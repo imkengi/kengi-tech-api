@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+.env.gcloud
+.env.production
+prisma/dev.db
+prisma/dev.db-journal
+prisma/data/

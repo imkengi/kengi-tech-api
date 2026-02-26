@@ -1,0 +1,11 @@
+PassengerNodejs /home/YOUR_CPANEL_USER/nodevenv/open-retail-api/20/bin/node
+PassengerAppType node
+PassengerStartupFile app.js
+
+# Force HTTPS
+RewriteEngine On
+RewriteCond %{HTTPS} off
+RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Let Passenger handle all requests
+PassengerFriendlyErrorPages on

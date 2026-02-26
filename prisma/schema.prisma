@@ -1,0 +1,748 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Store (Multi-tenant) ──────────────────────────────────────────────────────
+
+model Store {
+  id               String   @id @default(cuid())
+  code             String   @unique       // store code: e.g. "STORE001", used at login
+  name             String                 // store display name
+  address          String?
+  phone            String?
+  logo             String?
+  description      String?
+  status           String   @default("active") // active | inactive | suspended
+  costPriceMethod    String   @default("fixed")  // fixed | average | lastImport
+  trackSerial        Boolean  @default(false)
+  trackBatch         Boolean  @default(false)
+  allowNegativeStock Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  users       User[]
+}
+
+// ─── Auth ──────────────────────────────────────────────────────────────────────
+
+model User {
+  id             String   @id @default(cuid())
+  email          String
+  name           String
+  password       String
+  role           String   @default("cashier") // office: admin | manager | accountant  sales: sales | cashier  delivery: driver | shipper
+  phone          String?
+  avatar         String?
+  code           String?  @unique // employee code: NV-001
+  salary         Float?   // monthly salary
+  hireDate       DateTime? // date hired
+  shifts         Int      @default(0) // total shifts worked
+  totalSales     Float    @default(0) // total sales amount
+  employeeStatus String   @default("active") // active | inactive
+  notes          String?
+  storeId        String?
+  store          Store?   @relation(fields: [storeId], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  transactions         Transaction[]
+  inventoryTransactions InventoryTransaction[]
+  importReceipts       ImportReceipt[]
+  apiKeys              ApiKey[]
+  salesCheckins        SalesCheckin[]
+  salesOrders          SalesOrder[]
+
+  @@unique([email, storeId])
+  @@index([storeId])
+  @@index([role])
+  @@index([employeeStatus])
+}
+
+// ─── Sales Staff Tracking ───────────────────────────────────────────────────
+
+model SalesCheckin {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id])
+  type         String    // "checkin" | "checkout"
+  latitude     Float
+  longitude    Float
+  address      String?   // reverse geocoded or manual
+  note         String?
+  photo        String?   // optional selfie URL
+  customerId   String?   // linked customer store
+  customer     Customer? @relation(fields: [customerId], references: [id])
+  customerName String?   // denormalized for quick display
+  createdAt    DateTime  @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([customerId])
+}
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  name       String                         // Display name: "Mobile App", "Partner"
+  keyId      String    @unique              // Public ID: ak_xxxx
+  secretHash String                         // bcrypt hash of the secret
+  lastFour   String                         // Last 4 chars of secret for display
+  scopes     String    @default("read")     // "read" | "read,write" | "admin"
+  isActive   Boolean   @default(true)
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
+  userId     String
+  user       User      @relation(fields: [userId], references: [id])
+  createdAt  DateTime  @default(now())
+}
+
+// ─── Products ──────────────────────────────────────────────────────────────────
+
+model Category {
+  id          String     @id @default(cuid())
+  name        String
+  description String?
+  color       String?
+  level       Int        @default(1)
+  parentId    String?
+  parent      Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children    Category[] @relation("CategoryTree")
+  createdAt   DateTime   @default(now())
+
+  products Product[]
+}
+
+model Brand {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  logo        String?
+  createdAt   DateTime @default(now())
+
+  products Product[]
+}
+
+model Product {
+  id           String   @id @default(cuid())
+  name         String
+  sku          String   @unique
+  barcode      String?
+  description  String?
+  categoryId   String
+  brandId      String?
+  costPrice    Float    @default(0)
+  sellingPrice Float    @default(0)
+  taxInclusive Boolean  @default(false)
+  stock        Int      @default(0)
+  minStock     Int      @default(0)
+  maxStock     Int      @default(0)
+  baseUnit     String   @default("cái")
+  trackSerial  Boolean  @default(false)  // true = quản lý theo IMEI/Serial
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  category          Category              @relation(fields: [categoryId], references: [id])
+  brand             Brand?                @relation(fields: [brandId], references: [id])
+  unitConversions   UnitConversion[]
+  images            ProductImage[]
+  transactionItems  TransactionItem[]
+  inventoryTx       InventoryTransaction[]
+  importReceiptItems ImportReceiptItem[]
+  salesOrderItems    SalesOrderItem[]
+  serials            ProductSerial[]
+
+  @@index([categoryId])
+  @@index([brandId])
+  @@index([sku])
+  @@index([barcode])
+}
+
+model ProductSerial {
+  id          String    @id @default(cuid())
+  productId   String
+  serial      String                        // IMEI or serial number
+  status      String    @default("in_stock") // in_stock | sold | returned | defective
+  soldAt      DateTime?
+  note        String?
+  createdAt   DateTime  @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, serial])
+  @@index([productId])
+  @@index([serial])
+  @@index([status])
+}
+
+model UnitConversion {
+  id             String @id @default(cuid())
+  productId      String
+  fromUnit       String
+  toUnit         String
+  conversionRate Float
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  url       String
+  isPrimary Boolean @default(false)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+// ─── Customers ─────────────────────────────────────────────────────────────────
+
+model CustomerGroup {
+  id       String @id @default(cuid())
+  name     String
+  discount Float  @default(0)
+  color    String @default("#6b7280")
+
+  customers Customer[]
+}
+
+model Customer {
+  id               String   @id @default(cuid())
+  code             String   @unique
+  name             String
+  phone            String
+  email            String?
+  address          String?
+  groupId          String?
+  birthday         String?
+  gender           String?  // male | female | other
+  notes            String?
+  totalPurchases   Float    @default(0)
+  totalOrders      Int      @default(0)
+  debt             Float    @default(0)
+  loyaltyPoints    Int      @default(0)
+  tier             String   @default("bronze") // bronze | silver | gold | vip
+  lastPurchaseDate DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  group          CustomerGroup? @relation(fields: [groupId], references: [id])
+  transactions   Transaction[]
+  salesCheckins  SalesCheckin[]
+  salesOrders    SalesOrder[]
+
+  @@index([groupId])
+  @@index([phone])
+  @@index([tier])
+}
+
+// ─── Transactions ──────────────────────────────────────────────────────────────
+
+model Transaction {
+  id             String   @id @default(cuid())
+  receiptNumber  String   @unique
+  customerId     String?
+  customerName   String?
+  customerPhone  String?
+  subtotal       Float    @default(0)
+  discount       Float    @default(0)
+  tax            Float    @default(0)
+  total          Float    @default(0)
+  amountReceived Float    @default(0)
+  change         Float    @default(0)
+  status         String   @default("completed") // completed | returned | voided
+  createdBy      String
+  createdByName  String?
+  notes          String?
+  returnedAt     DateTime?
+  returnReason   String?
+  createdAt      DateTime @default(now())
+
+  creator  User              @relation(fields: [createdBy], references: [id])
+  customer Customer?         @relation(fields: [customerId], references: [id])
+  items    TransactionItem[]
+  payments Payment[]
+
+  @@index([createdAt])
+  @@index([status])
+  @@index([customerId])
+  @@index([createdBy])
+}
+
+model TransactionItem {
+  id            String @id @default(cuid())
+  transactionId String
+  productId     String
+  productName   String
+  sku           String
+  quantity      Int
+  unitPrice     Float
+  discount      Float  @default(0)
+  lineTotal     Float
+
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  product     Product     @relation(fields: [productId], references: [id])
+
+  @@index([transactionId])
+  @@index([productId])
+}
+
+model Payment {
+  id            String  @id @default(cuid())
+  transactionId String
+  type          String  // cash | card | transfer | ewallet | credit
+  amount        Float
+  reference     String?
+
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@index([transactionId])
+}
+
+// ─── Inventory ─────────────────────────────────────────────────────────────────
+
+model InventoryTransaction {
+  id             String   @id @default(cuid())
+  type           String   // import | export | sale | adjustment | stocktaking | return
+  productId      String
+  productName    String
+  productSku     String
+  quantity       Int
+  reason         String
+  note           String?
+  referenceId    String?  // Document code: HD1234, PN001, etc.
+  referenceType  String?  // sale | import_receipt | adjustment | void | return
+  unitPrice      Float?   // Transaction price per unit (sale price or import cost)
+  costPriceAfter Float?   // Cost price of product after this transaction
+  supplierId     String?
+  supplierName   String?
+  userId         String
+  userName       String
+  createdAt      DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@index([productId])
+  @@index([createdAt])
+  @@index([referenceId])
+  @@index([referenceType])
+}
+
+model ImportReceipt {
+  id           String   @id @default(cuid())
+  code         String   @unique
+  supplierId   String?
+  supplierName String?
+  totalCost    Float    @default(0)
+  totalItems   Int      @default(0)
+  status       String   @default("draft") // draft | completed | cancelled
+  note         String?
+  userId       String
+  userName     String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user  User                @relation(fields: [userId], references: [id])
+  items ImportReceiptItem[]
+
+  @@index([supplierId])
+  @@index([createdAt])
+  @@index([status])
+}
+
+model ImportReceiptItem {
+  id          String @id @default(cuid())
+  receiptId   String
+  productId   String
+  productName String
+  productSku  String
+  quantity    Int
+  costPrice   Float
+  total       Float
+
+  receipt ImportReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  product Product      @relation(fields: [productId], references: [id])
+}
+
+// ─── Promotions ────────────────────────────────────────────────────────────────
+
+model Promotion {
+  id            String   @id @default(cuid())
+  code          String   @unique
+  name          String
+  description   String?
+  type          String   // percentage | fixed | bogo | freebie
+  value         Float
+  minOrderValue Float?
+  maxDiscount   Float?
+  startDate     DateTime
+  endDate       DateTime
+  status        String   @default("active") // active | scheduled | expired | paused
+  usageCount    Int      @default(0)
+  usageLimit    Int?
+  applicableTo  String   @default("all") // all | category | product
+  categoryIds   String?  // JSON array string
+  productIds    String?  // JSON array string
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// ─── Suppliers ─────────────────────────────────────────────────────────────────
+
+model Supplier {
+  id           String   @id @default(cuid())
+  code         String   @unique
+  name         String
+  contactName  String?
+  phone        String?
+  email        String?
+  address      String?
+  taxCode      String?
+  totalOrders  Int      @default(0)
+  totalValue   Float    @default(0)
+  status       String   @default("active") // active | inactive
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  purchaseOrders PurchaseOrder[]
+}
+
+// ─── Purchase Orders ───────────────────────────────────────────────────────────
+
+model PurchaseOrder {
+  id            String    @id @default(cuid())
+  code          String    @unique
+  supplierId    String?
+  supplierName  String
+  status        String    @default("draft") // draft | pending | confirmed | shipping | received | cancelled
+  totalAmount   Float     @default(0)
+  notes         String?
+  expectedDate  DateTime?
+  receivedDate  DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  supplier Supplier?           @relation(fields: [supplierId], references: [id])
+  items    PurchaseOrderItem[]
+}
+
+model PurchaseOrderItem {
+  id              String @id @default(cuid())
+  purchaseOrderId String
+  productName     String
+  sku             String?
+  quantity        Int
+  unitPrice       Float
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+}
+
+// ─── Expenses ──────────────────────────────────────────────────────────────────
+
+model Expense {
+  id          String   @id @default(cuid())
+  description String
+  amount      Float
+  category    String   // rent | electricity | water | internet | supplies | transport | food | maintenance | marketing | other
+  date        DateTime @default(now())
+  paidBy      String?
+  recurring   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ─── Notifications ─────────────────────────────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(cuid())
+  title     String
+  message   String
+  type      String   @default("info") // info | warning | success | error | announcement
+  read      Boolean  @default(false)
+  userId    String?
+  createdAt DateTime @default(now())
+}
+
+// ─── Warranty ──────────────────────────────────────────────────────────────────
+
+model Warranty {
+  id            String    @id @default(cuid())
+  code          String    @unique
+  productId     String?
+  productName   String
+  customerName  String
+  customerPhone String?
+  serialNumber  String?
+  startDate     DateTime
+  endDate       DateTime
+  status        String    @default("active") // active | expired | claimed | voided
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// ─── Repairs ───────────────────────────────────────────────────────────────────
+
+model Repair {
+  id            String    @id @default(cuid())
+  code          String    @unique
+  productName   String
+  customerName  String
+  customerPhone String?
+  issue         String
+  status        String    @default("received") // received | diagnosing | repairing | done | returned | cancelled
+  cost          Float     @default(0)
+  estimatedDate DateTime?
+  completedDate DateTime?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// ─── Quotations ────────────────────────────────────────────────────────────────
+
+model Quotation {
+  id           String   @id @default(cuid())
+  code         String   @unique
+  customerName String
+  customerPhone String?
+  items        String   // JSON string of items array
+  totalAmount  Float    @default(0)
+  status       String   @default("draft") // draft | sent | accepted | rejected | expired
+  validUntil   DateTime?
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// ─── Audit Log ─────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  userName  String?
+  action    String   // create | update | delete | login | logout | export | view | config | sale_completed | stock_adjusted | debt_payment | shift_closed
+  entity    String   // products | orders | customers | inventory | transactions | expenses | promotions | suppliers | settings | auth
+  entityId  String?
+  details   String?  // descriptive text
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([entity])
+  @@index([userId])
+}
+
+// ─── Price History ─────────────────────────────────────────────────────────────
+
+model PriceHistory {
+  id          String   @id @default(cuid())
+  productId   String
+  productName String
+  productSku  String?
+  oldPrice    Float
+  newPrice    Float
+  changedBy   String?
+  reason      String?
+  createdAt   DateTime @default(now())
+
+  @@index([productId])
+  @@index([createdAt])
+}
+
+// ─── Shipping ──────────────────────────────────────────────────────────────────
+
+model ShippingOrder {
+  id              String    @id @default(cuid())
+  code            String    @unique
+  transactionId   String?
+  customerName    String
+  customerPhone   String?
+  address         String
+  driverId        String?
+  driverName      String?
+  status          String    @default("pending") // pending | picked_up | in_transit | delivered | failed | returned
+  shippingFee     Float     @default(0)
+  cod             Float     @default(0)
+  notes           String?
+  estimatedDate   DateTime?
+  deliveredDate   DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// ─── Drivers ───────────────────────────────────────────────────────────────────
+
+model Driver {
+  id           String   @id @default(cuid())
+  code         String   @unique
+  name         String
+  phone        String
+  vehicleType  String?  // motorbike | car | van | truck
+  vehiclePlate String?
+  status       String   @default("active") // active | inactive | busy
+  totalDeliveries Int   @default(0)
+  rating       Float    @default(5.0)
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// ─── Tax Config ────────────────────────────────────────────────────────────────
+
+model TaxConfig {
+  id          String  @id @default(cuid())
+  name        String
+  rate        Float
+  description String?
+  isDefault   Boolean @default(false)
+  status      String  @default("active") // active | inactive
+}
+
+// ─── Loyalty / Customer Segments ───────────────────────────────────────────────
+
+model CustomerSegment {
+  id            String @id @default(cuid())
+  name          String
+  description   String?
+  conditions    String // JSON: criteria like { minPurchases, minOrders, tier }
+  customerCount Int    @default(0)
+  color         String @default("#6b7280")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// ─── Currency ──────────────────────────────────────────────────────────────────
+
+model Currency {
+  id        String   @id @default(cuid())
+  code      String   @unique // USD, EUR, VND etc
+  name      String
+  symbol    String
+  rate      Float    @default(1) // exchange rate to base currency (VND)
+  isBase    Boolean  @default(false)
+  status    String   @default("active")
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Feedback / Reviews ────────────────────────────────────────────────────────
+
+model Feedback {
+  id           String   @id @default(cuid())
+  customerName String?
+  customerPhone String?
+  type         String   @default("general") // general | complaint | suggestion | praise
+  rating       Int?     // 1-5
+  message      String
+  status       String   @default("new") // new | in_progress | resolved | closed
+  response     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// ─── Schedule ──────────────────────────────────────────────────────────────────
+
+model Schedule {
+  id        String   @id @default(cuid())
+  userId    String?
+  userName  String
+  date      DateTime
+  shift     String   // morning | afternoon | evening | full
+  status    String   @default("scheduled") // scheduled | completed | absent | late
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Returns ────────────────────────────────────────────────────────────────
+
+model ReturnOrder {
+  id              String    @id @default(cuid())
+  code            String    @unique
+  originalInvoice String
+  customerName    String
+  customerPhone   String?
+  status          String    @default("pending") // pending | approved | rejected | refunded
+  reason          String    // defective | wrong_product | not_satisfied | damaged | other
+  items           String    // JSON array: [{ productName, sku, quantity, unitPrice }]
+  totalRefund     Float     @default(0)
+  notes           String?
+  processedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// ─── Debt Ledger ────────────────────────────────────────────────────────────
+
+model DebtEntry {
+  id           String   @id @default(cuid())
+  customerId   String
+  customerName String
+  phone        String?
+  type         String   // debt | payment
+  amount       Float
+  description  String
+  balance      Float    @default(0) // running balance after this entry
+  createdAt    DateTime @default(now())
+
+  @@index([customerId])
+  @@index([createdAt])
+}
+
+// ─── Bundles / Combos ───────────────────────────────────────────────────────
+
+model Bundle {
+  id            String    @id @default(cuid())
+  name          String
+  category      String?
+  items         String    // JSON array: [{ name, originalPrice, sku }]
+  originalTotal Float     @default(0)
+  bundlePrice   Float     @default(0)
+  discount      Float     @default(0) // percentage
+  active        Boolean   @default(true)
+  soldCount     Int       @default(0)
+  validUntil    DateTime?
+  maxUsage      Int?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// ─── Sales Orders (đơn treo từ NV bán hàng) ────────────────────────────────
+
+model SalesOrder {
+  id           String   @id @default(cuid())
+  orderNumber  String   @unique // SO-001
+  status       String   @default("pending") // pending | processing | completed | cancelled
+  salesUserId  String
+  customerId   String?
+  customerName String?
+  note         String?
+  subtotal     Float    @default(0)
+  discount     Float    @default(0)
+  total        Float    @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  salesUser    User             @relation(fields: [salesUserId], references: [id])
+  customer     Customer?        @relation(fields: [customerId], references: [id])
+  items        SalesOrderItem[]
+}
+
+model SalesOrderItem {
+  id           String @id @default(cuid())
+  salesOrderId String
+  productId    String
+  productName  String
+  sku          String
+  quantity     Int
+  unitPrice    Float
+  lineTotal    Float
+
+  salesOrder   SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  product      Product    @relation(fields: [productId], references: [id])
+}
+

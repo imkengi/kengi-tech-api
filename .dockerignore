@@ -1,0 +1,17 @@
+node_modules
+dist
+.env
+.env.*
+*.db
+.git
+.gitignore
+.agent
+.railwayignore
+*.log
+*.md
+test-*.js
+test_*.ts
+test_*.json
+check_db.ts
+app.js
+login.json
