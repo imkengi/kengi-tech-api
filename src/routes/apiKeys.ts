@@ -1,14 +1,19 @@
 import { Router, Response } from 'express'
 import crypto from 'crypto'
 import bcrypt from 'bcryptjs'
-import prisma from '../lib/prisma'
-import { authMiddleware, AuthRequest } from '../middleware/auth'
+import { authMiddleware, AuthRequest, getBranchId } from '../middleware/auth'
+import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 
 const router = Router()
 
 // ─── GET /api/api-keys — Get current key info (admin only) ──────────────────
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const schema = req.user?.storeSchema || 'default'
+        const cacheKey = `${schema}:apiKeys:${JSON.stringify(req.query)}`
+        const cached = await cacheGet(cacheKey)
+        if (cached) return res.json(cached)
+        const prisma = req.storePrisma!
         if (req.user!.role !== 'admin' && req.user!.role !== 'manager') {
             res.status(403).json({ success: false, error: 'Chỉ admin/manager mới có quyền' })
             return
@@ -29,7 +34,9 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
             },
         })
 
-        res.json({ success: true, data: key })
+        const _response = { success: true, data: key }
+        await cacheSet(cacheKey, _response, 300)
+        res.json(_response)
     } catch (err) {
         console.error('Get API key error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
@@ -39,6 +46,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 // ─── POST /api/api-keys/regenerate — Delete old + create new secret ─────────
 router.post('/regenerate', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
         if (req.user!.role !== 'admin' && req.user!.role !== 'manager') {
             res.status(403).json({ success: false, error: 'Chỉ admin/manager mới có quyền' })
             return
@@ -90,6 +98,7 @@ router.post('/regenerate', authMiddleware, async (req: AuthRequest, res: Respons
 // ─── POST /api/api-keys/test — Test a key (via X-API-Key header) ────────────
 router.post('/test', async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
         const apiKeyHeader = req.headers['x-api-key'] as string
 
         if (!apiKeyHeader) {

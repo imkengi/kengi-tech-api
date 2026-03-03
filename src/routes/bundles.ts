@@ -1,12 +1,14 @@
 import { Router, Request, Response } from 'express'
-import prisma from '../lib/prisma'
-import { authMiddleware } from '../middleware/auth'
+import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
+import { validate } from '../middleware/validate'
+import { CreateBundleSchema, UpdateBundleSchema } from '../schemas'
 
 const router = Router()
 
 // GET /api/bundles
-router.get('/', authMiddleware, async (req: Request, res: Response) => {
+router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
         const { active, category, search } = req.query
         const where: any = {}
         if (active === 'true') where.active = true
@@ -24,8 +26,9 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
 })
 
 // POST /api/bundles
-router.post('/', authMiddleware, async (req: Request, res: Response) => {
+router.post('/', authMiddleware, validate(CreateBundleSchema), async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
         const { name, category, items, originalTotal, bundlePrice, discount, active, validUntil, maxUsage } = req.body
         if (!name?.trim()) return res.status(400).json({ success: false, error: 'Bundle name required' })
 
@@ -50,9 +53,11 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
 })
 
 // PUT /api/bundles/:id
-router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
+router.put('/:id', authMiddleware, validate(UpdateBundleSchema), async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
         const { name, category, items, originalTotal, bundlePrice, discount, active, soldCount, validUntil, maxUsage } = req.body
+        const bundleId = String(req.params.id)
         const data: any = {}
         if (name !== undefined) data.name = name
         if (category !== undefined) data.category = category
@@ -65,7 +70,7 @@ router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
         if (validUntil !== undefined) data.validUntil = validUntil ? new Date(validUntil) : null
         if (maxUsage !== undefined) data.maxUsage = maxUsage ? Number(maxUsage) : null
 
-        const bundle = await prisma.bundle.update({ where: { id: req.params.id }, data })
+        const bundle = await prisma.bundle.update({ where: { id: bundleId }, data })
         res.json({ success: true, data: { ...bundle, items: JSON.parse(bundle.items) } })
     } catch (err) {
         res.status(500).json({ success: false, error: 'Internal server error' })
@@ -73,9 +78,10 @@ router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
 })
 
 // DELETE /api/bundles/:id
-router.delete('/:id', authMiddleware, async (req: Request, res: Response) => {
+router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-        await prisma.bundle.delete({ where: { id: req.params.id } })
+        const prisma = req.storePrisma!
+        await prisma.bundle.delete({ where: { id: String(req.params.id) } })
         res.json({ success: true })
     } catch (err) {
         res.status(500).json({ success: false, error: 'Internal server error' })

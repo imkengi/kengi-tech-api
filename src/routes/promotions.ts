@@ -1,12 +1,20 @@
 import { Router, Request, Response } from 'express'
-import prisma from '../lib/prisma'
-import { authMiddleware } from '../middleware/auth'
+import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
+import { requireRole } from '../middleware/roleMiddleware'
+import { validate } from '../middleware/validate'
+import { CreatePromotionSchema, UpdatePromotionSchema } from '../schemas'
+import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 
 const router = Router()
 
 // GET /api/promotions
-router.get('/', authMiddleware, async (req: Request, res: Response) => {
+router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const schema = req.user?.storeSchema || 'default'
+        const cacheKey = `${schema}:promotions:${JSON.stringify(req.query)}`
+        const cached = await cacheGet(cacheKey)
+        if (cached) return res.json(cached)
+        const prisma = req.storePrisma!
         const { search, status, type, page = '1', pageSize = '20' } = req.query
 
         const where: any = {}
@@ -57,8 +65,9 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
 })
 
 // POST /api/promotions
-router.post('/', authMiddleware, async (req: Request, res: Response) => {
+router.post('/', authMiddleware, requireRole('admin', 'manager'), validate(CreatePromotionSchema), async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
         const { categoryIds, productIds, startDate, endDate, ...data } = req.body
 
         const promotion = await prisma.promotion.create({
@@ -71,6 +80,7 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
             },
         })
 
+        cacheDel(`${req.user?.storeSchema || 'default'}:promotions:*`).catch(() => {})
         res.status(201).json({
             success: true,
             data: {
@@ -90,9 +100,11 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
 })
 
 // PUT /api/promotions/:id
-router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
+router.put('/:id', authMiddleware, requireRole('admin', 'manager'), validate(UpdatePromotionSchema), async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
         const { categoryIds, productIds, startDate, endDate, ...updates } = req.body
+        const promoId = String(req.params.id)
 
         const data: any = { ...updates }
         if (startDate) data.startDate = new Date(startDate)
@@ -101,7 +113,7 @@ router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
         if (productIds !== undefined) data.productIds = JSON.stringify(productIds)
 
         const promotion = await prisma.promotion.update({
-            where: { id: req.params.id },
+            where: { id: promoId },
             data,
         })
 
@@ -124,9 +136,10 @@ router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
 })
 
 // DELETE /api/promotions/:id
-router.delete('/:id', authMiddleware, async (req: Request, res: Response) => {
+router.delete('/:id', authMiddleware, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
     try {
-        await prisma.promotion.delete({ where: { id: req.params.id } })
+        const prisma = req.storePrisma!
+        await prisma.promotion.delete({ where: { id: String(req.params.id) } })
         res.json({ success: true, message: 'Promotion deleted' })
     } catch (err) {
         console.error('Delete promotion error:', err)

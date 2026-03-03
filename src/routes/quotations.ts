@@ -1,12 +1,14 @@
 import { Router, Request, Response } from 'express'
-import prisma from '../lib/prisma'
-import { authMiddleware } from '../middleware/auth'
+import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
+import { validate } from '../middleware/validate'
+import { CreateQuotationSchema, UpdateQuotationSchema } from '../schemas'
 
 const router = Router()
 
 // GET /api/quotations
-router.get('/', authMiddleware, async (req: Request, res: Response) => {
+router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
         const { search, status } = req.query
         const where: any = {}
         if (status && status !== 'all') where.status = status
@@ -22,8 +24,9 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
 })
 
 // POST /api/quotations
-router.post('/', authMiddleware, async (req: Request, res: Response) => {
+router.post('/', authMiddleware, validate(CreateQuotationSchema), async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
         const { customerName, customerPhone, items, totalAmount, validUntil, notes } = req.body
         if (!customerName?.trim()) return res.status(400).json({ success: false, error: 'Customer name required' })
         const count = await prisma.quotation.count()
@@ -36,23 +39,28 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
 })
 
 // PUT /api/quotations/:id
-router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
+router.put('/:id', authMiddleware, validate(UpdateQuotationSchema), async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
         const { status, customerName, items, totalAmount, notes } = req.body
+        const qId = String(req.params.id)
         const d: any = {}
         if (status) d.status = status
         if (customerName) d.customerName = customerName
         if (items) { d.items = JSON.stringify(items); d.totalAmount = items.reduce((s: number, it: any) => s + (it.quantity || 0) * (it.unitPrice || 0), 0) }
         if (totalAmount !== undefined) d.totalAmount = Number(totalAmount)
         if (notes !== undefined) d.notes = notes
-        const data = await prisma.quotation.update({ where: { id: req.params.id }, data: d })
+        const data = await prisma.quotation.update({ where: { id: qId }, data: d })
         res.json({ success: true, data: { ...data, items: JSON.parse(data.items) } })
     } catch (err) { res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
 
 // DELETE /api/quotations/:id
-router.delete('/:id', authMiddleware, async (req: Request, res: Response) => {
-    try { await prisma.quotation.delete({ where: { id: req.params.id } }); res.json({ success: true }) }
+router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        await prisma.quotation.delete({ where: { id: String(req.params.id) } }); res.json({ success: true })
+    }
     catch (err) { res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
 

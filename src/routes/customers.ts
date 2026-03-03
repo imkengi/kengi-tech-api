@@ -1,15 +1,23 @@
 import { Router, Request, Response } from 'express'
-import prisma from '../lib/prisma'
-import { authMiddleware } from '../middleware/auth'
+import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
+import { validate } from '../middleware/validate'
+import { CreateCustomerSchema, UpdateCustomerSchema } from '../schemas'
+import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 
 const router = Router()
 
 // ─── Customers CRUD ─────────────────────────────────────────────────────────
 
 // GET /api/customers
-router.get('/', authMiddleware, async (req: Request, res: Response) => {
+router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
+        const schema = req.user?.storeSchema || 'default'
         const { search, groupId, page = '1', pageSize = '20' } = req.query
+
+        const cacheKey = `${schema}:customers:${JSON.stringify(req.query)}`
+        const cached = await cacheGet(cacheKey)
+        if (cached) return res.json(cached)
 
         const where: any = {}
         if (search) {
@@ -44,7 +52,7 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
             updatedAt: c.updatedAt.toISOString(),
         }))
 
-        res.json({
+        const response = {
             success: true,
             data: {
                 items: data,
@@ -53,7 +61,9 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
                 pageSize: size,
                 totalPages: Math.ceil(total / size),
             },
-        })
+        }
+        await cacheSet(cacheKey, response, 60)
+        res.json(response)
     } catch (err) {
         console.error('Get customers error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
@@ -61,15 +71,16 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
 })
 
 // GET /api/customers/:id
-router.get('/:id', authMiddleware, async (req: Request, res: Response) => {
+router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
         // Check if path is "groups" — handle customer-groups route
         if (req.params.id === 'groups') {
             return res.redirect('/api/customer-groups')
         }
 
-        const customer = await prisma.customer.findUnique({
-            where: { id: req.params.id },
+        const customer = await prisma.customer.findFirst({
+            where: { id: String(req.params.id) },
             include: { group: true },
         })
 
@@ -94,10 +105,11 @@ router.get('/:id', authMiddleware, async (req: Request, res: Response) => {
 })
 
 // GET /api/customers/:id/purchases
-router.get('/:id/purchases', authMiddleware, async (req: Request, res: Response) => {
+router.get('/:id/purchases', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
         const transactions = await prisma.transaction.findMany({
-            where: { customerId: req.params.id },
+            where: { customerId: String(req.params.id) },
             orderBy: { createdAt: 'desc' },
             take: 20,
             include: { items: true },
@@ -106,7 +118,7 @@ router.get('/:id/purchases', authMiddleware, async (req: Request, res: Response)
         const purchases = transactions.map(t => ({
             id: t.id,
             orderId: t.id,
-            customerId: req.params.id,
+            customerId: String(req.params.id),
             date: t.createdAt.toISOString(),
             items: t.items.length,
             total: t.total,
@@ -121,8 +133,9 @@ router.get('/:id/purchases', authMiddleware, async (req: Request, res: Response)
 })
 
 // POST /api/customers
-router.post('/', authMiddleware, async (req: Request, res: Response) => {
+router.post('/', authMiddleware, validate(CreateCustomerSchema), async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
         const { name, phone, email, address, notes, groupId } = req.body
 
         if (!name) {
@@ -164,6 +177,7 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
                 updatedAt: customer.updatedAt.toISOString(),
             },
         })
+        cacheDel(`${req.user?.storeSchema || 'default'}:customers:*`).catch(() => { })
     } catch (err) {
         console.error('Create customer error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
@@ -171,11 +185,25 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
 })
 
 // PUT /api/customers/:id
-router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
+router.put('/:id', authMiddleware, validate(UpdateCustomerSchema), async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
+        const existing = await prisma.customer.findFirst({ where: { id: String(req.params.id) } })
+        if (!existing) return res.status(404).json({ success: false, error: 'Customer not found' })
+        // Explicitly allowlist updatable fields — prevent overwriting debt/points via mass assignment
+        const { name, phone, email, address, groupId, taxCode, note, loyaltyPoints } = req.body
         const customer = await prisma.customer.update({
-            where: { id: req.params.id },
-            data: req.body,
+            where: { id: existing.id },
+            data: {
+                ...(name !== undefined && { name }),
+                ...(phone !== undefined && { phone }),
+                ...(email !== undefined && { email }),
+                ...(address !== undefined && { address }),
+                ...(groupId !== undefined && { groupId }),
+                ...(taxCode !== undefined && { taxCode }),
+                ...(note !== undefined && { note }),
+                ...(loyaltyPoints !== undefined && { loyaltyPoints }),
+            },
         })
 
         res.json({
@@ -187,6 +215,7 @@ router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
                 updatedAt: customer.updatedAt.toISOString(),
             },
         })
+        cacheDel(`${req.user?.storeSchema || 'default'}:customers:*`).catch(() => { })
     } catch (err) {
         console.error('Update customer error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
@@ -194,9 +223,13 @@ router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
 })
 
 // DELETE /api/customers/:id
-router.delete('/:id', authMiddleware, async (req: Request, res: Response) => {
+router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-        await prisma.customer.delete({ where: { id: req.params.id } })
+        const prisma = req.storePrisma!
+        // Verify ownership before delete
+        const toDelete = await prisma.customer.findFirst({ where: { id: String(req.params.id) } })
+        if (!toDelete) return res.status(404).json({ success: false, error: 'Customer not found' })
+        await prisma.customer.delete({ where: { id: toDelete.id } })
         res.json({ success: true, message: 'Customer deleted' })
     } catch (err) {
         console.error('Delete customer error:', err)
@@ -205,8 +238,9 @@ router.delete('/:id', authMiddleware, async (req: Request, res: Response) => {
 })
 
 // POST /api/customers/:id/pay-debt — Pay down customer debt
-router.post('/:id/pay-debt', authMiddleware, async (req: Request, res: Response) => {
+router.post('/:id/pay-debt', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
         const { amount, method, reference, note } = req.body
 
         if (!amount || amount <= 0) {
@@ -214,8 +248,8 @@ router.post('/:id/pay-debt', authMiddleware, async (req: Request, res: Response)
             return
         }
 
-        const customer = await prisma.customer.findUnique({
-            where: { id: req.params.id },
+        const customer = await prisma.customer.findFirst({
+            where: { id: String(req.params.id) },
         })
 
         if (!customer) {
@@ -226,7 +260,7 @@ router.post('/:id/pay-debt', authMiddleware, async (req: Request, res: Response)
         const payAmount = Math.min(amount, customer.debt)
 
         const updated = await prisma.customer.update({
-            where: { id: req.params.id },
+            where: { id: String(req.params.id) },
             data: {
                 debt: { decrement: payAmount },
             },

@@ -1,19 +1,30 @@
 import { Router, Request, Response } from 'express'
-import prisma from '../lib/prisma'
-import { authMiddleware } from '../middleware/auth'
+import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
+import { requireRole } from '../middleware/roleMiddleware'
+import { validate } from '../middleware/validate'
+import { CreateExpenseSchema, UpdateExpenseSchema } from '../schemas'
+import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 
 const router = Router()
 
 // GET /api/expenses
-router.get('/', authMiddleware, async (req: Request, res: Response) => {
+router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const schema = req.user?.storeSchema || 'default'
+        const cacheKey = `${schema}:expenses:${JSON.stringify(req.query)}`
+        const cached = await cacheGet(cacheKey)
+        if (cached) return res.json(cached)
+        const prisma = req.storePrisma!
+        const branchId = getBranchId(req)
         const { search, category } = req.query
         const where: any = {}
         if (category && category !== 'all') where.category = category
         if (search) where.description = { contains: String(search) }
 
         const expenses = await prisma.expense.findMany({ where, orderBy: { date: 'desc' } })
-        res.json({ success: true, data: expenses })
+        const _response = { success: true, data: expenses }
+        await cacheSet(cacheKey, _response, 60)
+        res.json(_response)
     } catch (err) {
         console.error('Get expenses error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
@@ -21,9 +32,11 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
 })
 
 // GET /api/expenses/stats
-router.get('/stats', authMiddleware, async (_req: Request, res: Response) => {
+router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-        const expenses = await prisma.expense.findMany()
+        const prisma = req.storePrisma!
+        const branchId = getBranchId(req)
+        const expenses = await prisma.expense.findMany({ where: { ...getBranchFilter(req as any) } })
         const total = expenses.reduce((s, e) => s + e.amount, 0)
         const recurring = expenses.filter(e => e.recurring).reduce((s, e) => s + e.amount, 0)
         const categories: Record<string, number> = {}
@@ -35,8 +48,10 @@ router.get('/stats', authMiddleware, async (_req: Request, res: Response) => {
 })
 
 // POST /api/expenses
-router.post('/', authMiddleware, async (req: Request, res: Response) => {
+router.post('/', authMiddleware, requireRole('admin', 'manager'), validate(CreateExpenseSchema), async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
+        const branchId = getBranchId(req)
         const { description, amount, category, paidBy, recurring, date } = req.body
         if (!description?.trim()) return res.status(400).json({ success: false, error: 'Description required' })
         if (!amount || amount <= 0) return res.status(400).json({ success: false, error: 'Valid amount required' })
@@ -51,6 +66,7 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
                 date: date ? new Date(date) : new Date(),
             },
         })
+        cacheDel(`${req.user?.storeSchema || 'default'}:expenses:*`).catch(() => {})
         res.status(201).json({ success: true, data: expense })
     } catch (err) {
         console.error('Create expense error:', err)
@@ -59,11 +75,14 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
 })
 
 // PUT /api/expenses/:id
-router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
+router.put('/:id', authMiddleware, requireRole('admin', 'manager'), validate(UpdateExpenseSchema), async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
+        const branchId = getBranchId(req)
+        const expId = String(req.params.id)
         const { description, amount, category, paidBy, recurring, date } = req.body
         const expense = await prisma.expense.update({
-            where: { id: req.params.id },
+            where: { id: expId },
             data: {
                 ...(description !== undefined && { description }),
                 ...(amount !== undefined && { amount: Number(amount) }),
@@ -80,9 +99,11 @@ router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
 })
 
 // DELETE /api/expenses/:id
-router.delete('/:id', authMiddleware, async (req: Request, res: Response) => {
+router.delete('/:id', authMiddleware, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
     try {
-        await prisma.expense.delete({ where: { id: req.params.id } })
+        const prisma = req.storePrisma!
+        const branchId = getBranchId(req)
+        await prisma.expense.delete({ where: { id: String(req.params.id) } })
         res.json({ success: true })
     } catch (err) {
         res.status(500).json({ success: false, error: 'Internal server error' })

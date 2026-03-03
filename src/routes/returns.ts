@@ -1,15 +1,26 @@
-import { Router, Request, Response } from 'express'
-import prisma from '../lib/prisma'
-import { authMiddleware } from '../middleware/auth'
+import { Router, Response } from 'express'
+import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
+import { validate } from '../middleware/validate'
+import { CreateReturnSchema, UpdateReturnSchema } from '../schemas'
 
 const router = Router()
 
-// GET /api/returns
-router.get('/', authMiddleware, async (req: Request, res: Response) => {
+// ═══════════════════════════════════════════════════════════════════════════════
+//  GET /api/returns
+// ═══════════════════════════════════════════════════════════════════════════════
+
+router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-        const { status, search } = req.query
+        const prisma = req.storePrisma!
+        const { status, search, reason, startDate, endDate } = req.query
         const where: any = {}
         if (status && status !== 'all') where.status = status
+        if (reason && reason !== 'all') where.reason = reason
+        if (startDate || endDate) {
+            where.createdAt = {}
+            if (startDate) where.createdAt.gte = new Date(startDate as string)
+            if (endDate) where.createdAt.lte = new Date(endDate as string)
+        }
         if (search) {
             where.OR = [
                 { code: { contains: String(search) } },
@@ -17,83 +28,335 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
                 { originalInvoice: { contains: String(search) } },
             ]
         }
-        const returns = await prisma.returnOrder.findMany({ where, orderBy: { createdAt: 'desc' } })
-        const data = returns.map(r => ({ ...r, items: JSON.parse(r.items || '[]') }))
-        res.json({ success: true, data })
+        const returns = await prisma.returnOrder.findMany({
+            where,
+            include: { items: true },
+            orderBy: { createdAt: 'desc' },
+        })
+        res.json({ success: true, data: returns })
     } catch (err) {
         console.error('Get returns error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
     }
 })
 
-// GET /api/returns/stats
-router.get('/stats', authMiddleware, async (_req: Request, res: Response) => {
+// ═══════════════════════════════════════════════════════════════════════════════
+//  GET /api/returns/stats
+// ═══════════════════════════════════════════════════════════════════════════════
+
+router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-        const returns = await prisma.returnOrder.findMany()
+        const prisma = req.storePrisma!
+        const returns = await prisma.returnOrder.findMany({ ...getBranchFilter(req as any) })
         const total = returns.length
         const pending = returns.filter(r => r.status === 'pending').length
-        const totalRefund = returns.reduce((s, r) => s + r.totalRefund, 0)
-        const refunded = returns.filter(r => r.status === 'refunded').reduce((s, r) => s + r.totalRefund, 0)
-        res.json({ success: true, data: { total, pending, totalRefund, refunded } })
+        const approved = returns.filter(r => r.status === 'approved').length
+        const processing = returns.filter(r => r.status === 'processing').length
+        const refunded = returns.filter(r => r.status === 'refunded').length
+        const rejected = returns.filter(r => r.status === 'rejected').length
+        const exchanged = returns.filter(r => r.status === 'exchanged').length
+        const totalRefund = returns.filter(r => ['refunded', 'exchanged'].includes(r.status)).reduce((s, r) => s + r.totalRefund, 0)
+        const pendingRefund = returns.filter(r => ['pending', 'approved', 'processing'].includes(r.status)).reduce((s, r) => s + r.totalRefund, 0)
+
+        // By reason breakdown
+        const byReason: Record<string, number> = {}
+        returns.forEach(r => { byReason[r.reason] = (byReason[r.reason] || 0) + 1 })
+
+        // By refund method
+        const byMethod: Record<string, number> = {}
+        returns.filter(r => r.refundMethod).forEach(r => { byMethod[r.refundMethod!] = (byMethod[r.refundMethod!] || 0) + 1 })
+
+        // Last 30 days trend
+        const now = new Date()
+        const trend: { date: string; count: number; amount: number }[] = []
+        for (let i = 29; i >= 0; i--) {
+            const d = new Date(now)
+            d.setDate(d.getDate() - i)
+            const ds = d.toISOString().slice(0, 10)
+            const dayReturns = returns.filter(r => r.createdAt.toISOString().slice(0, 10) === ds)
+            trend.push({ date: ds, count: dayReturns.length, amount: dayReturns.reduce((s, r) => s + r.totalRefund, 0) })
+        }
+
+        res.json({
+            success: true,
+            data: {
+                total, pending, approved, processing, refunded, rejected, exchanged,
+                totalRefund, pendingRefund,
+                byReason: Object.entries(byReason).map(([reason, count]) => ({ reason, count })),
+                byMethod: Object.entries(byMethod).map(([method, count]) => ({ method, count })),
+                trend,
+            },
+        })
     } catch (err) {
         res.status(500).json({ success: false, error: 'Internal server error' })
     }
 })
 
-// POST /api/returns
-router.post('/', authMiddleware, async (req: Request, res: Response) => {
+// ═══════════════════════════════════════════════════════════════════════════════
+//  GET /api/returns/analytics
+// ═══════════════════════════════════════════════════════════════════════════════
+
+router.get('/analytics', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-        const { code, originalInvoice, customerName, customerPhone, reason, items, totalRefund, notes } = req.body
+        const prisma = req.storePrisma!
+        const { days = '30' } = req.query
+        const since = new Date(Date.now() - Number(days) * 86400_000)
+
+        const returns = await prisma.returnOrder.findMany({
+            where: { createdAt: { gte: since } },
+            include: { items: true },
+        })
+
+        // Return rate (vs total transactions)
+        const totalTx = await prisma.transaction.count({ where: { createdAt: { gte: since } } })
+        const returnRate = totalTx > 0 ? (returns.length / totalTx * 100) : 0
+
+        // Top returned products
+        const productMap: Record<string, { name: string; count: number; amount: number }> = {}
+        returns.forEach(r => {
+            r.items.forEach(item => {
+                const key = item.productName
+                if (!productMap[key]) productMap[key] = { name: key, count: 0, amount: 0 }
+                productMap[key].count += item.quantity
+                productMap[key].amount += item.quantity * item.unitPrice
+            })
+        })
+        const topProducts = Object.values(productMap).sort((a, b) => b.count - a.count).slice(0, 10)
+
+        // Avg processing time (pending → refunded)
+        const processed = returns.filter(r => r.processedAt)
+        const avgProcessingHours = processed.length > 0
+            ? processed.reduce((s, r) => s + (r.processedAt!.getTime() - r.createdAt.getTime()) / 3600000, 0) / processed.length
+            : 0
+
+        // Restock rate
+        const allItems = returns.flatMap(r => r.items)
+        const restockedCount = allItems.filter(i => i.restocked).length
+        const restockRate = allItems.length > 0 ? (restockedCount / allItems.length * 100) : 0
+
+        res.json({
+            success: true,
+            data: {
+                returnRate: Math.round(returnRate * 10) / 10,
+                topProducts,
+                avgProcessingHours: Math.round(avgProcessingHours * 10) / 10,
+                restockRate: Math.round(restockRate * 10) / 10,
+                totalReturns: returns.length,
+                totalRefundAmount: returns.reduce((s, r) => s + r.totalRefund, 0),
+            },
+        })
+    } catch (err) {
+        console.error('Return analytics error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  POST /api/returns
+// ═══════════════════════════════════════════════════════════════════════════════
+
+router.post('/', authMiddleware, validate(CreateReturnSchema), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const { code, originalInvoice, transactionId, customerName, customerPhone, reason, items, totalRefund, notes, refundMethod, staffName } = req.body
         if (!originalInvoice?.trim()) return res.status(400).json({ success: false, error: 'Original invoice required' })
         if (!customerName?.trim()) return res.status(400).json({ success: false, error: 'Customer name required' })
 
-        // Auto-generate code if not provided
+        // Auto-generate code
         const count = await prisma.returnOrder.count()
-        const returnCode = code || `RT-${String(count + 1).padStart(3, '0')}`
+        const returnCode = code || `RT-${String(count + 1).padStart(4, '0')}`
 
         const returnOrder = await prisma.returnOrder.create({
             data: {
                 code: returnCode,
                 originalInvoice: originalInvoice.trim(),
+                transactionId: transactionId || null,
                 customerName: customerName.trim(),
                 customerPhone: customerPhone || null,
                 reason: reason || 'other',
-                items: JSON.stringify(items || []),
                 totalRefund: Number(totalRefund) || 0,
+                refundMethod: refundMethod || null,
+                staffName: staffName || null,
                 notes: notes || null,
+                items: {
+                    create: (items || []).map((item: any) => ({
+                        productId: item.productId || null,
+                        productName: item.productName,
+                        sku: item.sku || null,
+                        quantity: Number(item.quantity) || 1,
+                        unitPrice: Number(item.unitPrice) || 0,
+                        returnReason: item.returnReason || null,
+                        condition: item.condition || null,
+                    })),
+                },
             },
+            include: { items: true },
         })
-        res.status(201).json({ success: true, data: { ...returnOrder, items: JSON.parse(returnOrder.items) } })
-    } catch (err) {
+        res.status(201).json({ success: true, data: returnOrder })
+    } catch (err: any) {
         console.error('Create return error:', err)
-        res.status(500).json({ success: false, error: 'Internal server error' })
+        res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message || String(err) })
     }
 })
 
-// PUT /api/returns/:id
-router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
+// ═══════════════════════════════════════════════════════════════════════════════
+//  PUT /api/returns/:id
+// ═══════════════════════════════════════════════════════════════════════════════
+
+router.put('/:id', authMiddleware, validate(UpdateReturnSchema), async (req: AuthRequest, res: Response) => {
     try {
-        const { status, notes } = req.body
+        const prisma = req.storePrisma!
+        const retId = String(req.params.id)
+        const { status, notes, refundMethod, staffName } = req.body
         const data: any = {}
         if (status !== undefined) {
             data.status = status
-            if (status === 'approved' || status === 'rejected' || status === 'refunded') {
-                data.processedAt = new Date()
+            if (['approved', 'rejected'].includes(status)) data.processedAt = new Date()
+            if (['refunded', 'exchanged'].includes(status)) {
+                data.processedAt = data.processedAt || new Date()
+                data.refundedAt = new Date()
             }
         }
         if (notes !== undefined) data.notes = notes
+        if (refundMethod !== undefined) data.refundMethod = refundMethod
+        if (staffName !== undefined) data.staffName = staffName
 
-        const returnOrder = await prisma.returnOrder.update({ where: { id: req.params.id }, data })
-        res.json({ success: true, data: { ...returnOrder, items: JSON.parse(returnOrder.items) } })
+        const returnOrder = await prisma.returnOrder.update({
+            where: { id: retId },
+            data,
+            include: { items: true },
+        })
+        res.json({ success: true, data: returnOrder })
     } catch (err) {
         res.status(500).json({ success: false, error: 'Internal server error' })
     }
 })
 
-// DELETE /api/returns/:id
-router.delete('/:id', authMiddleware, async (req: Request, res: Response) => {
+// ═══════════════════════════════════════════════════════════════════════════════
+//  POST /api/returns/:id/process-refund
+// ═══════════════════════════════════════════════════════════════════════════════
+
+router.post('/:id/process-refund', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-        await prisma.returnOrder.delete({ where: { id: req.params.id } })
+        const prisma = req.storePrisma!
+        const retId = String(req.params.id)
+        const { refundMethod, refundAmount, staffName } = req.body
+
+        const returnOrder = await prisma.returnOrder.findUnique({
+            where: { id: retId },
+            include: { items: true },
+        })
+        if (!returnOrder) return res.status(404).json({ success: false, error: 'Không tìm thấy phiếu trả' })
+        if (['refunded', 'exchanged', 'rejected'].includes(returnOrder.status)) {
+            return res.status(400).json({ success: false, error: 'Phiếu này đã được xử lý' })
+        }
+
+        const amount = Number(refundAmount) || returnOrder.totalRefund
+
+        // Update return order
+        const updated = await prisma.returnOrder.update({
+            where: { id: retId },
+            data: {
+                status: refundMethod === 'exchange' ? 'exchanged' : 'refunded',
+                refundMethod: refundMethod || 'cash',
+                refundAmount: amount,
+                staffName: staffName || returnOrder.staffName,
+                processedAt: returnOrder.processedAt || new Date(),
+                refundedAt: new Date(),
+            },
+            include: { items: true },
+        })
+
+        // Create refund transaction record
+        try {
+            const txCount = await prisma.transaction.count()
+            await prisma.transaction.create({
+                data: {
+                    receiptNumber: `RF-${String(txCount + 1).padStart(4, '0')}`,
+                    type: 'refund',
+                    customerName: returnOrder.customerName,
+                    customerPhone: returnOrder.customerPhone || null,
+                    subtotal: -amount,
+                    discount: 0,
+                    tax: 0,
+                    total: -amount,
+                    paymentMethod: refundMethod === 'bank_transfer' ? 'transfer' : refundMethod === 'store_credit' ? 'credit' : 'cash',
+                    status: 'completed',
+                    items: JSON.stringify(returnOrder.items.map(i => ({
+                        productName: i.productName, sku: i.sku, quantity: -i.quantity, unitPrice: i.unitPrice,
+                    }))),
+                    notes: `Hoàn tiền phiếu ${returnOrder.code}`,
+                },
+            })
+        } catch (_) {
+            // Transaction creation is optional — don't fail the refund
+        }
+
+        res.json({ success: true, data: updated })
+    } catch (err) {
+        console.error('Process refund error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  POST /api/returns/:id/restock
+// ═══════════════════════════════════════════════════════════════════════════════
+
+router.post('/:id/restock', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const retId = String(req.params.id)
+        const { itemIds } = req.body // Optional: specific items to restock
+
+        const returnOrder = await prisma.returnOrder.findUnique({
+            where: { id: retId },
+            include: { items: true },
+        })
+        if (!returnOrder) return res.status(404).json({ success: false, error: 'Không tìm thấy phiếu trả' })
+
+        // Determine which items to restock
+        const toRestock = itemIds
+            ? returnOrder.items.filter(i => itemIds.includes(i.id) && !i.restocked)
+            : returnOrder.items.filter(i => !i.restocked && i.condition !== 'damaged' && i.condition !== 'defective')
+
+        let restocked = 0
+        for (const item of toRestock) {
+            // Mark item as restocked
+            await prisma.returnItem.update({
+                where: { id: item.id },
+                data: { restocked: true },
+            })
+
+            // Update product stock if productId exists
+            if (item.productId) {
+                try {
+                    await prisma.product.update({
+                        where: { id: item.productId },
+                        data: { stock: { increment: item.quantity } },
+                    })
+                } catch (_) {
+                    // Product may not exist
+                }
+            }
+            restocked++
+        }
+
+        res.json({ success: true, data: { restocked, total: returnOrder.items.length } })
+    } catch (err) {
+        console.error('Restock error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  DELETE /api/returns/:id
+// ═══════════════════════════════════════════════════════════════════════════════
+
+router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        await prisma.returnOrder.delete({ where: { id: String(req.params.id) } })
         res.json({ success: true })
     } catch (err) {
         res.status(500).json({ success: false, error: 'Internal server error' })

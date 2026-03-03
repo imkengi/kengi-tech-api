@@ -1,29 +1,18 @@
-# ═══════════════════════════════════════════════════════════════════════════════
-# Google Cloud Build — Build & Deploy to Cloud Run
-# ═══════════════════════════════════════════════════════════════════════════════
-#
-# Usage:
-#   gcloud builds submit --config cloudbuild.yaml .
-#
-# Or set up a Cloud Build trigger for auto-deploy on git push.
-#
-# Required substitutions (set in Cloud Build trigger or CLI):
-#   _REGION: Cloud Run region (default: asia-southeast1)
-#   _SERVICE_NAME: Cloud Run service name (default: open-retail-api)
-#   _CLOUD_SQL_INSTANCE: Cloud SQL connection name (PROJECT:REGION:INSTANCE)
-# ═══════════════════════════════════════════════════════════════════════════════
-
 substitutions:
   _REGION: asia-southeast1
   _SERVICE_NAME: kengi-tech-api
+  _CLOUD_SQL_INSTANCE: kengi-tech:asia-southeast1:kengi-tech-db
+  _DB_NAME: kengi_tech
+  _DB_USER: postgres
+  _DB_PASSWORD: KengiTech2026@
+  _JWT_SECRET: open-retail-super-secret-key-change-in-production
+  _REDIS_URL: ""
 
 steps:
   # Step 1: Build Docker image
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
-      - '-t'
-      - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:$COMMIT_SHA'
       - '-t'
       - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:latest'
       - '.'
@@ -32,14 +21,9 @@ steps:
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'push'
-      - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:$COMMIT_SHA'
-
-  - name: 'gcr.io/cloud-builders/docker'
-    args:
-      - 'push'
       - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:latest'
 
-  # Step 3: Deploy to Cloud Run
+  # Step 3: Deploy to Cloud Run with Cloud SQL connector
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     args:
@@ -47,7 +31,7 @@ steps:
       - 'deploy'
       - '${_SERVICE_NAME}'
       - '--image'
-      - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:$COMMIT_SHA'
+      - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:latest'
       - '--region'
       - '${_REGION}'
       - '--platform'
@@ -63,11 +47,19 @@ steps:
       - '3'
       - '--port'
       - '8080'
+      - '--add-cloudsql-instances'
+      - '${_CLOUD_SQL_INSTANCE}'
       - '--set-env-vars'
-      - 'NODE_ENV=production'
+      - >-
+        NODE_ENV=production,
+        DATABASE_URL=postgresql://${_DB_USER}:${_DB_PASSWORD}@localhost/${_DB_NAME}?host=/cloudsql/${_CLOUD_SQL_INSTANCE},
+        JWT_SECRET=${_JWT_SECRET},
+        CORS_ORIGIN=*,
+        ADMIN_KEY=kengi-super-admin-2026,
+        APP_BASE_URL=https://kengi.vn,
+        REDIS_URL=${_REDIS_URL}
 
 images:
-  - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:$COMMIT_SHA'
   - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:latest'
 
 options:

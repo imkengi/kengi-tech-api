@@ -1,12 +1,12 @@
 import { Router, Request, Response } from 'express'
-import prisma from '../lib/prisma'
-import { authMiddleware } from '../middleware/auth'
+import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
 
 const router = Router()
 
 // GET /api/purchase-orders
-router.get('/', authMiddleware, async (req: Request, res: Response) => {
+router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
         const { search, status } = req.query
         const where: any = {}
         if (status && status !== 'all') where.status = status
@@ -30,10 +30,11 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
 })
 
 // GET /api/purchase-orders/:id
-router.get('/:id', authMiddleware, async (req: Request, res: Response) => {
+router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
         const po = await prisma.purchaseOrder.findUnique({
-            where: { id: req.params.id },
+            where: { id: String(req.params.id) },
             include: { items: true, supplier: true },
         })
         if (!po) return res.status(404).json({ success: false, error: 'Not found' })
@@ -44,8 +45,9 @@ router.get('/:id', authMiddleware, async (req: Request, res: Response) => {
 })
 
 // POST /api/purchase-orders
-router.post('/', authMiddleware, async (req: Request, res: Response) => {
+router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
         const { supplierId, supplierName, items, notes, expectedDate } = req.body
         if (!supplierName?.trim()) return res.status(400).json({ success: false, error: 'Supplier name required' })
         if (!items?.length) return res.status(400).json({ success: false, error: 'At least one item required' })
@@ -82,30 +84,73 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
 })
 
 // PUT /api/purchase-orders/:id/status
-router.put('/:id/status', authMiddleware, async (req: Request, res: Response) => {
+router.put('/:id/status', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
         const { status } = req.body
         const validStatuses = ['draft', 'pending', 'confirmed', 'shipping', 'received', 'cancelled']
         if (!validStatuses.includes(status)) return res.status(400).json({ success: false, error: 'Invalid status' })
 
+        // Fetch full PO before update (to check previous status and items)
+        const existing: any = await prisma.purchaseOrder.findUnique({
+            where: { id: String(req.params.id) },
+            include: { items: true },
+        })
+        if (!existing) return res.status(404).json({ success: false, error: 'Purchase order not found' })
+
         const data: any = { status }
         if (status === 'received') data.receivedDate = new Date()
 
-        const po = await prisma.purchaseOrder.update({
-            where: { id: req.params.id },
+        const po: any = await prisma.purchaseOrder.update({
+            where: { id: String(req.params.id) },
             data,
             include: { items: true },
         })
+
+        // ─── Auto-update product stock when marking as received ───────────────
+        if (status === 'received' && existing.status !== 'received') {
+            let updatedCount = 0
+            for (const item of existing.items) {
+                let product: any = null
+
+                // Try SKU first, then fall back to product name
+                if (item.sku?.trim()) {
+                    product = await prisma.product.findFirst({
+                        where: { sku: { equals: item.sku.trim(), mode: 'insensitive' } },
+                    })
+                }
+                if (!product && item.productName?.trim()) {
+                    product = await prisma.product.findFirst({
+                        where: { name: { equals: item.productName.trim(), mode: 'insensitive' } },
+                    })
+                }
+
+                if (product) {
+                    await prisma.product.update({
+                        where: { id: product.id },
+                        data: { stock: { increment: item.quantity } },
+                    })
+                    updatedCount++
+                } else {
+                    console.warn(`[PO received] Product not found: SKU=${item.sku} name=${item.productName}`)
+                }
+            }
+            console.log(`[PO received] ${po.code} — stock updated for ${updatedCount}/${existing.items.length} items`)
+        }
+
         res.json({ success: true, data: po })
     } catch (err) {
+        console.error('Update PO status error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
     }
 })
 
+
 // DELETE /api/purchase-orders/:id
-router.delete('/:id', authMiddleware, async (req: Request, res: Response) => {
+router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-        await prisma.purchaseOrder.delete({ where: { id: req.params.id } })
+        const prisma = req.storePrisma!
+        await prisma.purchaseOrder.delete({ where: { id: String(req.params.id) } })
         res.json({ success: true })
     } catch (err) {
         res.status(500).json({ success: false, error: 'Internal server error' })

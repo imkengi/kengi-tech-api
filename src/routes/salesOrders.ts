@@ -1,12 +1,13 @@
 import { Router, Request, Response } from 'express'
-import prisma from '../lib/prisma'
-import { authMiddleware } from '../middleware/auth'
+import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
 
 const router = Router()
 
 // GET /api/sales-orders — List with filters
-router.get('/', authMiddleware, async (req: Request, res: Response) => {
+router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
+        const branchId = getBranchId(req)
         const { status, salesUserId } = req.query
         const where: any = {}
         if (status && status !== 'all') where.status = String(status)
@@ -29,9 +30,11 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
 })
 
 // GET /api/sales-orders/pending/count — Badge count for POS
-router.get('/pending/count', authMiddleware, async (_req: Request, res: Response) => {
+router.get('/pending/count', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-        const count = await prisma.salesOrder.count({ where: { status: 'pending' } })
+        const prisma = req.storePrisma!
+        const branchId = getBranchId(req)
+        const count = await prisma.salesOrder.count({ where: { ...getBranchFilter(req as any), status: 'pending' } })
         res.json({ success: true, data: { count } })
     } catch (err) {
         res.status(500).json({ success: false, error: 'Internal server error' })
@@ -39,8 +42,10 @@ router.get('/pending/count', authMiddleware, async (_req: Request, res: Response
 })
 
 // POST /api/sales-orders — Sales staff creates new order
-router.post('/', authMiddleware, async (req: Request, res: Response) => {
+router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
+        const branchId = getBranchId(req)
         const currentUser = (req as any).user
         const { customerId, customerName, note, items, discount } = req.body
 
@@ -66,9 +71,7 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
         const discountAmount = Number(discount) || 0
         const total = subtotal - discountAmount
 
-        const order = await prisma.salesOrder.create({
-            data: {
-                orderNumber,
+        const order = await prisma.salesOrder.create({ data: { orderNumber,
                 salesUserId: currentUser.id,
                 customerId: customerId || null,
                 customerName: customerName || null,
@@ -94,8 +97,10 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
 })
 
 // PUT /api/sales-orders/:id/status — Update order status
-router.put('/:id/status', authMiddleware, async (req: Request, res: Response) => {
+router.put('/:id/status', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
+        const branchId = getBranchId(req)
         const { status } = req.body
         const validStatuses = ['pending', 'processing', 'completed', 'cancelled']
         if (!validStatuses.includes(status)) {
@@ -103,7 +108,7 @@ router.put('/:id/status', authMiddleware, async (req: Request, res: Response) =>
         }
 
         const order = await prisma.salesOrder.update({
-            where: { id: req.params.id },
+            where: { id: String(req.params.id) },
             data: { status },
             include: {
                 salesUser: { select: { id: true, name: true, code: true } },
@@ -118,14 +123,16 @@ router.put('/:id/status', authMiddleware, async (req: Request, res: Response) =>
 })
 
 // DELETE /api/sales-orders/:id — Delete order (only pending)
-router.delete('/:id', authMiddleware, async (req: Request, res: Response) => {
+router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-        const order = await prisma.salesOrder.findUnique({ where: { id: req.params.id } })
+        const prisma = req.storePrisma!
+        const branchId = getBranchId(req)
+        const order = await prisma.salesOrder.findUnique({ where: { id: String(req.params.id) } })
         if (!order) return res.status(404).json({ success: false, error: 'Not found' })
         if (order.status !== 'pending' && order.status !== 'cancelled') {
             return res.status(400).json({ success: false, error: 'Chỉ xóa được đơn pending/cancelled' })
         }
-        await prisma.salesOrder.delete({ where: { id: req.params.id } })
+        await prisma.salesOrder.delete({ where: { id: String(req.params.id) } })
         res.json({ success: true })
     } catch (err) {
         res.status(500).json({ success: false, error: 'Internal server error' })

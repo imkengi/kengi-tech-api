@@ -1,12 +1,12 @@
 import { Router, Request, Response } from 'express'
-import prisma from '../lib/prisma'
-import { authMiddleware } from '../middleware/auth'
+import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
 
 const router = Router()
 
 // GET /api/debts — all entries, optional filter by customerId
-router.get('/', authMiddleware, async (req: Request, res: Response) => {
+router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
         const { customerId, type } = req.query
         const where: any = {}
         if (customerId) where.customerId = customerId
@@ -21,8 +21,9 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
 })
 
 // GET /api/debts/summary — grouped by customer with totals
-router.get('/summary', authMiddleware, async (_req: Request, res: Response) => {
+router.get('/summary', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
         // 1. Get all customers with debt > 0
         const customersWithDebt = await prisma.customer.findMany({
             where: { debt: { gt: 0 } },
@@ -79,23 +80,21 @@ router.get('/summary', authMiddleware, async (_req: Request, res: Response) => {
 })
 
 // POST /api/debts — add debt or payment entry
-router.post('/', authMiddleware, async (req: Request, res: Response) => {
+router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
         const { customerId, customerName, phone, type, amount, description } = req.body
         if (!customerId?.trim()) return res.status(400).json({ success: false, error: 'Customer ID required' })
         if (!amount || amount <= 0) return res.status(400).json({ success: false, error: 'Valid amount required' })
 
         // Get current balance for this customer
-        const lastEntry = await prisma.debtEntry.findFirst({
-            where: { customerId },
+        const lastEntry = await prisma.debtEntry.findFirst({ where: { ...getBranchFilter(req as any), customerId },
             orderBy: { createdAt: 'desc' },
         })
         const currentBalance = lastEntry?.balance ?? 0
         const newBalance = type === 'debt' ? currentBalance + Number(amount) : currentBalance - Number(amount)
 
-        const entry = await prisma.debtEntry.create({
-            data: {
-                customerId: customerId.trim(),
+        const entry = await prisma.debtEntry.create({ data: { customerId: customerId.trim(),
                 customerName: customerName?.trim() || 'Khách hàng',
                 phone: phone || null,
                 type: type || 'debt',
@@ -112,9 +111,10 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
 })
 
 // DELETE /api/debts/:id
-router.delete('/:id', authMiddleware, async (req: Request, res: Response) => {
+router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-        await prisma.debtEntry.delete({ where: { id: req.params.id } })
+        const prisma = req.storePrisma!
+        await prisma.debtEntry.delete({ where: { id: String(req.params.id) } })
         res.json({ success: true })
     } catch (err) {
         res.status(500).json({ success: false, error: 'Internal server error' })

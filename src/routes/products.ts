@@ -1,39 +1,46 @@
 import { Router, Request, Response } from 'express'
-import prisma from '../lib/prisma'
-import { authMiddleware } from '../middleware/auth'
+import { authMiddleware, AuthRequest, getBranchFilter } from '../middleware/auth'
+import { requireRole } from '../middleware/roleMiddleware'
+import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
+import { validate } from '../middleware/validate'
+import { CreateProductSchema, UpdateProductSchema } from '../schemas'
 
 const router = Router()
 
 // ─── Products CRUD ──────────────────────────────────────────────────────────
 
 // GET /api/products
-router.get('/', authMiddleware, async (req: Request, res: Response) => {
+router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
+        // Cache check
+        const cacheKey = `products:${req.user?.storeSchema || 'default'}:${JSON.stringify(req.query)}`
+        const cached = await cacheGet(cacheKey)
+        if (cached) return res.json(cached)
+
         const {
-            search, categoryId, brandId, stockStatus,
-            page = '1', pageSize = '20', sortBy = 'createdAt', sortOrder = 'desc',
-        } = req.query
+            search, categoryId, brandId, stockStatus, productType,
+            page = '1', pageSize = '20', sortBy = 'createdAt', sortOrder = 'desc' } = req.query
 
         const where: any = {}
 
         if (search) {
             where.OR = [
-                { name: { contains: search as string } },
-                { sku: { contains: search as string } },
-                { barcode: { contains: search as string } },
+                { name: { contains: search as string, mode: 'insensitive' } },
+                { sku: { contains: search as string, mode: 'insensitive' } },
+                { barcode: { contains: search as string, mode: 'insensitive' } },
             ]
         }
-        if (categoryId) where.categoryId = categoryId
-        if (brandId) where.brandId = brandId
+        if (categoryId) where.categoryId = categoryId as string
+        if (brandId) where.brandId = brandId as string
+        if (productType) where.productType = productType as string
+        if (stockStatus === 'in_stock') where.stock = { gt: 0 }
         if (stockStatus === 'out_of_stock') where.stock = 0
-        else if (stockStatus === 'low_stock') where.stock = { gt: 0 }  // post-filter for minStock below
-        else if (stockStatus === 'in_stock') where.stock = { gt: 0 }
 
         const pageNum = Math.max(1, parseInt(page as string))
         const size = Math.max(1, Math.min(100, parseInt(pageSize as string)))
         const skip = (pageNum - 1) * size
 
-        // For low_stock, we need raw comparison — simplify with post-filter
         const [total, products] = await Promise.all([
             prisma.product.count({ where }),
             prisma.product.findMany({
@@ -41,35 +48,33 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
                 include: {
                     category: true,
                     brand: true,
-                    unitConversions: true,
                     images: true,
-                    serials: true,
+                    unitConversions: true
                 },
-                orderBy: { [sortBy as string]: sortOrder },
+                orderBy: { [sortBy as string]: sortOrder as string },
                 skip,
-                take: stockStatus === 'low_stock' ? undefined : size, // fetch all for low_stock post-filter
+                take: size
             }),
         ])
 
-        // Post-filter for low_stock (stock > 0 AND stock <= minStock)
         let filteredProducts = products
         let filteredTotal = total
         if (stockStatus === 'low_stock') {
-            filteredProducts = products.filter(p => p.stock > 0 && p.stock <= p.minStock)
+            filteredProducts = products.filter((p: any) => p.stock > 0 && p.stock <= p.minStock)
             filteredTotal = filteredProducts.length
         }
 
-        // Map to match frontend type shape
-        const data = filteredProducts.map(p => ({
+        const data = filteredProducts.map((p: any) => ({
             id: p.id,
             name: p.name,
             sku: p.sku,
             barcode: p.barcode,
             description: p.description,
+            productType: p.productType || 'goods',
             categoryId: p.categoryId,
-            categoryName: (p as any).category?.name ?? null,
+            categoryName: p.category?.name || '',
             brandId: p.brandId,
-            brandName: (p as any).brand?.name ?? null,
+            brandName: p.brand?.name || '',
             costPrice: p.costPrice,
             sellingPrice: p.sellingPrice,
             taxInclusive: p.taxInclusive,
@@ -78,23 +83,24 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
             maxStock: p.maxStock,
             baseUnit: p.baseUnit,
             trackSerial: p.trackSerial,
-            unitConversions: p.unitConversions,
-            images: p.images,
-            serials: (p as any).serials ?? [],
-            createdAt: p.createdAt.toISOString(),
-            updatedAt: p.updatedAt.toISOString(),
+            images: (p.images || []).map((img: any) => ({ id: img.id, url: img.url, isPrimary: img.isPrimary })),
+            unitConversions: p.unitConversions || [],
+            createdAt: p.createdAt?.toISOString?.() || p.createdAt,
+            updatedAt: p.updatedAt?.toISOString?.() || p.updatedAt
         }))
 
-        res.json({
+        const response = {
             success: true,
             data: {
                 items: data,
                 total: filteredTotal,
                 page: pageNum,
                 pageSize: size,
-                totalPages: Math.ceil(filteredTotal / size),
-            },
-        })
+                totalPages: Math.ceil(filteredTotal / size)
+            }
+        }
+        await cacheSet(cacheKey, response, 60) // Cache 60s
+        res.json(response)
     } catch (err) {
         console.error('Get products error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
@@ -102,25 +108,27 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
 })
 
 // GET /api/products/:id
-router.get('/:id', authMiddleware, async (req: Request, res: Response) => {
+router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-        const product = await prisma.product.findUnique({
-            where: { id: req.params.id },
-            include: { category: true, brand: true, unitConversions: true, images: true, serials: true },
+        const prisma = req.storePrisma!
+        const product = await prisma.product.findFirst({
+            where: { id: String(req.params.id) },
+            include: {
+                category: true,
+                brand: true,
+                images: true,
+                unitConversions: true,
+                serials: true
+            }
         })
-
-        if (!product) {
-            res.status(404).json({ success: false, error: 'Product not found' })
-            return
-        }
-
+        if (!product) return res.status(404).json({ success: false, error: 'Product not found' })
         res.json({
             success: true,
             data: {
                 ...product,
                 createdAt: product.createdAt.toISOString(),
-                updatedAt: product.updatedAt.toISOString(),
-            },
+                updatedAt: product.updatedAt.toISOString()
+            }
         })
     } catch (err) {
         console.error('Get product error:', err)
@@ -129,28 +137,22 @@ router.get('/:id', authMiddleware, async (req: Request, res: Response) => {
 })
 
 // POST /api/products
-router.post('/', authMiddleware, async (req: Request, res: Response) => {
+router.post('/', authMiddleware, requireRole('admin', 'manager'), validate(CreateProductSchema), async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
         const { unitConversions, images, ...productData } = req.body
 
         const product = await prisma.product.create({
             data: {
                 ...productData,
                 unitConversions: unitConversions?.length ? {
-                    create: unitConversions.map((uc: any) => ({
-                        fromUnit: uc.fromUnit,
-                        toUnit: uc.toUnit,
-                        conversionRate: uc.conversionRate,
-                    })),
+                    createMany: { data: unitConversions }
                 } : undefined,
                 images: images?.length ? {
-                    create: images.map((img: any) => ({
-                        url: img.url,
-                        isPrimary: img.isPrimary || false,
-                    })),
-                } : undefined,
+                    createMany: { data: images }
+                } : undefined
             },
-            include: { category: true, brand: true, unitConversions: true, images: true, serials: true },
+            include: { category: true, brand: true, images: true, unitConversions: true }
         })
 
         res.status(201).json({
@@ -158,9 +160,11 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
             data: {
                 ...product,
                 createdAt: product.createdAt.toISOString(),
-                updatedAt: product.updatedAt.toISOString(),
-            },
+                updatedAt: product.updatedAt.toISOString()
+            }
         })
+        // Invalidate products cache
+        cacheDel(`products:${req.user?.storeSchema || 'default'}:*`).catch(() => { })
     } catch (err) {
         console.error('Create product error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
@@ -168,50 +172,44 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
 })
 
 // PUT /api/products/:id
-router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
+router.put('/:id', authMiddleware, requireRole('admin', 'manager'), validate(UpdateProductSchema), async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
+        // Verify product belongs to store
+        const existing = await prisma.product.findFirst({ where: { id: String(req.params.id) } })
+        if (!existing) return res.status(404).json({ success: false, error: 'Product not found' })
+
         const { unitConversions, images, ...rawUpdates } = req.body
 
-        // Only allow fields that exist in Prisma Product model
         const allowedFields = [
             'name', 'sku', 'barcode', 'description', 'categoryId', 'brandId',
-            'costPrice', 'sellingPrice', 'taxInclusive', 'stock', 'minStock',
-            'maxStock', 'baseUnit', 'trackSerial',
+            'costPrice', 'sellingPrice', 'taxInclusive', 'stock', 'minStock', 'maxStock',
+            'baseUnit', 'trackSerial', 'productType',
         ]
         const updates: any = {}
         for (const key of allowedFields) {
-            if (key in rawUpdates && rawUpdates[key] !== undefined) {
-                updates[key] = rawUpdates[key]
-            }
+            if (rawUpdates[key] !== undefined) updates[key] = rawUpdates[key]
         }
 
-        // If unitConversions provided, delete old ones and create new
         if (unitConversions) {
-            await prisma.unitConversion.deleteMany({ where: { productId: req.params.id } })
+            await prisma.unitConversion.deleteMany({ where: { productId: String(req.params.id) } })
         }
         if (images) {
-            await prisma.productImage.deleteMany({ where: { productId: req.params.id } })
+            await prisma.productImage.deleteMany({ where: { productId: String(req.params.id) } })
         }
 
         const product = await prisma.product.update({
-            where: { id: req.params.id },
+            where: { id: String(req.params.id) },
             data: {
                 ...updates,
                 unitConversions: unitConversions?.length ? {
-                    create: unitConversions.map((uc: any) => ({
-                        fromUnit: uc.fromUnit,
-                        toUnit: uc.toUnit,
-                        conversionRate: uc.conversionRate,
-                    })),
+                    createMany: { data: unitConversions }
                 } : undefined,
                 images: images?.length ? {
-                    create: images.map((img: any) => ({
-                        url: img.url,
-                        isPrimary: img.isPrimary || false,
-                    })),
-                } : undefined,
+                    createMany: { data: images }
+                } : undefined
             },
-            include: { category: true, brand: true, unitConversions: true, images: true, serials: true },
+            include: { category: true, brand: true, images: true, unitConversions: true }
         })
 
         res.json({
@@ -219,9 +217,10 @@ router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
             data: {
                 ...product,
                 createdAt: product.createdAt.toISOString(),
-                updatedAt: product.updatedAt.toISOString(),
-            },
+                updatedAt: product.updatedAt.toISOString()
+            }
         })
+        cacheDel(`products:${req.user?.storeSchema || 'default'}:*`).catch(() => { })
     } catch (err) {
         console.error('Update product error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
@@ -229,100 +228,104 @@ router.put('/:id', authMiddleware, async (req: Request, res: Response) => {
 })
 
 // DELETE /api/products/:id
-router.delete('/:id', authMiddleware, async (req: Request, res: Response) => {
+router.delete('/:id', authMiddleware, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
     try {
-        await prisma.product.delete({ where: { id: req.params.id } })
-        res.json({ success: true, message: 'Product deleted' })
+        const prisma = req.storePrisma!
+        const existing = await prisma.product.findFirst({ where: { id: String(req.params.id) } })
+        if (!existing) return res.status(404).json({ success: false, error: 'Product not found' })
+
+        await prisma.product.delete({ where: { id: String(req.params.id) } })
+        res.json({ success: true })
+        cacheDel(`products:${req.user?.storeSchema || 'default'}:*`).catch(() => { })
     } catch (err) {
         console.error('Delete product error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
     }
 })
 
-// ─── Serial / IMEI Management ───────────────────────────────────────────────
-
-// GET /api/products/:id/serials
-router.get('/:id/serials', authMiddleware, async (req: Request, res: Response) => {
+// POST /api/products/bulk-import
+router.post('/bulk-import', authMiddleware, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
     try {
-        const { status } = req.query
-        const where: any = { productId: req.params.id }
-        if (status) where.status = status
+        const prisma = req.storePrisma!
+        const { rows } = req.body
+        if (!Array.isArray(rows) || rows.length === 0) {
+            return res.status(400).json({ success: false, error: 'No rows provided' })
+        }
 
-        const serials = await prisma.productSerial.findMany({
-            where,
-            orderBy: { createdAt: 'desc' },
-        })
-        res.json({ success: true, data: serials })
-    } catch (err) {
-        console.error('Get serials error:', err)
-        res.status(500).json({ success: false, error: 'Internal server error' })
-    }
-})
+        const allCategories = await prisma.category.findMany({ where: { ...getBranchFilter(req as any) } })
+        const catByName = new Map<string, string>()
+        for (const c of allCategories) catByName.set(c.name.toLowerCase(), c.id)
 
-// POST /api/products/:id/serials
-router.post('/:id/serials', authMiddleware, async (req: Request, res: Response) => {
-    try {
-        const { serial, serials: serialList, note } = req.body
-        const productId = req.params.id
-
-        // Support both single serial and batch
-        const toCreate = serialList?.length
-            ? serialList.map((s: string) => ({ serial: s.trim(), note }))
-            : [{ serial: serial?.trim(), note }]
-
-        const created = []
-        for (const item of toCreate) {
-            if (!item.serial) continue
-            const record = await prisma.productSerial.create({
-                data: {
-                    productId,
-                    serial: item.serial,
-                    note: item.note || null,
-                },
+        async function findOrCreateCategory(name: string, level: number, parentId?: string): Promise<string> {
+            const key = (parentId ? parentId + ':' : '') + name.toLowerCase()
+            if (catByName.has(key)) return catByName.get(key)!
+            const existing = await prisma.category.findFirst({
+                where: { name, level, parentId: parentId || null }
             })
-            created.push(record)
+            if (existing) { catByName.set(key, existing.id); return existing.id }
+            const created = await prisma.category.create({
+                data: { name, level, parentId: parentId || null }
+            })
+            catByName.set(key, created.id)
+            return created.id
         }
 
-        res.status(201).json({ success: true, data: created })
-    } catch (err: any) {
-        if (err.code === 'P2002') {
-            res.status(409).json({ success: false, error: 'Serial đã tồn tại cho sản phẩm này' })
-            return
-        }
-        console.error('Add serial error:', err)
-        res.status(500).json({ success: false, error: 'Internal server error' })
-    }
-})
-
-// PUT /api/products/:id/serials/:serialId
-router.put('/:id/serials/:serialId', authMiddleware, async (req: Request, res: Response) => {
-    try {
-        const { status, note } = req.body
-        const data: any = {}
-        if (status) {
-            data.status = status
-            if (status === 'sold') data.soldAt = new Date()
-        }
-        if (note !== undefined) data.note = note
-
-        const updated = await prisma.productSerial.update({
-            where: { id: req.params.serialId },
-            data,
+        const existingProducts = await prisma.product.findMany({
+            where: { ...getBranchFilter(req as any) },
+            select: { id: true, sku: true, stock: true }
         })
-        res.json({ success: true, data: updated })
-    } catch (err) {
-        console.error('Update serial error:', err)
-        res.status(500).json({ success: false, error: 'Internal server error' })
-    }
-})
+        const productBySku = new Map<string, { id: string; stock: number }>()
+        for (const p of existingProducts) productBySku.set(p.sku, { id: p.id, stock: p.stock })
 
-// DELETE /api/products/:id/serials/:serialId
-router.delete('/:id/serials/:serialId', authMiddleware, async (req: Request, res: Response) => {
-    try {
-        await prisma.productSerial.delete({ where: { id: req.params.serialId } })
-        res.json({ success: true, message: 'Serial deleted' })
+        let created = 0, updated = 0, skipped = 0, errors: string[] = []
+
+        for (const row of rows) {
+            try {
+                if (!row.name || !row.sku) { skipped++; continue }
+                const existing = productBySku.get(row.sku)
+
+                let categoryId: string | undefined
+                if (row.category) {
+                    const names = row.category.split('>').map((s: string) => s.trim())
+                    let parentId: string | undefined
+                    for (let i = 0; i < names.length; i++) {
+                        parentId = await findOrCreateCategory(names[i], i + 1, parentId)
+                    }
+                    categoryId = parentId
+                }
+                if (!categoryId) {
+                    categoryId = await findOrCreateCategory('Chung', 1)
+                }
+
+                const productData: any = {
+                    name: row.name,
+                    sku: row.sku,
+                    barcode: row.barcode || null,
+                    description: row.description || null,
+                    categoryId,
+                    costPrice: parseFloat(row.costPrice) || 0,
+                    sellingPrice: parseFloat(row.sellingPrice) || 0,
+                    stock: parseInt(row.stock) || 0,
+                    minStock: parseInt(row.minStock) || 0,
+                    baseUnit: row.unit || 'Cái'
+                }
+
+                if (existing) {
+                    await prisma.product.update({ where: { id: existing.id }, data: productData })
+                    updated++
+                } else {
+                    await prisma.product.create({ data: productData })
+                    created++
+                }
+            } catch (err: any) {
+                errors.push(`${row.sku || 'unknown'}: ${err.message?.slice(0, 60)}`)
+                if (errors.length >= 10) break
+            }
+        }
+
+        res.json({ success: true, created, updated, skipped, errors: errors.slice(0, 10) })
     } catch (err) {
-        console.error('Delete serial error:', err)
+        console.error('Bulk import error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
     }
 })

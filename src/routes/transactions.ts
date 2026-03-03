@@ -1,12 +1,21 @@
 import { Router, Request, Response } from 'express'
-import prisma from '../lib/prisma'
-import { authMiddleware, AuthRequest } from '../middleware/auth'
+import { authMiddleware, AuthRequest, getBranchFilter, getBranchId } from '../middleware/auth'
+import { validate } from '../middleware/validate'
+import { CreateTransactionSchema } from '../schemas'
+import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 
 const router = Router()
 
 // GET /api/transactions
-router.get('/', authMiddleware, async (req: Request, res: Response) => {
+router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
+        const branchId = getBranchId(req)
+        const schema = req.user?.storeSchema || 'default'
+        const cacheKey = `${schema}:transactions:${JSON.stringify(req.query)}`
+        const cached = await cacheGet(cacheKey)
+        if (cached) return res.json(cached)
+
         const {
             search, startDate, endDate, paymentMethod, status, cashier,
             page = '1', pageSize = '20',
@@ -32,7 +41,7 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
         if (cashier) where.createdBy = cashier
 
         const pageNum = Math.max(1, parseInt(page as string))
-        const size = Math.max(1, Math.min(100, parseInt(pageSize as string)))
+        const size = Math.max(1, Math.min(10000, parseInt(pageSize as string)))
         const skip = (pageNum - 1) * size
 
         const [total, transactions] = await Promise.all([
@@ -87,11 +96,12 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
             createdByName: t.createdByName,
             notes: t.notes,
             createdAt: t.createdAt.toISOString(),
+            transactionDate: t.transactionDate?.toISOString() || t.createdAt.toISOString(),
             returnedAt: t.returnedAt?.toISOString(),
             returnReason: t.returnReason,
         }))
 
-        res.json({
+        const response = {
             success: true,
             data: {
                 items: data,
@@ -100,18 +110,155 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
                 pageSize: size,
                 totalPages: Math.ceil(filteredTotal / size),
             },
-        })
+        }
+        await cacheSet(cacheKey, response, 30)
+        res.json(response)
     } catch (err) {
         console.error('Get transactions error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
     }
 })
 
-// GET /api/transactions/:id
-router.get('/:id', authMiddleware, async (req: Request, res: Response) => {
+// GET /api/transactions/stats
+router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
+        const schema = req.user?.storeSchema || 'default'
+        const { startDate, endDate } = req.query
+        const statsCacheKey = `${schema}:transactions:stats:${startDate || ''}:${endDate || ''}`
+        const cachedStats = await cacheGet(statsCacheKey)
+        if (cachedStats) return res.json(cachedStats)
+
+        const now = new Date()
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        const yesterdayStart = new Date(todayStart.getTime() - 86400_000)
+
+        // Use provided date range or default to 30 days
+        const rangeStart = startDate ? new Date(startDate as string) : new Date(now.getTime() - 30 * 86400_000)
+        const rangeEnd = endDate ? (() => { const d = new Date(endDate as string); d.setHours(23, 59, 59, 999); return d })() : now
+
+        // Get all transactions in the specified range
+        const recent = await prisma.transaction.findMany({
+            where: { createdAt: { gte: rangeStart, lte: rangeEnd } },
+            include: { items: true, payments: true },
+            orderBy: { createdAt: 'desc' },
+        })
+
+        const completed = recent.filter(t => t.status === 'completed')
+        const partial = recent.filter(t => t.status === 'partial')
+        const voided = recent.filter(t => t.status === 'voided')
+        const returned = recent.filter(t => t.status === 'returned')
+
+        // KPI aggregations
+        const totalOrders = recent.length
+        const totalRevenue = completed.reduce((s, t) => s + t.total, 0)
+        const completedCount = completed.length
+        const voidedCount = voided.length
+        const returnedCount = returned.length
+
+        // Today vs yesterday
+        const todayTx = completed.filter(t => t.createdAt >= todayStart)
+        const yesterdayTx = completed.filter(t => t.createdAt >= yesterdayStart && t.createdAt < todayStart)
+        const revenueToday = todayTx.reduce((s, t) => s + t.total, 0)
+        const revenueYesterday = yesterdayTx.reduce((s, t) => s + t.total, 0)
+
+        // Revenue by hour (today)
+        const byHour: { hour: number; revenue: number; count: number }[] = []
+        for (let h = 0; h <= now.getHours(); h++) {
+            const hourTx = todayTx.filter(t => t.createdAt.getHours() === h)
+            byHour.push({
+                hour: h,
+                revenue: hourTx.reduce((s, t) => s + t.total, 0),
+                count: hourTx.length,
+            })
+        }
+
+        // Revenue by day (last 30 days)
+        const byDay: { date: string; revenue: number; count: number }[] = []
+        for (let d = 29; d >= 0; d--) {
+            const dayStart = new Date(now.getTime() - d * 86400_000)
+            dayStart.setHours(0, 0, 0, 0)
+            const dayEnd = new Date(dayStart.getTime() + 86400_000)
+            const dayTx = completed.filter(t => t.createdAt >= dayStart && t.createdAt < dayEnd)
+            byDay.push({
+                date: dayStart.toISOString().slice(0, 10),
+                revenue: dayTx.reduce((s, t) => s + t.total, 0),
+                count: dayTx.length,
+            })
+        }
+
+        // Payment method breakdown
+        const paymentBreakdown: Record<string, number> = {}
+        for (const t of completed) {
+            for (const p of t.payments) {
+                paymentBreakdown[p.type] = (paymentBreakdown[p.type] || 0) + p.amount
+            }
+        }
+
+        // Top products
+        const productMap = new Map<string, { name: string; qty: number; revenue: number }>()
+        for (const t of completed) {
+            for (const item of t.items) {
+                const existing = productMap.get(item.productId) || { name: item.productName, qty: 0, revenue: 0 }
+                existing.qty += item.quantity
+                existing.revenue += item.lineTotal
+                productMap.set(item.productId, existing)
+            }
+        }
+        const topProducts = Array.from(productMap.entries())
+            .map(([id, v]) => ({ id, name: v.name, quantity: v.qty, revenue: v.revenue }))
+            .sort((a, b) => b.revenue - a.revenue)
+            .slice(0, 10)
+
+        // Unique cashiers
+        const cashierSet = new Map<string, string>()
+        for (const t of recent) {
+            if (t.createdBy) cashierSet.set(t.createdBy, t.createdByName || t.createdBy)
+        }
+        const cashiers = Array.from(cashierSet.entries()).map(([id, name]) => ({ id, name }))
+
+        // Total debt
+        const totalDebt = partial.reduce((s, t) => {
+            const creditPayment = t.payments.find(p => p.type === 'credit')
+            return s + (creditPayment?.amount || 0)
+        }, 0)
+
+        const statsResponse = {
+            success: true,
+            data: {
+                totalOrders,
+                totalRevenue,
+                completedCount,
+                voidedCount,
+                returnedCount,
+                revenueToday,
+                revenueYesterday,
+                ordersToday: todayTx.length,
+                ordersYesterday: yesterdayTx.length,
+                totalDebt,
+                debtCount: partial.length,
+                byHour,
+                byDay,
+                paymentBreakdown,
+                topProducts,
+                cashiers,
+            },
+        }
+        await cacheSet(statsCacheKey, statsResponse, 60)
+        res.json(statsResponse)
+    } catch (err) {
+        console.error('Get transaction stats error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// GET /api/transactions/:id
+router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const branchId = getBranchId(req)
         const transaction = await prisma.transaction.findUnique({
-            where: { id: req.params.id },
+            where: { id: String(req.params.id) },
             include: { items: true, payments: true },
         })
 
@@ -135,8 +282,10 @@ router.get('/:id', authMiddleware, async (req: Request, res: Response) => {
 })
 
 // POST /api/transactions — POS Checkout
-router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.post('/', authMiddleware, validate(CreateTransactionSchema), async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
+        const branchId = getBranchId(req)
         const { items, payments, ...txData } = req.body
 
         if (!items || !Array.isArray(items) || items.length === 0) {
@@ -167,6 +316,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
             createdBy: req.user!.userId,
             createdByName: user?.name || 'Admin',
             notes: txData.notes || null,
+            transactionDate: txData.transactionDate ? new Date(txData.transactionDate) : null,
             items: {
                 create: items.map((item: any) => ({
                     productId: item.productId,
@@ -248,8 +398,40 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
                 where: { id: txData.customerId },
                 data: customerUpdate,
             })
+
+            // ── Loyalty points earn ───────────────────────────────────────────────
+            try {
+                const customer = await prisma.customer.findUnique({ where: { id: txData.customerId } })
+                if (customer) {
+                    // 1 point per 1,000đ spent
+                    const earnedPoints = Math.floor(transaction.total / 1000)
+                    if (earnedPoints > 0) {
+                        const newPoints = (customer.loyaltyPoints || 0) + earnedPoints
+                        const cumulative = customer.totalPurchases || 0
+
+                        // Auto-tier upgrade based on cumulative spending
+                        let newTier = customer.tier || 'bronze'
+                        if (cumulative >= 50_000_000) newTier = 'vip'
+                        else if (cumulative >= 20_000_000) newTier = 'gold'
+                        else if (cumulative >= 5_000_000) newTier = 'silver'
+                        else newTier = 'bronze'
+
+                        await (prisma as any).customer.update({
+                            where: { id: txData.customerId },
+                            data: {
+                                loyaltyPoints: newPoints,
+                                loyaltyTier: newTier,
+                            },
+                        })
+                        console.log(`[Loyalty] Customer ${customer.name}: +${earnedPoints} pts → ${newPoints} (tier: ${newTier})`)
+                    }
+                }
+            } catch (loyaltyErr) {
+                console.warn('[Loyalty] Points update failed (non-critical):', loyaltyErr)
+            }
         }
 
+        cacheDel(`${req.user?.storeSchema || 'default'}:transactions:*`).catch(() => { })
         console.log(`✅ Transaction ${receiptNumber} created — ${items.length} items, total: ${transaction.total}`)
 
         res.status(201).json({
@@ -257,6 +439,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
             data: {
                 ...transaction,
                 createdAt: transaction.createdAt.toISOString(),
+                transactionDate: transaction.transactionDate?.toISOString() || transaction.createdAt.toISOString(),
             },
         })
     } catch (err) {
@@ -268,8 +451,10 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 // PUT /api/transactions/:id/void
 router.put('/:id/void', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
+        const branchId = getBranchId(req)
         const existing = await prisma.transaction.findUnique({
-            where: { id: req.params.id },
+            where: { id: String(req.params.id) },
             include: { items: true },
         })
 
@@ -286,7 +471,7 @@ router.put('/:id/void', authMiddleware, async (req: AuthRequest, res: Response) 
         const user = await prisma.user.findUnique({ where: { id: req.user!.userId } })
 
         const transaction = await prisma.transaction.update({
-            where: { id: req.params.id },
+            where: { id: String(req.params.id) },
             data: { status: 'voided' },
             include: { items: true },
         })
@@ -328,6 +513,7 @@ router.put('/:id/void', authMiddleware, async (req: AuthRequest, res: Response) 
             })
         }
 
+        cacheDel(`${req.user?.storeSchema || 'default'}:transactions:*`).catch(() => { })
         console.log(`🚫 Transaction ${existing.receiptNumber} voided`)
 
         res.json({
@@ -343,13 +529,102 @@ router.put('/:id/void', authMiddleware, async (req: AuthRequest, res: Response) 
     }
 })
 
+// PUT /api/transactions/:id/pay-debt — Pay off debt for partial transaction
+router.put('/:id/pay-debt', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const { paymentType, amount, reference } = req.body
+
+        const existing = await prisma.transaction.findUnique({
+            where: { id: String(req.params.id) },
+            include: { payments: true },
+        })
+
+        if (!existing) {
+            res.status(404).json({ success: false, error: 'Không tìm thấy giao dịch' })
+            return
+        }
+
+        if (existing.status !== 'partial') {
+            res.status(400).json({ success: false, error: 'Giao dịch không ở trạng thái ghi nợ' })
+            return
+        }
+
+        // Calculate debt: credit payment amount
+        const creditPayment = existing.payments.find(p => p.type === 'credit')
+        const debtAmount = creditPayment?.amount || 0
+        const payAmount = amount || debtAmount
+
+        // Add new payment record
+        await prisma.payment.create({
+            data: {
+                transactionId: existing.id,
+                type: paymentType || 'cash',
+                amount: payAmount,
+                reference: reference || `Thanh toán nợ ${existing.receiptNumber}`,
+            },
+        })
+
+        // Update transaction status to completed
+        const transaction = await prisma.transaction.update({
+            where: { id: existing.id },
+            data: {
+                status: 'completed',
+                amountReceived: existing.amountReceived + payAmount,
+            },
+            include: { items: true, payments: true },
+        })
+
+        // Reduce customer debt
+        if (existing.customerId) {
+            try {
+                await prisma.customer.update({
+                    where: { id: existing.customerId },
+                    data: { debt: { decrement: payAmount } },
+                })
+            } catch { }
+        }
+
+        // Audit log
+        try {
+            const user = await prisma.user.findUnique({ where: { id: req.user!.userId } })
+            await prisma.auditLog.create({
+                data: {
+                    userId: req.user!.userId,
+                    userName: user?.name || 'Admin',
+                    action: 'pay_debt',
+                    entity: 'Transaction',
+                    entityId: existing.id,
+                    details: JSON.stringify({ amount: payAmount, paymentType, receiptNumber: existing.receiptNumber }),
+                },
+            })
+        } catch { }
+
+        cacheDel(`${req.user?.storeSchema || 'default'}:transactions:*`).catch(() => { })
+        console.log(`💰 Debt paid for ${existing.receiptNumber}: ${payAmount}`)
+
+        res.json({
+            success: true,
+            data: {
+                ...transaction,
+                createdAt: transaction.createdAt.toISOString(),
+            },
+        })
+    } catch (err) {
+        console.error('Pay debt error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
 // PUT /api/transactions/:id/return — Return a transaction
 router.put('/:id/return', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
+        const branchId = getBranchId(req)
         const { reason, returnItems } = req.body
 
         const existing = await prisma.transaction.findUnique({
-            where: { id: req.params.id },
+            where: { id: String(req.params.id) },
             include: { items: true },
         })
 
@@ -370,11 +645,26 @@ router.put('/:id/return', authMiddleware, async (req: AuthRequest, res: Response
             ? existing.items.filter(i => returnItems.some((ri: any) => ri.productId === i.productId))
             : existing.items
 
+        // Determine return quantities (from returnItems or use full qty)
+        const returnQtyMap = new Map<string, number>()
+        if (returnItems && Array.isArray(returnItems) && returnItems.length > 0) {
+            for (const ri of returnItems) {
+                returnQtyMap.set(ri.productId, ri.quantity || existing.items.find(i => i.productId === ri.productId)?.quantity || 0)
+            }
+        } else {
+            for (const item of itemsToReturn) {
+                returnQtyMap.set(item.productId, item.quantity)
+            }
+        }
+
         // Calculate return total
-        const returnTotal = itemsToReturn.reduce((sum, item) => sum + item.lineTotal, 0)
+        const returnTotal = itemsToReturn.reduce((sum, item) => {
+            const qty = returnQtyMap.get(item.productId) || item.quantity
+            return sum + (item.unitPrice * qty)
+        }, 0)
 
         const transaction = await prisma.transaction.update({
-            where: { id: req.params.id },
+            where: { id: String(req.params.id) },
             data: {
                 status: 'returned',
                 returnedAt: new Date(),
@@ -383,11 +673,46 @@ router.put('/:id/return', authMiddleware, async (req: AuthRequest, res: Response
             include: { items: true, payments: true },
         })
 
+        // Generate unique return document code (RT-001, RT-002, ...)
+        const returnCount = await prisma.returnOrder.count()
+        const returnCode = `RT-${String(returnCount + 1).padStart(3, '0')}`
+
+        // Build return items as JSON for ReturnOrder.items (stored as String)
+        const returnItemsJson = itemsToReturn.map((item: any) => ({
+            productName: item.productName,
+            sku: item.sku,
+            quantity: returnQtyMap.get(item.productId) || item.quantity,
+            unitPrice: item.unitPrice,
+            productId: item.productId,
+        }))
+
+        // Create ReturnOrder record (try/catch — table may not be migrated yet)
+        let returnOrder: any = null
+        try {
+            returnOrder = await prisma.returnOrder.create({
+                data: {
+                    code: returnCode,
+                    originalInvoice: existing.receiptNumber,
+                    customerName: (existing as any).customerName || 'Khách lẻ',
+                    customerPhone: (existing as any).customerPhone || null,
+                    reason: reason || 'Trả hàng',
+                    items: JSON.stringify(returnItemsJson),
+                    totalRefund: returnTotal,
+                    status: 'completed',
+                    processedAt: new Date(),
+                    notes: `Trả hàng từ giao dịch ${existing.receiptNumber}`,
+                },
+            })
+        } catch (roErr: any) {
+            console.warn(`⚠️ ReturnOrder table not ready: ${roErr.message} — returning without ReturnOrder record`)
+        }
+
         // Restore stock for returned items + create inventory records
         for (const item of itemsToReturn) {
+            const qty = returnQtyMap.get(item.productId) || item.quantity
             const updatedProduct = await prisma.product.update({
                 where: { id: item.productId },
-                data: { stock: { increment: item.quantity } },
+                data: { stock: { increment: qty } },
             })
 
             await prisma.inventoryTransaction.create({
@@ -396,10 +721,10 @@ router.put('/:id/return', authMiddleware, async (req: AuthRequest, res: Response
                     productId: item.productId,
                     productName: item.productName,
                     productSku: item.sku,
-                    quantity: item.quantity,
-                    reason: `Trả hàng - ${existing.receiptNumber}`,
+                    quantity: qty,
+                    reason: `Trả hàng - ${returnCode} (${existing.receiptNumber})`,
                     note: reason || `Trả hàng giao dịch ${existing.receiptNumber}`,
-                    referenceId: existing.receiptNumber,
+                    referenceId: returnCode,
                     referenceType: 'return',
                     unitPrice: item.unitPrice || 0,
                     costPriceAfter: updatedProduct.costPrice,
@@ -420,7 +745,55 @@ router.put('/:id/return', authMiddleware, async (req: AuthRequest, res: Response
             })
         }
 
-        console.log(`↩️ Transaction ${existing.receiptNumber} returned — ${itemsToReturn.length} items`)
+        cacheDel(`${req.user?.storeSchema || 'default'}:transactions:*`).catch(() => { })
+        console.log(`↩️ Transaction ${existing.receiptNumber} returned as ${returnCode} — ${itemsToReturn.length} items`)
+
+        res.json({
+            success: true,
+            data: {
+                ...transaction,
+                createdAt: transaction.createdAt.toISOString(),
+                returnedAt: transaction.returnedAt?.toISOString(),
+                returnOrder: returnOrder ? {
+                    code: returnOrder.code,
+                    id: returnOrder.id,
+                    totalRefund: returnOrder.totalRefund,
+                    items: JSON.parse(returnOrder.items),
+                } : { code: returnCode, totalRefund: returnTotal },
+            },
+        })
+    } catch (err) {
+        console.error('Return transaction error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// PUT /api/transactions/:id — Edit transaction notes/customer info
+router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const id = String(req.params.id)
+        const { notes, customerName, customerPhone } = req.body
+
+        const existing = await prisma.transaction.findUnique({ where: { id } })
+        if (!existing) {
+            res.status(404).json({ success: false, error: 'Transaction not found' })
+            return
+        }
+
+        const updateData: any = {}
+        if (notes !== undefined) updateData.notes = notes
+        if (customerName !== undefined) updateData.customerName = customerName
+        if (customerPhone !== undefined) updateData.customerPhone = customerPhone
+
+        const transaction = await prisma.transaction.update({
+            where: { id },
+            data: updateData,
+            include: { items: true, payments: true },
+        })
+
+        cacheDel(`${req.user?.storeSchema || 'default'}:transactions:*`).catch(() => { })
+        console.log(`✏️ Transaction ${existing.receiptNumber} updated — notes/customer`)
 
         res.json({
             success: true,
@@ -431,7 +804,46 @@ router.put('/:id/return', authMiddleware, async (req: AuthRequest, res: Response
             },
         })
     } catch (err) {
-        console.error('Return transaction error:', err)
+        console.error('Update transaction error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// PUT /api/transactions/:id/vat — Issue or update VAT invoice info
+router.put('/:id/vat', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const branchId = getBranchId(req)
+        const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
+        const { vatInvoiceNumber, vatStatus } = req.body
+
+        const existing = await prisma.transaction.findUnique({ where: { id } })
+        if (!existing) {
+            return res.status(404).json({ success: false, error: 'Transaction not found' })
+        }
+
+        const updateData: any = {}
+        if (vatStatus === 'issued') {
+            // Auto-generate VAT invoice number if not provided
+            const vatCount = await prisma.transaction.count({ where: { ...getBranchFilter(req as any), vatStatus: 'issued' } })
+            updateData.vatInvoiceNumber = vatInvoiceNumber || `VAT-${String(vatCount + 1).padStart(6, '0')}`
+            updateData.vatIssuedAt = new Date()
+            updateData.vatStatus = 'issued'
+        } else if (vatStatus === 'cancelled') {
+            updateData.vatStatus = 'cancelled'
+        } else {
+            updateData.vatStatus = 'none'
+            updateData.vatInvoiceNumber = null
+            updateData.vatIssuedAt = null
+        }
+
+        const transaction = await prisma.transaction.update({ where: { id }, data: updateData })
+        cacheDel(`${req.user?.storeSchema || 'default'}:transactions:*`).catch(() => { })
+        console.log(`🧾 Transaction ${existing.receiptNumber} VAT: ${updateData.vatStatus} (${updateData.vatInvoiceNumber || 'N/A'})`)
+
+        res.json({ success: true, data: transaction })
+    } catch (err) {
+        console.error('PUT /transactions/:id/vat error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
     }
 })

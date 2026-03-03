@@ -1,8 +1,10 @@
 import { Router, Request, Response } from 'express'
-import prisma from '../lib/prisma'
-import { authMiddleware } from '../middleware/auth'
+import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
 import bcrypt from 'bcryptjs'
+import { validate } from '../middleware/validate'
+import { CreateEmployeeSchema, UpdateEmployeeSchema } from '../schemas'
+import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 
 const router = Router()
 
@@ -11,7 +13,6 @@ const safeUser = (u: any) => {
     return rest
 }
 
-// Department → role mapping
 const DEPARTMENT_ROLES: Record<string, string[]> = {
     office: ['admin', 'manager', 'accountant'],
     sales: ['sales', 'cashier'],
@@ -19,10 +20,15 @@ const DEPARTMENT_ROLES: Record<string, string[]> = {
 }
 
 // GET /api/employees
-router.get('/', authMiddleware, async (req: Request, res: Response) => {
+router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const schema = req.user?.storeSchema || 'default'
+        const cacheKey = `${schema}:employees:${JSON.stringify(req.query)}`
+        const cached = await cacheGet(cacheKey)
+        if (cached) return res.json(cached)
+        const prisma = req.storePrisma!
         const { search, role, status, department } = req.query
-        const where: any = {}
+        const where: any = { ...getBranchFilter(req as any) }
         if (department && DEPARTMENT_ROLES[String(department)]) {
             where.role = { in: DEPARTMENT_ROLES[String(department)] }
         } else if (role && role !== 'all') {
@@ -38,8 +44,10 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
                 { email: { contains: q } },
             ]
         }
-        const users = await prisma.user.findMany({ where, orderBy: { createdAt: 'desc' } })
-        res.json({ success: true, data: users.map(safeUser) })
+        const users = await prisma.user.findMany({ where, orderBy: { createdAt: 'desc' }, include: { branch: { select: { id: true, name: true, code: true, isMainBranch: true } } } })
+        const _response = { success: true, data: users.map(u => { const { password, ...rest } = u; return rest }) }
+        await cacheSet(cacheKey, _response, 60)
+        res.json(_response)
     } catch (err) {
         console.error('Get employees error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
@@ -47,48 +55,48 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
 })
 
 // GET /api/employees/:id
-router.get('/:id', authMiddleware, async (req: Request, res: Response) => {
+router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-        const user = await prisma.user.findUnique({ where: { id: req.params.id } })
+        const prisma = req.storePrisma!
+        const user = await prisma.user.findFirst({ where: { id: String(req.params.id) }, include: { branch: { select: { id: true, name: true, code: true, isMainBranch: true } } } })
         if (!user) return res.status(404).json({ success: false, error: 'Not found' })
-        res.json({ success: true, data: safeUser(user) })
+        const { password, ...rest } = user
+        res.json({ success: true, data: rest })
     } catch (err) {
         res.status(500).json({ success: false, error: 'Internal server error' })
     }
 })
 
-// POST /api/employees (admin & manager only)
-router.post('/', authMiddleware, requireRole('admin', 'manager'), async (req: Request, res: Response) => {
+// POST /api/employees
+router.post('/', authMiddleware, requireRole('admin', 'manager'), validate(CreateEmployeeSchema), async (req: AuthRequest, res: Response) => {
     try {
-        const { name, phone, email, role, salary, notes } = req.body
+        const prisma = req.storePrisma!
+        const { name, phone, email, role, salary, notes, branchId: assignBranchId } = req.body
         if (!name?.trim()) return res.status(400).json({ success: false, error: 'Name required' })
         if (!phone?.trim()) return res.status(400).json({ success: false, error: 'Phone required' })
 
-        const count = await prisma.user.count()
-        const code = `NV-${String(count + 1).padStart(3, '0')}`
+        // Use provided branchId or fallback to creator's branch
+        const effectiveBranchId = assignBranchId || getBranchId(req)
 
-        // Default email if not provided
-        const emailVal = email?.trim() || `${code.toLowerCase().replace('-', '.')}@openretail.vn`
-        // Check email uniqueness
-        const existing = await prisma.user.findUnique({ where: { email: emailVal } })
+        const count = await prisma.user.count({ where: {} })
+        const code = `NV-${String(count + 1).padStart(3, '0')}`
+        const emailVal = email?.trim() || `${code.toLowerCase().replace('-', '.')}@kengitech.vn`
+
+        const existing = await prisma.user.findFirst({ where: { email: emailVal } })
         if (existing) return res.status(400).json({ success: false, error: 'Email already exists' })
 
-        const hashedPassword = await bcrypt.hash('123456', 10) // default password
+        const hashedPassword = await bcrypt.hash('123456', 10)
 
         const user = await prisma.user.create({
             data: {
-                name: name.trim(),
-                email: emailVal,
-                password: hashedPassword,
-                role: role || 'cashier',
-                phone: phone?.trim(),
-                code,
+                name: name.trim(), email: emailVal, password: hashedPassword,
+                role: role || 'cashier', phone: phone?.trim(), code,
                 salary: salary ? Number(salary) : null,
-                hireDate: new Date(),
-                employeeStatus: 'active',
-                notes: notes?.trim() || null,
+                hireDate: new Date(), employeeStatus: 'active',
+                notes: notes?.trim() || null, branchId: effectiveBranchId || null,
             },
         })
+        cacheDel(`${req.user?.storeSchema || 'default'}:employees:*`).catch(() => {})
         res.status(201).json({ success: true, data: safeUser(user) })
     } catch (err) {
         console.error('Create employee error:', err)
@@ -96,18 +104,20 @@ router.post('/', authMiddleware, requireRole('admin', 'manager'), async (req: Re
     }
 })
 
-// PUT /api/employees/:id (admin & manager only)
-router.put('/:id', authMiddleware, requireRole('admin', 'manager'), async (req: Request, res: Response) => {
+// PUT /api/employees/:id
+router.put('/:id', authMiddleware, requireRole('admin', 'manager'), validate(UpdateEmployeeSchema), async (req: AuthRequest, res: Response) => {
     try {
-        const currentUser = (req as any).user
-        const { name, phone, email, role, salary, notes, employeeStatus } = req.body
+        const prisma = req.storePrisma!
+        const { name, phone, email, role, salary, notes, employeeStatus, branchId: newBranchId } = req.body
+        const empId = String(req.params.id)
 
-        // Manager cannot modify admin accounts
-        const target = await prisma.user.findUnique({ where: { id: req.params.id } })
-        if (target?.role === 'admin' && currentUser.role !== 'admin') {
+        const target = await prisma.user.findFirst({ where: { id: empId } })
+        if (!target) return res.status(404).json({ success: false, error: 'Not found' })
+
+        const currentUser = (req as any).user
+        if (target.role === 'admin' && currentUser.role !== 'admin') {
             return res.status(403).json({ success: false, error: 'Không thể sửa tài khoản admin' })
         }
-        // Manager cannot promote to admin
         if (role === 'admin' && currentUser.role !== 'admin') {
             return res.status(403).json({ success: false, error: 'Chỉ admin mới được gán quyền admin' })
         }
@@ -120,21 +130,24 @@ router.put('/:id', authMiddleware, requireRole('admin', 'manager'), async (req: 
         if (salary !== undefined) data.salary = Number(salary)
         if (notes !== undefined) data.notes = notes
         if (employeeStatus !== undefined) data.employeeStatus = employeeStatus
+        if (newBranchId !== undefined) data.branchId = newBranchId || null
 
-        const user = await prisma.user.update({ where: { id: req.params.id }, data })
-        res.json({ success: true, data: safeUser(user) })
+        const user = await prisma.user.update({ where: { id: empId }, data, include: { branch: { select: { id: true, name: true, code: true, isMainBranch: true } } } })
+        const { password: _, ...rest } = user
+        res.json({ success: true, data: rest })
     } catch (err) {
         res.status(500).json({ success: false, error: 'Internal server error' })
     }
 })
 
-// PUT /api/employees/:id/toggle-status (admin & manager only)
-router.put('/:id/toggle-status', authMiddleware, requireRole('admin', 'manager'), async (req: Request, res: Response) => {
+// PUT /api/employees/:id/toggle-status
+router.put('/:id/toggle-status', authMiddleware, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
     try {
-        const user = await prisma.user.findUnique({ where: { id: req.params.id } })
+        const prisma = req.storePrisma!
+        const user = await prisma.user.findFirst({ where: { id: String(req.params.id) } })
         if (!user) return res.status(404).json({ success: false, error: 'Not found' })
         const updated = await prisma.user.update({
-            where: { id: req.params.id },
+            where: { id: String(req.params.id) },
             data: { employeeStatus: user.employeeStatus === 'active' ? 'inactive' : 'active' },
         })
         res.json({ success: true, data: safeUser(updated) })
@@ -143,15 +156,18 @@ router.put('/:id/toggle-status', authMiddleware, requireRole('admin', 'manager')
     }
 })
 
-// DELETE /api/employees/:id (admin only)
-router.delete('/:id', authMiddleware, requireRole('admin'), async (req: Request, res: Response) => {
+// DELETE /api/employees/:id
+router.delete('/:id', authMiddleware, requireRole('admin'), async (req: AuthRequest, res: Response) => {
     try {
-        // Don't allow deleting self
-        const txCount = await prisma.transaction.count({ where: { createdBy: req.params.id } })
+        const prisma = req.storePrisma!
+        const target = await prisma.user.findFirst({ where: { id: String(req.params.id) } })
+        if (!target) return res.status(404).json({ success: false, error: 'Not found' })
+
+        const txCount = await prisma.transaction.count({ where: { createdBy: String(req.params.id) } })
         if (txCount > 0) {
             return res.status(400).json({ success: false, error: `Employee has ${txCount} transactions, cannot delete. Deactivate instead.` })
         }
-        await prisma.user.delete({ where: { id: req.params.id } })
+        await prisma.user.delete({ where: { id: String(req.params.id) } })
         res.json({ success: true })
     } catch (err) {
         res.status(500).json({ success: false, error: 'Internal server error' })

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express'
-import prisma from '../lib/prisma'
-import { authMiddleware } from '../middleware/auth'
+import { authMiddleware, AuthRequest } from '../middleware/auth'
+import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 
 const router = Router()
 
@@ -8,8 +8,14 @@ const router = Router()
 const userSelect = { id: true, name: true, code: true, avatar: true, role: true }
 
 // ─── GET /api/sales-tracking — List checkin/checkout records ─────────────────
-router.get('/', authMiddleware, async (req: Request, res: Response) => {
+router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const schema = req.user?.storeSchema || 'default'
+        const cacheKey = `${schema}:salesTracking:${JSON.stringify(req.query)}`
+        const cached = await cacheGet(cacheKey)
+        if (cached) return res.json(cached)
+        const prisma = req.storePrisma!
+
         const { userId, from, to, type } = req.query
         const where: any = {}
         if (userId) where.userId = String(userId)
@@ -28,16 +34,20 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
                 customer: { select: { id: true, name: true, code: true, phone: true, address: true } },
             },
         })
-        res.json({ success: true, data: records })
-    } catch (err) {
+        const _response = { success: true, data: records }
+        await cacheSet(cacheKey, _response, 60)
+        res.json(_response)
+    } catch (err: any) {
         console.error('Sales tracking list error:', err)
-        res.status(500).json({ success: false, error: 'Internal server error' })
+        res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
     }
 })
 
 // ─── GET /api/sales-tracking/active — Currently checked-in staff ────────────
-router.get('/active', authMiddleware, async (_req: Request, res: Response) => {
+router.get('/active', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
+
         const today = new Date()
         today.setHours(0, 0, 0, 0)
         const tomorrow = new Date(today)
@@ -73,15 +83,17 @@ router.get('/active', authMiddleware, async (_req: Request, res: Response) => {
         }
 
         res.json({ success: true, data: activeStaff })
-    } catch (err) {
+    } catch (err: any) {
         console.error('Active staff error:', err)
-        res.status(500).json({ success: false, error: 'Internal server error' })
+        res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
     }
 })
 
 // ─── GET /api/sales-tracking/stats — Daily KPIs ─────────────────────────────
-router.get('/stats', authMiddleware, async (req: Request, res: Response) => {
+router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
+
         const dateStr = req.query.date ? String(req.query.date) : new Date().toISOString().split('T')[0]
         const dayStart = new Date(dateStr + 'T00:00:00')
         const dayEnd = new Date(dateStr + 'T23:59:59')
@@ -143,15 +155,17 @@ router.get('/stats', authMiddleware, async (req: Request, res: Response) => {
                 uniqueCustomers,
             },
         })
-    } catch (err) {
+    } catch (err: any) {
         console.error('Stats error:', err)
-        res.status(500).json({ success: false, error: 'Internal server error' })
+        res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
     }
 })
 
 // ─── GET /api/sales-tracking/leaderboard — Top performers ───────────────────
-router.get('/leaderboard', authMiddleware, async (req: Request, res: Response) => {
+router.get('/leaderboard', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
+
         const days = Number(req.query.days) || 7
         const startDate = new Date()
         startDate.setDate(startDate.getDate() - days)
@@ -214,17 +228,19 @@ router.get('/leaderboard', authMiddleware, async (req: Request, res: Response) =
             .slice(0, 10)
 
         res.json({ success: true, data: leaderboard })
-    } catch (err) {
+    } catch (err: any) {
         console.error('Leaderboard error:', err)
-        res.status(500).json({ success: false, error: 'Internal server error' })
+        res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
     }
 })
 
 // ─── GET /api/sales-tracking/:userId/history — User's history ───────────────
-router.get('/:userId/history', authMiddleware, async (req: Request, res: Response) => {
+router.get('/:userId/history', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
+
         const records = await prisma.salesCheckin.findMany({
-            where: { userId: req.params.userId },
+            where: { userId: String(req.params.userId) },
             orderBy: { createdAt: 'desc' },
             take: 50,
             include: {
@@ -247,15 +263,17 @@ router.get('/:userId/history', authMiddleware, async (req: Request, res: Respons
         }
 
         res.json({ success: true, data: records, todayHours: Math.round(todayMinutes / 60 * 10) / 10 })
-    } catch (err) {
+    } catch (err: any) {
         console.error('User history error:', err)
-        res.status(500).json({ success: false, error: 'Internal server error' })
+        res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
     }
 })
 
 // ─── POST /api/sales-tracking/checkin — Check in ────────────────────────────
-router.post('/checkin', authMiddleware, async (req: Request, res: Response) => {
+router.post('/checkin', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
+
         const currentUser = (req as any).user
         const { latitude, longitude, address, note, customerId, customerName } = req.body
 
@@ -265,7 +283,7 @@ router.post('/checkin', authMiddleware, async (req: Request, res: Response) => {
 
         const record = await prisma.salesCheckin.create({
             data: {
-                userId: currentUser.id,
+                userId: currentUser.userId,
                 type: 'checkin',
                 latitude: Number(latitude),
                 longitude: Number(longitude),
@@ -280,16 +298,19 @@ router.post('/checkin', authMiddleware, async (req: Request, res: Response) => {
             },
         })
 
+        cacheDel(`${req.user?.storeSchema || 'default'}:salesTracking:*`).catch(() => {})
         res.status(201).json({ success: true, data: record })
-    } catch (err) {
+    } catch (err: any) {
         console.error('Checkin error:', err)
-        res.status(500).json({ success: false, error: 'Internal server error' })
+        res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
     }
 })
 
 // ─── POST /api/sales-tracking/checkout — Check out ──────────────────────────
-router.post('/checkout', authMiddleware, async (req: Request, res: Response) => {
+router.post('/checkout', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
+
         const currentUser = (req as any).user
         const { latitude, longitude, address, note } = req.body
 
@@ -302,7 +323,7 @@ router.post('/checkout', authMiddleware, async (req: Request, res: Response) => 
         today.setHours(0, 0, 0, 0)
         const lastCheckin = await prisma.salesCheckin.findFirst({
             where: {
-                userId: currentUser.id,
+                userId: currentUser.userId,
                 type: 'checkin',
                 createdAt: { gte: today },
             },
@@ -311,7 +332,7 @@ router.post('/checkout', authMiddleware, async (req: Request, res: Response) => 
 
         const record = await prisma.salesCheckin.create({
             data: {
-                userId: currentUser.id,
+                userId: currentUser.userId,
                 type: 'checkout',
                 latitude: Number(latitude),
                 longitude: Number(longitude),
@@ -329,10 +350,11 @@ router.post('/checkout', authMiddleware, async (req: Request, res: Response) => 
             sessionDuration = Math.round((record.createdAt.getTime() - lastCheckin.createdAt.getTime()) / 60000)
         }
 
+        cacheDel(`${req.user?.storeSchema || 'default'}:salesTracking:*`).catch(() => {})
         res.status(201).json({ success: true, data: record, sessionDuration })
-    } catch (err) {
+    } catch (err: any) {
         console.error('Checkout error:', err)
-        res.status(500).json({ success: false, error: 'Internal server error' })
+        res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
     }
 })
 

@@ -1,13 +1,14 @@
 import { Router, Request, Response } from 'express'
-import prisma from '../lib/prisma'
-import { authMiddleware } from '../middleware/auth'
+import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
 import { calculateCostPrice, getCostPriceMethod } from '../lib/costPrice'
 
 const router = Router()
 
 // GET /api/import-receipts
-router.get('/', authMiddleware, async (req: Request, res: Response) => {
+router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
+        const branchId = getBranchId(req)
         const {
             search, status,
             page = '1', pageSize = '20',
@@ -46,6 +47,7 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
                 items: receipts.map(r => ({
                     ...r,
                     createdAt: r.createdAt.toISOString(),
+                    transactionDate: (r as any).transactionDate?.toISOString() || r.createdAt.toISOString(),
                     updatedAt: r.updatedAt.toISOString(),
                 })),
                 total,
@@ -61,10 +63,12 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
 })
 
 // GET /api/import-receipts/:id
-router.get('/:id', authMiddleware, async (req: Request, res: Response) => {
+router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
+        const branchId = getBranchId(req)
         const receipt = await prisma.importReceipt.findUnique({
-            where: { id: req.params.id },
+            where: { id: String(req.params.id) },
             include: { items: true },
         })
 
@@ -84,8 +88,10 @@ router.get('/:id', authMiddleware, async (req: Request, res: Response) => {
 })
 
 // POST /api/import-receipts
-router.post('/', authMiddleware, async (req: Request, res: Response) => {
+router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
+        const branchId = getBranchId(req)
         const { items, ...receiptData } = req.body
         const user = (req as any).user
 
@@ -96,9 +102,7 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
         // Generate code: NH-YYYYMMDD-XXX
         const today = new Date()
         const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '')
-        const count = await prisma.importReceipt.count({
-            where: {
-                createdAt: {
+        const count = await prisma.importReceipt.count({ where: { ...getBranchFilter(req as any), createdAt: {
                     gte: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
                 },
             },
@@ -108,9 +112,7 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
         const totalCost = items.reduce((sum: number, item: any) => sum + (item.quantity * item.costPrice), 0)
         const totalItems = items.reduce((sum: number, item: any) => sum + item.quantity, 0)
 
-        const receipt = await prisma.importReceipt.create({
-            data: {
-                code,
+        const receipt = await prisma.importReceipt.create({ data: { code,
                 supplierId: receiptData.supplierId || null,
                 supplierName: receiptData.supplierName || null,
                 totalCost,
@@ -119,6 +121,7 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
                 note: receiptData.note || null,
                 userId: user.userId || user.id,
                 userName,
+                transactionDate: receiptData.transactionDate ? new Date(receiptData.transactionDate) : null,
                 items: {
                     create: items.map((item: any) => ({
                         productId: item.productId,
@@ -192,10 +195,12 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
 })
 
 // PUT /api/import-receipts/:id/complete — Confirm receipt (draft → completed)
-router.put('/:id/complete', authMiddleware, async (req: Request, res: Response) => {
+router.put('/:id/complete', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
+        const branchId = getBranchId(req)
         const receipt = await prisma.importReceipt.findUnique({
-            where: { id: req.params.id },
+            where: { id: String(req.params.id) },
             include: { items: true },
         })
 
@@ -250,7 +255,7 @@ router.put('/:id/complete', authMiddleware, async (req: Request, res: Response) 
         }
 
         const updated = await prisma.importReceipt.update({
-            where: { id: req.params.id },
+            where: { id: String(req.params.id) },
             data: { status: 'completed' },
             include: { items: true },
         })
@@ -266,14 +271,16 @@ router.put('/:id/complete', authMiddleware, async (req: Request, res: Response) 
 })
 
 // PUT /api/import-receipts/:id/cancel
-router.put('/:id/cancel', authMiddleware, async (req: Request, res: Response) => {
+router.put('/:id/cancel', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-        const receipt = await prisma.importReceipt.findUnique({ where: { id: req.params.id } })
+        const prisma = req.storePrisma!
+        const branchId = getBranchId(req)
+        const receipt = await prisma.importReceipt.findUnique({ where: { id: String(req.params.id) } })
         if (!receipt) { res.status(404).json({ success: false, error: 'Not found' }); return }
         if (receipt.status !== 'draft') { res.status(400).json({ success: false, error: 'Only drafts can be cancelled' }); return }
 
         const updated = await prisma.importReceipt.update({
-            where: { id: req.params.id },
+            where: { id: String(req.params.id) },
             data: { status: 'cancelled' },
             include: { items: true },
         })
@@ -289,10 +296,12 @@ router.put('/:id/cancel', authMiddleware, async (req: Request, res: Response) =>
 })
 
 // PUT /api/import-receipts/:id/return — Return imported goods to supplier
-router.put('/:id/return', authMiddleware, async (req: Request, res: Response) => {
+router.put('/:id/return', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
+        const branchId = getBranchId(req)
         const receipt = await prisma.importReceipt.findUnique({
-            where: { id: req.params.id },
+            where: { id: String(req.params.id) },
             include: { items: true },
         })
         if (!receipt) { res.status(404).json({ success: false, error: 'Not found' }); return }
@@ -361,7 +370,7 @@ router.put('/:id/return', authMiddleware, async (req: Request, res: Response) =>
         const newStatus = isFullReturn ? 'returned' : 'partial_return'
 
         const updated = await prisma.importReceipt.update({
-            where: { id: req.params.id },
+            where: { id: String(req.params.id) },
             data: { status: newStatus },
             include: { items: true },
         })
@@ -383,10 +392,12 @@ router.put('/:id/return', authMiddleware, async (req: Request, res: Response) =>
 })
 
 // DELETE /api/import-receipts/:id — delete any receipt, reverse stock if completed
-router.delete('/:id', authMiddleware, async (req: Request, res: Response) => {
+router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        const prisma = req.storePrisma!
+        const branchId = getBranchId(req)
         const receipt = await prisma.importReceipt.findUnique({
-            where: { id: req.params.id },
+            where: { id: String(req.params.id) },
             include: { items: true },
         })
         if (!receipt) { res.status(404).json({ success: false, error: 'Not found' }); return }
@@ -421,7 +432,7 @@ router.delete('/:id', authMiddleware, async (req: Request, res: Response) => {
         }
 
         // Delete the receipt (cascade deletes items)
-        await prisma.importReceipt.delete({ where: { id: req.params.id } })
+        await prisma.importReceipt.delete({ where: { id: String(req.params.id) } })
         res.json({ success: true, message: 'Deleted' })
     } catch (err: any) {
         console.error('Delete import receipt error:', err?.message || err)
