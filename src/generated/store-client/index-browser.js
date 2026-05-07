@@ -738,6 +738,9 @@ exports.Prisma.SalesOrderScalarFieldEnum = {
   discount: 'discount',
   total: 'total',
   branchId: 'branchId',
+  processedById: 'processedById',
+  processedAt: 'processedAt',
+  cancelReason: 'cancelReason',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -870,6 +873,7 @@ exports.Prisma.StoreSettingsScalarFieldEnum = {
   notifyNewOrder: 'notifyNewOrder',
   notifyDailyReport: 'notifyDailyReport',
   notifyWeeklyReport: 'notifyWeeklyReport',
+  salesCanCheckout: 'salesCanCheckout',
   updatedAt: 'updatedAt'
 };
 

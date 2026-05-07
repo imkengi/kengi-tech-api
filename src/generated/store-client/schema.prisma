@@ -823,25 +823,30 @@ model Bundle {
 // ─── Sales Orders ───────────────────────────────────────────────────────────
 
 model SalesOrder {
-  id           String   @id @default(cuid())
-  orderNumber  String   @unique
-  status       String   @default("pending")
-  salesUserId  String
-  customerId   String?
-  customerName String?
-  note         String?
-  subtotal     Float    @default(0)
-  discount     Float    @default(0)
-  total        Float    @default(0)
-  branchId     String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id            String    @id @default(cuid())
+  orderNumber   String    @unique
+  status        String    @default("pending")
+  salesUserId   String
+  customerId    String?
+  customerName  String?
+  note          String?
+  subtotal      Float     @default(0)
+  discount      Float     @default(0)
+  total         Float     @default(0)
+  branchId      String?
+  processedById String?
+  processedAt   DateTime?
+  cancelReason  String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   salesUser User             @relation(fields: [salesUserId], references: [id])
   customer  Customer?        @relation(fields: [customerId], references: [id])
   items     SalesOrderItem[]
 
   @@index([branchId])
+  @@index([status])
+  @@index([salesUserId])
 }
 
 model SalesOrderItem {
@@ -1007,6 +1012,9 @@ model StoreSettings {
   notifyDailyReport Boolean @default(false)
 
   notifyWeeklyReport Boolean @default(true)
+
+  // Permission: allow Sales role to checkout/sell directly. When false, Sales can only create SalesOrder
+  salesCanCheckout Boolean @default(false)
 
   updatedAt DateTime @updatedAt
 }

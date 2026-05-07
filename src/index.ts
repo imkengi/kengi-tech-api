@@ -39,6 +39,7 @@ import salesTrackingRoutes from './routes/salesTracking'
 import salesOrderRoutes from './routes/salesOrders'
 import importReceiptRoutes from './routes/importReceipts'
 import storeSettingsRoutes from './routes/storeSettings'
+import settingsRoutes from './routes/settings'
 import branchRoutes from './routes/branches'
 import priceListRoutes from './routes/priceLists'
 import adminRoutes from './routes/admin'
@@ -160,6 +161,7 @@ app.use('/api/debts', debtRoutes)
 app.use('/api/bundles', bundleRoutes)
 app.use('/api/reports/financial', financialReportRoutes)
 app.use('/api/store-settings', storeSettingsRoutes)
+app.use('/api/settings', settingsRoutes)
 app.use('/api/branches', branchRoutes)
 app.use('/api/price-lists', priceListRoutes)
 app.use('/api/admin', adminRoutes)

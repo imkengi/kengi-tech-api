@@ -54972,6 +54972,9 @@ export namespace Prisma {
     discount: number | null
     total: number | null
     branchId: string | null
+    processedById: string | null
+    processedAt: Date | null
+    cancelReason: string | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -54988,6 +54991,9 @@ export namespace Prisma {
     discount: number | null
     total: number | null
     branchId: string | null
+    processedById: string | null
+    processedAt: Date | null
+    cancelReason: string | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -55004,6 +55010,9 @@ export namespace Prisma {
     discount: number
     total: number
     branchId: number
+    processedById: number
+    processedAt: number
+    cancelReason: number
     createdAt: number
     updatedAt: number
     _all: number
@@ -55034,6 +55043,9 @@ export namespace Prisma {
     discount?: true
     total?: true
     branchId?: true
+    processedById?: true
+    processedAt?: true
+    cancelReason?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -55050,6 +55062,9 @@ export namespace Prisma {
     discount?: true
     total?: true
     branchId?: true
+    processedById?: true
+    processedAt?: true
+    cancelReason?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -55066,6 +55081,9 @@ export namespace Prisma {
     discount?: true
     total?: true
     branchId?: true
+    processedById?: true
+    processedAt?: true
+    cancelReason?: true
     createdAt?: true
     updatedAt?: true
     _all?: true
@@ -55169,6 +55187,9 @@ export namespace Prisma {
     discount: number
     total: number
     branchId: string | null
+    processedById: string | null
+    processedAt: Date | null
+    cancelReason: string | null
     createdAt: Date
     updatedAt: Date
     _count: SalesOrderCountAggregateOutputType | null
@@ -55204,6 +55225,9 @@ export namespace Prisma {
     discount?: boolean
     total?: boolean
     branchId?: boolean
+    processedById?: boolean
+    processedAt?: boolean
+    cancelReason?: boolean
     createdAt?: boolean
     updatedAt?: boolean
     salesUser?: boolean | UserDefaultArgs<ExtArgs>
@@ -55224,6 +55248,9 @@ export namespace Prisma {
     discount?: boolean
     total?: boolean
     branchId?: boolean
+    processedById?: boolean
+    processedAt?: boolean
+    cancelReason?: boolean
     createdAt?: boolean
     updatedAt?: boolean
     salesUser?: boolean | UserDefaultArgs<ExtArgs>
@@ -55242,6 +55269,9 @@ export namespace Prisma {
     discount?: boolean
     total?: boolean
     branchId?: boolean
+    processedById?: boolean
+    processedAt?: boolean
+    cancelReason?: boolean
     createdAt?: boolean
     updatedAt?: boolean
     salesUser?: boolean | UserDefaultArgs<ExtArgs>
@@ -55260,11 +55290,14 @@ export namespace Prisma {
     discount?: boolean
     total?: boolean
     branchId?: boolean
+    processedById?: boolean
+    processedAt?: boolean
+    cancelReason?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type SalesOrderOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "orderNumber" | "status" | "salesUserId" | "customerId" | "customerName" | "note" | "subtotal" | "discount" | "total" | "branchId" | "createdAt" | "updatedAt", ExtArgs["result"]["salesOrder"]>
+  export type SalesOrderOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "orderNumber" | "status" | "salesUserId" | "customerId" | "customerName" | "note" | "subtotal" | "discount" | "total" | "branchId" | "processedById" | "processedAt" | "cancelReason" | "createdAt" | "updatedAt", ExtArgs["result"]["salesOrder"]>
   export type SalesOrderInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     salesUser?: boolean | UserDefaultArgs<ExtArgs>
     customer?: boolean | SalesOrder$customerArgs<ExtArgs>
@@ -55299,6 +55332,9 @@ export namespace Prisma {
       discount: number
       total: number
       branchId: string | null
+      processedById: string | null
+      processedAt: Date | null
+      cancelReason: string | null
       createdAt: Date
       updatedAt: Date
     }, ExtArgs["result"]["salesOrder"]>
@@ -55738,6 +55774,9 @@ export namespace Prisma {
     readonly discount: FieldRef<"SalesOrder", 'Float'>
     readonly total: FieldRef<"SalesOrder", 'Float'>
     readonly branchId: FieldRef<"SalesOrder", 'String'>
+    readonly processedById: FieldRef<"SalesOrder", 'String'>
+    readonly processedAt: FieldRef<"SalesOrder", 'DateTime'>
+    readonly cancelReason: FieldRef<"SalesOrder", 'String'>
     readonly createdAt: FieldRef<"SalesOrder", 'DateTime'>
     readonly updatedAt: FieldRef<"SalesOrder", 'DateTime'>
   }
@@ -65264,6 +65303,7 @@ export namespace Prisma {
     notifyNewOrder: boolean | null
     notifyDailyReport: boolean | null
     notifyWeeklyReport: boolean | null
+    salesCanCheckout: boolean | null
     updatedAt: Date | null
   }
 
@@ -65290,6 +65330,7 @@ export namespace Prisma {
     notifyNewOrder: boolean | null
     notifyDailyReport: boolean | null
     notifyWeeklyReport: boolean | null
+    salesCanCheckout: boolean | null
     updatedAt: Date | null
   }
 
@@ -65316,6 +65357,7 @@ export namespace Prisma {
     notifyNewOrder: number
     notifyDailyReport: number
     notifyWeeklyReport: number
+    salesCanCheckout: number
     updatedAt: number
     _all: number
   }
@@ -65344,6 +65386,7 @@ export namespace Prisma {
     notifyNewOrder?: true
     notifyDailyReport?: true
     notifyWeeklyReport?: true
+    salesCanCheckout?: true
     updatedAt?: true
   }
 
@@ -65370,6 +65413,7 @@ export namespace Prisma {
     notifyNewOrder?: true
     notifyDailyReport?: true
     notifyWeeklyReport?: true
+    salesCanCheckout?: true
     updatedAt?: true
   }
 
@@ -65396,6 +65440,7 @@ export namespace Prisma {
     notifyNewOrder?: true
     notifyDailyReport?: true
     notifyWeeklyReport?: true
+    salesCanCheckout?: true
     updatedAt?: true
     _all?: true
   }
@@ -65495,6 +65540,7 @@ export namespace Prisma {
     notifyNewOrder: boolean
     notifyDailyReport: boolean
     notifyWeeklyReport: boolean
+    salesCanCheckout: boolean
     updatedAt: Date
     _count: StoreSettingsCountAggregateOutputType | null
     _min: StoreSettingsMinAggregateOutputType | null
@@ -65538,6 +65584,7 @@ export namespace Prisma {
     notifyNewOrder?: boolean
     notifyDailyReport?: boolean
     notifyWeeklyReport?: boolean
+    salesCanCheckout?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["storeSettings"]>
 
@@ -65564,6 +65611,7 @@ export namespace Prisma {
     notifyNewOrder?: boolean
     notifyDailyReport?: boolean
     notifyWeeklyReport?: boolean
+    salesCanCheckout?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["storeSettings"]>
 
@@ -65590,6 +65638,7 @@ export namespace Prisma {
     notifyNewOrder?: boolean
     notifyDailyReport?: boolean
     notifyWeeklyReport?: boolean
+    salesCanCheckout?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["storeSettings"]>
 
@@ -65616,10 +65665,11 @@ export namespace Prisma {
     notifyNewOrder?: boolean
     notifyDailyReport?: boolean
     notifyWeeklyReport?: boolean
+    salesCanCheckout?: boolean
     updatedAt?: boolean
   }
 
-  export type StoreSettingsOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "address" | "phone" | "logo" | "description" | "costPriceMethod" | "trackSerial" | "trackBatch" | "allowNegativeStock" | "shiftConfig" | "businessType" | "taxCode" | "ownerName" | "ownerIdNumber" | "representativeName" | "email" | "website" | "notifyLowStock" | "notifyNewOrder" | "notifyDailyReport" | "notifyWeeklyReport" | "updatedAt", ExtArgs["result"]["storeSettings"]>
+  export type StoreSettingsOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "address" | "phone" | "logo" | "description" | "costPriceMethod" | "trackSerial" | "trackBatch" | "allowNegativeStock" | "shiftConfig" | "businessType" | "taxCode" | "ownerName" | "ownerIdNumber" | "representativeName" | "email" | "website" | "notifyLowStock" | "notifyNewOrder" | "notifyDailyReport" | "notifyWeeklyReport" | "salesCanCheckout" | "updatedAt", ExtArgs["result"]["storeSettings"]>
 
   export type $StoreSettingsPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     name: "StoreSettings"
@@ -65647,6 +65697,7 @@ export namespace Prisma {
       notifyNewOrder: boolean
       notifyDailyReport: boolean
       notifyWeeklyReport: boolean
+      salesCanCheckout: boolean
       updatedAt: Date
     }, ExtArgs["result"]["storeSettings"]>
     composites: {}
@@ -66093,6 +66144,7 @@ export namespace Prisma {
     readonly notifyNewOrder: FieldRef<"StoreSettings", 'Boolean'>
     readonly notifyDailyReport: FieldRef<"StoreSettings", 'Boolean'>
     readonly notifyWeeklyReport: FieldRef<"StoreSettings", 'Boolean'>
+    readonly salesCanCheckout: FieldRef<"StoreSettings", 'Boolean'>
     readonly updatedAt: FieldRef<"StoreSettings", 'DateTime'>
   }
     
@@ -76951,6 +77003,9 @@ export namespace Prisma {
     discount: 'discount',
     total: 'total',
     branchId: 'branchId',
+    processedById: 'processedById',
+    processedAt: 'processedAt',
+    cancelReason: 'cancelReason',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
   };
@@ -77110,6 +77165,7 @@ export namespace Prisma {
     notifyNewOrder: 'notifyNewOrder',
     notifyDailyReport: 'notifyDailyReport',
     notifyWeeklyReport: 'notifyWeeklyReport',
+    salesCanCheckout: 'salesCanCheckout',
     updatedAt: 'updatedAt'
   };
 
@@ -81146,6 +81202,9 @@ export namespace Prisma {
     discount?: FloatFilter<"SalesOrder"> | number
     total?: FloatFilter<"SalesOrder"> | number
     branchId?: StringNullableFilter<"SalesOrder"> | string | null
+    processedById?: StringNullableFilter<"SalesOrder"> | string | null
+    processedAt?: DateTimeNullableFilter<"SalesOrder"> | Date | string | null
+    cancelReason?: StringNullableFilter<"SalesOrder"> | string | null
     createdAt?: DateTimeFilter<"SalesOrder"> | Date | string
     updatedAt?: DateTimeFilter<"SalesOrder"> | Date | string
     salesUser?: XOR<UserScalarRelationFilter, UserWhereInput>
@@ -81165,6 +81224,9 @@ export namespace Prisma {
     discount?: SortOrder
     total?: SortOrder
     branchId?: SortOrderInput | SortOrder
+    processedById?: SortOrderInput | SortOrder
+    processedAt?: SortOrderInput | SortOrder
+    cancelReason?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     salesUser?: UserOrderByWithRelationInput
@@ -81187,6 +81249,9 @@ export namespace Prisma {
     discount?: FloatFilter<"SalesOrder"> | number
     total?: FloatFilter<"SalesOrder"> | number
     branchId?: StringNullableFilter<"SalesOrder"> | string | null
+    processedById?: StringNullableFilter<"SalesOrder"> | string | null
+    processedAt?: DateTimeNullableFilter<"SalesOrder"> | Date | string | null
+    cancelReason?: StringNullableFilter<"SalesOrder"> | string | null
     createdAt?: DateTimeFilter<"SalesOrder"> | Date | string
     updatedAt?: DateTimeFilter<"SalesOrder"> | Date | string
     salesUser?: XOR<UserScalarRelationFilter, UserWhereInput>
@@ -81206,6 +81271,9 @@ export namespace Prisma {
     discount?: SortOrder
     total?: SortOrder
     branchId?: SortOrderInput | SortOrder
+    processedById?: SortOrderInput | SortOrder
+    processedAt?: SortOrderInput | SortOrder
+    cancelReason?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     _count?: SalesOrderCountOrderByAggregateInput
@@ -81230,6 +81298,9 @@ export namespace Prisma {
     discount?: FloatWithAggregatesFilter<"SalesOrder"> | number
     total?: FloatWithAggregatesFilter<"SalesOrder"> | number
     branchId?: StringNullableWithAggregatesFilter<"SalesOrder"> | string | null
+    processedById?: StringNullableWithAggregatesFilter<"SalesOrder"> | string | null
+    processedAt?: DateTimeNullableWithAggregatesFilter<"SalesOrder"> | Date | string | null
+    cancelReason?: StringNullableWithAggregatesFilter<"SalesOrder"> | string | null
     createdAt?: DateTimeWithAggregatesFilter<"SalesOrder"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"SalesOrder"> | Date | string
   }
@@ -81909,6 +81980,7 @@ export namespace Prisma {
     notifyNewOrder?: BoolFilter<"StoreSettings"> | boolean
     notifyDailyReport?: BoolFilter<"StoreSettings"> | boolean
     notifyWeeklyReport?: BoolFilter<"StoreSettings"> | boolean
+    salesCanCheckout?: BoolFilter<"StoreSettings"> | boolean
     updatedAt?: DateTimeFilter<"StoreSettings"> | Date | string
   }
 
@@ -81935,6 +82007,7 @@ export namespace Prisma {
     notifyNewOrder?: SortOrder
     notifyDailyReport?: SortOrder
     notifyWeeklyReport?: SortOrder
+    salesCanCheckout?: SortOrder
     updatedAt?: SortOrder
   }
 
@@ -81964,6 +82037,7 @@ export namespace Prisma {
     notifyNewOrder?: BoolFilter<"StoreSettings"> | boolean
     notifyDailyReport?: BoolFilter<"StoreSettings"> | boolean
     notifyWeeklyReport?: BoolFilter<"StoreSettings"> | boolean
+    salesCanCheckout?: BoolFilter<"StoreSettings"> | boolean
     updatedAt?: DateTimeFilter<"StoreSettings"> | Date | string
   }, "id">
 
@@ -81990,6 +82064,7 @@ export namespace Prisma {
     notifyNewOrder?: SortOrder
     notifyDailyReport?: SortOrder
     notifyWeeklyReport?: SortOrder
+    salesCanCheckout?: SortOrder
     updatedAt?: SortOrder
     _count?: StoreSettingsCountOrderByAggregateInput
     _max?: StoreSettingsMaxOrderByAggregateInput
@@ -82022,6 +82097,7 @@ export namespace Prisma {
     notifyNewOrder?: BoolWithAggregatesFilter<"StoreSettings"> | boolean
     notifyDailyReport?: BoolWithAggregatesFilter<"StoreSettings"> | boolean
     notifyWeeklyReport?: BoolWithAggregatesFilter<"StoreSettings"> | boolean
+    salesCanCheckout?: BoolWithAggregatesFilter<"StoreSettings"> | boolean
     updatedAt?: DateTimeWithAggregatesFilter<"StoreSettings"> | Date | string
   }
 
@@ -87270,6 +87346,9 @@ export namespace Prisma {
     discount?: number
     total?: number
     branchId?: string | null
+    processedById?: string | null
+    processedAt?: Date | string | null
+    cancelReason?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     salesUser: UserCreateNestedOneWithoutSalesOrdersInput
@@ -87289,6 +87368,9 @@ export namespace Prisma {
     discount?: number
     total?: number
     branchId?: string | null
+    processedById?: string | null
+    processedAt?: Date | string | null
+    cancelReason?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     items?: SalesOrderItemUncheckedCreateNestedManyWithoutSalesOrderInput
@@ -87304,6 +87386,9 @@ export namespace Prisma {
     discount?: FloatFieldUpdateOperationsInput | number
     total?: FloatFieldUpdateOperationsInput | number
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    processedById?: NullableStringFieldUpdateOperationsInput | string | null
+    processedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     salesUser?: UserUpdateOneRequiredWithoutSalesOrdersNestedInput
@@ -87323,6 +87408,9 @@ export namespace Prisma {
     discount?: FloatFieldUpdateOperationsInput | number
     total?: FloatFieldUpdateOperationsInput | number
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    processedById?: NullableStringFieldUpdateOperationsInput | string | null
+    processedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     items?: SalesOrderItemUncheckedUpdateManyWithoutSalesOrderNestedInput
@@ -87340,6 +87428,9 @@ export namespace Prisma {
     discount?: number
     total?: number
     branchId?: string | null
+    processedById?: string | null
+    processedAt?: Date | string | null
+    cancelReason?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -87354,6 +87445,9 @@ export namespace Prisma {
     discount?: FloatFieldUpdateOperationsInput | number
     total?: FloatFieldUpdateOperationsInput | number
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    processedById?: NullableStringFieldUpdateOperationsInput | string | null
+    processedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -87370,6 +87464,9 @@ export namespace Prisma {
     discount?: FloatFieldUpdateOperationsInput | number
     total?: FloatFieldUpdateOperationsInput | number
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    processedById?: NullableStringFieldUpdateOperationsInput | string | null
+    processedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -88136,6 +88233,7 @@ export namespace Prisma {
     notifyNewOrder?: boolean
     notifyDailyReport?: boolean
     notifyWeeklyReport?: boolean
+    salesCanCheckout?: boolean
     updatedAt?: Date | string
   }
 
@@ -88162,6 +88260,7 @@ export namespace Prisma {
     notifyNewOrder?: boolean
     notifyDailyReport?: boolean
     notifyWeeklyReport?: boolean
+    salesCanCheckout?: boolean
     updatedAt?: Date | string
   }
 
@@ -88188,6 +88287,7 @@ export namespace Prisma {
     notifyNewOrder?: BoolFieldUpdateOperationsInput | boolean
     notifyDailyReport?: BoolFieldUpdateOperationsInput | boolean
     notifyWeeklyReport?: BoolFieldUpdateOperationsInput | boolean
+    salesCanCheckout?: BoolFieldUpdateOperationsInput | boolean
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -88214,6 +88314,7 @@ export namespace Prisma {
     notifyNewOrder?: BoolFieldUpdateOperationsInput | boolean
     notifyDailyReport?: BoolFieldUpdateOperationsInput | boolean
     notifyWeeklyReport?: BoolFieldUpdateOperationsInput | boolean
+    salesCanCheckout?: BoolFieldUpdateOperationsInput | boolean
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -88240,6 +88341,7 @@ export namespace Prisma {
     notifyNewOrder?: boolean
     notifyDailyReport?: boolean
     notifyWeeklyReport?: boolean
+    salesCanCheckout?: boolean
     updatedAt?: Date | string
   }
 
@@ -88266,6 +88368,7 @@ export namespace Prisma {
     notifyNewOrder?: BoolFieldUpdateOperationsInput | boolean
     notifyDailyReport?: BoolFieldUpdateOperationsInput | boolean
     notifyWeeklyReport?: BoolFieldUpdateOperationsInput | boolean
+    salesCanCheckout?: BoolFieldUpdateOperationsInput | boolean
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -88292,6 +88395,7 @@ export namespace Prisma {
     notifyNewOrder?: BoolFieldUpdateOperationsInput | boolean
     notifyDailyReport?: BoolFieldUpdateOperationsInput | boolean
     notifyWeeklyReport?: BoolFieldUpdateOperationsInput | boolean
+    salesCanCheckout?: BoolFieldUpdateOperationsInput | boolean
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -92154,6 +92258,9 @@ export namespace Prisma {
     discount?: SortOrder
     total?: SortOrder
     branchId?: SortOrder
+    processedById?: SortOrder
+    processedAt?: SortOrder
+    cancelReason?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -92176,6 +92283,9 @@ export namespace Prisma {
     discount?: SortOrder
     total?: SortOrder
     branchId?: SortOrder
+    processedById?: SortOrder
+    processedAt?: SortOrder
+    cancelReason?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -92192,6 +92302,9 @@ export namespace Prisma {
     discount?: SortOrder
     total?: SortOrder
     branchId?: SortOrder
+    processedById?: SortOrder
+    processedAt?: SortOrder
+    cancelReason?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -92627,6 +92740,7 @@ export namespace Prisma {
     notifyNewOrder?: SortOrder
     notifyDailyReport?: SortOrder
     notifyWeeklyReport?: SortOrder
+    salesCanCheckout?: SortOrder
     updatedAt?: SortOrder
   }
 
@@ -92653,6 +92767,7 @@ export namespace Prisma {
     notifyNewOrder?: SortOrder
     notifyDailyReport?: SortOrder
     notifyWeeklyReport?: SortOrder
+    salesCanCheckout?: SortOrder
     updatedAt?: SortOrder
   }
 
@@ -92679,6 +92794,7 @@ export namespace Prisma {
     notifyNewOrder?: SortOrder
     notifyDailyReport?: SortOrder
     notifyWeeklyReport?: SortOrder
+    salesCanCheckout?: SortOrder
     updatedAt?: SortOrder
   }
 
@@ -95812,6 +95928,9 @@ export namespace Prisma {
     discount?: number
     total?: number
     branchId?: string | null
+    processedById?: string | null
+    processedAt?: Date | string | null
+    cancelReason?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     customer?: CustomerCreateNestedOneWithoutSalesOrdersInput
@@ -95829,6 +95948,9 @@ export namespace Prisma {
     discount?: number
     total?: number
     branchId?: string | null
+    processedById?: string | null
+    processedAt?: Date | string | null
+    cancelReason?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     items?: SalesOrderItemUncheckedCreateNestedManyWithoutSalesOrderInput
@@ -96098,6 +96220,9 @@ export namespace Prisma {
     discount?: FloatFilter<"SalesOrder"> | number
     total?: FloatFilter<"SalesOrder"> | number
     branchId?: StringNullableFilter<"SalesOrder"> | string | null
+    processedById?: StringNullableFilter<"SalesOrder"> | string | null
+    processedAt?: DateTimeNullableFilter<"SalesOrder"> | Date | string | null
+    cancelReason?: StringNullableFilter<"SalesOrder"> | string | null
     createdAt?: DateTimeFilter<"SalesOrder"> | Date | string
     updatedAt?: DateTimeFilter<"SalesOrder"> | Date | string
   }
@@ -97954,6 +98079,9 @@ export namespace Prisma {
     discount?: number
     total?: number
     branchId?: string | null
+    processedById?: string | null
+    processedAt?: Date | string | null
+    cancelReason?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     salesUser: UserCreateNestedOneWithoutSalesOrdersInput
@@ -97971,6 +98099,9 @@ export namespace Prisma {
     discount?: number
     total?: number
     branchId?: string | null
+    processedById?: string | null
+    processedAt?: Date | string | null
+    cancelReason?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     items?: SalesOrderItemUncheckedCreateNestedManyWithoutSalesOrderInput
@@ -100135,6 +100266,9 @@ export namespace Prisma {
     discount?: number
     total?: number
     branchId?: string | null
+    processedById?: string | null
+    processedAt?: Date | string | null
+    cancelReason?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     salesUser: UserCreateNestedOneWithoutSalesOrdersInput
@@ -100153,6 +100287,9 @@ export namespace Prisma {
     discount?: number
     total?: number
     branchId?: string | null
+    processedById?: string | null
+    processedAt?: Date | string | null
+    cancelReason?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -100244,6 +100381,9 @@ export namespace Prisma {
     discount?: FloatFieldUpdateOperationsInput | number
     total?: FloatFieldUpdateOperationsInput | number
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    processedById?: NullableStringFieldUpdateOperationsInput | string | null
+    processedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     salesUser?: UserUpdateOneRequiredWithoutSalesOrdersNestedInput
@@ -100262,6 +100402,9 @@ export namespace Prisma {
     discount?: FloatFieldUpdateOperationsInput | number
     total?: FloatFieldUpdateOperationsInput | number
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    processedById?: NullableStringFieldUpdateOperationsInput | string | null
+    processedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -101361,6 +101504,9 @@ export namespace Prisma {
     discount?: number
     total?: number
     branchId?: string | null
+    processedById?: string | null
+    processedAt?: Date | string | null
+    cancelReason?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -101645,6 +101791,9 @@ export namespace Prisma {
     discount?: FloatFieldUpdateOperationsInput | number
     total?: FloatFieldUpdateOperationsInput | number
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    processedById?: NullableStringFieldUpdateOperationsInput | string | null
+    processedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     customer?: CustomerUpdateOneWithoutSalesOrdersNestedInput
@@ -101662,6 +101811,9 @@ export namespace Prisma {
     discount?: FloatFieldUpdateOperationsInput | number
     total?: FloatFieldUpdateOperationsInput | number
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    processedById?: NullableStringFieldUpdateOperationsInput | string | null
+    processedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     items?: SalesOrderItemUncheckedUpdateManyWithoutSalesOrderNestedInput
@@ -101678,6 +101830,9 @@ export namespace Prisma {
     discount?: FloatFieldUpdateOperationsInput | number
     total?: FloatFieldUpdateOperationsInput | number
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    processedById?: NullableStringFieldUpdateOperationsInput | string | null
+    processedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -102389,6 +102544,9 @@ export namespace Prisma {
     discount?: number
     total?: number
     branchId?: string | null
+    processedById?: string | null
+    processedAt?: Date | string | null
+    cancelReason?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -102521,6 +102679,9 @@ export namespace Prisma {
     discount?: FloatFieldUpdateOperationsInput | number
     total?: FloatFieldUpdateOperationsInput | number
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    processedById?: NullableStringFieldUpdateOperationsInput | string | null
+    processedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     salesUser?: UserUpdateOneRequiredWithoutSalesOrdersNestedInput
@@ -102538,6 +102699,9 @@ export namespace Prisma {
     discount?: FloatFieldUpdateOperationsInput | number
     total?: FloatFieldUpdateOperationsInput | number
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    processedById?: NullableStringFieldUpdateOperationsInput | string | null
+    processedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     items?: SalesOrderItemUncheckedUpdateManyWithoutSalesOrderNestedInput
@@ -102554,6 +102718,9 @@ export namespace Prisma {
     discount?: FloatFieldUpdateOperationsInput | number
     total?: FloatFieldUpdateOperationsInput | number
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    processedById?: NullableStringFieldUpdateOperationsInput | string | null
+    processedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
