@@ -282,7 +282,9 @@ router.post('/login', async (req: Request, res: Response) => {
 
         // 3.5 — 2FA gate: if enabled, send OTP and stop here. Client must call
         //      /api/auth/verify-otp with purpose=login_2fa to complete login.
-        if (user.twoFactorEnabled) {
+        //      Skip when SMTP isn't configured — emailService falls back to
+        //      console.log, which would silently lock users out.
+        if (user.twoFactorEnabled && process.env.SMTP_USER) {
             const code = generateOtpCode()
             saveOtp('login_2fa', store.code, user.email, code)
             const { subject, html, text } = buildOtpEmail(code, 'login')
