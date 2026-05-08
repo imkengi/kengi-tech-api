@@ -418,9 +418,15 @@ export const SalesTripSaleSchema = z.object({
 export const ReconcileSalesTripSchema = z.object({
     items: z.array(z.object({
         productId: z.string().min(1),
-        actualReturnedQty: z.number().int().min(0),
+        // Either send the explicit returned total...
+        actualReturnedQty: z.number().int().min(0).optional(),
+        // ...or send the split (good + damaged still on vehicle); backend sums them.
+        actualQuantity: z.number().int().min(0).optional(),
+        damagedQuantity: z.number().int().min(0).optional(),
         notes: z.string().max(500).optional().nullable(),
     })).optional().default([]),
+    // Cash count from the salesperson; persisted as a note for now (no DB column yet).
+    actualCash: z.number().min(0).optional(),
     notes: z.string().max(1000).optional().nullable(),
 })
 
