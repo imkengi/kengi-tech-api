@@ -92,6 +92,7 @@ router.put('/:id', authMiddleware, requireRole('admin', 'manager'), validate(Upd
                 ...(date !== undefined && { date: new Date(date) }),
             },
         })
+        cacheDel(`${req.user?.storeSchema || 'default'}:expenses:*`).catch(() => {})
         res.json({ success: true, data: expense })
     } catch (err) {
         res.status(500).json({ success: false, error: 'Internal server error' })
@@ -104,6 +105,7 @@ router.delete('/:id', authMiddleware, requireRole('admin', 'manager'), async (re
         const prisma = req.storePrisma!
         const branchId = getBranchId(req)
         await prisma.expense.delete({ where: { id: String(req.params.id) } })
+        cacheDel(`${req.user?.storeSchema || 'default'}:expenses:*`).catch(() => {})
         res.json({ success: true })
     } catch (err) {
         res.status(500).json({ success: false, error: 'Internal server error' })

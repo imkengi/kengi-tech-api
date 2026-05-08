@@ -47,8 +47,15 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
                 items: receipts.map(r => ({
                     ...r,
                     createdAt: r.createdAt.toISOString(),
+                    importDate: (r as any).transactionDate
+                        ? (r as any).transactionDate.toISOString().slice(0, 10)
+                        : null,
                     transactionDate: (r as any).transactionDate?.toISOString() || r.createdAt.toISOString(),
                     updatedAt: r.updatedAt.toISOString(),
+                    // returnedQtyMap: productId -> returnedQuantity (stored directly on items)
+                    returnedQtyMap: Object.fromEntries(
+                        (r.items || []).map((i: any) => [i.productId, i.returnedQuantity ?? 0])
+                    ),
                 })),
                 total,
                 page: pageNum,
@@ -77,9 +84,13 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
             return
         }
 
+        // returnedQtyMap built from returnedQuantity field directly on items
+        const returnedQtyMap: Record<string, number> = Object.fromEntries(
+            receipt.items.map(i => [i.productId, (i as any).returnedQuantity ?? 0])
+        )
         res.json({
             success: true,
-            data: { ...receipt, createdAt: receipt.createdAt.toISOString(), updatedAt: receipt.updatedAt.toISOString() },
+            data: { ...receipt, createdAt: receipt.createdAt.toISOString(), updatedAt: receipt.updatedAt.toISOString(), returnedQtyMap },
         })
     } catch (err) {
         console.error('Get import receipt error:', err)
@@ -121,7 +132,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
                 note: receiptData.note || null,
                 userId: user.userId || user.id,
                 userName,
-                transactionDate: receiptData.transactionDate ? new Date(receiptData.transactionDate) : null,
+                transactionDate: receiptData.importDate ? new Date(receiptData.importDate) : (receiptData.transactionDate ? new Date(receiptData.transactionDate) : null),
                 items: {
                     create: items.map((item: any) => ({
                         productId: item.productId,
@@ -186,7 +197,14 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 
         res.status(201).json({
             success: true,
-            data: { ...receipt, createdAt: receipt.createdAt.toISOString(), updatedAt: receipt.updatedAt.toISOString() },
+            data: {
+                ...receipt,
+                createdAt: receipt.createdAt.toISOString(),
+                importDate: (receipt as any).transactionDate
+                    ? (receipt as any).transactionDate.toISOString().slice(0, 10)
+                    : null,
+                updatedAt: receipt.updatedAt.toISOString(),
+            },
         })
     } catch (err) {
         console.error('Create import receipt error:', err)
@@ -299,7 +317,6 @@ router.put('/:id/cancel', authMiddleware, async (req: AuthRequest, res: Response
 router.put('/:id/return', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        const branchId = getBranchId(req)
         const receipt = await prisma.importReceipt.findUnique({
             where: { id: String(req.params.id) },
             include: { items: true },
@@ -313,25 +330,51 @@ router.put('/:id/return', authMiddleware, async (req: AuthRequest, res: Response
         const dbUser = await prisma.user.findUnique({ where: { id: user.userId || user.id } })
         const userName = dbUser?.name || user.email || 'Unknown'
 
-        // req.body.items = [{ productId, quantity, reason? }]
         const returnItems: { productId: string; quantity: number; reason?: string }[] = req.body.items
         if (!returnItems || returnItems.length === 0) {
             res.status(400).json({ success: false, error: 'Vui lòng chọn sản phẩm cần trả' }); return
         }
 
-        // Validate quantities
         let totalReturnCost = 0
         let totalReturnQty = 0
+
+        // ── Validate & process each return item ──────────────────────────────
         for (const ri of returnItems) {
             const receiptItem = receipt.items.find(i => i.productId === ri.productId)
             if (!receiptItem) {
                 res.status(400).json({ success: false, error: `Sản phẩm ${ri.productId} không có trong phiếu` }); return
             }
-            if (ri.quantity <= 0 || ri.quantity > receiptItem.quantity) {
-                res.status(400).json({ success: false, error: `Số lượng trả không hợp lệ cho ${receiptItem.productName}` }); return
-            }
 
-            // Update product stock (decrement)
+            // returnedQuantity is tracked directly on the item (not via inventoryTransaction)
+            const alreadyReturned = (receiptItem as any).returnedQuantity ?? 0
+            const canReturn = receiptItem.quantity - alreadyReturned
+
+            if (ri.quantity <= 0) {
+                res.status(400).json({ success: false, error: `Số lượng trả phải lớn hơn 0 cho ${receiptItem.productName}` }); return
+            }
+            if (ri.quantity > canReturn) {
+                res.status(400).json({
+                    success: false,
+                    error: `${receiptItem.productName}: chỉ còn ${canReturn} SP có thể trả (đã trả ${alreadyReturned}/${receiptItem.quantity})`
+                }); return
+            }
+        }
+
+        // ── Generate unique batchId for this return session ──────────────────
+        const now = new Date()
+        const batchId = `RETURN-${now.toISOString().slice(0, 10).replace(/-/g, '')}-${Date.now().toString(36).toUpperCase()}`
+
+        // ── All valid — execute updates ───────────────────────────────────────
+        for (const ri of returnItems) {
+            const receiptItem = receipt.items.find(i => i.productId === ri.productId)!
+
+            // 1. Increment returnedQuantity on the receipt item
+            await (prisma as any).importReceiptItem.update({
+                where: { id: receiptItem.id },
+                data: { returnedQuantity: { increment: ri.quantity } },
+            })
+
+            // 2. Decrement product stock
             const product = await prisma.product.findUnique({ where: { id: ri.productId } })
             if (product) {
                 const newStock = Math.max(0, product.stock - ri.quantity)
@@ -344,7 +387,7 @@ router.put('/:id/return', authMiddleware, async (req: AuthRequest, res: Response
             totalReturnCost += receiptItem.costPrice * ri.quantity
             totalReturnQty += ri.quantity
 
-            // Log inventory transaction
+            // 3. Log inventory transaction — note stores batchId for later undo
             await prisma.inventoryTransaction.create({
                 data: {
                     type: 'export',
@@ -353,6 +396,7 @@ router.put('/:id/return', authMiddleware, async (req: AuthRequest, res: Response
                     productSku: receiptItem.productSku,
                     quantity: -ri.quantity,
                     reason: ri.reason || `Trả hàng nhập theo phiếu ${receipt.code}`,
+                    note: batchId,  // ← batch identifier for targeted undo
                     referenceId: receipt.code,
                     referenceType: 'import_return',
                     unitPrice: receiptItem.costPrice,
@@ -364,9 +408,14 @@ router.put('/:id/return', authMiddleware, async (req: AuthRequest, res: Response
             })
         }
 
-        // Check if full or partial return
-        const totalOriginalQty = receipt.items.reduce((s, i) => s + i.quantity, 0)
-        const isFullReturn = totalReturnQty >= totalOriginalQty
+        // ── Determine new status based on accumulated returnedQuantity ────────
+        // Re-fetch items to get updated returnedQuantity values
+        const updatedItems = await (prisma as any).importReceiptItem.findMany({
+            where: { receiptId: receipt.id },
+        })
+        const totalOriginalQty = updatedItems.reduce((s: number, i: any) => s + i.quantity, 0)
+        const totalReturnedQty = updatedItems.reduce((s: number, i: any) => s + (i.returnedQuantity ?? 0), 0)
+        const isFullReturn = totalReturnedQty >= totalOriginalQty
         const newStatus = isFullReturn ? 'returned' : 'partial_return'
 
         const updated = await prisma.importReceipt.update({
@@ -383,6 +432,7 @@ router.put('/:id/return', authMiddleware, async (req: AuthRequest, res: Response
                 updatedAt: updated.updatedAt.toISOString(),
                 returnedQty: totalReturnQty,
                 returnedCost: totalReturnCost,
+                batchId,
             },
         })
     } catch (err: any) {
@@ -391,7 +441,145 @@ router.put('/:id/return', authMiddleware, async (req: AuthRequest, res: Response
     }
 })
 
+// GET /api/import-receipts/:id/return-history — List all return batches for a receipt
+router.get('/:id/return-history', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const receipt = await prisma.importReceipt.findUnique({
+            where: { id: String(req.params.id) },
+            include: { items: true },
+        })
+        if (!receipt) { res.status(404).json({ success: false, error: 'Not found' }); return }
+
+        // Get all return transactions, grouped by batchId (stored in note field)
+        const txns = await prisma.inventoryTransaction.findMany({
+            where: { referenceId: receipt.code, referenceType: 'import_return' },
+            orderBy: { createdAt: 'asc' },
+        })
+
+        // Group by batchId (note field)
+        const batchMap = new Map<string, any>()
+        for (const txn of txns) {
+            const batchId = txn.note || 'LEGACY'
+            if (!batchMap.has(batchId)) {
+                batchMap.set(batchId, {
+                    batchId,
+                    createdAt: txn.createdAt.toISOString(),
+                    userName: txn.userName,
+                    totalQty: 0,
+                    totalCost: 0,
+                    items: [],
+                })
+            }
+            const batch = batchMap.get(batchId)!
+            const qty = Math.abs(txn.quantity)
+            batch.totalQty += qty
+            batch.totalCost += qty * (txn.unitPrice || 0)
+            batch.items.push({
+                productId: txn.productId,
+                productName: txn.productName,
+                productSku: txn.productSku,
+                quantity: qty,
+                unitPrice: txn.unitPrice || 0,
+            })
+        }
+
+        res.json({
+            success: true,
+            data: Array.from(batchMap.values()).reverse(), // newest first
+        })
+    } catch (err: any) {
+        console.error('Return history error:', err?.message || err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// DELETE /api/import-receipts/:id/return/:batchId — Undo a specific return batch
+router.delete('/:id/return/:batchId', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const { batchId } = req.params
+
+        const receipt = await prisma.importReceipt.findUnique({
+            where: { id: String(req.params.id) },
+            include: { items: true },
+        })
+        if (!receipt) { res.status(404).json({ success: false, error: 'Not found' }); return }
+
+        // Find only this batch's transactions (note = batchId)
+        const batchTxns = await prisma.inventoryTransaction.findMany({
+            where: { referenceId: receipt.code, referenceType: 'import_return', note: batchId },
+        })
+        if (batchTxns.length === 0) {
+            res.status(404).json({ success: false, error: `Không tìm thấy phiếu trả ${batchId}` }); return
+        }
+
+        // 1. Restore stock for each product in this batch
+        for (const txn of batchTxns) {
+            if (!txn.productId) continue
+            const returnedQty = Math.abs(txn.quantity)
+            await prisma.product.update({
+                where: { id: txn.productId },
+                data: { stock: { increment: returnedQty } },
+            })
+
+            // 2. Decrement returnedQuantity on the receipt item
+            const receiptItem = receipt.items.find(i => i.productId === txn.productId)
+            if (receiptItem) {
+                const current = (receiptItem as any).returnedQuantity ?? 0
+                await (prisma as any).importReceiptItem.update({
+                    where: { id: receiptItem.id },
+                    data: { returnedQuantity: Math.max(0, current - returnedQty) },
+                })
+            }
+        }
+
+        // 3. Delete only this batch's transactions
+        await prisma.inventoryTransaction.deleteMany({
+            where: { referenceId: receipt.code, referenceType: 'import_return', note: batchId },
+        })
+
+        // 4. Re-fetch items to recalculate status
+        const updatedItems = await (prisma as any).importReceiptItem.findMany({
+            where: { receiptId: receipt.id },
+        })
+        const totalOriginalQty = updatedItems.reduce((s: number, i: any) => s + i.quantity, 0)
+        const totalReturnedQty = updatedItems.reduce((s: number, i: any) => s + (i.returnedQuantity ?? 0), 0)
+
+        let newStatus: string
+        if (totalReturnedQty <= 0) newStatus = 'completed'
+        else if (totalReturnedQty >= totalOriginalQty) newStatus = 'returned'
+        else newStatus = 'partial_return'
+
+        const updated = await prisma.importReceipt.update({
+            where: { id: String(req.params.id) },
+            data: { status: newStatus },
+            include: { items: true },
+        })
+
+        // Build new returnedQtyMap
+        const returnedQtyMap = Object.fromEntries(
+            (updated.items || []).map((i: any) => [i.productId, i.returnedQuantity ?? 0])
+        )
+
+        res.json({
+            success: true,
+            message: `Đã hủy phiếu trả ${batchId} thành công`,
+            data: {
+                ...updated,
+                createdAt: updated.createdAt.toISOString(),
+                updatedAt: updated.updatedAt.toISOString(),
+                returnedQtyMap,
+            },
+        })
+    } catch (err: any) {
+        console.error('Undo batch return error:', err?.message || err)
+        res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
+    }
+})
+
 // DELETE /api/import-receipts/:id — delete any receipt, reverse stock if completed
+
 router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!

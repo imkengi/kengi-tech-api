@@ -4,6 +4,22 @@ import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 
 const router = Router()
 
+// GET /api/branches/stats
+router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const all = await prisma.branch.findMany()
+        const active = all.filter((b: any) => b.status === 'active').length
+        const mainBranch = all.find((b: any) => b.isMainBranch)
+        const employeeCounts = await prisma.user.groupBy({ by: ['branchId'], _count: true })
+        const perBranch = all.map((b: any) => ({
+            id: b.id, name: b.name, code: b.code, isMain: b.isMainBranch,
+            employees: employeeCounts.find((e: any) => e.branchId === b.id)?._count || 0
+        }))
+        res.json({ success: true, data: { total: all.length, active, mainBranch: mainBranch?.name || null, perBranch } })
+    } catch (err) { res.status(500).json({ success: false, error: 'Internal server error' }) }
+})
+
 // GET /api/branches
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
@@ -74,7 +90,7 @@ router.post('/request', authMiddleware, async (req: AuthRequest, res: Response) 
             },
         })
 
-        cacheDel(`${req.user?.storeSchema || 'default'}:branches:*`).catch(() => {})
+        cacheDel(`${req.user?.storeSchema || 'default'}:branches:*`).catch(() => { })
         res.status(201).json({
             success: true,
             data: request,
@@ -101,12 +117,177 @@ router.get('/requests', authMiddleware, async (req: AuthRequest, res: Response) 
     }
 })
 
-// POST /api/branches — BLOCKED: must go through admin approval
-router.post('/', authMiddleware, async (_req: AuthRequest, res: Response) => {
-    res.status(403).json({
-        success: false,
-        error: 'Tạo chi nhánh trực tiếp đã bị vô hiệu hóa. Vui lòng sử dụng POST /api/branches/request để gửi yêu cầu, admin sẽ duyệt.',
-    })
+// ─── GET /api/branches/limit — Check branch limit for current store
+router.get('/limit', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const allBranches = await prisma.branch.findMany({ where: { status: 'active' } })
+        const currentCount = allBranches.length
+
+        // Get store from registry to check addOns & extraBranches
+        const { registryPrisma } = require('../lib/prisma')
+        const store = await registryPrisma.store.findUnique({ where: { id: req.user?.storeId } })
+        let storeAddOns: string[] = []
+        try { storeAddOns = JSON.parse(store?.addOns || '[]') } catch { storeAddOns = [] }
+
+        const hasExtraBranch = storeAddOns.includes('extra_branch')
+        const extraBranches = hasExtraBranch ? (store?.extraBranches || 0) : 0
+        const maxBranches = 1 + extraBranches // 1 CN chính miễn phí + extra đã thanh toán
+
+        res.json({
+            success: true,
+            data: {
+                currentCount,
+                maxBranches,
+                remaining: Math.max(0, maxBranches - currentCount),
+                hasExtraBranch,
+                extraBranches,
+            },
+        })
+    } catch (err) {
+        console.error('Branch limit error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// POST /api/branches — Self-create branch if within paid limit
+router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const { name, code, address, phone } = req.body
+
+        if (!name?.trim() || !code?.trim()) {
+            return res.status(400).json({ success: false, error: 'Tên và mã chi nhánh là bắt buộc' })
+        }
+
+        // Check duplicate code
+        const existingBranch = await prisma.branch.findFirst({ where: { code: code.trim().toUpperCase() } })
+        if (existingBranch) {
+            return res.status(409).json({ success: false, error: 'Mã chi nhánh đã tồn tại' })
+        }
+
+        // Check branch limit from registry
+        const { registryPrisma } = require('../lib/prisma')
+        const store = await registryPrisma.store.findUnique({ where: { id: req.user?.storeId } })
+        let storeAddOns: string[] = []
+        try { storeAddOns = JSON.parse(store?.addOns || '[]') } catch { storeAddOns = [] }
+
+        const hasExtraBranch = storeAddOns.includes('extra_branch')
+        const extraBranches = hasExtraBranch ? (store?.extraBranches || 0) : 0
+        const maxBranches = 1 + extraBranches
+
+        const allBranches = await prisma.branch.findMany({ where: { status: 'active' } })
+        if (allBranches.length >= maxBranches) {
+            return res.status(403).json({
+                success: false,
+                error: `Đã đạt giới hạn ${maxBranches} chi nhánh. Vui lòng liên hệ admin để nâng cấp gói thêm chi nhánh.`,
+            })
+        }
+
+        // Create branch directly
+        const branch = await prisma.branch.create({
+            data: { name: name.trim(), code: code.trim().toUpperCase(), address: address?.trim() || null, phone: phone?.trim() || null },
+        })
+
+        cacheDel(`${req.user?.storeSchema || 'default'}:branches:*`).catch(() => { })
+        res.status(201).json({ success: true, data: branch, message: 'Chi nhánh đã được tạo thành công' })
+    } catch (err) {
+        console.error('Create branch error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// GET /api/branches/:id/detail — Branch detail with aggregated stats
+router.get('/:id/detail', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const branchId = req.params.id as string
+
+        const branch = await prisma.branch.findFirst({ where: { id: branchId } })
+        if (!branch) return res.status(404).json({ success: false, error: 'Chi nhánh không tồn tại' })
+
+        const thirtyDaysAgo = new Date()
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
+        // Parallel queries for stats
+        const [
+            employeeCount,
+            transactionStats,
+            expenseStats,
+            customerCount,
+            recentTransactions,
+        ] = await Promise.all([
+            // Employees belonging to this branch
+            prisma.user.count({ where: { branchId } }).catch(() => 0),
+            // Transaction stats (30 days)
+            prisma.transaction.aggregate({
+                where: { branchId, createdAt: { gte: thirtyDaysAgo }, status: { not: 'voided' } },
+                _count: true,
+                _sum: { total: true },
+            }).catch(() => ({ _count: 0, _sum: { total: 0 } })),
+            // Expense stats (30 days)
+            prisma.expense.aggregate({
+                where: { branchId, date: { gte: thirtyDaysAgo } },
+                _count: true,
+                _sum: { amount: true },
+            }).catch(() => ({ _count: 0, _sum: { amount: 0 } })),
+            // Unique customers who bought at this branch
+            prisma.transaction.findMany({
+                where: { branchId, customerId: { not: null } },
+                select: { customerId: true },
+                distinct: ['customerId'],
+            }).then((r: any[]) => r.length).catch(() => 0),
+            // Recent 10 transactions
+            prisma.transaction.findMany({
+                where: { branchId },
+                orderBy: { createdAt: 'desc' },
+                take: 10,
+                select: {
+                    id: true, receiptNumber: true, customerName: true, total: true,
+                    status: true, createdAt: true, createdByName: true,
+                },
+            }).catch(() => []),
+        ])
+
+        // Get employees list
+        const employees = await prisma.user.findMany({
+            where: { branchId },
+            select: { id: true, name: true, email: true, role: true, status: true },
+            orderBy: { name: 'asc' },
+        }).catch(() => [])
+
+        res.json({
+            success: true,
+            data: {
+                branch: {
+                    id: branch.id,
+                    name: branch.name,
+                    code: branch.code,
+                    address: branch.address,
+                    phone: branch.phone,
+                    isMainBranch: branch.isMainBranch || false,
+                    status: branch.status,
+                    createdAt: branch.createdAt?.toISOString(),
+                },
+                stats: {
+                    employeeCount,
+                    transactionCount: transactionStats._count || 0,
+                    revenue: transactionStats._sum?.total || 0,
+                    expenseCount: expenseStats._count || 0,
+                    expenseTotal: expenseStats._sum?.amount || 0,
+                    customerCount,
+                },
+                employees,
+                recentTransactions: recentTransactions.map((t: any) => ({
+                    ...t,
+                    createdAt: t.createdAt?.toISOString(),
+                })),
+            },
+        })
+    } catch (err) {
+        console.error('Branch detail error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
 })
 
 // PUT /api/branches/:id
@@ -174,6 +355,35 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
         })
     } catch (err) {
         console.error('Delete branch request error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// POST /api/branches/migrate-branch-ids — One-time: assign null branchIds to main branch
+router.post('/migrate-branch-ids', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const mainBranch = await prisma.branch.findFirst({ where: { isMainBranch: true } })
+        if (!mainBranch) return res.status(404).json({ success: false, error: 'No main branch found' })
+
+        const tables = ['Product', 'Customer', 'Transaction', 'ImportReceipt', 'PurchaseOrder', 'Category', 'Brand', 'Expense', 'SalesOrder', 'Supplier', 'ReturnOrder']
+        const results: Record<string, string> = {}
+
+        for (const table of tables) {
+            try {
+                const r = await prisma.$executeRawUnsafe(
+                    `UPDATE "${table}" SET "branchId" = $1 WHERE "branchId" IS NULL`,
+                    mainBranch.id
+                )
+                results[table] = `${r} rows updated`
+            } catch (e: any) {
+                results[table] = `error: ${e.message?.substring(0, 100)}`
+            }
+        }
+
+        res.json({ success: true, mainBranchId: mainBranch.id, results })
+    } catch (err) {
+        console.error('Migrate branch IDs error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
     }
 })

@@ -150,6 +150,9 @@ exports.Prisma.UserScalarFieldEnum = {
   notes: 'notes',
   isLocked: 'isLocked',
   twoFactorEnabled: 'twoFactorEnabled',
+  twoFactorSecret: 'twoFactorSecret',
+  trustedDevices: 'trustedDevices',
+  permissions: 'permissions',
   branchId: 'branchId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
@@ -261,10 +264,14 @@ exports.Prisma.CustomerScalarFieldEnum = {
   phone: 'phone',
   email: 'email',
   address: 'address',
+  latitude: 'latitude',
+  longitude: 'longitude',
   groupId: 'groupId',
   birthday: 'birthday',
   gender: 'gender',
   notes: 'notes',
+  salesUserId: 'salesUserId',
+  salesUserName: 'salesUserName',
   totalPurchases: 'totalPurchases',
   totalOrders: 'totalOrders',
   debt: 'debt',
@@ -298,6 +305,7 @@ exports.Prisma.TransactionScalarFieldEnum = {
   vatInvoiceNumber: 'vatInvoiceNumber',
   vatIssuedAt: 'vatIssuedAt',
   vatStatus: 'vatStatus',
+  revisionOfId: 'revisionOfId',
   createdAt: 'createdAt'
 };
 
@@ -367,7 +375,9 @@ exports.Prisma.ImportReceiptItemScalarFieldEnum = {
   productName: 'productName',
   productSku: 'productSku',
   quantity: 'quantity',
+  returnedQuantity: 'returnedQuantity',
   costPrice: 'costPrice',
+  discount: 'discount',
   total: 'total'
 };
 
@@ -466,6 +476,7 @@ exports.Prisma.WarrantyScalarFieldEnum = {
   startDate: 'startDate',
   endDate: 'endDate',
   status: 'status',
+  transactionId: 'transactionId',
   notes: 'notes',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
@@ -492,7 +503,10 @@ exports.Prisma.QuotationScalarFieldEnum = {
   code: 'code',
   customerName: 'customerName',
   customerPhone: 'customerPhone',
+  customerEmail: 'customerEmail',
   items: 'items',
+  subtotal: 'subtotal',
+  discount: 'discount',
   totalAmount: 'totalAmount',
   status: 'status',
   validUntil: 'validUntil',
@@ -510,6 +524,7 @@ exports.Prisma.AuditLogScalarFieldEnum = {
   entityId: 'entityId',
   details: 'details',
   ipAddress: 'ipAddress',
+  deviceInfo: 'deviceInfo',
   createdAt: 'createdAt'
 };
 
@@ -534,6 +549,10 @@ exports.Prisma.ShippingOrderScalarFieldEnum = {
   address: 'address',
   driverId: 'driverId',
   driverName: 'driverName',
+  vehicleId: 'vehicleId',
+  vehiclePlate: 'vehiclePlate',
+  carrier: 'carrier',
+  trackingNumber: 'trackingNumber',
   status: 'status',
   shippingFee: 'shippingFee',
   cod: 'cod',
@@ -560,6 +579,44 @@ exports.Prisma.DriverScalarFieldEnum = {
   updatedAt: 'updatedAt'
 };
 
+exports.Prisma.VehicleScalarFieldEnum = {
+  id: 'id',
+  code: 'code',
+  name: 'name',
+  type: 'type',
+  licensePlate: 'licensePlate',
+  brand: 'brand',
+  model: 'model',
+  year: 'year',
+  color: 'color',
+  currentKm: 'currentKm',
+  lastOilChangeKm: 'lastOilChangeKm',
+  inspectionExpiry: 'inspectionExpiry',
+  insuranceExpiry: 'insuranceExpiry',
+  assignedDriverId: 'assignedDriverId',
+  assignedDriverName: 'assignedDriverName',
+  status: 'status',
+  imageUrl: 'imageUrl',
+  notes: 'notes',
+  branchId: 'branchId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.VehicleMaintenanceScalarFieldEnum = {
+  id: 'id',
+  vehicleId: 'vehicleId',
+  type: 'type',
+  description: 'description',
+  cost: 'cost',
+  kmAtService: 'kmAtService',
+  serviceDate: 'serviceDate',
+  nextDueDate: 'nextDueDate',
+  performedBy: 'performedBy',
+  notes: 'notes',
+  createdAt: 'createdAt'
+};
+
 exports.Prisma.TaxConfigScalarFieldEnum = {
   id: 'id',
   name: 'name',
@@ -567,6 +624,29 @@ exports.Prisma.TaxConfigScalarFieldEnum = {
   description: 'description',
   isDefault: 'isDefault',
   status: 'status'
+};
+
+exports.Prisma.BankAccountScalarFieldEnum = {
+  id: 'id',
+  bankName: 'bankName',
+  accountNumber: 'accountNumber',
+  accountName: 'accountName',
+  isDefault: 'isDefault',
+  status: 'status',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.BankTransactionScalarFieldEnum = {
+  id: 'id',
+  bankAccountId: 'bankAccountId',
+  type: 'type',
+  amount: 'amount',
+  description: 'description',
+  reference: 'reference',
+  date: 'date',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
 };
 
 exports.Prisma.TaxDeclarationScalarFieldEnum = {
@@ -738,6 +818,9 @@ exports.Prisma.SalesOrderScalarFieldEnum = {
   discount: 'discount',
   total: 'total',
   branchId: 'branchId',
+  processedById: 'processedById',
+  processedAt: 'processedAt',
+  cancelReason: 'cancelReason',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -762,6 +845,13 @@ exports.Prisma.PriceListScalarFieldEnum = {
   active: 'active',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
+};
+
+exports.Prisma.PriceListItemScalarFieldEnum = {
+  id: 'id',
+  priceListId: 'priceListId',
+  productId: 'productId',
+  price: 'price'
 };
 
 exports.Prisma.PriceRuleScalarFieldEnum = {
@@ -870,21 +960,23 @@ exports.Prisma.StoreSettingsScalarFieldEnum = {
   notifyNewOrder: 'notifyNewOrder',
   notifyDailyReport: 'notifyDailyReport',
   notifyWeeklyReport: 'notifyWeeklyReport',
+  autoRestockOnReturn: 'autoRestockOnReturn',
+  salesCanCheckout: 'salesCanCheckout',
   updatedAt: 'updatedAt'
 };
 
 exports.Prisma.StoreScalarFieldEnum = {
   id: 'id',
+  code: 'code',
   name: 'name',
   address: 'address',
   phone: 'phone',
-  email: 'email',
-  website: 'website',
-  businessType: 'businessType',
-  taxCode: 'taxCode',
-  ownerName: 'ownerName',
-  ownerIdNumber: 'ownerIdNumber',
-  representativeName: 'representativeName',
+  logo: 'logo',
+  status: 'status',
+  schema: 'schema',
+  plan: 'plan',
+  addOns: 'addOns',
+  extraBranches: 'extraBranches',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -1009,6 +1101,23 @@ exports.Prisma.OnlineOrderScalarFieldEnum = {
   updatedAt: 'updatedAt'
 };
 
+exports.Prisma.OnlineProductScalarFieldEnum = {
+  id: 'id',
+  channelId: 'channelId',
+  platform: 'platform',
+  platformProductId: 'platformProductId',
+  name: 'name',
+  sku: 'sku',
+  price: 'price',
+  stock: 'stock',
+  status: 'status',
+  imageUrl: 'imageUrl',
+  localProductId: 'localProductId',
+  syncedAt: 'syncedAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
 exports.Prisma.OnlineOrderItemScalarFieldEnum = {
   id: 'id',
   onlineOrderId: 'onlineOrderId',
@@ -1029,6 +1138,104 @@ exports.Prisma.SyncLogScalarFieldEnum = {
   details: 'details',
   ordersCount: 'ordersCount',
   createdAt: 'createdAt'
+};
+
+exports.Prisma.JournalEntryScalarFieldEnum = {
+  id: 'id',
+  date: 'date',
+  description: 'description',
+  debitAccount: 'debitAccount',
+  debitAccountName: 'debitAccountName',
+  creditAccount: 'creditAccount',
+  creditAccountName: 'creditAccountName',
+  amount: 'amount',
+  reference: 'reference',
+  referenceType: 'referenceType',
+  notes: 'notes',
+  branchId: 'branchId',
+  createdBy: 'createdBy',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.FixedAssetScalarFieldEnum = {
+  id: 'id',
+  code: 'code',
+  name: 'name',
+  category: 'category',
+  acquisitionDate: 'acquisitionDate',
+  originalCost: 'originalCost',
+  usefulLifeMonths: 'usefulLifeMonths',
+  method: 'method',
+  accumulatedDepreciation: 'accumulatedDepreciation',
+  netBookValue: 'netBookValue',
+  monthlyDepreciation: 'monthlyDepreciation',
+  depreciationAccount: 'depreciationAccount',
+  status: 'status',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.EInvoiceConfigScalarFieldEnum = {
+  id: 'id',
+  provider: 'provider',
+  apiUrl: 'apiUrl',
+  apiKey: 'apiKey',
+  apiSecret: 'apiSecret',
+  taxCode: 'taxCode',
+  templateId: 'templateId',
+  serialNo: 'serialNo',
+  active: 'active',
+  extra: 'extra',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.EInvoiceScalarFieldEnum = {
+  id: 'id',
+  transactionId: 'transactionId',
+  provider: 'provider',
+  invoiceNumber: 'invoiceNumber',
+  lookupCode: 'lookupCode',
+  pdfUrl: 'pdfUrl',
+  xmlData: 'xmlData',
+  status: 'status',
+  errorMessage: 'errorMessage',
+  issuedAt: 'issuedAt',
+  cancelledAt: 'cancelledAt',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.HKDRevenueEntryScalarFieldEnum = {
+  id: 'id',
+  date: 'date',
+  soChungTu: 'soChungTu',
+  dienGiai: 'dienGiai',
+  doanhThu: 'doanhThu',
+  chietKhau: 'chietKhau',
+  thueGTGT: 'thueGTGT',
+  doanhThuThuan: 'doanhThuThuan',
+  tncnUocTinh: 'tncnUocTinh',
+  phuongThucTT: 'phuongThucTT',
+  ghiChu: 'ghiChu',
+  branchId: 'branchId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.StorageFileScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  url: 'url',
+  size: 'size',
+  type: 'type',
+  category: 'category',
+  referenceId: 'referenceId',
+  referenceName: 'referenceName',
+  description: 'description',
+  uploadedBy: 'uploadedBy',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
 };
 
 exports.Prisma.SortOrder = {
@@ -1079,7 +1286,11 @@ exports.Prisma.ModelName = {
   PriceHistory: 'PriceHistory',
   ShippingOrder: 'ShippingOrder',
   Driver: 'Driver',
+  Vehicle: 'Vehicle',
+  VehicleMaintenance: 'VehicleMaintenance',
   TaxConfig: 'TaxConfig',
+  BankAccount: 'BankAccount',
+  BankTransaction: 'BankTransaction',
   TaxDeclaration: 'TaxDeclaration',
   CustomerSegment: 'CustomerSegment',
   Currency: 'Currency',
@@ -1092,6 +1303,7 @@ exports.Prisma.ModelName = {
   SalesOrder: 'SalesOrder',
   SalesOrderItem: 'SalesOrderItem',
   PriceList: 'PriceList',
+  PriceListItem: 'PriceListItem',
   PriceRule: 'PriceRule',
   Announcement: 'Announcement',
   Attendance: 'Attendance',
@@ -1105,8 +1317,15 @@ exports.Prisma.ModelName = {
   PayrollRecord: 'PayrollRecord',
   OnlineChannel: 'OnlineChannel',
   OnlineOrder: 'OnlineOrder',
+  OnlineProduct: 'OnlineProduct',
   OnlineOrderItem: 'OnlineOrderItem',
-  SyncLog: 'SyncLog'
+  SyncLog: 'SyncLog',
+  JournalEntry: 'JournalEntry',
+  FixedAsset: 'FixedAsset',
+  EInvoiceConfig: 'EInvoiceConfig',
+  EInvoice: 'EInvoice',
+  HKDRevenueEntry: 'HKDRevenueEntry',
+  StorageFile: 'StorageFile'
 };
 
 /**

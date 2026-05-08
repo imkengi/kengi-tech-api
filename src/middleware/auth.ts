@@ -4,8 +4,10 @@ import bcrypt from 'bcryptjs'
 import { registryPrisma, getStorePrisma } from '../lib/prisma'
 import { PrismaClient as StorePrisma } from '../generated/store-client'
 
-const JWT_SECRET = process.env.JWT_SECRET
-if (!JWT_SECRET) throw new Error('❌ JWT_SECRET environment variable is required. Set it in .env file.')
+const JWT_SECRET = process.env.JWT_SECRET || ''
+if (!JWT_SECRET) {
+    console.error('⚠️ JWT_SECRET environment variable is not set — auth middleware will reject all requests')
+}
 
 export interface AuthPayload {
     userId: string

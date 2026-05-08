@@ -7,21 +7,35 @@ import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 
 const router = Router()
 
+// GET /api/promotions/stats
+router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const all = await prisma.promotion.findMany({ select: { status: true, type: true } })
+        const byType: Record<string, number> = {}
+        const byStatus: Record<string, number> = {}
+        for (const p of all) {
+            byType[p.type] = (byType[p.type] || 0) + 1
+            byStatus[p.status] = (byStatus[p.status] || 0) + 1
+        }
+        res.json({ success: true, data: { total: all.length, byType, byStatus } })
+    } catch { res.status(500).json({ success: false, error: 'Internal server error' }) }
+})
+
 // GET /api/promotions
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const schema = req.user?.storeSchema || 'default'
         const cacheKey = `${schema}:promotions:${JSON.stringify(req.query)}`
         const cached = await cacheGet(cacheKey)
-        if (cached) return res.json(cached)
         const prisma = req.storePrisma!
         const { search, status, type, page = '1', pageSize = '20' } = req.query
 
         const where: any = {}
         if (search) {
             where.OR = [
-                { name: { contains: search as string } },
-                { code: { contains: search as string } },
+                { name: { contains: search as string, mode: 'insensitive' } },
+                { code: { contains: search as string, mode: 'insensitive' } },
             ]
         }
         if (status && status !== 'all') where.status = status
@@ -80,7 +94,7 @@ router.post('/', authMiddleware, requireRole('admin', 'manager'), validate(Creat
             },
         })
 
-        cacheDel(`${req.user?.storeSchema || 'default'}:promotions:*`).catch(() => {})
+        cacheDel(`${req.user?.storeSchema || 'default'}:promotions:*`).catch(() => { })
         res.status(201).json({
             success: true,
             data: {

@@ -6,6 +6,23 @@ import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 
 const router = Router()
 
+// GET /api/brands/stats
+router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const brands = await prisma.brand.findMany()
+        const distribution = await prisma.product.groupBy({ by: ['brandId'], _count: true })
+        const totalProducts = await prisma.product.count()
+        const noBrand = totalProducts - distribution.reduce((s: number, d: any) => s + d._count, 0)
+        const topBrand = distribution.sort((a: any, b: any) => b._count - a._count)[0]
+        const topBrandName = topBrand ? brands.find((b: any) => b.id === topBrand.brandId)?.name : null
+        const byBrand = brands.map((b: any) => ({
+            id: b.id, name: b.name, products: distribution.find((d: any) => d.brandId === b.id)?._count || 0
+        })).sort((a: any, b: any) => b.products - a.products)
+        res.json({ success: true, data: { total: brands.length, totalProducts, noBrand, topBrand: topBrandName, byBrand } })
+    } catch (err) { res.status(500).json({ success: false, error: 'Internal server error' }) }
+})
+
 // GET /api/brands
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
@@ -32,7 +49,7 @@ router.post('/', authMiddleware, validate(CreateBrandSchema), async (req: AuthRe
     try {
         const prisma = req.storePrisma!
         const brand = await prisma.brand.create({ data: { ...req.body } })
-        cacheDel(`${req.user?.storeSchema || 'default'}:brands:*`).catch(() => {})
+        cacheDel(`${req.user?.storeSchema || 'default'}:brands:*`).catch(() => { })
         res.status(201).json({ success: true, data: { ...brand, createdAt: brand.createdAt.toISOString() } })
     } catch (err) {
         console.error('Create brand error:', err)

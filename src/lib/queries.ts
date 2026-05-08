@@ -17,7 +17,7 @@ export interface DashboardStats {
     expenses: { thisMonth: number; growth: number }
 }
 
-export async function getDashboardStats(prisma: StorePrisma): Promise<DashboardStats> {
+export async function getDashboardStats(prisma: StorePrisma, branchFilter: Record<string, any> = {}): Promise<DashboardStats> {
     const now = new Date()
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
@@ -26,6 +26,8 @@ export async function getDashboardStats(prisma: StorePrisma): Promise<DashboardS
     const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 2, 1)
     const prevMonthEnd = new Date(now.getFullYear(), now.getMonth() - 1, 0, 23, 59, 59, 999)
 
+    // branchFilter applied to Transaction + Expense (tables that have branchId)
+    // Product + Customer don't have branchId column
     const [
         totalRevenue,
         todayRevenue,
@@ -44,13 +46,13 @@ export async function getDashboardStats(prisma: StorePrisma): Promise<DashboardS
         thisMonthExpenses,
         lastMonthExpenses,
     ] = await Promise.all([
-        prisma.transaction.aggregate({ _sum: { total: true }, where: { status: { not: 'voided' } } }),
-        prisma.transaction.aggregate({ _sum: { total: true }, where: { createdAt: { gte: todayStart }, status: { not: 'voided' } } }),
-        prisma.transaction.aggregate({ _sum: { total: true }, where: { createdAt: { gte: monthStart }, status: { not: 'voided' } } }),
-        prisma.transaction.aggregate({ _sum: { total: true }, where: { createdAt: { gte: lastMonthStart, lte: lastMonthEnd }, status: { not: 'voided' } } }),
-        prisma.transaction.count({ where: { status: { not: 'voided' } } }),
-        prisma.transaction.count({ where: { createdAt: { gte: todayStart }, status: { not: 'voided' } } }),
-        prisma.transaction.count({ where: { createdAt: { gte: lastMonthStart, lte: lastMonthEnd }, status: { not: 'voided' } } }),
+        prisma.transaction.aggregate({ _sum: { total: true }, where: { ...branchFilter, status: { not: 'voided' } } }),
+        prisma.transaction.aggregate({ _sum: { total: true }, where: { ...branchFilter, createdAt: { gte: todayStart }, status: { not: 'voided' } } }),
+        prisma.transaction.aggregate({ _sum: { total: true }, where: { ...branchFilter, createdAt: { gte: monthStart }, status: { not: 'voided' } } }),
+        prisma.transaction.aggregate({ _sum: { total: true }, where: { ...branchFilter, createdAt: { gte: lastMonthStart, lte: lastMonthEnd }, status: { not: 'voided' } } }),
+        prisma.transaction.count({ where: { ...branchFilter, status: { not: 'voided' } } }),
+        prisma.transaction.count({ where: { ...branchFilter, createdAt: { gte: todayStart }, status: { not: 'voided' } } }),
+        prisma.transaction.count({ where: { ...branchFilter, createdAt: { gte: lastMonthStart, lte: lastMonthEnd }, status: { not: 'voided' } } }),
         prisma.product.count(),
         prisma.product.count({ where: { stock: { gt: 0, lte: 10 } } }),
         prisma.product.count({ where: { stock: { lte: 0 } } }),
@@ -58,8 +60,8 @@ export async function getDashboardStats(prisma: StorePrisma): Promise<DashboardS
         prisma.customer.count({ where: { createdAt: { gte: monthStart } } }),
         prisma.customer.count({ where: { createdAt: { gte: lastMonthStart, lte: lastMonthEnd } } }),
         prisma.customer.count({ where: { debt: { gt: 0 } } }),
-        prisma.expense.aggregate({ _sum: { amount: true }, where: { date: { gte: monthStart } } }),
-        prisma.expense.aggregate({ _sum: { amount: true }, where: { date: { gte: lastMonthStart, lte: lastMonthEnd } } }),
+        prisma.expense.aggregate({ _sum: { amount: true }, where: { ...branchFilter, date: { gte: monthStart } } }),
+        prisma.expense.aggregate({ _sum: { amount: true }, where: { ...branchFilter, date: { gte: lastMonthStart, lte: lastMonthEnd } } }),
     ])
 
     const calcGrowth = (current: number, previous: number) =>
@@ -112,15 +114,15 @@ export interface RevenueDataPoint {
     profit: number
 }
 
-export async function getRevenueByDays(prisma: StorePrisma, days: number = 7): Promise<RevenueDataPoint[]> {
+export async function getRevenueByDays(prisma: StorePrisma, days: number = 7, branchFilter: Record<string, any> = {}): Promise<RevenueDataPoint[]> {
     const safetyDays = Math.min(90, Math.max(1, days))
     const since = new Date()
     since.setDate(since.getDate() - safetyDays)
     since.setHours(0, 0, 0, 0)
 
-    // Fetch all transactions in range at once (instead of N queries per day)
     const transactions = await prisma.transaction.findMany({
         where: {
+            ...branchFilter,
             createdAt: { gte: since },
             status: { not: 'voided' },
         },
@@ -162,6 +164,7 @@ export async function getRevenueByDays(prisma: StorePrisma, days: number = 7): P
 export interface TopProduct {
     id: string
     name: string
+    sku: string
     revenue: number
     quantity: number
     color: string
@@ -169,7 +172,7 @@ export interface TopProduct {
 
 export async function getTopProducts(prisma: StorePrisma, limit: number = 10): Promise<TopProduct[]> {
     const items = await prisma.transactionItem.groupBy({
-        by: ['productId', 'productName'],
+        by: ['productId', 'productName', 'sku'],
         _sum: { lineTotal: true, quantity: true },
         orderBy: { _sum: { lineTotal: 'desc' } },
         take: limit,
@@ -179,6 +182,7 @@ export async function getTopProducts(prisma: StorePrisma, limit: number = 10): P
     return items.map((item, i) => ({
         id: item.productId,
         name: item.productName,
+        sku: item.sku || '',
         revenue: item._sum.lineTotal ?? 0,
         quantity: item._sum.quantity ?? 0,
         color: COLORS[i % COLORS.length],
@@ -255,8 +259,9 @@ export async function getCustomerDebtSummary(prisma: StorePrisma, limit: number 
 
 // ─── Recent Activity ────────────────────────────────────────────────────────
 
-export async function getRecentActivity(prisma: StorePrisma, limit: number = 10) {
+export async function getRecentActivity(prisma: StorePrisma, limit: number = 10, branchFilter: Record<string, any> = {}) {
     const transactions = await prisma.transaction.findMany({
+        where: branchFilter,
         orderBy: { createdAt: 'desc' },
         take: limit,
         select: { id: true, receiptNumber: true, customerName: true, total: true, status: true, createdAt: true },

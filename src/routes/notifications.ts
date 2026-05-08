@@ -31,6 +31,16 @@ export function sendNotification(storeId: string, event: string, data: object) {
     }
 }
 
+// GET /api/notifications/stats
+router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const outOfStock = await prisma.product.count({ where: { stock: 0, productType: { not: 'service' } } })
+        const lowStock = await prisma.product.count({ where: { stock: { gt: 0, lte: 5 }, productType: { not: 'service' } } })
+        res.json({ success: true, data: { total: outOfStock + lowStock, critical: outOfStock, warning: lowStock } })
+    } catch { res.status(500).json({ success: false, error: 'Internal server error' }) }
+})
+
 // GET /api/notifications/stream — SSE connection
 router.get('/stream', authMiddleware, (req: AuthRequest, res: Response) => {
     const storeId = (req as any).storeId || req.user?.storeSchema || 'default'
@@ -92,7 +102,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         }))
 
         const _response = { success: true, data: notifications, count: notifications.length }
-        await cacheSet(cacheKey, _response, 30)
+        await cacheSet(cacheKey, _response, 300)
         res.json(_response)
     } catch (err) {
         res.status(500).json({ success: false, error: 'Internal server error' })

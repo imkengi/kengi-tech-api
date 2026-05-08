@@ -24,7 +24,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
             orderBy: sortBy === 'rating' ? { rating: 'desc' } : { createdAt: 'desc' },
         })
         const _response = { success: true, data }
-        await cacheSet(cacheKey, _response, 120)
+        await cacheSet(cacheKey, _response, 300)
         res.json(_response)
     } catch (err) {
         console.error('List reviews error:', err)

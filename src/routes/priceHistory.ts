@@ -18,7 +18,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         if (search) { const q = String(search); where.OR = [{ productName: { contains: q } }, { productSku: { contains: q } }] }
         const data = await prisma.priceHistory.findMany({ where, orderBy: { createdAt: 'desc' }, take: 200 })
         const _response = { success: true, data }
-        await cacheSet(cacheKey, _response, 120)
+        await cacheSet(cacheKey, _response, 300)
         res.json(_response)
     } catch (err) { res.status(500).json({ success: false, error: 'Internal server error' }) }
 })

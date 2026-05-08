@@ -4,6 +4,17 @@ import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 
 const router = Router()
 
+// GET /api/drivers/stats
+router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const all = await prisma.driver.findMany({ select: { status: true } })
+        const byStatus: Record<string, number> = {}
+        for (const d of all) { byStatus[d.status || 'available'] = (byStatus[d.status || 'available'] || 0) + 1 }
+        res.json({ success: true, data: { total: all.length, byStatus } })
+    } catch { res.status(500).json({ success: false, error: 'Internal server error' }) }
+})
+
 // GET /api/drivers
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
@@ -18,7 +29,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         if (search) { const q = String(search); where.OR = [{ name: { contains: q } }, { code: { contains: q } }, { phone: { contains: q } }] }
         const data = await prisma.driver.findMany({ where, orderBy: { createdAt: 'desc' } })
         const _response = { success: true, data }
-        await cacheSet(cacheKey, _response, 120)
+        await cacheSet(cacheKey, _response, 300)
         res.json(_response)
     } catch (err) { res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
@@ -33,7 +44,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         const code = `TX-${String(count + 1).padStart(3, '0')}`
         const plate = vehiclePlate || licensePlate || null
         const data = await prisma.driver.create({ data: { code, name, phone, vehicleType, vehiclePlate: plate, notes, status: 'available' } })
-        cacheDel(`${req.user?.storeSchema || 'default'}:drivers:*`).catch(() => {})
+        cacheDel(`${req.user?.storeSchema || 'default'}:drivers:*`).catch(() => { })
         res.status(201).json({ success: true, data })
     } catch (err) { console.error('Create driver error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
 })

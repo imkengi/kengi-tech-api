@@ -158,9 +158,16 @@ router.get('/analytics', authMiddleware, async (req: AuthRequest, res: Response)
 router.post('/', authMiddleware, validate(CreateReturnSchema), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        const { code, originalInvoice, transactionId, customerName, customerPhone, reason, items, totalRefund, notes, refundMethod, staffName } = req.body
+        const { code, originalInvoice, transactionId, originalTransactionId, customerName, customerPhone, reason, items, totalRefund, notes, refundMethod, staffName } = req.body
         if (!originalInvoice?.trim()) return res.status(400).json({ success: false, error: 'Original invoice required' })
         if (!customerName?.trim()) return res.status(400).json({ success: false, error: 'Customer name required' })
+
+        // Accept both transactionId and originalTransactionId from frontend
+        let txId = transactionId || originalTransactionId || null
+        if (!txId && originalInvoice && originalInvoice !== 'TRẢ NHANH' && originalInvoice !== 'Không Hóa Đơn') {
+            const txByInvoice = await prisma.transaction.findFirst({ where: { receiptNumber: originalInvoice.trim() } })
+            if (txByInvoice) txId = txByInvoice.id
+        }
 
         // Auto-generate code
         const count = await prisma.returnOrder.count()
@@ -170,7 +177,7 @@ router.post('/', authMiddleware, validate(CreateReturnSchema), async (req: AuthR
             data: {
                 code: returnCode,
                 originalInvoice: originalInvoice.trim(),
-                transactionId: transactionId || null,
+                transactionId: txId,
                 customerName: customerName.trim(),
                 customerPhone: customerPhone || null,
                 reason: reason || 'other',
@@ -178,6 +185,10 @@ router.post('/', authMiddleware, validate(CreateReturnSchema), async (req: AuthR
                 refundMethod: refundMethod || null,
                 staffName: staffName || null,
                 notes: notes || null,
+                status: 'refunded',
+                processedAt: new Date(),
+                refundedAt: new Date(),
+                refundAmount: Number(totalRefund) || 0,
                 items: {
                     create: (items || []).map((item: any) => ({
                         productId: item.productId || null,
@@ -192,6 +203,88 @@ router.post('/', authMiddleware, validate(CreateReturnSchema), async (req: AuthR
             },
             include: { items: true },
         })
+
+        // Auto-reduce customer debt if original sale was credit/partial
+        if (txId) {
+            try {
+                const originalTx = await prisma.transaction.findUnique({ where: { id: txId } })
+                if (originalTx) {
+                    await prisma.transaction.update({
+                        where: { id: txId },
+                        data: { returnedAt: new Date() }
+                    })
+                }
+                if (originalTx && originalTx.customerId) {
+                    const customer = await prisma.customer.findUnique({ where: { id: originalTx.customerId } })
+                    if (customer && customer.debt > 0) {
+                        const refundAmt = Number(totalRefund) || 0
+                        const debtReduction = Math.min(refundAmt, customer.debt)
+                        if (debtReduction > 0) {
+                            await prisma.customer.update({
+                                where: { id: customer.id },
+                                data: { debt: { decrement: debtReduction } },
+                            })
+                            await prisma.debtEntry.create({
+                                data: {
+                                    customerId: customer.id,
+                                    customerName: customer.name,
+                                    phone: customer.phone || '',
+                                    type: 'return',
+                                    amount: debtReduction,
+                                    description: `Trả hàng - phiếu ${returnCode} (${originalInvoice})`,
+                                    balance: Math.max(0, customer.debt - debtReduction),
+                                },
+                            })
+                            console.log(`📦 Debt reduced by ${debtReduction} for ${customer.name} (return ${returnCode})`)
+                        }
+                    }
+                }
+            } catch (debtErr) {
+                console.error('Auto debt reduction on return creation failed (non-fatal):', debtErr)
+            }
+        }
+
+        // Auto-restock items
+        try {
+            const storeSettings = await prisma.storeSettings.findFirst()
+            if (storeSettings?.autoRestockOnReturn) {
+                for (const item of returnOrder.items) {
+                    if (!item.productId || item.condition === 'damaged' || item.condition === 'defective') continue
+
+                    // Mark as restocked
+                    await prisma.returnItem.update({
+                        where: { id: item.id },
+                        data: { restocked: true },
+                    })
+
+                    // Increment stock
+                    await prisma.product.update({
+                        where: { id: item.productId },
+                        data: { stock: { increment: item.quantity } },
+                    })
+
+                    // Create inventory transaction
+                    await (prisma as any).inventoryTransaction.create({
+                        data: {
+                            type: 'import',
+                            productId: item.productId,
+                            productName: item.productName || 'Unknown',
+                            productSku: item.sku || '',
+                            quantity: item.quantity,
+                            reason: `Tự động nhập lại kho từ đơn trả hàng ${returnCode}`,
+                            referenceId: returnCode,
+                            referenceType: 'sale_return',
+                            unitPrice: item.unitPrice || 0,
+                            userId: req.user?.userId || 'system',
+                            userName: 'Hệ thống - Trả hàng (Auto)',
+                        }
+                    })
+                }
+            }
+        } catch (restockErr) {
+            console.error('Auto restock on return creation failed (non-fatal):', restockErr)
+        }
+
         res.status(201).json({ success: true, data: returnOrder })
     } catch (err: any) {
         console.error('Create return error:', err)
@@ -273,23 +366,60 @@ router.post('/:id/process-refund', authMiddleware, async (req: AuthRequest, res:
             await prisma.transaction.create({
                 data: {
                     receiptNumber: `RF-${String(txCount + 1).padStart(4, '0')}`,
-                    type: 'refund',
                     customerName: returnOrder.customerName,
                     customerPhone: returnOrder.customerPhone || null,
                     subtotal: -amount,
                     discount: 0,
                     tax: 0,
                     total: -amount,
-                    paymentMethod: refundMethod === 'bank_transfer' ? 'transfer' : refundMethod === 'store_credit' ? 'credit' : 'cash',
+                    amountReceived: 0,
                     status: 'completed',
-                    items: JSON.stringify(returnOrder.items.map(i => ({
-                        productName: i.productName, sku: i.sku, quantity: -i.quantity, unitPrice: i.unitPrice,
-                    }))),
+                    createdBy: req.user?.userId || 'system',
+                    createdByName: req.user?.email || 'Hệ thống',
                     notes: `Hoàn tiền phiếu ${returnOrder.code}`,
                 },
             })
         } catch (_) {
             // Transaction creation is optional — don't fail the refund
+        }
+
+        // If original sale had debt → reduce customer debt
+        if (returnOrder.transactionId) {
+            try {
+                const originalTx = await prisma.transaction.findUnique({
+                    where: { id: returnOrder.transactionId },
+                })
+                if (originalTx && originalTx.customerId) {
+                    const customer = await prisma.customer.findUnique({
+                        where: { id: originalTx.customerId },
+                    })
+                    if (customer && customer.debt > 0) {
+                        // Reduce debt by refund amount (max = current debt)
+                        const debtReduction = Math.min(amount, customer.debt)
+                        if (debtReduction > 0) {
+                            await prisma.customer.update({
+                                where: { id: customer.id },
+                                data: { debt: { decrement: debtReduction } },
+                            })
+                            // Create DebtEntry for tracking
+                            await prisma.debtEntry.create({
+                                data: {
+                                    customerId: customer.id,
+                                    customerName: customer.name,
+                                    phone: customer.phone || '',
+                                    type: 'payment',
+                                    amount: debtReduction,
+                                    description: `Giảm nợ do trả hàng - phiếu ${returnOrder.code}`,
+                                    balance: Math.max(0, customer.debt - debtReduction),
+                                },
+                            })
+                            console.log(`💰 Debt reduced by ${debtReduction} for customer ${customer.name} (return ${returnOrder.code})`)
+                        }
+                    }
+                }
+            } catch (debtErr) {
+                console.error('Debt reduction on return failed (non-fatal):', debtErr)
+            }
         }
 
         res.json({ success: true, data: updated })
@@ -335,8 +465,26 @@ router.post('/:id/restock', authMiddleware, async (req: AuthRequest, res: Respon
                         where: { id: item.productId },
                         data: { stock: { increment: item.quantity } },
                     })
-                } catch (_) {
-                    // Product may not exist
+
+                    // Create inventory transaction to show in stock card
+                    await (prisma as any).inventoryTransaction.create({
+                        data: {
+                            type: 'import',
+                            productId: item.productId,
+                            productName: item.productName || 'Unknown',
+                            productSku: item.sku || '',
+                            quantity: item.quantity,
+                            reason: `Nhập lại kho từ đơn trả hàng ${returnOrder.code}`,
+                            referenceId: returnOrder.code,
+                            referenceType: 'sale_return',
+                            unitPrice: item.unitPrice || 0,
+                            userId: req.user!.userId,
+                            userName: 'Hệ thống - Trả hàng',
+                        }
+                    })
+                } catch (e) {
+                    // Product may not exist or other error
+                    console.error('Error updating stock/transaction for returned item:', e)
                 }
             }
             restocked++

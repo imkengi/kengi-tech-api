@@ -41,6 +41,12 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
             }
         } catch { /* ignore */ }
 
+        // Count current branches
+        let branchCount = 0
+        try {
+            branchCount = await prisma.branch.count()
+        } catch { /* branch table might not exist */ }
+
         res.json({
             success: true,
             data: {
@@ -60,6 +66,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
                 plan,
                 addOns,
                 extraBranches,
+                branchCount,
             },
         })
     } catch (err) {

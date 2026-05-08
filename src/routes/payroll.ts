@@ -22,7 +22,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
             orderBy: [{ year: 'desc' }, { month: 'desc' }, { employeeName: 'asc' }],
         })
         const _response = { success: true, data: records }
-        await cacheSet(cacheKey, _response, 120)
+        await cacheSet(cacheKey, _response, 300)
         res.json(_response)
     } catch (err) {
         console.error('Get payroll error:', err)

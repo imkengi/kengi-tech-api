@@ -2,8 +2,12 @@ import { registryPrisma, getStorePrisma } from '../lib/prisma'
 import { getPlatformService, type PlatformOrder } from '../services/platforms'
 import { processNewOrders } from '../services/orderSync'
 
-const SYNC_INTERVAL = 10 * 60 * 1000 // 10 minutes
-let syncTimer: NodeJS.Timeout | null = null
+const SYNC_INTERVAL    = 10 * 60 * 1000       // 10 phút
+const CLEANUP_INTERVAL = 24 * 60 * 60 * 1000  // 24 tiếng
+const CLEANUP_DAYS     = 18                    // Xóa đơn cũ hơn 18 ngày
+
+let syncTimer:    NodeJS.Timeout | null = null
+let cleanupTimer: NodeJS.Timeout | null = null
 
 /**
  * Sync orders for a single channel
@@ -181,6 +185,76 @@ async function runAutoSync() {
     }
 }
 
+// ═══════════════════════════════════════════════════════════
+//  CLEANUP — Xóa đơn COMPLETED/CANCELLED cũ hơn 18 ngày
+// ═══════════════════════════════════════════════════════════
+
+async function runCleanup() {
+    const cutoff = new Date(Date.now() - CLEANUP_DAYS * 86400_000)
+    const cleanStatuses = ['COMPLETED', 'completed', 'CANCELLED', 'cancelled', 'TO_RETURN', 'returned']
+
+    try {
+        const stores = await registryPrisma.store.findMany({ where: { status: 'active' } }) as any[]
+        let totalDeleted = 0
+
+        for (const store of stores) {
+            try {
+                const storePrisma = getStorePrisma(store.schemaName)
+
+                // Lấy danh sách id đơn cũ cần xóa
+                const oldOrders = await storePrisma.onlineOrder.findMany({
+                    where: {
+                        status:    { in: cleanStatuses },
+                        updatedAt: { lt: cutoff },
+                    },
+                    select: { id: true, orderNumber: true },
+                })
+
+                if (oldOrders.length === 0) continue
+
+                const ids = oldOrders.map((o: any) => o.id)
+
+                // Xóa items trước (cascade nếu DB không tự xóa)
+                await storePrisma.onlineOrderItem.deleteMany({
+                    where: { onlineOrderId: { in: ids } },
+                })
+
+                // Xóa đơn hàng
+                const result = await storePrisma.onlineOrder.deleteMany({
+                    where: { id: { in: ids } },
+                })
+
+                totalDeleted += result.count
+                console.log(`[Cleanup] ${store.name}: xóa ${result.count} đơn cũ (>${CLEANUP_DAYS} ngày): ${oldOrders.slice(0, 5).map((o: any) => o.orderNumber).join(', ')}${oldOrders.length > 5 ? '...' : ''}`)
+
+                // Cập nhật lại stats kênh
+                const channels = await storePrisma.onlineChannel.findMany({ select: { id: true } })
+                for (const ch of channels) {
+                    const agg = await storePrisma.onlineOrder.aggregate({
+                        where: { channelId: ch.id },
+                        _count: true,
+                        _sum: { total: true },
+                    })
+                    await storePrisma.onlineChannel.update({
+                        where: { id: ch.id },
+                        data: { totalOrders: agg._count, totalRevenue: agg._sum.total || 0 },
+                    }).catch(() => {})
+                }
+            } catch (err: any) {
+                if (!err.message?.includes('does not exist')) {
+                    console.error(`[Cleanup] Error on store ${store.name}:`, err.message)
+                }
+            }
+        }
+
+        if (totalDeleted > 0) {
+            console.log(`[Cleanup] Hoàn thành: đã xóa ${totalDeleted} đơn cũ trên ${stores.length} cửa hàng`)
+        }
+    } catch (err: any) {
+        console.error('[Cleanup] Fatal error:', err.message)
+    }
+}
+
 /**
  * Start the auto-sync cron
  */
@@ -193,6 +267,14 @@ export function startAutoSync() {
         runAutoSync()
         syncTimer = setInterval(runAutoSync, SYNC_INTERVAL)
     }, 30_000)
+
+    // Cleanup chạy lần đầu sau 5 phút (tránh xung đột lúc khởi động), sau đó mỗi 24h
+    setTimeout(() => {
+        runCleanup()
+        cleanupTimer = setInterval(runCleanup, CLEANUP_INTERVAL)
+    }, 5 * 60_000)
+
+    console.log(`🧹 Auto-cleanup started (every 24h, orders >${CLEANUP_DAYS} days old)`)
 }
 
 /**
@@ -203,5 +285,10 @@ export function stopAutoSync() {
         clearInterval(syncTimer)
         syncTimer = null
         console.log('⏰ Auto-sync stopped')
+    }
+    if (cleanupTimer) {
+        clearInterval(cleanupTimer)
+        cleanupTimer = null
+        console.log('🧹 Auto-cleanup stopped')
     }
 }

@@ -78,13 +78,15 @@ function memSet(key: string, value: string, ttlMs: number): void {
 }
 
 function memDel(pattern: string): void {
-    if (pattern.endsWith('*')) {
-        const prefix = pattern.slice(0, -1)
-        for (const key of memoryCache.keys()) {
-            if (key.startsWith(prefix)) memoryCache.delete(key)
-        }
-    } else {
+    if (!pattern.includes('*')) {
         memoryCache.delete(pattern)
+        return
+    }
+    // Convert glob pattern to regex: escape special chars, replace * with .*
+    const regexStr = '^' + pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$'
+    const regex = new RegExp(regexStr)
+    for (const key of memoryCache.keys()) {
+        if (regex.test(key)) memoryCache.delete(key)
     }
 }
 

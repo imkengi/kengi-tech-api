@@ -85,13 +85,13 @@ const TEMPLATES: Record<string, { filename: string; headers: string[]; sample: s
     },
     transactions: {
         filename: 'mau_don_hang.xlsx',
-        headers: ['Mã đơn', 'Ngày giờ', 'Khách hàng', 'SĐT', 'Mã hàng', 'Tên hàng', 'Số lượng', 'Đơn giá', 'Giảm giá', 'Ghi chú'],
-        sample: [['DH001', '28/02/2026 14:30', 'Nguyễn Văn A', '0901234567', 'SP001', 'Áo thun', '2', '150000', '0', '']]
+        headers: ['Mã đơn', 'Ngày giờ', 'Mã KH', 'Khách hàng', 'SĐT', 'Mã hàng', 'Tên hàng', 'Số lượng', 'Đơn giá', 'Giảm giá', 'Ghi chú'],
+        sample: [['DH001', '28/02/2026 14:30', 'KH001', 'Nguyễn Văn A', '0901234567', 'SP001', 'Áo thun', '2', '150000', '0', '']]
     },
     'import-receipts': {
         filename: 'mau_nhap_hang.xlsx',
-        headers: ['Mã phiếu', 'Ngày giờ', 'Nhà cung cấp', 'Mã hàng', 'Tên hàng', 'Số lượng', 'Đơn giá', 'Ghi chú'],
-        sample: [['PN001', '28/02/2026 10:00', 'Công ty ABC', 'SP001', 'Áo thun', '50', '85000', '']]
+        headers: ['Mã phiếu', 'Ngày giờ', 'Nhà cung cấp', 'Mã hàng', 'Tên hàng', 'Số lượng', 'Đơn giá', 'Giảm giá', 'Ghi chú'],
+        sample: [['PN001', '28/02/2026 10:00', 'Công ty ABC', 'SP001', 'Áo thun', '50', '85000', '5000', '']]
     },
     returns: {
         filename: 'mau_tra_hang.xlsx',
@@ -324,14 +324,29 @@ router.post('/transactions', authMiddleware, upload.single('file'), async (req: 
         for (const [receiptNumber, itemRows] of grouped) {
             try {
                 const firstRow = itemRows[0]
+                const customerCode = col(firstRow, 'Mã KH', 'Mã khách hàng', 'customer_code', 'ma_kh') || null
                 const customerName = col(firstRow, 'Khách hàng', 'Tên KH', 'customer', 'Khách Hàng') || null
                 const customerPhone = col(firstRow, 'SĐT', 'Số điện thoại', 'phone') || null
-                const discount = toNumber(col(firstRow, 'Giảm giá', 'Chiết khấu', 'discount'))
                 const notes = col(firstRow, 'Ghi chú', 'notes') || null
                 const dateStr = col(firstRow, 'Ngày giờ', 'Ngày', 'Thời gian', 'Date', 'DateTime', 'ngay_gio')
                 const createdAt = dateStr ? parseDateTime(dateStr, 12, 0) : new Date()
 
-                const itemsData: { productId: string; productName: string; sku: string; quantity: number; unitPrice: number; lineTotal: number }[] = []
+                // Look up customerId from customer code, phone, or name
+                let customerId: string | null = null
+                if (customerCode) {
+                    const customer = await getPrisma(req).customer.findFirst({ where: { code: customerCode } })
+                    if (customer) customerId = customer.id
+                }
+                if (!customerId && customerPhone) {
+                    const customer = await getPrisma(req).customer.findFirst({ where: { phone: customerPhone } })
+                    if (customer) customerId = customer.id
+                }
+                if (!customerId && customerName) {
+                    const customer = await getPrisma(req).customer.findFirst({ where: { name: customerName } })
+                    if (customer) customerId = customer.id
+                }
+
+                const itemsData: { productId: string; productName: string; sku: string; quantity: number; unitPrice: number; discount: number; lineTotal: number }[] = []
                 for (const row of itemRows) {
                     const sku = col(row, 'Mã hàng', 'SKU', 'Mã sản phẩm', 'sku')
                     if (!sku) continue
@@ -339,23 +354,42 @@ router.post('/transactions', authMiddleware, upload.single('file'), async (req: 
                     if (!product) { errors.push(`Mã hàng "${sku}" không tồn tại`); continue }
                     const qty = Math.round(toNumber(col(row, 'Số lượng', 'SL', 'quantity', 'Số Lượng')))
                     const price = toNumber(col(row, 'Đơn giá', 'Giá bán', 'unit_price', 'Đơn Giá')) || product.sellingPrice
+                    const itemDiscount = toNumber(col(row, 'Giảm giá', 'Chiết khấu', 'discount'))
                     if (qty <= 0) continue
-                    itemsData.push({ productId: product.id, productName: product.name, sku, quantity: qty, unitPrice: price, lineTotal: qty * price })
+                    itemsData.push({ productId: product.id, productName: product.name, sku, quantity: qty, unitPrice: price, discount: itemDiscount, lineTotal: Math.max(0, qty * price - itemDiscount) })
                 }
                 if (itemsData.length === 0) { orderIdx++; continue }
 
-                const subtotal = itemsData.reduce((s, i) => s + i.lineTotal, 0)
+                const subtotal = itemsData.reduce((s, i) => s + (i.quantity * i.unitPrice), 0)
+                const discount = itemsData.reduce((s, i) => s + i.discount, 0)
                 const total = subtotal - discount
 
-                await getPrisma(req).transaction.create({
-                    data: {
-                        receiptNumber, customerName, customerPhone,
-                        subtotal, discount, total, branchId: branchId || null,
-                        status: 'completed', createdBy: userId, notes,
-                        createdAt,
-                        items: { create: itemsData }
-                    }
-                })
+                // Upsert: if receiptNumber already exists, update; otherwise create
+                const existing = await getPrisma(req).transaction.findUnique({ where: { receiptNumber } })
+                if (existing) {
+                    // Delete old items and update transaction
+                    await getPrisma(req).transactionItem.deleteMany({ where: { transactionId: existing.id } })
+                    await getPrisma(req).transaction.update({
+                        where: { id: existing.id },
+                        data: {
+                            customerName, customerPhone, customerId,
+                            subtotal, discount, total, branchId: branchId || null,
+                            status: 'completed', notes, createdAt,
+                            items: { create: itemsData }
+                        }
+                    })
+                } else {
+                    await getPrisma(req).transaction.create({
+                        data: {
+                            receiptNumber, customerName, customerPhone,
+                            customerId,
+                            subtotal, discount, total, branchId: branchId || null,
+                            status: 'completed', createdBy: userId, notes,
+                            createdAt,
+                            items: { create: itemsData }
+                        }
+                    })
+                }
 
                 for (const item of itemsData) {
                     await getPrisma(req).product.update({ where: { id: item.productId }, data: { stock: { decrement: item.quantity } } })
@@ -418,7 +452,7 @@ router.post('/import-receipts', authMiddleware, upload.single('file'), async (re
                 const dateStr = col(firstRow, 'Ngày giờ', 'Ngày', 'Thời gian', 'Date', 'DateTime', 'ngay_gio')
                 const createdAt = dateStr ? parseDateTime(dateStr, 10, 0) : new Date()
 
-                const itemsData: { productId: string; productName: string; productSku: string; quantity: number; costPrice: number; total: number }[] = []
+                const itemsData: { productId: string; productName: string; productSku: string; quantity: number; costPrice: number; discount: number; total: number }[] = []
                 for (const row of itemRows) {
                     const sku = col(row, 'Mã hàng', 'SKU', 'Mã sản phẩm', 'sku')
                     if (!sku) continue
@@ -426,8 +460,9 @@ router.post('/import-receipts', authMiddleware, upload.single('file'), async (re
                     if (!product) { errors.push(`Mã hàng "${sku}" không tồn tại`); continue }
                     const qty = Math.round(toNumber(col(row, 'Số lượng', 'SL', 'quantity', 'Số Lượng')))
                     const price = toNumber(col(row, 'Đơn giá', 'Giá nhập', 'unit_price', 'Đơn Giá')) || product.costPrice
+                    const itemDiscount = toNumber(col(row, 'Giảm giá', 'Chiết khấu', 'discount'))
                     if (qty <= 0) continue
-                    itemsData.push({ productId: product.id, productName: product.name, productSku: sku, quantity: qty, costPrice: price, total: qty * price })
+                    itemsData.push({ productId: product.id, productName: product.name, productSku: sku, quantity: qty, costPrice: price, discount: itemDiscount, total: Math.max(0, qty * price - itemDiscount) })
                 }
                 if (itemsData.length === 0) { orderIdx++; continue }
 

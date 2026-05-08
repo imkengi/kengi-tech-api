@@ -48,6 +48,9 @@ model User {
   notes            String?
   isLocked         Boolean   @default(false)
   twoFactorEnabled Boolean   @default(false)
+  twoFactorSecret  String?
+  trustedDevices   String    @default("[]") // JSON: [{id,name,browser,os,ip,lastUsed,createdAt}]
+  permissions      String    @default("[]") // JSON: granular permission list per employee
   branchId         String?
   branch           Branch?   @relation(fields: [branchId], references: [id])
   createdAt        DateTime  @default(now())
@@ -160,6 +163,7 @@ model Product {
   salesOrderItems    SalesOrderItem[]
   serials            ProductSerial[]
   onlineOrderItems   OnlineOrderItem[]
+  onlineProducts     OnlineProduct[]
 
   @@index([categoryId])
   @@index([brandId])
@@ -221,10 +225,14 @@ model Customer {
   phone            String
   email            String?
   address          String?
+  latitude         Float?    // Vĩ độ — lưu sau khi geocode địa chỉ
+  longitude        Float?    // Kinh độ — lưu sau khi geocode địa chỉ
   groupId          String?
   birthday         String?
   gender           String?
   notes            String?
+  salesUserId      String?   // NV Sales phụ trách
+  salesUserName    String?   // Tên NV Sales (denormalized)
   totalPurchases   Float     @default(0)
   totalOrders      Int       @default(0)
   debt             Float     @default(0)
@@ -242,6 +250,7 @@ model Customer {
   @@index([groupId])
   @@index([phone])
   @@index([tier])
+  @@index([salesUserId])
 }
 
 // ─── Transactions ──────────────────────────────────────────────────────────────
@@ -269,6 +278,7 @@ model Transaction {
   vatInvoiceNumber String?
   vatIssuedAt      DateTime?
   vatStatus        String    @default("none")
+  revisionOfId     String?   // If this is a revision, points to the original transaction
   createdAt        DateTime  @default(now())
 
   creator  User              @relation(fields: [createdBy], references: [id])
@@ -372,14 +382,16 @@ model ImportReceipt {
 }
 
 model ImportReceiptItem {
-  id          String @id @default(cuid())
-  receiptId   String
-  productId   String
-  productName String
-  productSku  String
-  quantity    Int
-  costPrice   Float
-  total       Float
+  id               String @id @default(cuid())
+  receiptId        String
+  productId        String
+  productName      String
+  productSku       String
+  quantity         Int
+  returnedQuantity Int    @default(0)
+  costPrice        Float
+  discount         Float  @default(0)
+  total            Float
 
   receipt ImportReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
   product Product       @relation(fields: [productId], references: [id])
@@ -501,6 +513,7 @@ model Warranty {
   startDate     DateTime
   endDate       DateTime
   status        String   @default("active")
+  transactionId String?  // Linked to the transaction that created this warranty
   notes         String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -531,7 +544,10 @@ model Quotation {
   code          String    @unique
   customerName  String
   customerPhone String?
+  customerEmail String?
   items         String
+  subtotal      Float     @default(0)
+  discount      Float     @default(0)
   totalAmount   Float     @default(0)
   status        String    @default("draft")
   validUntil    DateTime?
@@ -551,6 +567,7 @@ model AuditLog {
   entityId  String?
   details   String?
   ipAddress String?
+  deviceInfo String?  // JSON: {browser, os, ip, deviceId}
   createdAt DateTime @default(now())
 
   @@index([createdAt])
@@ -578,24 +595,30 @@ model PriceHistory {
 // ─── Shipping ──────────────────────────────────────────────────────────────────
 
 model ShippingOrder {
-  id            String    @id @default(cuid())
-  code          String    @unique
-  transactionId String?
-  customerName  String
-  customerPhone String?
-  address       String
-  driverId      String?
-  driverName    String?
-  status        String    @default("pending")
-  shippingFee   Float     @default(0)
-  cod           Float     @default(0)
-  notes         String?
-  estimatedDate DateTime?
-  deliveredDate DateTime?
-  branchId      String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id             String    @id @default(cuid())
+  code           String    @unique
+  transactionId  String?
+  customerName   String
+  customerPhone  String?
+  address        String
+  driverId       String?
+  driverName     String?
+  vehicleId      String?
+  vehiclePlate   String?
+  carrier        String    @default("self")
+  trackingNumber String?
+  status         String    @default("preparing")
+  shippingFee    Float     @default(0)
+  cod            Float     @default(0)
+  notes          String?
+  estimatedDate  DateTime?
+  deliveredDate  DateTime?
+  branchId       String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
+  @@index([transactionId])
+  @@index([vehicleId])
   @@index([branchId])
 }
 
@@ -616,6 +639,57 @@ model Driver {
   updatedAt       DateTime @updatedAt
 }
 
+// ─── Vehicles (Fleet Management) ───────────────────────────────────────────────
+
+model Vehicle {
+  id                 String    @id @default(cuid())
+  code               String    @unique
+  name               String
+  type               String    @default("car")
+  licensePlate       String
+  brand              String?
+  model              String?
+  year               Int?
+  color              String?
+  currentKm          Float     @default(0)
+  lastOilChangeKm    Float     @default(0)
+  inspectionExpiry   DateTime?
+  insuranceExpiry    DateTime?
+  assignedDriverId   String?
+  assignedDriverName String?
+  status             String    @default("available")
+  imageUrl           String?
+  notes              String?
+  branchId           String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  maintenanceLogs VehicleMaintenance[]
+
+  @@index([branchId])
+  @@index([status])
+  @@index([licensePlate])
+}
+
+model VehicleMaintenance {
+  id          String   @id @default(cuid())
+  vehicleId   String
+  type        String
+  description String
+  cost        Float    @default(0)
+  kmAtService Float    @default(0)
+  serviceDate DateTime @default(now())
+  nextDueDate DateTime?
+  performedBy String?
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId])
+  @@index([serviceDate])
+}
+
 // ─── Tax Config ────────────────────────────────────────────────────────────────
 
 model TaxConfig {
@@ -625,6 +699,38 @@ model TaxConfig {
   description String?
   isDefault   Boolean @default(false)
   status      String  @default("active")
+}
+
+// ─── Bank Accounts (S2e - Tiền gửi) ───────────────────────────────────────────
+
+model BankAccount {
+  id            String   @id @default(cuid())
+  bankName      String
+  accountNumber String
+  accountName   String?
+  isDefault     Boolean  @default(false)
+  status        String   @default("active")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  transactions BankTransaction[]
+}
+
+model BankTransaction {
+  id            String       @id @default(cuid())
+  bankAccountId String?
+  type          String       // "deposit" | "withdraw"
+  amount        Float
+  description   String
+  reference     String?
+  date          DateTime     @default(now())
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  bankAccount BankAccount? @relation(fields: [bankAccountId], references: [id])
+
+  @@index([date])
+  @@index([bankAccountId])
 }
 
 // ─── Tax Declaration ───────────────────────────────────────────────────────────
@@ -824,25 +930,30 @@ model Bundle {
 // ─── Sales Orders ───────────────────────────────────────────────────────────
 
 model SalesOrder {
-  id           String   @id @default(cuid())
-  orderNumber  String   @unique
-  status       String   @default("pending")
-  salesUserId  String
-  customerId   String?
-  customerName String?
-  note         String?
-  subtotal     Float    @default(0)
-  discount     Float    @default(0)
-  total        Float    @default(0)
-  branchId     String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id            String    @id @default(cuid())
+  orderNumber   String    @unique
+  status        String    @default("pending")
+  salesUserId   String
+  customerId    String?
+  customerName  String?
+  note          String?
+  subtotal      Float     @default(0)
+  discount      Float     @default(0)
+  total         Float     @default(0)
+  branchId      String?
+  processedById String?
+  processedAt   DateTime?
+  cancelReason  String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   salesUser User             @relation(fields: [salesUserId], references: [id])
   customer  Customer?        @relation(fields: [customerId], references: [id])
   items     SalesOrderItem[]
 
   @@index([branchId])
+  @@index([status])
+  @@index([salesUserId])
 }
 
 model SalesOrderItem {
@@ -872,6 +983,20 @@ model PriceList {
   updatedAt   DateTime @updatedAt
 
   rules PriceRule[]
+  items PriceListItem[]
+}
+
+model PriceListItem {
+  id          String @id @default(cuid())
+  priceListId String
+  productId   String
+  price       Float
+
+  priceList PriceList @relation(fields: [priceListId], references: [id], onDelete: Cascade)
+
+  @@unique([priceListId, productId])
+  @@index([priceListId])
+  @@index([productId])
 }
 
 model PriceRule {
@@ -1008,26 +1133,31 @@ model StoreSettings {
   notifyDailyReport Boolean @default(false)
 
   notifyWeeklyReport Boolean @default(true)
+  
+  autoRestockOnReturn Boolean @default(true)
+
+  // Permission: allow Sales role to checkout/sell directly. When false, Sales can only create SalesOrder
+  salesCanCheckout Boolean @default(false)
 
   updatedAt DateTime @updatedAt
 }
 
-// ─── Store (business profile for tax) ───────────────────────────────────────
+// ─── Store (synced with main schema.prisma) ─────────────────────────────────
 
 model Store {
-  id                 String   @id @default("default")
-  name               String
-  address            String?
-  phone              String?
-  email              String?
-  website            String?
-  businessType       String   @default("company")
-  taxCode            String?
-  ownerName          String?
-  ownerIdNumber      String?
-  representativeName String?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id            String   @id @default(cuid())
+  code          String   @unique
+  name          String
+  address       String?
+  phone         String?
+  logo          String?
+  status        String   @default("active")
+  schema        String   @unique
+  plan          String   @default("full")
+  addOns        String   @default("[]")
+  extraBranches Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 // ─── Branch Requests ────────────────────────────────────────────────────────
@@ -1129,6 +1259,7 @@ model OnlineChannel {
   updatedAt      DateTime  @updatedAt
 
   orders OnlineOrder[]
+  products OnlineProduct[]
 
   commissionRate Float @default(6) // % phí sàn mặc định
 }
@@ -1178,6 +1309,33 @@ model OnlineOrder {
   @@index([platform])
 }
 
+// ─── Online Products (Danh mục hàng hóa trên sàn) ───────────────────────────
+
+model OnlineProduct {
+  id                 String    @id @default(cuid())
+  channelId          String
+  platform           String
+  platformProductId  String
+  name               String
+  sku                String?
+  price              Float     @default(0)
+  stock              Int       @default(0)
+  status             String    @default("NORMAL")
+  imageUrl           String?
+  localProductId     String?   // ID của Product trong kho để map Giá vốn
+  syncedAt           DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  channel            OnlineChannel @relation(fields: [channelId], references: [id])
+  localProduct       Product?      @relation(fields: [localProductId], references: [id])
+
+  @@unique([channelId, platformProductId]) // Mỗi gian hàng có duy nhất 1 ID này
+  @@index([channelId])
+  @@index([localProductId])
+  @@index([platform])
+}
+
 // ─── Online Order Items ─────────────────────────────────────────────────────
 
 model OnlineOrderItem {
@@ -1210,4 +1368,131 @@ model SyncLog {
   createdAt   DateTime @default(now())
 
   @@index([channelId, createdAt])
+}
+
+// ─── Journal Entry (Bút Toán Kế Toán) ──────────────────────────────────────
+
+model JournalEntry {
+  id               String   @id @default(cuid())
+  date             String
+  description      String
+  debitAccount     String
+  debitAccountName String?
+  creditAccount    String
+  creditAccountName String?
+  amount           Float
+  reference        String?
+  referenceType    String   @default("manual")
+  notes            String?
+  branchId         String?
+  createdBy        String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([date])
+  @@index([debitAccount])
+  @@index([creditAccount])
+  @@index([referenceType])
+}
+
+// ─── Fixed Asset (Tài Sản Cố Định) ─────────────────────────────────────────
+
+model FixedAsset {
+  id                      String   @id @default(cuid())
+  code                    String   @unique
+  name                    String
+  category                String
+  acquisitionDate         String
+  originalCost            Float
+  usefulLifeMonths        Int
+  method                  String   @default("straight-line")
+  accumulatedDepreciation Float    @default(0)
+  netBookValue            Float    @default(0)
+  monthlyDepreciation     Float    @default(0)
+  depreciationAccount     String   @default("6424")
+  status                  String   @default("active")
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@index([status])
+  @@index([category])
+}
+
+// ─── E-Invoice (Hóa đơn Điện tử) ───────────────────────────────────────────
+
+model EInvoiceConfig {
+  id          String   @id @default(cuid())
+  provider    String   // misa | viettel | vnpt | fpt | easyinvoice | bkav
+  apiUrl      String
+  apiKey      String
+  apiSecret   String
+  taxCode     String
+  templateId  String?
+  serialNo    String?
+  active      Boolean  @default(true)
+  extra       String?  // JSON for provider-specific config
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model EInvoice {
+  id              String    @id @default(cuid())
+  transactionId   String
+  provider        String
+  invoiceNumber   String?
+  lookupCode      String?
+  pdfUrl          String?
+  xmlData         String?
+  status          String    @default("pending") // pending | issued | error | cancelled
+  errorMessage    String?
+  issuedAt        DateTime?
+  cancelledAt     DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@index([transactionId])
+  @@index([invoiceNumber])
+  @@index([status])
+}
+
+// ─── HKD Revenue Entry (Ghi chép doanh thu theo ngày) ──────────────────────
+
+model HKDRevenueEntry {
+  id            String   @id @default(cuid())
+  date          DateTime
+  soChungTu     String?
+  dienGiai      String
+  doanhThu      Float    @default(0)  // Doanh thu (chưa thuế)
+  chietKhau     Float    @default(0)
+  thueGTGT      Float    @default(0)  // GTGT tỷ lệ trực tiếp
+  doanhThuThuan Float    @default(0)  // Doanh thu thuần
+  tncnUocTinh  Float    @default(0)  // TNCN ước tính 17%
+  phuongThucTT  String   @default("Tiền mặt")
+  ghiChu        String?
+  branchId      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([date])
+  @@index([branchId])
+  @@index([createdAt])
+}
+
+// ─── Storage Vault ──────────────────────────────────────────────────────────
+
+model StorageFile {
+  id             String   @id @default(cuid())
+  name           String
+  url            String
+  size           Int
+  type           String
+  category       String
+  referenceId    String?
+  referenceName  String?
+  description    String?
+  uploadedBy     String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  @@index([category])
+  @@index([referenceId])
 }

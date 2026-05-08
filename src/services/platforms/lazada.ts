@@ -1,4 +1,4 @@
-import { PlatformService, PlatformCredentials, PlatformOrder, PlatformOrderItem, TokenResponse } from './base'
+import { PlatformService, PlatformCredentials, PlatformOrder, PlatformOrderItem, PlatformProduct, TokenResponse } from './base'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  LAZADA OPEN PLATFORM
@@ -153,6 +153,12 @@ export class LazadaService extends PlatformService {
         }
     }
 
+    async fetchProducts(): Promise<{ products: PlatformProduct[]; total: number }> {
+        // TODO: Implement Lazada product sync
+        console.log('[Lazada] fetchProducts not yet implemented')
+        return { products: [], total: 0 }
+    }
+
     // ─── Mappers ─────────────────────────────────────────────────────────────────
 
     private mapOrder(o: any, rawItems: any[]): PlatformOrder {
@@ -178,9 +184,9 @@ export class LazadaService extends PlatformService {
             customerPhone: addr.phone || o.customer_phone || '',
             shippingAddress: [addr.address1, addr.address2, addr.address3, addr.city, addr.country].filter(Boolean).join(', '),
             subtotal: parseFloat(o.price || '0'),
-            discount: parseFloat(o.voucher_seller || '0'),
+            discount: 0,
             shippingFee: parseFloat(o.shipping_fee || '0'),
-            total: parseFloat(o.payment_amount || o.price || '0'),
+            total: parseFloat(o.price || '0'),
             paymentMethod: o.payment_method || 'Lazada',
             paymentStatus: this.mapPaymentStatus(o.statuses?.[0] || o.status || ''),
             trackingNumber: o.tracking_code || undefined,

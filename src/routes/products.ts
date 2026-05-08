@@ -22,6 +22,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
             search, categoryId, brandId, stockStatus, productType,
             page = '1', pageSize = '20', sortBy = 'createdAt', sortOrder = 'desc' } = req.query
 
+        // Note: Product table does not have branchId column, so no branch filtering
         const where: any = {}
 
         if (search) {
@@ -38,7 +39,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         if (stockStatus === 'out_of_stock') where.stock = 0
 
         const pageNum = Math.max(1, parseInt(page as string))
-        const size = Math.max(1, Math.min(100, parseInt(pageSize as string)))
+        const size = Math.max(1, Math.min(1000, parseInt(pageSize as string)))
         const skip = (pageNum - 1) * size
 
         const [total, products] = await Promise.all([
@@ -99,10 +100,75 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
                 totalPages: Math.ceil(filteredTotal / size)
             }
         }
-        await cacheSet(cacheKey, response, 60) // Cache 60s
+        await cacheSet(cacheKey, response, 300) // Cache 60s
         res.json(response)
     } catch (err) {
         console.error('Get products error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// GET /api/products/stats — aggregate inventory stats across ALL products
+router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+
+        const cacheKey = `product-stats:${req.user?.storeSchema || 'default'}`
+        const cached = await cacheGet(cacheKey)
+        if (cached) return res.json(cached)
+
+        // Note: Product table does not have branchId column
+        const [total, outOfStock, allProducts] = await Promise.all([
+            prisma.product.count(),
+            prisma.product.count({ where: { stock: { lte: 0 } } }),
+            prisma.product.findMany({
+                select: { stock: true, minStock: true, sellingPrice: true, costPrice: true, categoryId: true }
+            })
+        ])
+
+        // Compute lowStock (0 < stock <= minStock) and inStock (stock > minStock)
+        let lowStock = 0
+        let totalStockValue = 0
+        let totalPrice = 0
+        const categoryCounts = new Map<string, number>()
+
+        for (const p of allProducts) {
+            const min = p.minStock ?? 5
+            if (p.stock > 0 && p.stock <= min) lowStock++
+            totalStockValue += p.stock * p.sellingPrice
+            totalPrice += p.sellingPrice
+            const catId = p.categoryId || '__none__'
+            categoryCounts.set(catId, (categoryCounts.get(catId) || 0) + 1)
+        }
+
+        const inStock = total - outOfStock - lowStock
+        const avgPrice = total > 0 ? Math.round(totalPrice / total) : 0
+
+        // Get category names for top categories
+        const topCats = Array.from(categoryCounts.entries())
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 6)
+
+        const categoryIds = topCats.map(([id]) => id).filter(id => id !== '__none__')
+        const categories = categoryIds.length > 0
+            ? await prisma.category.findMany({ where: { id: { in: categoryIds } }, select: { id: true, name: true } })
+            : []
+        const catNameMap = new Map(categories.map(c => [c.id, c.name]))
+
+        const topCategories = topCats.map(([id, count]) => ({
+            id,
+            name: id === '__none__' ? 'Không phân loại' : (catNameMap.get(id) || 'Không phân loại'),
+            count
+        }))
+
+        const response = {
+            success: true,
+            data: { total, inStock, lowStock, outOfStock, totalStockValue, avgPrice, topCategories }
+        }
+        await cacheSet(cacheKey, response, 120)
+        res.json(response)
+    } catch (err) {
+        console.error('Get product stats error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
     }
 })
@@ -140,16 +206,33 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
 router.post('/', authMiddleware, requireRole('admin', 'manager'), validate(CreateProductSchema), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        const { unitConversions, images, ...productData } = req.body
+        const { unitConversions, images, name, sku, barcode, description, categoryId, brandId, costPrice, sellingPrice, stock, unit, productType, status, tags, ...rawUpdates } = req.body
+
+        const cleanUC = (unitConversions || []).filter((uc: any) => uc.toUnit?.trim()).map(({ id, ...rest }: any) => rest)
+        const cleanImages = (images || []).filter((img: any) => img.url).map(({ id, ...rest }: any) => rest)
 
         const product = await prisma.product.create({
             data: {
-                ...productData,
-                unitConversions: unitConversions?.length ? {
-                    createMany: { data: unitConversions }
+                name,
+                sku,
+                barcode: barcode || null,
+                description: description || null,
+                categoryId: categoryId || undefined,
+                brandId: brandId || null,
+                productType: productType || 'goods',
+                costPrice: costPrice || 0,
+                sellingPrice: sellingPrice || 0,
+                stock: stock || 0,
+                baseUnit: rawUpdates?.baseUnit || unit || 'cái',
+                minStock: rawUpdates?.minStock || 0,
+                maxStock: rawUpdates?.maxStock || 100,
+                taxInclusive: rawUpdates?.taxInclusive ?? true,
+                trackSerial: rawUpdates?.trackSerial ?? false,
+                unitConversions: cleanUC.length ? {
+                    createMany: { data: cleanUC }
                 } : undefined,
-                images: images?.length ? {
-                    createMany: { data: images }
+                images: cleanImages.length ? {
+                    createMany: { data: cleanImages }
                 } : undefined
             },
             include: { category: true, brand: true, images: true, unitConversions: true }
@@ -165,6 +248,7 @@ router.post('/', authMiddleware, requireRole('admin', 'manager'), validate(Creat
         })
         // Invalidate products cache
         cacheDel(`products:${req.user?.storeSchema || 'default'}:*`).catch(() => { })
+        cacheDel(`product-stats:${req.user?.storeSchema || 'default'}`).catch(() => { })
     } catch (err) {
         console.error('Create product error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
@@ -198,15 +282,18 @@ router.put('/:id', authMiddleware, requireRole('admin', 'manager'), validate(Upd
             await prisma.productImage.deleteMany({ where: { productId: String(req.params.id) } })
         }
 
+        const cleanUC = (unitConversions || []).filter((uc: any) => uc.toUnit?.trim()).map(({ id, ...rest }: any) => rest)
+        const cleanImages = (images || []).filter((img: any) => img.url).map(({ id, ...rest }: any) => rest)
+
         const product = await prisma.product.update({
             where: { id: String(req.params.id) },
             data: {
                 ...updates,
-                unitConversions: unitConversions?.length ? {
-                    createMany: { data: unitConversions }
+                unitConversions: cleanUC.length ? {
+                    createMany: { data: cleanUC }
                 } : undefined,
-                images: images?.length ? {
-                    createMany: { data: images }
+                images: cleanImages.length ? {
+                    createMany: { data: cleanImages }
                 } : undefined
             },
             include: { category: true, brand: true, images: true, unitConversions: true }
@@ -221,6 +308,7 @@ router.put('/:id', authMiddleware, requireRole('admin', 'manager'), validate(Upd
             }
         })
         cacheDel(`products:${req.user?.storeSchema || 'default'}:*`).catch(() => { })
+        cacheDel(`product-stats:${req.user?.storeSchema || 'default'}`).catch(() => { })
     } catch (err) {
         console.error('Update product error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
@@ -237,6 +325,7 @@ router.delete('/:id', authMiddleware, requireRole('admin', 'manager'), async (re
         await prisma.product.delete({ where: { id: String(req.params.id) } })
         res.json({ success: true })
         cacheDel(`products:${req.user?.storeSchema || 'default'}:*`).catch(() => { })
+        cacheDel(`product-stats:${req.user?.storeSchema || 'default'}`).catch(() => { })
     } catch (err) {
         console.error('Delete product error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })

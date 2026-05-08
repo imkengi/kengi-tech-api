@@ -110,7 +110,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         `).catch(() => [])
 
         const _response = { success: true, data: requests || [] }
-        await cacheSet(cacheKey, _response, 120)
+        await cacheSet(cacheKey, _response, 300)
         res.json(_response)
     } catch (err) {
         console.error('List upgrade requests error:', err)

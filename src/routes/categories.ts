@@ -6,6 +6,29 @@ import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 
 const router = Router()
 
+// GET /api/categories/stats
+router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const categories = await prisma.category.findMany({
+            include: {
+                _count: { select: { products: true } },
+                products: { select: { stock: true, minStock: true } },
+            },
+        })
+        const total = categories.length
+        const totalProducts = categories.reduce((s, c) => s + c._count.products, 0)
+        const emptyCategories = categories.filter(c => c._count.products === 0).length
+        const allProds = categories.flatMap(c => (c as any).products || [])
+        const outOfStock = allProds.filter((p: any) => (p.stock ?? 0) <= 0).length
+        const lowStock = allProds.filter((p: any) => (p.stock ?? 0) > 0 && (p.stock ?? 0) <= (p.minStock ?? 5)).length
+        res.json({ success: true, data: { total, totalProducts, emptyCategories, outOfStock, lowStock } })
+    } catch (err) {
+        console.error('Category stats error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
 // GET /api/categories — tree or flat
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
@@ -50,7 +73,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
                 }
             })
             const treeResponse = { success: true, data: tree }
-            await cacheSet(cacheKey, treeResponse, 120)
+            await cacheSet(cacheKey, treeResponse, 300)
             res.json(treeResponse)
         } else {
             const categories = await prisma.category.findMany({
@@ -84,7 +107,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
                 }
             })
             const flatResponse = { success: true, data }
-            await cacheSet(cacheKey, flatResponse, 120)
+            await cacheSet(cacheKey, flatResponse, 300)
             res.json(flatResponse)
         }
     } catch (err) {

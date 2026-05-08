@@ -42,7 +42,9 @@ router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => 
             }),
         ])
 
-        const completedCount = byStatus.find(s => s.status === 'completed')?._count ?? 0
+        // Helper: aggregate count for a status, covering both Shopee UPPERCASE and legacy lowercase
+        const countFor = (...statuses: string[]) =>
+            statuses.reduce((sum, s) => sum + (byStatus.find(b => b.status === s)?._count ?? 0), 0)
 
         res.json({
             success: true,
@@ -53,11 +55,14 @@ router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => 
                 totalDiscount: totals._sum.discount ?? 0,
                 totalPlatformFee: canSeeProfits ? (totals._sum.platformFee ?? 0) : undefined,
                 totalNetRevenue: canSeeProfits ? (totals._sum.netRevenue ?? 0) : undefined,
-                completionRate: totalOrders > 0 ? Math.round((completedCount / totalOrders) * 100) : 0,
-                pendingCount: byStatus.find(s => s.status === 'pending')?._count ?? 0,
-                processingCount: (byStatus.find(s => s.status === 'confirmed')?._count ?? 0)
-                    + (byStatus.find(s => s.status === 'processing')?._count ?? 0),
-                shippingCount: byStatus.find(s => s.status === 'shipping')?._count ?? 0,
+                // Completion rate: gom cả COMPLETED và completed
+                completionRate: totalOrders > 0 ? Math.round((countFor('COMPLETED', 'completed') / totalOrders) * 100) : 0,
+                // Pending count (Chờ xử lý): UNPAID + READY_TO_SHIP + pending + confirmed
+                pendingCount: countFor('UNPAID', 'READY_TO_SHIP', 'pending', 'confirmed'),
+                // Processing count (Đã xử lý): PROCESSED + processing
+                processingCount: countFor('PROCESSED', 'processing'),
+                // Shipping count: SHIPPED + shipping
+                shippingCount: countFor('SHIPPED', 'shipping'),
                 byStatus: byStatus.map(s => ({ status: s.status, count: s._count, revenue: s._sum.total ?? 0 })),
                 byChannel: byChannel.map(c => ({ platform: c.platform, count: c._count, revenue: c._sum.total ?? 0 })),
                 canSeeProfits,
@@ -250,7 +255,32 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         const skip = (pageNum - 1) * size
 
         const where: any = {}
-        if (status && status !== 'all') where.status = status
+        if (status && status !== 'all') {
+            // Map: accept cả Shopee UPPERCASE và lowercase nội bộ để tránh mismatch
+            const STATUS_VARIANTS: Record<string, string[]> = {
+                UNPAID:             ['UNPAID', 'pending'],
+                READY_TO_SHIP:      ['READY_TO_SHIP', 'confirmed'],
+                PROCESSED:          ['PROCESSED', 'processing'],
+                SHIPPED:            ['SHIPPED', 'shipping'],
+                TO_CONFIRM_RECEIVE: ['TO_CONFIRM_RECEIVE', 'delivered'],
+                COMPLETED:          ['COMPLETED', 'completed'],
+                IN_CANCEL:          ['IN_CANCEL', 'cancelling'],
+                CANCELLED:          ['CANCELLED', 'cancelled'],
+                TO_RETURN:          ['TO_RETURN', 'returned'],
+                // lowercase → cũng map ngược lại UPPERCASE để dùng được từ cả hai phía
+                pending:     ['pending', 'UNPAID'],
+                confirmed:   ['confirmed', 'READY_TO_SHIP'],
+                processing:  ['processing', 'PROCESSED'],
+                shipping:    ['shipping', 'SHIPPED'],
+                delivered:   ['delivered', 'TO_CONFIRM_RECEIVE'],
+                completed:   ['completed', 'COMPLETED'],
+                cancelling:  ['cancelling', 'IN_CANCEL'],
+                cancelled:   ['cancelled', 'CANCELLED'],
+                returned:    ['returned', 'TO_RETURN'],
+            }
+            const variants = STATUS_VARIANTS[status as string]
+            where.status = variants ? { in: variants } : status as string
+        }
         if (channelId) where.channelId = channelId as string
         if (platform && platform !== 'all') where.platform = platform
         if (paymentStatus && paymentStatus !== 'all') where.paymentStatus = paymentStatus
@@ -294,6 +324,157 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         res.status(500).json({ success: false, error: 'Internal server error' })
     }
 })
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  MARKETPLACE PRODUCTS — Aggregate + Sync
+//  ⚠️ Must be BEFORE /:id to avoid Express swallowing /products as a param
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// GET /api/online-orders/products/stats
+router.get('/products/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const { channelId } = req.query
+        const where: any = {}
+        if (channelId) where.channelId = channelId as string
+
+        const [total, active, outOfStock] = await Promise.all([
+            prisma.onlineProduct.count({ where }),
+            prisma.onlineProduct.count({ where: { ...where, status: 'NORMAL', stock: { gt: 0 } } }),
+            prisma.onlineProduct.count({ where: { ...where, stock: 0 } }),
+        ])
+
+        res.json({ success: true, data: { total, active, outOfStock, needsPriceUpdate: 0 } })
+    } catch (err) {
+        console.error('Get marketplace product stats error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// GET /api/online-orders/products
+router.get('/products', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const { search, channelId, platform, status, page = '1', pageSize = '50' } = req.query
+
+        const pageNum = Math.max(1, parseInt(page as string) || 1)
+        const size = Math.min(200, Math.max(1, parseInt(pageSize as string) || 50))
+
+        // Build where clause
+        const where: any = {}
+        if (channelId) where.channelId = channelId as string
+        if (platform && platform !== 'all') where.platform = platform as string
+        if (status && status !== 'all') where.status = status as string
+        if (search) {
+            const q = (search as string).trim()
+            where.OR = [
+                { name: { contains: q, mode: 'insensitive' } },
+                { sku: { contains: q, mode: 'insensitive' } },
+            ]
+        }
+
+        // Fetch channels for commission rate
+        const channels = await prisma.onlineChannel.findMany({
+            select: { id: true, commissionRate: true, platform: true, name: true },
+        })
+        const channelMap = new Map(channels.map(c => [c.id, c]))
+
+        const [total, rawProducts] = await Promise.all([
+            prisma.onlineProduct.count({ where }),
+            prisma.onlineProduct.findMany({
+                where,
+                include: {
+                    localProduct: {
+                        select: { id: true, name: true, sku: true, costPrice: true, stock: true },
+                    },
+                },
+                orderBy: { updatedAt: 'desc' },
+                skip: (pageNum - 1) * size,
+                take: size,
+            }),
+        ])
+
+        const items = rawProducts.map(p => {
+            const ch = channelMap.get(p.channelId)
+            const commissionRate = ch?.commissionRate ?? 6
+            const platformFee = Math.round(p.price * commissionRate / 100)
+            const costPrice = p.localProduct?.costPrice ?? undefined
+            return {
+                id: p.id,
+                channelId: p.channelId,
+                channelName: ch?.name || null,
+                platform: p.platform,
+                platformProductId: p.platformProductId,
+                name: p.name,
+                sku: p.sku,
+                price: p.price,
+                stock: p.stock,
+                status: p.status,
+                imageUrl: p.imageUrl,
+                createdAt: p.createdAt.toISOString(),
+                updatedAt: p.updatedAt?.toISOString() || null,
+                syncedAt: p.syncedAt?.toISOString() || null,
+                commissionRate,
+                platformFee,
+                netPrice: p.price - platformFee,
+                costPrice: costPrice != null ? Number(costPrice) : undefined,
+                localProductId: p.localProductId,
+                localProductName: p.localProduct?.name || null,
+                localProductSku: p.localProduct?.sku || null,
+                localStock: p.localProduct?.stock ?? null,
+            }
+        })
+
+        const totalPages = Math.ceil(total / size) || 1
+        res.json({ success: true, data: { items, total, page: pageNum, pageSize: size, totalPages } })
+    } catch (err) {
+        console.error('Get marketplace products error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// PUT /api/online-orders/products/:id/link — Link online product to local inventory product
+router.put('/products/:id/link', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const { localProductId } = req.body
+
+        const onlineProduct = await prisma.onlineProduct.findUnique({ where: { id: req.params.id as string } })
+        if (!onlineProduct) {
+            res.status(404).json({ success: false, error: 'Sản phẩm sàn không tồn tại' })
+            return
+        }
+
+        // If unlinking (null), skip product validation
+        if (localProductId) {
+            const localProduct = await prisma.product.findUnique({ where: { id: localProductId } })
+            if (!localProduct) {
+                res.status(404).json({ success: false, error: 'Sản phẩm kho không tồn tại' })
+                return
+            }
+        }
+
+        const updated = await prisma.onlineProduct.update({
+            where: { id: req.params.id as string },
+            data: { localProductId: localProductId || null },
+            include: {
+                localProduct: { select: { id: true, name: true, sku: true, costPrice: true, stock: true } },
+            },
+        })
+
+        res.json({ success: true, data: updated })
+    } catch (err: any) {
+        console.error('Link product error:', err)
+        res.status(500).json({ success: false, error: err.message || 'Internal server error' })
+    }
+})
+
+// PUT /api/online-orders/products/:id — Update price/stock stub
+router.put('/products/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+    res.json({ success: true, data: { id: req.params.id, ...req.body } })
+})
+
+
 
 // GET /api/online-orders/:id
 router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -447,7 +628,15 @@ router.put('/:id/status', authMiddleware, async (req: AuthRequest, res: Response
         const { id } = req.params
         const { status, trackingNumber, shippingCarrier } = req.body
 
-        const validStatuses = ['pending', 'confirmed', 'processing', 'shipping', 'delivered', 'completed', 'cancelled', 'returned']
+        // Shopee UPPERCASE + legacy lowercase
+        const validStatuses = [
+            // Shopee Open Platform v2 official statuses
+            'UNPAID', 'READY_TO_SHIP', 'PROCESSED', 'SHIPPED',
+            'TO_CONFIRM_RECEIVE', 'COMPLETED', 'IN_CANCEL', 'CANCELLED', 'TO_RETURN',
+            // Legacy lowercase (internal / non-Shopee orders)
+            'pending', 'confirmed', 'processing', 'shipping',
+            'delivered', 'completed', 'cancelling', 'cancelled', 'returned',
+        ]
         if (!status || !validStatuses.includes(status)) {
             res.status(400).json({ success: false, error: 'Trạng thái không hợp lệ' })
             return
@@ -461,14 +650,17 @@ router.put('/:id/status', authMiddleware, async (req: AuthRequest, res: Response
         const oldStatus = oldOrder?.status
 
         const updateData: any = { status }
-        if (status === 'shipping') {
+        // Timestamp auto-fill: map cả Shopee UPPERCASE và legacy lowercase
+        if (status === 'SHIPPED' || status === 'shipping') {
             updateData.shippedAt = new Date()
             if (trackingNumber) updateData.trackingNumber = trackingNumber
             if (shippingCarrier) updateData.shippingCarrier = shippingCarrier
         }
-        if (status === 'delivered') updateData.deliveredAt = new Date()
-        if (status === 'completed') updateData.paymentStatus = 'paid'
-        if (status === 'completed' && !updateData.paidAt) updateData.paidAt = new Date()
+        if (status === 'TO_CONFIRM_RECEIVE' || status === 'delivered') updateData.deliveredAt = new Date()
+        if (status === 'COMPLETED' || status === 'completed') {
+            updateData.paymentStatus = 'paid'
+            updateData.paidAt = new Date()
+        }
 
         const order = await prisma.onlineOrder.update({
             where: { id: id as string },
@@ -477,11 +669,11 @@ router.put('/:id/status', authMiddleware, async (req: AuthRequest, res: Response
         })
 
         // ── Inventory auto-sync ──────────────────────────────────────────
-        // Deduct stock when confirmed, restore when cancelled
-        const confirmStatuses = ['confirmed', 'processing', 'shipping']
+        // Deduct stock when order is confirmed/processed, restore when cancelled/returned
+        const confirmStatuses = ['READY_TO_SHIP', 'PROCESSED', 'SHIPPED', 'confirmed', 'processing', 'shipping']
         const wasNotConfirmed = !oldStatus || !confirmStatuses.includes(oldStatus)
         const isNowConfirmed = confirmStatuses.includes(status)
-        const isCancelled = status === 'cancelled' || status === 'returned'
+        const isCancelled = ['CANCELLED', 'TO_RETURN', 'IN_CANCEL', 'cancelled', 'returned'].includes(status)
         const wasConfirmed = oldStatus && confirmStatuses.includes(oldStatus)
 
         if (order.items?.length) {
@@ -606,8 +798,8 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
             res.status(404).json({ success: false, error: 'Không tìm thấy đơn hàng' })
             return
         }
-        if (!['pending', 'cancelled'].includes(order.status)) {
-            res.status(400).json({ success: false, error: 'Chỉ có thể xóa đơn ở trạng thái Chờ xử lý hoặc Đã hủy' })
+        if (!['pending', 'cancelled', 'UNPAID', 'CANCELLED'].includes(order.status)) {
+            res.status(400).json({ success: false, error: 'Chỉ có thể xóa đơn ở trạng thái Chờ thanh toán hoặc Đã hủy' })
             return
         }
 
@@ -636,9 +828,10 @@ router.post('/bulk-update', authMiddleware, async (req: AuthRequest, res: Respon
         const data: any = { status }
         if (trackingNumber) data.trackingNumber = trackingNumber
         if (shippingCarrier) data.shippingCarrier = shippingCarrier
-        if (status === 'shipping') data.shippedAt = new Date()
-        if (status === 'delivered') data.deliveredAt = new Date()
-        if (status === 'completed' || status === 'delivered') data.paymentStatus = 'paid'
+        // Timestamp auto-fill for bulk updates
+        if (status === 'SHIPPED' || status === 'shipping') data.shippedAt = new Date()
+        if (status === 'TO_CONFIRM_RECEIVE' || status === 'delivered') data.deliveredAt = new Date()
+        if (['COMPLETED', 'completed', 'TO_CONFIRM_RECEIVE', 'delivered'].includes(status)) data.paymentStatus = 'paid'
 
         const result = await prisma.onlineOrder.updateMany({
             where: { id: { in: ids } },
@@ -1042,17 +1235,76 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
         })
         if (!service) { res.status(400).json({ success: false, error: 'Nền tảng chưa được hỗ trợ' }); return }
 
-        // Fetch orders from platform
-        const since = channel.lastSyncAt || new Date(Date.now() - 7 * 86400_000)
+        // ── Auto-refresh token if expired or about to expire (5 min buffer) ──
+        const tokenExpiresAt = (channel as any).tokenExpiresAt
+        const needsRefresh = tokenExpiresAt && new Date(tokenExpiresAt).getTime() < Date.now() + 5 * 60 * 1000
+        if (needsRefresh) {
+            console.log(`[Sync] Token expired/expiring for channel ${channel.name}, refreshing...`)
+            try {
+                const tokens = await service.refreshAccessToken();
+                (service as any).credentials.accessToken = tokens.accessToken;
+                (service as any).credentials.refreshToken = tokens.refreshToken;
+                await prisma.onlineChannel.update({
+                    where: { id: channel.id },
+                    data: {
+                        accessToken: tokens.accessToken,
+                        refreshToken: tokens.refreshToken,
+                        tokenExpiresAt: new Date(Date.now() + tokens.expiresIn * 1000),
+                    },
+                })
+                console.log(`[Sync] Token refreshed successfully for ${channel.name}`)
+            } catch (refreshErr: any) {
+                console.error(`[Sync] Token refresh failed for ${channel.name}:`, refreshErr.message)
+                // Continue anyway — the old token might still work briefly
+            }
+        }
+
+        // Fetch orders from platform (with retry-on-token-error)
+        // Với update_time, luôn dùng 15 ngày để bắt đơn cũ đã thay đổi status
+        // (lastSyncAt quá ngắn — đơn cũ có thể update_time trong window 15 ngày)
+        const since = new Date(Date.now() - 14 * 86400_000)
         let allOrders: PlatformOrder[] = []
         let page = 1
         let hasMore = true
 
-        while (hasMore && page <= 10) { // Max 10 pages safety
-            const result = await service.fetchOrders({ since, page, pageSize: 50 })
-            allOrders = allOrders.concat(result.orders)
-            hasMore = result.hasMore
-            page++
+        const fetchWithRetry = async () => {
+            while (hasMore && page <= 10) {
+                const result = await service.fetchOrders({ since, page, pageSize: 50 })
+                allOrders = allOrders.concat(result.orders)
+                hasMore = result.hasMore
+                page++
+            }
+        }
+
+        try {
+            await fetchWithRetry()
+        } catch (fetchErr: any) {
+            // If it's a token error, try refresh once and retry
+            if (fetchErr.message?.includes('invalid_access_token') || fetchErr.message?.includes('error_auth')) {
+                console.log(`[Sync] Token error during fetch, attempting refresh and retry...`)
+                try {
+                    const tokens = await service.refreshAccessToken();
+                    (service as any).credentials.accessToken = tokens.accessToken;
+                    (service as any).credentials.refreshToken = tokens.refreshToken;
+                    await prisma.onlineChannel.update({
+                        where: { id: channel.id },
+                        data: {
+                            accessToken: tokens.accessToken,
+                            refreshToken: tokens.refreshToken,
+                            tokenExpiresAt: new Date(Date.now() + tokens.expiresIn * 1000),
+                        },
+                    })
+                    console.log(`[Sync] Token refreshed on retry, re-fetching...`)
+                    allOrders = []
+                    page = 1
+                    hasMore = true
+                    await fetchWithRetry()
+                } catch (retryErr: any) {
+                    throw new Error(`Shopee token refresh failed: ${retryErr.message}. Vui lòng kết nối lại Shopee.`)
+                }
+            } else {
+                throw fetchErr
+            }
         }
 
         // Import orders into DB
@@ -1181,9 +1433,130 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
             console.error('Order conversion error:', e.message)
         }
 
+        // ── Batch refresh status của đơn cũ chưa kết thúc ──────────────────────
+        // Shopee chỉ sync đơn mới theo create_time → đơn SHIPPED từ tháng trước không được cập nhật
+        // → Query DB lấy đơn chưa kết thúc, gọi get_order_detail để lấy status mới nhất
+        let statusRefreshed = 0
+        if (channel.platform === 'shopee') {
+            try {
+                const NON_TERMINAL = ['pending','confirmed','processing','shipping','delivered','UNPAID','READY_TO_SHIP','PROCESSED','SHIPPED','TO_CONFIRM_RECEIVE','IN_CANCEL']
+                const pendingOrders = await prisma.onlineOrder.findMany({
+                    where: { channelId: channel.id, status: { in: NON_TERMINAL }, externalOrderId: { not: null } },
+                    select: { id: true, externalOrderId: true, status: true, trackingNumber: true, shippingCarrier: true },
+                })
+
+                if (pendingOrders.length > 0) {
+                    // Lấy externalOrderId, strip prefix SPE-
+                    const snToId: Record<string, string> = {}
+                    const snToOld: Record<string, { status: string; trackingNumber: string | null; shippingCarrier: string | null }> = {}
+                    for (const o of pendingOrders) {
+                        const sn = (o.externalOrderId || '').replace(/^(SPE-|TIK-|LAZ-)/i, '')
+                        if (sn) { snToId[sn] = o.id; snToOld[sn] = { status: o.status, trackingNumber: o.trackingNumber, shippingCarrier: o.shippingCarrier } }
+                    }
+                    const orderSns = Object.keys(snToId)
+                    console.log(`[Sync] Refreshing status of ${orderSns.length} pending orders...`)
+
+                    // Gọi Shopee get_order_detail theo batch 50
+                    const BATCH = 50
+                    const shopeeForRefresh = new ShopeeService({
+                        apiKey: channel.apiKey || '', apiSecret: channel.apiSecret || '',
+                        accessToken: (channel as any).accessToken || '',
+                        refreshToken: (channel as any).refreshToken || '',
+                        shopId: channel.shopId || '',
+                    })
+                    for (let i = 0; i < orderSns.length; i += BATCH) {
+                        const batch = orderSns.slice(i, i + BATCH)
+                        try {
+                            const detailPath = '/api/v2/order/get_order_detail'
+                            const detailUrl = (shopeeForRefresh as any).apiUrl(detailPath) +
+                                `&order_sn_list=${batch.join(',')}&response_optional_fields=tracking_no,shipping_carrier`
+                            const detailData: any = await (shopeeForRefresh as any).httpGet(detailUrl)
+                            const details: any[] = detailData.response?.order_list || []
+
+                            for (const d of details) {
+                                const sn: string = d.order_sn
+                                const dbId = snToId[sn]
+                                if (!dbId) continue
+                                const newStatus: string = (shopeeForRefresh as any).mapStatus(d.order_status)
+                                const newPayStatus: string = (shopeeForRefresh as any).mapPaymentStatus(d.order_status)
+
+                                const newTracking = d.tracking_no || snToOld[sn]?.trackingNumber || null
+                                const newCarrier = d.shipping_carrier || snToOld[sn]?.shippingCarrier || null
+                                const oldStatus = snToOld[sn]?.status
+
+                                if (newStatus !== oldStatus || newTracking !== snToOld[sn]?.trackingNumber) {
+                                    const upd: any = {
+                                        status: newStatus,
+                                        externalStatus: d.order_status,
+                                        paymentStatus: newPayStatus,
+                                        trackingNumber: newTracking,
+                                        shippingCarrier: newCarrier,
+                                        syncedAt: new Date(),
+                                    }
+                                    if (d.order_status === 'SHIPPED' && !snToOld[sn]?.trackingNumber) upd.shippedAt = new Date()
+                                    if (d.order_status === 'TO_CONFIRM_RECEIVE') upd.deliveredAt = new Date()
+                                    if (['COMPLETED', 'completed'].includes(newStatus)) { upd.paymentStatus = 'paid'; upd.paidAt = new Date() }
+                                    await prisma.onlineOrder.update({ where: { id: dbId }, data: upd })
+                                    statusRefreshed++
+                                }
+                            }
+                        } catch (batchErr: any) {
+                            console.error(`[Sync] Batch status refresh error (i=${i}):`, batchErr.message)
+                        }
+                    }
+                    console.log(`[Sync] Status refreshed: ${statusRefreshed}/${orderSns.length} orders updated`)
+                }
+            } catch (refreshErr: any) {
+                console.error('[Sync] Batch status refresh failed:', refreshErr.message)
+            }
+        }
+
+        // ── PRODUCT SYNC ────────────────────────────────────────────────────────
+        let productsSynced = 0
+        try {
+            console.log(`[Sync] Starting product catalog sync for channel ${channel.name}...`)
+            const { products } = await service.fetchProducts()
+            for (const p of products) {
+                await prisma.onlineProduct.upsert({
+                    where: {
+                        channelId_platformProductId: {
+                            channelId: channel.id,
+                            platformProductId: p.platformProductId,
+                        },
+                    },
+                    create: {
+                        channelId: channel.id,
+                        platform: channel.platform,
+                        platformProductId: p.platformProductId,
+                        name: p.name,
+                        sku: p.sku || null,
+                        price: p.price,
+                        stock: p.stock,
+                        status: p.status || 'NORMAL',
+                        imageUrl: p.imageUrl || null,
+                        syncedAt: new Date(),
+                    },
+                    update: {
+                        name: p.name,
+                        sku: p.sku || null,
+                        price: p.price,
+                        stock: p.stock,
+                        status: p.status || 'NORMAL',
+                        imageUrl: p.imageUrl || null,
+                        syncedAt: new Date(),
+                    },
+                })
+                productsSynced++
+            }
+            console.log(`[Sync] Product catalog: ${productsSynced} products synced`)
+        } catch (prodErr: any) {
+            console.error('[Sync] Product catalog sync error:', prodErr.message)
+            errors.push(`Product sync: ${prodErr.message}`)
+        }
+
         res.json({
             success: true,
-            data: { imported, updated, errors: errors.length, total: allOrders.length, converted },
+            data: { imported, updated, statusRefreshed, productsSynced, errors: errors.length, total: allOrders.length, converted },
         })
     } catch (err: any) {
         console.error('Sync orders error:', err)
@@ -1204,6 +1577,106 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
         res.status(500).json({ success: false, error: err.message || 'Internal server error' })
     }
 })
+
+// POST /api/online-orders/channels/:id/sync-status — Refresh status của tất cả đơn chưa kết thúc
+// Dùng khi muốn cập nhật ngay mà không cần sync đơn mới
+router.post('/channels/:id/sync-status', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const channel = await prisma.onlineChannel.findUnique({ where: { id: req.params.id as string } })
+        if (!channel) { res.status(404).json({ success: false, error: 'Kênh không tồn tại' }); return }
+        if (channel.platform !== 'shopee') {
+            res.status(400).json({ success: false, error: 'Chỉ hỗ trợ Shopee hiện tại' }); return
+        }
+
+        const NON_TERMINAL = ['pending','confirmed','processing','shipping','delivered','UNPAID','READY_TO_SHIP','PROCESSED','SHIPPED','TO_CONFIRM_RECEIVE','IN_CANCEL']
+        const pendingOrders = await prisma.onlineOrder.findMany({
+            where: { channelId: channel.id, status: { in: NON_TERMINAL }, externalOrderId: { not: null } },
+            select: { id: true, externalOrderId: true, status: true, trackingNumber: true, shippingCarrier: true },
+        })
+
+        if (pendingOrders.length === 0) {
+            res.json({ success: true, data: { refreshed: 0, total: 0, message: 'Không có đơn nào cần cập nhật' } })
+            return
+        }
+
+        const snToId: Record<string, string> = {}
+        const snToOld: Record<string, { status: string; trackingNumber: string | null; shippingCarrier: string | null }> = {}
+        for (const o of pendingOrders) {
+            const sn = (o.externalOrderId || '').replace(/^(SPE-|TIK-|LAZ-)/i, '')
+            if (sn) { snToId[sn] = o.id; snToOld[sn] = { status: o.status, trackingNumber: o.trackingNumber, shippingCarrier: o.shippingCarrier } }
+        }
+        const orderSns = Object.keys(snToId)
+
+        const shopee = new ShopeeService({
+            apiKey: channel.apiKey || '', apiSecret: channel.apiSecret || '',
+            accessToken: (channel as any).accessToken || '',
+            refreshToken: (channel as any).refreshToken || '',
+            shopId: channel.shopId || '',
+        })
+
+        let refreshed = 0
+        const BATCH = 50
+        for (let i = 0; i < orderSns.length; i += BATCH) {
+            const batch = orderSns.slice(i, i + BATCH)
+            try {
+                const detailPath = '/api/v2/order/get_order_detail'
+                const detailUrl = (shopee as any).apiUrl(detailPath) +
+                    `&order_sn_list=${batch.join(',')}&response_optional_fields=tracking_no,shipping_carrier`
+                const detailData = await (shopee as any).httpGet(detailUrl)
+                const details = detailData.response?.order_list || []
+
+                for (const d of details) {
+                    const sn = d.order_sn
+                    const dbId = snToId[sn]
+                    if (!dbId) continue
+                    const newStatus = (shopee as any).mapStatus(d.order_status)
+                    const newPayStatus = (shopee as any).mapPaymentStatus(d.order_status)
+                    const newTracking = d.tracking_no || snToOld[sn]?.trackingNumber || null
+                    const newCarrier = d.shipping_carrier || snToOld[sn]?.shippingCarrier || null
+                    const oldStatus = snToOld[sn]?.status
+
+                    const upd: any = {
+                        status: newStatus,
+                        externalStatus: d.order_status,
+                        paymentStatus: newPayStatus,
+                        trackingNumber: newTracking,
+                        shippingCarrier: newCarrier,
+                        syncedAt: new Date(),
+                    }
+                    if (d.order_status === 'SHIPPED' && !snToOld[sn]?.trackingNumber) upd.shippedAt = new Date()
+                    if (d.order_status === 'TO_CONFIRM_RECEIVE') upd.deliveredAt = new Date()
+                    if (['COMPLETED', 'completed'].includes(newStatus)) { upd.paymentStatus = 'paid'; upd.paidAt = new Date() }
+
+                    await prisma.onlineOrder.update({ where: { id: dbId }, data: upd })
+                    if (newStatus !== oldStatus) refreshed++
+                }
+            } catch (batchErr: any) {
+                console.error(`[SyncStatus] Batch error (i=${i}):`, batchErr.message)
+            }
+        }
+
+        console.log(`[SyncStatus] Done: ${refreshed} status changed out of ${orderSns.length} orders`)
+
+        // Log
+        await prisma.syncLog.create({
+            data: {
+                channelId: channel.id,
+                action: 'sync_status',
+                status: 'success',
+                details: `Refreshed ${refreshed}/${orderSns.length} orders`,
+                ordersCount: orderSns.length,
+            },
+        }).catch(() => {})
+
+        res.json({ success: true, data: { refreshed, total: orderSns.length } })
+    } catch (err: any) {
+        console.error('Sync status error:', err)
+        res.status(500).json({ success: false, error: err.message || 'Internal server error' })
+    }
+})
+
+
 
 // GET /api/online-orders/channels/:id/sync-logs
 router.get('/channels/:id/sync-logs', authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -1722,6 +2195,147 @@ router.post('/channels/:id/sync-returns', authMiddleware, async (req: AuthReques
     } catch (err: any) {
         console.error('Sync returns error:', err)
         res.status(500).json({ success: false, error: err.message || 'Internal server error' })
+    }
+})
+
+
+
+
+// POST /api/online-orders/channels/:id/sync-products
+router.post('/channels/:id/sync-products', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const channel = await prisma.onlineChannel.findUnique({ where: { id: req.params.id as string } })
+        if (!channel) {
+            res.status(404).json({ success: false, error: 'Kênh không tồn tại' })
+            return
+        }
+
+        // For Shopee: fetch product list via item.get_item_list
+        if (channel.platform === 'shopee') {
+            const shopee = new ShopeeService({
+                apiKey: channel.apiKey || '',
+                apiSecret: channel.apiSecret || '',
+                accessToken: (channel as any).accessToken || '',
+                refreshToken: (channel as any).refreshToken || '',
+                shopId: channel.shopId || '',
+            })
+
+            // Auto-refresh token if needed
+            const tokenExpiresAt = (channel as any).tokenExpiresAt
+            if (tokenExpiresAt && new Date(tokenExpiresAt).getTime() < Date.now() + 5 * 60 * 1000) {
+                try {
+                    const tokens = await shopee.refreshAccessToken();
+                    (shopee as any).credentials.accessToken = tokens.accessToken;
+                    (shopee as any).credentials.refreshToken = tokens.refreshToken;
+                    await prisma.onlineChannel.update({
+                        where: { id: channel.id },
+                        data: {
+                            accessToken: tokens.accessToken,
+                            refreshToken: tokens.refreshToken,
+                            tokenExpiresAt: new Date(Date.now() + tokens.expiresIn * 1000),
+                        },
+                    })
+                } catch (e: any) {
+                    console.warn('[sync-products] Token refresh failed:', e.message)
+                }
+            }
+
+            // Fetch item list from Shopee
+            let imported = 0, updated = 0
+            const errors: string[] = []
+
+            try {
+                // item.get_item_list returns paginated list of item_id
+                const listUrl = (shopee as any).apiUrl('/api/v2/product/get_item_list') +
+                    `&offset=0&page_size=100&item_status=NORMAL&item_status=BANNED&item_status=UNLIST&item_status=DELETED`
+                const listData: any = await (shopee as any).httpGet(listUrl)
+                const items: any[] = listData?.response?.item || []
+
+                // Fetch detail for each item
+                if (items.length > 0) {
+                    const itemIds = items.map((i: any) => i.item_id).join(',')
+                    const detailUrl = (shopee as any).apiUrl('/api/v2/product/get_item_base_info') +
+                        `&item_id_list=${itemIds}`
+                    const detailData: any = await (shopee as any).httpGet(detailUrl)
+                    const itemDetails: any[] = detailData?.response?.item_list || []
+                    imported = itemDetails.length
+                }
+            } catch (e: any) {
+                errors.push(e.message)
+                console.error('[sync-products] Shopee item list error:', e.message)
+            }
+
+            // Log sync
+            await prisma.syncLog.create({
+                data: {
+                    channelId: channel.id,
+                    action: 'sync_products',
+                    status: errors.length > 0 ? 'partial' : 'success',
+                    details: `Products fetched: ${imported}, Errors: ${errors.length}${errors.length > 0 ? '\n' + errors[0] : ''}`,
+                    ordersCount: imported,
+                },
+            }).catch(() => {})
+
+            res.json({
+                success: true,
+                data: { imported, updated: 0, errors: errors.length, total: imported },
+            })
+            return
+        }
+
+        // For other platforms: just acknowledge
+        res.json({
+            success: true,
+            data: { imported: 0, updated: 0, errors: 0, total: 0, message: `Nền tảng ${channel.platform} chưa hỗ trợ đồng bộ sản phẩm tự động` },
+        })
+    } catch (err: any) {
+        console.error('Sync products error:', err)
+        res.status(500).json({ success: false, error: err.message || 'Internal server error' })
+    }
+})
+
+// POST /api/online-orders/fix-totals - TEMPORARY endpoint to fix historical totals
+router.post('/fix-totals', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        
+        // 1. Update OnlineOrder: total = subtotal, discount = 0
+        await prisma.$executeRawUnsafe(`
+            UPDATE "OnlineOrder" 
+            SET discount = 0, 
+                total = subtotal, 
+                "netRevenue" = subtotal - "shippingFee" - "platformFee"
+        `)
+        
+        // 2. Update Transaction: total = subtotal, amountReceived = subtotal, discount = 0
+        await prisma.$executeRawUnsafe(`
+            UPDATE "Transaction" 
+            SET discount = 0, 
+                total = subtotal, 
+                "amountReceived" = subtotal 
+            WHERE "receiptNumber" LIKE 'ONLINE-%' 
+               OR "receiptNumber" LIKE 'SPE-%' 
+               OR "receiptNumber" LIKE 'TIK-%' 
+               OR "receiptNumber" LIKE 'LZD-%'
+        `)
+
+        // 3. Update Payments
+        await prisma.$executeRawUnsafe(`
+            UPDATE "Payment" p
+            SET amount = t.total
+            FROM "Transaction" t
+            WHERE p."transactionId" = t.id
+              AND (t."receiptNumber" LIKE 'ONLINE-%' 
+                   OR t."receiptNumber" LIKE 'SPE-%' 
+                   OR t."receiptNumber" LIKE 'TIK-%' 
+                   OR t."receiptNumber" LIKE 'LZD-%')
+        `)
+
+        res.json({ success: true, message: 'Đã cập nhật lại tổng tiền cho tất cả đơn hàng online cũ.' })
+    } catch (err: any) {
+        console.error('Fix totals error:', err)
+        res.status(500).json({ success: false, error: err.message })
     }
 })
 

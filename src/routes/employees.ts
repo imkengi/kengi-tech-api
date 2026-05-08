@@ -15,9 +15,25 @@ const safeUser = (u: any) => {
 
 const DEPARTMENT_ROLES: Record<string, string[]> = {
     office: ['admin', 'manager', 'accountant'],
-    sales: ['sales', 'cashier'],
+    sales: ['staff', 'cashier'],
     delivery: ['driver', 'shipper'],
+    warranty: ['warranty', 'repairs'],
 }
+
+// GET /api/employees/stats
+router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const all = await prisma.user.findMany({ select: { role: true, employeeStatus: true } })
+        const byRole: Record<string, number> = {}
+        let active = 0, inactive = 0
+        for (const u of all) {
+            byRole[u.role] = (byRole[u.role] || 0) + 1
+            if (u.employeeStatus === 'active') active++; else inactive++
+        }
+        res.json({ success: true, data: { total: all.length, active, inactive, byRole } })
+    } catch { res.status(500).json({ success: false, error: 'Internal server error' }) }
+})
 
 // GET /api/employees
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -46,7 +62,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         }
         const users = await prisma.user.findMany({ where, orderBy: { createdAt: 'desc' }, include: { branch: { select: { id: true, name: true, code: true, isMainBranch: true } } } })
         const _response = { success: true, data: users.map(u => { const { password, ...rest } = u; return rest }) }
-        await cacheSet(cacheKey, _response, 60)
+        await cacheSet(cacheKey, _response, 300)
         res.json(_response)
     } catch (err) {
         console.error('Get employees error:', err)
@@ -71,7 +87,7 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
 router.post('/', authMiddleware, requireRole('admin', 'manager'), validate(CreateEmployeeSchema), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        const { name, phone, email, role, salary, notes, branchId: assignBranchId } = req.body
+        const { name, phone, email, role, salary, notes, branchId: assignBranchId, password: customPassword } = req.body
         if (!name?.trim()) return res.status(400).json({ success: false, error: 'Name required' })
         if (!phone?.trim()) return res.status(400).json({ success: false, error: 'Phone required' })
 
@@ -85,7 +101,7 @@ router.post('/', authMiddleware, requireRole('admin', 'manager'), validate(Creat
         const existing = await prisma.user.findFirst({ where: { email: emailVal } })
         if (existing) return res.status(400).json({ success: false, error: 'Email already exists' })
 
-        const hashedPassword = await bcrypt.hash('123456', 10)
+        const hashedPassword = await bcrypt.hash(customPassword || '123456', 10)
 
         const user = await prisma.user.create({
             data: {
@@ -96,7 +112,7 @@ router.post('/', authMiddleware, requireRole('admin', 'manager'), validate(Creat
                 notes: notes?.trim() || null, branchId: effectiveBranchId || null,
             },
         })
-        cacheDel(`${req.user?.storeSchema || 'default'}:employees:*`).catch(() => {})
+        cacheDel(`${req.user?.storeSchema || 'default'}:employees:*`).catch(() => { })
         res.status(201).json({ success: true, data: safeUser(user) })
     } catch (err) {
         console.error('Create employee error:', err)
@@ -140,6 +156,31 @@ router.put('/:id', authMiddleware, requireRole('admin', 'manager'), validate(Upd
     }
 })
 
+// PUT /api/employees/:id/reset-password
+router.put('/:id/reset-password', authMiddleware, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const { password } = req.body
+        const empId = String(req.params.id)
+
+        const target = await prisma.user.findFirst({ where: { id: empId } })
+        if (!target) return res.status(404).json({ success: false, error: 'Not found' })
+
+        if (target.role === 'admin' && (req as any).user.role !== 'admin') {
+            return res.status(403).json({ success: false, error: 'Không thể đặt lại mật khẩu admin' })
+        }
+
+        const newPassword = password || Math.random().toString(36).slice(-8) + 'A1'
+        const hashed = await bcrypt.hash(newPassword, 10)
+        await prisma.user.update({ where: { id: empId }, data: { password: hashed } })
+
+        res.json({ success: true, data: { password: newPassword, message: `Mật khẩu mới: ${newPassword}` } })
+    } catch (err) {
+        console.error('Reset password error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
 // PUT /api/employees/:id/toggle-status
 router.put('/:id/toggle-status', authMiddleware, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
     try {
@@ -171,6 +212,45 @@ router.delete('/:id', authMiddleware, requireRole('admin'), async (req: AuthRequ
         res.json({ success: true })
     } catch (err) {
         res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// ─── GET /api/employees/:id/permissions ───────────────────────────────────────
+router.get('/:id/permissions', authMiddleware, requireRole('admin'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const user = await prisma.user.findFirst({
+            where: { id: String(req.params.id) },
+            select: { id: true, name: true, role: true, permissions: true },
+        })
+        if (!user) return res.status(404).json({ success: false, error: 'Nhân viên không tồn tại' })
+        const permissions = JSON.parse(user.permissions || '[]')
+        res.json({ success: true, data: { ...user, permissions } })
+    } catch (err: any) {
+        console.error('Get permissions error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
+    }
+})
+
+// ─── PUT /api/employees/:id/permissions ───────────────────────────────────────
+router.put('/:id/permissions', authMiddleware, requireRole('admin'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const { permissions } = req.body
+        if (!Array.isArray(permissions)) {
+            return res.status(400).json({ success: false, error: 'permissions phải là một mảng' })
+        }
+        const user = await prisma.user.findFirst({ where: { id: String(req.params.id) } })
+        if (!user) return res.status(404).json({ success: false, error: 'Nhân viên không tồn tại' })
+
+        await prisma.user.update({
+            where: { id: String(req.params.id) },
+            data: { permissions: JSON.stringify(permissions) },
+        })
+        res.json({ success: true, data: { permissions } })
+    } catch (err: any) {
+        console.error('Update permissions error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
     }
 })
 

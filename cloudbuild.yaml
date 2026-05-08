@@ -47,17 +47,12 @@ steps:
       - '3'
       - '--port'
       - '8080'
+      - '--session-affinity'
       - '--add-cloudsql-instances'
       - '${_CLOUD_SQL_INSTANCE}'
       - '--set-env-vars'
       - >-
-        NODE_ENV=production,
-        DATABASE_URL=postgresql://${_DB_USER}:${_DB_PASSWORD}@localhost/${_DB_NAME}?host=/cloudsql/${_CLOUD_SQL_INSTANCE},
-        JWT_SECRET=${_JWT_SECRET},
-        CORS_ORIGIN=*,
-        ADMIN_KEY=kengi-super-admin-2026,
-        APP_BASE_URL=https://kengi.vn,
-        REDIS_URL=${_REDIS_URL}
+        NODE_ENV=production,DATABASE_URL=postgresql://${_DB_USER}:${_DB_PASSWORD}@localhost/${_DB_NAME}?host=/cloudsql/${_CLOUD_SQL_INSTANCE},JWT_SECRET=${_JWT_SECRET},CORS_ORIGIN=*,ADMIN_KEY=kengi-super-admin-2026,APP_BASE_URL=https://kengi.vn,REDIS_URL=${_REDIS_URL}
 
 images:
   - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:latest'

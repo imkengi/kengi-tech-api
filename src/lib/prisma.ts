@@ -17,9 +17,9 @@ import { PrismaClient } from '@prisma/client'
 import { PrismaClient as StorePrisma } from '../generated/store-client'
 import { execSync } from 'child_process'
 
-const POOL_SIZE = parseInt(process.env.PRISMA_POOL_SIZE || '5', 10)
+const POOL_SIZE = parseInt(process.env.PRISMA_POOL_SIZE || '2', 10)
 const POOL_TIMEOUT = parseInt(process.env.PRISMA_POOL_TIMEOUT || '10', 10)
-const MAX_BRANCH_CLIENTS = parseInt(process.env.MAX_STORE_CLIENTS || '50', 10)
+const MAX_BRANCH_CLIENTS = parseInt(process.env.MAX_STORE_CLIENTS || '10', 10)
 
 // ─── Registry Client (public schema — Store lookup only) ────────────────────
 
@@ -96,7 +96,9 @@ function getStorePrisma(schemaName: string): StorePrisma {
 
     const base = getBaseDbUrl()
     const sep = base.includes('?') ? '&' : '?'
-    const url = `${base}${sep}schema=${schemaName}&connection_limit=${POOL_SIZE}&pool_timeout=${POOL_TIMEOUT}`
+    // IMPORTANT: Adding application_name=${schemaName} forces Prisma to treat this as a unique connection pool
+    // This prevents the severe bug where multiple PrismaClients share the search_path of the first loaded schema
+    const url = `${base}${sep}schema=${schemaName}&application_name=${schemaName}&connection_limit=${POOL_SIZE}&pool_timeout=${POOL_TIMEOUT}`
 
     const client = new StorePrisma({
         datasources: { db: { url } },
@@ -147,7 +149,7 @@ async function createTablesRawSQL(schemaName: string): Promise<void> {
     validateSchemaName(schemaName)
     const q = (sql: string) => registryPrisma.$executeRawUnsafe(sql)
 
-    // Minimal schema for branch operation
+    // Full User table matching schema-store.prisma
     await q(`CREATE TABLE IF NOT EXISTS "${schemaName}"."User" (
         id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
         email TEXT UNIQUE NOT NULL,
@@ -156,14 +158,27 @@ async function createTablesRawSQL(schemaName: string): Promise<void> {
         role TEXT NOT NULL DEFAULT 'cashier',
         phone TEXT,
         avatar TEXT,
-        code TEXT UNIQUE,
-        "branchId" TEXT,
+        code TEXT,
+        salary DOUBLE PRECISION,
+        "hireDate" TIMESTAMP,
+        shifts INTEGER NOT NULL DEFAULT 0,
+        "totalSales" DOUBLE PRECISION NOT NULL DEFAULT 0,
         "employeeStatus" TEXT NOT NULL DEFAULT 'active',
+        notes TEXT,
         "isLocked" BOOLEAN NOT NULL DEFAULT false,
         "twoFactorEnabled" BOOLEAN NOT NULL DEFAULT false,
+        "twoFactorSecret" TEXT,
+        "trustedDevices" TEXT NOT NULL DEFAULT '[]',
+        permissions TEXT NOT NULL DEFAULT '[]',
+        "branchId" TEXT,
         "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
         "updatedAt" TIMESTAMP NOT NULL DEFAULT NOW()
     )`)
+    // Indexes for User
+    await q(`CREATE UNIQUE INDEX IF NOT EXISTS "${schemaName}_User_code_key" ON "${schemaName}"."User" (code) WHERE code IS NOT NULL`)
+    await q(`CREATE INDEX IF NOT EXISTS "${schemaName}_User_branchId_idx" ON "${schemaName}"."User" ("branchId")`)
+    await q(`CREATE INDEX IF NOT EXISTS "${schemaName}_User_role_idx" ON "${schemaName}"."User" (role)`)
+    await q(`CREATE INDEX IF NOT EXISTS "${schemaName}_User_employeeStatus_idx" ON "${schemaName}"."User" ("employeeStatus")`)
 
     await q(`CREATE TABLE IF NOT EXISTS "${schemaName}"."Branch" (
         id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,

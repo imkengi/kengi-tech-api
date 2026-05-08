@@ -25,6 +25,7 @@ import auditLogRoutes from './routes/auditLogs'
 import priceHistoryRoutes from './routes/priceHistory'
 import shippingRoutes from './routes/shipping'
 import driverRoutes from './routes/drivers'
+import vehicleRoutes from './routes/vehicles'
 import taxRoutes from './routes/tax'
 import segmentRoutes from './routes/segments'
 import currencyRoutes from './routes/currencies'
@@ -39,6 +40,7 @@ import salesTrackingRoutes from './routes/salesTracking'
 import salesOrderRoutes from './routes/salesOrders'
 import importReceiptRoutes from './routes/importReceipts'
 import storeSettingsRoutes from './routes/storeSettings'
+import settingsRoutes from './routes/settings'
 import branchRoutes from './routes/branches'
 import priceListRoutes from './routes/priceLists'
 import adminRoutes from './routes/admin'
@@ -53,10 +55,15 @@ import payrollRoutes from './routes/payroll'
 import onlineOrderRoutes from './routes/onlineOrders'
 import upgradeRequestRoutes from './routes/upgradeRequests'
 import webhookRoutes from './routes/webhooks'
+import eventRoutes from './routes/events'
 import { cacheDisconnect, cacheHealth } from './lib/cache'
 import { startAutoSync, stopAutoSync } from './cron/autoSync'
+import { setupWebSocket, getWebSocketStats } from './lib/websocket'
+import { pubsubDisconnect } from './lib/pubsub'
+import { createServer } from 'http'
 
 const app = express()
+app.set('trust proxy', 1) // Trust first proxy (Cloud Run load balancer)
 const PORT = process.env.PORT || 3001
 
 // ─── Middleware ──────────────────────────────────────────────────────────────
@@ -88,13 +95,15 @@ app.use(cors({
 }))
 
 app.use(express.json({ limit: '10mb' }))
+import path from 'path'
+app.use('/uploads', express.static(path.join(process.cwd(), 'public', 'uploads')))
 
 // ─── Rate Limiting ───────────────────────────────────────────────────────────
 
 // Strict rate limit for auth endpoints
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 10,
+    max: 100,
     standardHeaders: true,
     legacyHeaders: false,
     message: { success: false, error: 'Quá nhiều lần thử đăng nhập. Vui lòng thử lại sau 15 phút.' },
@@ -104,7 +113,7 @@ const authLimiter = rateLimit({
 // General API rate limit
 const apiLimiter = rateLimit({
     windowMs: 60 * 1000, // 1 minute
-    max: 300,
+    max: 3000,
     standardHeaders: true,
     legacyHeaders: false,
     message: { success: false, error: 'Quá nhiều yêu cầu. Vui lòng thử lại sau.' },
@@ -120,6 +129,10 @@ app.use((req, _res, next) => {
     next()
 })
 
+// ─── Automatic Audit Logging ────────────────────────────────────────────────
+import { auditLoggerMiddleware } from './middleware/auditLogger'
+app.use('/api', auditLoggerMiddleware)
+
 // ─── Core Routes ────────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes)
 app.use('/api/api-keys', apiKeyRoutes)
@@ -130,6 +143,7 @@ app.use('/api/customers', customerRoutes)
 app.use('/api/customer-groups', customerGroupRoutes)
 app.use('/api/inventory', inventoryRoutes)
 app.use('/api/transactions', transactionRoutes)
+app.use('/api/events', eventRoutes)
 app.use('/api/promotions', promotionRoutes)
 app.use('/api/dashboard', dashboardRoutes)
 
@@ -149,6 +163,7 @@ app.use('/api/audit-logs', auditLogRoutes)
 app.use('/api/price-history', priceHistoryRoutes)
 app.use('/api/shipping', shippingRoutes)
 app.use('/api/drivers', driverRoutes)
+app.use('/api/vehicles', vehicleRoutes)
 app.use('/api/tax', taxRoutes)
 app.use('/api/segments', segmentRoutes)
 app.use('/api/currencies', currencyRoutes)
@@ -160,6 +175,7 @@ app.use('/api/debts', debtRoutes)
 app.use('/api/bundles', bundleRoutes)
 app.use('/api/reports/financial', financialReportRoutes)
 app.use('/api/store-settings', storeSettingsRoutes)
+app.use('/api/settings', settingsRoutes)
 app.use('/api/branches', branchRoutes)
 app.use('/api/price-lists', priceListRoutes)
 app.use('/api/admin', adminRoutes)
@@ -175,14 +191,25 @@ app.use('/api/online-orders', onlineOrderRoutes)
 app.use('/api/upgrade-requests', upgradeRequestRoutes)
 app.use('/api/webhooks', webhookRoutes)
 
+import einvoiceRoutes from './routes/einvoice'
+app.use('/api/einvoice', einvoiceRoutes)
+
+import storageRoutes from './routes/storage'
+app.use('/api/storage', storageRoutes)
+
+import chatRoutes from './routes/chat'
+app.use('/api/online-orders/chat', chatRoutes)
+
 // ─── Health check ───────────────────────────────────────────────────────────
 app.get('/api/health', async (_req, res) => {
     const cache = await cacheHealth()
+    const ws = getWebSocketStats()
     res.json({
         status: 'ok',
         timestamp: new Date().toISOString(),
         architecture: 'multi-schema',
         cache,
+        websocket: ws,
     })
 })
 
@@ -195,16 +222,244 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 // ─── Start ──────────────────────────────────────────────────────────────────
 if (!process.env.PASSENGER_BASE_URI) {
     const startTime = Date.now()
+    const httpServer = createServer(app)
+
+    // Attach WebSocket server to the same HTTP server
+    setupWebSocket(httpServer)
 
     registryPrisma.$connect()
-        .then(() => console.log('✅ Registry DB connected'))
+        .then(async () => {
+            console.log('✅ Registry DB connected')
+            // Auto-create RefreshToken table if not exists (idempotent migration)
+            try {
+                await registryPrisma.$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "public"."RefreshToken" (
+                        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+                        token TEXT UNIQUE NOT NULL,
+                        "userId" TEXT NOT NULL,
+                        email TEXT NOT NULL,
+                        role TEXT NOT NULL,
+                        "storeId" TEXT NOT NULL,
+                        "storeCode" TEXT NOT NULL,
+                        "branchId" TEXT,
+                        "branchSchema" TEXT NOT NULL,
+                        "isMainBranch" BOOLEAN NOT NULL DEFAULT false,
+                        "deviceId" TEXT,
+                        "expiresAt" TIMESTAMP NOT NULL,
+                        "createdAt" TIMESTAMP NOT NULL DEFAULT NOW()
+                    )
+                `)
+                // Apply migration for existing databases
+                await registryPrisma.$executeRawUnsafe(`
+                    ALTER TABLE "public"."RefreshToken" ADD COLUMN IF NOT EXISTS "deviceId" TEXT;
+                `)
+                await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "RefreshToken_token_idx" ON "public"."RefreshToken"(token)`)
+                await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "RefreshToken_userId_idx" ON "public"."RefreshToken"("userId")`)
+                await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "RefreshToken_expiresAt_idx" ON "public"."RefreshToken"("expiresAt")`)
+                console.log('✅ RefreshToken table ready')
+            } catch (err: any) {
+                console.error('⚠️ RefreshToken table migration failed:', err.message)
+            }
+
+            // Auto-create StorageFile table for all vault metadata across all dynamic schemas
+            try {
+                const schemas: any[] = await registryPrisma.$queryRaw`SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('information_schema', 'pg_catalog', 'pg_toast', 'public')`
+                for (const { schema_name } of schemas) {
+                    await registryPrisma.$executeRawUnsafe(`
+                        CREATE TABLE IF NOT EXISTS "${schema_name}"."StorageFile" (
+                            "id" TEXT NOT NULL,
+                            "name" TEXT NOT NULL,
+                            "url" TEXT NOT NULL,
+                            "size" INTEGER NOT NULL,
+                            "type" TEXT NOT NULL,
+                            "category" TEXT NOT NULL,
+                            "referenceId" TEXT,
+                            "referenceName" TEXT,
+                            "description" TEXT,
+                            "uploadedBy" TEXT NOT NULL,
+                            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            CONSTRAINT "StorageFile_pkey" PRIMARY KEY ("id")
+                        )
+                    `).catch(() => {})
+                }
+                console.log('✅ StorageFile multi-schema synchronization completed')
+            } catch (err: any) {
+                console.error('⚠️ StorageFile multi-schema migration failed:', err.message)
+            }
+
+            // Auto-upgrade existing schemas with new security + customer columns
+            try {
+                const schemas: any[] = await registryPrisma.$queryRaw`SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('information_schema', 'pg_catalog', 'pg_toast', 'public')`
+                for (const { schema_name } of schemas) {
+                    // Security columns
+                    await registryPrisma.$executeRawUnsafe(`ALTER TABLE "${schema_name}"."User" ADD COLUMN IF NOT EXISTS "twoFactorSecret" TEXT;`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`ALTER TABLE "${schema_name}"."User" ADD COLUMN IF NOT EXISTS "trustedDevices" TEXT NOT NULL DEFAULT '[]';`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`ALTER TABLE "${schema_name}"."AuditLog" ADD COLUMN IF NOT EXISTS "deviceInfo" TEXT;`).catch(() => {})
+                    // Customer sales association columns
+                    await registryPrisma.$executeRawUnsafe(`ALTER TABLE "${schema_name}"."Customer" ADD COLUMN IF NOT EXISTS "salesUserId" TEXT;`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`ALTER TABLE "${schema_name}"."Customer" ADD COLUMN IF NOT EXISTS "salesUserName" TEXT;`).catch(() => {})
+                    // Employee permissions column
+                    await registryPrisma.$executeRawUnsafe(`ALTER TABLE "${schema_name}"."User" ADD COLUMN IF NOT EXISTS "permissions" TEXT NOT NULL DEFAULT '[]';`).catch(() => {})
+                    // Transaction revisions
+                    await registryPrisma.$executeRawUnsafe(`ALTER TABLE "${schema_name}"."Transaction" ADD COLUMN IF NOT EXISTS "transactionDate" TIMESTAMP(3);`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`ALTER TABLE "${schema_name}"."Transaction" ADD COLUMN IF NOT EXISTS "revisionOfId" TEXT;`).catch(() => {})
+                    // Vehicle fleet management tables
+                    await registryPrisma.$executeRawUnsafe(`
+                        CREATE TABLE IF NOT EXISTS "${schema_name}"."Vehicle" (
+                            "id" TEXT NOT NULL,
+                            "code" TEXT NOT NULL,
+                            "name" TEXT NOT NULL,
+                            "type" TEXT NOT NULL DEFAULT 'car',
+                            "licensePlate" TEXT NOT NULL,
+                            "brand" TEXT,
+                            "model" TEXT,
+                            "year" INTEGER,
+                            "color" TEXT,
+                            "currentKm" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "lastOilChangeKm" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "inspectionExpiry" TIMESTAMP(3),
+                            "insuranceExpiry" TIMESTAMP(3),
+                            "assignedDriverId" TEXT,
+                            "assignedDriverName" TEXT,
+                            "status" TEXT NOT NULL DEFAULT 'available',
+                            "imageUrl" TEXT,
+                            "notes" TEXT,
+                            "branchId" TEXT,
+                            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            CONSTRAINT "Vehicle_pkey" PRIMARY KEY ("id"),
+                            CONSTRAINT "Vehicle_code_key" UNIQUE ("code")
+                        )
+                    `).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Vehicle_branchId_idx" ON "${schema_name}"."Vehicle"("branchId")`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Vehicle_status_idx" ON "${schema_name}"."Vehicle"("status")`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Vehicle_licensePlate_idx" ON "${schema_name}"."Vehicle"("licensePlate")`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`
+                        CREATE TABLE IF NOT EXISTS "${schema_name}"."VehicleMaintenance" (
+                            "id" TEXT NOT NULL,
+                            "vehicleId" TEXT NOT NULL,
+                            "type" TEXT NOT NULL,
+                            "description" TEXT NOT NULL,
+                            "cost" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "kmAtService" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "serviceDate" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            "nextDueDate" TIMESTAMP(3),
+                            "performedBy" TEXT,
+                            "notes" TEXT,
+                            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            CONSTRAINT "VehicleMaintenance_pkey" PRIMARY KEY ("id"),
+                            CONSTRAINT "VehicleMaintenance_vehicleId_fkey" FOREIGN KEY ("vehicleId") REFERENCES "${schema_name}"."Vehicle"("id") ON DELETE CASCADE ON UPDATE CASCADE
+                        )
+                    `).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "VehicleMaintenance_vehicleId_idx" ON "${schema_name}"."VehicleMaintenance"("vehicleId")`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "VehicleMaintenance_serviceDate_idx" ON "${schema_name}"."VehicleMaintenance"("serviceDate")`).catch(() => {})
+                }
+                console.log('✅ Security + Customer + Vehicle columns multi-schema migration completed')
+            } catch (err: any) {
+                console.error('⚠️ Schema columns migration failed:', err.message)
+            }
+
+            // --- BEGIN LEGACY DATA MIGRATION ---
+            // Automatically migrate data from single-tenant public schema to the new multi-tenant schemas
+            try {
+                const stores = await registryPrisma.store.findMany({ where: { status: 'active' } })
+                for (const store of stores) {
+                    if (!store.schema.startsWith('branch_')) continue
+
+                    console.log(`[Migration] Checking legacy data restoration for ${store.schema}...`)
+                    let hasTransaction = [{ count: 0 }]
+                    try {
+                        hasTransaction = await registryPrisma.$queryRawUnsafe<{ count: number }[]>(`SELECT count(*) FROM "${store.schema}"."Transaction"`)
+                    } catch {
+                        console.log(`[Migration] ${store.schema} table not ready, skipping.`)
+                        continue
+                    }
+                    if (Number(hasTransaction[0]?.count || 0) > 10) {
+                        console.log(`[Migration] ${store.schema} already has transactions, assuming migrated. Skipping.`)
+                        continue
+                    }
+
+                    const tablesOrder = [
+                        'CustomerGroup',
+                        'Customer',
+                        'Supplier',
+                        'ProductCategory',
+                        'Tax',
+                        'Segment',
+                        'LoyaltyTier',
+                        'Product',
+                        'Bundle',
+                        'ProductBundle',
+                        'Batch',
+                        'PriceList',
+                        'PriceHistory',
+                        'SalesOrder',
+                        'SalesOrderItem',
+                        'PurchaseOrder',
+                        'PurchaseOrderItem',
+                        'ImportReceipt',
+                        'ImportReceiptItem',
+                        'Transaction',
+                        'TransactionItem',
+                        'InventoryTransaction',
+                        'PaymentMethod',
+                        'CashRegistry',
+                        'Shift',
+                        'ShiftSession',
+                        'CashTransaction',
+                        'CustomerDebtHistory',
+                        'SupplierDebtHistory',
+                        'SalesCheckin',
+                        'Warranty',
+                        'Repair',
+                        'Promotion'
+                    ]
+
+                    let migratedCount = 0;
+                    for (const table of tablesOrder) {
+                        try {
+                            const pubCols = await registryPrisma.$queryRawUnsafe<{ column_name: string }[]>(
+                                `SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = '${table}'`
+                            )
+                            const storeCols = await registryPrisma.$queryRawUnsafe<{ column_name: string }[]>(
+                                `SELECT column_name FROM information_schema.columns WHERE table_schema = '${store.schema}' AND table_name = '${table}'`
+                            )
+
+                            const pCols = pubCols.map(r => r.column_name)
+                            const sCols = storeCols.map(r => r.column_name)
+                            if (!pCols.length || !sCols.length) continue
+
+                            const common = pCols.filter(c => sCols.includes(c))
+                            if (!common.length) continue
+
+                            const cStr = common.map(c => `"${c}"`).join(', ')
+                            const query = `INSERT INTO "${store.schema}"."${table}" (${cStr}) SELECT ${cStr} FROM "public"."${table}" ON CONFLICT DO NOTHING`
+
+                            await registryPrisma.$executeRawUnsafe(query)
+                            migratedCount++;
+                        } catch (e: any) {
+                            console.error(`[Migration] Error restoring ${table}: ${e.message}`)
+                        }
+                    }
+                    if (migratedCount > 0) {
+                        console.log(`[Migration] Successfully restored ${migratedCount} tables into ${store.schema}`)
+                    }
+                }
+            } catch (err: any) {
+                console.error('⚠️ Legacy data migration failed:', err.message)
+            }
+            // --- END LEGACY DATA MIGRATION ---
+
+        })
         .catch((err: any) => console.error('⚠️ Registry DB connection failed:', err.message))
         .then(() => {
-            app.listen(PORT, () => {
+            httpServer.listen(PORT, () => {
                 const elapsed = Date.now() - startTime
                 console.log(`🚀 KengiTech API running on http://localhost:${PORT} (startup: ${elapsed}ms)`)
                 console.log(`📋 Health check: http://localhost:${PORT}/api/health`)
                 console.log(`🏗️ Architecture: Multi-schema (per-store isolation)`)
+                console.log(`🔌 WebSocket endpoint: ws://localhost:${PORT}/ws`)
                 startAutoSync()
             })
         })
@@ -214,6 +469,7 @@ if (!process.env.PASSENGER_BASE_URI) {
         console.log('🛑 Shutting down gracefully...')
         await disconnectAll()
         await cacheDisconnect()
+        await pubsubDisconnect()
         stopAutoSync()
         process.exit(0)
     }

@@ -4,6 +4,24 @@ import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 
 const router = Router()
 
+// GET /api/segments/stats
+router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const segments = await prisma.customerSegment.findMany({
+            select: { name: true, customerCount: true, color: true },
+            orderBy: { customerCount: 'desc' },
+        })
+        const total = segments.length
+        const totalCustomers = segments.reduce((s, seg) => s + (seg.customerCount ?? 0), 0)
+        const largest = segments[0] || null
+        res.json({ success: true, data: { total, totalCustomers, largest, segments } })
+    } catch (err) {
+        console.error('Segment stats error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
 // GET /api/segments
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
@@ -15,7 +33,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         const data = await prisma.customerSegment.findMany({ orderBy: { createdAt: 'desc' } })
         const parsed = data.map(s => ({ ...s, conditions: JSON.parse(s.conditions || '{}') }))
         const _response = { success: true, data: parsed }
-        await cacheSet(cacheKey, _response, 120)
+        await cacheSet(cacheKey, _response, 300)
         res.json(_response)
     } catch (err) { res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
@@ -34,9 +52,10 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         if (cond.tier) customerWhere.tier = cond.tier
         const customerCount = await prisma.customer.count({ where: customerWhere })
 
-        const data = await prisma.customerSegment.create({ data: { name, description, conditions: JSON.stringify(conditions || {}), customerCount, color: color || '#6b7280' },
+        const data = await prisma.customerSegment.create({
+            data: { name, description, conditions: JSON.stringify(conditions || {}), customerCount, color: color || '#6b7280' },
         })
-        cacheDel(`${req.user?.storeSchema || 'default'}:segments:*`).catch(() => {})
+        cacheDel(`${req.user?.storeSchema || 'default'}:segments:*`).catch(() => { })
         res.status(201).json({ success: true, data: { ...data, conditions: JSON.parse(data.conditions) } })
     } catch (err) { res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
@@ -58,7 +77,8 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
 router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        await prisma.customerSegment.delete({ where: { id: String(req.params.id) } }); res.json({ success: true }) }
+        await prisma.customerSegment.delete({ where: { id: String(req.params.id) } }); res.json({ success: true })
+    }
     catch (err) { res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
 

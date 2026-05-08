@@ -35,7 +35,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
             },
         })
         const _response = { success: true, data: records }
-        await cacheSet(cacheKey, _response, 60)
+        await cacheSet(cacheKey, _response, 300)
         res.json(_response)
     } catch (err: any) {
         console.error('Sales tracking list error:', err)

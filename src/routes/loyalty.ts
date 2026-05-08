@@ -6,6 +6,27 @@ import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 
 const router = Router()
 
+// GET /api/loyalty/stats
+router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const members = await prisma.loyaltyMember.findMany({
+            select: { totalPoints: true, tier: true, lifetimePoints: true },
+        })
+        const total = members.length
+        const totalPoints = members.reduce((s, m) => s + m.totalPoints, 0)
+        const avgPoints = total > 0 ? Math.round(totalPoints / total) : 0
+        const tierDist: Record<string, number> = {}
+        for (const m of members) {
+            tierDist[m.tier] = (tierDist[m.tier] ?? 0) + 1
+        }
+        res.json({ success: true, data: { total, totalPoints, avgPoints, tierDist } })
+    } catch (err) {
+        console.error('Loyalty stats error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
 // GET /api/loyalty
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
@@ -27,7 +48,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
             orderBy: { totalPoints: 'desc' },
         })
         const _response = { success: true, data }
-        await cacheSet(cacheKey, _response, 120)
+        await cacheSet(cacheKey, _response, 300)
         res.json(_response)
     } catch (err) {
         console.error('List loyalty members error:', err)
@@ -45,7 +66,7 @@ router.post('/', authMiddleware, validate(CreateLoyaltyMemberSchema), async (req
             data: { name: name.trim(), phone: phone || null, customerId: customerId || null, tier: tier || 'bronze' },
             include: { transactions: true },
         })
-        cacheDel(`${req.user?.storeSchema || 'default'}:loyalty:*`).catch(() => {})
+        cacheDel(`${req.user?.storeSchema || 'default'}:loyalty:*`).catch(() => { })
         res.status(201).json({ success: true, data })
     } catch (err) {
         console.error('Create loyalty member error:', err)

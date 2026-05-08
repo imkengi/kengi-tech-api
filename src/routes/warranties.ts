@@ -23,9 +23,15 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         }
         const data = await prisma.warranty.findMany({ where, orderBy: { createdAt: 'desc' } })
         const _response = { success: true, data }
-        await cacheSet(cacheKey, _response, 120)
+        await cacheSet(cacheKey, _response, 300)
         res.json(_response)
-    } catch (err) { res.status(500).json({ success: false, error: 'Internal server error' }) }
+    } catch (err: any) {
+        console.error('GET /warranties error:', err?.message || err)
+        if (err?.message?.includes('does not exist') || err?.code === 'P2021') {
+            return res.json({ success: true, data: [] })
+        }
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
 })
 
 // POST /api/warranties
@@ -41,17 +47,47 @@ router.post('/', authMiddleware, validate(CreateWarrantySchema), async (req: Aut
         })
         cacheDel(`${req.user?.storeSchema || 'default'}:warranties:*`).catch(() => {})
         res.status(201).json({ success: true, data })
-    } catch (err) { res.status(500).json({ success: false, error: 'Internal server error' }) }
+    } catch (err: any) {
+        console.error('POST /warranties error:', err?.message || err)
+        if (err?.message?.includes('does not exist') || err?.code === 'P2021') {
+            return res.status(500).json({ success: false, error: 'Bảng Warranty chưa được tạo. Vui lòng chạy repair-schema.' })
+        }
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
 })
 
 // PUT /api/warranties/:id
 router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        const { status, notes, endDate } = req.body
-        const data = await prisma.warranty.update({ where: { id: String(req.params.id) }, data: { ...(status && { status }), ...(notes !== undefined && { notes }), ...(endDate && { endDate: new Date(endDate) }) } })
+        const { status, notes, endDate, issue, resolution } = req.body
+        const updateData: any = {}
+        if (status) updateData.status = status
+        if (endDate) updateData.endDate = new Date(endDate)
+
+        // When marking as "claimed" (bảo hành hoàn thành), auto-append claim notes
+        if (status === 'claimed' && (issue || resolution)) {
+            const existing = await prisma.warranty.findUnique({ where: { id: String(req.params.id) }, select: { notes: true } })
+            const timestamp = new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
+            const claimBy = req.user?.email || 'unknown'
+            const claimNote = [
+                `\n--- BẢO HÀNH HOÀN THÀNH (${timestamp}) ---`,
+                `Người xử lý: ${claimBy}`,
+                issue ? `Vấn đề: ${issue}` : '',
+                resolution ? `Kết quả: ${resolution}` : '',
+            ].filter(Boolean).join('\n')
+            updateData.notes = (existing?.notes || '') + claimNote
+        } else if (notes !== undefined) {
+            updateData.notes = notes
+        }
+
+        const data = await prisma.warranty.update({ where: { id: String(req.params.id) }, data: updateData })
+        cacheDel(`${req.user?.storeSchema || 'default'}:warranties:*`).catch(() => {})
         res.json({ success: true, data })
-    } catch (err) { res.status(500).json({ success: false, error: 'Internal server error' }) }
+    } catch (err: any) {
+        console.error('PUT /warranties error:', err?.message || err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
 })
 
 // DELETE /api/warranties/:id
@@ -60,7 +96,10 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
         const prisma = req.storePrisma!
         await prisma.warranty.delete({ where: { id: String(req.params.id) } }); res.json({ success: true })
     }
-    catch (err) { res.status(500).json({ success: false, error: 'Internal server error' }) }
+    catch (err: any) {
+        console.error('DELETE /warranties error:', err?.message || err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
 })
 
 export default router

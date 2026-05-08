@@ -3,6 +3,18 @@ import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../mi
 
 const router = Router()
 
+// GET /api/purchase-orders/stats
+router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const all = await prisma.purchaseOrder.findMany({ select: { status: true, totalAmount: true } })
+        const byStatus: Record<string, number> = {}
+        let totalValue = 0
+        for (const o of all) { byStatus[o.status] = (byStatus[o.status] || 0) + 1; if (o.status !== 'cancelled') totalValue += o.totalAmount }
+        res.json({ success: true, data: { total: all.length, byStatus, totalValue } })
+    } catch { res.status(500).json({ success: false, error: 'Internal server error' }) }
+})
+
 // GET /api/purchase-orders
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {

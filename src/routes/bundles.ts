@@ -5,6 +5,25 @@ import { CreateBundleSchema, UpdateBundleSchema } from '../schemas'
 
 const router = Router()
 
+// GET /api/bundles/stats
+router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const bundles = await prisma.bundle.findMany({
+            select: { active: true, soldCount: true, bundlePrice: true, discount: true },
+        })
+        const total = bundles.length
+        const active = bundles.filter(b => b.active).length
+        const totalSold = bundles.reduce((s, b) => s + (b.soldCount ?? 0), 0)
+        const totalRevenue = bundles.reduce((s, b) => s + ((b.soldCount ?? 0) * (b.bundlePrice ?? 0)), 0)
+        const avgDiscount = total > 0 ? Math.round(bundles.reduce((s, b) => s + (b.discount ?? 0), 0) / total * 10) / 10 : 0
+        res.json({ success: true, data: { total, active, inactive: total - active, totalSold, totalRevenue, avgDiscount } })
+    } catch (err) {
+        console.error('Bundle stats error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
 // GET /api/bundles
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
@@ -29,7 +48,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 router.post('/', authMiddleware, validate(CreateBundleSchema), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        const { name, category, items, originalTotal, bundlePrice, discount, active, validUntil, maxUsage } = req.body
+        const { name, category, items, originalTotal, bundlePrice, price, discount, active, validUntil, maxUsage } = req.body
         if (!name?.trim()) return res.status(400).json({ success: false, error: 'Bundle name required' })
 
         const bundle = await prisma.bundle.create({
@@ -38,7 +57,7 @@ router.post('/', authMiddleware, validate(CreateBundleSchema), async (req: AuthR
                 category: category || null,
                 items: JSON.stringify(items || []),
                 originalTotal: Number(originalTotal) || 0,
-                bundlePrice: Number(bundlePrice) || 0,
+                bundlePrice: Number(bundlePrice || price) || 0,
                 discount: Number(discount) || 0,
                 active: active !== false,
                 validUntil: validUntil ? new Date(validUntil) : null,

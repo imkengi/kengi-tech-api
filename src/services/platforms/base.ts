@@ -48,6 +48,16 @@ export interface PlatformOrderItem {
     lineTotal: number
 }
 
+export interface PlatformProduct {
+    platformProductId: string
+    name: string
+    sku?: string
+    price: number
+    stock: number
+    status: string
+    imageUrl?: string
+}
+
 export interface TokenResponse {
     accessToken: string
     refreshToken: string
@@ -91,6 +101,9 @@ export abstract class PlatformService {
         page?: number
         pageSize?: number
     }): Promise<{ orders: PlatformOrder[]; hasMore: boolean; total: number }>
+
+    /** Fetch product catalog from platform */
+    abstract fetchProducts(): Promise<{ products: PlatformProduct[]; total: number }>
 
     /** Get single order details */
     abstract getOrderDetail(externalOrderId: string): Promise<PlatformOrder | null>

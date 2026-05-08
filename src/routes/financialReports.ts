@@ -57,7 +57,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 
         const data = await buildReportFromPrisma(prisma, startDate, endDate, period)
         const response = { success: true, data, source: 'prisma' }
-        await cacheSet(cacheKey, response, 120)
+        await cacheSet(cacheKey, response, 300)
         res.json(response)
     } catch (err) {
         console.error('Financial report error:', err)
@@ -153,7 +153,10 @@ async function buildReportFromPrisma(prisma: any, startDate: Date, endDate: Date
             include: { items: { include: { product: { select: { costPrice: true } } } }, payments: true },
         }),
         prisma.expense.findMany({ where: { date: { gte: startDate, lte: endDate } } }),
-        prisma.product.findMany({ select: { id: true, name: true, costPrice: true, sellingPrice: true, stock: true } }),
+        prisma.product.findMany({ 
+            where: { productType: { not: 'service' } },
+            select: { id: true, name: true, costPrice: true, sellingPrice: true, stock: true } 
+        }),
         prisma.debtEntry.findMany({ where: { createdAt: { gte: startDate, lte: endDate } } }),
         prisma.transaction.findMany({
             where: { createdAt: { gte: prevStart, lte: prevEnd }, status: { not: 'voided' } },

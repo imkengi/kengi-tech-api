@@ -5,6 +5,19 @@ import { CreateRepairSchema, UpdateRepairSchema } from '../schemas'
 
 const router = Router()
 
+// GET /api/repairs/stats
+router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const all = await prisma.repair.findMany({ select: { status: true, cost: true } })
+        const byStatus: Record<string, number> = {}
+        let totalRevenue = 0
+        for (const r of all) { byStatus[r.status || 'received'] = (byStatus[r.status || 'received'] || 0) + 1; totalRevenue += r.cost }
+        const avgCost = all.length > 0 ? Math.round(totalRevenue / all.length) : 0
+        res.json({ success: true, data: { total: all.length, byStatus, totalRevenue, avgCost } })
+    } catch { res.status(500).json({ success: false, error: 'Internal server error' }) }
+})
+
 // GET /api/repairs
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {

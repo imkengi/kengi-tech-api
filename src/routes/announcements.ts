@@ -6,6 +6,20 @@ import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 
 const router = Router()
 
+// GET /api/announcements/stats
+router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const all = await prisma.announcement.findMany({ where: { archived: false } })
+        const pinned = all.filter((a: any) => a.pinned).length
+        const byPriority: Record<string, number> = { info: 0, warning: 0, urgent: 0, success: 0 }
+        all.forEach((a: any) => { if (byPriority[a.priority] !== undefined) byPriority[a.priority]++ })
+        const total = await prisma.announcement.count()
+        const archived = await prisma.announcement.count({ where: { archived: true } })
+        res.json({ success: true, data: { total, active: all.length, pinned, archived, byPriority } })
+    } catch (err) { res.status(500).json({ success: false, error: 'Internal server error' }) }
+})
+
 // GET /api/announcements
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
@@ -25,7 +39,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         }
         const data = await prisma.announcement.findMany({ where, orderBy: [{ pinned: 'desc' }, { createdAt: 'desc' }] })
         const _response = { success: true, data }
-        await cacheSet(cacheKey, _response, 120)
+        await cacheSet(cacheKey, _response, 300)
         res.json(_response)
     } catch (err) {
         console.error('List announcements error:', err)
@@ -43,7 +57,7 @@ router.post('/', authMiddleware, validate(CreateAnnouncementSchema), async (req:
         const data = await prisma.announcement.create({
             data: { branchId, title: title.trim(), content: content.trim(), priority: priority || 'info', author: author || 'Admin' }
         })
-        cacheDel(`${req.user?.storeSchema || 'default'}:announcements:*`).catch(() => {})
+        cacheDel(`${req.user?.storeSchema || 'default'}:announcements:*`).catch(() => { })
         res.status(201).json({ success: true, data })
     } catch (err) {
         console.error('Create announcement error:', err)

@@ -7,6 +7,41 @@ import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 
 const router = Router()
 
+// POST /api/price-lists/migrate — create PriceListItem table if not exists
+router.post('/migrate', authMiddleware, requireRole('admin'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        await prisma.$executeRawUnsafe(`
+            CREATE TABLE IF NOT EXISTS "PriceListItem" (
+                "id" TEXT NOT NULL,
+                "priceListId" TEXT NOT NULL,
+                "productId" TEXT NOT NULL,
+                "price" DOUBLE PRECISION NOT NULL,
+                CONSTRAINT "PriceListItem_pkey" PRIMARY KEY ("id"),
+                CONSTRAINT "PriceListItem_priceListId_productId_key" UNIQUE ("priceListId", "productId"),
+                CONSTRAINT "PriceListItem_priceListId_fkey" FOREIGN KEY ("priceListId") REFERENCES "PriceList"("id") ON DELETE CASCADE ON UPDATE CASCADE
+            )
+        `)
+        await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "PriceListItem_priceListId_idx" ON "PriceListItem"("priceListId")`)
+        await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "PriceListItem_productId_idx" ON "PriceListItem"("productId")`)
+        res.json({ success: true, message: 'PriceListItem table created/verified' })
+    } catch (err) {
+        console.error('Migration error:', err)
+        res.status(500).json({ success: false, error: 'Migration failed' })
+    }
+})
+
+// GET /api/price-lists/stats
+router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const total = await prisma.priceList.count()
+        const active = await prisma.priceList.count({ where: { active: true } })
+        const totalRules = await prisma.priceRule.count()
+        res.json({ success: true, data: { total, active, inactive: total - active, totalRules } })
+    } catch { res.status(500).json({ success: false, error: 'Internal server error' }) }
+})
+
 // GET /api/price-lists — all price lists with rules
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
@@ -20,7 +55,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
             orderBy: { createdAt: 'desc' },
         })
         const _response = { success: true, data: lists }
-        await cacheSet(cacheKey, _response, 120)
+        await cacheSet(cacheKey, _response, 300)
         res.json(_response)
     } catch (err) {
         console.error('Get price lists error:', err)
@@ -65,7 +100,7 @@ router.post('/', authMiddleware, requireRole('admin', 'manager'), validate(Creat
             },
             include: { rules: true },
         })
-        cacheDel(`${req.user?.storeSchema || 'default'}:priceLists:*`).catch(() => {})
+        cacheDel(`${req.user?.storeSchema || 'default'}:priceLists:*`).catch(() => { })
         res.status(201).json({ success: true, data: list })
     } catch (err) {
         console.error('Create price list error:', err)
@@ -110,7 +145,7 @@ router.delete('/:id', authMiddleware, requireRole('admin', 'manager'), async (re
         const list = await prisma.priceList.findUnique({ where: { id: plId } })
         if (list?.isDefault) { res.status(400).json({ success: false, error: 'Cannot delete default price list' }); return }
         await prisma.priceList.delete({ where: { id: plId } })
-        cacheDel(`${req.user?.storeSchema || 'default'}:priceLists:*`).catch(() => {})
+        cacheDel(`${req.user?.storeSchema || 'default'}:priceLists:*`).catch(() => { })
         res.json({ success: true })
     } catch (err) {
         res.status(500).json({ success: false, error: 'Internal server error' })
@@ -144,7 +179,7 @@ router.post('/:id/rules', authMiddleware, requireRole('admin', 'manager'), valid
                 note: note || null,
             },
         })
-        cacheDel(`${req.user?.storeSchema || 'default'}:priceLists:*`).catch(() => {})
+        cacheDel(`${req.user?.storeSchema || 'default'}:priceLists:*`).catch(() => { })
         res.status(201).json({ success: true, data: rule })
     } catch (err) {
         console.error('Create price rule error:', err)
@@ -185,6 +220,105 @@ router.delete('/rules/:ruleId', authMiddleware, requireRole('admin', 'manager'),
     try {
         const prisma = req.storePrisma!
         await prisma.priceRule.delete({ where: { id: String(req.params.ruleId) } })
+        res.json({ success: true })
+    } catch (err) {
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// ─── Price List Items (direct product prices) ──────────────────────────────
+
+// GET /api/price-lists/:id/items — get products + prices in a price list
+router.get('/:id/items', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const plId = String(req.params.id)
+        const search = String(req.query.search || '')
+
+        const items = await prisma.priceListItem.findMany({
+            where: { priceListId: plId },
+            orderBy: { productId: 'asc' },
+        })
+
+        // Fetch product details for each item
+        const productIds = items.map(i => i.productId)
+        const products = productIds.length > 0
+            ? await prisma.product.findMany({
+                where: { id: { in: productIds } },
+                select: { id: true, name: true, sku: true, sellingPrice: true, costPrice: true, categoryId: true, category: { select: { name: true } } },
+            })
+            : []
+
+        const productMap = new Map(products.map(p => [p.id, p]))
+
+        let result = items.map(item => {
+            const prod = productMap.get(item.productId)
+            return {
+                id: item.id,
+                productId: item.productId,
+                price: item.price,
+                productName: prod?.name || 'Sản phẩm đã xóa',
+                sku: prod?.sku || '',
+                sellingPrice: prod?.sellingPrice || 0,
+                costPrice: prod?.costPrice || 0,
+                categoryName: prod?.category?.name || '',
+            }
+        })
+
+        // Search filter
+        if (search) {
+            const s = search.toLowerCase()
+            result = result.filter(r => r.productName.toLowerCase().includes(s) || r.sku.toLowerCase().includes(s))
+        }
+
+        res.json({ success: true, data: result })
+    } catch (err) {
+        console.error('Get price list items error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// PUT /api/price-lists/:id/items — bulk upsert product prices
+router.put('/:id/items', authMiddleware, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const plId = String(req.params.id)
+        const { items } = req.body as { items: { productId: string; price: number }[] }
+
+        if (!Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ success: false, error: 'Items array required' })
+        }
+
+        // Upsert each item
+        const results = await Promise.all(
+            items.map(item =>
+                prisma.priceListItem.upsert({
+                    where: { priceListId_productId: { priceListId: plId, productId: item.productId } },
+                    create: { priceListId: plId, productId: item.productId, price: Number(item.price) },
+                    update: { price: Number(item.price) },
+                })
+            )
+        )
+
+        cacheDel(`${req.user?.storeSchema || 'default'}:priceLists:*`).catch(() => { })
+        res.json({ success: true, data: { updated: results.length } })
+    } catch (err) {
+        console.error('Update price list items error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// DELETE /api/price-lists/:id/items/:productId — remove product from price list
+router.delete('/:id/items/:productId', authMiddleware, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const plId = String(req.params.id)
+        const productId = String(req.params.productId)
+
+        await prisma.priceListItem.delete({
+            where: { priceListId_productId: { priceListId: plId, productId } },
+        })
+        cacheDel(`${req.user?.storeSchema || 'default'}:priceLists:*`).catch(() => { })
         res.json({ success: true })
     } catch (err) {
         res.status(500).json({ success: false, error: 'Internal server error' })

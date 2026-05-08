@@ -1,4 +1,4 @@
-import { PlatformService, PlatformCredentials, PlatformOrder, PlatformOrderItem, TokenResponse } from './base'
+import { PlatformService, PlatformCredentials, PlatformOrder, PlatformOrderItem, PlatformProduct, TokenResponse } from './base'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  TIKTOK SHOP API v202309
@@ -144,6 +144,12 @@ export class TikTokService extends PlatformService {
         }
     }
 
+    async fetchProducts(): Promise<{ products: PlatformProduct[]; total: number }> {
+        // TODO: Implement TikTok product sync
+        console.log('[TikTok] fetchProducts not yet implemented')
+        return { products: [], total: 0 }
+    }
+
     // ─── Mappers ─────────────────────────────────────────────────────────────────
 
     private mapOrder(o: any): PlatformOrder {
@@ -170,9 +176,9 @@ export class TikTokService extends PlatformService {
             customerPhone: addr.phone_number || addr.phone || '',
             shippingAddress: [addr.address_detail, addr.district, addr.city, addr.region_code].filter(Boolean).join(', '),
             subtotal: items.reduce((s, i) => s + i.lineTotal, 0),
-            discount: (parseFloat(payment.platform_discount || '0') + parseFloat(payment.seller_discount || '0')) / 100,
+            discount: 0,
             shippingFee: parseFloat(payment.shipping_fee || o.shipping_fee || '0') / 100,
-            total: parseFloat(payment.total_amount || o.payment_info?.total_amount || '0') / 100,
+            total: items.reduce((s, i) => s + i.lineTotal, 0),
             paymentMethod: payment.payment_method || 'TikTok',
             paymentStatus: this.mapPaymentStatus(o.status?.toString() || ''),
             trackingNumber: o.tracking_number || undefined,

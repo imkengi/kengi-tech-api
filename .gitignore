@@ -1,8 +1,37 @@
 node_modules/
 dist/
 .env
-.env.gcloud
-.env.production
+.env*
+env.json
 prisma/dev.db
 prisma/dev.db-journal
 prisma/data/
+
+# Local logs / dumps (root)
+/api_logs.json
+/build_log*.txt
+/db_status.txt
+/detailed_logs.json
+/error_logs*
+/local_diff.txt
+/logs.json
+/prod_error_logs*
+/schema_dump.txt
+/tmp_*
+
+# Ad-hoc diagnostic scripts (root)
+/check-*.js
+/check.ts
+/check_tables.ts
+/diagnose.js
+/fetch_logs*.js
+/fix-*.js
+/migrate-schemas.js
+/migrate-storage*.ts
+/parse_logs.js
+/test-db.js
+/test-prisma.js
+/deploy.bat
+
+# Claude Code state
+.claude/

@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // Registry Schema — Central database for store registration & auth lookup
-// Only used for: finding store by code, user login lookup
+// Only used for: finding store by code, user login lookup, refresh tokens
 // ═══════════════════════════════════════════════════════════════════════════════
 
 generator client {
@@ -28,4 +28,28 @@ model Store {
   extraBranches Int  @default(0)         // number of extra branches
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ─── Refresh Token Store (persistent, survives server restarts) ──────────────
+// Stores refresh tokens in PostgreSQL instead of in-memory Map.
+// This ensures tokens remain valid across Cloud Run restarts/cold-starts.
+
+model RefreshToken {
+  id           String   @id @default(cuid())
+  token        String   @unique
+  userId       String
+  email        String
+  role         String
+  storeId      String
+  storeCode    String
+  branchId     String?
+  branchSchema String
+  isMainBranch Boolean  @default(false)
+  deviceId     String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([token])
+  @@index([userId])
+  @@index([expiresAt])
 }

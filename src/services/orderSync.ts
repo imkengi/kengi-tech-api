@@ -17,7 +17,12 @@ export async function convertOnlineOrderToTransaction(prisma: StorePrisma, order
     if (!order) return false
 
     // Only convert orders with statuses that indicate a sale
-    const convertibleStatuses = ['confirmed', 'processing', 'shipping', 'completed']
+    const convertibleStatuses = [
+        // lowercase (nội bộ, sau khi mapStatus)
+        'confirmed', 'processing', 'shipping', 'completed',
+        // Shopee UPPERCASE (đề phòng lưu thẳng từ API)
+        'READY_TO_SHIP', 'PROCESSED', 'SHIPPED', 'COMPLETED',
+    ]
     if (!convertibleStatuses.includes(order.status)) return false
 
     // Check if already converted (receipt exists with this order number)
@@ -139,8 +144,8 @@ export async function convertOnlineOrderToTransaction(prisma: StorePrisma, order
                 quantity: -inv.quantity,
                 reason: 'Bán hàng online',
                 note: `Đơn ${order.orderNumber} (${order.platform || 'Shopee'})`,
-                referenceId: order.id,
-                referenceType: 'online_order',
+                referenceId: `ONLINE-${order.orderNumber}`,
+                referenceType: 'sale',
                 userId: systemUser.id,
                 userName: 'Hệ thống',
                 transactionDate: order.createdAt,
@@ -160,7 +165,10 @@ export async function processNewOrders(prisma: StorePrisma, channelId: string): 
     const orders = await prisma.onlineOrder.findMany({
         where: {
             channelId,
-            status: { in: ['confirmed', 'processing', 'shipping', 'completed'] },
+            status: { in: [
+                'confirmed', 'processing', 'shipping', 'completed',
+                'READY_TO_SHIP', 'PROCESSED', 'SHIPPED', 'COMPLETED',
+            ] },
         },
         select: { id: true, orderNumber: true },
     })
