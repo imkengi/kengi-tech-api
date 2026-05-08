@@ -12,12 +12,28 @@ export const CreateProductSchema = z.object({
     costPrice: z.number().min(0, 'Giá vốn không được âm'),
     sellingPrice: z.number().min(0, 'Giá bán không được âm'),
     stock: z.number().int().min(0).default(0),
+    minStock: z.number().int().min(0).optional(),
+    maxStock: z.number().int().min(0).optional(),
+    baseUnit: z.string().max(50).optional().nullable(),
     unit: z.string().max(50).optional().nullable(),
+    taxInclusive: z.boolean().optional(),
+    trackSerial: z.boolean().optional(),
     weight: z.number().min(0).optional().nullable(),
-    productType: z.enum(['product', 'service', 'combo']).default('product'),
+    productType: z.enum(['goods', 'service']).default('goods'),
     status: z.enum(['active', 'inactive', 'draft']).default('active'),
     tags: z.array(z.string()).optional().default([]),
-})
+    images: z.array(z.object({
+        id: z.string().optional(),
+        url: z.string(),
+        isPrimary: z.boolean().optional(),
+    })).optional(),
+    unitConversions: z.array(z.object({
+        id: z.string().optional(),
+        fromUnit: z.string(),
+        toUnit: z.string(),
+        conversionRate: z.number(),
+    })).optional(),
+}).passthrough()
 
 export const UpdateProductSchema = CreateProductSchema.partial()
 

@@ -136,20 +136,60 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     }
 })
 
+const PRODUCT_ALLOWED_FIELDS = [
+    'name', 'sku', 'barcode', 'description', 'categoryId', 'brandId',
+    'costPrice', 'sellingPrice', 'taxInclusive', 'stock', 'minStock', 'maxStock',
+    'baseUnit', 'trackSerial', 'productType',
+] as const
+
+function sanitizeUnitConversions(arr: any[]): { fromUnit: string; toUnit: string; conversionRate: number }[] {
+    return arr
+        .filter((uc) => uc && uc.toUnit && String(uc.toUnit).trim())
+        .map((uc) => ({
+            fromUnit: String(uc.fromUnit ?? ''),
+            toUnit: String(uc.toUnit),
+            conversionRate: Number(uc.conversionRate) || 1,
+        }))
+}
+
+function sanitizeImages(arr: any[]): { url: string; isPrimary: boolean }[] {
+    return arr
+        .filter((img) => img && img.url)
+        .map((img) => ({
+            url: String(img.url),
+            isPrimary: Boolean(img.isPrimary),
+        }))
+}
+
+function pickProductFields(raw: Record<string, any>): any {
+    const out: any = {}
+    for (const key of PRODUCT_ALLOWED_FIELDS) {
+        if (raw[key] !== undefined) out[key] = raw[key]
+    }
+    // Empty string FK fields would violate FK constraint — coerce to null
+    if (out.categoryId === '') out.categoryId = null
+    if (out.brandId === '') out.brandId = null
+    return out
+}
+
 // POST /api/products
 router.post('/', authMiddleware, requireRole('admin', 'manager'), validate(CreateProductSchema), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        const { unitConversions, images, ...productData } = req.body
+        const { unitConversions, images, ...rawData } = req.body
+        const productData = pickProductFields(rawData)
+
+        const cleanConversions = Array.isArray(unitConversions) ? sanitizeUnitConversions(unitConversions) : []
+        const cleanImages = Array.isArray(images) ? sanitizeImages(images) : []
 
         const product = await prisma.product.create({
             data: {
                 ...productData,
-                unitConversions: unitConversions?.length ? {
-                    createMany: { data: unitConversions }
+                unitConversions: cleanConversions.length ? {
+                    createMany: { data: cleanConversions }
                 } : undefined,
-                images: images?.length ? {
-                    createMany: { data: images }
+                images: cleanImages.length ? {
+                    createMany: { data: cleanImages }
                 } : undefined
             },
             include: { category: true, brand: true, images: true, unitConversions: true }
@@ -180,21 +220,15 @@ router.put('/:id', authMiddleware, requireRole('admin', 'manager'), validate(Upd
         if (!existing) return res.status(404).json({ success: false, error: 'Product not found' })
 
         const { unitConversions, images, ...rawUpdates } = req.body
+        const updates = pickProductFields(rawUpdates)
 
-        const allowedFields = [
-            'name', 'sku', 'barcode', 'description', 'categoryId', 'brandId',
-            'costPrice', 'sellingPrice', 'taxInclusive', 'stock', 'minStock', 'maxStock',
-            'baseUnit', 'trackSerial', 'productType',
-        ]
-        const updates: any = {}
-        for (const key of allowedFields) {
-            if (rawUpdates[key] !== undefined) updates[key] = rawUpdates[key]
-        }
+        const cleanConversions = Array.isArray(unitConversions) ? sanitizeUnitConversions(unitConversions) : null
+        const cleanImages = Array.isArray(images) ? sanitizeImages(images) : null
 
-        if (unitConversions) {
+        if (cleanConversions !== null) {
             await prisma.unitConversion.deleteMany({ where: { productId: String(req.params.id) } })
         }
-        if (images) {
+        if (cleanImages !== null) {
             await prisma.productImage.deleteMany({ where: { productId: String(req.params.id) } })
         }
 
@@ -202,11 +236,11 @@ router.put('/:id', authMiddleware, requireRole('admin', 'manager'), validate(Upd
             where: { id: String(req.params.id) },
             data: {
                 ...updates,
-                unitConversions: unitConversions?.length ? {
-                    createMany: { data: unitConversions }
+                unitConversions: cleanConversions?.length ? {
+                    createMany: { data: cleanConversions }
                 } : undefined,
-                images: images?.length ? {
-                    createMany: { data: images }
+                images: cleanImages?.length ? {
+                    createMany: { data: cleanImages }
                 } : undefined
             },
             include: { category: true, brand: true, images: true, unitConversions: true }
