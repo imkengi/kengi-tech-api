@@ -11,13 +11,50 @@ export const CreateProductSchema = z.object({
     supplierId: z.string().optional().nullable(),
     costPrice: z.number().min(0, 'Giá vốn không được âm'),
     sellingPrice: z.number().min(0, 'Giá bán không được âm'),
+    wholesalePrice: z.number().min(0).optional().nullable(),
+    taxInclusive: z.boolean().optional().default(true),
+    vatRate: z.number().optional().nullable(),
+    promoPrice: z.number().optional().nullable(),
+    promoStart: z.string().optional().nullable(),
+    promoEnd: z.string().optional().nullable(),
     stock: z.number().int().min(0).default(0),
+    minStock: z.number().int().min(0).default(0),
+    maxStock: z.number().int().min(0).default(100),
     unit: z.string().max(50).optional().nullable(),
+    baseUnit: z.string().max(50).optional().nullable(),
+    shelfLocation: z.string().max(200).optional().nullable(),
+    trackSerial: z.boolean().optional().default(false),
+    trackBatch: z.boolean().optional().default(false),
     weight: z.number().min(0).optional().nullable(),
-    productType: z.enum(['product', 'service', 'combo']).default('product'),
+    weightUnit: z.enum(['g', 'kg']).optional().nullable(),
+    dimensionLength: z.number().optional().nullable(),
+    dimensionWidth: z.number().optional().nullable(),
+    dimensionHeight: z.number().optional().nullable(),
+    color: z.string().optional().nullable(),
+    material: z.string().optional().nullable(),
+    customAttributes: z.array(z.object({ key: z.string(), value: z.string() })).optional().default([]),
+    warrantyMonths: z.number().optional().nullable(),
+    warrantyConditions: z.string().optional().nullable(),
+    shelfLife: z.number().optional().nullable(),
+    storageTemp: z.string().optional().nullable(),
+    internalNotes: z.string().optional().nullable(),
+    productType: z.string().default('goods'),
     status: z.enum(['active', 'inactive', 'draft']).default('active'),
     tags: z.array(z.string()).optional().default([]),
-})
+    origin: z.string().optional().nullable(),
+    supplierSku: z.string().optional().nullable(),
+    unitConversions: z.array(z.object({
+        id: z.string().optional(),
+        fromUnit: z.string(),
+        toUnit: z.string(),
+        conversionRate: z.number().min(0.001),
+    })).optional().default([]),
+    images: z.array(z.object({
+        id: z.string().optional(),
+        url: z.string(),
+        isPrimary: z.boolean().optional().default(false),
+    })).optional().default([]),
+}).passthrough()
 
 export const UpdateProductSchema = CreateProductSchema.partial()
 
@@ -25,7 +62,7 @@ export const UpdateProductSchema = CreateProductSchema.partial()
 export const CreateTransactionSchema = z.object({
     customerId: z.string().optional().nullable(),
     customerName: z.string().max(200).optional().nullable(),
-    customerPhone: z.string().max(20).optional().nullable(),
+    customerPhone: z.string().max(50).optional().nullable(),
     items: z.array(z.object({
         productId: z.string().min(1),
         productName: z.string().min(1),
@@ -34,6 +71,9 @@ export const CreateTransactionSchema = z.object({
         unitPrice: z.number().min(0),
         discount: z.number().min(0).default(0),
         lineTotal: z.number().min(0),
+        selectedUnit: z.string().optional().nullable(),
+        isBundle: z.boolean().optional(),
+        bundleId: z.string().optional(),
     })).min(1, 'Đơn hàng phải có ít nhất 1 sản phẩm'),
     payments: z.array(z.object({
         type: z.enum(['cash', 'card', 'transfer', 'ewallet', 'credit']),
@@ -49,6 +89,8 @@ export const CreateTransactionSchema = z.object({
     debtAmount: z.number().min(0).optional().nullable(),
     notes: z.string().max(500).optional().nullable(),
     status: z.enum(['completed', 'partial', 'voided']).default('completed'),
+    revisionOfId: z.string().optional().nullable(),
+    appliedPromotionIds: z.array(z.string()).optional(),
 })
 
 // ─── Customers ────────────────────────────────────────────────────────────────
@@ -60,9 +102,13 @@ export const CreateCustomerSchema = z.object({
     groupId: z.string().optional().nullable(),
     taxCode: z.string().max(20).optional().nullable(),
     note: z.string().max(1000).optional().nullable(),
+    notes: z.string().max(2000).optional().nullable(),
+    birthday: z.string().optional().nullable(),
+    gender: z.enum(['male', 'female', 'other']).optional().nullable(),
+    code: z.string().optional().nullable(),
     debt: z.number().min(0).default(0),
     loyaltyPoints: z.number().int().min(0).default(0),
-})
+}).passthrough()
 
 export const UpdateCustomerSchema = CreateCustomerSchema.partial()
 
@@ -71,7 +117,7 @@ export const CreateEmployeeSchema = z.object({
     name: z.string().min(1, 'Tên nhân viên không được để trống').max(200),
     email: z.string().email('Email không hợp lệ').optional().nullable().or(z.literal('')),
     phone: z.string().max(20).optional().nullable(),
-    role: z.enum(['admin', 'manager', 'staff', 'cashier', 'warehouse', 'driver', 'accountant']).optional(),
+    role: z.enum(['admin', 'manager', 'staff', 'cashier', 'warehouse', 'driver', 'accountant', 'warranty']).optional(),
     department: z.string().max(100).optional().nullable(),
     position: z.string().max(100).optional().nullable(),
     salary: z.number().min(0).optional().nullable(),
@@ -79,7 +125,10 @@ export const CreateEmployeeSchema = z.object({
     status: z.enum(['active', 'inactive']).default('active'),
     address: z.string().max(500).optional().nullable(),
     note: z.string().max(1000).optional().nullable(),
-})
+    password: z.string().optional().nullable(),
+    notes: z.string().max(1000).optional().nullable(),
+    branchId: z.string().optional().nullable(),
+}).passthrough()
 
 export const UpdateEmployeeSchema = CreateEmployeeSchema.partial()
 
@@ -122,12 +171,12 @@ export const UpdateCategorySchema = CreateCategorySchema.partial()
 export const CreateRepairSchema = z.object({
     productName: z.string().min(1, 'Tên thiết bị không được để trống').max(200),
     customerName: z.string().max(200).optional().nullable(),
-    customerPhone: z.string().max(20).optional().nullable(),
+    customerPhone: z.string().max(50).optional().nullable(),
     issue: z.string().min(1, 'Mô tả sự cố không được để trống').max(1000),
     cost: z.number().min(0).optional().nullable(),
     estimatedDate: z.string().optional().nullable(),
-    notes: z.string().max(1000).optional().nullable(),
-    status: z.enum(['pending', 'in_progress', 'done', 'cancelled']).default('pending'),
+    notes: z.string().max(5000).optional().nullable(),
+    status: z.string().default('pending'),
 })
 
 export const UpdateRepairSchema = CreateRepairSchema.partial()
@@ -136,7 +185,7 @@ export const UpdateRepairSchema = CreateRepairSchema.partial()
 export const CreateWarrantySchema = z.object({
     productName: z.string().min(1, 'Tên sản phẩm không được để trống').max(200),
     customerName: z.string().min(1, 'Tên khách hàng không được để trống').max(200),
-    customerPhone: z.string().max(20).optional().nullable(),
+    customerPhone: z.string().max(50).optional().nullable(),
     serialNumber: z.string().max(100).optional().nullable(),
     startDate: z.string().min(1, 'Ngày bắt đầu bảo hành không được để trống'),
     endDate: z.string().min(1, 'Ngày kết thúc bảo hành không được để trống'),
@@ -150,19 +199,31 @@ export const UpdateWarrantySchema = CreateWarrantySchema.partial()
 // ─── Quotations ───────────────────────────────────────────────────────────────
 export const CreateQuotationSchema = z.object({
     customerName: z.string().max(200).optional().nullable(),
-    customerPhone: z.string().max(20).optional().nullable(),
+    customerPhone: z.string().max(50).optional().nullable(),
+    customerEmail: z.string().max(200).optional().nullable(),
     customerId: z.string().optional().nullable(),
-    items: z.array(z.object({
-        productId: z.string().min(1),
-        productName: z.string().min(1),
-        quantity: z.number().int().min(1),
-        unitPrice: z.number().min(0),
-        discount: z.number().min(0).default(0),
-    })).min(1, 'Báo giá phải có ít nhất 1 sản phẩm'),
-    total: z.number().min(0),
+    items: z.union([
+        z.string(),  // JSON string from frontend
+        z.array(z.object({
+            productId: z.string().optional(),
+            productName: z.string().optional(),
+            name: z.string().optional(),
+            sku: z.string().optional(),
+            quantity: z.number().int().min(1).optional(),
+            qty: z.number().int().min(1).optional(),
+            unitPrice: z.number().min(0).optional(),
+            price: z.number().min(0).optional(),
+            discount: z.number().min(0).default(0),
+        })),
+    ]).optional(),
+    subtotal: z.number().min(0).optional(),
+    discount: z.number().min(0).default(0),
+    total: z.number().min(0).optional(),
+    totalAmount: z.number().min(0).optional(),
     validUntil: z.string().optional().nullable(),
     notes: z.string().max(1000).optional().nullable(),
-    status: z.enum(['draft', 'sent', 'accepted', 'rejected', 'expired']).default('draft'),
+    status: z.enum(['draft', 'sent', 'viewed', 'accepted', 'rejected', 'expired']).default('draft'),
+    code: z.string().optional(),
 })
 
 export const UpdateQuotationSchema = CreateQuotationSchema.partial()
@@ -170,18 +231,22 @@ export const UpdateQuotationSchema = CreateQuotationSchema.partial()
 // ─── Bundles ──────────────────────────────────────────────────────────────────
 export const CreateBundleSchema = z.object({
     name: z.string().min(1, 'Tên combo không được để trống').max(200),
-    description: z.string().max(1000).optional().nullable(),
-    price: z.number().min(0, 'Giá combo không được âm'),
-    discountType: z.enum(['fixed', 'percent']).default('fixed'),
-    discountValue: z.number().min(0).default(0),
-    startDate: z.string().optional().nullable(),
-    endDate: z.string().optional().nullable(),
-    status: z.enum(['active', 'inactive']).default('active'),
+    category: z.string().max(200).optional().nullable(),
     items: z.array(z.object({
-        productId: z.string().min(1),
-        quantity: z.number().int().min(1),
+        productId: z.string().optional(),
+        name: z.string().optional(),
+        originalPrice: z.number().min(0).optional(),
+        sku: z.string().optional().nullable(),
+        quantity: z.number().int().min(1).default(1),
     })).min(1, 'Combo phải có ít nhất 1 sản phẩm'),
-})
+    originalTotal: z.number().min(0).default(0),
+    bundlePrice: z.number().min(0, 'Giá combo không được âm'),
+    price: z.number().min(0).optional(), // alias for bundlePrice
+    discount: z.number().min(0).default(0),
+    active: z.boolean().default(true),
+    validUntil: z.string().optional().nullable(),
+    maxUsage: z.number().int().min(0).optional().nullable(),
+}).passthrough()
 
 export const UpdateBundleSchema = CreateBundleSchema.partial()
 
@@ -213,6 +278,7 @@ export const UpdateExpenseSchema = CreateExpenseSchema.partial()
 export const CreatePromotionSchema = z.object({
     name: z.string().min(1, 'Tên chương trình không được để trống').max(200),
     code: z.string().max(50).optional().nullable(),
+    description: z.string().max(5000).optional().nullable(),
     type: z.enum(['percentage', 'fixed', 'bogo', 'freebie']).default('percentage'),
     value: z.number().min(0).default(0),
     minOrderValue: z.number().min(0).default(0),
@@ -278,8 +344,9 @@ export const CreateReturnSchema = z.object({
     code: z.string().max(50).optional().nullable(),
     originalInvoice: z.string().min(1, 'Hóa đơn gốc không được để trống').max(200),
     transactionId: z.string().optional().nullable(),
+    originalTransactionId: z.string().optional().nullable(),
     customerName: z.string().min(1, 'Tên khách hàng không được để trống').max(200),
-    customerPhone: z.string().max(20).optional().nullable(),
+    customerPhone: z.string().max(50).optional().nullable(),
     reason: z.string().min(1, 'Lý do trả hàng không được để trống').max(500),
     refundMethod: z.string().max(50).optional().nullable(),
     staffName: z.string().max(200).optional().nullable(),

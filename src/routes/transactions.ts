@@ -3,31 +3,46 @@ import { authMiddleware, AuthRequest, getBranchFilter, getBranchId } from '../mi
 import { validate } from '../middleware/validate'
 import { CreateTransactionSchema } from '../schemas'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
+import { publishEvent } from '../lib/pubsub'
 
 const router = Router()
+
+// Resolve how many base units 1 `selectedUnit` represents for a given product.
+// Returns 1 when selectedUnit equals the product's baseUnit or no matching conversion.
+// Mirrors POS price logic: if conv.toUnit === selectedUnit, rate = conv.conversionRate;
+// if conv.fromUnit === selectedUnit, rate = 1 / conv.conversionRate.
+function resolveConversionRate(
+    product: { baseUnit: string | null; unitConversions?: { fromUnit: string; toUnit: string; conversionRate: number }[] } | null | undefined,
+    selectedUnit?: string | null,
+): number {
+    if (!product || !selectedUnit) return 1
+    if (!product.baseUnit || selectedUnit === product.baseUnit) return 1
+    const convs = product.unitConversions || []
+    const conv = convs.find(uc => uc.toUnit === selectedUnit || uc.fromUnit === selectedUnit)
+    if (!conv || !conv.conversionRate || conv.conversionRate <= 0) return 1
+    if (conv.toUnit === selectedUnit) return conv.conversionRate
+    return 1 / conv.conversionRate
+}
 
 // GET /api/transactions
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const branchId = getBranchId(req)
-        const schema = req.user?.storeSchema || 'default'
-        const cacheKey = `${schema}:transactions:${JSON.stringify(req.query)}`
-        const cached = await cacheGet(cacheKey)
-        if (cached) return res.json(cached)
 
         const {
             search, startDate, endDate, paymentMethod, status, cashier,
             page = '1', pageSize = '20',
         } = req.query
 
-        const where: any = {}
+        const where: any = { ...getBranchFilter(req as any) }
+        console.log(`[DEBUG-TX-GET] branchId=${branchId}, where=${JSON.stringify(where)}, headers.x-branch-id=${req.headers['x-branch-id']}, jwt.branchId=${req.user?.branchId}, isMainBranch=${req.user?.isMainBranch}`)
 
         if (search) {
             where.OR = [
-                { receiptNumber: { contains: search as string } },
-                { customerName: { contains: search as string } },
-                { customerPhone: { contains: search as string } },
+                { receiptNumber: { contains: search as string, mode: 'insensitive' } },
+                { customerName: { contains: search as string, mode: 'insensitive' } },
+                { customerPhone: { contains: search as string, mode: 'insensitive' } },
             ]
         }
 
@@ -48,7 +63,12 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
             prisma.transaction.count({ where }),
             prisma.transaction.findMany({
                 where,
-                include: { items: true, payments: true },
+                include: { 
+                    items: {
+                        include: { product: { select: { costPrice: true } } }
+                    }, 
+                    payments: true 
+                },
                 orderBy: { createdAt: 'desc' },
                 skip,
                 take: size,
@@ -65,6 +85,14 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
             filteredTotal = filteredTx.length
         }
 
+        // Build branch name map for overview mode
+        const branchIds = [...new Set(transactions.map((t: any) => t.branchId).filter(Boolean))]
+        let branchMap: Record<string, string> = {}
+        if (branchIds.length > 0) {
+            const branches = await prisma.branch.findMany({ where: { id: { in: branchIds } }, select: { id: true, name: true } })
+            branchMap = Object.fromEntries(branches.map(b => [b.id, b.name]))
+        }
+
         const data = filteredTx.map(t => ({
             id: t.id,
             receiptNumber: t.receiptNumber,
@@ -79,6 +107,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
                 unitPrice: i.unitPrice,
                 discount: i.discount,
                 lineTotal: i.lineTotal,
+                product: (i as any).product || undefined,
             })),
             subtotal: t.subtotal,
             discount: t.discount,
@@ -99,6 +128,8 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
             transactionDate: t.transactionDate?.toISOString() || t.createdAt.toISOString(),
             returnedAt: t.returnedAt?.toISOString(),
             returnReason: t.returnReason,
+            branchId: t.branchId || null,
+            branchName: t.branchId ? (branchMap[t.branchId] || null) : null,
         }))
 
         const response = {
@@ -111,7 +142,6 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
                 totalPages: Math.ceil(filteredTotal / size),
             },
         }
-        await cacheSet(cacheKey, response, 30)
         res.json(response)
     } catch (err) {
         console.error('Get transactions error:', err)
@@ -140,7 +170,12 @@ router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => 
         // Get all transactions in the specified range
         const recent = await prisma.transaction.findMany({
             where: { createdAt: { gte: rangeStart, lte: rangeEnd } },
-            include: { items: true, payments: true },
+            include: { 
+                items: {
+                    include: { product: { select: { costPrice: true } } }
+                }, 
+                payments: true 
+            },
             orderBy: { createdAt: 'desc' },
         })
 
@@ -244,7 +279,7 @@ router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => 
                 cashiers,
             },
         }
-        await cacheSet(statsCacheKey, statsResponse, 60)
+        await cacheSet(statsCacheKey, statsResponse, 300)
         res.json(statsResponse)
     } catch (err) {
         console.error('Get transaction stats error:', err)
@@ -259,7 +294,12 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
         const branchId = getBranchId(req)
         const transaction = await prisma.transaction.findUnique({
             where: { id: String(req.params.id) },
-            include: { items: true, payments: true },
+            include: { 
+                items: {
+                    include: { product: { select: { costPrice: true } } }
+                }, 
+                payments: true 
+            },
         })
 
         if (!transaction) {
@@ -286,7 +326,8 @@ router.post('/', authMiddleware, validate(CreateTransactionSchema), async (req: 
     try {
         const prisma = req.storePrisma!
         const branchId = getBranchId(req)
-        const { items, payments, ...txData } = req.body
+        console.log(`[DEBUG-TX-POST] branchId=${branchId}, headers.x-branch-id=${req.headers['x-branch-id']}, jwt.branchId=${req.user?.branchId}, isMainBranch=${req.user?.isMainBranch}`)
+        const { items, payments, appliedPromotionIds, ...txData } = req.body
 
         if (!items || !Array.isArray(items) || items.length === 0) {
             res.status(400).json({ success: false, error: 'Items are required' })
@@ -298,10 +339,51 @@ router.post('/', authMiddleware, validate(CreateTransactionSchema), async (req: 
 
         // Generate receipt number
         const count = await prisma.transaction.count()
-        const receiptNumber = txData.receiptNumber || `HD${Date.now()}${String(count + 1).padStart(4, '0')}`
+        let receiptNumber = txData.receiptNumber || `HD${Date.now()}${String(count + 1).padStart(4, '0')}`
+
+        // If this is a revision of an existing transaction, generate .1/.2/.3 suffix
+        if (txData.revisionOfId) {
+            try {
+                const sourceTransaction = await prisma.transaction.findUnique({
+                    where: { id: txData.revisionOfId },
+                    select: { receiptNumber: true },
+                })
+                if (sourceTransaction) {
+                    // Get the base receipt number (strip any existing .N suffix)
+                    const baseReceipt = sourceTransaction.receiptNumber.replace(/\.\d+$/, '')
+                    // Count how many revisions already exist
+                    const existingRevisions = await prisma.transaction.count({
+                        where: { receiptNumber: { startsWith: baseReceipt + '.' } },
+                    })
+                    receiptNumber = `${baseReceipt}.${existingRevisions + 1}`
+                }
+            } catch (revErr) {
+                console.warn('[Revision] Could not generate revision receipt number:', revErr)
+            }
+        }
 
         // Calculate debt amount from credit payments
         const debtAmount = txData.debtAmount || 0
+
+        // Look up products with their unit conversions so we can convert
+        // sale-unit quantities (e.g., 1 cuộn) into base-unit stock movements (e.g., 1000 m).
+        const productIds = [...new Set(items.map((i: any) => i.productId).filter(Boolean))] as string[]
+        const productsWithConv = productIds.length > 0
+            ? await prisma.product.findMany({
+                where: { id: { in: productIds } },
+                include: { unitConversions: true },
+            })
+            : []
+        const productMap = new Map(productsWithConv.map(p => [p.id, p]))
+
+        // For each line, resolve conversion rate against the live product record.
+        const itemsWithConversion = items.map((item: any) => {
+            const product = productMap.get(item.productId)
+            const selectedUnit: string | null = item.selectedUnit || product?.baseUnit || null
+            const rate = resolveConversionRate(product as any, selectedUnit)
+            const baseQuantity = Math.round(item.quantity * rate)
+            return { ...item, selectedUnit, conversionRate: rate, baseQuantity }
+        })
 
         // Build create data — use undefined to omit optional FK fields
         const createData: any = {
@@ -317,8 +399,9 @@ router.post('/', authMiddleware, validate(CreateTransactionSchema), async (req: 
             createdByName: user?.name || 'Admin',
             notes: txData.notes || null,
             transactionDate: txData.transactionDate ? new Date(txData.transactionDate) : null,
+            branchId: branchId || null,
             items: {
-                create: items.map((item: any) => ({
+                create: itemsWithConversion.map((item: any) => ({
                     productId: item.productId,
                     productName: item.productName,
                     sku: item.sku || item.productSku || '',
@@ -350,15 +433,44 @@ router.post('/', authMiddleware, validate(CreateTransactionSchema), async (req: 
 
         const transaction = await prisma.transaction.create({
             data: createData,
-            include: { items: true, payments: true },
+            include: { 
+                items: {
+                    include: { product: { select: { costPrice: true } } }
+                }, 
+                payments: true 
+            },
         })
 
+        // Increment promotion usageCount if any promotions were applied
+        if (appliedPromotionIds && Array.isArray(appliedPromotionIds) && appliedPromotionIds.length > 0) {
+            for (const promoId of appliedPromotionIds) {
+                await prisma.promotion.update({
+                    where: { id: promoId },
+                    data: { usageCount: { increment: 1 } }
+                }).catch(err => {
+                    console.error(`Failed to increment usageCount for promotion ${promoId}:`, err)
+                })
+            }
+        }
 
-        // Decrease product stock + create inventory transaction records for each item
-        for (const item of items) {
+        // Increment bundle soldCount for any bundles included in the order
+        const bundleIds = [...new Set(items.filter((i: any) => i.isBundle && i.bundleId).map((i: any) => i.bundleId))]
+        for (const bundleId of bundleIds) {
+            await prisma.bundle.update({
+                where: { id: bundleId },
+                data: { soldCount: { increment: 1 } }
+            }).catch(err => {
+                console.error(`Failed to increment soldCount for bundle ${bundleId}:`, err)
+            })
+        }
+
+        // Decrease product stock + create inventory transaction records for each item.
+        // Stock and InventoryTransaction.quantity are tracked in the product's BASE unit,
+        // so we use baseQuantity (sale-unit qty × conversion rate) — not the raw line qty.
+        for (const item of itemsWithConversion) {
             const updatedProduct = await prisma.product.update({
                 where: { id: item.productId },
-                data: { stock: { decrement: item.quantity } },
+                data: { stock: { decrement: item.baseQuantity } },
             })
 
             // Create inventory transaction record for stock tracking
@@ -368,7 +480,7 @@ router.post('/', authMiddleware, validate(CreateTransactionSchema), async (req: 
                     productId: item.productId,
                     productName: item.productName,
                     productSku: item.sku || item.productSku || '',
-                    quantity: -item.quantity,
+                    quantity: -item.baseQuantity,
                     reason: `Bán hàng - ${receiptNumber}`,
                     note: `Giao dịch ${receiptNumber}`,
                     referenceId: receiptNumber,
@@ -431,8 +543,23 @@ router.post('/', authMiddleware, validate(CreateTransactionSchema), async (req: 
             }
         }
 
-        cacheDel(`${req.user?.storeSchema || 'default'}:transactions:*`).catch(() => { })
+        cacheDel(`${req.user?.storeSchema || 'default'}:*:transactions:*`).catch(() => { })
+        if (appliedPromotionIds && Array.isArray(appliedPromotionIds) && appliedPromotionIds.length > 0) {
+            cacheDel(`${req.user?.storeSchema || 'default'}:promotions:*`).catch(() => { })
+        }
         console.log(`✅ Transaction ${receiptNumber} created — ${items.length} items, total: ${transaction.total}`)
+
+        // Publish realtime event
+        publishEvent(req.user?.storeSchema, 'transaction:created', {
+            id: transaction.id,
+            receiptNumber,
+            total: transaction.total,
+            status: transaction.status,
+            createdByName: transaction.createdByName,
+            customerName: transaction.customerName || 'Khách lẻ',
+            itemCount: items.length,
+            createdAt: transaction.createdAt.toISOString(),
+        }, branchId).catch(() => { })
 
         res.status(201).json({
             success: true,
@@ -455,7 +582,11 @@ router.put('/:id/void', authMiddleware, async (req: AuthRequest, res: Response) 
         const branchId = getBranchId(req)
         const existing = await prisma.transaction.findUnique({
             where: { id: String(req.params.id) },
-            include: { items: true },
+            include: { 
+                items: {
+                    include: { product: { select: { costPrice: true } } }
+                }
+            },
         })
 
         if (!existing) {
@@ -473,7 +604,11 @@ router.put('/:id/void', authMiddleware, async (req: AuthRequest, res: Response) 
         const transaction = await prisma.transaction.update({
             where: { id: String(req.params.id) },
             data: { status: 'voided' },
-            include: { items: true },
+            include: { 
+                items: {
+                    include: { product: { select: { costPrice: true } } }
+                }
+            },
         })
 
         // Restore stock for each item + create inventory records
@@ -513,8 +648,15 @@ router.put('/:id/void', authMiddleware, async (req: AuthRequest, res: Response) 
             })
         }
 
-        cacheDel(`${req.user?.storeSchema || 'default'}:transactions:*`).catch(() => { })
+        cacheDel(`${req.user?.storeSchema || 'default'}:*:transactions:*`).catch(() => { })
         console.log(`🚫 Transaction ${existing.receiptNumber} voided`)
+
+        // Publish realtime event
+        publishEvent(req.user?.storeSchema, 'transaction:voided', {
+            id: existing.id,
+            receiptNumber: existing.receiptNumber,
+            total: existing.total,
+        }, branchId).catch(() => { })
 
         res.json({
             success: true,
@@ -572,7 +714,10 @@ router.put('/:id/pay-debt', authMiddleware, async (req: AuthRequest, res: Respon
                 status: 'completed',
                 amountReceived: existing.amountReceived + payAmount,
             },
-            include: { items: true, payments: true },
+            include: { 
+                items: { include: { product: { select: { costPrice: true } } } }, 
+                payments: true 
+            },
         })
 
         // Reduce customer debt
@@ -600,7 +745,7 @@ router.put('/:id/pay-debt', authMiddleware, async (req: AuthRequest, res: Respon
             })
         } catch { }
 
-        cacheDel(`${req.user?.storeSchema || 'default'}:transactions:*`).catch(() => { })
+        cacheDel(`${req.user?.storeSchema || 'default'}:*:transactions:*`).catch(() => { })
         console.log(`💰 Debt paid for ${existing.receiptNumber}: ${payAmount}`)
 
         res.json({
@@ -625,7 +770,9 @@ router.put('/:id/return', authMiddleware, async (req: AuthRequest, res: Response
 
         const existing = await prisma.transaction.findUnique({
             where: { id: String(req.params.id) },
-            include: { items: true },
+            include: { 
+                items: { include: { product: { select: { costPrice: true } } } }
+            },
         })
 
         if (!existing) {
@@ -670,7 +817,10 @@ router.put('/:id/return', authMiddleware, async (req: AuthRequest, res: Response
                 returnedAt: new Date(),
                 returnReason: reason || 'Trả hàng',
             },
-            include: { items: true, payments: true },
+            include: { 
+                items: { include: { product: { select: { costPrice: true } } } }, 
+                payments: true 
+            },
         })
 
         // Generate unique return document code (RT-001, RT-002, ...)
@@ -696,7 +846,15 @@ router.put('/:id/return', authMiddleware, async (req: AuthRequest, res: Response
                     customerName: (existing as any).customerName || 'Khách lẻ',
                     customerPhone: (existing as any).customerPhone || null,
                     reason: reason || 'Trả hàng',
-                    items: JSON.stringify(returnItemsJson),
+                    items: {
+                        create: returnItemsJson.map((i: any) => ({
+                            productId: i.productId,
+                            productName: i.productName,
+                            sku: i.sku,
+                            quantity: i.quantity,
+                            unitPrice: i.unitPrice,
+                        }))
+                    },
                     totalRefund: returnTotal,
                     status: 'completed',
                     processedAt: new Date(),
@@ -734,19 +892,39 @@ router.put('/:id/return', authMiddleware, async (req: AuthRequest, res: Response
             })
         }
 
-        // Revert customer stats
+        // Revert customer stats + debt if applicable
         if (existing.customerId) {
+            const updateData: any = {
+                totalPurchases: { decrement: returnTotal },
+                totalOrders: { decrement: 1 },
+            }
+
+            // If original sale had credit (debt), reduce customer debt on return
+            const existingWithPayments = await prisma.transaction.findUnique({
+                where: { id: existing.id },
+                include: { payments: true },
+            })
+            const creditPayment = existingWithPayments?.payments.find(p => p.type === 'credit')
+            if (creditPayment && creditPayment.amount > 0) {
+                updateData.debt = { decrement: Math.min(creditPayment.amount, returnTotal) }
+            }
+
             await prisma.customer.update({
                 where: { id: existing.customerId },
-                data: {
-                    totalPurchases: { decrement: returnTotal },
-                    totalOrders: { decrement: 1 },
-                },
+                data: updateData,
             })
         }
 
-        cacheDel(`${req.user?.storeSchema || 'default'}:transactions:*`).catch(() => { })
+        cacheDel(`${req.user?.storeSchema || 'default'}:*:transactions:*`).catch(() => { })
         console.log(`↩️ Transaction ${existing.receiptNumber} returned as ${returnCode} — ${itemsToReturn.length} items`)
+
+        // Publish realtime event
+        publishEvent(req.user?.storeSchema, 'transaction:returned', {
+            id: existing.id,
+            receiptNumber: existing.receiptNumber,
+            returnCode,
+            totalRefund: returnTotal,
+        }, branchId).catch(() => { })
 
         res.json({
             success: true,
@@ -789,10 +967,13 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
         const transaction = await prisma.transaction.update({
             where: { id },
             data: updateData,
-            include: { items: true, payments: true },
+            include: { 
+                items: { include: { product: { select: { costPrice: true } } } }, 
+                payments: true 
+            },
         })
 
-        cacheDel(`${req.user?.storeSchema || 'default'}:transactions:*`).catch(() => { })
+        cacheDel(`${req.user?.storeSchema || 'default'}:*:transactions:*`).catch(() => { })
         console.log(`✏️ Transaction ${existing.receiptNumber} updated — notes/customer`)
 
         res.json({
@@ -838,12 +1019,174 @@ router.put('/:id/vat', authMiddleware, async (req: AuthRequest, res: Response) =
         }
 
         const transaction = await prisma.transaction.update({ where: { id }, data: updateData })
-        cacheDel(`${req.user?.storeSchema || 'default'}:transactions:*`).catch(() => { })
+        cacheDel(`${req.user?.storeSchema || 'default'}:*:transactions:*`).catch(() => { })
         console.log(`🧾 Transaction ${existing.receiptNumber} VAT: ${updateData.vatStatus} (${updateData.vatInvoiceNumber || 'N/A'})`)
 
         res.json({ success: true, data: transaction })
     } catch (err) {
         console.error('PUT /transactions/:id/vat error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// POST /api/transactions/:id/revise — Void old transaction and link warranties to new one
+router.post('/:id/revise', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const branchId = getBranchId(req)
+        const sourceId = String(req.params.id)
+        const { newTransactionId, newReceiptNumber } = req.body
+
+        if (!newTransactionId || !newReceiptNumber) {
+            res.status(400).json({ success: false, error: 'newTransactionId and newReceiptNumber are required' })
+            return
+        }
+
+        // 1. Find the old transaction
+        const existing = await prisma.transaction.findUnique({
+            where: { id: sourceId },
+            include: { 
+                items: { include: { product: { select: { costPrice: true } } } }
+            },
+        })
+
+        if (!existing) {
+            res.status(404).json({ success: false, error: 'Source transaction not found' })
+            return
+        }
+
+        if (existing.status === 'voided') {
+            res.status(400).json({ success: false, error: 'Transaction already voided' })
+            return
+        }
+
+        const user = await prisma.user.findUnique({ where: { id: req.user!.userId } })
+
+        // 2. Void the old transaction
+        await prisma.transaction.update({
+            where: { id: sourceId },
+            data: { status: 'voided', notes: (existing.notes ? existing.notes + '\n' : '') + `[Cập nhật] → ${newReceiptNumber}` },
+        })
+
+        // 3. Restore stock from old transaction
+        for (const item of existing.items) {
+            const updatedProduct = await prisma.product.update({
+                where: { id: item.productId },
+                data: { stock: { increment: item.quantity } },
+            })
+
+            await prisma.inventoryTransaction.create({
+                data: {
+                    type: 'adjustment',
+                    productId: item.productId,
+                    productName: item.productName,
+                    productSku: item.sku,
+                    quantity: item.quantity,
+                    reason: `Cập nhật phiếu - ${existing.receiptNumber} → ${newReceiptNumber}`,
+                    note: `Hoàn kho do cập nhật giao dịch ${existing.receiptNumber}`,
+                    referenceId: existing.receiptNumber,
+                    referenceType: 'revision',
+                    unitPrice: item.unitPrice || 0,
+                    costPriceAfter: updatedProduct.costPrice,
+                    userId: req.user!.userId,
+                    userName: user?.name || 'Admin',
+                },
+            })
+        }
+
+        // 4. Revert customer stats from old transaction
+        if (existing.customerId) {
+            await prisma.customer.update({
+                where: { id: existing.customerId },
+                data: {
+                    totalPurchases: { decrement: existing.total },
+                    totalOrders: { decrement: 1 },
+                },
+            }).catch(() => {})
+        }
+
+        // 5. Link the new transaction as revision of the old one
+        try {
+            await prisma.transaction.update({
+                where: { id: newTransactionId },
+                data: { revisionOfId: sourceId },
+            })
+        } catch (revLinkErr) {
+            console.warn('[Revision] Could not set revisionOfId (field may not exist yet):', revLinkErr)
+        }
+
+        // 6. Transfer warranties from old transaction to new one
+        let warrantyCount = 0
+        try {
+            const result = await prisma.warranty.updateMany({
+                where: { transactionId: sourceId },
+                data: { transactionId: newTransactionId },
+            })
+            warrantyCount = result.count
+        } catch (wErr) {
+            console.warn('[Revision] Warranty transfer failed (field may not exist):', wErr)
+        }
+
+        // 6b. Transfer return orders from old transaction to new one
+        let returnOrderCount = 0
+        try {
+            const result = await prisma.returnOrder.updateMany({
+                where: { transactionId: sourceId },
+                data: {
+                    transactionId: newTransactionId,
+                    originalInvoice: newReceiptNumber,
+                },
+            })
+            returnOrderCount = result.count
+            if (returnOrderCount > 0) {
+                console.log(`[Revision] ${returnOrderCount} return order(s) re-linked: ${existing.receiptNumber} → ${newReceiptNumber}`)
+            }
+        } catch (roErr) {
+            console.warn('[Revision] Return order transfer failed (non-critical):', roErr)
+        }
+
+        // 7. Audit log
+        try {
+            await prisma.auditLog.create({
+                data: {
+                    userId: req.user!.userId,
+                    userName: user?.name || 'Admin',
+                    action: 'revise',
+                    entity: 'Transaction',
+                    entityId: sourceId,
+                    details: JSON.stringify({
+                        oldReceipt: existing.receiptNumber,
+                        newReceipt: newReceiptNumber,
+                        newTransactionId,
+                        warrantiesTransferred: warrantyCount,
+                        returnOrdersTransferred: returnOrderCount,
+                    }),
+                },
+            })
+        } catch { }
+
+        cacheDel(`${req.user?.storeSchema || 'default'}:*:transactions:*`).catch(() => { })
+        console.log(`📝 Transaction ${existing.receiptNumber} revised → ${newReceiptNumber} (${warrantyCount} warranties transferred)`)
+
+        // Publish realtime event
+        publishEvent(req.user?.storeSchema, 'transaction:revised', {
+            oldId: sourceId,
+            oldReceipt: existing.receiptNumber,
+            newId: newTransactionId,
+            newReceipt: newReceiptNumber,
+        }, branchId).catch(() => { })
+
+        res.json({
+            success: true,
+            data: {
+                oldReceiptNumber: existing.receiptNumber,
+                newReceiptNumber,
+                newTransactionId,
+                warrantiesTransferred: warrantyCount,
+            },
+        })
+    } catch (err) {
+        console.error('Revise transaction error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
     }
 })
