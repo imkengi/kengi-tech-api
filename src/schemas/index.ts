@@ -22,7 +22,6 @@ export const CreateProductSchema = z.object({
     maxStock: z.number().int().min(0).optional(),
     baseUnit: z.string().max(50).optional().nullable(),
     unit: z.string().max(50).optional().nullable(),
-    taxInclusive: z.boolean().optional(),
     trackSerial: z.boolean().optional(),
     weight: z.number().min(0).optional().nullable(),
     productType: z.enum(['goods', 'service']).default('goods'),

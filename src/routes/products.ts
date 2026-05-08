@@ -299,8 +299,7 @@ router.put('/:id', authMiddleware, requireRole('admin', 'manager'), validate(Upd
             await prisma.productImage.deleteMany({ where: { productId: String(req.params.id) } })
         }
 
-        const cleanUC = (unitConversions || []).filter((uc: any) => uc.toUnit?.trim()).map(({ id, ...rest }: any) => rest)
-        const cleanImages = (images || []).filter((img: any) => img.url).map(({ id, ...rest }: any) => rest)
+        const imagesToCreate = (images || []).filter((img: any) => img.url).map(({ id, ...rest }: any) => rest)
 
         const product = await prisma.product.update({
             where: { id: String(req.params.id) },
@@ -309,8 +308,8 @@ router.put('/:id', authMiddleware, requireRole('admin', 'manager'), validate(Upd
                 unitConversions: cleanConversions?.length ? {
                     createMany: { data: cleanConversions }
                 } : undefined,
-                images: cleanImages?.length ? {
-                    createMany: { data: cleanImages }
+                images: imagesToCreate?.length ? {
+                    createMany: { data: imagesToCreate }
                 } : undefined
             },
             include: { category: true, brand: true, images: true, unitConversions: true }
