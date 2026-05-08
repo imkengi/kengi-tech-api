@@ -1577,7 +1577,7 @@ model SalesTrip {
   code          String    @unique
   vehicleId     String
   warehouseId   String
-  status        String    @default("planned") // planned | loaded | active | reconciling | closed | cancelled
+  status        String    @default("loading") // loading | active | reconciling | closed | cancelled  (legacy: planned, loaded — surfaced as "loading")
   driverId      String?
   driverName    String?
   salesUserId   String
