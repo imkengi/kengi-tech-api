@@ -866,7 +866,15 @@ router.post('/send-otp', async (req: Request, res: Response) => {
             return res.status(429).json({ success: false, error: `Vui lòng đợi ${cooldown.retryAfter}s trước khi gửi lại mã` })
         }
 
-        const store = await registryPrisma.store.findFirst({ where: { code: storeCode } })
+        // Case-insensitive store lookup (matches /login and /branches behavior)
+        const normalizedCode = storeCode.trim().toLowerCase()
+        let store = await registryPrisma.store.findFirst({ where: { code: normalizedCode } })
+        if (!store) {
+            const stores: any[] = await registryPrisma.$queryRawUnsafe(
+                `SELECT * FROM "Store" WHERE LOWER(code) = $1 LIMIT 1`, normalizedCode
+            )
+            if (stores.length > 0) store = stores[0]
+        }
         if (!store || store.status !== 'active') {
             // password_reset: silent success to prevent enumeration
             if (purpose === 'password_reset') return res.json({ success: true, data: { sent: true } })
@@ -928,7 +936,15 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
             return res.status(400).json({ success: false, error: msg })
         }
 
-        const store = await registryPrisma.store.findFirst({ where: { code: storeCode } })
+        // Case-insensitive store lookup (matches /login and /branches behavior)
+        const normalizedCode = storeCode.trim().toLowerCase()
+        let store = await registryPrisma.store.findFirst({ where: { code: normalizedCode } })
+        if (!store) {
+            const stores: any[] = await registryPrisma.$queryRawUnsafe(
+                `SELECT * FROM "Store" WHERE LOWER(code) = $1 LIMIT 1`, normalizedCode
+            )
+            if (stores.length > 0) store = stores[0]
+        }
         if (!store || store.status !== 'active') {
             return res.status(404).json({ success: false, error: 'Cửa hàng không tồn tại' })
         }
