@@ -5,6 +5,8 @@ import crypto from 'crypto'
 import { registryPrisma, getStorePrisma, branchIdToSchema, createBranchSchema, dropBranchSchema } from '../lib/prisma'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
+import { generateOtpCode, saveOtp, verifyOtp, consumeOtp, canSendOtp, OTP_CONFIG } from '../lib/otp'
+import { sendEmail, buildOtpEmail } from '../services/emailService'
 
 const router = Router()
 const JWT_SECRET = process.env.JWT_SECRET
@@ -249,6 +251,32 @@ router.post('/login', async (req: Request, res: Response) => {
 
         const valid = await bcrypt.compare(password, user.password)
         if (!valid) { res.status(401).json({ success: false, error: 'Email hoặc mật khẩu không đúng' }); return }
+
+        // 3.5 — 2FA gate: if enabled, send OTP and stop here. Client must call
+        //      /api/auth/verify-otp with purpose=login_2fa to complete login.
+        if (user.twoFactorEnabled) {
+            const code = generateOtpCode()
+            saveOtp('login_2fa', store.code, user.email, code)
+            const { subject, html, text } = buildOtpEmail(code, 'login')
+            try {
+                await sendEmail(user.email, subject, html, text)
+            } catch (e: any) {
+                console.error('2FA OTP email failed:', e?.message || e)
+                res.status(500).json({ success: false, error: 'Không thể gửi mã xác minh. Vui lòng thử lại.' })
+                return
+            }
+            res.json({
+                success: true,
+                data: {
+                    requiresOtp: true,
+                    email: user.email,
+                    storeCode: store.code,
+                    branchId: targetBranchId,
+                    expiresInMinutes: OTP_CONFIG.OTP_TTL_MIN,
+                },
+            })
+            return
+        }
 
         // 4. Get branch info
         const effectiveBranchId = targetBranchId || user.branchId
@@ -569,6 +597,196 @@ router.post('/logout', async (req: Request, res: Response) => {
     const { refreshToken } = req.body
     if (refreshToken) refreshTokenStore.delete(refreshToken)
     res.json({ success: true })
+})
+
+// ─── POST /api/auth/send-otp ─────────────────────────────────────────────────
+// Body: { email, storeCode, purpose: 'login_2fa' | 'password_reset' }
+//   - login_2fa: resend OTP (requires the user to have already completed /login).
+//                We re-check that 2FA is enabled before issuing.
+//   - password_reset: anyone may request. We always respond success to avoid
+//                     leaking which emails exist.
+router.post('/send-otp', async (req: Request, res: Response) => {
+    try {
+        const { email, storeCode, purpose } = req.body || {}
+        if (!email?.trim() || !storeCode?.trim()) {
+            return res.status(400).json({ success: false, error: 'Email và mã cửa hàng là bắt buộc' })
+        }
+        if (purpose !== 'login_2fa' && purpose !== 'password_reset') {
+            return res.status(400).json({ success: false, error: 'Loại yêu cầu không hợp lệ' })
+        }
+
+        const cooldown = canSendOtp(purpose, storeCode, email)
+        if (!cooldown.ok) {
+            return res.status(429).json({ success: false, error: `Vui lòng đợi ${cooldown.retryAfter}s trước khi gửi lại mã` })
+        }
+
+        const store = await registryPrisma.store.findFirst({ where: { code: storeCode } })
+        if (!store || store.status !== 'active') {
+            // password_reset: silent success to prevent enumeration
+            if (purpose === 'password_reset') return res.json({ success: true, data: { sent: true } })
+            return res.status(404).json({ success: false, error: 'Mã cửa hàng không tồn tại' })
+        }
+
+        const storePrisma = getStorePrisma(store.schema)
+        const user = await storePrisma.user.findFirst({ where: { email: email.trim().toLowerCase() } })
+
+        if (purpose === 'login_2fa') {
+            if (!user || !user.twoFactorEnabled) {
+                return res.status(400).json({ success: false, error: 'Không đủ điều kiện để gửi mã 2FA' })
+            }
+        } else if (purpose === 'password_reset') {
+            // Silent success if user not found
+            if (!user) return res.json({ success: true, data: { sent: true } })
+        }
+
+        const code = generateOtpCode()
+        saveOtp(purpose, store.code, email, code)
+        const { subject, html, text } = buildOtpEmail(code, purpose === 'login_2fa' ? 'login' : 'reset')
+        try {
+            await sendEmail(email.trim().toLowerCase(), subject, html, text)
+        } catch (e: any) {
+            console.error('Send OTP email failed:', e?.message || e)
+            return res.status(500).json({ success: false, error: 'Không thể gửi email. Vui lòng thử lại.' })
+        }
+
+        res.json({ success: true, data: { sent: true, expiresInMinutes: OTP_CONFIG.OTP_TTL_MIN } })
+    } catch (err: any) {
+        console.error('send-otp error:', err?.message || err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// ─── POST /api/auth/verify-otp ───────────────────────────────────────────────
+// Body: { email, storeCode, code, purpose, branchId? }
+//   - login_2fa: completes login. Returns full token pair + user/store/branch.
+//   - password_reset: returns a short-lived reset token (10m JWT) to be passed
+//                     to /reset-password. The OTP is consumed here.
+router.post('/verify-otp', async (req: Request, res: Response) => {
+    try {
+        const { email, storeCode, code, purpose, branchId } = req.body || {}
+        if (!email?.trim() || !storeCode?.trim() || !code || !purpose) {
+            return res.status(400).json({ success: false, error: 'Thiếu thông tin xác minh' })
+        }
+        if (purpose !== 'login_2fa' && purpose !== 'password_reset') {
+            return res.status(400).json({ success: false, error: 'Loại yêu cầu không hợp lệ' })
+        }
+
+        const result = verifyOtp(purpose, storeCode, email, String(code))
+        if (!result.ok) {
+            const msg = {
+                not_found: 'Mã không tồn tại hoặc đã hết hạn',
+                expired: 'Mã đã hết hạn',
+                too_many_attempts: 'Quá nhiều lần thử. Vui lòng yêu cầu mã mới.',
+                invalid: 'Mã không đúng',
+            }[result.reason]
+            return res.status(400).json({ success: false, error: msg })
+        }
+
+        const store = await registryPrisma.store.findFirst({ where: { code: storeCode } })
+        if (!store || store.status !== 'active') {
+            return res.status(404).json({ success: false, error: 'Cửa hàng không tồn tại' })
+        }
+        const storePrisma = getStorePrisma(store.schema)
+        const user = await storePrisma.user.findFirst({ where: { email: email.trim().toLowerCase() } })
+        if (!user) return res.status(404).json({ success: false, error: 'Người dùng không tồn tại' })
+
+        if (purpose === 'login_2fa') {
+            if (user.isLocked) return res.status(403).json({ success: false, error: 'Tài khoản đã bị khóa' })
+            consumeOtp('login_2fa', store.code, email)
+
+            const effectiveBranchId = branchId || user.branchId
+            let branch = null
+            if (effectiveBranchId) {
+                branch = await storePrisma.branch.findUnique({
+                    where: { id: effectiveBranchId },
+                    select: { id: true, name: true, code: true, address: true, isMainBranch: true },
+                })
+            }
+            const settings = await storePrisma.storeSettings.findUnique({ where: { id: 'default' } })
+
+            const tokenPayload = {
+                userId: user.id, email: user.email, role: user.role,
+                storeId: store.id, storeCode: store.code,
+                branchId: effectiveBranchId, branchSchema: store.schema,
+                storeSchema: store.schema, isMainBranch: branch?.isMainBranch || false,
+            }
+            const { accessToken, refreshToken } = createTokenPair(tokenPayload)
+
+            return res.json({
+                success: true,
+                data: {
+                    token: accessToken,
+                    refreshToken,
+                    user: {
+                        id: user.id, email: user.email, name: user.name,
+                        role: user.role, phone: user.phone,
+                        avatar: user.avatar, twoFactorEnabled: user.twoFactorEnabled,
+                    },
+                    store: {
+                        id: store.id, code: store.code, name: store.name,
+                        address: settings?.address || store.address,
+                        phone: settings?.phone || store.phone,
+                        logo: settings?.logo || null,
+                    },
+                    branch,
+                },
+            })
+        }
+
+        // password_reset: issue a short-lived reset token; OTP is consumed.
+        consumeOtp('password_reset', store.code, email)
+        const resetToken = jwt.sign(
+            { purpose: 'password_reset', userId: user.id, storeId: store.id, storeCode: store.code },
+            JWT_SECRET!,
+            { expiresIn: '10m' } as any,
+        )
+        return res.json({ success: true, data: { resetToken, expiresInMinutes: 10 } })
+    } catch (err: any) {
+        console.error('verify-otp error:', err?.message || err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// ─── POST /api/auth/reset-password ───────────────────────────────────────────
+// Body: { resetToken, newPassword }
+// resetToken comes from a successful /verify-otp with purpose=password_reset.
+router.post('/reset-password', async (req: Request, res: Response) => {
+    try {
+        const { resetToken, newPassword } = req.body || {}
+        if (!resetToken || !newPassword) {
+            return res.status(400).json({ success: false, error: 'Thiếu thông tin' })
+        }
+        if (newPassword.length < 8 || !/[A-Z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+            return res.status(400).json({ success: false, error: 'Mật khẩu mới phải có ít nhất 8 ký tự, bao gồm chữ hoa và số' })
+        }
+
+        let payload: any
+        try {
+            payload = jwt.verify(resetToken, JWT_SECRET!)
+        } catch {
+            return res.status(401).json({ success: false, error: 'Token đặt lại đã hết hạn hoặc không hợp lệ' })
+        }
+        if (payload?.purpose !== 'password_reset' || !payload?.userId || !payload?.storeId) {
+            return res.status(401).json({ success: false, error: 'Token không hợp lệ' })
+        }
+
+        const store = await registryPrisma.store.findUnique({ where: { id: payload.storeId } })
+        if (!store) return res.status(404).json({ success: false, error: 'Cửa hàng không tồn tại' })
+
+        const storePrisma = getStorePrisma(store.schema)
+        const hashed = await bcrypt.hash(newPassword, 10)
+        await storePrisma.user.update({ where: { id: payload.userId }, data: { password: hashed } })
+
+        // Invalidate all refresh tokens for this user (force re-login everywhere)
+        for (const [token, data] of refreshTokenStore) {
+            if (data.userId === payload.userId) refreshTokenStore.delete(token)
+        }
+
+        res.json({ success: true, message: 'Đặt lại mật khẩu thành công' })
+    } catch (err: any) {
+        console.error('reset-password error:', err?.message || err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
 })
 
 export default router
