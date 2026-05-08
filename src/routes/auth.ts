@@ -717,6 +717,26 @@ router.put('/change-password', authMiddleware, async (req: AuthRequest, res: Res
     }
 })
 
+// ─── POST /api/auth/verify-password ─────────────────────────────────────────
+router.post('/verify-password', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const storePrisma = req.storePrisma!
+        const { password } = req.body
+        if (!password) { res.status(400).json({ success: false, error: 'Vui lòng nhập mật khẩu' }); return }
+
+        const user = await storePrisma.user.findUnique({ where: { id: req.user!.userId } })
+        if (!user) { res.status(404).json({ success: false, error: 'User not found' }); return }
+
+        const valid = await bcrypt.compare(password, user.password)
+        if (!valid) { res.status(401).json({ success: false, error: 'Mật khẩu không đúng' }); return }
+
+        res.json({ success: true })
+    } catch (err) {
+        console.error('Verify password error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
 // ─── PUT /api/auth/update-email ──────────────────────────────────────────────
 router.put('/update-email', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
