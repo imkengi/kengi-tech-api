@@ -59,10 +59,7 @@ export function buildOtpEmail(code: string, purpose: 'login' | 'reset'): { subje
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:560px;background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(76,29,149,0.10);">
       <tr>
         <td style="background:linear-gradient(135deg,#7c3aed 0%,#4f46e5 100%);background-color:#7c3aed;padding:40px 32px;text-align:center;">
-          <div style="display:inline-block;width:64px;height:64px;background-color:rgba(255,255,255,0.20);border-radius:16px;text-align:center;margin-bottom:16px;">
-            <div style="font-size:32px;font-weight:800;color:#ffffff;line-height:64px;">K</div>
-          </div>
-          <div style="color:#ffffff;font-size:24px;font-weight:700;letter-spacing:0.5px;">Kengi Tech</div>
+          <img src="https://storage.googleapis.com/kengi-tech-assets/logo.png" alt="Kengi Tech" height="40" style="height:40px;width:auto;display:inline-block;margin-bottom:12px;">
           <div style="color:rgba(255,255,255,0.85);font-size:13px;margin-top:6px;">${headerSubtitle}</div>
         </td>
       </tr>
