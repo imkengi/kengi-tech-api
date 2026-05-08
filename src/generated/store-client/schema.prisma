@@ -668,6 +668,8 @@ model Vehicle {
   updatedAt          DateTime  @updatedAt
 
   maintenanceLogs VehicleMaintenance[]
+  warehouse       Warehouse?
+  salesTrips      SalesTrip[]
 
   @@index([branchId])
   @@index([status])
@@ -1485,17 +1487,20 @@ model Warehouse {
   id          String   @id @default(cuid())
   code        String   @unique
   name        String
-  type        String   @default("main") // main | damaged | warranty | other
+  type        String   @default("main") // main | damaged | warranty | mobile | other
   branchId    String?
   description String?
   isDefault   Boolean  @default(false)
   isActive    Boolean  @default(true)
+  vehicleId   String?  @unique // when set, this warehouse is the mobile stock for a specific vehicle
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   stocks        WarehouseStock[]
   transfersFrom StockTransfer[]  @relation("TransferFrom")
   transfersTo   StockTransfer[]  @relation("TransferTo")
+  vehicle       Vehicle?         @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  salesTrips    SalesTrip[]
 
   @@index([branchId])
   @@index([type])
@@ -1557,6 +1562,65 @@ model StockTransferItem {
   transfer StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
 
   @@index([transferId])
+  @@index([productId])
+}
+
+// ─── Sales Trips (Bán hàng lưu động trên xe) ──────────────────────────────────
+// A SalesTrip orchestrates a van-sales run: pick a Vehicle, load stock from main
+// into the vehicle's mobile warehouse, sell on the road, then close out and
+// return any unsold stock back to main. The mobile warehouse is auto-created /
+// reused per-vehicle (Warehouse.vehicleId links them 1:1).
+
+model SalesTrip {
+  id            String    @id @default(cuid())
+  code          String    @unique
+  vehicleId     String
+  warehouseId   String
+  status        String    @default("planned") // planned | loaded | active | reconciling | closed | cancelled
+  driverId      String?
+  driverName    String?
+  salesUserId   String
+  salesUserName String?
+  branchId      String?
+  plannedDate   DateTime?
+  startedAt     DateTime?
+  closedAt      DateTime?
+  notes         String?
+  totalLoaded   Int       @default(0)
+  totalSold     Int       @default(0)
+  totalReturned Int       @default(0)
+  totalRevenue  Float     @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  vehicle   Vehicle         @relation(fields: [vehicleId], references: [id])
+  warehouse Warehouse       @relation(fields: [warehouseId], references: [id])
+  items     SalesTripItem[]
+
+  @@index([vehicleId])
+  @@index([warehouseId])
+  @@index([status])
+  @@index([branchId])
+  @@index([salesUserId])
+  @@index([createdAt])
+}
+
+model SalesTripItem {
+  id          String  @id @default(cuid())
+  tripId      String
+  productId   String
+  productName String
+  productSku  String?
+  loadedQty   Int     @default(0)
+  soldQty     Int     @default(0)
+  returnedQty Int     @default(0)
+  unitPrice   Float   @default(0)
+  notes       String?
+
+  trip SalesTrip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@unique([tripId, productId])
+  @@index([tripId])
   @@index([productId])
 }
 

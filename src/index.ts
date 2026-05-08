@@ -57,6 +57,7 @@ import upgradeRequestRoutes from './routes/upgradeRequests'
 import webhookRoutes from './routes/webhooks'
 import eventRoutes from './routes/events'
 import warehouseRoutes from './routes/warehouses'
+import salesTripRoutes from './routes/salesTrips'
 import { cacheDisconnect, cacheHealth } from './lib/cache'
 import { startAutoSync, stopAutoSync } from './cron/autoSync'
 import { setupWebSocket, getWebSocketStats } from './lib/websocket'
@@ -192,6 +193,7 @@ app.use('/api/online-orders', onlineOrderRoutes)
 app.use('/api/upgrade-requests', upgradeRequestRoutes)
 app.use('/api/webhooks', webhookRoutes)
 app.use('/api/warehouses', warehouseRoutes)
+app.use('/api/sales-trips', salesTripRoutes)
 
 import einvoiceRoutes from './routes/einvoice'
 app.use('/api/einvoice', einvoiceRoutes)
@@ -438,6 +440,66 @@ if (!process.env.PASSENGER_BASE_URI) {
                     `).catch(() => {})
                     await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "StockTransferItem_transferId_idx" ON "${schema_name}"."StockTransferItem"("transferId")`).catch(() => {})
                     await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "StockTransferItem_productId_idx" ON "${schema_name}"."StockTransferItem"("productId")`).catch(() => {})
+
+                    // Warehouse.vehicleId — links a warehouse to a specific vehicle (for sales trips)
+                    await registryPrisma.$executeRawUnsafe(`ALTER TABLE "${schema_name}"."Warehouse" ADD COLUMN IF NOT EXISTS "vehicleId" TEXT;`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "Warehouse_vehicleId_key" ON "${schema_name}"."Warehouse"("vehicleId") WHERE "vehicleId" IS NOT NULL`).catch(() => {})
+
+                    // SalesTrip + SalesTripItem (van-sales / mobile selling)
+                    await registryPrisma.$executeRawUnsafe(`
+                        CREATE TABLE IF NOT EXISTS "${schema_name}"."SalesTrip" (
+                            "id" TEXT NOT NULL,
+                            "code" TEXT NOT NULL,
+                            "vehicleId" TEXT NOT NULL,
+                            "warehouseId" TEXT NOT NULL,
+                            "status" TEXT NOT NULL DEFAULT 'planned',
+                            "driverId" TEXT,
+                            "driverName" TEXT,
+                            "salesUserId" TEXT NOT NULL,
+                            "salesUserName" TEXT,
+                            "branchId" TEXT,
+                            "plannedDate" TIMESTAMP(3),
+                            "startedAt" TIMESTAMP(3),
+                            "closedAt" TIMESTAMP(3),
+                            "notes" TEXT,
+                            "totalLoaded" INTEGER NOT NULL DEFAULT 0,
+                            "totalSold" INTEGER NOT NULL DEFAULT 0,
+                            "totalReturned" INTEGER NOT NULL DEFAULT 0,
+                            "totalRevenue" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            CONSTRAINT "SalesTrip_pkey" PRIMARY KEY ("id"),
+                            CONSTRAINT "SalesTrip_code_key" UNIQUE ("code"),
+                            CONSTRAINT "SalesTrip_vehicleId_fkey" FOREIGN KEY ("vehicleId") REFERENCES "${schema_name}"."Vehicle"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+                            CONSTRAINT "SalesTrip_warehouseId_fkey" FOREIGN KEY ("warehouseId") REFERENCES "${schema_name}"."Warehouse"("id") ON DELETE RESTRICT ON UPDATE CASCADE
+                        )
+                    `).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SalesTrip_vehicleId_idx" ON "${schema_name}"."SalesTrip"("vehicleId")`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SalesTrip_warehouseId_idx" ON "${schema_name}"."SalesTrip"("warehouseId")`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SalesTrip_status_idx" ON "${schema_name}"."SalesTrip"("status")`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SalesTrip_branchId_idx" ON "${schema_name}"."SalesTrip"("branchId")`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SalesTrip_salesUserId_idx" ON "${schema_name}"."SalesTrip"("salesUserId")`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SalesTrip_createdAt_idx" ON "${schema_name}"."SalesTrip"("createdAt")`).catch(() => {})
+
+                    await registryPrisma.$executeRawUnsafe(`
+                        CREATE TABLE IF NOT EXISTS "${schema_name}"."SalesTripItem" (
+                            "id" TEXT NOT NULL,
+                            "tripId" TEXT NOT NULL,
+                            "productId" TEXT NOT NULL,
+                            "productName" TEXT NOT NULL,
+                            "productSku" TEXT,
+                            "loadedQty" INTEGER NOT NULL DEFAULT 0,
+                            "soldQty" INTEGER NOT NULL DEFAULT 0,
+                            "returnedQty" INTEGER NOT NULL DEFAULT 0,
+                            "unitPrice" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "notes" TEXT,
+                            CONSTRAINT "SalesTripItem_pkey" PRIMARY KEY ("id"),
+                            CONSTRAINT "SalesTripItem_tripId_productId_key" UNIQUE ("tripId", "productId"),
+                            CONSTRAINT "SalesTripItem_tripId_fkey" FOREIGN KEY ("tripId") REFERENCES "${schema_name}"."SalesTrip"("id") ON DELETE CASCADE ON UPDATE CASCADE
+                        )
+                    `).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SalesTripItem_tripId_idx" ON "${schema_name}"."SalesTripItem"("tripId")`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SalesTripItem_productId_idx" ON "${schema_name}"."SalesTripItem"("productId")`).catch(() => {})
 
                     // Seed default warehouses (idempotent — uses isDefault flag)
                     try {

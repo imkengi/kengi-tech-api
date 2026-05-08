@@ -1233,6 +1233,7 @@ exports.Prisma.WarehouseScalarFieldEnum = {
   description: 'description',
   isDefault: 'isDefault',
   isActive: 'isActive',
+  vehicleId: 'vehicleId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -1272,6 +1273,42 @@ exports.Prisma.StockTransferItemScalarFieldEnum = {
   productName: 'productName',
   productSku: 'productSku',
   quantity: 'quantity',
+  notes: 'notes'
+};
+
+exports.Prisma.SalesTripScalarFieldEnum = {
+  id: 'id',
+  code: 'code',
+  vehicleId: 'vehicleId',
+  warehouseId: 'warehouseId',
+  status: 'status',
+  driverId: 'driverId',
+  driverName: 'driverName',
+  salesUserId: 'salesUserId',
+  salesUserName: 'salesUserName',
+  branchId: 'branchId',
+  plannedDate: 'plannedDate',
+  startedAt: 'startedAt',
+  closedAt: 'closedAt',
+  notes: 'notes',
+  totalLoaded: 'totalLoaded',
+  totalSold: 'totalSold',
+  totalReturned: 'totalReturned',
+  totalRevenue: 'totalRevenue',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.SalesTripItemScalarFieldEnum = {
+  id: 'id',
+  tripId: 'tripId',
+  productId: 'productId',
+  productName: 'productName',
+  productSku: 'productSku',
+  loadedQty: 'loadedQty',
+  soldQty: 'soldQty',
+  returnedQty: 'returnedQty',
+  unitPrice: 'unitPrice',
   notes: 'notes'
 };
 
@@ -1381,6 +1418,8 @@ exports.Prisma.ModelName = {
   WarehouseStock: 'WarehouseStock',
   StockTransfer: 'StockTransfer',
   StockTransferItem: 'StockTransferItem',
+  SalesTrip: 'SalesTrip',
+  SalesTripItem: 'SalesTripItem',
   StorageFile: 'StorageFile'
 };
 

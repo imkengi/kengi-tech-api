@@ -351,7 +351,7 @@ export const UpdateReturnSchema = CreateReturnSchema.partial()
 
 
 // ─── Warehouses ───────────────────────────────────────────────────────────────
-export const WAREHOUSE_TYPES = ['main', 'damaged', 'warranty', 'other'] as const
+export const WAREHOUSE_TYPES = ['main', 'damaged', 'warranty', 'mobile', 'other'] as const
 
 export const CreateWarehouseSchema = z.object({
     name: z.string().min(1, 'Tên kho không được để trống').max(200),
@@ -383,6 +383,54 @@ export const CreateStockTransferSchema = z.object({
     (data) => data.fromWarehouseId !== data.toWarehouseId || (!data.fromWarehouseId && !data.toWarehouseId),
     { message: 'Kho nguồn và kho đích không được trùng nhau', path: ['toWarehouseId'] },
 )
+
+// ─── Sales Trips (Bán hàng lưu động trên xe) ──────────────────────────────────
+const SalesTripItemInputSchema = z.object({
+    productId: z.string().min(1, 'productId là bắt buộc'),
+    quantity: z.number().int().min(1, 'Số lượng phải lớn hơn 0'),
+    unitPrice: z.number().min(0).optional(),
+    notes: z.string().max(500).optional().nullable(),
+})
+
+export const CreateSalesTripSchema = z.object({
+    vehicleId: z.string().min(1, 'Vui lòng chọn xe cho chuyến bán hàng'),
+    plannedDate: z.string().optional().nullable(),
+    notes: z.string().max(1000).optional().nullable(),
+    items: z.array(SalesTripItemInputSchema).optional().default([]),
+    driverId: z.string().optional().nullable(),
+    driverName: z.string().max(200).optional().nullable(),
+})
+
+export const LoadSalesTripSchema = z.object({
+    items: z.array(SalesTripItemInputSchema).min(1, 'Cần ít nhất 1 sản phẩm để chất lên xe'),
+})
+
+export const SalesTripSaleSchema = z.object({
+    items: z.array(z.object({
+        productId: z.string().min(1),
+        quantity: z.number().int().min(1, 'Số lượng phải lớn hơn 0'),
+        unitPrice: z.number().min(0).optional(),
+        notes: z.string().max(500).optional().nullable(),
+    })).min(1, 'Cần ít nhất 1 sản phẩm'),
+    notes: z.string().max(1000).optional().nullable(),
+})
+
+export const ReconcileSalesTripSchema = z.object({
+    items: z.array(z.object({
+        productId: z.string().min(1),
+        actualReturnedQty: z.number().int().min(0),
+        notes: z.string().max(500).optional().nullable(),
+    })).optional().default([]),
+    notes: z.string().max(1000).optional().nullable(),
+})
+
+export const CloseSalesTripSchema = z.object({
+    notes: z.string().max(1000).optional().nullable(),
+})
+
+export const CancelSalesTripSchema = z.object({
+    reason: z.string().max(500).optional().nullable(),
+})
 
 // ─── Announcements ────────────────────────────────────────────────────────────
 export const CreateAnnouncementSchema = z.object({
