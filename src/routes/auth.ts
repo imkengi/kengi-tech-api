@@ -6,6 +6,8 @@ import { execSync } from 'child_process'
 import { registryPrisma, getStorePrisma, branchIdToSchema, createBranchSchema, dropBranchSchema } from '../lib/prisma'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
+import { generateOtpCode, saveOtp, verifyOtp, consumeOtp, canSendOtp, OTP_CONFIG } from '../lib/otp'
+import { sendEmail, buildOtpEmail } from '../services/emailService'
 
 const router = Router()
 const JWT_SECRET = process.env.JWT_SECRET || ''
@@ -277,6 +279,32 @@ router.post('/login', async (req: Request, res: Response) => {
 
         const valid = await bcrypt.compare(password, user.password)
         if (!valid) { res.status(401).json({ success: false, error: 'Email hoặc mật khẩu không đúng' }); return }
+
+        // 3.5 — 2FA gate: if enabled, send OTP and stop here. Client must call
+        //      /api/auth/verify-otp with purpose=login_2fa to complete login.
+        if (user.twoFactorEnabled) {
+            const code = generateOtpCode()
+            saveOtp('login_2fa', store.code, user.email, code)
+            const { subject, html, text } = buildOtpEmail(code, 'login')
+            try {
+                await sendEmail(user.email, subject, html, text)
+            } catch (e: any) {
+                console.error('2FA OTP email failed:', e?.message || e)
+                res.status(500).json({ success: false, error: 'Không thể gửi mã xác minh. Vui lòng thử lại.' })
+                return
+            }
+            res.json({
+                success: true,
+                data: {
+                    requiresOtp: true,
+                    email: user.email,
+                    storeCode: store.code,
+                    branchId: targetBranchId,
+                    expiresInMinutes: OTP_CONFIG.OTP_TTL_MIN,
+                },
+            })
+            return
+        }
 
         // 4. Get branch info
         const effectiveBranchId = targetBranchId || user.branchId
@@ -815,403 +843,193 @@ router.post('/logout', async (req: Request, res: Response) => {
     res.json({ success: true })
 })
 
-// ─── POST /api/auth/repair-schema — Fix a broken store schema ────────────────
-// Use when a store's PostgreSQL schema exists but tables were never pushed
-router.post('/repair-schema', async (req: Request, res: Response) => {
+// ─── POST /api/auth/send-otp ─────────────────────────────────────────────────
+// Body: { email, storeCode, purpose: 'login_2fa' | 'password_reset' }
+//   - login_2fa: resend OTP (requires the user to have already completed /login).
+//                We re-check that 2FA is enabled before issuing.
+//   - password_reset: anyone may request. We always respond success to avoid
+//                     leaking which emails exist.
+router.post('/send-otp', async (req: Request, res: Response) => {
     try {
-        const { storeCode, adminSecret } = req.body
-        // Simple secret protection (use env var or hardcoded for now)
-        if (adminSecret !== (process.env.ADMIN_REPAIR_SECRET || 'kengi-repair-2026')) {
-            return res.status(403).json({ success: false, error: 'Invalid admin secret' })
+        const { email, storeCode, purpose } = req.body || {}
+        if (!email?.trim() || !storeCode?.trim()) {
+            return res.status(400).json({ success: false, error: 'Email và mã cửa hàng là bắt buộc' })
         }
-        if (!storeCode) {
-            return res.status(400).json({ success: false, error: 'storeCode required' })
-        }
-
-        const trimmedCode = storeCode.trim()
-        // Try exact match first, then case-insensitive
-        const store = await registryPrisma.store.findFirst({
-            where: { code: { equals: trimmedCode, mode: 'insensitive' } },
-        })
-        if (!store) {
-            return res.status(404).json({ success: false, error: `Store "${trimmedCode}" not found in registry` })
+        if (purpose !== 'login_2fa' && purpose !== 'password_reset') {
+            return res.status(400).json({ success: false, error: 'Loại yêu cầu không hợp lệ' })
         }
 
-        const schema = store.schema
-        console.log(`🔧 [RepairSchema] Repairing schema "${schema}" for store "${store.code}"...`)
+        const cooldown = canSendOtp(purpose, storeCode, email)
+        if (!cooldown.ok) {
+            return res.status(429).json({ success: false, error: `Vui lòng đợi ${cooldown.retryAfter}s trước khi gửi lại mã` })
+        }
 
-        // Push tables into the existing schema
-        await createBranchSchema(schema)
+        const store = await registryPrisma.store.findFirst({ where: { code: storeCode } })
+        if (!store || store.status !== 'active') {
+            // password_reset: silent success to prevent enumeration
+            if (purpose === 'password_reset') return res.json({ success: true, data: { sent: true } })
+            return res.status(404).json({ success: false, error: 'Mã cửa hàng không tồn tại' })
+        }
 
-        // Check if Branch table has any rows
-        const storePrisma = getStorePrisma(schema)
-        const branchCount = await storePrisma.branch.count()
-        
-        if (branchCount === 0) {
-            // Seed a main branch
-            const branch = await storePrisma.branch.create({
+        const storePrisma = getStorePrisma(store.schema)
+        const user = await storePrisma.user.findFirst({ where: { email: email.trim().toLowerCase() } })
+
+        if (purpose === 'login_2fa') {
+            if (!user || !user.twoFactorEnabled) {
+                return res.status(400).json({ success: false, error: 'Không đủ điều kiện để gửi mã 2FA' })
+            }
+        } else if (purpose === 'password_reset') {
+            // Silent success if user not found
+            if (!user) return res.json({ success: true, data: { sent: true } })
+        }
+
+        const code = generateOtpCode()
+        saveOtp(purpose, store.code, email, code)
+        const { subject, html, text } = buildOtpEmail(code, purpose === 'login_2fa' ? 'login' : 'reset')
+        try {
+            await sendEmail(email.trim().toLowerCase(), subject, html, text)
+        } catch (e: any) {
+            console.error('Send OTP email failed:', e?.message || e)
+            return res.status(500).json({ success: false, error: 'Không thể gửi email. Vui lòng thử lại.' })
+        }
+
+        res.json({ success: true, data: { sent: true, expiresInMinutes: OTP_CONFIG.OTP_TTL_MIN } })
+    } catch (err: any) {
+        console.error('send-otp error:', err?.message || err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// ─── POST /api/auth/verify-otp ───────────────────────────────────────────────
+// Body: { email, storeCode, code, purpose, branchId? }
+//   - login_2fa: completes login. Returns full token pair + user/store/branch.
+//   - password_reset: returns a short-lived reset token (10m JWT) to be passed
+//                     to /reset-password. The OTP is consumed here.
+router.post('/verify-otp', async (req: Request, res: Response) => {
+    try {
+        const { email, storeCode, code, purpose, branchId } = req.body || {}
+        if (!email?.trim() || !storeCode?.trim() || !code || !purpose) {
+            return res.status(400).json({ success: false, error: 'Thiếu thông tin xác minh' })
+        }
+        if (purpose !== 'login_2fa' && purpose !== 'password_reset') {
+            return res.status(400).json({ success: false, error: 'Loại yêu cầu không hợp lệ' })
+        }
+
+        const result = verifyOtp(purpose, storeCode, email, String(code))
+        if (!result.ok) {
+            const msg = {
+                not_found: 'Mã không tồn tại hoặc đã hết hạn',
+                expired: 'Mã đã hết hạn',
+                too_many_attempts: 'Quá nhiều lần thử. Vui lòng yêu cầu mã mới.',
+                invalid: 'Mã không đúng',
+            }[result.reason]
+            return res.status(400).json({ success: false, error: msg })
+        }
+
+        const store = await registryPrisma.store.findFirst({ where: { code: storeCode } })
+        if (!store || store.status !== 'active') {
+            return res.status(404).json({ success: false, error: 'Cửa hàng không tồn tại' })
+        }
+        const storePrisma = getStorePrisma(store.schema)
+        const user = await storePrisma.user.findFirst({ where: { email: email.trim().toLowerCase() } })
+        if (!user) return res.status(404).json({ success: false, error: 'Người dùng không tồn tại' })
+
+        if (purpose === 'login_2fa') {
+            if (user.isLocked) return res.status(403).json({ success: false, error: 'Tài khoản đã bị khóa' })
+            consumeOtp('login_2fa', store.code, email)
+
+            const effectiveBranchId = branchId || user.branchId
+            let branch = null
+            if (effectiveBranchId) {
+                branch = await storePrisma.branch.findUnique({
+                    where: { id: effectiveBranchId },
+                    select: { id: true, name: true, code: true, address: true, isMainBranch: true },
+                })
+            }
+            const settings = await storePrisma.storeSettings.findUnique({ where: { id: 'default' } })
+
+            const tokenPayload = {
+                userId: user.id, email: user.email, role: user.role,
+                storeId: store.id, storeCode: store.code,
+                branchId: effectiveBranchId, branchSchema: store.schema,
+                storeSchema: store.schema, isMainBranch: branch?.isMainBranch || false,
+            }
+            const { accessToken, refreshToken } = createTokenPair(tokenPayload)
+
+            return res.json({
+                success: true,
                 data: {
-                    name: 'Chi nhánh chính',
-                    code: 'CN01',
-                    isMainBranch: true,
-                    address: store.address,
+                    token: accessToken,
+                    refreshToken,
+                    user: {
+                        id: user.id, email: user.email, name: user.name,
+                        role: user.role, phone: user.phone,
+                        avatar: user.avatar, twoFactorEnabled: user.twoFactorEnabled,
+                    },
+                    store: {
+                        id: store.id, code: store.code, name: store.name,
+                        address: settings?.address || store.address,
+                        phone: settings?.phone || store.phone,
+                        logo: settings?.logo || null,
+                    },
+                    branch,
                 },
             })
-            console.log(`  ✅ Created main branch: ${branch.id}`)
-
-            // Check if admin user exists
-            const userCount = await storePrisma.user.count()
-            if (userCount === 0) {
-                const bcryptLib = await import('bcryptjs')
-                const hashedPw = await bcryptLib.hash('Admin123', 10)
-                await storePrisma.user.create({
-                    data: {
-                        email: 'admin@kengi.vn',
-                        name: 'Admin',
-                        password: hashedPw,
-                        role: 'admin',
-                        branchId: branch.id,
-                    },
-                })
-                console.log(`  ✅ Created admin user: admin@kengi.vn / Admin123`)
-            }
-
-            // Check if store settings exist
-            const settingsCount = await storePrisma.storeSettings.count()
-            if (settingsCount === 0) {
-                await storePrisma.storeSettings.create({
-                    data: {
-                        id: 'default',
-                        name: store.name,
-                        address: store.address,
-                        phone: store.phone,
-                    },
-                })
-                console.log(`  ✅ Created store settings`)
-            }
         }
 
-        res.json({
-            success: true,
-            message: `Schema "${schema}" repaired successfully for store "${store.code}"`,
-            data: { schema, branchCount: await storePrisma.branch.count() },
-        })
+        // password_reset: issue a short-lived reset token; OTP is consumed.
+        consumeOtp('password_reset', store.code, email)
+        const resetToken = jwt.sign(
+            { purpose: 'password_reset', userId: user.id, storeId: store.id, storeCode: store.code },
+            JWT_SECRET!,
+            { expiresIn: '10m' } as any,
+        )
+        return res.json({ success: true, data: { resetToken, expiresInMinutes: 10 } })
     } catch (err: any) {
-        console.error('Repair schema error:', err)
-        res.status(500).json({ success: false, error: 'Repair failed', detail: err?.message || String(err) })
+        console.error('verify-otp error:', err?.message || err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
     }
 })
 
-// ─── GET /api/auth/debug-stores — Full diagnostic endpoint ────────────────
-router.get('/debug-stores', async (req: Request, res: Response) => {
+// ─── POST /api/auth/reset-password ───────────────────────────────────────────
+// Body: { resetToken, newPassword }
+// resetToken comes from a successful /verify-otp with purpose=password_reset.
+router.post('/reset-password', async (req: Request, res: Response) => {
     try {
-        const stores = await registryPrisma.store.findMany({ orderBy: { createdAt: 'asc' } })
-
-        // Check for duplicate schemas
-        const schemaMap = new Map<string, string[]>()
-        for (const s of stores) {
-            const list = schemaMap.get(s.schema) || []
-            list.push(s.code)
-            schemaMap.set(s.schema, list)
+        const { resetToken, newPassword } = req.body || {}
+        if (!resetToken || !newPassword) {
+            return res.status(400).json({ success: false, error: 'Thiếu thông tin' })
         }
-        const duplicates: Record<string, string[]> = {}
-        for (const [schema, codes] of schemaMap) {
-            if (codes.length > 1) duplicates[schema] = codes
+        if (newPassword.length < 8 || !/[A-Z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+            return res.status(400).json({ success: false, error: 'Mật khẩu mới phải có ít nhất 8 ký tự, bao gồm chữ hoa và số' })
         }
 
-        // Check existing schemas in PostgreSQL
-        const existingSchemas = await registryPrisma.$queryRaw<{ schema_name: string }[]>`
-            SELECT schema_name FROM information_schema.schemata
-            WHERE schema_name LIKE 'branch_%' OR schema_name LIKE 'store_%' OR schema_name LIKE 'pending_%'
-        `
-        const existingSet = new Set(existingSchemas.map(s => s.schema_name))
+        let payload: any
+        try {
+            payload = jwt.verify(resetToken, JWT_SECRET!)
+        } catch {
+            return res.status(401).json({ success: false, error: 'Token đặt lại đã hết hạn hoặc không hợp lệ' })
+        }
+        if (payload?.purpose !== 'password_reset' || !payload?.userId || !payload?.storeId) {
+            return res.status(401).json({ success: false, error: 'Token không hợp lệ' })
+        }
 
-        // Check expected schema mapping + user counts
-        const storeDetails = await Promise.all(stores.map(async (s) => {
-            const safe = s.id.toLowerCase().replace(/[^a-z0-9]/g, '')
-            const expected = `branch_${safe}`
-            const schemaExists = existingSet.has(s.schema)
-            let userCount = 0
-            let missingColumns: string[] = []
-            if (schemaExists) {
-                try {
-                    const uc = await registryPrisma.$queryRawUnsafe<{ count: bigint }[]>(
-                        `SELECT COUNT(*) as count FROM "${s.schema}"."User"`
-                    )
-                    userCount = Number(uc[0]?.count || 0)
+        const store = await registryPrisma.store.findUnique({ where: { id: payload.storeId } })
+        if (!store) return res.status(404).json({ success: false, error: 'Cửa hàng không tồn tại' })
 
-                    const columns = await registryPrisma.$queryRawUnsafe<{ column_name: string }[]>(
-                        `SELECT column_name FROM information_schema.columns WHERE table_schema = $1 AND table_name = 'User'`,
-                        s.schema
-                    )
-                    const colSet = new Set(columns.map(c => c.column_name))
-                    const required = ['id', 'email', 'name', 'password', 'role', 'isLocked', 'twoFactorEnabled', 'twoFactorSecret', 'trustedDevices', 'permissions', 'branchId']
-                    missingColumns = required.filter(c => !colSet.has(c))
-                } catch { }
-            }
-            return {
-                code: s.code, id: s.id, name: s.name,
-                schema: s.schema, expectedSchema: expected,
-                schemaMismatch: s.schema !== expected,
-                schemaExists, userCount, missingColumns,
-                status: s.status, plan: s.plan,
-                createdAt: s.createdAt,
-            }
-        }))
+        const storePrisma = getStorePrisma(store.schema)
+        const hashed = await bcrypt.hash(newPassword, 10)
+        await storePrisma.user.update({ where: { id: payload.userId }, data: { password: hashed } })
 
-        // Orphan schemas
-        const usedSchemas = new Set(stores.map(s => s.schema))
-        const orphans = existingSchemas.filter(s => !usedSchemas.has(s.schema_name)).map(s => s.schema_name)
+        // Invalidate all refresh tokens for this user (force re-login everywhere)
+        for (const [token, data] of refreshTokenStore) {
+            if (data.userId === payload.userId) refreshTokenStore.delete(token)
+        }
 
-        res.json({
-            success: true,
-            totalStores: stores.length,
-            duplicateSchemas: duplicates,
-            orphanSchemas: orphans,
-            stores: storeDetails,
-        })
+        res.json({ success: true, message: 'Đặt lại mật khẩu thành công' })
     } catch (err: any) {
-        res.status(500).json({ success: false, error: err.message })
-    }
-})
-
-// ─── POST /api/auth/restore-schemas — Restore broken links ────────────────
-router.post('/restore-schemas', async (req: Request, res: Response) => {
-    try {
-        // Restore KENGI
-        await registryPrisma.store.updateMany({
-            where: { code: 'KENGI' },
-            data: { schema: 'branch_cmm64d5kt0000s601vr4djk39' }
-        })
-        // Restore KENGIONLINE
-        await registryPrisma.store.updateMany({
-            where: { code: 'KENGIONLINE' },
-            data: { schema: 'store_kengi' }
-        })
-        res.json({ success: true, message: 'Schemas restored for KENGI and KENGIONLINE.' })
-    } catch (err: any) {
-        res.status(500).json({ success: false, error: err.message })
-    }
-})
-
-// ─── POST /api/auth/seed-kengionline — Massive seed for KENGIONLINE ────────────────
-router.post('/seed-kengionline', async (req: Request, res: Response) => {
-    try {
-        const store = await registryPrisma.store.findFirst({ where: { code: 'KENGIONLINE' } })
-        if (!store) throw new Error('Store KENGIONLINE not found!')
-        
-        const db = getStorePrisma(store.schema)
-        const hashedPw = await bcrypt.hash('admin123', 10) // Ensure admin123
-
-        // Branch
-        let branch = await db.branch.findFirst({ where: { isMainBranch: true } })
-        if (!branch) {
-            branch = await db.branch.create({ data: { name: 'Chi nhánh chính', code: 'CN01', isMainBranch: true, address: '123 Nguyễn Huệ, Q1, TP.HCM', phone: '028 1234 5678' } })
-        }
-
-        // Users
-        const usersData = [
-            { email: 'admin@kengi.vn', name: 'Admin Kengi', role: 'admin', code: 'NV001', password: hashedPw },
-            { email: 'manager@kengi.vn', name: 'Quản lý', role: 'manager', code: 'NV002', password: await bcrypt.hash('manager123', 10) },
-            { email: 'cashier@kengi.vn', name: 'Thu ngân 1', role: 'cashier', code: 'NV003', password: await bcrypt.hash('cashier123', 10) },
-            { email: 'cashier2@kengi.vn', name: 'Thu ngân 2', role: 'cashier', code: 'NV004', password: await bcrypt.hash('cashier123', 10) },
-        ]
-        const users: any[] = []
-        for (const u of usersData) {
-            let existing = await db.user.findFirst({ where: { email: u.email } })
-            if (!existing) {
-                existing = await db.user.create({ data: { ...u, branchId: branch.id, phone: '0901234567' } })
-            } else {
-                existing = await db.user.update({ where: { id: existing.id }, data: { password: u.password } })
-            }
-            users.push(existing)
-        }
-
-        // Categories
-        const catIds: Record<string, string> = {}
-        const cats = [
-            { name: 'Thời trang nam', children: ['Áo thun', 'Áo sơ mi', 'Quần Jean', 'Quần Kaki', 'Phụ kiện nam'] },
-            { name: 'Thời trang nữ', children: ['Đầm váy', 'Áo kiểu', 'Quần ống rộng', 'Túi xách', 'Phụ kiện nữ'] },
-            { name: 'Điện tử & Phụ kiện', children: ['Điện thoại di động', 'Tai nghe', 'Cáp sạc', 'Pin dự phòng', 'Ốp lưng'] },
-            { name: 'Gia dụng', children: ['Đồ bếp', 'Vệ sinh nhà cửa', 'Trang trí'] },
-        ]
-        for (const { name, children } of cats) {
-            let parent = await db.category.findFirst({ where: { name, level: 1 } })
-            if (!parent) parent = await db.category.create({ data: { name, level: 1 } })
-            catIds[name] = parent.id
-            for (const child of children) {
-                let sub = await db.category.findFirst({ where: { name: child, level: 2, parentId: parent.id } })
-                if (!sub) sub = await db.category.create({ data: { name: child, level: 2, parentId: parent.id } })
-                catIds[`${name}/${child}`] = sub.id
-            }
-        }
-
-        // Products
-        const existingProductsCount = await db.product.count()
-        let dbProducts: any[] = await db.product.findMany()
-
-        if (existingProductsCount < 30) {
-            const newProducts = []
-            let skuCounter = 100
-            for (const catName of Object.keys(catIds)) {
-                if (!catName.includes('/')) continue // skip parents
-                for (let i = 0; i < 4; i++) {
-                    skuCounter++
-                    const basePrice = (Math.floor(Math.random() * 50) + 10) * 10000
-                    newProducts.push({
-                        sku: `SP${skuCounter}`,
-                        name: `Sản phẩm ${catName.split('/')[1]} cao cấp ${i+1}`,
-                        costPrice: basePrice * 0.6,
-                        sellingPrice: basePrice,
-                        stock: Math.floor(Math.random() * 200) + 20,
-                        categoryId: catIds[catName],
-                        baseUnit: 'Cái',
-                        minStock: 10,
-                    })
-                }
-            }
-            await db.product.createMany({ data: newProducts, skipDuplicates: true })
-            dbProducts = await db.product.findMany()
-        }
-
-        // Customer Groups
-        let groupVIP = await db.customerGroup.findFirst({ where: { name: 'VIP' } })
-        if (!groupVIP) groupVIP = await db.customerGroup.create({ data: { name: 'VIP', discount: 10, color: '#f59e0b' } })
-        
-        let groupRegular = await db.customerGroup.findFirst({ where: { name: 'Thường' } })
-        if (!groupRegular) groupRegular = await db.customerGroup.create({ data: { name: 'Thường', discount: 0, color: '#6b7280' } })
-
-        // Customers
-        let dbCustomers: any[] = await db.customer.findMany()
-        if (dbCustomers.length < 20) {
-            const newCusts = []
-            const ho = ['Nguyễn', 'Trần', 'Lê', 'Phạm', 'Hoàng', 'Huỳnh', 'Phan', 'Vũ', 'Võ', 'Đặng', 'Bùi']
-            const dem = ['Văn', 'Thị', 'Minh', 'Hữu', 'Thanh', 'Ngọc', 'Xuân', 'Thu', 'Đức', 'Hải']
-            const ten = ['An', 'Bình', 'Cường', 'Dũng', 'Em', 'Phong', 'Giang', 'Hùng', 'Linh', 'Mai', 'Nga']
-            
-            for (let i = 0; i < 30; i++) {
-                const isVip = Math.random() > 0.8
-                newCusts.push({
-                    code: `KH${1000 + i}`,
-                    name: `${ho[i%ho.length]} ${dem[i%dem.length]} ${ten[i%ten.length]}`,
-                    phone: `09${Math.floor(Math.random() * 100000000).toString().padStart(8, '0')}`,
-                    groupId: isVip ? groupVIP.id : groupRegular.id,
-                    totalSpent: 0
-                })
-            }
-            await db.customer.createMany({ data: newCusts, skipDuplicates: true })
-            dbCustomers = await db.customer.findMany()
-        }
-
-        // Transactions (90 days)
-        const txCount = await db.transaction.count()
-        let createdTxCount = 0
-        if (txCount < 500) {
-            const adminId = users[0].id
-            const baseDate = new Date()
-            const txsToCreate = []
-
-            for (let day = 0; day < 90; day++) {
-                const txDate = new Date(baseDate)
-                txDate.setDate(txDate.getDate() - day)
-                const isWeekend = txDate.getDay() === 0 || txDate.getDay() === 6
-                const numTx = isWeekend ? Math.floor(Math.random() * 20) + 10 : Math.floor(Math.random() * 10) + 5
-
-                for (let t = 0; t < numTx; t++) {
-                    const exactDate = new Date(txDate)
-                    exactDate.setHours(8 + Math.floor(Math.random() * 13), Math.floor(Math.random() * 60), Math.floor(Math.random() * 60), 0)
-
-                    const customer = Math.random() > 0.4 ? dbCustomers[Math.floor(Math.random() * dbCustomers.length)] : null
-                    const numItems = Math.floor(Math.random() * 4) + 1
-                    const shuffled = [...dbProducts].sort(() => Math.random() - 0.5).slice(0, numItems)
-                    
-                    const items = shuffled.map(p => {
-                        const qty = Math.floor(Math.random() * 3) + 1
-                        return { productId: p.id, productName: p.name, sku: p.sku, quantity: qty, unitPrice: p.sellingPrice, lineTotal: qty * p.sellingPrice }
-                    })
-                    const subtotal = items.reduce((s, i) => s + i.lineTotal, 0)
-                    let discount = 0
-                    if (customer && customer.groupId === groupVIP.id) discount = Math.round(subtotal * 0.1 / 1000) * 1000
-                    else if (Math.random() > 0.8) discount = Math.round(subtotal * 0.05 / 1000) * 1000
-                    const total = subtotal - discount
-
-                    await db.transaction.create({
-                        data: {
-                            receiptNumber: `HD${Date.now().toString().slice(-6)}-${String(day * 50 + t + 1).padStart(4, '0')}`,
-                            customerId: customer?.id || null,
-                            customerName: customer?.name || 'Khách lẻ',
-                            customerPhone: customer?.phone || null,
-                            subtotal, discount, total, tax: 0,
-                            status: 'completed',
-                            createdBy: adminId,
-                            branchId: branch!.id,
-                            createdAt: exactDate,
-                            items: { create: items },
-                            payments: { create: [{ amount: total, type: Math.random() > 0.4 ? 'cash' : 'transfer' }] },
-                        },
-                    })
-                    createdTxCount++
-                }
-            }
-        }
-
-        // Expenses
-        const expCount = await db.expense.count()
-        if (expCount < 30) {
-            const expCats = ['Thuê mặt bằng', 'Lương nhân viên', 'Điện nước', 'Marketing', 'Vận chuyển', 'Nhập hàng', 'Tiếp khách']
-            const baseDate = new Date()
-            for (let i = 0; i < 150; i++) {
-                const d = new Date(baseDate)
-                d.setDate(d.getDate() - Math.floor(Math.random() * 90))
-                await db.expense.create({
-                    data: {
-                        description: `${expCats[i % expCats.length]}`,
-                        amount: (Math.floor(Math.random() * 50) + 5) * 100000,
-                        category: expCats[i % expCats.length],
-                        date: d,
-                        branchId: branch!.id,
-                    },
-                })
-            }
-        }
-
-        res.json({ success: true, message: `Massive seed complete! Products: ${dbProducts.length}, Customers: ${dbCustomers.length}, New Transactions: ${createdTxCount}` })
-    } catch (err: any) {
-        console.error(err)
-        res.status(500).json({ success: false, error: err.message })
-    }
-})
-
-// ─── POST /api/auth/migrate-all-stores — Push schema to all stores ────────────────
-router.post('/migrate-all-stores', async (req: Request, res: Response) => {
-    try {
-        const stores = await registryPrisma.store.findMany({ where: { status: 'active' } })
-        const results = []
-
-        for (const store of stores) {
-            const schemaName = store.schema
-            try {
-                // Ensure the PostgreSQL schema exists
-                await registryPrisma.$executeRawUnsafe(`CREATE SCHEMA IF NOT EXISTS "${schemaName}"`)
-
-                const base = (process.env.DATABASE_URL || '').replace(/[?&]schema=[^&]*/g, '').replace(/\?$/, '')
-                const sep = base.includes('?') ? '&' : '?'
-                const storeUrl = `${base}${sep}schema=${schemaName}`
-
-                execSync('npx prisma db push --schema=prisma/schema-store.prisma --skip-generate --accept-data-loss', {
-                    stdio: 'pipe',
-                    env: { ...process.env, STORE_DATABASE_URL: storeUrl, DATABASE_URL: storeUrl },
-                })
-                
-                results.push({ store: store.code, schema: schemaName, ok: true })
-            } catch (err: any) {
-                const msg = err.stderr?.toString() || err.message || String(err)
-                results.push({ store: store.code, schema: schemaName, ok: false, error: msg })
-            }
-        }
-        res.json({ success: true, results })
-    } catch (err: any) {
-        res.status(500).json({ success: false, error: err.message })
+        console.error('reset-password error:', err?.message || err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
     }
 })
 
