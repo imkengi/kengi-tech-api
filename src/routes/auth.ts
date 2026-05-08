@@ -169,6 +169,23 @@ router.post('/signup', async (req: Request, res: Response) => {
             },
         })
 
+        // Seed default warehouses (main / damaged / warranty)
+        try {
+            const suffix = finalSchema.slice(-6).toUpperCase()
+            const defaults = [
+                { code: `WH-MAIN-${suffix}`, name: 'Kho chính', type: 'main', description: 'Kho hàng hóa chính' },
+                { code: `WH-DAMAGED-${suffix}`, name: 'Kho hàng hư hỏng', type: 'damaged', description: 'Kho chứa hàng bị hư hỏng, không bán được' },
+                { code: `WH-WARRANTY-${suffix}`, name: 'Kho hàng bảo hành', type: 'warranty', description: 'Kho chứa hàng đang bảo hành / đã thu hồi để bảo hành' },
+            ]
+            for (const w of defaults) {
+                await (storePrisma as any).warehouse.create({
+                    data: { ...w, isDefault: true, isActive: true },
+                }).catch(() => {})
+            }
+        } catch (e: any) {
+            console.warn('[Signup] Default warehouse seeding failed:', e?.message)
+        }
+
         console.log(`✅ [Signup] Store "${store.code}" → schema "${finalSchema}"`)
 
         // 7. Sign JWT with branch schema + refresh token
@@ -518,6 +535,23 @@ router.post('/add-branch', authMiddleware, async (req: AuthRequest, res: Respons
         // Copy store settings
         if (storeSettings) {
             await newPrisma.storeSettings.create({ data: { ...storeSettings } })
+        }
+
+        // Seed default warehouses for the new branch
+        try {
+            const suffix = newSchema.slice(-6).toUpperCase()
+            const defaults = [
+                { code: `WH-MAIN-${suffix}`, name: 'Kho chính', type: 'main', description: 'Kho hàng hóa chính' },
+                { code: `WH-DAMAGED-${suffix}`, name: 'Kho hàng hư hỏng', type: 'damaged', description: 'Kho chứa hàng bị hư hỏng, không bán được' },
+                { code: `WH-WARRANTY-${suffix}`, name: 'Kho hàng bảo hành', type: 'warranty', description: 'Kho chứa hàng đang bảo hành / đã thu hồi để bảo hành' },
+            ]
+            for (const w of defaults) {
+                await (newPrisma as any).warehouse.create({
+                    data: { ...w, isDefault: true, isActive: true },
+                }).catch(() => {})
+            }
+        } catch (e: any) {
+            console.warn('[AddBranch] Default warehouse seeding failed:', e?.message)
         }
 
         console.log(`✅ [AddBranch] Branch "${name}" (${code}) → schema "${newSchema}"`)

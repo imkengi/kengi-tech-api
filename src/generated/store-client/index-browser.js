@@ -429,6 +429,7 @@ exports.Prisma.PurchaseOrderScalarFieldEnum = {
   notes: 'notes',
   expectedDate: 'expectedDate',
   receivedDate: 'receivedDate',
+  branchId: 'branchId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -960,6 +961,7 @@ exports.Prisma.StoreSettingsScalarFieldEnum = {
   notifyNewOrder: 'notifyNewOrder',
   notifyDailyReport: 'notifyDailyReport',
   notifyWeeklyReport: 'notifyWeeklyReport',
+  autoRestockOnReturn: 'autoRestockOnReturn',
   salesCanCheckout: 'salesCanCheckout',
   updatedAt: 'updatedAt'
 };
@@ -1222,6 +1224,57 @@ exports.Prisma.HKDRevenueEntryScalarFieldEnum = {
   updatedAt: 'updatedAt'
 };
 
+exports.Prisma.WarehouseScalarFieldEnum = {
+  id: 'id',
+  code: 'code',
+  name: 'name',
+  type: 'type',
+  branchId: 'branchId',
+  description: 'description',
+  isDefault: 'isDefault',
+  isActive: 'isActive',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.WarehouseStockScalarFieldEnum = {
+  id: 'id',
+  warehouseId: 'warehouseId',
+  productId: 'productId',
+  productName: 'productName',
+  productSku: 'productSku',
+  quantity: 'quantity',
+  notes: 'notes',
+  updatedAt: 'updatedAt',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.StockTransferScalarFieldEnum = {
+  id: 'id',
+  code: 'code',
+  fromWarehouseId: 'fromWarehouseId',
+  toWarehouseId: 'toWarehouseId',
+  status: 'status',
+  reason: 'reason',
+  notes: 'notes',
+  branchId: 'branchId',
+  userId: 'userId',
+  userName: 'userName',
+  totalQuantity: 'totalQuantity',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.StockTransferItemScalarFieldEnum = {
+  id: 'id',
+  transferId: 'transferId',
+  productId: 'productId',
+  productName: 'productName',
+  productSku: 'productSku',
+  quantity: 'quantity',
+  notes: 'notes'
+};
+
 exports.Prisma.StorageFileScalarFieldEnum = {
   id: 'id',
   name: 'name',
@@ -1324,6 +1377,10 @@ exports.Prisma.ModelName = {
   EInvoiceConfig: 'EInvoiceConfig',
   EInvoice: 'EInvoice',
   HKDRevenueEntry: 'HKDRevenueEntry',
+  Warehouse: 'Warehouse',
+  WarehouseStock: 'WarehouseStock',
+  StockTransfer: 'StockTransfer',
+  StockTransferItem: 'StockTransferItem',
   StorageFile: 'StorageFile'
 };
 

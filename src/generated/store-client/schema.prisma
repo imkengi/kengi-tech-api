@@ -1136,6 +1136,8 @@ model StoreSettings {
 
   notifyWeeklyReport Boolean @default(true)
 
+  autoRestockOnReturn Boolean @default(true)
+
   // Permission: allow Sales role to checkout/sell directly. When false, Sales can only create SalesOrder
   salesCanCheckout Boolean @default(false)
 
@@ -1475,6 +1477,87 @@ model HKDRevenueEntry {
   @@index([date])
   @@index([branchId])
   @@index([createdAt])
+}
+
+// ─── Warehouses (Kho hàng — chính / hư hỏng / bảo hành / khác) ────────────────
+
+model Warehouse {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  type        String   @default("main") // main | damaged | warranty | other
+  branchId    String?
+  description String?
+  isDefault   Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  stocks        WarehouseStock[]
+  transfersFrom StockTransfer[]  @relation("TransferFrom")
+  transfersTo   StockTransfer[]  @relation("TransferTo")
+
+  @@index([branchId])
+  @@index([type])
+  @@index([isActive])
+}
+
+model WarehouseStock {
+  id          String   @id @default(cuid())
+  warehouseId String
+  productId   String
+  productName String
+  productSku  String?
+  quantity    Int      @default(0)
+  notes       String?
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@unique([warehouseId, productId])
+  @@index([warehouseId])
+  @@index([productId])
+}
+
+model StockTransfer {
+  id              String   @id @default(cuid())
+  code            String   @unique
+  fromWarehouseId String? // null = imported from main product stock
+  toWarehouseId   String? // null = exported back to main product stock
+  status          String   @default("completed") // draft | completed | cancelled
+  reason          String? // damage | warranty_received | warranty_returned | restock | other
+  notes           String?
+  branchId        String?
+  userId          String?
+  userName        String?
+  totalQuantity   Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  fromWarehouse Warehouse?          @relation("TransferFrom", fields: [fromWarehouseId], references: [id])
+  toWarehouse   Warehouse?          @relation("TransferTo", fields: [toWarehouseId], references: [id])
+  items         StockTransferItem[]
+
+  @@index([branchId])
+  @@index([fromWarehouseId])
+  @@index([toWarehouseId])
+  @@index([createdAt])
+}
+
+model StockTransferItem {
+  id          String  @id @default(cuid())
+  transferId  String
+  productId   String
+  productName String
+  productSku  String?
+  quantity    Int
+  notes       String?
+
+  transfer StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+
+  @@index([transferId])
+  @@index([productId])
 }
 
 // ─── Storage Vault ──────────────────────────────────────────────────────────

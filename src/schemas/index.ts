@@ -350,6 +350,40 @@ export const CreateReturnSchema = z.object({
 export const UpdateReturnSchema = CreateReturnSchema.partial()
 
 
+// ─── Warehouses ───────────────────────────────────────────────────────────────
+export const WAREHOUSE_TYPES = ['main', 'damaged', 'warranty', 'other'] as const
+
+export const CreateWarehouseSchema = z.object({
+    name: z.string().min(1, 'Tên kho không được để trống').max(200),
+    code: z.string().max(50).optional().nullable(),
+    type: z.enum(WAREHOUSE_TYPES).default('other'),
+    branchId: z.string().optional().nullable(),
+    description: z.string().max(1000).optional().nullable(),
+    isActive: z.boolean().default(true),
+})
+
+export const UpdateWarehouseSchema = CreateWarehouseSchema.partial()
+
+export const StockTransferItemSchema = z.object({
+    productId: z.string().min(1, 'productId là bắt buộc'),
+    quantity: z.number().int().min(1, 'Số lượng phải lớn hơn 0'),
+    notes: z.string().max(500).optional().nullable(),
+})
+
+export const CreateStockTransferSchema = z.object({
+    fromWarehouseId: z.string().optional().nullable(),
+    toWarehouseId: z.string().optional().nullable(),
+    reason: z.string().max(100).optional().nullable(),
+    notes: z.string().max(1000).optional().nullable(),
+    items: z.array(StockTransferItemSchema).min(1, 'Phải có ít nhất 1 sản phẩm'),
+}).refine(
+    (data) => data.fromWarehouseId || data.toWarehouseId,
+    { message: 'Phải chọn kho nguồn hoặc kho đích', path: ['fromWarehouseId'] },
+).refine(
+    (data) => data.fromWarehouseId !== data.toWarehouseId || (!data.fromWarehouseId && !data.toWarehouseId),
+    { message: 'Kho nguồn và kho đích không được trùng nhau', path: ['toWarehouseId'] },
+)
+
 // ─── Announcements ────────────────────────────────────────────────────────────
 export const CreateAnnouncementSchema = z.object({
     title: z.string().min(1, 'Tiêu đề không được để trống').max(300),

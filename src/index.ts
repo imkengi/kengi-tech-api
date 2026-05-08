@@ -56,6 +56,7 @@ import onlineOrderRoutes from './routes/onlineOrders'
 import upgradeRequestRoutes from './routes/upgradeRequests'
 import webhookRoutes from './routes/webhooks'
 import eventRoutes from './routes/events'
+import warehouseRoutes from './routes/warehouses'
 import { cacheDisconnect, cacheHealth } from './lib/cache'
 import { startAutoSync, stopAutoSync } from './cron/autoSync'
 import { setupWebSocket, getWebSocketStats } from './lib/websocket'
@@ -190,6 +191,7 @@ app.use('/api/payroll', payrollRoutes)
 app.use('/api/online-orders', onlineOrderRoutes)
 app.use('/api/upgrade-requests', upgradeRequestRoutes)
 app.use('/api/webhooks', webhookRoutes)
+app.use('/api/warehouses', warehouseRoutes)
 
 import einvoiceRoutes from './routes/einvoice'
 app.use('/api/einvoice', einvoiceRoutes)
@@ -354,8 +356,112 @@ if (!process.env.PASSENGER_BASE_URI) {
                     `).catch(() => {})
                     await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "VehicleMaintenance_vehicleId_idx" ON "${schema_name}"."VehicleMaintenance"("vehicleId")`).catch(() => {})
                     await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "VehicleMaintenance_serviceDate_idx" ON "${schema_name}"."VehicleMaintenance"("serviceDate")`).catch(() => {})
+
+                    // Warehouse / WarehouseStock / StockTransfer / StockTransferItem
+                    await registryPrisma.$executeRawUnsafe(`
+                        CREATE TABLE IF NOT EXISTS "${schema_name}"."Warehouse" (
+                            "id" TEXT NOT NULL,
+                            "code" TEXT NOT NULL,
+                            "name" TEXT NOT NULL,
+                            "type" TEXT NOT NULL DEFAULT 'main',
+                            "branchId" TEXT,
+                            "description" TEXT,
+                            "isDefault" BOOLEAN NOT NULL DEFAULT false,
+                            "isActive" BOOLEAN NOT NULL DEFAULT true,
+                            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            CONSTRAINT "Warehouse_pkey" PRIMARY KEY ("id"),
+                            CONSTRAINT "Warehouse_code_key" UNIQUE ("code")
+                        )
+                    `).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Warehouse_branchId_idx" ON "${schema_name}"."Warehouse"("branchId")`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Warehouse_type_idx" ON "${schema_name}"."Warehouse"("type")`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Warehouse_isActive_idx" ON "${schema_name}"."Warehouse"("isActive")`).catch(() => {})
+
+                    await registryPrisma.$executeRawUnsafe(`
+                        CREATE TABLE IF NOT EXISTS "${schema_name}"."WarehouseStock" (
+                            "id" TEXT NOT NULL,
+                            "warehouseId" TEXT NOT NULL,
+                            "productId" TEXT NOT NULL,
+                            "productName" TEXT NOT NULL,
+                            "productSku" TEXT,
+                            "quantity" INTEGER NOT NULL DEFAULT 0,
+                            "notes" TEXT,
+                            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            CONSTRAINT "WarehouseStock_pkey" PRIMARY KEY ("id"),
+                            CONSTRAINT "WarehouseStock_warehouseId_productId_key" UNIQUE ("warehouseId", "productId"),
+                            CONSTRAINT "WarehouseStock_warehouseId_fkey" FOREIGN KEY ("warehouseId") REFERENCES "${schema_name}"."Warehouse"("id") ON DELETE CASCADE ON UPDATE CASCADE
+                        )
+                    `).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "WarehouseStock_warehouseId_idx" ON "${schema_name}"."WarehouseStock"("warehouseId")`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "WarehouseStock_productId_idx" ON "${schema_name}"."WarehouseStock"("productId")`).catch(() => {})
+
+                    await registryPrisma.$executeRawUnsafe(`
+                        CREATE TABLE IF NOT EXISTS "${schema_name}"."StockTransfer" (
+                            "id" TEXT NOT NULL,
+                            "code" TEXT NOT NULL,
+                            "fromWarehouseId" TEXT,
+                            "toWarehouseId" TEXT,
+                            "status" TEXT NOT NULL DEFAULT 'completed',
+                            "reason" TEXT,
+                            "notes" TEXT,
+                            "branchId" TEXT,
+                            "userId" TEXT,
+                            "userName" TEXT,
+                            "totalQuantity" INTEGER NOT NULL DEFAULT 0,
+                            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            CONSTRAINT "StockTransfer_pkey" PRIMARY KEY ("id"),
+                            CONSTRAINT "StockTransfer_code_key" UNIQUE ("code"),
+                            CONSTRAINT "StockTransfer_fromWarehouseId_fkey" FOREIGN KEY ("fromWarehouseId") REFERENCES "${schema_name}"."Warehouse"("id") ON DELETE SET NULL ON UPDATE CASCADE,
+                            CONSTRAINT "StockTransfer_toWarehouseId_fkey" FOREIGN KEY ("toWarehouseId") REFERENCES "${schema_name}"."Warehouse"("id") ON DELETE SET NULL ON UPDATE CASCADE
+                        )
+                    `).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "StockTransfer_branchId_idx" ON "${schema_name}"."StockTransfer"("branchId")`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "StockTransfer_fromWarehouseId_idx" ON "${schema_name}"."StockTransfer"("fromWarehouseId")`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "StockTransfer_toWarehouseId_idx" ON "${schema_name}"."StockTransfer"("toWarehouseId")`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "StockTransfer_createdAt_idx" ON "${schema_name}"."StockTransfer"("createdAt")`).catch(() => {})
+
+                    await registryPrisma.$executeRawUnsafe(`
+                        CREATE TABLE IF NOT EXISTS "${schema_name}"."StockTransferItem" (
+                            "id" TEXT NOT NULL,
+                            "transferId" TEXT NOT NULL,
+                            "productId" TEXT NOT NULL,
+                            "productName" TEXT NOT NULL,
+                            "productSku" TEXT,
+                            "quantity" INTEGER NOT NULL,
+                            "notes" TEXT,
+                            CONSTRAINT "StockTransferItem_pkey" PRIMARY KEY ("id"),
+                            CONSTRAINT "StockTransferItem_transferId_fkey" FOREIGN KEY ("transferId") REFERENCES "${schema_name}"."StockTransfer"("id") ON DELETE CASCADE ON UPDATE CASCADE
+                        )
+                    `).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "StockTransferItem_transferId_idx" ON "${schema_name}"."StockTransferItem"("transferId")`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "StockTransferItem_productId_idx" ON "${schema_name}"."StockTransferItem"("productId")`).catch(() => {})
+
+                    // Seed default warehouses (idempotent — uses isDefault flag)
+                    try {
+                        const existing: any[] = await registryPrisma.$queryRawUnsafe(
+                            `SELECT type FROM "${schema_name}"."Warehouse" WHERE "isDefault" = true AND "branchId" IS NULL`
+                        )
+                        const existingTypes = new Set(existing.map((r: any) => r.type))
+                        const defaults: Array<{ code: string; name: string; type: string; description: string }> = [
+                            { code: `WH-MAIN-${schema_name.slice(-6).toUpperCase()}`, name: 'Kho chính', type: 'main', description: 'Kho hàng hóa chính' },
+                            { code: `WH-DAMAGED-${schema_name.slice(-6).toUpperCase()}`, name: 'Kho hàng hư hỏng', type: 'damaged', description: 'Kho chứa hàng bị hư hỏng, không bán được' },
+                            { code: `WH-WARRANTY-${schema_name.slice(-6).toUpperCase()}`, name: 'Kho hàng bảo hành', type: 'warranty', description: 'Kho chứa hàng đang bảo hành / đã thu hồi để bảo hành' },
+                        ]
+                        for (const d of defaults) {
+                            if (existingTypes.has(d.type)) continue
+                            await registryPrisma.$executeRawUnsafe(
+                                `INSERT INTO "${schema_name}"."Warehouse" ("id", "code", "name", "type", "description", "isDefault", "isActive", "createdAt", "updatedAt")
+                                 VALUES (gen_random_uuid()::text, $1, $2, $3, $4, true, true, NOW(), NOW())
+                                 ON CONFLICT ("code") DO NOTHING`,
+                                d.code, d.name, d.type, d.description
+                            ).catch(() => {})
+                        }
+                    } catch {}
                 }
-                console.log('✅ Security + Customer + Vehicle columns multi-schema migration completed')
+                console.log('✅ Security + Customer + Vehicle + Warehouse columns multi-schema migration completed')
             } catch (err: any) {
                 console.error('⚠️ Schema columns migration failed:', err.message)
             }
