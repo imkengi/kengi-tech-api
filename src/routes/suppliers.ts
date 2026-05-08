@@ -214,7 +214,7 @@ router.get('/:id/debt-history', authMiddleware, async (req: AuthRequest, res: Re
                     balance: 0,
                 })
             }
-            if (po.status === 'completed' && po.totalAmount > 0) {
+            if (po.status === 'received' && po.totalAmount > 0) {
                 history.push({
                     id: `${po.id}-pay`,
                     code: `TT-${po.code}`,
