@@ -1133,8 +1133,6 @@ model StoreSettings {
 
   notifyWeeklyReport Boolean @default(true)
 
-  autoRestockOnReturn Boolean @default(true)
-
   // Permission: allow Sales role to checkout/sell directly. When false, Sales can only create SalesOrder
   salesCanCheckout Boolean @default(false)
 

@@ -1139,6 +1139,9 @@ model StoreSettings {
   // Permission: allow Sales role to checkout/sell directly. When false, Sales can only create SalesOrder
   salesCanCheckout Boolean @default(false)
 
+  // Permission: allow Sales role to checkout/sell directly. When false, Sales can only create SalesOrder
+  salesCanCheckout Boolean @default(false)
+
   updatedAt DateTime @updatedAt
 }
 

@@ -13,7 +13,6 @@
     "db:push": "npx prisma db push",
     "db:push:store": "npx prisma db push --schema=prisma/schema-store.prisma",
     "db:push:all": "npx prisma db push && npx prisma db push --schema=prisma/schema-store.prisma",
-    "db:migrate:all-stores": "npx tsx scripts/migrate-all-stores.ts",
     "db:seed": "npx tsx prisma/seed.ts",
     "db:studio": "npx prisma studio",
     "db:migrate": "npx prisma db push",
