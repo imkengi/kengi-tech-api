@@ -334,6 +334,16 @@ router.post('/', authMiddleware, validate(CreateTransactionSchema), async (req: 
             return
         }
 
+        // Van-sales context: when x-warehouse-id is present, this checkout sells from
+        // a vehicle's mobile warehouse instead of the main store stock. Stock for the
+        // sale must come from WarehouseStock (loaded onto the vehicle ahead of time)
+        // rather than from Product.stock, which was already decremented at trip-load.
+        const warehouseHeader = req.headers['x-warehouse-id']
+        const salesTripHeader = req.headers['x-sales-trip-id']
+        const vanWarehouseId = Array.isArray(warehouseHeader) ? warehouseHeader[0] : warehouseHeader
+        const salesTripId = Array.isArray(salesTripHeader) ? salesTripHeader[0] : salesTripHeader
+        const isVanSale = !!vanWarehouseId
+
         // Get user info
         const user = await prisma.user.findUnique({ where: { id: req.user!.userId } })
 
@@ -384,6 +394,36 @@ router.post('/', authMiddleware, validate(CreateTransactionSchema), async (req: 
             const baseQuantity = Math.round(item.quantity * rate)
             return { ...item, selectedUnit, conversionRate: rate, baseQuantity }
         })
+
+        // Van-sales stock check: confirm the vehicle's mobile warehouse has enough of
+        // each product (in base units) to cover this sale. Aggregates per-product so
+        // duplicate line items can't individually pass the check then collectively
+        // exceed available stock.
+        if (isVanSale) {
+            const stocks = await (prisma as any).warehouseStock.findMany({
+                where: { warehouseId: String(vanWarehouseId), productId: { in: productIds } },
+            })
+            const stockMap = new Map<string, any>(stocks.map((s: any) => [s.productId, s]))
+
+            const requiredByProduct = new Map<string, { qty: number; name: string }>()
+            for (const item of itemsWithConversion) {
+                const cur = requiredByProduct.get(item.productId) || { qty: 0, name: item.productName }
+                cur.qty += item.baseQuantity
+                requiredByProduct.set(item.productId, cur)
+            }
+
+            for (const [productId, { qty, name }] of requiredByProduct) {
+                const stk = stockMap.get(productId)
+                const available = stk?.quantity || 0
+                if (available < qty) {
+                    res.status(400).json({
+                        success: false,
+                        error: `Sản phẩm "${stk?.productName || name}" chỉ còn ${available} trên xe (cần ${qty})`,
+                    })
+                    return
+                }
+            }
+        }
 
         // Build create data — use undefined to omit optional FK fields
         const createData: any = {
@@ -467,11 +507,15 @@ router.post('/', authMiddleware, validate(CreateTransactionSchema), async (req: 
         // Decrease product stock + create inventory transaction records for each item.
         // Stock and InventoryTransaction.quantity are tracked in the product's BASE unit,
         // so we use baseQuantity (sale-unit qty × conversion rate) — not the raw line qty.
+        // For van sales, Product.stock was already decremented when stock was loaded onto
+        // the vehicle, so we only touch the vehicle's WarehouseStock here.
         for (const item of itemsWithConversion) {
-            const updatedProduct = await prisma.product.update({
-                where: { id: item.productId },
-                data: { stock: { decrement: item.baseQuantity } },
-            })
+            const productAfter = isVanSale
+                ? await prisma.product.findUnique({ where: { id: item.productId }, select: { costPrice: true } })
+                : await prisma.product.update({
+                    where: { id: item.productId },
+                    data: { stock: { decrement: item.baseQuantity } },
+                })
 
             // Create inventory transaction record for stock tracking
             await prisma.inventoryTransaction.create({
@@ -486,11 +530,56 @@ router.post('/', authMiddleware, validate(CreateTransactionSchema), async (req: 
                     referenceId: receiptNumber,
                     referenceType: 'sale',
                     unitPrice: item.unitPrice || 0,
-                    costPriceAfter: updatedProduct.costPrice,
+                    costPriceAfter: productAfter?.costPrice || 0,
                     userId: req.user!.userId,
                     userName: user?.name || 'Admin',
                 },
             })
+        }
+
+        // Van-sales bookkeeping: decrement WarehouseStock on the vehicle, and roll the
+        // sale into SalesTripItem.soldQty + SalesTrip totals when a trip is in scope.
+        if (isVanSale) {
+            for (const item of itemsWithConversion) {
+                await (prisma as any).warehouseStock.update({
+                    where: { warehouseId_productId: { warehouseId: String(vanWarehouseId), productId: item.productId } },
+                    data: { quantity: { decrement: item.baseQuantity } },
+                }).catch((err: any) => {
+                    console.error(`[VanSale] WarehouseStock decrement failed for product ${item.productId}:`, err)
+                })
+            }
+
+            if (salesTripId) {
+                const totalBaseQty = itemsWithConversion.reduce((s: number, i: any) => s + i.baseQuantity, 0)
+
+                for (const item of itemsWithConversion) {
+                    await (prisma as any).salesTripItem.upsert({
+                        where: { tripId_productId: { tripId: String(salesTripId), productId: item.productId } },
+                        update: { soldQty: { increment: item.baseQuantity } },
+                        create: {
+                            tripId: String(salesTripId),
+                            productId: item.productId,
+                            productName: item.productName,
+                            productSku: item.sku || item.productSku || null,
+                            loadedQty: 0,
+                            soldQty: item.baseQuantity,
+                            unitPrice: item.unitPrice || 0,
+                        },
+                    }).catch((err: any) => {
+                        console.error(`[VanSale] SalesTripItem upsert failed for product ${item.productId}:`, err)
+                    })
+                }
+
+                await (prisma as any).salesTrip.update({
+                    where: { id: String(salesTripId) },
+                    data: {
+                        totalSold: { increment: totalBaseQty },
+                        totalRevenue: { increment: transaction.total },
+                    },
+                }).catch((err: any) => {
+                    console.error(`[VanSale] SalesTrip totals update failed for ${salesTripId}:`, err)
+                })
+            }
         }
 
         // Update customer stats if customer exists
