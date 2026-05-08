@@ -7,6 +7,7 @@ import { registryPrisma, getStorePrisma, branchIdToSchema, createBranchSchema, d
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
 import { generateOtpCode, saveOtp, verifyOtp, consumeOtp, canSendOtp, OTP_CONFIG } from '../lib/otp'
+import { generateDeviceToken, saveTrustedDevice, isDeviceTrusted, TRUSTED_DEVICE_CONFIG } from '../lib/trustedDevice'
 import { sendEmail, buildOtpEmail } from '../services/emailService'
 
 const router = Router()
@@ -284,7 +285,13 @@ router.post('/login', async (req: Request, res: Response) => {
         //      /api/auth/verify-otp with purpose=login_2fa to complete login.
         //      Skip when SMTP isn't configured — emailService falls back to
         //      console.log, which would silently lock users out.
-        if (user.twoFactorEnabled && process.env.SMTP_USER) {
+        // KENGIONLINE is a demo store and skips 2FA entirely.
+        const isKengiOnline = store.code.toUpperCase() === 'KENGIONLINE'
+        const incomingDeviceToken: string =
+            (req.body && req.body.deviceToken) ||
+            (req.headers['x-device-token'] as string) || ''
+        const trustedDevice = !isKengiOnline && incomingDeviceToken && isDeviceTrusted(user.id, incomingDeviceToken)
+        if (user.twoFactorEnabled && process.env.SMTP_USER && !isKengiOnline && !trustedDevice) {
             const code = generateOtpCode()
             saveOtp('login_2fa', store.code, user.email, code)
             const { subject, html, text } = buildOtpEmail(code, 'login')
@@ -335,7 +342,8 @@ router.post('/login', async (req: Request, res: Response) => {
         }
 
         // ── 2FA Gate: if user has 2FA enabled, check trusted devices first ──
-        if (user.twoFactorEnabled && user.twoFactorSecret) {
+        // KENGIONLINE demo store skips 2FA entirely.
+        if (user.twoFactorEnabled && user.twoFactorSecret && !isKengiOnline) {
             const { deviceId } = req.body
             // Check if device is trusted
             const trustedDevices: any[] = JSON.parse(user.trustedDevices || '[]')
@@ -974,11 +982,17 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
             }
             const { accessToken, refreshToken } = createTokenPair(tokenPayload)
 
+            // Issue a trusted-device token so this device can skip 2FA for the next 30 days.
+            const deviceToken = generateDeviceToken()
+            saveTrustedDevice(user.id, deviceToken, String(req.headers['user-agent'] || ''))
+
             return res.json({
                 success: true,
                 data: {
                     token: accessToken,
                     refreshToken,
+                    deviceToken,
+                    deviceTokenExpiresInDays: TRUSTED_DEVICE_CONFIG.TRUSTED_DEVICE_TTL_DAYS,
                     user: {
                         id: user.id, email: user.email, name: user.name,
                         role: user.role, phone: user.phone,
