@@ -242,7 +242,52 @@ if (!process.env.PASSENGER_BASE_URI) {
     registryPrisma.$connect()
         .then(async () => {
             console.log('✅ Registry DB connected')
+
+            // ─── Boot migration framework ──────────────────────────────────
+            // Tracks which migration blocks have run so we don't replay 750+
+            // DDL statements on every deploy. First boot runs everything;
+            // subsequent boots skip in ~1 query.
+            const migrationStartTime = Date.now()
+            console.log('[Migration] Checking for pending migrations...')
+
+            try {
+                await registryPrisma.$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "public"."_schema_migrations" (
+                        id SERIAL,
+                        name TEXT UNIQUE,
+                        applied_at TIMESTAMP DEFAULT NOW()
+                    )
+                `)
+            } catch (err: any) {
+                console.error('[Migration] Failed to create _schema_migrations table:', err.message)
+            }
+
+            const isMigrationApplied = async (name: string): Promise<boolean> => {
+                try {
+                    const rows = await registryPrisma.$queryRawUnsafe<any[]>(
+                        `SELECT 1 FROM "public"."_schema_migrations" WHERE name = $1 LIMIT 1`,
+                        name
+                    )
+                    return rows.length > 0
+                } catch {
+                    return false
+                }
+            }
+
+            const markMigrationApplied = async (name: string): Promise<void> => {
+                try {
+                    await registryPrisma.$executeRawUnsafe(
+                        `INSERT INTO "public"."_schema_migrations" (name) VALUES ($1) ON CONFLICT (name) DO NOTHING`,
+                        name
+                    )
+                } catch (err: any) {
+                    console.error(`[Migration] Failed to mark ${name} applied:`, err.message)
+                }
+            }
+
+            try {
             // Auto-create RefreshToken table if not exists (idempotent migration)
+            if (!(await isMigrationApplied('refresh_token_v1'))) {
             try {
                 await registryPrisma.$executeRawUnsafe(`
                     CREATE TABLE IF NOT EXISTS "public"."RefreshToken" (
@@ -268,15 +313,19 @@ if (!process.env.PASSENGER_BASE_URI) {
                 await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "RefreshToken_token_idx" ON "public"."RefreshToken"(token)`)
                 await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "RefreshToken_userId_idx" ON "public"."RefreshToken"("userId")`)
                 await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "RefreshToken_expiresAt_idx" ON "public"."RefreshToken"("expiresAt")`)
+                await markMigrationApplied('refresh_token_v1')
                 console.log('✅ RefreshToken table ready')
             } catch (err: any) {
                 console.error('⚠️ RefreshToken table migration failed:', err.message)
+            }
             }
 
             // Auto-create StorageFile table for all vault metadata across all dynamic schemas
             try {
                 const schemas: any[] = await registryPrisma.$queryRaw`SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('information_schema', 'pg_catalog', 'pg_toast', 'public')`
                 for (const { schema_name } of schemas) {
+                    const storageFileMigName = `storage_file_v1:${schema_name}`
+                    if (await isMigrationApplied(storageFileMigName)) continue
                     await registryPrisma.$executeRawUnsafe(`
                         CREATE TABLE IF NOT EXISTS "${schema_name}"."StorageFile" (
                             "id" TEXT NOT NULL,
@@ -294,6 +343,7 @@ if (!process.env.PASSENGER_BASE_URI) {
                             CONSTRAINT "StorageFile_pkey" PRIMARY KEY ("id")
                         )
                     `).catch(() => {})
+                    await markMigrationApplied(storageFileMigName)
                 }
                 console.log('✅ StorageFile multi-schema synchronization completed')
             } catch (err: any) {
@@ -304,6 +354,8 @@ if (!process.env.PASSENGER_BASE_URI) {
             try {
                 const schemas: any[] = await registryPrisma.$queryRaw`SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('information_schema', 'pg_catalog', 'pg_toast', 'public')`
                 for (const { schema_name } of schemas) {
+                    const schemaUpgradeMigName = `schema_upgrade_v1:${schema_name}`
+                    if (await isMigrationApplied(schemaUpgradeMigName)) continue
                     // Security columns
                     await registryPrisma.$executeRawUnsafe(`ALTER TABLE "${schema_name}"."User" ADD COLUMN IF NOT EXISTS "twoFactorSecret" TEXT;`).catch(() => {})
                     await registryPrisma.$executeRawUnsafe(`ALTER TABLE "${schema_name}"."User" ADD COLUMN IF NOT EXISTS "trustedDevices" TEXT NOT NULL DEFAULT '[]';`).catch(() => {})
@@ -530,6 +582,7 @@ if (!process.env.PASSENGER_BASE_URI) {
                             ).catch(() => {})
                         }
                     } catch {}
+                    await markMigrationApplied(schemaUpgradeMigName)
                 }
                 console.log('✅ Security + Customer + Vehicle + Warehouse columns multi-schema migration completed')
             } catch (err: any) {
@@ -543,6 +596,9 @@ if (!process.env.PASSENGER_BASE_URI) {
                 for (const store of stores) {
                     if (!store.schema.startsWith('branch_')) continue
 
+                    const legacyMigName = `legacy_data_v1:${store.schema}`
+                    if (await isMigrationApplied(legacyMigName)) continue
+
                     console.log(`[Migration] Checking legacy data restoration for ${store.schema}...`)
                     let hasTransaction = [{ count: 0 }]
                     try {
@@ -553,6 +609,7 @@ if (!process.env.PASSENGER_BASE_URI) {
                     }
                     if (Number(hasTransaction[0]?.count || 0) > 10) {
                         console.log(`[Migration] ${store.schema} already has transactions, assuming migrated. Skipping.`)
+                        await markMigrationApplied(legacyMigName)
                         continue
                     }
 
@@ -621,11 +678,19 @@ if (!process.env.PASSENGER_BASE_URI) {
                     if (migratedCount > 0) {
                         console.log(`[Migration] Successfully restored ${migratedCount} tables into ${store.schema}`)
                     }
+                    await markMigrationApplied(legacyMigName)
                 }
             } catch (err: any) {
                 console.error('⚠️ Legacy data migration failed:', err.message)
             }
             // --- END LEGACY DATA MIGRATION ---
+
+            } catch (err: any) {
+                console.error('[Migration] Boot migration error (server will still start):', err.message)
+            }
+
+            const migrationElapsed = Date.now() - migrationStartTime
+            console.log(`[Migration] All migrations up to date (${migrationElapsed}ms)`)
 
         })
         .catch((err: any) => console.error('⚠️ Registry DB connection failed:', err.message))
