@@ -691,12 +691,15 @@ const reconcileHandler = async (req: AuthRequest, res: Response) => {
                     // Frontend sends { actualQuantity, damagedQuantity } — both are physically
                     // still on the vehicle, so total returned = good + damaged. Older clients
                     // may still send the explicit actualReturnedQty.
-                    const returnedQty = it.actualReturnedQty
-                        ?? ((it.actualQuantity ?? 0) + (it.damagedQuantity ?? 0))
+                    const actual = it.actualQuantity ?? 0
+                    const damaged = it.damagedQuantity ?? 0
+                    const returnedQty = it.actualReturnedQty ?? (actual + damaged)
                     await tx.salesTripItem.updateMany({
                         where: { tripId: trip.id, productId: it.productId },
                         data: {
                             returnedQty,
+                            actualQty: actual,
+                            damagedQty: damaged,
                             notes: it.notes ?? undefined,
                         },
                     })

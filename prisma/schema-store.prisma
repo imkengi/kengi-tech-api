@@ -1615,6 +1615,8 @@ model SalesTripItem {
   loadedQty   Int     @default(0)
   soldQty     Int     @default(0)
   returnedQty Int     @default(0)
+  actualQty   Int     @default(0)
+  damagedQty  Int     @default(0)
   unitPrice   Float   @default(0)
   notes       String?
 
