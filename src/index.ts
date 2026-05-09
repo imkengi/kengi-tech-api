@@ -589,6 +589,19 @@ if (!process.env.PASSENGER_BASE_URI) {
                 console.error('⚠️ Schema columns migration failed:', err.message)
             }
 
+            // Promotion usage tracking — Transaction.appliedPromotionIds (JSON-encoded list)
+            try {
+                const schemas: any[] = await registryPrisma.$queryRaw`SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('information_schema', 'pg_catalog', 'pg_toast', 'public')`
+                for (const { schema_name } of schemas) {
+                    const migName = `promotion_usage_v1:${schema_name}`
+                    if (await isMigrationApplied(migName)) continue
+                    await registryPrisma.$executeRawUnsafe(`ALTER TABLE "${schema_name}"."Transaction" ADD COLUMN IF NOT EXISTS "appliedPromotionIds" TEXT;`).catch(() => {})
+                    await markMigrationApplied(migName)
+                }
+            } catch (err: any) {
+                console.error('⚠️ Promotion usage migration failed:', err.message)
+            }
+
             // --- BEGIN LEGACY DATA MIGRATION ---
             // Automatically migrate data from single-tenant public schema to the new multi-tenant schemas
             try {

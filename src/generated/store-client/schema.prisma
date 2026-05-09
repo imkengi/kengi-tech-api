@@ -256,30 +256,31 @@ model Customer {
 // ─── Transactions ──────────────────────────────────────────────────────────────
 
 model Transaction {
-  id               String    @id @default(cuid())
-  receiptNumber    String    @unique
-  customerId       String?
-  customerName     String?
-  customerPhone    String?
-  branchId         String?
-  subtotal         Float     @default(0)
-  discount         Float     @default(0)
-  tax              Float     @default(0)
-  total            Float     @default(0)
-  amountReceived   Float     @default(0)
-  change           Float     @default(0)
-  status           String    @default("completed")
-  createdBy        String
-  createdByName    String?
-  notes            String?
-  returnedAt       DateTime?
-  returnReason     String?
-  transactionDate  DateTime?
-  vatInvoiceNumber String?
-  vatIssuedAt      DateTime?
-  vatStatus        String    @default("none")
-  revisionOfId     String? // If this is a revision, points to the original transaction
-  createdAt        DateTime  @default(now())
+  id                  String    @id @default(cuid())
+  receiptNumber       String    @unique
+  customerId          String?
+  customerName        String?
+  customerPhone       String?
+  branchId            String?
+  subtotal            Float     @default(0)
+  discount            Float     @default(0)
+  tax                 Float     @default(0)
+  total               Float     @default(0)
+  amountReceived      Float     @default(0)
+  change              Float     @default(0)
+  status              String    @default("completed")
+  createdBy           String
+  createdByName       String?
+  notes               String?
+  returnedAt          DateTime?
+  returnReason        String?
+  transactionDate     DateTime?
+  vatInvoiceNumber    String?
+  vatIssuedAt         DateTime?
+  vatStatus           String    @default("none")
+  revisionOfId        String? // If this is a revision, points to the original transaction
+  appliedPromotionIds String? // JSON array of Promotion.id values applied at checkout
+  createdAt           DateTime  @default(now())
 
   creator  User              @relation(fields: [createdBy], references: [id])
   customer Customer?         @relation(fields: [customerId], references: [id])
@@ -1576,7 +1577,7 @@ model SalesTrip {
   code          String    @unique
   vehicleId     String
   warehouseId   String
-  status        String    @default("planned") // planned | loaded | active | reconciling | closed | cancelled
+  status        String    @default("loading") // loading | active | reconciling | closed | cancelled  (legacy: planned, loaded — surfaced as "loading")
   driverId      String?
   driverName    String?
   salesUserId   String
@@ -1614,6 +1615,8 @@ model SalesTripItem {
   loadedQty   Int     @default(0)
   soldQty     Int     @default(0)
   returnedQty Int     @default(0)
+  actualQty   Int     @default(0)
+  damagedQty  Int     @default(0)
   unitPrice   Float   @default(0)
   notes       String?
 

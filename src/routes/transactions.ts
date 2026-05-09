@@ -426,6 +426,12 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
             }
         }
 
+        // Normalize applied promotions list once so we can both persist it on the
+        // Transaction (audit trail) and bump Promotion.usageCount atomically below.
+        const promoIds: string[] = (Array.isArray(appliedPromotionIds) ? appliedPromotionIds : [])
+            .map((v: any) => String(v))
+            .filter((v: string) => v.length > 0)
+
         // Build create data — use undefined to omit optional FK fields
         const createData: any = {
             receiptNumber,
@@ -441,6 +447,7 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
             notes: txData.notes || null,
             transactionDate: txData.transactionDate ? new Date(txData.transactionDate) : null,
             branchId: branchId || null,
+            appliedPromotionIds: promoIds.length > 0 ? JSON.stringify(promoIds) : null,
             items: {
                 create: itemsWithConversion.map((item: any) => ({
                     productId: item.productId,
@@ -472,27 +479,26 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
             }
         }
 
-        const transaction = await prisma.transaction.create({
-            data: createData,
-            include: { 
-                items: {
-                    include: { product: { select: { costPrice: true } } }
-                }, 
-                payments: true 
-            },
-        })
-
-        // Increment promotion usageCount if any promotions were applied
-        if (appliedPromotionIds && Array.isArray(appliedPromotionIds) && appliedPromotionIds.length > 0) {
-            for (const promoId of appliedPromotionIds) {
-                await prisma.promotion.update({
-                    where: { id: promoId },
-                    data: { usageCount: { increment: 1 } }
-                }).catch(err => {
-                    console.error(`Failed to increment usageCount for promotion ${promoId}:`, err)
-                })
-            }
-        }
+        // Create the transaction and bump Promotion.usageCount in one atomic batch
+        // so a partial failure can't leave the receipt persisted while the promo
+        // counter stays at zero.
+        const writes: any[] = [
+            prisma.transaction.create({
+                data: createData,
+                include: {
+                    items: {
+                        include: { product: { select: { costPrice: true } } }
+                    },
+                    payments: true
+                },
+            }),
+            ...promoIds.map(promoId => prisma.promotion.update({
+                where: { id: promoId },
+                data: { usageCount: { increment: 1 } },
+            })),
+        ]
+        const results = await prisma.$transaction(writes)
+        const transaction = results[0]
 
         // Increment bundle soldCount for any bundles included in the order
         const bundleIds = [...new Set(items.filter((i: any) => i.isBundle && i.bundleId).map((i: any) => i.bundleId))]
@@ -634,7 +640,7 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
         }
 
         cacheDel(`${req.user?.storeSchema || 'default'}:*:transactions:*`).catch(() => { })
-        if (appliedPromotionIds && Array.isArray(appliedPromotionIds) && appliedPromotionIds.length > 0) {
+        if (promoIds.length > 0) {
             cacheDel(`${req.user?.storeSchema || 'default'}:promotions:*`).catch(() => { })
         }
         console.log(`✅ Transaction ${receiptNumber} created — ${items.length} items, total: ${transaction.total}`)

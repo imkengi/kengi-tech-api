@@ -306,6 +306,7 @@ exports.Prisma.TransactionScalarFieldEnum = {
   vatIssuedAt: 'vatIssuedAt',
   vatStatus: 'vatStatus',
   revisionOfId: 'revisionOfId',
+  appliedPromotionIds: 'appliedPromotionIds',
   createdAt: 'createdAt'
 };
 
@@ -1308,6 +1309,8 @@ exports.Prisma.SalesTripItemScalarFieldEnum = {
   loadedQty: 'loadedQty',
   soldQty: 'soldQty',
   returnedQty: 'returnedQty',
+  actualQty: 'actualQty',
+  damagedQty: 'damagedQty',
   unitPrice: 'unitPrice',
   notes: 'notes'
 };

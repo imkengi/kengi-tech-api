@@ -279,6 +279,7 @@ model Transaction {
   vatIssuedAt      DateTime?
   vatStatus        String    @default("none")
   revisionOfId     String?   // If this is a revision, points to the original transaction
+  appliedPromotionIds String? // JSON array of Promotion.id values applied at checkout
   createdAt        DateTime  @default(now())
 
   creator  User              @relation(fields: [createdBy], references: [id])

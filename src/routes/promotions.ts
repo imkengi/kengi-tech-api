@@ -55,8 +55,31 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
             }),
         ])
 
+        // Derive the real usage count for each promotion on this page from the audit
+        // trail on Transaction.appliedPromotionIds. Falls back to the stored
+        // Promotion.usageCount counter if the aggregate fails or returns nothing
+        // (e.g. legacy receipts created before audit-trail tracking landed).
+        const derivedCounts = new Map<string, number>()
+        if (promotions.length > 0) {
+            try {
+                const ids = promotions.map(p => p.id)
+                const rows = await prisma.$queryRaw<Array<{ promo_id: string; uses: bigint | number }>>`
+                    SELECT elem AS promo_id, COUNT(*)::bigint AS uses
+                    FROM "Transaction" t,
+                         jsonb_array_elements_text(t."appliedPromotionIds"::jsonb) elem
+                    WHERE t."appliedPromotionIds" IS NOT NULL
+                      AND elem = ANY(${ids}::text[])
+                    GROUP BY elem
+                `
+                for (const r of rows) derivedCounts.set(r.promo_id, Number(r.uses))
+            } catch (aggErr) {
+                console.warn('[Promotions] usageCount derivation failed, falling back to stored counter:', aggErr)
+            }
+        }
+
         const data = promotions.map(p => ({
             ...p,
+            usageCount: Math.max(p.usageCount || 0, derivedCounts.get(p.id) || 0),
             categoryIds: p.categoryIds ? JSON.parse(p.categoryIds) : [],
             productIds: p.productIds ? JSON.parse(p.productIds) : [],
             startDate: p.startDate.toISOString(),
