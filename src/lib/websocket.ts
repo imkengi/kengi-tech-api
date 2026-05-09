@@ -50,7 +50,12 @@ export function setupWebSocket(server: HTTPServer): WebSocketServer {
         })
     } else {
         // Local emitter fallback — listen for events from same process
-        console.log('📡 WebSocket using local EventEmitter (single-instance mode)')
+        if (process.env.NODE_ENV === 'production') {
+            console.error('🚨 CRITICAL: WebSocket broadcast is using in-process EventEmitter in production.')
+            console.error('🚨 CRITICAL: Multi-pod deployments will lose cross-instance realtime updates. Set REDIS_URL to fix.')
+        } else {
+            console.log('📡 WebSocket using local EventEmitter (single-instance mode)')
+        }
     }
 
     // ── Connection handler ─────────────────────────────────────────────────

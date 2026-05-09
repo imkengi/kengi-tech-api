@@ -20,7 +20,13 @@ localEmitter.setMaxListeners(100)
 
 function initPublisher(): Redis | null {
     if (!REDIS_URL) {
-        console.log('📡 Redis Pub/Sub: No REDIS_URL — using in-process EventEmitter')
+        if (process.env.NODE_ENV === 'production') {
+            console.error('🚨 CRITICAL: REDIS_URL is not set in production. Pub/Sub is falling back to an in-process EventEmitter.')
+            console.error('🚨 CRITICAL: With multiple pods/workers, realtime events (transactions, inventory updates, chat) WILL NOT propagate across instances. WebSocket clients on other pods will miss updates.')
+            console.error('🚨 CRITICAL: Set REDIS_URL to a reachable Redis instance to restore cross-instance broadcasting.')
+        } else {
+            console.log('📡 Redis Pub/Sub: No REDIS_URL — using in-process EventEmitter (single-instance mode)')
+        }
         useLocalEmitter = true
         return null
     }
