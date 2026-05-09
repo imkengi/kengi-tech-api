@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { authMiddleware, AuthRequest, getBranchFilter } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
+import { requirePermission } from '../middleware/permissionMiddleware'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { validate } from '../middleware/validate'
 import { CreateProductSchema, UpdateProductSchema } from '../schemas'
@@ -10,7 +11,7 @@ const router = Router()
 // ─── Products CRUD ──────────────────────────────────────────────────────────
 
 // GET /api/products
-router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/', authMiddleware, requirePermission('products.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         // Cache check
@@ -122,7 +123,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 })
 
 // GET /api/products/stats — aggregate inventory stats across ALL products
-router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/stats', authMiddleware, requirePermission('products.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
 
@@ -187,7 +188,7 @@ router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => 
 })
 
 // GET /api/products/:id
-router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/:id', authMiddleware, requirePermission('products.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const product = await prisma.product.findFirst({
@@ -252,7 +253,7 @@ function pickProductFields(raw: Record<string, any>): any {
 }
 
 // POST /api/products
-router.post('/', authMiddleware, requireRole('admin', 'manager'), validate(CreateProductSchema), async (req: AuthRequest, res: Response) => {
+router.post('/', authMiddleware, requirePermission('products.create'), validate(CreateProductSchema), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { unitConversions, images, ...rawData } = req.body
@@ -292,7 +293,7 @@ router.post('/', authMiddleware, requireRole('admin', 'manager'), validate(Creat
 })
 
 // PUT /api/products/:id
-router.put('/:id', authMiddleware, requireRole('admin', 'manager'), validate(UpdateProductSchema), async (req: AuthRequest, res: Response) => {
+router.put('/:id', authMiddleware, requirePermission('products.edit'), validate(UpdateProductSchema), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         // Verify product belongs to store
@@ -345,7 +346,7 @@ router.put('/:id', authMiddleware, requireRole('admin', 'manager'), validate(Upd
 })
 
 // DELETE /api/products/:id
-router.delete('/:id', authMiddleware, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
+router.delete('/:id', authMiddleware, requirePermission('products.delete'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const existing = await prisma.product.findFirst({ where: { id: String(req.params.id) } })

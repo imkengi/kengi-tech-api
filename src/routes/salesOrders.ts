@@ -1,6 +1,7 @@
 import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest, getBranchFilter } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
+import { requirePermission } from '../middleware/permissionMiddleware'
 import { cacheDel } from '../lib/cache'
 
 const router = Router()
@@ -28,7 +29,7 @@ function invalidateCache(req: AuthRequest) {
 
 // ─── GET /api/sales-orders/pending-count ────────────────────────────────────
 // Badge count for POS — must be declared BEFORE /:id to avoid shadowing
-router.get('/pending-count', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/pending-count', authMiddleware, requirePermission('orders.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const where: any = { ...getBranchFilter(req), status: 'pending' }
@@ -43,7 +44,7 @@ router.get('/pending-count', authMiddleware, async (req: AuthRequest, res: Respo
 })
 
 // Backwards-compat alias used by existing frontend
-router.get('/pending/count', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/pending/count', authMiddleware, requirePermission('orders.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const where: any = { ...getBranchFilter(req), status: 'pending' }
@@ -56,7 +57,7 @@ router.get('/pending/count', authMiddleware, async (req: AuthRequest, res: Respo
 })
 
 // ─── GET /api/sales-orders ──────────────────────────────────────────────────
-router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/', authMiddleware, requirePermission('orders.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { status, salesUserId, search, page = '1', pageSize = '20' } = req.query
@@ -116,7 +117,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 })
 
 // ─── GET /api/sales-orders/:id ──────────────────────────────────────────────
-router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/:id', authMiddleware, requirePermission('orders.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const order = await prisma.salesOrder.findUnique({
@@ -138,7 +139,7 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
 })
 
 // ─── POST /api/sales-orders ─────────────────────────────────────────────────
-router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.post('/', authMiddleware, requirePermission('orders.create'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { customerId, customerName, note, items, discount } = req.body

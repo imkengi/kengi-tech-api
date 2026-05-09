@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
+import { requirePermission } from '../middleware/permissionMiddleware'
 import bcrypt from 'bcryptjs'
 import { validate } from '../middleware/validate'
 import { CreateEmployeeSchema, UpdateEmployeeSchema } from '../schemas'
@@ -21,7 +22,7 @@ const DEPARTMENT_ROLES: Record<string, string[]> = {
 }
 
 // GET /api/employees/stats
-router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/stats', authMiddleware, requirePermission('employees.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const all = await prisma.user.findMany({ select: { role: true, employeeStatus: true } })
@@ -36,7 +37,7 @@ router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => 
 })
 
 // GET /api/employees
-router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/', authMiddleware, requirePermission('employees.view'), async (req: AuthRequest, res: Response) => {
     try {
         const schema = req.user?.storeSchema || 'default'
         const cacheKey = `${schema}:employees:${JSON.stringify(req.query)}`
@@ -71,7 +72,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 })
 
 // GET /api/employees/:id
-router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/:id', authMiddleware, requirePermission('employees.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const user = await prisma.user.findFirst({ where: { id: String(req.params.id) }, include: { branch: { select: { id: true, name: true, code: true, isMainBranch: true } } } })
@@ -84,7 +85,7 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
 })
 
 // POST /api/employees
-router.post('/', authMiddleware, requireRole('admin', 'manager'), validate(CreateEmployeeSchema), async (req: AuthRequest, res: Response) => {
+router.post('/', authMiddleware, requirePermission('employees.create'), validate(CreateEmployeeSchema), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { name, phone, email, role, salary, notes, branchId: assignBranchId, password: customPassword } = req.body
@@ -121,7 +122,7 @@ router.post('/', authMiddleware, requireRole('admin', 'manager'), validate(Creat
 })
 
 // PUT /api/employees/:id
-router.put('/:id', authMiddleware, requireRole('admin', 'manager'), validate(UpdateEmployeeSchema), async (req: AuthRequest, res: Response) => {
+router.put('/:id', authMiddleware, requirePermission('employees.edit'), validate(UpdateEmployeeSchema), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { name, phone, email, role, salary, notes, employeeStatus, branchId: newBranchId } = req.body

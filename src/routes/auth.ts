@@ -70,7 +70,7 @@ function createTokenPair(payload: any) {
 const USER_SELECT = {
     id: true, email: true, name: true, role: true, phone: true, avatar: true,
     code: true, employeeStatus: true, isLocked: true, twoFactorEnabled: true,
-    branchId: true, createdAt: true,
+    branchId: true, createdAt: true, permissions: true,
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
@@ -599,6 +599,7 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
             success: true,
             data: {
                 ...user,
+                permissions: JSON.parse((user as any).permissions || '[]'),
                 storeId: req.user?.storeId,
                 storeCode: req.user?.storeCode,
                 branchSchema: req.user?.branchSchema,
@@ -1053,6 +1054,7 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
                         id: user.id, email: user.email, name: user.name,
                         role: user.role, phone: user.phone,
                         avatar: user.avatar, twoFactorEnabled: user.twoFactorEnabled,
+                        permissions: JSON.parse((user as any).permissions || '[]'),
                     },
                     store: {
                         id: store.id, code: store.code, name: store.name,

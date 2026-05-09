@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express'
 import { authMiddleware, AuthRequest, getBranchFilter, getBranchId } from '../middleware/auth'
+import { requirePermission } from '../middleware/permissionMiddleware'
 import { validate } from '../middleware/validate'
 import { CreateTransactionSchema } from '../schemas'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
@@ -25,7 +26,7 @@ function resolveConversionRate(
 }
 
 // GET /api/transactions
-router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/', authMiddleware, requirePermission('pos.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const branchId = getBranchId(req)
@@ -150,7 +151,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 })
 
 // GET /api/transactions/stats
-router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/stats', authMiddleware, requirePermission('pos.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const schema = req.user?.storeSchema || 'default'
@@ -288,7 +289,7 @@ router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => 
 })
 
 // GET /api/transactions/:id
-router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/:id', authMiddleware, requirePermission('pos.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const branchId = getBranchId(req)
@@ -322,7 +323,7 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
 })
 
 // POST /api/transactions — POS Checkout
-router.post('/', authMiddleware, validate(CreateTransactionSchema), async (req: AuthRequest, res: Response) => {
+router.post('/', authMiddleware, requirePermission('pos.create_order'), validate(CreateTransactionSchema), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const branchId = getBranchId(req)

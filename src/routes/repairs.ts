@@ -1,12 +1,13 @@
 import { Router, Request, Response } from 'express'
 import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
+import { requirePermission } from '../middleware/permissionMiddleware'
 import { validate } from '../middleware/validate'
 import { CreateRepairSchema, UpdateRepairSchema } from '../schemas'
 
 const router = Router()
 
 // GET /api/repairs/stats
-router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/stats', authMiddleware, requirePermission('repairs.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const all = await prisma.repair.findMany({ select: { status: true, cost: true } })
@@ -19,7 +20,7 @@ router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => 
 })
 
 // GET /api/repairs
-router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/', authMiddleware, requirePermission('repairs.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { search, status } = req.query
@@ -35,7 +36,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 })
 
 // POST /api/repairs
-router.post('/', authMiddleware, validate(CreateRepairSchema), async (req: AuthRequest, res: Response) => {
+router.post('/', authMiddleware, requirePermission('repairs.create'), validate(CreateRepairSchema), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { productName, customerName, customerPhone, issue, cost, estimatedDate, notes } = req.body
@@ -50,7 +51,7 @@ router.post('/', authMiddleware, validate(CreateRepairSchema), async (req: AuthR
 })
 
 // PUT /api/repairs/:id
-router.put('/:id', authMiddleware, validate(UpdateRepairSchema), async (req: AuthRequest, res: Response) => {
+router.put('/:id', authMiddleware, requirePermission('repairs.edit'), validate(UpdateRepairSchema), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { status, cost, notes, completedDate } = req.body

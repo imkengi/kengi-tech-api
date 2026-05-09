@@ -1,5 +1,6 @@
 import { Router, Response } from 'express'
 import { authMiddleware, getBranchFilter, AuthRequest } from '../middleware/auth'
+import { requirePermission } from '../middleware/permissionMiddleware'
 import { validate } from '../middleware/validate'
 import { CreateCategorySchema, UpdateCategorySchema } from '../schemas'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
@@ -7,7 +8,7 @@ import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 const router = Router()
 
 // GET /api/categories/stats
-router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/stats', authMiddleware, requirePermission('categories.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const categories = await prisma.category.findMany({
@@ -30,7 +31,7 @@ router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => 
 })
 
 // GET /api/categories — tree or flat
-router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/', authMiddleware, requirePermission('categories.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const schema = req.user?.storeSchema || 'default'
@@ -117,7 +118,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 })
 
 // GET /api/categories/:id
-router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/:id', authMiddleware, requirePermission('categories.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const category = await prisma.category.findFirst({
@@ -150,7 +151,7 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
 })
 
 // POST /api/categories
-router.post('/', authMiddleware, validate(CreateCategorySchema), async (req: AuthRequest, res: Response) => {
+router.post('/', authMiddleware, requirePermission('categories.create'), validate(CreateCategorySchema), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { name, description, color, parentId } = req.body
@@ -174,7 +175,7 @@ router.post('/', authMiddleware, validate(CreateCategorySchema), async (req: Aut
 })
 
 // PUT /api/categories/:id
-router.put('/:id', authMiddleware, validate(UpdateCategorySchema), async (req: AuthRequest, res: Response) => {
+router.put('/:id', authMiddleware, requirePermission('categories.edit'), validate(UpdateCategorySchema), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { name, description, color, parentId } = req.body
@@ -207,7 +208,7 @@ router.put('/:id', authMiddleware, validate(UpdateCategorySchema), async (req: A
 })
 
 // DELETE /api/categories/:id
-router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.delete('/:id', authMiddleware, requirePermission('categories.delete'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const childCount = await prisma.category.count({ where: { parentId: req.params.id as string } })

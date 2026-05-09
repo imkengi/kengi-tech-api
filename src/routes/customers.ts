@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express'
 import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
+import { requirePermission } from '../middleware/permissionMiddleware'
 import { validate } from '../middleware/validate'
 import { CreateCustomerSchema, UpdateCustomerSchema } from '../schemas'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
@@ -9,7 +10,7 @@ const router = Router()
 // ─── Customers CRUD ─────────────────────────────────────────────────────────
 
 // GET /api/customers/stats
-router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/stats', authMiddleware, requirePermission('customers.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const total = await prisma.customer.count()
@@ -22,7 +23,7 @@ router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => 
 })
 
 // GET /api/customers
-router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/', authMiddleware, requirePermission('customers.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const schema = req.user?.storeSchema || 'default'
@@ -85,7 +86,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 })
 
 // GET /api/customers/:id
-router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/:id', authMiddleware, requirePermission('customers.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         // Check if path is "groups" — handle customer-groups route
@@ -141,7 +142,7 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
 })
 
 // GET /api/customers/:id/purchases
-router.get('/:id/purchases', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/:id/purchases', authMiddleware, requirePermission('customers.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const custId = String(req.params.id)
@@ -178,7 +179,7 @@ router.get('/:id/purchases', authMiddleware, async (req: AuthRequest, res: Respo
 })
 
 // GET /api/customers/:id/prices/:productId
-router.get('/:id/prices/:productId', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/:id/prices/:productId', authMiddleware, requirePermission('customers.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const custId = String(req.params.id)
@@ -236,7 +237,7 @@ router.get('/:id/prices/:productId', authMiddleware, async (req: AuthRequest, re
 
 
 // GET /api/customers/:id/debt-history — Build debt movement history from transactions + DebtEntry
-router.get('/:id/debt-history', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/:id/debt-history', authMiddleware, requirePermission('customers.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const custId = String(req.params.id)
@@ -611,7 +612,7 @@ router.post('/:id/cancel-receipt', authMiddleware, async (req: AuthRequest, res:
 
 
 // POST /api/customers
-router.post('/', authMiddleware, validate(CreateCustomerSchema), async (req: AuthRequest, res: Response) => {
+router.post('/', authMiddleware, requirePermission('customers.create'), validate(CreateCustomerSchema), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { name, phone, email, address, notes, groupId, birthday, gender, taxCode, salesUserId, salesUserName } = req.body
@@ -667,7 +668,7 @@ router.post('/', authMiddleware, validate(CreateCustomerSchema), async (req: Aut
 })
 
 // PUT /api/customers/:id
-router.put('/:id', authMiddleware, validate(UpdateCustomerSchema), async (req: AuthRequest, res: Response) => {
+router.put('/:id', authMiddleware, requirePermission('customers.edit'), validate(UpdateCustomerSchema), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const existing = await prisma.customer.findFirst({ where: { id: String(req.params.id) } })
@@ -710,7 +711,7 @@ router.put('/:id', authMiddleware, validate(UpdateCustomerSchema), async (req: A
 })
 
 // DELETE /api/customers/:id
-router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.delete('/:id', authMiddleware, requirePermission('customers.delete'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         // Verify ownership before delete

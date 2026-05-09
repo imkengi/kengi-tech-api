@@ -1,5 +1,6 @@
 import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
+import { requirePermission } from '../middleware/permissionMiddleware'
 import { isBigQueryEnabled, queryBQ } from '../lib/bigquery'
 import { cacheGet, cacheSet } from '../lib/cache'
 
@@ -8,7 +9,7 @@ const router = Router()
 // ═══════════════════════════════════════════════════════════════════════════════
 // GET /api/reports/financial?period=thisMonth|lastMonth|3months|6months|year
 // ═══════════════════════════════════════════════════════════════════════════════
-router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/', authMiddleware, requirePermission('reports.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const schema = req.user?.storeSchema || 'default'
