@@ -304,8 +304,10 @@ router.post('/login', async (req: Request, res: Response) => {
         //      console.log, which would silently lock users out.
         // KENGIONLINE is a demo store and skips 2FA entirely.
         const isKengiOnline = store.code.toUpperCase() === 'KENGIONLINE'
+        // Accept either deviceToken (legacy) or deviceId (sent by current frontend)
+        // as the trusted-device identifier.
         const incomingDeviceToken: string =
-            (req.body && req.body.deviceToken) ||
+            (req.body && (req.body.deviceToken || req.body.deviceId)) ||
             (req.headers['x-device-token'] as string) || ''
         const trustedDevice = !isKengiOnline && incomingDeviceToken && isDeviceTrusted(user.id, incomingDeviceToken)
         if (user.twoFactorEnabled && process.env.SMTP_USER && !isKengiOnline && !trustedDevice) {
