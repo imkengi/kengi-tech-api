@@ -938,6 +938,12 @@ router.post(
                             where: { id: r.productId },
                             data: { stock: { increment: r.quantity } },
                         })
+                        // Mirror the physical return on the trip item so the books
+                        // line up after cancellation (loadedQty = returnedQty).
+                        await tx.salesTripItem.updateMany({
+                            where: { tripId: trip.id, productId: r.productId },
+                            data: { returnedQty: r.quantity },
+                        })
                     }
                 }
 
