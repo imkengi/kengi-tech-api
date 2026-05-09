@@ -143,7 +143,7 @@ async function runAutoSync() {
 
         for (const store of stores) {
             try {
-                const storePrisma = getStorePrisma(store.schemaName)
+                const storePrisma = getStorePrisma(store.schema)
 
                 // Find channels with access tokens (connected)
                 const channels = await storePrisma.onlineChannel.findMany({
@@ -199,7 +199,7 @@ async function runCleanup() {
 
         for (const store of stores) {
             try {
-                const storePrisma = getStorePrisma(store.schemaName)
+                const storePrisma = getStorePrisma(store.schema)
 
                 // Lấy danh sách id đơn cũ cần xóa
                 const oldOrders = await storePrisma.onlineOrder.findMany({
