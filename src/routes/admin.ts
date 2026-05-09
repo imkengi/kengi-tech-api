@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express'
 import { registryPrisma, getStorePrisma, dropStoreSchema } from '../lib/prisma'
+import { invalidateStoreStatus } from '../lib/storeStatusCache'
 
 const router = Router()
 
@@ -146,6 +147,7 @@ router.put('/stores/:id/status', async (req: Request, res: Response) => {
         if (!store) return res.status(404).json({ success: false, error: 'Cửa hàng không tồn tại' })
 
         const updated = await prisma.store.update({ where: { id: String(req.params.id) }, data: { status } })
+        invalidateStoreStatus(store.id)
         console.log(`[Admin] Store ${store.code} status → ${status}`)
 
         // Force-logout all users when store is suspended
@@ -198,6 +200,7 @@ router.delete('/stores/:id', async (req: Request, res: Response) => {
         await dropStoreSchema(store.schema)
         // Delete registry entry
         await prisma.store.delete({ where: { id: store.id } })
+        invalidateStoreStatus(store.id)
 
         console.log(`[Admin] Deleted store ${store.code} (schema: ${store.schema})`)
         res.json({ success: true, message: `Đã xóa cửa hàng "${store.name}"` })

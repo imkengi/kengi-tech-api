@@ -1,7 +1,8 @@
 import { Request, Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
-import { registryPrisma, getStorePrisma } from '../lib/prisma'
+import { getStorePrisma } from '../lib/prisma'
+import { getStoreStatus } from '../lib/storeStatusCache'
 import { PrismaClient as StorePrisma } from '../generated/store-client'
 
 const JWT_SECRET = process.env.JWT_SECRET || ''
@@ -88,13 +89,11 @@ export const authMiddleware = async (req: AuthRequest, res: Response, next: Next
                 // Attach branch-specific Prisma client
                 req.storePrisma = getStorePrisma(schema)
 
-                // Check store suspension (skip for superadmin)
+                // Check store suspension (skip for superadmin) — cached to avoid
+                // hitting the registry on every authenticated request.
                 if (decoded.storeId && decoded.role !== 'superadmin') {
-                    const store = await registryPrisma.store.findUnique({
-                        where: { id: decoded.storeId },
-                        select: { status: true },
-                    })
-                    if (store && store.status === 'suspended') {
+                    const status = await getStoreStatus(decoded.storeId)
+                    if (status === 'suspended') {
                         res.status(403).json({
                             success: false,
                             error: 'Cửa hàng đã bị tạm dừng. Vui lòng liên hệ quản trị viên hệ thống.',
