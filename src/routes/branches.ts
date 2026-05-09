@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express'
 import { authMiddleware, AuthRequest, getBranchFilter } from '../middleware/auth'
+import { requireRole } from '../middleware/roleMiddleware'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 
 const router = Router()
@@ -360,7 +361,8 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
 })
 
 // POST /api/branches/migrate-branch-ids — One-time: assign null branchIds to main branch
-router.post('/migrate-branch-ids', authMiddleware, async (req: AuthRequest, res: Response) => {
+// Admin/superadmin only — runs UPDATE across 11 tables, must not be exposed to regular users.
+router.post('/migrate-branch-ids', authMiddleware, requireRole('admin', 'superadmin'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma! as any
         const mainBranch = await prisma.branch.findFirst({ where: { isMainBranch: true } })
