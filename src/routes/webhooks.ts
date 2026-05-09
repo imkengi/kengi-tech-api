@@ -1,9 +1,30 @@
 import { Router, Request, Response } from 'express'
+import crypto from 'crypto'
 import registryPrisma, { getStorePrisma } from '../lib/prisma'
 import { ShopeeService } from '../services/platforms/shopee'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 
 const router = Router()
+
+// Cache shop_id → store schema for 1h. Avoids scanning every active store schema
+// on every webhook delivery; invalidates naturally when channel credentials rotate.
+const SHOP_SCHEMA_TTL = 3600
+const shopSchemaCacheKey = (shopId: string) => `webhook:shopee:shop:${shopId}:schema`
+
+// Shopee push signature: HMAC-SHA256(partner_key, push_url + "|" + raw_body) hex.
+// Sent in the Authorization header. Returns true when signature matches.
+function verifyShopeeSignature(rawBody: Buffer, url: string, partnerKey: string, signature: string): boolean {
+    const baseString = `${url}|${rawBody.toString('utf8')}`
+    const expected = crypto.createHmac('sha256', partnerKey).update(baseString).digest('hex')
+    try {
+        const a = Buffer.from(expected, 'hex')
+        const b = Buffer.from(signature, 'hex')
+        if (a.length !== b.length) return false
+        return crypto.timingSafeEqual(a, b)
+    } catch {
+        return false
+    }
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  SHOPEE WEBHOOK (PUSH NOTIFICATION)
@@ -25,6 +46,11 @@ router.post('/shopee', async (req: Request, res: Response) => {
         const pushCode = body.code
         const data = body.data || {}
 
+        const rawBody: Buffer | undefined = (req as any).rawBody
+        const signature = String(req.header('authorization') || req.header('x-shopee-signature') || '').trim()
+        const pushUrl = process.env.SHOPEE_WEBHOOK_URL ||
+            `${req.protocol}://${req.get('host')}${req.originalUrl}`
+
         console.log(`[Shopee Webhook] code=${pushCode} shop=${shopId} data=${JSON.stringify(data).substring(0, 300)}`)
 
         // Only process order-related push codes
@@ -39,36 +65,68 @@ router.post('/shopee', async (req: Request, res: Response) => {
             return
         }
 
-        // Find which store+channel matches this shopId
-        const allStores = await registryPrisma.store.findMany({ where: { status: 'active' } })
-
+        // ── Find channel by shop_id (cached schema lookup → fall back to scan) ──
         let channel: any = null
         let storePrisma: any = null
+        let resolvedSchema: string | null = null
 
-        for (const store of allStores) {
+        const cachedSchema = shopId ? await cacheGet<string>(shopSchemaCacheKey(shopId)) : null
+        if (cachedSchema) {
             try {
-                const prisma = getStorePrisma(store.schema)
-
+                const prisma = getStorePrisma(cachedSchema)
                 const found = await prisma.onlineChannel.findFirst({
-                    where: {
-                        platform: 'shopee',
-                        shopId: shopId,
-                    },
+                    where: { platform: 'shopee', shopId },
                 })
-
                 if (found) {
                     channel = found
                     storePrisma = prisma
-                    break
+                    resolvedSchema = cachedSchema
                 }
             } catch {
-                // Store might not have OnlineChannel table
-                continue
+                // Cached schema went stale (store removed, table missing) — fall through to scan.
+            }
+        }
+
+        if (!channel) {
+            const allStores = await registryPrisma.store.findMany({ where: { status: 'active' } })
+            for (const store of allStores) {
+                try {
+                    const prisma = getStorePrisma(store.schema)
+                    const found = await prisma.onlineChannel.findFirst({
+                        where: { platform: 'shopee', shopId },
+                    })
+                    if (found) {
+                        channel = found
+                        storePrisma = prisma
+                        resolvedSchema = store.schema
+                        break
+                    }
+                } catch {
+                    // Store might not have OnlineChannel table
+                    continue
+                }
             }
         }
 
         if (!channel || !storePrisma) {
             console.log(`[Shopee Webhook] No channel found for shop_id=${shopId}`)
+            return
+        }
+
+        if (resolvedSchema && resolvedSchema !== cachedSchema) {
+            await cacheSet(shopSchemaCacheKey(shopId), resolvedSchema, SHOP_SCHEMA_TTL)
+        }
+
+        // ── Verify HMAC signature (env-wide partner key, then per-channel apiSecret) ──
+        const partnerKey = process.env.SHOPEE_PARTNER_KEY || channel.apiSecret || ''
+        if (!partnerKey) {
+            console.warn(`[Shopee Webhook] No partner key available for shop_id=${shopId} — processing without signature check`)
+        } else if (!signature) {
+            console.warn(`[Shopee Webhook] Missing Authorization header for shop_id=${shopId} — processing without signature check`)
+        } else if (!rawBody) {
+            console.warn(`[Shopee Webhook] Raw body unavailable — processing without signature check`)
+        } else if (!verifyShopeeSignature(rawBody, pushUrl, partnerKey, signature)) {
+            console.warn(`[Shopee Webhook] ❌ Invalid signature for shop_id=${shopId} — rejecting`)
             return
         }
 

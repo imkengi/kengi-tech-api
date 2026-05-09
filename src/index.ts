@@ -96,7 +96,15 @@ app.use(cors({
     credentials: true,
 }))
 
-app.use(express.json({ limit: '10mb' }))
+app.use(express.json({
+    limit: '10mb',
+    verify: (req, _res, buf) => {
+        // Stash raw body bytes for HMAC verification (e.g., Shopee webhook).
+        // Recomputing from JSON.stringify(req.body) would diverge from the bytes
+        // the sender actually signed (key order, whitespace).
+        ; (req as any).rawBody = buf
+    },
+}))
 import path from 'path'
 app.use('/uploads', express.static(path.join(process.cwd(), 'public', 'uploads')))
 
