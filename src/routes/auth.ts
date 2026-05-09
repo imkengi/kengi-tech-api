@@ -1096,7 +1096,7 @@ router.post('/reset-password', async (req: Request, res: Response) => {
 
         let payload: any
         try {
-            payload = jwt.verify(resetToken, JWT_SECRET!)
+            payload = jwt.verify(resetToken, JWT_SECRET!, { algorithms: ['HS256'] })
         } catch {
             return res.status(401).json({ success: false, error: 'Token đặt lại đã hết hạn hoặc không hợp lệ' })
         }

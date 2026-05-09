@@ -65,7 +65,7 @@ export function setupWebSocket(server: HTTPServer): WebSocketServer {
         }
 
         try {
-            const decoded = jwt.verify(token, JWT_SECRET) as any
+            const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as any
             ws.storeSchema = decoded.storeSchema
             ws.userId = decoded.userId
             ws.isAlive = true

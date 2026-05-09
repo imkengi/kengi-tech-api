@@ -80,7 +80,7 @@ export const authMiddleware = async (req: AuthRequest, res: Response, next: Next
     if (authHeader && authHeader.startsWith('Bearer ')) {
         const token = authHeader.split(' ')[1]
         try {
-            const decoded = jwt.verify(token, JWT_SECRET) as AuthPayload
+            const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as AuthPayload
             req.user = decoded
 
             const schema = resolveSchema(decoded)
@@ -129,7 +129,7 @@ export const optionalAuth = async (req: AuthRequest, _res: Response, next: NextF
     if (authHeader && authHeader.startsWith('Bearer ')) {
         const token = authHeader.split(' ')[1]
         try {
-            const decoded = jwt.verify(token, JWT_SECRET) as AuthPayload
+            const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as AuthPayload
             req.user = decoded
             const schema = resolveSchema(decoded)
             if (schema) req.storePrisma = getStorePrisma(schema)
