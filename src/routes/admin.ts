@@ -721,23 +721,21 @@ router.post('/sync-schemas', async (_req: Request, res: Response) => {
         const results: { store: string; schema: string; status: string }[] = []
 
         for (const store of stores) {
+            // Schema names come from the registry and are restricted to safe identifier
+            // chars by createBranchSchema; this guard is belt-and-suspenders before
+            // interpolating into raw DDL.
+            if (!/^[a-z0-9_]+$/i.test(store.schema)) {
+                results.push({ store: store.code, schema: store.schema, status: 'error: invalid schema name' })
+                continue
+            }
             try {
-                // Run prisma db push for this store's schema
-                const base = (process.env.DATABASE_URL || '').replace(/[?&]schema=[^&]*/g, '').replace(/\?$/, '')
-                const sep = base.includes('?') ? '&' : '?'
-                const schemaUrl = `${base}${sep}schema=${store.schema}`
-
-                const { execSync } = require('child_process')
-                execSync('npx prisma db push --schema=prisma/schema-store.prisma --skip-generate --accept-data-loss', {
-                    stdio: 'pipe',
-                    env: { ...process.env, STORE_DATABASE_URL: schemaUrl, DATABASE_URL: schemaUrl },
-                    timeout: 30000,
-                })
+                await prisma.$executeRawUnsafe(`ALTER TABLE "${store.schema}"."SalesTripItem" ADD COLUMN IF NOT EXISTS "actualQty" INTEGER NOT NULL DEFAULT 0`)
+                await prisma.$executeRawUnsafe(`ALTER TABLE "${store.schema}"."SalesTripItem" ADD COLUMN IF NOT EXISTS "damagedQty" INTEGER NOT NULL DEFAULT 0`)
                 results.push({ store: store.code, schema: store.schema, status: 'ok' })
                 console.log(`✅ Schema synced: ${store.code} (${store.schema})`)
             } catch (err: any) {
-                results.push({ store: store.code, schema: store.schema, status: `error: ${err?.message?.slice(0, 100)}` })
-                console.error(`❌ Schema sync failed: ${store.code}`, err?.message?.slice(0, 200))
+                results.push({ store: store.code, schema: store.schema, status: `error: ${err?.message?.slice(0, 200)}` })
+                console.error(`❌ Schema sync failed: ${store.code}`, err?.message?.slice(0, 400))
             }
         }
 
