@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express'
-import { registryPrisma, getStorePrisma, dropStoreSchema } from '../lib/prisma'
+import { registryPrisma, getStorePrisma, dropStoreSchema, mapWithConcurrency } from '../lib/prisma'
 
 const router = Router()
 
@@ -212,7 +212,7 @@ router.get('/users', async (_req: Request, res: Response) => {
     try {
         const stores = await prisma.store.findMany()
         const allUsers: any[] = []
-        await Promise.all(stores.map(async (store) => {
+        await mapWithConcurrency(stores, async (store) => {
             try {
                 const sp = getStorePrisma(store.schema)
                 const users = await sp.user.findMany({ include: { branch: { select: { name: true } } } })
@@ -221,7 +221,7 @@ router.get('/users', async (_req: Request, res: Response) => {
                     branchName: (u as any).branch?.name || null
                 }))
             } catch { /* schema not ready */ }
-        }))
+        })
         res.json({ success: true, data: allUsers })
     } catch (err) {
         console.error('Admin list users error:', err)
@@ -331,7 +331,7 @@ router.get('/branch-requests', async (req: Request, res: Response) => {
         const statusFilter = (req.query.status as string) || 'all'
         const stores = await prisma.store.findMany()
         const allRequests: any[] = []
-        await Promise.all(stores.map(async (store) => {
+        await mapWithConcurrency(stores, async (store) => {
             try {
                 const sp = getStorePrisma(store.schema)
                 const rows: any[] = await (sp as any).$queryRawUnsafe(
@@ -340,7 +340,7 @@ router.get('/branch-requests', async (req: Request, res: Response) => {
                 ).catch(() => [])
                 rows.forEach(r => allRequests.push({ ...r, storeName: store.name, storeCode: store.code, _storeSchema: store.schema }))
             } catch { /* table might not exist */ }
-        }))
+        })
         allRequests.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         res.json({ success: true, data: allRequests })
     } catch (err) {
@@ -426,7 +426,7 @@ router.get('/branch-delete-requests', async (req: Request, res: Response) => {
         const statusFilter = (req.query.status as string) || 'all'
         const stores = await prisma.store.findMany()
         const allRequests: any[] = []
-        await Promise.all(stores.map(async (store) => {
+        await mapWithConcurrency(stores, async (store) => {
             try {
                 const sp = getStorePrisma(store.schema)
                 const rows: any[] = await (sp as any).$queryRawUnsafe(
@@ -435,7 +435,7 @@ router.get('/branch-delete-requests', async (req: Request, res: Response) => {
                 ).catch(() => [])
                 rows.forEach(r => allRequests.push({ ...r, storeName: store.name, storeCode: store.code, _storeSchema: store.schema }))
             } catch { /* table might not exist */ }
-        }))
+        })
         allRequests.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         res.json({ success: true, data: allRequests })
     } catch (err) {
@@ -768,7 +768,7 @@ router.get('/cloud-metrics', async (_req: Request, res: Response) => {
         let totalRevenue = 0
         let totalRevenueLastMonth = 0
 
-        await Promise.all(stores.map(async (s) => {
+        await mapWithConcurrency(stores, async (s) => {
             try {
                 const sp = getStorePrisma(s.schema)
                 const [todayTx, monthTx, lastMonthTx, monthRev, lastMonthRev] = await Promise.all([
@@ -784,7 +784,7 @@ router.get('/cloud-metrics', async (_req: Request, res: Response) => {
                 totalRevenue += (monthRev?._sum?.total || 0)
                 totalRevenueLastMonth += (lastMonthRev?._sum?.total || 0)
             } catch { /* skip */ }
-        }))
+        })
 
         // ── Cloud Run metrics via GCP Monitoring REST API ─────────────────────
         let gcpData: any = null

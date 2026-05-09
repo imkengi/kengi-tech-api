@@ -17,9 +17,9 @@ import { PrismaClient } from '@prisma/client'
 import { PrismaClient as StorePrisma } from '../generated/store-client'
 import { execSync } from 'child_process'
 
-const POOL_SIZE = parseInt(process.env.PRISMA_POOL_SIZE || '2', 10)
+const POOL_SIZE = parseInt(process.env.PRISMA_POOL_SIZE || '3', 10)
 const POOL_TIMEOUT = parseInt(process.env.PRISMA_POOL_TIMEOUT || '10', 10)
-const MAX_BRANCH_CLIENTS = parseInt(process.env.MAX_STORE_CLIENTS || '10', 10)
+const MAX_BRANCH_CLIENTS = parseInt(process.env.MAX_STORE_CLIENTS || '50', 10)
 
 // ─── Registry Client (public schema — Store lookup only) ────────────────────
 
@@ -228,6 +228,35 @@ async function disconnectAll(): Promise<void> {
     branchClients.clear()
 }
 
+// ─── Concurrency helper ─────────────────────────────────────────────────────
+// Cap concurrent fan-out across stores so we don't blow past Postgres
+// max_connections or evict every entry in the LRU cache.
+
+const STORE_FANOUT_CONCURRENCY = parseInt(process.env.STORE_FANOUT_CONCURRENCY || '5', 10)
+
+/**
+ * Map an async function over an array with bounded concurrency.
+ * Drop-in replacement for `Promise.all(items.map(fn))` when iterating
+ * across stores or other heavyweight resources.
+ */
+async function mapWithConcurrency<T, R>(
+    items: T[],
+    fn: (item: T, index: number) => Promise<R>,
+    limit: number = STORE_FANOUT_CONCURRENCY,
+): Promise<R[]> {
+    const results: R[] = new Array(items.length)
+    let cursor = 0
+    const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+        while (true) {
+            const i = cursor++
+            if (i >= items.length) return
+            results[i] = await fn(items[i], i)
+        }
+    })
+    await Promise.all(workers)
+    return results
+}
+
 // ─── Exports ────────────────────────────────────────────────────────────────
 
 export {
@@ -237,6 +266,8 @@ export {
     createBranchSchema,
     dropBranchSchema,
     disconnectAll,
+    mapWithConcurrency,
+    STORE_FANOUT_CONCURRENCY,
 }
 
 // Backward compat aliases
