@@ -18,21 +18,73 @@ if (!JWT_SECRET) {
 const ACCESS_TOKEN_TTL = '15m'       // Short-lived access token
 const REFRESH_TOKEN_TTL_DAYS = 90    // Long-lived refresh token (90 days)
 
-// ─── In-memory refresh token store ───────────────────────────────────────────
-// Maps refreshToken -> { userId, storeCode, branchId, branchSchema, storeId, storeCode, isMainBranch, email, role, expiresAt }
-const refreshTokenStore = new Map<string, {
+// ─── Refresh token persistence (registry DB is source of truth) ──────────────
+// Refresh tokens are stored in the public.RefreshToken table (see prisma/schema.prisma).
+// A small in-memory cache keeps hot lookups fast — but the DB is authoritative,
+// so a deploy or pod restart does NOT log everyone out, and store suspension
+// can revoke tokens by deleting rows.
+type RefreshTokenRecord = {
     userId: string; email: string; role: string;
     storeId: string; storeCode: string;
     branchId: string | null; branchSchema: string;
-    isMainBranch: boolean; expiresAt: Date;
-}>()
+    isMainBranch: boolean; deviceId?: string | null; expiresAt: Date;
+}
+const refreshTokenCache = new Map<string, RefreshTokenRecord>()
 
-// Cleanup expired tokens every hour
+async function persistRefreshToken(token: string, rec: RefreshTokenRecord): Promise<void> {
+    refreshTokenCache.set(token, rec)
+    await registryPrisma.refreshToken.create({
+        data: {
+            token,
+            userId: rec.userId,
+            email: rec.email,
+            role: rec.role,
+            storeId: rec.storeId,
+            storeCode: rec.storeCode,
+            branchId: rec.branchId,
+            branchSchema: rec.branchSchema,
+            isMainBranch: rec.isMainBranch,
+            deviceId: rec.deviceId ?? null,
+            expiresAt: rec.expiresAt,
+        },
+    })
+}
+
+async function loadRefreshToken(token: string): Promise<RefreshTokenRecord | null> {
+    const cached = refreshTokenCache.get(token)
+    if (cached) return cached
+    const row = await registryPrisma.refreshToken.findUnique({ where: { token } })
+    if (!row) return null
+    const rec: RefreshTokenRecord = {
+        userId: row.userId, email: row.email, role: row.role,
+        storeId: row.storeId, storeCode: row.storeCode,
+        branchId: row.branchId, branchSchema: row.branchSchema,
+        isMainBranch: row.isMainBranch, deviceId: row.deviceId,
+        expiresAt: row.expiresAt,
+    }
+    refreshTokenCache.set(token, rec)
+    return rec
+}
+
+async function deleteRefreshToken(token: string): Promise<void> {
+    refreshTokenCache.delete(token)
+    await registryPrisma.refreshToken.deleteMany({ where: { token } }).catch(() => {})
+}
+
+async function deleteRefreshTokensForUser(userId: string): Promise<void> {
+    for (const [t, rec] of refreshTokenCache) {
+        if (rec.userId === userId) refreshTokenCache.delete(t)
+    }
+    await registryPrisma.refreshToken.deleteMany({ where: { userId } }).catch(() => {})
+}
+
+// Cleanup expired tokens every hour (cache + DB)
 setInterval(() => {
     const now = new Date()
-    for (const [token, data] of refreshTokenStore) {
-        if (data.expiresAt < now) refreshTokenStore.delete(token)
+    for (const [token, rec] of refreshTokenCache) {
+        if (rec.expiresAt < now) refreshTokenCache.delete(token)
     }
+    registryPrisma.refreshToken.deleteMany({ where: { expiresAt: { lt: now } } }).catch(() => {})
 }, 60 * 60 * 1000)
 
 // ─── Pending 2FA login store ─────────────────────────────────────────────────
@@ -58,12 +110,23 @@ function generateRefreshToken(): string {
     return crypto.randomBytes(64).toString('hex')
 }
 
-function createTokenPair(payload: any) {
+async function createTokenPair(payload: any, deviceId?: string | null) {
     if (!JWT_SECRET) throw new Error('JWT_SECRET is not configured — cannot sign tokens')
     const accessToken = jwt.sign(payload, JWT_SECRET, { expiresIn: ACCESS_TOKEN_TTL } as any)
     const refreshToken = generateRefreshToken()
     const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000)
-    refreshTokenStore.set(refreshToken, { ...payload, expiresAt })
+    await persistRefreshToken(refreshToken, {
+        userId: payload.userId,
+        email: payload.email,
+        role: payload.role,
+        storeId: payload.storeId,
+        storeCode: payload.storeCode,
+        branchId: payload.branchId ?? null,
+        branchSchema: payload.branchSchema,
+        isMainBranch: !!payload.isMainBranch,
+        deviceId: deviceId ?? null,
+        expiresAt,
+    })
     return { accessToken, refreshToken, refreshExpiresAt: expiresAt }
 }
 
@@ -194,7 +257,7 @@ router.post('/signup', async (req: Request, res: Response) => {
             storeId: store.id, storeCode: store.code,
             branchId: branch.id, branchSchema: finalSchema, isMainBranch: true,
         }
-        const { accessToken, refreshToken } = createTokenPair(tokenPayload)
+        const { accessToken, refreshToken } = await createTokenPair(tokenPayload)
 
         res.status(201).json({
             success: true,
@@ -400,7 +463,7 @@ router.post('/login', async (req: Request, res: Response) => {
             branchId: effectiveBranchId, branchSchema,
             storeSchema: branchSchema, isMainBranch: branch?.isMainBranch || false,
         }
-        const { accessToken, refreshToken } = createTokenPair(tokenPayload)
+        const { accessToken, refreshToken } = await createTokenPair(tokenPayload, req.body?.deviceId)
 
         res.json({
             success: true,
@@ -480,7 +543,7 @@ router.post('/verify-2fa', async (req: Request, res: Response) => {
             branchId: pending.branchId, branchSchema: pending.branchSchema,
             storeSchema: pending.branchSchema, isMainBranch: pending.isMainBranch,
         }
-        const { accessToken, refreshToken } = createTokenPair(tokenPayload)
+        const { accessToken, refreshToken } = await createTokenPair(tokenPayload, deviceId || pending.deviceId)
 
         res.json({
             success: true,
@@ -877,21 +940,64 @@ router.post('/refresh', async (req: Request, res: Response) => {
             return res.status(400).json({ success: false, error: 'Refresh token is required' })
         }
 
-        const stored = refreshTokenStore.get(refreshToken)
+        const stored = await loadRefreshToken(refreshToken)
         if (!stored) {
             return res.status(401).json({ success: false, error: 'Invalid refresh token' })
         }
 
         // Check expiry
         if (stored.expiresAt < new Date()) {
-            refreshTokenStore.delete(refreshToken)
+            await deleteRefreshToken(refreshToken)
             return res.status(401).json({ success: false, error: 'Refresh token expired' })
         }
 
-        // Generate new access token (keep same refresh token)
-        const { userId, email, role, storeId, storeCode, branchId, branchSchema, isMainBranch } = stored
+        // Verify the store is still active (suspension revokes refresh)
+        const store = await registryPrisma.store.findUnique({
+            where: { id: stored.storeId },
+            select: { status: true },
+        })
+        if (!store || store.status !== 'active') {
+            await deleteRefreshToken(refreshToken)
+            return res.status(403).json({ success: false, error: 'Cửa hàng đã bị tạm dừng' })
+        }
+
+        // Re-read current role / permissions / isLocked from the store schema
+        // so role changes and account locks take effect on next refresh.
+        const storePrisma = getStorePrisma(stored.branchSchema)
+        const currentUser = await storePrisma.user.findUnique({
+            where: { id: stored.userId },
+            select: { id: true, email: true, role: true, isLocked: true, permissions: true },
+        }).catch(() => null)
+        if (!currentUser) {
+            await deleteRefreshToken(refreshToken)
+            return res.status(401).json({ success: false, error: 'User no longer exists' })
+        }
+        if (currentUser.isLocked) {
+            await deleteRefreshTokensForUser(currentUser.id)
+            return res.status(403).json({ success: false, error: 'Tài khoản đã bị khóa' })
+        }
+
+        // If role changed in DB, update the cached + persisted record so future
+        // refreshes stay consistent with the latest store state.
+        if (currentUser.role !== stored.role) {
+            stored.role = currentUser.role
+            refreshTokenCache.set(refreshToken, stored)
+            await registryPrisma.refreshToken.updateMany({
+                where: { token: refreshToken },
+                data: { role: currentUser.role },
+            }).catch(() => {})
+        }
+
+        const { userId, email, storeId, storeCode, branchId, branchSchema, isMainBranch } = stored
         const newAccessToken = jwt.sign(
-            { userId, email, role, storeId, storeCode, branchId, branchSchema, storeSchema: branchSchema, isMainBranch },
+            {
+                userId, email,
+                role: currentUser.role,
+                storeId, storeCode, branchId,
+                branchSchema, storeSchema: branchSchema,
+                isMainBranch,
+                permissions: JSON.parse((currentUser as any).permissions || '[]'),
+            },
             JWT_SECRET,
             { expiresIn: ACCESS_TOKEN_TTL } as any,
         )
@@ -906,7 +1012,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
 // ─── POST /api/auth/logout — Invalidate refresh token ────────────────────────
 router.post('/logout', async (req: Request, res: Response) => {
     const { refreshToken } = req.body
-    if (refreshToken) refreshTokenStore.delete(refreshToken)
+    if (refreshToken) await deleteRefreshToken(refreshToken)
     res.json({ success: true })
 })
 
@@ -1037,7 +1143,7 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
                 branchId: effectiveBranchId, branchSchema: store.schema,
                 storeSchema: store.schema, isMainBranch: branch?.isMainBranch || false,
             }
-            const { accessToken, refreshToken } = createTokenPair(tokenPayload)
+            const { accessToken, refreshToken } = await createTokenPair(tokenPayload, req.body?.deviceId)
 
             // Issue a trusted-device token so this device can skip 2FA for the next 30 days.
             const deviceToken = generateDeviceToken()
@@ -1112,9 +1218,7 @@ router.post('/reset-password', async (req: Request, res: Response) => {
         await storePrisma.user.update({ where: { id: payload.userId }, data: { password: hashed } })
 
         // Invalidate all refresh tokens for this user (force re-login everywhere)
-        for (const [token, data] of refreshTokenStore) {
-            if (data.userId === payload.userId) refreshTokenStore.delete(token)
-        }
+        await deleteRefreshTokensForUser(String(payload.userId))
 
         res.json({ success: true, message: 'Đặt lại mật khẩu thành công' })
     } catch (err: any) {

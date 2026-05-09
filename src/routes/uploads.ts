@@ -15,9 +15,32 @@ if (!fs.existsSync(UPLOADS_DIR)) {
     fs.mkdirSync(UPLOADS_DIR, { recursive: true })
 }
 
-// Multer config for local storage
+// Schema names are validated to [a-z0-9_]+ before reaching here, so they are
+// safe to use as path segments — but double-check before constructing paths.
+function storePrefix(req: AuthRequest): string {
+    const schema = req.user?.branchSchema || req.user?.storeSchema
+    if (!schema || !/^[a-z0-9_]+$/.test(schema)) {
+        throw new Error('Missing or invalid store schema')
+    }
+    return schema
+}
+
+function ensureStoreDir(prefix: string): string {
+    const dir = path.join(UPLOADS_DIR, prefix)
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+    return dir
+}
+
+// Multer config — files land in a per-store subdirectory.
 const storage = multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
+    destination: (req, _file, cb) => {
+        try {
+            const prefix = storePrefix(req as AuthRequest)
+            cb(null, ensureStoreDir(prefix))
+        } catch (err: any) {
+            cb(err, '')
+        }
+    },
     filename: (_req, file, cb) => {
         const hash = crypto.randomBytes(8).toString('hex')
         const ext = path.extname(file.originalname) || '.jpg'
@@ -33,6 +56,29 @@ const upload = multer({
     }
 })
 
+async function recordStorageFile(
+    req: AuthRequest,
+    args: { name: string; url: string; size: number; type: string; category?: string },
+): Promise<void> {
+    const prisma = req.storePrisma
+    if (!prisma) return
+    try {
+        await prisma.storageFile.create({
+            data: {
+                name: args.name,
+                url: args.url,
+                size: args.size,
+                type: args.type,
+                category: args.category || 'upload',
+                uploadedBy: req.user?.email || 'System',
+            },
+        })
+    } catch (err: any) {
+        // Don't fail the upload if metadata write fails — but log it.
+        console.warn('StorageFile.create failed:', err?.message || err)
+    }
+}
+
 // ─── GET /api/uploads/status ─────────────────────────────────────────────────
 router.get('/status', authMiddleware, (_req: Request, res: Response) => {
     res.json({ success: true, data: { enabled: true, gcs: isStorageEnabled() } })
@@ -46,15 +92,23 @@ router.post('/direct', authMiddleware, upload.single('file'), async (req: AuthRe
             return res.status(400).json({ success: false, error: 'No file uploaded' })
         }
 
-        // Build public URL
+        const prefix = storePrefix(req)
         const baseUrl = process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`
-        const publicUrl = `${baseUrl}/uploads/${req.file.filename}`
+        const relPath = `${prefix}/${req.file.filename}`
+        const publicUrl = `${baseUrl}/uploads/${relPath}`
+
+        await recordStorageFile(req, {
+            name: req.file.originalname,
+            url: publicUrl,
+            size: req.file.size,
+            type: req.file.mimetype,
+        })
 
         res.json({
             success: true,
             data: {
                 url: publicUrl,
-                filename: req.file.filename,
+                filename: relPath,
                 size: req.file.size,
                 mimetype: req.file.mimetype,
             }
@@ -86,16 +140,27 @@ router.post('/base64', authMiddleware, async (req: AuthRequest, res: Response) =
         const hash = crypto.randomBytes(8).toString('hex')
         const fname = `${Date.now()}-${hash}${ext}`
 
-        fs.writeFileSync(path.join(UPLOADS_DIR, fname), Buffer.from(base64Data, 'base64'))
+        const prefix = storePrefix(req)
+        const dir = ensureStoreDir(prefix)
+        const buf = Buffer.from(base64Data, 'base64')
+        fs.writeFileSync(path.join(dir, fname), buf)
 
         const baseUrl = process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`
-        const publicUrl = `${baseUrl}/uploads/${fname}`
+        const relPath = `${prefix}/${fname}`
+        const publicUrl = `${baseUrl}/uploads/${relPath}`
+
+        await recordStorageFile(req, {
+            name: typeof origName === 'string' ? origName : fname,
+            url: publicUrl,
+            size: buf.length,
+            type: mimeType,
+        })
 
         res.json({
             success: true,
             data: {
                 url: publicUrl,
-                filename: fname,
+                filename: relPath,
             }
         })
     } catch (err: any) {
@@ -105,16 +170,20 @@ router.post('/base64', authMiddleware, async (req: AuthRequest, res: Response) =
 })
 
 // ─── POST /api/uploads/signed-url ────────────────────────────────────────────
-// Request a signed URL for direct upload to Cloud Storage (requires GCS)
-router.post('/signed-url', authMiddleware, async (req: Request, res: Response) => {
+// Request a signed URL for direct upload to Cloud Storage (requires GCS).
+// The folder is forced to the caller's store prefix — client cannot pick it.
+router.post('/signed-url', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const { folder = 'general', filename, contentType } = req.body
 
         if (!filename || typeof filename !== 'string') {
             return res.status(400).json({ success: false, error: 'filename is required' })
         }
-        if (folder.includes('..') || filename.includes('..')) {
-            return res.status(400).json({ success: false, error: 'Invalid path' })
+        if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+            return res.status(400).json({ success: false, error: 'Invalid filename' })
+        }
+        if (typeof folder !== 'string' || folder.includes('..') || folder.includes('/') || folder.includes('\\')) {
+            return res.status(400).json({ success: false, error: 'Invalid folder' })
         }
         if (!contentType) {
             return res.status(400).json({ success: false, error: 'contentType is required' })
@@ -131,7 +200,9 @@ router.post('/signed-url', authMiddleware, async (req: Request, res: Response) =
             return res.status(400).json({ success: false, error: `Content type '${contentType}' not allowed` })
         }
 
-        const result = await getSignedUploadUrl(folder, filename, contentType)
+        const prefix = storePrefix(req)
+        const scopedFolder = `${prefix}/${folder}`
+        const result = await getSignedUploadUrl(scopedFolder, filename, contentType)
         res.json({ success: true, data: result })
     } catch (err: any) {
         console.error('Signed URL error:', err)
@@ -140,22 +211,33 @@ router.post('/signed-url', authMiddleware, async (req: Request, res: Response) =
 })
 
 // ─── DELETE /api/uploads/:filename ───────────────────────────────────────────
-router.delete('/:filename(*)', authMiddleware, requireRole('admin', 'manager'), async (req: Request, res: Response) => {
+// The caller may only delete files inside their own store prefix.
+router.delete('/:filename(*)', authMiddleware, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
     try {
-        const filename = String(req.params.filename)
-        if (!filename || filename.includes('..') || filename.startsWith('/')) {
+        const filename = String(req.params.filename || '').replace(/^\/+/, '')
+        if (!filename || filename.includes('..')) {
             return res.status(400).json({ success: false, error: 'Invalid filename' })
         }
 
-        // Try deleting from local storage first
-        const localPath = path.join(UPLOADS_DIR, path.basename(filename))
+        const prefix = storePrefix(req)
+        if (!filename.startsWith(prefix + '/')) {
+            return res.status(403).json({ success: false, error: 'You can only delete files in your own store' })
+        }
+
+        // Resolve and confirm the path stays inside the store's local directory.
+        const storeDir = path.resolve(UPLOADS_DIR, prefix)
+        const localPath = path.resolve(UPLOADS_DIR, filename)
+        if (!localPath.startsWith(storeDir + path.sep) && localPath !== storeDir) {
+            return res.status(400).json({ success: false, error: 'Invalid path' })
+        }
+
         if (fs.existsSync(localPath)) {
             fs.unlinkSync(localPath)
             return res.json({ success: true, message: 'File deleted' })
         }
 
-        // Try GCS
-        await deleteFile(String(filename))
+        // GCS path is already store-prefixed by the upload routes.
+        await deleteFile(filename)
         res.json({ success: true, message: 'File deleted' })
     } catch (err: any) {
         console.error('Delete file error:', err)

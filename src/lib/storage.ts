@@ -49,6 +49,9 @@ export async function getSignedUploadUrl(
     if (!storage || !bucket || !BUCKET_NAME) {
         throw new Error('Cloud Storage not configured (set GCS_BUCKET env var)')
     }
+    if (folder.includes('..') || folder.startsWith('/') || folder.includes('\\')) {
+        throw new Error('Invalid folder path')
+    }
 
     // Generate unique filename: folder/timestamp-random-originalname
     const ext = originalName.split('.').pop() || ''
