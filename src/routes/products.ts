@@ -19,7 +19,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         if (cached) return res.json(cached)
 
         const {
-            search, categoryId, brandId, stockStatus, productType,
+            search, categoryId, brandId, stockStatus, productType, warehouseId,
             page = '1', pageSize = '20', sortBy = 'createdAt', sortOrder = 'desc' } = req.query
 
         // Note: Product table does not have branchId column, so no branch filtering
@@ -65,6 +65,19 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
             filteredTotal = filteredProducts.length
         }
 
+        // When warehouseId is provided (e.g. van sales), replace stock with
+        // warehouse-specific quantities and filter to only stocked products.
+        let warehouseStockMap: Map<string, number> | null = null
+        if (warehouseId) {
+            const wStocks = await (prisma as any).warehouseStock.findMany({
+                where: { warehouseId: warehouseId as string, quantity: { gt: 0 } },
+                select: { productId: true, quantity: true },
+            })
+            warehouseStockMap = new Map(wStocks.map((ws: any) => [ws.productId, ws.quantity]))
+            filteredProducts = filteredProducts.filter((p: any) => warehouseStockMap!.has(p.id))
+            filteredTotal = filteredProducts.length
+        }
+
         const data = filteredProducts.map((p: any) => ({
             id: p.id,
             name: p.name,
@@ -79,7 +92,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
             costPrice: p.costPrice,
             sellingPrice: p.sellingPrice,
             taxInclusive: p.taxInclusive,
-            stock: p.stock,
+            stock: warehouseStockMap ? (warehouseStockMap.get(p.id) ?? 0) : p.stock,
             minStock: p.minStock,
             maxStock: p.maxStock,
             baseUnit: p.baseUnit,
