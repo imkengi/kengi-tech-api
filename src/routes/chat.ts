@@ -1,8 +1,37 @@
 import { Router, Response, Request } from 'express'
+import rateLimit from 'express-rate-limit'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { registryPrisma, getStorePrisma } from '../lib/prisma'
 
 const router = Router()
+
+// ─── Public chat rate limiters (per-IP) ─────────────────────────────────────
+// Public chat endpoints accept no auth, so spam control is per-IP only.
+// Conversation creation is rarer and more expensive (DDL on cold schema),
+// message send / poll are higher-volume but cheaper.
+const startConversationLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, error: 'Quá nhiều phiên trò chuyện được tạo từ địa chỉ này. Vui lòng thử lại sau 1 giờ.' },
+})
+
+const sendMessageLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 minute
+    max: 60,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, error: 'Quá nhiều tin nhắn. Vui lòng chậm lại.' },
+})
+
+const pollMessagesLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 minute
+    max: 120,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, error: 'Quá nhiều yêu cầu. Vui lòng thử lại sau.' },
+})
 
 // ─── Zero-Touch Migration ───────────────────────────────────────────────────
 // Creates chat tables on first access per store schema
@@ -545,7 +574,7 @@ async function resolveStoreSchema(storeCode: string): Promise<{ schema: string }
 }
 
 // POST /public/start — customer starts a new chat session
-router.post('/public/start', async (req: Request, res: Response) => {
+router.post('/public/start', startConversationLimiter, async (req: Request, res: Response) => {
     try {
         const { storeCode, customerName, customerPhone, customerEmail, platform = 'website' } = req.body
 
@@ -617,7 +646,7 @@ router.post('/public/start', async (req: Request, res: Response) => {
 })
 
 // POST /public/send — customer sends a message
-router.post('/public/send', async (req: Request, res: Response) => {
+router.post('/public/send', sendMessageLimiter, async (req: Request, res: Response) => {
     try {
         const { storeCode, sessionToken, content, customerName } = req.body
 
@@ -682,7 +711,7 @@ router.post('/public/send', async (req: Request, res: Response) => {
 })
 
 // GET /public/messages — customer polls for messages
-router.get('/public/messages', async (req: Request, res: Response) => {
+router.get('/public/messages', pollMessagesLimiter, async (req: Request, res: Response) => {
     try {
         const { storeCode, sessionToken } = req.query
 
