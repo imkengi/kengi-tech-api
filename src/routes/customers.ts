@@ -46,7 +46,7 @@ router.get('/', authMiddleware, requirePermission('customers.view'), async (req:
         if (salesUserId) where.salesUserId = salesUserId
 
         const pageNum = Math.max(1, parseInt(page as string))
-        const size = Math.max(1, Math.min(5000, parseInt(pageSize as string)))
+        const size = Math.max(1, Math.min(200, parseInt(pageSize as string)))
         const skip = (pageNum - 1) * size
 
         const [total, customers] = await Promise.all([

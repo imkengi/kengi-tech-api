@@ -40,7 +40,7 @@ router.get('/', authMiddleware, requirePermission('products.view'), async (req: 
         if (stockStatus === 'out_of_stock') where.stock = 0
 
         const pageNum = Math.max(1, parseInt(page as string))
-        const size = Math.max(1, Math.min(1000, parseInt(pageSize as string)))
+        const size = Math.max(1, Math.min(200, parseInt(pageSize as string)))
         const skip = (pageNum - 1) * size
 
         const [total, products] = await Promise.all([

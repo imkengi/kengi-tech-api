@@ -57,7 +57,7 @@ router.get('/', authMiddleware, requirePermission('pos.view'), async (req: AuthR
         if (cashier) where.createdBy = cashier
 
         const pageNum = Math.max(1, parseInt(page as string))
-        const size = Math.max(1, Math.min(10000, parseInt(pageSize as string)))
+        const size = Math.max(1, Math.min(200, parseInt(pageSize as string)))
         const skip = (pageNum - 1) * size
 
         const [total, transactions] = await Promise.all([
