@@ -232,33 +232,55 @@ router.get('/users', async (_req: Request, res: Response) => {
     }
 })
 
-// ─── PUT /admin/users/:id — Update a user (cross-schema lookup) ─────────────
+// ─── PUT /admin/users/:id — Update a user ───────────────────────────────────
+// Prefer ?storeId= or ?storeCode= (also accepted in body) to scope the lookup
+// to a single tenant schema. Without a hint we fall back to scanning every
+// store schema, which is O(stores) and gets slower as the registry grows —
+// log a warning so this shows up in metrics until the frontend always passes
+// the hint.
 router.put('/users/:id', async (req: Request, res: Response) => {
     try {
         const { id } = req.params
         const { password, phone, email } = req.body
+        const storeIdHint = String(req.query.storeId || req.body?.storeId || '').trim() || null
+        const storeCodeHint = String(req.query.storeCode || req.body?.storeCode || '').trim() || null
+
+        const updateUser = async (sp: any) => {
+            const user = await sp.user.findUnique({ where: { id: String(id) } })
+            if (!user) return false
+            const data: any = {}
+            if (password) {
+                const bcrypt = await import('bcryptjs')
+                data.password = await bcrypt.hash(password, 10)
+            }
+            if (phone !== undefined) data.phone = phone
+            if (email !== undefined) data.email = email
+            await sp.user.update({ where: { id: String(id) }, data })
+            return true
+        }
+
+        // Fast path: caller scoped the request to a specific store
+        if (storeIdHint || storeCodeHint) {
+            const store = await prisma.store.findUnique({
+                where: storeIdHint ? { id: storeIdHint } : { code: storeCodeHint! },
+            })
+            if (!store) return res.status(404).json({ success: false, error: 'Store not found' })
+            const ok = await updateUser(getStorePrisma(store.schema))
+            if (!ok) return res.status(404).json({ success: false, error: 'User not found' })
+            return res.json({ success: true, message: 'Đã cập nhật' })
+        }
+
+        // Slow path: O(stores) scan — early-exit on first match
+        console.warn('[Admin] PUT /users/:id called without storeId/storeCode hint — scanning all schemas')
         const stores = await prisma.store.findMany()
-        let found = false
         for (const store of stores) {
             try {
-                const sp = getStorePrisma(store.schema)
-                const user = await sp.user.findUnique({ where: { id: String(id) } })
-                if (user) {
-                    const data: any = {}
-                    if (password) {
-                        const bcrypt = await import('bcryptjs')
-                        data.password = await bcrypt.hash(password, 10)
-                    }
-                    if (phone !== undefined) data.phone = phone
-                    if (email !== undefined) data.email = email
-                    await sp.user.update({ where: { id: String(id) }, data })
-                    found = true
-                    break
+                if (await updateUser(getStorePrisma(store.schema))) {
+                    return res.json({ success: true, message: 'Đã cập nhật' })
                 }
-            } catch { /* skip */ }
+            } catch { /* skip schemas that don't have the table yet */ }
         }
-        if (!found) return res.status(404).json({ success: false, error: 'User not found' })
-        res.json({ success: true, message: 'Đã cập nhật' })
+        return res.status(404).json({ success: false, error: 'User not found' })
     } catch (err) {
         console.error('Admin update user error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
