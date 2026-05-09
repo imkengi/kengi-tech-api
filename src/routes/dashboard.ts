@@ -11,9 +11,11 @@ router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => 
         const prisma = req.storePrisma!
         const schema = req.user?.storeSchema || 'unknown'
         const branchFilter = getBranchFilter(req)
-        const branchId = req.headers['x-branch-id'] || 'all'
+        // Cache key derived from JWT, never client headers — prevents cross-branch
+        // cache poisoning by clients that spoof x-branch-id.
+        const cacheBranch = req.user?.isMainBranch ? 'all' : (req.user?.branchId || 'none')
 
-        const cacheKey = `${schema}:${branchId}:dashboard:stats`
+        const cacheKey = `${schema}:${cacheBranch}:dashboard:stats`
         const cached = await cacheGet(cacheKey)
         if (cached) return res.json({ success: true, source: 'cache', data: cached })
 
@@ -33,10 +35,10 @@ router.get('/revenue', authMiddleware, async (req: AuthRequest, res: Response) =
         const prisma = req.storePrisma!
         const schema = req.user?.storeSchema || 'unknown'
         const branchFilter = getBranchFilter(req)
-        const branchId = req.headers['x-branch-id'] || 'all'
+        const cacheBranch = req.user?.isMainBranch ? 'all' : (req.user?.branchId || 'none')
         const days = Math.min(90, Math.max(1, parseInt(req.query.days as string) || 7))
 
-        const cacheKey = `${schema}:${branchId}:dashboard:revenue:${days}`
+        const cacheKey = `${schema}:${cacheBranch}:dashboard:revenue:${days}`
         const cached = await cacheGet(cacheKey)
         if (cached) return res.json({ success: true, data: cached, source: 'cache' })
 
@@ -76,8 +78,8 @@ router.get('/recent-activity', authMiddleware, async (req: AuthRequest, res: Res
         const prisma = req.storePrisma!
         const schema = req.user?.storeSchema || 'unknown'
         const branchFilter = getBranchFilter(req)
-        const branchId = req.headers['x-branch-id'] || 'all'
-        const cacheKey = `${schema}:${branchId}:dashboard:recent-activity`
+        const cacheBranch = req.user?.isMainBranch ? 'all' : (req.user?.branchId || 'none')
+        const cacheKey = `${schema}:${cacheBranch}:dashboard:recent-activity`
         const cached = await cacheGet(cacheKey)
         if (cached) return res.json({ success: true, data: cached, source: 'cache' })
 
