@@ -941,7 +941,7 @@ router.post(
                     }
                 }
 
-                return tx.salesTrip.update({
+                const result = await tx.salesTrip.update({
                     where: { id: trip.id },
                     data: {
                         status: 'cancelled',
@@ -953,6 +953,17 @@ router.post(
                     },
                     include: TRIP_INCLUDE,
                 })
+
+                // Defensive: ensure the vehicle is freed even if it was somehow
+                // left flagged from a prior aborted lifecycle.
+                if (trip.vehicleId) {
+                    await tx.vehicle.update({
+                        where: { id: trip.vehicleId },
+                        data: { status: 'available' },
+                    })
+                }
+
+                return result
             })
 
             res.json({ success: true, data: shapeTrip(updated) })
