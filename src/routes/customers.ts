@@ -4,6 +4,7 @@ import { requirePermission } from '../middleware/permissionMiddleware'
 import { validate } from '../middleware/validate'
 import { CreateCustomerSchema, UpdateCustomerSchema } from '../schemas'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
+import { nextCode } from '../lib/codeGenerator'
 
 const router = Router()
 
@@ -622,16 +623,11 @@ router.post('/', authMiddleware, requirePermission('customers.create'), validate
             return
         }
 
-        // Auto-generate customer code if not provided
+        // Auto-generate customer code if not provided. Uses an atomic sequence
+        // so concurrent POST /api/customers cannot mint the same code twice.
         let code = req.body.code
         if (!code) {
-            const lastCustomer = await prisma.customer.findFirst({
-                orderBy: { code: 'desc' },
-                where: { code: { startsWith: 'KH' } },
-                select: { code: true },
-            })
-            const lastNum = lastCustomer ? parseInt(lastCustomer.code.replace('KH', '')) || 0 : 0
-            code = `KH${String(lastNum + 1).padStart(3, '0')}`
+            code = await nextCode(prisma, 'customerCodeSeq', 'KH', 3, '')
         }
 
         const customer = await prisma.customer.create({

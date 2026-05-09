@@ -2,6 +2,7 @@ import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest, getBranchFilter, getBranchId } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
 import { validate } from '../middleware/validate'
+import { nextCode } from '../lib/codeGenerator'
 import {
     CreateSalesTripSchema,
     LoadSalesTripSchema,
@@ -103,15 +104,13 @@ async function ensureVehicleWarehouse(prisma: any, vehicle: any): Promise<any> {
     return wh
 }
 
-// ─── Helper: generate unique trip code with retry ─────────────────────────────
+// ─── Helper: generate unique trip code via Postgres sequence ──────────────────
 async function nextTripCode(tx: any): Promise<string> {
-    for (let attempt = 0; attempt < 5; attempt++) {
-        const count = await tx.salesTrip.count()
-        const code = `TRIP-${String(count + 1 + attempt).padStart(5, '0')}`
-        const dup = await tx.salesTrip.findFirst({ where: { code }, select: { id: true } })
-        if (!dup) return code
-    }
-    return `TRIP-${Date.now()}`
+    return nextCode(tx, 'salesTripCodeSeq', 'TRIP', 5)
+}
+
+async function nextTransferCode(tx: any): Promise<string> {
+    return nextCode(tx, 'stockTransferCodeSeq', 'TRF', 5)
 }
 
 // ─── Helper: load product info for a list of productIds ───────────────────────
@@ -297,13 +296,7 @@ router.post(
                 // Apply load: main stock → vehicle warehouse
                 if (inputItems.length > 0) {
                     // 1) Stock-transfer record (main → vehicle warehouse)
-                    let transferCode = ''
-                    for (let attempt = 0; attempt < 5; attempt++) {
-                        const count = await tx.stockTransfer.count()
-                        transferCode = `TRF-${String(count + 1 + attempt).padStart(5, '0')}`
-                        const dup = await tx.stockTransfer.findFirst({ where: { code: transferCode }, select: { id: true } })
-                        if (!dup) break
-                    }
+                    const transferCode = await nextTransferCode(tx)
                     await tx.stockTransfer.create({
                         data: {
                             code: transferCode,
@@ -402,13 +395,7 @@ const loadHandler = async (req: AuthRequest, res: Response) => {
 
             const updated = await prisma.$transaction(async (tx: any) => {
                 // Stock transfer record
-                let transferCode = ''
-                for (let attempt = 0; attempt < 5; attempt++) {
-                    const count = await tx.stockTransfer.count()
-                    transferCode = `TRF-${String(count + 1 + attempt).padStart(5, '0')}`
-                    const dup = await tx.stockTransfer.findFirst({ where: { code: transferCode }, select: { id: true } })
-                    if (!dup) break
-                }
+                const transferCode = await nextTransferCode(tx)
                 await tx.stockTransfer.create({
                     data: {
                         code: transferCode,
@@ -779,13 +766,7 @@ const closeHandler = async (req: AuthRequest, res: Response) => {
             const updated = await prisma.$transaction(async (tx: any) => {
                 // Vehicle warehouse → main stock (back to Product.stock)
                 if (remaining.length > 0) {
-                    let transferCode = ''
-                    for (let attempt = 0; attempt < 5; attempt++) {
-                        const count = await tx.stockTransfer.count()
-                        transferCode = `TRF-${String(count + 1 + attempt).padStart(5, '0')}`
-                        const dup = await tx.stockTransfer.findFirst({ where: { code: transferCode }, select: { id: true } })
-                        if (!dup) break
-                    }
+                    const transferCode = await nextTransferCode(tx)
                     await tx.stockTransfer.create({
                         data: {
                             code: transferCode,
@@ -902,13 +883,7 @@ router.post(
 
             const updated = await prisma.$transaction(async (tx: any) => {
                 if (stocks.length > 0) {
-                    let transferCode = ''
-                    for (let attempt = 0; attempt < 5; attempt++) {
-                        const count = await tx.stockTransfer.count()
-                        transferCode = `TRF-${String(count + 1 + attempt).padStart(5, '0')}`
-                        const dup = await tx.stockTransfer.findFirst({ where: { code: transferCode }, select: { id: true } })
-                        if (!dup) break
-                    }
+                    const transferCode = await nextTransferCode(tx)
                     await tx.stockTransfer.create({
                         data: {
                             code: transferCode,

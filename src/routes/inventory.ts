@@ -2,6 +2,7 @@ import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest, getBranchFilter } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
+import { nextCode } from '../lib/codeGenerator'
 
 const router = Router()
 
@@ -243,8 +244,7 @@ router.post('/receipts', authMiddleware, async (req: AuthRequest, res: Response)
         const prisma = req.storePrisma!
         const { items, ...receiptData } = req.body
 
-        const count = await prisma.importReceipt.count({ where: { ...getBranchFilter(req as any) } })
-        const code = `PN${String(count + 1).padStart(3, '0')}`
+        const code = await nextCode(prisma, 'importReceiptCodeSeq', 'PN', 3, '')
 
         const receipt = await prisma.importReceipt.create({
             data: {
