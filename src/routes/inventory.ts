@@ -136,7 +136,7 @@ router.get('/io-report', authMiddleware, async (req: AuthRequest, res: Response)
     try {
         const prisma = req.storePrisma!
         const { startDate, endDate } = req.query
-        
+
         if (!startDate || !endDate) {
             return res.status(400).json({ success: false, error: 'Missing startDate or endDate' })
         }
@@ -144,63 +144,63 @@ router.get('/io-report', authMiddleware, async (req: AuthRequest, res: Response)
         const start = new Date(startDate as string)
         const end = new Date(endDate as string)
 
-        // 1. Fetch current stock and cost for all active products
-        const products = await prisma.product.findMany({
-            where: { productType: { not: 'service' } },
-            select: { id: true, sku: true, name: true, stock: true, costPrice: true },
-            orderBy: { name: 'asc' }
-        })
+        // Single SQL query: join product with inward/outward/later movement
+        // aggregates, compute opening from current stock minus later movement,
+        // and exclude products with zero activity AND zero opening/closing.
+        // This pushes the entire roll-forward to Postgres so the API process
+        // never materializes the full Product table.
+        const rows = await prisma.$queryRawUnsafe<any[]>(
+            `WITH later AS (
+                SELECT "productId", COALESCE(SUM(quantity), 0) AS net_later
+                FROM "InventoryTransaction"
+                WHERE "createdAt" > $2
+                GROUP BY "productId"
+            ),
+            inward AS (
+                SELECT "productId", COALESCE(SUM(quantity), 0) AS qty_in
+                FROM "InventoryTransaction"
+                WHERE "createdAt" >= $1 AND "createdAt" <= $2 AND quantity > 0
+                GROUP BY "productId"
+            ),
+            outward AS (
+                SELECT "productId", COALESCE(SUM(quantity), 0) AS qty_out
+                FROM "InventoryTransaction"
+                WHERE "createdAt" >= $1 AND "createdAt" <= $2 AND quantity < 0
+                GROUP BY "productId"
+            )
+            SELECT
+                p.id, p.sku, p.name, COALESCE(p."costPrice", 0) AS cost_price,
+                p.stock - COALESCE(later.net_later, 0) AS closing_qty,
+                COALESCE(inward.qty_in, 0) AS qty_in,
+                COALESCE(outward.qty_out, 0) AS qty_out
+            FROM "Product" p
+            LEFT JOIN later ON later."productId" = p.id
+            LEFT JOIN inward ON inward."productId" = p.id
+            LEFT JOIN outward ON outward."productId" = p.id
+            WHERE (p."productType" <> 'service' OR p."productType" IS NULL)
+              AND (
+                  COALESCE(inward.qty_in, 0) <> 0
+                  OR COALESCE(outward.qty_out, 0) <> 0
+                  OR p.stock - COALESCE(later.net_later, 0) <> 0
+                  OR p.stock - COALESCE(later.net_later, 0)
+                     - COALESCE(inward.qty_in, 0)
+                     - COALESCE(outward.qty_out, 0) <> 0
+              )
+            ORDER BY p.name ASC`,
+            start, end,
+        )
 
-        // 2. Fetch transactions AFTER endDate (to reverse-calculate closing stock)
-        const txLater = await prisma.inventoryTransaction.groupBy({
-            by: ['productId'],
-            where: { createdAt: { gt: end } },
-            _sum: { quantity: true }
-        })
-        const laterMap = new Map<string, number>()
-        for (const tx of txLater) {
-            laterMap.set(tx.productId, tx._sum.quantity || 0)
-        }
-
-        // 3. Fetch transactions DURING period (Inward)
-        const txPeriodIn = await prisma.inventoryTransaction.groupBy({
-            by: ['productId'],
-            where: { createdAt: { gte: start, lte: end }, quantity: { gt: 0 } },
-            _sum: { quantity: true }
-        })
-        const inMap = new Map<string, number>()
-        for (const tx of txPeriodIn) {
-            inMap.set(tx.productId, tx._sum.quantity || 0)
-        }
-
-        // 4. Fetch transactions DURING period (Outward)
-        const txPeriodOut = await prisma.inventoryTransaction.groupBy({
-            by: ['productId'],
-            where: { createdAt: { gte: start, lte: end }, quantity: { lt: 0 } },
-            _sum: { quantity: true }
-        })
-        const outMap = new Map<string, number>()
-        for (const tx of txPeriodOut) {
-            outMap.set(tx.productId, tx._sum.quantity || 0)
-        }
-
-        // 5. Compute Opening and Closing
-        const report = products.map(p => {
-            const netLater = laterMap.get(p.id) || 0
-            const closingQty = p.stock - netLater
-            
-            const qtyIn = inMap.get(p.id) || 0
-            const qtyOut = outMap.get(p.id) || 0 // This is a negative number
-            
-            // Closing = Opening + In + Out => Opening = Closing - In - Out
+        const num = (v: unknown): number => Number(v ?? 0)
+        const report = rows.map((r: any) => {
+            const closingQty = num(r.closing_qty)
+            const qtyIn = num(r.qty_in)
+            const qtyOut = num(r.qty_out) // negative
             const openingQty = closingQty - qtyIn - qtyOut
-
-            const cost = p.costPrice || 0
-
+            const cost = num(r.cost_price)
             return {
-                productId: p.id,
-                sku: p.sku,
-                name: p.name,
+                productId: r.id,
+                sku: r.sku,
+                name: r.name,
                 costPrice: cost,
                 openingQty,
                 openingValue: openingQty * cost,
@@ -209,9 +209,9 @@ router.get('/io-report', authMiddleware, async (req: AuthRequest, res: Response)
                 outQty: Math.abs(qtyOut),
                 outValue: Math.abs(qtyOut) * cost,
                 closingQty,
-                closingValue: closingQty * cost
+                closingValue: closingQty * cost,
             }
-        }).filter(r => r.openingQty !== 0 || r.inQty !== 0 || r.outQty !== 0 || r.closingQty !== 0)
+        })
 
         res.json({ success: true, data: report })
     } catch (err) {

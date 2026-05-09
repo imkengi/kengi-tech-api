@@ -142,102 +142,228 @@ async function buildReportFromBigQuery(startISO: string, endISO: string, period:
 // ═══════════════════════════════════════════════════════════════════════════════
 // Prisma report builder
 // KEY PRINCIPLE: equity = assets - liabilities (always balances by definition)
+//
+// Aggregations are pushed into SQL so even period=year stops loading all
+// transactions+items into the API. Daily granularity for short windows,
+// monthly granularity for windows > 90 days (yearly view).
 // ═══════════════════════════════════════════════════════════════════════════════
 async function buildReportFromPrisma(prisma: any, startDate: Date, endDate: Date, period: string) {
     const duration = endDate.getTime() - startDate.getTime()
     const prevStart = new Date(startDate.getTime() - duration)
     const prevEnd = new Date(startDate.getTime() - 1)
 
-    const [transactions, expenses, allProducts, debtEntries, previousPeriodTx, importReceipts] = await Promise.all([
-        prisma.transaction.findMany({
-            where: { createdAt: { gte: startDate, lte: endDate }, status: { not: 'voided' } },
-            include: { items: { include: { product: { select: { costPrice: true } } } }, payments: true },
-        }),
-        prisma.expense.findMany({ where: { date: { gte: startDate, lte: endDate } } }),
-        prisma.product.findMany({ 
-            where: { productType: { not: 'service' } },
-            select: { id: true, name: true, costPrice: true, sellingPrice: true, stock: true } 
-        }),
-        prisma.debtEntry.findMany({ where: { createdAt: { gte: startDate, lte: endDate } } }),
-        prisma.transaction.findMany({
-            where: { createdAt: { gte: prevStart, lte: prevEnd }, status: { not: 'voided' } },
-            select: { total: true },
-        }),
+    // Switch to monthly buckets when the window exceeds ~90 days, so a 1-year
+    // report returns 12 rows instead of 365.
+    const bucketUnit = duration > 90 * 24 * 60 * 60 * 1000 ? 'month' : 'day'
+
+    const [
+        pnlRows,
+        expenseRows,
+        productAggRows,
+        productLowStockRows,
+        debtRows,
+        prevTxRows,
+        importReceipts,
+        dailyTxRows,
+        dailyExpenseRows,
+        paymentRows,
+        topProductRows,
+    ] = await Promise.all([
+        // Transaction P&L summary + COGS in one query (joined to TransactionItem×Product)
+        prisma.$queryRawUnsafe(
+            `SELECT
+                COALESCE(SUM(t.total), 0) AS total_revenue,
+                COALESCE(SUM(t.discount), 0) AS total_discount,
+                COALESCE(SUM(t.tax), 0) AS total_tax,
+                COUNT(DISTINCT t.id) AS total_orders,
+                COALESCE((
+                    SELECT SUM(p.\"costPrice\" * ti.quantity)
+                    FROM \"TransactionItem\" ti
+                    JOIN \"Transaction\" t2 ON t2.id = ti.\"transactionId\"
+                    LEFT JOIN \"Product\" p ON p.id = ti.\"productId\"
+                    WHERE t2.\"createdAt\" >= $1 AND t2.\"createdAt\" <= $2 AND t2.status <> 'voided'
+                ), 0) AS total_cogs
+             FROM \"Transaction\" t
+             WHERE t.\"createdAt\" >= $1 AND t.\"createdAt\" <= $2 AND t.status <> 'voided'`,
+            startDate, endDate,
+        ),
+        prisma.$queryRawUnsafe(
+            `SELECT category, COALESCE(SUM(amount), 0) AS total
+             FROM \"Expense\"
+             WHERE date >= $1 AND date <= $2
+             GROUP BY category`,
+            startDate, endDate,
+        ),
+        // Inventory totals: cost+retail value, SKU count
+        prisma.$queryRawUnsafe(
+            `SELECT
+                COALESCE(SUM(\"costPrice\" * stock), 0) AS inventory_cost,
+                COALESCE(SUM(\"sellingPrice\" * stock), 0) AS inventory_retail,
+                COUNT(*) AS total_skus
+             FROM \"Product\"
+             WHERE \"productType\" <> 'service' OR \"productType\" IS NULL`,
+        ),
+        // Low-stock count (separate so the WHERE doesn't blow away the totals)
+        prisma.$queryRawUnsafe(
+            `SELECT COUNT(*) AS low_stock_count
+             FROM \"Product\"
+             WHERE (\"productType\" <> 'service' OR \"productType\" IS NULL)
+               AND stock >= 0 AND stock <= 10`,
+        ),
+        prisma.$queryRawUnsafe(
+            `SELECT type, COALESCE(SUM(amount), 0) AS total
+             FROM \"DebtEntry\"
+             WHERE \"createdAt\" >= $1 AND \"createdAt\" <= $2
+             GROUP BY type`,
+            startDate, endDate,
+        ),
+        prisma.$queryRawUnsafe(
+            `SELECT COALESCE(SUM(total), 0) AS revenue
+             FROM \"Transaction\"
+             WHERE \"createdAt\" >= $1 AND \"createdAt\" <= $2 AND status <> 'voided'`,
+            prevStart, prevEnd,
+        ),
         // Accounts payable: unpaid import receipts (all time up to endDate)
         prisma.importReceipt.findMany({
             where: { createdAt: { lte: endDate } },
-            select: { totalAmount: true, paidAmount: true },
+            select: { totalCost: true, status: true },
         }).catch(() => [] as any[]),
+        // Daily/monthly transaction buckets — revenue + orders + COGS
+        prisma.$queryRawUnsafe(
+            `SELECT
+                to_char(date_trunc('${bucketUnit}', t.\"createdAt\"), 'YYYY-MM-DD') AS bucket,
+                COALESCE(SUM(t.total), 0) AS revenue,
+                COUNT(*) AS orders,
+                COALESCE((
+                    SELECT SUM(p.\"costPrice\" * ti.quantity)
+                    FROM \"TransactionItem\" ti
+                    JOIN \"Transaction\" t2 ON t2.id = ti.\"transactionId\"
+                    LEFT JOIN \"Product\" p ON p.id = ti.\"productId\"
+                    WHERE t2.status <> 'voided'
+                      AND date_trunc('${bucketUnit}', t2.\"createdAt\") = date_trunc('${bucketUnit}', t.\"createdAt\")
+                ), 0) AS cogs
+             FROM \"Transaction\" t
+             WHERE t.\"createdAt\" >= $1 AND t.\"createdAt\" <= $2 AND t.status <> 'voided'
+             GROUP BY 1
+             ORDER BY 1`,
+            startDate, endDate,
+        ),
+        prisma.$queryRawUnsafe(
+            `SELECT
+                to_char(date_trunc('${bucketUnit}', date), 'YYYY-MM-DD') AS bucket,
+                COALESCE(SUM(amount), 0) AS expense
+             FROM \"Expense\"
+             WHERE date >= $1 AND date <= $2
+             GROUP BY 1
+             ORDER BY 1`,
+            startDate, endDate,
+        ),
+        // Payment breakdown — group by payment.type
+        prisma.$queryRawUnsafe(
+            `SELECT pm.type, COALESCE(SUM(pm.amount), 0) AS amount
+             FROM \"Payment\" pm
+             JOIN \"Transaction\" t ON t.id = pm.\"transactionId\"
+             WHERE t.\"createdAt\" >= $1 AND t.\"createdAt\" <= $2 AND t.status <> 'voided'
+             GROUP BY pm.type`,
+            startDate, endDate,
+        ),
+        // Top products — already aggregate-only, top 10
+        prisma.$queryRawUnsafe(
+            `SELECT
+                ti.\"productId\" AS product_id,
+                MAX(ti.\"productName\") AS name,
+                COALESCE(SUM(ti.\"lineTotal\"), 0) AS revenue,
+                COALESCE(SUM(ti.quantity), 0) AS quantity,
+                COALESCE(SUM(COALESCE(p.\"costPrice\", 0) * ti.quantity), 0) AS cost
+             FROM \"TransactionItem\" ti
+             JOIN \"Transaction\" t ON t.id = ti.\"transactionId\"
+             LEFT JOIN \"Product\" p ON p.id = ti.\"productId\"
+             WHERE t.\"createdAt\" >= $1 AND t.\"createdAt\" <= $2 AND t.status <> 'voided'
+             GROUP BY ti.\"productId\"
+             ORDER BY revenue DESC
+             LIMIT 10`,
+            startDate, endDate,
+        ),
     ])
 
+    const num = (v: unknown): number => Number(v ?? 0)
+
     // ─── P&L ──────────────────────────────────────────────────────────────────
-    const totalRevenue = transactions.reduce((s: number, t: any) => s + t.total, 0)
-    const totalDiscount = transactions.reduce((s: number, t: any) => s + t.discount, 0)
-    const totalTax = transactions.reduce((s: number, t: any) => s + t.tax, 0)
-    const totalCOGS = transactions.reduce((s: number, t: any) =>
-        s + t.items.reduce((is: number, item: any) => is + ((item.product?.costPrice ?? 0) * item.quantity), 0), 0)
+    const pnl = (pnlRows as any[])[0] || {}
+    const totalRevenue = num(pnl.total_revenue)
+    const totalDiscount = num(pnl.total_discount)
+    const totalTax = num(pnl.total_tax)
+    const totalOrders = num(pnl.total_orders)
+    const totalCOGS = num(pnl.total_cogs)
     const grossProfit = totalRevenue - totalCOGS
     const grossMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0
 
     const expenseByCategory: Record<string, number> = {}
     let totalExpenses = 0
-    expenses.forEach((e: any) => {
+    for (const e of expenseRows as any[]) {
         const cat = e.category || 'Khác'
-        expenseByCategory[cat] = (expenseByCategory[cat] || 0) + e.amount
-        totalExpenses += e.amount
-    })
+        const amt = num(e.total)
+        expenseByCategory[cat] = (expenseByCategory[cat] || 0) + amt
+        totalExpenses += amt
+    }
     const operatingProfit = grossProfit - totalExpenses
     const netProfit = operatingProfit
     const netMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0
 
-    // ─── Daily data ───────────────────────────────────────────────────────────
-    const revenueByDay: Record<string, { date: string; revenue: number; expense: number; orders: number; cogs: number }> = {}
-    transactions.forEach((tx: any) => {
-        const day = tx.createdAt.toISOString().slice(0, 10)
-        if (!revenueByDay[day]) revenueByDay[day] = { date: day, revenue: 0, expense: 0, orders: 0, cogs: 0 }
-        revenueByDay[day].revenue += tx.total
-        revenueByDay[day].orders += 1
-        revenueByDay[day].cogs += tx.items.reduce((s: number, item: any) => s + ((item.product?.costPrice ?? 0) * item.quantity), 0)
-    })
-    expenses.forEach((ex: any) => {
-        const day = new Date(ex.date).toISOString().slice(0, 10)
-        if (!revenueByDay[day]) revenueByDay[day] = { date: day, revenue: 0, expense: 0, orders: 0, cogs: 0 }
-        revenueByDay[day].expense += ex.amount
-    })
-    const dailyData = Object.values(revenueByDay).sort((a, b) => a.date.localeCompare(b.date))
+    // ─── Daily/monthly buckets (already grouped in SQL) ───────────────────────
+    const bucketMap: Record<string, { date: string; revenue: number; expense: number; orders: number; cogs: number }> = {}
+    for (const row of dailyTxRows as any[]) {
+        bucketMap[row.bucket] = {
+            date: row.bucket,
+            revenue: num(row.revenue),
+            orders: num(row.orders),
+            cogs: num(row.cogs),
+            expense: 0,
+        }
+    }
+    for (const row of dailyExpenseRows as any[]) {
+        if (!bucketMap[row.bucket]) {
+            bucketMap[row.bucket] = { date: row.bucket, revenue: 0, expense: 0, orders: 0, cogs: 0 }
+        }
+        bucketMap[row.bucket].expense = num(row.expense)
+    }
+    const dailyData = Object.values(bucketMap).sort((a, b) => a.date.localeCompare(b.date))
 
     const paymentBreakdown: Record<string, number> = {}
-    transactions.forEach((tx: any) => {
-        tx.payments.forEach((p: any) => { paymentBreakdown[p.type] = (paymentBreakdown[p.type] || 0) + p.amount })
-    })
+    for (const row of paymentRows as any[]) {
+        if (row.type) paymentBreakdown[row.type] = num(row.amount)
+    }
 
-    const productRevenue: Record<string, { name: string; revenue: number; quantity: number; cost: number }> = {}
-    transactions.forEach((tx: any) => {
-        tx.items.forEach((item: any) => {
-            if (!productRevenue[item.productId]) productRevenue[item.productId] = { name: item.productName, revenue: 0, quantity: 0, cost: 0 }
-            productRevenue[item.productId].revenue += item.lineTotal
-            productRevenue[item.productId].quantity += item.quantity
-            productRevenue[item.productId].cost += (item.product?.costPrice ?? 0) * item.quantity
-        })
+    const topProducts = (topProductRows as any[]).map((p) => {
+        const revenue = num(p.revenue)
+        const cost = num(p.cost)
+        return {
+            name: p.name,
+            revenue,
+            quantity: num(p.quantity),
+            cost,
+            profit: revenue - cost,
+            margin: revenue > 0 ? ((revenue - cost) / revenue) * 100 : 0,
+        }
     })
-    const topProducts = Object.values(productRevenue).sort((a, b) => b.revenue - a.revenue).slice(0, 10)
-        .map(p => ({ ...p, profit: p.revenue - p.cost, margin: p.revenue > 0 ? ((p.revenue - p.cost) / p.revenue * 100) : 0 }))
 
     // ─── Balance Sheet — cốt lõi: equity = assets - liabilities ───────────────
-    // ASSETS
-    const inventoryCostValue = allProducts.reduce((s: number, p: any) => s + (p.costPrice * p.stock), 0)
-    const inventoryRetailValue = allProducts.reduce((s: number, p: any) => s + (p.sellingPrice * p.stock), 0)
-    const totalAR = debtEntries.filter((d: any) => d.type === 'debt').reduce((s: number, d: any) => s + d.amount, 0)
-    const totalARPaid = debtEntries.filter((d: any) => d.type === 'payment').reduce((s: number, d: any) => s + d.amount, 0)
+    const productAgg = (productAggRows as any[])[0] || {}
+    const inventoryCostValue = num(productAgg.inventory_cost)
+    const inventoryRetailValue = num(productAgg.inventory_retail)
+    const totalSKUs = num(productAgg.total_skus)
+    const lowStockCount = num(((productLowStockRows as any[])[0] || {}).low_stock_count)
+
+    const debtMap: Record<string, number> = {}
+    for (const row of debtRows as any[]) debtMap[row.type] = num(row.total)
+    const totalAR = debtMap['debt'] || 0
+    const totalARPaid = debtMap['payment'] || 0
     const netReceivable = Math.max(0, totalAR - totalARPaid)
-    // Cash: revenue thu được + nợ đã thu - chi phí hoạt động
     const cashBalance = Math.max(0, totalRevenue + totalARPaid - totalExpenses)
     const totalAssets = cashBalance + inventoryCostValue + netReceivable
 
-    // LIABILITIES: phải trả NCC = tổng giá trị đơn nhập chưa nhận hàng đầy đủ
-    // ImportReceipt schema: totalCost, status ('draft'|'partial'|'completed')
+    // LIABILITIES: phải trả NCC = tổng giá trị đơn nhập chưa hoàn tất
     const accountsPayable = (importReceipts as any[]).reduce((s, r) => {
-        // Chỉ tính các đơn chưa completed (draft/partial)
         if (r.status === 'completed') return s
         return s + (r.totalCost || 0)
     }, 0)
@@ -245,12 +371,11 @@ async function buildReportFromPrisma(prisma: any, startDate: Date, endDate: Date
 
     // EQUITY = ASSETS - LIABILITIES (luôn cân bằng theo định nghĩa kế toán)
     const totalEquity = totalAssets - totalLiabilities
-    // Breakdown equity: Lợi nhuận giữ lại (kỳ này) + Vốn chủ tích lũy (số dư)
     const retainedEarnings = netProfit
-    const contributedCapital = totalEquity - retainedEarnings // vốn góp + tích lũy trước kỳ
+    const contributedCapital = totalEquity - retainedEarnings
 
-    // Growth
-    const prevRevenue = (previousPeriodTx as any[]).reduce((s, t) => s + t.total, 0)
+    // Growth vs previous period
+    const prevRevenue = num(((prevTxRows as any[])[0] || {}).revenue)
     const revenueGrowth = prevRevenue > 0 ? ((totalRevenue - prevRevenue) / prevRevenue) * 100 : (totalRevenue > 0 ? 100 : 0)
 
     return {
@@ -259,7 +384,6 @@ async function buildReportFromPrisma(prisma: any, startDate: Date, endDate: Date
         balance: {
             assets: { cash: cashBalance, inventoryCost: inventoryCostValue, inventoryRetail: inventoryRetailValue, accountsReceivable: netReceivable, total: totalAssets },
             liabilities: { accountsPayable, total: totalLiabilities },
-            // equity.total = assets.total - liabilities.total → LUÔN CÂN BẰNG
             equity: { retainedEarnings, inventoryCapital: contributedCapital, total: totalEquity },
         },
         cashflow: {
@@ -267,7 +391,13 @@ async function buildReportFromPrisma(prisma: any, startDate: Date, endDate: Date
             net: (totalRevenue + totalARPaid) - (totalExpenses + totalCOGS),
             byActivity: { operating: { inflow: totalRevenue, outflow: totalCOGS }, expenses: { inflow: 0, outflow: totalExpenses }, financing: { inflow: totalARPaid, outflow: 0 } },
         },
-        kpis: { totalOrders: transactions.length, avgOrderValue: transactions.length > 0 ? totalRevenue / transactions.length : 0, revenueGrowth, totalSKUs: allProducts.length, lowStockCount: allProducts.filter((p: any) => p.stock <= 10 && p.stock >= 0).length },
+        kpis: {
+            totalOrders,
+            avgOrderValue: totalOrders > 0 ? totalRevenue / totalOrders : 0,
+            revenueGrowth,
+            totalSKUs,
+            lowStockCount,
+        },
         dailyData, paymentBreakdown, topProducts,
     }
 }

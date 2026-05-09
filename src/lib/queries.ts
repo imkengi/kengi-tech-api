@@ -23,59 +23,78 @@ export async function getDashboardStats(prisma: StorePrisma, branchFilter: Recor
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
     const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
     const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999)
-    const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 2, 1)
-    const prevMonthEnd = new Date(now.getFullYear(), now.getMonth() - 1, 0, 23, 59, 59, 999)
 
-    // branchFilter applied to Transaction + Expense (tables that have branchId)
-    // Product + Customer don't have branchId column
-    const [
-        totalRevenue,
-        todayRevenue,
-        thisMonthRevenue,
-        lastMonthRevenue,
-        totalOrders,
-        todayOrders,
-        lastMonthOrders,
-        totalProducts,
-        lowStockProducts,
-        outOfStockProducts,
-        totalCustomers,
-        newCustomersThisMonth,
-        newCustomersLastMonth,
-        customersWithDebt,
-        thisMonthExpenses,
-        lastMonthExpenses,
-    ] = await Promise.all([
-        prisma.transaction.aggregate({ _sum: { total: true }, where: { ...branchFilter, status: { not: 'voided' } } }),
-        prisma.transaction.aggregate({ _sum: { total: true }, where: { ...branchFilter, createdAt: { gte: todayStart }, status: { not: 'voided' } } }),
-        prisma.transaction.aggregate({ _sum: { total: true }, where: { ...branchFilter, createdAt: { gte: monthStart }, status: { not: 'voided' } } }),
-        prisma.transaction.aggregate({ _sum: { total: true }, where: { ...branchFilter, createdAt: { gte: lastMonthStart, lte: lastMonthEnd }, status: { not: 'voided' } } }),
-        prisma.transaction.count({ where: { ...branchFilter, status: { not: 'voided' } } }),
-        prisma.transaction.count({ where: { ...branchFilter, createdAt: { gte: todayStart }, status: { not: 'voided' } } }),
-        prisma.transaction.count({ where: { ...branchFilter, createdAt: { gte: lastMonthStart, lte: lastMonthEnd }, status: { not: 'voided' } } }),
-        prisma.product.count(),
-        prisma.product.count({ where: { stock: { gt: 0, lte: 10 } } }),
-        prisma.product.count({ where: { stock: { lte: 0 } } }),
-        prisma.customer.count(),
-        prisma.customer.count({ where: { createdAt: { gte: monthStart } } }),
-        prisma.customer.count({ where: { createdAt: { gte: lastMonthStart, lte: lastMonthEnd } } }),
-        prisma.customer.count({ where: { debt: { gt: 0 } } }),
-        prisma.expense.aggregate({ _sum: { amount: true }, where: { ...branchFilter, date: { gte: monthStart } } }),
-        prisma.expense.aggregate({ _sum: { amount: true }, where: { ...branchFilter, date: { gte: lastMonthStart, lte: lastMonthEnd } } }),
+    // The previous implementation issued 16 round-trips. Consolidate into 4
+    // FILTER-style aggregate queries (one per table). Each pushes counting and
+    // summing fully into Postgres, so the API process never materializes the
+    // underlying rows.
+    //
+    // branchFilter applied to Transaction + Expense (tables that have branchId);
+    // Product + Customer don't have branchId, so they use a single aggregate.
+    const branchId: string | null = (branchFilter && (branchFilter as any).branchId) || null
+
+    const [txRows, productRows, customerRows, expenseRows] = await Promise.all([
+        prisma.$queryRawUnsafe<any[]>(
+            `SELECT
+                COALESCE(SUM(total) FILTER (WHERE status <> 'voided'), 0) AS total_revenue,
+                COALESCE(SUM(total) FILTER (WHERE status <> 'voided' AND "createdAt" >= $1), 0) AS today_revenue,
+                COALESCE(SUM(total) FILTER (WHERE status <> 'voided' AND "createdAt" >= $2), 0) AS this_month_revenue,
+                COALESCE(SUM(total) FILTER (WHERE status <> 'voided' AND "createdAt" >= $3 AND "createdAt" <= $4), 0) AS last_month_revenue,
+                COUNT(*) FILTER (WHERE status <> 'voided') AS total_orders,
+                COUNT(*) FILTER (WHERE status <> 'voided' AND "createdAt" >= $1) AS today_orders,
+                COUNT(*) FILTER (WHERE status <> 'voided' AND "createdAt" >= $3 AND "createdAt" <= $4) AS last_month_orders
+             FROM "Transaction"
+             WHERE ($5::text IS NULL OR "branchId" = $5)`,
+            todayStart, monthStart, lastMonthStart, lastMonthEnd, branchId,
+        ),
+        prisma.$queryRawUnsafe<any[]>(
+            `SELECT
+                COUNT(*) AS total_products,
+                COUNT(*) FILTER (WHERE stock > 0 AND stock <= 10) AS low_stock,
+                COUNT(*) FILTER (WHERE stock <= 0) AS out_of_stock
+             FROM "Product"`,
+        ),
+        prisma.$queryRawUnsafe<any[]>(
+            `SELECT
+                COUNT(*) AS total_customers,
+                COUNT(*) FILTER (WHERE "createdAt" >= $1) AS new_this_month,
+                COUNT(*) FILTER (WHERE "createdAt" >= $2 AND "createdAt" <= $3) AS new_last_month,
+                COUNT(*) FILTER (WHERE debt > 0) AS customers_with_debt
+             FROM "Customer"`,
+            monthStart, lastMonthStart, lastMonthEnd,
+        ),
+        prisma.$queryRawUnsafe<any[]>(
+            `SELECT
+                COALESCE(SUM(amount) FILTER (WHERE date >= $1), 0) AS this_month_expenses,
+                COALESCE(SUM(amount) FILTER (WHERE date >= $2 AND date <= $3), 0) AS last_month_expenses
+             FROM "Expense"
+             WHERE ($4::text IS NULL OR "branchId" = $4)`,
+            monthStart, lastMonthStart, lastMonthEnd, branchId,
+        ),
     ])
+
+    const num = (v: unknown): number => Number(v ?? 0)
+
+    const tx = txRows[0] || {}
+    const pr = productRows[0] || {}
+    const cu = customerRows[0] || {}
+    const ex = expenseRows[0] || {}
+
+    const totalOrders = num(tx.total_orders)
+    const todayOrders = num(tx.today_orders)
+    const lastMonthOrders = num(tx.last_month_orders)
+    const thisMonthRev = num(tx.this_month_revenue)
+    const lastMonthRev = num(tx.last_month_revenue)
+    const thisMonthExp = num(ex.this_month_expenses)
+    const lastMonthExp = num(ex.last_month_expenses)
 
     const calcGrowth = (current: number, previous: number) =>
         previous > 0 ? Math.round(((current - previous) / previous) * 100) : 0
 
-    const thisMonthRev = thisMonthRevenue._sum.total || 0
-    const lastMonthRev = lastMonthRevenue._sum.total || 0
-    const thisMonthExp = thisMonthExpenses._sum.amount || 0
-    const lastMonthExp = lastMonthExpenses._sum.amount || 0
-
     return {
         revenue: {
-            total: totalRevenue._sum.total || 0,
-            today: todayRevenue._sum.total || 0,
+            total: num(tx.total_revenue),
+            today: num(tx.today_revenue),
             thisMonth: thisMonthRev,
             growth: calcGrowth(thisMonthRev, lastMonthRev),
         },
@@ -86,16 +105,16 @@ export async function getDashboardStats(prisma: StorePrisma, branchFilter: Recor
             growth: calcGrowth(todayOrders, Math.round(lastMonthOrders / 30)),
         },
         products: {
-            total: totalProducts,
-            lowStock: lowStockProducts,
-            outOfStock: outOfStockProducts,
+            total: num(pr.total_products),
+            lowStock: num(pr.low_stock),
+            outOfStock: num(pr.out_of_stock),
             growth: 0, // products don't grow month-over-month meaningfully
         },
         customers: {
-            total: totalCustomers,
-            newThisMonth: newCustomersThisMonth,
-            withDebt: customersWithDebt,
-            growth: calcGrowth(newCustomersThisMonth, newCustomersLastMonth),
+            total: num(cu.total_customers),
+            newThisMonth: num(cu.new_this_month),
+            withDebt: num(cu.customers_with_debt),
+            growth: calcGrowth(num(cu.new_this_month), num(cu.new_last_month)),
         },
         expenses: {
             thisMonth: thisMonthExp,

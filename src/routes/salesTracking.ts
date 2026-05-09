@@ -171,61 +171,58 @@ router.get('/leaderboard', authMiddleware, async (req: AuthRequest, res: Respons
         startDate.setDate(startDate.getDate() - days)
         startDate.setHours(0, 0, 0, 0)
 
-        const records = await prisma.salesCheckin.findMany({
-            where: { createdAt: { gte: startDate } },
-            orderBy: { createdAt: 'asc' },
-            include: { user: { select: userSelect } },
+        // Aggregate per-user totals in SQL. Hours are computed via a window
+        // function pairing each checkin with the next event for that user;
+        // when the next event is a checkout, the elapsed time counts toward
+        // hours. This avoids loading every checkin row for the period into
+        // memory just to do counts.
+        const aggregateRows = await prisma.$queryRawUnsafe<any[]>(
+            `WITH ordered AS (
+                SELECT
+                    "userId",
+                    type,
+                    "customerId",
+                    "createdAt",
+                    LEAD(type) OVER (PARTITION BY "userId" ORDER BY "createdAt") AS next_type,
+                    LEAD("createdAt") OVER (PARTITION BY "userId" ORDER BY "createdAt") AS next_at
+                FROM "SalesCheckin"
+                WHERE "createdAt" >= $1
+            )
+            SELECT
+                "userId" AS user_id,
+                COUNT(*) FILTER (WHERE type = 'checkin') AS checkins,
+                COUNT(DISTINCT "customerId") FILTER (WHERE type = 'checkin' AND "customerId" IS NOT NULL) AS customers,
+                COALESCE(
+                    SUM(EXTRACT(EPOCH FROM (next_at - "createdAt")) / 60.0)
+                        FILTER (WHERE type = 'checkin' AND next_type = 'checkout'),
+                    0
+                ) AS minutes
+            FROM ordered
+            GROUP BY "userId"
+            ORDER BY checkins DESC
+            LIMIT 10`,
+            startDate,
+        )
+
+        const userIds = aggregateRows.map((r: any) => r.user_id)
+        const users = userIds.length
+            ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: userSelect })
+            : []
+        const userById = new Map(users.map((u: any) => [u.id, u]))
+
+        const leaderboard = aggregateRows.map((row: any) => {
+            const u: any = userById.get(row.user_id) || {}
+            const minutes = Number(row.minutes ?? 0)
+            return {
+                id: row.user_id,
+                name: u.name || 'N/A',
+                code: u.code || '',
+                avatar: u.avatar || null,
+                checkins: Number(row.checkins ?? 0),
+                hours: Math.round(minutes / 60 * 10) / 10,
+                customers: Number(row.customers ?? 0),
+            }
         })
-
-        const userMap = new Map<string, {
-            id: string; name: string; code: string; avatar: string | null
-            checkins: number; totalMinutes: number; customerSet: Set<string>
-            records: typeof records
-        }>()
-
-        for (const r of records) {
-            if (!userMap.has(r.userId)) {
-                userMap.set(r.userId, {
-                    id: r.userId,
-                    name: r.user?.name || 'N/A',
-                    code: r.user?.code || '',
-                    avatar: r.user?.avatar || null,
-                    checkins: 0,
-                    totalMinutes: 0,
-                    customerSet: new Set(),
-                    records: [],
-                })
-            }
-            const u = userMap.get(r.userId)!
-            u.records.push(r)
-            if (r.type === 'checkin') {
-                u.checkins++
-                if (r.customerId) u.customerSet.add(r.customerId)
-            }
-        }
-
-        // Calculate hours per user
-        for (const [, u] of userMap) {
-            for (let i = 0; i < u.records.length; i++) {
-                if (u.records[i].type === 'checkin') {
-                    const co = u.records.find((r, j) => j > i && r.type === 'checkout')
-                    if (co) u.totalMinutes += (co.createdAt.getTime() - u.records[i].createdAt.getTime()) / 60000
-                }
-            }
-        }
-
-        const leaderboard = Array.from(userMap.values())
-            .map(u => ({
-                id: u.id,
-                name: u.name,
-                code: u.code,
-                avatar: u.avatar,
-                checkins: u.checkins,
-                hours: Math.round(u.totalMinutes / 60 * 10) / 10,
-                customers: u.customerSet.size,
-            }))
-            .sort((a, b) => b.checkins - a.checkins)
-            .slice(0, 10)
 
         res.json({ success: true, data: leaderboard })
     } catch (err: any) {
