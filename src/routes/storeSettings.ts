@@ -63,6 +63,11 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
                 notifyNewOrder: store?.notifyNewOrder ?? true,
                 notifyDailyReport: store?.notifyDailyReport ?? false,
                 notifyWeeklyReport: store?.notifyWeeklyReport ?? true,
+                openTime: store?.openTime ?? null,
+                closeTime: store?.closeTime ?? null,
+                dailyRevenueTarget: store?.dailyRevenueTarget ?? null,
+                monthlyRevenueTarget: store?.monthlyRevenueTarget ?? null,
+                dailyOrderTarget: store?.dailyOrderTarget ?? null,
                 plan,
                 addOns,
                 extraBranches,
@@ -80,11 +85,39 @@ router.put('/', authMiddleware, requireRole('admin'), async (req: AuthRequest, r
     try {
         const prisma = req.storePrisma!
         const { name, address, phone, logo, costPriceMethod, trackSerial, trackBatch, allowNegativeStock, shiftConfig,
-            notifyLowStock, notifyNewOrder, notifyDailyReport, notifyWeeklyReport } = req.body
+            notifyLowStock, notifyNewOrder, notifyDailyReport, notifyWeeklyReport,
+            openTime, closeTime, dailyRevenueTarget, monthlyRevenueTarget, dailyOrderTarget } = req.body
 
         if (costPriceMethod && !['fixed', 'average', 'lastImport'].includes(costPriceMethod)) {
             res.status(400).json({ success: false, error: 'Invalid cost price method' })
             return
+        }
+
+        const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/
+        for (const [key, val] of [['openTime', openTime], ['closeTime', closeTime]] as const) {
+            if (val !== undefined && val !== null && val !== '' && !TIME_RE.test(String(val))) {
+                res.status(400).json({ success: false, error: `Invalid ${key} - expected "HH:mm"` })
+                return
+            }
+        }
+
+        const coerceNum = (v: any): number | null => {
+            if (v === null || v === '' || v === undefined) return null
+            const n = Number(v)
+            return Number.isFinite(n) && n >= 0 ? n : (NaN as any)
+        }
+        const targetFields: Array<[string, any]> = [
+            ['dailyRevenueTarget', dailyRevenueTarget],
+            ['monthlyRevenueTarget', monthlyRevenueTarget],
+            ['dailyOrderTarget', dailyOrderTarget],
+        ]
+        for (const [key, val] of targetFields) {
+            if (val === undefined) continue
+            const n = coerceNum(val)
+            if (Number.isNaN(n)) {
+                res.status(400).json({ success: false, error: `Invalid ${key} - expected non-negative number` })
+                return
+            }
         }
 
         const data: any = {}
@@ -101,6 +134,14 @@ router.put('/', authMiddleware, requireRole('admin'), async (req: AuthRequest, r
         if (notifyNewOrder !== undefined) data.notifyNewOrder = Boolean(notifyNewOrder)
         if (notifyDailyReport !== undefined) data.notifyDailyReport = Boolean(notifyDailyReport)
         if (notifyWeeklyReport !== undefined) data.notifyWeeklyReport = Boolean(notifyWeeklyReport)
+        if (openTime !== undefined) data.openTime = openTime === '' ? null : openTime
+        if (closeTime !== undefined) data.closeTime = closeTime === '' ? null : closeTime
+        if (dailyRevenueTarget !== undefined) data.dailyRevenueTarget = coerceNum(dailyRevenueTarget)
+        if (monthlyRevenueTarget !== undefined) data.monthlyRevenueTarget = coerceNum(monthlyRevenueTarget)
+        if (dailyOrderTarget !== undefined) {
+            const n = coerceNum(dailyOrderTarget)
+            data.dailyOrderTarget = n === null ? null : Math.trunc(n)
+        }
 
         const updated = await prisma.storeSettings.upsert({
             where: { id: 'default' },

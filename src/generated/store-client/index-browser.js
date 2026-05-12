@@ -996,6 +996,11 @@ exports.Prisma.StoreSettingsScalarFieldEnum = {
   notifyWeeklyReport: 'notifyWeeklyReport',
   autoRestockOnReturn: 'autoRestockOnReturn',
   salesCanCheckout: 'salesCanCheckout',
+  openTime: 'openTime',
+  closeTime: 'closeTime',
+  dailyRevenueTarget: 'dailyRevenueTarget',
+  monthlyRevenueTarget: 'monthlyRevenueTarget',
+  dailyOrderTarget: 'dailyOrderTarget',
   updatedAt: 'updatedAt'
 };
 
