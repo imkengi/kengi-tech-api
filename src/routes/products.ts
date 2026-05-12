@@ -218,7 +218,8 @@ router.get('/:id', authMiddleware, requirePermission('products.view'), async (re
 
 // GET /api/products/:productId/price-history?customerId=...
 // Returns every past sale line of this product (optionally filtered by customer),
-// one row per transaction-line, newest first.
+// one row per transaction-line, newest first. `price` is the effective per-unit
+// amount actually paid (lineTotal / quantity, post-discount), not the list price.
 router.get('/:productId/price-history', authMiddleware, requirePermission('products.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
@@ -226,21 +227,34 @@ router.get('/:productId/price-history', authMiddleware, requirePermission('produ
         const customerId = req.query.customerId ? String(req.query.customerId) : undefined
         const limit = Math.max(1, Math.min(500, parseInt(String(req.query.limit ?? '200'))))
 
-        const where: any = {
-            productId,
-            transaction: {
-                status: { not: 'voided' },
-            },
+        // When a customer is specified, match transactions by id OR by stored
+        // name/phone — older transactions may have been keyed to the customer
+        // by name/phone before a customer record was attached, so customerId
+        // alone can miss legitimate prior purchases.
+        let transactionFilter: any = { status: { not: 'voided' } }
+        if (customerId) {
+            const customer = await prisma.customer.findFirst({
+                where: { id: customerId },
+                select: { name: true, phone: true },
+            })
+            const orClauses: any[] = [{ customerId }]
+            if (customer?.name) orClauses.push({ customerName: customer.name })
+            if (customer?.phone) orClauses.push({ customerPhone: customer.phone })
+            transactionFilter = { AND: [{ status: { not: 'voided' } }, { OR: orClauses }] }
         }
-        if (customerId) where.transaction.customerId = customerId
 
         const items = await prisma.transactionItem.findMany({
-            where,
+            where: {
+                productId,
+                transaction: transactionFilter,
+            },
             orderBy: { transaction: { createdAt: 'desc' } },
             take: limit,
             select: {
                 unitPrice: true,
                 quantity: true,
+                discount: true,
+                lineTotal: true,
                 transaction: {
                     select: {
                         id: true,
@@ -253,15 +267,23 @@ router.get('/:productId/price-history', authMiddleware, requirePermission('produ
             },
         })
 
-        const data = items.map(it => ({
-            price: it.unitPrice,
-            quantity: it.quantity,
-            date: it.transaction.createdAt.toISOString(),
-            receiptNumber: it.transaction.receiptNumber,
-            transactionId: it.transaction.id,
-            customerId: it.transaction.customerId,
-            customerName: it.transaction.customerName,
-        }))
+        const data = items.map(it => {
+            const qty = it.quantity || 1
+            // Effective per-unit price actually paid (post-discount).
+            const effective = qty > 0 ? it.lineTotal / qty : it.unitPrice
+            return {
+                price: effective,
+                unitPrice: it.unitPrice,
+                discount: it.discount,
+                lineTotal: it.lineTotal,
+                quantity: it.quantity,
+                date: it.transaction.createdAt.toISOString(),
+                receiptNumber: it.transaction.receiptNumber,
+                transactionId: it.transaction.id,
+                customerId: it.transaction.customerId,
+                customerName: it.transaction.customerName,
+            }
+        })
 
         res.json({ success: true, data })
     } catch (err) {
