@@ -255,6 +255,7 @@ export const CreateExpenseSchema = z.object({
     paidBy: z.string().max(200).default('Admin'),
     recurring: z.boolean().default(false),
     date: z.string().optional().nullable(),
+    bankAccountId: z.string().optional().nullable(),
 })
 
 export const UpdateExpenseSchema = CreateExpenseSchema.partial()

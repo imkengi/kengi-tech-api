@@ -478,18 +478,49 @@ model PurchaseOrderItem {
 // ─── Expenses ──────────────────────────────────────────────────────────────────
 
 model Expense {
-  id          String   @id @default(cuid())
-  description String
-  amount      Float
-  category    String
-  date        DateTime @default(now())
-  paidBy      String?
-  recurring   Boolean  @default(false)
-  branchId    String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String   @id @default(cuid())
+  description   String
+  amount        Float
+  category      String
+  date          DateTime @default(now())
+  paidBy        String?
+  recurring     Boolean  @default(false)
+  bankAccountId String?
+  status        String   @default("active")  // "active" | "cancelled"
+  cancelledAt   DateTime?
+  cancelReason  String?
+  branchId      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([branchId])
+  @@index([status])
+}
+
+// ─── Cash Receipts ─────────────────────────────────────────────────────────────
+
+model CashReceipt {
+  id            String   @id @default(cuid())
+  description   String
+  amount        Float
+  category      String   // "debt_collection" | "rental" | "capital" | "refund" | "other"
+  date          DateTime @default(now())
+  receivedVia   String?  // "Tiền mặt" | "Chuyển khoản"
+  bankAccountId String?
+  customerId    String?
+  customerName  String?
+  reference     String?
+  status        String   @default("active")  // "active" | "cancelled"
+  cancelledAt   DateTime?
+  cancelReason  String?
+  branchId      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([branchId])
+  @@index([date])
+  @@index([bankAccountId])
+  @@index([status])
 }
 
 // ─── Notifications ─────────────────────────────────────────────────────────────

@@ -452,6 +452,29 @@ exports.Prisma.ExpenseScalarFieldEnum = {
   date: 'date',
   paidBy: 'paidBy',
   recurring: 'recurring',
+  bankAccountId: 'bankAccountId',
+  status: 'status',
+  cancelledAt: 'cancelledAt',
+  cancelReason: 'cancelReason',
+  branchId: 'branchId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.CashReceiptScalarFieldEnum = {
+  id: 'id',
+  description: 'description',
+  amount: 'amount',
+  category: 'category',
+  date: 'date',
+  receivedVia: 'receivedVia',
+  bankAccountId: 'bankAccountId',
+  customerId: 'customerId',
+  customerName: 'customerName',
+  reference: 'reference',
+  status: 'status',
+  cancelledAt: 'cancelledAt',
+  cancelReason: 'cancelReason',
   branchId: 'branchId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
@@ -1407,6 +1430,7 @@ exports.Prisma.ModelName = {
   PurchaseOrder: 'PurchaseOrder',
   PurchaseOrderItem: 'PurchaseOrderItem',
   Expense: 'Expense',
+  CashReceipt: 'CashReceipt',
   Notification: 'Notification',
   Warranty: 'Warranty',
   Repair: 'Repair',
