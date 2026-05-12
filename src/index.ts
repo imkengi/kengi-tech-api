@@ -25,6 +25,7 @@ import auditLogRoutes from './routes/auditLogs'
 import priceHistoryRoutes from './routes/priceHistory'
 import shippingRoutes from './routes/shipping'
 import driverRoutes from './routes/drivers'
+import deliveryRouteRoutes from './routes/deliveryRoutes'
 import vehicleRoutes from './routes/vehicles'
 import taxRoutes from './routes/tax'
 import segmentRoutes from './routes/segments'
@@ -173,6 +174,7 @@ app.use('/api/audit-logs', auditLogRoutes)
 app.use('/api/price-history', priceHistoryRoutes)
 app.use('/api/shipping', shippingRoutes)
 app.use('/api/drivers', driverRoutes)
+app.use('/api/delivery-routes', deliveryRouteRoutes)
 app.use('/api/vehicles', vehicleRoutes)
 app.use('/api/tax', taxRoutes)
 app.use('/api/segments', segmentRoutes)
@@ -600,6 +602,63 @@ if (!process.env.PASSENGER_BASE_URI) {
                 }
             } catch (err: any) {
                 console.error('⚠️ Promotion usage migration failed:', err.message)
+            }
+
+            // Delivery routes — admin-planned multi-stop driver routes
+            try {
+                const schemas: any[] = await registryPrisma.$queryRaw`SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('information_schema', 'pg_catalog', 'pg_toast', 'public')`
+                for (const { schema_name } of schemas) {
+                    const migName = `delivery_route_v1:${schema_name}`
+                    if (await isMigrationApplied(migName)) continue
+                    await registryPrisma.$executeRawUnsafe(`
+                        CREATE TABLE IF NOT EXISTS "${schema_name}"."DeliveryRoute" (
+                            "id" TEXT NOT NULL,
+                            "name" TEXT NOT NULL,
+                            "date" TEXT NOT NULL,
+                            "driverId" TEXT NOT NULL,
+                            "driverName" TEXT NOT NULL,
+                            "status" TEXT NOT NULL DEFAULT 'planned',
+                            "startTime" TIMESTAMP(3),
+                            "endTime" TIMESTAMP(3),
+                            "fuelCost" TEXT,
+                            "createdBy" TEXT NOT NULL,
+                            "branchId" TEXT,
+                            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            CONSTRAINT "DeliveryRoute_pkey" PRIMARY KEY ("id")
+                        )
+                    `).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "DeliveryRoute_driverId_idx" ON "${schema_name}"."DeliveryRoute"("driverId")`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "DeliveryRoute_date_idx" ON "${schema_name}"."DeliveryRoute"("date")`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "DeliveryRoute_status_idx" ON "${schema_name}"."DeliveryRoute"("status")`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "DeliveryRoute_branchId_idx" ON "${schema_name}"."DeliveryRoute"("branchId")`).catch(() => {})
+
+                    await registryPrisma.$executeRawUnsafe(`
+                        CREATE TABLE IF NOT EXISTS "${schema_name}"."DeliveryStop" (
+                            "id" TEXT NOT NULL,
+                            "routeId" TEXT NOT NULL,
+                            "sequence" INTEGER NOT NULL,
+                            "customerName" TEXT NOT NULL,
+                            "customerPhone" TEXT,
+                            "address" TEXT NOT NULL,
+                            "invoiceCode" TEXT,
+                            "invoiceId" TEXT,
+                            "productCount" INTEGER NOT NULL DEFAULT 0,
+                            "total" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "status" TEXT NOT NULL DEFAULT 'pending',
+                            "notes" TEXT,
+                            "deliveredAt" TIMESTAMP(3),
+                            CONSTRAINT "DeliveryStop_pkey" PRIMARY KEY ("id"),
+                            CONSTRAINT "DeliveryStop_routeId_fkey" FOREIGN KEY ("routeId") REFERENCES "${schema_name}"."DeliveryRoute"("id") ON DELETE CASCADE ON UPDATE CASCADE
+                        )
+                    `).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "DeliveryStop_routeId_idx" ON "${schema_name}"."DeliveryStop"("routeId")`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "DeliveryStop_status_idx" ON "${schema_name}"."DeliveryStop"("status")`).catch(() => {})
+
+                    await markMigrationApplied(migName)
+                }
+            } catch (err: any) {
+                console.error('⚠️ Delivery route migration failed:', err.message)
             }
 
             // --- BEGIN LEGACY DATA MIGRATION ---

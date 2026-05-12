@@ -696,6 +696,52 @@ model VehicleMaintenance {
   @@index([serviceDate])
 }
 
+// ─── Delivery Routes (driver multi-stop routes built by admin) ───────────────
+
+model DeliveryRoute {
+  id         String    @id @default(cuid())
+  name       String
+  date       String
+  driverId   String
+  driverName String
+  status     String    @default("planned")
+  startTime  DateTime?
+  endTime    DateTime?
+  fuelCost   String?
+  createdBy  String
+  branchId   String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  stops DeliveryStop[]
+
+  @@index([driverId])
+  @@index([date])
+  @@index([status])
+  @@index([branchId])
+}
+
+model DeliveryStop {
+  id            String    @id @default(cuid())
+  routeId       String
+  sequence      Int
+  customerName  String
+  customerPhone String?
+  address       String
+  invoiceCode   String?
+  invoiceId     String?
+  productCount  Int       @default(0)
+  total         Float     @default(0)
+  status        String    @default("pending")
+  notes         String?
+  deliveredAt   DateTime?
+
+  route DeliveryRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
+
+  @@index([routeId])
+  @@index([status])
+}
+
 // ─── Tax Config ────────────────────────────────────────────────────────────────
 
 model TaxConfig {

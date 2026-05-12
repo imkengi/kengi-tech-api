@@ -619,6 +619,38 @@ exports.Prisma.VehicleMaintenanceScalarFieldEnum = {
   createdAt: 'createdAt'
 };
 
+exports.Prisma.DeliveryRouteScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  date: 'date',
+  driverId: 'driverId',
+  driverName: 'driverName',
+  status: 'status',
+  startTime: 'startTime',
+  endTime: 'endTime',
+  fuelCost: 'fuelCost',
+  createdBy: 'createdBy',
+  branchId: 'branchId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.DeliveryStopScalarFieldEnum = {
+  id: 'id',
+  routeId: 'routeId',
+  sequence: 'sequence',
+  customerName: 'customerName',
+  customerPhone: 'customerPhone',
+  address: 'address',
+  invoiceCode: 'invoiceCode',
+  invoiceId: 'invoiceId',
+  productCount: 'productCount',
+  total: 'total',
+  status: 'status',
+  notes: 'notes',
+  deliveredAt: 'deliveredAt'
+};
+
 exports.Prisma.TaxConfigScalarFieldEnum = {
   id: 'id',
   name: 'name',
@@ -1380,6 +1412,8 @@ exports.Prisma.ModelName = {
   Driver: 'Driver',
   Vehicle: 'Vehicle',
   VehicleMaintenance: 'VehicleMaintenance',
+  DeliveryRoute: 'DeliveryRoute',
+  DeliveryStop: 'DeliveryStop',
   TaxConfig: 'TaxConfig',
   BankAccount: 'BankAccount',
   BankTransaction: 'BankTransaction',
