@@ -216,6 +216,60 @@ router.get('/:id', authMiddleware, requirePermission('products.view'), async (re
     }
 })
 
+// GET /api/products/:productId/price-history?customerId=...
+// Returns every past sale line of this product (optionally filtered by customer),
+// one row per transaction-line, newest first.
+router.get('/:productId/price-history', authMiddleware, requirePermission('products.view'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const productId = String(req.params.productId)
+        const customerId = req.query.customerId ? String(req.query.customerId) : undefined
+        const limit = Math.max(1, Math.min(500, parseInt(String(req.query.limit ?? '200'))))
+
+        const where: any = {
+            productId,
+            transaction: {
+                status: { not: 'voided' },
+            },
+        }
+        if (customerId) where.transaction.customerId = customerId
+
+        const items = await prisma.transactionItem.findMany({
+            where,
+            orderBy: { transaction: { createdAt: 'desc' } },
+            take: limit,
+            select: {
+                unitPrice: true,
+                quantity: true,
+                transaction: {
+                    select: {
+                        id: true,
+                        receiptNumber: true,
+                        createdAt: true,
+                        customerId: true,
+                        customerName: true,
+                    },
+                },
+            },
+        })
+
+        const data = items.map(it => ({
+            price: it.unitPrice,
+            quantity: it.quantity,
+            date: it.transaction.createdAt.toISOString(),
+            receiptNumber: it.transaction.receiptNumber,
+            transactionId: it.transaction.id,
+            customerId: it.transaction.customerId,
+            customerName: it.transaction.customerName,
+        }))
+
+        res.json({ success: true, data })
+    } catch (err) {
+        console.error('Product price-history error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
 const PRODUCT_ALLOWED_FIELDS = [
     'name', 'sku', 'barcode', 'description', 'categoryId', 'brandId',
     'costPrice', 'sellingPrice', 'taxInclusive', 'stock', 'minStock', 'maxStock',
