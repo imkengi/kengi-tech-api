@@ -59,6 +59,8 @@ import webhookRoutes from './routes/webhooks'
 import eventRoutes from './routes/events'
 import warehouseRoutes from './routes/warehouses'
 import salesTripRoutes from './routes/salesTrips'
+import cashReceiptRoutes from './routes/cashReceipts'
+import bankAccountRoutes from './routes/bankAccounts'
 import { cacheDisconnect, cacheHealth } from './lib/cache'
 import { startAutoSync, stopAutoSync } from './cron/autoSync'
 import { setupWebSocket, getWebSocketStats } from './lib/websocket'
@@ -204,6 +206,8 @@ app.use('/api/upgrade-requests', upgradeRequestRoutes)
 app.use('/api/webhooks', webhookRoutes)
 app.use('/api/warehouses', warehouseRoutes)
 app.use('/api/sales-trips', salesTripRoutes)
+app.use('/api/cash-receipts', cashReceiptRoutes)
+app.use('/api/bank-accounts', bankAccountRoutes)
 
 import einvoiceRoutes from './routes/einvoice'
 app.use('/api/einvoice', einvoiceRoutes)
@@ -677,6 +681,54 @@ if (!process.env.PASSENGER_BASE_URI) {
                 console.log('✅ StoreSettings hours+targets migration completed')
             } catch (err: any) {
                 console.error('⚠️ StoreSettings hours+targets migration failed:', err.message)
+            }
+
+            // CashReceipt table + Expense cashflow columns (bankAccountId, status, cancellation)
+            try {
+                const schemas: any[] = await registryPrisma.$queryRaw`SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('information_schema', 'pg_catalog', 'pg_toast', 'public')`
+                for (const { schema_name } of schemas) {
+                    const migName = `cash_receipt_v1:${schema_name}`
+                    if (await isMigrationApplied(migName)) continue
+
+                    // Create CashReceipt table
+                    await registryPrisma.$executeRawUnsafe(`
+                        CREATE TABLE IF NOT EXISTS "${schema_name}"."CashReceipt" (
+                            "id" TEXT NOT NULL,
+                            "description" TEXT NOT NULL,
+                            "amount" DOUBLE PRECISION NOT NULL,
+                            "category" TEXT NOT NULL,
+                            "date" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            "receivedVia" TEXT,
+                            "bankAccountId" TEXT,
+                            "customerId" TEXT,
+                            "customerName" TEXT,
+                            "reference" TEXT,
+                            "status" TEXT NOT NULL DEFAULT 'active',
+                            "cancelledAt" TIMESTAMP(3),
+                            "cancelReason" TEXT,
+                            "branchId" TEXT,
+                            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            CONSTRAINT "CashReceipt_pkey" PRIMARY KEY ("id")
+                        )
+                    `).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CashReceipt_branchId_idx" ON "${schema_name}"."CashReceipt"("branchId")`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CashReceipt_date_idx" ON "${schema_name}"."CashReceipt"("date")`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CashReceipt_bankAccountId_idx" ON "${schema_name}"."CashReceipt"("bankAccountId")`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CashReceipt_status_idx" ON "${schema_name}"."CashReceipt"("status")`).catch(() => {})
+
+                    // Expense — cashflow linkage + cancellation columns
+                    await registryPrisma.$executeRawUnsafe(`ALTER TABLE "${schema_name}"."Expense" ADD COLUMN IF NOT EXISTS "bankAccountId" TEXT;`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`ALTER TABLE "${schema_name}"."Expense" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT 'active';`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`ALTER TABLE "${schema_name}"."Expense" ADD COLUMN IF NOT EXISTS "cancelledAt" TIMESTAMP(3);`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`ALTER TABLE "${schema_name}"."Expense" ADD COLUMN IF NOT EXISTS "cancelReason" TEXT;`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Expense_status_idx" ON "${schema_name}"."Expense"("status")`).catch(() => {})
+
+                    await markMigrationApplied(migName)
+                }
+                console.log('✅ CashReceipt + Expense cashflow migration completed')
+            } catch (err: any) {
+                console.error('⚠️ CashReceipt + Expense cashflow migration failed:', err.message)
             }
 
             // --- BEGIN LEGACY DATA MIGRATION ---
