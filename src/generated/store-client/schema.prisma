@@ -1190,6 +1190,15 @@ model StoreSettings {
   // Permission: allow Sales role to checkout/sell directly. When false, Sales can only create SalesOrder
   salesCanCheckout Boolean @default(false)
 
+  // Store hours - "HH:mm" 24h format
+  openTime  String?
+  closeTime String?
+
+  // Sales targets
+  dailyRevenueTarget   Float?
+  monthlyRevenueTarget Float?
+  dailyOrderTarget     Int?
+
   updatedAt DateTime @updatedAt
 }
 

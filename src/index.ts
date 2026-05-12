@@ -661,6 +661,24 @@ if (!process.env.PASSENGER_BASE_URI) {
                 console.error('⚠️ Delivery route migration failed:', err.message)
             }
 
+            // StoreSettings — store hours + sales targets (per-tenant config)
+            try {
+                const schemas: any[] = await registryPrisma.$queryRaw`SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('information_schema', 'pg_catalog', 'pg_toast', 'public')`
+                for (const { schema_name } of schemas) {
+                    const migName = `store_settings_hours_targets_v1:${schema_name}`
+                    if (await isMigrationApplied(migName)) continue
+                    await registryPrisma.$executeRawUnsafe(`ALTER TABLE "${schema_name}"."StoreSettings" ADD COLUMN IF NOT EXISTS "openTime" TEXT;`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`ALTER TABLE "${schema_name}"."StoreSettings" ADD COLUMN IF NOT EXISTS "closeTime" TEXT;`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`ALTER TABLE "${schema_name}"."StoreSettings" ADD COLUMN IF NOT EXISTS "dailyRevenueTarget" DOUBLE PRECISION;`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`ALTER TABLE "${schema_name}"."StoreSettings" ADD COLUMN IF NOT EXISTS "monthlyRevenueTarget" DOUBLE PRECISION;`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`ALTER TABLE "${schema_name}"."StoreSettings" ADD COLUMN IF NOT EXISTS "dailyOrderTarget" INTEGER;`).catch(() => {})
+                    await markMigrationApplied(migName)
+                }
+                console.log('✅ StoreSettings hours+targets migration completed')
+            } catch (err: any) {
+                console.error('⚠️ StoreSettings hours+targets migration failed:', err.message)
+            }
+
             // --- BEGIN LEGACY DATA MIGRATION ---
             // Automatically migrate data from single-tenant public schema to the new multi-tenant schemas
             try {
