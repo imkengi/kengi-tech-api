@@ -139,11 +139,50 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
         if (driverId !== undefined) d.driverId = driverId
         if (driverName !== undefined) d.driverName = driverName
 
-        const data = await prisma.deliveryRoute.update({
-            where: { id: String(req.params.id) },
-            data: d,
-            include: { stops: { orderBy: { sequence: 'asc' } } },
-        })
+        // Use transaction when status changes to also update vehicle
+        let data: any
+        if (status !== undefined) {
+            data = await (prisma as any).$transaction(async (tx: any) => {
+                const updated = await tx.deliveryRoute.update({
+                    where: { id: String(req.params.id) },
+                    data: d,
+                    include: { stops: { orderBy: { sequence: 'asc' } } },
+                })
+
+                // Auto-manage vehicle status based on delivery route status
+                const route = await tx.deliveryRoute.findUnique({
+                    where: { id: String(req.params.id) },
+                    select: { driverId: true },
+                })
+                if (route?.driverId) {
+                    const vehicle = await tx.vehicle.findFirst({
+                        where: { assignedDriverId: route.driverId },
+                        select: { id: true, status: true },
+                    })
+                    if (vehicle) {
+                        if (status === 'in_progress' && vehicle.status === 'available') {
+                            await tx.vehicle.update({
+                                where: { id: vehicle.id },
+                                data: { status: 'in_use' },
+                            })
+                        } else if ((status === 'completed' || status === 'cancelled') && vehicle.status === 'in_use') {
+                            await tx.vehicle.update({
+                                where: { id: vehicle.id },
+                                data: { status: 'available' },
+                            })
+                        }
+                    }
+                }
+
+                return updated
+            })
+        } else {
+            data = await prisma.deliveryRoute.update({
+                where: { id: String(req.params.id) },
+                data: d,
+                include: { stops: { orderBy: { sequence: 'asc' } } },
+            })
+        }
         cacheDel(`${req.user?.storeSchema || 'default'}:delivery-routes:*`).catch(() => {})
         res.json({ success: true, data })
     } catch (err) {
@@ -188,7 +227,26 @@ router.put('/:id/stops/:stopId', authMiddleware, async (req: AuthRequest, res: R
 router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        await prisma.deliveryRoute.delete({ where: { id: String(req.params.id) } })
+        // If route was in_progress, free the driver's vehicle
+        const route = await prisma.deliveryRoute.findUnique({
+            where: { id: String(req.params.id) },
+            select: { status: true, driverId: true },
+        })
+        await (prisma as any).$transaction(async (tx: any) => {
+            await tx.deliveryRoute.delete({ where: { id: String(req.params.id) } })
+            if (route?.status === 'in_progress' && route.driverId) {
+                const vehicle = await tx.vehicle.findFirst({
+                    where: { assignedDriverId: route.driverId, status: 'in_use' },
+                    select: { id: true },
+                })
+                if (vehicle) {
+                    await tx.vehicle.update({
+                        where: { id: vehicle.id },
+                        data: { status: 'available' },
+                    })
+                }
+            }
+        })
         cacheDel(`${req.user?.storeSchema || 'default'}:delivery-routes:*`).catch(() => {})
         res.json({ success: true })
     } catch (err) {

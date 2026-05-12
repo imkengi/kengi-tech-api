@@ -345,6 +345,12 @@ router.post(
                     }
                 }
 
+                // Mark vehicle as in_use from the moment a trip is created
+                await tx.vehicle.update({
+                    where: { id: vehicle.id },
+                    data: { status: VEHICLE_BUSY_STATUS },
+                })
+
                 return created
             })
 
