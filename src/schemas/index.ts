@@ -405,6 +405,14 @@ export const LoadSalesTripSchema = z.object({
     items: z.array(SalesTripItemInputSchema).min(1, 'Cần ít nhất 1 sản phẩm để chất lên xe'),
 })
 
+export const UnloadSalesTripSchema = z.object({
+    items: z.array(z.object({
+        productId: z.string().min(1),
+        quantity: z.number().int().min(1, 'Số lượng phải lớn hơn 0'),
+    })).min(1, 'Cần ít nhất 1 sản phẩm để dỡ khỏi xe'),
+    notes: z.string().max(1000).optional().nullable(),
+})
+
 export const SalesTripSaleSchema = z.object({
     items: z.array(z.object({
         productId: z.string().min(1),

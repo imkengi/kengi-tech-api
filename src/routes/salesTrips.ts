@@ -6,6 +6,7 @@ import { nextCode } from '../lib/codeGenerator'
 import {
     CreateSalesTripSchema,
     LoadSalesTripSchema,
+    UnloadSalesTripSchema,
     SalesTripSaleSchema,
     ReconcileSalesTripSchema,
     CloseSalesTripSchema,
@@ -490,6 +491,133 @@ router.put(
     requireRole(...TRIP_OPERATOR_ROLES),
     validate(LoadSalesTripSchema),
     loadHandler,
+)
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PUT /api/sales-trips/:id/unload — mid-trip return: dỡ một phần hàng khỏi xe
+// về kho chính mà không đóng chuyến. Chỉ áp dụng khi chuyến đang chạy (active).
+// Mirrors /load in reverse: decrement vehicle stock, decrement loadedQty +
+// totalLoaded, increment main Product.stock, log a StockTransfer.
+// ═════════════════════════════════════════════════════════════════════════════
+const unloadHandler = async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const tripId = String(req.params.id)
+        const { items, notes } = req.body as {
+            items: Array<{ productId: string; quantity: number }>
+            notes?: string
+        }
+
+        const trip = await prisma.salesTrip.findFirst({
+            where: scopeFilter(req, { id: tripId }),
+            include: { items: true },
+        })
+        if (!trip) return res.status(404).json({ success: false, error: 'Không tìm thấy chuyến bán hàng' })
+        if (trip.status !== 'active') {
+            return res.status(400).json({
+                success: false,
+                error: `Chỉ dỡ hàng khỏi xe khi chuyến đang chạy (hiện tại: ${publicTripStatus(trip.status)})`,
+            })
+        }
+
+        // Validate every product is on the trip and has enough remaining (loadedQty - soldQty).
+        const tripItemMap = new Map<string, any>(trip.items.map((ti: any) => [ti.productId, ti]))
+        for (const it of items) {
+            const ti = tripItemMap.get(it.productId)
+            if (!ti) {
+                return res.status(400).json({
+                    success: false,
+                    error: `Sản phẩm "${it.productId}" không có trong chuyến — không thể dỡ`,
+                })
+            }
+            const remaining = (ti.loadedQty || 0) - (ti.soldQty || 0)
+            if (it.quantity > remaining) {
+                return res.status(400).json({
+                    success: false,
+                    error: `Trên xe không đủ "${ti.productName}" để dỡ (còn ${remaining}, yêu cầu ${it.quantity})`,
+                })
+            }
+        }
+
+        const totalUnloaded = items.reduce((s, it) => s + (it.quantity || 0), 0)
+        const branchId = trip.branchId || getBranchId(req) || null
+        const callerName = req.user?.email || null
+
+        const updated = await prisma.$transaction(async (tx: any) => {
+            // Audit: vehicle warehouse → main stock
+            const transferCode = await nextTransferCode(tx)
+            await tx.stockTransfer.create({
+                data: {
+                    code: transferCode,
+                    fromWarehouseId: trip.warehouseId,
+                    toWarehouseId: null,
+                    status: 'completed',
+                    reason: 'sales_trip_unload',
+                    notes: `Dỡ hàng giữa chuyến ${trip.code} về kho chính`,
+                    branchId,
+                    userId: req.user!.userId,
+                    userName: callerName,
+                    totalQuantity: totalUnloaded,
+                    items: {
+                        create: items.map(it => {
+                            const ti = tripItemMap.get(it.productId)
+                            return {
+                                productId: it.productId,
+                                productName: ti.productName,
+                                productSku: ti.productSku || null,
+                                quantity: it.quantity,
+                            }
+                        }),
+                    },
+                },
+            })
+
+            // Move stock back: vehicle warehouse → main Product.stock
+            for (const it of items) {
+                await tx.warehouseStock.update({
+                    where: { warehouseId_productId: { warehouseId: trip.warehouseId, productId: it.productId } },
+                    data: { quantity: { decrement: it.quantity } },
+                })
+                await tx.product.update({
+                    where: { id: it.productId },
+                    data: { stock: { increment: it.quantity } },
+                })
+                await tx.salesTripItem.update({
+                    where: { tripId_productId: { tripId: trip.id, productId: it.productId } },
+                    data: { loadedQty: { decrement: it.quantity } },
+                })
+            }
+
+            return tx.salesTrip.update({
+                where: { id: trip.id },
+                data: {
+                    totalLoaded: { decrement: totalUnloaded },
+                    notes: notes ? `${trip.notes ? trip.notes + '\n' : ''}${notes}` : trip.notes,
+                },
+                include: TRIP_INCLUDE,
+            })
+        })
+
+        res.json({ success: true, data: shapeTrip(updated) })
+    } catch (err: any) {
+        console.error('Unload sales trip error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
+    }
+}
+
+router.put(
+    '/:id/unload',
+    authMiddleware,
+    requireRole(...TRIP_OPERATOR_ROLES),
+    validate(UnloadSalesTripSchema),
+    unloadHandler,
+)
+router.post(
+    '/:id/unload',
+    authMiddleware,
+    requireRole(...TRIP_OPERATOR_ROLES),
+    validate(UnloadSalesTripSchema),
+    unloadHandler,
 )
 
 // ═════════════════════════════════════════════════════════════════════════════
