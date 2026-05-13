@@ -26,6 +26,8 @@ type TripStatus = 'loading' | 'active' | 'reconciling' | 'closed' | 'cancelled'
 // Status values that the API treats as the "loading" phase. Includes legacy
 // values so existing trips keep working without a data migration.
 const LOADING_STATUSES = ['loading', 'planned', 'loaded']
+// Statuses that allow adding more stock (loading + active trips)
+const LOAD_ALLOWED_STATUSES = [...LOADING_STATUSES, 'active']
 // Statuses that indicate an open trip blocking another trip on the same vehicle.
 const OPEN_TRIP_STATUSES = [...LOADING_STATUSES, 'active', 'reconciling']
 
@@ -383,10 +385,10 @@ const loadHandler = async (req: AuthRequest, res: Response) => {
                 include: { items: true },
             })
             if (!trip) return res.status(404).json({ success: false, error: 'Không tìm thấy chuyến bán hàng' })
-            if (!LOADING_STATUSES.includes(trip.status)) {
+            if (!LOAD_ALLOWED_STATUSES.includes(trip.status)) {
                 return res.status(400).json({
                     success: false,
-                    error: `Chỉ chất hàng được khi chuyến đang chất hàng (hiện tại: ${publicTripStatus(trip.status)})`,
+                    error: `Chỉ chất hàng được khi chuyến đang chất hàng hoặc đang chạy (hiện tại: ${publicTripStatus(trip.status)})`,
                 })
             }
 
@@ -476,7 +478,8 @@ const loadHandler = async (req: AuthRequest, res: Response) => {
                 return tx.salesTrip.update({
                     where: { id: trip.id },
                     data: {
-                        status: 'loading',
+                        // Keep 'active' status if trip is already running
+                        status: trip.status === 'active' ? 'active' : 'loading',
                         totalLoaded: { increment: totalAdded },
                     },
                     include: TRIP_INCLUDE,
