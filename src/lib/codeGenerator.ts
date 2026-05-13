@@ -43,3 +43,36 @@ export async function nextCode(
     const n = Number(rows[0]?.n ?? 0)
     return `${prefix}${separator}${String(n).padStart(padLength, '0')}`
 }
+
+// True when Prisma raises a unique-constraint violation that mentions the
+// `code` column. Used to drive retry loops around code-minting inserts.
+export function isCodeUniqueViolation(err: any): boolean {
+    if (!err || err.code !== 'P2002') return false
+    const target = err.meta?.target
+    if (Array.isArray(target)) return target.some((t: any) => typeof t === 'string' && t.includes('code'))
+    if (typeof target === 'string') return target.includes('code')
+    // P2002 without target detail — assume code (safer to retry than to 500).
+    return true
+}
+
+/**
+ * Run `fn` and retry it whenever it fails with a unique-constraint violation
+ * on a `code` column. Pairs with `nextCode`: each retry calls nextval again,
+ * advancing past any pre-existing rows that were inserted before the sequence
+ * was introduced. After `maxRetries`, the last error is re-thrown.
+ */
+export async function withCodeCollisionRetry<T>(
+    fn: () => Promise<T>,
+    maxRetries: number = 50,
+): Promise<T> {
+    let lastErr: any
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+            return await fn()
+        } catch (err: any) {
+            if (!isCodeUniqueViolation(err)) throw err
+            lastErr = err
+        }
+    }
+    throw lastErr
+}

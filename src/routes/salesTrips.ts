@@ -2,7 +2,7 @@ import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest, getBranchFilter, getBranchId } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
 import { validate } from '../middleware/validate'
-import { nextCode } from '../lib/codeGenerator'
+import { nextCode, withCodeCollisionRetry } from '../lib/codeGenerator'
 import {
     CreateSalesTripSchema,
     LoadSalesTripSchema,
@@ -260,7 +260,13 @@ router.post(
             const initialStatus: TripStatus = 'loading'
             const totalLoaded = inputItems.reduce((s, it) => s + (it.quantity || 0), 0)
 
-            const trip = await prisma.$transaction(async (tx: any) => {
+            // Wrap the whole create-trip transaction in a code-collision retry.
+            // The sequence used by nextTripCode starts at 1, so on stores that
+            // had trips before the sequence was introduced it can hand out
+            // codes that already exist. On retry, nextval advances past the
+            // colliding number; the transaction rolled back so no stock moves
+            // are duplicated.
+            const trip = await withCodeCollisionRetry<any>(() => prisma.$transaction(async (tx: any) => {
                 const code = await nextTripCode(tx)
 
                 const created = await tx.salesTrip.create({
@@ -352,7 +358,7 @@ router.post(
                 })
 
                 return created
-            })
+            }))
 
             res.status(201).json({ success: true, data: shapeTrip(trip) })
         } catch (err: any) {
@@ -400,7 +406,7 @@ const loadHandler = async (req: AuthRequest, res: Response) => {
             const branchId = trip.branchId || getBranchId(req) || null
             const callerName = req.user?.email || null
 
-            const updated = await prisma.$transaction(async (tx: any) => {
+            const updated = await withCodeCollisionRetry<any>(() => prisma.$transaction(async (tx: any) => {
                 // Stock transfer record
                 const transferCode = await nextTransferCode(tx)
                 await tx.stockTransfer.create({
@@ -475,7 +481,7 @@ const loadHandler = async (req: AuthRequest, res: Response) => {
                     },
                     include: TRIP_INCLUDE,
                 })
-            })
+            }))
 
             res.json({ success: true, data: shapeTrip(updated) })
         } catch (err: any) {
@@ -549,7 +555,7 @@ const unloadHandler = async (req: AuthRequest, res: Response) => {
         const branchId = trip.branchId || getBranchId(req) || null
         const callerName = req.user?.email || null
 
-        const updated = await prisma.$transaction(async (tx: any) => {
+        const updated = await withCodeCollisionRetry<any>(() => prisma.$transaction(async (tx: any) => {
             // Audit: vehicle warehouse → main stock
             const transferCode = await nextTransferCode(tx)
             await tx.stockTransfer.create({
@@ -602,7 +608,7 @@ const unloadHandler = async (req: AuthRequest, res: Response) => {
                 },
                 include: TRIP_INCLUDE,
             })
-        })
+        }))
 
         res.json({ success: true, data: shapeTrip(updated) })
     } catch (err: any) {
@@ -897,7 +903,7 @@ const closeHandler = async (req: AuthRequest, res: Response) => {
             const branchId = trip.branchId || getBranchId(req) || null
             const callerName = req.user?.email || null
 
-            const updated = await prisma.$transaction(async (tx: any) => {
+            const updated = await withCodeCollisionRetry<any>(() => prisma.$transaction(async (tx: any) => {
                 // Vehicle warehouse → main stock (back to Product.stock)
                 if (remaining.length > 0) {
                     const transferCode = await nextTransferCode(tx)
@@ -958,7 +964,7 @@ const closeHandler = async (req: AuthRequest, res: Response) => {
                     },
                     include: TRIP_INCLUDE,
                 })
-            })
+            }))
 
             res.json({ success: true, data: shapeTrip(updated) })
         } catch (err: any) {
@@ -1015,7 +1021,7 @@ router.post(
             const branchId = trip.branchId || getBranchId(req) || null
             const callerName = req.user?.email || null
 
-            const updated = await prisma.$transaction(async (tx: any) => {
+            const updated = await withCodeCollisionRetry<any>(() => prisma.$transaction(async (tx: any) => {
                 if (stocks.length > 0) {
                     const transferCode = await nextTransferCode(tx)
                     await tx.stockTransfer.create({
@@ -1082,7 +1088,7 @@ router.post(
                 }
 
                 return result
-            })
+            }))
 
             res.json({ success: true, data: shapeTrip(updated) })
         } catch (err: any) {

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
+import { nextCode, withCodeCollisionRetry } from '../lib/codeGenerator'
 
 const router = Router()
 
@@ -83,19 +84,25 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         const prisma = req.storePrisma!
         const { name, type, licensePlate, brand, model, year, color, currentKm, lastOilChangeKm, inspectionExpiry, insuranceExpiry, assignedDriverId, assignedDriverName, imageUrl, notes, branchId } = req.body
         if (!name?.trim() || !licensePlate?.trim()) return res.status(400).json({ success: false, error: 'Name and license plate required' })
-        const count = await prisma.vehicle.count()
-        const code = `XE-${String(count + 1).padStart(3, '0')}`
-        const data = await prisma.vehicle.create({
-            data: {
-                code, name, type: type || 'car', licensePlate,
-                brand, model, year: year ? Number(year) : null, color,
-                currentKm: currentKm ? Number(currentKm) : 0,
-                lastOilChangeKm: lastOilChangeKm ? Number(lastOilChangeKm) : 0,
-                inspectionExpiry: inspectionExpiry ? new Date(inspectionExpiry) : null,
-                insuranceExpiry: insuranceExpiry ? new Date(insuranceExpiry) : null,
-                assignedDriverId, assignedDriverName, imageUrl, notes, branchId,
-                status: 'available'
-            }
+        // Atomic sequence-based code generation. The previous `count(*) + 1`
+        // pattern reused codes after a delete and raced under concurrent POSTs,
+        // both of which surfaced as P2002 on Vehicle.code. The retry advances
+        // the sequence past any pre-existing rows so first-time use on a
+        // populated database also succeeds.
+        const data = await withCodeCollisionRetry(async () => {
+            const code = await nextCode(prisma as any, 'vehicleCodeSeq', 'XE', 3)
+            return prisma.vehicle.create({
+                data: {
+                    code, name, type: type || 'car', licensePlate,
+                    brand, model, year: year ? Number(year) : null, color,
+                    currentKm: currentKm ? Number(currentKm) : 0,
+                    lastOilChangeKm: lastOilChangeKm ? Number(lastOilChangeKm) : 0,
+                    inspectionExpiry: inspectionExpiry ? new Date(inspectionExpiry) : null,
+                    insuranceExpiry: insuranceExpiry ? new Date(insuranceExpiry) : null,
+                    assignedDriverId, assignedDriverName, imageUrl, notes, branchId,
+                    status: 'available'
+                }
+            })
         })
         cacheDel(`${req.user?.storeSchema || 'default'}:vehicles:*`).catch(() => { })
         res.status(201).json({ success: true, data })
