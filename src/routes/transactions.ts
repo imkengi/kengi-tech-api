@@ -131,6 +131,7 @@ router.get('/', authMiddleware, requirePermission('pos.view'), async (req: AuthR
             returnReason: t.returnReason,
             branchId: t.branchId || null,
             branchName: t.branchId ? (branchMap[t.branchId] || null) : null,
+            channel: (t as any).channel || 'direct',
         }))
 
         const response = {
@@ -448,6 +449,7 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
             transactionDate: txData.transactionDate ? new Date(txData.transactionDate) : null,
             branchId: branchId || null,
             appliedPromotionIds: promoIds.length > 0 ? JSON.stringify(promoIds) : null,
+            channel: isVanSale ? 'van' : (txData.channel || 'direct'),
             items: {
                 create: itemsWithConversion.map((item: any) => ({
                     productId: item.productId,
