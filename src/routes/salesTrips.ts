@@ -1102,6 +1102,51 @@ router.post(
 )
 
 // ═════════════════════════════════════════════════════════════════════════════
+// GET /api/sales-trips/:id/transfers — stock transfer history for this trip
+// Returns all load/unload stock transfers associated with the trip's warehouse
+// ═════════════════════════════════════════════════════════════════════════════
+router.get('/:id/transfers', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const trip = await prisma.salesTrip.findFirst({
+            where: scopeFilter(req, { id: String(req.params.id) }),
+            select: { id: true, warehouseId: true, code: true },
+        })
+        if (!trip) return res.status(404).json({ success: false, error: 'Không tìm thấy chuyến bán hàng' })
+
+        const transfers = await prisma.stockTransfer.findMany({
+            where: {
+                OR: [
+                    { toWarehouseId: trip.warehouseId, reason: { startsWith: 'sales_trip' } },
+                    { fromWarehouseId: trip.warehouseId, reason: { startsWith: 'sales_trip' } },
+                ],
+            },
+            include: {
+                items: { select: { productId: true, productName: true, productSku: true, quantity: true } },
+            },
+            orderBy: { createdAt: 'desc' },
+        })
+
+        const data = transfers.map((t: any) => ({
+            id: t.id,
+            code: t.code,
+            type: t.reason === 'sales_trip_load' ? 'load' : t.reason === 'sales_trip_unload' ? 'unload' : t.reason,
+            reason: t.reason,
+            notes: t.notes,
+            totalQuantity: t.totalQuantity,
+            userName: t.userName,
+            createdAt: t.createdAt,
+            items: t.items,
+        }))
+
+        res.json({ success: true, data })
+    } catch (err) {
+        console.error('Get trip transfers error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// ═════════════════════════════════════════════════════════════════════════════
 // DELETE /api/sales-trips/:id — purge a trip record. Manager-only.
 // Allowed only when the trip is terminal (closed/cancelled) or an empty draft
 // (loading with nothing on the vehicle yet). Active/reconciling trips must be
