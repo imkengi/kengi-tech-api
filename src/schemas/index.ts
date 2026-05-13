@@ -447,6 +447,14 @@ export const CancelSalesTripSchema = z.object({
     reason: z.string().max(500).optional().nullable(),
 })
 
+export const PauseSalesTripSchema = z.object({
+    notes: z.string().max(1000).optional().nullable(),
+})
+
+export const ResumeSalesTripSchema = z.object({
+    notes: z.string().max(1000).optional().nullable(),
+})
+
 // ─── Announcements ────────────────────────────────────────────────────────────
 export const CreateAnnouncementSchema = z.object({
     title: z.string().min(1, 'Tiêu đề không được để trống').max(300),

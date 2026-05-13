@@ -11,25 +11,29 @@ import {
     ReconcileSalesTripSchema,
     CloseSalesTripSchema,
     CancelSalesTripSchema,
+    PauseSalesTripSchema,
+    ResumeSalesTripSchema,
 } from '../schemas'
 
 const router = Router()
 
 // ─── State machine ────────────────────────────────────────────────────────────
-// loading → active → reconciling → closed
+// loading → active ⇄ paused → reconciling → closed
 //   ↘ cancelled (from loading only — refunds load back to main stock)
+//
+// `paused` = tạm nghỉ (end-of-day pause, vehicle keeps stock, resume next day)
 //
 // Legacy: existing rows may carry status 'planned' or 'loaded' (now collapsed
 // into 'loading'). Reads accept all three; new writes always use 'loading'.
-type TripStatus = 'loading' | 'active' | 'reconciling' | 'closed' | 'cancelled'
+type TripStatus = 'loading' | 'active' | 'paused' | 'reconciling' | 'closed' | 'cancelled'
 
 // Status values that the API treats as the "loading" phase. Includes legacy
 // values so existing trips keep working without a data migration.
 const LOADING_STATUSES = ['loading', 'planned', 'loaded']
-// Statuses that allow adding more stock (loading + active trips)
-const LOAD_ALLOWED_STATUSES = [...LOADING_STATUSES, 'active']
+// Statuses that allow adding more stock (loading + active + paused trips)
+const LOAD_ALLOWED_STATUSES = [...LOADING_STATUSES, 'active', 'paused']
 // Statuses that indicate an open trip blocking another trip on the same vehicle.
-const OPEN_TRIP_STATUSES = [...LOADING_STATUSES, 'active', 'reconciling']
+const OPEN_TRIP_STATUSES = [...LOADING_STATUSES, 'active', 'paused', 'reconciling']
 
 // Translate legacy DB status values to the canonical public status.
 function publicTripStatus(dbStatus: string): string {
@@ -72,6 +76,28 @@ const TRIP_OPERATOR_ROLES = ['admin', 'manager', 'superadmin', 'cashier', 'drive
 
 function isManager(role?: string): boolean {
     return !!role && MANAGER_ROLES.includes(role)
+}
+
+// ─── Helper: create a SalesTripLog entry ─────────────────────────────────────
+async function logTripAction(
+    tx: any,
+    tripId: string,
+    action: string,
+    userId: string,
+    userName?: string | null,
+    notes?: string | null,
+    metadata?: any,
+) {
+    await tx.salesTripLog.create({
+        data: {
+            tripId,
+            action,
+            userId,
+            userName: userName || null,
+            notes: notes || null,
+            metadata: metadata ? JSON.stringify(metadata) : null,
+        },
+    })
 }
 
 // Vehicle is fit-to-trip when in one of these statuses
@@ -359,6 +385,13 @@ router.post(
                     data: { status: VEHICLE_BUSY_STATUS },
                 })
 
+                // Log trip creation
+                await logTripAction(tx, created.id, 'create', req.user!.userId, callerName, notes || null, {
+                    vehicleId: vehicle.id,
+                    itemCount: inputItems.length,
+                    totalLoaded,
+                })
+
                 return created
             }))
 
@@ -475,11 +508,17 @@ const loadHandler = async (req: AuthRequest, res: Response) => {
                     })
                 }
 
+                // Log load action
+                await logTripAction(tx, trip.id, 'load', req.user!.userId, callerName, null, {
+                    items: items.map(it => ({ productId: it.productId, quantity: it.quantity })),
+                    totalAdded,
+                })
+
                 return tx.salesTrip.update({
                     where: { id: trip.id },
                     data: {
-                        // Keep 'active' status if trip is already running
-                        status: trip.status === 'active' ? 'active' : 'loading',
+                        // Keep current status if trip is already running or paused
+                        status: (trip.status === 'active' || trip.status === 'paused') ? trip.status : 'loading',
                         totalLoaded: { increment: totalAdded },
                     },
                     include: TRIP_INCLUDE,
@@ -528,10 +567,10 @@ const unloadHandler = async (req: AuthRequest, res: Response) => {
             include: { items: true },
         })
         if (!trip) return res.status(404).json({ success: false, error: 'Không tìm thấy chuyến bán hàng' })
-        if (trip.status !== 'active') {
+        if (!['active', 'paused'].includes(trip.status)) {
             return res.status(400).json({
                 success: false,
-                error: `Chỉ dỡ hàng khỏi xe khi chuyến đang chạy (hiện tại: ${publicTripStatus(trip.status)})`,
+                error: `Chỉ dỡ hàng khỏi xe khi chuyến đang chạy hoặc tạm nghỉ (hiện tại: ${publicTripStatus(trip.status)})`,
             })
         }
 
@@ -603,6 +642,12 @@ const unloadHandler = async (req: AuthRequest, res: Response) => {
                 })
             }
 
+            // Log unload action
+            await logTripAction(tx, trip.id, 'unload', req.user!.userId, callerName, notes || null, {
+                items: items.map(it => ({ productId: it.productId, quantity: it.quantity })),
+                totalUnloaded,
+            })
+
             return tx.salesTrip.update({
                 where: { id: trip.id },
                 data: {
@@ -663,6 +708,7 @@ const startHandler = async (req: AuthRequest, res: Response) => {
 
             const updated = await prisma.$transaction(async (tx: any) => {
                 await tx.vehicle.update({ where: { id: trip.vehicleId }, data: { status: VEHICLE_BUSY_STATUS } })
+                await logTripAction(tx, trip.id, 'start', req.user!.userId, req.user?.email || null)
                 return tx.salesTrip.update({
                     where: { id: trip.id },
                     data: { status: 'active', startedAt: new Date() },
@@ -679,6 +725,117 @@ const startHandler = async (req: AuthRequest, res: Response) => {
 
 router.post('/:id/start', authMiddleware, requireRole(...TRIP_OPERATOR_ROLES), startHandler)
 router.put('/:id/start', authMiddleware, requireRole(...TRIP_OPERATOR_ROLES), startHandler)
+
+// ═════════════════════════════════════════════════════════════════════════════
+// POST|PUT /api/sales-trips/:id/pause — tạm nghỉ chuyến (cuối ngày).
+// Vehicle keeps stock, status → paused. Can resume next day.
+// ═════════════════════════════════════════════════════════════════════════════
+const pauseHandler = async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const tripId = String(req.params.id)
+        const { notes } = (req.body || {}) as { notes?: string }
+
+        const trip = await prisma.salesTrip.findFirst({
+            where: scopeFilter(req, { id: tripId }),
+        })
+        if (!trip) return res.status(404).json({ success: false, error: 'Không tìm thấy chuyến bán hàng' })
+        if (trip.status !== 'active') {
+            return res.status(400).json({
+                success: false,
+                error: `Chỉ tạm nghỉ được chuyến đang chạy (hiện tại: ${publicTripStatus(trip.status)})`,
+            })
+        }
+
+        const updated = await prisma.$transaction(async (tx: any) => {
+            await logTripAction(tx, trip.id, 'pause', req.user!.userId, req.user?.email || null, notes || null)
+            return tx.salesTrip.update({
+                where: { id: trip.id },
+                data: {
+                    status: 'paused',
+                    pausedAt: new Date(),
+                    notes: notes ? `${trip.notes ? trip.notes + '\n' : ''}${notes}` : trip.notes,
+                },
+                include: TRIP_INCLUDE,
+            })
+        })
+
+        res.json({ success: true, data: shapeTrip(updated) })
+    } catch (err: any) {
+        console.error('Pause sales trip error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
+    }
+}
+
+router.post('/:id/pause', authMiddleware, requireRole(...TRIP_OPERATOR_ROLES), validate(PauseSalesTripSchema), pauseHandler)
+router.put('/:id/pause', authMiddleware, requireRole(...TRIP_OPERATOR_ROLES), validate(PauseSalesTripSchema), pauseHandler)
+
+// ═════════════════════════════════════════════════════════════════════════════
+// POST|PUT /api/sales-trips/:id/resume — tiếp tục chuyến sau khi tạm nghỉ.
+// Status → active. Can load/unload/sell again.
+// ═════════════════════════════════════════════════════════════════════════════
+const resumeHandler = async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const tripId = String(req.params.id)
+        const { notes } = (req.body || {}) as { notes?: string }
+
+        const trip = await prisma.salesTrip.findFirst({
+            where: scopeFilter(req, { id: tripId }),
+        })
+        if (!trip) return res.status(404).json({ success: false, error: 'Không tìm thấy chuyến bán hàng' })
+        if (trip.status !== 'paused') {
+            return res.status(400).json({
+                success: false,
+                error: `Chỉ tiếp tục được chuyến đang tạm nghỉ (hiện tại: ${publicTripStatus(trip.status)})`,
+            })
+        }
+
+        const updated = await prisma.$transaction(async (tx: any) => {
+            await logTripAction(tx, trip.id, 'resume', req.user!.userId, req.user?.email || null, notes || null)
+            return tx.salesTrip.update({
+                where: { id: trip.id },
+                data: {
+                    status: 'active',
+                    notes: notes ? `${trip.notes ? trip.notes + '\n' : ''}${notes}` : trip.notes,
+                },
+                include: TRIP_INCLUDE,
+            })
+        })
+
+        res.json({ success: true, data: shapeTrip(updated) })
+    } catch (err: any) {
+        console.error('Resume sales trip error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
+    }
+}
+
+router.post('/:id/resume', authMiddleware, requireRole(...TRIP_OPERATOR_ROLES), validate(ResumeSalesTripSchema), resumeHandler)
+router.put('/:id/resume', authMiddleware, requireRole(...TRIP_OPERATOR_ROLES), validate(ResumeSalesTripSchema), resumeHandler)
+
+// ═════════════════════════════════════════════════════════════════════════════
+// GET /api/sales-trips/:id/logs — activity history for this trip
+// ═════════════════════════════════════════════════════════════════════════════
+router.get('/:id/logs', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const trip = await prisma.salesTrip.findFirst({
+            where: scopeFilter(req, { id: String(req.params.id) }),
+            select: { id: true },
+        })
+        if (!trip) return res.status(404).json({ success: false, error: 'Không tìm thấy chuyến bán hàng' })
+
+        const logs = await prisma.salesTripLog.findMany({
+            where: { tripId: trip.id },
+            orderBy: { createdAt: 'desc' },
+        })
+
+        res.json({ success: true, data: logs })
+    } catch (err) {
+        console.error('Get trip logs error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
 
 // ═════════════════════════════════════════════════════════════════════════════
 // POST /api/sales-trips/:id/sales — record sales from the vehicle (active only)
@@ -763,6 +920,13 @@ router.post(
                     })
                 }
 
+                // Log sale action
+                await logTripAction(tx, trip.id, 'sale', req.user!.userId, req.user?.email || null, notes || null, {
+                    items: items.map(it => ({ productId: it.productId, quantity: it.quantity })),
+                    totalSold: totalSoldDelta,
+                    revenue: revenueDelta,
+                })
+
                 return tx.salesTrip.update({
                     where: { id: trip.id },
                     data: {
@@ -808,10 +972,10 @@ const reconcileHandler = async (req: AuthRequest, res: Response) => {
             include: { items: true },
         })
         if (!trip) return res.status(404).json({ success: false, error: 'Không tìm thấy chuyến bán hàng' })
-        if (!['active', 'reconciling'].includes(trip.status)) {
+        if (!['active', 'paused', 'reconciling'].includes(trip.status)) {
             return res.status(400).json({
                 success: false,
-                error: `Chỉ đối soát được chuyến đang chạy (hiện tại: ${publicTripStatus(trip.status)})`,
+                error: `Chỉ đối soát được chuyến đang chạy hoặc tạm nghỉ (hiện tại: ${publicTripStatus(trip.status)})`,
             })
         }
 
@@ -843,6 +1007,8 @@ const reconcileHandler = async (req: AuthRequest, res: Response) => {
                 : null
             const noteParts = [trip.notes, notes, cashLine].filter(Boolean)
             const mergedNotes = noteParts.length ? noteParts.join('\n') : trip.notes
+
+            await logTripAction(tx, trip.id, 'reconcile', req.user!.userId, req.user?.email || null, notes || null)
 
             return tx.salesTrip.update({
                 where: { id: trip.id },
@@ -890,10 +1056,10 @@ const closeHandler = async (req: AuthRequest, res: Response) => {
                 where: { id: tripId, ...getBranchFilter(req as any) },
             })
             if (!trip) return res.status(404).json({ success: false, error: 'Không tìm thấy chuyến bán hàng' })
-            if (!['active', 'reconciling'].includes(trip.status)) {
+            if (!['active', 'paused', 'reconciling'].includes(trip.status)) {
                 return res.status(400).json({
                     success: false,
-                    error: `Chỉ đóng được chuyến đang chạy hoặc đang đối soát (hiện tại: ${publicTripStatus(trip.status)})`,
+                    error: `Chỉ đóng được chuyến đang chạy, tạm nghỉ hoặc đang đối soát (hiện tại: ${publicTripStatus(trip.status)})`,
                 })
             }
 
@@ -956,6 +1122,8 @@ const closeHandler = async (req: AuthRequest, res: Response) => {
                     where: { id: trip.vehicleId },
                     data: { status: 'available' },
                 })
+
+                await logTripAction(tx, trip.id, 'close', req.user!.userId, req.user?.email || null, notes || null, { totalReturned })
 
                 return tx.salesTrip.update({
                     where: { id: trip.id },
@@ -1067,6 +1235,8 @@ router.post(
                         })
                     }
                 }
+
+                await logTripAction(tx, trip.id, 'cancel', req.user!.userId, req.user?.email || null, reason || null)
 
                 const result = await tx.salesTrip.update({
                     where: { id: trip.id },

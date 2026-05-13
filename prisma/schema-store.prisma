@@ -1665,7 +1665,7 @@ model SalesTrip {
   code          String    @unique
   vehicleId     String
   warehouseId   String
-  status        String    @default("loading") // loading | active | reconciling | closed | cancelled  (legacy: planned, loaded — surfaced as "loading")
+  status        String    @default("loading") // loading | active | paused | reconciling | closed | cancelled  (legacy: planned, loaded — surfaced as "loading")
   driverId      String?
   driverName    String?
   salesUserId   String
@@ -1673,6 +1673,7 @@ model SalesTrip {
   branchId      String?
   plannedDate   DateTime?
   startedAt     DateTime?
+  pausedAt      DateTime?
   closedAt      DateTime?
   notes         String?
   totalLoaded   Int       @default(0)
@@ -1685,6 +1686,7 @@ model SalesTrip {
   vehicle   Vehicle         @relation(fields: [vehicleId], references: [id])
   warehouse Warehouse       @relation(fields: [warehouseId], references: [id])
   items     SalesTripItem[]
+  logs      SalesTripLog[]
 
   @@index([vehicleId])
   @@index([warehouseId])
@@ -1713,6 +1715,22 @@ model SalesTripItem {
   @@unique([tripId, productId])
   @@index([tripId])
   @@index([productId])
+}
+
+model SalesTripLog {
+  id        String   @id @default(cuid())
+  tripId    String
+  action    String   // create | start | pause | resume | load | unload | sale | reconcile | close | cancel
+  notes     String?
+  userId    String
+  userName  String?
+  metadata  String?  // JSON string for extra data (items, quantities, etc.)
+  createdAt DateTime @default(now())
+
+  trip SalesTrip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
+  @@index([createdAt])
 }
 
 // ─── Storage Vault ──────────────────────────────────────────────────────────
