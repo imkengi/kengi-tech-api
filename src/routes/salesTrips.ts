@@ -1280,9 +1280,13 @@ router.get('/:id/transfers', authMiddleware, async (req: AuthRequest, res: Respo
         const prisma = req.storePrisma! as any
         const trip = await prisma.salesTrip.findFirst({
             where: scopeFilter(req, { id: String(req.params.id) }),
-            select: { id: true, warehouseId: true, code: true },
+            select: { id: true, warehouseId: true, code: true, createdAt: true, closedAt: true },
         })
         if (!trip) return res.status(404).json({ success: false, error: 'Không tìm thấy chuyến bán hàng' })
+
+        // Scope transfers to this trip's lifetime only (warehouse is reused across trips on the same vehicle)
+        const timeFilter: any = { gte: trip.createdAt }
+        if (trip.closedAt) timeFilter.lte = trip.closedAt
 
         const transfers = await prisma.stockTransfer.findMany({
             where: {
@@ -1290,6 +1294,7 @@ router.get('/:id/transfers', authMiddleware, async (req: AuthRequest, res: Respo
                     { toWarehouseId: trip.warehouseId, reason: { startsWith: 'sales_trip' } },
                     { fromWarehouseId: trip.warehouseId, reason: { startsWith: 'sales_trip' } },
                 ],
+                createdAt: timeFilter,
             },
             include: {
                 items: { select: { productId: true, productName: true, productSku: true, quantity: true } },
