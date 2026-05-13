@@ -627,7 +627,7 @@ router.post('/', authMiddleware, requirePermission('customers.create'), validate
         // so concurrent POST /api/customers cannot mint the same code twice.
         let code = req.body.code
         if (!code) {
-            code = await nextCode(prisma, 'customerCodeSeq', 'KH', 3, '')
+            code = await nextCode(prisma, 'customerCodeSeq', 'KH', 3, '', 'Customer', 'code')
         }
 
         const customer = await prisma.customer.create({

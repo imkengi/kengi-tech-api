@@ -244,7 +244,7 @@ router.post('/receipts', authMiddleware, async (req: AuthRequest, res: Response)
         const prisma = req.storePrisma!
         const { items, ...receiptData } = req.body
 
-        const code = await nextCode(prisma, 'importReceiptCodeSeq', 'PN', 3, '')
+        const code = await nextCode(prisma, 'importReceiptCodeSeq', 'PN', 3, '', 'ImportReceipt', 'code')
 
         const receipt = await prisma.importReceipt.create({
             data: {
