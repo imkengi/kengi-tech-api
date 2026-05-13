@@ -90,7 +90,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         // the sequence past any pre-existing rows so first-time use on a
         // populated database also succeeds.
         const data = await withCodeCollisionRetry(async () => {
-            const code = await nextCode(prisma as any, 'vehicleCodeSeq', 'XE', 3)
+            const code = await nextCode(prisma as any, 'vehicleCodeSeq', 'XE', 3, '-', 'Vehicle', 'code')
             return prisma.vehicle.create({
                 data: {
                     code, name, type: type || 'car', licensePlate,

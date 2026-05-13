@@ -20,6 +20,11 @@
  * @param padLength  Width of the numeric portion (zero-padded)
  * @param separator  Separator between prefix and number; defaults to "-".
  *                   Use "" for codes like "PN001" or "KH001".
+ * @param tableName  Optional table to seed the sequence from (e.g. "SalesTrip").
+ *                   When provided with codeColumn, the first nextval is preceded
+ *                   by a setval past the max existing numeric suffix, so freshly
+ *                   created sequences don't collide with pre-existing rows.
+ * @param codeColumn  Column on tableName holding the existing codes (e.g. "code").
  */
 export async function nextCode(
     prisma: any,
@@ -27,6 +32,8 @@ export async function nextCode(
     prefix: string,
     padLength: number,
     separator: string = '-',
+    tableName?: string,
+    codeColumn?: string,
 ): Promise<string> {
     if (!/^[A-Za-z0-9_]+$/.test(sequenceName)) {
         throw new Error(`Invalid sequence name: ${sequenceName}`)
@@ -37,6 +44,39 @@ export async function nextCode(
     // a rollback. Sequence advances themselves are NOT rolled back, which is
     // exactly what we want for unique-code generation.
     await prisma.$executeRawUnsafe(`CREATE SEQUENCE IF NOT EXISTS "${sequenceName}"`)
+
+    // Seed the sequence past any pre-existing rows the first time it is used.
+    // CREATE SEQUENCE starts at 1, which collides with historical codes like
+    // TRIP-00001 inserted before this generator existed. is_called=false means
+    // nextval has never been called on this sequence (true right after CREATE,
+    // also true again after a rollback recreates it), so this is the right
+    // moment to advance past the table's current MAX. setval is not rolled
+    // back, so once a non-rolled-back transaction seeds it, it stays seeded.
+    if (tableName && codeColumn) {
+        if (!/^[A-Za-z0-9_]+$/.test(tableName)) {
+            throw new Error(`Invalid table name: ${tableName}`)
+        }
+        if (!/^[A-Za-z0-9_]+$/.test(codeColumn)) {
+            throw new Error(`Invalid column name: ${codeColumn}`)
+        }
+        const state = (await prisma.$queryRawUnsafe(
+            `SELECT is_called FROM "${sequenceName}"`,
+        )) as Array<{ is_called: boolean }>
+        if (state[0] && !state[0].is_called) {
+            const fullPrefix = `${prefix}${separator}`
+            const suffixStart = fullPrefix.length + 1 // Postgres substring is 1-indexed
+            const pattern = `^${fullPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[0-9]+$`
+            const rows = (await prisma.$queryRawUnsafe(
+                `SELECT COALESCE(MAX(substring("${codeColumn}" FROM ${suffixStart})::bigint), 0) AS m FROM "${tableName}" WHERE "${codeColumn}" ~ $1`,
+                pattern,
+            )) as Array<{ m: bigint | number }>
+            const maxN = Number(rows[0]?.m ?? 0)
+            if (maxN > 0) {
+                await prisma.$executeRawUnsafe(`SELECT setval('"${sequenceName}"', ${maxN})`)
+            }
+        }
+    }
+
     const rows = (await prisma.$queryRawUnsafe(
         `SELECT nextval('"${sequenceName}"') AS n`,
     )) as Array<{ n: bigint | number }>

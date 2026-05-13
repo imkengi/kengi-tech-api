@@ -107,11 +107,11 @@ async function ensureVehicleWarehouse(prisma: any, vehicle: any): Promise<any> {
 
 // ─── Helper: generate unique trip code via Postgres sequence ──────────────────
 async function nextTripCode(tx: any): Promise<string> {
-    return nextCode(tx, 'salesTripCodeSeq', 'TRIP', 5)
+    return nextCode(tx, 'salesTripCodeSeq', 'TRIP', 5, '-', 'SalesTrip', 'code')
 }
 
 async function nextTransferCode(tx: any): Promise<string> {
-    return nextCode(tx, 'stockTransferCodeSeq', 'TRF', 5)
+    return nextCode(tx, 'stockTransferCodeSeq', 'TRF', 5, '-', 'StockTransfer', 'code')
 }
 
 // ─── Helper: load product info for a list of productIds ───────────────────────
