@@ -808,15 +808,36 @@ router.get('/journal-entries', authMiddleware, async (req: AuthRequest, res: Res
 router.post('/journal-entries', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        const { date, description, debitAccount, debitAccountName, creditAccount, creditAccountName, amount, reference, notes } = req.body
-        if (!date || !description || !debitAccount || !creditAccount || !amount) {
-            return res.status(400).json({ success: false, error: 'ThiÃ¡ÂºÂ¿u thÃƒÂ´ng tin bÃ¡ÂºÂ¯t buÃ¡Â»â„¢c' })
+        const { date, description, debitAccount, debitAccountName, creditAccount, creditAccountName, amount, debitAmount, creditAmount, reference, referenceType, notes } = req.body
+        if (!date || !description || !debitAccount || !creditAccount || (amount === undefined && debitAmount === undefined && creditAmount === undefined)) {
+            return res.status(400).json({ success: false, error: 'Thiếu thông tin bắt buộc' })
         }
+
+        // Resolve amounts: prefer explicit debit/credit, fall back to single amount
+        const dAmt = Number(debitAmount ?? amount)
+        const cAmt = Number(creditAmount ?? amount)
+
+        // ─── Balance validation (Nguyên tắc kép: Tổng Nợ = Tổng Có) ──────────────
+        if (!Number.isFinite(dAmt) || !Number.isFinite(cAmt) || dAmt <= 0 || cAmt <= 0) {
+            return res.status(400).json({ success: false, error: 'Số tiền phải > 0' })
+        }
+        if (dAmt !== cAmt) {
+            return res.status(400).json({
+                success: false,
+                error: `Bút toán chưa cân đối: Tổng Nợ (${dAmt.toLocaleString('vi-VN')}) ≠ Tổng Có (${cAmt.toLocaleString('vi-VN')})`,
+            })
+        }
+        if (debitAccount === creditAccount) {
+            return res.status(400).json({ success: false, error: 'TK Nợ và TK Có không được trùng nhau' })
+        }
+
         const data = await prisma.journalEntry.create({
             data: {
                 date, description, debitAccount, debitAccountName: debitAccountName || null,
                 creditAccount, creditAccountName: creditAccountName || null,
-                amount: Number(amount), reference: reference || null, notes: notes || null,
+                amount: dAmt, reference: reference || null,
+                referenceType: referenceType || 'manual',
+                notes: notes || null,
                 branchId: (req as any).branchId || null, createdBy: (req as any).userId || null,
             }
         })
