@@ -1078,66 +1078,428 @@ router.get('/debt-aging', authMiddleware, async (req: AuthRequest, res: Response
 
 // Ã¢â€â‚¬Ã¢â€â‚¬ FIXED ASSETS (TSCÃ„Â + KhÃ¡ÂºÂ¥u Hao) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
-// GET /api/tax/fixed-assets
+// ─── Fixed Asset helpers ──────────────────────────────────────────────────────
+// Compute monthly depreciation given method, depreciable base, useful life, and current net book value.
+// straight-line: (originalCost - residualValue) / usefulLifeMonths
+// declining-balance: netBookValue * (2 / usefulLifeMonths), floored at residualValue
+function computeMonthlyDepreciation(method: string, originalCost: number, residualValue: number, usefulLifeMonths: number, currentNetBook: number): number {
+    if (!usefulLifeMonths || usefulLifeMonths <= 0) return 0
+    const base = Math.max(0, originalCost - residualValue)
+    if (method === 'declining-balance') {
+        const rate = 2 / usefulLifeMonths
+        return Math.max(0, Math.round(currentNetBook * rate))
+    }
+    return Math.round(base / usefulLifeMonths)
+}
+
+// Build full month-by-month depreciation schedule for an asset.
+function buildDepreciationSchedule(asset: any): { entries: any[]; totalDepreciation: number } {
+    const original = Number(asset.originalCost) || 0
+    const residual = Number(asset.residualValue) || 0
+    const life = Number(asset.usefulLifeMonths) || 0
+    const method = asset.method || 'straight-line'
+    const acqDate = new Date(asset.acquisitionDate)
+    const entries: any[] = []
+    let netBook = original
+    let accumulated = 0
+    const depreciableTotal = Math.max(0, original - residual)
+
+    for (let i = 1; i <= life && accumulated < depreciableTotal; i++) {
+        let monthly = computeMonthlyDepreciation(method, original, residual, life, netBook)
+        // Cap so accumulated never exceeds depreciableTotal
+        if (accumulated + monthly > depreciableTotal) monthly = depreciableTotal - accumulated
+        accumulated += monthly
+        netBook = original - accumulated
+        const periodDate = new Date(acqDate.getFullYear(), acqDate.getMonth() + i, 0)
+        entries.push({
+            period: i,
+            year: periodDate.getFullYear(),
+            month: periodDate.getMonth() + 1,
+            date: periodDate.toISOString().slice(0, 10),
+            depreciation: monthly,
+            accumulated,
+            netBookValue: netBook,
+        })
+    }
+    return { entries, totalDepreciation: accumulated }
+}
+
+// Recalculate runtime depreciation values for an asset as of `asOf` date (default now).
+function recalcAsset(asset: any, asOf: Date = new Date()): any {
+    const original = Number(asset.originalCost) || 0
+    const residual = Number(asset.residualValue) || 0
+    const life = Number(asset.usefulLifeMonths) || 0
+    const method = asset.method || 'straight-line'
+    const acqDate = new Date(asset.acquisitionDate)
+    if (asset.status === 'disposed') {
+        return { ...asset, monthlyDepreciation: 0 }
+    }
+    const monthsElapsed = Math.max(0, (asOf.getFullYear() - acqDate.getFullYear()) * 12 + (asOf.getMonth() - acqDate.getMonth()))
+    const monthsUsed = Math.min(life, monthsElapsed)
+    const depreciableTotal = Math.max(0, original - residual)
+    const monthlyDep = computeMonthlyDepreciation(method, original, residual, life, original)
+    const accumulated = Math.min(depreciableTotal, monthlyDep * monthsUsed)
+    const netBook = original - accumulated
+    const status = accumulated >= depreciableTotal && depreciableTotal > 0 ? 'fully-depreciated' : asset.status
+    return { ...asset, accumulatedDepreciation: accumulated, netBookValue: netBook, monthlyDepreciation: monthlyDep, status }
+}
+
+// ─── FIXED ASSETS (TSCĐ + Khấu Hao) ──────────────────────────────────────────
+
+// GET /api/tax/fixed-assets/summary — totals + count by category
+router.get('/fixed-assets/summary', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const assets = await prisma.fixedAsset.findMany()
+        const processed = assets.map((a: any) => recalcAsset(a))
+        const active = processed.filter((a: any) => a.status === 'active')
+
+        const byCategory: Record<string, { count: number; originalCost: number; accumulatedDepreciation: number; netBookValue: number }> = {}
+        for (const a of processed) {
+            const cat = a.category || 'other'
+            if (!byCategory[cat]) byCategory[cat] = { count: 0, originalCost: 0, accumulatedDepreciation: 0, netBookValue: 0 }
+            byCategory[cat].count++
+            byCategory[cat].originalCost += a.originalCost || 0
+            byCategory[cat].accumulatedDepreciation += a.accumulatedDepreciation || 0
+            byCategory[cat].netBookValue += a.netBookValue || 0
+        }
+
+        res.json({
+            success: true,
+            data: {
+                totalOriginalCost: processed.reduce((s: number, a: any) => s + (a.originalCost || 0), 0),
+                totalAccumulatedDepreciation: processed.reduce((s: number, a: any) => s + (a.accumulatedDepreciation || 0), 0),
+                totalNetBookValue: processed.reduce((s: number, a: any) => s + (a.netBookValue || 0), 0),
+                totalMonthlyDepreciation: active.reduce((s: number, a: any) => s + (a.monthlyDepreciation || 0), 0),
+                totalCount: processed.length,
+                activeCount: active.length,
+                disposedCount: processed.filter((a: any) => a.status === 'disposed').length,
+                fullyDepreciatedCount: processed.filter((a: any) => a.status === 'fully-depreciated').length,
+                byCategory,
+            },
+        })
+    } catch (err) { console.error('GET /fixed-assets/summary error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
+})
+
+// POST /api/tax/fixed-assets/depreciation/run?year=&month= — run monthly depreciation
+router.post('/fixed-assets/depreciation/run', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const year = Number(req.query.year) || new Date().getFullYear()
+        const month = Number(req.query.month) || (new Date().getMonth() + 1)
+        if (month < 1 || month > 12) return res.status(400).json({ success: false, error: 'Tháng không hợp lệ (1-12)' })
+        const branchId = (req as any).branchId || null
+        const userId = (req as any).userId || null
+
+        const assets = await prisma.fixedAsset.findMany({ where: { status: 'active' } })
+        const monthEndDate = new Date(year, month, 0)
+        const depDate = monthEndDate.toISOString().slice(0, 10)
+
+        // Pre-load existing refs for the period for idempotency
+        const existingDepRefs = await prisma.journalEntry.findMany({
+            where: { referenceType: 'depreciation', date: depDate },
+            select: { reference: true },
+        })
+        const existingRefSet = new Set(existingDepRefs.map((e: any) => e.reference).filter(Boolean))
+
+        const created: any[] = []
+        const skipped: any[] = []
+        let totalAmount = 0
+
+        for (const asset of assets) {
+            const acqDate = new Date(asset.acquisitionDate)
+            const acqYear = acqDate.getFullYear()
+            const acqMonth = acqDate.getMonth() + 1
+            // Skip if depreciation period precedes acquisition
+            if (year < acqYear || (year === acqYear && month < acqMonth)) {
+                skipped.push({ assetId: asset.id, code: asset.code, reason: 'Trước ngày mua' })
+                continue
+            }
+
+            const original = Number(asset.originalCost) || 0
+            const residual = Number(asset.residualValue) || 0
+            const life = Number(asset.usefulLifeMonths) || 0
+            const depreciableTotal = Math.max(0, original - residual)
+            const currentAccumulated = Number(asset.accumulatedDepreciation) || 0
+            if (currentAccumulated >= depreciableTotal) {
+                skipped.push({ assetId: asset.id, code: asset.code, reason: 'Đã khấu hao hết' })
+                continue
+            }
+
+            const ref = `DEP-${asset.code}-${year}-${String(month).padStart(2, '0')}`
+            if (existingRefSet.has(ref)) {
+                skipped.push({ assetId: asset.id, code: asset.code, reason: 'Đã chạy kỳ này', reference: ref })
+                continue
+            }
+
+            const currentNetBook = original - currentAccumulated
+            let monthly = computeMonthlyDepreciation(asset.method || 'straight-line', original, residual, life, currentNetBook)
+            // Cap so we don't over-depreciate
+            const remaining = depreciableTotal - currentAccumulated
+            if (monthly > remaining) monthly = remaining
+            if (monthly <= 0) {
+                skipped.push({ assetId: asset.id, code: asset.code, reason: 'Số tiền khấu hao = 0' })
+                continue
+            }
+
+            const debitAccount = asset.depreciationAccount || '6424'
+            const debitAccountName = debitAccount.startsWith('627') ? 'CP sản xuất chung - khấu hao'
+                : debitAccount.startsWith('641') ? 'CP bán hàng - khấu hao'
+                : debitAccount.startsWith('642') ? 'CP QLDN - khấu hao'
+                : 'CP khấu hao TSCĐ'
+
+            try {
+                const entry = await prisma.journalEntry.create({
+                    data: {
+                        date: depDate,
+                        description: `Khấu hao T${month}/${year} - ${asset.name}`,
+                        debitAccount, debitAccountName,
+                        creditAccount: '214', creditAccountName: 'Hao mòn TSCĐ',
+                        amount: monthly, reference: ref, referenceType: 'depreciation',
+                        branchId, createdBy: userId,
+                    },
+                })
+
+                // Update asset cumulative depreciation + net book value
+                const newAccumulated = currentAccumulated + monthly
+                const newNetBook = original - newAccumulated
+                const newStatus = newAccumulated >= depreciableTotal ? 'fully-depreciated' : 'active'
+                await prisma.fixedAsset.update({
+                    where: { id: asset.id },
+                    data: {
+                        accumulatedDepreciation: newAccumulated,
+                        netBookValue: newNetBook,
+                        status: newStatus,
+                    },
+                })
+
+                created.push({ assetId: asset.id, code: asset.code, name: asset.name, amount: monthly, reference: ref, entryId: entry.id })
+                totalAmount += monthly
+            } catch (e: any) {
+                skipped.push({ assetId: asset.id, code: asset.code, reason: e?.message || 'Lỗi tạo bút toán' })
+            }
+        }
+
+        res.json({
+            success: true,
+            data: {
+                year, month, date: depDate,
+                created, skipped,
+                summary: { createdCount: created.length, skippedCount: skipped.length, totalAmount },
+            },
+        })
+    } catch (err) { console.error('POST /fixed-assets/depreciation/run error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
+})
+
+// GET /api/tax/fixed-assets — list with optional filters (?category=&status=)
 router.get('/fixed-assets', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-        const prisma = req.storePrisma!
-        const assets = await prisma.fixedAsset.findMany({ orderBy: { createdAt: 'desc' } })
+        const prisma = req.storePrisma! as any
+        const category = (req.query.category as string) || undefined
+        const status = (req.query.status as string) || undefined
+        const where: any = {}
+        if (category) where.category = category
+        if (status) where.status = status
 
-        // Auto-calculate depreciation for active assets
-        const now = new Date()
-        const processed = assets.map(a => {
-            if (a.status === 'active') {
-                const acqDate = new Date(a.acquisitionDate)
-                const monthsUsed = Math.max(0, (now.getFullYear() - acqDate.getFullYear()) * 12 + now.getMonth() - acqDate.getMonth())
-                const monthlyDep = a.method === 'straight-line' ? Math.round(a.originalCost / a.usefulLifeMonths) : Math.round((a.originalCost * 2) / a.usefulLifeMonths)
-                const accumulated = Math.min(a.originalCost, monthlyDep * monthsUsed)
-                const netBook = a.originalCost - accumulated
-                const status = accumulated >= a.originalCost ? 'fully-depreciated' : 'active'
-                return { ...a, accumulatedDepreciation: accumulated, netBookValue: netBook, monthlyDepreciation: monthlyDep, status }
-            }
-            return a
-        })
+        const assets = await prisma.fixedAsset.findMany({ where, orderBy: { createdAt: 'desc' } })
+        const processed = assets.map((a: any) => recalcAsset(a))
+        const active = processed.filter((a: any) => a.status === 'active')
 
-        const activeAssets = processed.filter(a => a.status === 'active')
         const summary = {
-            totalOriginalCost: processed.reduce((s, a) => s + a.originalCost, 0),
-            totalAccumulated: processed.reduce((s, a) => s + a.accumulatedDepreciation, 0),
-            totalNetBook: processed.reduce((s, a) => s + a.netBookValue, 0),
-            totalMonthlyDep: activeAssets.reduce((s, a) => s + a.monthlyDepreciation, 0),
-            activeCount: activeAssets.length,
+            totalOriginalCost: processed.reduce((s: number, a: any) => s + (a.originalCost || 0), 0),
+            totalAccumulated: processed.reduce((s: number, a: any) => s + (a.accumulatedDepreciation || 0), 0),
+            totalNetBook: processed.reduce((s: number, a: any) => s + (a.netBookValue || 0), 0),
+            totalMonthlyDep: active.reduce((s: number, a: any) => s + (a.monthlyDepreciation || 0), 0),
+            activeCount: active.length,
         }
 
         res.json({ success: true, data: { assets: processed, summary } })
     } catch (err) { console.error('GET /fixed-assets error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
 
-// POST /api/tax/fixed-assets
+// POST /api/tax/fixed-assets — create
 router.post('/fixed-assets', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-        const prisma = req.storePrisma!
-        const { code, name, category, acquisitionDate, originalCost, usefulLifeMonths, method, depreciationAccount } = req.body
-        if (!code || !name || !originalCost || !usefulLifeMonths) {
-            return res.status(400).json({ success: false, error: 'ThiÃ¡ÂºÂ¿u thÃƒÂ´ng tin bÃ¡ÂºÂ¯t buÃ¡Â»â„¢c' })
+        const prisma = req.storePrisma! as any
+        const {
+            code, name, category, acquisitionDate, originalCost, usefulLifeMonths,
+            depreciationMethod, method, residualValue, department, description, depreciationAccount,
+        } = req.body
+        if (!code?.trim() || !name?.trim()) {
+            return res.status(400).json({ success: false, error: 'Mã và tên tài sản là bắt buộc' })
         }
-        const monthlyDep = method === 'straight-line'
-            ? Math.round(Number(originalCost) / Number(usefulLifeMonths))
-            : Math.round((Number(originalCost) * 2) / Number(usefulLifeMonths))
+        const cost = Number(originalCost)
+        const life = Number(usefulLifeMonths)
+        if (!cost || cost <= 0) return res.status(400).json({ success: false, error: 'Nguyên giá phải > 0' })
+        if (!life || life <= 0) return res.status(400).json({ success: false, error: 'Thời gian sử dụng (tháng) phải > 0' })
+        const residual = Number(residualValue) || 0
+        if (residual < 0 || residual >= cost) return res.status(400).json({ success: false, error: 'Giá trị thu hồi không hợp lệ' })
+
+        const depMethod = depreciationMethod || method || 'straight-line'
+        if (!['straight-line', 'declining-balance'].includes(depMethod)) {
+            return res.status(400).json({ success: false, error: 'Phương pháp khấu hao không hợp lệ' })
+        }
+
+        const monthlyDep = computeMonthlyDepreciation(depMethod, cost, residual, life, cost)
 
         const data = await prisma.fixedAsset.create({
             data: {
-                code, name, category: category || 'other',
+                code: code.trim(),
+                name: name.trim(),
+                category: category || 'other',
                 acquisitionDate: acquisitionDate || new Date().toISOString().slice(0, 10),
-                originalCost: Number(originalCost),
-                usefulLifeMonths: Number(usefulLifeMonths),
-                method: method || 'straight-line',
+                originalCost: cost,
+                usefulLifeMonths: life,
+                method: depMethod,
+                residualValue: residual,
+                department: department?.trim() || null,
+                description: description?.trim() || null,
                 monthlyDepreciation: monthlyDep,
-                netBookValue: Number(originalCost),
+                accumulatedDepreciation: 0,
+                netBookValue: cost,
                 depreciationAccount: depreciationAccount || '6424',
-            }
+                status: 'active',
+            },
         })
         res.status(201).json({ success: true, data })
-    } catch (err: any) { console.error('POST /fixed-assets error:', err); res.status(500).json({ success: false, error: err?.message || 'Internal server error' }) }
+    } catch (err: any) {
+        console.error('POST /fixed-assets error:', err)
+        if (err?.code === 'P2002') return res.status(400).json({ success: false, error: 'Mã tài sản đã tồn tại' })
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// GET /api/tax/fixed-assets/:id/depreciation — full depreciation schedule
+router.get('/fixed-assets/:id/depreciation', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
+        const asset = await prisma.fixedAsset.findUnique({ where: { id } })
+        if (!asset) return res.status(404).json({ success: false, error: 'Không tìm thấy tài sản' })
+
+        const schedule = buildDepreciationSchedule(asset)
+        res.json({
+            success: true,
+            data: {
+                assetId: asset.id,
+                code: asset.code,
+                name: asset.name,
+                method: asset.method,
+                originalCost: asset.originalCost,
+                residualValue: asset.residualValue || 0,
+                usefulLifeMonths: asset.usefulLifeMonths,
+                acquisitionDate: asset.acquisitionDate,
+                schedule: schedule.entries,
+                totalDepreciation: schedule.totalDepreciation,
+            },
+        })
+    } catch (err) { console.error('GET /fixed-assets/:id/depreciation error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
+})
+
+// GET /api/tax/fixed-assets/:id — single asset (with depreciation schedule)
+router.get('/fixed-assets/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
+        const asset = await prisma.fixedAsset.findUnique({ where: { id } })
+        if (!asset) return res.status(404).json({ success: false, error: 'Không tìm thấy tài sản' })
+
+        const processed = recalcAsset(asset)
+        const schedule = buildDepreciationSchedule(asset)
+
+        res.json({ success: true, data: { ...processed, schedule: schedule.entries } })
+    } catch (err) { console.error('GET /fixed-assets/:id error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
+})
+
+// PUT /api/tax/fixed-assets/:id — update asset details
+router.put('/fixed-assets/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
+        const existing = await prisma.fixedAsset.findUnique({ where: { id } })
+        if (!existing) return res.status(404).json({ success: false, error: 'Không tìm thấy tài sản' })
+
+        const {
+            code, name, category, acquisitionDate, originalCost, usefulLifeMonths,
+            depreciationMethod, method, residualValue, department, description,
+            depreciationAccount, status,
+        } = req.body
+
+        const data: any = {}
+        if (code !== undefined) data.code = String(code).trim()
+        if (name !== undefined) data.name = String(name).trim()
+        if (category !== undefined) data.category = category
+        if (acquisitionDate !== undefined) data.acquisitionDate = acquisitionDate
+        if (originalCost !== undefined) {
+            const v = Number(originalCost)
+            if (!v || v <= 0) return res.status(400).json({ success: false, error: 'Nguyên giá phải > 0' })
+            data.originalCost = v
+        }
+        if (usefulLifeMonths !== undefined) {
+            const v = Number(usefulLifeMonths)
+            if (!v || v <= 0) return res.status(400).json({ success: false, error: 'Thời gian sử dụng phải > 0' })
+            data.usefulLifeMonths = v
+        }
+        const depMethod = depreciationMethod || method
+        if (depMethod !== undefined) {
+            if (!['straight-line', 'declining-balance'].includes(depMethod)) {
+                return res.status(400).json({ success: false, error: 'Phương pháp khấu hao không hợp lệ' })
+            }
+            data.method = depMethod
+        }
+        if (residualValue !== undefined) {
+            const v = Number(residualValue)
+            if (v < 0) return res.status(400).json({ success: false, error: 'Giá trị thu hồi không hợp lệ' })
+            data.residualValue = v
+        }
+        if (department !== undefined) data.department = department ? String(department).trim() : null
+        if (description !== undefined) data.description = description ? String(description).trim() : null
+        if (depreciationAccount !== undefined) data.depreciationAccount = depreciationAccount
+        if (status !== undefined) data.status = status
+
+        // Recompute monthly depreciation if any of the relevant fields changed
+        const recomputeKeys = ['originalCost', 'usefulLifeMonths', 'method', 'residualValue']
+        if (recomputeKeys.some(k => k in data)) {
+            const merged = { ...existing, ...data }
+            const accumulated = Number(merged.accumulatedDepreciation) || 0
+            const currentNetBook = (Number(merged.originalCost) || 0) - accumulated
+            data.monthlyDepreciation = computeMonthlyDepreciation(
+                merged.method || 'straight-line',
+                Number(merged.originalCost) || 0,
+                Number(merged.residualValue) || 0,
+                Number(merged.usefulLifeMonths) || 0,
+                currentNetBook,
+            )
+            data.netBookValue = currentNetBook
+        }
+
+        const updated = await prisma.fixedAsset.update({ where: { id }, data })
+        res.json({ success: true, data: updated })
+    } catch (err: any) {
+        console.error('PUT /fixed-assets/:id error:', err)
+        if (err?.code === 'P2002') return res.status(400).json({ success: false, error: 'Mã tài sản đã tồn tại' })
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// DELETE /api/tax/fixed-assets/:id — soft delete (mark as disposed)
+router.delete('/fixed-assets/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
+        const existing = await prisma.fixedAsset.findUnique({ where: { id } })
+        if (!existing) return res.status(404).json({ success: false, error: 'Không tìm thấy tài sản' })
+        if (existing.status === 'disposed') {
+            return res.status(400).json({ success: false, error: 'Tài sản đã thanh lý trước đó' })
+        }
+
+        const disposalDate = (req.body?.disposalDate as string) || new Date().toISOString().slice(0, 10)
+        const updated = await prisma.fixedAsset.update({
+            where: { id },
+            data: { status: 'disposed', disposalDate, monthlyDepreciation: 0 },
+        })
+        res.json({ success: true, data: updated })
+    } catch (err) { console.error('DELETE /fixed-assets/:id error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
 
 // Ã¢â€â‚¬Ã¢â€â‚¬ PAYROLL ACCOUNTING (BÃ¡ÂºÂ£ng LÃ†Â°Ã†Â¡ng KT) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬

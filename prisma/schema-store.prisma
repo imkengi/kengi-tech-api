@@ -225,14 +225,14 @@ model Customer {
   phone            String
   email            String?
   address          String?
-  latitude         Float?    // Vĩ độ — lưu sau khi geocode địa chỉ
-  longitude        Float?    // Kinh độ — lưu sau khi geocode địa chỉ
+  latitude         Float? // Vĩ độ — lưu sau khi geocode địa chỉ
+  longitude        Float? // Kinh độ — lưu sau khi geocode địa chỉ
   groupId          String?
   birthday         String?
   gender           String?
   notes            String?
-  salesUserId      String?   // NV Sales phụ trách
-  salesUserName    String?   // Tên NV Sales (denormalized)
+  salesUserId      String? // NV Sales phụ trách
+  salesUserName    String? // Tên NV Sales (denormalized)
   totalPurchases   Float     @default(0)
   totalOrders      Int       @default(0)
   debt             Float     @default(0)
@@ -256,32 +256,32 @@ model Customer {
 // ─── Transactions ──────────────────────────────────────────────────────────────
 
 model Transaction {
-  id               String    @id @default(cuid())
-  receiptNumber    String    @unique
-  customerId       String?
-  customerName     String?
-  customerPhone    String?
-  branchId         String?
-  subtotal         Float     @default(0)
-  discount         Float     @default(0)
-  tax              Float     @default(0)
-  total            Float     @default(0)
-  amountReceived   Float     @default(0)
-  change           Float     @default(0)
-  status           String    @default("completed")
-  createdBy        String
-  createdByName    String?
-  notes            String?
-  returnedAt       DateTime?
-  returnReason     String?
-  transactionDate  DateTime?
-  vatInvoiceNumber String?
-  vatIssuedAt      DateTime?
-  vatStatus        String    @default("none")
-  revisionOfId     String?   // If this is a revision, points to the original transaction
+  id                  String    @id @default(cuid())
+  receiptNumber       String    @unique
+  customerId          String?
+  customerName        String?
+  customerPhone       String?
+  branchId            String?
+  subtotal            Float     @default(0)
+  discount            Float     @default(0)
+  tax                 Float     @default(0)
+  total               Float     @default(0)
+  amountReceived      Float     @default(0)
+  change              Float     @default(0)
+  status              String    @default("completed")
+  createdBy           String
+  createdByName       String?
+  notes               String?
+  returnedAt          DateTime?
+  returnReason        String?
+  transactionDate     DateTime?
+  vatInvoiceNumber    String?
+  vatIssuedAt         DateTime?
+  vatStatus           String    @default("none")
+  revisionOfId        String? // If this is a revision, points to the original transaction
   appliedPromotionIds String? // JSON array of Promotion.id values applied at checkout
-  channel          String    @default("direct") // direct | van | delivery | online
-  createdAt        DateTime  @default(now())
+  channel             String    @default("direct") // direct | van | delivery | online
+  createdAt           DateTime  @default(now())
 
   creator  User              @relation(fields: [createdBy], references: [id])
   customer Customer?         @relation(fields: [customerId], references: [id])
@@ -479,20 +479,20 @@ model PurchaseOrderItem {
 // ─── Expenses ──────────────────────────────────────────────────────────────────
 
 model Expense {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   description   String
   amount        Float
   category      String
-  date          DateTime @default(now())
+  date          DateTime  @default(now())
   paidBy        String?
-  recurring     Boolean  @default(false)
+  recurring     Boolean   @default(false)
   bankAccountId String?
-  status        String   @default("active")  // "active" | "cancelled"
+  status        String    @default("active") // "active" | "cancelled"
   cancelledAt   DateTime?
   cancelReason  String?
   branchId      String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@index([branchId])
   @@index([status])
@@ -501,22 +501,22 @@ model Expense {
 // ─── Cash Receipts ─────────────────────────────────────────────────────────────
 
 model CashReceipt {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   description   String
   amount        Float
-  category      String   // "debt_collection" | "rental" | "capital" | "refund" | "other"
-  date          DateTime @default(now())
-  receivedVia   String?  // "Tiền mặt" | "Chuyển khoản"
+  category      String // "debt_collection" | "rental" | "capital" | "refund" | "other"
+  date          DateTime  @default(now())
+  receivedVia   String? // "Tiền mặt" | "Chuyển khoản"
   bankAccountId String?
   customerId    String?
   customerName  String?
   reference     String?
-  status        String   @default("active")  // "active" | "cancelled"
+  status        String    @default("active") // "active" | "cancelled"
   cancelledAt   DateTime?
   cancelReason  String?
   branchId      String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@index([branchId])
   @@index([date])
@@ -549,7 +549,7 @@ model Warranty {
   startDate     DateTime
   endDate       DateTime
   status        String   @default("active")
-  transactionId String?  // Linked to the transaction that created this warranty
+  transactionId String? // Linked to the transaction that created this warranty
   notes         String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -595,16 +595,16 @@ model Quotation {
 // ─── Audit Log ─────────────────────────────────────────────────────────────────
 
 model AuditLog {
-  id        String   @id @default(cuid())
-  userId    String?
-  userName  String?
-  action    String
-  entity    String
-  entityId  String?
-  details   String?
-  ipAddress String?
-  deviceInfo String?  // JSON: {browser, os, ip, deviceId}
-  createdAt DateTime @default(now())
+  id         String   @id @default(cuid())
+  userId     String?
+  userName   String?
+  action     String
+  entity     String
+  entityId   String?
+  details    String?
+  ipAddress  String?
+  deviceInfo String? // JSON: {browser, os, ip, deviceId}
+  createdAt  DateTime @default(now())
 
   @@index([createdAt])
   @@index([entity])
@@ -710,17 +710,17 @@ model Vehicle {
 }
 
 model VehicleMaintenance {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   vehicleId   String
   type        String
   description String
-  cost        Float    @default(0)
-  kmAtService Float    @default(0)
-  serviceDate DateTime @default(now())
+  cost        Float     @default(0)
+  kmAtService Float     @default(0)
+  serviceDate DateTime  @default(now())
   nextDueDate DateTime?
   performedBy String?
   notes       String?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
 
   vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
 
@@ -801,15 +801,15 @@ model BankAccount {
 }
 
 model BankTransaction {
-  id            String       @id @default(cuid())
+  id            String   @id @default(cuid())
   bankAccountId String?
-  type          String       // "deposit" | "withdraw"
+  type          String // "deposit" | "withdraw"
   amount        Float
   description   String
   reference     String?
-  date          DateTime     @default(now())
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  date          DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   bankAccount BankAccount? @relation(fields: [bankAccountId], references: [id])
 
@@ -931,24 +931,24 @@ model Schedule {
 // ─── Returns ────────────────────────────────────────────────────────────────
 
 model ReturnOrder {
-  id              String       @id @default(cuid())
-  code            String       @unique
+  id              String    @id @default(cuid())
+  code            String    @unique
   originalInvoice String
   transactionId   String?
   customerName    String
   customerPhone   String?
-  status          String       @default("pending") // pending, approved, rejected, processing, refunded, exchanged
+  status          String    @default("pending") // pending, approved, rejected, processing, refunded, exchanged
   reason          String
-  refundMethod    String?      // cash, bank_transfer, store_credit, exchange
-  refundAmount    Float        @default(0)
-  totalRefund     Float        @default(0)
+  refundMethod    String? // cash, bank_transfer, store_credit, exchange
+  refundAmount    Float     @default(0)
+  totalRefund     Float     @default(0)
   notes           String?
   staffName       String?
   branchId        String?
   processedAt     DateTime?
   refundedAt      DateTime?
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   items ReturnItem[]
 
@@ -958,7 +958,7 @@ model ReturnOrder {
 }
 
 model ReturnItem {
-  id            String      @id @default(cuid())
+  id            String  @id @default(cuid())
   returnOrderId String
   productId     String?
   productName   String
@@ -966,15 +966,14 @@ model ReturnItem {
   quantity      Int
   unitPrice     Float
   returnReason  String?
-  condition     String?     // new, used, damaged, defective
-  restocked     Boolean     @default(false)
+  condition     String? // new, used, damaged, defective
+  restocked     Boolean @default(false)
 
   returnOrder ReturnOrder @relation(fields: [returnOrderId], references: [id], onDelete: Cascade)
 
   @@index([returnOrderId])
   @@index([productId])
 }
-
 
 // ─── Debt Ledger ────────────────────────────────────────────────────────────
 
@@ -1217,7 +1216,7 @@ model StoreSettings {
   notifyDailyReport Boolean @default(false)
 
   notifyWeeklyReport Boolean @default(true)
-  
+
   autoRestockOnReturn Boolean @default(true)
 
   // Permission: allow Sales role to checkout/sell directly. When false, Sales can only create SalesOrder
@@ -1351,7 +1350,7 @@ model OnlineChannel {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  orders OnlineOrder[]
+  orders   OnlineOrder[]
   products OnlineProduct[]
 
   commissionRate Float @default(6) // % phí sàn mặc định
@@ -1405,23 +1404,23 @@ model OnlineOrder {
 // ─── Online Products (Danh mục hàng hóa trên sàn) ───────────────────────────
 
 model OnlineProduct {
-  id                 String    @id @default(cuid())
-  channelId          String
-  platform           String
-  platformProductId  String
-  name               String
-  sku                String?
-  price              Float     @default(0)
-  stock              Int       @default(0)
-  status             String    @default("NORMAL")
-  imageUrl           String?
-  localProductId     String?   // ID của Product trong kho để map Giá vốn
-  syncedAt           DateTime?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  id                String    @id @default(cuid())
+  channelId         String
+  platform          String
+  platformProductId String
+  name              String
+  sku               String?
+  price             Float     @default(0)
+  stock             Int       @default(0)
+  status            String    @default("NORMAL")
+  imageUrl          String?
+  localProductId    String? // ID của Product trong kho để map Giá vốn
+  syncedAt          DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  channel            OnlineChannel @relation(fields: [channelId], references: [id])
-  localProduct       Product?      @relation(fields: [localProductId], references: [id])
+  channel      OnlineChannel @relation(fields: [channelId], references: [id])
+  localProduct Product?      @relation(fields: [localProductId], references: [id])
 
   @@unique([channelId, platformProductId]) // Mỗi gian hàng có duy nhất 1 ID này
   @@index([channelId])
@@ -1466,21 +1465,21 @@ model SyncLog {
 // ─── Journal Entry (Bút Toán Kế Toán) ──────────────────────────────────────
 
 model JournalEntry {
-  id               String   @id @default(cuid())
-  date             String
-  description      String
-  debitAccount     String
-  debitAccountName String?
-  creditAccount    String
+  id                String   @id @default(cuid())
+  date              String
+  description       String
+  debitAccount      String
+  debitAccountName  String?
+  creditAccount     String
   creditAccountName String?
-  amount           Float
-  reference        String?
-  referenceType    String   @default("manual")
-  notes            String?
-  branchId         String?
-  createdBy        String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  amount            Float
+  reference         String?
+  referenceType     String   @default("manual")
+  notes             String?
+  branchId          String?
+  createdBy         String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   @@index([date])
   @@index([debitAccount])
@@ -1503,6 +1502,10 @@ model FixedAsset {
   netBookValue            Float    @default(0)
   monthlyDepreciation     Float    @default(0)
   depreciationAccount     String   @default("6424")
+  residualValue           Float    @default(0)
+  department              String?
+  description             String?
+  disposalDate            String?
   status                  String   @default("active")
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
@@ -1514,33 +1517,33 @@ model FixedAsset {
 // ─── E-Invoice (Hóa đơn Điện tử) ───────────────────────────────────────────
 
 model EInvoiceConfig {
-  id          String   @id @default(cuid())
-  provider    String   // misa | viettel | vnpt | fpt | easyinvoice | bkav
-  apiUrl      String
-  apiKey      String
-  apiSecret   String
-  taxCode     String
-  templateId  String?
-  serialNo    String?
-  active      Boolean  @default(true)
-  extra       String?  // JSON for provider-specific config
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  provider   String // misa | viettel | vnpt | fpt | easyinvoice | bkav
+  apiUrl     String
+  apiKey     String
+  apiSecret  String
+  taxCode    String
+  templateId String?
+  serialNo   String?
+  active     Boolean  @default(true)
+  extra      String? // JSON for provider-specific config
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 model EInvoice {
-  id              String    @id @default(cuid())
-  transactionId   String
-  provider        String
-  invoiceNumber   String?
-  lookupCode      String?
-  pdfUrl          String?
-  xmlData         String?
-  status          String    @default("pending") // pending | issued | error | cancelled
-  errorMessage    String?
-  issuedAt        DateTime?
-  cancelledAt     DateTime?
-  createdAt       DateTime  @default(now())
+  id            String    @id @default(cuid())
+  transactionId String
+  provider      String
+  invoiceNumber String?
+  lookupCode    String?
+  pdfUrl        String?
+  xmlData       String?
+  status        String    @default("pending") // pending | issued | error | cancelled
+  errorMessage  String?
+  issuedAt      DateTime?
+  cancelledAt   DateTime?
+  createdAt     DateTime  @default(now())
 
   @@index([transactionId])
   @@index([invoiceNumber])
@@ -1554,11 +1557,11 @@ model HKDRevenueEntry {
   date          DateTime
   soChungTu     String?
   dienGiai      String
-  doanhThu      Float    @default(0)  // Doanh thu (chưa thuế)
+  doanhThu      Float    @default(0) // Doanh thu (chưa thuế)
   chietKhau     Float    @default(0)
-  thueGTGT      Float    @default(0)  // GTGT tỷ lệ trực tiếp
-  doanhThuThuan Float    @default(0)  // Doanh thu thuần
-  tncnUocTinh  Float    @default(0)  // TNCN ước tính 17%
+  thueGTGT      Float    @default(0) // GTGT tỷ lệ trực tiếp
+  doanhThuThuan Float    @default(0) // Doanh thu thuần
+  tncnUocTinh   Float    @default(0) // TNCN ước tính 17%
   phuongThucTT  String   @default("Tiền mặt")
   ghiChu        String?
   branchId      String?
@@ -1581,15 +1584,15 @@ model Warehouse {
   description String?
   isDefault   Boolean  @default(false)
   isActive    Boolean  @default(true)
-  vehicleId   String?  @unique  // when set, this warehouse is the mobile stock for a specific vehicle
+  vehicleId   String?  @unique // when set, this warehouse is the mobile stock for a specific vehicle
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  stocks            WarehouseStock[]
-  transfersFrom     StockTransfer[]      @relation("TransferFrom")
-  transfersTo       StockTransfer[]      @relation("TransferTo")
-  vehicle           Vehicle?             @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
-  salesTrips        SalesTrip[]
+  stocks        WarehouseStock[]
+  transfersFrom StockTransfer[]  @relation("TransferFrom")
+  transfersTo   StockTransfer[]  @relation("TransferTo")
+  vehicle       Vehicle?         @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  salesTrips    SalesTrip[]
 
   @@index([branchId])
   @@index([type])
@@ -1617,10 +1620,10 @@ model WarehouseStock {
 model StockTransfer {
   id              String   @id @default(cuid())
   code            String   @unique
-  fromWarehouseId String?  // null = imported from main product stock
-  toWarehouseId   String?  // null = exported back to main product stock
+  fromWarehouseId String? // null = imported from main product stock
+  toWarehouseId   String? // null = exported back to main product stock
   status          String   @default("completed") // draft | completed | cancelled
-  reason          String?  // damage | warranty_received | warranty_returned | restock | other
+  reason          String? // damage | warranty_received | warranty_returned | restock | other
   notes           String?
   branchId        String?
   userId          String?
@@ -1629,8 +1632,8 @@ model StockTransfer {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  fromWarehouse Warehouse?           @relation("TransferFrom", fields: [fromWarehouseId], references: [id])
-  toWarehouse   Warehouse?           @relation("TransferTo", fields: [toWarehouseId], references: [id])
+  fromWarehouse Warehouse?          @relation("TransferFrom", fields: [fromWarehouseId], references: [id])
+  toWarehouse   Warehouse?          @relation("TransferTo", fields: [toWarehouseId], references: [id])
   items         StockTransferItem[]
 
   @@index([branchId])
@@ -1640,7 +1643,7 @@ model StockTransfer {
 }
 
 model StockTransferItem {
-  id          String @id @default(cuid())
+  id          String  @id @default(cuid())
   transferId  String
   productId   String
   productName String
@@ -1720,11 +1723,11 @@ model SalesTripItem {
 model SalesTripLog {
   id        String   @id @default(cuid())
   tripId    String
-  action    String   // create | start | pause | resume | load | unload | sale | reconcile | close | cancel
+  action    String // create | start | pause | resume | load | unload | sale | reconcile | close | cancel
   notes     String?
   userId    String
   userName  String?
-  metadata  String?  // JSON string for extra data (items, quantities, etc.)
+  metadata  String? // JSON string for extra data (items, quantities, etc.)
   createdAt DateTime @default(now())
 
   trip SalesTrip @relation(fields: [tripId], references: [id], onDelete: Cascade)
@@ -1736,19 +1739,19 @@ model SalesTripLog {
 // ─── Storage Vault ──────────────────────────────────────────────────────────
 
 model StorageFile {
-  id             String   @id @default(cuid())
-  name           String
-  url            String
-  size           Int
-  type           String
-  category       String
-  referenceId    String?
-  referenceName  String?
-  description    String?
-  uploadedBy     String
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  
+  id            String   @id @default(cuid())
+  name          String
+  url           String
+  size          Int
+  type          String
+  category      String
+  referenceId   String?
+  referenceName String?
+  description   String?
+  uploadedBy    String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
   @@index([category])
   @@index([referenceId])
 }
