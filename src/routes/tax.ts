@@ -3335,4 +3335,187 @@ router.get('/hkd/s7', authMiddleware, async (req: AuthRequest, res: Response) =>
     } catch (err) { console.error('GET /hkd/s7:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
 
+// ─── Z-REPORTS (Báo cáo Z — chốt ca cuối ngày POS) ───────────────────────────
+
+// Normalize an arbitrary date string/Date into midnight UTC of that calendar day.
+// Used as the canonical key on ZReport so (registerId, date) uniqueness fires
+// regardless of what time-of-day the client sends.
+function zReportDayKey(input: any): Date | null {
+    if (!input) return null
+    const d = input instanceof Date ? input : new Date(String(input))
+    if (isNaN(d.getTime())) return null
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
+}
+
+// GET /api/tax/z-reports/calculate?date=YYYY-MM-DD&registerId=...
+// Computes Z-Report figures from POS transactions for the given day.
+// Returns calculated values for the frontend to review before persisting.
+// NOTE: Transaction has no registerId column today, so `registerId` is echoed
+// back but does not filter the orders query — date + branch isolation only.
+router.get('/z-reports/calculate', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const dateStr = req.query.date as string | undefined
+        const registerId = (req.query.registerId as string | undefined) || ''
+        const day = zReportDayKey(dateStr)
+        if (!day) return res.status(400).json({ success: false, error: 'date là bắt buộc (YYYY-MM-DD)' })
+        const dayStart = day
+        const dayEnd = new Date(day.getTime() + 24 * 60 * 60 * 1000 - 1)
+
+        const branchFilter = getBranchFilter(req as any)
+        // Transactions for the day: prefer transactionDate, fall back to createdAt
+        const txWhere: any = {
+            status: 'completed',
+            OR: [
+                { transactionDate: { gte: dayStart, lte: dayEnd } },
+                { transactionDate: null, createdAt: { gte: dayStart, lte: dayEnd } },
+            ],
+            ...branchFilter,
+        }
+        const txs = await prisma.transaction.findMany({
+            where: txWhere,
+            include: { payments: true },
+        })
+
+        let totalSales = 0
+        let totalDiscounts = 0
+        let cashSales = 0
+        let cardSales = 0
+        for (const tx of txs) {
+            totalSales += Number(tx.total) || 0
+            totalDiscounts += Number(tx.discount) || 0
+            for (const p of (tx.payments || [])) {
+                const t = String(p.type || '').toLowerCase()
+                const amt = Number(p.amount) || 0
+                if (t === 'cash' || t === 'tiền mặt') cashSales += amt
+                else if (t === 'card' || t === 'credit_card' || t === 'debit_card' || t === 'pos') cardSales += amt
+            }
+        }
+
+        // Returns: ReturnOrder refunded/processed during the day
+        const returns = await prisma.returnOrder.findMany({
+            where: {
+                status: { in: ['refunded', 'approved', 'processing', 'exchanged'] },
+                OR: [
+                    { refundedAt: { gte: dayStart, lte: dayEnd } },
+                    { processedAt: { gte: dayStart, lte: dayEnd } },
+                    { refundedAt: null, processedAt: null, createdAt: { gte: dayStart, lte: dayEnd } },
+                ],
+                ...branchFilter,
+            },
+        })
+        const totalReturns = returns.reduce((s: number, r: any) => s + (Number(r.totalRefund || r.refundAmount) || 0), 0)
+        const netSales = totalSales - totalReturns - totalDiscounts
+
+        res.json({
+            success: true,
+            data: {
+                date: dateStr,
+                registerId,
+                cashSales,
+                cardSales,
+                totalSales,
+                totalReturns,
+                totalDiscounts,
+                netSales,
+                transactionCount: txs.length,
+                returnCount: returns.length,
+            },
+        })
+    } catch (err) {
+        console.error('GET /z-reports/calculate error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// GET /api/tax/z-reports?from=&to=&registerId=
+router.get('/z-reports', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const from = req.query.from ? zReportDayKey(req.query.from) : null
+        const to = req.query.to ? zReportDayKey(req.query.to) : null
+        const registerId = req.query.registerId as string | undefined
+
+        const where: any = { ...getBranchFilter(req as any) }
+        if (from || to) {
+            where.date = {}
+            if (from) where.date.gte = from
+            if (to) where.date.lte = new Date(to.getTime() + 24 * 60 * 60 * 1000 - 1)
+        }
+        if (registerId) where.registerId = registerId
+
+        const data = await prisma.zReport.findMany({ where, orderBy: { date: 'desc' } })
+        res.json({ success: true, data })
+    } catch (err) {
+        console.error('GET /z-reports error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// GET /api/tax/z-reports/:id
+router.get('/z-reports/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
+        const data = await prisma.zReport.findFirst({ where: { id, ...getBranchFilter(req as any) } })
+        if (!data) return res.status(404).json({ success: false, error: 'Z-Report not found' })
+        res.json({ success: true, data })
+    } catch (err) {
+        console.error('GET /z-reports/:id error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// POST /api/tax/z-reports
+router.post('/z-reports', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const {
+            date, registerId,
+            cashStart, cashEnd, cashSales, cardSales,
+            totalSales, totalReturns, totalDiscounts, netSales, cashDifference,
+            notes,
+        } = req.body
+
+        if (!date) return res.status(400).json({ success: false, error: 'date là bắt buộc' })
+        if (!registerId?.toString().trim()) return res.status(400).json({ success: false, error: 'registerId là bắt buộc' })
+        const day = zReportDayKey(date)
+        if (!day) return res.status(400).json({ success: false, error: 'date không hợp lệ' })
+
+        const regId = registerId.toString().trim()
+        const existing = await prisma.zReport.findFirst({ where: { registerId: regId, date: day } })
+        if (existing) {
+            return res.status(409).json({
+                success: false,
+                error: `Đã có Z-Report cho máy ${regId} ngày ${day.toISOString().slice(0, 10)}`,
+                data: existing,
+            })
+        }
+
+        const num = (v: any) => Number(v) || 0
+        const created = await prisma.zReport.create({
+            data: {
+                date: day,
+                registerId: regId,
+                cashStart: num(cashStart),
+                cashEnd: num(cashEnd),
+                cashSales: num(cashSales),
+                cardSales: num(cardSales),
+                totalSales: num(totalSales),
+                totalReturns: num(totalReturns),
+                totalDiscounts: num(totalDiscounts),
+                netSales: num(netSales),
+                cashDifference: num(cashDifference),
+                notes: notes || null,
+                branchId: getBranchId(req as any) || null,
+                createdBy: req.user?.userId || null,
+            },
+        })
+        res.status(201).json({ success: true, data: created })
+    } catch (err) {
+        console.error('POST /z-reports error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
 export default router
