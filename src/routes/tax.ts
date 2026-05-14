@@ -1667,6 +1667,198 @@ router.post('/auto-journal', authMiddleware, async (req: AuthRequest, res: Respo
     } catch (err) { console.error('POST /auto-journal error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
 
+// ─── CLOSING ENTRIES (Kết chuyển cuối kỳ TK911) ──────────────────────────────
+
+interface ClosingPlanItem {
+    description: string
+    debitAccount: string
+    debitAccountName: string
+    creditAccount: string
+    creditAccountName: string
+    amount: number
+}
+
+// Account map for closing: code → { name, normalBalance: 'credit' | 'debit' }
+// Revenue/income accounts (credit balance) close TO TK911 via Nợ X / Có 911
+// Expense/cost accounts (debit balance) close TO TK911 via Nợ 911 / Có X
+const CLOSING_ACCOUNTS: { code: string; name: string; type: 'revenue' | 'expense' }[] = [
+    { code: '511', name: 'Doanh thu bán hàng & CCDV', type: 'revenue' },
+    { code: '515', name: 'DT hoạt động tài chính', type: 'revenue' },
+    { code: '711', name: 'Thu nhập khác', type: 'revenue' },
+    { code: '632', name: 'Giá vốn hàng bán', type: 'expense' },
+    { code: '635', name: 'Chi phí tài chính', type: 'expense' },
+    { code: '641', name: 'Chi phí bán hàng', type: 'expense' },
+    { code: '642', name: 'Chi phí QLDN', type: 'expense' },
+    { code: '811', name: 'Chi phí khác', type: 'expense' },
+]
+
+/**
+ * Compute closing plan from journal entries for a period.
+ * For each P&L account, balance = sum(credit) - sum(debit) for revenue,
+ * sum(debit) - sum(credit) for expenses. Then build the 8 transfer entries
+ * + one result-transfer to TK421.
+ *
+ * `accountCode` may be a sub-account (e.g. '5111') — we match by prefix.
+ */
+function buildClosingPlan(entries: { debitAccount: string; creditAccount: string; amount: number }[], periodLabel: string): ClosingPlanItem[] {
+    const plan: ClosingPlanItem[] = []
+
+    let totalRevenue = 0 // credits to 911
+    let totalExpense = 0 // debits from 911
+
+    for (const acc of CLOSING_ACCOUNTS) {
+        // Sum debit and credit for entries touching this account (or its sub-accounts)
+        let debitSum = 0
+        let creditSum = 0
+        for (const e of entries) {
+            if (e.debitAccount === acc.code || e.debitAccount?.startsWith(acc.code)) debitSum += e.amount
+            if (e.creditAccount === acc.code || e.creditAccount?.startsWith(acc.code)) creditSum += e.amount
+        }
+        // Net balance to close
+        const balance = acc.type === 'revenue' ? creditSum - debitSum : debitSum - creditSum
+        if (balance <= 0) continue // nothing to close (or contra-balance — skip)
+
+        if (acc.type === 'revenue') {
+            // Nợ TKxxx / Có 911
+            plan.push({
+                description: `Kết chuyển ${acc.name} ${periodLabel}`,
+                debitAccount: acc.code, debitAccountName: acc.name,
+                creditAccount: '911', creditAccountName: 'Xác định KQKD',
+                amount: balance,
+            })
+            totalRevenue += balance
+        } else {
+            // Nợ 911 / Có TKxxx
+            plan.push({
+                description: `Kết chuyển ${acc.name} ${periodLabel}`,
+                debitAccount: '911', debitAccountName: 'Xác định KQKD',
+                creditAccount: acc.code, creditAccountName: acc.name,
+                amount: balance,
+            })
+            totalExpense += balance
+        }
+    }
+
+    // Result transfer to TK421 (Lợi nhuận chưa phân phối)
+    const profit = totalRevenue - totalExpense
+    if (profit > 0) {
+        plan.push({
+            description: `Kết chuyển lãi ${periodLabel} sang TK421`,
+            debitAccount: '911', debitAccountName: 'Xác định KQKD',
+            creditAccount: '421', creditAccountName: 'LNST chưa phân phối',
+            amount: profit,
+        })
+    } else if (profit < 0) {
+        plan.push({
+            description: `Kết chuyển lỗ ${periodLabel} sang TK421`,
+            debitAccount: '421', debitAccountName: 'LNST chưa phân phối',
+            creditAccount: '911', creditAccountName: 'Xác định KQKD',
+            amount: -profit,
+        })
+    }
+
+    return plan
+}
+
+// GET /api/tax/closing-entries/preview?year=2026&month=3
+// Returns the planned closing entries without persisting them.
+router.get('/closing-entries/preview', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const year = Number(req.query.year) || new Date().getFullYear()
+        const month = req.query.month ? Number(req.query.month) : undefined
+        const dateGte = month ? `${year}-${String(month).padStart(2, '0')}-01` : `${year}-01-01`
+        const dateEnd = month ? `${year}-${String(month).padStart(2, '0')}-31` : `${year}-12-31`
+        const periodLabel = month ? `T${month}/${year}` : `năm ${year}`
+
+        const entries = await prisma.journalEntry.findMany({
+            where: { date: { gte: dateGte, lte: dateEnd } },
+            select: { debitAccount: true, creditAccount: true, amount: true },
+        })
+
+        const plan = buildClosingPlan(entries, periodLabel)
+        const totalDebit = plan.reduce((s, p) => s + p.amount, 0)
+        res.json({ success: true, data: { plan, periodLabel, totalDebit, totalCredit: totalDebit } })
+    } catch (err) {
+        console.error('GET /closing-entries/preview error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// POST /api/tax/closing-entries?year=2026&month=3
+// Calculates and creates period-end closing entries (kết chuyển cuối kỳ TK911).
+router.post('/closing-entries', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const year = Number(req.query.year) || new Date().getFullYear()
+        const month = req.query.month ? Number(req.query.month) : undefined
+        const dateGte = month ? `${year}-${String(month).padStart(2, '0')}-01` : `${year}-01-01`
+        const dateEnd = month ? `${year}-${String(month).padStart(2, '0')}-31` : `${year}-12-31`
+        const periodLabel = month ? `T${month}/${year}` : `năm ${year}`
+        // Closing entry date = last day of period
+        const closingDate = month
+            ? new Date(year, month, 0).toISOString().slice(0, 10)
+            : `${year}-12-31`
+
+        const entries = await prisma.journalEntry.findMany({
+            where: { date: { gte: dateGte, lte: dateEnd } },
+            select: { debitAccount: true, creditAccount: true, amount: true, reference: true, referenceType: true },
+        })
+
+        // Idempotency: refuse to re-run if closing entries already exist for this period
+        const closingRef = month ? `CLOSE-${year}-${String(month).padStart(2, '0')}` : `CLOSE-${year}`
+        const existing = entries.filter(e => e.referenceType === 'closing' && e.reference?.startsWith(closingRef))
+        if (existing.length > 0) {
+            return res.status(409).json({
+                success: false,
+                error: `Đã có ${existing.length} bút toán kết chuyển cho kỳ ${periodLabel}. Xóa bút toán cũ trước khi tạo lại.`,
+            })
+        }
+
+        const plan = buildClosingPlan(entries, periodLabel)
+        if (plan.length === 0) {
+            return res.status(400).json({ success: false, error: `Không có số dư nào để kết chuyển trong kỳ ${periodLabel}` })
+        }
+
+        const branchId = (req as any).branchId || null
+        const userId = (req as any).userId || null
+        const created: any[] = []
+        for (let i = 0; i < plan.length; i++) {
+            const p = plan[i]!
+            try {
+                const entry = await prisma.journalEntry.create({
+                    data: {
+                        date: closingDate,
+                        description: p.description,
+                        debitAccount: p.debitAccount, debitAccountName: p.debitAccountName,
+                        creditAccount: p.creditAccount, creditAccountName: p.creditAccountName,
+                        amount: p.amount,
+                        reference: `${closingRef}-${String(i + 1).padStart(2, '0')}`,
+                        referenceType: 'closing',
+                        branchId, createdBy: userId,
+                    },
+                })
+                created.push(entry)
+            } catch (e) {
+                console.error('Failed to create closing entry', p, e)
+            }
+        }
+
+        res.status(201).json({
+            success: true,
+            data: {
+                created,
+                periodLabel,
+                totalCreated: created.length,
+                totalAmount: created.reduce((s, c) => s + (c.amount || 0), 0),
+            },
+        })
+    } catch (err) {
+        console.error('POST /closing-entries error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
 // Ã¢â€â‚¬Ã¢â€â‚¬ BALANCE SHEET (BÃ¡ÂºÂ£ng CÃƒÂ¢n Ã„ÂÃ¡Â»â€˜i KÃ¡ÂºÂ¿ ToÃƒÂ¡n) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
 
 router.get('/balance-sheet', authMiddleware, async (req: AuthRequest, res: Response) => {
