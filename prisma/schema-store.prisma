@@ -1736,6 +1736,33 @@ model SalesTripLog {
   @@index([createdAt])
 }
 
+// ─── Z-Report (Báo cáo Z — chốt ca / kết ca cuối ngày POS) ─────────────────
+
+model ZReport {
+  id              String   @id @default(cuid())
+  date            DateTime                  // canonical day (midnight UTC) the report covers
+  registerId      String                    // POS register / cash drawer identifier
+  cashStart       Float    @default(0)
+  cashEnd         Float    @default(0)
+  cashSales       Float    @default(0)
+  cardSales       Float    @default(0)
+  totalSales      Float    @default(0)
+  totalReturns    Float    @default(0)
+  totalDiscounts  Float    @default(0)
+  netSales        Float    @default(0)
+  cashDifference  Float    @default(0)
+  notes           String?
+  branchId        String?
+  createdBy       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([registerId, date])
+  @@index([date])
+  @@index([branchId])
+  @@index([registerId])
+}
+
 // ─── Storage Vault ──────────────────────────────────────────────────────────
 
 model StorageFile {
