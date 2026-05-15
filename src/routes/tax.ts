@@ -175,67 +175,6 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
 })
 
 // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
-//  STORE INFO (Tax / Business profile)
-// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
-
-// GET /api/tax/store-info
-router.get('/store-info', authMiddleware, async (req: AuthRequest, res: Response) => {
-    try {
-        const prisma = req.storePrisma!
-        const store = await (prisma as any).store.findFirst()
-        if (!store) return res.json({ success: true, data: null })
-        res.json({
-            success: true,
-            data: {
-                id: store.id,
-                name: store.name,
-                address: store.address,
-                phone: store.phone,
-                email: store.email,
-                website: store.website,
-                businessType: store.businessType,
-                taxCode: store.taxCode,
-                ownerName: store.ownerName,
-                ownerIdNumber: store.ownerIdNumber,
-                representativeName: store.representativeName,
-            },
-        })
-    } catch (err) {
-        console.error('GET /store-info error:', err)
-        res.status(500).json({ success: false, error: 'Internal server error' })
-    }
-})
-
-// PUT /api/tax/store-info
-router.put('/store-info', authMiddleware, async (req: AuthRequest, res: Response) => {
-    try {
-        const prisma = req.storePrisma!
-        const { name, address, phone, email, website, businessType, taxCode, ownerName, ownerIdNumber, representativeName } = req.body
-        const store = await (prisma as any).store.findFirst()
-        if (!store) return res.status(404).json({ success: false, error: 'Store not found' })
-        const data = await (prisma as any).store.update({
-            where: { id: store.id },
-            data: {
-                ...(name !== undefined && { name }),
-                ...(address !== undefined && { address }),
-                ...(phone !== undefined && { phone }),
-                ...(email !== undefined && { email }),
-                ...(website !== undefined && { website }),
-                ...(businessType !== undefined && { businessType }),
-                ...(taxCode !== undefined && { taxCode }),
-                ...(ownerName !== undefined && { ownerName }),
-                ...(ownerIdNumber !== undefined && { ownerIdNumber }),
-                ...(representativeName !== undefined && { representativeName }),
-            },
-        })
-        res.json({ success: true, data })
-    } catch (err) {
-        console.error('PUT /store-info error:', err)
-        res.status(500).json({ success: false, error: 'Internal server error' })
-    }
-})
-
-// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 //  REVENUE CHECK & INVOICE LISTING
 // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
@@ -3102,13 +3041,13 @@ router.post('/seed-test-data', authMiddleware, async (req: AuthRequest, res: Res
                                 month, year, employeeId: emp.id, employeeName: emp.name || 'NV',
                                 grossSalary: emp.salary, netSalary: Math.round((emp.salary || 0) * 0.895),
                                 totalCost: Math.round((emp.salary || 0) * 1.215),
-                                bhxhEmployee: Math.round((emp.salary || 0) * 0.08),
-                                bhytEmployee: Math.round((emp.salary || 0) * 0.015),
-                                bhtnEmployee: Math.round((emp.salary || 0) * 0.01),
-                                bhxhEmployer: Math.round((emp.salary || 0) * 0.175),
-                                bhytEmployer: Math.round((emp.salary || 0) * 0.03),
-                                bhtnEmployer: Math.round((emp.salary || 0) * 0.01),
-                                pitAmount: 0, allowances: 0, deductions: 0,
+                                bhxh_emp: Math.round((emp.salary || 0) * 0.08),
+                                bhyt_emp: Math.round((emp.salary || 0) * 0.015),
+                                bhtn_emp: Math.round((emp.salary || 0) * 0.01),
+                                bhxh_er: Math.round((emp.salary || 0) * 0.175),
+                                bhyt_er: Math.round((emp.salary || 0) * 0.03),
+                                bhtn_er: Math.round((emp.salary || 0) * 0.01),
+                                pit: 0,
                             }
                         })
                         counts.payroll++
@@ -3461,7 +3400,7 @@ router.get('/hkd/s2', authMiddleware, async (req: AuthRequest, res: Response) =>
                     stt: idx++, ngay, soChungTu: imp.receiptNumber || imp.code || '',
                     supplierName: imp.supplierName || 'NCC', type: 'import',
                     maHang, tenHangHoa: item.productName || item.name || item.product?.name || '',
-                    dvt: item.unit || item.product?.baseUnit || 'ăượng',
+                    dvt: item.unit || item.product?.baseUnit || 'cái',
                     nhapSoLuong: qty, nhapDonGia: cp, nhapThanhTien: tt,
                     xuatSoLuong: 0, xuatDonGia: 0, xuatThanhTien: 0,
                     dienGiai: `Nhập kho từ ${imp.supplierName || 'NCC'}`,
