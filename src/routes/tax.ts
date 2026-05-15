@@ -5945,30 +5945,58 @@ const COA_SEED: Array<{
 // POST /api/tax/chart-of-accounts/seed
 router.post('/chart-of-accounts/seed', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-        const prisma: any = req.storePrisma!
+        const prisma: any = req.storePrisma
+        if (!prisma) {
+            return res.status(400).json({ success: false, error: 'Store context required' })
+        }
         const force = req.body?.force === true || req.query.force === 'true'
 
         let created = 0, skipped = 0, updated = 0
+        const errors: Array<{ code: string; error: string }> = []
+
         for (const acc of COA_SEED) {
-            const existing = await prisma.chartOfAccount.findUnique({ where: { code: acc.code } }).catch(() => null)
-            if (existing) {
-                if (force) {
-                    await prisma.chartOfAccount.update({
-                        where: { code: acc.code },
-                        data: { ...acc, isSystem: true, isActive: true },
-                    })
+            try {
+                const data = {
+                    code: acc.code,
+                    name: acc.name,
+                    nameEn: acc.nameEn ?? null,
+                    level: acc.level,
+                    parentCode: acc.parentCode ?? null,
+                    type: acc.type,
+                    nature: acc.nature,
+                    description: acc.description ?? null,
+                    isSystem: true,
+                    isActive: true,
+                }
+                const existing = await prisma.chartOfAccount.findUnique({ where: { code: acc.code } })
+                if (existing) {
+                    if (!force) { skipped++; continue }
+                    const { code: _ignored, ...updateData } = data
+                    await prisma.chartOfAccount.update({ where: { code: acc.code }, data: updateData })
                     updated++
                 } else {
-                    skipped++
+                    try {
+                        await prisma.chartOfAccount.create({ data })
+                        created++
+                    } catch (e: any) {
+                        // P2002 = unique constraint violation (concurrent seed); treat as skip.
+                        if (e?.code === 'P2002') { skipped++ } else { throw e }
+                    }
                 }
-                continue
+            } catch (itemErr: any) {
+                errors.push({ code: acc.code, error: itemErr?.message || String(itemErr) })
             }
-            await prisma.chartOfAccount.create({
-                data: { ...acc, isSystem: true, isActive: true },
-            })
-            created++
         }
-        res.json({ success: true, data: { created, updated, skipped, total: COA_SEED.length } })
+
+        res.json({
+            success: true,
+            data: {
+                created, updated, skipped,
+                failed: errors.length,
+                total: COA_SEED.length,
+                ...(errors.length > 0 ? { errors } : {}),
+            },
+        })
     } catch (err: any) {
         console.error('POST /chart-of-accounts/seed error:', err)
         res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
