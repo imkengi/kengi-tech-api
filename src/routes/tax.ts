@@ -717,6 +717,271 @@ router.get('/declarations/:id/xml', authMiddleware, async (req: AuthRequest, res
     }
 })
 
+// --- VAT Amendments (To khai bo sung 01/GTGT - TT80/2021) ---------------------
+
+const VAT_LINE_FIELDS = [
+    'ct21', 'ct22', 'ct23', 'ct24', 'ct25', 'ct26', 'ct27', 'ct28',
+    'ct29', 'ct30', 'ct31', 'ct32', 'ct33', 'ct34', 'ct35',
+    'ct36', 'ct37', 'ct38', 'ct39', 'ct40a', 'ct40b',
+] as const
+
+function recalcVatTotals(d: Record<string, any>) {
+    d.ct29 = (d.ct21 || 0) + (d.ct22 || 0) + (d.ct23 || 0) + (d.ct25 || 0) + (d.ct27 || 0)
+    d.ct30 = (d.ct24 || 0) + (d.ct26 || 0) + (d.ct28 || 0)
+    d.ct35 = (d.ct30 || 0) - (d.ct33 || 0) - (d.ct34 || 0)
+    d.ct38 = d.ct35 > 0 ? d.ct35 + (d.ct36 || 0) - (d.ct37 || 0) : 0
+    d.ct39 = d.ct35 < 0 ? Math.abs(d.ct35) - (d.ct36 || 0) + (d.ct37 || 0) : 0
+    d.ct40b = (d.ct39 || 0) - (d.ct40a || 0)
+    return d
+}
+
+function snapshotVatLines(decl: Record<string, any>): Record<string, number> {
+    const snap: Record<string, number> = {}
+    for (const f of VAT_LINE_FIELDS) snap[f] = Number(decl[f] || 0)
+    return snap
+}
+
+function parseAmendmentNotes(raw: string | null | undefined): any {
+    if (!raw) return {}
+    try { return JSON.parse(raw) || {} } catch { return {} }
+}
+
+function buildVatDiff(originalSnap: Record<string, number>, amendment: Record<string, any>) {
+    const diff: Array<{ field: string; originalValue: number; amendedValue: number; difference: number }> = []
+    for (const f of VAT_LINE_FIELDS) {
+        const originalValue = Number(originalSnap[f] || 0)
+        const amendedValue = Number(amendment[f] || 0)
+        if (originalValue !== amendedValue) {
+            diff.push({ field: f, originalValue, amendedValue, difference: amendedValue - originalValue })
+        }
+    }
+    return diff
+}
+
+// POST /api/tax/vat-amendment - create amendment for an existing VAT declaration
+router.post('/vat-amendment', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const { originalId, amendmentReason, fields } = req.body as {
+            originalId?: string
+            amendmentReason?: string
+            fields?: Record<string, number | string>
+        }
+
+        if (!originalId) {
+            return res.status(400).json({ success: false, error: 'originalId la bat buoc' })
+        }
+        if (!amendmentReason || !String(amendmentReason).trim()) {
+            return res.status(400).json({ success: false, error: 'amendmentReason (ly do khai bo sung) la bat buoc' })
+        }
+
+        const original = await prisma.taxDeclaration.findUnique({ where: { id: originalId } })
+        if (!original) {
+            return res.status(404).json({ success: false, error: 'Khong tim thay to khai goc' })
+        }
+        if (original.formType !== '01_GTGT') {
+            return res.status(400).json({ success: false, error: 'Chi ho tro khai bo sung cho to khai 01/GTGT' })
+        }
+
+        const prevCount = await (prisma.taxDeclaration as any).count({
+            where: { formType: '01_GTGT_BS', originalId },
+        })
+        const amendmentNumber = prevCount + 1
+
+        const amended: Record<string, any> = {}
+        for (const f of VAT_LINE_FIELDS) amended[f] = Number((original as any)[f] || 0)
+        if (fields && typeof fields === 'object') {
+            for (const f of VAT_LINE_FIELDS) {
+                const v = (fields as any)[f]
+                if (v !== undefined && v !== null && v !== '') {
+                    amended[f] = Number(v)
+                }
+            }
+        }
+        recalcVatTotals(amended)
+
+        const originalSnapshot = snapshotVatLines(original as any)
+        const notesPayload = JSON.stringify({
+            amendmentNumber,
+            amendmentReason,
+            originalPeriod: original.period,
+            originalSnapshot,
+        })
+
+        const amendmentPeriod = `${original.period}-BS${amendmentNumber}`
+
+        const data = await prisma.taxDeclaration.create({
+            data: {
+                formType: '01_GTGT_BS',
+                businessType: original.businessType,
+                period: amendmentPeriod,
+                periodType: original.periodType,
+                year: original.year,
+                month: original.month,
+                quarter: original.quarter,
+                taxCode: original.taxCode,
+                companyName: original.companyName,
+                companyAddress: original.companyAddress,
+                ...amended,
+                originalId: original.id,
+                amendmentNumber,
+                amendmentReason,
+                notes: notesPayload,
+                status: 'draft',
+            } as any,
+        })
+
+        res.status(201).json({ success: true, data })
+    } catch (err: any) {
+        console.error('POST /vat-amendment error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// GET /api/tax/vat-amendment?year=&month= - list amendments for a period
+router.get('/vat-amendment', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const where: any = { formType: '01_GTGT_BS' }
+        if (req.query.year) where.year = Number(req.query.year)
+        if (req.query.month) where.month = Number(req.query.month)
+        if (req.query.quarter) where.quarter = Number(req.query.quarter)
+        if (req.query.originalId) where.originalId = String(req.query.originalId)
+
+        const rows = await prisma.taxDeclaration.findMany({
+            where,
+            orderBy: [{ year: 'desc' }, { month: 'desc' }, { amendmentNumber: 'desc' } as any],
+        })
+        res.json({ success: true, data: rows })
+    } catch (err: any) {
+        console.error('GET /vat-amendment error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// GET /api/tax/vat-amendment/:id - single amendment with diff vs original
+router.get('/vat-amendment/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
+
+        const amendment = await prisma.taxDeclaration.findUnique({ where: { id } })
+        if (!amendment || amendment.formType !== '01_GTGT_BS') {
+            return res.status(404).json({ success: false, error: 'Khong tim thay to khai bo sung' })
+        }
+
+        const original = (amendment as any).originalId
+            ? await prisma.taxDeclaration.findUnique({ where: { id: (amendment as any).originalId } })
+            : null
+
+        const notes = parseAmendmentNotes(amendment.notes)
+        const originalSnap: Record<string, number> = notes.originalSnapshot
+            || (original ? snapshotVatLines(original as any) : {})
+
+        const diff = buildVatDiff(originalSnap, amendment as any)
+
+        res.json({
+            success: true,
+            data: {
+                amendment,
+                original,
+                originalSnapshot: originalSnap,
+                amendmentNumber: (amendment as any).amendmentNumber,
+                amendmentReason: (amendment as any).amendmentReason,
+                diff,
+            },
+        })
+    } catch (err: any) {
+        console.error('GET /vat-amendment/:id error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// GET /api/tax/vat-amendment/:id/diff - field-by-field diff
+router.get('/vat-amendment/:id/diff', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
+
+        const amendment = await prisma.taxDeclaration.findUnique({ where: { id } })
+        if (!amendment || amendment.formType !== '01_GTGT_BS') {
+            return res.status(404).json({ success: false, error: 'Khong tim thay to khai bo sung' })
+        }
+
+        const notes = parseAmendmentNotes(amendment.notes)
+        let originalSnap: Record<string, number> = notes.originalSnapshot || {}
+        if (!originalSnap || Object.keys(originalSnap).length === 0) {
+            const original = (amendment as any).originalId
+                ? await prisma.taxDeclaration.findUnique({ where: { id: (amendment as any).originalId } })
+                : null
+            originalSnap = original ? snapshotVatLines(original as any) : {}
+        }
+
+        const diff = buildVatDiff(originalSnap, amendment as any)
+        res.json({
+            success: true,
+            data: {
+                amendmentId: amendment.id,
+                originalId: (amendment as any).originalId,
+                diff,
+            },
+        })
+    } catch (err: any) {
+        console.error('GET /vat-amendment/:id/diff error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// POST /api/tax/vat-amendment/:id/submit - finalize an amendment
+router.post('/vat-amendment/:id/submit', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
+
+        const amendment = await prisma.taxDeclaration.findUnique({ where: { id } })
+        if (!amendment || amendment.formType !== '01_GTGT_BS') {
+            return res.status(404).json({ success: false, error: 'Khong tim thay to khai bo sung' })
+        }
+        if (amendment.status === 'submitted' || amendment.status === 'filed') {
+            return res.status(400).json({ success: false, error: 'To khai bo sung da duoc nop' })
+        }
+
+        const filedAt = new Date()
+        const submitted = await prisma.taxDeclaration.update({
+            where: { id },
+            data: { status: 'submitted', filedAt },
+        })
+
+        // Link the original declaration: mark it as amended and record the latest
+        // amendment id in its notes JSON so the UI can surface the history.
+        const origId = (amendment as any).originalId
+        if (origId) {
+            const original = await prisma.taxDeclaration.findUnique({ where: { id: origId } })
+            if (original) {
+                const origNotes = parseAmendmentNotes(original.notes)
+                const amendments: Array<{ id: string; amendmentNumber: number | null; filedAt: string }> =
+                    Array.isArray(origNotes.amendments) ? origNotes.amendments : []
+                amendments.push({
+                    id: amendment.id,
+                    amendmentNumber: (amendment as any).amendmentNumber || null,
+                    filedAt: filedAt.toISOString(),
+                })
+                const merged = { ...origNotes, amendments, latestAmendmentId: amendment.id }
+                await prisma.taxDeclaration.update({
+                    where: { id: original.id },
+                    data: { status: 'amended', notes: JSON.stringify(merged) },
+                })
+            }
+        }
+
+        res.json({ success: true, data: submitted })
+    } catch (err: any) {
+        console.error('POST /vat-amendment/:id/submit error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+
 // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 //  ACCOUNTING MODULE Ã¢â‚¬â€ Wave 1+2 Routes
 // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
@@ -2333,9 +2598,11 @@ router.get('/income-statement', authMiddleware, async (req: AuthRequest, res: Re
         const laborExp622 = sumByAccount('622', 'debit')       // CP nhÃƒÂ¢n cÃƒÂ´ng
         const totalOpExp = sellingExp641 + adminExp642 + laborExp622
         const operatingProfit = grossProfit - totalOpExp
-        const otherIncome711 = sumByAccount('711', 'credit')   // Thu nhÃ¡ÂºÂ­p khÃƒÂ¡c
-        const otherExpense811 = sumByAccount('811', 'debit')   // Chi phÃƒÂ­ khÃƒÂ¡c
-        const profitBeforeTax = operatingProfit + otherIncome711 - otherExpense811
+        const financialIncome515 = sumByAccount('515', 'credit')   // Doanh thu hoat dong tai chinh (TT200 line 21)
+        const financialExpense635 = sumByAccount('635', 'debit')   // Chi phi tai chinh (TT200 line 22)
+        const otherIncome711 = sumByAccount('711', 'credit')   // Thu nhap khac (TT200 line 31)
+        const otherExpense811 = sumByAccount('811', 'debit')   // Chi phi khac (TT200 line 32)
+        const profitBeforeTax = operatingProfit + financialIncome515 - financialExpense635 + otherIncome711 - otherExpense811
         const taxExpense = sumByAccount('3331', 'credit')      // ThuÃ¡ÂºÂ¿ GTGT
         const netIncome = profitBeforeTax  // Simplified Ã¢â‚¬â€ tax already in revenue
 
@@ -2363,6 +2630,8 @@ router.get('/income-statement', authMiddleware, async (req: AuthRequest, res: Re
                 laborExpenses: laborExp622,
                 totalOperatingExpenses: totalOpExp,
                 operatingProfit,
+                financialIncome: financialIncome515,
+                financialExpense: financialExpense635,
                 otherIncome: otherIncome711,
                 otherExpenses: otherExpense811,
                 profitBeforeTax,
@@ -4393,7 +4662,6 @@ router.post('/z-reports', authMiddleware, async (req: AuthRequest, res: Response
     }
 })
 
-export default router
 // Quarterly Corporate Income Tax declaration per TT200/2014 + circular 80/2021.
 // Line codes (ct01..ct07) match mã chỉ tiêu on form 03/TNDN.
 
@@ -4717,7 +4985,6 @@ router.get('/cit-declaration/appendix/pl01-2', authMiddleware, async (req: AuthR
     }
 })
 
-export default router
 // Tính thuế TNCN cuối năm cho từng nhân viên từ PayrollRecord.
 // Biểu lũy tiến từng phần 5%→35% theo Luật thuế TNCN.
 // Mức giảm trừ: bản thân 11tr/tháng (NĐ44/2023), phụ thuộc 4.4tr/tháng/người.
@@ -5023,7 +5290,6 @@ router.get('/pit-settlement/:year/employees', authMiddleware, async (req: AuthRe
     }
 })
 
-export default router
 //
 // 3 loại điều chỉnh:
 //   "increase"        — điều chỉnh tăng số lượng / đơn giá
@@ -5413,271 +5679,6 @@ router.post('/adjustment-invoices/:id/approve', authMiddleware, async (req: Auth
         res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
     }
 })
-
-export default router
-    dependentDeduction: number   // Giảm trừ người phụ thuộc
-    deductions: number           // Tổng giảm trừ (BH + bản thân + phụ thuộc)
-    taxableIncome: number        // Thu nhập tính thuế
-    taxAmount: number            // Thuế TNCN phải nộp theo biểu lũy tiến
-    pitWithheld: number          // Thuế TNCN đã khấu trừ trong năm (sum monthly pit)
-    balanceDue: number           // taxAmount - pitWithheld (>0: nộp thêm, <0: hoàn)
-}
-
-function aggregatePitByEmployee(records: any[]): PitEmployeeBreakdown[] {
-    const byEmp = new Map<string, any[]>()
-    for (const r of records) {
-        const key = r.employeeId || r.employeeName
-        if (!key) continue
-        if (!byEmp.has(key)) byEmp.set(key, [])
-        byEmp.get(key)!.push(r)
-    }
-
-    const result: PitEmployeeBreakdown[] = []
-    for (const [employeeId, recs] of byEmp.entries()) {
-        const sample = recs[0]
-        let totalIncome = 0
-        let totalInsurance = 0
-        let dependentMonths = 0
-        let pitWithheld = 0
-        const monthsSeen = new Set<number>()
-        for (const r of recs) {
-            const gross = Number(r.actualGross) || Number(r.grossSalary) || 0
-            const bonus = Number(r.bonus) || 0
-            // actualGross may or may not already include bonus depending on how payroll was entered.
-            // If actualGross < grossSalary, treat bonus as not yet rolled in.
-            const hasBonusInActual = gross >= Number(r.grossSalary || 0)
-            totalIncome += gross + (hasBonusInActual ? 0 : bonus)
-            totalInsurance += (Number(r.bhxh_emp) || 0) + (Number(r.bhyt_emp) || 0) + (Number(r.bhtn_emp) || 0)
-            dependentMonths += Number(r.dependents) || 0
-            pitWithheld += Number(r.pit) || 0
-            if (typeof r.month === 'number') monthsSeen.add(r.month)
-        }
-        const monthsWorked = monthsSeen.size || recs.length
-        const selfDeduction = monthsWorked * PIT_SELF_DEDUCTION_PER_MONTH
-        const dependentDeduction = dependentMonths * PIT_DEPENDENT_DEDUCTION_PER_MONTH
-        const deductions = totalInsurance + selfDeduction + dependentDeduction
-        const taxableIncome = Math.max(0, totalIncome - deductions)
-        const taxAmount = calculatePitProgressive(taxableIncome)
-        result.push({
-            employeeId,
-            employeeCode: sample.employeeCode || null,
-            name: sample.employeeName || '',
-            department: sample.department || null,
-            monthsWorked,
-            totalIncome: Math.round(totalIncome),
-            totalInsurance: Math.round(totalInsurance),
-            selfDeduction,
-            dependentDeduction,
-            deductions: Math.round(deductions),
-            taxableIncome: Math.round(taxableIncome),
-            taxAmount,
-            pitWithheld: Math.round(pitWithheld),
-            balanceDue: taxAmount - Math.round(pitWithheld),
-        })
-    }
-    result.sort((a, b) => a.name.localeCompare(b.name, 'vi'))
-    return result
-}
-
-function pitSummary(employees: PitEmployeeBreakdown[]) {
-    return {
-        totalEmployees: employees.length,
-        totalIncome: employees.reduce((s, e) => s + e.totalIncome, 0),
-        totalDeductions: employees.reduce((s, e) => s + e.deductions, 0),
-        totalTaxableIncome: employees.reduce((s, e) => s + e.taxableIncome, 0),
-        totalTax: employees.reduce((s, e) => s + e.taxAmount, 0),
-        totalWithheld: employees.reduce((s, e) => s + e.pitWithheld, 0),
-        totalBalanceDue: employees.reduce((s, e) => s + e.balanceDue, 0),
-    }
-}
-
-// Parse the structured PIT payload we store inside TaxDeclaration.notes.
-// Returns null if notes is plain text (legacy / user-entered) rather than our JSON envelope.
-function parsePitNotes(notes: string | null | undefined): { userNotes?: string; employees?: PitEmployeeBreakdown[]; summary?: any } | null {
-    if (!notes) return null
-    try {
-        const obj = JSON.parse(notes)
-        if (obj && obj.__pit === true) return obj
-        return null
-    } catch { return null }
-}
-
-// GET /api/tax/pit-settlement/calculate?year=2024
-// Tính thuế TNCN năm từ PayrollRecord (không lưu).
-router.get('/pit-settlement/calculate', authMiddleware, async (req: AuthRequest, res: Response) => {
-    try {
-        const prisma = req.storePrisma! as any
-        const year = Number(req.query.year) || new Date().getFullYear()
-        const records = await prisma.payrollRecord.findMany({
-            where: { year },
-            orderBy: [{ employeeName: 'asc' }, { month: 'asc' }],
-        })
-        const employees = aggregatePitByEmployee(records)
-        res.json({
-            success: true,
-            data: {
-                year,
-                summary: pitSummary(employees),
-                employees,
-            },
-        })
-    } catch (err) {
-        console.error('GET /pit-settlement/calculate error:', err)
-        res.status(500).json({ success: false, error: 'Internal server error' })
-    }
-})
-
-// POST /api/tax/pit-settlement
-// Lưu bản quyết toán TNCN năm (Form 05/QTT-TNCN) vào TaxDeclaration.
-// period = `QTT-{year}` (unique). Chi tiết per-employee lưu trong notes (JSON envelope).
-router.post('/pit-settlement', authMiddleware, async (req: AuthRequest, res: Response) => {
-    try {
-        const prisma = req.storePrisma!
-        const year = Number(req.body.year)
-        if (!year) return res.status(400).json({ success: false, error: 'year là bắt buộc' })
-
-        const employees: PitEmployeeBreakdown[] = Array.isArray(req.body.employees) ? req.body.employees : []
-        const status = (req.body.status as string) || 'draft'
-        const userNotes = typeof req.body.notes === 'string' ? req.body.notes : ''
-
-        const summary = pitSummary(employees)
-        const totalTax = Number(req.body.totalTax) || summary.totalTax
-
-        const store: any = await (prisma as any).storeSettings.findFirst().catch(() => null)
-        const taxCode = store?.taxCode || ''
-        const companyName = store?.name || 'My Store'
-        const companyAddress = store?.address || null
-
-        const period = `QTT-${year}`
-        const existing = await prisma.taxDeclaration.findUnique({ where: { period } })
-        if (existing) {
-            return res.status(409).json({
-                success: false,
-                error: `Đã có quyết toán TNCN cho năm ${year}. Xóa bản cũ trước khi tạo lại.`,
-                data: existing,
-            })
-        }
-
-        const notesPayload = JSON.stringify({
-            __pit: true,
-            userNotes,
-            summary,
-            employees,
-        })
-
-        const data = await prisma.taxDeclaration.create({
-            data: {
-                formType: PIT_FORM_TYPE,
-                period,
-                periodType: 'year',
-                year,
-                month: null,
-                quarter: null,
-                taxCode,
-                companyName,
-                companyAddress,
-                businessType: store?.businessType || 'company',
-                status,
-                notes: notesPayload,
-            },
-        })
-
-        res.status(201).json({
-            success: true,
-            data: {
-                id: data.id,
-                year,
-                period,
-                status: data.status,
-                totalTax,
-                summary,
-                employees,
-            },
-        })
-    } catch (err: any) {
-        console.error('POST /pit-settlement error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
-    }
-})
-
-// GET /api/tax/pit-settlement?year=2024
-// Liệt kê các bản quyết toán TNCN. Không truyền year → liệt kê tất cả.
-router.get('/pit-settlement', authMiddleware, async (req: AuthRequest, res: Response) => {
-    try {
-        const prisma = req.storePrisma!
-        const yearQ = req.query.year ? Number(req.query.year) : undefined
-        const where: any = { formType: PIT_FORM_TYPE }
-        if (yearQ) where.year = yearQ
-        const decls = await prisma.taxDeclaration.findMany({ where, orderBy: { year: 'desc' } })
-        const data = decls.map(d => {
-            const parsed = parsePitNotes(d.notes)
-            return {
-                id: d.id,
-                year: d.year,
-                period: d.period,
-                status: d.status,
-                taxCode: d.taxCode,
-                companyName: d.companyName,
-                filedAt: d.filedAt,
-                createdAt: d.createdAt,
-                updatedAt: d.updatedAt,
-                userNotes: parsed?.userNotes || '',
-                summary: parsed?.summary || null,
-                totalEmployees: parsed?.employees?.length || 0,
-            }
-        })
-        res.json({ success: true, data })
-    } catch (err) {
-        console.error('GET /pit-settlement error:', err)
-        res.status(500).json({ success: false, error: 'Internal server error' })
-    }
-})
-
-// GET /api/tax/pit-settlement/:year/employees
-// Chi tiết per-employee. Ưu tiên đọc từ bản quyết toán đã lưu;
-// nếu chưa lưu thì tính trực tiếp từ PayrollRecord.
-router.get('/pit-settlement/:year/employees', authMiddleware, async (req: AuthRequest, res: Response) => {
-    try {
-        const prisma = req.storePrisma! as any
-        const year = Number(req.params.year)
-        if (!year) return res.status(400).json({ success: false, error: 'year không hợp lệ' })
-
-        const decl = await prisma.taxDeclaration.findUnique({ where: { period: `QTT-${year}` } })
-        const parsed = decl ? parsePitNotes(decl.notes) : null
-        if (parsed?.employees) {
-            return res.json({
-                success: true,
-                data: {
-                    year,
-                    source: 'saved',
-                    declarationId: decl.id,
-                    status: decl.status,
-                    summary: parsed.summary || pitSummary(parsed.employees),
-                    employees: parsed.employees,
-                },
-            })
-        }
-
-        const records = await prisma.payrollRecord.findMany({
-            where: { year },
-            orderBy: [{ employeeName: 'asc' }, { month: 'asc' }],
-        })
-        const employees = aggregatePitByEmployee(records)
-        res.json({
-            success: true,
-            data: {
-                year,
-                source: 'calculated',
-                summary: pitSummary(employees),
-                employees,
-            },
-        })
-    } catch (err) {
-        console.error('GET /pit-settlement/:year/employees error:', err)
-        res.status(500).json({ success: false, error: 'Internal server error' })
-    }
-})
-
 
 // =============================================================================
 //  SPRINT 3: B03-DN Cash Flow Statement + Chart of Accounts + Multi-currency
@@ -6351,7 +6352,7 @@ function lastDayOfMonth(year: number, month1to12: number): number {
     return new Date(year, month1to12, 0).getDate()
 }
 
-function fmtDate(y: number, m1to12: number, d: number): string {
+function fmtDateYMD(y: number, m1to12: number, d: number): string {
     return `${y}-${String(m1to12).padStart(2, '0')}-${String(d).padStart(2, '0')}`
 }
 
@@ -6367,7 +6368,7 @@ function generateDeadlinesForYear(year: number): DeadlineSeed[] {
         out.push({
             taxType: '01_GTGT',
             period: `T${String(m).padStart(2, '0')}/${year}`,
-            dueDate: fmtDate(dueYear, dueMonth, 20),
+            dueDate: fmtDateYMD(dueYear, dueMonth, 20),
             description: `To khai VAT thang ${m}/${year}`,
         })
     }
@@ -6380,7 +6381,7 @@ function generateDeadlinesForYear(year: number): DeadlineSeed[] {
         out.push({
             taxType: '01_GTGT_Q',
             period: `Q${q}/${year}`,
-            dueDate: fmtDate(dueYear, dueMonth, lastDayOfMonth(dueYear, dueMonth)),
+            dueDate: fmtDateYMD(dueYear, dueMonth, lastDayOfMonth(dueYear, dueMonth)),
             description: `To khai VAT quy ${q}/${year}`,
         })
     }
@@ -6393,7 +6394,7 @@ function generateDeadlinesForYear(year: number): DeadlineSeed[] {
         out.push({
             taxType: '03_TNDN',
             period: `CIT-Q${q}/${year}`,
-            dueDate: fmtDate(dueYear, dueMonth, lastDayOfMonth(dueYear, dueMonth)),
+            dueDate: fmtDateYMD(dueYear, dueMonth, lastDayOfMonth(dueYear, dueMonth)),
             description: `To khai TNDN tam tinh quy ${q}/${year}`,
         })
     }
@@ -6405,7 +6406,7 @@ function generateDeadlinesForYear(year: number): DeadlineSeed[] {
         out.push({
             taxType: '06_TNCN',
             period: `PIT-T${String(m).padStart(2, '0')}/${year}`,
-            dueDate: fmtDate(dueYear, dueMonth, 20),
+            dueDate: fmtDateYMD(dueYear, dueMonth, 20),
             description: `Khau tru PIT thang ${m}/${year}`,
         })
     }
@@ -6414,7 +6415,7 @@ function generateDeadlinesForYear(year: number): DeadlineSeed[] {
     out.push({
         taxType: '05_QTT_TNCN',
         period: `QTT-${year}`,
-        dueDate: fmtDate(year + 1, 3, 31),
+        dueDate: fmtDateYMD(year + 1, 3, 31),
         description: `Quyet toan TNCN nam ${year}`,
     })
 
@@ -6422,7 +6423,7 @@ function generateDeadlinesForYear(year: number): DeadlineSeed[] {
     out.push({
         taxType: 'BCTC',
         period: `BCTC-${year}`,
-        dueDate: fmtDate(year + 1, 3, 31),
+        dueDate: fmtDateYMD(year + 1, 3, 31),
         description: `Bao cao tai chinh nam ${year}`,
     })
 
