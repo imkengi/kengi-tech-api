@@ -3880,4 +3880,328 @@ router.post('/z-reports', authMiddleware, async (req: AuthRequest, res: Response
     }
 })
 
+// ─── CIT DECLARATION (Thuế TNDN — Tờ khai 03/TNDN quý) ───────────────────────
+// Quarterly Corporate Income Tax declaration per TT200/2014 + circular 80/2021.
+// Line codes (ct01..ct07) match mã chỉ tiêu on form 03/TNDN.
+
+const CIT_DEFAULT_RATE = 20 // % — standard CIT rate
+
+function citQuarterRange(year: number, quarter: number) {
+    const startMonth = (quarter - 1) * 3 // 0,3,6,9
+    const dateGte = `${year}-${String(startMonth + 1).padStart(2, '0')}-01`
+    const endMonth = startMonth + 3 // 3,6,9,12
+    const dateLte = `${year}-${String(endMonth).padStart(2, '0')}-31`
+    const txStart = new Date(year, startMonth, 1)
+    const txEnd = new Date(year, endMonth, 0, 23, 59, 59, 999)
+    return { dateGte, dateLte, txStart, txEnd }
+}
+
+function citPeriodKey(year: number, quarter: number) {
+    return `CIT-Q${quarter}/${year}`
+}
+
+async function computeCitLines(prisma: any, year: number, quarter: number) {
+    const { dateGte, dateLte } = citQuarterRange(year, quarter)
+    const entries = await prisma.journalEntry.findMany({
+        where: { date: { gte: dateGte, lte: dateLte } },
+        select: { debitAccount: true, creditAccount: true, amount: true },
+    })
+
+    const sumCredit = (prefix: string) =>
+        entries.filter((e: any) => e.creditAccount?.startsWith(prefix))
+            .reduce((s: number, e: any) => s + (e.amount || 0), 0)
+    const sumDebit = (prefix: string) =>
+        entries.filter((e: any) => e.debitAccount?.startsWith(prefix))
+            .reduce((s: number, e: any) => s + (e.amount || 0), 0)
+
+    const rev511 = sumCredit('511')
+    const rev515 = sumCredit('515')
+    const rev711 = sumCredit('711')
+    const exp632 = sumDebit('632')
+    const exp635 = sumDebit('635')
+    const exp641 = sumDebit('641')
+    const exp642 = sumDebit('642')
+    const exp811 = sumDebit('811')
+
+    const totalRevenue = rev511 + rev515 + rev711
+    const totalExpenses = exp632 + exp635 + exp641 + exp642 + exp811
+
+    const ct01 = totalRevenue
+    const ct02 = 0
+    const ct03 = ct01 - totalExpenses
+    const ct04 = 0
+    const ct05 = Math.max(0, ct03 - ct04)
+    const ct06 = CIT_DEFAULT_RATE
+    const ct07 = Math.round(ct05 * ct06 / 100)
+
+    const lineItems = [
+        { code: 'ct01', label: 'Tổng doanh thu', value: ct01 },
+        { code: 'ct02', label: 'Doanh thu miễn thuế', value: ct02 },
+        { code: 'ct03', label: 'Thu nhập chịu thuế', value: ct03 },
+        { code: 'ct04', label: 'Lỗ kết chuyển', value: ct04 },
+        { code: 'ct05', label: 'TNCT sau chuyển lỗ', value: ct05 },
+        { code: 'ct06', label: 'Thuế suất (%)', value: ct06 },
+        { code: 'ct07', label: 'Thuế TNDN phải nộp', value: ct07 },
+    ]
+
+    return {
+        lineItems,
+        revenue: { tk511: rev511, tk515: rev515, tk711: rev711, total: totalRevenue },
+        expenses: { tk632: exp632, tk635: exp635, tk641: exp641, tk642: exp642, tk811: exp811, total: totalExpenses },
+    }
+}
+
+// GET /api/tax/cit-declaration/calculate?year=2026&quarter=1
+router.get('/cit-declaration/calculate', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const year = Number(req.query.year) || new Date().getFullYear()
+        const quarter = Number(req.query.quarter)
+        if (!quarter || quarter < 1 || quarter > 4) {
+            return res.status(400).json({ success: false, error: 'quarter phải từ 1 đến 4' })
+        }
+        const data = await computeCitLines(prisma, year, quarter)
+        res.json({ success: true, data: { year, quarter, period: citPeriodKey(year, quarter), formType: '03_TNDN', ...data } })
+    } catch (err) {
+        console.error('GET /cit-declaration/calculate error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// GET /api/tax/cit-declaration?year=2026 — list CIT declarations for the year
+router.get('/cit-declaration', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const year = Number(req.query.year) || new Date().getFullYear()
+        const rows = await prisma.taxDeclaration.findMany({
+            where: { formType: '03_TNDN', year },
+            orderBy: [{ year: 'desc' }, { quarter: 'desc' }],
+        })
+        const data = rows.map(r => {
+            let lineItems: any[] = []
+            try { lineItems = r.notes ? JSON.parse(r.notes).lineItems || [] : [] } catch (_) { }
+            return {
+                id: r.id, period: r.period, year: r.year, quarter: r.quarter,
+                formType: r.formType, status: r.status,
+                taxCode: r.taxCode, companyName: r.companyName,
+                filedAt: r.filedAt, createdAt: r.createdAt, updatedAt: r.updatedAt,
+                lineItems,
+            }
+        })
+        res.json({ success: true, data })
+    } catch (err) {
+        console.error('GET /cit-declaration error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// POST /api/tax/cit-declaration — persist a CIT declaration (one per year+quarter)
+router.post('/cit-declaration', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const year = Number(req.body.year)
+        const quarter = Number(req.body.quarter)
+        const status = (req.body.status as string) || 'draft'
+        const notesText = (req.body.notes as string) || ''
+        const bodyLines = Array.isArray(req.body.lineItems) ? req.body.lineItems : null
+
+        if (!year || !quarter || quarter < 1 || quarter > 4) {
+            return res.status(400).json({ success: false, error: 'year và quarter (1-4) là bắt buộc' })
+        }
+        if (!['draft', 'submitted', 'filed'].includes(status)) {
+            return res.status(400).json({ success: false, error: 'status không hợp lệ' })
+        }
+
+        const period = citPeriodKey(year, quarter)
+        const existing = await prisma.taxDeclaration.findFirst({
+            where: { formType: '03_TNDN', year, quarter },
+        })
+        if (existing) {
+            return res.status(409).json({
+                success: false,
+                error: `Đã có tờ khai TNDN cho ${period}`,
+                data: existing,
+            })
+        }
+
+        // Pull store profile for taxCode/companyName (mirrors VAT POST /declarations)
+        const storeProfile: any = await prisma.store.findFirst().catch(() => null)
+            || await prisma.storeSettings.findFirst().catch(() => null)
+        const taxCode = (req.body.taxCode as string) || storeProfile?.taxCode || ''
+        const companyName = (req.body.companyName as string) || storeProfile?.name || ''
+        const companyAddress = (req.body.companyAddress as string) || storeProfile?.address || null
+
+        // If lineItems weren't supplied, compute from journal entries
+        let lineItems = bodyLines
+        if (!lineItems || lineItems.length === 0) {
+            const computed = await computeCitLines(prisma, year, quarter)
+            lineItems = computed.lineItems
+        }
+
+        const payload = JSON.stringify({ lineItems, userNotes: notesText })
+
+        const data = await prisma.taxDeclaration.create({
+            data: {
+                formType: '03_TNDN',
+                businessType: 'company',
+                period,
+                periodType: 'quarter',
+                year,
+                quarter,
+                month: null,
+                taxCode, companyName, companyAddress,
+                status,
+                filedAt: status === 'filed' ? new Date() : null,
+                notes: payload,
+            },
+        })
+
+        res.status(201).json({
+            success: true,
+            data: { ...data, lineItems },
+        })
+    } catch (err: any) {
+        console.error('POST /cit-declaration error:', err)
+        if (err?.code === 'P2002') {
+            return res.status(409).json({ success: false, error: 'Tờ khai cho kỳ này đã tồn tại' })
+        }
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// GET /api/tax/cit-declaration/appendix/pl01-1?year=&quarter=
+// PL01-1: chi tiết doanh thu — nhóm theo danh mục sản phẩm (Category)
+router.get('/cit-declaration/appendix/pl01-1', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const year = Number(req.query.year) || new Date().getFullYear()
+        const quarter = Number(req.query.quarter)
+        if (!quarter || quarter < 1 || quarter > 4) {
+            return res.status(400).json({ success: false, error: 'quarter phải từ 1 đến 4' })
+        }
+        const { txStart, txEnd } = citQuarterRange(year, quarter)
+        const bf = getBranchFilter(req as any)
+
+        const txs = await prisma.transaction.findMany({
+            where: {
+                status: 'completed',
+                ...bf,
+                OR: [
+                    { transactionDate: { gte: txStart, lte: txEnd } },
+                    { transactionDate: null, createdAt: { gte: txStart, lte: txEnd } },
+                ],
+            },
+            include: {
+                items: { include: { product: { include: { category: true } } } },
+            },
+        })
+
+        // Aggregate by category
+        const byCategory: Record<string, { categoryId: string; categoryName: string; quantity: number; revenue: number; discount: number; netRevenue: number; itemCount: number }> = {}
+        let totalQuantity = 0, totalRevenue = 0, totalDiscount = 0
+        for (const tx of txs) {
+            for (const it of (tx.items || [])) {
+                const cat = it.product?.category
+                const key = cat?.id || 'other'
+                const name = cat?.name || 'Khác'
+                if (!byCategory[key]) byCategory[key] = { categoryId: key, categoryName: name, quantity: 0, revenue: 0, discount: 0, netRevenue: 0, itemCount: 0 }
+                const gross = (it.unitPrice || 0) * (it.quantity || 0)
+                const disc = it.discount || 0
+                const net = it.lineTotal || (gross - disc)
+                byCategory[key].quantity += it.quantity || 0
+                byCategory[key].revenue += gross
+                byCategory[key].discount += disc
+                byCategory[key].netRevenue += net
+                byCategory[key].itemCount += 1
+                totalQuantity += it.quantity || 0
+                totalRevenue += gross
+                totalDiscount += disc
+            }
+        }
+
+        const rows = Object.values(byCategory)
+            .sort((a, b) => b.netRevenue - a.netRevenue)
+            .map((r, i) => ({ stt: i + 1, ...r }))
+        const totalNetRevenue = totalRevenue - totalDiscount
+
+        res.json({
+            success: true,
+            data: {
+                year, quarter, period: citPeriodKey(year, quarter),
+                appendix: 'PL01-1',
+                title: 'Phụ lục PL01-1: Chi tiết doanh thu theo nhóm hàng',
+                rows,
+                summary: { totalQuantity, totalRevenue, totalDiscount, totalNetRevenue, transactionCount: txs.length },
+            },
+        })
+    } catch (err) {
+        console.error('GET /cit-declaration/appendix/pl01-1 error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// GET /api/tax/cit-declaration/appendix/pl01-2?year=&quarter=
+// PL01-2: chi tiết chi phí — nhóm theo tài khoản chi phí (TK632, TK635, TK641, TK642, TK811)
+router.get('/cit-declaration/appendix/pl01-2', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const year = Number(req.query.year) || new Date().getFullYear()
+        const quarter = Number(req.query.quarter)
+        if (!quarter || quarter < 1 || quarter > 4) {
+            return res.status(400).json({ success: false, error: 'quarter phải từ 1 đến 4' })
+        }
+        const { dateGte, dateLte } = citQuarterRange(year, quarter)
+
+        const entries = await prisma.journalEntry.findMany({
+            where: { date: { gte: dateGte, lte: dateLte } },
+            select: { debitAccount: true, debitAccountName: true, amount: true },
+        })
+
+        const groups: Array<{ code: string; label: string }> = [
+            { code: '632', label: 'Giá vốn hàng bán' },
+            { code: '635', label: 'Chi phí tài chính' },
+            { code: '641', label: 'Chi phí bán hàng' },
+            { code: '642', label: 'Chi phí quản lý doanh nghiệp' },
+            { code: '811', label: 'Chi phí khác' },
+        ]
+
+        // Aggregate amounts and collect sub-account breakdown per group
+        const rows = groups.map((g, idx) => {
+            const matched = entries.filter((e: any) => e.debitAccount?.startsWith(g.code))
+            const amount = matched.reduce((s: number, e: any) => s + (e.amount || 0), 0)
+            const subMap: Record<string, { code: string; name: string; amount: number; count: number }> = {}
+            for (const e of matched) {
+                const k = e.debitAccount
+                if (!subMap[k]) subMap[k] = { code: k, name: e.debitAccountName || k, amount: 0, count: 0 }
+                subMap[k].amount += e.amount || 0
+                subMap[k].count += 1
+            }
+            return {
+                stt: idx + 1,
+                accountCode: g.code,
+                accountName: g.label,
+                amount,
+                entryCount: matched.length,
+                breakdown: Object.values(subMap).sort((a, b) => b.amount - a.amount),
+            }
+        })
+
+        const totalExpenses = rows.reduce((s, r) => s + r.amount, 0)
+
+        res.json({
+            success: true,
+            data: {
+                year, quarter, period: citPeriodKey(year, quarter),
+                appendix: 'PL01-2',
+                title: 'Phụ lục PL01-2: Chi tiết chi phí theo tài khoản',
+                rows,
+                summary: { totalExpenses, entryCount: entries.length },
+            },
+        })
+    } catch (err) {
+        console.error('GET /cit-declaration/appendix/pl01-2 error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
 export default router
