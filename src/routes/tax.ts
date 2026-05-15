@@ -3880,4 +3880,310 @@ router.post('/z-reports', authMiddleware, async (req: AuthRequest, res: Response
     }
 })
 
+// ─── PIT ANNUAL SETTLEMENT (Quyết toán TNCN — Form 05/QTT-TNCN) ──────────────
+// Tính thuế TNCN cuối năm cho từng nhân viên từ PayrollRecord.
+// Biểu lũy tiến từng phần 5%→35% theo Luật thuế TNCN.
+// Mức giảm trừ: bản thân 11tr/tháng (NĐ44/2023), phụ thuộc 4.4tr/tháng/người.
+
+const PIT_FORM_TYPE = '05_QTT_TNCN'
+const PIT_SELF_DEDUCTION_PER_MONTH = 11_000_000
+const PIT_DEPENDENT_DEDUCTION_PER_MONTH = 4_400_000
+
+// Biểu thuế lũy tiến từng phần — annual brackets (VND), Vietnamese PIT law
+const PIT_BRACKETS_ANNUAL: { upTo: number; rate: number }[] = [
+    { upTo: 60_000_000, rate: 0.05 },
+    { upTo: 120_000_000, rate: 0.10 },
+    { upTo: 216_000_000, rate: 0.15 },
+    { upTo: 384_000_000, rate: 0.20 },
+    { upTo: 624_000_000, rate: 0.25 },
+    { upTo: 960_000_000, rate: 0.30 },
+    { upTo: Infinity, rate: 0.35 },
+]
+
+function calculatePitProgressive(taxableIncome: number): number {
+    if (taxableIncome <= 0) return 0
+    let tax = 0
+    let prevCap = 0
+    for (const b of PIT_BRACKETS_ANNUAL) {
+        const slice = Math.min(taxableIncome, b.upTo) - prevCap
+        if (slice <= 0) break
+        tax += slice * b.rate
+        prevCap = b.upTo
+        if (taxableIncome <= b.upTo) break
+    }
+    return Math.round(tax)
+}
+
+interface PitEmployeeBreakdown {
+    employeeId: string
+    employeeCode: string | null
+    name: string
+    department: string | null
+    monthsWorked: number
+    totalIncome: number          // Tổng thu nhập chịu thuế
+    totalInsurance: number       // BHXH + BHYT + BHTN (phần NLĐ) — khấu trừ trước thuế
+    selfDeduction: number        // Giảm trừ bản thân
+    dependentDeduction: number   // Giảm trừ người phụ thuộc
+    deductions: number           // Tổng giảm trừ (BH + bản thân + phụ thuộc)
+    taxableIncome: number        // Thu nhập tính thuế
+    taxAmount: number            // Thuế TNCN phải nộp theo biểu lũy tiến
+    pitWithheld: number          // Thuế TNCN đã khấu trừ trong năm (sum monthly pit)
+    balanceDue: number           // taxAmount - pitWithheld (>0: nộp thêm, <0: hoàn)
+}
+
+function aggregatePitByEmployee(records: any[]): PitEmployeeBreakdown[] {
+    const byEmp = new Map<string, any[]>()
+    for (const r of records) {
+        const key = r.employeeId || r.employeeName
+        if (!key) continue
+        if (!byEmp.has(key)) byEmp.set(key, [])
+        byEmp.get(key)!.push(r)
+    }
+
+    const result: PitEmployeeBreakdown[] = []
+    for (const [employeeId, recs] of byEmp.entries()) {
+        const sample = recs[0]
+        let totalIncome = 0
+        let totalInsurance = 0
+        let dependentMonths = 0
+        let pitWithheld = 0
+        const monthsSeen = new Set<number>()
+        for (const r of recs) {
+            const gross = Number(r.actualGross) || Number(r.grossSalary) || 0
+            const bonus = Number(r.bonus) || 0
+            // actualGross may or may not already include bonus depending on how payroll was entered.
+            // If actualGross < grossSalary, treat bonus as not yet rolled in.
+            const hasBonusInActual = gross >= Number(r.grossSalary || 0)
+            totalIncome += gross + (hasBonusInActual ? 0 : bonus)
+            totalInsurance += (Number(r.bhxh_emp) || 0) + (Number(r.bhyt_emp) || 0) + (Number(r.bhtn_emp) || 0)
+            dependentMonths += Number(r.dependents) || 0
+            pitWithheld += Number(r.pit) || 0
+            if (typeof r.month === 'number') monthsSeen.add(r.month)
+        }
+        const monthsWorked = monthsSeen.size || recs.length
+        const selfDeduction = monthsWorked * PIT_SELF_DEDUCTION_PER_MONTH
+        const dependentDeduction = dependentMonths * PIT_DEPENDENT_DEDUCTION_PER_MONTH
+        const deductions = totalInsurance + selfDeduction + dependentDeduction
+        const taxableIncome = Math.max(0, totalIncome - deductions)
+        const taxAmount = calculatePitProgressive(taxableIncome)
+        result.push({
+            employeeId,
+            employeeCode: sample.employeeCode || null,
+            name: sample.employeeName || '',
+            department: sample.department || null,
+            monthsWorked,
+            totalIncome: Math.round(totalIncome),
+            totalInsurance: Math.round(totalInsurance),
+            selfDeduction,
+            dependentDeduction,
+            deductions: Math.round(deductions),
+            taxableIncome: Math.round(taxableIncome),
+            taxAmount,
+            pitWithheld: Math.round(pitWithheld),
+            balanceDue: taxAmount - Math.round(pitWithheld),
+        })
+    }
+    result.sort((a, b) => a.name.localeCompare(b.name, 'vi'))
+    return result
+}
+
+function pitSummary(employees: PitEmployeeBreakdown[]) {
+    return {
+        totalEmployees: employees.length,
+        totalIncome: employees.reduce((s, e) => s + e.totalIncome, 0),
+        totalDeductions: employees.reduce((s, e) => s + e.deductions, 0),
+        totalTaxableIncome: employees.reduce((s, e) => s + e.taxableIncome, 0),
+        totalTax: employees.reduce((s, e) => s + e.taxAmount, 0),
+        totalWithheld: employees.reduce((s, e) => s + e.pitWithheld, 0),
+        totalBalanceDue: employees.reduce((s, e) => s + e.balanceDue, 0),
+    }
+}
+
+// Parse the structured PIT payload we store inside TaxDeclaration.notes.
+// Returns null if notes is plain text (legacy / user-entered) rather than our JSON envelope.
+function parsePitNotes(notes: string | null | undefined): { userNotes?: string; employees?: PitEmployeeBreakdown[]; summary?: any } | null {
+    if (!notes) return null
+    try {
+        const obj = JSON.parse(notes)
+        if (obj && obj.__pit === true) return obj
+        return null
+    } catch { return null }
+}
+
+// GET /api/tax/pit-settlement/calculate?year=2024
+// Tính thuế TNCN năm từ PayrollRecord (không lưu).
+router.get('/pit-settlement/calculate', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const year = Number(req.query.year) || new Date().getFullYear()
+        const records = await prisma.payrollRecord.findMany({
+            where: { year },
+            orderBy: [{ employeeName: 'asc' }, { month: 'asc' }],
+        })
+        const employees = aggregatePitByEmployee(records)
+        res.json({
+            success: true,
+            data: {
+                year,
+                summary: pitSummary(employees),
+                employees,
+            },
+        })
+    } catch (err) {
+        console.error('GET /pit-settlement/calculate error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// POST /api/tax/pit-settlement
+// Lưu bản quyết toán TNCN năm (Form 05/QTT-TNCN) vào TaxDeclaration.
+// period = `QTT-{year}` (unique). Chi tiết per-employee lưu trong notes (JSON envelope).
+router.post('/pit-settlement', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const year = Number(req.body.year)
+        if (!year) return res.status(400).json({ success: false, error: 'year là bắt buộc' })
+
+        const employees: PitEmployeeBreakdown[] = Array.isArray(req.body.employees) ? req.body.employees : []
+        const status = (req.body.status as string) || 'draft'
+        const userNotes = typeof req.body.notes === 'string' ? req.body.notes : ''
+
+        const summary = pitSummary(employees)
+        const totalTax = Number(req.body.totalTax) || summary.totalTax
+
+        const store: any = await (prisma as any).storeSettings.findFirst().catch(() => null)
+        const taxCode = store?.taxCode || ''
+        const companyName = store?.name || 'My Store'
+        const companyAddress = store?.address || null
+
+        const period = `QTT-${year}`
+        const existing = await prisma.taxDeclaration.findUnique({ where: { period } })
+        if (existing) {
+            return res.status(409).json({
+                success: false,
+                error: `Đã có quyết toán TNCN cho năm ${year}. Xóa bản cũ trước khi tạo lại.`,
+                data: existing,
+            })
+        }
+
+        const notesPayload = JSON.stringify({
+            __pit: true,
+            userNotes,
+            summary,
+            employees,
+        })
+
+        const data = await prisma.taxDeclaration.create({
+            data: {
+                formType: PIT_FORM_TYPE,
+                period,
+                periodType: 'year',
+                year,
+                month: null,
+                quarter: null,
+                taxCode,
+                companyName,
+                companyAddress,
+                businessType: store?.businessType || 'company',
+                status,
+                notes: notesPayload,
+            },
+        })
+
+        res.status(201).json({
+            success: true,
+            data: {
+                id: data.id,
+                year,
+                period,
+                status: data.status,
+                totalTax,
+                summary,
+                employees,
+            },
+        })
+    } catch (err: any) {
+        console.error('POST /pit-settlement error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// GET /api/tax/pit-settlement?year=2024
+// Liệt kê các bản quyết toán TNCN. Không truyền year → liệt kê tất cả.
+router.get('/pit-settlement', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const yearQ = req.query.year ? Number(req.query.year) : undefined
+        const where: any = { formType: PIT_FORM_TYPE }
+        if (yearQ) where.year = yearQ
+        const decls = await prisma.taxDeclaration.findMany({ where, orderBy: { year: 'desc' } })
+        const data = decls.map(d => {
+            const parsed = parsePitNotes(d.notes)
+            return {
+                id: d.id,
+                year: d.year,
+                period: d.period,
+                status: d.status,
+                taxCode: d.taxCode,
+                companyName: d.companyName,
+                filedAt: d.filedAt,
+                createdAt: d.createdAt,
+                updatedAt: d.updatedAt,
+                userNotes: parsed?.userNotes || '',
+                summary: parsed?.summary || null,
+                totalEmployees: parsed?.employees?.length || 0,
+            }
+        })
+        res.json({ success: true, data })
+    } catch (err) {
+        console.error('GET /pit-settlement error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// GET /api/tax/pit-settlement/:year/employees
+// Chi tiết per-employee. Ưu tiên đọc từ bản quyết toán đã lưu;
+// nếu chưa lưu thì tính trực tiếp từ PayrollRecord.
+router.get('/pit-settlement/:year/employees', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const year = Number(req.params.year)
+        if (!year) return res.status(400).json({ success: false, error: 'year không hợp lệ' })
+
+        const decl = await prisma.taxDeclaration.findUnique({ where: { period: `QTT-${year}` } })
+        const parsed = decl ? parsePitNotes(decl.notes) : null
+        if (parsed?.employees) {
+            return res.json({
+                success: true,
+                data: {
+                    year,
+                    source: 'saved',
+                    declarationId: decl.id,
+                    status: decl.status,
+                    summary: parsed.summary || pitSummary(parsed.employees),
+                    employees: parsed.employees,
+                },
+            })
+        }
+
+        const records = await prisma.payrollRecord.findMany({
+            where: { year },
+            orderBy: [{ employeeName: 'asc' }, { month: 'asc' }],
+        })
+        const employees = aggregatePitByEmployee(records)
+        res.json({
+            success: true,
+            data: {
+                year,
+                source: 'calculated',
+                summary: pitSummary(employees),
+                employees,
+            },
+        })
+    } catch (err) {
+        console.error('GET /pit-settlement/:year/employees error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
 export default router
