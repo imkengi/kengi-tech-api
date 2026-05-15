@@ -1541,6 +1541,44 @@ exports.Prisma.ExchangeRateScalarFieldEnum = {
   updatedAt: 'updatedAt'
 };
 
+exports.Prisma.TaxDeadlineScalarFieldEnum = {
+  id: 'id',
+  taxType: 'taxType',
+  period: 'period',
+  dueDate: 'dueDate',
+  status: 'status',
+  description: 'description',
+  filedAt: 'filedAt',
+  reminderSent: 'reminderSent',
+  declarationId: 'declarationId',
+  notes: 'notes',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.TaxAuditLogScalarFieldEnum = {
+  id: 'id',
+  action: 'action',
+  entityType: 'entityType',
+  entityId: 'entityId',
+  userId: 'userId',
+  userName: 'userName',
+  changes: 'changes',
+  ip: 'ip',
+  timestamp: 'timestamp'
+};
+
+exports.Prisma.TaxBudgetScalarFieldEnum = {
+  id: 'id',
+  accountCode: 'accountCode',
+  year: 'year',
+  month: 'month',
+  amount: 'amount',
+  notes: 'notes',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
 exports.Prisma.SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -1645,7 +1683,10 @@ exports.Prisma.ModelName = {
   ZReport: 'ZReport',
   StorageFile: 'StorageFile',
   ChartOfAccount: 'ChartOfAccount',
-  ExchangeRate: 'ExchangeRate'
+  ExchangeRate: 'ExchangeRate',
+  TaxDeadline: 'TaxDeadline',
+  TaxAuditLog: 'TaxAuditLog',
+  TaxBudget: 'TaxBudget'
 };
 
 /**

@@ -1945,3 +1945,61 @@ model ExchangeRate {
   @@index([date])
   @@index([fromCurrency])
 }
+
+// --- Tax Deadlines (Lich nop thue) ------------------------------------------
+
+model TaxDeadline {
+  id            String    @id @default(cuid())
+  taxType       String
+  period        String
+  dueDate       String
+  status        String    @default("pending")
+  description   String?
+  filedAt       DateTime?
+  reminderSent  Boolean   @default(false)
+  declarationId String?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([taxType, period])
+  @@index([dueDate])
+  @@index([status])
+  @@index([taxType])
+}
+
+// --- Tax Audit Log (Nhat ky thao tac) ---------------------------------------
+
+model TaxAuditLog {
+  id         String   @id @default(cuid())
+  action     String
+  entityType String
+  entityId   String?
+  userId     String?
+  userName   String?
+  changes    String?
+  ip         String?
+  timestamp  DateTime @default(now())
+
+  @@index([timestamp])
+  @@index([entityType])
+  @@index([userId])
+  @@index([action])
+}
+
+// --- Tax Budget (Du toan ngan sach theo tai khoan) --------------------------
+
+model TaxBudget {
+  id          String   @id @default(cuid())
+  accountCode String
+  year        Int
+  month       Int?
+  amount      Float    @default(0)
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([accountCode, year, month])
+  @@index([year])
+  @@index([accountCode])
+}

@@ -6311,4 +6311,910 @@ router.post('/exchange-rates/revalue', authMiddleware, async (req: AuthRequest, 
     }
 })
 
+
+// =============================================================================
+//  SPRINT 4 + 5: Compliance + Reporting
+// =============================================================================
+
+// --- Audit Log helper (used by Sprint 4 endpoints) --------------------------
+
+async function logTaxAction(
+    prisma: any,
+    req: AuthRequest,
+    args: { action: string; entityType: string; entityId?: string | null; changes?: any },
+) {
+    try {
+        const ip = (req.headers?.['x-forwarded-for'] as string)?.split(',')[0]?.trim()
+            || (req as any).ip
+            || (req.socket as any)?.remoteAddress
+            || null
+        await prisma.taxAuditLog.create({
+            data: {
+                action: args.action,
+                entityType: args.entityType,
+                entityId: args.entityId || null,
+                userId: (req as any).user?.id || null,
+                userName: (req as any).user?.name || (req as any).user?.email || null,
+                changes: args.changes !== undefined ? JSON.stringify(args.changes) : null,
+                ip,
+            },
+        })
+    } catch (e) {
+        // audit must never break the main request
+        console.error('logTaxAction error:', e)
+    }
+}
+
+// --- Tax Deadlines (Lich nop thue) ------------------------------------------
+
+function lastDayOfMonth(year: number, month1to12: number): number {
+    return new Date(year, month1to12, 0).getDate()
+}
+
+function fmtDate(y: number, m1to12: number, d: number): string {
+    return `${y}-${String(m1to12).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+}
+
+type DeadlineSeed = { taxType: string; period: string; dueDate: string; description: string }
+
+function generateDeadlinesForYear(year: number): DeadlineSeed[] {
+    const out: DeadlineSeed[] = []
+
+    // VAT monthly (01/GTGT): for each month M, due 20th of M+1
+    for (let m = 1; m <= 12; m++) {
+        const dueYear = m === 12 ? year + 1 : year
+        const dueMonth = m === 12 ? 1 : m + 1
+        out.push({
+            taxType: '01_GTGT',
+            period: `T${String(m).padStart(2, '0')}/${year}`,
+            dueDate: fmtDate(dueYear, dueMonth, 20),
+            description: `To khai VAT thang ${m}/${year}`,
+        })
+    }
+
+    // VAT quarterly (01/GTGT_Q): for each quarter, due last day of month after quarter end
+    for (let q = 1; q <= 4; q++) {
+        const qEndMonth = q * 3
+        const dueYear = qEndMonth === 12 ? year + 1 : year
+        const dueMonth = qEndMonth === 12 ? 1 : qEndMonth + 1
+        out.push({
+            taxType: '01_GTGT_Q',
+            period: `Q${q}/${year}`,
+            dueDate: fmtDate(dueYear, dueMonth, lastDayOfMonth(dueYear, dueMonth)),
+            description: `To khai VAT quy ${q}/${year}`,
+        })
+    }
+
+    // CIT (03/TNDN) quarterly: same cadence as VAT quarterly
+    for (let q = 1; q <= 4; q++) {
+        const qEndMonth = q * 3
+        const dueYear = qEndMonth === 12 ? year + 1 : year
+        const dueMonth = qEndMonth === 12 ? 1 : qEndMonth + 1
+        out.push({
+            taxType: '03_TNDN',
+            period: `CIT-Q${q}/${year}`,
+            dueDate: fmtDate(dueYear, dueMonth, lastDayOfMonth(dueYear, dueMonth)),
+            description: `To khai TNDN tam tinh quy ${q}/${year}`,
+        })
+    }
+
+    // PIT withholding (06/TNCN) monthly: due 20th of M+1
+    for (let m = 1; m <= 12; m++) {
+        const dueYear = m === 12 ? year + 1 : year
+        const dueMonth = m === 12 ? 1 : m + 1
+        out.push({
+            taxType: '06_TNCN',
+            period: `PIT-T${String(m).padStart(2, '0')}/${year}`,
+            dueDate: fmtDate(dueYear, dueMonth, 20),
+            description: `Khau tru PIT thang ${m}/${year}`,
+        })
+    }
+
+    // PIT settlement (05/QTT-TNCN): March 31 of following year
+    out.push({
+        taxType: '05_QTT_TNCN',
+        period: `QTT-${year}`,
+        dueDate: fmtDate(year + 1, 3, 31),
+        description: `Quyet toan TNCN nam ${year}`,
+    })
+
+    // Financial statements (BCTC): 90 days after fiscal year end (Dec 31 → Mar 31)
+    out.push({
+        taxType: 'BCTC',
+        period: `BCTC-${year}`,
+        dueDate: fmtDate(year + 1, 3, 31),
+        description: `Bao cao tai chinh nam ${year}`,
+    })
+
+    return out
+}
+
+// GET /api/tax/deadlines?year= - list (auto-seed for year if missing)
+router.get('/deadlines', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const year = Number(req.query.year) || new Date().getFullYear()
+
+        // Auto-seed any missing deadlines for the year (idempotent upsert)
+        const seeds = generateDeadlinesForYear(year)
+        for (const s of seeds) {
+            await prisma.taxDeadline.upsert({
+                where: { taxType_period: { taxType: s.taxType, period: s.period } },
+                create: { ...s, status: 'pending' },
+                update: { dueDate: s.dueDate, description: s.description },
+            })
+        }
+
+        // Auto-mark overdue: pending items whose dueDate < today
+        const today = new Date().toISOString().slice(0, 10)
+        await prisma.taxDeadline.updateMany({
+            where: { status: 'pending', dueDate: { lt: today } },
+            data: { status: 'overdue' },
+        })
+
+        const where: any = {}
+        if (req.query.year) {
+            const y = Number(req.query.year)
+            where.OR = [
+                { period: { contains: `/${y}` } },
+                { period: { contains: `-${y}` } },
+            ]
+        }
+        if (req.query.taxType) where.taxType = String(req.query.taxType)
+        if (req.query.status) where.status = String(req.query.status)
+
+        const data = await prisma.taxDeadline.findMany({
+            where,
+            orderBy: [{ dueDate: 'asc' }],
+        })
+        res.json({ success: true, data })
+    } catch (err: any) {
+        console.error('GET /deadlines error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// GET /api/tax/deadlines/overdue - list overdue items
+router.get('/deadlines/overdue', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const today = new Date().toISOString().slice(0, 10)
+        // Refresh overdue status first
+        await prisma.taxDeadline.updateMany({
+            where: { status: 'pending', dueDate: { lt: today } },
+            data: { status: 'overdue' },
+        })
+        const data = await prisma.taxDeadline.findMany({
+            where: { status: 'overdue' },
+            orderBy: [{ dueDate: 'asc' }],
+        })
+        res.json({ success: true, data })
+    } catch (err: any) {
+        console.error('GET /deadlines/overdue error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// PUT /api/tax/deadlines/:id - mark as submitted (or other status update)
+router.put('/deadlines/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
+        const { status, declarationId, notes, reminderSent } = req.body || {}
+
+        const updateData: any = {}
+        if (status !== undefined) {
+            if (!['pending', 'submitted', 'overdue'].includes(String(status))) {
+                return res.status(400).json({ success: false, error: 'status khong hop le' })
+            }
+            updateData.status = String(status)
+            if (status === 'submitted' && !req.body?.filedAt) {
+                updateData.filedAt = new Date()
+            }
+        }
+        if (req.body?.filedAt !== undefined) {
+            updateData.filedAt = req.body.filedAt ? new Date(req.body.filedAt) : null
+        }
+        if (declarationId !== undefined) updateData.declarationId = declarationId || null
+        if (notes !== undefined) updateData.notes = notes || null
+        if (reminderSent !== undefined) updateData.reminderSent = Boolean(reminderSent)
+
+        const data = await prisma.taxDeadline.update({ where: { id }, data: updateData })
+        await logTaxAction(prisma, req, {
+            action: 'deadline.update',
+            entityType: 'TaxDeadline',
+            entityId: id,
+            changes: updateData,
+        })
+        res.json({ success: true, data })
+    } catch (err: any) {
+        console.error('PUT /deadlines/:id error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// --- Audit Log endpoints ----------------------------------------------------
+
+// GET /api/tax/audit-log?from=&to=&entityType=&userId=
+router.get('/audit-log', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const where: any = {}
+        if (req.query.from || req.query.to) {
+            where.timestamp = {
+                ...(req.query.from ? { gte: new Date(String(req.query.from)) } : {}),
+                ...(req.query.to ? { lte: new Date(String(req.query.to)) } : {}),
+            }
+        }
+        if (req.query.entityType) where.entityType = String(req.query.entityType)
+        if (req.query.entityId) where.entityId = String(req.query.entityId)
+        if (req.query.userId) where.userId = String(req.query.userId)
+        if (req.query.action) where.action = String(req.query.action)
+
+        const limit = Math.min(Number(req.query.limit) || 200, 1000)
+        const data = await prisma.taxAuditLog.findMany({
+            where,
+            orderBy: [{ timestamp: 'desc' }],
+            take: limit,
+        })
+        res.json({ success: true, data })
+    } catch (err: any) {
+        console.error('GET /audit-log error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// POST /api/tax/audit-log - manual log entry
+router.post('/audit-log', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const { action, entityType, entityId, changes } = req.body || {}
+        if (!action || !entityType) {
+            return res.status(400).json({ success: false, error: 'action, entityType la bat buoc' })
+        }
+        await logTaxAction(prisma, req, { action, entityType, entityId, changes })
+        res.status(201).json({ success: true })
+    } catch (err: any) {
+        console.error('POST /audit-log error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// --- Tax Budget --------------------------------------------------------------
+
+// GET /api/tax/budget?year=&month=&accountCode=
+router.get('/budget', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const where: any = {}
+        if (req.query.year) where.year = Number(req.query.year)
+        if (req.query.month !== undefined && req.query.month !== '') where.month = Number(req.query.month)
+        if (req.query.accountCode) where.accountCode = String(req.query.accountCode)
+
+        const data = await prisma.taxBudget.findMany({
+            where,
+            orderBy: [{ year: 'desc' }, { month: 'asc' }, { accountCode: 'asc' }],
+        })
+        res.json({ success: true, data })
+    } catch (err: any) {
+        console.error('GET /budget error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// POST /api/tax/budget - upsert budget
+router.post('/budget', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const { accountCode, year, month, amount, notes } = req.body || {}
+        if (!accountCode || !year || amount === undefined) {
+            return res.status(400).json({ success: false, error: 'accountCode, year, amount la bat buoc' })
+        }
+        const monthVal = month === undefined || month === null || month === '' ? null : Number(month)
+        const data = await prisma.taxBudget.upsert({
+            where: {
+                accountCode_year_month: {
+                    accountCode: String(accountCode),
+                    year: Number(year),
+                    month: monthVal as any,
+                },
+            },
+            create: {
+                accountCode: String(accountCode),
+                year: Number(year),
+                month: monthVal,
+                amount: Number(amount),
+                notes: notes ? String(notes) : null,
+            },
+            update: {
+                amount: Number(amount),
+                notes: notes !== undefined ? (notes ? String(notes) : null) : undefined,
+            },
+        })
+        await logTaxAction(prisma, req, {
+            action: 'budget.upsert',
+            entityType: 'TaxBudget',
+            entityId: data.id,
+            changes: { accountCode, year, month: monthVal, amount },
+        })
+        res.status(201).json({ success: true, data })
+    } catch (err: any) {
+        console.error('POST /budget error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// PUT /api/tax/budget/:id
+router.put('/budget/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
+        const { amount, notes } = req.body || {}
+        const updateData: any = {}
+        if (amount !== undefined) updateData.amount = Number(amount)
+        if (notes !== undefined) updateData.notes = notes === null ? null : String(notes)
+        const data = await prisma.taxBudget.update({ where: { id }, data: updateData })
+        await logTaxAction(prisma, req, {
+            action: 'budget.update', entityType: 'TaxBudget', entityId: id, changes: updateData,
+        })
+        res.json({ success: true, data })
+    } catch (err: any) {
+        console.error('PUT /budget/:id error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// DELETE /api/tax/budget/:id
+router.delete('/budget/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
+        await prisma.taxBudget.delete({ where: { id } })
+        await logTaxAction(prisma, req, { action: 'budget.delete', entityType: 'TaxBudget', entityId: id })
+        res.json({ success: true })
+    } catch (err: any) {
+        console.error('DELETE /budget/:id error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// GET /api/tax/budget-vs-actual?year=&month= - compare budget vs actual
+router.get('/budget-vs-actual', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const year = Number(req.query.year) || new Date().getFullYear()
+        const month = req.query.month ? Number(req.query.month) : undefined
+
+        const { startDate, endDate } = cashFlowDateRange(year, month)
+
+        // Pull budgets: if month given, get monthly budgets for that month; else year-level (month null)
+        const budgetWhere: any = { year }
+        if (month) {
+            // Combine month-specific and yearly budgets (yearly = month null)
+            budgetWhere.OR = [{ month }, { month: null }]
+        } else {
+            budgetWhere.month = null
+        }
+        const budgets: any[] = await prisma.taxBudget.findMany({ where: budgetWhere })
+
+        // Pull journal entries for period
+        let entries: any[] = []
+        try {
+            entries = await prisma.journalEntry.findMany({
+                where: { date: { gte: startDate, lte: endDate } },
+                select: { debitAccount: true, creditAccount: true, amount: true },
+            })
+        } catch (_) { entries = [] }
+
+        // Pull chart of accounts for nature lookup
+        const codes = new Set<string>(budgets.map(b => b.accountCode))
+        for (const e of entries) {
+            if (e.debitAccount) codes.add(e.debitAccount)
+            if (e.creditAccount) codes.add(e.creditAccount)
+        }
+        let coaList: any[] = []
+        try {
+            coaList = await prisma.chartOfAccount.findMany({
+                where: { code: { in: Array.from(codes) } },
+                select: { code: true, name: true, type: true, nature: true },
+            })
+        } catch (_) { coaList = [] }
+        const coaByCode = new Map<string, any>(coaList.map(c => [c.code, c]))
+
+        // Compute actual per accountCode appearing in budgets
+        type Row = {
+            accountCode: string; accountName: string | null; nature: string | null;
+            budget: number; actual: number; debits: number; credits: number;
+            variance: number; variancePct: number; status: 'over' | 'under' | 'on-target' | 'no-budget';
+        }
+        const rows: Row[] = []
+
+        // Helper: actual based on nature
+        const computeActual = (code: string, nature: string | null) => {
+            let debits = 0, credits = 0
+            for (const e of entries) {
+                if (e.debitAccount === code || e.debitAccount?.startsWith(code + '.')) debits += e.amount || 0
+                if (e.creditAccount === code || e.creditAccount?.startsWith(code + '.')) credits += e.amount || 0
+            }
+            const actual = nature === 'Credit' ? credits - debits : debits - credits
+            return { debits, credits, actual }
+        }
+
+        for (const b of budgets) {
+            const coa = coaByCode.get(b.accountCode)
+            const { debits, credits, actual } = computeActual(b.accountCode, coa?.nature || null)
+            const variance = actual - b.amount
+            const variancePct = b.amount === 0 ? 0 : (variance / b.amount) * 100
+            let status: Row['status'] = 'on-target'
+            if (Math.abs(variancePct) > 5) status = variance > 0 ? 'over' : 'under'
+            rows.push({
+                accountCode: b.accountCode,
+                accountName: coa?.name || null,
+                nature: coa?.nature || null,
+                budget: b.amount,
+                actual, debits, credits,
+                variance, variancePct, status,
+            })
+        }
+
+        res.json({
+            success: true,
+            data: {
+                year, month: month || null,
+                startDate, endDate,
+                rows,
+                summary: {
+                    totalBudget: rows.reduce((s, r) => s + r.budget, 0),
+                    totalActual: rows.reduce((s, r) => s + r.actual, 0),
+                    totalVariance: rows.reduce((s, r) => s + r.variance, 0),
+                    overCount: rows.filter(r => r.status === 'over').length,
+                    underCount: rows.filter(r => r.status === 'under').length,
+                },
+            },
+        })
+    } catch (err: any) {
+        console.error('GET /budget-vs-actual error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// =============================================================================
+//  SPRINT 5: Reports + Exports
+// =============================================================================
+
+// --- Helper: opening balance + period flow for an account prefix ------------
+
+type LedgerEntry = { date: string; debitAccount: string; creditAccount: string; amount: number; description?: string | null; reference?: string | null }
+
+async function loadJournalEntries(prisma: any, startDate?: string, endDate?: string): Promise<LedgerEntry[]> {
+    try {
+        const where: any = {}
+        if (startDate || endDate) {
+            where.date = {
+                ...(startDate ? { gte: startDate } : {}),
+                ...(endDate ? { lte: endDate } : {}),
+            }
+        }
+        return await prisma.journalEntry.findMany({
+            where,
+            orderBy: [{ date: 'asc' }, { createdAt: 'asc' }],
+        })
+    } catch (_) { return [] }
+}
+
+function balanceForCode(entries: LedgerEntry[], code: string, nature: string | null): { debits: number; credits: number; balance: number } {
+    let debits = 0, credits = 0
+    for (const e of entries) {
+        if (e.debitAccount === code) debits += e.amount || 0
+        if (e.creditAccount === code) credits += e.amount || 0
+    }
+    const balance = nature === 'Credit' ? credits - debits : debits - credits
+    return { debits, credits, balance }
+}
+
+// GET /api/tax/reports/summary?year=
+router.get('/reports/summary', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const year = Number(req.query.year) || new Date().getFullYear()
+        const startDate = `${year}-01-01`
+        const endDate = `${year}-12-31`
+
+        const periodEntries = await loadJournalEntries(prisma, startDate, endDate)
+        const openingEntries = await loadJournalEntries(prisma, undefined, `${year - 1}-12-31`)
+        const allUntilEnd = [...openingEntries, ...periodEntries]
+
+        const sumDr = (es: LedgerEntry[], prefixes: string[]) =>
+            es.filter(e => prefixes.some(p => e.debitAccount?.startsWith(p)))
+                .reduce((s, e) => s + (e.amount || 0), 0)
+        const sumCr = (es: LedgerEntry[], prefixes: string[]) =>
+            es.filter(e => prefixes.some(p => e.creditAccount?.startsWith(p)))
+                .reduce((s, e) => s + (e.amount || 0), 0)
+        const netDr = (es: LedgerEntry[], prefixes: string[]) => sumDr(es, prefixes) - sumCr(es, prefixes)
+        const netCr = (es: LedgerEntry[], prefixes: string[]) => sumCr(es, prefixes) - sumDr(es, prefixes)
+
+        // Income statement (period flows)
+        const revenue511 = sumCr(periodEntries, ['511'])
+        const revenue515 = sumCr(periodEntries, ['515'])
+        const revenue711 = sumCr(periodEntries, ['711'])
+        const totalRevenue = revenue511 + revenue515 + revenue711
+        const cogs = sumDr(periodEntries, ['632'])
+        const opex = sumDr(periodEntries, ['641', '642'])
+        const finExp = sumDr(periodEntries, ['635'])
+        const otherExp = sumDr(periodEntries, ['811'])
+        const cit = sumDr(periodEntries, ['821'])
+        const totalExpenses = cogs + opex + finExp + otherExp + cit
+        const grossProfit = revenue511 - cogs
+        const operatingProfit = grossProfit - opex
+        const profitBeforeTax = totalRevenue - (cogs + opex + finExp + otherExp)
+        const netProfit = profitBeforeTax - cit
+
+        // Balance sheet (ending balances)
+        const currentAssets = netDr(allUntilEnd, ['111', '112', '121', '128', '131', '133', '138', '141', '142', '152', '153', '154', '155', '156', '157'])
+        const longTermAssets = netDr(allUntilEnd, ['211', '212', '213', '217', '221', '242']) - netCr(allUntilEnd, ['214', '229'])
+        const totalAssets = currentAssets + longTermAssets
+        const currentLiabilities = netCr(allUntilEnd, ['331', '333', '334', '335', '338'])
+        const longTermLiabilities = netCr(allUntilEnd, ['341'])
+        const totalLiabilities = currentLiabilities + longTermLiabilities
+        const equity = netCr(allUntilEnd, ['411', '413', '414', '418', '421']) - netDr(allUntilEnd, ['419'])
+        const cashPosition = netDr(allUntilEnd, ['111', '112'])
+
+        // Tax obligations (closing balances of payable accounts)
+        const vatPayable = netCr(allUntilEnd, ['3331'])
+        const citPayable = netCr(allUntilEnd, ['3334'])
+        const pitPayable = netCr(allUntilEnd, ['3335'])
+
+        // Ratios
+        const currentRatio = currentLiabilities === 0 ? null : currentAssets / currentLiabilities
+        const debtRatio = totalAssets === 0 ? null : totalLiabilities / totalAssets
+        const roe = equity === 0 ? null : netProfit / equity
+        const grossMargin = revenue511 === 0 ? null : grossProfit / revenue511
+        const netMargin = totalRevenue === 0 ? null : netProfit / totalRevenue
+
+        res.json({
+            success: true,
+            data: {
+                year, startDate, endDate,
+                incomeStatement: {
+                    revenue: { sales: revenue511, financial: revenue515, other: revenue711, total: totalRevenue },
+                    cogs,
+                    grossProfit,
+                    operatingExpenses: opex,
+                    operatingProfit,
+                    financialExpenses: finExp,
+                    otherExpenses: otherExp,
+                    profitBeforeTax,
+                    cit,
+                    netProfit,
+                    totalExpenses,
+                },
+                balanceSheet: {
+                    currentAssets, longTermAssets, totalAssets,
+                    currentLiabilities, longTermLiabilities, totalLiabilities,
+                    equity,
+                    cashPosition,
+                },
+                taxObligations: { vatPayable, citPayable, pitPayable },
+                ratios: { currentRatio, debtRatio, roe, grossMargin, netMargin },
+            },
+        })
+    } catch (err: any) {
+        console.error('GET /reports/summary error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// GET /api/tax/reports/tax-obligations?year= - upcoming tax payments
+router.get('/reports/tax-obligations', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const year = Number(req.query.year) || new Date().getFullYear()
+        const today = new Date().toISOString().slice(0, 10)
+
+        // Auto-seed deadlines for the year
+        const seeds = generateDeadlinesForYear(year)
+        for (const s of seeds) {
+            await prisma.taxDeadline.upsert({
+                where: { taxType_period: { taxType: s.taxType, period: s.period } },
+                create: { ...s, status: 'pending' },
+                update: { dueDate: s.dueDate, description: s.description },
+            })
+        }
+        await prisma.taxDeadline.updateMany({
+            where: { status: 'pending', dueDate: { lt: today } },
+            data: { status: 'overdue' },
+        })
+
+        // Closing balance of each payable account
+        const endDate = `${year}-12-31`
+        const allEntries = await loadJournalEntries(prisma, undefined, endDate)
+        const netCr = (prefixes: string[]) => {
+            let dr = 0, cr = 0
+            for (const e of allEntries) {
+                if (prefixes.some(p => e.debitAccount?.startsWith(p))) dr += e.amount || 0
+                if (prefixes.some(p => e.creditAccount?.startsWith(p))) cr += e.amount || 0
+            }
+            return cr - dr
+        }
+
+        const vatPayable = netCr(['3331'])
+        const citPayable = netCr(['3334'])
+        const pitPayable = netCr(['3335'])
+
+        // Upcoming pending/overdue deadlines for the year
+        const upcoming = await prisma.taxDeadline.findMany({
+            where: {
+                status: { in: ['pending', 'overdue'] },
+                OR: [
+                    { period: { contains: `/${year}` } },
+                    { period: { contains: `-${year}` } },
+                ],
+            },
+            orderBy: [{ dueDate: 'asc' }],
+        })
+
+        res.json({
+            success: true,
+            data: {
+                year,
+                balances: { vatPayable, citPayable, pitPayable, total: vatPayable + citPayable + pitPayable },
+                upcomingDeadlines: upcoming,
+                today,
+            },
+        })
+    } catch (err: any) {
+        console.error('GET /reports/tax-obligations error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// --- Exports (data only — frontend handles rendering) -----------------------
+
+// GET /api/tax/export/trial-balance?year=&month=
+router.get('/export/trial-balance', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const year = Number(req.query.year) || new Date().getFullYear()
+        const month = req.query.month ? Number(req.query.month) : undefined
+        const { startDate, endDate } = cashFlowDateRange(year, month)
+
+        const periodEntries = await loadJournalEntries(prisma, startDate, endDate)
+        const openingEntries = await loadJournalEntries(prisma, undefined, startDate)
+        // openingEntries above includes entries on startDate; we want strictly before.
+        // Re-pull explicitly with lt to be precise.
+        const openingStrict = await prisma.journalEntry.findMany({
+            where: { date: { lt: startDate } },
+            select: { debitAccount: true, creditAccount: true, amount: true },
+        }).catch(() => [])
+
+        // Collect all account codes from both
+        const codes = new Set<string>()
+        for (const e of openingStrict) {
+            if (e.debitAccount) codes.add(e.debitAccount)
+            if (e.creditAccount) codes.add(e.creditAccount)
+        }
+        for (const e of periodEntries) {
+            if (e.debitAccount) codes.add(e.debitAccount)
+            if (e.creditAccount) codes.add(e.creditAccount)
+        }
+
+        let coaList: any[] = []
+        try {
+            coaList = await prisma.chartOfAccount.findMany({
+                where: { code: { in: Array.from(codes) } },
+                select: { code: true, name: true, nature: true, type: true },
+            })
+        } catch (_) { coaList = [] }
+        const coaByCode = new Map<string, any>(coaList.map(c => [c.code, c]))
+
+        type TBRow = {
+            accountCode: string; accountName: string | null; nature: string | null; type: string | null;
+            openingDebit: number; openingCredit: number;
+            periodDebit: number; periodCredit: number;
+            closingDebit: number; closingCredit: number;
+        }
+
+        const sortedCodes = Array.from(codes).sort()
+        const rows: TBRow[] = sortedCodes.map(code => {
+            const coa = coaByCode.get(code)
+            const nature = coa?.nature || null
+
+            let openDr = 0, openCr = 0
+            for (const e of openingStrict) {
+                if (e.debitAccount === code) openDr += e.amount || 0
+                if (e.creditAccount === code) openCr += e.amount || 0
+            }
+            const openingNet = nature === 'Credit' ? openCr - openDr : openDr - openCr
+            const openingDebit = openingNet >= 0 && nature !== 'Credit' ? openingNet : (nature !== 'Credit' && openingNet < 0 ? 0 : 0)
+            const openingCredit = nature === 'Credit' ? Math.max(openingNet, 0) : (openingNet < 0 ? -openingNet : 0)
+
+            let periodDr = 0, periodCr = 0
+            for (const e of periodEntries) {
+                if (e.debitAccount === code) periodDr += e.amount || 0
+                if (e.creditAccount === code) periodCr += e.amount || 0
+            }
+
+            const closingNet = nature === 'Credit'
+                ? (openCr + periodCr) - (openDr + periodDr)
+                : (openDr + periodDr) - (openCr + periodCr)
+            const closingDebit = nature === 'Credit' ? (closingNet < 0 ? -closingNet : 0) : Math.max(closingNet, 0)
+            const closingCredit = nature === 'Credit' ? Math.max(closingNet, 0) : (closingNet < 0 ? -closingNet : 0)
+
+            return {
+                accountCode: code,
+                accountName: coa?.name || null,
+                nature, type: coa?.type || null,
+                openingDebit, openingCredit,
+                periodDebit: periodDr, periodCredit: periodCr,
+                closingDebit, closingCredit,
+            }
+        })
+
+        const totals = rows.reduce(
+            (acc, r) => ({
+                openingDebit: acc.openingDebit + r.openingDebit,
+                openingCredit: acc.openingCredit + r.openingCredit,
+                periodDebit: acc.periodDebit + r.periodDebit,
+                periodCredit: acc.periodCredit + r.periodCredit,
+                closingDebit: acc.closingDebit + r.closingDebit,
+                closingCredit: acc.closingCredit + r.closingCredit,
+            }),
+            { openingDebit: 0, openingCredit: 0, periodDebit: 0, periodCredit: 0, closingDebit: 0, closingCredit: 0 },
+        )
+
+        res.json({
+            success: true,
+            data: {
+                year, month: month || null,
+                startDate, endDate,
+                rows,
+                totals,
+                isBalanced: Math.abs(totals.periodDebit - totals.periodCredit) < 0.01,
+            },
+        })
+    } catch (err: any) {
+        console.error('GET /export/trial-balance error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// GET /api/tax/export/general-ledger?accountCode=&year=&month=
+router.get('/export/general-ledger', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const accountCode = String(req.query.accountCode || '').trim()
+        if (!accountCode) {
+            return res.status(400).json({ success: false, error: 'accountCode la bat buoc' })
+        }
+        const year = Number(req.query.year) || new Date().getFullYear()
+        const month = req.query.month ? Number(req.query.month) : undefined
+        const { startDate, endDate } = cashFlowDateRange(year, month)
+
+        // Lookup nature for running balance interpretation
+        let coa: any = null
+        try {
+            coa = await prisma.chartOfAccount.findUnique({ where: { code: accountCode } })
+        } catch (_) { coa = null }
+        const nature = coa?.nature || null
+
+        // Opening balance (all entries strictly before startDate)
+        const openingEntries: any[] = await prisma.journalEntry.findMany({
+            where: {
+                date: { lt: startDate },
+                OR: [{ debitAccount: accountCode }, { creditAccount: accountCode }],
+            },
+            select: { debitAccount: true, creditAccount: true, amount: true },
+        }).catch(() => [])
+
+        let openDr = 0, openCr = 0
+        for (const e of openingEntries) {
+            if (e.debitAccount === accountCode) openDr += e.amount || 0
+            if (e.creditAccount === accountCode) openCr += e.amount || 0
+        }
+        const openingBalance = nature === 'Credit' ? openCr - openDr : openDr - openCr
+
+        // Period transactions
+        const periodEntries: any[] = await prisma.journalEntry.findMany({
+            where: {
+                date: { gte: startDate, lte: endDate },
+                OR: [{ debitAccount: accountCode }, { creditAccount: accountCode }],
+            },
+            orderBy: [{ date: 'asc' }, { createdAt: 'asc' }],
+        }).catch(() => [])
+
+        let running = openingBalance
+        const rows = periodEntries.map((e: any) => {
+            const isDebitSide = e.debitAccount === accountCode
+            const debit = isDebitSide ? e.amount || 0 : 0
+            const credit = !isDebitSide ? e.amount || 0 : 0
+            const delta = nature === 'Credit' ? credit - debit : debit - credit
+            running += delta
+            return {
+                id: e.id,
+                date: e.date,
+                description: e.description,
+                reference: e.reference,
+                referenceType: e.referenceType,
+                counterpartyAccount: isDebitSide ? e.creditAccount : e.debitAccount,
+                counterpartyName: isDebitSide ? e.creditAccountName : e.debitAccountName,
+                debit, credit,
+                runningBalance: running,
+            }
+        })
+
+        const totalDebit = rows.reduce((s, r) => s + r.debit, 0)
+        const totalCredit = rows.reduce((s, r) => s + r.credit, 0)
+        const closingBalance = running
+
+        res.json({
+            success: true,
+            data: {
+                accountCode,
+                accountName: coa?.name || null,
+                nature,
+                type: coa?.type || null,
+                year, month: month || null,
+                startDate, endDate,
+                openingBalance,
+                rows,
+                totalDebit, totalCredit,
+                closingBalance,
+                rowCount: rows.length,
+            },
+        })
+    } catch (err: any) {
+        console.error('GET /export/general-ledger error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// GET /api/tax/export/journal-book?year=&month=
+router.get('/export/journal-book', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const year = Number(req.query.year) || new Date().getFullYear()
+        const month = req.query.month ? Number(req.query.month) : undefined
+        const { startDate, endDate } = cashFlowDateRange(year, month)
+
+        const limit = Math.min(Number(req.query.limit) || 5000, 20000)
+
+        const entries: any[] = await prisma.journalEntry.findMany({
+            where: { date: { gte: startDate, lte: endDate } },
+            orderBy: [{ date: 'asc' }, { createdAt: 'asc' }],
+            take: limit,
+        }).catch(() => [])
+
+        const totalDebit = entries.reduce((s, e) => s + (e.amount || 0), 0)
+        const totalCredit = totalDebit // every entry is debit=credit by construction
+
+        res.json({
+            success: true,
+            data: {
+                year, month: month || null,
+                startDate, endDate,
+                rows: entries.map(e => ({
+                    id: e.id,
+                    date: e.date,
+                    description: e.description,
+                    debitAccount: e.debitAccount,
+                    debitAccountName: e.debitAccountName,
+                    creditAccount: e.creditAccount,
+                    creditAccountName: e.creditAccountName,
+                    amount: e.amount,
+                    reference: e.reference,
+                    referenceType: e.referenceType,
+                    notes: e.notes,
+                    createdAt: e.createdAt,
+                })),
+                totalDebit, totalCredit,
+                rowCount: entries.length,
+                truncated: entries.length === limit,
+            },
+        })
+    } catch (err: any) {
+        console.error('GET /export/journal-book error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
 export default router
