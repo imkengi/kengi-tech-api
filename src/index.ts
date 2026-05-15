@@ -827,6 +827,24 @@ if (!process.env.PASSENGER_BASE_URI) {
             }
             // --- END LEGACY DATA MIGRATION ---
 
+            // Auto-journal support — JournalEntry.referenceType + StoreSettings.autoCreateJournalEntries
+            try {
+                const schemas: any[] = await registryPrisma.$queryRaw`SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('information_schema', 'pg_catalog', 'pg_toast', 'public')`
+                for (const { schema_name } of schemas) {
+                    const migName = `auto_journal_v1:${schema_name}`
+                    if (await isMigrationApplied(migName)) continue
+                    // JournalEntry.referenceType for tagging auto vs manual entries
+                    await registryPrisma.$executeRawUnsafe(`ALTER TABLE "${schema_name}"."JournalEntry" ADD COLUMN IF NOT EXISTS "referenceType" TEXT NOT NULL DEFAULT 'manual';`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "JournalEntry_referenceType_idx" ON "${schema_name}"."JournalEntry"("referenceType")`).catch(() => {})
+                    // StoreSettings.autoCreateJournalEntries toggle
+                    await registryPrisma.$executeRawUnsafe(`ALTER TABLE "${schema_name}"."StoreSettings" ADD COLUMN IF NOT EXISTS "autoCreateJournalEntries" BOOLEAN NOT NULL DEFAULT true;`).catch(() => {})
+                    await markMigrationApplied(migName)
+                }
+                console.log('✅ Auto-journal columns migration completed')
+            } catch (err: any) {
+                console.error('⚠️ Auto-journal migration failed:', err.message)
+            }
+
             } catch (err: any) {
                 console.error('[Migration] Boot migration error (server will still start):', err.message)
             }
