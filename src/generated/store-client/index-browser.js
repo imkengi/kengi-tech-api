@@ -750,6 +750,9 @@ exports.Prisma.TaxDeclarationScalarFieldEnum = {
   status: 'status',
   filedAt: 'filedAt',
   notes: 'notes',
+  originalId: 'originalId',
+  amendmentNumber: 'amendmentNumber',
+  amendmentReason: 'amendmentReason',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };

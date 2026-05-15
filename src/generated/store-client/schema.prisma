@@ -820,54 +820,58 @@ model BankTransaction {
 // ─── Tax Declaration ───────────────────────────────────────────────────────────
 
 model TaxDeclaration {
-  id             String    @id @default(cuid())
-  formType       String    @default("01_GTGT")
-  period         String    @unique
-  periodType     String    @default("month")
-  year           Int
-  month          Int?
-  quarter        Int?
-  taxCode        String
-  companyName    String
-  companyAddress String?
-  businessType   String    @default("company")
-  ct21           Float     @default(0)
-  ct22           Float     @default(0)
-  ct23           Float     @default(0)
-  ct24           Float     @default(0)
-  ct25           Float     @default(0)
-  ct26           Float     @default(0)
-  ct27           Float     @default(0)
-  ct28           Float     @default(0)
-  ct29           Float     @default(0)
-  ct30           Float     @default(0)
-  ct31           Float     @default(0)
-  ct32           Float     @default(0)
-  ct33           Float     @default(0)
-  ct34           Float     @default(0)
-  ct35           Float     @default(0)
-  ct36           Float     @default(0)
-  ct37           Float     @default(0)
-  ct38           Float     @default(0)
-  ct39           Float     @default(0)
-  ct40a          Float     @default(0)
-  ct40b          Float     @default(0)
-  cnkdRevenue    Float     @default(0)
-  cnkdVatRate    Float     @default(1)
-  cnkdVatAmount  Float     @default(0)
-  cnkdPitRate    Float     @default(0.5)
-  cnkdPitAmount  Float     @default(0)
-  cnkdTotalTax   Float     @default(0)
-  cnkdThreshold  Float     @default(500000000)
-  status         String    @default("draft")
-  filedAt        DateTime?
-  notes          String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  formType        String    @default("01_GTGT")
+  period          String    @unique
+  periodType      String    @default("month")
+  year            Int
+  month           Int?
+  quarter         Int?
+  taxCode         String
+  companyName     String
+  companyAddress  String?
+  businessType    String    @default("company")
+  ct21            Float     @default(0)
+  ct22            Float     @default(0)
+  ct23            Float     @default(0)
+  ct24            Float     @default(0)
+  ct25            Float     @default(0)
+  ct26            Float     @default(0)
+  ct27            Float     @default(0)
+  ct28            Float     @default(0)
+  ct29            Float     @default(0)
+  ct30            Float     @default(0)
+  ct31            Float     @default(0)
+  ct32            Float     @default(0)
+  ct33            Float     @default(0)
+  ct34            Float     @default(0)
+  ct35            Float     @default(0)
+  ct36            Float     @default(0)
+  ct37            Float     @default(0)
+  ct38            Float     @default(0)
+  ct39            Float     @default(0)
+  ct40a           Float     @default(0)
+  ct40b           Float     @default(0)
+  cnkdRevenue     Float     @default(0)
+  cnkdVatRate     Float     @default(1)
+  cnkdVatAmount   Float     @default(0)
+  cnkdPitRate     Float     @default(0.5)
+  cnkdPitAmount   Float     @default(0)
+  cnkdTotalTax    Float     @default(0)
+  cnkdThreshold   Float     @default(500000000)
+  status          String    @default("draft")
+  filedAt         DateTime?
+  notes           String?
+  originalId      String?
+  amendmentNumber Int?
+  amendmentReason String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   @@index([year])
   @@index([status])
   @@index([formType])
+  @@index([originalId])
 }
 
 // ─── Customer Segments ─────────────────────────────────────────────────────────
