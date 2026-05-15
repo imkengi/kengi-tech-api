@@ -307,6 +307,7 @@ exports.Prisma.TransactionScalarFieldEnum = {
   vatStatus: 'vatStatus',
   revisionOfId: 'revisionOfId',
   appliedPromotionIds: 'appliedPromotionIds',
+  channel: 'channel',
   createdAt: 'createdAt'
 };
 
@@ -1233,6 +1234,10 @@ exports.Prisma.FixedAssetScalarFieldEnum = {
   netBookValue: 'netBookValue',
   monthlyDepreciation: 'monthlyDepreciation',
   depreciationAccount: 'depreciationAccount',
+  residualValue: 'residualValue',
+  department: 'department',
+  description: 'description',
+  disposalDate: 'disposalDate',
   status: 'status',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
@@ -1350,6 +1355,7 @@ exports.Prisma.SalesTripScalarFieldEnum = {
   branchId: 'branchId',
   plannedDate: 'plannedDate',
   startedAt: 'startedAt',
+  pausedAt: 'pausedAt',
   closedAt: 'closedAt',
   notes: 'notes',
   totalLoaded: 'totalLoaded',
@@ -1373,6 +1379,76 @@ exports.Prisma.SalesTripItemScalarFieldEnum = {
   damagedQty: 'damagedQty',
   unitPrice: 'unitPrice',
   notes: 'notes'
+};
+
+exports.Prisma.SalesTripLogScalarFieldEnum = {
+  id: 'id',
+  tripId: 'tripId',
+  action: 'action',
+  notes: 'notes',
+  userId: 'userId',
+  userName: 'userName',
+  metadata: 'metadata',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.InventoryCountScalarFieldEnum = {
+  id: 'id',
+  code: 'code',
+  countDate: 'countDate',
+  type: 'type',
+  status: 'status',
+  warehouseId: 'warehouseId',
+  notes: 'notes',
+  totalItems: 'totalItems',
+  surplusCount: 'surplusCount',
+  shortageCount: 'shortageCount',
+  surplusValue: 'surplusValue',
+  shortageValue: 'shortageValue',
+  finalizedAt: 'finalizedAt',
+  finalizedBy: 'finalizedBy',
+  branchId: 'branchId',
+  createdBy: 'createdBy',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.InventoryCountItemScalarFieldEnum = {
+  id: 'id',
+  countId: 'countId',
+  refId: 'refId',
+  refCode: 'refCode',
+  name: 'name',
+  unit: 'unit',
+  systemQty: 'systemQty',
+  countedQty: 'countedQty',
+  variance: 'variance',
+  unitCost: 'unitCost',
+  originalCost: 'originalCost',
+  accumulatedDep: 'accumulatedDep',
+  netBookValue: 'netBookValue',
+  condition: 'condition',
+  notes: 'notes'
+};
+
+exports.Prisma.ZReportScalarFieldEnum = {
+  id: 'id',
+  date: 'date',
+  registerId: 'registerId',
+  cashStart: 'cashStart',
+  cashEnd: 'cashEnd',
+  cashSales: 'cashSales',
+  cardSales: 'cardSales',
+  totalSales: 'totalSales',
+  totalReturns: 'totalReturns',
+  totalDiscounts: 'totalDiscounts',
+  netSales: 'netSales',
+  cashDifference: 'cashDifference',
+  notes: 'notes',
+  branchId: 'branchId',
+  createdBy: 'createdBy',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
 };
 
 exports.Prisma.StorageFileScalarFieldEnum = {
@@ -1486,6 +1562,10 @@ exports.Prisma.ModelName = {
   StockTransferItem: 'StockTransferItem',
   SalesTrip: 'SalesTrip',
   SalesTripItem: 'SalesTripItem',
+  SalesTripLog: 'SalesTripLog',
+  InventoryCount: 'InventoryCount',
+  InventoryCountItem: 'InventoryCountItem',
+  ZReport: 'ZReport',
   StorageFile: 'StorageFile'
 };
 

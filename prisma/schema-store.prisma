@@ -1736,26 +1736,80 @@ model SalesTripLog {
   @@index([createdAt])
 }
 
+// ─── Inventory Count (Kiểm kê — BC26-BH hàng hóa / D02-TS TSCĐ) ─────────────
+
+model InventoryCount {
+  id            String    @id @default(cuid())
+  code          String    @unique
+  countDate     String // ngày kiểm kê (YYYY-MM-DD)
+  type          String // "goods" | "fixed-assets"
+  status        String    @default("draft") // draft | finalized | cancelled
+  warehouseId   String? // optional warehouse scope (goods)
+  notes         String?
+  totalItems    Int       @default(0)
+  surplusCount  Int       @default(0) // # items with countedQty > systemQty
+  shortageCount Int       @default(0) // # items with countedQty < systemQty
+  surplusValue  Float     @default(0) // total value of surplus (goods: cost; assets: NBV)
+  shortageValue Float     @default(0) // total value of shortage
+  finalizedAt   DateTime?
+  finalizedBy   String?
+  branchId      String?
+  createdBy     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  items InventoryCountItem[]
+
+  @@index([countDate])
+  @@index([type])
+  @@index([status])
+  @@index([branchId])
+  @@index([warehouseId])
+}
+
+model InventoryCountItem {
+  id             String  @id @default(cuid())
+  countId        String
+  refId          String // productId (goods) or fixedAssetId (assets)
+  refCode        String? // sku / asset code (for report)
+  name           String // productName / assetName
+  unit           String? // ĐVT (goods only)
+  systemQty      Float   @default(0) // số sổ sách (goods: stock; assets: 1)
+  countedQty     Float? // số kiểm kê (nullable until counted)
+  variance       Float   @default(0) // countedQty - systemQty
+  unitCost       Float   @default(0) // goods: costPrice; assets: netBookValue
+  originalCost   Float? // assets only: nguyên giá
+  accumulatedDep Float? // assets only: khấu hao lũy kế
+  netBookValue   Float? // assets only: giá trị còn lại
+  condition      String? // assets: tình trạng (good | damaged | missing | disposed)
+  notes          String?
+
+  count InventoryCount @relation(fields: [countId], references: [id], onDelete: Cascade)
+
+  @@index([countId])
+  @@index([refId])
+}
+
 // ─── Z-Report (Báo cáo Z — chốt ca / kết ca cuối ngày POS) ─────────────────
 
 model ZReport {
-  id              String   @id @default(cuid())
-  date            DateTime                  // canonical day (midnight UTC) the report covers
-  registerId      String                    // POS register / cash drawer identifier
-  cashStart       Float    @default(0)
-  cashEnd         Float    @default(0)
-  cashSales       Float    @default(0)
-  cardSales       Float    @default(0)
-  totalSales      Float    @default(0)
-  totalReturns    Float    @default(0)
-  totalDiscounts  Float    @default(0)
-  netSales        Float    @default(0)
-  cashDifference  Float    @default(0)
-  notes           String?
-  branchId        String?
-  createdBy       String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String   @id @default(cuid())
+  date           DateTime // canonical day (midnight UTC) the report covers
+  registerId     String // POS register / cash drawer identifier
+  cashStart      Float    @default(0)
+  cashEnd        Float    @default(0)
+  cashSales      Float    @default(0)
+  cardSales      Float    @default(0)
+  totalSales     Float    @default(0)
+  totalReturns   Float    @default(0)
+  totalDiscounts Float    @default(0)
+  netSales       Float    @default(0)
+  cashDifference Float    @default(0)
+  notes          String?
+  branchId       String?
+  createdBy      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@unique([registerId, date])
   @@index([date])

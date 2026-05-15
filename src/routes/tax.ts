@@ -3697,6 +3697,519 @@ router.get('/hkd/s7', authMiddleware, async (req: AuthRequest, res: Response) =>
     } catch (err) { console.error('GET /hkd/s7:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
 
+// ─── INVENTORY COUNT (Kiểm kê — BC26-BH hàng hóa / D02-TS TSCĐ) ────────────
+
+// Normalize countDate to YYYY-MM-DD string (matches JournalEntry.date format).
+function normalizeCountDate(input: any): string | null {
+    if (!input) return new Date().toISOString().slice(0, 10)
+    const d = input instanceof Date ? input : new Date(String(input))
+    if (isNaN(d.getTime())) return null
+    return d.toISOString().slice(0, 10)
+}
+
+// Generate count code: KK-YYYYMMDD-NNN where NNN is daily sequence (zero-padded).
+async function nextInventoryCountCode(prisma: any, dateStr: string): Promise<string> {
+    const ymd = dateStr.replace(/-/g, '')
+    const prefix = `KK-${ymd}-`
+    const todays = await prisma.inventoryCount.findMany({
+        where: { code: { startsWith: prefix } },
+        select: { code: true },
+    })
+    let max = 0
+    for (const c of todays) {
+        const n = parseInt(c.code.slice(prefix.length), 10)
+        if (!isNaN(n) && n > max) max = n
+    }
+    return `${prefix}${String(max + 1).padStart(3, '0')}`
+}
+
+// POST /api/tax/inventory-count — create a new count session and auto-populate items
+router.post('/inventory-count', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const { countDate, type, warehouseId, notes } = req.body
+
+        if (!['goods', 'fixed-assets'].includes(type)) {
+            return res.status(400).json({ success: false, error: 'type phải là "goods" hoặc "fixed-assets"' })
+        }
+        const dateStr = normalizeCountDate(countDate)
+        if (!dateStr) return res.status(400).json({ success: false, error: 'countDate không hợp lệ' })
+
+        const branchId = getBranchId(req) || null
+        const userId = req.user?.userId || null
+        const code = await nextInventoryCountCode(prisma, dateStr)
+
+        // Build item payload depending on type.
+        const itemsData: any[] = []
+        if (type === 'goods') {
+            if (warehouseId) {
+                // Populate from warehouse stocks (joined with product for cost + unit)
+                const stocks = await prisma.warehouseStock.findMany({
+                    where: { warehouseId, quantity: { gt: 0 } },
+                })
+                const productIds = stocks.map((s: any) => s.productId)
+                const products = productIds.length
+                    ? await prisma.product.findMany({ where: { id: { in: productIds } } })
+                    : []
+                const productMap = new Map(products.map((p: any) => [p.id, p]))
+                for (const s of stocks) {
+                    const p: any = productMap.get(s.productId)
+                    itemsData.push({
+                        refId: s.productId,
+                        refCode: s.productSku || p?.sku || null,
+                        name: s.productName || p?.name || s.productId,
+                        unit: p?.baseUnit || 'cái',
+                        systemQty: Number(s.quantity) || 0,
+                        unitCost: Number(p?.costPrice) || 0,
+                    })
+                }
+            } else {
+                // Use Product.stock (global, not per-warehouse)
+                const products = await prisma.product.findMany({
+                    where: { productType: 'goods' },
+                    orderBy: { name: 'asc' },
+                })
+                for (const p of products) {
+                    itemsData.push({
+                        refId: p.id,
+                        refCode: p.sku,
+                        name: p.name,
+                        unit: p.baseUnit || 'cái',
+                        systemQty: Number(p.stock) || 0,
+                        unitCost: Number(p.costPrice) || 0,
+                    })
+                }
+            }
+        } else {
+            // type === 'fixed-assets'
+            const assets = await prisma.fixedAsset.findMany({
+                where: { status: { not: 'disposed' } },
+                orderBy: { code: 'asc' },
+            })
+            for (const a of assets) {
+                const processed = recalcAsset(a)
+                itemsData.push({
+                    refId: a.id,
+                    refCode: a.code,
+                    name: a.name,
+                    unit: null,
+                    systemQty: 1,
+                    unitCost: Number(processed.netBookValue) || 0,
+                    originalCost: Number(a.originalCost) || 0,
+                    accumulatedDep: Number(processed.accumulatedDepreciation) || 0,
+                    netBookValue: Number(processed.netBookValue) || 0,
+                })
+            }
+        }
+
+        const created = await prisma.inventoryCount.create({
+            data: {
+                code,
+                countDate: dateStr,
+                type,
+                status: 'draft',
+                warehouseId: warehouseId || null,
+                notes: notes || null,
+                totalItems: itemsData.length,
+                branchId,
+                createdBy: userId,
+                items: { create: itemsData },
+            },
+            include: { items: true },
+        })
+
+        res.status(201).json({ success: true, data: created })
+    } catch (err: any) {
+        console.error('POST /inventory-count error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// GET /api/tax/inventory-count — list with filters (?type=&status=&from=&to=)
+router.get('/inventory-count', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const type = req.query.type as string | undefined
+        const status = req.query.status as string | undefined
+        const from = req.query.from as string | undefined
+        const to = req.query.to as string | undefined
+
+        const where: any = { ...getBranchFilter(req) }
+        if (type) where.type = type
+        if (status) where.status = status
+        if (from || to) {
+            where.countDate = {}
+            if (from) where.countDate.gte = from
+            if (to) where.countDate.lte = to
+        }
+
+        const data = await prisma.inventoryCount.findMany({
+            where,
+            orderBy: { countDate: 'desc' },
+        })
+        res.json({ success: true, data })
+    } catch (err) {
+        console.error('GET /inventory-count error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// GET /api/tax/inventory-count/:id — single count session with items
+router.get('/inventory-count/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
+        const session = await prisma.inventoryCount.findUnique({
+            where: { id },
+            include: { items: { orderBy: { name: 'asc' } } },
+        })
+        if (!session) return res.status(404).json({ success: false, error: 'Không tìm thấy phiên kiểm kê' })
+        res.json({ success: true, data: session })
+    } catch (err) {
+        console.error('GET /inventory-count/:id error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// PUT /api/tax/inventory-count/:id/items — bulk-update counted quantities (+ variance)
+router.put('/inventory-count/:id/items', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
+        const session = await prisma.inventoryCount.findUnique({ where: { id } })
+        if (!session) return res.status(404).json({ success: false, error: 'Không tìm thấy phiên kiểm kê' })
+        if (session.status !== 'draft') {
+            return res.status(400).json({ success: false, error: 'Phiên kiểm kê đã được chốt, không thể chỉnh sửa' })
+        }
+
+        const items = Array.isArray(req.body?.items) ? req.body.items : []
+        if (!items.length) return res.status(400).json({ success: false, error: 'items rỗng' })
+
+        const existing = await prisma.inventoryCountItem.findMany({ where: { countId: id } })
+        const itemMap = new Map(existing.map((it: any) => [it.id, it]))
+
+        const updated: any[] = []
+        for (const incoming of items) {
+            const it: any = itemMap.get(incoming.itemId)
+            if (!it) continue
+            const countedQty = incoming.countedQty === null || incoming.countedQty === undefined
+                ? null
+                : Number(incoming.countedQty)
+            if (countedQty !== null && !Number.isFinite(countedQty)) {
+                return res.status(400).json({ success: false, error: `countedQty không hợp lệ cho item ${incoming.itemId}` })
+            }
+            const variance = countedQty === null ? 0 : countedQty - (Number(it.systemQty) || 0)
+            const updateData: any = {
+                countedQty,
+                variance,
+                notes: incoming.notes !== undefined ? (incoming.notes || null) : it.notes,
+            }
+            // Asset condition (good | damaged | missing | disposed)
+            if (incoming.condition !== undefined) updateData.condition = incoming.condition || null
+            const u = await prisma.inventoryCountItem.update({ where: { id: it.id }, data: updateData })
+            updated.push(u)
+        }
+
+        res.json({ success: true, data: { updatedCount: updated.length, items: updated } })
+    } catch (err: any) {
+        console.error('PUT /inventory-count/:id/items error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// POST /api/tax/inventory-count/:id/finalize — lock + generate adjustment journal entries
+router.post('/inventory-count/:id/finalize', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
+        const session = await prisma.inventoryCount.findUnique({
+            where: { id },
+            include: { items: true },
+        })
+        if (!session) return res.status(404).json({ success: false, error: 'Không tìm thấy phiên kiểm kê' })
+        if (session.status !== 'draft') {
+            return res.status(400).json({ success: false, error: 'Phiên kiểm kê đã được chốt trước đó' })
+        }
+
+        const branchId = getBranchId(req) || null
+        const userId = req.user?.userId || null
+        const journalDate = session.countDate
+
+        const entries: any[] = []
+        let surplusCount = 0, shortageCount = 0
+        let surplusValue = 0, shortageValue = 0
+
+        if (session.type === 'goods') {
+            for (const item of session.items) {
+                if (item.countedQty === null || item.countedQty === undefined) continue
+                const variance = Number(item.variance) || 0
+                if (variance === 0) continue
+                const unitCost = Number(item.unitCost) || 0
+                const amount = Math.abs(variance) * unitCost
+                const ref = `KK-${session.code}-${item.refCode || item.refId}`
+
+                if (variance > 0) {
+                    // Hàng thừa: Nợ TK156 / Có TK338
+                    surplusCount++
+                    surplusValue += amount
+                    if (amount > 0) {
+                        const e = await prisma.journalEntry.create({
+                            data: {
+                                date: journalDate,
+                                description: `Kiểm kê thừa - ${item.name} (+${variance})`,
+                                debitAccount: '156', debitAccountName: 'Hàng hóa',
+                                creditAccount: '338', creditAccountName: 'Phải trả, phải nộp khác (hàng thừa chờ xử lý)',
+                                amount, reference: ref, referenceType: 'inventory-count',
+                                branchId, createdBy: userId,
+                            },
+                        })
+                        entries.push(e)
+                    }
+                } else {
+                    // Hàng thiếu: Nợ TK138 / Có TK156
+                    shortageCount++
+                    shortageValue += amount
+                    if (amount > 0) {
+                        const e = await prisma.journalEntry.create({
+                            data: {
+                                date: journalDate,
+                                description: `Kiểm kê thiếu - ${item.name} (${variance})`,
+                                debitAccount: '138', debitAccountName: 'Phải thu khác (hàng thiếu chờ xử lý)',
+                                creditAccount: '156', creditAccountName: 'Hàng hóa',
+                                amount, reference: ref, referenceType: 'inventory-count',
+                                branchId, createdBy: userId,
+                            },
+                        })
+                        entries.push(e)
+                    }
+                }
+
+                // Adjust system stock to match counted value (single source of truth post-count)
+                const newQty = Number(item.countedQty) || 0
+                if (session.warehouseId) {
+                    await prisma.warehouseStock.updateMany({
+                        where: { warehouseId: session.warehouseId, productId: item.refId },
+                        data: { quantity: Math.round(newQty) },
+                    })
+                } else {
+                    await prisma.product.update({
+                        where: { id: item.refId },
+                        data: { stock: Math.round(newQty) },
+                    }).catch(() => { /* product may have been deleted */ })
+                }
+            }
+        } else {
+            // type === 'fixed-assets'
+            for (const item of session.items) {
+                const condition = (item.condition || '').toLowerCase()
+                const isDisposed = condition === 'disposed' || condition === 'missing'
+                if (!isDisposed) continue
+
+                const original = Number(item.originalCost) || 0
+                const accumDep = Number(item.accumulatedDep) || 0
+                const nbv = Number(item.netBookValue) || 0
+                shortageCount++
+                shortageValue += nbv
+
+                const ref = `KK-${session.code}-${item.refCode || item.refId}`
+                // Nợ TK214 / Có TK211 — write off accumulated depreciation against original cost
+                if (accumDep > 0) {
+                    const e = await prisma.journalEntry.create({
+                        data: {
+                            date: journalDate,
+                            description: `Thanh lý TSCĐ kiểm kê - ${item.name} (KH lũy kế)`,
+                            debitAccount: '214', debitAccountName: 'Hao mòn TSCĐ',
+                            creditAccount: '211', creditAccountName: 'TSCĐ hữu hình',
+                            amount: accumDep, reference: ref, referenceType: 'inventory-count',
+                            branchId, createdBy: userId,
+                        },
+                    })
+                    entries.push(e)
+                }
+                // If remaining NBV > 0: Nợ TK811 / Có TK211 — loss on disposal
+                if (nbv > 0) {
+                    const e = await prisma.journalEntry.create({
+                        data: {
+                            date: journalDate,
+                            description: `Thanh lý TSCĐ kiểm kê - ${item.name} (GTCL)`,
+                            debitAccount: '811', debitAccountName: 'Chi phí khác (thanh lý TSCĐ)',
+                            creditAccount: '211', creditAccountName: 'TSCĐ hữu hình',
+                            amount: nbv, reference: ref, referenceType: 'inventory-count',
+                            branchId, createdBy: userId,
+                        },
+                    })
+                    entries.push(e)
+                }
+
+                // Mark asset as disposed
+                await prisma.fixedAsset.update({
+                    where: { id: item.refId },
+                    data: { status: 'disposed', disposalDate: journalDate, monthlyDepreciation: 0 },
+                }).catch(() => { /* asset may have been deleted */ })
+            }
+        }
+
+        const finalized = await prisma.inventoryCount.update({
+            where: { id },
+            data: {
+                status: 'finalized',
+                finalizedAt: new Date(),
+                finalizedBy: userId,
+                surplusCount,
+                shortageCount,
+                surplusValue,
+                shortageValue,
+            },
+            include: { items: true },
+        })
+
+        res.json({
+            success: true,
+            data: {
+                session: finalized,
+                journalEntries: entries,
+                summary: {
+                    surplusCount, shortageCount,
+                    surplusValue, shortageValue,
+                    netVariance: surplusValue - shortageValue,
+                    entryCount: entries.length,
+                },
+            },
+        })
+    } catch (err: any) {
+        console.error('POST /inventory-count/:id/finalize error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// GET /api/tax/inventory-count/:id/report — BC26-BH (goods) or D02-TS (fixed-assets)
+router.get('/inventory-count/:id/report', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
+        const session = await prisma.inventoryCount.findUnique({
+            where: { id },
+            include: { items: { orderBy: { name: 'asc' } } },
+        })
+        if (!session) return res.status(404).json({ success: false, error: 'Không tìm thấy phiên kiểm kê' })
+
+        if (session.type === 'goods') {
+            // BC26-BH: Biên bản kiểm kê hàng hóa
+            const columns = [
+                { key: 'stt', label: 'STT' },
+                { key: 'tenHang', label: 'Tên hàng' },
+                { key: 'maHang', label: 'Mã hàng' },
+                { key: 'dvt', label: 'ĐVT' },
+                { key: 'soSoSach', label: 'Số sổ sách' },
+                { key: 'soKiemKe', label: 'Số kiểm kê' },
+                { key: 'chenhLech', label: 'Chênh lệch' },
+                { key: 'donGia', label: 'Đơn giá' },
+                { key: 'giaTriChenhLech', label: 'Giá trị chênh lệch' },
+                { key: 'ghiChu', label: 'Ghi chú' },
+            ]
+            const rows = session.items.map((it: any, i: number) => {
+                const sys = Number(it.systemQty) || 0
+                const cnt = it.countedQty === null ? null : Number(it.countedQty)
+                const variance = cnt === null ? 0 : cnt - sys
+                const value = variance * (Number(it.unitCost) || 0)
+                return {
+                    stt: i + 1,
+                    tenHang: it.name,
+                    maHang: it.refCode || '',
+                    dvt: it.unit || '',
+                    soSoSach: sys,
+                    soKiemKe: cnt,
+                    chenhLech: variance,
+                    donGia: Number(it.unitCost) || 0,
+                    giaTriChenhLech: value,
+                    ghiChu: it.notes || '',
+                }
+            })
+            const summary = {
+                tongSoSach: rows.reduce((s: number, r: any) => s + (r.soSoSach || 0), 0),
+                tongKiemKe: rows.reduce((s: number, r: any) => s + (r.soKiemKe || 0), 0),
+                tongChenhLech: rows.reduce((s: number, r: any) => s + (r.chenhLech || 0), 0),
+                tongGiaTriChenhLech: rows.reduce((s: number, r: any) => s + (r.giaTriChenhLech || 0), 0),
+                surplusCount: session.surplusCount,
+                shortageCount: session.shortageCount,
+                surplusValue: session.surplusValue,
+                shortageValue: session.shortageValue,
+            }
+            return res.json({
+                success: true,
+                data: {
+                    form: 'BC26-BH',
+                    title: 'Biên bản kiểm kê hàng hóa',
+                    sessionCode: session.code,
+                    countDate: session.countDate,
+                    status: session.status,
+                    warehouseId: session.warehouseId,
+                    notes: session.notes,
+                    columns, rows, summary,
+                },
+            })
+        }
+
+        // D02-TS: Bảng kiểm kê TSCĐ
+        const columns = [
+            { key: 'stt', label: 'STT' },
+            { key: 'tenTSCD', label: 'Tên TSCĐ' },
+            { key: 'maTSCD', label: 'Mã' },
+            { key: 'nguyenGia', label: 'Nguyên giá' },
+            { key: 'khauHaoLK', label: 'Khấu hao LK' },
+            { key: 'giaTriConLai', label: 'Giá trị còn lại' },
+            { key: 'tinhTrang', label: 'Tình trạng' },
+            { key: 'ghiChu', label: 'Ghi chú' },
+        ]
+        const conditionLabel = (c: string | null) => {
+            switch ((c || '').toLowerCase()) {
+                case 'good': return 'Tốt'
+                case 'damaged': return 'Hư hỏng'
+                case 'missing': return 'Mất'
+                case 'disposed': return 'Thanh lý'
+                default: return 'Chưa kiểm kê'
+            }
+        }
+        const rows = session.items.map((it: any, i: number) => ({
+            stt: i + 1,
+            tenTSCD: it.name,
+            maTSCD: it.refCode || '',
+            nguyenGia: Number(it.originalCost) || 0,
+            khauHaoLK: Number(it.accumulatedDep) || 0,
+            giaTriConLai: Number(it.netBookValue) || 0,
+            tinhTrang: conditionLabel(it.condition),
+            ghiChu: it.notes || '',
+        }))
+        const summary = {
+            tongNguyenGia: rows.reduce((s: number, r: any) => s + (r.nguyenGia || 0), 0),
+            tongKhauHaoLK: rows.reduce((s: number, r: any) => s + (r.khauHaoLK || 0), 0),
+            tongGiaTriConLai: rows.reduce((s: number, r: any) => s + (r.giaTriConLai || 0), 0),
+            totalCount: rows.length,
+            goodCount: session.items.filter((it: any) => (it.condition || '').toLowerCase() === 'good').length,
+            damagedCount: session.items.filter((it: any) => (it.condition || '').toLowerCase() === 'damaged').length,
+            disposedCount: session.items.filter((it: any) => {
+                const c = (it.condition || '').toLowerCase()
+                return c === 'disposed' || c === 'missing'
+            }).length,
+        }
+        res.json({
+            success: true,
+            data: {
+                form: 'D02-TS',
+                title: 'Bảng kiểm kê tài sản cố định',
+                sessionCode: session.code,
+                countDate: session.countDate,
+                status: session.status,
+                notes: session.notes,
+                columns, rows, summary,
+            },
+        })
+    } catch (err: any) {
+        console.error('GET /inventory-count/:id/report error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
 // ─── Z-REPORTS (Báo cáo Z — chốt ca cuối ngày POS) ───────────────────────────
 
 // Normalize an arbitrary date string/Date into midnight UTC of that calendar day.
