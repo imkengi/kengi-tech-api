@@ -1512,6 +1512,35 @@ exports.Prisma.StorageFileScalarFieldEnum = {
   updatedAt: 'updatedAt'
 };
 
+exports.Prisma.ChartOfAccountScalarFieldEnum = {
+  id: 'id',
+  code: 'code',
+  name: 'name',
+  nameEn: 'nameEn',
+  level: 'level',
+  parentCode: 'parentCode',
+  type: 'type',
+  nature: 'nature',
+  isActive: 'isActive',
+  isSystem: 'isSystem',
+  description: 'description',
+  storeId: 'storeId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.ExchangeRateScalarFieldEnum = {
+  id: 'id',
+  date: 'date',
+  fromCurrency: 'fromCurrency',
+  toCurrency: 'toCurrency',
+  rate: 'rate',
+  source: 'source',
+  notes: 'notes',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
 exports.Prisma.SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -1614,7 +1643,9 @@ exports.Prisma.ModelName = {
   InventoryCount: 'InventoryCount',
   InventoryCountItem: 'InventoryCountItem',
   ZReport: 'ZReport',
-  StorageFile: 'StorageFile'
+  StorageFile: 'StorageFile',
+  ChartOfAccount: 'ChartOfAccount',
+  ExchangeRate: 'ExchangeRate'
 };
 
 /**

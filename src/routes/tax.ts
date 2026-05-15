@@ -5678,4 +5678,637 @@ router.get('/pit-settlement/:year/employees', authMiddleware, async (req: AuthRe
     }
 })
 
+
+// =============================================================================
+//  SPRINT 3: B03-DN Cash Flow Statement + Chart of Accounts + Multi-currency
+// =============================================================================
+
+// --- B03-DN Cash Flow Statement (TT200/2014, indirect method) ----------------
+
+type CashFlowEntry = { debitAccount: string; creditAccount: string; amount: number }
+
+function startsWithAny(s: string | null | undefined, prefixes: string[]) {
+    if (!s) return false
+    return prefixes.some(p => s.startsWith(p))
+}
+
+function sumDebitsTo(entries: CashFlowEntry[], prefixes: string[]): number {
+    return entries
+        .filter(e => startsWithAny(e.debitAccount, prefixes))
+        .reduce((s, e) => s + (e.amount || 0), 0)
+}
+
+function sumCreditsTo(entries: CashFlowEntry[], prefixes: string[]): number {
+    return entries
+        .filter(e => startsWithAny(e.creditAccount, prefixes))
+        .reduce((s, e) => s + (e.amount || 0), 0)
+}
+
+function netDebitChange(entries: CashFlowEntry[], prefixes: string[]): number {
+    return sumDebitsTo(entries, prefixes) - sumCreditsTo(entries, prefixes)
+}
+
+function netCreditChange(entries: CashFlowEntry[], prefixes: string[]): number {
+    return sumCreditsTo(entries, prefixes) - sumDebitsTo(entries, prefixes)
+}
+
+function cashFlowDateRange(year: number, month?: number) {
+    if (month) {
+        const startDate = `${year}-${String(month).padStart(2, '0')}-01`
+        const endDay = new Date(year, month, 0).getDate()
+        const endDate = `${year}-${String(month).padStart(2, '0')}-${String(endDay).padStart(2, '0')}`
+        return { startDate, endDate }
+    }
+    return { startDate: `${year}-01-01`, endDate: `${year}-12-31` }
+}
+
+async function computeCashFlow(prisma: any, year: number, month?: number) {
+    const { startDate, endDate } = cashFlowDateRange(year, month)
+
+    let periodEntries: CashFlowEntry[] = []
+    try {
+        periodEntries = await prisma.journalEntry.findMany({
+            where: { date: { gte: startDate, lte: endDate } },
+            select: { debitAccount: true, creditAccount: true, amount: true },
+        })
+    } catch (_) { periodEntries = [] }
+
+    let openingEntries: CashFlowEntry[] = []
+    try {
+        openingEntries = await prisma.journalEntry.findMany({
+            where: { date: { lt: startDate } },
+            select: { debitAccount: true, creditAccount: true, amount: true },
+        })
+    } catch (_) { openingEntries = [] }
+
+    const rev511 = sumCreditsTo(periodEntries, ['511'])
+    const rev515 = sumCreditsTo(periodEntries, ['515'])
+    const rev711 = sumCreditsTo(periodEntries, ['711'])
+    const exp632 = sumDebitsTo(periodEntries, ['632'])
+    const exp635 = sumDebitsTo(periodEntries, ['635'])
+    const exp641 = sumDebitsTo(periodEntries, ['641'])
+    const exp642 = sumDebitsTo(periodEntries, ['642'])
+    const exp811 = sumDebitsTo(periodEntries, ['811'])
+    const totalRevenue = rev511 + rev515 + rev711
+    const totalExpenses = exp632 + exp635 + exp641 + exp642 + exp811
+    const ct01 = totalRevenue - totalExpenses
+
+    const ct02 = sumCreditsTo(periodEntries, ['214'])
+    const ct03 = netCreditChange(periodEntries, ['229'])
+    const ct04 = netCreditChange(periodEntries, ['413'])
+    const ct05 = 0
+    const ct06 = exp635 - rev515
+
+    const ct08 = ct01 + ct02 + ct03 + ct04 + ct05 + ct06
+
+    const deltaReceivables = netDebitChange(periodEntries, ['131'])
+    const ct09 = -deltaReceivables
+    const deltaInventory = netDebitChange(periodEntries, ['152', '155', '156'])
+    const ct10 = -deltaInventory
+    const deltaPayables = netCreditChange(periodEntries, ['331'])
+    const ct11 = deltaPayables
+    const deltaPrepaid = netDebitChange(periodEntries, ['142', '242'])
+    const ct12 = -deltaPrepaid
+
+    const ct14 = -periodEntries
+        .filter(e => e.debitAccount?.startsWith('635') && startsWithAny(e.creditAccount, ['111', '112']))
+        .reduce((s, e) => s + (e.amount || 0), 0)
+    const ct15 = -periodEntries
+        .filter(e => e.debitAccount?.startsWith('3334') && startsWithAny(e.creditAccount, ['111', '112']))
+        .reduce((s, e) => s + (e.amount || 0), 0)
+
+    const ct20 = ct08 + ct09 + ct10 + ct11 + ct12 + ct14 + ct15
+
+    const ct21 = -periodEntries
+        .filter(e => startsWithAny(e.debitAccount, ['211', '213']) && startsWithAny(e.creditAccount, ['111', '112']))
+        .reduce((s, e) => s + (e.amount || 0), 0)
+    const ct22 = periodEntries
+        .filter(e => startsWithAny(e.creditAccount, ['211', '213']) && startsWithAny(e.debitAccount, ['111', '112']))
+        .reduce((s, e) => s + (e.amount || 0), 0)
+    const ct30 = ct21 + ct22
+
+    const ct33 = periodEntries
+        .filter(e => e.creditAccount?.startsWith('341') && startsWithAny(e.debitAccount, ['111', '112']))
+        .reduce((s, e) => s + (e.amount || 0), 0)
+    const ct34 = -periodEntries
+        .filter(e => e.debitAccount?.startsWith('341') && startsWithAny(e.creditAccount, ['111', '112']))
+        .reduce((s, e) => s + (e.amount || 0), 0)
+    const ct36 = -periodEntries
+        .filter(e => e.debitAccount?.startsWith('421') && startsWithAny(e.creditAccount, ['111', '112']))
+        .reduce((s, e) => s + (e.amount || 0), 0)
+    const ct40 = ct33 + ct34 + ct36
+
+    const ct50 = ct20 + ct30 + ct40
+    const ct60 = netDebitChange(openingEntries, ['111', '112'])
+    const ct70 = ct60 + ct50
+
+    return {
+        period: month ? `T${String(month).padStart(2, '0')}/${year}` : `Y${year}`,
+        startDate, endDate,
+        operating: {
+            ct01_profitBeforeTax: ct01,
+            ct02_depreciation: ct02,
+            ct03_provisions: ct03,
+            ct04_fxGainLoss: ct04,
+            ct05_investmentGainLoss: ct05,
+            ct06_interestExpense: ct06,
+            ct08_profitBeforeWCChanges: ct08,
+            ct09_deltaReceivables: ct09,
+            ct10_deltaInventory: ct10,
+            ct11_deltaPayables: ct11,
+            ct12_deltaPrepaid: ct12,
+            ct14_interestPaid: ct14,
+            ct15_citPaid: ct15,
+            ct20_netCashOperating: ct20,
+        },
+        investing: {
+            ct21_acquireFixedAssets: ct21,
+            ct22_disposeFixedAssets: ct22,
+            ct30_netCashInvesting: ct30,
+        },
+        financing: {
+            ct33_borrowingsReceived: ct33,
+            ct34_borrowingsRepaid: ct34,
+            ct36_dividendsPaid: ct36,
+            ct40_netCashFinancing: ct40,
+        },
+        ct50_netCashChange: ct50,
+        ct60_openingCash: ct60,
+        ct70_closingCash: ct70,
+    }
+}
+
+// GET /api/tax/cash-flow-statement?year=&month=
+router.get('/cash-flow-statement', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const year = Number(req.query.year) || new Date().getFullYear()
+        const month = req.query.month ? Number(req.query.month) : undefined
+        if (month && (month < 1 || month > 12)) {
+            return res.status(400).json({ success: false, error: 'month phai trong khoang 1-12' })
+        }
+
+        const current = await computeCashFlow(prisma, year, month)
+        const prior = await computeCashFlow(prisma, year - 1, month)
+
+        res.json({
+            success: true,
+            data: {
+                current,
+                prior,
+                comparison: {
+                    operatingDelta: current.operating.ct20_netCashOperating - prior.operating.ct20_netCashOperating,
+                    investingDelta: current.investing.ct30_netCashInvesting - prior.investing.ct30_netCashInvesting,
+                    financingDelta: current.financing.ct40_netCashFinancing - prior.financing.ct40_netCashFinancing,
+                    netChangeDelta: current.ct50_netCashChange - prior.ct50_netCashChange,
+                    closingCashDelta: current.ct70_closingCash - prior.ct70_closingCash,
+                },
+            },
+        })
+    } catch (err: any) {
+        console.error('GET /cash-flow-statement error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// --- Chart of Accounts (TT200) -----------------------------------------------
+
+const COA_SEED: Array<{
+    code: string; name: string; nameEn?: string; level: number; parentCode?: string;
+    type: string; nature: string; description?: string;
+}> = [
+    { code: '111', name: 'Tien mat', nameEn: 'Cash on hand', level: 1, type: 'Asset', nature: 'Debit' },
+    { code: '1111', name: 'Tien Viet Nam', nameEn: 'Cash in VND', level: 2, parentCode: '111', type: 'Asset', nature: 'Debit' },
+    { code: '1112', name: 'Ngoai te', nameEn: 'Cash in foreign currency', level: 2, parentCode: '111', type: 'Asset', nature: 'Debit' },
+    { code: '112', name: 'Tien gui ngan hang', nameEn: 'Cash in bank', level: 1, type: 'Asset', nature: 'Debit' },
+    { code: '1121', name: 'Tien VND tai ngan hang', nameEn: 'Bank VND', level: 2, parentCode: '112', type: 'Asset', nature: 'Debit' },
+    { code: '1122', name: 'Ngoai te tai ngan hang', nameEn: 'Bank foreign currency', level: 2, parentCode: '112', type: 'Asset', nature: 'Debit' },
+    { code: '121', name: 'Chung khoan kinh doanh', nameEn: 'Trading securities', level: 1, type: 'Asset', nature: 'Debit' },
+    { code: '128', name: 'Dau tu nam giu den ngay dao han', nameEn: 'Held-to-maturity investments', level: 1, type: 'Asset', nature: 'Debit' },
+    { code: '131', name: 'Phai thu khach hang', nameEn: 'Trade receivables', level: 1, type: 'Asset', nature: 'Debit' },
+    { code: '133', name: 'Thue GTGT duoc khau tru', nameEn: 'VAT deductible', level: 1, type: 'Asset', nature: 'Debit' },
+    { code: '1331', name: 'VAT duoc khau tru cua HHDV', nameEn: 'VAT deductible of goods/services', level: 2, parentCode: '133', type: 'Asset', nature: 'Debit' },
+    { code: '138', name: 'Phai thu khac', nameEn: 'Other receivables', level: 1, type: 'Asset', nature: 'Debit' },
+    { code: '141', name: 'Tam ung', nameEn: 'Advances to employees', level: 1, type: 'Asset', nature: 'Debit' },
+    { code: '142', name: 'Chi phi tra truoc ngan han', nameEn: 'Short-term prepaid expenses', level: 1, type: 'Asset', nature: 'Debit' },
+    { code: '152', name: 'Nguyen lieu, vat lieu', nameEn: 'Raw materials', level: 1, type: 'Asset', nature: 'Debit' },
+    { code: '153', name: 'Cong cu, dung cu', nameEn: 'Tools and supplies', level: 1, type: 'Asset', nature: 'Debit' },
+    { code: '154', name: 'Chi phi SXKD do dang', nameEn: 'Work in progress', level: 1, type: 'Asset', nature: 'Debit' },
+    { code: '155', name: 'Thanh pham', nameEn: 'Finished goods', level: 1, type: 'Asset', nature: 'Debit' },
+    { code: '156', name: 'Hang hoa', nameEn: 'Merchandise', level: 1, type: 'Asset', nature: 'Debit' },
+    { code: '157', name: 'Hang gui di ban', nameEn: 'Goods on consignment', level: 1, type: 'Asset', nature: 'Debit' },
+    { code: '211', name: 'Tai san co dinh huu hinh', nameEn: 'Tangible fixed assets', level: 1, type: 'Asset', nature: 'Debit' },
+    { code: '212', name: 'Tai san co dinh thue tai chinh', nameEn: 'Finance leased assets', level: 1, type: 'Asset', nature: 'Debit' },
+    { code: '213', name: 'Tai san co dinh vo hinh', nameEn: 'Intangible fixed assets', level: 1, type: 'Asset', nature: 'Debit' },
+    { code: '214', name: 'Hao mon TSCD', nameEn: 'Accumulated depreciation', level: 1, type: 'Asset', nature: 'Credit' },
+    { code: '217', name: 'Bat dong san dau tu', nameEn: 'Investment property', level: 1, type: 'Asset', nature: 'Debit' },
+    { code: '221', name: 'Dau tu vao cong ty con', nameEn: 'Investment in subsidiaries', level: 1, type: 'Asset', nature: 'Debit' },
+    { code: '229', name: 'Du phong ton that tai san', nameEn: 'Provision for asset loss', level: 1, type: 'Asset', nature: 'Credit' },
+    { code: '242', name: 'Chi phi tra truoc dai han', nameEn: 'Long-term prepaid expenses', level: 1, type: 'Asset', nature: 'Debit' },
+    { code: '331', name: 'Phai tra nguoi ban', nameEn: 'Trade payables', level: 1, type: 'Liability', nature: 'Credit' },
+    { code: '333', name: 'Thue va cac khoan phai nop NN', nameEn: 'Taxes payable', level: 1, type: 'Liability', nature: 'Credit' },
+    { code: '3331', name: 'Thue GTGT phai nop', nameEn: 'VAT payable', level: 2, parentCode: '333', type: 'Liability', nature: 'Credit' },
+    { code: '3334', name: 'Thue TNDN', nameEn: 'Corporate income tax payable', level: 2, parentCode: '333', type: 'Liability', nature: 'Credit' },
+    { code: '3335', name: 'Thue TNCN', nameEn: 'Personal income tax payable', level: 2, parentCode: '333', type: 'Liability', nature: 'Credit' },
+    { code: '334', name: 'Phai tra nguoi lao dong', nameEn: 'Payables to employees', level: 1, type: 'Liability', nature: 'Credit' },
+    { code: '335', name: 'Chi phi phai tra', nameEn: 'Accrued expenses', level: 1, type: 'Liability', nature: 'Credit' },
+    { code: '338', name: 'Phai tra phai nop khac', nameEn: 'Other payables', level: 1, type: 'Liability', nature: 'Credit' },
+    { code: '341', name: 'Vay va no thue tai chinh', nameEn: 'Borrowings and finance lease liabilities', level: 1, type: 'Liability', nature: 'Credit' },
+    { code: '411', name: 'Von dau tu cua chu so huu', nameEn: "Owner's capital", level: 1, type: 'Equity', nature: 'Credit' },
+    { code: '413', name: 'Chenh lech ty gia hoi doai', nameEn: 'FX differences', level: 1, type: 'Equity', nature: 'Credit' },
+    { code: '414', name: 'Quy dau tu phat trien', nameEn: 'Investment & development fund', level: 1, type: 'Equity', nature: 'Credit' },
+    { code: '418', name: 'Cac quy khac thuoc VCSH', nameEn: 'Other equity funds', level: 1, type: 'Equity', nature: 'Credit' },
+    { code: '419', name: 'Co phieu quy', nameEn: 'Treasury shares', level: 1, type: 'Equity', nature: 'Debit' },
+    { code: '421', name: 'Loi nhuan sau thue chua phan phoi', nameEn: 'Retained earnings', level: 1, type: 'Equity', nature: 'Credit' },
+    { code: '511', name: 'Doanh thu ban hang va cung cap dich vu', nameEn: 'Sales revenue', level: 1, type: 'Revenue', nature: 'Credit' },
+    { code: '5111', name: 'Doanh thu ban hang hoa', nameEn: 'Goods sales revenue', level: 2, parentCode: '511', type: 'Revenue', nature: 'Credit' },
+    { code: '5112', name: 'Doanh thu thanh pham', nameEn: 'Finished goods revenue', level: 2, parentCode: '511', type: 'Revenue', nature: 'Credit' },
+    { code: '5113', name: 'Doanh thu cung cap dich vu', nameEn: 'Service revenue', level: 2, parentCode: '511', type: 'Revenue', nature: 'Credit' },
+    { code: '515', name: 'Doanh thu hoat dong tai chinh', nameEn: 'Financial income', level: 1, type: 'Revenue', nature: 'Credit' },
+    { code: '521', name: 'Cac khoan giam tru doanh thu', nameEn: 'Sales deductions', level: 1, type: 'Revenue', nature: 'Debit' },
+    { code: '611', name: 'Mua hang', nameEn: 'Purchases', level: 1, type: 'Expense', nature: 'Debit' },
+    { code: '621', name: 'Chi phi nguyen vat lieu truc tiep', nameEn: 'Direct material cost', level: 1, type: 'Expense', nature: 'Debit' },
+    { code: '622', name: 'Chi phi nhan cong truc tiep', nameEn: 'Direct labor cost', level: 1, type: 'Expense', nature: 'Debit' },
+    { code: '627', name: 'Chi phi san xuat chung', nameEn: 'Manufacturing overhead', level: 1, type: 'Expense', nature: 'Debit' },
+    { code: '632', name: 'Gia von hang ban', nameEn: 'Cost of goods sold', level: 1, type: 'Expense', nature: 'Debit' },
+    { code: '635', name: 'Chi phi tai chinh', nameEn: 'Financial expenses', level: 1, type: 'Expense', nature: 'Debit' },
+    { code: '641', name: 'Chi phi ban hang', nameEn: 'Selling expenses', level: 1, type: 'Expense', nature: 'Debit' },
+    { code: '642', name: 'Chi phi quan ly doanh nghiep', nameEn: 'G&A expenses', level: 1, type: 'Expense', nature: 'Debit' },
+    { code: '711', name: 'Thu nhap khac', nameEn: 'Other income', level: 1, type: 'Revenue', nature: 'Credit' },
+    { code: '811', name: 'Chi phi khac', nameEn: 'Other expenses', level: 1, type: 'Expense', nature: 'Debit' },
+    { code: '821', name: 'Chi phi thue TNDN', nameEn: 'Corporate income tax expense', level: 1, type: 'Expense', nature: 'Debit' },
+    { code: '911', name: 'Xac dinh ket qua kinh doanh', nameEn: 'Income summary', level: 1, type: 'Equity', nature: 'Debit' },
+    { code: '001', name: 'Tai san thue ngoai', nameEn: 'Leased assets (off-balance)', level: 1, type: 'OffBalance', nature: 'Debit' },
+]
+
+// POST /api/tax/chart-of-accounts/seed
+router.post('/chart-of-accounts/seed', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const force = req.body?.force === true || req.query.force === 'true'
+
+        let created = 0, skipped = 0, updated = 0
+        for (const acc of COA_SEED) {
+            const existing = await prisma.chartOfAccount.findUnique({ where: { code: acc.code } }).catch(() => null)
+            if (existing) {
+                if (force) {
+                    await prisma.chartOfAccount.update({
+                        where: { code: acc.code },
+                        data: { ...acc, isSystem: true, isActive: true },
+                    })
+                    updated++
+                } else {
+                    skipped++
+                }
+                continue
+            }
+            await prisma.chartOfAccount.create({
+                data: { ...acc, isSystem: true, isActive: true },
+            })
+            created++
+        }
+        res.json({ success: true, data: { created, updated, skipped, total: COA_SEED.length } })
+    } catch (err: any) {
+        console.error('POST /chart-of-accounts/seed error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// GET /api/tax/chart-of-accounts
+router.get('/chart-of-accounts', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const where: any = {}
+        if (req.query.type) where.type = String(req.query.type)
+        if (req.query.parentCode) where.parentCode = String(req.query.parentCode)
+        if (req.query.isActive !== undefined) where.isActive = req.query.isActive === 'true'
+        if (req.query.q) {
+            const q = String(req.query.q)
+            where.OR = [
+                { code: { contains: q } },
+                { name: { contains: q } },
+                { nameEn: { contains: q } },
+            ]
+        }
+        const data = await prisma.chartOfAccount.findMany({
+            where,
+            orderBy: [{ code: 'asc' }],
+        })
+        res.json({ success: true, data })
+    } catch (err: any) {
+        console.error('GET /chart-of-accounts error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// GET /api/tax/chart-of-accounts/tree
+router.get('/chart-of-accounts/tree', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const rows = await prisma.chartOfAccount.findMany({
+            where: { isActive: true },
+            orderBy: [{ code: 'asc' }],
+        })
+        type Node = any
+        const byCode = new Map<string, Node>()
+        for (const r of rows) byCode.set(r.code, { ...r, children: [] })
+        const roots: Node[] = []
+        for (const r of rows) {
+            const node = byCode.get(r.code)
+            if (r.parentCode && byCode.has(r.parentCode)) {
+                byCode.get(r.parentCode).children.push(node)
+            } else {
+                roots.push(node)
+            }
+        }
+        res.json({ success: true, data: roots })
+    } catch (err: any) {
+        console.error('GET /chart-of-accounts/tree error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// GET /api/tax/chart-of-accounts/:code
+router.get('/chart-of-accounts/:code', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const code = Array.isArray(req.params.code) ? req.params.code[0] : req.params.code
+        const acc = await prisma.chartOfAccount.findUnique({ where: { code } })
+        if (!acc) return res.status(404).json({ success: false, error: 'Not found' })
+        res.json({ success: true, data: acc })
+    } catch (err: any) {
+        console.error('GET /chart-of-accounts/:code error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// POST /api/tax/chart-of-accounts
+router.post('/chart-of-accounts', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const { code, name, nameEn, level, parentCode, type, nature, description, isActive } = req.body || {}
+        if (!code || !name || !type || !nature) {
+            return res.status(400).json({ success: false, error: 'code, name, type, nature la bat buoc' })
+        }
+        const existing = await prisma.chartOfAccount.findUnique({ where: { code } }).catch(() => null)
+        if (existing) {
+            return res.status(409).json({ success: false, error: `Account ${code} da ton tai` })
+        }
+        if (parentCode) {
+            const parent = await prisma.chartOfAccount.findUnique({ where: { code: parentCode } }).catch(() => null)
+            if (!parent) return res.status(400).json({ success: false, error: `parentCode ${parentCode} khong ton tai` })
+        }
+        const data = await prisma.chartOfAccount.create({
+            data: {
+                code: String(code),
+                name: String(name),
+                nameEn: nameEn ? String(nameEn) : null,
+                level: Number(level) || (parentCode ? 2 : 1),
+                parentCode: parentCode ? String(parentCode) : null,
+                type: String(type),
+                nature: String(nature),
+                description: description ? String(description) : null,
+                isActive: isActive !== false,
+                isSystem: false,
+            },
+        })
+        res.status(201).json({ success: true, data })
+    } catch (err: any) {
+        console.error('POST /chart-of-accounts error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// PUT /api/tax/chart-of-accounts/:code
+router.put('/chart-of-accounts/:code', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const code = Array.isArray(req.params.code) ? req.params.code[0] : req.params.code
+        const existing = await prisma.chartOfAccount.findUnique({ where: { code } }).catch(() => null)
+        if (!existing) return res.status(404).json({ success: false, error: 'Not found' })
+
+        const { name, nameEn, level, parentCode, type, nature, description, isActive } = req.body || {}
+        const updateData: any = {}
+        if (name !== undefined) updateData.name = String(name)
+        if (nameEn !== undefined) updateData.nameEn = nameEn === null ? null : String(nameEn)
+        if (level !== undefined) updateData.level = Number(level)
+        if (parentCode !== undefined) updateData.parentCode = parentCode === null || parentCode === '' ? null : String(parentCode)
+        if (type !== undefined) updateData.type = String(type)
+        if (nature !== undefined) updateData.nature = String(nature)
+        if (description !== undefined) updateData.description = description === null ? null : String(description)
+        if (isActive !== undefined) updateData.isActive = Boolean(isActive)
+
+        const data = await prisma.chartOfAccount.update({ where: { code }, data: updateData })
+        res.json({ success: true, data })
+    } catch (err: any) {
+        console.error('PUT /chart-of-accounts/:code error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// DELETE /api/tax/chart-of-accounts/:code - soft delete
+router.delete('/chart-of-accounts/:code', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const code = Array.isArray(req.params.code) ? req.params.code[0] : req.params.code
+        const existing = await prisma.chartOfAccount.findUnique({ where: { code } }).catch(() => null)
+        if (!existing) return res.status(404).json({ success: false, error: 'Not found' })
+        if (existing.isSystem) {
+            return res.status(400).json({ success: false, error: 'Khong the xoa tai khoan he thong' })
+        }
+        const data = await prisma.chartOfAccount.update({ where: { code }, data: { isActive: false } })
+        res.json({ success: true, data })
+    } catch (err: any) {
+        console.error('DELETE /chart-of-accounts/:code error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// --- Exchange Rates + FX revaluation ----------------------------------------
+
+router.get('/exchange-rates', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const where: any = {}
+        if (req.query.fromCurrency) where.fromCurrency = String(req.query.fromCurrency)
+        if (req.query.toCurrency) where.toCurrency = String(req.query.toCurrency)
+        if (req.query.date) where.date = String(req.query.date)
+        if (req.query.dateGte || req.query.dateLte) {
+            where.date = {
+                ...(req.query.dateGte ? { gte: String(req.query.dateGte) } : {}),
+                ...(req.query.dateLte ? { lte: String(req.query.dateLte) } : {}),
+            }
+        }
+        const data = await prisma.exchangeRate.findMany({
+            where,
+            orderBy: [{ date: 'desc' }, { fromCurrency: 'asc' }],
+        })
+        res.json({ success: true, data })
+    } catch (err: any) {
+        console.error('GET /exchange-rates error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+router.get('/exchange-rates/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
+        const data = await prisma.exchangeRate.findUnique({ where: { id } })
+        if (!data) return res.status(404).json({ success: false, error: 'Not found' })
+        res.json({ success: true, data })
+    } catch (err: any) {
+        console.error('GET /exchange-rates/:id error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+router.post('/exchange-rates', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const { date, fromCurrency, toCurrency, rate, source, notes } = req.body || {}
+        if (!date || !fromCurrency || !toCurrency || rate === undefined || rate === null) {
+            return res.status(400).json({ success: false, error: 'date, fromCurrency, toCurrency, rate la bat buoc' })
+        }
+        const data = await prisma.exchangeRate.upsert({
+            where: {
+                date_fromCurrency_toCurrency: {
+                    date: String(date),
+                    fromCurrency: String(fromCurrency),
+                    toCurrency: String(toCurrency),
+                },
+            },
+            create: {
+                date: String(date),
+                fromCurrency: String(fromCurrency),
+                toCurrency: String(toCurrency),
+                rate: Number(rate),
+                source: source ? String(source) : null,
+                notes: notes ? String(notes) : null,
+            },
+            update: {
+                rate: Number(rate),
+                source: source ? String(source) : null,
+                notes: notes ? String(notes) : null,
+            },
+        })
+        res.status(201).json({ success: true, data })
+    } catch (err: any) {
+        console.error('POST /exchange-rates error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+router.put('/exchange-rates/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
+        const { rate, source, notes } = req.body || {}
+        const updateData: any = {}
+        if (rate !== undefined) updateData.rate = Number(rate)
+        if (source !== undefined) updateData.source = source === null ? null : String(source)
+        if (notes !== undefined) updateData.notes = notes === null ? null : String(notes)
+        const data = await prisma.exchangeRate.update({ where: { id }, data: updateData })
+        res.json({ success: true, data })
+    } catch (err: any) {
+        console.error('PUT /exchange-rates/:id error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+router.delete('/exchange-rates/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
+        await prisma.exchangeRate.delete({ where: { id } })
+        res.json({ success: true })
+    } catch (err: any) {
+        console.error('DELETE /exchange-rates/:id error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// POST /api/tax/exchange-rates/revalue - month-end FX revaluation for TK112/131/331 via TK413
+router.post('/exchange-rates/revalue', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const { date, fromCurrency, toCurrency, newRate, balances } = req.body || {}
+        if (!date || !fromCurrency || !toCurrency || newRate === undefined) {
+            return res.status(400).json({ success: false, error: 'date, fromCurrency, toCurrency, newRate la bat buoc' })
+        }
+        if (!Array.isArray(balances) || balances.length === 0) {
+            return res.status(400).json({ success: false, error: 'balances (mang) la bat buoc' })
+        }
+
+        const FX_ACCOUNT = '413'
+        const FX_ACCOUNT_NAME = 'Chenh lech ty gia hoi doai'
+        const branchId = getBranchId(req as any) || null
+        const createdEntries: any[] = []
+        let totalGain = 0, totalLoss = 0
+
+        for (const b of balances as Array<any>) {
+            const account = String(b.account || '').trim()
+            if (!account) continue
+            const foreignAmount = Number(b.foreignAmount || 0)
+            const oldRate = Number(b.oldRate || 0)
+            const isLiability = Boolean(b.isLiability) || account.startsWith('331') || account.startsWith('341')
+            const newValue = foreignAmount * Number(newRate)
+            const oldValue = foreignAmount * oldRate
+            const delta = newValue - oldValue
+            if (delta === 0) continue
+
+            let debitAccount: string, creditAccount: string, amount = Math.abs(delta), isGain: boolean
+            if (!isLiability) {
+                isGain = delta > 0
+                if (isGain) { debitAccount = account; creditAccount = FX_ACCOUNT }
+                else { debitAccount = FX_ACCOUNT; creditAccount = account }
+            } else {
+                isGain = delta < 0
+                if (isGain) { debitAccount = account; creditAccount = FX_ACCOUNT }
+                else { debitAccount = FX_ACCOUNT; creditAccount = account }
+            }
+
+            if (isGain) totalGain += amount
+            else totalLoss += amount
+
+            const entry = await prisma.journalEntry.create({
+                data: {
+                    date: String(date),
+                    description: `Danh gia lai ngoai te ${fromCurrency}/${toCurrency} TK${account} (${isGain ? 'lai' : 'lo'} ty gia)`,
+                    debitAccount,
+                    creditAccount,
+                    amount,
+                    reference: `FX-REVAL-${String(date)}`,
+                    referenceType: 'fx-revaluation',
+                    notes: JSON.stringify({
+                        fromCurrency, toCurrency, newRate: Number(newRate), oldRate, foreignAmount,
+                        account, isLiability, delta, kind: isGain ? 'gain' : 'loss',
+                        userDescription: b.description || null,
+                    }),
+                    branchId,
+                    createdBy: (req as any).user?.id || null,
+                },
+            })
+            createdEntries.push(entry)
+        }
+
+        res.status(201).json({
+            success: true,
+            data: {
+                date, fromCurrency, toCurrency, newRate: Number(newRate),
+                fxAccount: FX_ACCOUNT,
+                fxAccountName: FX_ACCOUNT_NAME,
+                entriesCreated: createdEntries.length,
+                totalGain,
+                totalLoss,
+                netImpact: totalGain - totalLoss,
+                entries: createdEntries,
+            },
+        })
+    } catch (err: any) {
+        console.error('POST /exchange-rates/revalue error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
 export default router
