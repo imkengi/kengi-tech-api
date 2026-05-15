@@ -1223,6 +1223,10 @@ model StoreSettings {
 
   autoRestockOnReturn Boolean @default(true)
 
+  // Auto-generate JournalEntry records on POS transaction completion (Sales + VAT + COGS).
+  // When false, accountants must run POST /api/tax/auto-journal manually to backfill.
+  autoCreateJournalEntries Boolean @default(true)
+
   // Permission: allow Sales role to checkout/sell directly. When false, Sales can only create SalesOrder
   salesCanCheckout Boolean @default(false)
 

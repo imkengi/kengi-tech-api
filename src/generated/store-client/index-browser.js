@@ -1022,6 +1022,7 @@ exports.Prisma.StoreSettingsScalarFieldEnum = {
   notifyDailyReport: 'notifyDailyReport',
   notifyWeeklyReport: 'notifyWeeklyReport',
   autoRestockOnReturn: 'autoRestockOnReturn',
+  autoCreateJournalEntries: 'autoCreateJournalEntries',
   salesCanCheckout: 'salesCanCheckout',
   openTime: 'openTime',
   closeTime: 'closeTime',

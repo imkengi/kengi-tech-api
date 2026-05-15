@@ -5,6 +5,7 @@ import { validate } from '../middleware/validate'
 import { CreateTransactionSchema } from '../schemas'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { publishEvent } from '../lib/pubsub'
+import { createJournalEntriesForTransaction } from '../lib/autoJournal'
 
 const router = Router()
 
@@ -639,6 +640,23 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
             } catch (loyaltyErr) {
                 console.warn('[Loyalty] Points update failed (non-critical):', loyaltyErr)
             }
+        }
+
+        // Auto-generate journal entries (revenue/VAT/COGS) when the store opted in.
+        // Gated on StoreSettings.autoCreateJournalEntries so accountants can fall back
+        // to the manual /api/tax/auto-journal backfill if they prefer batch posting.
+        // Non-fatal: a failure here must not roll back the sale itself.
+        try {
+            const settings = await prisma.storeSettings.findFirst({ select: { autoCreateJournalEntries: true } })
+            if (settings?.autoCreateJournalEntries !== false) {
+                await createJournalEntriesForTransaction(prisma, transaction as any, {
+                    branchId: branchId || null,
+                    userId: req.user!.userId,
+                    skipDupCheck: false,
+                })
+            }
+        } catch (jeErr) {
+            console.warn(`[AutoJournal] Failed for ${receiptNumber} (non-fatal):`, jeErr)
         }
 
         cacheDel(`${req.user?.storeSchema || 'default'}:*:transactions:*`).catch(() => { })

@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express'
 import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
+import { createJournalEntriesForTransaction, AUTO_JOURNAL_REF_TYPES } from '../lib/autoJournal'
 
 const router = Router()
 
@@ -1854,105 +1855,17 @@ router.post('/auto-journal', authMiddleware, async (req: AuthRequest, res: Respo
         })
 
         for (const tx of txs) {
-            const ref = `SALE-${tx.receiptNumber}`
-            if (existingRefs.has(ref)) continue
+            // Skip when every ref for this tx has already been created.
+            // The helper is idempotent on its own, but pre-skipping avoids one DB probe per tx.
+            const allRefs = [`SALE-${tx.receiptNumber}`, `VAT-${tx.receiptNumber}`, `DISC-${tx.receiptNumber}`, `COGS-${tx.receiptNumber}`]
+            if (allRefs.every(r => existingRefs.has(r))) continue
 
-            const date = fmtDate(tx.createdAt)
-            const revenue = tx.subtotal || (tx.total - (tx.tax || 0))
-            const vatAmount = tx.tax || 0
-
-            // Determine debit account based on payment status
-            const totalPaid = tx.payments?.reduce((s: number, p: any) => s + (p.amount || 0), 0) || tx.amountReceived || 0
-            const isPaid = totalPaid >= tx.total
-            let debitAccount: string
-            let debitName: string
-
-            if (isPaid) {
-                // Customer already paid Ã¢â€ â€™ Cash or Bank
-                const payType = tx.payments?.[0]?.type || 'cash'
-                debitAccount = payType === 'bank' || payType === 'transfer' ? '112' : '111'
-                debitName = debitAccount === '112' ? 'TiÃ¡Â»Ân gÃ¡Â»Â­i ngÃƒÂ¢n hÃƒÂ ng' : 'TiÃ¡Â»Ân mÃ¡ÂºÂ·t'
-            } else {
-                // Customer hasn't paid Ã¢â€ â€™ Accounts Receivable (PhÃ¡ÂºÂ£i thu khÃƒÂ¡ch hÃƒÂ ng)
-                debitAccount = '131'
-                debitName = 'PhÃ¡ÂºÂ£i thu khÃƒÂ¡ch hÃƒÂ ng'
-            }
-
-            // Entry 1: Cash/Bank Ã¢â€ Â Revenue (NÃ¡Â»Â£ TK111/112, CÃƒÂ³ TK511)
-            if (revenue > 0) {
-                try {
-                    await prisma.journalEntry.create({
-                        data: {
-                            date, description: `BÃƒÂ¡n hÃƒÂ ng ${tx.receiptNumber}${tx.customerName ? ' - KH: ' + tx.customerName : ''}`,
-                            debitAccount, debitAccountName: debitName,
-                            creditAccount: '511', creditAccountName: 'Doanh thu bÃƒÂ¡n hÃƒÂ ng',
-                            amount: revenue, reference: ref, referenceType: 'sale',
-                            branchId, createdBy: userId,
-                        }
-                    })
-                    created.push({ type: 'sale', ref, amount: revenue })
-                } catch (_) { }
-            }
-
-            // Entry 2: Cash/Bank Ã¢â€ Â VAT (NÃ¡Â»Â£ TK111/112, CÃƒÂ³ TK3331) 
-            if (vatAmount > 0) {
-                const vatRef = `VAT-${tx.receiptNumber}`
-                if (!existingRefs.has(vatRef)) {
-                    try {
-                        await prisma.journalEntry.create({
-                            data: {
-                                date, description: `ThuÃ¡ÂºÂ¿ GTGT Ã„â€˜Ã¡ÂºÂ§u ra ${tx.receiptNumber}`,
-                                debitAccount, debitAccountName: debitName,
-                                creditAccount: '3331', creditAccountName: 'ThuÃ¡ÂºÂ¿ GTGT phÃ¡ÂºÂ£i nÃ¡Â»â„¢p',
-                                amount: vatAmount, reference: vatRef, referenceType: 'sale',
-                                branchId, createdBy: userId,
-                            }
-                        })
-                        created.push({ type: 'vat-out', ref: vatRef, amount: vatAmount })
-                    } catch (_) { }
-                }
-            }
-
-            // Entry 3: Discount (if any) - NÃ¡Â»Â£ TK521, CÃƒÂ³ TK111/112
-            if (tx.discount > 0) {
-                const discRef = `DISC-${tx.receiptNumber}`
-                if (!existingRefs.has(discRef)) {
-                    try {
-                        await prisma.journalEntry.create({
-                            data: {
-                                date, description: `GiÃ¡ÂºÂ£m giÃƒÂ¡ hÃƒÂ ng bÃƒÂ¡n ${tx.receiptNumber}`,
-                                debitAccount: '521', debitAccountName: 'ChiÃ¡ÂºÂ¿t khÃ¡ÂºÂ¥u thÃ†Â°Ã†Â¡ng mÃ¡ÂºÂ¡i',
-                                creditAccount: debitAccount, creditAccountName: debitName,
-                                amount: tx.discount, reference: discRef, referenceType: 'sale',
-                                branchId, createdBy: userId,
-                            }
-                        })
-                        created.push({ type: 'discount', ref: discRef, amount: tx.discount })
-                    } catch (_) { }
-                }
-            }
-
-            // Entry 4: COGS Ã¢â‚¬â€ NÃ¡Â»Â£ TK632 (GiÃƒÂ¡ vÃ¡Â»â€˜n), CÃƒÂ³ TK156 (HÃƒÂ ng hÃƒÂ³a)
-            const cogsRef = `COGS-${tx.receiptNumber}`
-            if (!existingRefs.has(cogsRef)) {
-                const cogsAmount = (tx as any).items?.reduce((s: number, item: any) => {
-                    const cost = item.product?.costPrice || 0
-                    return s + (cost * item.quantity)
-                }, 0) || 0
-                if (cogsAmount > 0) {
-                    try {
-                        await prisma.journalEntry.create({
-                            data: {
-                                date, description: `GiÃƒÂ¡ vÃ¡Â»â€˜n hÃƒÂ ng bÃƒÂ¡n ${tx.receiptNumber}`,
-                                debitAccount: '632', debitAccountName: 'GiÃƒÂ¡ vÃ¡Â»â€˜n hÃƒÂ ng bÃƒÂ¡n',
-                                creditAccount: '156', creditAccountName: 'HÃƒÂ ng hÃƒÂ³a',
-                                amount: cogsAmount, reference: cogsRef, referenceType: 'sale',
-                                branchId, createdBy: userId,
-                            }
-                        })
-                        created.push({ type: 'cogs', ref: cogsRef, amount: cogsAmount })
-                    } catch (_) { }
-                }
+            const result = await createJournalEntriesForTransaction(prisma, tx as any, {
+                branchId, userId, skipDupCheck: true,
+            })
+            for (const entry of result.created) {
+                created.push(entry)
+                existingRefs.add(entry.ref)
             }
         }
 
@@ -2231,6 +2144,43 @@ router.post('/auto-journal', authMiddleware, async (req: AuthRequest, res: Respo
 
         res.json({ success: true, data: { created, summary } })
     } catch (err) { console.error('POST /auto-journal error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
+})
+
+// DELETE /api/tax/auto-journal?year=2026&month=3
+// Removes all auto-generated journal entries for a period — i.e. anything
+// whose referenceType is in AUTO_JOURNAL_REF_TYPES. Manual entries (default
+// referenceType = 'manual') and closing entries are preserved. Lets the user
+// "undo" a batch run so they can re-run after fixing source data.
+router.delete('/auto-journal', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const year = Number(req.query.year) || new Date().getFullYear()
+        const month = req.query.month ? Number(req.query.month) : undefined
+
+        // JournalEntry.date is a string in YYYY-MM-DD — use string range to avoid date parsing issues.
+        const dateGte = month ? `${year}-${String(month).padStart(2, '0')}-01` : `${year}-01-01`
+        const dateLte = month ? `${year}-${String(month).padStart(2, '0')}-31` : `${year}-12-31`
+
+        const result = await prisma.journalEntry.deleteMany({
+            where: {
+                referenceType: { in: [...AUTO_JOURNAL_REF_TYPES] },
+                date: { gte: dateGte, lte: dateLte },
+            },
+        })
+
+        const periodLabel = month ? `T${month}/${year}` : `năm ${year}`
+        res.json({
+            success: true,
+            data: {
+                deleted: result.count,
+                periodLabel,
+                referenceTypes: AUTO_JOURNAL_REF_TYPES,
+            },
+        })
+    } catch (err) {
+        console.error('DELETE /auto-journal error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
 })
 
 // ─── CLOSING ENTRIES (Kết chuyển cuối kỳ TK911) ──────────────────────────────
