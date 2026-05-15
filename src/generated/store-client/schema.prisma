@@ -1550,6 +1550,70 @@ model EInvoice {
   @@index([status])
 }
 
+// ─── Adjustment Invoice (Hóa đơn điều chỉnh — NĐ123/2020) ──────────────────
+
+model AdjustmentInvoice {
+  id                    String    @id @default(cuid())
+  code                  String    @unique // HDDC-YYYYMMDD-NNN
+  adjustmentDate        String // ngày lập hóa đơn điều chỉnh (YYYY-MM-DD)
+  type                  String // "increase" | "decrease" | "info_correction"
+  status                String    @default("draft") // draft | approved | cancelled
+  // Original invoice reference (mandatory per NĐ123/2020 Điều 19)
+  originalInvoiceId     String? // optional FK to EInvoice / Transaction if internal
+  originalInvoiceNumber String
+  originalInvoiceDate   String // YYYY-MM-DD
+  originalInvoiceSerial String? // ký hiệu hóa đơn gốc
+  // Reason (lý do điều chỉnh) — required
+  reason                String
+  // Buyer (người mua) — replicated on adjustment doc
+  buyerName             String?
+  buyerTaxCode          String?
+  buyerAddress          String?
+  // info_correction: capture the corrected field(s) — JSON object
+  correctionData        String? // JSON: { field: { old, new } }
+  // Totals (signed: positive for increase, negative for decrease, zero for info_correction)
+  subtotal              Float     @default(0) // tổng tiền hàng (chưa VAT)
+  vatAmount             Float     @default(0) // tổng VAT điều chỉnh
+  totalAmount           Float     @default(0) // tổng cộng (đã VAT)
+  notes                 String?
+  // Approval/posting trail
+  approvedAt            DateTime?
+  approvedBy            String?
+  journalEntryIds       String? // JSON array of JournalEntry ids generated on approve
+  branchId              String?
+  createdBy             String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  items AdjustmentInvoiceItem[]
+
+  @@index([adjustmentDate])
+  @@index([type])
+  @@index([status])
+  @@index([originalInvoiceId])
+  @@index([originalInvoiceNumber])
+  @@index([branchId])
+}
+
+model AdjustmentInvoiceItem {
+  id             String  @id @default(cuid())
+  adjustmentId   String
+  productName    String
+  productCode    String?
+  unit           String? // ĐVT
+  quantity       Float   @default(0) // signed (negative for decrease)
+  unitPrice      Float   @default(0)
+  amount         Float   @default(0) // quantity * unitPrice (signed)
+  vatRate        Float   @default(0) // % (0, 5, 8, 10)
+  vatAmount      Float   @default(0) // signed
+  adjustmentType String // "increase" | "decrease" | "info_correction"
+  notes          String?
+
+  adjustment AdjustmentInvoice @relation(fields: [adjustmentId], references: [id], onDelete: Cascade)
+
+  @@index([adjustmentId])
+}
+
 // ─── HKD Revenue Entry (Ghi chép doanh thu theo ngày) ──────────────────────
 
 model HKDRevenueEntry {

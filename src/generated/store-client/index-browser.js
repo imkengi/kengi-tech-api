@@ -1273,6 +1273,49 @@ exports.Prisma.EInvoiceScalarFieldEnum = {
   createdAt: 'createdAt'
 };
 
+exports.Prisma.AdjustmentInvoiceScalarFieldEnum = {
+  id: 'id',
+  code: 'code',
+  adjustmentDate: 'adjustmentDate',
+  type: 'type',
+  status: 'status',
+  originalInvoiceId: 'originalInvoiceId',
+  originalInvoiceNumber: 'originalInvoiceNumber',
+  originalInvoiceDate: 'originalInvoiceDate',
+  originalInvoiceSerial: 'originalInvoiceSerial',
+  reason: 'reason',
+  buyerName: 'buyerName',
+  buyerTaxCode: 'buyerTaxCode',
+  buyerAddress: 'buyerAddress',
+  correctionData: 'correctionData',
+  subtotal: 'subtotal',
+  vatAmount: 'vatAmount',
+  totalAmount: 'totalAmount',
+  notes: 'notes',
+  approvedAt: 'approvedAt',
+  approvedBy: 'approvedBy',
+  journalEntryIds: 'journalEntryIds',
+  branchId: 'branchId',
+  createdBy: 'createdBy',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.AdjustmentInvoiceItemScalarFieldEnum = {
+  id: 'id',
+  adjustmentId: 'adjustmentId',
+  productName: 'productName',
+  productCode: 'productCode',
+  unit: 'unit',
+  quantity: 'quantity',
+  unitPrice: 'unitPrice',
+  amount: 'amount',
+  vatRate: 'vatRate',
+  vatAmount: 'vatAmount',
+  adjustmentType: 'adjustmentType',
+  notes: 'notes'
+};
+
 exports.Prisma.HKDRevenueEntryScalarFieldEnum = {
   id: 'id',
   date: 'date',
@@ -1555,6 +1598,8 @@ exports.Prisma.ModelName = {
   FixedAsset: 'FixedAsset',
   EInvoiceConfig: 'EInvoiceConfig',
   EInvoice: 'EInvoice',
+  AdjustmentInvoice: 'AdjustmentInvoice',
+  AdjustmentInvoiceItem: 'AdjustmentInvoiceItem',
   HKDRevenueEntry: 'HKDRevenueEntry',
   Warehouse: 'Warehouse',
   WarehouseStock: 'WarehouseStock',

@@ -5023,4 +5023,395 @@ router.get('/pit-settlement/:year/employees', authMiddleware, async (req: AuthRe
     }
 })
 
+// ─── ADJUSTMENT INVOICE (Hóa đơn điều chỉnh — NĐ123/2020 Điều 19) ──────────
+//
+// 3 loại điều chỉnh:
+//   "increase"        — điều chỉnh tăng số lượng / đơn giá
+//   "decrease"        — điều chỉnh giảm số lượng / đơn giá
+//   "info_correction" — điều chỉnh thông tin (mã số thuế, tên, địa chỉ...)
+//
+// Bút toán khi duyệt (approve):
+//   increase  → Nợ 131/Có 511 + Nợ 131/Có 3331  (tăng doanh thu + VAT đầu ra)
+//   decrease  → Nợ 511/Có 131 + Nợ 3331/Có 131  (giảm doanh thu + VAT đầu ra,
+//                                                  thể hiện âm trên 01/GTGT)
+//   info_correction → không phát sinh bút toán (chỉ điều chỉnh thông tin)
+
+const ADJ_TYPES = ['increase', 'decrease', 'info_correction'] as const
+type AdjustmentType = typeof ADJ_TYPES[number]
+
+function normalizeAdjustmentDate(input: any): string | null {
+    if (!input) return new Date().toISOString().slice(0, 10)
+    const d = input instanceof Date ? input : new Date(String(input))
+    if (isNaN(d.getTime())) return null
+    return d.toISOString().slice(0, 10)
+}
+
+async function nextAdjustmentInvoiceCode(prisma: any, dateStr: string): Promise<string> {
+    const ymd = dateStr.replace(/-/g, '')
+    const prefix = `HDDC-${ymd}-`
+    const todays = await prisma.adjustmentInvoice.findMany({
+        where: { code: { startsWith: prefix } },
+        select: { code: true },
+    })
+    let max = 0
+    for (const c of todays) {
+        const n = parseInt(c.code.slice(prefix.length), 10)
+        if (!isNaN(n) && n > max) max = n
+    }
+    return `${prefix}${String(max + 1).padStart(3, '0')}`
+}
+
+// Apply the sign convention: increase/info_correction keep positive numbers,
+// decrease forces negative. Quantities/amounts are stored signed so the SQL
+// aggregates roll up correctly on the VAT return.
+function signedAdjustmentItem(raw: any, type: AdjustmentType): any {
+    const itemType = (raw.adjustmentType as AdjustmentType) || type
+    const absQty = Math.abs(Number(raw.quantity) || 0)
+    const unitPrice = Number(raw.unitPrice) || 0
+    const vatRate = Number(raw.vatRate) || 0
+    const signedQty = itemType === 'decrease' ? -absQty : absQty
+    const amount = signedQty * unitPrice
+    const vatAmount = amount * (vatRate / 100)
+    return {
+        productName: String(raw.productName || '').trim(),
+        productCode: raw.productCode || null,
+        unit: raw.unit || null,
+        quantity: signedQty,
+        unitPrice,
+        amount,
+        vatRate,
+        vatAmount,
+        adjustmentType: itemType,
+        notes: raw.notes || null,
+    }
+}
+
+function totalsFromItems(items: any[]): { subtotal: number; vatAmount: number; totalAmount: number } {
+    const subtotal = items.reduce((s, it) => s + (Number(it.amount) || 0), 0)
+    const vatAmount = items.reduce((s, it) => s + (Number(it.vatAmount) || 0), 0)
+    return { subtotal, vatAmount, totalAmount: subtotal + vatAmount }
+}
+
+// POST /api/tax/adjustment-invoices — create draft adjustment invoice
+router.post('/adjustment-invoices', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const {
+            adjustmentDate, type, originalInvoiceId, originalInvoiceNumber, originalInvoiceDate,
+            originalInvoiceSerial, reason, buyerName, buyerTaxCode, buyerAddress,
+            correctionData, items, notes,
+        } = req.body
+
+        if (!ADJ_TYPES.includes(type)) {
+            return res.status(400).json({ success: false, error: `type phải là một trong: ${ADJ_TYPES.join(', ')}` })
+        }
+        const dateStr = normalizeAdjustmentDate(adjustmentDate)
+        if (!dateStr) return res.status(400).json({ success: false, error: 'adjustmentDate không hợp lệ' })
+        if (!originalInvoiceNumber?.toString().trim()) {
+            return res.status(400).json({ success: false, error: 'originalInvoiceNumber là bắt buộc' })
+        }
+        const origDate = normalizeAdjustmentDate(originalInvoiceDate)
+        if (!origDate) return res.status(400).json({ success: false, error: 'originalInvoiceDate không hợp lệ' })
+        if (!reason?.toString().trim()) {
+            return res.status(400).json({ success: false, error: 'reason (lý do điều chỉnh) là bắt buộc' })
+        }
+
+        const rawItems: any[] = Array.isArray(items) ? items : []
+        // info_correction may have no quantitative items; increase/decrease must.
+        if (type !== 'info_correction' && rawItems.length === 0) {
+            return res.status(400).json({ success: false, error: 'Phải có ít nhất 1 dòng điều chỉnh' })
+        }
+        const itemsData = rawItems.map(it => signedAdjustmentItem(it, type as AdjustmentType))
+        const totals = totalsFromItems(itemsData)
+
+        const branchId = getBranchId(req) || null
+        const userId = req.user?.userId || null
+        const code = await nextAdjustmentInvoiceCode(prisma, dateStr)
+
+        const created = await prisma.adjustmentInvoice.create({
+            data: {
+                code,
+                adjustmentDate: dateStr,
+                type,
+                status: 'draft',
+                originalInvoiceId: originalInvoiceId || null,
+                originalInvoiceNumber: String(originalInvoiceNumber).trim(),
+                originalInvoiceDate: origDate,
+                originalInvoiceSerial: originalInvoiceSerial || null,
+                reason: String(reason).trim(),
+                buyerName: buyerName || null,
+                buyerTaxCode: buyerTaxCode || null,
+                buyerAddress: buyerAddress || null,
+                correctionData: correctionData ? JSON.stringify(correctionData) : null,
+                subtotal: totals.subtotal,
+                vatAmount: totals.vatAmount,
+                totalAmount: totals.totalAmount,
+                notes: notes || null,
+                branchId,
+                createdBy: userId,
+                items: { create: itemsData },
+            },
+            include: { items: true },
+        })
+
+        res.status(201).json({ success: true, data: created })
+    } catch (err: any) {
+        console.error('POST /adjustment-invoices error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// GET /api/tax/adjustment-invoices?from=&to=&type=&originalInvoiceId=&status=
+router.get('/adjustment-invoices', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const from = req.query.from as string | undefined
+        const to = req.query.to as string | undefined
+        const type = req.query.type as string | undefined
+        const originalInvoiceId = req.query.originalInvoiceId as string | undefined
+        const status = req.query.status as string | undefined
+
+        const where: any = { ...getBranchFilter(req) }
+        if (type) where.type = type
+        if (status) where.status = status
+        if (originalInvoiceId) where.originalInvoiceId = originalInvoiceId
+        if (from || to) {
+            where.adjustmentDate = {}
+            if (from) where.adjustmentDate.gte = from
+            if (to) where.adjustmentDate.lte = to
+        }
+
+        const data = await prisma.adjustmentInvoice.findMany({
+            where,
+            orderBy: { adjustmentDate: 'desc' },
+        })
+        res.json({ success: true, data })
+    } catch (err) {
+        console.error('GET /adjustment-invoices error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// GET /api/tax/adjustment-invoices/:id — single adjustment invoice with items
+router.get('/adjustment-invoices/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
+        const data = await prisma.adjustmentInvoice.findUnique({
+            where: { id },
+            include: { items: true },
+        })
+        if (!data) return res.status(404).json({ success: false, error: 'Không tìm thấy hóa đơn điều chỉnh' })
+        res.json({ success: true, data })
+    } catch (err) {
+        console.error('GET /adjustment-invoices/:id error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// PUT /api/tax/adjustment-invoices/:id — update draft (cannot edit approved invoice)
+router.put('/adjustment-invoices/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
+        const existing = await prisma.adjustmentInvoice.findUnique({ where: { id } })
+        if (!existing) return res.status(404).json({ success: false, error: 'Không tìm thấy hóa đơn điều chỉnh' })
+        if (existing.status !== 'draft') {
+            return res.status(400).json({ success: false, error: 'Chỉ có thể chỉnh sửa hóa đơn điều chỉnh ở trạng thái draft' })
+        }
+
+        const {
+            adjustmentDate, type, originalInvoiceId, originalInvoiceNumber, originalInvoiceDate,
+            originalInvoiceSerial, reason, buyerName, buyerTaxCode, buyerAddress,
+            correctionData, items, notes,
+        } = req.body
+
+        const updateData: any = {}
+
+        if (type !== undefined) {
+            if (!ADJ_TYPES.includes(type)) {
+                return res.status(400).json({ success: false, error: `type phải là một trong: ${ADJ_TYPES.join(', ')}` })
+            }
+            updateData.type = type
+        }
+        if (adjustmentDate !== undefined) {
+            const dateStr = normalizeAdjustmentDate(adjustmentDate)
+            if (!dateStr) return res.status(400).json({ success: false, error: 'adjustmentDate không hợp lệ' })
+            updateData.adjustmentDate = dateStr
+        }
+        if (originalInvoiceId !== undefined) updateData.originalInvoiceId = originalInvoiceId || null
+        if (originalInvoiceNumber !== undefined) {
+            if (!String(originalInvoiceNumber).trim()) {
+                return res.status(400).json({ success: false, error: 'originalInvoiceNumber không được rỗng' })
+            }
+            updateData.originalInvoiceNumber = String(originalInvoiceNumber).trim()
+        }
+        if (originalInvoiceDate !== undefined) {
+            const origDate = normalizeAdjustmentDate(originalInvoiceDate)
+            if (!origDate) return res.status(400).json({ success: false, error: 'originalInvoiceDate không hợp lệ' })
+            updateData.originalInvoiceDate = origDate
+        }
+        if (originalInvoiceSerial !== undefined) updateData.originalInvoiceSerial = originalInvoiceSerial || null
+        if (reason !== undefined) {
+            if (!String(reason).trim()) return res.status(400).json({ success: false, error: 'reason không được rỗng' })
+            updateData.reason = String(reason).trim()
+        }
+        if (buyerName !== undefined) updateData.buyerName = buyerName || null
+        if (buyerTaxCode !== undefined) updateData.buyerTaxCode = buyerTaxCode || null
+        if (buyerAddress !== undefined) updateData.buyerAddress = buyerAddress || null
+        if (correctionData !== undefined) {
+            updateData.correctionData = correctionData ? JSON.stringify(correctionData) : null
+        }
+        if (notes !== undefined) updateData.notes = notes || null
+
+        // Replace items wholesale when provided.
+        if (Array.isArray(items)) {
+            const effectiveType: AdjustmentType = (updateData.type || existing.type) as AdjustmentType
+            if (effectiveType !== 'info_correction' && items.length === 0) {
+                return res.status(400).json({ success: false, error: 'Phải có ít nhất 1 dòng điều chỉnh' })
+            }
+            const itemsData = items.map((it: any) => signedAdjustmentItem(it, effectiveType))
+            const totals = totalsFromItems(itemsData)
+            updateData.subtotal = totals.subtotal
+            updateData.vatAmount = totals.vatAmount
+            updateData.totalAmount = totals.totalAmount
+
+            await prisma.adjustmentInvoiceItem.deleteMany({ where: { adjustmentId: id } })
+            updateData.items = { create: itemsData }
+        }
+
+        const updated = await prisma.adjustmentInvoice.update({
+            where: { id },
+            data: updateData,
+            include: { items: true },
+        })
+
+        res.json({ success: true, data: updated })
+    } catch (err: any) {
+        console.error('PUT /adjustment-invoices/:id error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// POST /api/tax/adjustment-invoices/:id/approve — finalize + create journal entries
+//
+// Bút toán theo TT200/TT133:
+//   increase: tổng tiền hàng (subtotal) > 0
+//     Nợ 131 / Có 511   subtotal
+//     Nợ 131 / Có 3331  vatAmount        (chỉ khi vatAmount != 0)
+//   decrease: subtotal < 0 (lưu signed); ta đảo bút toán
+//     Nợ 511 / Có 131   |subtotal|
+//     Nợ 3331 / Có 131  |vatAmount|
+//   info_correction: không phát sinh bút toán tài chính
+router.post('/adjustment-invoices/:id/approve', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
+        const inv = await prisma.adjustmentInvoice.findUnique({
+            where: { id },
+            include: { items: true },
+        })
+        if (!inv) return res.status(404).json({ success: false, error: 'Không tìm thấy hóa đơn điều chỉnh' })
+        if (inv.status !== 'draft') {
+            return res.status(400).json({ success: false, error: 'Hóa đơn điều chỉnh đã được duyệt trước đó' })
+        }
+
+        const branchId = getBranchId(req) || null
+        const userId = req.user?.userId || null
+        const journalDate = inv.adjustmentDate
+        const ref = `HDDC-${inv.code}`
+        const entries: any[] = []
+
+        if (inv.type === 'increase') {
+            if (inv.subtotal !== 0) {
+                const e = await prisma.journalEntry.create({
+                    data: {
+                        date: journalDate,
+                        description: `Điều chỉnh tăng doanh thu - HĐ gốc ${inv.originalInvoiceNumber}: ${inv.reason}`,
+                        debitAccount: '131', debitAccountName: 'Phải thu khách hàng',
+                        creditAccount: '511', creditAccountName: 'Doanh thu bán hàng và cung cấp dịch vụ',
+                        amount: Math.abs(Number(inv.subtotal) || 0),
+                        reference: ref, referenceType: 'adjustment-invoice',
+                        branchId, createdBy: userId,
+                    },
+                })
+                entries.push(e)
+            }
+            if (inv.vatAmount !== 0) {
+                const e = await prisma.journalEntry.create({
+                    data: {
+                        date: journalDate,
+                        description: `Điều chỉnh tăng VAT đầu ra - HĐ gốc ${inv.originalInvoiceNumber}`,
+                        debitAccount: '131', debitAccountName: 'Phải thu khách hàng',
+                        creditAccount: '3331', creditAccountName: 'Thuế GTGT đầu ra phải nộp',
+                        amount: Math.abs(Number(inv.vatAmount) || 0),
+                        reference: ref, referenceType: 'adjustment-invoice',
+                        branchId, createdBy: userId,
+                    },
+                })
+                entries.push(e)
+            }
+        } else if (inv.type === 'decrease') {
+            if (inv.subtotal !== 0) {
+                const e = await prisma.journalEntry.create({
+                    data: {
+                        date: journalDate,
+                        description: `Điều chỉnh giảm doanh thu - HĐ gốc ${inv.originalInvoiceNumber}: ${inv.reason}`,
+                        debitAccount: '511', debitAccountName: 'Doanh thu bán hàng và cung cấp dịch vụ',
+                        creditAccount: '131', creditAccountName: 'Phải thu khách hàng',
+                        amount: Math.abs(Number(inv.subtotal) || 0),
+                        reference: ref, referenceType: 'adjustment-invoice',
+                        branchId, createdBy: userId,
+                    },
+                })
+                entries.push(e)
+            }
+            if (inv.vatAmount !== 0) {
+                const e = await prisma.journalEntry.create({
+                    data: {
+                        date: journalDate,
+                        description: `Điều chỉnh giảm VAT đầu ra - HĐ gốc ${inv.originalInvoiceNumber}`,
+                        debitAccount: '3331', debitAccountName: 'Thuế GTGT đầu ra phải nộp',
+                        creditAccount: '131', creditAccountName: 'Phải thu khách hàng',
+                        amount: Math.abs(Number(inv.vatAmount) || 0),
+                        reference: ref, referenceType: 'adjustment-invoice',
+                        branchId, createdBy: userId,
+                    },
+                })
+                entries.push(e)
+            }
+        }
+        // info_correction: không có bút toán — chỉ duyệt và lưu correctionData.
+
+        const approved = await prisma.adjustmentInvoice.update({
+            where: { id },
+            data: {
+                status: 'approved',
+                approvedAt: new Date(),
+                approvedBy: userId,
+                journalEntryIds: JSON.stringify(entries.map(e => e.id)),
+            },
+            include: { items: true },
+        })
+
+        res.json({
+            success: true,
+            data: {
+                invoice: approved,
+                journalEntries: entries,
+                summary: {
+                    type: inv.type,
+                    subtotal: inv.subtotal,
+                    vatAmount: inv.vatAmount,
+                    totalAmount: inv.totalAmount,
+                    entryCount: entries.length,
+                },
+            },
+        })
+    } catch (err: any) {
+        console.error('POST /adjustment-invoices/:id/approve error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
 export default router
