@@ -859,15 +859,19 @@ model TaxDeclaration {
   cnkdPitAmount  Float     @default(0)
   cnkdTotalTax   Float     @default(0)
   cnkdThreshold  Float     @default(500000000)
-  status         String    @default("draft")
-  filedAt        DateTime?
-  notes          String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  status           String    @default("draft")
+  filedAt          DateTime?
+  notes            String?
+  originalId       String?
+  amendmentNumber  Int?
+  amendmentReason  String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   @@index([year])
   @@index([status])
   @@index([formType])
+  @@index([originalId])
 }
 
 // ─── Customer Segments ─────────────────────────────────────────────────────────
