@@ -5,7 +5,6 @@ substitutions:
   _DB_NAME: kengi_tech
   _DB_USER: postgres
   _DB_PASSWORD: KengiTech2026@
-  _JWT_SECRET: open-retail-super-secret-key-change-in-production
   _REDIS_URL: ""
 
 steps:
