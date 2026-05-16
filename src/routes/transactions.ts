@@ -33,7 +33,7 @@ router.get('/', authMiddleware, requirePermission('pos.view'), async (req: AuthR
         const branchId = getBranchId(req)
 
         const {
-            search, startDate, endDate, paymentMethod, status, cashier,
+            search, startDate, endDate, paymentMethod, status, cashier, customerId,
             page = '1', pageSize = '20',
         } = req.query
 
@@ -54,8 +54,12 @@ router.get('/', authMiddleware, requirePermission('pos.view'), async (req: AuthR
             if (endDate) where.createdAt.lte = new Date(endDate as string)
         }
 
-        if (status && status !== 'all') where.status = status
+        if (status && status !== 'all') {
+            const statusList = (status as string).split(',').map(s => s.trim()).filter(Boolean)
+            where.status = statusList.length > 1 ? { in: statusList } : statusList[0]
+        }
         if (cashier) where.createdBy = cashier
+        if (customerId) where.customerId = customerId as string
 
         const pageNum = Math.max(1, parseInt(page as string))
         const size = Math.max(1, Math.min(200, parseInt(pageSize as string)))
