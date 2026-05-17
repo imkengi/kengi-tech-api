@@ -291,6 +291,7 @@ exports.Prisma.TransactionScalarFieldEnum = {
   branchId: 'branchId',
   subtotal: 'subtotal',
   discount: 'discount',
+  discountType: 'discountType',
   tax: 'tax',
   total: 'total',
   amountReceived: 'amountReceived',
@@ -320,6 +321,7 @@ exports.Prisma.TransactionItemScalarFieldEnum = {
   quantity: 'quantity',
   unitPrice: 'unitPrice',
   discount: 'discount',
+  discountType: 'discountType',
   lineTotal: 'lineTotal'
 };
 

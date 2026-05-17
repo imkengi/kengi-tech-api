@@ -264,6 +264,7 @@ model Transaction {
   branchId            String?
   subtotal            Float     @default(0)
   discount            Float     @default(0)
+  discountType        String?   @default("fixed")
   tax                 Float     @default(0)
   total               Float     @default(0)
   amountReceived      Float     @default(0)
@@ -304,6 +305,7 @@ model TransactionItem {
   quantity      Int
   unitPrice     Float
   discount      Float  @default(0)
+  discountType  String? @default("fixed")
   lineTotal     Float
 
   transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
