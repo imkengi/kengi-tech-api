@@ -845,6 +845,21 @@ if (!process.env.PASSENGER_BASE_URI) {
                 console.error('⚠️ Auto-journal migration failed:', err.message)
             }
 
+            // discountType support — Transaction.discountType + TransactionItem.discountType
+            try {
+                const schemas: any[] = await registryPrisma.$queryRaw`SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('information_schema', 'pg_catalog', 'pg_toast', 'public')`
+                for (const { schema_name } of schemas) {
+                    const migName = `discount_type_v1:${schema_name}`
+                    if (await isMigrationApplied(migName)) continue
+                    await registryPrisma.$executeRawUnsafe(`ALTER TABLE "${schema_name}"."Transaction" ADD COLUMN IF NOT EXISTS "discountType" TEXT DEFAULT 'fixed';`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`ALTER TABLE "${schema_name}"."TransactionItem" ADD COLUMN IF NOT EXISTS "discountType" TEXT DEFAULT 'fixed';`).catch(() => {})
+                    await markMigrationApplied(migName)
+                }
+                console.log('✅ discountType columns migration completed')
+            } catch (err: any) {
+                console.error('⚠️ discountType migration failed:', err.message)
+            }
+
             } catch (err: any) {
                 console.error('[Migration] Boot migration error (server will still start):', err.message)
             }
