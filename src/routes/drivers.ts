@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
+import { nextCode } from '../lib/codeGenerator'
 
 const router = Router()
 
@@ -40,8 +41,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         const prisma = req.storePrisma!
         const { name, phone, vehicleType, vehiclePlate, licensePlate, notes } = req.body
         if (!name?.trim() || !phone?.trim()) return res.status(400).json({ success: false, error: 'Name and phone required' })
-        const count = await prisma.driver.count({ where: {} })
-        const code = `TX-${String(count + 1).padStart(3, '0')}`
+        const code = await nextCode(prisma, 'driverCodeSeq', 'TX', 3, '-', 'Driver', 'code')
         const plate = vehiclePlate || licensePlate || null
         const data = await prisma.driver.create({ data: { code, name, phone, vehicleType, vehiclePlate: plate, notes, status: 'available' } })
         cacheDel(`${req.user?.storeSchema || 'default'}:drivers:*`).catch(() => { })

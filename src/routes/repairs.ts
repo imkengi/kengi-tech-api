@@ -3,6 +3,7 @@ import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../mi
 import { requirePermission } from '../middleware/permissionMiddleware'
 import { validate } from '../middleware/validate'
 import { CreateRepairSchema, UpdateRepairSchema } from '../schemas'
+import { nextCode } from '../lib/codeGenerator'
 
 const router = Router()
 
@@ -41,8 +42,7 @@ router.post('/', authMiddleware, requirePermission('repairs.create'), validate(C
         const prisma = req.storePrisma!
         const { productName, customerName, customerPhone, issue, cost, estimatedDate, notes } = req.body
         if (!productName?.trim() || !issue?.trim()) return res.status(400).json({ success: false, error: 'Product name and issue required' })
-        const count = await prisma.repair.count()
-        const code = `RP-${String(count + 1).padStart(4, '0')}`
+        const code = await nextCode(prisma, 'repairCodeSeq', 'RP', 4, '-', 'Repair', 'code')
         const data = await prisma.repair.create({
             data: { code, productName, customerName: customerName || '', customerPhone, issue, cost: Number(cost) || 0, estimatedDate: estimatedDate ? new Date(estimatedDate) : null, notes },
         })

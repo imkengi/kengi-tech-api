@@ -6,6 +6,7 @@ import { CreateTransactionSchema } from '../schemas'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { publishEvent } from '../lib/pubsub'
 import { createJournalEntriesForTransaction } from '../lib/autoJournal'
+import { nextCode } from '../lib/codeGenerator'
 
 const router = Router()
 
@@ -945,9 +946,8 @@ router.put('/:id/return', authMiddleware, async (req: AuthRequest, res: Response
             },
         })
 
-        // Generate unique return document code (RT-001, RT-002, ...)
-        const returnCount = await prisma.returnOrder.count()
-        const returnCode = `RT-${String(returnCount + 1).padStart(3, '0')}`
+        // Generate unique return document code (RT-0001, RT-0002, ...)
+        const returnCode = await nextCode(prisma, 'returnOrderCodeSeq', 'RT', 4, '-', 'ReturnOrder', 'code')
 
         // Build return items as JSON for ReturnOrder.items (stored as String)
         const returnItemsJson = itemsToReturn.map((item: any) => ({
@@ -1128,8 +1128,7 @@ router.put('/:id/vat', authMiddleware, async (req: AuthRequest, res: Response) =
         const updateData: any = {}
         if (vatStatus === 'issued') {
             // Auto-generate VAT invoice number if not provided
-            const vatCount = await prisma.transaction.count({ where: { ...getBranchFilter(req as any), vatStatus: 'issued' } })
-            updateData.vatInvoiceNumber = vatInvoiceNumber || `VAT-${String(vatCount + 1).padStart(6, '0')}`
+            updateData.vatInvoiceNumber = vatInvoiceNumber || await nextCode(prisma, 'vatInvoiceCodeSeq', 'VAT', 6, '-', 'Transaction', 'vatInvoiceNumber')
             updateData.vatIssuedAt = new Date()
             updateData.vatStatus = 'issued'
         } else if (vatStatus === 'cancelled') {

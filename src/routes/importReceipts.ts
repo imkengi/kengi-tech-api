@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
 import { calculateCostPrice, getCostPriceMethod } from '../lib/costPrice'
+import { nextCode } from '../lib/codeGenerator'
 
 const router = Router()
 
@@ -113,12 +114,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         // Generate code: NH-YYYYMMDD-XXX
         const today = new Date()
         const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '')
-        const count = await prisma.importReceipt.count({ where: { ...getBranchFilter(req as any), createdAt: {
-                    gte: new Date(today.getFullYear(), today.getMonth(), today.getDate()),
-                },
-            },
-        })
-        const code = `NH-${dateStr}-${String(count + 1).padStart(3, '0')}`
+        const code = await nextCode(prisma, 'importReceiptNHCodeSeq', `NH-${dateStr}`, 3, '-', 'ImportReceipt', 'code')
 
         const totalCost = items.reduce((sum: number, item: any) => sum + (item.quantity * item.costPrice), 0)
         const totalItems = items.reduce((sum: number, item: any) => sum + item.quantity, 0)

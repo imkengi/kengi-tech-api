@@ -3,6 +3,7 @@ import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../mi
 import { validate } from '../middleware/validate'
 import { CreateWarrantySchema, UpdateWarrantySchema } from '../schemas'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
+import { nextCode } from '../lib/codeGenerator'
 
 const router = Router()
 
@@ -40,8 +41,7 @@ router.post('/', authMiddleware, validate(CreateWarrantySchema), async (req: Aut
         const prisma = req.storePrisma!
         const { productName, customerName, customerPhone, serialNumber, startDate, endDate, notes, productId } = req.body
         if (!productName?.trim() || !customerName?.trim()) return res.status(400).json({ success: false, error: 'Product and customer name required' })
-        const count = await prisma.warranty.count()
-        const code = `WR-${String(count + 1).padStart(4, '0')}`
+        const code = await nextCode(prisma, 'warrantyCodeSeq', 'WR', 4, '-', 'Warranty', 'code')
         const data = await prisma.warranty.create({
             data: { code, productId, productName, customerName, customerPhone, serialNumber, startDate: new Date(startDate), endDate: new Date(endDate), notes },
         })

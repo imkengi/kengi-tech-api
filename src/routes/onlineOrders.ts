@@ -1,5 +1,6 @@
 import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest, getBranchFilter } from '../middleware/auth'
+import { nextCode } from '../lib/codeGenerator'
 
 const router = Router()
 
@@ -515,10 +516,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         // Auto-generate order number
         const today = new Date()
         const prefix = `ON${today.getFullYear().toString().slice(-2)}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`
-        const count = await prisma.onlineOrder.count({
-            where: { orderNumber: { startsWith: prefix } },
-        })
-        const orderNumber = `${prefix}-${String(count + 1).padStart(4, '0')}`
+        const orderNumber = await nextCode(prisma, 'onlineOrderCodeSeq', prefix, 4, '-', 'OnlineOrder', 'orderNumber')
 
         // Resolve channel info
         let channelName = orderData.channelName
@@ -1815,8 +1813,7 @@ router.post('/:id/return', authMiddleware, async (req: AuthRequest, res: Respons
         }
 
         // Generate return code
-        const returnCount = await prisma.returnOrder.count()
-        const returnCode = `RTN-ON-${String(returnCount + 1).padStart(5, '0')}`
+        const returnCode = await nextCode(prisma, 'onlineReturnCodeSeq', 'RTN-ON', 5, '-', 'ReturnOrder', 'code')
 
         // Create return order
         const returnOrder = await prisma.returnOrder.create({

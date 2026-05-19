@@ -6,6 +6,7 @@ import bcrypt from 'bcryptjs'
 import { validate } from '../middleware/validate'
 import { CreateEmployeeSchema, UpdateEmployeeSchema } from '../schemas'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
+import { nextCode } from '../lib/codeGenerator'
 
 const router = Router()
 
@@ -95,8 +96,7 @@ router.post('/', authMiddleware, requirePermission('employees.create'), validate
         // Use provided branchId or fallback to creator's branch
         const effectiveBranchId = assignBranchId || getBranchId(req)
 
-        const count = await prisma.user.count({ where: {} })
-        const code = `NV-${String(count + 1).padStart(3, '0')}`
+        const code = await nextCode(prisma, 'employeeCodeSeq', 'NV', 3, '-', 'User', 'code')
         const emailVal = email?.trim() || `${code.toLowerCase().replace('-', '.')}@kengitech.vn`
 
         const existing = await prisma.user.findFirst({ where: { email: emailVal } })

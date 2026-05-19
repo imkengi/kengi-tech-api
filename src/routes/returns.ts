@@ -2,6 +2,7 @@ import { Router, Response } from 'express'
 import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
 import { validate } from '../middleware/validate'
 import { CreateReturnSchema, UpdateReturnSchema } from '../schemas'
+import { nextCode } from '../lib/codeGenerator'
 
 const router = Router()
 
@@ -170,8 +171,7 @@ router.post('/', authMiddleware, validate(CreateReturnSchema), async (req: AuthR
         }
 
         // Auto-generate code
-        const count = await prisma.returnOrder.count()
-        const returnCode = code || `RT-${String(count + 1).padStart(4, '0')}`
+        const returnCode = code || await nextCode(prisma, 'returnOrderCodeSeq', 'RT', 4, '-', 'ReturnOrder', 'code')
 
         const returnOrder = await prisma.returnOrder.create({
             data: {
@@ -362,10 +362,10 @@ router.post('/:id/process-refund', authMiddleware, async (req: AuthRequest, res:
 
         // Create refund transaction record
         try {
-            const txCount = await prisma.transaction.count()
+            const refundReceiptNumber = await nextCode(prisma, 'refundReceiptCodeSeq', 'RF', 4, '-', 'Transaction', 'receiptNumber')
             await prisma.transaction.create({
                 data: {
-                    receiptNumber: `RF-${String(txCount + 1).padStart(4, '0')}`,
+                    receiptNumber: refundReceiptNumber,
                     customerName: returnOrder.customerName,
                     customerPhone: returnOrder.customerPhone || null,
                     subtotal: -amount,

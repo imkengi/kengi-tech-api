@@ -3,6 +3,7 @@ import { authMiddleware, AuthRequest, getBranchFilter } from '../middleware/auth
 import { requireRole } from '../middleware/roleMiddleware'
 import { requirePermission } from '../middleware/permissionMiddleware'
 import { cacheDel } from '../lib/cache'
+import { nextCode } from '../lib/codeGenerator'
 
 const router = Router()
 
@@ -166,8 +167,7 @@ router.post('/', authMiddleware, requirePermission('orders.create'), async (req:
         const total = Math.max(0, subtotal - discountAmount)
 
         // Generate sequential order number
-        const count = await prisma.salesOrder.count()
-        const orderNumber = `SO-${String(count + 1).padStart(6, '0')}`
+        const orderNumber = await nextCode(prisma, 'salesOrderCodeSeq', 'SO', 6, '-', 'SalesOrder', 'orderNumber')
 
         const order = await prisma.salesOrder.create({
             data: {

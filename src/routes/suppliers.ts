@@ -4,6 +4,7 @@ import { requireRole } from '../middleware/roleMiddleware'
 import { validate } from '../middleware/validate'
 import { CreateSupplierSchema, UpdateSupplierSchema } from '../schemas'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
+import { nextCode } from '../lib/codeGenerator'
 
 const router = Router()
 
@@ -294,8 +295,7 @@ router.post('/', authMiddleware, requireRole('admin', 'manager'), validate(Creat
         const prisma = req.storePrisma!
         const { name, contactName, phone, email, address, taxCode, status, notes } = req.body
         if (!name?.trim()) return res.status(400).json({ success: false, error: 'Name required' })
-        const count = await prisma.supplier.count()
-        const code = `NCC-${String(count + 1).padStart(3, '0')}`
+        const code = await nextCode(prisma, 'supplierCodeSeq', 'NCC', 3, '-', 'Supplier', 'code')
         const supplier = await prisma.supplier.create({
             data: { code, name: name.trim(), contactName, phone, email, address, taxCode, status: status || 'active', notes },
         })

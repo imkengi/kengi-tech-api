@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
+import { nextCode, withCodeCollisionRetry } from '../lib/codeGenerator'
 
 const router = Router()
 
@@ -100,25 +101,13 @@ router.post('/', authMiddleware, requireRole('admin', 'manager'), async (req: Au
             },
         })
 
-        // Retry on PO-code race: P2002 = unique constraint violation on `code`
-        let po: any = null
-        let lastErr: any = null
-        for (let attempt = 0; attempt < 5; attempt++) {
-            const count = await prisma.purchaseOrder.count()
-            const code = `PO-${String(count + 1 + attempt).padStart(3, '0')}`
-            try {
-                po = await prisma.purchaseOrder.create({
-                    data: buildData(code) as any,
-                    include: { items: true },
-                })
-                break
-            } catch (err: any) {
-                lastErr = err
-                if (err?.code !== 'P2002') throw err
-                // unique-constraint clash on `code` — retry with next number
-            }
-        }
-        if (!po) throw lastErr || new Error('Failed to allocate PO code')
+        const po = await withCodeCollisionRetry(async () => {
+            const code = await nextCode(prisma, 'purchaseOrderCodeSeq', 'PO', 3, '-', 'PurchaseOrder', 'code')
+            return prisma.purchaseOrder.create({
+                data: buildData(code) as any,
+                include: { items: true },
+            })
+        })
 
         res.status(201).json({ success: true, data: po })
     } catch (err) {

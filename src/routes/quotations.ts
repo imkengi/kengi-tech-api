@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
 import { validate } from '../middleware/validate'
 import { CreateQuotationSchema, UpdateQuotationSchema } from '../schemas'
+import { nextCode } from '../lib/codeGenerator'
 
 const router = Router()
 
@@ -99,7 +100,7 @@ router.post('/', authMiddleware, validate(CreateQuotationSchema), async (req: Au
         const prisma = req.storePrisma!
         const { customerName, customerPhone, customerEmail, items, totalAmount, total, subtotal, discount, validUntil, notes, code } = req.body
         if (!customerName?.trim()) return res.status(400).json({ success: false, error: 'Customer name required' })
-        const finalCode = code || `QT-${String((await prisma.quotation.count()) + 1).padStart(4, '0')}`
+        const finalCode = code || await nextCode(prisma, 'quotationCodeSeq', 'QT', 4, '-', 'Quotation', 'code')
         const finalTotal = Number(totalAmount) || Number(total) || 0
         const data = await prisma.quotation.create({
             data: {

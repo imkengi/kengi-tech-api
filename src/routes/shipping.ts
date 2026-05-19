@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
+import { nextCode } from '../lib/codeGenerator'
 
 const router = Router()
 
@@ -85,8 +86,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
             } catch {}
         }
 
-        const count = await prisma.shippingOrder.count()
-        const code = `SH-${String(count + 1).padStart(4, '0')}`
+        const code = await nextCode(prisma, 'shippingOrderCodeSeq', 'SH', 4, '-', 'ShippingOrder', 'code')
         const data = await prisma.shippingOrder.create({
             data: {
                 code,

@@ -7,6 +7,7 @@ import {
     UpdateWarehouseSchema,
     CreateStockTransferSchema,
 } from '../schemas'
+import { nextCode } from '../lib/codeGenerator'
 
 const router = Router()
 
@@ -450,14 +451,7 @@ router.post(
 
             // Atomic transaction: create transfer + adjust stocks
             const transfer = await prisma.$transaction(async (tx: any) => {
-                // Generate code with retry on collision
-                let code = ''
-                for (let attempt = 0; attempt < 5; attempt++) {
-                    const count = await tx.stockTransfer.count()
-                    code = `TRF-${String(count + 1 + attempt).padStart(5, '0')}`
-                    const dup = await tx.stockTransfer.findFirst({ where: { code }, select: { id: true } })
-                    if (!dup) break
-                }
+                const code = await nextCode(tx, 'stockTransferCodeSeq', 'TRF', 5, '-', 'StockTransfer', 'code')
 
                 const created = await tx.stockTransfer.create({
                     data: {
