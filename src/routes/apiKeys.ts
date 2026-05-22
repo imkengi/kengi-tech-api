@@ -81,12 +81,14 @@ router.post('/regenerate', authMiddleware, async (req: AuthRequest, res: Respons
             },
         })
 
-        // Return the secret ONCE
+        // Return the secret ONCE with clientId + clientSecret for token exchange
         res.json({
             success: true,
             data: {
                 ...apiKey,
-                secret, // ⚠️ Only returned once
+                secret,
+                clientId: apiKey.keyId,      // alias for token exchange
+                clientSecret: secret,        // alias for token exchange
             },
         })
     } catch (err) {

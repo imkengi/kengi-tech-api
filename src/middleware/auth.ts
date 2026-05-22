@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
-import { getStorePrisma } from '../lib/prisma'
+import { getStorePrisma, registryPrisma } from '../lib/prisma'
 import { getStoreStatus } from '../lib/storeStatusCache'
 import { PrismaClient as StorePrisma } from '../generated/store-client'
 
@@ -34,10 +34,40 @@ function resolveSchema(payload: AuthPayload): string | undefined {
 }
 
 // ─── Try to authenticate via X-API-Key header ─────────────────────────────────
+// Supports two modes:
+//   1. JWT + X-API-Key: schema resolved from JWT payload (original flow)
+//   2. Standalone X-API-Key + X-Store-Code: schema resolved from registry DB
 async function tryApiKeyAuth(req: AuthRequest): Promise<boolean> {
     const apiKey = req.headers['x-api-key'] as string | undefined
-    const schema = req.user ? resolveSchema(req.user) : undefined
-    if (!apiKey || !schema) return false
+    if (!apiKey) return false
+
+    // Resolve schema: prefer JWT payload, fall back to X-Store-Code header
+    let schema = req.user ? resolveSchema(req.user) : undefined
+    let storeId = req.user?.storeId
+    let storeCode = req.user?.storeCode
+
+    if (!schema) {
+        // Standalone mode: resolve schema from X-Store-Code header via registry DB
+        const headerStoreCode = req.headers['x-store-code'] as string | undefined
+        if (!headerStoreCode) return false
+
+        try {
+            const store = await registryPrisma.store.findFirst({
+                where: { code: { equals: headerStoreCode, mode: 'insensitive' } },
+                include: { branches: { where: { isMain: true }, take: 1 } },
+            })
+            if (!store || !store.branches[0]) return false
+
+            const mainBranch = store.branches[0]
+            schema = `branch_${mainBranch.id}`
+            storeId = store.id
+            storeCode = store.code
+        } catch {
+            return false
+        }
+    }
+
+    if (!schema) return false
 
     try {
         const storePrisma = getStorePrisma(schema)
@@ -54,8 +84,8 @@ async function tryApiKeyAuth(req: AuthRequest): Promise<boolean> {
                     userId: key.user.id,
                     email: key.user.email,
                     role: key.user.role,
-                    storeId: req.user?.storeId,
-                    storeCode: req.user?.storeCode,
+                    storeId,
+                    storeCode,
                     branchId: key.user.branchId || undefined,
                     branchSchema: schema,
                     storeSchema: schema,  // alias

@@ -1227,4 +1227,85 @@ router.post('/reset-password', async (req: Request, res: Response) => {
     }
 })
 
+// ─── POST /token — OAuth2 Client Credentials → Access Token ─────────────────
+// No auth required. Accepts { clientId, clientSecret, storeCode } and returns
+// a JWT access token (1 hour) that can be used as a Bearer token for all API calls.
+router.post('/token', async (req: Request, res: Response) => {
+    try {
+        const { clientId, clientSecret, storeCode } = req.body
+        if (!clientId || !clientSecret || !storeCode) {
+            res.status(400).json({
+                success: false,
+                error: 'clientId, clientSecret, and storeCode are required',
+            })
+            return
+        }
+
+        // Look up store
+        const store = await registryPrisma.store.findFirst({
+            where: { code: { equals: storeCode, mode: 'insensitive' } },
+            include: { branches: { where: { isMain: true }, take: 1 } },
+        })
+        if (!store || !store.branches[0]) {
+            res.status(404).json({ success: false, error: 'Store not found' })
+            return
+        }
+
+        const mainBranch = store.branches[0]
+        const schema = `branch_${mainBranch.id}`
+        const storePrisma = getStorePrisma(schema)
+
+        // Find API key by clientId (keyId)
+        const apiKey = await storePrisma.apiKey.findFirst({
+            where: { keyId: clientId, isActive: true },
+            include: { user: true },
+        })
+        if (!apiKey) {
+            res.status(401).json({ success: false, error: 'Invalid clientId' })
+            return
+        }
+
+        // Verify clientSecret against stored hash
+        const valid = await bcrypt.compare(clientSecret, apiKey.secretHash)
+        if (!valid) {
+            res.status(401).json({ success: false, error: 'Invalid clientSecret' })
+            return
+        }
+
+        // Generate JWT token (same shape as login tokens)
+        const payload = {
+            userId: apiKey.user.id,
+            email: apiKey.user.email,
+            role: apiKey.user.role,
+            storeId: store.id,
+            storeCode: store.code,
+            branchId: mainBranch.id,
+            branchSchema: schema,
+            storeSchema: schema,
+            isMainBranch: true,
+        }
+
+        const token = jwt.sign(payload, JWT_SECRET, { algorithm: 'HS256', expiresIn: '1h' })
+
+        // Update last used
+        storePrisma.apiKey.update({
+            where: { id: apiKey.id },
+            data: { lastUsedAt: new Date() },
+        }).catch(() => { })
+
+        res.json({
+            success: true,
+            data: {
+                access_token: token,
+                token_type: 'Bearer',
+                expires_in: 3600,
+                scope: apiKey.scopes || 'admin',
+            },
+        })
+    } catch (err: any) {
+        console.error('Token exchange error:', err?.message || err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
 export default router
