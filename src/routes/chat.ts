@@ -1,4 +1,5 @@
 import { Router, Response, Request } from 'express'
+import { errMsg } from '../lib/errorResponse'
 import rateLimit from 'express-rate-limit'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { registryPrisma, getStorePrisma } from '../lib/prisma'
@@ -445,7 +446,7 @@ router.get('/shopee/conversations', authMiddleware, async (req: AuthRequest, res
         })
     } catch (err: any) {
         console.error('Shopee get conversations error:', err)
-        res.status(500).json({ success: false, error: err.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -501,7 +502,7 @@ router.get('/shopee/messages/:conversationId', authMiddleware, async (req: AuthR
         })
     } catch (err: any) {
         console.error('Shopee get messages error:', err)
-        res.status(500).json({ success: false, error: err.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -531,7 +532,7 @@ router.post('/shopee/send', authMiddleware, async (req: AuthRequest, res: Respon
         })
     } catch (err: any) {
         console.error('Shopee send message error:', err)
-        res.status(500).json({ success: false, error: err.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -555,7 +556,7 @@ router.post('/shopee/read', authMiddleware, async (req: AuthRequest, res: Respon
         res.json({ success: true })
     } catch (err: any) {
         console.error('Shopee read conversation error:', err)
-        res.status(500).json({ success: false, error: err.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 

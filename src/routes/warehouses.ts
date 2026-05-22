@@ -1,4 +1,5 @@
 import { Router, Response } from 'express'
+import { errorDetail } from '../lib/errorResponse'
 import { authMiddleware, AuthRequest, getBranchFilter, getBranchId } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
 import { validate } from '../middleware/validate'
@@ -525,7 +526,7 @@ router.post(
             res.status(201).json({ success: true, data: transfer })
         } catch (err: any) {
             console.error('Create stock transfer error:', err)
-            res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
+            res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
         }
     },
 )

@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express'
+import { errMsg } from '../lib/errorResponse'
 import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
 import { createJournalEntriesForTransaction, AUTO_JOURNAL_REF_TYPES } from '../lib/autoJournal'
 
@@ -555,7 +556,7 @@ router.post('/declarations', authMiddleware, async (req: AuthRequest, res: Respo
         res.status(201).json({ success: true, data })
     } catch (err: any) {
         console.error('POST /declarations error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -615,7 +616,7 @@ router.put('/declarations/:id', authMiddleware, async (req: AuthRequest, res: Re
         res.json({ success: true, data })
     } catch (err: any) {
         console.error('PUT /declarations/:id error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -628,7 +629,7 @@ router.delete('/declarations/:id', authMiddleware, async (req: AuthRequest, res:
         res.json({ success: true })
     } catch (err: any) {
         console.error('DELETE /declarations/:id error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -653,7 +654,7 @@ router.get('/declarations/:id/xml', authMiddleware, async (req: AuthRequest, res
         res.send(xml)
     } catch (err: any) {
         console.error('GET /declarations/:id/xml error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -774,7 +775,7 @@ router.post('/vat-amendment', authMiddleware, async (req: AuthRequest, res: Resp
         res.status(201).json({ success: true, data })
     } catch (err: any) {
         console.error('POST /vat-amendment error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -795,7 +796,7 @@ router.get('/vat-amendment', authMiddleware, async (req: AuthRequest, res: Respo
         res.json({ success: true, data: rows })
     } catch (err: any) {
         console.error('GET /vat-amendment error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -833,7 +834,7 @@ router.get('/vat-amendment/:id', authMiddleware, async (req: AuthRequest, res: R
         })
     } catch (err: any) {
         console.error('GET /vat-amendment/:id error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -868,7 +869,7 @@ router.get('/vat-amendment/:id/diff', authMiddleware, async (req: AuthRequest, r
         })
     } catch (err: any) {
         console.error('GET /vat-amendment/:id/diff error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -917,7 +918,7 @@ router.post('/vat-amendment/:id/submit', authMiddleware, async (req: AuthRequest
         res.json({ success: true, data: submitted })
     } catch (err: any) {
         console.error('POST /vat-amendment/:id/submit error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -1570,7 +1571,7 @@ router.post('/fixed-assets', authMiddleware, async (req: AuthRequest, res: Respo
     } catch (err: any) {
         console.error('POST /fixed-assets error:', err)
         if (err?.code === 'P2002') return res.status(400).json({ success: false, error: 'Mã tài sản đã tồn tại' })
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -1683,7 +1684,7 @@ router.put('/fixed-assets/:id', authMiddleware, async (req: AuthRequest, res: Re
     } catch (err: any) {
         console.error('PUT /fixed-assets/:id error:', err)
         if (err?.code === 'P2002') return res.status(400).json({ success: false, error: 'Mã tài sản đã tồn tại' })
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -3979,7 +3980,7 @@ router.post('/inventory-count', authMiddleware, async (req: AuthRequest, res: Re
         res.status(201).json({ success: true, data: created })
     } catch (err: any) {
         console.error('POST /inventory-count error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -4071,7 +4072,7 @@ router.put('/inventory-count/:id/items', authMiddleware, async (req: AuthRequest
         res.json({ success: true, data: { updatedCount: updated.length, items: updated } })
     } catch (err: any) {
         console.error('PUT /inventory-count/:id/items error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -4236,7 +4237,7 @@ router.post('/inventory-count/:id/finalize', authMiddleware, async (req: AuthReq
         })
     } catch (err: any) {
         console.error('POST /inventory-count/:id/finalize error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -4364,7 +4365,7 @@ router.get('/inventory-count/:id/report', authMiddleware, async (req: AuthReques
         })
     } catch (err: any) {
         console.error('GET /inventory-count/:id/report error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -4735,7 +4736,7 @@ router.post('/cit-declaration', authMiddleware, async (req: AuthRequest, res: Re
         if (err?.code === 'P2002') {
             return res.status(409).json({ success: false, error: 'Tờ khai cho kỳ này đã tồn tại' })
         }
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -5097,7 +5098,7 @@ router.post('/pit-settlement', authMiddleware, async (req: AuthRequest, res: Res
         })
     } catch (err: any) {
         console.error('POST /pit-settlement error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -5312,7 +5313,7 @@ router.post('/adjustment-invoices', authMiddleware, async (req: AuthRequest, res
         res.status(201).json({ success: true, data: created })
     } catch (err: any) {
         console.error('POST /adjustment-invoices error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -5444,7 +5445,7 @@ router.put('/adjustment-invoices/:id', authMiddleware, async (req: AuthRequest, 
         res.json({ success: true, data: updated })
     } catch (err: any) {
         console.error('PUT /adjustment-invoices/:id error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -5565,7 +5566,7 @@ router.post('/adjustment-invoices/:id/approve', authMiddleware, async (req: Auth
         })
     } catch (err: any) {
         console.error('POST /adjustment-invoices/:id/approve error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -5757,7 +5758,7 @@ router.get('/cash-flow-statement', authMiddleware, async (req: AuthRequest, res:
         })
     } catch (err: any) {
         console.error('GET /cash-flow-statement error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -5888,7 +5889,7 @@ router.post('/chart-of-accounts/seed', authMiddleware, async (req: AuthRequest, 
         })
     } catch (err: any) {
         console.error('POST /chart-of-accounts/seed error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -5915,7 +5916,7 @@ router.get('/chart-of-accounts', authMiddleware, async (req: AuthRequest, res: R
         res.json({ success: true, data })
     } catch (err: any) {
         console.error('GET /chart-of-accounts error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -5942,7 +5943,7 @@ router.get('/chart-of-accounts/tree', authMiddleware, async (req: AuthRequest, r
         res.json({ success: true, data: roots })
     } catch (err: any) {
         console.error('GET /chart-of-accounts/tree error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -5956,7 +5957,7 @@ router.get('/chart-of-accounts/:code', authMiddleware, async (req: AuthRequest, 
         res.json({ success: true, data: acc })
     } catch (err: any) {
         console.error('GET /chart-of-accounts/:code error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -5993,7 +5994,7 @@ router.post('/chart-of-accounts', authMiddleware, async (req: AuthRequest, res: 
         res.status(201).json({ success: true, data })
     } catch (err: any) {
         console.error('POST /chart-of-accounts error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -6020,7 +6021,7 @@ router.put('/chart-of-accounts/:code', authMiddleware, async (req: AuthRequest, 
         res.json({ success: true, data })
     } catch (err: any) {
         console.error('PUT /chart-of-accounts/:code error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -6038,7 +6039,7 @@ router.delete('/chart-of-accounts/:code', authMiddleware, async (req: AuthReques
         res.json({ success: true, data })
     } catch (err: any) {
         console.error('DELETE /chart-of-accounts/:code error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -6064,7 +6065,7 @@ router.get('/exchange-rates', authMiddleware, async (req: AuthRequest, res: Resp
         res.json({ success: true, data })
     } catch (err: any) {
         console.error('GET /exchange-rates error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -6077,7 +6078,7 @@ router.get('/exchange-rates/:id', authMiddleware, async (req: AuthRequest, res: 
         res.json({ success: true, data })
     } catch (err: any) {
         console.error('GET /exchange-rates/:id error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -6113,7 +6114,7 @@ router.post('/exchange-rates', authMiddleware, async (req: AuthRequest, res: Res
         res.status(201).json({ success: true, data })
     } catch (err: any) {
         console.error('POST /exchange-rates error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -6130,7 +6131,7 @@ router.put('/exchange-rates/:id', authMiddleware, async (req: AuthRequest, res: 
         res.json({ success: true, data })
     } catch (err: any) {
         console.error('PUT /exchange-rates/:id error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -6142,7 +6143,7 @@ router.delete('/exchange-rates/:id', authMiddleware, async (req: AuthRequest, re
         res.json({ success: true })
     } catch (err: any) {
         console.error('DELETE /exchange-rates/:id error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -6225,7 +6226,7 @@ router.post('/exchange-rates/revalue', authMiddleware, async (req: AuthRequest, 
         })
     } catch (err: any) {
         console.error('POST /exchange-rates/revalue error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -6388,7 +6389,7 @@ router.get('/deadlines', authMiddleware, async (req: AuthRequest, res: Response)
         res.json({ success: true, data })
     } catch (err: any) {
         console.error('GET /deadlines error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -6409,7 +6410,7 @@ router.get('/deadlines/overdue', authMiddleware, async (req: AuthRequest, res: R
         res.json({ success: true, data })
     } catch (err: any) {
         console.error('GET /deadlines/overdue error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -6447,7 +6448,7 @@ router.put('/deadlines/:id', authMiddleware, async (req: AuthRequest, res: Respo
         res.json({ success: true, data })
     } catch (err: any) {
         console.error('PUT /deadlines/:id error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -6478,7 +6479,7 @@ router.get('/audit-log', authMiddleware, async (req: AuthRequest, res: Response)
         res.json({ success: true, data })
     } catch (err: any) {
         console.error('GET /audit-log error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -6494,7 +6495,7 @@ router.post('/audit-log', authMiddleware, async (req: AuthRequest, res: Response
         res.status(201).json({ success: true })
     } catch (err: any) {
         console.error('POST /audit-log error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -6516,7 +6517,7 @@ router.get('/budget', authMiddleware, async (req: AuthRequest, res: Response) =>
         res.json({ success: true, data })
     } catch (err: any) {
         console.error('GET /budget error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -6558,7 +6559,7 @@ router.post('/budget', authMiddleware, async (req: AuthRequest, res: Response) =
         res.status(201).json({ success: true, data })
     } catch (err: any) {
         console.error('POST /budget error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -6578,7 +6579,7 @@ router.put('/budget/:id', authMiddleware, async (req: AuthRequest, res: Response
         res.json({ success: true, data })
     } catch (err: any) {
         console.error('PUT /budget/:id error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -6592,7 +6593,7 @@ router.delete('/budget/:id', authMiddleware, async (req: AuthRequest, res: Respo
         res.json({ success: true })
     } catch (err: any) {
         console.error('DELETE /budget/:id error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -6692,7 +6693,7 @@ router.get('/budget-vs-actual', authMiddleware, async (req: AuthRequest, res: Re
         })
     } catch (err: any) {
         console.error('GET /budget-vs-actual error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -6818,7 +6819,7 @@ router.get('/reports/summary', authMiddleware, async (req: AuthRequest, res: Res
         })
     } catch (err: any) {
         console.error('GET /reports/summary error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -6882,7 +6883,7 @@ router.get('/reports/tax-obligations', authMiddleware, async (req: AuthRequest, 
         })
     } catch (err: any) {
         console.error('GET /reports/tax-obligations error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -6992,7 +6993,7 @@ router.get('/export/trial-balance', authMiddleware, async (req: AuthRequest, res
         })
     } catch (err: any) {
         console.error('GET /export/trial-balance error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -7082,7 +7083,7 @@ router.get('/export/general-ledger', authMiddleware, async (req: AuthRequest, re
         })
     } catch (err: any) {
         console.error('GET /export/general-ledger error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -7131,7 +7132,7 @@ router.get('/export/journal-book', authMiddleware, async (req: AuthRequest, res:
         })
     } catch (err: any) {
         console.error('GET /export/journal-book error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 

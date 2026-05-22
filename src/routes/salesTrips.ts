@@ -1,4 +1,5 @@
 import { Router, Response } from 'express'
+import { errorDetail } from '../lib/errorResponse'
 import { authMiddleware, AuthRequest, getBranchFilter, getBranchId } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
 import { validate } from '../middleware/validate'
@@ -398,7 +399,7 @@ router.post(
             res.status(201).json({ success: true, data: shapeTrip(trip) })
         } catch (err: any) {
             console.error('Create sales trip error:', err)
-            res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
+            res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
         }
     },
 )
@@ -528,7 +529,7 @@ const loadHandler = async (req: AuthRequest, res: Response) => {
             res.json({ success: true, data: shapeTrip(updated) })
         } catch (err: any) {
             console.error('Load sales trip error:', err)
-            res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
+            res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
         }
 }
 
@@ -661,7 +662,7 @@ const unloadHandler = async (req: AuthRequest, res: Response) => {
         res.json({ success: true, data: shapeTrip(updated) })
     } catch (err: any) {
         console.error('Unload sales trip error:', err)
-        res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
+        res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
     }
 }
 
@@ -719,7 +720,7 @@ const startHandler = async (req: AuthRequest, res: Response) => {
             res.json({ success: true, data: shapeTrip(updated) })
         } catch (err: any) {
             console.error('Start sales trip error:', err)
-            res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
+            res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
         }
 }
 
@@ -763,7 +764,7 @@ const pauseHandler = async (req: AuthRequest, res: Response) => {
         res.json({ success: true, data: shapeTrip(updated) })
     } catch (err: any) {
         console.error('Pause sales trip error:', err)
-        res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
+        res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
     }
 }
 
@@ -806,7 +807,7 @@ const resumeHandler = async (req: AuthRequest, res: Response) => {
         res.json({ success: true, data: shapeTrip(updated) })
     } catch (err: any) {
         console.error('Resume sales trip error:', err)
-        res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
+        res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
     }
 }
 
@@ -941,7 +942,7 @@ router.post(
             res.json({ success: true, data: shapeTrip(updated) })
         } catch (err: any) {
             console.error('Record sales trip sale error:', err)
-            res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
+            res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
         }
     },
 )
@@ -1023,7 +1024,7 @@ const reconcileHandler = async (req: AuthRequest, res: Response) => {
         res.json({ success: true, data: shapeTrip(updated) })
     } catch (err: any) {
         console.error('Reconcile sales trip error:', err)
-        res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
+        res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
     }
 }
 
@@ -1140,7 +1141,7 @@ const closeHandler = async (req: AuthRequest, res: Response) => {
             res.json({ success: true, data: shapeTrip(updated) })
         } catch (err: any) {
             console.error('Close sales trip error:', err)
-            res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
+            res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
         }
 }
 
@@ -1266,7 +1267,7 @@ router.post(
             res.json({ success: true, data: shapeTrip(updated) })
         } catch (err: any) {
             console.error('Cancel sales trip error:', err)
-            res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
+            res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
         }
     },
 )
@@ -1355,7 +1356,7 @@ router.delete(
             res.json({ success: true })
         } catch (err: any) {
             console.error('Delete sales trip error:', err)
-            res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
+            res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
         }
     },
 )

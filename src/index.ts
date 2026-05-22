@@ -3,6 +3,7 @@ import cors from 'cors'
 import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
 import { registryPrisma, disconnectAll } from './lib/prisma'
+import { errorDetail } from './lib/errorResponse'
 import authRoutes from './routes/auth'
 import productRoutes from './routes/products'
 import categoryRoutes from './routes/categories'
@@ -123,6 +124,17 @@ const authLimiter = rateLimit({
     skip: (req: express.Request) => process.env.NODE_ENV === 'development' && (req.ip === '::1' || req.ip === '127.0.0.1'),
 })
 
+// Very strict limit for signup — each signup provisions a new PostgreSQL schema
+// and pushes the full table set (expensive + blocking), so it's a prime DoS target.
+const signupLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 3,                    // 3 store signups per IP per hour
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, error: 'Quá nhiều lần đăng ký. Vui lòng thử lại sau 1 giờ.' },
+    skip: (req: express.Request) => process.env.NODE_ENV === 'development' && (req.ip === '::1' || req.ip === '127.0.0.1'),
+})
+
 // General API rate limit
 const apiLimiter = rateLimit({
     windowMs: 60 * 1000, // 1 minute
@@ -133,6 +145,7 @@ const apiLimiter = rateLimit({
     skip: (req: express.Request) => process.env.NODE_ENV === 'development' && (req.ip === '::1' || req.ip === '127.0.0.1'),
 })
 
+app.use('/api/auth/signup', signupLimiter)
 app.use('/api/auth/login', authLimiter)
 app.use('/api', apiLimiter)
 
@@ -234,7 +247,7 @@ app.get('/api/health', async (_req, res) => {
 // ─── Error handler ──────────────────────────────────────────────────────────
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     console.error('Unhandled error:', err)
-    res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message || String(err) })
+    res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
 })
 
 // ─── Start ──────────────────────────────────────────────────────────────────
@@ -323,6 +336,39 @@ if (!process.env.PASSENGER_BASE_URI) {
                 console.log('✅ RefreshToken table ready')
             } catch (err: any) {
                 console.error('⚠️ RefreshToken table migration failed:', err.message)
+            }
+            }
+
+            // Auto-create Pending2FA table if not exists (idempotent migration).
+            // Backs the 2FA login handshake so verify requests work across Cloud Run instances.
+            if (!(await isMigrationApplied('pending_2fa_v1'))) {
+            try {
+                await registryPrisma.$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "public"."Pending2FA" (
+                        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+                        "loginToken" TEXT UNIQUE NOT NULL,
+                        "userId" TEXT NOT NULL,
+                        email TEXT NOT NULL,
+                        role TEXT NOT NULL,
+                        "storeId" TEXT NOT NULL,
+                        "storeCode" TEXT NOT NULL,
+                        "branchId" TEXT,
+                        "branchSchema" TEXT NOT NULL,
+                        "isMainBranch" BOOLEAN NOT NULL DEFAULT false,
+                        "deviceId" TEXT,
+                        "userData" TEXT NOT NULL,
+                        "storeData" TEXT NOT NULL,
+                        "branchData" TEXT,
+                        "expiresAt" TIMESTAMP NOT NULL,
+                        "createdAt" TIMESTAMP NOT NULL DEFAULT NOW()
+                    )
+                `)
+                await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Pending2FA_loginToken_idx" ON "public"."Pending2FA"("loginToken")`)
+                await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Pending2FA_expiresAt_idx" ON "public"."Pending2FA"("expiresAt")`)
+                await markMigrationApplied('pending_2fa_v1')
+                console.log('✅ Pending2FA table ready')
+            } catch (err: any) {
+                console.error('⚠️ Pending2FA table migration failed:', err.message)
             }
             }
 

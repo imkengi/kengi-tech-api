@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express'
-import { authMiddleware, AuthRequest } from '../middleware/auth'
+import { authMiddleware, AuthRequest, canAccessBranch } from '../middleware/auth'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { nextCode, withCodeCollisionRetry } from '../lib/codeGenerator'
 
@@ -74,6 +74,7 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
             include: { maintenanceLogs: { orderBy: { serviceDate: 'desc' } } }
         })
         if (!data) return res.status(404).json({ success: false, error: 'Vehicle not found' })
+        if (!canAccessBranch(req, data.branchId)) return res.status(404).json({ success: false, error: 'Vehicle not found' })
         res.json({ success: true, data })
     } catch (err) { res.status(500).json({ success: false, error: 'Internal server error' }) }
 })

@@ -1,5 +1,5 @@
 import { Router, Response } from 'express'
-import { authMiddleware, AuthRequest, getBranchFilter } from '../middleware/auth'
+import { authMiddleware, AuthRequest, getBranchFilter, canAccessBranch } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
 import { requirePermission } from '../middleware/permissionMiddleware'
 import { cacheDel } from '../lib/cache'
@@ -126,6 +126,11 @@ router.get('/:id', authMiddleware, requirePermission('orders.view'), async (req:
             include: ORDER_INCLUDE,
         })
         if (!order) return res.status(404).json({ success: false, error: 'Không tìm thấy đơn hàng' })
+
+        // Branch ownership: prevent reading another branch's order by id
+        if (!canAccessBranch(req, order.branchId)) {
+            return res.status(404).json({ success: false, error: 'Không tìm thấy đơn hàng' })
+        }
 
         // Sales role can only view their own orders
         if (!isProcessor(req.user?.role) && order.salesUserId !== req.user!.userId) {

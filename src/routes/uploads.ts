@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express'
+import { errMsg } from '../lib/errorResponse'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
 import { getSignedUploadUrl, deleteFile, isStorageEnabled } from '../lib/storage'
@@ -115,7 +116,7 @@ router.post('/direct', authMiddleware, upload.single('file'), async (req: AuthRe
         })
     } catch (err: any) {
         console.error('Direct upload error:', err)
-        res.status(500).json({ success: false, error: err.message || 'Upload failed' })
+        res.status(500).json({ success: false, error: errMsg(err, 'Upload failed') })
     }
 })
 
@@ -165,7 +166,7 @@ router.post('/base64', authMiddleware, async (req: AuthRequest, res: Response) =
         })
     } catch (err: any) {
         console.error('Base64 upload error:', err)
-        res.status(500).json({ success: false, error: err.message || 'Upload failed' })
+        res.status(500).json({ success: false, error: errMsg(err, 'Upload failed') })
     }
 })
 
@@ -206,7 +207,7 @@ router.post('/signed-url', authMiddleware, async (req: AuthRequest, res: Respons
         res.json({ success: true, data: result })
     } catch (err: any) {
         console.error('Signed URL error:', err)
-        res.status(500).json({ success: false, error: err.message || 'Failed to generate signed URL' })
+        res.status(500).json({ success: false, error: errMsg(err, 'Failed to generate signed URL') })
     }
 })
 
@@ -241,7 +242,7 @@ router.delete('/:filename(*)', authMiddleware, requireRole('admin', 'manager'), 
         res.json({ success: true, message: 'File deleted' })
     } catch (err: any) {
         console.error('Delete file error:', err)
-        res.status(500).json({ success: false, error: err.message || 'Failed to delete file' })
+        res.status(500).json({ success: false, error: errMsg(err, 'Failed to delete file') })
     }
 })
 

@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express'
+import { errorDetail } from '../lib/errorResponse'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import crypto from 'crypto'
@@ -87,23 +88,64 @@ setInterval(() => {
     registryPrisma.refreshToken.deleteMany({ where: { expiresAt: { lt: now } } }).catch(() => {})
 }, 60 * 60 * 1000)
 
-// ─── Pending 2FA login store ─────────────────────────────────────────────────
-// Maps loginToken -> { payload data needed to complete login after 2FA verification }
-const pending2FAStore = new Map<string, {
+// ─── Pending 2FA login store (registry DB is source of truth) ────────────────
+// Holds the partial login state between /login (password OK, 2FA required) and
+// /verify-2fa. Backed by the public.Pending2FA table (see prisma/schema.prisma)
+// rather than an in-memory Map, so on Cloud Run the verify request can be served
+// by any instance. Rows carry a short TTL (5 min) and are deleted on success.
+const PENDING_2FA_TTL_MS = 5 * 60 * 1000
+
+type Pending2FAPayload = {
     userId: string; email: string; role: string;
     storeId: string; storeCode: string;
     branchId: string | null; branchSchema: string;
     isMainBranch: boolean; deviceId?: string;
     user: any; store: any; branch: any;
-    expiresAt: Date;
-}>()
+}
 
-// Cleanup expired pending 2FA tokens every 5 minutes
-setInterval(() => {
-    const now = new Date()
-    for (const [token, data] of pending2FAStore) {
-        if (data.expiresAt < now) pending2FAStore.delete(token)
+async function savePending2FA(loginToken: string, p: Pending2FAPayload, expiresAt: Date): Promise<void> {
+    await registryPrisma.pending2FA.create({
+        data: {
+            loginToken,
+            userId: p.userId,
+            email: p.email,
+            role: p.role,
+            storeId: p.storeId,
+            storeCode: p.storeCode,
+            branchId: p.branchId,
+            branchSchema: p.branchSchema,
+            isMainBranch: p.isMainBranch,
+            deviceId: p.deviceId ?? null,
+            userData: JSON.stringify(p.user ?? null),
+            storeData: JSON.stringify(p.store ?? null),
+            branchData: p.branch != null ? JSON.stringify(p.branch) : null,
+            expiresAt,
+        },
+    })
+}
+
+async function loadPending2FA(loginToken: string): Promise<(Pending2FAPayload & { expiresAt: Date }) | null> {
+    const row = await registryPrisma.pending2FA.findUnique({ where: { loginToken } })
+    if (!row) return null
+    return {
+        userId: row.userId, email: row.email, role: row.role,
+        storeId: row.storeId, storeCode: row.storeCode,
+        branchId: row.branchId, branchSchema: row.branchSchema,
+        isMainBranch: row.isMainBranch, deviceId: row.deviceId ?? undefined,
+        user: row.userData ? JSON.parse(row.userData) : null,
+        store: row.storeData ? JSON.parse(row.storeData) : null,
+        branch: row.branchData ? JSON.parse(row.branchData) : null,
+        expiresAt: row.expiresAt,
     }
+}
+
+async function deletePending2FA(loginToken: string): Promise<void> {
+    await registryPrisma.pending2FA.deleteMany({ where: { loginToken } }).catch(() => {})
+}
+
+// Cleanup expired pending 2FA rows every 5 minutes
+setInterval(() => {
+    registryPrisma.pending2FA.deleteMany({ where: { expiresAt: { lt: new Date() } } }).catch(() => {})
 }, 5 * 60 * 1000)
 
 function generateRefreshToken(): string {
@@ -314,7 +356,7 @@ router.post('/branches', async (req: Request, res: Response) => {
         })
     } catch (err: any) {
         console.error('Get branches error:', err)
-        res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message || String(err) })
+        res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
     }
 })
 
@@ -434,14 +476,13 @@ router.post('/login', async (req: Request, res: Response) => {
             if (!isTrusted) {
                 // Require 2FA — return a temporary loginToken
                 const loginToken = crypto.randomBytes(32).toString('hex')
-                pending2FAStore.set(loginToken, {
+                await savePending2FA(loginToken, {
                     userId: user.id, email: user.email, role: user.role,
                     storeId: store.id, storeCode: store.code,
                     branchId: effectiveBranchId, branchSchema,
                     isMainBranch: branch?.isMainBranch || false,
                     deviceId, user: userData, store: storeData, branch,
-                    expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes TTL
-                })
+                }, new Date(Date.now() + PENDING_2FA_TTL_MS))
                 return res.json({
                     success: true,
                     data: {
@@ -489,12 +530,12 @@ router.post('/verify-2fa', async (req: Request, res: Response) => {
             return res.status(400).json({ success: false, error: 'loginToken và totpCode là bắt buộc' })
         }
 
-        const pending = pending2FAStore.get(loginToken)
+        const pending = await loadPending2FA(loginToken)
         if (!pending) {
             return res.status(401).json({ success: false, error: 'Phiên đăng nhập 2FA đã hết hạn, vui lòng đăng nhập lại' })
         }
         if (pending.expiresAt < new Date()) {
-            pending2FAStore.delete(loginToken)
+            await deletePending2FA(loginToken)
             return res.status(401).json({ success: false, error: 'Phiên đăng nhập 2FA đã hết hạn' })
         }
 
@@ -503,7 +544,7 @@ router.post('/verify-2fa', async (req: Request, res: Response) => {
         const branchPrisma = getStorePrisma(pending.branchSchema)
         const user = await branchPrisma.user.findUnique({ where: { id: pending.userId }, select: { twoFactorSecret: true, trustedDevices: true } })
         if (!user?.twoFactorSecret) {
-            pending2FAStore.delete(loginToken)
+            await deletePending2FA(loginToken)
             return res.status(400).json({ success: false, error: '2FA chưa được thiết lập' })
         }
 
@@ -513,7 +554,7 @@ router.post('/verify-2fa', async (req: Request, res: Response) => {
         }
 
         // 2FA valid — consume the pending token
-        pending2FAStore.delete(loginToken)
+        await deletePending2FA(loginToken)
 
         // Optionally trust device
         if (trustDevice && deviceId) {
@@ -836,7 +877,7 @@ router.post('/setup-2fa', authMiddleware, async (req: AuthRequest, res: Response
         res.json({ success: true, data: { otpauthUrl, secret } })
     } catch (err: any) {
         console.error('Setup 2FA error:', err)
-        res.status(500).json({ success: false, error: 'Lỗi thiết lập 2FA', detail: err?.message })
+        res.status(500).json({ success: false, error: 'Lỗi thiết lập 2FA', detail: errorDetail(err) })
     }
 })
 
@@ -859,7 +900,7 @@ router.post('/confirm-2fa', authMiddleware, async (req: AuthRequest, res: Respon
         res.json({ success: true, message: 'Bật 2FA thành công' })
     } catch (err: any) {
         console.error('Confirm 2FA error:', err)
-        res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
+        res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
     }
 })
 

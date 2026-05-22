@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express'
+import { errorDetail } from '../lib/errorResponse'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 
@@ -39,7 +40,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         res.json(_response)
     } catch (err: any) {
         console.error('Sales tracking list error:', err)
-        res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
+        res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
     }
 })
 
@@ -85,7 +86,7 @@ router.get('/active', authMiddleware, async (req: AuthRequest, res: Response) =>
         res.json({ success: true, data: activeStaff })
     } catch (err: any) {
         console.error('Active staff error:', err)
-        res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
+        res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
     }
 })
 
@@ -157,7 +158,7 @@ router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => 
         })
     } catch (err: any) {
         console.error('Stats error:', err)
-        res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
+        res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
     }
 })
 
@@ -227,7 +228,7 @@ router.get('/leaderboard', authMiddleware, async (req: AuthRequest, res: Respons
         res.json({ success: true, data: leaderboard })
     } catch (err: any) {
         console.error('Leaderboard error:', err)
-        res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
+        res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
     }
 })
 
@@ -262,7 +263,7 @@ router.get('/:userId/history', authMiddleware, async (req: AuthRequest, res: Res
         res.json({ success: true, data: records, todayHours: Math.round(todayMinutes / 60 * 10) / 10 })
     } catch (err: any) {
         console.error('User history error:', err)
-        res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
+        res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
     }
 })
 
@@ -299,7 +300,7 @@ router.post('/checkin', authMiddleware, async (req: AuthRequest, res: Response) 
         res.status(201).json({ success: true, data: record })
     } catch (err: any) {
         console.error('Checkin error:', err)
-        res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
+        res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
     }
 })
 
@@ -351,7 +352,7 @@ router.post('/checkout', authMiddleware, async (req: AuthRequest, res: Response)
         res.status(201).json({ success: true, data: record, sessionDuration })
     } catch (err: any) {
         console.error('Checkout error:', err)
-        res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
+        res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
     }
 })
 

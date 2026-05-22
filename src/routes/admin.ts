@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express'
+import { errMsg } from '../lib/errorResponse'
 import { registryPrisma, getStorePrisma, dropStoreSchema, mapWithConcurrency } from '../lib/prisma'
 import { invalidateStoreStatus } from '../lib/storeStatusCache'
 
@@ -549,7 +550,7 @@ if (process.env.NODE_ENV === 'development') {
             res.json({ success: true, message: 'Database reset complete', deleted: stores.length })
         } catch (err: any) {
             console.error('Reset DB error:', err)
-            res.status(500).json({ success: false, error: err?.message || 'Reset failed' })
+            res.status(500).json({ success: false, error: errMsg(err, 'Reset failed') })
         }
     })
 } else {
@@ -623,7 +624,7 @@ router.post('/migrate', async (_req: Request, res: Response) => {
         res.json({ success: true, message: 'Migration complete', storeResults })
     } catch (err: any) {
         console.error('Migration error:', err)
-        res.status(500).json({ success: false, error: err?.message || 'Migration failed' })
+        res.status(500).json({ success: false, error: errMsg(err, 'Migration failed') })
     }
 })
 

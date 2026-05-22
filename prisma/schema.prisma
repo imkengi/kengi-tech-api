@@ -53,3 +53,31 @@ model RefreshToken {
   @@index([userId])
   @@index([expiresAt])
 }
+
+// ─── Pending 2FA Store (persistent, survives server restarts) ─────────────────
+// Holds the partially-authenticated login state between /login (password OK,
+// 2FA required) and /verify-2fa. Stored in PostgreSQL instead of an in-memory
+// Map so that on Cloud Run the verify request can land on any instance.
+// Rows are short-lived (5 min TTL) and deleted on successful verification.
+
+model Pending2FA {
+  id           String   @id @default(cuid())
+  loginToken   String   @unique
+  userId       String
+  email        String
+  role         String
+  storeId      String
+  storeCode    String
+  branchId     String?
+  branchSchema String
+  isMainBranch Boolean  @default(false)
+  deviceId     String?
+  userData     String   // JSON-encoded user payload returned after verification
+  storeData    String   // JSON-encoded store payload returned after verification
+  branchData   String?  // JSON-encoded branch payload (nullable)
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([loginToken])
+  @@index([expiresAt])
+}

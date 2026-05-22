@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express'
-import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
+import { errorDetail } from '../lib/errorResponse'
+import { authMiddleware, getBranchFilter, AuthRequest, getBranchId, canAccessBranch } from '../middleware/auth'
 import { calculateCostPrice, getCostPriceMethod } from '../lib/costPrice'
 import { nextCode } from '../lib/codeGenerator'
 
@@ -81,6 +82,12 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
         })
 
         if (!receipt) {
+            res.status(404).json({ success: false, error: 'Not found' })
+            return
+        }
+
+        // Branch ownership: prevent reading another branch's receipt by id
+        if (!canAccessBranch(req, receipt.branchId)) {
             res.status(404).json({ success: false, error: 'Not found' })
             return
         }
@@ -433,7 +440,7 @@ router.put('/:id/return', authMiddleware, async (req: AuthRequest, res: Response
         })
     } catch (err: any) {
         console.error('Return import receipt error:', err?.message || err)
-        res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
+        res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
     }
 })
 
@@ -570,7 +577,7 @@ router.delete('/:id/return/:batchId', authMiddleware, async (req: AuthRequest, r
         })
     } catch (err: any) {
         console.error('Undo batch return error:', err?.message || err)
-        res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
+        res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
     }
 })
 
@@ -621,7 +628,7 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
     } catch (err: any) {
         console.error('Delete import receipt error:', err?.message || err)
         console.error('Delete import receipt stack:', err?.stack)
-        res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
+        res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
     }
 })
 

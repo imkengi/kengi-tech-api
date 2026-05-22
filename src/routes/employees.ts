@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express'
-import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
+import { errorDetail } from '../lib/errorResponse'
+import { authMiddleware, getBranchFilter, AuthRequest, getBranchId, canAccessBranch } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
 import { requirePermission } from '../middleware/permissionMiddleware'
 import bcrypt from 'bcryptjs'
@@ -78,6 +79,7 @@ router.get('/:id', authMiddleware, requirePermission('employees.view'), async (r
         const prisma = req.storePrisma!
         const user = await prisma.user.findFirst({ where: { id: String(req.params.id) }, include: { branch: { select: { id: true, name: true, code: true, isMainBranch: true } } } })
         if (!user) return res.status(404).json({ success: false, error: 'Not found' })
+        if (!canAccessBranch(req, user.branchId)) return res.status(404).json({ success: false, error: 'Not found' })
         const { password, ...rest } = user
         res.json({ success: true, data: rest })
     } catch (err) {
@@ -229,7 +231,7 @@ router.get('/:id/permissions', authMiddleware, requireRole('admin'), async (req:
         res.json({ success: true, data: { ...user, permissions } })
     } catch (err: any) {
         console.error('Get permissions error:', err)
-        res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
+        res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
     }
 })
 
@@ -251,7 +253,7 @@ router.put('/:id/permissions', authMiddleware, requireRole('admin'), async (req:
         res.json({ success: true, data: { permissions } })
     } catch (err: any) {
         console.error('Update permissions error:', err)
-        res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
+        res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
     }
 })
 

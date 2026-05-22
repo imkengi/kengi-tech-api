@@ -1,4 +1,5 @@
 import { Router, Response } from 'express'
+import { errorDetail } from '../lib/errorResponse'
 import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
 import { validate } from '../middleware/validate'
 import { CreateReturnSchema, UpdateReturnSchema } from '../schemas'
@@ -288,7 +289,7 @@ router.post('/', authMiddleware, validate(CreateReturnSchema), async (req: AuthR
         res.status(201).json({ success: true, data: returnOrder })
     } catch (err: any) {
         console.error('Create return error:', err)
-        res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message || String(err) })
+        res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
     }
 })
 

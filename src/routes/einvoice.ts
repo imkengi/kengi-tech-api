@@ -1,4 +1,5 @@
 import { Router, Response } from 'express'
+import { errMsg } from '../lib/errorResponse'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
 import { getProvider, PROVIDERS } from '../services/einvoice'
@@ -34,7 +35,7 @@ router.get('/config', authMiddleware, async (req: AuthRequest, res: Response) =>
         res.json({ success: true, data: config })
     } catch (err: any) {
         console.error('GET /einvoice/config error:', err)
-        res.status(500).json({ success: false, error: err.message })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -80,7 +81,7 @@ router.put('/config', authMiddleware, requireRole('admin', 'manager'), async (re
         res.json({ success: true, data: config })
     } catch (err: any) {
         console.error('PUT /einvoice/config error:', err)
-        res.status(500).json({ success: false, error: err.message })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -97,7 +98,7 @@ router.post('/test-connection', authMiddleware, requireRole('admin', 'manager'),
         const result = await provider.testConnection(config as EInvoiceProviderConfig)
         res.json({ success: true, data: result })
     } catch (err: any) {
-        res.status(500).json({ success: false, error: err.message })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -199,7 +200,7 @@ router.post('/issue/:transactionId', authMiddleware, requireRole('admin', 'manag
         res.json({ success: result.success, data: record })
     } catch (err: any) {
         console.error('Issue e-invoice error:', err)
-        res.status(500).json({ success: false, error: err.message })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -248,7 +249,7 @@ router.get('/history', authMiddleware, async (req: AuthRequest, res: Response) =
         res.json({ success: true, data })
     } catch (err: any) {
         console.error('GET /einvoice/history error:', err)
-        res.status(500).json({ success: false, error: err.message })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -285,7 +286,7 @@ router.post('/cancel/:invoiceId', authMiddleware, requireRole('admin', 'manager'
 
         res.json({ success: result.success, data: result })
     } catch (err: any) {
-        res.status(500).json({ success: false, error: err.message })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 

@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { errMsg } from '../lib/errorResponse'
 import multer from 'multer'
 import { Storage } from '@google-cloud/storage'
 import path from 'path'
@@ -64,7 +65,7 @@ router.post('/upload', authMiddleware, upload.single('file'), async (req: AuthRe
         res.json(newFile)
     } catch (err: any) {
         console.error('Storage Upload Error:', err)
-        res.status(500).json({ error: err.message })
+        res.status(500).json({ error: errMsg(err) })
     }
 })
 
@@ -74,7 +75,7 @@ router.get('/files', authMiddleware, async (req: AuthRequest, res) => {
         const files = await prisma.storageFile.findMany({ orderBy: { createdAt: 'desc' } })
         res.json({ data: files.map(f => ({ ...f, uploadedAt: f.createdAt.toISOString() })) })
     } catch (err: any) {
-        res.status(500).json({ error: err.message })
+        res.status(500).json({ error: errMsg(err) })
     }
 })
 
@@ -104,7 +105,7 @@ router.delete('/files/:id', authMiddleware, async (req: AuthRequest, res) => {
         }
         res.json({ success: true })
     } catch (err: any) {
-        res.status(500).json({ error: err.message })
+        res.status(500).json({ error: errMsg(err) })
     }
 })
 

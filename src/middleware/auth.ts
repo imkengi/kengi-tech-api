@@ -200,3 +200,20 @@ export function getBranchFilter(req: AuthRequest): Record<string, any> {
     if (req.user?.isMainBranch) return {}
     return req.user?.branchId ? { branchId: req.user.branchId } : {}
 }
+
+// Ownership check for single-record (`/:id`) reads on branch-scoped models.
+// Mirrors getBranchFilter semantics so that `findUnique` lookups can't be used
+// to read another branch's record by guessing its id:
+//   - admin / manager / superadmin see every branch
+//   - main-branch users see every branch
+//   - users with no branch context behave like the list filter (see everything)
+//   - everyone else may only access records belonging to their own branch
+// Returns true when access is allowed.
+export function canAccessBranch(req: AuthRequest, recordBranchId: string | null | undefined): boolean {
+    const role = req.user?.role
+    if (role === 'admin' || role === 'manager' || role === 'superadmin') return true
+    if (req.user?.isMainBranch) return true
+    const userBranchId = req.user?.branchId
+    if (!userBranchId) return true
+    return recordBranchId === userBranchId
+}

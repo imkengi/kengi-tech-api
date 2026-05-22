@@ -1,5 +1,5 @@
 import { Router, Response } from 'express'
-import { authMiddleware, AuthRequest, getBranchId } from '../middleware/auth'
+import { authMiddleware, AuthRequest, getBranchId, canAccessBranch } from '../middleware/auth'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 
 const router = Router()
@@ -43,6 +43,7 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
             include: { stops: { orderBy: { sequence: 'asc' } } },
         })
         if (!data) return res.status(404).json({ success: false, error: 'Route not found' })
+        if (!canAccessBranch(req, data.branchId)) return res.status(404).json({ success: false, error: 'Route not found' })
         res.json({ success: true, data })
     } catch (err) {
         console.error('Get delivery route error:', err)

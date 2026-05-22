@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express'
+import { errorDetail } from '../lib/errorResponse'
 import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
 import { requirePermission } from '../middleware/permissionMiddleware'
 import { validate } from '../middleware/validate'
@@ -82,7 +83,7 @@ router.get('/', authMiddleware, requirePermission('customers.view'), async (req:
         res.json(response)
     } catch (err: any) {
         console.error('Get customers error:', err)
-        res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message || String(err) })
+        res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
     }
 })
 

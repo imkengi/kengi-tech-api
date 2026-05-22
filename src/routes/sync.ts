@@ -1,5 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { registryPrisma, getStorePrisma } from '../lib/prisma'
+import { authMiddleware } from '../middleware/auth'
+import { errMsg } from '../lib/errorResponse'
 
 // BigQuery imports (optional, only used if available)
 let ensureDataset: any, insertRows: any, deleteRowsSince: any, isBigQueryEnabled: any
@@ -101,12 +103,12 @@ router.post('/sync-to-bigquery', async (req: Request, res: Response) => {
         res.json({ success: true, data: { synced: result, elapsed: `${elapsed}s`, syncedAt: new Date().toISOString() } })
     } catch (err: any) {
         console.error('[Sync] ETL error:', err)
-        res.status(500).json({ success: false, error: err.message || 'ETL sync failed' })
+        res.status(500).json({ success: false, error: errMsg(err, 'ETL sync failed') })
     }
 })
 
 // ─── GET /api/internal/sync-status ──────────────────────────────────────────
-router.get('/sync-status', (_req: Request, res: Response) => {
+router.get('/sync-status', authMiddleware, (_req: Request, res: Response) => {
     res.json({
         success: true,
         data: {

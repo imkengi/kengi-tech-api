@@ -1,4 +1,5 @@
 import { Router, Response } from 'express'
+import { errorDetail } from '../lib/errorResponse'
 import { authMiddleware, AuthRequest, getBranchFilter } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
@@ -454,7 +455,7 @@ router.post('/free-return', authMiddleware, async (req: AuthRequest, res: Respon
         res.json({ success: true, data: { batchId, items: results } })
     } catch (err: any) {
         console.error('Free return error:', err?.message || err)
-        res.status(500).json({ success: false, error: 'Internal server error', detail: err?.message })
+        res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
     }
 })
 

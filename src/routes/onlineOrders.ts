@@ -1,4 +1,5 @@
 import { Router, Response } from 'express'
+import { errMsg } from '../lib/errorResponse'
 import { authMiddleware, AuthRequest, getBranchFilter } from '../middleware/auth'
 import { nextCode } from '../lib/codeGenerator'
 
@@ -466,7 +467,7 @@ router.put('/products/:id/link', authMiddleware, async (req: AuthRequest, res: R
         res.json({ success: true, data: updated })
     } catch (err: any) {
         console.error('Link product error:', err)
-        res.status(500).json({ success: false, error: err.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -958,7 +959,7 @@ router.get('/shipping-label-debug/:id', authMiddleware, async (req: AuthRequest,
 
         res.json({ success: true, debug: steps })
     } catch (err: any) {
-        res.json({ success: false, error: err.message })
+        res.json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -1122,7 +1123,7 @@ router.post('/shipping-label-batch', authMiddleware, async (req: AuthRequest, re
         res.send(pdf)
     } catch (err: any) {
         console.error('Batch shipping label error:', err)
-        res.status(500).json({ success: false, error: err.message || 'Lỗi tải vận đơn hàng loạt' })
+        res.status(500).json({ success: false, error: errMsg(err, 'Lỗi tải vận đơn hàng loạt') })
     }
 })
 
@@ -1158,7 +1159,7 @@ router.get('/channels/:id/auth-url', authMiddleware, async (req: AuthRequest, re
         res.json({ success: true, data: { authUrl, redirectUri } })
     } catch (err: any) {
         console.error('Generate auth URL error:', err)
-        res.status(500).json({ success: false, error: err.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -1214,7 +1215,7 @@ router.post('/channels/:id/exchange-token', authMiddleware, async (req: AuthRequ
         res.json({ success: true, data: { shopId: tokens.shopId, expiresIn: tokens.expiresIn } })
     } catch (err: any) {
         console.error('Exchange token error:', err)
-        res.status(500).json({ success: false, error: err.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -1572,7 +1573,7 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
             })
         } catch (_) { }
 
-        res.status(500).json({ success: false, error: err.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -1670,7 +1671,7 @@ router.post('/channels/:id/sync-status', authMiddleware, async (req: AuthRequest
         res.json({ success: true, data: { refreshed, total: orderSns.length } })
     } catch (err: any) {
         console.error('Sync status error:', err)
-        res.status(500).json({ success: false, error: err.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -1724,7 +1725,7 @@ router.post('/channels/:id/test-connection', authMiddleware, async (req: AuthReq
         res.json({ success: true, data: { connected: result.success, shopName: result.shopName, error: result.error } })
     } catch (err: any) {
         console.error('Test connection error:', err)
-        res.status(500).json({ success: false, error: err.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -2191,7 +2192,7 @@ router.post('/channels/:id/sync-returns', authMiddleware, async (req: AuthReques
         })
     } catch (err: any) {
         console.error('Sync returns error:', err)
-        res.status(500).json({ success: false, error: err.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -2288,7 +2289,7 @@ router.post('/channels/:id/sync-products', authMiddleware, async (req: AuthReque
         })
     } catch (err: any) {
         console.error('Sync products error:', err)
-        res.status(500).json({ success: false, error: err.message || 'Internal server error' })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -2332,7 +2333,7 @@ router.post('/fix-totals', authMiddleware, async (req: AuthRequest, res: Respons
         res.json({ success: true, message: 'Đã cập nhật lại tổng tiền cho tất cả đơn hàng online cũ.' })
     } catch (err: any) {
         console.error('Fix totals error:', err)
-        res.status(500).json({ success: false, error: err.message })
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 

@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express'
-import { authMiddleware, AuthRequest, getBranchFilter, getBranchId } from '../middleware/auth'
+import { authMiddleware, AuthRequest, getBranchFilter, getBranchId, canAccessBranch } from '../middleware/auth'
 import { requirePermission } from '../middleware/permissionMiddleware'
 import { validate } from '../middleware/validate'
 import { CreateTransactionSchema } from '../schemas'
@@ -311,6 +311,12 @@ router.get('/:id', authMiddleware, requirePermission('pos.view'), async (req: Au
         })
 
         if (!transaction) {
+            res.status(404).json({ success: false, error: 'Transaction not found' })
+            return
+        }
+
+        // Branch ownership: prevent reading another branch's transaction by id
+        if (!canAccessBranch(req, transaction.branchId)) {
             res.status(404).json({ success: false, error: 'Transaction not found' })
             return
         }

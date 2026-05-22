@@ -1,4 +1,5 @@
 import { Router, Response } from 'express'
+import { errMsg } from '../lib/errorResponse'
 import multer from 'multer'
 import * as XLSX from 'xlsx'
 import { authMiddleware, AuthRequest, getBranchFilter, getBranchId } from '../middleware/auth'
@@ -59,7 +60,7 @@ router.get('/branches', authMiddleware, async (req: AuthRequest, res) => {
         })
         res.json({ success: true, data: branches })
     } catch (err: any) {
-        res.status(500).json({ success: false, error: err?.message || 'Lỗi' })
+        res.status(500).json({ success: false, error: errMsg(err, 'Lỗi') })
     }
 })
 
@@ -288,7 +289,7 @@ router.post('/products', authMiddleware, upload.single('file'), async (req: Auth
         if (req.query.stream === 'true') {
             sendError(res, err?.message || 'Import thất bại')
         } else {
-            res.status(500).json({ success: false, error: err?.message || 'Import thất bại' })
+            res.status(500).json({ success: false, error: errMsg(err, 'Import thất bại') })
         }
     }
 })
@@ -411,7 +412,7 @@ router.post('/transactions', authMiddleware, upload.single('file'), async (req: 
         if (req.query.stream === 'true') {
             sendError(res, err?.message || 'Import thất bại')
         } else {
-            res.status(500).json({ success: false, error: err?.message || 'Import thất bại' })
+            res.status(500).json({ success: false, error: errMsg(err, 'Import thất bại') })
         }
     }
 })
@@ -496,7 +497,7 @@ router.post('/import-receipts', authMiddleware, upload.single('file'), async (re
     } catch (err: any) {
         console.error('[ImportData] ImportReceipts error:', err)
         if (req.query.stream === 'true') sendError(res, err?.message || 'Import thất bại')
-        else res.status(500).json({ success: false, error: err?.message || 'Import thất bại' })
+        else res.status(500).json({ success: false, error: errMsg(err, 'Import thất bại') })
     }
 })
 
@@ -579,7 +580,7 @@ router.post('/returns', authMiddleware, upload.single('file'), async (req: AuthR
     } catch (err: any) {
         console.error('[ImportData] Returns error:', err)
         if (req.query.stream === 'true') sendError(res, err?.message || 'Import thất bại')
-        else res.status(500).json({ success: false, error: err?.message || 'Import thất bại' })
+        else res.status(500).json({ success: false, error: errMsg(err, 'Import thất bại') })
     }
 })
 
@@ -658,7 +659,7 @@ router.post('/customers', authMiddleware, upload.single('file'), async (req: Aut
     } catch (err: any) {
         console.error('[ImportData] Customers error:', err)
         if (req.query.stream === 'true') sendError(res, err?.message || 'Import thất bại')
-        else res.status(500).json({ success: false, error: err?.message || 'Import thất bại' })
+        else res.status(500).json({ success: false, error: errMsg(err, 'Import thất bại') })
     }
 })
 
@@ -721,7 +722,7 @@ router.post('/suppliers', authMiddleware, upload.single('file'), async (req: Aut
     } catch (err: any) {
         console.error('[ImportData] Suppliers error:', err)
         if (req.query.stream === 'true') sendError(res, err?.message || 'Import thất bại')
-        else res.status(500).json({ success: false, error: err?.message || 'Import thất bại' })
+        else res.status(500).json({ success: false, error: errMsg(err, 'Import thất bại') })
     }
 })
 
