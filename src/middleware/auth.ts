@@ -52,14 +52,17 @@ async function tryApiKeyAuth(req: AuthRequest): Promise<boolean> {
         if (!headerStoreCode) return false
 
         try {
-            const store = await registryPrisma.store.findFirst({
-                where: { code: { equals: headerStoreCode, mode: 'insensitive' } },
-                include: { branches: { where: { isMain: true }, take: 1 } },
-            })
-            if (!store || !store.branches[0]) return false
+            const normalizedCode = headerStoreCode.trim().toLowerCase()
+            let store = await registryPrisma.store.findFirst({ where: { code: normalizedCode } })
+            if (!store) {
+                const stores: any[] = await registryPrisma.$queryRawUnsafe(
+                    `SELECT * FROM "Store" WHERE LOWER(code) = $1 LIMIT 1`, normalizedCode
+                )
+                if (stores.length > 0) store = stores[0]
+            }
+            if (!store) return false
 
-            const mainBranch = store.branches[0]
-            schema = `branch_${mainBranch.id}`
+            schema = store.schema
             storeId = store.id
             storeCode = store.code
         } catch {

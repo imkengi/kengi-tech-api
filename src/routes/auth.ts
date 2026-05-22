@@ -1241,19 +1241,25 @@ router.post('/token', async (req: Request, res: Response) => {
             return
         }
 
-        // Look up store
-        const store = await registryPrisma.store.findFirst({
-            where: { code: { equals: storeCode, mode: 'insensitive' } },
-            include: { branches: { where: { isMain: true }, take: 1 } },
-        })
-        if (!store || !store.branches[0]) {
+        // Look up store in registry (same pattern as /login)
+        const normalizedCode = storeCode.trim().toLowerCase()
+        let store = await registryPrisma.store.findFirst({ where: { code: normalizedCode } })
+        if (!store) {
+            const stores: any[] = await registryPrisma.$queryRawUnsafe(
+                `SELECT * FROM "Store" WHERE LOWER(code) = $1 LIMIT 1`, normalizedCode
+            )
+            if (stores.length > 0) store = stores[0]
+        }
+        if (!store) {
             res.status(404).json({ success: false, error: 'Store not found' })
             return
         }
 
-        const mainBranch = store.branches[0]
-        const schema = `branch_${mainBranch.id}`
+        const schema = store.schema
         const storePrisma = getStorePrisma(schema)
+
+        // Find main branch for JWT payload
+        const mainBranch = await storePrisma.branch.findFirst({ where: { isMainBranch: true } })
 
         // Find API key by clientId (keyId)
         const apiKey = await storePrisma.apiKey.findFirst({
