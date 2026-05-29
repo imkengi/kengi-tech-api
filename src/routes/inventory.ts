@@ -1,9 +1,10 @@
 import { Router, Response } from 'express'
 import { errorDetail } from '../lib/errorResponse'
-import { authMiddleware, AuthRequest, getBranchFilter } from '../middleware/auth'
+import { authMiddleware, AuthRequest, getBranchFilter, getBranchId } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { nextCode } from '../lib/codeGenerator'
+import { getOrCreateDefaultWarehouse, updateWarehouseStock } from '../lib/warehouseHelper'
 
 const router = Router()
 
@@ -243,7 +244,9 @@ router.get('/receipts', authMiddleware, async (req: AuthRequest, res: Response) 
 router.post('/receipts', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        const { items, ...receiptData } = req.body
+        // warehouseId is pulled out separately so it isn't spread into the
+        // ImportReceipt.create payload (no such column on the model).
+        const { items, warehouseId, ...receiptData } = req.body
 
         const code = await nextCode(prisma, 'importReceiptCodeSeq', 'PN', 3, '', 'ImportReceipt', 'code')
 
@@ -263,11 +266,26 @@ router.post('/receipts', authMiddleware, async (req: AuthRequest, res: Response)
             include: { items: true },
         })
 
+        // Resolve the target warehouse so import receipts also land in per-warehouse
+        // stock, keeping WarehouseStock in sync with Product.stock. An explicit
+        // warehouseId in the body wins; otherwise use the branch's default warehouse.
+        let defaultWarehouseId: string | null = null
+        if (warehouseId) {
+            defaultWarehouseId = String(warehouseId)
+        } else {
+            const defaultWarehouse = await getOrCreateDefaultWarehouse(prisma as any, getBranchId(req) || null)
+            defaultWarehouseId = defaultWarehouse?.id || null
+        }
+
         for (const item of items) {
             await prisma.product.update({
                 where: { id: item.productId },
                 data: { stock: { increment: item.quantity } },
             })
+            if (defaultWarehouseId) {
+                await updateWarehouseStock(prisma as any, defaultWarehouseId, item.productId, item.quantity)
+                    .catch((err: any) => console.error(`[Import] WarehouseStock increment failed for product ${item.productId}:`, err))
+            }
             await prisma.inventoryTransaction.create({
                 data: {
                     type: 'import',

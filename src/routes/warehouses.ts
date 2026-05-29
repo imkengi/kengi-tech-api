@@ -35,6 +35,16 @@ function canWriteWarehouseType(role: string | undefined, type: string): boolean 
 
 const WARRANTY_FORBIDDEN_MSG = 'Chỉ admin hoặc nhân viên bảo hành / bảo trì mới có quyền truy cập kho bảo hành'
 
+// ─── Branch scope for warehouse access ─────────────────────────────────────────
+// Admins and managers operate store-wide: they see warehouses across all branches
+// and can run cross-branch stock transfers, so the branch filter is dropped for
+// them. Everyone else stays scoped to their own branch (getBranchFilter).
+function warehouseBranchFilter(req: AuthRequest): Record<string, any> {
+    const role = req.user?.role
+    if (role === 'admin' || role === 'manager') return {}
+    return getBranchFilter(req as any)
+}
+
 // ─── Helper: ensure default warehouses exist (lazy seed) ────────────────────────
 async function ensureDefaultWarehouses(prisma: any, branchId: string | null | undefined): Promise<void> {
     for (const w of DEFAULT_WAREHOUSES) {
@@ -70,7 +80,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         // Lazy-seed defaults so existing stores get warehouses on first call
         await ensureDefaultWarehouses(prisma, branchId)
 
-        const where: any = { ...getBranchFilter(req as any) }
+        const where: any = { ...warehouseBranchFilter(req) }
         if (req.query.type && req.query.type !== 'all') where.type = String(req.query.type)
         if (req.query.isActive !== undefined) where.isActive = req.query.isActive === 'true'
 
@@ -96,7 +106,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma! as any
-        const where: any = { ...getBranchFilter(req as any) }
+        const where: any = { ...warehouseBranchFilter(req) }
 
         // Hide warranty warehouses from non-authorized roles
         const role = req.user?.role
@@ -125,13 +135,83 @@ router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => 
     }
 })
 
+// ─── GET /api/warehouses/stock-summary ─────────────────────────────────────────
+// Dashboard rollup: aggregate stock across every warehouse in scope. Returns
+// grand totals, a per-warehouse breakdown, and a per-product total (a product's
+// quantity summed across all warehouses). Admin/manager see all branches.
+// NOTE: must stay above the `/:id` route so "stock-summary" isn't read as an id.
+router.get('/stock-summary', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const where: any = { ...warehouseBranchFilter(req) }
+
+        // Hide warranty warehouses from roles that can't access them
+        const role = req.user?.role
+        if (role !== 'admin' && role !== 'warranty') where.type = { not: 'warranty' }
+
+        const warehouses = await prisma.warehouse.findMany({
+            where,
+            include: { stocks: true },
+        })
+
+        const byProduct = new Map<string, { productId: string; productName: string; productSku: string | null; quantity: number }>()
+        let totalQuantity = 0
+
+        const byWarehouse = warehouses.map((w: any) => {
+            let whQty = 0
+            for (const s of w.stocks) {
+                const qty = s.quantity || 0
+                whQty += qty
+                totalQuantity += qty
+                const cur = byProduct.get(s.productId)
+                if (cur) {
+                    cur.quantity += qty
+                } else {
+                    byProduct.set(s.productId, {
+                        productId: s.productId,
+                        productName: s.productName,
+                        productSku: s.productSku ?? null,
+                        quantity: qty,
+                    })
+                }
+            }
+            return {
+                warehouseId: w.id,
+                code: w.code,
+                name: w.name,
+                type: w.type,
+                isDefault: w.isDefault,
+                isActive: w.isActive,
+                totalSkus: w.stocks.length,
+                totalQuantity: whQty,
+            }
+        })
+
+        const products = Array.from(byProduct.values()).sort((a, b) => b.quantity - a.quantity)
+
+        res.json({
+            success: true,
+            data: {
+                totalWarehouses: warehouses.length,
+                totalSkus: byProduct.size,
+                totalQuantity,
+                byWarehouse,
+                byProduct: products,
+            },
+        })
+    } catch (err) {
+        console.error('Warehouse stock summary error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
 // ─── GET /api/warehouses/:id ─────────────────────────────────────────────────────
 router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma! as any
         const id = String(req.params.id)
         const warehouse = await prisma.warehouse.findFirst({
-            where: { id, ...getBranchFilter(req as any) },
+            where: { id, ...warehouseBranchFilter(req) },
         })
         if (!warehouse) return res.status(404).json({ success: false, error: 'Không tìm thấy kho' })
         if (!canReadWarehouseType(req.user?.role, warehouse.type)) {
@@ -152,7 +232,7 @@ router.get('/:id/stock', authMiddleware, async (req: AuthRequest, res: Response)
         const { search } = req.query
 
         const warehouse = await prisma.warehouse.findFirst({
-            where: { id, ...getBranchFilter(req as any) },
+            where: { id, ...warehouseBranchFilter(req) },
         })
         if (!warehouse) return res.status(404).json({ success: false, error: 'Không tìm thấy kho' })
         if (!canReadWarehouseType(req.user?.role, warehouse.type)) {
@@ -238,7 +318,7 @@ router.put(
             const prisma = req.storePrisma! as any
             const id = String(req.params.id)
             const existing = await prisma.warehouse.findFirst({
-                where: { id, ...getBranchFilter(req as any) },
+                where: { id, ...warehouseBranchFilter(req) },
             })
             if (!existing) return res.status(404).json({ success: false, error: 'Không tìm thấy kho' })
             if (!canWriteWarehouseType(req.user?.role, existing.type)) {
@@ -287,7 +367,7 @@ router.delete(
             const prisma = req.storePrisma! as any
             const id = String(req.params.id)
             const existing = await prisma.warehouse.findFirst({
-                where: { id, ...getBranchFilter(req as any) },
+                where: { id, ...warehouseBranchFilter(req) },
                 include: { stocks: { select: { id: true, quantity: true } } },
             })
             if (!existing) return res.status(404).json({ success: false, error: 'Không tìm thấy kho' })
@@ -328,7 +408,7 @@ router.delete(
 router.get('/transfers/list', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma! as any
-        const where: any = { ...getBranchFilter(req as any) }
+        const where: any = { ...warehouseBranchFilter(req) }
         if (req.query.warehouseId) {
             const wid = String(req.query.warehouseId)
             where.OR = [{ fromWarehouseId: wid }, { toWarehouseId: wid }]
@@ -377,7 +457,7 @@ router.post(
             const { fromWarehouseId, toWarehouseId, reason, notes, items } = req.body
 
             // Resolve and validate warehouses
-            const branchScope = getBranchFilter(req as any)
+            const branchScope = warehouseBranchFilter(req)
             let fromWh: any = null
             let toWh: any = null
             if (fromWarehouseId) {
@@ -536,7 +616,7 @@ router.get('/transfers/:id', authMiddleware, async (req: AuthRequest, res: Respo
     try {
         const prisma = req.storePrisma! as any
         const transfer = await prisma.stockTransfer.findFirst({
-            where: { id: String(req.params.id), ...getBranchFilter(req as any) },
+            where: { id: String(req.params.id), ...warehouseBranchFilter(req) },
             include: {
                 items: true,
                 fromWarehouse: { select: { id: true, name: true, type: true, code: true } },
@@ -573,7 +653,7 @@ router.post(
             const branchId = getBranchId(req) || null
             await ensureDefaultWarehouses(prisma, branchId)
             const warehouses = await prisma.warehouse.findMany({
-                where: { isDefault: true, ...getBranchFilter(req as any) },
+                where: { isDefault: true, ...warehouseBranchFilter(req) },
                 orderBy: { type: 'asc' },
             })
             res.json({ success: true, data: warehouses })

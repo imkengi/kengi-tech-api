@@ -77,6 +77,9 @@ export const CreateTransactionSchema = z.object({
     status: z.enum(['completed', 'partial', 'voided']).default('completed'),
     revisionOfId: z.string().optional().nullable(),
     appliedPromotionIds: z.array(z.string()).optional(),
+    // Optional target warehouse for the per-warehouse stock decrement. When omitted
+    // the branch's default warehouse is used (see routes/transactions.ts).
+    warehouseId: z.string().optional().nullable(),
 })
 
 // ─── Customers ────────────────────────────────────────────────────────────────

@@ -7,6 +7,7 @@ import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { publishEvent } from '../lib/pubsub'
 import { createJournalEntriesForTransaction } from '../lib/autoJournal'
 import { nextCode } from '../lib/codeGenerator'
+import { getOrCreateDefaultWarehouse, updateWarehouseStock } from '../lib/warehouseHelper'
 
 const router = Router()
 
@@ -532,6 +533,22 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
         // so we use baseQuantity (sale-unit qty × conversion rate) — not the raw line qty.
         // For van sales, Product.stock was already decremented when stock was loaded onto
         // the vehicle, so we only touch the vehicle's WarehouseStock here.
+
+        // For ordinary sales, mirror each Product.stock decrement against a warehouse
+        // so per-warehouse stock stays in sync. An explicit warehouseId in the request
+        // body wins; otherwise we fall back to the branch's default warehouse. (When
+        // x-warehouse-id is set this is a van sale, handled separately against the
+        // vehicle warehouse.)
+        let defaultWarehouseId: string | null = null
+        if (!isVanSale) {
+            if (txData.warehouseId) {
+                defaultWarehouseId = String(txData.warehouseId)
+            } else {
+                const wh = await getOrCreateDefaultWarehouse(prisma as any, branchId || null)
+                defaultWarehouseId = wh?.id || null
+            }
+        }
+
         for (const item of itemsWithConversion) {
             const productAfter = isVanSale
                 ? await prisma.product.findUnique({ where: { id: item.productId }, select: { costPrice: true } })
@@ -539,6 +556,12 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
                     where: { id: item.productId },
                     data: { stock: { decrement: item.baseQuantity } },
                 })
+
+            // Keep the default warehouse's stock in lock-step with Product.stock.
+            if (defaultWarehouseId) {
+                await updateWarehouseStock(prisma as any, defaultWarehouseId, item.productId, -item.baseQuantity)
+                    .catch((err: any) => console.error(`[Sale] WarehouseStock decrement failed for product ${item.productId}:`, err))
+            }
 
             // Create inventory transaction record for stock tracking
             await prisma.inventoryTransaction.create({
