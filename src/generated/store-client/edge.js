@@ -1674,7 +1674,7 @@ const config = {
       "value": "prisma-client-js"
     },
     "output": {
-      "value": "C:\\Users\\ADMIN\\.gemini\\antigravity-socua\\scratch\\open-retail-api\\.claude\\worktrees\\hopeful-bardeen-bcd284\\src\\generated\\store-client",
+      "value": "C:\\Users\\ADMIN\\.gemini\\antigravity-socua\\scratch\\open-retail-api\\src\\generated\\store-client",
       "fromEnvVar": null
     },
     "config": {
@@ -1688,11 +1688,12 @@ const config = {
       }
     ],
     "previewFeatures": [],
-    "sourceFilePath": "C:\\Users\\ADMIN\\.gemini\\antigravity-socua\\scratch\\open-retail-api\\.claude\\worktrees\\hopeful-bardeen-bcd284\\prisma\\schema-store.prisma",
+    "sourceFilePath": "C:\\Users\\ADMIN\\.gemini\\antigravity-socua\\scratch\\open-retail-api\\prisma\\schema-store.prisma",
     "isCustomOutput": true
   },
   "relativeEnvPaths": {
-    "rootEnvPath": null
+    "rootEnvPath": null,
+    "schemaEnvPath": "../../../.env"
   },
   "relativePath": "../../../prisma",
   "clientVersion": "6.19.2",
