@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express'
-import { authMiddleware, AuthRequest, getBranchFilter } from '../middleware/auth'
+import { authMiddleware, AuthRequest, getBranchFilter, getBranchId } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
 import { requirePermission } from '../middleware/permissionMiddleware'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
@@ -14,8 +14,12 @@ const router = Router()
 router.get('/', authMiddleware, requirePermission('products.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        // Cache check
-        const cacheKey = `products:${req.user?.storeSchema || 'default'}:${JSON.stringify(req.query)}`
+        // Branch context: explicit ?branchId wins, else the caller's own branch.
+        // Used below to surface per-branch stock from the branch's default warehouse.
+        const branchContextId = (req.query.branchId as string) || getBranchId(req) || null
+
+        // Cache check — keyed on the branch context so two branches don't share a page.
+        const cacheKey = `products:${req.user?.storeSchema || 'default'}:${branchContextId || 'nobranch'}:${JSON.stringify(req.query)}`
         const cached = await cacheGet(cacheKey)
         if (cached) return res.json(cached)
 
@@ -79,6 +83,27 @@ router.get('/', authMiddleware, requirePermission('products.view'), async (req: 
             filteredTotal = filteredProducts.length
         }
 
+        // Per-branch stock: when a branch context exists, surface the quantity held in
+        // that branch's default "main" warehouse as `branchStock`. Product.stock is left
+        // as the global cross-warehouse total for backward compatibility.
+        let branchStockMap: Map<string, number> | null = null
+        if (branchContextId) {
+            const branchWarehouse = await (prisma as any).warehouse.findFirst({
+                where: { type: 'main', isDefault: true, branchId: branchContextId },
+                select: { id: true },
+            })
+            if (branchWarehouse) {
+                const ids = filteredProducts.map((p: any) => p.id)
+                const bStocks = ids.length > 0
+                    ? await (prisma as any).warehouseStock.findMany({
+                        where: { warehouseId: branchWarehouse.id, productId: { in: ids } },
+                        select: { productId: true, quantity: true },
+                    })
+                    : []
+                branchStockMap = new Map(bStocks.map((ws: any) => [ws.productId, ws.quantity]))
+            }
+        }
+
         const data = filteredProducts.map((p: any) => ({
             id: p.id,
             name: p.name,
@@ -94,6 +119,7 @@ router.get('/', authMiddleware, requirePermission('products.view'), async (req: 
             sellingPrice: p.sellingPrice,
             taxInclusive: p.taxInclusive,
             stock: warehouseStockMap ? (warehouseStockMap.get(p.id) ?? 0) : p.stock,
+            branchStock: branchStockMap ? (branchStockMap.get(p.id) ?? 0) : null,
             minStock: p.minStock,
             maxStock: p.maxStock,
             baseUnit: p.baseUnit,
@@ -202,10 +228,29 @@ router.get('/:id', authMiddleware, requirePermission('products.view'), async (re
             }
         })
         if (!product) return res.status(404).json({ success: false, error: 'Product not found' })
+
+        // Per-branch stock from the branch's default "main" warehouse (see list route).
+        const branchContextId = (req.query.branchId as string) || getBranchId(req) || null
+        let branchStock: number | null = null
+        if (branchContextId) {
+            const branchWarehouse = await (prisma as any).warehouse.findFirst({
+                where: { type: 'main', isDefault: true, branchId: branchContextId },
+                select: { id: true },
+            })
+            if (branchWarehouse) {
+                const ws = await (prisma as any).warehouseStock.findUnique({
+                    where: { warehouseId_productId: { warehouseId: branchWarehouse.id, productId: product.id } },
+                    select: { quantity: true },
+                })
+                branchStock = ws?.quantity ?? 0
+            }
+        }
+
         res.json({
             success: true,
             data: {
                 ...product,
+                branchStock,
                 createdAt: product.createdAt.toISOString(),
                 updatedAt: product.updatedAt.toISOString()
             }

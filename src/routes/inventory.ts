@@ -48,6 +48,65 @@ router.post('/reindex', authMiddleware, requireRole('admin'), async (req: AuthRe
             }
         }
 
+        // 3b. Rebuild per-branch WarehouseStock from InventoryTransaction sums.
+        // Group by (productId, branchId) and write each branch's total into that
+        // branch's default "main" warehouse — the source of truth for branch-level
+        // stock. Records with a null branchId belong to the current branch context
+        // (per-branch schema model), so they fall back to the caller's branch.
+        // Because the per-branch sums add up to the global per-product sum, Product.stock
+        // (set above) stays equal to the SUM of all WarehouseStock quantities.
+        const productInfo = new Map(allProducts.map(p => [p.id, { name: p.name, sku: p.sku }]))
+        const fallbackBranchId = getBranchId(req) || null
+
+        const branchSums = await prisma.inventoryTransaction.groupBy({
+            by: ['productId', 'branchId'],
+            _sum: { quantity: true },
+        })
+
+        // Resolve each branch's default warehouse once.
+        const warehouseCache = new Map<string, string | null>()
+        async function resolveWarehouseId(branchId: string | null): Promise<string | null> {
+            const effective = branchId ?? fallbackBranchId
+            const key = effective || '__null__'
+            if (warehouseCache.has(key)) return warehouseCache.get(key)!
+            const wh = await getOrCreateDefaultWarehouse(prisma as any, effective)
+            const id = wh?.id || null
+            warehouseCache.set(key, id)
+            return id
+        }
+
+        // Aggregate per (warehouse, product) so branch groups that resolve to the same
+        // warehouse (e.g. null + caller branch) are combined rather than overwriting.
+        const aggregated = new Map<string, { warehouseId: string; productId: string; quantity: number }>()
+        for (const row of branchSums) {
+            const warehouseId = await resolveWarehouseId(row.branchId ?? null)
+            if (!warehouseId) continue
+            const k = `${warehouseId}:${row.productId}`
+            const prev = aggregated.get(k)
+            aggregated.set(k, {
+                warehouseId,
+                productId: row.productId,
+                quantity: (prev?.quantity || 0) + (row._sum.quantity || 0),
+            })
+        }
+
+        let warehouseStockUpdated = 0
+        for (const { warehouseId, productId, quantity } of aggregated.values()) {
+            const info = productInfo.get(productId)
+            await (prisma as any).warehouseStock.upsert({
+                where: { warehouseId_productId: { warehouseId, productId } },
+                update: { quantity },
+                create: {
+                    warehouseId,
+                    productId,
+                    productName: info?.name ?? '',
+                    productSku: info?.sku ?? null,
+                    quantity,
+                },
+            })
+            warehouseStockUpdated++
+        }
+
         // 4. Invalidate caches
         const schema = req.user?.storeSchema || 'default'
         cacheDel(`${schema}:inventory:*`).catch(() => { })
@@ -60,6 +119,7 @@ router.post('/reindex', authMiddleware, requireRole('admin'), async (req: AuthRe
                 totalProducts: allProducts.length,
                 updated,
                 unchanged: allProducts.length - updated,
+                warehouseStockUpdated,
                 changes: changes.slice(0, 50), // Return first 50 changes for review
             },
         })

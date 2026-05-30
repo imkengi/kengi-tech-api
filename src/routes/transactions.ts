@@ -440,6 +440,49 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
             }
         }
 
+        // Ordinary sale: the branch's default "main" warehouse is the source of truth for
+        // branch-level availability. Resolve it up front (an explicit body warehouseId wins)
+        // so we can both validate stock here and decrement the same warehouse after the sale.
+        let defaultWarehouseId: string | null = null
+        if (!isVanSale) {
+            if (txData.warehouseId) {
+                defaultWarehouseId = String(txData.warehouseId)
+            } else {
+                const wh = await getOrCreateDefaultWarehouse(prisma as any, branchId || null)
+                defaultWarehouseId = wh?.id || null
+            }
+
+            // Check WarehouseStock (not Product.stock) for availability. Aggregate per
+            // product so duplicate line items can't each pass then collectively oversell.
+            // When a product has no WarehouseStock row yet (legacy data not migrated via
+            // reindex), fall back to the global Product.stock so existing sales still work.
+            if (defaultWarehouseId) {
+                const stocks = await (prisma as any).warehouseStock.findMany({
+                    where: { warehouseId: defaultWarehouseId, productId: { in: productIds } },
+                })
+                const stockMap = new Map<string, any>(stocks.map((s: any) => [s.productId, s]))
+
+                const requiredByProduct = new Map<string, { qty: number; name: string }>()
+                for (const item of itemsWithConversion) {
+                    const cur = requiredByProduct.get(item.productId) || { qty: 0, name: item.productName }
+                    cur.qty += item.baseQuantity
+                    requiredByProduct.set(item.productId, cur)
+                }
+
+                for (const [productId, { qty, name }] of requiredByProduct) {
+                    const stk = stockMap.get(productId)
+                    const available = stk ? stk.quantity : (productMap.get(productId)?.stock ?? 0)
+                    if (available < qty) {
+                        res.status(400).json({
+                            success: false,
+                            error: `Sản phẩm "${stk?.productName || name}" chỉ còn ${available} trong kho (cần ${qty})`,
+                        })
+                        return
+                    }
+                }
+            }
+        }
+
         // Normalize applied promotions list once so we can both persist it on the
         // Transaction (audit trail) and bump Promotion.usageCount atomically below.
         const promoIds: string[] = (Array.isArray(appliedPromotionIds) ? appliedPromotionIds : [])
@@ -534,20 +577,9 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
         // For van sales, Product.stock was already decremented when stock was loaded onto
         // the vehicle, so we only touch the vehicle's WarehouseStock here.
 
-        // For ordinary sales, mirror each Product.stock decrement against a warehouse
-        // so per-warehouse stock stays in sync. An explicit warehouseId in the request
-        // body wins; otherwise we fall back to the branch's default warehouse. (When
-        // x-warehouse-id is set this is a van sale, handled separately against the
-        // vehicle warehouse.)
-        let defaultWarehouseId: string | null = null
-        if (!isVanSale) {
-            if (txData.warehouseId) {
-                defaultWarehouseId = String(txData.warehouseId)
-            } else {
-                const wh = await getOrCreateDefaultWarehouse(prisma as any, branchId || null)
-                defaultWarehouseId = wh?.id || null
-            }
-        }
+        // defaultWarehouseId was resolved during the availability check above; the same
+        // warehouse is decremented below so its WarehouseStock stays in lock-step with
+        // Product.stock. (Van sales are handled separately against the vehicle warehouse.)
 
         for (const item of itemsWithConversion) {
             const productAfter = isVanSale
