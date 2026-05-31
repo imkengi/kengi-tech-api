@@ -1355,4 +1355,76 @@ router.post('/token', async (req: Request, res: Response) => {
     }
 })
 
+// ════════════════════════════════════════════════════════════════════════════════
+// POST /api/auth/switch-branch — Switch the user's active branch
+//
+// Issues a new JWT with the target branchId. Admin/manager can switch to any
+// branch; other roles can only switch to branches they are assigned to.
+// ════════════════════════════════════════════════════════════════════════════════
+router.post('/switch-branch', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const { branchId } = req.body
+        if (!branchId) return res.status(400).json({ success: false, error: 'branchId is required' })
+
+        const storePrisma = req.storePrisma! as any
+        const user = req.user!
+
+        // Validate the target branch exists
+        const targetBranch = await storePrisma.branch.findUnique({
+            where: { id: branchId },
+            select: { id: true, name: true, code: true, isMainBranch: true, status: true },
+        })
+        if (!targetBranch) return res.status(404).json({ success: false, error: 'Chi nhánh không tồn tại' })
+        if (targetBranch.status === 'inactive') return res.status(400).json({ success: false, error: 'Chi nhánh đã bị vô hiệu hóa' })
+
+        // Access check: admin/manager can switch to any branch; others must be assigned
+        const role = user.role
+        if (role !== 'admin' && role !== 'manager') {
+            const currentUser = await storePrisma.user.findUnique({
+                where: { id: user.userId },
+                select: { branchId: true },
+            })
+            if (currentUser?.branchId !== branchId) {
+                return res.status(403).json({ success: false, error: 'Bạn không có quyền truy cập chi nhánh này' })
+            }
+        }
+
+        // Build all accessible branches for the response
+        const allBranches = await storePrisma.branch.findMany({
+            where: { status: { not: 'inactive' } },
+            select: { id: true, name: true, code: true, isMainBranch: true },
+            orderBy: [{ isMainBranch: 'desc' }, { name: 'asc' }],
+        })
+        const isCrossBranch = role === 'admin' || role === 'manager' || allBranches.length > 1
+
+        // Create new token pair with the target branchId
+        const payload = {
+            userId: user.userId,
+            email: user.email,
+            role: user.role,
+            storeId: user.storeId,
+            storeCode: user.storeCode,
+            branchId: targetBranch.id,
+            branchSchema: user.storeSchema,
+            isMainBranch: targetBranch.isMainBranch,
+        }
+
+        const { accessToken, refreshToken } = await createTokenPair(payload)
+
+        res.json({
+            success: true,
+            data: {
+                token: accessToken,
+                refreshToken,
+                branch: targetBranch,
+                accessibleBranches: allBranches,
+                isCrossBranch,
+            },
+        })
+    } catch (err: any) {
+        console.error('Switch branch error:', err?.message || err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
 export default router
