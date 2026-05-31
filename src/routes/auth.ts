@@ -675,6 +675,95 @@ router.post('/add-branch', authMiddleware, async (req: AuthRequest, res: Respons
     }
 })
 
+// ─── POST /api/auth/switch-branch — Change the active branch for this session ─
+// Issues a fresh JWT (+ refresh token) with the new branchId embedded. Branches
+// of a store share one schema, so only branchId / isMainBranch change in the
+// payload — branchSchema stays the same.
+//
+// Access rules (mirrors canAccessBranch semantics):
+//   - admin / manager / superadmin may switch to any branch
+//   - everyone else may only switch to their own assigned branch
+router.post('/switch-branch', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const storePrisma = req.storePrisma!
+        const { branchId } = req.body || {}
+        if (!branchId || typeof branchId !== 'string') {
+            res.status(400).json({ success: false, error: 'branchId là bắt buộc' })
+            return
+        }
+
+        // 1. Validate the target branch exists in this store
+        const target = await storePrisma.branch.findUnique({
+            where: { id: branchId },
+            select: { id: true, name: true, code: true, isMainBranch: true, status: true },
+        })
+        if (!target || target.status !== 'active') {
+            res.status(404).json({ success: false, error: 'Chi nhánh không tồn tại' })
+            return
+        }
+
+        // 2. Determine which branches the user can access
+        const role = req.user!.role
+        const canAccessAll = role === 'admin' || role === 'manager' || role === 'superadmin'
+
+        // Load the user's home branch assignment from the store schema
+        const user = await storePrisma.user.findUnique({
+            where: { id: req.user!.userId },
+            select: { branchId: true, email: true },
+        })
+        if (!user) { res.status(404).json({ success: false, error: 'User not found' }); return }
+
+        // 3. Build the accessible-branch list
+        const branchSelect = { id: true, name: true, code: true, isMainBranch: true }
+        let accessibleBranches: Array<{ id: string; name: string; code: string; isMainBranch: boolean }>
+        if (canAccessAll) {
+            accessibleBranches = await storePrisma.branch.findMany({
+                where: { status: 'active' },
+                select: branchSelect,
+                orderBy: [{ isMainBranch: 'desc' }, { name: 'asc' }],
+            })
+        } else {
+            accessibleBranches = user.branchId
+                ? await storePrisma.branch.findMany({
+                    where: { id: user.branchId, status: 'active' },
+                    select: branchSelect,
+                })
+                : []
+        }
+
+        // 4. Enforce access to the requested branch
+        const hasAccess = canAccessAll || accessibleBranches.some(b => b.id === branchId)
+        if (!hasAccess) {
+            res.status(403).json({ success: false, error: 'Bạn không có quyền truy cập chi nhánh này' })
+            return
+        }
+
+        // 5. Issue a new token pair with the new branchId (same schema as login)
+        const branchSchema = req.user!.branchSchema || req.user!.storeSchema!
+        const tokenPayload = {
+            userId: req.user!.userId, email: user.email, role,
+            storeId: req.user!.storeId, storeCode: req.user!.storeCode,
+            branchId: target.id, branchSchema,
+            storeSchema: branchSchema, isMainBranch: target.isMainBranch,
+        }
+        const { accessToken, refreshToken } = await createTokenPair(tokenPayload, req.body?.deviceId)
+
+        res.json({
+            success: true,
+            data: {
+                token: accessToken,
+                refreshToken,
+                branch: { id: target.id, name: target.name, code: target.code, isMainBranch: target.isMainBranch },
+                accessibleBranches,
+                isCrossBranch: target.id !== user.branchId,
+            },
+        })
+    } catch (err: any) {
+        console.error('Switch branch error:', err?.message || err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
 // ─── GET /api/auth/me ────────────────────────────────────────────────────────
 router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
