@@ -129,6 +129,103 @@ router.post('/reindex', authMiddleware, requireRole('admin'), async (req: AuthRe
     }
 })
 
+// POST /api/inventory/sync-warehouse-stock — Backfill WarehouseStock from Product.stock
+// Existing data carries a global Product.stock but no per-branch WarehouseStock rows, so
+// per-branch stock surfaces as 0. This seeds each branch's default "main" warehouse from
+// Product.stock. Single-branch stores get an authoritative set (quantity = Product.stock);
+// multi-branch stores stay conservative — existing rows are kept, only missing ones are
+// created (assume the global stock sits at the branch until a transfer says otherwise).
+router.post('/sync-warehouse-stock', authMiddleware, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+
+        // All products with the fields a WarehouseStock row needs to be self-describing.
+        const products = await prisma.product.findMany({
+            select: { id: true, name: true, sku: true, stock: true },
+        })
+
+        // Branch set decides single- vs multi-branch behaviour. With no branches the
+        // store keeps a single null-branch ("store itself") default warehouse.
+        const branches = await prisma.branch.findMany({ select: { id: true, name: true } })
+        const isMultiBranch = branches.length > 1
+
+        // Resolve the default "main" warehouse for every branch (or the null-branch store
+        // warehouse when there are no branches), lazily creating any that don't exist.
+        const targets: { warehouseId: string; branchId: string | null }[] = []
+        if (branches.length === 0) {
+            const wh = await getOrCreateDefaultWarehouse(prisma as any, null)
+            if (wh?.id) targets.push({ warehouseId: wh.id, branchId: null })
+        } else {
+            for (const b of branches) {
+                const wh = await getOrCreateDefaultWarehouse(prisma as any, b.id, b.name)
+                if (wh?.id) targets.push({ warehouseId: wh.id, branchId: b.id })
+            }
+        }
+
+        let syncedProducts = 0
+        let created = 0
+        let updated = 0
+        const perWarehouse: { warehouseId: string; branchId: string | null; synced: number }[] = []
+
+        for (const { warehouseId, branchId } of targets) {
+            // Existing rows for this warehouse — lets us tell create vs keep apart.
+            const existing = await (prisma as any).warehouseStock.findMany({
+                where: { warehouseId },
+                select: { productId: true },
+            })
+            const existingIds = new Set(existing.map((e: any) => e.productId))
+
+            let synced = 0
+            for (const p of products) {
+                const has = existingIds.has(p.id)
+                // Multi-branch + row already present → keep the branch's own number.
+                if (isMultiBranch && has) continue
+
+                await (prisma as any).warehouseStock.upsert({
+                    where: { warehouseId_productId: { warehouseId, productId: p.id } },
+                    // Single-branch: authoritative set. Multi-branch only reaches here
+                    // when the row is missing, so update never fires for it.
+                    update: isMultiBranch ? {} : { quantity: p.stock },
+                    create: {
+                        warehouseId,
+                        productId: p.id,
+                        productName: p.name,
+                        productSku: p.sku ?? null,
+                        quantity: p.stock,
+                    },
+                })
+                if (has) updated++
+                else created++
+                synced++
+            }
+            perWarehouse.push({ warehouseId, branchId, synced })
+            syncedProducts += synced
+        }
+
+        // Invalidate stock-sensitive caches so the new per-branch numbers show up.
+        const schema = req.user?.storeSchema || 'default'
+        cacheDel(`${schema}:inventory:*`).catch(() => { })
+        cacheDel(`${schema}:products:*`).catch(() => { })
+        cacheDel(`products:${schema}:*`).catch(() => { })
+
+        res.json({
+            success: true,
+            data: {
+                totalProducts: products.length,
+                warehouses: targets.length,
+                syncedProducts,
+                created,
+                updated,
+                mode: isMultiBranch ? 'multi-branch' : 'single-branch',
+                perWarehouse,
+            },
+        })
+    } catch (err) {
+        console.error('Sync warehouse stock error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
 // GET /api/inventory -- stock summary
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {

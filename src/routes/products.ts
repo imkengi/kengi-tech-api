@@ -101,6 +101,31 @@ router.get('/', authMiddleware, requirePermission('products.view'), async (req: 
                     })
                     : []
                 branchStockMap = new Map(bStocks.map((ws: any) => [ws.productId, ws.quantity]))
+
+                // Self-heal: products with no WarehouseStock row for this branch warehouse
+                // get one lazily seeded with quantity = Product.stock, so per-branch stock
+                // gradually backfills as products are viewed (conservative: assume the
+                // global stock sits at this branch until a transfer says otherwise). The
+                // upsert's empty update keeps any row a concurrent request just created.
+                const missing = filteredProducts.filter((p: any) => !branchStockMap!.has(p.id))
+                for (const p of missing) {
+                    try {
+                        await (prisma as any).warehouseStock.upsert({
+                            where: { warehouseId_productId: { warehouseId: branchWarehouse.id, productId: p.id } },
+                            update: {},
+                            create: {
+                                warehouseId: branchWarehouse.id,
+                                productId: p.id,
+                                productName: p.name,
+                                productSku: p.sku ?? null,
+                                quantity: p.stock ?? 0,
+                            },
+                        })
+                        branchStockMap!.set(p.id, p.stock ?? 0)
+                    } catch (err) {
+                        console.error('[products] WarehouseStock auto-heal failed for', p.id, err)
+                    }
+                }
             }
         }
 
@@ -242,7 +267,28 @@ router.get('/:id', authMiddleware, requirePermission('products.view'), async (re
                     where: { warehouseId_productId: { warehouseId: branchWarehouse.id, productId: product.id } },
                     select: { quantity: true },
                 })
-                branchStock = ws?.quantity ?? 0
+                if (ws) {
+                    branchStock = ws.quantity
+                } else {
+                    // Self-heal: no per-branch row yet — seed it from Product.stock so the
+                    // number self-populates on view (see list route for the rationale).
+                    branchStock = product.stock ?? 0
+                    try {
+                        await (prisma as any).warehouseStock.upsert({
+                            where: { warehouseId_productId: { warehouseId: branchWarehouse.id, productId: product.id } },
+                            update: {},
+                            create: {
+                                warehouseId: branchWarehouse.id,
+                                productId: product.id,
+                                productName: product.name,
+                                productSku: product.sku ?? null,
+                                quantity: product.stock ?? 0,
+                            },
+                        })
+                    } catch (err) {
+                        console.error('[products] WarehouseStock auto-heal failed for', product.id, err)
+                    }
+                }
             }
         }
 
