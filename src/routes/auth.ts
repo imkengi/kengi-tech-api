@@ -778,13 +778,24 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
                 select: { id: true, code: true, name: true, address: true, phone: true },
             })
         }
+        // Use JWT branchId (switched branch) over DB branchId (home branch)
+        const effectiveBranchId = req.user?.branchId || user.branchId
         let branch = null
-        if (user.branchId) {
+        if (effectiveBranchId) {
             branch = await storePrisma.branch.findUnique({
-                where: { id: user.branchId },
-                select: { id: true, name: true, code: true, address: true },
+                where: { id: effectiveBranchId },
+                select: { id: true, name: true, code: true, address: true, isMainBranch: true },
             })
         }
+
+        // Build accessible branches + isCrossBranch for the frontend
+        const role = req.user?.role || user.role
+        const canAccessAll = role === 'admin' || role === 'manager' || role === 'superadmin'
+        const allBranches = await storePrisma.branch.findMany({
+            where: { status: { not: 'inactive' } },
+            select: { id: true, name: true, code: true, isMainBranch: true },
+            orderBy: [{ isMainBranch: 'desc' }, { name: 'asc' }],
+        })
 
         const settings = await storePrisma.storeSettings.findUnique({ where: { id: 'default' } })
 
@@ -798,6 +809,9 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res: Response) => {
                 branchSchema: req.user?.branchSchema,
                 store: store ? { ...store, logo: settings?.logo, address: settings?.address || store.address, phone: settings?.phone || store.phone } : null,
                 branch,
+                currentBranch: branch,
+                accessibleBranches: allBranches,
+                isCrossBranch: canAccessAll || allBranches.length > 1,
             },
         })
     } catch (err) {
