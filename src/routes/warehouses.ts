@@ -95,7 +95,22 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
             orderBy: [{ isDefault: 'desc' }, { type: 'asc' }, { name: 'asc' }],
         })
 
-        res.json({ success: true, data: warehouses })
+        // Enrich with branch name so the frontend can show which branch each warehouse belongs to
+        const branchIds = [...new Set(warehouses.map((w: any) => w.branchId).filter(Boolean))]
+        const branchMap = new Map<string, string>()
+        if (branchIds.length > 0) {
+            const branches = await prisma.branch.findMany({
+                where: { id: { in: branchIds } },
+                select: { id: true, name: true },
+            })
+            branches.forEach((b: any) => branchMap.set(b.id, b.name))
+        }
+        const data = warehouses.map((w: any) => ({
+            ...w,
+            branchName: w.branchId ? (branchMap.get(w.branchId) || null) : null,
+        }))
+
+        res.json({ success: true, data })
     } catch (err) {
         console.error('List warehouses error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
