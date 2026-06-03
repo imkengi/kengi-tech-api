@@ -1,5 +1,5 @@
 import { Router, Response } from 'express'
-import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
+import { authMiddleware, getBranchFilter, AuthRequest, getBranchId, canAccessBranch } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
 import { validate } from '../middleware/validate'
 import { CreateExpenseSchema, UpdateExpenseSchema } from '../schemas'
@@ -11,13 +11,13 @@ const router = Router()
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const schema = req.user?.storeSchema || 'default'
-        const cacheKey = `${schema}:expenses:${JSON.stringify(req.query)}`
+        const cacheKey = `${schema}:expenses:${JSON.stringify(getBranchFilter(req))}:${JSON.stringify(req.query)}`
         const cached = await cacheGet(cacheKey)
         if (cached) return res.json(cached)
         const prisma = req.storePrisma!
         const branchId = getBranchId(req)
         const { search, category, status, startDate, endDate } = req.query as Record<string, string | undefined>
-        const where: any = {}
+        const where: any = { ...getBranchFilter(req) }
         if (category && category !== 'all') where.category = category
         if (status && status !== 'all') where.status = status
         if (search) where.description = { contains: String(search) }
@@ -71,6 +71,7 @@ router.post('/', authMiddleware, requireRole('admin', 'manager'), validate(Creat
                 recurring: recurring || false,
                 date: date ? new Date(date) : new Date(),
                 bankAccountId: bankAccountId || null,
+                branchId: getBranchId(req) || null,
             },
         })
 
@@ -103,6 +104,9 @@ router.put('/:id', authMiddleware, requireRole('admin', 'manager'), validate(Upd
         const branchId = getBranchId(req)
         const expId = String(req.params.id)
         const { description, amount, category, paidBy, recurring, date, bankAccountId } = req.body
+        const existing = await prisma.expense.findUnique({ where: { id: expId } })
+        if (!existing) return res.status(404).json({ success: false, error: 'Không tìm thấy phiếu chi' })
+        if (!canAccessBranch(req, existing.branchId)) return res.status(404).json({ success: false, error: 'Không tìm thấy phiếu chi' })
         const expense = await prisma.expense.update({
             where: { id: expId },
             data: {
@@ -131,6 +135,7 @@ router.post('/:id/cancel', authMiddleware, requireRole('admin', 'manager'), asyn
 
         const existing = await prisma.expense.findUnique({ where: { id } })
         if (!existing) return res.status(404).json({ success: false, error: 'Không tìm thấy phiếu chi' })
+        if (!canAccessBranch(req, existing.branchId)) return res.status(404).json({ success: false, error: 'Không tìm thấy phiếu chi' })
         if (existing.status === 'cancelled') return res.status(400).json({ success: false, error: 'Phiếu chi đã bị hủy trước đó' })
 
         const expense = await prisma.expense.update({
@@ -168,8 +173,11 @@ router.post('/:id/cancel', authMiddleware, requireRole('admin', 'manager'), asyn
 router.delete('/:id', authMiddleware, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        const branchId = getBranchId(req)
-        await prisma.expense.delete({ where: { id: String(req.params.id) } })
+        const id = String(req.params.id)
+        const existing = await prisma.expense.findUnique({ where: { id } })
+        if (!existing) return res.status(404).json({ success: false, error: 'Không tìm thấy phiếu chi' })
+        if (!canAccessBranch(req, existing.branchId)) return res.status(404).json({ success: false, error: 'Không tìm thấy phiếu chi' })
+        await prisma.expense.delete({ where: { id } })
         cacheDel(`${req.user?.storeSchema || 'default'}:expenses:*`).catch(() => {})
         res.json({ success: true })
     } catch (err) {

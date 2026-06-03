@@ -1,5 +1,5 @@
 import { Router, Response } from 'express'
-import { authMiddleware, AuthRequest, getBranchId, canAccessBranch } from '../middleware/auth'
+import { authMiddleware, AuthRequest, getBranchId, getBranchFilter, canAccessBranch } from '../middleware/auth'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 
 const router = Router()
@@ -11,12 +11,12 @@ const ROUTE_STATUS = new Set(['planned', 'in_progress', 'completed'])
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const schema = req.user?.storeSchema || 'default'
-        const cacheKey = `${schema}:delivery-routes:${JSON.stringify(req.query)}`
+        const cacheKey = `${schema}:delivery-routes:${JSON.stringify(getBranchFilter(req))}:${JSON.stringify(req.query)}`
         const cached = await cacheGet(cacheKey)
         if (cached) return res.json(cached)
         const prisma = req.storePrisma!
         const { driverId, date, status } = req.query
-        const where: any = {}
+        const where: any = { ...getBranchFilter(req) }
         if (driverId) where.driverId = String(driverId)
         if (date) where.date = String(date)
         if (status && status !== 'all') where.status = String(status)
@@ -126,6 +126,14 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { name, status, startTime, endTime, fuelCost, driverId, driverName } = req.body
+
+        const existingRoute = await prisma.deliveryRoute.findUnique({
+            where: { id: String(req.params.id) },
+            select: { branchId: true },
+        })
+        if (!existingRoute) return res.status(404).json({ success: false, error: 'Route not found' })
+        if (!canAccessBranch(req, existingRoute.branchId)) return res.status(404).json({ success: false, error: 'Route not found' })
+
         const d: any = {}
         if (name !== undefined) d.name = name
         if (status !== undefined) {
@@ -215,6 +223,14 @@ router.put('/:id/stops/:stopId', authMiddleware, async (req: AuthRequest, res: R
         if (!stop || stop.routeId !== String(req.params.id)) {
             return res.status(404).json({ success: false, error: 'Stop not found on this route' })
         }
+        // DeliveryStop has no branchId — scope by its parent route's branch
+        const parentRoute = await prisma.deliveryRoute.findUnique({
+            where: { id: stop.routeId },
+            select: { branchId: true },
+        })
+        if (!parentRoute || !canAccessBranch(req, parentRoute.branchId)) {
+            return res.status(404).json({ success: false, error: 'Stop not found on this route' })
+        }
         const data = await prisma.deliveryStop.update({ where: { id: stop.id }, data: d })
         cacheDel(`${req.user?.storeSchema || 'default'}:delivery-routes:*`).catch(() => {})
         res.json({ success: true, data })
@@ -231,8 +247,10 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
         // If route was in_progress, free the driver's vehicle
         const route = await prisma.deliveryRoute.findUnique({
             where: { id: String(req.params.id) },
-            select: { status: true, driverId: true },
+            select: { status: true, driverId: true, branchId: true },
         })
+        if (!route) return res.status(404).json({ success: false, error: 'Route not found' })
+        if (!canAccessBranch(req, route.branchId)) return res.status(404).json({ success: false, error: 'Route not found' })
         await (prisma as any).$transaction(async (tx: any) => {
             await tx.deliveryRoute.delete({ where: { id: String(req.params.id) } })
             if (route?.status === 'in_progress' && route.driverId) {

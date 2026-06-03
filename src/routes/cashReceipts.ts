@@ -1,5 +1,5 @@
 import { Router, Response } from 'express'
-import { authMiddleware, AuthRequest } from '../middleware/auth'
+import { authMiddleware, AuthRequest, getBranchFilter, getBranchId, canAccessBranch } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
 
 const router = Router()
@@ -11,7 +11,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma! as any
         const { startDate, endDate, category, search, status } = req.query
-        const where: any = {}
+        const where: any = { ...getBranchFilter(req) }
 
         if (category && category !== 'all') where.category = String(category)
         if (status && status !== 'all') where.status = String(status)
@@ -35,7 +35,7 @@ router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => 
     try {
         const prisma = req.storePrisma! as any
         const { startDate, endDate } = req.query
-        const where: any = { status: 'active' }
+        const where: any = { ...getBranchFilter(req), status: 'active' }
         if (startDate || endDate) {
             where.date = {}
             if (startDate) where.date.gte = new Date(String(startDate))
@@ -77,6 +77,7 @@ router.post('/', authMiddleware, requireRole('admin', 'manager'), async (req: Au
                 customerId: customerId || null,
                 customerName: customerName?.trim() || null,
                 reference: reference?.trim() || null,
+                branchId: getBranchId(req) || null,
             },
         })
 
@@ -111,6 +112,10 @@ router.put('/:id', authMiddleware, requireRole('admin', 'manager'), async (req: 
             receivedVia, bankAccountId, customerId, customerName, reference,
         } = req.body
 
+        const existing = await prisma.cashReceipt.findUnique({ where: { id } })
+        if (!existing) return res.status(404).json({ success: false, error: 'Không tìm thấy phiếu thu' })
+        if (!canAccessBranch(req, existing.branchId)) return res.status(404).json({ success: false, error: 'Không tìm thấy phiếu thu' })
+
         const data: any = {}
         if (description !== undefined) data.description = String(description).trim()
         if (amount !== undefined) data.amount = Number(amount)
@@ -139,6 +144,7 @@ router.post('/:id/cancel', authMiddleware, requireRole('admin', 'manager'), asyn
 
         const existing = await prisma.cashReceipt.findUnique({ where: { id } })
         if (!existing) return res.status(404).json({ success: false, error: 'Không tìm thấy phiếu thu' })
+        if (!canAccessBranch(req, existing.branchId)) return res.status(404).json({ success: false, error: 'Không tìm thấy phiếu thu' })
         if (existing.status === 'cancelled') return res.status(400).json({ success: false, error: 'Phiếu thu đã bị hủy trước đó' })
 
         const receipt = await prisma.cashReceipt.update({
@@ -175,7 +181,11 @@ router.post('/:id/cancel', authMiddleware, requireRole('admin', 'manager'), asyn
 router.delete('/:id', authMiddleware, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma! as any
-        await prisma.cashReceipt.delete({ where: { id: String(req.params.id) } })
+        const id = String(req.params.id)
+        const existing = await prisma.cashReceipt.findUnique({ where: { id } })
+        if (!existing) return res.status(404).json({ success: false, error: 'Không tìm thấy phiếu thu' })
+        if (!canAccessBranch(req, existing.branchId)) return res.status(404).json({ success: false, error: 'Không tìm thấy phiếu thu' })
+        await prisma.cashReceipt.delete({ where: { id } })
         res.json({ success: true })
     } catch (err) {
         console.error('Delete cash receipt error:', err)
