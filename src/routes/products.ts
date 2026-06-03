@@ -14,9 +14,12 @@ const router = Router()
 router.get('/', authMiddleware, requirePermission('products.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        // Branch context: explicit ?branchId wins, else the caller's own branch.
-        // Used below to surface per-branch stock from the branch's default warehouse.
-        const branchContextId = (req.query.branchId as string) || getBranchId(req) || null
+        // Branch context: explicit ?branchId wins, then the X-Branch-Id header the
+        // frontend sets when the user switches branches, else the caller's own JWT
+        // branch. Used below to surface per-branch stock from the branch's default
+        // warehouse — without the header check, branch switching had no effect and
+        // every request showed main-branch stock.
+        const branchContextId = (req.query.branchId as string) || (req.headers['x-branch-id'] as string) || getBranchId(req) || null
 
         // Cache check — keyed on the branch context so two branches don't share a page.
         const cacheKey = `products:${req.user?.storeSchema || 'default'}:${branchContextId || 'nobranch'}:${JSON.stringify(req.query)}`
@@ -103,13 +106,17 @@ router.get('/', authMiddleware, requirePermission('products.view'), async (req: 
                 branchStockMap = new Map(bStocks.map((ws: any) => [ws.productId, ws.quantity]))
 
                 // Self-heal: products with no WarehouseStock row for this branch warehouse
-                // get one lazily seeded with quantity = Product.stock, so per-branch stock
-                // gradually backfills as products are viewed (conservative: assume the
-                // global stock sits at this branch until a transfer says otherwise). The
-                // upsert's empty update keeps any row a concurrent request just created.
+                // get one lazily created. For the MAIN branch, seed with Product.stock
+                // (legacy global stock lives there). For other branches, start at 0 —
+                // stock should arrive via imports or transfers, not be duplicated.
+                const isMainBranch = !!(await (prisma as any).branch.findFirst({
+                    where: { id: branchContextId, isMainBranch: true },
+                    select: { id: true },
+                }))
                 const missing = filteredProducts.filter((p: any) => !branchStockMap!.has(p.id))
                 for (const p of missing) {
                     try {
+                        const seedQty = isMainBranch ? (p.stock ?? 0) : 0
                         await (prisma as any).warehouseStock.upsert({
                             where: { warehouseId_productId: { warehouseId: branchWarehouse.id, productId: p.id } },
                             update: {},
@@ -118,7 +125,7 @@ router.get('/', authMiddleware, requirePermission('products.view'), async (req: 
                                 productId: p.id,
                                 productName: p.name,
                                 productSku: p.sku ?? null,
-                                quantity: p.stock ?? 0,
+                                quantity: seedQty,
                             },
                         })
                         branchStockMap!.set(p.id, p.stock ?? 0)
@@ -255,7 +262,7 @@ router.get('/:id', authMiddleware, requirePermission('products.view'), async (re
         if (!product) return res.status(404).json({ success: false, error: 'Product not found' })
 
         // Per-branch stock from the branch's default "main" warehouse (see list route).
-        const branchContextId = (req.query.branchId as string) || getBranchId(req) || null
+        const branchContextId = (req.query.branchId as string) || (req.headers['x-branch-id'] as string) || getBranchId(req) || null
         let branchStock: number | null = null
         if (branchContextId) {
             const branchWarehouse = await (prisma as any).warehouse.findFirst({
@@ -270,9 +277,13 @@ router.get('/:id', authMiddleware, requirePermission('products.view'), async (re
                 if (ws) {
                     branchStock = ws.quantity
                 } else {
-                    // Self-heal: no per-branch row yet — seed it from Product.stock so the
-                    // number self-populates on view (see list route for the rationale).
-                    branchStock = product.stock ?? 0
+                    // Self-heal: main branch gets Product.stock, others start at 0
+                    const isMain = !!(await (prisma as any).branch.findFirst({
+                        where: { id: branchContextId, isMainBranch: true },
+                        select: { id: true },
+                    }))
+                    const seedQty = isMain ? (product.stock ?? 0) : 0
+                    branchStock = seedQty
                     try {
                         await (prisma as any).warehouseStock.upsert({
                             where: { warehouseId_productId: { warehouseId: branchWarehouse.id, productId: product.id } },
@@ -282,7 +293,7 @@ router.get('/:id', authMiddleware, requirePermission('products.view'), async (re
                                 productId: product.id,
                                 productName: product.name,
                                 productSku: product.sku ?? null,
-                                quantity: product.stock ?? 0,
+                                quantity: seedQty,
                             },
                         })
                     } catch (err) {

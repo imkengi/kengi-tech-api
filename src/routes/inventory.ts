@@ -167,7 +167,15 @@ router.post('/sync-warehouse-stock', authMiddleware, requireRole('admin', 'manag
         let updated = 0
         const perWarehouse: { warehouseId: string; branchId: string | null; synced: number }[] = []
 
+        // Determine which branch is the main branch (gets Product.stock),
+        // other branches start at 0 so stock must come from imports/transfers.
+        const mainBranch = await prisma.branch.findFirst({
+            where: { isMainBranch: true },
+            select: { id: true },
+        })
+
         for (const { warehouseId, branchId } of targets) {
+            const isMainWarehouse = !branchId || branchId === mainBranch?.id
             // Existing rows for this warehouse — lets us tell create vs keep apart.
             const existing = await (prisma as any).warehouseStock.findMany({
                 where: { warehouseId },
@@ -181,17 +189,18 @@ router.post('/sync-warehouse-stock', authMiddleware, requireRole('admin', 'manag
                 // Multi-branch + row already present → keep the branch's own number.
                 if (isMultiBranch && has) continue
 
+                // Main branch: seed with Product.stock. Other branches: start at 0.
+                const seedQty = isMainWarehouse ? p.stock : 0
+
                 await (prisma as any).warehouseStock.upsert({
                     where: { warehouseId_productId: { warehouseId, productId: p.id } },
-                    // Single-branch: authoritative set. Multi-branch only reaches here
-                    // when the row is missing, so update never fires for it.
-                    update: isMultiBranch ? {} : { quantity: p.stock },
+                    update: isMultiBranch ? {} : { quantity: seedQty },
                     create: {
                         warehouseId,
                         productId: p.id,
                         productName: p.name,
                         productSku: p.sku ?? null,
-                        quantity: p.stock,
+                        quantity: seedQty,
                     },
                 })
                 if (has) updated++
@@ -200,6 +209,20 @@ router.post('/sync-warehouse-stock', authMiddleware, requireRole('admin', 'manag
             }
             perWarehouse.push({ warehouseId, branchId, synced })
             syncedProducts += synced
+        }
+
+        // If ?reset=true, zero out non-main branch warehouses that were incorrectly
+        // seeded with Product.stock by the old auto-heal logic.
+        let resetCount = 0
+        if (req.query.reset === 'true' && isMultiBranch) {
+            for (const { warehouseId, branchId } of targets) {
+                if (!branchId || branchId === mainBranch?.id) continue
+                const result = await (prisma as any).warehouseStock.updateMany({
+                    where: { warehouseId },
+                    data: { quantity: 0 },
+                })
+                resetCount += result.count || 0
+            }
         }
 
         // Invalidate stock-sensitive caches so the new per-branch numbers show up.
