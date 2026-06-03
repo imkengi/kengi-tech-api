@@ -303,11 +303,49 @@ router.get('/:id', authMiddleware, requirePermission('products.view'), async (re
             }
         }
 
+        // Per-branch stock breakdown across every branch's default "main" warehouse.
+        // Restricted to admin/manager/superadmin so regular staff can't see other
+        // branches' stock; regular staff only get their own `branchStock` above.
+        let allBranchStock: Array<{ branchId: string | null; branchName: string | null; warehouseId: string; quantity: number }> | undefined
+        const role = req.user?.role
+        if (role === 'admin' || role === 'manager' || role === 'superadmin') {
+            const mainWarehouses = await (prisma as any).warehouse.findMany({
+                where: { type: 'main', isDefault: true },
+                select: { id: true, branchId: true },
+            })
+            const warehouseIds = mainWarehouses.map((w: any) => w.id)
+            const stocks = warehouseIds.length > 0
+                ? await (prisma as any).warehouseStock.findMany({
+                    where: { productId: product.id, warehouseId: { in: warehouseIds } },
+                    select: { warehouseId: true, quantity: true },
+                })
+                : []
+            const stockMap = new Map<string, number>(stocks.map((s: any) => [s.warehouseId, s.quantity]))
+
+            const branchIds = [...new Set(mainWarehouses.map((w: any) => w.branchId).filter(Boolean))] as string[]
+            const branchMap = new Map<string, string>()
+            if (branchIds.length > 0) {
+                const branches = await (prisma as any).branch.findMany({
+                    where: { id: { in: branchIds } },
+                    select: { id: true, name: true },
+                })
+                branches.forEach((b: any) => branchMap.set(b.id, b.name))
+            }
+
+            allBranchStock = mainWarehouses.map((w: any) => ({
+                branchId: w.branchId ?? null,
+                branchName: w.branchId ? (branchMap.get(w.branchId) ?? null) : null,
+                warehouseId: w.id,
+                quantity: stockMap.get(w.id) ?? 0,
+            }))
+        }
+
         res.json({
             success: true,
             data: {
                 ...product,
                 branchStock,
+                ...(allBranchStock ? { allBranchStock } : {}),
                 createdAt: product.createdAt.toISOString(),
                 updatedAt: product.updatedAt.toISOString()
             }
