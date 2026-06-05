@@ -62,6 +62,9 @@ import warehouseRoutes from './routes/warehouses'
 import salesTripRoutes from './routes/salesTrips'
 import cashReceiptRoutes from './routes/cashReceipts'
 import bankAccountRoutes from './routes/bankAccounts'
+import accountRoutes from './routes/accounts'
+import accountingRoutes from './routes/accounting'
+import accountingReportRoutes from './routes/accountingReports'
 import { cacheDisconnect, cacheHealth } from './lib/cache'
 import { startAutoSync, stopAutoSync } from './cron/autoSync'
 import { setupWebSocket, getWebSocketStats } from './lib/websocket'
@@ -221,6 +224,14 @@ app.use('/api/warehouses', warehouseRoutes)
 app.use('/api/sales-trips', salesTripRoutes)
 app.use('/api/cash-receipts', cashReceiptRoutes)
 app.use('/api/bank-accounts', bankAccountRoutes)
+
+// ─── Accounting (Thông tư 99/2025) ──────────────────────────────────────────
+// Chart of accounts CRUD, period locking, closing entries, carry-forward, and
+// the bookkeeping reports. accountingReportRoutes mounts at /api/reports AFTER
+// /api/reports/financial (mounted above) so the more specific prefix wins.
+app.use('/api/accounts', accountRoutes)
+app.use('/api/accounting', accountingRoutes)
+app.use('/api/reports', accountingReportRoutes)
 
 import einvoiceRoutes from './routes/einvoice'
 app.use('/api/einvoice', einvoiceRoutes)
@@ -904,6 +915,40 @@ if (!process.env.PASSENGER_BASE_URI) {
                 console.log('✅ discountType columns migration completed')
             } catch (err: any) {
                 console.error('⚠️ discountType migration failed:', err.message)
+            }
+
+            // PeriodLock — accounting period locking (khóa sổ kế toán) per TT99/2025
+            try {
+                const schemas: any[] = await registryPrisma.$queryRaw`SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('information_schema', 'pg_catalog', 'pg_toast', 'public')`
+                for (const { schema_name } of schemas) {
+                    const migName = `period_lock_v1:${schema_name}`
+                    if (await isMigrationApplied(migName)) continue
+                    await registryPrisma.$executeRawUnsafe(`
+                        CREATE TABLE IF NOT EXISTS "${schema_name}"."PeriodLock" (
+                            "id" TEXT NOT NULL,
+                            "lockDate" TEXT NOT NULL,
+                            "periodType" TEXT NOT NULL DEFAULT 'month',
+                            "note" TEXT,
+                            "isActive" BOOLEAN NOT NULL DEFAULT true,
+                            "lockedBy" TEXT,
+                            "lockedByName" TEXT,
+                            "unlockedAt" TIMESTAMP(3),
+                            "unlockedBy" TEXT,
+                            "unlockReason" TEXT,
+                            "branchId" TEXT,
+                            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            CONSTRAINT "PeriodLock_pkey" PRIMARY KEY ("id")
+                        )
+                    `).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "PeriodLock_isActive_idx" ON "${schema_name}"."PeriodLock"("isActive")`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "PeriodLock_lockDate_idx" ON "${schema_name}"."PeriodLock"("lockDate")`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "PeriodLock_branchId_idx" ON "${schema_name}"."PeriodLock"("branchId")`).catch(() => {})
+                    await markMigrationApplied(migName)
+                }
+                console.log('✅ PeriodLock migration completed')
+            } catch (err: any) {
+                console.error('⚠️ PeriodLock migration failed:', err.message)
             }
 
             } catch (err: any) {

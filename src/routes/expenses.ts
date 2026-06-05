@@ -4,6 +4,7 @@ import { requireRole } from '../middleware/roleMiddleware'
 import { validate } from '../middleware/validate'
 import { CreateExpenseSchema, UpdateExpenseSchema } from '../schemas'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
+import { enforcePeriodLock } from '../lib/periodLock'
 
 const router = Router()
 
@@ -54,7 +55,7 @@ router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => 
 })
 
 // POST /api/expenses
-router.post('/', authMiddleware, requireRole('admin', 'manager'), validate(CreateExpenseSchema), async (req: AuthRequest, res: Response) => {
+router.post('/', authMiddleware, requireRole('admin', 'manager'), validate(CreateExpenseSchema), enforcePeriodLock('date'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma! as any
         const branchId = getBranchId(req)

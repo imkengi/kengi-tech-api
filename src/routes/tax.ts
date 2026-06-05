@@ -2,6 +2,8 @@ import { Router, Request, Response } from 'express'
 import { errMsg } from '../lib/errorResponse'
 import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
 import { createJournalEntriesForTransaction, AUTO_JOURNAL_REF_TYPES } from '../lib/autoJournal'
+import { COA_SEED } from '../lib/chartOfAccounts'
+import { enforcePeriodLock, assertNotLocked } from '../lib/periodLock'
 
 const router = Router()
 
@@ -1011,7 +1013,7 @@ router.get('/journal-entries', authMiddleware, async (req: AuthRequest, res: Res
 })
 
 // POST /api/tax/journal-entries
-router.post('/journal-entries', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.post('/journal-entries', authMiddleware, enforcePeriodLock('date'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { date, description, debitAccount, debitAccountName, creditAccount, creditAccountName, amount, debitAmount, creditAmount, reference, referenceType, notes } = req.body
@@ -1056,6 +1058,17 @@ router.delete('/journal-entries/:id', authMiddleware, async (req: AuthRequest, r
     try {
         const prisma = req.storePrisma!
         const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
+        const entry = await prisma.journalEntry.findUnique({ where: { id } })
+        if (!entry) return res.status(404).json({ success: false, error: 'Không tìm thấy bút toán' })
+        // Khóa sổ: chặn xóa chứng từ thuộc kỳ đã khóa.
+        try {
+            await assertNotLocked(prisma, (req as any).branchId ?? req.user?.branchId ?? null, entry.date)
+        } catch (lockErr: any) {
+            if (lockErr?.code === 'PERIOD_LOCKED') {
+                return res.status(423).json({ success: false, code: 'PERIOD_LOCKED', lockDate: lockErr.lockDate, error: lockErr.message })
+            }
+            throw lockErr
+        }
         await prisma.journalEntry.delete({ where: { id } })
         res.json({ success: true })
     } catch (err) { console.error('DELETE /journal-entries error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
@@ -2207,6 +2220,7 @@ const CLOSING_ACCOUNTS: { code: string; name: string; type: 'revenue' | 'expense
     { code: '641', name: 'Chi phí bán hàng', type: 'expense' },
     { code: '642', name: 'Chi phí QLDN', type: 'expense' },
     { code: '811', name: 'Chi phí khác', type: 'expense' },
+    { code: '821', name: 'Chi phí thuế TNDN', type: 'expense' },
 ]
 
 /**
@@ -5762,75 +5776,7 @@ router.get('/cash-flow-statement', authMiddleware, async (req: AuthRequest, res:
     }
 })
 
-// --- Chart of Accounts (TT200) -----------------------------------------------
-
-const COA_SEED: Array<{
-    code: string; name: string; nameEn?: string; level: number; parentCode?: string;
-    type: string; nature: string; description?: string;
-}> = [
-    { code: '111', name: 'Tien mat', nameEn: 'Cash on hand', level: 1, type: 'Asset', nature: 'Debit' },
-    { code: '1111', name: 'Tien Viet Nam', nameEn: 'Cash in VND', level: 2, parentCode: '111', type: 'Asset', nature: 'Debit' },
-    { code: '1112', name: 'Ngoai te', nameEn: 'Cash in foreign currency', level: 2, parentCode: '111', type: 'Asset', nature: 'Debit' },
-    { code: '112', name: 'Tien gui ngan hang', nameEn: 'Cash in bank', level: 1, type: 'Asset', nature: 'Debit' },
-    { code: '1121', name: 'Tien VND tai ngan hang', nameEn: 'Bank VND', level: 2, parentCode: '112', type: 'Asset', nature: 'Debit' },
-    { code: '1122', name: 'Ngoai te tai ngan hang', nameEn: 'Bank foreign currency', level: 2, parentCode: '112', type: 'Asset', nature: 'Debit' },
-    { code: '121', name: 'Chung khoan kinh doanh', nameEn: 'Trading securities', level: 1, type: 'Asset', nature: 'Debit' },
-    { code: '128', name: 'Dau tu nam giu den ngay dao han', nameEn: 'Held-to-maturity investments', level: 1, type: 'Asset', nature: 'Debit' },
-    { code: '131', name: 'Phai thu khach hang', nameEn: 'Trade receivables', level: 1, type: 'Asset', nature: 'Debit' },
-    { code: '133', name: 'Thue GTGT duoc khau tru', nameEn: 'VAT deductible', level: 1, type: 'Asset', nature: 'Debit' },
-    { code: '1331', name: 'VAT duoc khau tru cua HHDV', nameEn: 'VAT deductible of goods/services', level: 2, parentCode: '133', type: 'Asset', nature: 'Debit' },
-    { code: '138', name: 'Phai thu khac', nameEn: 'Other receivables', level: 1, type: 'Asset', nature: 'Debit' },
-    { code: '141', name: 'Tam ung', nameEn: 'Advances to employees', level: 1, type: 'Asset', nature: 'Debit' },
-    { code: '142', name: 'Chi phi tra truoc ngan han', nameEn: 'Short-term prepaid expenses', level: 1, type: 'Asset', nature: 'Debit' },
-    { code: '152', name: 'Nguyen lieu, vat lieu', nameEn: 'Raw materials', level: 1, type: 'Asset', nature: 'Debit' },
-    { code: '153', name: 'Cong cu, dung cu', nameEn: 'Tools and supplies', level: 1, type: 'Asset', nature: 'Debit' },
-    { code: '154', name: 'Chi phi SXKD do dang', nameEn: 'Work in progress', level: 1, type: 'Asset', nature: 'Debit' },
-    { code: '155', name: 'Thanh pham', nameEn: 'Finished goods', level: 1, type: 'Asset', nature: 'Debit' },
-    { code: '156', name: 'Hang hoa', nameEn: 'Merchandise', level: 1, type: 'Asset', nature: 'Debit' },
-    { code: '157', name: 'Hang gui di ban', nameEn: 'Goods on consignment', level: 1, type: 'Asset', nature: 'Debit' },
-    { code: '211', name: 'Tai san co dinh huu hinh', nameEn: 'Tangible fixed assets', level: 1, type: 'Asset', nature: 'Debit' },
-    { code: '212', name: 'Tai san co dinh thue tai chinh', nameEn: 'Finance leased assets', level: 1, type: 'Asset', nature: 'Debit' },
-    { code: '213', name: 'Tai san co dinh vo hinh', nameEn: 'Intangible fixed assets', level: 1, type: 'Asset', nature: 'Debit' },
-    { code: '214', name: 'Hao mon TSCD', nameEn: 'Accumulated depreciation', level: 1, type: 'Asset', nature: 'Credit' },
-    { code: '217', name: 'Bat dong san dau tu', nameEn: 'Investment property', level: 1, type: 'Asset', nature: 'Debit' },
-    { code: '221', name: 'Dau tu vao cong ty con', nameEn: 'Investment in subsidiaries', level: 1, type: 'Asset', nature: 'Debit' },
-    { code: '229', name: 'Du phong ton that tai san', nameEn: 'Provision for asset loss', level: 1, type: 'Asset', nature: 'Credit' },
-    { code: '242', name: 'Chi phi tra truoc dai han', nameEn: 'Long-term prepaid expenses', level: 1, type: 'Asset', nature: 'Debit' },
-    { code: '331', name: 'Phai tra nguoi ban', nameEn: 'Trade payables', level: 1, type: 'Liability', nature: 'Credit' },
-    { code: '333', name: 'Thue va cac khoan phai nop NN', nameEn: 'Taxes payable', level: 1, type: 'Liability', nature: 'Credit' },
-    { code: '3331', name: 'Thue GTGT phai nop', nameEn: 'VAT payable', level: 2, parentCode: '333', type: 'Liability', nature: 'Credit' },
-    { code: '3334', name: 'Thue TNDN', nameEn: 'Corporate income tax payable', level: 2, parentCode: '333', type: 'Liability', nature: 'Credit' },
-    { code: '3335', name: 'Thue TNCN', nameEn: 'Personal income tax payable', level: 2, parentCode: '333', type: 'Liability', nature: 'Credit' },
-    { code: '334', name: 'Phai tra nguoi lao dong', nameEn: 'Payables to employees', level: 1, type: 'Liability', nature: 'Credit' },
-    { code: '335', name: 'Chi phi phai tra', nameEn: 'Accrued expenses', level: 1, type: 'Liability', nature: 'Credit' },
-    { code: '338', name: 'Phai tra phai nop khac', nameEn: 'Other payables', level: 1, type: 'Liability', nature: 'Credit' },
-    { code: '341', name: 'Vay va no thue tai chinh', nameEn: 'Borrowings and finance lease liabilities', level: 1, type: 'Liability', nature: 'Credit' },
-    { code: '411', name: 'Von dau tu cua chu so huu', nameEn: "Owner's capital", level: 1, type: 'Equity', nature: 'Credit' },
-    { code: '413', name: 'Chenh lech ty gia hoi doai', nameEn: 'FX differences', level: 1, type: 'Equity', nature: 'Credit' },
-    { code: '414', name: 'Quy dau tu phat trien', nameEn: 'Investment & development fund', level: 1, type: 'Equity', nature: 'Credit' },
-    { code: '418', name: 'Cac quy khac thuoc VCSH', nameEn: 'Other equity funds', level: 1, type: 'Equity', nature: 'Credit' },
-    { code: '419', name: 'Co phieu quy', nameEn: 'Treasury shares', level: 1, type: 'Equity', nature: 'Debit' },
-    { code: '421', name: 'Loi nhuan sau thue chua phan phoi', nameEn: 'Retained earnings', level: 1, type: 'Equity', nature: 'Credit' },
-    { code: '511', name: 'Doanh thu ban hang va cung cap dich vu', nameEn: 'Sales revenue', level: 1, type: 'Revenue', nature: 'Credit' },
-    { code: '5111', name: 'Doanh thu ban hang hoa', nameEn: 'Goods sales revenue', level: 2, parentCode: '511', type: 'Revenue', nature: 'Credit' },
-    { code: '5112', name: 'Doanh thu thanh pham', nameEn: 'Finished goods revenue', level: 2, parentCode: '511', type: 'Revenue', nature: 'Credit' },
-    { code: '5113', name: 'Doanh thu cung cap dich vu', nameEn: 'Service revenue', level: 2, parentCode: '511', type: 'Revenue', nature: 'Credit' },
-    { code: '515', name: 'Doanh thu hoat dong tai chinh', nameEn: 'Financial income', level: 1, type: 'Revenue', nature: 'Credit' },
-    { code: '521', name: 'Cac khoan giam tru doanh thu', nameEn: 'Sales deductions', level: 1, type: 'Revenue', nature: 'Debit' },
-    { code: '611', name: 'Mua hang', nameEn: 'Purchases', level: 1, type: 'Expense', nature: 'Debit' },
-    { code: '621', name: 'Chi phi nguyen vat lieu truc tiep', nameEn: 'Direct material cost', level: 1, type: 'Expense', nature: 'Debit' },
-    { code: '622', name: 'Chi phi nhan cong truc tiep', nameEn: 'Direct labor cost', level: 1, type: 'Expense', nature: 'Debit' },
-    { code: '627', name: 'Chi phi san xuat chung', nameEn: 'Manufacturing overhead', level: 1, type: 'Expense', nature: 'Debit' },
-    { code: '632', name: 'Gia von hang ban', nameEn: 'Cost of goods sold', level: 1, type: 'Expense', nature: 'Debit' },
-    { code: '635', name: 'Chi phi tai chinh', nameEn: 'Financial expenses', level: 1, type: 'Expense', nature: 'Debit' },
-    { code: '641', name: 'Chi phi ban hang', nameEn: 'Selling expenses', level: 1, type: 'Expense', nature: 'Debit' },
-    { code: '642', name: 'Chi phi quan ly doanh nghiep', nameEn: 'G&A expenses', level: 1, type: 'Expense', nature: 'Debit' },
-    { code: '711', name: 'Thu nhap khac', nameEn: 'Other income', level: 1, type: 'Revenue', nature: 'Credit' },
-    { code: '811', name: 'Chi phi khac', nameEn: 'Other expenses', level: 1, type: 'Expense', nature: 'Debit' },
-    { code: '821', name: 'Chi phi thue TNDN', nameEn: 'Corporate income tax expense', level: 1, type: 'Expense', nature: 'Debit' },
-    { code: '911', name: 'Xac dinh ket qua kinh doanh', nameEn: 'Income summary', level: 1, type: 'Equity', nature: 'Debit' },
-    { code: '001', name: 'Tai san thue ngoai', nameEn: 'Leased assets (off-balance)', level: 1, type: 'OffBalance', nature: 'Debit' },
-]
+// --- Chart of Accounts (Thong tu 99/2025/TT-BTC) — seed shared from lib --------
 
 // POST /api/tax/chart-of-accounts/seed
 router.post('/chart-of-accounts/seed', authMiddleware, async (req: AuthRequest, res: Response) => {

@@ -1,6 +1,7 @@
 import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest, getBranchFilter, getBranchId, canAccessBranch } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
+import { enforcePeriodLock } from '../lib/periodLock'
 
 const router = Router()
 
@@ -55,7 +56,7 @@ router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => 
 })
 
 // POST /api/cash-receipts — create
-router.post('/', authMiddleware, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
+router.post('/', authMiddleware, requireRole('admin', 'manager'), enforcePeriodLock('date'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma! as any
         const {

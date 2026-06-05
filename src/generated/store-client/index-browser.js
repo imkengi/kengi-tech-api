@@ -1532,6 +1532,22 @@ exports.Prisma.ChartOfAccountScalarFieldEnum = {
   updatedAt: 'updatedAt'
 };
 
+exports.Prisma.PeriodLockScalarFieldEnum = {
+  id: 'id',
+  lockDate: 'lockDate',
+  periodType: 'periodType',
+  note: 'note',
+  isActive: 'isActive',
+  lockedBy: 'lockedBy',
+  lockedByName: 'lockedByName',
+  unlockedAt: 'unlockedAt',
+  unlockedBy: 'unlockedBy',
+  unlockReason: 'unlockReason',
+  branchId: 'branchId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
 exports.Prisma.ExchangeRateScalarFieldEnum = {
   id: 'id',
   date: 'date',
@@ -1686,6 +1702,7 @@ exports.Prisma.ModelName = {
   ZReport: 'ZReport',
   StorageFile: 'StorageFile',
   ChartOfAccount: 'ChartOfAccount',
+  PeriodLock: 'PeriodLock',
   ExchangeRate: 'ExchangeRate',
   TaxDeadline: 'TaxDeadline',
   TaxAuditLog: 'TaxAuditLog',

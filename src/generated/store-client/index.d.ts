@@ -449,6 +449,11 @@ export type StorageFile = $Result.DefaultSelection<Prisma.$StorageFilePayload>
  */
 export type ChartOfAccount = $Result.DefaultSelection<Prisma.$ChartOfAccountPayload>
 /**
+ * Model PeriodLock
+ * 
+ */
+export type PeriodLock = $Result.DefaultSelection<Prisma.$PeriodLockPayload>
+/**
  * Model ExchangeRate
  * 
  */
@@ -1458,6 +1463,16 @@ export class PrismaClient<
   get chartOfAccount(): Prisma.ChartOfAccountDelegate<ExtArgs, ClientOptions>;
 
   /**
+   * `prisma.periodLock`: Exposes CRUD operations for the **PeriodLock** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more PeriodLocks
+    * const periodLocks = await prisma.periodLock.findMany()
+    * ```
+    */
+  get periodLock(): Prisma.PeriodLockDelegate<ExtArgs, ClientOptions>;
+
+  /**
    * `prisma.exchangeRate`: Exposes CRUD operations for the **ExchangeRate** model.
     * Example usage:
     * ```ts
@@ -2024,6 +2039,7 @@ export namespace Prisma {
     ZReport: 'ZReport',
     StorageFile: 'StorageFile',
     ChartOfAccount: 'ChartOfAccount',
+    PeriodLock: 'PeriodLock',
     ExchangeRate: 'ExchangeRate',
     TaxDeadline: 'TaxDeadline',
     TaxAuditLog: 'TaxAuditLog',
@@ -2046,7 +2062,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "branch" | "user" | "apiKey" | "salesCheckin" | "category" | "brand" | "product" | "productSerial" | "unitConversion" | "productImage" | "customerGroup" | "customer" | "transaction" | "transactionItem" | "payment" | "inventoryTransaction" | "importReceipt" | "importReceiptItem" | "promotion" | "supplier" | "purchaseOrder" | "purchaseOrderItem" | "expense" | "cashReceipt" | "notification" | "warranty" | "repair" | "quotation" | "auditLog" | "priceHistory" | "shippingOrder" | "driver" | "vehicle" | "vehicleMaintenance" | "deliveryRoute" | "deliveryStop" | "taxConfig" | "bankAccount" | "bankTransaction" | "taxDeclaration" | "customerSegment" | "currency" | "feedback" | "schedule" | "returnOrder" | "returnItem" | "debtEntry" | "bundle" | "salesOrder" | "salesOrderItem" | "priceList" | "priceListItem" | "priceRule" | "announcement" | "attendance" | "loyaltyMember" | "loyaltyTransaction" | "review" | "storeSettings" | "store" | "branchRequest" | "branchDeleteRequest" | "payrollRecord" | "onlineChannel" | "onlineOrder" | "onlineProduct" | "onlineOrderItem" | "syncLog" | "journalEntry" | "fixedAsset" | "eInvoiceConfig" | "eInvoice" | "adjustmentInvoice" | "adjustmentInvoiceItem" | "hKDRevenueEntry" | "warehouse" | "warehouseStock" | "stockTransfer" | "stockTransferItem" | "salesTrip" | "salesTripItem" | "salesTripLog" | "inventoryCount" | "inventoryCountItem" | "zReport" | "storageFile" | "chartOfAccount" | "exchangeRate" | "taxDeadline" | "taxAuditLog" | "taxBudget"
+      modelProps: "branch" | "user" | "apiKey" | "salesCheckin" | "category" | "brand" | "product" | "productSerial" | "unitConversion" | "productImage" | "customerGroup" | "customer" | "transaction" | "transactionItem" | "payment" | "inventoryTransaction" | "importReceipt" | "importReceiptItem" | "promotion" | "supplier" | "purchaseOrder" | "purchaseOrderItem" | "expense" | "cashReceipt" | "notification" | "warranty" | "repair" | "quotation" | "auditLog" | "priceHistory" | "shippingOrder" | "driver" | "vehicle" | "vehicleMaintenance" | "deliveryRoute" | "deliveryStop" | "taxConfig" | "bankAccount" | "bankTransaction" | "taxDeclaration" | "customerSegment" | "currency" | "feedback" | "schedule" | "returnOrder" | "returnItem" | "debtEntry" | "bundle" | "salesOrder" | "salesOrderItem" | "priceList" | "priceListItem" | "priceRule" | "announcement" | "attendance" | "loyaltyMember" | "loyaltyTransaction" | "review" | "storeSettings" | "store" | "branchRequest" | "branchDeleteRequest" | "payrollRecord" | "onlineChannel" | "onlineOrder" | "onlineProduct" | "onlineOrderItem" | "syncLog" | "journalEntry" | "fixedAsset" | "eInvoiceConfig" | "eInvoice" | "adjustmentInvoice" | "adjustmentInvoiceItem" | "hKDRevenueEntry" | "warehouse" | "warehouseStock" | "stockTransfer" | "stockTransferItem" | "salesTrip" | "salesTripItem" | "salesTripLog" | "inventoryCount" | "inventoryCountItem" | "zReport" | "storageFile" | "chartOfAccount" | "periodLock" | "exchangeRate" | "taxDeadline" | "taxAuditLog" | "taxBudget"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -8488,6 +8504,80 @@ export namespace Prisma {
           }
         }
       }
+      PeriodLock: {
+        payload: Prisma.$PeriodLockPayload<ExtArgs>
+        fields: Prisma.PeriodLockFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.PeriodLockFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PeriodLockPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.PeriodLockFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PeriodLockPayload>
+          }
+          findFirst: {
+            args: Prisma.PeriodLockFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PeriodLockPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.PeriodLockFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PeriodLockPayload>
+          }
+          findMany: {
+            args: Prisma.PeriodLockFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PeriodLockPayload>[]
+          }
+          create: {
+            args: Prisma.PeriodLockCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PeriodLockPayload>
+          }
+          createMany: {
+            args: Prisma.PeriodLockCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.PeriodLockCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PeriodLockPayload>[]
+          }
+          delete: {
+            args: Prisma.PeriodLockDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PeriodLockPayload>
+          }
+          update: {
+            args: Prisma.PeriodLockUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PeriodLockPayload>
+          }
+          deleteMany: {
+            args: Prisma.PeriodLockDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.PeriodLockUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.PeriodLockUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PeriodLockPayload>[]
+          }
+          upsert: {
+            args: Prisma.PeriodLockUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PeriodLockPayload>
+          }
+          aggregate: {
+            args: Prisma.PeriodLockAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregatePeriodLock>
+          }
+          groupBy: {
+            args: Prisma.PeriodLockGroupByArgs<ExtArgs>
+            result: $Utils.Optional<PeriodLockGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.PeriodLockCountArgs<ExtArgs>
+            result: $Utils.Optional<PeriodLockCountAggregateOutputType> | number
+          }
+        }
+      }
       ExchangeRate: {
         payload: Prisma.$ExchangeRatePayload<ExtArgs>
         fields: Prisma.ExchangeRateFieldRefs
@@ -8967,6 +9057,7 @@ export namespace Prisma {
     zReport?: ZReportOmit
     storageFile?: StorageFileOmit
     chartOfAccount?: ChartOfAccountOmit
+    periodLock?: PeriodLockOmit
     exchangeRate?: ExchangeRateOmit
     taxDeadline?: TaxDeadlineOmit
     taxAuditLog?: TaxAuditLogOmit
@@ -113644,6 +113735,1105 @@ export namespace Prisma {
 
 
   /**
+   * Model PeriodLock
+   */
+
+  export type AggregatePeriodLock = {
+    _count: PeriodLockCountAggregateOutputType | null
+    _min: PeriodLockMinAggregateOutputType | null
+    _max: PeriodLockMaxAggregateOutputType | null
+  }
+
+  export type PeriodLockMinAggregateOutputType = {
+    id: string | null
+    lockDate: string | null
+    periodType: string | null
+    note: string | null
+    isActive: boolean | null
+    lockedBy: string | null
+    lockedByName: string | null
+    unlockedAt: Date | null
+    unlockedBy: string | null
+    unlockReason: string | null
+    branchId: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type PeriodLockMaxAggregateOutputType = {
+    id: string | null
+    lockDate: string | null
+    periodType: string | null
+    note: string | null
+    isActive: boolean | null
+    lockedBy: string | null
+    lockedByName: string | null
+    unlockedAt: Date | null
+    unlockedBy: string | null
+    unlockReason: string | null
+    branchId: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type PeriodLockCountAggregateOutputType = {
+    id: number
+    lockDate: number
+    periodType: number
+    note: number
+    isActive: number
+    lockedBy: number
+    lockedByName: number
+    unlockedAt: number
+    unlockedBy: number
+    unlockReason: number
+    branchId: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type PeriodLockMinAggregateInputType = {
+    id?: true
+    lockDate?: true
+    periodType?: true
+    note?: true
+    isActive?: true
+    lockedBy?: true
+    lockedByName?: true
+    unlockedAt?: true
+    unlockedBy?: true
+    unlockReason?: true
+    branchId?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type PeriodLockMaxAggregateInputType = {
+    id?: true
+    lockDate?: true
+    periodType?: true
+    note?: true
+    isActive?: true
+    lockedBy?: true
+    lockedByName?: true
+    unlockedAt?: true
+    unlockedBy?: true
+    unlockReason?: true
+    branchId?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type PeriodLockCountAggregateInputType = {
+    id?: true
+    lockDate?: true
+    periodType?: true
+    note?: true
+    isActive?: true
+    lockedBy?: true
+    lockedByName?: true
+    unlockedAt?: true
+    unlockedBy?: true
+    unlockReason?: true
+    branchId?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type PeriodLockAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which PeriodLock to aggregate.
+     */
+    where?: PeriodLockWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of PeriodLocks to fetch.
+     */
+    orderBy?: PeriodLockOrderByWithRelationInput | PeriodLockOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: PeriodLockWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` PeriodLocks from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` PeriodLocks.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned PeriodLocks
+    **/
+    _count?: true | PeriodLockCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: PeriodLockMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: PeriodLockMaxAggregateInputType
+  }
+
+  export type GetPeriodLockAggregateType<T extends PeriodLockAggregateArgs> = {
+        [P in keyof T & keyof AggregatePeriodLock]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregatePeriodLock[P]>
+      : GetScalarType<T[P], AggregatePeriodLock[P]>
+  }
+
+
+
+
+  export type PeriodLockGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: PeriodLockWhereInput
+    orderBy?: PeriodLockOrderByWithAggregationInput | PeriodLockOrderByWithAggregationInput[]
+    by: PeriodLockScalarFieldEnum[] | PeriodLockScalarFieldEnum
+    having?: PeriodLockScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: PeriodLockCountAggregateInputType | true
+    _min?: PeriodLockMinAggregateInputType
+    _max?: PeriodLockMaxAggregateInputType
+  }
+
+  export type PeriodLockGroupByOutputType = {
+    id: string
+    lockDate: string
+    periodType: string
+    note: string | null
+    isActive: boolean
+    lockedBy: string | null
+    lockedByName: string | null
+    unlockedAt: Date | null
+    unlockedBy: string | null
+    unlockReason: string | null
+    branchId: string | null
+    createdAt: Date
+    updatedAt: Date
+    _count: PeriodLockCountAggregateOutputType | null
+    _min: PeriodLockMinAggregateOutputType | null
+    _max: PeriodLockMaxAggregateOutputType | null
+  }
+
+  type GetPeriodLockGroupByPayload<T extends PeriodLockGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<PeriodLockGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof PeriodLockGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], PeriodLockGroupByOutputType[P]>
+            : GetScalarType<T[P], PeriodLockGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type PeriodLockSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    lockDate?: boolean
+    periodType?: boolean
+    note?: boolean
+    isActive?: boolean
+    lockedBy?: boolean
+    lockedByName?: boolean
+    unlockedAt?: boolean
+    unlockedBy?: boolean
+    unlockReason?: boolean
+    branchId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["periodLock"]>
+
+  export type PeriodLockSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    lockDate?: boolean
+    periodType?: boolean
+    note?: boolean
+    isActive?: boolean
+    lockedBy?: boolean
+    lockedByName?: boolean
+    unlockedAt?: boolean
+    unlockedBy?: boolean
+    unlockReason?: boolean
+    branchId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["periodLock"]>
+
+  export type PeriodLockSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    lockDate?: boolean
+    periodType?: boolean
+    note?: boolean
+    isActive?: boolean
+    lockedBy?: boolean
+    lockedByName?: boolean
+    unlockedAt?: boolean
+    unlockedBy?: boolean
+    unlockReason?: boolean
+    branchId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["periodLock"]>
+
+  export type PeriodLockSelectScalar = {
+    id?: boolean
+    lockDate?: boolean
+    periodType?: boolean
+    note?: boolean
+    isActive?: boolean
+    lockedBy?: boolean
+    lockedByName?: boolean
+    unlockedAt?: boolean
+    unlockedBy?: boolean
+    unlockReason?: boolean
+    branchId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type PeriodLockOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "lockDate" | "periodType" | "note" | "isActive" | "lockedBy" | "lockedByName" | "unlockedAt" | "unlockedBy" | "unlockReason" | "branchId" | "createdAt" | "updatedAt", ExtArgs["result"]["periodLock"]>
+
+  export type $PeriodLockPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "PeriodLock"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      lockDate: string
+      periodType: string
+      note: string | null
+      isActive: boolean
+      lockedBy: string | null
+      lockedByName: string | null
+      unlockedAt: Date | null
+      unlockedBy: string | null
+      unlockReason: string | null
+      branchId: string | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["periodLock"]>
+    composites: {}
+  }
+
+  type PeriodLockGetPayload<S extends boolean | null | undefined | PeriodLockDefaultArgs> = $Result.GetResult<Prisma.$PeriodLockPayload, S>
+
+  type PeriodLockCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<PeriodLockFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: PeriodLockCountAggregateInputType | true
+    }
+
+  export interface PeriodLockDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['PeriodLock'], meta: { name: 'PeriodLock' } }
+    /**
+     * Find zero or one PeriodLock that matches the filter.
+     * @param {PeriodLockFindUniqueArgs} args - Arguments to find a PeriodLock
+     * @example
+     * // Get one PeriodLock
+     * const periodLock = await prisma.periodLock.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends PeriodLockFindUniqueArgs>(args: SelectSubset<T, PeriodLockFindUniqueArgs<ExtArgs>>): Prisma__PeriodLockClient<$Result.GetResult<Prisma.$PeriodLockPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one PeriodLock that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {PeriodLockFindUniqueOrThrowArgs} args - Arguments to find a PeriodLock
+     * @example
+     * // Get one PeriodLock
+     * const periodLock = await prisma.periodLock.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends PeriodLockFindUniqueOrThrowArgs>(args: SelectSubset<T, PeriodLockFindUniqueOrThrowArgs<ExtArgs>>): Prisma__PeriodLockClient<$Result.GetResult<Prisma.$PeriodLockPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first PeriodLock that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PeriodLockFindFirstArgs} args - Arguments to find a PeriodLock
+     * @example
+     * // Get one PeriodLock
+     * const periodLock = await prisma.periodLock.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends PeriodLockFindFirstArgs>(args?: SelectSubset<T, PeriodLockFindFirstArgs<ExtArgs>>): Prisma__PeriodLockClient<$Result.GetResult<Prisma.$PeriodLockPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first PeriodLock that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PeriodLockFindFirstOrThrowArgs} args - Arguments to find a PeriodLock
+     * @example
+     * // Get one PeriodLock
+     * const periodLock = await prisma.periodLock.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends PeriodLockFindFirstOrThrowArgs>(args?: SelectSubset<T, PeriodLockFindFirstOrThrowArgs<ExtArgs>>): Prisma__PeriodLockClient<$Result.GetResult<Prisma.$PeriodLockPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more PeriodLocks that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PeriodLockFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all PeriodLocks
+     * const periodLocks = await prisma.periodLock.findMany()
+     * 
+     * // Get first 10 PeriodLocks
+     * const periodLocks = await prisma.periodLock.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const periodLockWithIdOnly = await prisma.periodLock.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends PeriodLockFindManyArgs>(args?: SelectSubset<T, PeriodLockFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PeriodLockPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a PeriodLock.
+     * @param {PeriodLockCreateArgs} args - Arguments to create a PeriodLock.
+     * @example
+     * // Create one PeriodLock
+     * const PeriodLock = await prisma.periodLock.create({
+     *   data: {
+     *     // ... data to create a PeriodLock
+     *   }
+     * })
+     * 
+     */
+    create<T extends PeriodLockCreateArgs>(args: SelectSubset<T, PeriodLockCreateArgs<ExtArgs>>): Prisma__PeriodLockClient<$Result.GetResult<Prisma.$PeriodLockPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many PeriodLocks.
+     * @param {PeriodLockCreateManyArgs} args - Arguments to create many PeriodLocks.
+     * @example
+     * // Create many PeriodLocks
+     * const periodLock = await prisma.periodLock.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends PeriodLockCreateManyArgs>(args?: SelectSubset<T, PeriodLockCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many PeriodLocks and returns the data saved in the database.
+     * @param {PeriodLockCreateManyAndReturnArgs} args - Arguments to create many PeriodLocks.
+     * @example
+     * // Create many PeriodLocks
+     * const periodLock = await prisma.periodLock.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many PeriodLocks and only return the `id`
+     * const periodLockWithIdOnly = await prisma.periodLock.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends PeriodLockCreateManyAndReturnArgs>(args?: SelectSubset<T, PeriodLockCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PeriodLockPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a PeriodLock.
+     * @param {PeriodLockDeleteArgs} args - Arguments to delete one PeriodLock.
+     * @example
+     * // Delete one PeriodLock
+     * const PeriodLock = await prisma.periodLock.delete({
+     *   where: {
+     *     // ... filter to delete one PeriodLock
+     *   }
+     * })
+     * 
+     */
+    delete<T extends PeriodLockDeleteArgs>(args: SelectSubset<T, PeriodLockDeleteArgs<ExtArgs>>): Prisma__PeriodLockClient<$Result.GetResult<Prisma.$PeriodLockPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one PeriodLock.
+     * @param {PeriodLockUpdateArgs} args - Arguments to update one PeriodLock.
+     * @example
+     * // Update one PeriodLock
+     * const periodLock = await prisma.periodLock.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends PeriodLockUpdateArgs>(args: SelectSubset<T, PeriodLockUpdateArgs<ExtArgs>>): Prisma__PeriodLockClient<$Result.GetResult<Prisma.$PeriodLockPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more PeriodLocks.
+     * @param {PeriodLockDeleteManyArgs} args - Arguments to filter PeriodLocks to delete.
+     * @example
+     * // Delete a few PeriodLocks
+     * const { count } = await prisma.periodLock.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends PeriodLockDeleteManyArgs>(args?: SelectSubset<T, PeriodLockDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more PeriodLocks.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PeriodLockUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many PeriodLocks
+     * const periodLock = await prisma.periodLock.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends PeriodLockUpdateManyArgs>(args: SelectSubset<T, PeriodLockUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more PeriodLocks and returns the data updated in the database.
+     * @param {PeriodLockUpdateManyAndReturnArgs} args - Arguments to update many PeriodLocks.
+     * @example
+     * // Update many PeriodLocks
+     * const periodLock = await prisma.periodLock.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more PeriodLocks and only return the `id`
+     * const periodLockWithIdOnly = await prisma.periodLock.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends PeriodLockUpdateManyAndReturnArgs>(args: SelectSubset<T, PeriodLockUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PeriodLockPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one PeriodLock.
+     * @param {PeriodLockUpsertArgs} args - Arguments to update or create a PeriodLock.
+     * @example
+     * // Update or create a PeriodLock
+     * const periodLock = await prisma.periodLock.upsert({
+     *   create: {
+     *     // ... data to create a PeriodLock
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the PeriodLock we want to update
+     *   }
+     * })
+     */
+    upsert<T extends PeriodLockUpsertArgs>(args: SelectSubset<T, PeriodLockUpsertArgs<ExtArgs>>): Prisma__PeriodLockClient<$Result.GetResult<Prisma.$PeriodLockPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of PeriodLocks.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PeriodLockCountArgs} args - Arguments to filter PeriodLocks to count.
+     * @example
+     * // Count the number of PeriodLocks
+     * const count = await prisma.periodLock.count({
+     *   where: {
+     *     // ... the filter for the PeriodLocks we want to count
+     *   }
+     * })
+    **/
+    count<T extends PeriodLockCountArgs>(
+      args?: Subset<T, PeriodLockCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], PeriodLockCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a PeriodLock.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PeriodLockAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends PeriodLockAggregateArgs>(args: Subset<T, PeriodLockAggregateArgs>): Prisma.PrismaPromise<GetPeriodLockAggregateType<T>>
+
+    /**
+     * Group by PeriodLock.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PeriodLockGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends PeriodLockGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: PeriodLockGroupByArgs['orderBy'] }
+        : { orderBy?: PeriodLockGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, PeriodLockGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetPeriodLockGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the PeriodLock model
+   */
+  readonly fields: PeriodLockFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for PeriodLock.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__PeriodLockClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the PeriodLock model
+   */
+  interface PeriodLockFieldRefs {
+    readonly id: FieldRef<"PeriodLock", 'String'>
+    readonly lockDate: FieldRef<"PeriodLock", 'String'>
+    readonly periodType: FieldRef<"PeriodLock", 'String'>
+    readonly note: FieldRef<"PeriodLock", 'String'>
+    readonly isActive: FieldRef<"PeriodLock", 'Boolean'>
+    readonly lockedBy: FieldRef<"PeriodLock", 'String'>
+    readonly lockedByName: FieldRef<"PeriodLock", 'String'>
+    readonly unlockedAt: FieldRef<"PeriodLock", 'DateTime'>
+    readonly unlockedBy: FieldRef<"PeriodLock", 'String'>
+    readonly unlockReason: FieldRef<"PeriodLock", 'String'>
+    readonly branchId: FieldRef<"PeriodLock", 'String'>
+    readonly createdAt: FieldRef<"PeriodLock", 'DateTime'>
+    readonly updatedAt: FieldRef<"PeriodLock", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * PeriodLock findUnique
+   */
+  export type PeriodLockFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PeriodLock
+     */
+    select?: PeriodLockSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PeriodLock
+     */
+    omit?: PeriodLockOmit<ExtArgs> | null
+    /**
+     * Filter, which PeriodLock to fetch.
+     */
+    where: PeriodLockWhereUniqueInput
+  }
+
+  /**
+   * PeriodLock findUniqueOrThrow
+   */
+  export type PeriodLockFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PeriodLock
+     */
+    select?: PeriodLockSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PeriodLock
+     */
+    omit?: PeriodLockOmit<ExtArgs> | null
+    /**
+     * Filter, which PeriodLock to fetch.
+     */
+    where: PeriodLockWhereUniqueInput
+  }
+
+  /**
+   * PeriodLock findFirst
+   */
+  export type PeriodLockFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PeriodLock
+     */
+    select?: PeriodLockSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PeriodLock
+     */
+    omit?: PeriodLockOmit<ExtArgs> | null
+    /**
+     * Filter, which PeriodLock to fetch.
+     */
+    where?: PeriodLockWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of PeriodLocks to fetch.
+     */
+    orderBy?: PeriodLockOrderByWithRelationInput | PeriodLockOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for PeriodLocks.
+     */
+    cursor?: PeriodLockWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` PeriodLocks from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` PeriodLocks.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of PeriodLocks.
+     */
+    distinct?: PeriodLockScalarFieldEnum | PeriodLockScalarFieldEnum[]
+  }
+
+  /**
+   * PeriodLock findFirstOrThrow
+   */
+  export type PeriodLockFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PeriodLock
+     */
+    select?: PeriodLockSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PeriodLock
+     */
+    omit?: PeriodLockOmit<ExtArgs> | null
+    /**
+     * Filter, which PeriodLock to fetch.
+     */
+    where?: PeriodLockWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of PeriodLocks to fetch.
+     */
+    orderBy?: PeriodLockOrderByWithRelationInput | PeriodLockOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for PeriodLocks.
+     */
+    cursor?: PeriodLockWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` PeriodLocks from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` PeriodLocks.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of PeriodLocks.
+     */
+    distinct?: PeriodLockScalarFieldEnum | PeriodLockScalarFieldEnum[]
+  }
+
+  /**
+   * PeriodLock findMany
+   */
+  export type PeriodLockFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PeriodLock
+     */
+    select?: PeriodLockSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PeriodLock
+     */
+    omit?: PeriodLockOmit<ExtArgs> | null
+    /**
+     * Filter, which PeriodLocks to fetch.
+     */
+    where?: PeriodLockWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of PeriodLocks to fetch.
+     */
+    orderBy?: PeriodLockOrderByWithRelationInput | PeriodLockOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing PeriodLocks.
+     */
+    cursor?: PeriodLockWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` PeriodLocks from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` PeriodLocks.
+     */
+    skip?: number
+    distinct?: PeriodLockScalarFieldEnum | PeriodLockScalarFieldEnum[]
+  }
+
+  /**
+   * PeriodLock create
+   */
+  export type PeriodLockCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PeriodLock
+     */
+    select?: PeriodLockSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PeriodLock
+     */
+    omit?: PeriodLockOmit<ExtArgs> | null
+    /**
+     * The data needed to create a PeriodLock.
+     */
+    data: XOR<PeriodLockCreateInput, PeriodLockUncheckedCreateInput>
+  }
+
+  /**
+   * PeriodLock createMany
+   */
+  export type PeriodLockCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many PeriodLocks.
+     */
+    data: PeriodLockCreateManyInput | PeriodLockCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * PeriodLock createManyAndReturn
+   */
+  export type PeriodLockCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PeriodLock
+     */
+    select?: PeriodLockSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the PeriodLock
+     */
+    omit?: PeriodLockOmit<ExtArgs> | null
+    /**
+     * The data used to create many PeriodLocks.
+     */
+    data: PeriodLockCreateManyInput | PeriodLockCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * PeriodLock update
+   */
+  export type PeriodLockUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PeriodLock
+     */
+    select?: PeriodLockSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PeriodLock
+     */
+    omit?: PeriodLockOmit<ExtArgs> | null
+    /**
+     * The data needed to update a PeriodLock.
+     */
+    data: XOR<PeriodLockUpdateInput, PeriodLockUncheckedUpdateInput>
+    /**
+     * Choose, which PeriodLock to update.
+     */
+    where: PeriodLockWhereUniqueInput
+  }
+
+  /**
+   * PeriodLock updateMany
+   */
+  export type PeriodLockUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update PeriodLocks.
+     */
+    data: XOR<PeriodLockUpdateManyMutationInput, PeriodLockUncheckedUpdateManyInput>
+    /**
+     * Filter which PeriodLocks to update
+     */
+    where?: PeriodLockWhereInput
+    /**
+     * Limit how many PeriodLocks to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * PeriodLock updateManyAndReturn
+   */
+  export type PeriodLockUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PeriodLock
+     */
+    select?: PeriodLockSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the PeriodLock
+     */
+    omit?: PeriodLockOmit<ExtArgs> | null
+    /**
+     * The data used to update PeriodLocks.
+     */
+    data: XOR<PeriodLockUpdateManyMutationInput, PeriodLockUncheckedUpdateManyInput>
+    /**
+     * Filter which PeriodLocks to update
+     */
+    where?: PeriodLockWhereInput
+    /**
+     * Limit how many PeriodLocks to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * PeriodLock upsert
+   */
+  export type PeriodLockUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PeriodLock
+     */
+    select?: PeriodLockSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PeriodLock
+     */
+    omit?: PeriodLockOmit<ExtArgs> | null
+    /**
+     * The filter to search for the PeriodLock to update in case it exists.
+     */
+    where: PeriodLockWhereUniqueInput
+    /**
+     * In case the PeriodLock found by the `where` argument doesn't exist, create a new PeriodLock with this data.
+     */
+    create: XOR<PeriodLockCreateInput, PeriodLockUncheckedCreateInput>
+    /**
+     * In case the PeriodLock was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<PeriodLockUpdateInput, PeriodLockUncheckedUpdateInput>
+  }
+
+  /**
+   * PeriodLock delete
+   */
+  export type PeriodLockDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PeriodLock
+     */
+    select?: PeriodLockSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PeriodLock
+     */
+    omit?: PeriodLockOmit<ExtArgs> | null
+    /**
+     * Filter which PeriodLock to delete.
+     */
+    where: PeriodLockWhereUniqueInput
+  }
+
+  /**
+   * PeriodLock deleteMany
+   */
+  export type PeriodLockDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which PeriodLocks to delete
+     */
+    where?: PeriodLockWhereInput
+    /**
+     * Limit how many PeriodLocks to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * PeriodLock without action
+   */
+  export type PeriodLockDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PeriodLock
+     */
+    select?: PeriodLockSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PeriodLock
+     */
+    omit?: PeriodLockOmit<ExtArgs> | null
+  }
+
+
+  /**
    * Model ExchangeRate
    */
 
@@ -119617,6 +120807,25 @@ export namespace Prisma {
   };
 
   export type ChartOfAccountScalarFieldEnum = (typeof ChartOfAccountScalarFieldEnum)[keyof typeof ChartOfAccountScalarFieldEnum]
+
+
+  export const PeriodLockScalarFieldEnum: {
+    id: 'id',
+    lockDate: 'lockDate',
+    periodType: 'periodType',
+    note: 'note',
+    isActive: 'isActive',
+    lockedBy: 'lockedBy',
+    lockedByName: 'lockedByName',
+    unlockedAt: 'unlockedAt',
+    unlockedBy: 'unlockedBy',
+    unlockReason: 'unlockReason',
+    branchId: 'branchId',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type PeriodLockScalarFieldEnum = (typeof PeriodLockScalarFieldEnum)[keyof typeof PeriodLockScalarFieldEnum]
 
 
   export const ExchangeRateScalarFieldEnum: {
@@ -128314,6 +129523,98 @@ export namespace Prisma {
     storeId?: StringNullableWithAggregatesFilter<"ChartOfAccount"> | string | null
     createdAt?: DateTimeWithAggregatesFilter<"ChartOfAccount"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"ChartOfAccount"> | Date | string
+  }
+
+  export type PeriodLockWhereInput = {
+    AND?: PeriodLockWhereInput | PeriodLockWhereInput[]
+    OR?: PeriodLockWhereInput[]
+    NOT?: PeriodLockWhereInput | PeriodLockWhereInput[]
+    id?: StringFilter<"PeriodLock"> | string
+    lockDate?: StringFilter<"PeriodLock"> | string
+    periodType?: StringFilter<"PeriodLock"> | string
+    note?: StringNullableFilter<"PeriodLock"> | string | null
+    isActive?: BoolFilter<"PeriodLock"> | boolean
+    lockedBy?: StringNullableFilter<"PeriodLock"> | string | null
+    lockedByName?: StringNullableFilter<"PeriodLock"> | string | null
+    unlockedAt?: DateTimeNullableFilter<"PeriodLock"> | Date | string | null
+    unlockedBy?: StringNullableFilter<"PeriodLock"> | string | null
+    unlockReason?: StringNullableFilter<"PeriodLock"> | string | null
+    branchId?: StringNullableFilter<"PeriodLock"> | string | null
+    createdAt?: DateTimeFilter<"PeriodLock"> | Date | string
+    updatedAt?: DateTimeFilter<"PeriodLock"> | Date | string
+  }
+
+  export type PeriodLockOrderByWithRelationInput = {
+    id?: SortOrder
+    lockDate?: SortOrder
+    periodType?: SortOrder
+    note?: SortOrderInput | SortOrder
+    isActive?: SortOrder
+    lockedBy?: SortOrderInput | SortOrder
+    lockedByName?: SortOrderInput | SortOrder
+    unlockedAt?: SortOrderInput | SortOrder
+    unlockedBy?: SortOrderInput | SortOrder
+    unlockReason?: SortOrderInput | SortOrder
+    branchId?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type PeriodLockWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: PeriodLockWhereInput | PeriodLockWhereInput[]
+    OR?: PeriodLockWhereInput[]
+    NOT?: PeriodLockWhereInput | PeriodLockWhereInput[]
+    lockDate?: StringFilter<"PeriodLock"> | string
+    periodType?: StringFilter<"PeriodLock"> | string
+    note?: StringNullableFilter<"PeriodLock"> | string | null
+    isActive?: BoolFilter<"PeriodLock"> | boolean
+    lockedBy?: StringNullableFilter<"PeriodLock"> | string | null
+    lockedByName?: StringNullableFilter<"PeriodLock"> | string | null
+    unlockedAt?: DateTimeNullableFilter<"PeriodLock"> | Date | string | null
+    unlockedBy?: StringNullableFilter<"PeriodLock"> | string | null
+    unlockReason?: StringNullableFilter<"PeriodLock"> | string | null
+    branchId?: StringNullableFilter<"PeriodLock"> | string | null
+    createdAt?: DateTimeFilter<"PeriodLock"> | Date | string
+    updatedAt?: DateTimeFilter<"PeriodLock"> | Date | string
+  }, "id">
+
+  export type PeriodLockOrderByWithAggregationInput = {
+    id?: SortOrder
+    lockDate?: SortOrder
+    periodType?: SortOrder
+    note?: SortOrderInput | SortOrder
+    isActive?: SortOrder
+    lockedBy?: SortOrderInput | SortOrder
+    lockedByName?: SortOrderInput | SortOrder
+    unlockedAt?: SortOrderInput | SortOrder
+    unlockedBy?: SortOrderInput | SortOrder
+    unlockReason?: SortOrderInput | SortOrder
+    branchId?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: PeriodLockCountOrderByAggregateInput
+    _max?: PeriodLockMaxOrderByAggregateInput
+    _min?: PeriodLockMinOrderByAggregateInput
+  }
+
+  export type PeriodLockScalarWhereWithAggregatesInput = {
+    AND?: PeriodLockScalarWhereWithAggregatesInput | PeriodLockScalarWhereWithAggregatesInput[]
+    OR?: PeriodLockScalarWhereWithAggregatesInput[]
+    NOT?: PeriodLockScalarWhereWithAggregatesInput | PeriodLockScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"PeriodLock"> | string
+    lockDate?: StringWithAggregatesFilter<"PeriodLock"> | string
+    periodType?: StringWithAggregatesFilter<"PeriodLock"> | string
+    note?: StringNullableWithAggregatesFilter<"PeriodLock"> | string | null
+    isActive?: BoolWithAggregatesFilter<"PeriodLock"> | boolean
+    lockedBy?: StringNullableWithAggregatesFilter<"PeriodLock"> | string | null
+    lockedByName?: StringNullableWithAggregatesFilter<"PeriodLock"> | string | null
+    unlockedAt?: DateTimeNullableWithAggregatesFilter<"PeriodLock"> | Date | string | null
+    unlockedBy?: StringNullableWithAggregatesFilter<"PeriodLock"> | string | null
+    unlockReason?: StringNullableWithAggregatesFilter<"PeriodLock"> | string | null
+    branchId?: StringNullableWithAggregatesFilter<"PeriodLock"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"PeriodLock"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"PeriodLock"> | Date | string
   }
 
   export type ExchangeRateWhereInput = {
@@ -138648,6 +139949,118 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type PeriodLockCreateInput = {
+    id?: string
+    lockDate: string
+    periodType?: string
+    note?: string | null
+    isActive?: boolean
+    lockedBy?: string | null
+    lockedByName?: string | null
+    unlockedAt?: Date | string | null
+    unlockedBy?: string | null
+    unlockReason?: string | null
+    branchId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type PeriodLockUncheckedCreateInput = {
+    id?: string
+    lockDate: string
+    periodType?: string
+    note?: string | null
+    isActive?: boolean
+    lockedBy?: string | null
+    lockedByName?: string | null
+    unlockedAt?: Date | string | null
+    unlockedBy?: string | null
+    unlockReason?: string | null
+    branchId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type PeriodLockUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    lockDate?: StringFieldUpdateOperationsInput | string
+    periodType?: StringFieldUpdateOperationsInput | string
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    isActive?: BoolFieldUpdateOperationsInput | boolean
+    lockedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    lockedByName?: NullableStringFieldUpdateOperationsInput | string | null
+    unlockedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    unlockedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    unlockReason?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PeriodLockUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    lockDate?: StringFieldUpdateOperationsInput | string
+    periodType?: StringFieldUpdateOperationsInput | string
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    isActive?: BoolFieldUpdateOperationsInput | boolean
+    lockedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    lockedByName?: NullableStringFieldUpdateOperationsInput | string | null
+    unlockedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    unlockedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    unlockReason?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PeriodLockCreateManyInput = {
+    id?: string
+    lockDate: string
+    periodType?: string
+    note?: string | null
+    isActive?: boolean
+    lockedBy?: string | null
+    lockedByName?: string | null
+    unlockedAt?: Date | string | null
+    unlockedBy?: string | null
+    unlockReason?: string | null
+    branchId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type PeriodLockUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    lockDate?: StringFieldUpdateOperationsInput | string
+    periodType?: StringFieldUpdateOperationsInput | string
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    isActive?: BoolFieldUpdateOperationsInput | boolean
+    lockedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    lockedByName?: NullableStringFieldUpdateOperationsInput | string | null
+    unlockedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    unlockedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    unlockReason?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PeriodLockUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    lockDate?: StringFieldUpdateOperationsInput | string
+    periodType?: StringFieldUpdateOperationsInput | string
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    isActive?: BoolFieldUpdateOperationsInput | boolean
+    lockedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    lockedByName?: NullableStringFieldUpdateOperationsInput | string | null
+    unlockedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    unlockedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    unlockReason?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type ExchangeRateCreateInput = {
     id?: string
     date: string
@@ -144888,6 +146301,54 @@ export namespace Prisma {
 
   export type ChartOfAccountSumOrderByAggregateInput = {
     level?: SortOrder
+  }
+
+  export type PeriodLockCountOrderByAggregateInput = {
+    id?: SortOrder
+    lockDate?: SortOrder
+    periodType?: SortOrder
+    note?: SortOrder
+    isActive?: SortOrder
+    lockedBy?: SortOrder
+    lockedByName?: SortOrder
+    unlockedAt?: SortOrder
+    unlockedBy?: SortOrder
+    unlockReason?: SortOrder
+    branchId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type PeriodLockMaxOrderByAggregateInput = {
+    id?: SortOrder
+    lockDate?: SortOrder
+    periodType?: SortOrder
+    note?: SortOrder
+    isActive?: SortOrder
+    lockedBy?: SortOrder
+    lockedByName?: SortOrder
+    unlockedAt?: SortOrder
+    unlockedBy?: SortOrder
+    unlockReason?: SortOrder
+    branchId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type PeriodLockMinOrderByAggregateInput = {
+    id?: SortOrder
+    lockDate?: SortOrder
+    periodType?: SortOrder
+    note?: SortOrder
+    isActive?: SortOrder
+    lockedBy?: SortOrder
+    lockedByName?: SortOrder
+    unlockedAt?: SortOrder
+    unlockedBy?: SortOrder
+    unlockReason?: SortOrder
+    branchId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
   }
 
   export type ExchangeRateDateFromCurrencyToCurrencyCompoundUniqueInput = {

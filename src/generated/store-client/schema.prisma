@@ -1934,6 +1934,30 @@ model ChartOfAccount {
   @@index([isActive])
 }
 
+// --- Period Lock (Khoa so ke toan) -----------------------------------------
+// Locks an accounting period so vouchers dated on/before `lockDate` cannot be
+// created, edited or deleted. The current lock = the most recent active row.
+
+model PeriodLock {
+  id           String    @id @default(cuid())
+  lockDate     String // YYYY-MM-DD — vouchers with date <= lockDate are frozen
+  periodType   String    @default("month") // month | quarter | year | custom
+  note         String?
+  isActive     Boolean   @default(true)
+  lockedBy     String?
+  lockedByName String?
+  unlockedAt   DateTime?
+  unlockedBy   String?
+  unlockReason String?
+  branchId     String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([isActive])
+  @@index([lockDate])
+  @@index([branchId])
+}
+
 // --- Exchange Rates (Multi-currency + FX revaluation) ----------------------
 
 model ExchangeRate {
