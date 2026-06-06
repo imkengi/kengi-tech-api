@@ -65,6 +65,8 @@ import bankAccountRoutes from './routes/bankAccounts'
 import accountRoutes from './routes/accounts'
 import accountingRoutes from './routes/accounting'
 import accountingReportRoutes from './routes/accountingReports'
+import financialStatementRoutes from './routes/financialStatements'
+import taxDeclarationRoutes from './routes/taxDeclarations'
 import { cacheDisconnect, cacheHealth } from './lib/cache'
 import { startAutoSync, stopAutoSync } from './cron/autoSync'
 import { setupWebSocket, getWebSocketStats } from './lib/websocket'
@@ -194,6 +196,7 @@ app.use('/api/shipping', shippingRoutes)
 app.use('/api/drivers', driverRoutes)
 app.use('/api/delivery-routes', deliveryRouteRoutes)
 app.use('/api/vehicles', vehicleRoutes)
+app.use('/api/tax', taxDeclarationRoutes) // BCTC phase-2 tax forms (no path overlap with taxRoutes)
 app.use('/api/tax', taxRoutes)
 app.use('/api/segments', segmentRoutes)
 app.use('/api/currencies', currencyRoutes)
@@ -231,6 +234,9 @@ app.use('/api/bank-accounts', bankAccountRoutes)
 // /api/reports/financial (mounted above) so the more specific prefix wins.
 app.use('/api/accounts', accountRoutes)
 app.use('/api/accounting', accountingRoutes)
+// Financial statements (B01/B02/B03-DNN) mount at /api/reports before the
+// bookkeeping reports; their paths never overlap.
+app.use('/api/reports', financialStatementRoutes)
 app.use('/api/reports', accountingReportRoutes)
 
 import einvoiceRoutes from './routes/einvoice'
