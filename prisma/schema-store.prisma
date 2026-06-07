@@ -1528,36 +1528,106 @@ model FixedAsset {
 
 model EInvoiceConfig {
   id         String   @id @default(cuid())
-  provider   String // misa | viettel | vnpt | fpt | easyinvoice | bkav
-  apiUrl     String
-  apiKey     String
-  apiSecret  String
-  taxCode    String
+  provider   String // VNPT | VIETTEL | FPT | MISA | BKAV | EASYINVOICE | CUSTOM
+  apiUrl     String?
+  apiKey     String?
+  apiSecret  String?
+  taxCode    String?
   templateId String?
   serialNo   String?
   active     Boolean  @default(true)
   extra      String? // JSON for provider-specific config
+  // Phase 3 (TT78/2021) — credentials + company + numbering config
+  apiUsername       String?
+  apiPassword       String? // encrypted at rest
+  companyName       String?
+  companyAddress    String?
+  invoicePattern    String? // mẫu số hóa đơn, e.g. "1"
+  invoiceSerial     String? // ký hiệu, e.g. "C26TAA"
+  certificateSerial String? // serial of the signing certificate
+  isActive          Boolean @default(true)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
 
+// Hóa đơn điện tử (TT78/2021/TT-BTC). Phase-3 model: full lifecycle
+// (DRAFT → SIGNED → SENT → CANCELLED/REPLACED). Legacy provider-issuance
+// fields (transactionId/provider/lookupCode/xmlData) are kept nullable for
+// backward compatibility with the earlier /issue flow.
 model EInvoice {
   id            String    @id @default(cuid())
-  transactionId String
-  provider      String
-  invoiceNumber String?
+  // Legacy provider-issuance fields (now optional)
+  transactionId String?
+  provider      String?
   lookupCode    String?
-  pdfUrl        String?
   xmlData       String?
-  status        String    @default("pending") // pending | issued | error | cancelled
   errorMessage  String?
+  // Numbering / classification
+  invoiceNumber String? // số hóa đơn (sequence, e.g. 00000001)
+  invoiceSymbol String? // ký hiệu mẫu, e.g. 1C26TAA
+  invoiceDate   String? // YYYY-MM-DD
+  invoiceType   String  @default("SALE") // SALE | RETURN | ADJUSTMENT
+  status        String  @default("DRAFT") // DRAFT|SIGNED|SENT|CANCELLED|REPLACED|ERROR
+  // Seller (người bán) — auto-filled from EInvoiceConfig / StoreSettings
+  sellerName    String?
+  sellerTaxCode String?
+  sellerAddress String?
+  // Buyer (người mua)
+  buyerName     String?
+  buyerTaxCode  String?
+  buyerAddress  String?
+  // Totals
+  totalBeforeVat Float  @default(0)
+  vatAmount      Float  @default(0)
+  totalAmount    Float  @default(0)
+  currency       String @default("VND")
+  paymentMethod  String? // TM | CK | TM/CK
+  // Artifacts + provider linkage
+  xmlContent        String? // signed XML (TT78 format)
+  pdfUrl            String?
+  providerInvoiceId String? // ID returned by the e-invoice provider
+  providerResponse  String? // JSON response from the provider
+  // Replace / cancel trail
+  replacesInvoiceId   String? // original invoice this one replaces
+  replacedByInvoiceId String? // replacement invoice that supersedes this one
+  cancelReason        String?
+  notes               String?
+  branchId            String?
+  createdBy           String?
+  createdByName       String?
   issuedAt      DateTime?
+  signedAt      DateTime?
+  sentAt        DateTime?
   cancelledAt   DateTime?
   createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @default(now()) @updatedAt
+
+  items EInvoiceItem[]
 
   @@index([transactionId])
   @@index([invoiceNumber])
   @@index([status])
+  @@index([invoiceDate])
+  @@index([buyerTaxCode])
+  @@index([branchId])
+}
+
+model EInvoiceItem {
+  id         String  @id @default(cuid())
+  eInvoiceId String
+  itemNumber Int     @default(0) // STT
+  itemName   String
+  unitName   String? // ĐVT
+  quantity   Float   @default(0)
+  unitPrice  Float   @default(0)
+  vatRate    Float   @default(0) // 0 | 5 | 8 | 10 (%)
+  vatAmount  Float   @default(0)
+  amount     Float   @default(0) // thành tiền (chưa VAT)
+  notes      String?
+
+  eInvoice EInvoice @relation(fields: [eInvoiceId], references: [id], onDelete: Cascade)
+
+  @@index([eInvoiceId])
 }
 
 // ─── Adjustment Invoice (Hóa đơn điều chỉnh — NĐ123/2020) ──────────────────

@@ -957,6 +957,109 @@ if (!process.env.PASSENGER_BASE_URI) {
                 console.error('⚠️ PeriodLock migration failed:', err.message)
             }
 
+            // E-Invoice Phase 3 — Hóa đơn điện tử (TT78/2021/TT-BTC).
+            // Creates EInvoice / EInvoiceItem / EInvoiceConfig and upgrades the
+            // legacy EInvoice / EInvoiceConfig tables (Phase-1 issuance flow) with
+            // the richer lifecycle columns. Idempotent (IF NOT EXISTS everywhere).
+            try {
+                const schemas: any[] = await registryPrisma.$queryRaw`SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('information_schema', 'pg_catalog', 'pg_toast', 'public')`
+                for (const { schema_name } of schemas) {
+                    const migName = `einvoice_phase3_v1:${schema_name}`
+                    if (await isMigrationApplied(migName)) continue
+
+                    // EInvoice — create (fresh schemas) then add Phase-3 columns
+                    await registryPrisma.$executeRawUnsafe(`
+                        CREATE TABLE IF NOT EXISTS "${schema_name}"."EInvoice" (
+                            "id" TEXT NOT NULL,
+                            "status" TEXT NOT NULL DEFAULT 'DRAFT',
+                            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            CONSTRAINT "EInvoice_pkey" PRIMARY KEY ("id")
+                        )
+                    `).catch(() => {})
+                    const eiCols: Array<[string, string]> = [
+                        ['transactionId', 'TEXT'], ['provider', 'TEXT'], ['lookupCode', 'TEXT'],
+                        ['xmlData', 'TEXT'], ['errorMessage', 'TEXT'],
+                        ['invoiceNumber', 'TEXT'], ['invoiceSymbol', 'TEXT'], ['invoiceDate', 'TEXT'],
+                        ['invoiceType', `TEXT NOT NULL DEFAULT 'SALE'`],
+                        ['sellerName', 'TEXT'], ['sellerTaxCode', 'TEXT'], ['sellerAddress', 'TEXT'],
+                        ['buyerName', 'TEXT'], ['buyerTaxCode', 'TEXT'], ['buyerAddress', 'TEXT'],
+                        ['totalBeforeVat', 'DOUBLE PRECISION NOT NULL DEFAULT 0'],
+                        ['vatAmount', 'DOUBLE PRECISION NOT NULL DEFAULT 0'],
+                        ['totalAmount', 'DOUBLE PRECISION NOT NULL DEFAULT 0'],
+                        ['currency', `TEXT NOT NULL DEFAULT 'VND'`], ['paymentMethod', 'TEXT'],
+                        ['xmlContent', 'TEXT'], ['pdfUrl', 'TEXT'],
+                        ['providerInvoiceId', 'TEXT'], ['providerResponse', 'TEXT'],
+                        ['replacesInvoiceId', 'TEXT'], ['replacedByInvoiceId', 'TEXT'],
+                        ['cancelReason', 'TEXT'], ['notes', 'TEXT'], ['branchId', 'TEXT'],
+                        ['createdBy', 'TEXT'], ['createdByName', 'TEXT'],
+                        ['issuedAt', 'TIMESTAMP(3)'], ['signedAt', 'TIMESTAMP(3)'],
+                        ['sentAt', 'TIMESTAMP(3)'], ['cancelledAt', 'TIMESTAMP(3)'],
+                        ['updatedAt', 'TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP'],
+                    ]
+                    for (const [col, type] of eiCols) {
+                        await registryPrisma.$executeRawUnsafe(`ALTER TABLE "${schema_name}"."EInvoice" ADD COLUMN IF NOT EXISTS "${col}" ${type};`).catch(() => {})
+                    }
+                    // Make legacy required columns nullable (drafts have no transaction/provider yet)
+                    for (const col of ['transactionId', 'provider']) {
+                        await registryPrisma.$executeRawUnsafe(`ALTER TABLE "${schema_name}"."EInvoice" ALTER COLUMN "${col}" DROP NOT NULL;`).catch(() => {})
+                    }
+                    for (const [col, idxCol] of [['EInvoice_status_idx', 'status'], ['EInvoice_invoiceNumber_idx', 'invoiceNumber'], ['EInvoice_invoiceDate_idx', 'invoiceDate'], ['EInvoice_buyerTaxCode_idx', 'buyerTaxCode'], ['EInvoice_branchId_idx', 'branchId'], ['EInvoice_transactionId_idx', 'transactionId']]) {
+                        await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "${col}" ON "${schema_name}"."EInvoice"("${idxCol}")`).catch(() => {})
+                    }
+
+                    // EInvoiceItem
+                    await registryPrisma.$executeRawUnsafe(`
+                        CREATE TABLE IF NOT EXISTS "${schema_name}"."EInvoiceItem" (
+                            "id" TEXT NOT NULL,
+                            "eInvoiceId" TEXT NOT NULL,
+                            "itemNumber" INTEGER NOT NULL DEFAULT 0,
+                            "itemName" TEXT NOT NULL,
+                            "unitName" TEXT,
+                            "quantity" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "unitPrice" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "vatRate" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "vatAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "amount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "notes" TEXT,
+                            CONSTRAINT "EInvoiceItem_pkey" PRIMARY KEY ("id")
+                        )
+                    `).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "EInvoiceItem_eInvoiceId_idx" ON "${schema_name}"."EInvoiceItem"("eInvoiceId")`).catch(() => {})
+
+                    // EInvoiceConfig — create then add Phase-3 columns
+                    await registryPrisma.$executeRawUnsafe(`
+                        CREATE TABLE IF NOT EXISTS "${schema_name}"."EInvoiceConfig" (
+                            "id" TEXT NOT NULL,
+                            "provider" TEXT NOT NULL DEFAULT 'CUSTOM',
+                            "active" BOOLEAN NOT NULL DEFAULT true,
+                            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            CONSTRAINT "EInvoiceConfig_pkey" PRIMARY KEY ("id")
+                        )
+                    `).catch(() => {})
+                    const cfgCols: Array<[string, string]> = [
+                        ['apiUrl', 'TEXT'], ['apiKey', 'TEXT'], ['apiSecret', 'TEXT'], ['taxCode', 'TEXT'],
+                        ['templateId', 'TEXT'], ['serialNo', 'TEXT'], ['extra', 'TEXT'],
+                        ['apiUsername', 'TEXT'], ['apiPassword', 'TEXT'],
+                        ['companyName', 'TEXT'], ['companyAddress', 'TEXT'],
+                        ['invoicePattern', 'TEXT'], ['invoiceSerial', 'TEXT'], ['certificateSerial', 'TEXT'],
+                        ['isActive', 'BOOLEAN NOT NULL DEFAULT true'],
+                    ]
+                    for (const [col, type] of cfgCols) {
+                        await registryPrisma.$executeRawUnsafe(`ALTER TABLE "${schema_name}"."EInvoiceConfig" ADD COLUMN IF NOT EXISTS "${col}" ${type};`).catch(() => {})
+                    }
+                    // Legacy required columns become nullable (new config shape may omit them)
+                    for (const col of ['apiUrl', 'apiKey', 'apiSecret', 'taxCode']) {
+                        await registryPrisma.$executeRawUnsafe(`ALTER TABLE "${schema_name}"."EInvoiceConfig" ALTER COLUMN "${col}" DROP NOT NULL;`).catch(() => {})
+                    }
+
+                    await markMigrationApplied(migName)
+                }
+                console.log('✅ E-Invoice Phase 3 migration completed')
+            } catch (err: any) {
+                console.error('⚠️ E-Invoice Phase 3 migration failed:', err.message)
+            }
+
             } catch (err: any) {
                 console.error('[Migration] Boot migration error (server will still start):', err.message)
             }

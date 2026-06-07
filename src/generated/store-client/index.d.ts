@@ -374,6 +374,11 @@ export type EInvoiceConfig = $Result.DefaultSelection<Prisma.$EInvoiceConfigPayl
  */
 export type EInvoice = $Result.DefaultSelection<Prisma.$EInvoicePayload>
 /**
+ * Model EInvoiceItem
+ * 
+ */
+export type EInvoiceItem = $Result.DefaultSelection<Prisma.$EInvoiceItemPayload>
+/**
  * Model AdjustmentInvoice
  * 
  */
@@ -1313,6 +1318,16 @@ export class PrismaClient<
   get eInvoice(): Prisma.EInvoiceDelegate<ExtArgs, ClientOptions>;
 
   /**
+   * `prisma.eInvoiceItem`: Exposes CRUD operations for the **EInvoiceItem** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more EInvoiceItems
+    * const eInvoiceItems = await prisma.eInvoiceItem.findMany()
+    * ```
+    */
+  get eInvoiceItem(): Prisma.EInvoiceItemDelegate<ExtArgs, ClientOptions>;
+
+  /**
    * `prisma.adjustmentInvoice`: Exposes CRUD operations for the **AdjustmentInvoice** model.
     * Example usage:
     * ```ts
@@ -2024,6 +2039,7 @@ export namespace Prisma {
     FixedAsset: 'FixedAsset',
     EInvoiceConfig: 'EInvoiceConfig',
     EInvoice: 'EInvoice',
+    EInvoiceItem: 'EInvoiceItem',
     AdjustmentInvoice: 'AdjustmentInvoice',
     AdjustmentInvoiceItem: 'AdjustmentInvoiceItem',
     HKDRevenueEntry: 'HKDRevenueEntry',
@@ -2062,7 +2078,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "branch" | "user" | "apiKey" | "salesCheckin" | "category" | "brand" | "product" | "productSerial" | "unitConversion" | "productImage" | "customerGroup" | "customer" | "transaction" | "transactionItem" | "payment" | "inventoryTransaction" | "importReceipt" | "importReceiptItem" | "promotion" | "supplier" | "purchaseOrder" | "purchaseOrderItem" | "expense" | "cashReceipt" | "notification" | "warranty" | "repair" | "quotation" | "auditLog" | "priceHistory" | "shippingOrder" | "driver" | "vehicle" | "vehicleMaintenance" | "deliveryRoute" | "deliveryStop" | "taxConfig" | "bankAccount" | "bankTransaction" | "taxDeclaration" | "customerSegment" | "currency" | "feedback" | "schedule" | "returnOrder" | "returnItem" | "debtEntry" | "bundle" | "salesOrder" | "salesOrderItem" | "priceList" | "priceListItem" | "priceRule" | "announcement" | "attendance" | "loyaltyMember" | "loyaltyTransaction" | "review" | "storeSettings" | "store" | "branchRequest" | "branchDeleteRequest" | "payrollRecord" | "onlineChannel" | "onlineOrder" | "onlineProduct" | "onlineOrderItem" | "syncLog" | "journalEntry" | "fixedAsset" | "eInvoiceConfig" | "eInvoice" | "adjustmentInvoice" | "adjustmentInvoiceItem" | "hKDRevenueEntry" | "warehouse" | "warehouseStock" | "stockTransfer" | "stockTransferItem" | "salesTrip" | "salesTripItem" | "salesTripLog" | "inventoryCount" | "inventoryCountItem" | "zReport" | "storageFile" | "chartOfAccount" | "periodLock" | "exchangeRate" | "taxDeadline" | "taxAuditLog" | "taxBudget"
+      modelProps: "branch" | "user" | "apiKey" | "salesCheckin" | "category" | "brand" | "product" | "productSerial" | "unitConversion" | "productImage" | "customerGroup" | "customer" | "transaction" | "transactionItem" | "payment" | "inventoryTransaction" | "importReceipt" | "importReceiptItem" | "promotion" | "supplier" | "purchaseOrder" | "purchaseOrderItem" | "expense" | "cashReceipt" | "notification" | "warranty" | "repair" | "quotation" | "auditLog" | "priceHistory" | "shippingOrder" | "driver" | "vehicle" | "vehicleMaintenance" | "deliveryRoute" | "deliveryStop" | "taxConfig" | "bankAccount" | "bankTransaction" | "taxDeclaration" | "customerSegment" | "currency" | "feedback" | "schedule" | "returnOrder" | "returnItem" | "debtEntry" | "bundle" | "salesOrder" | "salesOrderItem" | "priceList" | "priceListItem" | "priceRule" | "announcement" | "attendance" | "loyaltyMember" | "loyaltyTransaction" | "review" | "storeSettings" | "store" | "branchRequest" | "branchDeleteRequest" | "payrollRecord" | "onlineChannel" | "onlineOrder" | "onlineProduct" | "onlineOrderItem" | "syncLog" | "journalEntry" | "fixedAsset" | "eInvoiceConfig" | "eInvoice" | "eInvoiceItem" | "adjustmentInvoice" | "adjustmentInvoiceItem" | "hKDRevenueEntry" | "warehouse" | "warehouseStock" | "stockTransfer" | "stockTransferItem" | "salesTrip" | "salesTripItem" | "salesTripLog" | "inventoryCount" | "inventoryCountItem" | "zReport" | "storageFile" | "chartOfAccount" | "periodLock" | "exchangeRate" | "taxDeadline" | "taxAuditLog" | "taxBudget"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -7394,6 +7410,80 @@ export namespace Prisma {
           }
         }
       }
+      EInvoiceItem: {
+        payload: Prisma.$EInvoiceItemPayload<ExtArgs>
+        fields: Prisma.EInvoiceItemFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.EInvoiceItemFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$EInvoiceItemPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.EInvoiceItemFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$EInvoiceItemPayload>
+          }
+          findFirst: {
+            args: Prisma.EInvoiceItemFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$EInvoiceItemPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.EInvoiceItemFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$EInvoiceItemPayload>
+          }
+          findMany: {
+            args: Prisma.EInvoiceItemFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$EInvoiceItemPayload>[]
+          }
+          create: {
+            args: Prisma.EInvoiceItemCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$EInvoiceItemPayload>
+          }
+          createMany: {
+            args: Prisma.EInvoiceItemCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.EInvoiceItemCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$EInvoiceItemPayload>[]
+          }
+          delete: {
+            args: Prisma.EInvoiceItemDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$EInvoiceItemPayload>
+          }
+          update: {
+            args: Prisma.EInvoiceItemUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$EInvoiceItemPayload>
+          }
+          deleteMany: {
+            args: Prisma.EInvoiceItemDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.EInvoiceItemUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.EInvoiceItemUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$EInvoiceItemPayload>[]
+          }
+          upsert: {
+            args: Prisma.EInvoiceItemUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$EInvoiceItemPayload>
+          }
+          aggregate: {
+            args: Prisma.EInvoiceItemAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateEInvoiceItem>
+          }
+          groupBy: {
+            args: Prisma.EInvoiceItemGroupByArgs<ExtArgs>
+            result: $Utils.Optional<EInvoiceItemGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.EInvoiceItemCountArgs<ExtArgs>
+            result: $Utils.Optional<EInvoiceItemCountAggregateOutputType> | number
+          }
+        }
+      }
       AdjustmentInvoice: {
         payload: Prisma.$AdjustmentInvoicePayload<ExtArgs>
         fields: Prisma.AdjustmentInvoiceFieldRefs
@@ -9042,6 +9132,7 @@ export namespace Prisma {
     fixedAsset?: FixedAssetOmit
     eInvoiceConfig?: EInvoiceConfigOmit
     eInvoice?: EInvoiceOmit
+    eInvoiceItem?: EInvoiceItemOmit
     adjustmentInvoice?: AdjustmentInvoiceOmit
     adjustmentInvoiceItem?: AdjustmentInvoiceItemOmit
     hKDRevenueEntry?: HKDRevenueEntryOmit
@@ -9934,6 +10025,37 @@ export namespace Prisma {
    */
   export type OnlineOrderCountOutputTypeCountItemsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: OnlineOrderItemWhereInput
+  }
+
+
+  /**
+   * Count Type EInvoiceCountOutputType
+   */
+
+  export type EInvoiceCountOutputType = {
+    items: number
+  }
+
+  export type EInvoiceCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    items?: boolean | EInvoiceCountOutputTypeCountItemsArgs
+  }
+
+  // Custom InputTypes
+  /**
+   * EInvoiceCountOutputType without action
+   */
+  export type EInvoiceCountOutputTypeDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the EInvoiceCountOutputType
+     */
+    select?: EInvoiceCountOutputTypeSelect<ExtArgs> | null
+  }
+
+  /**
+   * EInvoiceCountOutputType without action
+   */
+  export type EInvoiceCountOutputTypeCountItemsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: EInvoiceItemWhereInput
   }
 
 
@@ -93351,6 +93473,14 @@ export namespace Prisma {
     serialNo: string | null
     active: boolean | null
     extra: string | null
+    apiUsername: string | null
+    apiPassword: string | null
+    companyName: string | null
+    companyAddress: string | null
+    invoicePattern: string | null
+    invoiceSerial: string | null
+    certificateSerial: string | null
+    isActive: boolean | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -93366,6 +93496,14 @@ export namespace Prisma {
     serialNo: string | null
     active: boolean | null
     extra: string | null
+    apiUsername: string | null
+    apiPassword: string | null
+    companyName: string | null
+    companyAddress: string | null
+    invoicePattern: string | null
+    invoiceSerial: string | null
+    certificateSerial: string | null
+    isActive: boolean | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -93381,6 +93519,14 @@ export namespace Prisma {
     serialNo: number
     active: number
     extra: number
+    apiUsername: number
+    apiPassword: number
+    companyName: number
+    companyAddress: number
+    invoicePattern: number
+    invoiceSerial: number
+    certificateSerial: number
+    isActive: number
     createdAt: number
     updatedAt: number
     _all: number
@@ -93398,6 +93544,14 @@ export namespace Prisma {
     serialNo?: true
     active?: true
     extra?: true
+    apiUsername?: true
+    apiPassword?: true
+    companyName?: true
+    companyAddress?: true
+    invoicePattern?: true
+    invoiceSerial?: true
+    certificateSerial?: true
+    isActive?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -93413,6 +93567,14 @@ export namespace Prisma {
     serialNo?: true
     active?: true
     extra?: true
+    apiUsername?: true
+    apiPassword?: true
+    companyName?: true
+    companyAddress?: true
+    invoicePattern?: true
+    invoiceSerial?: true
+    certificateSerial?: true
+    isActive?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -93428,6 +93590,14 @@ export namespace Prisma {
     serialNo?: true
     active?: true
     extra?: true
+    apiUsername?: true
+    apiPassword?: true
+    companyName?: true
+    companyAddress?: true
+    invoicePattern?: true
+    invoiceSerial?: true
+    certificateSerial?: true
+    isActive?: true
     createdAt?: true
     updatedAt?: true
     _all?: true
@@ -93508,14 +93678,22 @@ export namespace Prisma {
   export type EInvoiceConfigGroupByOutputType = {
     id: string
     provider: string
-    apiUrl: string
-    apiKey: string
-    apiSecret: string
-    taxCode: string
+    apiUrl: string | null
+    apiKey: string | null
+    apiSecret: string | null
+    taxCode: string | null
     templateId: string | null
     serialNo: string | null
     active: boolean
     extra: string | null
+    apiUsername: string | null
+    apiPassword: string | null
+    companyName: string | null
+    companyAddress: string | null
+    invoicePattern: string | null
+    invoiceSerial: string | null
+    certificateSerial: string | null
+    isActive: boolean
     createdAt: Date
     updatedAt: Date
     _count: EInvoiceConfigCountAggregateOutputType | null
@@ -93548,6 +93726,14 @@ export namespace Prisma {
     serialNo?: boolean
     active?: boolean
     extra?: boolean
+    apiUsername?: boolean
+    apiPassword?: boolean
+    companyName?: boolean
+    companyAddress?: boolean
+    invoicePattern?: boolean
+    invoiceSerial?: boolean
+    certificateSerial?: boolean
+    isActive?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["eInvoiceConfig"]>
@@ -93563,6 +93749,14 @@ export namespace Prisma {
     serialNo?: boolean
     active?: boolean
     extra?: boolean
+    apiUsername?: boolean
+    apiPassword?: boolean
+    companyName?: boolean
+    companyAddress?: boolean
+    invoicePattern?: boolean
+    invoiceSerial?: boolean
+    certificateSerial?: boolean
+    isActive?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["eInvoiceConfig"]>
@@ -93578,6 +93772,14 @@ export namespace Prisma {
     serialNo?: boolean
     active?: boolean
     extra?: boolean
+    apiUsername?: boolean
+    apiPassword?: boolean
+    companyName?: boolean
+    companyAddress?: boolean
+    invoicePattern?: boolean
+    invoiceSerial?: boolean
+    certificateSerial?: boolean
+    isActive?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["eInvoiceConfig"]>
@@ -93593,11 +93795,19 @@ export namespace Prisma {
     serialNo?: boolean
     active?: boolean
     extra?: boolean
+    apiUsername?: boolean
+    apiPassword?: boolean
+    companyName?: boolean
+    companyAddress?: boolean
+    invoicePattern?: boolean
+    invoiceSerial?: boolean
+    certificateSerial?: boolean
+    isActive?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type EInvoiceConfigOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "provider" | "apiUrl" | "apiKey" | "apiSecret" | "taxCode" | "templateId" | "serialNo" | "active" | "extra" | "createdAt" | "updatedAt", ExtArgs["result"]["eInvoiceConfig"]>
+  export type EInvoiceConfigOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "provider" | "apiUrl" | "apiKey" | "apiSecret" | "taxCode" | "templateId" | "serialNo" | "active" | "extra" | "apiUsername" | "apiPassword" | "companyName" | "companyAddress" | "invoicePattern" | "invoiceSerial" | "certificateSerial" | "isActive" | "createdAt" | "updatedAt", ExtArgs["result"]["eInvoiceConfig"]>
 
   export type $EInvoiceConfigPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     name: "EInvoiceConfig"
@@ -93605,14 +93815,22 @@ export namespace Prisma {
     scalars: $Extensions.GetPayloadResult<{
       id: string
       provider: string
-      apiUrl: string
-      apiKey: string
-      apiSecret: string
-      taxCode: string
+      apiUrl: string | null
+      apiKey: string | null
+      apiSecret: string | null
+      taxCode: string | null
       templateId: string | null
       serialNo: string | null
       active: boolean
       extra: string | null
+      apiUsername: string | null
+      apiPassword: string | null
+      companyName: string | null
+      companyAddress: string | null
+      invoicePattern: string | null
+      invoiceSerial: string | null
+      certificateSerial: string | null
+      isActive: boolean
       createdAt: Date
       updatedAt: Date
     }, ExtArgs["result"]["eInvoiceConfig"]>
@@ -94048,6 +94266,14 @@ export namespace Prisma {
     readonly serialNo: FieldRef<"EInvoiceConfig", 'String'>
     readonly active: FieldRef<"EInvoiceConfig", 'Boolean'>
     readonly extra: FieldRef<"EInvoiceConfig", 'String'>
+    readonly apiUsername: FieldRef<"EInvoiceConfig", 'String'>
+    readonly apiPassword: FieldRef<"EInvoiceConfig", 'String'>
+    readonly companyName: FieldRef<"EInvoiceConfig", 'String'>
+    readonly companyAddress: FieldRef<"EInvoiceConfig", 'String'>
+    readonly invoicePattern: FieldRef<"EInvoiceConfig", 'String'>
+    readonly invoiceSerial: FieldRef<"EInvoiceConfig", 'String'>
+    readonly certificateSerial: FieldRef<"EInvoiceConfig", 'String'>
+    readonly isActive: FieldRef<"EInvoiceConfig", 'Boolean'>
     readonly createdAt: FieldRef<"EInvoiceConfig", 'DateTime'>
     readonly updatedAt: FieldRef<"EInvoiceConfig", 'DateTime'>
   }
@@ -94422,100 +94648,288 @@ export namespace Prisma {
 
   export type AggregateEInvoice = {
     _count: EInvoiceCountAggregateOutputType | null
+    _avg: EInvoiceAvgAggregateOutputType | null
+    _sum: EInvoiceSumAggregateOutputType | null
     _min: EInvoiceMinAggregateOutputType | null
     _max: EInvoiceMaxAggregateOutputType | null
+  }
+
+  export type EInvoiceAvgAggregateOutputType = {
+    totalBeforeVat: number | null
+    vatAmount: number | null
+    totalAmount: number | null
+  }
+
+  export type EInvoiceSumAggregateOutputType = {
+    totalBeforeVat: number | null
+    vatAmount: number | null
+    totalAmount: number | null
   }
 
   export type EInvoiceMinAggregateOutputType = {
     id: string | null
     transactionId: string | null
     provider: string | null
-    invoiceNumber: string | null
     lookupCode: string | null
-    pdfUrl: string | null
     xmlData: string | null
-    status: string | null
     errorMessage: string | null
+    invoiceNumber: string | null
+    invoiceSymbol: string | null
+    invoiceDate: string | null
+    invoiceType: string | null
+    status: string | null
+    sellerName: string | null
+    sellerTaxCode: string | null
+    sellerAddress: string | null
+    buyerName: string | null
+    buyerTaxCode: string | null
+    buyerAddress: string | null
+    totalBeforeVat: number | null
+    vatAmount: number | null
+    totalAmount: number | null
+    currency: string | null
+    paymentMethod: string | null
+    xmlContent: string | null
+    pdfUrl: string | null
+    providerInvoiceId: string | null
+    providerResponse: string | null
+    replacesInvoiceId: string | null
+    replacedByInvoiceId: string | null
+    cancelReason: string | null
+    notes: string | null
+    branchId: string | null
+    createdBy: string | null
+    createdByName: string | null
     issuedAt: Date | null
+    signedAt: Date | null
+    sentAt: Date | null
     cancelledAt: Date | null
     createdAt: Date | null
+    updatedAt: Date | null
   }
 
   export type EInvoiceMaxAggregateOutputType = {
     id: string | null
     transactionId: string | null
     provider: string | null
-    invoiceNumber: string | null
     lookupCode: string | null
-    pdfUrl: string | null
     xmlData: string | null
-    status: string | null
     errorMessage: string | null
+    invoiceNumber: string | null
+    invoiceSymbol: string | null
+    invoiceDate: string | null
+    invoiceType: string | null
+    status: string | null
+    sellerName: string | null
+    sellerTaxCode: string | null
+    sellerAddress: string | null
+    buyerName: string | null
+    buyerTaxCode: string | null
+    buyerAddress: string | null
+    totalBeforeVat: number | null
+    vatAmount: number | null
+    totalAmount: number | null
+    currency: string | null
+    paymentMethod: string | null
+    xmlContent: string | null
+    pdfUrl: string | null
+    providerInvoiceId: string | null
+    providerResponse: string | null
+    replacesInvoiceId: string | null
+    replacedByInvoiceId: string | null
+    cancelReason: string | null
+    notes: string | null
+    branchId: string | null
+    createdBy: string | null
+    createdByName: string | null
     issuedAt: Date | null
+    signedAt: Date | null
+    sentAt: Date | null
     cancelledAt: Date | null
     createdAt: Date | null
+    updatedAt: Date | null
   }
 
   export type EInvoiceCountAggregateOutputType = {
     id: number
     transactionId: number
     provider: number
-    invoiceNumber: number
     lookupCode: number
-    pdfUrl: number
     xmlData: number
-    status: number
     errorMessage: number
+    invoiceNumber: number
+    invoiceSymbol: number
+    invoiceDate: number
+    invoiceType: number
+    status: number
+    sellerName: number
+    sellerTaxCode: number
+    sellerAddress: number
+    buyerName: number
+    buyerTaxCode: number
+    buyerAddress: number
+    totalBeforeVat: number
+    vatAmount: number
+    totalAmount: number
+    currency: number
+    paymentMethod: number
+    xmlContent: number
+    pdfUrl: number
+    providerInvoiceId: number
+    providerResponse: number
+    replacesInvoiceId: number
+    replacedByInvoiceId: number
+    cancelReason: number
+    notes: number
+    branchId: number
+    createdBy: number
+    createdByName: number
     issuedAt: number
+    signedAt: number
+    sentAt: number
     cancelledAt: number
     createdAt: number
+    updatedAt: number
     _all: number
   }
 
+
+  export type EInvoiceAvgAggregateInputType = {
+    totalBeforeVat?: true
+    vatAmount?: true
+    totalAmount?: true
+  }
+
+  export type EInvoiceSumAggregateInputType = {
+    totalBeforeVat?: true
+    vatAmount?: true
+    totalAmount?: true
+  }
 
   export type EInvoiceMinAggregateInputType = {
     id?: true
     transactionId?: true
     provider?: true
-    invoiceNumber?: true
     lookupCode?: true
-    pdfUrl?: true
     xmlData?: true
-    status?: true
     errorMessage?: true
+    invoiceNumber?: true
+    invoiceSymbol?: true
+    invoiceDate?: true
+    invoiceType?: true
+    status?: true
+    sellerName?: true
+    sellerTaxCode?: true
+    sellerAddress?: true
+    buyerName?: true
+    buyerTaxCode?: true
+    buyerAddress?: true
+    totalBeforeVat?: true
+    vatAmount?: true
+    totalAmount?: true
+    currency?: true
+    paymentMethod?: true
+    xmlContent?: true
+    pdfUrl?: true
+    providerInvoiceId?: true
+    providerResponse?: true
+    replacesInvoiceId?: true
+    replacedByInvoiceId?: true
+    cancelReason?: true
+    notes?: true
+    branchId?: true
+    createdBy?: true
+    createdByName?: true
     issuedAt?: true
+    signedAt?: true
+    sentAt?: true
     cancelledAt?: true
     createdAt?: true
+    updatedAt?: true
   }
 
   export type EInvoiceMaxAggregateInputType = {
     id?: true
     transactionId?: true
     provider?: true
-    invoiceNumber?: true
     lookupCode?: true
-    pdfUrl?: true
     xmlData?: true
-    status?: true
     errorMessage?: true
+    invoiceNumber?: true
+    invoiceSymbol?: true
+    invoiceDate?: true
+    invoiceType?: true
+    status?: true
+    sellerName?: true
+    sellerTaxCode?: true
+    sellerAddress?: true
+    buyerName?: true
+    buyerTaxCode?: true
+    buyerAddress?: true
+    totalBeforeVat?: true
+    vatAmount?: true
+    totalAmount?: true
+    currency?: true
+    paymentMethod?: true
+    xmlContent?: true
+    pdfUrl?: true
+    providerInvoiceId?: true
+    providerResponse?: true
+    replacesInvoiceId?: true
+    replacedByInvoiceId?: true
+    cancelReason?: true
+    notes?: true
+    branchId?: true
+    createdBy?: true
+    createdByName?: true
     issuedAt?: true
+    signedAt?: true
+    sentAt?: true
     cancelledAt?: true
     createdAt?: true
+    updatedAt?: true
   }
 
   export type EInvoiceCountAggregateInputType = {
     id?: true
     transactionId?: true
     provider?: true
-    invoiceNumber?: true
     lookupCode?: true
-    pdfUrl?: true
     xmlData?: true
-    status?: true
     errorMessage?: true
+    invoiceNumber?: true
+    invoiceSymbol?: true
+    invoiceDate?: true
+    invoiceType?: true
+    status?: true
+    sellerName?: true
+    sellerTaxCode?: true
+    sellerAddress?: true
+    buyerName?: true
+    buyerTaxCode?: true
+    buyerAddress?: true
+    totalBeforeVat?: true
+    vatAmount?: true
+    totalAmount?: true
+    currency?: true
+    paymentMethod?: true
+    xmlContent?: true
+    pdfUrl?: true
+    providerInvoiceId?: true
+    providerResponse?: true
+    replacesInvoiceId?: true
+    replacedByInvoiceId?: true
+    cancelReason?: true
+    notes?: true
+    branchId?: true
+    createdBy?: true
+    createdByName?: true
     issuedAt?: true
+    signedAt?: true
+    sentAt?: true
     cancelledAt?: true
     createdAt?: true
+    updatedAt?: true
     _all?: true
   }
 
@@ -94557,6 +94971,18 @@ export namespace Prisma {
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
      * 
+     * Select which fields to average
+    **/
+    _avg?: EInvoiceAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: EInvoiceSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
      * Select which fields to find the minimum value
     **/
     _min?: EInvoiceMinAggregateInputType
@@ -94587,24 +95013,55 @@ export namespace Prisma {
     take?: number
     skip?: number
     _count?: EInvoiceCountAggregateInputType | true
+    _avg?: EInvoiceAvgAggregateInputType
+    _sum?: EInvoiceSumAggregateInputType
     _min?: EInvoiceMinAggregateInputType
     _max?: EInvoiceMaxAggregateInputType
   }
 
   export type EInvoiceGroupByOutputType = {
     id: string
-    transactionId: string
-    provider: string
-    invoiceNumber: string | null
+    transactionId: string | null
+    provider: string | null
     lookupCode: string | null
-    pdfUrl: string | null
     xmlData: string | null
-    status: string
     errorMessage: string | null
+    invoiceNumber: string | null
+    invoiceSymbol: string | null
+    invoiceDate: string | null
+    invoiceType: string
+    status: string
+    sellerName: string | null
+    sellerTaxCode: string | null
+    sellerAddress: string | null
+    buyerName: string | null
+    buyerTaxCode: string | null
+    buyerAddress: string | null
+    totalBeforeVat: number
+    vatAmount: number
+    totalAmount: number
+    currency: string
+    paymentMethod: string | null
+    xmlContent: string | null
+    pdfUrl: string | null
+    providerInvoiceId: string | null
+    providerResponse: string | null
+    replacesInvoiceId: string | null
+    replacedByInvoiceId: string | null
+    cancelReason: string | null
+    notes: string | null
+    branchId: string | null
+    createdBy: string | null
+    createdByName: string | null
     issuedAt: Date | null
+    signedAt: Date | null
+    sentAt: Date | null
     cancelledAt: Date | null
     createdAt: Date
+    updatedAt: Date
     _count: EInvoiceCountAggregateOutputType | null
+    _avg: EInvoiceAvgAggregateOutputType | null
+    _sum: EInvoiceSumAggregateOutputType | null
     _min: EInvoiceMinAggregateOutputType | null
     _max: EInvoiceMaxAggregateOutputType | null
   }
@@ -94627,80 +95084,225 @@ export namespace Prisma {
     id?: boolean
     transactionId?: boolean
     provider?: boolean
-    invoiceNumber?: boolean
     lookupCode?: boolean
-    pdfUrl?: boolean
     xmlData?: boolean
-    status?: boolean
     errorMessage?: boolean
+    invoiceNumber?: boolean
+    invoiceSymbol?: boolean
+    invoiceDate?: boolean
+    invoiceType?: boolean
+    status?: boolean
+    sellerName?: boolean
+    sellerTaxCode?: boolean
+    sellerAddress?: boolean
+    buyerName?: boolean
+    buyerTaxCode?: boolean
+    buyerAddress?: boolean
+    totalBeforeVat?: boolean
+    vatAmount?: boolean
+    totalAmount?: boolean
+    currency?: boolean
+    paymentMethod?: boolean
+    xmlContent?: boolean
+    pdfUrl?: boolean
+    providerInvoiceId?: boolean
+    providerResponse?: boolean
+    replacesInvoiceId?: boolean
+    replacedByInvoiceId?: boolean
+    cancelReason?: boolean
+    notes?: boolean
+    branchId?: boolean
+    createdBy?: boolean
+    createdByName?: boolean
     issuedAt?: boolean
+    signedAt?: boolean
+    sentAt?: boolean
     cancelledAt?: boolean
     createdAt?: boolean
+    updatedAt?: boolean
+    items?: boolean | EInvoice$itemsArgs<ExtArgs>
+    _count?: boolean | EInvoiceCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["eInvoice"]>
 
   export type EInvoiceSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
     transactionId?: boolean
     provider?: boolean
-    invoiceNumber?: boolean
     lookupCode?: boolean
-    pdfUrl?: boolean
     xmlData?: boolean
-    status?: boolean
     errorMessage?: boolean
+    invoiceNumber?: boolean
+    invoiceSymbol?: boolean
+    invoiceDate?: boolean
+    invoiceType?: boolean
+    status?: boolean
+    sellerName?: boolean
+    sellerTaxCode?: boolean
+    sellerAddress?: boolean
+    buyerName?: boolean
+    buyerTaxCode?: boolean
+    buyerAddress?: boolean
+    totalBeforeVat?: boolean
+    vatAmount?: boolean
+    totalAmount?: boolean
+    currency?: boolean
+    paymentMethod?: boolean
+    xmlContent?: boolean
+    pdfUrl?: boolean
+    providerInvoiceId?: boolean
+    providerResponse?: boolean
+    replacesInvoiceId?: boolean
+    replacedByInvoiceId?: boolean
+    cancelReason?: boolean
+    notes?: boolean
+    branchId?: boolean
+    createdBy?: boolean
+    createdByName?: boolean
     issuedAt?: boolean
+    signedAt?: boolean
+    sentAt?: boolean
     cancelledAt?: boolean
     createdAt?: boolean
+    updatedAt?: boolean
   }, ExtArgs["result"]["eInvoice"]>
 
   export type EInvoiceSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
     transactionId?: boolean
     provider?: boolean
-    invoiceNumber?: boolean
     lookupCode?: boolean
-    pdfUrl?: boolean
     xmlData?: boolean
-    status?: boolean
     errorMessage?: boolean
+    invoiceNumber?: boolean
+    invoiceSymbol?: boolean
+    invoiceDate?: boolean
+    invoiceType?: boolean
+    status?: boolean
+    sellerName?: boolean
+    sellerTaxCode?: boolean
+    sellerAddress?: boolean
+    buyerName?: boolean
+    buyerTaxCode?: boolean
+    buyerAddress?: boolean
+    totalBeforeVat?: boolean
+    vatAmount?: boolean
+    totalAmount?: boolean
+    currency?: boolean
+    paymentMethod?: boolean
+    xmlContent?: boolean
+    pdfUrl?: boolean
+    providerInvoiceId?: boolean
+    providerResponse?: boolean
+    replacesInvoiceId?: boolean
+    replacedByInvoiceId?: boolean
+    cancelReason?: boolean
+    notes?: boolean
+    branchId?: boolean
+    createdBy?: boolean
+    createdByName?: boolean
     issuedAt?: boolean
+    signedAt?: boolean
+    sentAt?: boolean
     cancelledAt?: boolean
     createdAt?: boolean
+    updatedAt?: boolean
   }, ExtArgs["result"]["eInvoice"]>
 
   export type EInvoiceSelectScalar = {
     id?: boolean
     transactionId?: boolean
     provider?: boolean
-    invoiceNumber?: boolean
     lookupCode?: boolean
-    pdfUrl?: boolean
     xmlData?: boolean
-    status?: boolean
     errorMessage?: boolean
+    invoiceNumber?: boolean
+    invoiceSymbol?: boolean
+    invoiceDate?: boolean
+    invoiceType?: boolean
+    status?: boolean
+    sellerName?: boolean
+    sellerTaxCode?: boolean
+    sellerAddress?: boolean
+    buyerName?: boolean
+    buyerTaxCode?: boolean
+    buyerAddress?: boolean
+    totalBeforeVat?: boolean
+    vatAmount?: boolean
+    totalAmount?: boolean
+    currency?: boolean
+    paymentMethod?: boolean
+    xmlContent?: boolean
+    pdfUrl?: boolean
+    providerInvoiceId?: boolean
+    providerResponse?: boolean
+    replacesInvoiceId?: boolean
+    replacedByInvoiceId?: boolean
+    cancelReason?: boolean
+    notes?: boolean
+    branchId?: boolean
+    createdBy?: boolean
+    createdByName?: boolean
     issuedAt?: boolean
+    signedAt?: boolean
+    sentAt?: boolean
     cancelledAt?: boolean
     createdAt?: boolean
+    updatedAt?: boolean
   }
 
-  export type EInvoiceOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "transactionId" | "provider" | "invoiceNumber" | "lookupCode" | "pdfUrl" | "xmlData" | "status" | "errorMessage" | "issuedAt" | "cancelledAt" | "createdAt", ExtArgs["result"]["eInvoice"]>
+  export type EInvoiceOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "transactionId" | "provider" | "lookupCode" | "xmlData" | "errorMessage" | "invoiceNumber" | "invoiceSymbol" | "invoiceDate" | "invoiceType" | "status" | "sellerName" | "sellerTaxCode" | "sellerAddress" | "buyerName" | "buyerTaxCode" | "buyerAddress" | "totalBeforeVat" | "vatAmount" | "totalAmount" | "currency" | "paymentMethod" | "xmlContent" | "pdfUrl" | "providerInvoiceId" | "providerResponse" | "replacesInvoiceId" | "replacedByInvoiceId" | "cancelReason" | "notes" | "branchId" | "createdBy" | "createdByName" | "issuedAt" | "signedAt" | "sentAt" | "cancelledAt" | "createdAt" | "updatedAt", ExtArgs["result"]["eInvoice"]>
+  export type EInvoiceInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    items?: boolean | EInvoice$itemsArgs<ExtArgs>
+    _count?: boolean | EInvoiceCountOutputTypeDefaultArgs<ExtArgs>
+  }
+  export type EInvoiceIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {}
+  export type EInvoiceIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {}
 
   export type $EInvoicePayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     name: "EInvoice"
-    objects: {}
+    objects: {
+      items: Prisma.$EInvoiceItemPayload<ExtArgs>[]
+    }
     scalars: $Extensions.GetPayloadResult<{
       id: string
-      transactionId: string
-      provider: string
-      invoiceNumber: string | null
+      transactionId: string | null
+      provider: string | null
       lookupCode: string | null
-      pdfUrl: string | null
       xmlData: string | null
-      status: string
       errorMessage: string | null
+      invoiceNumber: string | null
+      invoiceSymbol: string | null
+      invoiceDate: string | null
+      invoiceType: string
+      status: string
+      sellerName: string | null
+      sellerTaxCode: string | null
+      sellerAddress: string | null
+      buyerName: string | null
+      buyerTaxCode: string | null
+      buyerAddress: string | null
+      totalBeforeVat: number
+      vatAmount: number
+      totalAmount: number
+      currency: string
+      paymentMethod: string | null
+      xmlContent: string | null
+      pdfUrl: string | null
+      providerInvoiceId: string | null
+      providerResponse: string | null
+      replacesInvoiceId: string | null
+      replacedByInvoiceId: string | null
+      cancelReason: string | null
+      notes: string | null
+      branchId: string | null
+      createdBy: string | null
+      createdByName: string | null
       issuedAt: Date | null
+      signedAt: Date | null
+      sentAt: Date | null
       cancelledAt: Date | null
       createdAt: Date
+      updatedAt: Date
     }, ExtArgs["result"]["eInvoice"]>
     composites: {}
   }
@@ -95095,6 +95697,7 @@ export namespace Prisma {
    */
   export interface Prisma__EInvoiceClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
     readonly [Symbol.toStringTag]: "PrismaPromise"
+    items<T extends EInvoice$itemsArgs<ExtArgs> = {}>(args?: Subset<T, EInvoice$itemsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$EInvoiceItemPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -95127,15 +95730,42 @@ export namespace Prisma {
     readonly id: FieldRef<"EInvoice", 'String'>
     readonly transactionId: FieldRef<"EInvoice", 'String'>
     readonly provider: FieldRef<"EInvoice", 'String'>
-    readonly invoiceNumber: FieldRef<"EInvoice", 'String'>
     readonly lookupCode: FieldRef<"EInvoice", 'String'>
-    readonly pdfUrl: FieldRef<"EInvoice", 'String'>
     readonly xmlData: FieldRef<"EInvoice", 'String'>
-    readonly status: FieldRef<"EInvoice", 'String'>
     readonly errorMessage: FieldRef<"EInvoice", 'String'>
+    readonly invoiceNumber: FieldRef<"EInvoice", 'String'>
+    readonly invoiceSymbol: FieldRef<"EInvoice", 'String'>
+    readonly invoiceDate: FieldRef<"EInvoice", 'String'>
+    readonly invoiceType: FieldRef<"EInvoice", 'String'>
+    readonly status: FieldRef<"EInvoice", 'String'>
+    readonly sellerName: FieldRef<"EInvoice", 'String'>
+    readonly sellerTaxCode: FieldRef<"EInvoice", 'String'>
+    readonly sellerAddress: FieldRef<"EInvoice", 'String'>
+    readonly buyerName: FieldRef<"EInvoice", 'String'>
+    readonly buyerTaxCode: FieldRef<"EInvoice", 'String'>
+    readonly buyerAddress: FieldRef<"EInvoice", 'String'>
+    readonly totalBeforeVat: FieldRef<"EInvoice", 'Float'>
+    readonly vatAmount: FieldRef<"EInvoice", 'Float'>
+    readonly totalAmount: FieldRef<"EInvoice", 'Float'>
+    readonly currency: FieldRef<"EInvoice", 'String'>
+    readonly paymentMethod: FieldRef<"EInvoice", 'String'>
+    readonly xmlContent: FieldRef<"EInvoice", 'String'>
+    readonly pdfUrl: FieldRef<"EInvoice", 'String'>
+    readonly providerInvoiceId: FieldRef<"EInvoice", 'String'>
+    readonly providerResponse: FieldRef<"EInvoice", 'String'>
+    readonly replacesInvoiceId: FieldRef<"EInvoice", 'String'>
+    readonly replacedByInvoiceId: FieldRef<"EInvoice", 'String'>
+    readonly cancelReason: FieldRef<"EInvoice", 'String'>
+    readonly notes: FieldRef<"EInvoice", 'String'>
+    readonly branchId: FieldRef<"EInvoice", 'String'>
+    readonly createdBy: FieldRef<"EInvoice", 'String'>
+    readonly createdByName: FieldRef<"EInvoice", 'String'>
     readonly issuedAt: FieldRef<"EInvoice", 'DateTime'>
+    readonly signedAt: FieldRef<"EInvoice", 'DateTime'>
+    readonly sentAt: FieldRef<"EInvoice", 'DateTime'>
     readonly cancelledAt: FieldRef<"EInvoice", 'DateTime'>
     readonly createdAt: FieldRef<"EInvoice", 'DateTime'>
+    readonly updatedAt: FieldRef<"EInvoice", 'DateTime'>
   }
     
 
@@ -95152,6 +95782,10 @@ export namespace Prisma {
      * Omit specific fields from the EInvoice
      */
     omit?: EInvoiceOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: EInvoiceInclude<ExtArgs> | null
     /**
      * Filter, which EInvoice to fetch.
      */
@@ -95171,6 +95805,10 @@ export namespace Prisma {
      */
     omit?: EInvoiceOmit<ExtArgs> | null
     /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: EInvoiceInclude<ExtArgs> | null
+    /**
      * Filter, which EInvoice to fetch.
      */
     where: EInvoiceWhereUniqueInput
@@ -95188,6 +95826,10 @@ export namespace Prisma {
      * Omit specific fields from the EInvoice
      */
     omit?: EInvoiceOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: EInvoiceInclude<ExtArgs> | null
     /**
      * Filter, which EInvoice to fetch.
      */
@@ -95237,6 +95879,10 @@ export namespace Prisma {
      */
     omit?: EInvoiceOmit<ExtArgs> | null
     /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: EInvoiceInclude<ExtArgs> | null
+    /**
      * Filter, which EInvoice to fetch.
      */
     where?: EInvoiceWhereInput
@@ -95285,6 +95931,10 @@ export namespace Prisma {
      */
     omit?: EInvoiceOmit<ExtArgs> | null
     /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: EInvoiceInclude<ExtArgs> | null
+    /**
      * Filter, which EInvoices to fetch.
      */
     where?: EInvoiceWhereInput
@@ -95328,9 +95978,13 @@ export namespace Prisma {
      */
     omit?: EInvoiceOmit<ExtArgs> | null
     /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: EInvoiceInclude<ExtArgs> | null
+    /**
      * The data needed to create a EInvoice.
      */
-    data: XOR<EInvoiceCreateInput, EInvoiceUncheckedCreateInput>
+    data?: XOR<EInvoiceCreateInput, EInvoiceUncheckedCreateInput>
   }
 
   /**
@@ -95375,6 +96029,10 @@ export namespace Prisma {
      * Omit specific fields from the EInvoice
      */
     omit?: EInvoiceOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: EInvoiceInclude<ExtArgs> | null
     /**
      * The data needed to update a EInvoice.
      */
@@ -95442,6 +96100,10 @@ export namespace Prisma {
      */
     omit?: EInvoiceOmit<ExtArgs> | null
     /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: EInvoiceInclude<ExtArgs> | null
+    /**
      * The filter to search for the EInvoice to update in case it exists.
      */
     where: EInvoiceWhereUniqueInput
@@ -95468,6 +96130,10 @@ export namespace Prisma {
      */
     omit?: EInvoiceOmit<ExtArgs> | null
     /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: EInvoiceInclude<ExtArgs> | null
+    /**
      * Filter which EInvoice to delete.
      */
     where: EInvoiceWhereUniqueInput
@@ -95488,6 +96154,30 @@ export namespace Prisma {
   }
 
   /**
+   * EInvoice.items
+   */
+  export type EInvoice$itemsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the EInvoiceItem
+     */
+    select?: EInvoiceItemSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the EInvoiceItem
+     */
+    omit?: EInvoiceItemOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: EInvoiceItemInclude<ExtArgs> | null
+    where?: EInvoiceItemWhereInput
+    orderBy?: EInvoiceItemOrderByWithRelationInput | EInvoiceItemOrderByWithRelationInput[]
+    cursor?: EInvoiceItemWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: EInvoiceItemScalarFieldEnum | EInvoiceItemScalarFieldEnum[]
+  }
+
+  /**
    * EInvoice without action
    */
   export type EInvoiceDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -95499,6 +96189,1200 @@ export namespace Prisma {
      * Omit specific fields from the EInvoice
      */
     omit?: EInvoiceOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: EInvoiceInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model EInvoiceItem
+   */
+
+  export type AggregateEInvoiceItem = {
+    _count: EInvoiceItemCountAggregateOutputType | null
+    _avg: EInvoiceItemAvgAggregateOutputType | null
+    _sum: EInvoiceItemSumAggregateOutputType | null
+    _min: EInvoiceItemMinAggregateOutputType | null
+    _max: EInvoiceItemMaxAggregateOutputType | null
+  }
+
+  export type EInvoiceItemAvgAggregateOutputType = {
+    itemNumber: number | null
+    quantity: number | null
+    unitPrice: number | null
+    vatRate: number | null
+    vatAmount: number | null
+    amount: number | null
+  }
+
+  export type EInvoiceItemSumAggregateOutputType = {
+    itemNumber: number | null
+    quantity: number | null
+    unitPrice: number | null
+    vatRate: number | null
+    vatAmount: number | null
+    amount: number | null
+  }
+
+  export type EInvoiceItemMinAggregateOutputType = {
+    id: string | null
+    eInvoiceId: string | null
+    itemNumber: number | null
+    itemName: string | null
+    unitName: string | null
+    quantity: number | null
+    unitPrice: number | null
+    vatRate: number | null
+    vatAmount: number | null
+    amount: number | null
+    notes: string | null
+  }
+
+  export type EInvoiceItemMaxAggregateOutputType = {
+    id: string | null
+    eInvoiceId: string | null
+    itemNumber: number | null
+    itemName: string | null
+    unitName: string | null
+    quantity: number | null
+    unitPrice: number | null
+    vatRate: number | null
+    vatAmount: number | null
+    amount: number | null
+    notes: string | null
+  }
+
+  export type EInvoiceItemCountAggregateOutputType = {
+    id: number
+    eInvoiceId: number
+    itemNumber: number
+    itemName: number
+    unitName: number
+    quantity: number
+    unitPrice: number
+    vatRate: number
+    vatAmount: number
+    amount: number
+    notes: number
+    _all: number
+  }
+
+
+  export type EInvoiceItemAvgAggregateInputType = {
+    itemNumber?: true
+    quantity?: true
+    unitPrice?: true
+    vatRate?: true
+    vatAmount?: true
+    amount?: true
+  }
+
+  export type EInvoiceItemSumAggregateInputType = {
+    itemNumber?: true
+    quantity?: true
+    unitPrice?: true
+    vatRate?: true
+    vatAmount?: true
+    amount?: true
+  }
+
+  export type EInvoiceItemMinAggregateInputType = {
+    id?: true
+    eInvoiceId?: true
+    itemNumber?: true
+    itemName?: true
+    unitName?: true
+    quantity?: true
+    unitPrice?: true
+    vatRate?: true
+    vatAmount?: true
+    amount?: true
+    notes?: true
+  }
+
+  export type EInvoiceItemMaxAggregateInputType = {
+    id?: true
+    eInvoiceId?: true
+    itemNumber?: true
+    itemName?: true
+    unitName?: true
+    quantity?: true
+    unitPrice?: true
+    vatRate?: true
+    vatAmount?: true
+    amount?: true
+    notes?: true
+  }
+
+  export type EInvoiceItemCountAggregateInputType = {
+    id?: true
+    eInvoiceId?: true
+    itemNumber?: true
+    itemName?: true
+    unitName?: true
+    quantity?: true
+    unitPrice?: true
+    vatRate?: true
+    vatAmount?: true
+    amount?: true
+    notes?: true
+    _all?: true
+  }
+
+  export type EInvoiceItemAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which EInvoiceItem to aggregate.
+     */
+    where?: EInvoiceItemWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of EInvoiceItems to fetch.
+     */
+    orderBy?: EInvoiceItemOrderByWithRelationInput | EInvoiceItemOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: EInvoiceItemWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` EInvoiceItems from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` EInvoiceItems.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned EInvoiceItems
+    **/
+    _count?: true | EInvoiceItemCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: EInvoiceItemAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: EInvoiceItemSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: EInvoiceItemMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: EInvoiceItemMaxAggregateInputType
+  }
+
+  export type GetEInvoiceItemAggregateType<T extends EInvoiceItemAggregateArgs> = {
+        [P in keyof T & keyof AggregateEInvoiceItem]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateEInvoiceItem[P]>
+      : GetScalarType<T[P], AggregateEInvoiceItem[P]>
+  }
+
+
+
+
+  export type EInvoiceItemGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: EInvoiceItemWhereInput
+    orderBy?: EInvoiceItemOrderByWithAggregationInput | EInvoiceItemOrderByWithAggregationInput[]
+    by: EInvoiceItemScalarFieldEnum[] | EInvoiceItemScalarFieldEnum
+    having?: EInvoiceItemScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: EInvoiceItemCountAggregateInputType | true
+    _avg?: EInvoiceItemAvgAggregateInputType
+    _sum?: EInvoiceItemSumAggregateInputType
+    _min?: EInvoiceItemMinAggregateInputType
+    _max?: EInvoiceItemMaxAggregateInputType
+  }
+
+  export type EInvoiceItemGroupByOutputType = {
+    id: string
+    eInvoiceId: string
+    itemNumber: number
+    itemName: string
+    unitName: string | null
+    quantity: number
+    unitPrice: number
+    vatRate: number
+    vatAmount: number
+    amount: number
+    notes: string | null
+    _count: EInvoiceItemCountAggregateOutputType | null
+    _avg: EInvoiceItemAvgAggregateOutputType | null
+    _sum: EInvoiceItemSumAggregateOutputType | null
+    _min: EInvoiceItemMinAggregateOutputType | null
+    _max: EInvoiceItemMaxAggregateOutputType | null
+  }
+
+  type GetEInvoiceItemGroupByPayload<T extends EInvoiceItemGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<EInvoiceItemGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof EInvoiceItemGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], EInvoiceItemGroupByOutputType[P]>
+            : GetScalarType<T[P], EInvoiceItemGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type EInvoiceItemSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    eInvoiceId?: boolean
+    itemNumber?: boolean
+    itemName?: boolean
+    unitName?: boolean
+    quantity?: boolean
+    unitPrice?: boolean
+    vatRate?: boolean
+    vatAmount?: boolean
+    amount?: boolean
+    notes?: boolean
+    eInvoice?: boolean | EInvoiceDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["eInvoiceItem"]>
+
+  export type EInvoiceItemSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    eInvoiceId?: boolean
+    itemNumber?: boolean
+    itemName?: boolean
+    unitName?: boolean
+    quantity?: boolean
+    unitPrice?: boolean
+    vatRate?: boolean
+    vatAmount?: boolean
+    amount?: boolean
+    notes?: boolean
+    eInvoice?: boolean | EInvoiceDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["eInvoiceItem"]>
+
+  export type EInvoiceItemSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    eInvoiceId?: boolean
+    itemNumber?: boolean
+    itemName?: boolean
+    unitName?: boolean
+    quantity?: boolean
+    unitPrice?: boolean
+    vatRate?: boolean
+    vatAmount?: boolean
+    amount?: boolean
+    notes?: boolean
+    eInvoice?: boolean | EInvoiceDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["eInvoiceItem"]>
+
+  export type EInvoiceItemSelectScalar = {
+    id?: boolean
+    eInvoiceId?: boolean
+    itemNumber?: boolean
+    itemName?: boolean
+    unitName?: boolean
+    quantity?: boolean
+    unitPrice?: boolean
+    vatRate?: boolean
+    vatAmount?: boolean
+    amount?: boolean
+    notes?: boolean
+  }
+
+  export type EInvoiceItemOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "eInvoiceId" | "itemNumber" | "itemName" | "unitName" | "quantity" | "unitPrice" | "vatRate" | "vatAmount" | "amount" | "notes", ExtArgs["result"]["eInvoiceItem"]>
+  export type EInvoiceItemInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    eInvoice?: boolean | EInvoiceDefaultArgs<ExtArgs>
+  }
+  export type EInvoiceItemIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    eInvoice?: boolean | EInvoiceDefaultArgs<ExtArgs>
+  }
+  export type EInvoiceItemIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    eInvoice?: boolean | EInvoiceDefaultArgs<ExtArgs>
+  }
+
+  export type $EInvoiceItemPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "EInvoiceItem"
+    objects: {
+      eInvoice: Prisma.$EInvoicePayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      eInvoiceId: string
+      itemNumber: number
+      itemName: string
+      unitName: string | null
+      quantity: number
+      unitPrice: number
+      vatRate: number
+      vatAmount: number
+      amount: number
+      notes: string | null
+    }, ExtArgs["result"]["eInvoiceItem"]>
+    composites: {}
+  }
+
+  type EInvoiceItemGetPayload<S extends boolean | null | undefined | EInvoiceItemDefaultArgs> = $Result.GetResult<Prisma.$EInvoiceItemPayload, S>
+
+  type EInvoiceItemCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<EInvoiceItemFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: EInvoiceItemCountAggregateInputType | true
+    }
+
+  export interface EInvoiceItemDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['EInvoiceItem'], meta: { name: 'EInvoiceItem' } }
+    /**
+     * Find zero or one EInvoiceItem that matches the filter.
+     * @param {EInvoiceItemFindUniqueArgs} args - Arguments to find a EInvoiceItem
+     * @example
+     * // Get one EInvoiceItem
+     * const eInvoiceItem = await prisma.eInvoiceItem.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends EInvoiceItemFindUniqueArgs>(args: SelectSubset<T, EInvoiceItemFindUniqueArgs<ExtArgs>>): Prisma__EInvoiceItemClient<$Result.GetResult<Prisma.$EInvoiceItemPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one EInvoiceItem that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {EInvoiceItemFindUniqueOrThrowArgs} args - Arguments to find a EInvoiceItem
+     * @example
+     * // Get one EInvoiceItem
+     * const eInvoiceItem = await prisma.eInvoiceItem.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends EInvoiceItemFindUniqueOrThrowArgs>(args: SelectSubset<T, EInvoiceItemFindUniqueOrThrowArgs<ExtArgs>>): Prisma__EInvoiceItemClient<$Result.GetResult<Prisma.$EInvoiceItemPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first EInvoiceItem that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {EInvoiceItemFindFirstArgs} args - Arguments to find a EInvoiceItem
+     * @example
+     * // Get one EInvoiceItem
+     * const eInvoiceItem = await prisma.eInvoiceItem.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends EInvoiceItemFindFirstArgs>(args?: SelectSubset<T, EInvoiceItemFindFirstArgs<ExtArgs>>): Prisma__EInvoiceItemClient<$Result.GetResult<Prisma.$EInvoiceItemPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first EInvoiceItem that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {EInvoiceItemFindFirstOrThrowArgs} args - Arguments to find a EInvoiceItem
+     * @example
+     * // Get one EInvoiceItem
+     * const eInvoiceItem = await prisma.eInvoiceItem.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends EInvoiceItemFindFirstOrThrowArgs>(args?: SelectSubset<T, EInvoiceItemFindFirstOrThrowArgs<ExtArgs>>): Prisma__EInvoiceItemClient<$Result.GetResult<Prisma.$EInvoiceItemPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more EInvoiceItems that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {EInvoiceItemFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all EInvoiceItems
+     * const eInvoiceItems = await prisma.eInvoiceItem.findMany()
+     * 
+     * // Get first 10 EInvoiceItems
+     * const eInvoiceItems = await prisma.eInvoiceItem.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const eInvoiceItemWithIdOnly = await prisma.eInvoiceItem.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends EInvoiceItemFindManyArgs>(args?: SelectSubset<T, EInvoiceItemFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$EInvoiceItemPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a EInvoiceItem.
+     * @param {EInvoiceItemCreateArgs} args - Arguments to create a EInvoiceItem.
+     * @example
+     * // Create one EInvoiceItem
+     * const EInvoiceItem = await prisma.eInvoiceItem.create({
+     *   data: {
+     *     // ... data to create a EInvoiceItem
+     *   }
+     * })
+     * 
+     */
+    create<T extends EInvoiceItemCreateArgs>(args: SelectSubset<T, EInvoiceItemCreateArgs<ExtArgs>>): Prisma__EInvoiceItemClient<$Result.GetResult<Prisma.$EInvoiceItemPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many EInvoiceItems.
+     * @param {EInvoiceItemCreateManyArgs} args - Arguments to create many EInvoiceItems.
+     * @example
+     * // Create many EInvoiceItems
+     * const eInvoiceItem = await prisma.eInvoiceItem.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends EInvoiceItemCreateManyArgs>(args?: SelectSubset<T, EInvoiceItemCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many EInvoiceItems and returns the data saved in the database.
+     * @param {EInvoiceItemCreateManyAndReturnArgs} args - Arguments to create many EInvoiceItems.
+     * @example
+     * // Create many EInvoiceItems
+     * const eInvoiceItem = await prisma.eInvoiceItem.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many EInvoiceItems and only return the `id`
+     * const eInvoiceItemWithIdOnly = await prisma.eInvoiceItem.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends EInvoiceItemCreateManyAndReturnArgs>(args?: SelectSubset<T, EInvoiceItemCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$EInvoiceItemPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a EInvoiceItem.
+     * @param {EInvoiceItemDeleteArgs} args - Arguments to delete one EInvoiceItem.
+     * @example
+     * // Delete one EInvoiceItem
+     * const EInvoiceItem = await prisma.eInvoiceItem.delete({
+     *   where: {
+     *     // ... filter to delete one EInvoiceItem
+     *   }
+     * })
+     * 
+     */
+    delete<T extends EInvoiceItemDeleteArgs>(args: SelectSubset<T, EInvoiceItemDeleteArgs<ExtArgs>>): Prisma__EInvoiceItemClient<$Result.GetResult<Prisma.$EInvoiceItemPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one EInvoiceItem.
+     * @param {EInvoiceItemUpdateArgs} args - Arguments to update one EInvoiceItem.
+     * @example
+     * // Update one EInvoiceItem
+     * const eInvoiceItem = await prisma.eInvoiceItem.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends EInvoiceItemUpdateArgs>(args: SelectSubset<T, EInvoiceItemUpdateArgs<ExtArgs>>): Prisma__EInvoiceItemClient<$Result.GetResult<Prisma.$EInvoiceItemPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more EInvoiceItems.
+     * @param {EInvoiceItemDeleteManyArgs} args - Arguments to filter EInvoiceItems to delete.
+     * @example
+     * // Delete a few EInvoiceItems
+     * const { count } = await prisma.eInvoiceItem.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends EInvoiceItemDeleteManyArgs>(args?: SelectSubset<T, EInvoiceItemDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more EInvoiceItems.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {EInvoiceItemUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many EInvoiceItems
+     * const eInvoiceItem = await prisma.eInvoiceItem.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends EInvoiceItemUpdateManyArgs>(args: SelectSubset<T, EInvoiceItemUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more EInvoiceItems and returns the data updated in the database.
+     * @param {EInvoiceItemUpdateManyAndReturnArgs} args - Arguments to update many EInvoiceItems.
+     * @example
+     * // Update many EInvoiceItems
+     * const eInvoiceItem = await prisma.eInvoiceItem.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more EInvoiceItems and only return the `id`
+     * const eInvoiceItemWithIdOnly = await prisma.eInvoiceItem.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends EInvoiceItemUpdateManyAndReturnArgs>(args: SelectSubset<T, EInvoiceItemUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$EInvoiceItemPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one EInvoiceItem.
+     * @param {EInvoiceItemUpsertArgs} args - Arguments to update or create a EInvoiceItem.
+     * @example
+     * // Update or create a EInvoiceItem
+     * const eInvoiceItem = await prisma.eInvoiceItem.upsert({
+     *   create: {
+     *     // ... data to create a EInvoiceItem
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the EInvoiceItem we want to update
+     *   }
+     * })
+     */
+    upsert<T extends EInvoiceItemUpsertArgs>(args: SelectSubset<T, EInvoiceItemUpsertArgs<ExtArgs>>): Prisma__EInvoiceItemClient<$Result.GetResult<Prisma.$EInvoiceItemPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of EInvoiceItems.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {EInvoiceItemCountArgs} args - Arguments to filter EInvoiceItems to count.
+     * @example
+     * // Count the number of EInvoiceItems
+     * const count = await prisma.eInvoiceItem.count({
+     *   where: {
+     *     // ... the filter for the EInvoiceItems we want to count
+     *   }
+     * })
+    **/
+    count<T extends EInvoiceItemCountArgs>(
+      args?: Subset<T, EInvoiceItemCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], EInvoiceItemCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a EInvoiceItem.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {EInvoiceItemAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends EInvoiceItemAggregateArgs>(args: Subset<T, EInvoiceItemAggregateArgs>): Prisma.PrismaPromise<GetEInvoiceItemAggregateType<T>>
+
+    /**
+     * Group by EInvoiceItem.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {EInvoiceItemGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends EInvoiceItemGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: EInvoiceItemGroupByArgs['orderBy'] }
+        : { orderBy?: EInvoiceItemGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, EInvoiceItemGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetEInvoiceItemGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the EInvoiceItem model
+   */
+  readonly fields: EInvoiceItemFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for EInvoiceItem.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__EInvoiceItemClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    eInvoice<T extends EInvoiceDefaultArgs<ExtArgs> = {}>(args?: Subset<T, EInvoiceDefaultArgs<ExtArgs>>): Prisma__EInvoiceClient<$Result.GetResult<Prisma.$EInvoicePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the EInvoiceItem model
+   */
+  interface EInvoiceItemFieldRefs {
+    readonly id: FieldRef<"EInvoiceItem", 'String'>
+    readonly eInvoiceId: FieldRef<"EInvoiceItem", 'String'>
+    readonly itemNumber: FieldRef<"EInvoiceItem", 'Int'>
+    readonly itemName: FieldRef<"EInvoiceItem", 'String'>
+    readonly unitName: FieldRef<"EInvoiceItem", 'String'>
+    readonly quantity: FieldRef<"EInvoiceItem", 'Float'>
+    readonly unitPrice: FieldRef<"EInvoiceItem", 'Float'>
+    readonly vatRate: FieldRef<"EInvoiceItem", 'Float'>
+    readonly vatAmount: FieldRef<"EInvoiceItem", 'Float'>
+    readonly amount: FieldRef<"EInvoiceItem", 'Float'>
+    readonly notes: FieldRef<"EInvoiceItem", 'String'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * EInvoiceItem findUnique
+   */
+  export type EInvoiceItemFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the EInvoiceItem
+     */
+    select?: EInvoiceItemSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the EInvoiceItem
+     */
+    omit?: EInvoiceItemOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: EInvoiceItemInclude<ExtArgs> | null
+    /**
+     * Filter, which EInvoiceItem to fetch.
+     */
+    where: EInvoiceItemWhereUniqueInput
+  }
+
+  /**
+   * EInvoiceItem findUniqueOrThrow
+   */
+  export type EInvoiceItemFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the EInvoiceItem
+     */
+    select?: EInvoiceItemSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the EInvoiceItem
+     */
+    omit?: EInvoiceItemOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: EInvoiceItemInclude<ExtArgs> | null
+    /**
+     * Filter, which EInvoiceItem to fetch.
+     */
+    where: EInvoiceItemWhereUniqueInput
+  }
+
+  /**
+   * EInvoiceItem findFirst
+   */
+  export type EInvoiceItemFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the EInvoiceItem
+     */
+    select?: EInvoiceItemSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the EInvoiceItem
+     */
+    omit?: EInvoiceItemOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: EInvoiceItemInclude<ExtArgs> | null
+    /**
+     * Filter, which EInvoiceItem to fetch.
+     */
+    where?: EInvoiceItemWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of EInvoiceItems to fetch.
+     */
+    orderBy?: EInvoiceItemOrderByWithRelationInput | EInvoiceItemOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for EInvoiceItems.
+     */
+    cursor?: EInvoiceItemWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` EInvoiceItems from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` EInvoiceItems.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of EInvoiceItems.
+     */
+    distinct?: EInvoiceItemScalarFieldEnum | EInvoiceItemScalarFieldEnum[]
+  }
+
+  /**
+   * EInvoiceItem findFirstOrThrow
+   */
+  export type EInvoiceItemFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the EInvoiceItem
+     */
+    select?: EInvoiceItemSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the EInvoiceItem
+     */
+    omit?: EInvoiceItemOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: EInvoiceItemInclude<ExtArgs> | null
+    /**
+     * Filter, which EInvoiceItem to fetch.
+     */
+    where?: EInvoiceItemWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of EInvoiceItems to fetch.
+     */
+    orderBy?: EInvoiceItemOrderByWithRelationInput | EInvoiceItemOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for EInvoiceItems.
+     */
+    cursor?: EInvoiceItemWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` EInvoiceItems from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` EInvoiceItems.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of EInvoiceItems.
+     */
+    distinct?: EInvoiceItemScalarFieldEnum | EInvoiceItemScalarFieldEnum[]
+  }
+
+  /**
+   * EInvoiceItem findMany
+   */
+  export type EInvoiceItemFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the EInvoiceItem
+     */
+    select?: EInvoiceItemSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the EInvoiceItem
+     */
+    omit?: EInvoiceItemOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: EInvoiceItemInclude<ExtArgs> | null
+    /**
+     * Filter, which EInvoiceItems to fetch.
+     */
+    where?: EInvoiceItemWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of EInvoiceItems to fetch.
+     */
+    orderBy?: EInvoiceItemOrderByWithRelationInput | EInvoiceItemOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing EInvoiceItems.
+     */
+    cursor?: EInvoiceItemWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` EInvoiceItems from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` EInvoiceItems.
+     */
+    skip?: number
+    distinct?: EInvoiceItemScalarFieldEnum | EInvoiceItemScalarFieldEnum[]
+  }
+
+  /**
+   * EInvoiceItem create
+   */
+  export type EInvoiceItemCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the EInvoiceItem
+     */
+    select?: EInvoiceItemSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the EInvoiceItem
+     */
+    omit?: EInvoiceItemOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: EInvoiceItemInclude<ExtArgs> | null
+    /**
+     * The data needed to create a EInvoiceItem.
+     */
+    data: XOR<EInvoiceItemCreateInput, EInvoiceItemUncheckedCreateInput>
+  }
+
+  /**
+   * EInvoiceItem createMany
+   */
+  export type EInvoiceItemCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many EInvoiceItems.
+     */
+    data: EInvoiceItemCreateManyInput | EInvoiceItemCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * EInvoiceItem createManyAndReturn
+   */
+  export type EInvoiceItemCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the EInvoiceItem
+     */
+    select?: EInvoiceItemSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the EInvoiceItem
+     */
+    omit?: EInvoiceItemOmit<ExtArgs> | null
+    /**
+     * The data used to create many EInvoiceItems.
+     */
+    data: EInvoiceItemCreateManyInput | EInvoiceItemCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: EInvoiceItemIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * EInvoiceItem update
+   */
+  export type EInvoiceItemUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the EInvoiceItem
+     */
+    select?: EInvoiceItemSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the EInvoiceItem
+     */
+    omit?: EInvoiceItemOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: EInvoiceItemInclude<ExtArgs> | null
+    /**
+     * The data needed to update a EInvoiceItem.
+     */
+    data: XOR<EInvoiceItemUpdateInput, EInvoiceItemUncheckedUpdateInput>
+    /**
+     * Choose, which EInvoiceItem to update.
+     */
+    where: EInvoiceItemWhereUniqueInput
+  }
+
+  /**
+   * EInvoiceItem updateMany
+   */
+  export type EInvoiceItemUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update EInvoiceItems.
+     */
+    data: XOR<EInvoiceItemUpdateManyMutationInput, EInvoiceItemUncheckedUpdateManyInput>
+    /**
+     * Filter which EInvoiceItems to update
+     */
+    where?: EInvoiceItemWhereInput
+    /**
+     * Limit how many EInvoiceItems to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * EInvoiceItem updateManyAndReturn
+   */
+  export type EInvoiceItemUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the EInvoiceItem
+     */
+    select?: EInvoiceItemSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the EInvoiceItem
+     */
+    omit?: EInvoiceItemOmit<ExtArgs> | null
+    /**
+     * The data used to update EInvoiceItems.
+     */
+    data: XOR<EInvoiceItemUpdateManyMutationInput, EInvoiceItemUncheckedUpdateManyInput>
+    /**
+     * Filter which EInvoiceItems to update
+     */
+    where?: EInvoiceItemWhereInput
+    /**
+     * Limit how many EInvoiceItems to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: EInvoiceItemIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * EInvoiceItem upsert
+   */
+  export type EInvoiceItemUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the EInvoiceItem
+     */
+    select?: EInvoiceItemSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the EInvoiceItem
+     */
+    omit?: EInvoiceItemOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: EInvoiceItemInclude<ExtArgs> | null
+    /**
+     * The filter to search for the EInvoiceItem to update in case it exists.
+     */
+    where: EInvoiceItemWhereUniqueInput
+    /**
+     * In case the EInvoiceItem found by the `where` argument doesn't exist, create a new EInvoiceItem with this data.
+     */
+    create: XOR<EInvoiceItemCreateInput, EInvoiceItemUncheckedCreateInput>
+    /**
+     * In case the EInvoiceItem was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<EInvoiceItemUpdateInput, EInvoiceItemUncheckedUpdateInput>
+  }
+
+  /**
+   * EInvoiceItem delete
+   */
+  export type EInvoiceItemDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the EInvoiceItem
+     */
+    select?: EInvoiceItemSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the EInvoiceItem
+     */
+    omit?: EInvoiceItemOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: EInvoiceItemInclude<ExtArgs> | null
+    /**
+     * Filter which EInvoiceItem to delete.
+     */
+    where: EInvoiceItemWhereUniqueInput
+  }
+
+  /**
+   * EInvoiceItem deleteMany
+   */
+  export type EInvoiceItemDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which EInvoiceItems to delete
+     */
+    where?: EInvoiceItemWhereInput
+    /**
+     * Limit how many EInvoiceItems to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * EInvoiceItem without action
+   */
+  export type EInvoiceItemDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the EInvoiceItem
+     */
+    select?: EInvoiceItemSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the EInvoiceItem
+     */
+    omit?: EInvoiceItemOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: EInvoiceItemInclude<ExtArgs> | null
   }
 
 
@@ -120486,6 +122370,14 @@ export namespace Prisma {
     serialNo: 'serialNo',
     active: 'active',
     extra: 'extra',
+    apiUsername: 'apiUsername',
+    apiPassword: 'apiPassword',
+    companyName: 'companyName',
+    companyAddress: 'companyAddress',
+    invoicePattern: 'invoicePattern',
+    invoiceSerial: 'invoiceSerial',
+    certificateSerial: 'certificateSerial',
+    isActive: 'isActive',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
   };
@@ -120497,18 +122389,62 @@ export namespace Prisma {
     id: 'id',
     transactionId: 'transactionId',
     provider: 'provider',
-    invoiceNumber: 'invoiceNumber',
     lookupCode: 'lookupCode',
-    pdfUrl: 'pdfUrl',
     xmlData: 'xmlData',
-    status: 'status',
     errorMessage: 'errorMessage',
+    invoiceNumber: 'invoiceNumber',
+    invoiceSymbol: 'invoiceSymbol',
+    invoiceDate: 'invoiceDate',
+    invoiceType: 'invoiceType',
+    status: 'status',
+    sellerName: 'sellerName',
+    sellerTaxCode: 'sellerTaxCode',
+    sellerAddress: 'sellerAddress',
+    buyerName: 'buyerName',
+    buyerTaxCode: 'buyerTaxCode',
+    buyerAddress: 'buyerAddress',
+    totalBeforeVat: 'totalBeforeVat',
+    vatAmount: 'vatAmount',
+    totalAmount: 'totalAmount',
+    currency: 'currency',
+    paymentMethod: 'paymentMethod',
+    xmlContent: 'xmlContent',
+    pdfUrl: 'pdfUrl',
+    providerInvoiceId: 'providerInvoiceId',
+    providerResponse: 'providerResponse',
+    replacesInvoiceId: 'replacesInvoiceId',
+    replacedByInvoiceId: 'replacedByInvoiceId',
+    cancelReason: 'cancelReason',
+    notes: 'notes',
+    branchId: 'branchId',
+    createdBy: 'createdBy',
+    createdByName: 'createdByName',
     issuedAt: 'issuedAt',
+    signedAt: 'signedAt',
+    sentAt: 'sentAt',
     cancelledAt: 'cancelledAt',
-    createdAt: 'createdAt'
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
   };
 
   export type EInvoiceScalarFieldEnum = (typeof EInvoiceScalarFieldEnum)[keyof typeof EInvoiceScalarFieldEnum]
+
+
+  export const EInvoiceItemScalarFieldEnum: {
+    id: 'id',
+    eInvoiceId: 'eInvoiceId',
+    itemNumber: 'itemNumber',
+    itemName: 'itemName',
+    unitName: 'unitName',
+    quantity: 'quantity',
+    unitPrice: 'unitPrice',
+    vatRate: 'vatRate',
+    vatAmount: 'vatAmount',
+    amount: 'amount',
+    notes: 'notes'
+  };
+
+  export type EInvoiceItemScalarFieldEnum = (typeof EInvoiceItemScalarFieldEnum)[keyof typeof EInvoiceItemScalarFieldEnum]
 
 
   export const AdjustmentInvoiceScalarFieldEnum: {
@@ -127823,14 +129759,22 @@ export namespace Prisma {
     NOT?: EInvoiceConfigWhereInput | EInvoiceConfigWhereInput[]
     id?: StringFilter<"EInvoiceConfig"> | string
     provider?: StringFilter<"EInvoiceConfig"> | string
-    apiUrl?: StringFilter<"EInvoiceConfig"> | string
-    apiKey?: StringFilter<"EInvoiceConfig"> | string
-    apiSecret?: StringFilter<"EInvoiceConfig"> | string
-    taxCode?: StringFilter<"EInvoiceConfig"> | string
+    apiUrl?: StringNullableFilter<"EInvoiceConfig"> | string | null
+    apiKey?: StringNullableFilter<"EInvoiceConfig"> | string | null
+    apiSecret?: StringNullableFilter<"EInvoiceConfig"> | string | null
+    taxCode?: StringNullableFilter<"EInvoiceConfig"> | string | null
     templateId?: StringNullableFilter<"EInvoiceConfig"> | string | null
     serialNo?: StringNullableFilter<"EInvoiceConfig"> | string | null
     active?: BoolFilter<"EInvoiceConfig"> | boolean
     extra?: StringNullableFilter<"EInvoiceConfig"> | string | null
+    apiUsername?: StringNullableFilter<"EInvoiceConfig"> | string | null
+    apiPassword?: StringNullableFilter<"EInvoiceConfig"> | string | null
+    companyName?: StringNullableFilter<"EInvoiceConfig"> | string | null
+    companyAddress?: StringNullableFilter<"EInvoiceConfig"> | string | null
+    invoicePattern?: StringNullableFilter<"EInvoiceConfig"> | string | null
+    invoiceSerial?: StringNullableFilter<"EInvoiceConfig"> | string | null
+    certificateSerial?: StringNullableFilter<"EInvoiceConfig"> | string | null
+    isActive?: BoolFilter<"EInvoiceConfig"> | boolean
     createdAt?: DateTimeFilter<"EInvoiceConfig"> | Date | string
     updatedAt?: DateTimeFilter<"EInvoiceConfig"> | Date | string
   }
@@ -127838,14 +129782,22 @@ export namespace Prisma {
   export type EInvoiceConfigOrderByWithRelationInput = {
     id?: SortOrder
     provider?: SortOrder
-    apiUrl?: SortOrder
-    apiKey?: SortOrder
-    apiSecret?: SortOrder
-    taxCode?: SortOrder
+    apiUrl?: SortOrderInput | SortOrder
+    apiKey?: SortOrderInput | SortOrder
+    apiSecret?: SortOrderInput | SortOrder
+    taxCode?: SortOrderInput | SortOrder
     templateId?: SortOrderInput | SortOrder
     serialNo?: SortOrderInput | SortOrder
     active?: SortOrder
     extra?: SortOrderInput | SortOrder
+    apiUsername?: SortOrderInput | SortOrder
+    apiPassword?: SortOrderInput | SortOrder
+    companyName?: SortOrderInput | SortOrder
+    companyAddress?: SortOrderInput | SortOrder
+    invoicePattern?: SortOrderInput | SortOrder
+    invoiceSerial?: SortOrderInput | SortOrder
+    certificateSerial?: SortOrderInput | SortOrder
+    isActive?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -127856,14 +129808,22 @@ export namespace Prisma {
     OR?: EInvoiceConfigWhereInput[]
     NOT?: EInvoiceConfigWhereInput | EInvoiceConfigWhereInput[]
     provider?: StringFilter<"EInvoiceConfig"> | string
-    apiUrl?: StringFilter<"EInvoiceConfig"> | string
-    apiKey?: StringFilter<"EInvoiceConfig"> | string
-    apiSecret?: StringFilter<"EInvoiceConfig"> | string
-    taxCode?: StringFilter<"EInvoiceConfig"> | string
+    apiUrl?: StringNullableFilter<"EInvoiceConfig"> | string | null
+    apiKey?: StringNullableFilter<"EInvoiceConfig"> | string | null
+    apiSecret?: StringNullableFilter<"EInvoiceConfig"> | string | null
+    taxCode?: StringNullableFilter<"EInvoiceConfig"> | string | null
     templateId?: StringNullableFilter<"EInvoiceConfig"> | string | null
     serialNo?: StringNullableFilter<"EInvoiceConfig"> | string | null
     active?: BoolFilter<"EInvoiceConfig"> | boolean
     extra?: StringNullableFilter<"EInvoiceConfig"> | string | null
+    apiUsername?: StringNullableFilter<"EInvoiceConfig"> | string | null
+    apiPassword?: StringNullableFilter<"EInvoiceConfig"> | string | null
+    companyName?: StringNullableFilter<"EInvoiceConfig"> | string | null
+    companyAddress?: StringNullableFilter<"EInvoiceConfig"> | string | null
+    invoicePattern?: StringNullableFilter<"EInvoiceConfig"> | string | null
+    invoiceSerial?: StringNullableFilter<"EInvoiceConfig"> | string | null
+    certificateSerial?: StringNullableFilter<"EInvoiceConfig"> | string | null
+    isActive?: BoolFilter<"EInvoiceConfig"> | boolean
     createdAt?: DateTimeFilter<"EInvoiceConfig"> | Date | string
     updatedAt?: DateTimeFilter<"EInvoiceConfig"> | Date | string
   }, "id">
@@ -127871,14 +129831,22 @@ export namespace Prisma {
   export type EInvoiceConfigOrderByWithAggregationInput = {
     id?: SortOrder
     provider?: SortOrder
-    apiUrl?: SortOrder
-    apiKey?: SortOrder
-    apiSecret?: SortOrder
-    taxCode?: SortOrder
+    apiUrl?: SortOrderInput | SortOrder
+    apiKey?: SortOrderInput | SortOrder
+    apiSecret?: SortOrderInput | SortOrder
+    taxCode?: SortOrderInput | SortOrder
     templateId?: SortOrderInput | SortOrder
     serialNo?: SortOrderInput | SortOrder
     active?: SortOrder
     extra?: SortOrderInput | SortOrder
+    apiUsername?: SortOrderInput | SortOrder
+    apiPassword?: SortOrderInput | SortOrder
+    companyName?: SortOrderInput | SortOrder
+    companyAddress?: SortOrderInput | SortOrder
+    invoicePattern?: SortOrderInput | SortOrder
+    invoiceSerial?: SortOrderInput | SortOrder
+    certificateSerial?: SortOrderInput | SortOrder
+    isActive?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     _count?: EInvoiceConfigCountOrderByAggregateInput
@@ -127892,14 +129860,22 @@ export namespace Prisma {
     NOT?: EInvoiceConfigScalarWhereWithAggregatesInput | EInvoiceConfigScalarWhereWithAggregatesInput[]
     id?: StringWithAggregatesFilter<"EInvoiceConfig"> | string
     provider?: StringWithAggregatesFilter<"EInvoiceConfig"> | string
-    apiUrl?: StringWithAggregatesFilter<"EInvoiceConfig"> | string
-    apiKey?: StringWithAggregatesFilter<"EInvoiceConfig"> | string
-    apiSecret?: StringWithAggregatesFilter<"EInvoiceConfig"> | string
-    taxCode?: StringWithAggregatesFilter<"EInvoiceConfig"> | string
+    apiUrl?: StringNullableWithAggregatesFilter<"EInvoiceConfig"> | string | null
+    apiKey?: StringNullableWithAggregatesFilter<"EInvoiceConfig"> | string | null
+    apiSecret?: StringNullableWithAggregatesFilter<"EInvoiceConfig"> | string | null
+    taxCode?: StringNullableWithAggregatesFilter<"EInvoiceConfig"> | string | null
     templateId?: StringNullableWithAggregatesFilter<"EInvoiceConfig"> | string | null
     serialNo?: StringNullableWithAggregatesFilter<"EInvoiceConfig"> | string | null
     active?: BoolWithAggregatesFilter<"EInvoiceConfig"> | boolean
     extra?: StringNullableWithAggregatesFilter<"EInvoiceConfig"> | string | null
+    apiUsername?: StringNullableWithAggregatesFilter<"EInvoiceConfig"> | string | null
+    apiPassword?: StringNullableWithAggregatesFilter<"EInvoiceConfig"> | string | null
+    companyName?: StringNullableWithAggregatesFilter<"EInvoiceConfig"> | string | null
+    companyAddress?: StringNullableWithAggregatesFilter<"EInvoiceConfig"> | string | null
+    invoicePattern?: StringNullableWithAggregatesFilter<"EInvoiceConfig"> | string | null
+    invoiceSerial?: StringNullableWithAggregatesFilter<"EInvoiceConfig"> | string | null
+    certificateSerial?: StringNullableWithAggregatesFilter<"EInvoiceConfig"> | string | null
+    isActive?: BoolWithAggregatesFilter<"EInvoiceConfig"> | boolean
     createdAt?: DateTimeWithAggregatesFilter<"EInvoiceConfig"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"EInvoiceConfig"> | Date | string
   }
@@ -127909,32 +129885,88 @@ export namespace Prisma {
     OR?: EInvoiceWhereInput[]
     NOT?: EInvoiceWhereInput | EInvoiceWhereInput[]
     id?: StringFilter<"EInvoice"> | string
-    transactionId?: StringFilter<"EInvoice"> | string
-    provider?: StringFilter<"EInvoice"> | string
-    invoiceNumber?: StringNullableFilter<"EInvoice"> | string | null
+    transactionId?: StringNullableFilter<"EInvoice"> | string | null
+    provider?: StringNullableFilter<"EInvoice"> | string | null
     lookupCode?: StringNullableFilter<"EInvoice"> | string | null
-    pdfUrl?: StringNullableFilter<"EInvoice"> | string | null
     xmlData?: StringNullableFilter<"EInvoice"> | string | null
-    status?: StringFilter<"EInvoice"> | string
     errorMessage?: StringNullableFilter<"EInvoice"> | string | null
+    invoiceNumber?: StringNullableFilter<"EInvoice"> | string | null
+    invoiceSymbol?: StringNullableFilter<"EInvoice"> | string | null
+    invoiceDate?: StringNullableFilter<"EInvoice"> | string | null
+    invoiceType?: StringFilter<"EInvoice"> | string
+    status?: StringFilter<"EInvoice"> | string
+    sellerName?: StringNullableFilter<"EInvoice"> | string | null
+    sellerTaxCode?: StringNullableFilter<"EInvoice"> | string | null
+    sellerAddress?: StringNullableFilter<"EInvoice"> | string | null
+    buyerName?: StringNullableFilter<"EInvoice"> | string | null
+    buyerTaxCode?: StringNullableFilter<"EInvoice"> | string | null
+    buyerAddress?: StringNullableFilter<"EInvoice"> | string | null
+    totalBeforeVat?: FloatFilter<"EInvoice"> | number
+    vatAmount?: FloatFilter<"EInvoice"> | number
+    totalAmount?: FloatFilter<"EInvoice"> | number
+    currency?: StringFilter<"EInvoice"> | string
+    paymentMethod?: StringNullableFilter<"EInvoice"> | string | null
+    xmlContent?: StringNullableFilter<"EInvoice"> | string | null
+    pdfUrl?: StringNullableFilter<"EInvoice"> | string | null
+    providerInvoiceId?: StringNullableFilter<"EInvoice"> | string | null
+    providerResponse?: StringNullableFilter<"EInvoice"> | string | null
+    replacesInvoiceId?: StringNullableFilter<"EInvoice"> | string | null
+    replacedByInvoiceId?: StringNullableFilter<"EInvoice"> | string | null
+    cancelReason?: StringNullableFilter<"EInvoice"> | string | null
+    notes?: StringNullableFilter<"EInvoice"> | string | null
+    branchId?: StringNullableFilter<"EInvoice"> | string | null
+    createdBy?: StringNullableFilter<"EInvoice"> | string | null
+    createdByName?: StringNullableFilter<"EInvoice"> | string | null
     issuedAt?: DateTimeNullableFilter<"EInvoice"> | Date | string | null
+    signedAt?: DateTimeNullableFilter<"EInvoice"> | Date | string | null
+    sentAt?: DateTimeNullableFilter<"EInvoice"> | Date | string | null
     cancelledAt?: DateTimeNullableFilter<"EInvoice"> | Date | string | null
     createdAt?: DateTimeFilter<"EInvoice"> | Date | string
+    updatedAt?: DateTimeFilter<"EInvoice"> | Date | string
+    items?: EInvoiceItemListRelationFilter
   }
 
   export type EInvoiceOrderByWithRelationInput = {
     id?: SortOrder
-    transactionId?: SortOrder
-    provider?: SortOrder
-    invoiceNumber?: SortOrderInput | SortOrder
+    transactionId?: SortOrderInput | SortOrder
+    provider?: SortOrderInput | SortOrder
     lookupCode?: SortOrderInput | SortOrder
-    pdfUrl?: SortOrderInput | SortOrder
     xmlData?: SortOrderInput | SortOrder
-    status?: SortOrder
     errorMessage?: SortOrderInput | SortOrder
+    invoiceNumber?: SortOrderInput | SortOrder
+    invoiceSymbol?: SortOrderInput | SortOrder
+    invoiceDate?: SortOrderInput | SortOrder
+    invoiceType?: SortOrder
+    status?: SortOrder
+    sellerName?: SortOrderInput | SortOrder
+    sellerTaxCode?: SortOrderInput | SortOrder
+    sellerAddress?: SortOrderInput | SortOrder
+    buyerName?: SortOrderInput | SortOrder
+    buyerTaxCode?: SortOrderInput | SortOrder
+    buyerAddress?: SortOrderInput | SortOrder
+    totalBeforeVat?: SortOrder
+    vatAmount?: SortOrder
+    totalAmount?: SortOrder
+    currency?: SortOrder
+    paymentMethod?: SortOrderInput | SortOrder
+    xmlContent?: SortOrderInput | SortOrder
+    pdfUrl?: SortOrderInput | SortOrder
+    providerInvoiceId?: SortOrderInput | SortOrder
+    providerResponse?: SortOrderInput | SortOrder
+    replacesInvoiceId?: SortOrderInput | SortOrder
+    replacedByInvoiceId?: SortOrderInput | SortOrder
+    cancelReason?: SortOrderInput | SortOrder
+    notes?: SortOrderInput | SortOrder
+    branchId?: SortOrderInput | SortOrder
+    createdBy?: SortOrderInput | SortOrder
+    createdByName?: SortOrderInput | SortOrder
     issuedAt?: SortOrderInput | SortOrder
+    signedAt?: SortOrderInput | SortOrder
+    sentAt?: SortOrderInput | SortOrder
     cancelledAt?: SortOrderInput | SortOrder
     createdAt?: SortOrder
+    updatedAt?: SortOrder
+    items?: EInvoiceItemOrderByRelationAggregateInput
   }
 
   export type EInvoiceWhereUniqueInput = Prisma.AtLeast<{
@@ -127942,35 +129974,92 @@ export namespace Prisma {
     AND?: EInvoiceWhereInput | EInvoiceWhereInput[]
     OR?: EInvoiceWhereInput[]
     NOT?: EInvoiceWhereInput | EInvoiceWhereInput[]
-    transactionId?: StringFilter<"EInvoice"> | string
-    provider?: StringFilter<"EInvoice"> | string
-    invoiceNumber?: StringNullableFilter<"EInvoice"> | string | null
+    transactionId?: StringNullableFilter<"EInvoice"> | string | null
+    provider?: StringNullableFilter<"EInvoice"> | string | null
     lookupCode?: StringNullableFilter<"EInvoice"> | string | null
-    pdfUrl?: StringNullableFilter<"EInvoice"> | string | null
     xmlData?: StringNullableFilter<"EInvoice"> | string | null
-    status?: StringFilter<"EInvoice"> | string
     errorMessage?: StringNullableFilter<"EInvoice"> | string | null
+    invoiceNumber?: StringNullableFilter<"EInvoice"> | string | null
+    invoiceSymbol?: StringNullableFilter<"EInvoice"> | string | null
+    invoiceDate?: StringNullableFilter<"EInvoice"> | string | null
+    invoiceType?: StringFilter<"EInvoice"> | string
+    status?: StringFilter<"EInvoice"> | string
+    sellerName?: StringNullableFilter<"EInvoice"> | string | null
+    sellerTaxCode?: StringNullableFilter<"EInvoice"> | string | null
+    sellerAddress?: StringNullableFilter<"EInvoice"> | string | null
+    buyerName?: StringNullableFilter<"EInvoice"> | string | null
+    buyerTaxCode?: StringNullableFilter<"EInvoice"> | string | null
+    buyerAddress?: StringNullableFilter<"EInvoice"> | string | null
+    totalBeforeVat?: FloatFilter<"EInvoice"> | number
+    vatAmount?: FloatFilter<"EInvoice"> | number
+    totalAmount?: FloatFilter<"EInvoice"> | number
+    currency?: StringFilter<"EInvoice"> | string
+    paymentMethod?: StringNullableFilter<"EInvoice"> | string | null
+    xmlContent?: StringNullableFilter<"EInvoice"> | string | null
+    pdfUrl?: StringNullableFilter<"EInvoice"> | string | null
+    providerInvoiceId?: StringNullableFilter<"EInvoice"> | string | null
+    providerResponse?: StringNullableFilter<"EInvoice"> | string | null
+    replacesInvoiceId?: StringNullableFilter<"EInvoice"> | string | null
+    replacedByInvoiceId?: StringNullableFilter<"EInvoice"> | string | null
+    cancelReason?: StringNullableFilter<"EInvoice"> | string | null
+    notes?: StringNullableFilter<"EInvoice"> | string | null
+    branchId?: StringNullableFilter<"EInvoice"> | string | null
+    createdBy?: StringNullableFilter<"EInvoice"> | string | null
+    createdByName?: StringNullableFilter<"EInvoice"> | string | null
     issuedAt?: DateTimeNullableFilter<"EInvoice"> | Date | string | null
+    signedAt?: DateTimeNullableFilter<"EInvoice"> | Date | string | null
+    sentAt?: DateTimeNullableFilter<"EInvoice"> | Date | string | null
     cancelledAt?: DateTimeNullableFilter<"EInvoice"> | Date | string | null
     createdAt?: DateTimeFilter<"EInvoice"> | Date | string
+    updatedAt?: DateTimeFilter<"EInvoice"> | Date | string
+    items?: EInvoiceItemListRelationFilter
   }, "id">
 
   export type EInvoiceOrderByWithAggregationInput = {
     id?: SortOrder
-    transactionId?: SortOrder
-    provider?: SortOrder
-    invoiceNumber?: SortOrderInput | SortOrder
+    transactionId?: SortOrderInput | SortOrder
+    provider?: SortOrderInput | SortOrder
     lookupCode?: SortOrderInput | SortOrder
-    pdfUrl?: SortOrderInput | SortOrder
     xmlData?: SortOrderInput | SortOrder
-    status?: SortOrder
     errorMessage?: SortOrderInput | SortOrder
+    invoiceNumber?: SortOrderInput | SortOrder
+    invoiceSymbol?: SortOrderInput | SortOrder
+    invoiceDate?: SortOrderInput | SortOrder
+    invoiceType?: SortOrder
+    status?: SortOrder
+    sellerName?: SortOrderInput | SortOrder
+    sellerTaxCode?: SortOrderInput | SortOrder
+    sellerAddress?: SortOrderInput | SortOrder
+    buyerName?: SortOrderInput | SortOrder
+    buyerTaxCode?: SortOrderInput | SortOrder
+    buyerAddress?: SortOrderInput | SortOrder
+    totalBeforeVat?: SortOrder
+    vatAmount?: SortOrder
+    totalAmount?: SortOrder
+    currency?: SortOrder
+    paymentMethod?: SortOrderInput | SortOrder
+    xmlContent?: SortOrderInput | SortOrder
+    pdfUrl?: SortOrderInput | SortOrder
+    providerInvoiceId?: SortOrderInput | SortOrder
+    providerResponse?: SortOrderInput | SortOrder
+    replacesInvoiceId?: SortOrderInput | SortOrder
+    replacedByInvoiceId?: SortOrderInput | SortOrder
+    cancelReason?: SortOrderInput | SortOrder
+    notes?: SortOrderInput | SortOrder
+    branchId?: SortOrderInput | SortOrder
+    createdBy?: SortOrderInput | SortOrder
+    createdByName?: SortOrderInput | SortOrder
     issuedAt?: SortOrderInput | SortOrder
+    signedAt?: SortOrderInput | SortOrder
+    sentAt?: SortOrderInput | SortOrder
     cancelledAt?: SortOrderInput | SortOrder
     createdAt?: SortOrder
+    updatedAt?: SortOrder
     _count?: EInvoiceCountOrderByAggregateInput
+    _avg?: EInvoiceAvgOrderByAggregateInput
     _max?: EInvoiceMaxOrderByAggregateInput
     _min?: EInvoiceMinOrderByAggregateInput
+    _sum?: EInvoiceSumOrderByAggregateInput
   }
 
   export type EInvoiceScalarWhereWithAggregatesInput = {
@@ -127978,17 +130067,131 @@ export namespace Prisma {
     OR?: EInvoiceScalarWhereWithAggregatesInput[]
     NOT?: EInvoiceScalarWhereWithAggregatesInput | EInvoiceScalarWhereWithAggregatesInput[]
     id?: StringWithAggregatesFilter<"EInvoice"> | string
-    transactionId?: StringWithAggregatesFilter<"EInvoice"> | string
-    provider?: StringWithAggregatesFilter<"EInvoice"> | string
-    invoiceNumber?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
+    transactionId?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
+    provider?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
     lookupCode?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
-    pdfUrl?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
     xmlData?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
-    status?: StringWithAggregatesFilter<"EInvoice"> | string
     errorMessage?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
+    invoiceNumber?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
+    invoiceSymbol?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
+    invoiceDate?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
+    invoiceType?: StringWithAggregatesFilter<"EInvoice"> | string
+    status?: StringWithAggregatesFilter<"EInvoice"> | string
+    sellerName?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
+    sellerTaxCode?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
+    sellerAddress?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
+    buyerName?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
+    buyerTaxCode?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
+    buyerAddress?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
+    totalBeforeVat?: FloatWithAggregatesFilter<"EInvoice"> | number
+    vatAmount?: FloatWithAggregatesFilter<"EInvoice"> | number
+    totalAmount?: FloatWithAggregatesFilter<"EInvoice"> | number
+    currency?: StringWithAggregatesFilter<"EInvoice"> | string
+    paymentMethod?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
+    xmlContent?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
+    pdfUrl?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
+    providerInvoiceId?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
+    providerResponse?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
+    replacesInvoiceId?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
+    replacedByInvoiceId?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
+    cancelReason?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
+    notes?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
+    branchId?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
+    createdBy?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
+    createdByName?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
     issuedAt?: DateTimeNullableWithAggregatesFilter<"EInvoice"> | Date | string | null
+    signedAt?: DateTimeNullableWithAggregatesFilter<"EInvoice"> | Date | string | null
+    sentAt?: DateTimeNullableWithAggregatesFilter<"EInvoice"> | Date | string | null
     cancelledAt?: DateTimeNullableWithAggregatesFilter<"EInvoice"> | Date | string | null
     createdAt?: DateTimeWithAggregatesFilter<"EInvoice"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"EInvoice"> | Date | string
+  }
+
+  export type EInvoiceItemWhereInput = {
+    AND?: EInvoiceItemWhereInput | EInvoiceItemWhereInput[]
+    OR?: EInvoiceItemWhereInput[]
+    NOT?: EInvoiceItemWhereInput | EInvoiceItemWhereInput[]
+    id?: StringFilter<"EInvoiceItem"> | string
+    eInvoiceId?: StringFilter<"EInvoiceItem"> | string
+    itemNumber?: IntFilter<"EInvoiceItem"> | number
+    itemName?: StringFilter<"EInvoiceItem"> | string
+    unitName?: StringNullableFilter<"EInvoiceItem"> | string | null
+    quantity?: FloatFilter<"EInvoiceItem"> | number
+    unitPrice?: FloatFilter<"EInvoiceItem"> | number
+    vatRate?: FloatFilter<"EInvoiceItem"> | number
+    vatAmount?: FloatFilter<"EInvoiceItem"> | number
+    amount?: FloatFilter<"EInvoiceItem"> | number
+    notes?: StringNullableFilter<"EInvoiceItem"> | string | null
+    eInvoice?: XOR<EInvoiceScalarRelationFilter, EInvoiceWhereInput>
+  }
+
+  export type EInvoiceItemOrderByWithRelationInput = {
+    id?: SortOrder
+    eInvoiceId?: SortOrder
+    itemNumber?: SortOrder
+    itemName?: SortOrder
+    unitName?: SortOrderInput | SortOrder
+    quantity?: SortOrder
+    unitPrice?: SortOrder
+    vatRate?: SortOrder
+    vatAmount?: SortOrder
+    amount?: SortOrder
+    notes?: SortOrderInput | SortOrder
+    eInvoice?: EInvoiceOrderByWithRelationInput
+  }
+
+  export type EInvoiceItemWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: EInvoiceItemWhereInput | EInvoiceItemWhereInput[]
+    OR?: EInvoiceItemWhereInput[]
+    NOT?: EInvoiceItemWhereInput | EInvoiceItemWhereInput[]
+    eInvoiceId?: StringFilter<"EInvoiceItem"> | string
+    itemNumber?: IntFilter<"EInvoiceItem"> | number
+    itemName?: StringFilter<"EInvoiceItem"> | string
+    unitName?: StringNullableFilter<"EInvoiceItem"> | string | null
+    quantity?: FloatFilter<"EInvoiceItem"> | number
+    unitPrice?: FloatFilter<"EInvoiceItem"> | number
+    vatRate?: FloatFilter<"EInvoiceItem"> | number
+    vatAmount?: FloatFilter<"EInvoiceItem"> | number
+    amount?: FloatFilter<"EInvoiceItem"> | number
+    notes?: StringNullableFilter<"EInvoiceItem"> | string | null
+    eInvoice?: XOR<EInvoiceScalarRelationFilter, EInvoiceWhereInput>
+  }, "id">
+
+  export type EInvoiceItemOrderByWithAggregationInput = {
+    id?: SortOrder
+    eInvoiceId?: SortOrder
+    itemNumber?: SortOrder
+    itemName?: SortOrder
+    unitName?: SortOrderInput | SortOrder
+    quantity?: SortOrder
+    unitPrice?: SortOrder
+    vatRate?: SortOrder
+    vatAmount?: SortOrder
+    amount?: SortOrder
+    notes?: SortOrderInput | SortOrder
+    _count?: EInvoiceItemCountOrderByAggregateInput
+    _avg?: EInvoiceItemAvgOrderByAggregateInput
+    _max?: EInvoiceItemMaxOrderByAggregateInput
+    _min?: EInvoiceItemMinOrderByAggregateInput
+    _sum?: EInvoiceItemSumOrderByAggregateInput
+  }
+
+  export type EInvoiceItemScalarWhereWithAggregatesInput = {
+    AND?: EInvoiceItemScalarWhereWithAggregatesInput | EInvoiceItemScalarWhereWithAggregatesInput[]
+    OR?: EInvoiceItemScalarWhereWithAggregatesInput[]
+    NOT?: EInvoiceItemScalarWhereWithAggregatesInput | EInvoiceItemScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"EInvoiceItem"> | string
+    eInvoiceId?: StringWithAggregatesFilter<"EInvoiceItem"> | string
+    itemNumber?: IntWithAggregatesFilter<"EInvoiceItem"> | number
+    itemName?: StringWithAggregatesFilter<"EInvoiceItem"> | string
+    unitName?: StringNullableWithAggregatesFilter<"EInvoiceItem"> | string | null
+    quantity?: FloatWithAggregatesFilter<"EInvoiceItem"> | number
+    unitPrice?: FloatWithAggregatesFilter<"EInvoiceItem"> | number
+    vatRate?: FloatWithAggregatesFilter<"EInvoiceItem"> | number
+    vatAmount?: FloatWithAggregatesFilter<"EInvoiceItem"> | number
+    amount?: FloatWithAggregatesFilter<"EInvoiceItem"> | number
+    notes?: StringNullableWithAggregatesFilter<"EInvoiceItem"> | string | null
   }
 
   export type AdjustmentInvoiceWhereInput = {
@@ -137946,14 +140149,22 @@ export namespace Prisma {
   export type EInvoiceConfigCreateInput = {
     id?: string
     provider: string
-    apiUrl: string
-    apiKey: string
-    apiSecret: string
-    taxCode: string
+    apiUrl?: string | null
+    apiKey?: string | null
+    apiSecret?: string | null
+    taxCode?: string | null
     templateId?: string | null
     serialNo?: string | null
     active?: boolean
     extra?: string | null
+    apiUsername?: string | null
+    apiPassword?: string | null
+    companyName?: string | null
+    companyAddress?: string | null
+    invoicePattern?: string | null
+    invoiceSerial?: string | null
+    certificateSerial?: string | null
+    isActive?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -137961,14 +140172,22 @@ export namespace Prisma {
   export type EInvoiceConfigUncheckedCreateInput = {
     id?: string
     provider: string
-    apiUrl: string
-    apiKey: string
-    apiSecret: string
-    taxCode: string
+    apiUrl?: string | null
+    apiKey?: string | null
+    apiSecret?: string | null
+    taxCode?: string | null
     templateId?: string | null
     serialNo?: string | null
     active?: boolean
     extra?: string | null
+    apiUsername?: string | null
+    apiPassword?: string | null
+    companyName?: string | null
+    companyAddress?: string | null
+    invoicePattern?: string | null
+    invoiceSerial?: string | null
+    certificateSerial?: string | null
+    isActive?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -137976,14 +140195,22 @@ export namespace Prisma {
   export type EInvoiceConfigUpdateInput = {
     id?: StringFieldUpdateOperationsInput | string
     provider?: StringFieldUpdateOperationsInput | string
-    apiUrl?: StringFieldUpdateOperationsInput | string
-    apiKey?: StringFieldUpdateOperationsInput | string
-    apiSecret?: StringFieldUpdateOperationsInput | string
-    taxCode?: StringFieldUpdateOperationsInput | string
+    apiUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    apiKey?: NullableStringFieldUpdateOperationsInput | string | null
+    apiSecret?: NullableStringFieldUpdateOperationsInput | string | null
+    taxCode?: NullableStringFieldUpdateOperationsInput | string | null
     templateId?: NullableStringFieldUpdateOperationsInput | string | null
     serialNo?: NullableStringFieldUpdateOperationsInput | string | null
     active?: BoolFieldUpdateOperationsInput | boolean
     extra?: NullableStringFieldUpdateOperationsInput | string | null
+    apiUsername?: NullableStringFieldUpdateOperationsInput | string | null
+    apiPassword?: NullableStringFieldUpdateOperationsInput | string | null
+    companyName?: NullableStringFieldUpdateOperationsInput | string | null
+    companyAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    invoicePattern?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceSerial?: NullableStringFieldUpdateOperationsInput | string | null
+    certificateSerial?: NullableStringFieldUpdateOperationsInput | string | null
+    isActive?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -137991,14 +140218,22 @@ export namespace Prisma {
   export type EInvoiceConfigUncheckedUpdateInput = {
     id?: StringFieldUpdateOperationsInput | string
     provider?: StringFieldUpdateOperationsInput | string
-    apiUrl?: StringFieldUpdateOperationsInput | string
-    apiKey?: StringFieldUpdateOperationsInput | string
-    apiSecret?: StringFieldUpdateOperationsInput | string
-    taxCode?: StringFieldUpdateOperationsInput | string
+    apiUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    apiKey?: NullableStringFieldUpdateOperationsInput | string | null
+    apiSecret?: NullableStringFieldUpdateOperationsInput | string | null
+    taxCode?: NullableStringFieldUpdateOperationsInput | string | null
     templateId?: NullableStringFieldUpdateOperationsInput | string | null
     serialNo?: NullableStringFieldUpdateOperationsInput | string | null
     active?: BoolFieldUpdateOperationsInput | boolean
     extra?: NullableStringFieldUpdateOperationsInput | string | null
+    apiUsername?: NullableStringFieldUpdateOperationsInput | string | null
+    apiPassword?: NullableStringFieldUpdateOperationsInput | string | null
+    companyName?: NullableStringFieldUpdateOperationsInput | string | null
+    companyAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    invoicePattern?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceSerial?: NullableStringFieldUpdateOperationsInput | string | null
+    certificateSerial?: NullableStringFieldUpdateOperationsInput | string | null
+    isActive?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -138006,14 +140241,22 @@ export namespace Prisma {
   export type EInvoiceConfigCreateManyInput = {
     id?: string
     provider: string
-    apiUrl: string
-    apiKey: string
-    apiSecret: string
-    taxCode: string
+    apiUrl?: string | null
+    apiKey?: string | null
+    apiSecret?: string | null
+    taxCode?: string | null
     templateId?: string | null
     serialNo?: string | null
     active?: boolean
     extra?: string | null
+    apiUsername?: string | null
+    apiPassword?: string | null
+    companyName?: string | null
+    companyAddress?: string | null
+    invoicePattern?: string | null
+    invoiceSerial?: string | null
+    certificateSerial?: string | null
+    isActive?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -138021,14 +140264,22 @@ export namespace Prisma {
   export type EInvoiceConfigUpdateManyMutationInput = {
     id?: StringFieldUpdateOperationsInput | string
     provider?: StringFieldUpdateOperationsInput | string
-    apiUrl?: StringFieldUpdateOperationsInput | string
-    apiKey?: StringFieldUpdateOperationsInput | string
-    apiSecret?: StringFieldUpdateOperationsInput | string
-    taxCode?: StringFieldUpdateOperationsInput | string
+    apiUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    apiKey?: NullableStringFieldUpdateOperationsInput | string | null
+    apiSecret?: NullableStringFieldUpdateOperationsInput | string | null
+    taxCode?: NullableStringFieldUpdateOperationsInput | string | null
     templateId?: NullableStringFieldUpdateOperationsInput | string | null
     serialNo?: NullableStringFieldUpdateOperationsInput | string | null
     active?: BoolFieldUpdateOperationsInput | boolean
     extra?: NullableStringFieldUpdateOperationsInput | string | null
+    apiUsername?: NullableStringFieldUpdateOperationsInput | string | null
+    apiPassword?: NullableStringFieldUpdateOperationsInput | string | null
+    companyName?: NullableStringFieldUpdateOperationsInput | string | null
+    companyAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    invoicePattern?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceSerial?: NullableStringFieldUpdateOperationsInput | string | null
+    certificateSerial?: NullableStringFieldUpdateOperationsInput | string | null
+    isActive?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -138036,121 +140287,419 @@ export namespace Prisma {
   export type EInvoiceConfigUncheckedUpdateManyInput = {
     id?: StringFieldUpdateOperationsInput | string
     provider?: StringFieldUpdateOperationsInput | string
-    apiUrl?: StringFieldUpdateOperationsInput | string
-    apiKey?: StringFieldUpdateOperationsInput | string
-    apiSecret?: StringFieldUpdateOperationsInput | string
-    taxCode?: StringFieldUpdateOperationsInput | string
+    apiUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    apiKey?: NullableStringFieldUpdateOperationsInput | string | null
+    apiSecret?: NullableStringFieldUpdateOperationsInput | string | null
+    taxCode?: NullableStringFieldUpdateOperationsInput | string | null
     templateId?: NullableStringFieldUpdateOperationsInput | string | null
     serialNo?: NullableStringFieldUpdateOperationsInput | string | null
     active?: BoolFieldUpdateOperationsInput | boolean
     extra?: NullableStringFieldUpdateOperationsInput | string | null
+    apiUsername?: NullableStringFieldUpdateOperationsInput | string | null
+    apiPassword?: NullableStringFieldUpdateOperationsInput | string | null
+    companyName?: NullableStringFieldUpdateOperationsInput | string | null
+    companyAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    invoicePattern?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceSerial?: NullableStringFieldUpdateOperationsInput | string | null
+    certificateSerial?: NullableStringFieldUpdateOperationsInput | string | null
+    isActive?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type EInvoiceCreateInput = {
     id?: string
-    transactionId: string
-    provider: string
-    invoiceNumber?: string | null
+    transactionId?: string | null
+    provider?: string | null
     lookupCode?: string | null
-    pdfUrl?: string | null
     xmlData?: string | null
-    status?: string
     errorMessage?: string | null
+    invoiceNumber?: string | null
+    invoiceSymbol?: string | null
+    invoiceDate?: string | null
+    invoiceType?: string
+    status?: string
+    sellerName?: string | null
+    sellerTaxCode?: string | null
+    sellerAddress?: string | null
+    buyerName?: string | null
+    buyerTaxCode?: string | null
+    buyerAddress?: string | null
+    totalBeforeVat?: number
+    vatAmount?: number
+    totalAmount?: number
+    currency?: string
+    paymentMethod?: string | null
+    xmlContent?: string | null
+    pdfUrl?: string | null
+    providerInvoiceId?: string | null
+    providerResponse?: string | null
+    replacesInvoiceId?: string | null
+    replacedByInvoiceId?: string | null
+    cancelReason?: string | null
+    notes?: string | null
+    branchId?: string | null
+    createdBy?: string | null
+    createdByName?: string | null
     issuedAt?: Date | string | null
+    signedAt?: Date | string | null
+    sentAt?: Date | string | null
     cancelledAt?: Date | string | null
     createdAt?: Date | string
+    updatedAt?: Date | string
+    items?: EInvoiceItemCreateNestedManyWithoutEInvoiceInput
   }
 
   export type EInvoiceUncheckedCreateInput = {
     id?: string
-    transactionId: string
-    provider: string
-    invoiceNumber?: string | null
+    transactionId?: string | null
+    provider?: string | null
     lookupCode?: string | null
-    pdfUrl?: string | null
     xmlData?: string | null
-    status?: string
     errorMessage?: string | null
+    invoiceNumber?: string | null
+    invoiceSymbol?: string | null
+    invoiceDate?: string | null
+    invoiceType?: string
+    status?: string
+    sellerName?: string | null
+    sellerTaxCode?: string | null
+    sellerAddress?: string | null
+    buyerName?: string | null
+    buyerTaxCode?: string | null
+    buyerAddress?: string | null
+    totalBeforeVat?: number
+    vatAmount?: number
+    totalAmount?: number
+    currency?: string
+    paymentMethod?: string | null
+    xmlContent?: string | null
+    pdfUrl?: string | null
+    providerInvoiceId?: string | null
+    providerResponse?: string | null
+    replacesInvoiceId?: string | null
+    replacedByInvoiceId?: string | null
+    cancelReason?: string | null
+    notes?: string | null
+    branchId?: string | null
+    createdBy?: string | null
+    createdByName?: string | null
     issuedAt?: Date | string | null
+    signedAt?: Date | string | null
+    sentAt?: Date | string | null
     cancelledAt?: Date | string | null
     createdAt?: Date | string
+    updatedAt?: Date | string
+    items?: EInvoiceItemUncheckedCreateNestedManyWithoutEInvoiceInput
   }
 
   export type EInvoiceUpdateInput = {
     id?: StringFieldUpdateOperationsInput | string
-    transactionId?: StringFieldUpdateOperationsInput | string
-    provider?: StringFieldUpdateOperationsInput | string
-    invoiceNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    transactionId?: NullableStringFieldUpdateOperationsInput | string | null
+    provider?: NullableStringFieldUpdateOperationsInput | string | null
     lookupCode?: NullableStringFieldUpdateOperationsInput | string | null
-    pdfUrl?: NullableStringFieldUpdateOperationsInput | string | null
     xmlData?: NullableStringFieldUpdateOperationsInput | string | null
-    status?: StringFieldUpdateOperationsInput | string
     errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceSymbol?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceDate?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceType?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    sellerName?: NullableStringFieldUpdateOperationsInput | string | null
+    sellerTaxCode?: NullableStringFieldUpdateOperationsInput | string | null
+    sellerAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    buyerName?: NullableStringFieldUpdateOperationsInput | string | null
+    buyerTaxCode?: NullableStringFieldUpdateOperationsInput | string | null
+    buyerAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    totalBeforeVat?: FloatFieldUpdateOperationsInput | number
+    vatAmount?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
+    currency?: StringFieldUpdateOperationsInput | string
+    paymentMethod?: NullableStringFieldUpdateOperationsInput | string | null
+    xmlContent?: NullableStringFieldUpdateOperationsInput | string | null
+    pdfUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    providerInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    providerResponse?: NullableStringFieldUpdateOperationsInput | string | null
+    replacesInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    replacedByInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdByName?: NullableStringFieldUpdateOperationsInput | string | null
     issuedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    signedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    sentAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    items?: EInvoiceItemUpdateManyWithoutEInvoiceNestedInput
   }
 
   export type EInvoiceUncheckedUpdateInput = {
     id?: StringFieldUpdateOperationsInput | string
-    transactionId?: StringFieldUpdateOperationsInput | string
-    provider?: StringFieldUpdateOperationsInput | string
-    invoiceNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    transactionId?: NullableStringFieldUpdateOperationsInput | string | null
+    provider?: NullableStringFieldUpdateOperationsInput | string | null
     lookupCode?: NullableStringFieldUpdateOperationsInput | string | null
-    pdfUrl?: NullableStringFieldUpdateOperationsInput | string | null
     xmlData?: NullableStringFieldUpdateOperationsInput | string | null
-    status?: StringFieldUpdateOperationsInput | string
     errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceSymbol?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceDate?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceType?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    sellerName?: NullableStringFieldUpdateOperationsInput | string | null
+    sellerTaxCode?: NullableStringFieldUpdateOperationsInput | string | null
+    sellerAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    buyerName?: NullableStringFieldUpdateOperationsInput | string | null
+    buyerTaxCode?: NullableStringFieldUpdateOperationsInput | string | null
+    buyerAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    totalBeforeVat?: FloatFieldUpdateOperationsInput | number
+    vatAmount?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
+    currency?: StringFieldUpdateOperationsInput | string
+    paymentMethod?: NullableStringFieldUpdateOperationsInput | string | null
+    xmlContent?: NullableStringFieldUpdateOperationsInput | string | null
+    pdfUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    providerInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    providerResponse?: NullableStringFieldUpdateOperationsInput | string | null
+    replacesInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    replacedByInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdByName?: NullableStringFieldUpdateOperationsInput | string | null
     issuedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    signedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    sentAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    items?: EInvoiceItemUncheckedUpdateManyWithoutEInvoiceNestedInput
   }
 
   export type EInvoiceCreateManyInput = {
     id?: string
-    transactionId: string
-    provider: string
-    invoiceNumber?: string | null
+    transactionId?: string | null
+    provider?: string | null
     lookupCode?: string | null
-    pdfUrl?: string | null
     xmlData?: string | null
-    status?: string
     errorMessage?: string | null
+    invoiceNumber?: string | null
+    invoiceSymbol?: string | null
+    invoiceDate?: string | null
+    invoiceType?: string
+    status?: string
+    sellerName?: string | null
+    sellerTaxCode?: string | null
+    sellerAddress?: string | null
+    buyerName?: string | null
+    buyerTaxCode?: string | null
+    buyerAddress?: string | null
+    totalBeforeVat?: number
+    vatAmount?: number
+    totalAmount?: number
+    currency?: string
+    paymentMethod?: string | null
+    xmlContent?: string | null
+    pdfUrl?: string | null
+    providerInvoiceId?: string | null
+    providerResponse?: string | null
+    replacesInvoiceId?: string | null
+    replacedByInvoiceId?: string | null
+    cancelReason?: string | null
+    notes?: string | null
+    branchId?: string | null
+    createdBy?: string | null
+    createdByName?: string | null
     issuedAt?: Date | string | null
+    signedAt?: Date | string | null
+    sentAt?: Date | string | null
     cancelledAt?: Date | string | null
     createdAt?: Date | string
+    updatedAt?: Date | string
   }
 
   export type EInvoiceUpdateManyMutationInput = {
     id?: StringFieldUpdateOperationsInput | string
-    transactionId?: StringFieldUpdateOperationsInput | string
-    provider?: StringFieldUpdateOperationsInput | string
-    invoiceNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    transactionId?: NullableStringFieldUpdateOperationsInput | string | null
+    provider?: NullableStringFieldUpdateOperationsInput | string | null
     lookupCode?: NullableStringFieldUpdateOperationsInput | string | null
-    pdfUrl?: NullableStringFieldUpdateOperationsInput | string | null
     xmlData?: NullableStringFieldUpdateOperationsInput | string | null
-    status?: StringFieldUpdateOperationsInput | string
     errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceSymbol?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceDate?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceType?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    sellerName?: NullableStringFieldUpdateOperationsInput | string | null
+    sellerTaxCode?: NullableStringFieldUpdateOperationsInput | string | null
+    sellerAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    buyerName?: NullableStringFieldUpdateOperationsInput | string | null
+    buyerTaxCode?: NullableStringFieldUpdateOperationsInput | string | null
+    buyerAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    totalBeforeVat?: FloatFieldUpdateOperationsInput | number
+    vatAmount?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
+    currency?: StringFieldUpdateOperationsInput | string
+    paymentMethod?: NullableStringFieldUpdateOperationsInput | string | null
+    xmlContent?: NullableStringFieldUpdateOperationsInput | string | null
+    pdfUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    providerInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    providerResponse?: NullableStringFieldUpdateOperationsInput | string | null
+    replacesInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    replacedByInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdByName?: NullableStringFieldUpdateOperationsInput | string | null
     issuedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    signedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    sentAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type EInvoiceUncheckedUpdateManyInput = {
     id?: StringFieldUpdateOperationsInput | string
-    transactionId?: StringFieldUpdateOperationsInput | string
-    provider?: StringFieldUpdateOperationsInput | string
-    invoiceNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    transactionId?: NullableStringFieldUpdateOperationsInput | string | null
+    provider?: NullableStringFieldUpdateOperationsInput | string | null
     lookupCode?: NullableStringFieldUpdateOperationsInput | string | null
-    pdfUrl?: NullableStringFieldUpdateOperationsInput | string | null
     xmlData?: NullableStringFieldUpdateOperationsInput | string | null
-    status?: StringFieldUpdateOperationsInput | string
     errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceSymbol?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceDate?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceType?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    sellerName?: NullableStringFieldUpdateOperationsInput | string | null
+    sellerTaxCode?: NullableStringFieldUpdateOperationsInput | string | null
+    sellerAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    buyerName?: NullableStringFieldUpdateOperationsInput | string | null
+    buyerTaxCode?: NullableStringFieldUpdateOperationsInput | string | null
+    buyerAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    totalBeforeVat?: FloatFieldUpdateOperationsInput | number
+    vatAmount?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
+    currency?: StringFieldUpdateOperationsInput | string
+    paymentMethod?: NullableStringFieldUpdateOperationsInput | string | null
+    xmlContent?: NullableStringFieldUpdateOperationsInput | string | null
+    pdfUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    providerInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    providerResponse?: NullableStringFieldUpdateOperationsInput | string | null
+    replacesInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    replacedByInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdByName?: NullableStringFieldUpdateOperationsInput | string | null
     issuedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    signedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    sentAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type EInvoiceItemCreateInput = {
+    id?: string
+    itemNumber?: number
+    itemName: string
+    unitName?: string | null
+    quantity?: number
+    unitPrice?: number
+    vatRate?: number
+    vatAmount?: number
+    amount?: number
+    notes?: string | null
+    eInvoice: EInvoiceCreateNestedOneWithoutItemsInput
+  }
+
+  export type EInvoiceItemUncheckedCreateInput = {
+    id?: string
+    eInvoiceId: string
+    itemNumber?: number
+    itemName: string
+    unitName?: string | null
+    quantity?: number
+    unitPrice?: number
+    vatRate?: number
+    vatAmount?: number
+    amount?: number
+    notes?: string | null
+  }
+
+  export type EInvoiceItemUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    itemNumber?: IntFieldUpdateOperationsInput | number
+    itemName?: StringFieldUpdateOperationsInput | string
+    unitName?: NullableStringFieldUpdateOperationsInput | string | null
+    quantity?: FloatFieldUpdateOperationsInput | number
+    unitPrice?: FloatFieldUpdateOperationsInput | number
+    vatRate?: FloatFieldUpdateOperationsInput | number
+    vatAmount?: FloatFieldUpdateOperationsInput | number
+    amount?: FloatFieldUpdateOperationsInput | number
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    eInvoice?: EInvoiceUpdateOneRequiredWithoutItemsNestedInput
+  }
+
+  export type EInvoiceItemUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    eInvoiceId?: StringFieldUpdateOperationsInput | string
+    itemNumber?: IntFieldUpdateOperationsInput | number
+    itemName?: StringFieldUpdateOperationsInput | string
+    unitName?: NullableStringFieldUpdateOperationsInput | string | null
+    quantity?: FloatFieldUpdateOperationsInput | number
+    unitPrice?: FloatFieldUpdateOperationsInput | number
+    vatRate?: FloatFieldUpdateOperationsInput | number
+    vatAmount?: FloatFieldUpdateOperationsInput | number
+    amount?: FloatFieldUpdateOperationsInput | number
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type EInvoiceItemCreateManyInput = {
+    id?: string
+    eInvoiceId: string
+    itemNumber?: number
+    itemName: string
+    unitName?: string | null
+    quantity?: number
+    unitPrice?: number
+    vatRate?: number
+    vatAmount?: number
+    amount?: number
+    notes?: string | null
+  }
+
+  export type EInvoiceItemUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    itemNumber?: IntFieldUpdateOperationsInput | number
+    itemName?: StringFieldUpdateOperationsInput | string
+    unitName?: NullableStringFieldUpdateOperationsInput | string | null
+    quantity?: FloatFieldUpdateOperationsInput | number
+    unitPrice?: FloatFieldUpdateOperationsInput | number
+    vatRate?: FloatFieldUpdateOperationsInput | number
+    vatAmount?: FloatFieldUpdateOperationsInput | number
+    amount?: FloatFieldUpdateOperationsInput | number
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type EInvoiceItemUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    eInvoiceId?: StringFieldUpdateOperationsInput | string
+    itemNumber?: IntFieldUpdateOperationsInput | number
+    itemName?: StringFieldUpdateOperationsInput | string
+    unitName?: NullableStringFieldUpdateOperationsInput | string | null
+    quantity?: FloatFieldUpdateOperationsInput | number
+    unitPrice?: FloatFieldUpdateOperationsInput | number
+    vatRate?: FloatFieldUpdateOperationsInput | number
+    vatAmount?: FloatFieldUpdateOperationsInput | number
+    amount?: FloatFieldUpdateOperationsInput | number
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
   }
 
   export type AdjustmentInvoiceCreateInput = {
@@ -145174,6 +147723,14 @@ export namespace Prisma {
     serialNo?: SortOrder
     active?: SortOrder
     extra?: SortOrder
+    apiUsername?: SortOrder
+    apiPassword?: SortOrder
+    companyName?: SortOrder
+    companyAddress?: SortOrder
+    invoicePattern?: SortOrder
+    invoiceSerial?: SortOrder
+    certificateSerial?: SortOrder
+    isActive?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -145189,6 +147746,14 @@ export namespace Prisma {
     serialNo?: SortOrder
     active?: SortOrder
     extra?: SortOrder
+    apiUsername?: SortOrder
+    apiPassword?: SortOrder
+    companyName?: SortOrder
+    companyAddress?: SortOrder
+    invoicePattern?: SortOrder
+    invoiceSerial?: SortOrder
+    certificateSerial?: SortOrder
+    isActive?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -145204,53 +147769,229 @@ export namespace Prisma {
     serialNo?: SortOrder
     active?: SortOrder
     extra?: SortOrder
+    apiUsername?: SortOrder
+    apiPassword?: SortOrder
+    companyName?: SortOrder
+    companyAddress?: SortOrder
+    invoicePattern?: SortOrder
+    invoiceSerial?: SortOrder
+    certificateSerial?: SortOrder
+    isActive?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
+  }
+
+  export type EInvoiceItemListRelationFilter = {
+    every?: EInvoiceItemWhereInput
+    some?: EInvoiceItemWhereInput
+    none?: EInvoiceItemWhereInput
+  }
+
+  export type EInvoiceItemOrderByRelationAggregateInput = {
+    _count?: SortOrder
   }
 
   export type EInvoiceCountOrderByAggregateInput = {
     id?: SortOrder
     transactionId?: SortOrder
     provider?: SortOrder
-    invoiceNumber?: SortOrder
     lookupCode?: SortOrder
-    pdfUrl?: SortOrder
     xmlData?: SortOrder
-    status?: SortOrder
     errorMessage?: SortOrder
+    invoiceNumber?: SortOrder
+    invoiceSymbol?: SortOrder
+    invoiceDate?: SortOrder
+    invoiceType?: SortOrder
+    status?: SortOrder
+    sellerName?: SortOrder
+    sellerTaxCode?: SortOrder
+    sellerAddress?: SortOrder
+    buyerName?: SortOrder
+    buyerTaxCode?: SortOrder
+    buyerAddress?: SortOrder
+    totalBeforeVat?: SortOrder
+    vatAmount?: SortOrder
+    totalAmount?: SortOrder
+    currency?: SortOrder
+    paymentMethod?: SortOrder
+    xmlContent?: SortOrder
+    pdfUrl?: SortOrder
+    providerInvoiceId?: SortOrder
+    providerResponse?: SortOrder
+    replacesInvoiceId?: SortOrder
+    replacedByInvoiceId?: SortOrder
+    cancelReason?: SortOrder
+    notes?: SortOrder
+    branchId?: SortOrder
+    createdBy?: SortOrder
+    createdByName?: SortOrder
     issuedAt?: SortOrder
+    signedAt?: SortOrder
+    sentAt?: SortOrder
     cancelledAt?: SortOrder
     createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type EInvoiceAvgOrderByAggregateInput = {
+    totalBeforeVat?: SortOrder
+    vatAmount?: SortOrder
+    totalAmount?: SortOrder
   }
 
   export type EInvoiceMaxOrderByAggregateInput = {
     id?: SortOrder
     transactionId?: SortOrder
     provider?: SortOrder
-    invoiceNumber?: SortOrder
     lookupCode?: SortOrder
-    pdfUrl?: SortOrder
     xmlData?: SortOrder
-    status?: SortOrder
     errorMessage?: SortOrder
+    invoiceNumber?: SortOrder
+    invoiceSymbol?: SortOrder
+    invoiceDate?: SortOrder
+    invoiceType?: SortOrder
+    status?: SortOrder
+    sellerName?: SortOrder
+    sellerTaxCode?: SortOrder
+    sellerAddress?: SortOrder
+    buyerName?: SortOrder
+    buyerTaxCode?: SortOrder
+    buyerAddress?: SortOrder
+    totalBeforeVat?: SortOrder
+    vatAmount?: SortOrder
+    totalAmount?: SortOrder
+    currency?: SortOrder
+    paymentMethod?: SortOrder
+    xmlContent?: SortOrder
+    pdfUrl?: SortOrder
+    providerInvoiceId?: SortOrder
+    providerResponse?: SortOrder
+    replacesInvoiceId?: SortOrder
+    replacedByInvoiceId?: SortOrder
+    cancelReason?: SortOrder
+    notes?: SortOrder
+    branchId?: SortOrder
+    createdBy?: SortOrder
+    createdByName?: SortOrder
     issuedAt?: SortOrder
+    signedAt?: SortOrder
+    sentAt?: SortOrder
     cancelledAt?: SortOrder
     createdAt?: SortOrder
+    updatedAt?: SortOrder
   }
 
   export type EInvoiceMinOrderByAggregateInput = {
     id?: SortOrder
     transactionId?: SortOrder
     provider?: SortOrder
-    invoiceNumber?: SortOrder
     lookupCode?: SortOrder
-    pdfUrl?: SortOrder
     xmlData?: SortOrder
-    status?: SortOrder
     errorMessage?: SortOrder
+    invoiceNumber?: SortOrder
+    invoiceSymbol?: SortOrder
+    invoiceDate?: SortOrder
+    invoiceType?: SortOrder
+    status?: SortOrder
+    sellerName?: SortOrder
+    sellerTaxCode?: SortOrder
+    sellerAddress?: SortOrder
+    buyerName?: SortOrder
+    buyerTaxCode?: SortOrder
+    buyerAddress?: SortOrder
+    totalBeforeVat?: SortOrder
+    vatAmount?: SortOrder
+    totalAmount?: SortOrder
+    currency?: SortOrder
+    paymentMethod?: SortOrder
+    xmlContent?: SortOrder
+    pdfUrl?: SortOrder
+    providerInvoiceId?: SortOrder
+    providerResponse?: SortOrder
+    replacesInvoiceId?: SortOrder
+    replacedByInvoiceId?: SortOrder
+    cancelReason?: SortOrder
+    notes?: SortOrder
+    branchId?: SortOrder
+    createdBy?: SortOrder
+    createdByName?: SortOrder
     issuedAt?: SortOrder
+    signedAt?: SortOrder
+    sentAt?: SortOrder
     cancelledAt?: SortOrder
     createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type EInvoiceSumOrderByAggregateInput = {
+    totalBeforeVat?: SortOrder
+    vatAmount?: SortOrder
+    totalAmount?: SortOrder
+  }
+
+  export type EInvoiceScalarRelationFilter = {
+    is?: EInvoiceWhereInput
+    isNot?: EInvoiceWhereInput
+  }
+
+  export type EInvoiceItemCountOrderByAggregateInput = {
+    id?: SortOrder
+    eInvoiceId?: SortOrder
+    itemNumber?: SortOrder
+    itemName?: SortOrder
+    unitName?: SortOrder
+    quantity?: SortOrder
+    unitPrice?: SortOrder
+    vatRate?: SortOrder
+    vatAmount?: SortOrder
+    amount?: SortOrder
+    notes?: SortOrder
+  }
+
+  export type EInvoiceItemAvgOrderByAggregateInput = {
+    itemNumber?: SortOrder
+    quantity?: SortOrder
+    unitPrice?: SortOrder
+    vatRate?: SortOrder
+    vatAmount?: SortOrder
+    amount?: SortOrder
+  }
+
+  export type EInvoiceItemMaxOrderByAggregateInput = {
+    id?: SortOrder
+    eInvoiceId?: SortOrder
+    itemNumber?: SortOrder
+    itemName?: SortOrder
+    unitName?: SortOrder
+    quantity?: SortOrder
+    unitPrice?: SortOrder
+    vatRate?: SortOrder
+    vatAmount?: SortOrder
+    amount?: SortOrder
+    notes?: SortOrder
+  }
+
+  export type EInvoiceItemMinOrderByAggregateInput = {
+    id?: SortOrder
+    eInvoiceId?: SortOrder
+    itemNumber?: SortOrder
+    itemName?: SortOrder
+    unitName?: SortOrder
+    quantity?: SortOrder
+    unitPrice?: SortOrder
+    vatRate?: SortOrder
+    vatAmount?: SortOrder
+    amount?: SortOrder
+    notes?: SortOrder
+  }
+
+  export type EInvoiceItemSumOrderByAggregateInput = {
+    itemNumber?: SortOrder
+    quantity?: SortOrder
+    unitPrice?: SortOrder
+    vatRate?: SortOrder
+    vatAmount?: SortOrder
+    amount?: SortOrder
   }
 
   export type AdjustmentInvoiceItemListRelationFilter = {
@@ -148872,6 +151613,62 @@ export namespace Prisma {
     delete?: ProductWhereInput | boolean
     connect?: ProductWhereUniqueInput
     update?: XOR<XOR<ProductUpdateToOneWithWhereWithoutOnlineOrderItemsInput, ProductUpdateWithoutOnlineOrderItemsInput>, ProductUncheckedUpdateWithoutOnlineOrderItemsInput>
+  }
+
+  export type EInvoiceItemCreateNestedManyWithoutEInvoiceInput = {
+    create?: XOR<EInvoiceItemCreateWithoutEInvoiceInput, EInvoiceItemUncheckedCreateWithoutEInvoiceInput> | EInvoiceItemCreateWithoutEInvoiceInput[] | EInvoiceItemUncheckedCreateWithoutEInvoiceInput[]
+    connectOrCreate?: EInvoiceItemCreateOrConnectWithoutEInvoiceInput | EInvoiceItemCreateOrConnectWithoutEInvoiceInput[]
+    createMany?: EInvoiceItemCreateManyEInvoiceInputEnvelope
+    connect?: EInvoiceItemWhereUniqueInput | EInvoiceItemWhereUniqueInput[]
+  }
+
+  export type EInvoiceItemUncheckedCreateNestedManyWithoutEInvoiceInput = {
+    create?: XOR<EInvoiceItemCreateWithoutEInvoiceInput, EInvoiceItemUncheckedCreateWithoutEInvoiceInput> | EInvoiceItemCreateWithoutEInvoiceInput[] | EInvoiceItemUncheckedCreateWithoutEInvoiceInput[]
+    connectOrCreate?: EInvoiceItemCreateOrConnectWithoutEInvoiceInput | EInvoiceItemCreateOrConnectWithoutEInvoiceInput[]
+    createMany?: EInvoiceItemCreateManyEInvoiceInputEnvelope
+    connect?: EInvoiceItemWhereUniqueInput | EInvoiceItemWhereUniqueInput[]
+  }
+
+  export type EInvoiceItemUpdateManyWithoutEInvoiceNestedInput = {
+    create?: XOR<EInvoiceItemCreateWithoutEInvoiceInput, EInvoiceItemUncheckedCreateWithoutEInvoiceInput> | EInvoiceItemCreateWithoutEInvoiceInput[] | EInvoiceItemUncheckedCreateWithoutEInvoiceInput[]
+    connectOrCreate?: EInvoiceItemCreateOrConnectWithoutEInvoiceInput | EInvoiceItemCreateOrConnectWithoutEInvoiceInput[]
+    upsert?: EInvoiceItemUpsertWithWhereUniqueWithoutEInvoiceInput | EInvoiceItemUpsertWithWhereUniqueWithoutEInvoiceInput[]
+    createMany?: EInvoiceItemCreateManyEInvoiceInputEnvelope
+    set?: EInvoiceItemWhereUniqueInput | EInvoiceItemWhereUniqueInput[]
+    disconnect?: EInvoiceItemWhereUniqueInput | EInvoiceItemWhereUniqueInput[]
+    delete?: EInvoiceItemWhereUniqueInput | EInvoiceItemWhereUniqueInput[]
+    connect?: EInvoiceItemWhereUniqueInput | EInvoiceItemWhereUniqueInput[]
+    update?: EInvoiceItemUpdateWithWhereUniqueWithoutEInvoiceInput | EInvoiceItemUpdateWithWhereUniqueWithoutEInvoiceInput[]
+    updateMany?: EInvoiceItemUpdateManyWithWhereWithoutEInvoiceInput | EInvoiceItemUpdateManyWithWhereWithoutEInvoiceInput[]
+    deleteMany?: EInvoiceItemScalarWhereInput | EInvoiceItemScalarWhereInput[]
+  }
+
+  export type EInvoiceItemUncheckedUpdateManyWithoutEInvoiceNestedInput = {
+    create?: XOR<EInvoiceItemCreateWithoutEInvoiceInput, EInvoiceItemUncheckedCreateWithoutEInvoiceInput> | EInvoiceItemCreateWithoutEInvoiceInput[] | EInvoiceItemUncheckedCreateWithoutEInvoiceInput[]
+    connectOrCreate?: EInvoiceItemCreateOrConnectWithoutEInvoiceInput | EInvoiceItemCreateOrConnectWithoutEInvoiceInput[]
+    upsert?: EInvoiceItemUpsertWithWhereUniqueWithoutEInvoiceInput | EInvoiceItemUpsertWithWhereUniqueWithoutEInvoiceInput[]
+    createMany?: EInvoiceItemCreateManyEInvoiceInputEnvelope
+    set?: EInvoiceItemWhereUniqueInput | EInvoiceItemWhereUniqueInput[]
+    disconnect?: EInvoiceItemWhereUniqueInput | EInvoiceItemWhereUniqueInput[]
+    delete?: EInvoiceItemWhereUniqueInput | EInvoiceItemWhereUniqueInput[]
+    connect?: EInvoiceItemWhereUniqueInput | EInvoiceItemWhereUniqueInput[]
+    update?: EInvoiceItemUpdateWithWhereUniqueWithoutEInvoiceInput | EInvoiceItemUpdateWithWhereUniqueWithoutEInvoiceInput[]
+    updateMany?: EInvoiceItemUpdateManyWithWhereWithoutEInvoiceInput | EInvoiceItemUpdateManyWithWhereWithoutEInvoiceInput[]
+    deleteMany?: EInvoiceItemScalarWhereInput | EInvoiceItemScalarWhereInput[]
+  }
+
+  export type EInvoiceCreateNestedOneWithoutItemsInput = {
+    create?: XOR<EInvoiceCreateWithoutItemsInput, EInvoiceUncheckedCreateWithoutItemsInput>
+    connectOrCreate?: EInvoiceCreateOrConnectWithoutItemsInput
+    connect?: EInvoiceWhereUniqueInput
+  }
+
+  export type EInvoiceUpdateOneRequiredWithoutItemsNestedInput = {
+    create?: XOR<EInvoiceCreateWithoutItemsInput, EInvoiceUncheckedCreateWithoutItemsInput>
+    connectOrCreate?: EInvoiceCreateOrConnectWithoutItemsInput
+    upsert?: EInvoiceUpsertWithoutItemsInput
+    connect?: EInvoiceWhereUniqueInput
+    update?: XOR<XOR<EInvoiceUpdateToOneWithWhereWithoutItemsInput, EInvoiceUpdateWithoutItemsInput>, EInvoiceUncheckedUpdateWithoutItemsInput>
   }
 
   export type AdjustmentInvoiceItemCreateNestedManyWithoutAdjustmentInput = {
@@ -156803,6 +159600,259 @@ export namespace Prisma {
     onlineProducts?: OnlineProductUncheckedUpdateManyWithoutLocalProductNestedInput
   }
 
+  export type EInvoiceItemCreateWithoutEInvoiceInput = {
+    id?: string
+    itemNumber?: number
+    itemName: string
+    unitName?: string | null
+    quantity?: number
+    unitPrice?: number
+    vatRate?: number
+    vatAmount?: number
+    amount?: number
+    notes?: string | null
+  }
+
+  export type EInvoiceItemUncheckedCreateWithoutEInvoiceInput = {
+    id?: string
+    itemNumber?: number
+    itemName: string
+    unitName?: string | null
+    quantity?: number
+    unitPrice?: number
+    vatRate?: number
+    vatAmount?: number
+    amount?: number
+    notes?: string | null
+  }
+
+  export type EInvoiceItemCreateOrConnectWithoutEInvoiceInput = {
+    where: EInvoiceItemWhereUniqueInput
+    create: XOR<EInvoiceItemCreateWithoutEInvoiceInput, EInvoiceItemUncheckedCreateWithoutEInvoiceInput>
+  }
+
+  export type EInvoiceItemCreateManyEInvoiceInputEnvelope = {
+    data: EInvoiceItemCreateManyEInvoiceInput | EInvoiceItemCreateManyEInvoiceInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type EInvoiceItemUpsertWithWhereUniqueWithoutEInvoiceInput = {
+    where: EInvoiceItemWhereUniqueInput
+    update: XOR<EInvoiceItemUpdateWithoutEInvoiceInput, EInvoiceItemUncheckedUpdateWithoutEInvoiceInput>
+    create: XOR<EInvoiceItemCreateWithoutEInvoiceInput, EInvoiceItemUncheckedCreateWithoutEInvoiceInput>
+  }
+
+  export type EInvoiceItemUpdateWithWhereUniqueWithoutEInvoiceInput = {
+    where: EInvoiceItemWhereUniqueInput
+    data: XOR<EInvoiceItemUpdateWithoutEInvoiceInput, EInvoiceItemUncheckedUpdateWithoutEInvoiceInput>
+  }
+
+  export type EInvoiceItemUpdateManyWithWhereWithoutEInvoiceInput = {
+    where: EInvoiceItemScalarWhereInput
+    data: XOR<EInvoiceItemUpdateManyMutationInput, EInvoiceItemUncheckedUpdateManyWithoutEInvoiceInput>
+  }
+
+  export type EInvoiceItemScalarWhereInput = {
+    AND?: EInvoiceItemScalarWhereInput | EInvoiceItemScalarWhereInput[]
+    OR?: EInvoiceItemScalarWhereInput[]
+    NOT?: EInvoiceItemScalarWhereInput | EInvoiceItemScalarWhereInput[]
+    id?: StringFilter<"EInvoiceItem"> | string
+    eInvoiceId?: StringFilter<"EInvoiceItem"> | string
+    itemNumber?: IntFilter<"EInvoiceItem"> | number
+    itemName?: StringFilter<"EInvoiceItem"> | string
+    unitName?: StringNullableFilter<"EInvoiceItem"> | string | null
+    quantity?: FloatFilter<"EInvoiceItem"> | number
+    unitPrice?: FloatFilter<"EInvoiceItem"> | number
+    vatRate?: FloatFilter<"EInvoiceItem"> | number
+    vatAmount?: FloatFilter<"EInvoiceItem"> | number
+    amount?: FloatFilter<"EInvoiceItem"> | number
+    notes?: StringNullableFilter<"EInvoiceItem"> | string | null
+  }
+
+  export type EInvoiceCreateWithoutItemsInput = {
+    id?: string
+    transactionId?: string | null
+    provider?: string | null
+    lookupCode?: string | null
+    xmlData?: string | null
+    errorMessage?: string | null
+    invoiceNumber?: string | null
+    invoiceSymbol?: string | null
+    invoiceDate?: string | null
+    invoiceType?: string
+    status?: string
+    sellerName?: string | null
+    sellerTaxCode?: string | null
+    sellerAddress?: string | null
+    buyerName?: string | null
+    buyerTaxCode?: string | null
+    buyerAddress?: string | null
+    totalBeforeVat?: number
+    vatAmount?: number
+    totalAmount?: number
+    currency?: string
+    paymentMethod?: string | null
+    xmlContent?: string | null
+    pdfUrl?: string | null
+    providerInvoiceId?: string | null
+    providerResponse?: string | null
+    replacesInvoiceId?: string | null
+    replacedByInvoiceId?: string | null
+    cancelReason?: string | null
+    notes?: string | null
+    branchId?: string | null
+    createdBy?: string | null
+    createdByName?: string | null
+    issuedAt?: Date | string | null
+    signedAt?: Date | string | null
+    sentAt?: Date | string | null
+    cancelledAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type EInvoiceUncheckedCreateWithoutItemsInput = {
+    id?: string
+    transactionId?: string | null
+    provider?: string | null
+    lookupCode?: string | null
+    xmlData?: string | null
+    errorMessage?: string | null
+    invoiceNumber?: string | null
+    invoiceSymbol?: string | null
+    invoiceDate?: string | null
+    invoiceType?: string
+    status?: string
+    sellerName?: string | null
+    sellerTaxCode?: string | null
+    sellerAddress?: string | null
+    buyerName?: string | null
+    buyerTaxCode?: string | null
+    buyerAddress?: string | null
+    totalBeforeVat?: number
+    vatAmount?: number
+    totalAmount?: number
+    currency?: string
+    paymentMethod?: string | null
+    xmlContent?: string | null
+    pdfUrl?: string | null
+    providerInvoiceId?: string | null
+    providerResponse?: string | null
+    replacesInvoiceId?: string | null
+    replacedByInvoiceId?: string | null
+    cancelReason?: string | null
+    notes?: string | null
+    branchId?: string | null
+    createdBy?: string | null
+    createdByName?: string | null
+    issuedAt?: Date | string | null
+    signedAt?: Date | string | null
+    sentAt?: Date | string | null
+    cancelledAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type EInvoiceCreateOrConnectWithoutItemsInput = {
+    where: EInvoiceWhereUniqueInput
+    create: XOR<EInvoiceCreateWithoutItemsInput, EInvoiceUncheckedCreateWithoutItemsInput>
+  }
+
+  export type EInvoiceUpsertWithoutItemsInput = {
+    update: XOR<EInvoiceUpdateWithoutItemsInput, EInvoiceUncheckedUpdateWithoutItemsInput>
+    create: XOR<EInvoiceCreateWithoutItemsInput, EInvoiceUncheckedCreateWithoutItemsInput>
+    where?: EInvoiceWhereInput
+  }
+
+  export type EInvoiceUpdateToOneWithWhereWithoutItemsInput = {
+    where?: EInvoiceWhereInput
+    data: XOR<EInvoiceUpdateWithoutItemsInput, EInvoiceUncheckedUpdateWithoutItemsInput>
+  }
+
+  export type EInvoiceUpdateWithoutItemsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    transactionId?: NullableStringFieldUpdateOperationsInput | string | null
+    provider?: NullableStringFieldUpdateOperationsInput | string | null
+    lookupCode?: NullableStringFieldUpdateOperationsInput | string | null
+    xmlData?: NullableStringFieldUpdateOperationsInput | string | null
+    errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceSymbol?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceDate?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceType?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    sellerName?: NullableStringFieldUpdateOperationsInput | string | null
+    sellerTaxCode?: NullableStringFieldUpdateOperationsInput | string | null
+    sellerAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    buyerName?: NullableStringFieldUpdateOperationsInput | string | null
+    buyerTaxCode?: NullableStringFieldUpdateOperationsInput | string | null
+    buyerAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    totalBeforeVat?: FloatFieldUpdateOperationsInput | number
+    vatAmount?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
+    currency?: StringFieldUpdateOperationsInput | string
+    paymentMethod?: NullableStringFieldUpdateOperationsInput | string | null
+    xmlContent?: NullableStringFieldUpdateOperationsInput | string | null
+    pdfUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    providerInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    providerResponse?: NullableStringFieldUpdateOperationsInput | string | null
+    replacesInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    replacedByInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdByName?: NullableStringFieldUpdateOperationsInput | string | null
+    issuedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    signedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    sentAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type EInvoiceUncheckedUpdateWithoutItemsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    transactionId?: NullableStringFieldUpdateOperationsInput | string | null
+    provider?: NullableStringFieldUpdateOperationsInput | string | null
+    lookupCode?: NullableStringFieldUpdateOperationsInput | string | null
+    xmlData?: NullableStringFieldUpdateOperationsInput | string | null
+    errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceSymbol?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceDate?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceType?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    sellerName?: NullableStringFieldUpdateOperationsInput | string | null
+    sellerTaxCode?: NullableStringFieldUpdateOperationsInput | string | null
+    sellerAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    buyerName?: NullableStringFieldUpdateOperationsInput | string | null
+    buyerTaxCode?: NullableStringFieldUpdateOperationsInput | string | null
+    buyerAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    totalBeforeVat?: FloatFieldUpdateOperationsInput | number
+    vatAmount?: FloatFieldUpdateOperationsInput | number
+    totalAmount?: FloatFieldUpdateOperationsInput | number
+    currency?: StringFieldUpdateOperationsInput | string
+    paymentMethod?: NullableStringFieldUpdateOperationsInput | string | null
+    xmlContent?: NullableStringFieldUpdateOperationsInput | string | null
+    pdfUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    providerInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    providerResponse?: NullableStringFieldUpdateOperationsInput | string | null
+    replacesInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    replacedByInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdByName?: NullableStringFieldUpdateOperationsInput | string | null
+    issuedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    signedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    sentAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type AdjustmentInvoiceItemCreateWithoutAdjustmentInput = {
     id?: string
     productName: string
@@ -161013,6 +164063,58 @@ export namespace Prisma {
     unitPrice?: FloatFieldUpdateOperationsInput | number
     discount?: FloatFieldUpdateOperationsInput | number
     lineTotal?: FloatFieldUpdateOperationsInput | number
+  }
+
+  export type EInvoiceItemCreateManyEInvoiceInput = {
+    id?: string
+    itemNumber?: number
+    itemName: string
+    unitName?: string | null
+    quantity?: number
+    unitPrice?: number
+    vatRate?: number
+    vatAmount?: number
+    amount?: number
+    notes?: string | null
+  }
+
+  export type EInvoiceItemUpdateWithoutEInvoiceInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    itemNumber?: IntFieldUpdateOperationsInput | number
+    itemName?: StringFieldUpdateOperationsInput | string
+    unitName?: NullableStringFieldUpdateOperationsInput | string | null
+    quantity?: FloatFieldUpdateOperationsInput | number
+    unitPrice?: FloatFieldUpdateOperationsInput | number
+    vatRate?: FloatFieldUpdateOperationsInput | number
+    vatAmount?: FloatFieldUpdateOperationsInput | number
+    amount?: FloatFieldUpdateOperationsInput | number
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type EInvoiceItemUncheckedUpdateWithoutEInvoiceInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    itemNumber?: IntFieldUpdateOperationsInput | number
+    itemName?: StringFieldUpdateOperationsInput | string
+    unitName?: NullableStringFieldUpdateOperationsInput | string | null
+    quantity?: FloatFieldUpdateOperationsInput | number
+    unitPrice?: FloatFieldUpdateOperationsInput | number
+    vatRate?: FloatFieldUpdateOperationsInput | number
+    vatAmount?: FloatFieldUpdateOperationsInput | number
+    amount?: FloatFieldUpdateOperationsInput | number
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type EInvoiceItemUncheckedUpdateManyWithoutEInvoiceInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    itemNumber?: IntFieldUpdateOperationsInput | number
+    itemName?: StringFieldUpdateOperationsInput | string
+    unitName?: NullableStringFieldUpdateOperationsInput | string | null
+    quantity?: FloatFieldUpdateOperationsInput | number
+    unitPrice?: FloatFieldUpdateOperationsInput | number
+    vatRate?: FloatFieldUpdateOperationsInput | number
+    vatAmount?: FloatFieldUpdateOperationsInput | number
+    amount?: FloatFieldUpdateOperationsInput | number
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
   }
 
   export type AdjustmentInvoiceItemCreateManyAdjustmentInput = {
