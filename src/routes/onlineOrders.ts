@@ -1152,7 +1152,7 @@ router.get('/channels/:id/auth-url', authMiddleware, async (req: AuthRequest, re
         if (!service) { res.status(400).json({ success: false, error: 'Nền tảng chưa được hỗ trợ' }); return }
 
         const baseUrl = process.env.APP_BASE_URL || `${req.protocol}://${req.get('host')}`
-        const redirectUri = `${baseUrl}/api/online-orders/channels/${channel.id}/callback`
+        const redirectUri = `${baseUrl}/api/online-orders/tiktok/callback`
         const state = Buffer.from(JSON.stringify({ channelId: channel.id })).toString('base64')
         const authUrl = service.generateAuthUrl(redirectUri, state)
 
@@ -1160,6 +1160,33 @@ router.get('/channels/:id/auth-url', authMiddleware, async (req: AuthRequest, re
     } catch (err: any) {
         console.error('Generate auth URL error:', err)
         res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// GET /api/online-orders/tiktok/callback — generic TikTok OAuth callback
+// TikTok redirects here with ?code=...&state=... (state = base64 JSON {channelId})
+router.get('/tiktok/callback', async (req: AuthRequest, res: Response) => {
+    try {
+        const { code, state, shop_id } = req.query
+        if (!code || !state) { res.status(400).send('Missing code or state'); return }
+
+        // Decode state to get channelId
+        let channelId: string
+        try {
+            const decoded = JSON.parse(Buffer.from(state as string, 'base64').toString())
+            channelId = decoded.channelId
+        } catch {
+            res.status(400).send('Invalid state parameter')
+            return
+        }
+
+        // Redirect to frontend with OAuth code
+        const frontendUrl = process.env.FRONTEND_URL || 'https://kengi.vn'
+        const redirectUrl = `${frontendUrl}/dashboard-online-orders?oauth_code=${encodeURIComponent(code as string)}&channel_id=${encodeURIComponent(channelId)}${shop_id ? '&shop_id=' + encodeURIComponent(shop_id as string) : ''}`
+        res.redirect(redirectUrl)
+    } catch (err: any) {
+        console.error('TikTok OAuth callback error:', err)
+        res.status(500).send('Lỗi kết nối: ' + err.message)
     }
 })
 
