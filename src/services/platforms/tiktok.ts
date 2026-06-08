@@ -57,9 +57,16 @@ export class TikTokService extends PlatformService {
     }
 
     generateAuthUrl(redirectUri: string, state: string): string {
+        // TikTok must be told where to send the auth code, otherwise it falls back to
+        // the static "callback URL" registered in Partner Center and our per-channel
+        // /callback endpoint is never hit (so exchangeToken never runs, token never
+        // saved). Pass redirect_uri exactly like Shopee/Lazada do.
+        // NOTE: this exact URL must be whitelisted under the app's callback URLs in
+        // TikTok Shop Partner Center, or TikTok will reject the authorization.
         const params = new URLSearchParams({
             app_key: this.credentials.apiKey,
             state,
+            redirect_uri: redirectUri,
         })
         return `${TIKTOK_AUTH}/oauth/authorize?${params}`
     }
