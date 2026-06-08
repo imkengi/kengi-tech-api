@@ -64,15 +64,32 @@ export class TikTokService extends PlatformService {
         return `${TIKTOK_AUTH}/oauth/authorize?${params}`
     }
 
+    /**
+     * TikTok Shop returns `access_token_expire_in` as an ABSOLUTE Unix timestamp
+     * (e.g. 1718841600), not a relative TTL. Convert it to seconds-from-now so the
+     * caller's `new Date(Date.now() + expiresIn*1000)` produces a correct expiry.
+     * Falls back to a 24h TTL if the field is missing or already looks relative.
+     */
+    private toRelativeExpiry(rawExpire: any): number {
+        const now = Math.floor(Date.now() / 1000)
+        const raw = Number(rawExpire) || 0
+        if (raw > now) return raw - now      // absolute epoch → relative seconds
+        if (raw > 0) return raw              // already a relative TTL
+        return 86400
+    }
+
     async exchangeToken(code: string, redirectUri: string): Promise<TokenResponse> {
-        const url = `${TIKTOK_AUTH}/api/v2/token/get`
-        const body = {
+        // TikTok Shop's /api/v2/token/get is a GET with QUERY params (not a POST
+        // body). Sending a JSON body makes TikTok reject the request, which is why
+        // the token was never obtained/saved after authorization.
+        const params = new URLSearchParams({
             app_key: this.credentials.apiKey,
             app_secret: this.credentials.apiSecret,
             auth_code: code,
             grant_type: 'authorized_code',
-        }
-        const data = await this.httpPost(url, body)
+        })
+        const url = `${TIKTOK_AUTH}/api/v2/token/get?${params}`
+        const data = await this.httpGet(url)
 
         if (data.code !== 0) throw new Error(`TikTok auth error: ${data.message || data.code}`)
 
@@ -80,20 +97,23 @@ export class TikTokService extends PlatformService {
         return {
             accessToken: tokenData.access_token,
             refreshToken: tokenData.refresh_token,
-            expiresIn: tokenData.access_token_expire_in || 86400,
+            expiresIn: this.toRelativeExpiry(tokenData.access_token_expire_in),
+            // NOTE: open_id is stored as shopId for now. Order/product endpoints
+            // additionally need the real shop_cipher (from /authorization/202309/shops);
+            // testConnection works without it (noShopCipher).
             shopId: tokenData.open_id || undefined,
         }
     }
 
     async refreshAccessToken(): Promise<TokenResponse> {
-        const url = `${TIKTOK_AUTH}/api/v2/token/refresh`
-        const body = {
+        const params = new URLSearchParams({
             app_key: this.credentials.apiKey,
             app_secret: this.credentials.apiSecret,
-            refresh_token: this.credentials.refreshToken,
+            refresh_token: this.credentials.refreshToken || '',
             grant_type: 'refresh_token',
-        }
-        const data = await this.httpPost(url, body)
+        })
+        const url = `${TIKTOK_AUTH}/api/v2/token/refresh?${params}`
+        const data = await this.httpGet(url)
 
         if (data.code !== 0) throw new Error(`TikTok refresh error: ${data.message}`)
 
@@ -101,7 +121,7 @@ export class TikTokService extends PlatformService {
         return {
             accessToken: tokenData.access_token,
             refreshToken: tokenData.refresh_token,
-            expiresIn: tokenData.access_token_expire_in || 86400,
+            expiresIn: this.toRelativeExpiry(tokenData.access_token_expire_in),
         }
     }
 
