@@ -725,6 +725,20 @@ exports.Prisma.BankTransactionScalarFieldEnum = {
   updatedAt: 'updatedAt'
 };
 
+exports.Prisma.BankConnectionConfigScalarFieldEnum = {
+  id: 'id',
+  bankName: 'bankName',
+  apiUrl: 'apiUrl',
+  apiKey: 'apiKey',
+  apiSecret: 'apiSecret',
+  lastSyncAt: 'lastSyncAt',
+  syncStatus: 'syncStatus',
+  isActive: 'isActive',
+  branchId: 'branchId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
 exports.Prisma.TaxDeclarationScalarFieldEnum = {
   id: 'id',
   formType: 'formType',
@@ -1843,6 +1857,7 @@ exports.Prisma.ModelName = {
   TaxConfig: 'TaxConfig',
   BankAccount: 'BankAccount',
   BankTransaction: 'BankTransaction',
+  BankConnectionConfig: 'BankConnectionConfig',
   TaxDeclaration: 'TaxDeclaration',
   CustomerSegment: 'CustomerSegment',
   Currency: 'Currency',

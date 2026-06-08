@@ -95,6 +95,22 @@ async function ensureTables(req: AuthRequest): Promise<void> {
         await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "BankTransaction_isReconciled_idx" ON "BankTransaction"("isReconciled")`).catch(() => {})
         await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "BankTransaction_transactionDate_idx" ON "BankTransaction"("transactionDate")`).catch(() => {})
         await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "BankTransaction_branchId_idx" ON "BankTransaction"("branchId")`).catch(() => {})
+
+        await prisma.$executeRawUnsafe(`
+            CREATE TABLE IF NOT EXISTS "BankConnectionConfig" (
+                "id" TEXT NOT NULL,
+                "bankName" TEXT NOT NULL DEFAULT '',
+                "apiUrl" TEXT, "apiKey" TEXT, "apiSecret" TEXT,
+                "lastSyncAt" TIMESTAMP(3),
+                "syncStatus" TEXT NOT NULL DEFAULT 'idle',
+                "isActive" BOOLEAN NOT NULL DEFAULT true,
+                "branchId" TEXT,
+                "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT "BankConnectionConfig_pkey" PRIMARY KEY ("id")
+            )
+        `).catch(() => {})
+        await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "BankConnectionConfig_isActive_idx" ON "BankConnectionConfig"("isActive")`).catch(() => {})
         ensuredSchemas.add(key)
     } catch (e: any) {
         console.error('ensureTables(ebanking) error:', e?.message || e)
@@ -426,7 +442,11 @@ router.post('/transactions/auto-reconcile', authMiddleware, requireRole('admin',
 })
 
 // POST /api/ebanking/transactions/:id/reconcile — đối soát thủ công 1 giao dịch
-// Body: { matchedSaleId?, matchedExpenseId?, journalEntryId?, reconciled? }
+// Body: { matchedSaleId?, matchedExpenseId?, journalEntryId?, reconciled?,
+//         counterAccount?, counterAccountName? }
+// Khi đối soát và có counterAccount (mà chưa gắn bút toán), tự tạo bút toán:
+//   credit (tiền vào): Nợ 112 / Có counterAccount
+//   debit  (tiền ra) : Nợ counterAccount / Có 112
 router.post('/transactions/:id/reconcile', authMiddleware, requireRole('admin', 'manager', 'superadmin'), async (req: AuthRequest, res: Response) => {
     try {
         await ensureTables(req)
@@ -436,6 +456,35 @@ router.post('/transactions/:id/reconcile', authMiddleware, requireRole('admin', 
         if (!tx) return res.status(404).json({ success: false, error: 'Không tìm thấy giao dịch' })
         const b = req.body || {}
         const reconciled = b.reconciled === undefined ? true : !!b.reconciled
+
+        // Tạo bút toán nếu được yêu cầu (có counterAccount) và chưa có bút toán.
+        let journalEntryId: string | null = b.journalEntryId ?? tx.journalEntryId ?? null
+        let journalEntry: any = null
+        if (reconciled && !journalEntryId && b.counterAccount) {
+            const amount = round2(tx.amount)
+            if (amount > 0) {
+                const counter = String(b.counterAccount)
+                const counterName = b.counterAccountName || ''
+                const isCredit = tx.type !== 'debit'
+                const debitAccount = isCredit ? '112' : counter
+                const debitAccountName = isCredit ? 'Tiền gửi ngân hàng' : counterName
+                const creditAccount = isCredit ? counter : '112'
+                const creditAccountName = isCredit ? counterName : 'Tiền gửi ngân hàng'
+                const when = new Date(tx.transactionDate || tx.date || tx.createdAt)
+                const date = (isNaN(when.getTime()) ? new Date() : when).toISOString().slice(0, 10)
+                journalEntry = await prisma.journalEntry.create({
+                    data: {
+                        date, description: `Đối soát NH: ${tx.description || ''}`.trim(),
+                        debitAccount, debitAccountName, creditAccount, creditAccountName,
+                        amount, reference: `RECON-${tx.referenceNo || tx.reference || id}`,
+                        referenceType: 'bank_reconcile', branchId: tx.branchId || getBranchId(req) || null,
+                        createdBy: req.user?.userId || null,
+                    },
+                }).catch((e: any) => { console.error('reconcile journal error:', e?.message); return null })
+                if (journalEntry) journalEntryId = journalEntry.id
+            }
+        }
+
         const updated = await prisma.bankTransaction.update({
             where: { id },
             data: {
@@ -443,10 +492,10 @@ router.post('/transactions/:id/reconcile', authMiddleware, requireRole('admin', 
                 reconciledAt: reconciled ? new Date() : null,
                 matchedSaleId: b.matchedSaleId ?? tx.matchedSaleId ?? null,
                 matchedExpenseId: b.matchedExpenseId ?? tx.matchedExpenseId ?? null,
-                journalEntryId: b.journalEntryId ?? tx.journalEntryId ?? null,
+                journalEntryId,
             },
         })
-        res.json({ success: true, data: updated })
+        res.json({ success: true, data: { transaction: updated, journalEntry } })
     } catch (err: any) {
         console.error('POST /ebanking/transactions/:id/reconcile error:', err)
         res.status(500).json({ success: false, error: errMsg(err) })
@@ -494,6 +543,95 @@ router.get('/dashboard', authMiddleware, async (req: AuthRequest, res: Response)
         })
     } catch (err: any) {
         console.error('GET /ebanking/dashboard error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  Bank connection config (provider open-banking credentials) — STUB sync
+// ═════════════════════════════════════════════════════════════════════════════
+
+function maskConfig(c: any) {
+    if (!c) return null
+    return {
+        id: c.id, bankName: c.bankName, apiUrl: c.apiUrl || '',
+        apiKey: c.apiKey ? '********' : '',
+        apiSecret: c.apiSecret ? '********' : '',
+        lastSyncAt: c.lastSyncAt, syncStatus: c.syncStatus || 'idle',
+        isActive: c.isActive ?? true, createdAt: c.createdAt, updatedAt: c.updatedAt,
+    }
+}
+
+// GET /api/ebanking/connections — list configured bank connections (secrets masked)
+router.get('/connections', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        await ensureTables(req)
+        const prisma = req.storePrisma! as any
+        const data = await prisma.bankConnectionConfig.findMany({ orderBy: { createdAt: 'asc' } }).catch(() => [])
+        res.json({ success: true, data: data.map(maskConfig) })
+    } catch (err: any) {
+        console.error('GET /ebanking/connections error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// POST /api/ebanking/connections — create/update a bank connection config
+router.post('/connections', authMiddleware, requireRole('admin', 'manager', 'superadmin'), async (req: AuthRequest, res: Response) => {
+    try {
+        await ensureTables(req)
+        const prisma = req.storePrisma! as any
+        const b = req.body || {}
+        if (!b.bankName?.trim()) return res.status(400).json({ success: false, error: 'Tên ngân hàng (bankName) là bắt buộc' })
+        const existing = await prisma.bankConnectionConfig.findFirst({ where: { bankName: String(b.bankName).trim() } }).catch(() => null)
+        const data: any = {
+            bankName: String(b.bankName).trim(),
+            apiUrl: b.apiUrl ?? null,
+            isActive: b.isActive === undefined ? true : !!b.isActive,
+        }
+        if (b.apiKey !== undefined && b.apiKey !== '********') data.apiKey = b.apiKey || null
+        if (b.apiSecret !== undefined && b.apiSecret !== '********') data.apiSecret = b.apiSecret || null
+        const saved = existing
+            ? await prisma.bankConnectionConfig.update({ where: { id: existing.id }, data })
+            : await prisma.bankConnectionConfig.create({ data: { ...data, branchId: getBranchId(req) || null, syncStatus: 'idle' } })
+        res.status(existing ? 200 : 201).json({ success: true, data: maskConfig(saved) })
+    } catch (err: any) {
+        console.error('POST /ebanking/connections error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// DELETE /api/ebanking/connections/:id
+router.delete('/connections/:id', authMiddleware, requireRole('admin', 'manager', 'superadmin'), async (req: AuthRequest, res: Response) => {
+    try {
+        await ensureTables(req)
+        const prisma = req.storePrisma! as any
+        const id = String(req.params.id)
+        const cfg = await prisma.bankConnectionConfig.findUnique({ where: { id } }).catch(() => null)
+        if (!cfg) return res.status(404).json({ success: false, error: 'Không tìm thấy kết nối' })
+        await prisma.bankConnectionConfig.delete({ where: { id } })
+        res.json({ success: true, data: { id, deleted: true } })
+    } catch (err: any) {
+        console.error('DELETE /ebanking/connections/:id error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// POST /api/ebanking/connections/:id/sync — STUB: simulate a statement sync.
+router.post('/connections/:id/sync', authMiddleware, requireRole('admin', 'manager', 'superadmin'), async (req: AuthRequest, res: Response) => {
+    try {
+        await ensureTables(req)
+        const prisma = req.storePrisma! as any
+        const id = String(req.params.id)
+        const cfg = await prisma.bankConnectionConfig.findUnique({ where: { id } }).catch(() => null)
+        if (!cfg) return res.status(404).json({ success: false, error: 'Không tìm thấy kết nối' })
+        // STUB: real implementation would call the bank's open-banking API.
+        console.log(`[ebanking][STUB] sync bank=${cfg.bankName} url=${cfg.apiUrl || '(none)'}`)
+        const updated = await prisma.bankConnectionConfig.update({
+            where: { id }, data: { lastSyncAt: new Date(), syncStatus: 'idle' },
+        })
+        res.json({ success: true, data: { connection: maskConfig(updated), message: `Đồng bộ sao kê ${cfg.bankName} thành công (mô phỏng)`, imported: 0 } })
+    } catch (err: any) {
+        console.error('POST /ebanking/connections/:id/sync error:', err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }
 })

@@ -209,6 +209,11 @@ export type BankAccount = $Result.DefaultSelection<Prisma.$BankAccountPayload>
  */
 export type BankTransaction = $Result.DefaultSelection<Prisma.$BankTransactionPayload>
 /**
+ * Model BankConnectionConfig
+ * 
+ */
+export type BankConnectionConfig = $Result.DefaultSelection<Prisma.$BankConnectionConfigPayload>
+/**
  * Model TaxDeclaration
  * 
  */
@@ -1016,6 +1021,16 @@ export class PrismaClient<
     * ```
     */
   get bankTransaction(): Prisma.BankTransactionDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.bankConnectionConfig`: Exposes CRUD operations for the **BankConnectionConfig** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more BankConnectionConfigs
+    * const bankConnectionConfigs = await prisma.bankConnectionConfig.findMany()
+    * ```
+    */
+  get bankConnectionConfig(): Prisma.BankConnectionConfigDelegate<ExtArgs, ClientOptions>;
 
   /**
    * `prisma.taxDeclaration`: Exposes CRUD operations for the **TaxDeclaration** model.
@@ -2096,6 +2111,7 @@ export namespace Prisma {
     TaxConfig: 'TaxConfig',
     BankAccount: 'BankAccount',
     BankTransaction: 'BankTransaction',
+    BankConnectionConfig: 'BankConnectionConfig',
     TaxDeclaration: 'TaxDeclaration',
     CustomerSegment: 'CustomerSegment',
     Currency: 'Currency',
@@ -2174,7 +2190,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "branch" | "user" | "apiKey" | "salesCheckin" | "category" | "brand" | "product" | "productSerial" | "unitConversion" | "productImage" | "customerGroup" | "customer" | "transaction" | "transactionItem" | "payment" | "inventoryTransaction" | "importReceipt" | "importReceiptItem" | "promotion" | "supplier" | "purchaseOrder" | "purchaseOrderItem" | "expense" | "cashReceipt" | "notification" | "warranty" | "repair" | "quotation" | "auditLog" | "priceHistory" | "shippingOrder" | "driver" | "vehicle" | "vehicleMaintenance" | "deliveryRoute" | "deliveryStop" | "taxConfig" | "bankAccount" | "bankTransaction" | "taxDeclaration" | "customerSegment" | "currency" | "feedback" | "schedule" | "returnOrder" | "returnItem" | "debtEntry" | "bundle" | "salesOrder" | "salesOrderItem" | "priceList" | "priceListItem" | "priceRule" | "announcement" | "attendance" | "loyaltyMember" | "loyaltyTransaction" | "review" | "storeSettings" | "store" | "branchRequest" | "branchDeleteRequest" | "payrollRecord" | "employee" | "payrollPeriod" | "payrollEntry" | "onlineChannel" | "onlineOrder" | "onlineProduct" | "onlineOrderItem" | "syncLog" | "journalEntry" | "fixedAsset" | "depreciationEntry" | "cCDC" | "cCDCAllocation" | "eInvoiceConfig" | "eInvoice" | "eInvoiceItem" | "adjustmentInvoice" | "adjustmentInvoiceItem" | "hKDRevenueEntry" | "warehouse" | "warehouseStock" | "stockTransfer" | "stockTransferItem" | "salesTrip" | "salesTripItem" | "salesTripLog" | "inventoryCount" | "inventoryCountItem" | "zReport" | "storageFile" | "chartOfAccount" | "periodLock" | "exchangeRate" | "taxDeadline" | "taxAuditLog" | "taxBudget"
+      modelProps: "branch" | "user" | "apiKey" | "salesCheckin" | "category" | "brand" | "product" | "productSerial" | "unitConversion" | "productImage" | "customerGroup" | "customer" | "transaction" | "transactionItem" | "payment" | "inventoryTransaction" | "importReceipt" | "importReceiptItem" | "promotion" | "supplier" | "purchaseOrder" | "purchaseOrderItem" | "expense" | "cashReceipt" | "notification" | "warranty" | "repair" | "quotation" | "auditLog" | "priceHistory" | "shippingOrder" | "driver" | "vehicle" | "vehicleMaintenance" | "deliveryRoute" | "deliveryStop" | "taxConfig" | "bankAccount" | "bankTransaction" | "bankConnectionConfig" | "taxDeclaration" | "customerSegment" | "currency" | "feedback" | "schedule" | "returnOrder" | "returnItem" | "debtEntry" | "bundle" | "salesOrder" | "salesOrderItem" | "priceList" | "priceListItem" | "priceRule" | "announcement" | "attendance" | "loyaltyMember" | "loyaltyTransaction" | "review" | "storeSettings" | "store" | "branchRequest" | "branchDeleteRequest" | "payrollRecord" | "employee" | "payrollPeriod" | "payrollEntry" | "onlineChannel" | "onlineOrder" | "onlineProduct" | "onlineOrderItem" | "syncLog" | "journalEntry" | "fixedAsset" | "depreciationEntry" | "cCDC" | "cCDCAllocation" | "eInvoiceConfig" | "eInvoice" | "eInvoiceItem" | "adjustmentInvoice" | "adjustmentInvoiceItem" | "hKDRevenueEntry" | "warehouse" | "warehouseStock" | "stockTransfer" | "stockTransferItem" | "salesTrip" | "salesTripItem" | "salesTripLog" | "inventoryCount" | "inventoryCountItem" | "zReport" | "storageFile" | "chartOfAccount" | "periodLock" | "exchangeRate" | "taxDeadline" | "taxAuditLog" | "taxBudget"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -5061,6 +5077,80 @@ export namespace Prisma {
           count: {
             args: Prisma.BankTransactionCountArgs<ExtArgs>
             result: $Utils.Optional<BankTransactionCountAggregateOutputType> | number
+          }
+        }
+      }
+      BankConnectionConfig: {
+        payload: Prisma.$BankConnectionConfigPayload<ExtArgs>
+        fields: Prisma.BankConnectionConfigFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.BankConnectionConfigFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$BankConnectionConfigPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.BankConnectionConfigFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$BankConnectionConfigPayload>
+          }
+          findFirst: {
+            args: Prisma.BankConnectionConfigFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$BankConnectionConfigPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.BankConnectionConfigFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$BankConnectionConfigPayload>
+          }
+          findMany: {
+            args: Prisma.BankConnectionConfigFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$BankConnectionConfigPayload>[]
+          }
+          create: {
+            args: Prisma.BankConnectionConfigCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$BankConnectionConfigPayload>
+          }
+          createMany: {
+            args: Prisma.BankConnectionConfigCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.BankConnectionConfigCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$BankConnectionConfigPayload>[]
+          }
+          delete: {
+            args: Prisma.BankConnectionConfigDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$BankConnectionConfigPayload>
+          }
+          update: {
+            args: Prisma.BankConnectionConfigUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$BankConnectionConfigPayload>
+          }
+          deleteMany: {
+            args: Prisma.BankConnectionConfigDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.BankConnectionConfigUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.BankConnectionConfigUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$BankConnectionConfigPayload>[]
+          }
+          upsert: {
+            args: Prisma.BankConnectionConfigUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$BankConnectionConfigPayload>
+          }
+          aggregate: {
+            args: Prisma.BankConnectionConfigAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateBankConnectionConfig>
+          }
+          groupBy: {
+            args: Prisma.BankConnectionConfigGroupByArgs<ExtArgs>
+            result: $Utils.Optional<BankConnectionConfigGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.BankConnectionConfigCountArgs<ExtArgs>
+            result: $Utils.Optional<BankConnectionConfigCountAggregateOutputType> | number
           }
         }
       }
@@ -9639,6 +9729,7 @@ export namespace Prisma {
     taxConfig?: TaxConfigOmit
     bankAccount?: BankAccountOmit
     bankTransaction?: BankTransactionOmit
+    bankConnectionConfig?: BankConnectionConfigOmit
     taxDeclaration?: TaxDeclarationOmit
     customerSegment?: CustomerSegmentOmit
     currency?: CurrencyOmit
@@ -57393,6 +57484,1079 @@ export namespace Prisma {
      * Choose, which related nodes to fetch as well
      */
     include?: BankTransactionInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model BankConnectionConfig
+   */
+
+  export type AggregateBankConnectionConfig = {
+    _count: BankConnectionConfigCountAggregateOutputType | null
+    _min: BankConnectionConfigMinAggregateOutputType | null
+    _max: BankConnectionConfigMaxAggregateOutputType | null
+  }
+
+  export type BankConnectionConfigMinAggregateOutputType = {
+    id: string | null
+    bankName: string | null
+    apiUrl: string | null
+    apiKey: string | null
+    apiSecret: string | null
+    lastSyncAt: Date | null
+    syncStatus: string | null
+    isActive: boolean | null
+    branchId: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type BankConnectionConfigMaxAggregateOutputType = {
+    id: string | null
+    bankName: string | null
+    apiUrl: string | null
+    apiKey: string | null
+    apiSecret: string | null
+    lastSyncAt: Date | null
+    syncStatus: string | null
+    isActive: boolean | null
+    branchId: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type BankConnectionConfigCountAggregateOutputType = {
+    id: number
+    bankName: number
+    apiUrl: number
+    apiKey: number
+    apiSecret: number
+    lastSyncAt: number
+    syncStatus: number
+    isActive: number
+    branchId: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type BankConnectionConfigMinAggregateInputType = {
+    id?: true
+    bankName?: true
+    apiUrl?: true
+    apiKey?: true
+    apiSecret?: true
+    lastSyncAt?: true
+    syncStatus?: true
+    isActive?: true
+    branchId?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type BankConnectionConfigMaxAggregateInputType = {
+    id?: true
+    bankName?: true
+    apiUrl?: true
+    apiKey?: true
+    apiSecret?: true
+    lastSyncAt?: true
+    syncStatus?: true
+    isActive?: true
+    branchId?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type BankConnectionConfigCountAggregateInputType = {
+    id?: true
+    bankName?: true
+    apiUrl?: true
+    apiKey?: true
+    apiSecret?: true
+    lastSyncAt?: true
+    syncStatus?: true
+    isActive?: true
+    branchId?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type BankConnectionConfigAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which BankConnectionConfig to aggregate.
+     */
+    where?: BankConnectionConfigWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of BankConnectionConfigs to fetch.
+     */
+    orderBy?: BankConnectionConfigOrderByWithRelationInput | BankConnectionConfigOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: BankConnectionConfigWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` BankConnectionConfigs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` BankConnectionConfigs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned BankConnectionConfigs
+    **/
+    _count?: true | BankConnectionConfigCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: BankConnectionConfigMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: BankConnectionConfigMaxAggregateInputType
+  }
+
+  export type GetBankConnectionConfigAggregateType<T extends BankConnectionConfigAggregateArgs> = {
+        [P in keyof T & keyof AggregateBankConnectionConfig]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateBankConnectionConfig[P]>
+      : GetScalarType<T[P], AggregateBankConnectionConfig[P]>
+  }
+
+
+
+
+  export type BankConnectionConfigGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: BankConnectionConfigWhereInput
+    orderBy?: BankConnectionConfigOrderByWithAggregationInput | BankConnectionConfigOrderByWithAggregationInput[]
+    by: BankConnectionConfigScalarFieldEnum[] | BankConnectionConfigScalarFieldEnum
+    having?: BankConnectionConfigScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: BankConnectionConfigCountAggregateInputType | true
+    _min?: BankConnectionConfigMinAggregateInputType
+    _max?: BankConnectionConfigMaxAggregateInputType
+  }
+
+  export type BankConnectionConfigGroupByOutputType = {
+    id: string
+    bankName: string
+    apiUrl: string | null
+    apiKey: string | null
+    apiSecret: string | null
+    lastSyncAt: Date | null
+    syncStatus: string
+    isActive: boolean
+    branchId: string | null
+    createdAt: Date
+    updatedAt: Date
+    _count: BankConnectionConfigCountAggregateOutputType | null
+    _min: BankConnectionConfigMinAggregateOutputType | null
+    _max: BankConnectionConfigMaxAggregateOutputType | null
+  }
+
+  type GetBankConnectionConfigGroupByPayload<T extends BankConnectionConfigGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<BankConnectionConfigGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof BankConnectionConfigGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], BankConnectionConfigGroupByOutputType[P]>
+            : GetScalarType<T[P], BankConnectionConfigGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type BankConnectionConfigSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    bankName?: boolean
+    apiUrl?: boolean
+    apiKey?: boolean
+    apiSecret?: boolean
+    lastSyncAt?: boolean
+    syncStatus?: boolean
+    isActive?: boolean
+    branchId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["bankConnectionConfig"]>
+
+  export type BankConnectionConfigSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    bankName?: boolean
+    apiUrl?: boolean
+    apiKey?: boolean
+    apiSecret?: boolean
+    lastSyncAt?: boolean
+    syncStatus?: boolean
+    isActive?: boolean
+    branchId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["bankConnectionConfig"]>
+
+  export type BankConnectionConfigSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    bankName?: boolean
+    apiUrl?: boolean
+    apiKey?: boolean
+    apiSecret?: boolean
+    lastSyncAt?: boolean
+    syncStatus?: boolean
+    isActive?: boolean
+    branchId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["bankConnectionConfig"]>
+
+  export type BankConnectionConfigSelectScalar = {
+    id?: boolean
+    bankName?: boolean
+    apiUrl?: boolean
+    apiKey?: boolean
+    apiSecret?: boolean
+    lastSyncAt?: boolean
+    syncStatus?: boolean
+    isActive?: boolean
+    branchId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type BankConnectionConfigOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "bankName" | "apiUrl" | "apiKey" | "apiSecret" | "lastSyncAt" | "syncStatus" | "isActive" | "branchId" | "createdAt" | "updatedAt", ExtArgs["result"]["bankConnectionConfig"]>
+
+  export type $BankConnectionConfigPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "BankConnectionConfig"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      bankName: string
+      apiUrl: string | null
+      apiKey: string | null
+      apiSecret: string | null
+      lastSyncAt: Date | null
+      syncStatus: string
+      isActive: boolean
+      branchId: string | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["bankConnectionConfig"]>
+    composites: {}
+  }
+
+  type BankConnectionConfigGetPayload<S extends boolean | null | undefined | BankConnectionConfigDefaultArgs> = $Result.GetResult<Prisma.$BankConnectionConfigPayload, S>
+
+  type BankConnectionConfigCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<BankConnectionConfigFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: BankConnectionConfigCountAggregateInputType | true
+    }
+
+  export interface BankConnectionConfigDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['BankConnectionConfig'], meta: { name: 'BankConnectionConfig' } }
+    /**
+     * Find zero or one BankConnectionConfig that matches the filter.
+     * @param {BankConnectionConfigFindUniqueArgs} args - Arguments to find a BankConnectionConfig
+     * @example
+     * // Get one BankConnectionConfig
+     * const bankConnectionConfig = await prisma.bankConnectionConfig.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends BankConnectionConfigFindUniqueArgs>(args: SelectSubset<T, BankConnectionConfigFindUniqueArgs<ExtArgs>>): Prisma__BankConnectionConfigClient<$Result.GetResult<Prisma.$BankConnectionConfigPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one BankConnectionConfig that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {BankConnectionConfigFindUniqueOrThrowArgs} args - Arguments to find a BankConnectionConfig
+     * @example
+     * // Get one BankConnectionConfig
+     * const bankConnectionConfig = await prisma.bankConnectionConfig.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends BankConnectionConfigFindUniqueOrThrowArgs>(args: SelectSubset<T, BankConnectionConfigFindUniqueOrThrowArgs<ExtArgs>>): Prisma__BankConnectionConfigClient<$Result.GetResult<Prisma.$BankConnectionConfigPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first BankConnectionConfig that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {BankConnectionConfigFindFirstArgs} args - Arguments to find a BankConnectionConfig
+     * @example
+     * // Get one BankConnectionConfig
+     * const bankConnectionConfig = await prisma.bankConnectionConfig.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends BankConnectionConfigFindFirstArgs>(args?: SelectSubset<T, BankConnectionConfigFindFirstArgs<ExtArgs>>): Prisma__BankConnectionConfigClient<$Result.GetResult<Prisma.$BankConnectionConfigPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first BankConnectionConfig that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {BankConnectionConfigFindFirstOrThrowArgs} args - Arguments to find a BankConnectionConfig
+     * @example
+     * // Get one BankConnectionConfig
+     * const bankConnectionConfig = await prisma.bankConnectionConfig.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends BankConnectionConfigFindFirstOrThrowArgs>(args?: SelectSubset<T, BankConnectionConfigFindFirstOrThrowArgs<ExtArgs>>): Prisma__BankConnectionConfigClient<$Result.GetResult<Prisma.$BankConnectionConfigPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more BankConnectionConfigs that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {BankConnectionConfigFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all BankConnectionConfigs
+     * const bankConnectionConfigs = await prisma.bankConnectionConfig.findMany()
+     * 
+     * // Get first 10 BankConnectionConfigs
+     * const bankConnectionConfigs = await prisma.bankConnectionConfig.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const bankConnectionConfigWithIdOnly = await prisma.bankConnectionConfig.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends BankConnectionConfigFindManyArgs>(args?: SelectSubset<T, BankConnectionConfigFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$BankConnectionConfigPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a BankConnectionConfig.
+     * @param {BankConnectionConfigCreateArgs} args - Arguments to create a BankConnectionConfig.
+     * @example
+     * // Create one BankConnectionConfig
+     * const BankConnectionConfig = await prisma.bankConnectionConfig.create({
+     *   data: {
+     *     // ... data to create a BankConnectionConfig
+     *   }
+     * })
+     * 
+     */
+    create<T extends BankConnectionConfigCreateArgs>(args: SelectSubset<T, BankConnectionConfigCreateArgs<ExtArgs>>): Prisma__BankConnectionConfigClient<$Result.GetResult<Prisma.$BankConnectionConfigPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many BankConnectionConfigs.
+     * @param {BankConnectionConfigCreateManyArgs} args - Arguments to create many BankConnectionConfigs.
+     * @example
+     * // Create many BankConnectionConfigs
+     * const bankConnectionConfig = await prisma.bankConnectionConfig.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends BankConnectionConfigCreateManyArgs>(args?: SelectSubset<T, BankConnectionConfigCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many BankConnectionConfigs and returns the data saved in the database.
+     * @param {BankConnectionConfigCreateManyAndReturnArgs} args - Arguments to create many BankConnectionConfigs.
+     * @example
+     * // Create many BankConnectionConfigs
+     * const bankConnectionConfig = await prisma.bankConnectionConfig.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many BankConnectionConfigs and only return the `id`
+     * const bankConnectionConfigWithIdOnly = await prisma.bankConnectionConfig.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends BankConnectionConfigCreateManyAndReturnArgs>(args?: SelectSubset<T, BankConnectionConfigCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$BankConnectionConfigPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a BankConnectionConfig.
+     * @param {BankConnectionConfigDeleteArgs} args - Arguments to delete one BankConnectionConfig.
+     * @example
+     * // Delete one BankConnectionConfig
+     * const BankConnectionConfig = await prisma.bankConnectionConfig.delete({
+     *   where: {
+     *     // ... filter to delete one BankConnectionConfig
+     *   }
+     * })
+     * 
+     */
+    delete<T extends BankConnectionConfigDeleteArgs>(args: SelectSubset<T, BankConnectionConfigDeleteArgs<ExtArgs>>): Prisma__BankConnectionConfigClient<$Result.GetResult<Prisma.$BankConnectionConfigPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one BankConnectionConfig.
+     * @param {BankConnectionConfigUpdateArgs} args - Arguments to update one BankConnectionConfig.
+     * @example
+     * // Update one BankConnectionConfig
+     * const bankConnectionConfig = await prisma.bankConnectionConfig.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends BankConnectionConfigUpdateArgs>(args: SelectSubset<T, BankConnectionConfigUpdateArgs<ExtArgs>>): Prisma__BankConnectionConfigClient<$Result.GetResult<Prisma.$BankConnectionConfigPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more BankConnectionConfigs.
+     * @param {BankConnectionConfigDeleteManyArgs} args - Arguments to filter BankConnectionConfigs to delete.
+     * @example
+     * // Delete a few BankConnectionConfigs
+     * const { count } = await prisma.bankConnectionConfig.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends BankConnectionConfigDeleteManyArgs>(args?: SelectSubset<T, BankConnectionConfigDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more BankConnectionConfigs.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {BankConnectionConfigUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many BankConnectionConfigs
+     * const bankConnectionConfig = await prisma.bankConnectionConfig.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends BankConnectionConfigUpdateManyArgs>(args: SelectSubset<T, BankConnectionConfigUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more BankConnectionConfigs and returns the data updated in the database.
+     * @param {BankConnectionConfigUpdateManyAndReturnArgs} args - Arguments to update many BankConnectionConfigs.
+     * @example
+     * // Update many BankConnectionConfigs
+     * const bankConnectionConfig = await prisma.bankConnectionConfig.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more BankConnectionConfigs and only return the `id`
+     * const bankConnectionConfigWithIdOnly = await prisma.bankConnectionConfig.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends BankConnectionConfigUpdateManyAndReturnArgs>(args: SelectSubset<T, BankConnectionConfigUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$BankConnectionConfigPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one BankConnectionConfig.
+     * @param {BankConnectionConfigUpsertArgs} args - Arguments to update or create a BankConnectionConfig.
+     * @example
+     * // Update or create a BankConnectionConfig
+     * const bankConnectionConfig = await prisma.bankConnectionConfig.upsert({
+     *   create: {
+     *     // ... data to create a BankConnectionConfig
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the BankConnectionConfig we want to update
+     *   }
+     * })
+     */
+    upsert<T extends BankConnectionConfigUpsertArgs>(args: SelectSubset<T, BankConnectionConfigUpsertArgs<ExtArgs>>): Prisma__BankConnectionConfigClient<$Result.GetResult<Prisma.$BankConnectionConfigPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of BankConnectionConfigs.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {BankConnectionConfigCountArgs} args - Arguments to filter BankConnectionConfigs to count.
+     * @example
+     * // Count the number of BankConnectionConfigs
+     * const count = await prisma.bankConnectionConfig.count({
+     *   where: {
+     *     // ... the filter for the BankConnectionConfigs we want to count
+     *   }
+     * })
+    **/
+    count<T extends BankConnectionConfigCountArgs>(
+      args?: Subset<T, BankConnectionConfigCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], BankConnectionConfigCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a BankConnectionConfig.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {BankConnectionConfigAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends BankConnectionConfigAggregateArgs>(args: Subset<T, BankConnectionConfigAggregateArgs>): Prisma.PrismaPromise<GetBankConnectionConfigAggregateType<T>>
+
+    /**
+     * Group by BankConnectionConfig.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {BankConnectionConfigGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends BankConnectionConfigGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: BankConnectionConfigGroupByArgs['orderBy'] }
+        : { orderBy?: BankConnectionConfigGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, BankConnectionConfigGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetBankConnectionConfigGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the BankConnectionConfig model
+   */
+  readonly fields: BankConnectionConfigFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for BankConnectionConfig.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__BankConnectionConfigClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the BankConnectionConfig model
+   */
+  interface BankConnectionConfigFieldRefs {
+    readonly id: FieldRef<"BankConnectionConfig", 'String'>
+    readonly bankName: FieldRef<"BankConnectionConfig", 'String'>
+    readonly apiUrl: FieldRef<"BankConnectionConfig", 'String'>
+    readonly apiKey: FieldRef<"BankConnectionConfig", 'String'>
+    readonly apiSecret: FieldRef<"BankConnectionConfig", 'String'>
+    readonly lastSyncAt: FieldRef<"BankConnectionConfig", 'DateTime'>
+    readonly syncStatus: FieldRef<"BankConnectionConfig", 'String'>
+    readonly isActive: FieldRef<"BankConnectionConfig", 'Boolean'>
+    readonly branchId: FieldRef<"BankConnectionConfig", 'String'>
+    readonly createdAt: FieldRef<"BankConnectionConfig", 'DateTime'>
+    readonly updatedAt: FieldRef<"BankConnectionConfig", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * BankConnectionConfig findUnique
+   */
+  export type BankConnectionConfigFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the BankConnectionConfig
+     */
+    select?: BankConnectionConfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the BankConnectionConfig
+     */
+    omit?: BankConnectionConfigOmit<ExtArgs> | null
+    /**
+     * Filter, which BankConnectionConfig to fetch.
+     */
+    where: BankConnectionConfigWhereUniqueInput
+  }
+
+  /**
+   * BankConnectionConfig findUniqueOrThrow
+   */
+  export type BankConnectionConfigFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the BankConnectionConfig
+     */
+    select?: BankConnectionConfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the BankConnectionConfig
+     */
+    omit?: BankConnectionConfigOmit<ExtArgs> | null
+    /**
+     * Filter, which BankConnectionConfig to fetch.
+     */
+    where: BankConnectionConfigWhereUniqueInput
+  }
+
+  /**
+   * BankConnectionConfig findFirst
+   */
+  export type BankConnectionConfigFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the BankConnectionConfig
+     */
+    select?: BankConnectionConfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the BankConnectionConfig
+     */
+    omit?: BankConnectionConfigOmit<ExtArgs> | null
+    /**
+     * Filter, which BankConnectionConfig to fetch.
+     */
+    where?: BankConnectionConfigWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of BankConnectionConfigs to fetch.
+     */
+    orderBy?: BankConnectionConfigOrderByWithRelationInput | BankConnectionConfigOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for BankConnectionConfigs.
+     */
+    cursor?: BankConnectionConfigWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` BankConnectionConfigs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` BankConnectionConfigs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of BankConnectionConfigs.
+     */
+    distinct?: BankConnectionConfigScalarFieldEnum | BankConnectionConfigScalarFieldEnum[]
+  }
+
+  /**
+   * BankConnectionConfig findFirstOrThrow
+   */
+  export type BankConnectionConfigFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the BankConnectionConfig
+     */
+    select?: BankConnectionConfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the BankConnectionConfig
+     */
+    omit?: BankConnectionConfigOmit<ExtArgs> | null
+    /**
+     * Filter, which BankConnectionConfig to fetch.
+     */
+    where?: BankConnectionConfigWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of BankConnectionConfigs to fetch.
+     */
+    orderBy?: BankConnectionConfigOrderByWithRelationInput | BankConnectionConfigOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for BankConnectionConfigs.
+     */
+    cursor?: BankConnectionConfigWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` BankConnectionConfigs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` BankConnectionConfigs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of BankConnectionConfigs.
+     */
+    distinct?: BankConnectionConfigScalarFieldEnum | BankConnectionConfigScalarFieldEnum[]
+  }
+
+  /**
+   * BankConnectionConfig findMany
+   */
+  export type BankConnectionConfigFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the BankConnectionConfig
+     */
+    select?: BankConnectionConfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the BankConnectionConfig
+     */
+    omit?: BankConnectionConfigOmit<ExtArgs> | null
+    /**
+     * Filter, which BankConnectionConfigs to fetch.
+     */
+    where?: BankConnectionConfigWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of BankConnectionConfigs to fetch.
+     */
+    orderBy?: BankConnectionConfigOrderByWithRelationInput | BankConnectionConfigOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing BankConnectionConfigs.
+     */
+    cursor?: BankConnectionConfigWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` BankConnectionConfigs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` BankConnectionConfigs.
+     */
+    skip?: number
+    distinct?: BankConnectionConfigScalarFieldEnum | BankConnectionConfigScalarFieldEnum[]
+  }
+
+  /**
+   * BankConnectionConfig create
+   */
+  export type BankConnectionConfigCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the BankConnectionConfig
+     */
+    select?: BankConnectionConfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the BankConnectionConfig
+     */
+    omit?: BankConnectionConfigOmit<ExtArgs> | null
+    /**
+     * The data needed to create a BankConnectionConfig.
+     */
+    data: XOR<BankConnectionConfigCreateInput, BankConnectionConfigUncheckedCreateInput>
+  }
+
+  /**
+   * BankConnectionConfig createMany
+   */
+  export type BankConnectionConfigCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many BankConnectionConfigs.
+     */
+    data: BankConnectionConfigCreateManyInput | BankConnectionConfigCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * BankConnectionConfig createManyAndReturn
+   */
+  export type BankConnectionConfigCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the BankConnectionConfig
+     */
+    select?: BankConnectionConfigSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the BankConnectionConfig
+     */
+    omit?: BankConnectionConfigOmit<ExtArgs> | null
+    /**
+     * The data used to create many BankConnectionConfigs.
+     */
+    data: BankConnectionConfigCreateManyInput | BankConnectionConfigCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * BankConnectionConfig update
+   */
+  export type BankConnectionConfigUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the BankConnectionConfig
+     */
+    select?: BankConnectionConfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the BankConnectionConfig
+     */
+    omit?: BankConnectionConfigOmit<ExtArgs> | null
+    /**
+     * The data needed to update a BankConnectionConfig.
+     */
+    data: XOR<BankConnectionConfigUpdateInput, BankConnectionConfigUncheckedUpdateInput>
+    /**
+     * Choose, which BankConnectionConfig to update.
+     */
+    where: BankConnectionConfigWhereUniqueInput
+  }
+
+  /**
+   * BankConnectionConfig updateMany
+   */
+  export type BankConnectionConfigUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update BankConnectionConfigs.
+     */
+    data: XOR<BankConnectionConfigUpdateManyMutationInput, BankConnectionConfigUncheckedUpdateManyInput>
+    /**
+     * Filter which BankConnectionConfigs to update
+     */
+    where?: BankConnectionConfigWhereInput
+    /**
+     * Limit how many BankConnectionConfigs to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * BankConnectionConfig updateManyAndReturn
+   */
+  export type BankConnectionConfigUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the BankConnectionConfig
+     */
+    select?: BankConnectionConfigSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the BankConnectionConfig
+     */
+    omit?: BankConnectionConfigOmit<ExtArgs> | null
+    /**
+     * The data used to update BankConnectionConfigs.
+     */
+    data: XOR<BankConnectionConfigUpdateManyMutationInput, BankConnectionConfigUncheckedUpdateManyInput>
+    /**
+     * Filter which BankConnectionConfigs to update
+     */
+    where?: BankConnectionConfigWhereInput
+    /**
+     * Limit how many BankConnectionConfigs to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * BankConnectionConfig upsert
+   */
+  export type BankConnectionConfigUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the BankConnectionConfig
+     */
+    select?: BankConnectionConfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the BankConnectionConfig
+     */
+    omit?: BankConnectionConfigOmit<ExtArgs> | null
+    /**
+     * The filter to search for the BankConnectionConfig to update in case it exists.
+     */
+    where: BankConnectionConfigWhereUniqueInput
+    /**
+     * In case the BankConnectionConfig found by the `where` argument doesn't exist, create a new BankConnectionConfig with this data.
+     */
+    create: XOR<BankConnectionConfigCreateInput, BankConnectionConfigUncheckedCreateInput>
+    /**
+     * In case the BankConnectionConfig was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<BankConnectionConfigUpdateInput, BankConnectionConfigUncheckedUpdateInput>
+  }
+
+  /**
+   * BankConnectionConfig delete
+   */
+  export type BankConnectionConfigDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the BankConnectionConfig
+     */
+    select?: BankConnectionConfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the BankConnectionConfig
+     */
+    omit?: BankConnectionConfigOmit<ExtArgs> | null
+    /**
+     * Filter which BankConnectionConfig to delete.
+     */
+    where: BankConnectionConfigWhereUniqueInput
+  }
+
+  /**
+   * BankConnectionConfig deleteMany
+   */
+  export type BankConnectionConfigDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which BankConnectionConfigs to delete
+     */
+    where?: BankConnectionConfigWhereInput
+    /**
+     * Limit how many BankConnectionConfigs to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * BankConnectionConfig without action
+   */
+  export type BankConnectionConfigDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the BankConnectionConfig
+     */
+    select?: BankConnectionConfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the BankConnectionConfig
+     */
+    omit?: BankConnectionConfigOmit<ExtArgs> | null
   }
 
 
@@ -130186,6 +131350,23 @@ export namespace Prisma {
   export type BankTransactionScalarFieldEnum = (typeof BankTransactionScalarFieldEnum)[keyof typeof BankTransactionScalarFieldEnum]
 
 
+  export const BankConnectionConfigScalarFieldEnum: {
+    id: 'id',
+    bankName: 'bankName',
+    apiUrl: 'apiUrl',
+    apiKey: 'apiKey',
+    apiSecret: 'apiSecret',
+    lastSyncAt: 'lastSyncAt',
+    syncStatus: 'syncStatus',
+    isActive: 'isActive',
+    branchId: 'branchId',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type BankConnectionConfigScalarFieldEnum = (typeof BankConnectionConfigScalarFieldEnum)[keyof typeof BankConnectionConfigScalarFieldEnum]
+
+
   export const TaxDeclarationScalarFieldEnum: {
     id: 'id',
     formType: 'formType',
@@ -135247,6 +136428,88 @@ export namespace Prisma {
     notes?: StringNullableWithAggregatesFilter<"BankTransaction"> | string | null
     createdAt?: DateTimeWithAggregatesFilter<"BankTransaction"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"BankTransaction"> | Date | string
+  }
+
+  export type BankConnectionConfigWhereInput = {
+    AND?: BankConnectionConfigWhereInput | BankConnectionConfigWhereInput[]
+    OR?: BankConnectionConfigWhereInput[]
+    NOT?: BankConnectionConfigWhereInput | BankConnectionConfigWhereInput[]
+    id?: StringFilter<"BankConnectionConfig"> | string
+    bankName?: StringFilter<"BankConnectionConfig"> | string
+    apiUrl?: StringNullableFilter<"BankConnectionConfig"> | string | null
+    apiKey?: StringNullableFilter<"BankConnectionConfig"> | string | null
+    apiSecret?: StringNullableFilter<"BankConnectionConfig"> | string | null
+    lastSyncAt?: DateTimeNullableFilter<"BankConnectionConfig"> | Date | string | null
+    syncStatus?: StringFilter<"BankConnectionConfig"> | string
+    isActive?: BoolFilter<"BankConnectionConfig"> | boolean
+    branchId?: StringNullableFilter<"BankConnectionConfig"> | string | null
+    createdAt?: DateTimeFilter<"BankConnectionConfig"> | Date | string
+    updatedAt?: DateTimeFilter<"BankConnectionConfig"> | Date | string
+  }
+
+  export type BankConnectionConfigOrderByWithRelationInput = {
+    id?: SortOrder
+    bankName?: SortOrder
+    apiUrl?: SortOrderInput | SortOrder
+    apiKey?: SortOrderInput | SortOrder
+    apiSecret?: SortOrderInput | SortOrder
+    lastSyncAt?: SortOrderInput | SortOrder
+    syncStatus?: SortOrder
+    isActive?: SortOrder
+    branchId?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type BankConnectionConfigWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: BankConnectionConfigWhereInput | BankConnectionConfigWhereInput[]
+    OR?: BankConnectionConfigWhereInput[]
+    NOT?: BankConnectionConfigWhereInput | BankConnectionConfigWhereInput[]
+    bankName?: StringFilter<"BankConnectionConfig"> | string
+    apiUrl?: StringNullableFilter<"BankConnectionConfig"> | string | null
+    apiKey?: StringNullableFilter<"BankConnectionConfig"> | string | null
+    apiSecret?: StringNullableFilter<"BankConnectionConfig"> | string | null
+    lastSyncAt?: DateTimeNullableFilter<"BankConnectionConfig"> | Date | string | null
+    syncStatus?: StringFilter<"BankConnectionConfig"> | string
+    isActive?: BoolFilter<"BankConnectionConfig"> | boolean
+    branchId?: StringNullableFilter<"BankConnectionConfig"> | string | null
+    createdAt?: DateTimeFilter<"BankConnectionConfig"> | Date | string
+    updatedAt?: DateTimeFilter<"BankConnectionConfig"> | Date | string
+  }, "id">
+
+  export type BankConnectionConfigOrderByWithAggregationInput = {
+    id?: SortOrder
+    bankName?: SortOrder
+    apiUrl?: SortOrderInput | SortOrder
+    apiKey?: SortOrderInput | SortOrder
+    apiSecret?: SortOrderInput | SortOrder
+    lastSyncAt?: SortOrderInput | SortOrder
+    syncStatus?: SortOrder
+    isActive?: SortOrder
+    branchId?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: BankConnectionConfigCountOrderByAggregateInput
+    _max?: BankConnectionConfigMaxOrderByAggregateInput
+    _min?: BankConnectionConfigMinOrderByAggregateInput
+  }
+
+  export type BankConnectionConfigScalarWhereWithAggregatesInput = {
+    AND?: BankConnectionConfigScalarWhereWithAggregatesInput | BankConnectionConfigScalarWhereWithAggregatesInput[]
+    OR?: BankConnectionConfigScalarWhereWithAggregatesInput[]
+    NOT?: BankConnectionConfigScalarWhereWithAggregatesInput | BankConnectionConfigScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"BankConnectionConfig"> | string
+    bankName?: StringWithAggregatesFilter<"BankConnectionConfig"> | string
+    apiUrl?: StringNullableWithAggregatesFilter<"BankConnectionConfig"> | string | null
+    apiKey?: StringNullableWithAggregatesFilter<"BankConnectionConfig"> | string | null
+    apiSecret?: StringNullableWithAggregatesFilter<"BankConnectionConfig"> | string | null
+    lastSyncAt?: DateTimeNullableWithAggregatesFilter<"BankConnectionConfig"> | Date | string | null
+    syncStatus?: StringWithAggregatesFilter<"BankConnectionConfig"> | string
+    isActive?: BoolWithAggregatesFilter<"BankConnectionConfig"> | boolean
+    branchId?: StringNullableWithAggregatesFilter<"BankConnectionConfig"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"BankConnectionConfig"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"BankConnectionConfig"> | Date | string
   }
 
   export type TaxDeclarationWhereInput = {
@@ -145859,6 +147122,104 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type BankConnectionConfigCreateInput = {
+    id?: string
+    bankName?: string
+    apiUrl?: string | null
+    apiKey?: string | null
+    apiSecret?: string | null
+    lastSyncAt?: Date | string | null
+    syncStatus?: string
+    isActive?: boolean
+    branchId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type BankConnectionConfigUncheckedCreateInput = {
+    id?: string
+    bankName?: string
+    apiUrl?: string | null
+    apiKey?: string | null
+    apiSecret?: string | null
+    lastSyncAt?: Date | string | null
+    syncStatus?: string
+    isActive?: boolean
+    branchId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type BankConnectionConfigUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    bankName?: StringFieldUpdateOperationsInput | string
+    apiUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    apiKey?: NullableStringFieldUpdateOperationsInput | string | null
+    apiSecret?: NullableStringFieldUpdateOperationsInput | string | null
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    syncStatus?: StringFieldUpdateOperationsInput | string
+    isActive?: BoolFieldUpdateOperationsInput | boolean
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type BankConnectionConfigUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    bankName?: StringFieldUpdateOperationsInput | string
+    apiUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    apiKey?: NullableStringFieldUpdateOperationsInput | string | null
+    apiSecret?: NullableStringFieldUpdateOperationsInput | string | null
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    syncStatus?: StringFieldUpdateOperationsInput | string
+    isActive?: BoolFieldUpdateOperationsInput | boolean
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type BankConnectionConfigCreateManyInput = {
+    id?: string
+    bankName?: string
+    apiUrl?: string | null
+    apiKey?: string | null
+    apiSecret?: string | null
+    lastSyncAt?: Date | string | null
+    syncStatus?: string
+    isActive?: boolean
+    branchId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type BankConnectionConfigUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    bankName?: StringFieldUpdateOperationsInput | string
+    apiUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    apiKey?: NullableStringFieldUpdateOperationsInput | string | null
+    apiSecret?: NullableStringFieldUpdateOperationsInput | string | null
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    syncStatus?: StringFieldUpdateOperationsInput | string
+    isActive?: BoolFieldUpdateOperationsInput | boolean
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type BankConnectionConfigUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    bankName?: StringFieldUpdateOperationsInput | string
+    apiUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    apiKey?: NullableStringFieldUpdateOperationsInput | string | null
+    apiSecret?: NullableStringFieldUpdateOperationsInput | string | null
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    syncStatus?: StringFieldUpdateOperationsInput | string
+    isActive?: BoolFieldUpdateOperationsInput | boolean
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type TaxDeclarationCreateInput = {
     id?: string
     formType?: string
@@ -156064,6 +157425,48 @@ export namespace Prisma {
 
   export type BankTransactionSumOrderByAggregateInput = {
     amount?: SortOrder
+  }
+
+  export type BankConnectionConfigCountOrderByAggregateInput = {
+    id?: SortOrder
+    bankName?: SortOrder
+    apiUrl?: SortOrder
+    apiKey?: SortOrder
+    apiSecret?: SortOrder
+    lastSyncAt?: SortOrder
+    syncStatus?: SortOrder
+    isActive?: SortOrder
+    branchId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type BankConnectionConfigMaxOrderByAggregateInput = {
+    id?: SortOrder
+    bankName?: SortOrder
+    apiUrl?: SortOrder
+    apiKey?: SortOrder
+    apiSecret?: SortOrder
+    lastSyncAt?: SortOrder
+    syncStatus?: SortOrder
+    isActive?: SortOrder
+    branchId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type BankConnectionConfigMinOrderByAggregateInput = {
+    id?: SortOrder
+    bankName?: SortOrder
+    apiUrl?: SortOrder
+    apiKey?: SortOrder
+    apiSecret?: SortOrder
+    lastSyncAt?: SortOrder
+    syncStatus?: SortOrder
+    isActive?: SortOrder
+    branchId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
   }
 
   export type TaxDeclarationCountOrderByAggregateInput = {

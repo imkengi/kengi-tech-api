@@ -1261,6 +1261,122 @@ if (!process.env.PASSENGER_BASE_URI) {
                 console.error('⚠️ E-Banking Phase 4 migration failed:', err.message)
             }
 
+            // Payroll Phase 4 — Tiền lương. Creates Employee / PayrollPeriod / PayrollEntry.
+            // (The route also lazily ensures these tables; this covers existing schemas at boot.)
+            try {
+                const schemas: any[] = await registryPrisma.$queryRaw`SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('information_schema', 'pg_catalog', 'pg_toast', 'public')`
+                for (const { schema_name } of schemas) {
+                    const migName = `payroll_v1:${schema_name}`
+                    if (await isMigrationApplied(migName)) continue
+
+                    await registryPrisma.$executeRawUnsafe(`
+                        CREATE TABLE IF NOT EXISTS "${schema_name}"."Employee" (
+                            "id" TEXT NOT NULL, "code" TEXT NOT NULL, "name" TEXT NOT NULL,
+                            "position" TEXT, "department" TEXT,
+                            "baseSalary" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "bankAccount" TEXT, "bankName" TEXT, "taxCode" TEXT,
+                            "socialInsuranceNo" TEXT, "startDate" TEXT, "endDate" TEXT,
+                            "status" TEXT NOT NULL DEFAULT 'active',
+                            "dependents" INTEGER NOT NULL DEFAULT 0,
+                            "notes" TEXT, "branchId" TEXT,
+                            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            CONSTRAINT "Employee_pkey" PRIMARY KEY ("id")
+                        )
+                    `).catch(() => {})
+                    for (const [idx, col] of [['Employee_status_idx', 'status'], ['Employee_code_idx', 'code'], ['Employee_branchId_idx', 'branchId']]) {
+                        await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "${idx}" ON "${schema_name}"."Employee"("${col}")`).catch(() => {})
+                    }
+
+                    await registryPrisma.$executeRawUnsafe(`
+                        CREATE TABLE IF NOT EXISTS "${schema_name}"."PayrollPeriod" (
+                            "id" TEXT NOT NULL, "month" INTEGER NOT NULL, "year" INTEGER NOT NULL,
+                            "status" TEXT NOT NULL DEFAULT 'draft',
+                            "totalGross" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "totalDeductions" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "totalNet" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "notes" TEXT, "branchId" TEXT, "createdBy" TEXT,
+                            "confirmedAt" TIMESTAMP(3), "paidAt" TIMESTAMP(3),
+                            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            CONSTRAINT "PayrollPeriod_pkey" PRIMARY KEY ("id")
+                        )
+                    `).catch(() => {})
+                    for (const [idx, col] of [['PayrollPeriod_status_idx', 'status'], ['PayrollPeriod_branchId_idx', 'branchId']]) {
+                        await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "${idx}" ON "${schema_name}"."PayrollPeriod"("${col}")`).catch(() => {})
+                    }
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "PayrollPeriod_year_month_idx" ON "${schema_name}"."PayrollPeriod"("year","month")`).catch(() => {})
+
+                    await registryPrisma.$executeRawUnsafe(`
+                        CREATE TABLE IF NOT EXISTS "${schema_name}"."PayrollEntry" (
+                            "id" TEXT NOT NULL, "periodId" TEXT NOT NULL, "employeeId" TEXT NOT NULL,
+                            "employeeCode" TEXT, "employeeName" TEXT,
+                            "workDays" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "baseSalary" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "allowances" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "overtimePay" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "grossSalary" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "bhxhEmployee" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "bhytEmployee" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "bhtnEmployee" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "bhxhEmployer" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "bhytEmployer" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "bhtnEmployer" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "totalInsuranceEmployee" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "totalInsuranceEmployer" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "totalInsuranceDeduction" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "taxableIncome" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "personalDeduction" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "dependentDeduction" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "dependents" INTEGER NOT NULL DEFAULT 0,
+                            "assessableIncome" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "pitAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "netSalary" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "bankTransferAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "notes" TEXT,
+                            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            CONSTRAINT "PayrollEntry_pkey" PRIMARY KEY ("id")
+                        )
+                    `).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "PayrollEntry_periodId_idx" ON "${schema_name}"."PayrollEntry"("periodId")`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "PayrollEntry_employeeId_idx" ON "${schema_name}"."PayrollEntry"("employeeId")`).catch(() => {})
+
+                    await markMigrationApplied(migName)
+                }
+                console.log('✅ Payroll Phase 4 migration completed')
+            } catch (err: any) {
+                console.error('⚠️ Payroll Phase 4 migration failed:', err.message)
+            }
+
+            // E-Banking config Phase 4 — BankConnectionConfig (provider sync credentials).
+            try {
+                const schemas: any[] = await registryPrisma.$queryRaw`SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('information_schema', 'pg_catalog', 'pg_toast', 'public')`
+                for (const { schema_name } of schemas) {
+                    const migName = `ebanking_config_v1:${schema_name}`
+                    if (await isMigrationApplied(migName)) continue
+                    await registryPrisma.$executeRawUnsafe(`
+                        CREATE TABLE IF NOT EXISTS "${schema_name}"."BankConnectionConfig" (
+                            "id" TEXT NOT NULL,
+                            "bankName" TEXT NOT NULL DEFAULT '',
+                            "apiUrl" TEXT, "apiKey" TEXT, "apiSecret" TEXT,
+                            "lastSyncAt" TIMESTAMP(3),
+                            "syncStatus" TEXT NOT NULL DEFAULT 'idle',
+                            "isActive" BOOLEAN NOT NULL DEFAULT true,
+                            "branchId" TEXT,
+                            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            CONSTRAINT "BankConnectionConfig_pkey" PRIMARY KEY ("id")
+                        )
+                    `).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "BankConnectionConfig_isActive_idx" ON "${schema_name}"."BankConnectionConfig"("isActive")`).catch(() => {})
+                    await markMigrationApplied(migName)
+                }
+                console.log('✅ E-Banking config Phase 4 migration completed')
+            } catch (err: any) {
+                console.error('⚠️ E-Banking config Phase 4 migration failed:', err.message)
+            }
+
             } catch (err: any) {
                 console.error('[Migration] Boot migration error (server will still start):', err.message)
             }

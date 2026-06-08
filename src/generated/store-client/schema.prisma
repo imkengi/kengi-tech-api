@@ -842,6 +842,23 @@ model BankTransaction {
   @@index([branchId])
 }
 
+// E-Banking (Phase 4): provider sync credentials for a bank's open-banking API.
+model BankConnectionConfig {
+  id         String    @id @default(cuid())
+  bankName   String    @default("")
+  apiUrl     String?
+  apiKey     String?
+  apiSecret  String? // masked in responses
+  lastSyncAt DateTime?
+  syncStatus String    @default("idle") // idle | syncing | error
+  isActive   Boolean   @default(true)
+  branchId   String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([isActive])
+}
+
 // ─── Tax Declaration ───────────────────────────────────────────────────────────
 
 model TaxDeclaration {
