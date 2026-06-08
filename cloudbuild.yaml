@@ -53,6 +53,27 @@ steps:
       - >-
         NODE_ENV=production,DATABASE_URL=postgresql://${_DB_USER}:${_DB_PASSWORD}@localhost/${_DB_NAME}?host=/cloudsql/${_CLOUD_SQL_INSTANCE},CORS_ORIGIN=*,APP_BASE_URL=https://kengi.vn,REDIS_URL=${_REDIS_URL}
 
+  # Step 4: Force 100% traffic onto the just-deployed revision.
+  # When the service's traffic has ever been pinned to a *named* revision (rather
+  # than latestRevision:true), `gcloud run deploy` creates the new revision but
+  # does NOT migrate traffic to it — so fixes silently never go live (the cause of
+  # the TikTok sync staying broken: traffic was stuck on an old revision while
+  # every fix deployed as a no-traffic revision). `--to-latest` re-points traffic
+  # to the newest revision AND restores latestRevision:true so future deploys
+  # auto-migrate again. Idempotent.
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'services'
+      - 'update-traffic'
+      - '${_SERVICE_NAME}'
+      - '--region'
+      - '${_REGION}'
+      - '--platform'
+      - 'managed'
+      - '--to-latest'
+
 images:
   - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:latest'
 
