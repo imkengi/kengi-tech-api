@@ -1131,7 +1131,7 @@ router.post('/shipping-label-batch', authMiddleware, async (req: AuthRequest, re
 //  PLATFORM INTEGRATION — OAuth, Sync, Test Connection
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { getPlatformService, isSupportedPlatform, type PlatformOrder } from '../services/platforms'
+import { getPlatformService, isSupportedPlatform, TikTokService, type PlatformOrder } from '../services/platforms'
 import { processNewOrders } from '../services/orderSync'
 
 // GET /api/online-orders/channels/:id/auth-url
@@ -1287,6 +1287,26 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
             }
         }
 
+        // ── TikTok: ensure we have the real shop_cipher ──────────────────────
+        // Order/product endpoints require shop_cipher (NOT open_id). Older
+        // connections stored open_id as shopId; re-resolve it from
+        // /authorization/202309/shops and persist if it changed (self-heal).
+        if (channel.platform === 'tiktok' && service instanceof TikTokService && (service as any).credentials.accessToken) {
+            try {
+                const cipher = await service.getShopCipher()
+                if (cipher && cipher !== channel.shopId) {
+                    (service as any).credentials.shopId = cipher
+                    await prisma.onlineChannel.update({
+                        where: { id: channel.id },
+                        data: { shopId: cipher },
+                    })
+                    console.log(`[Sync] Resolved TikTok shop_cipher for ${channel.name}`)
+                }
+            } catch (cipherErr: any) {
+                console.error(`[Sync] Failed to resolve TikTok shop_cipher for ${channel.name}:`, cipherErr.message)
+            }
+        }
+
         // Fetch orders from platform (with retry-on-token-error)
         // Với update_time, luôn dùng 15 ngày để bắt đơn cũ đã thay đổi status
         // (lastSyncAt quá ngắn — đơn cũ có thể update_time trong window 15 ngày)
@@ -1295,12 +1315,24 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
         let page = 1
         let hasMore = true
 
+        // Optional status filter: ?status=UNPAID,AWAITING_SHIPMENT,...
+        // TikTok orders/search only filters by ONE native status per call, so we
+        // loop over each requested status. No status → single unfiltered pass.
+        const statusFilter = String(req.query.status || '')
+            .split(',').map(s => s.trim()).filter(Boolean)
+        const statusList: (string | undefined)[] = statusFilter.length ? statusFilter : [undefined]
+
         const fetchWithRetry = async () => {
-            while (hasMore && page <= 10) {
-                const result = await service.fetchOrders({ since, page, pageSize: 50 })
-                allOrders = allOrders.concat(result.orders)
-                hasMore = result.hasMore
-                page++
+            allOrders = []
+            for (const st of statusList) {
+                page = 1
+                hasMore = true
+                while (hasMore && page <= 10) {
+                    const result = await service.fetchOrders({ since, page, pageSize: 50, status: st })
+                    allOrders = allOrders.concat(result.orders)
+                    hasMore = result.hasMore
+                    page++
+                }
             }
         }
 

@@ -101,15 +101,55 @@ export class TikTokService extends PlatformService {
         if (data.code !== 0) throw new Error(`TikTok auth error: ${data.message || data.code}`)
 
         const tokenData = data.data || {}
+        const accessToken = tokenData.access_token
+
+        // Order/product endpoints need the real shop_cipher (NOT open_id or shop_id).
+        // Resolve it now via /authorization/202309/shops using the fresh access token,
+        // and store it as shopId so buildUrl() can pass it as shop_cipher.
+        // Fall back to open_id only if the lookup fails (sync will self-heal later).
+        this.credentials.accessToken = accessToken
+        let shopCipher: string | undefined
+        try {
+            shopCipher = await this.getShopCipher()
+        } catch (err) {
+            console.error('[TikTok] Failed to resolve shop_cipher after token exchange:', err)
+        }
+
         return {
-            accessToken: tokenData.access_token,
+            accessToken,
             refreshToken: tokenData.refresh_token,
             expiresIn: this.toRelativeExpiry(tokenData.access_token_expire_in),
-            // NOTE: open_id is stored as shopId for now. Order/product endpoints
-            // additionally need the real shop_cipher (from /authorization/202309/shops);
-            // testConnection works without it (noShopCipher).
-            shopId: tokenData.open_id || undefined,
+            shopId: shopCipher || tokenData.open_id || undefined,
         }
+    }
+
+    /**
+     * Resolve the authorized shop's `shop_cipher` from /authorization/202309/shops.
+     * Order/product endpoints require shop_cipher (open_id / shop_id are NOT usable),
+     * and this endpoint is itself shop-agnostic (must be called with noShopCipher).
+     * Requires an access token to already be set on the credentials. Returns the first
+     * shop's cipher, or undefined if no shop is returned.
+     */
+    async getShopCipher(): Promise<string | undefined> {
+        const shops = await this.getAuthorizedShops()
+        const shop = shops[0]
+        return shop?.cipher || shop?.shop_cipher || undefined
+    }
+
+    /**
+     * GET /authorization/202309/shops — list the shops the access token is
+     * authorized for. Shop-agnostic endpoint (must be called with noShopCipher),
+     * requires an access token. Returns the raw shop objects, each carrying the
+     * `cipher` (a.k.a. shop_cipher) that order/product endpoints require.
+     */
+    async getAuthorizedShops(): Promise<any[]> {
+        const path = '/authorization/202309/shops'
+        const { url, headers } = this.buildUrl(path, {}, undefined, { noShopCipher: true })
+        const data = await this.httpGet(url, headers)
+        if (data.code !== 0) {
+            throw new Error(`TikTok getShops: [${data.code}] ${data.message || 'Unknown error'}`)
+        }
+        return data.data?.shops || []
     }
 
     async refreshAccessToken(): Promise<TokenResponse> {
@@ -134,12 +174,18 @@ export class TikTokService extends PlatformService {
 
     // ─── Orders ──────────────────────────────────────────────────────────────────
 
-    async fetchOrders(params: { since?: Date; page?: number; pageSize?: number }) {
+    async fetchOrders(params: { since?: Date; page?: number; pageSize?: number; status?: string }) {
         const path = '/order/202309/orders/search'
         const bodyObj: any = {
             page_size: Math.min(params.pageSize || 50, 100),
             sort_field: 'CREATE_TIME',
             sort_order: 'DESC',
+        }
+        // TikTok v202309 orders/search filters by a single native order_status
+        // (UNPAID, ON_HOLD, AWAITING_SHIPMENT, AWAITING_COLLECTION, IN_TRANSIT,
+        // DELIVERED, COMPLETED, CANCELLED). Caller loops per-status for multiple.
+        if (params.status) {
+            bodyObj.order_status = params.status
         }
         if (params.since) {
             bodyObj.create_time_ge = Math.floor(params.since.getTime() / 1000)
@@ -196,7 +242,7 @@ export class TikTokService extends PlatformService {
                 return { success: false, error: `[${data.code}] ${data.message || 'Unknown error'}` }
             }
             const shop = data.data?.shops?.[0]
-            return { success: true, shopName: shop?.shop_name || shop?.shop_id || 'TikTok Shop' }
+            return { success: true, shopName: shop?.name || shop?.shop_name || shop?.id || 'TikTok Shop' }
         } catch (err: any) {
             console.error('[TikTok] testConnection exception:', err)
             return { success: false, error: err?.message || String(err) }

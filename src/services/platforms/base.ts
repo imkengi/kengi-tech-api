@@ -100,6 +100,8 @@ export abstract class PlatformService {
         since?: Date
         page?: number
         pageSize?: number
+        /** Platform-native status to filter by (single value per call) */
+        status?: string
     }): Promise<{ orders: PlatformOrder[]; hasMore: boolean; total: number }>
 
     /** Fetch product catalog from platform */
