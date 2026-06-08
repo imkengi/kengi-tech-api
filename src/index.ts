@@ -242,6 +242,14 @@ app.use('/api/reports', accountingReportRoutes)
 import einvoiceRoutes from './routes/einvoice'
 app.use('/api/einvoice', einvoiceRoutes)
 
+// ─── Accounting Phase 4 — TSCĐ, CCDC, E-Banking ─────────────────────────────
+import fixedAssetsRoutes from './routes/fixedAssets'
+import ccdcRoutes from './routes/ccdc'
+import ebankingRoutes from './routes/ebanking'
+app.use('/api/fixed-assets', fixedAssetsRoutes)
+app.use('/api/ccdc', ccdcRoutes)
+app.use('/api/ebanking', ebankingRoutes)
+
 import storageRoutes from './routes/storage'
 app.use('/api/storage', storageRoutes)
 
@@ -1058,6 +1066,199 @@ if (!process.env.PASSENGER_BASE_URI) {
                 console.log('✅ E-Invoice Phase 3 migration completed')
             } catch (err: any) {
                 console.error('⚠️ E-Invoice Phase 3 migration failed:', err.message)
+            }
+
+            // Fixed Assets Phase 4 — TSCĐ (TT99/2025). Adds the Phase-4 columns to
+            // the legacy FixedAsset table and creates DepreciationEntry. Idempotent.
+            try {
+                const schemas: any[] = await registryPrisma.$queryRaw`SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('information_schema', 'pg_catalog', 'pg_toast', 'public')`
+                for (const { schema_name } of schemas) {
+                    const migName = `fixed_assets_v1:${schema_name}`
+                    if (await isMigrationApplied(migName)) continue
+
+                    await registryPrisma.$executeRawUnsafe(`
+                        CREATE TABLE IF NOT EXISTS "${schema_name}"."FixedAsset" (
+                            "id" TEXT NOT NULL,
+                            "code" TEXT NOT NULL,
+                            "name" TEXT NOT NULL,
+                            "category" TEXT NOT NULL DEFAULT 'tangible',
+                            "acquisitionDate" TEXT NOT NULL DEFAULT '',
+                            "originalCost" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "usefulLifeMonths" INTEGER NOT NULL DEFAULT 0,
+                            "method" TEXT NOT NULL DEFAULT 'straight-line',
+                            "accumulatedDepreciation" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "netBookValue" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "monthlyDepreciation" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "depreciationAccount" TEXT NOT NULL DEFAULT '6424',
+                            "residualValue" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "status" TEXT NOT NULL DEFAULT 'active',
+                            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            CONSTRAINT "FixedAsset_pkey" PRIMARY KEY ("id")
+                        )
+                    `).catch(() => {})
+                    const faCols: Array<[string, string]> = [
+                        ['acquisitionCost', 'DOUBLE PRECISION NOT NULL DEFAULT 0'],
+                        ['depreciationMethod', `TEXT NOT NULL DEFAULT 'straight_line'`],
+                        ['accountCode', `TEXT NOT NULL DEFAULT '211'`],
+                        ['depAccAccountCode', `TEXT NOT NULL DEFAULT '2141'`],
+                        ['expenseAccountCode', `TEXT NOT NULL DEFAULT '6424'`],
+                        ['disposalDate', 'TEXT'], ['disposalAmount', 'DOUBLE PRECISION'],
+                        ['department', 'TEXT'], ['description', 'TEXT'],
+                        ['branchId', 'TEXT'], ['notes', 'TEXT'],
+                    ]
+                    for (const [col, type] of faCols) {
+                        await registryPrisma.$executeRawUnsafe(`ALTER TABLE "${schema_name}"."FixedAsset" ADD COLUMN IF NOT EXISTS "${col}" ${type};`).catch(() => {})
+                    }
+                    for (const [idx, col] of [['FixedAsset_status_idx', 'status'], ['FixedAsset_category_idx', 'category'], ['FixedAsset_branchId_idx', 'branchId']]) {
+                        await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "${idx}" ON "${schema_name}"."FixedAsset"("${col}")`).catch(() => {})
+                    }
+
+                    await registryPrisma.$executeRawUnsafe(`
+                        CREATE TABLE IF NOT EXISTS "${schema_name}"."DepreciationEntry" (
+                            "id" TEXT NOT NULL,
+                            "assetId" TEXT NOT NULL,
+                            "month" INTEGER NOT NULL,
+                            "year" INTEGER NOT NULL,
+                            "beginningValue" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "depreciationAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "accumulatedDepreciation" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "endingValue" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "journalEntryId" TEXT,
+                            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            CONSTRAINT "DepreciationEntry_pkey" PRIMARY KEY ("id")
+                        )
+                    `).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "DepreciationEntry_assetId_idx" ON "${schema_name}"."DepreciationEntry"("assetId")`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "DepreciationEntry_year_month_idx" ON "${schema_name}"."DepreciationEntry"("year","month")`).catch(() => {})
+
+                    await markMigrationApplied(migName)
+                }
+                console.log('✅ Fixed Assets Phase 4 migration completed')
+            } catch (err: any) {
+                console.error('⚠️ Fixed Assets Phase 4 migration failed:', err.message)
+            }
+
+            // CCDC Phase 4 — Công cụ dụng cụ (TT99/2025). Creates CCDC + CCDCAllocation.
+            try {
+                const schemas: any[] = await registryPrisma.$queryRaw`SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('information_schema', 'pg_catalog', 'pg_toast', 'public')`
+                for (const { schema_name } of schemas) {
+                    const migName = `ccdc_v1:${schema_name}`
+                    if (await isMigrationApplied(migName)) continue
+
+                    await registryPrisma.$executeRawUnsafe(`
+                        CREATE TABLE IF NOT EXISTS "${schema_name}"."CCDC" (
+                            "id" TEXT NOT NULL,
+                            "code" TEXT NOT NULL,
+                            "name" TEXT NOT NULL,
+                            "category" TEXT,
+                            "acquisitionDate" TEXT,
+                            "totalValue" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "allocationMonths" INTEGER NOT NULL DEFAULT 1,
+                            "monthlyAllocation" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "allocatedAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "remainingAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "accountCode" TEXT NOT NULL DEFAULT '242',
+                            "expenseAccountCode" TEXT NOT NULL DEFAULT '642',
+                            "status" TEXT NOT NULL DEFAULT 'allocating',
+                            "branchId" TEXT,
+                            "notes" TEXT,
+                            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            CONSTRAINT "CCDC_pkey" PRIMARY KEY ("id")
+                        )
+                    `).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CCDC_status_idx" ON "${schema_name}"."CCDC"("status")`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CCDC_branchId_idx" ON "${schema_name}"."CCDC"("branchId")`).catch(() => {})
+
+                    await registryPrisma.$executeRawUnsafe(`
+                        CREATE TABLE IF NOT EXISTS "${schema_name}"."CCDCAllocation" (
+                            "id" TEXT NOT NULL,
+                            "ccdcId" TEXT NOT NULL,
+                            "month" INTEGER NOT NULL,
+                            "year" INTEGER NOT NULL,
+                            "amount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "journalEntryId" TEXT,
+                            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            CONSTRAINT "CCDCAllocation_pkey" PRIMARY KEY ("id")
+                        )
+                    `).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CCDCAllocation_ccdcId_idx" ON "${schema_name}"."CCDCAllocation"("ccdcId")`).catch(() => {})
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CCDCAllocation_year_month_idx" ON "${schema_name}"."CCDCAllocation"("year","month")`).catch(() => {})
+
+                    await markMigrationApplied(migName)
+                }
+                console.log('✅ CCDC Phase 4 migration completed')
+            } catch (err: any) {
+                console.error('⚠️ CCDC Phase 4 migration failed:', err.message)
+            }
+
+            // E-Banking Phase 4 — Ngân hàng điện tử. Adds the Phase-4 columns to the
+            // legacy BankAccount / BankTransaction tables (sao kê + đối soát).
+            try {
+                const schemas: any[] = await registryPrisma.$queryRaw`SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('information_schema', 'pg_catalog', 'pg_toast', 'public')`
+                for (const { schema_name } of schemas) {
+                    const migName = `ebanking_v1:${schema_name}`
+                    if (await isMigrationApplied(migName)) continue
+
+                    await registryPrisma.$executeRawUnsafe(`
+                        CREATE TABLE IF NOT EXISTS "${schema_name}"."BankAccount" (
+                            "id" TEXT NOT NULL,
+                            "bankName" TEXT NOT NULL DEFAULT '',
+                            "accountNumber" TEXT NOT NULL DEFAULT '',
+                            "accountName" TEXT,
+                            "isDefault" BOOLEAN NOT NULL DEFAULT false,
+                            "status" TEXT NOT NULL DEFAULT 'active',
+                            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            CONSTRAINT "BankAccount_pkey" PRIMARY KEY ("id")
+                        )
+                    `).catch(() => {})
+                    const baCols: Array<[string, string]> = [
+                        ['bankBranch', 'TEXT'], ['currency', `TEXT NOT NULL DEFAULT 'VND'`],
+                        ['balance', 'DOUBLE PRECISION NOT NULL DEFAULT 0'],
+                        ['lastSyncAt', 'TIMESTAMP(3)'], ['branchId', 'TEXT'],
+                    ]
+                    for (const [col, type] of baCols) {
+                        await registryPrisma.$executeRawUnsafe(`ALTER TABLE "${schema_name}"."BankAccount" ADD COLUMN IF NOT EXISTS "${col}" ${type};`).catch(() => {})
+                    }
+                    await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "BankAccount_branchId_idx" ON "${schema_name}"."BankAccount"("branchId")`).catch(() => {})
+
+                    await registryPrisma.$executeRawUnsafe(`
+                        CREATE TABLE IF NOT EXISTS "${schema_name}"."BankTransaction" (
+                            "id" TEXT NOT NULL,
+                            "bankAccountId" TEXT,
+                            "type" TEXT NOT NULL DEFAULT 'credit',
+                            "amount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                            "description" TEXT NOT NULL DEFAULT '',
+                            "reference" TEXT,
+                            "date" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            CONSTRAINT "BankTransaction_pkey" PRIMARY KEY ("id")
+                        )
+                    `).catch(() => {})
+                    const btCols: Array<[string, string]> = [
+                        ['transactionDate', 'TIMESTAMP(3)'], ['referenceNo', 'TEXT'],
+                        ['counterpartyName', 'TEXT'], ['counterpartyAccount', 'TEXT'],
+                        ['isReconciled', 'BOOLEAN NOT NULL DEFAULT false'], ['reconciledAt', 'TIMESTAMP(3)'],
+                        ['journalEntryId', 'TEXT'], ['matchedSaleId', 'TEXT'], ['matchedExpenseId', 'TEXT'],
+                        ['branchId', 'TEXT'], ['notes', 'TEXT'],
+                    ]
+                    for (const [col, type] of btCols) {
+                        await registryPrisma.$executeRawUnsafe(`ALTER TABLE "${schema_name}"."BankTransaction" ADD COLUMN IF NOT EXISTS "${col}" ${type};`).catch(() => {})
+                    }
+                    for (const [idx, col] of [['BankTransaction_isReconciled_idx', 'isReconciled'], ['BankTransaction_transactionDate_idx', 'transactionDate'], ['BankTransaction_branchId_idx', 'branchId']]) {
+                        await registryPrisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "${idx}" ON "${schema_name}"."BankTransaction"("${col}")`).catch(() => {})
+                    }
+
+                    await markMigrationApplied(migName)
+                }
+                console.log('✅ E-Banking Phase 4 migration completed')
+            } catch (err: any) {
+                console.error('⚠️ E-Banking Phase 4 migration failed:', err.message)
             }
 
             } catch (err: any) {

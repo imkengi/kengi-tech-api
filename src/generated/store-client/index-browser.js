@@ -693,6 +693,11 @@ exports.Prisma.BankAccountScalarFieldEnum = {
   accountName: 'accountName',
   isDefault: 'isDefault',
   status: 'status',
+  bankBranch: 'bankBranch',
+  currency: 'currency',
+  balance: 'balance',
+  lastSyncAt: 'lastSyncAt',
+  branchId: 'branchId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -705,6 +710,17 @@ exports.Prisma.BankTransactionScalarFieldEnum = {
   description: 'description',
   reference: 'reference',
   date: 'date',
+  transactionDate: 'transactionDate',
+  referenceNo: 'referenceNo',
+  counterpartyName: 'counterpartyName',
+  counterpartyAccount: 'counterpartyAccount',
+  isReconciled: 'isReconciled',
+  reconciledAt: 'reconciledAt',
+  journalEntryId: 'journalEntryId',
+  matchedSaleId: 'matchedSaleId',
+  matchedExpenseId: 'matchedExpenseId',
+  branchId: 'branchId',
+  notes: 'notes',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -1114,6 +1130,77 @@ exports.Prisma.PayrollRecordScalarFieldEnum = {
   updatedAt: 'updatedAt'
 };
 
+exports.Prisma.EmployeeScalarFieldEnum = {
+  id: 'id',
+  code: 'code',
+  name: 'name',
+  position: 'position',
+  department: 'department',
+  baseSalary: 'baseSalary',
+  bankAccount: 'bankAccount',
+  bankName: 'bankName',
+  taxCode: 'taxCode',
+  socialInsuranceNo: 'socialInsuranceNo',
+  startDate: 'startDate',
+  endDate: 'endDate',
+  status: 'status',
+  dependents: 'dependents',
+  notes: 'notes',
+  branchId: 'branchId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.PayrollPeriodScalarFieldEnum = {
+  id: 'id',
+  month: 'month',
+  year: 'year',
+  status: 'status',
+  totalGross: 'totalGross',
+  totalDeductions: 'totalDeductions',
+  totalNet: 'totalNet',
+  notes: 'notes',
+  branchId: 'branchId',
+  createdBy: 'createdBy',
+  confirmedAt: 'confirmedAt',
+  paidAt: 'paidAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.PayrollEntryScalarFieldEnum = {
+  id: 'id',
+  periodId: 'periodId',
+  employeeId: 'employeeId',
+  employeeCode: 'employeeCode',
+  employeeName: 'employeeName',
+  workDays: 'workDays',
+  baseSalary: 'baseSalary',
+  allowances: 'allowances',
+  overtimePay: 'overtimePay',
+  grossSalary: 'grossSalary',
+  bhxhEmployee: 'bhxhEmployee',
+  bhytEmployee: 'bhytEmployee',
+  bhtnEmployee: 'bhtnEmployee',
+  bhxhEmployer: 'bhxhEmployer',
+  bhytEmployer: 'bhytEmployer',
+  bhtnEmployer: 'bhtnEmployer',
+  totalInsuranceEmployee: 'totalInsuranceEmployee',
+  totalInsuranceEmployer: 'totalInsuranceEmployer',
+  totalInsuranceDeduction: 'totalInsuranceDeduction',
+  taxableIncome: 'taxableIncome',
+  personalDeduction: 'personalDeduction',
+  dependentDeduction: 'dependentDeduction',
+  dependents: 'dependents',
+  assessableIncome: 'assessableIncome',
+  pitAmount: 'pitAmount',
+  netSalary: 'netSalary',
+  bankTransferAmount: 'bankTransferAmount',
+  notes: 'notes',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
 exports.Prisma.OnlineChannelScalarFieldEnum = {
   id: 'id',
   name: 'name',
@@ -1245,6 +1332,59 @@ exports.Prisma.FixedAssetScalarFieldEnum = {
   description: 'description',
   disposalDate: 'disposalDate',
   status: 'status',
+  acquisitionCost: 'acquisitionCost',
+  depreciationMethod: 'depreciationMethod',
+  accountCode: 'accountCode',
+  depAccAccountCode: 'depAccAccountCode',
+  expenseAccountCode: 'expenseAccountCode',
+  disposalAmount: 'disposalAmount',
+  branchId: 'branchId',
+  notes: 'notes',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.DepreciationEntryScalarFieldEnum = {
+  id: 'id',
+  assetId: 'assetId',
+  month: 'month',
+  year: 'year',
+  beginningValue: 'beginningValue',
+  depreciationAmount: 'depreciationAmount',
+  accumulatedDepreciation: 'accumulatedDepreciation',
+  endingValue: 'endingValue',
+  journalEntryId: 'journalEntryId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.CCDCScalarFieldEnum = {
+  id: 'id',
+  code: 'code',
+  name: 'name',
+  category: 'category',
+  acquisitionDate: 'acquisitionDate',
+  totalValue: 'totalValue',
+  allocationMonths: 'allocationMonths',
+  monthlyAllocation: 'monthlyAllocation',
+  allocatedAmount: 'allocatedAmount',
+  remainingAmount: 'remainingAmount',
+  accountCode: 'accountCode',
+  expenseAccountCode: 'expenseAccountCode',
+  status: 'status',
+  branchId: 'branchId',
+  notes: 'notes',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.CCDCAllocationScalarFieldEnum = {
+  id: 'id',
+  ccdcId: 'ccdcId',
+  month: 'month',
+  year: 'year',
+  amount: 'amount',
+  journalEntryId: 'journalEntryId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -1727,6 +1867,9 @@ exports.Prisma.ModelName = {
   BranchRequest: 'BranchRequest',
   BranchDeleteRequest: 'BranchDeleteRequest',
   PayrollRecord: 'PayrollRecord',
+  Employee: 'Employee',
+  PayrollPeriod: 'PayrollPeriod',
+  PayrollEntry: 'PayrollEntry',
   OnlineChannel: 'OnlineChannel',
   OnlineOrder: 'OnlineOrder',
   OnlineProduct: 'OnlineProduct',
@@ -1734,6 +1877,9 @@ exports.Prisma.ModelName = {
   SyncLog: 'SyncLog',
   JournalEntry: 'JournalEntry',
   FixedAsset: 'FixedAsset',
+  DepreciationEntry: 'DepreciationEntry',
+  CCDC: 'CCDC',
+  CCDCAllocation: 'CCDCAllocation',
   EInvoiceConfig: 'EInvoiceConfig',
   EInvoice: 'EInvoice',
   EInvoiceItem: 'EInvoiceItem',

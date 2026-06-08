@@ -790,33 +790,56 @@ model TaxConfig {
 // ─── Bank Accounts (S2e - Tiền gửi) ───────────────────────────────────────────
 
 model BankAccount {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   bankName      String
   accountNumber String
   accountName   String?
-  isDefault     Boolean  @default(false)
-  status        String   @default("active")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  isDefault     Boolean   @default(false)
+  status        String    @default("active")
+  // Phase 4 (E-Banking) — số dư + đồng bộ sao kê
+  bankBranch    String?
+  currency      String    @default("VND")
+  balance       Float     @default(0)
+  lastSyncAt    DateTime?
+  branchId      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   transactions BankTransaction[]
+
+  @@index([branchId])
 }
 
 model BankTransaction {
-  id            String   @id @default(cuid())
-  bankAccountId String?
-  type          String // "deposit" | "withdraw"
-  amount        Float
-  description   String
-  reference     String?
-  date          DateTime @default(now())
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                  String    @id @default(cuid())
+  bankAccountId       String?
+  type                String // legacy: "deposit"|"withdraw"; Phase 4: "credit"|"debit"
+  amount              Float
+  description         String
+  reference           String?
+  date                DateTime  @default(now())
+  // Phase 4 (E-Banking) — sao kê + đối soát
+  transactionDate     DateTime?
+  referenceNo         String?
+  counterpartyName    String?
+  counterpartyAccount String?
+  isReconciled        Boolean   @default(false)
+  reconciledAt        DateTime?
+  journalEntryId      String?
+  matchedSaleId       String?
+  matchedExpenseId    String?
+  branchId            String?
+  notes               String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   bankAccount BankAccount? @relation(fields: [bankAccountId], references: [id])
 
   @@index([date])
   @@index([bankAccountId])
+  @@index([isReconciled])
+  @@index([transactionDate])
+  @@index([branchId])
 }
 
 // ─── Tax Declaration ───────────────────────────────────────────────────────────
@@ -1338,6 +1361,90 @@ model PayrollRecord {
   @@index([employeeId])
 }
 
+// ─── Tiền lương Phase 4 (Employee + PayrollPeriod + PayrollEntry) ───────────
+
+model Employee {
+  id                String   @id @default(cuid())
+  code              String
+  name              String
+  position          String?
+  department        String?
+  baseSalary        Float    @default(0)
+  bankAccount       String?
+  bankName          String?
+  taxCode           String?
+  socialInsuranceNo String?
+  startDate         String?
+  endDate           String?
+  status            String   @default("active")
+  dependents        Int      @default(0)
+  notes             String?
+  branchId          String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([status])
+  @@index([code])
+  @@index([branchId])
+}
+
+model PayrollPeriod {
+  id              String    @id @default(cuid())
+  month           Int
+  year            Int
+  status          String    @default("draft")
+  totalGross      Float     @default(0)
+  totalDeductions Float     @default(0)
+  totalNet        Float     @default(0)
+  notes           String?
+  branchId        String?
+  createdBy       String?
+  confirmedAt     DateTime?
+  paidAt          DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([status])
+  @@index([year, month])
+  @@index([branchId])
+}
+
+model PayrollEntry {
+  id                      String   @id @default(cuid())
+  periodId                String
+  employeeId              String
+  employeeCode            String?
+  employeeName            String?
+  workDays                Float    @default(0)
+  baseSalary              Float    @default(0)
+  allowances              Float    @default(0)
+  overtimePay             Float    @default(0)
+  grossSalary             Float    @default(0)
+  bhxhEmployee            Float    @default(0)
+  bhytEmployee            Float    @default(0)
+  bhtnEmployee            Float    @default(0)
+  bhxhEmployer            Float    @default(0)
+  bhytEmployer            Float    @default(0)
+  bhtnEmployer            Float    @default(0)
+  totalInsuranceEmployee  Float    @default(0)
+  totalInsuranceEmployer  Float    @default(0)
+  totalInsuranceDeduction Float    @default(0)
+  taxableIncome           Float    @default(0)
+  personalDeduction       Float    @default(0)
+  dependentDeduction      Float    @default(0)
+  dependents              Int      @default(0)
+  assessableIncome        Float    @default(0)
+  pitAmount               Float    @default(0)
+  netSalary               Float    @default(0)
+  bankTransferAmount      Float    @default(0)
+  notes                   String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@index([periodId])
+  @@index([employeeId])
+}
+
 // ─── Online Sales Channels ──────────────────────────────────────────────────
 
 model OnlineChannel {
@@ -1517,11 +1624,87 @@ model FixedAsset {
   description             String?
   disposalDate            String?
   status                  String   @default("active")
+  // Phase 4 (TSCĐ) — bút toán khấu hao + thanh lý theo TT99/2025
+  acquisitionCost         Float    @default(0)
+  depreciationMethod      String   @default("straight_line") // straight_line | declining_balance
+  accountCode             String   @default("211") // 211 (hữu hình) | 213 (vô hình)
+  depAccAccountCode       String   @default("2141") // 2141 | 2143 (hao mòn TSCĐ)
+  expenseAccountCode      String   @default("6424") // 627 | 641 | 642
+  disposalAmount          Float?
+  branchId                String?
+  notes                   String?
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
+  depreciationEntries DepreciationEntry[]
+
   @@index([status])
   @@index([category])
+  @@index([branchId])
+}
+
+// Bút toán khấu hao TSCĐ theo từng tháng.
+model DepreciationEntry {
+  id                      String   @id @default(cuid())
+  assetId                 String
+  month                   Int
+  year                    Int
+  beginningValue          Float    @default(0)
+  depreciationAmount      Float    @default(0)
+  accumulatedDepreciation Float    @default(0)
+  endingValue             Float    @default(0)
+  journalEntryId          String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  asset FixedAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([assetId])
+  @@index([year, month])
+}
+
+// ─── Công cụ dụng cụ (CCDC) ────────────────────────────────────────────────
+
+model CCDC {
+  id                 String   @id @default(cuid())
+  code               String   @unique
+  name               String
+  category           String?
+  acquisitionDate    String?
+  totalValue         Float    @default(0)
+  allocationMonths   Int      @default(1)
+  monthlyAllocation  Float    @default(0)
+  allocatedAmount    Float    @default(0)
+  remainingAmount    Float    @default(0)
+  accountCode        String   @default("242") // 153 | 242
+  expenseAccountCode String   @default("642") // 627 | 641 | 642
+  status             String   @default("allocating") // allocating | fully_allocated | disposed
+  branchId           String?
+  notes              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  allocations CCDCAllocation[]
+
+  @@index([status])
+  @@index([branchId])
+}
+
+// Bút toán phân bổ CCDC theo từng tháng.
+model CCDCAllocation {
+  id             String   @id @default(cuid())
+  ccdcId         String
+  month          Int
+  year           Int
+  amount         Float    @default(0)
+  journalEntryId String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  ccdc CCDC @relation(fields: [ccdcId], references: [id], onDelete: Cascade)
+
+  @@index([ccdcId])
+  @@index([year, month])
 }
 
 // ─── E-Invoice (Hóa đơn Điện tử) ───────────────────────────────────────────

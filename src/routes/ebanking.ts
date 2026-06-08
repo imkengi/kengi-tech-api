@@ -1,0 +1,501 @@
+// ─────────────────────────────────────────────────────────────────────────────
+//  Ngân hàng điện tử (E-Banking) — Phase 4 — mounted at /api/ebanking
+//
+//  Quản lý tài khoản ngân hàng + sao kê giao dịch + đối soát (reconciliation).
+//  Chia sẻ bảng BankAccount/BankTransaction với /api/bank-accounts (mở rộng cột).
+//
+//  Routes:
+//    GET    /accounts                       danh sách tài khoản
+//    POST   /accounts                       thêm tài khoản
+//    GET    /accounts/:id                    chi tiết tài khoản
+//    PUT    /accounts/:id                    cập nhật
+//    DELETE /accounts/:id                    xóa
+//    GET    /accounts/:id/balance            số dư
+//    GET    /accounts/:id/transactions       sao kê
+//    POST   /accounts/:id/transactions       thêm giao dịch thủ công
+//    POST   /accounts/:id/import-csv         nhập sao kê từ CSV
+//    POST   /transactions/auto-reconcile     đối soát tự động
+//    POST   /transactions/:id/reconcile      đối soát 1 giao dịch
+//    GET    /dashboard                       tổng quan
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { Router, Response } from 'express'
+import { authMiddleware, AuthRequest, getBranchId, getBranchFilter } from '../middleware/auth'
+import { requireRole } from '../middleware/roleMiddleware'
+import { errMsg } from '../lib/errorResponse'
+
+const router = Router()
+
+const round2 = (v: any) => Math.round((Number(v) || 0) * 100) / 100
+
+// ─── Table provisioning (per-schema, cached once per process) ────────────────
+const ensuredSchemas = new Set<string>()
+async function ensureTables(req: AuthRequest): Promise<void> {
+    const prisma = req.storePrisma! as any
+    const key = req.user?.branchSchema || req.user?.storeSchema || 'default'
+    if (ensuredSchemas.has(key)) return
+    try {
+        // BankAccount / BankTransaction already exist (see /api/bank-accounts).
+        // Create-if-missing covers fresh schemas; ALTER adds the Phase-4 columns.
+        await prisma.$executeRawUnsafe(`
+            CREATE TABLE IF NOT EXISTS "BankAccount" (
+                "id" TEXT NOT NULL,
+                "bankName" TEXT NOT NULL DEFAULT '',
+                "accountNumber" TEXT NOT NULL DEFAULT '',
+                "accountName" TEXT,
+                "isDefault" BOOLEAN NOT NULL DEFAULT false,
+                "status" TEXT NOT NULL DEFAULT 'active',
+                "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT "BankAccount_pkey" PRIMARY KEY ("id")
+            )
+        `).catch(() => {})
+        const baCols: Array<[string, string]> = [
+            ['bankBranch', 'TEXT'],
+            ['currency', `TEXT NOT NULL DEFAULT 'VND'`],
+            ['balance', 'DOUBLE PRECISION NOT NULL DEFAULT 0'],
+            ['lastSyncAt', 'TIMESTAMP(3)'],
+            ['branchId', 'TEXT'],
+        ]
+        for (const [col, type] of baCols) {
+            await prisma.$executeRawUnsafe(`ALTER TABLE "BankAccount" ADD COLUMN IF NOT EXISTS "${col}" ${type};`).catch(() => {})
+        }
+        await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "BankAccount_branchId_idx" ON "BankAccount"("branchId")`).catch(() => {})
+
+        await prisma.$executeRawUnsafe(`
+            CREATE TABLE IF NOT EXISTS "BankTransaction" (
+                "id" TEXT NOT NULL,
+                "bankAccountId" TEXT,
+                "type" TEXT NOT NULL DEFAULT 'credit',
+                "amount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                "description" TEXT NOT NULL DEFAULT '',
+                "reference" TEXT,
+                "date" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT "BankTransaction_pkey" PRIMARY KEY ("id")
+            )
+        `).catch(() => {})
+        const btCols: Array<[string, string]> = [
+            ['transactionDate', 'TIMESTAMP(3)'],
+            ['referenceNo', 'TEXT'],
+            ['counterpartyName', 'TEXT'],
+            ['counterpartyAccount', 'TEXT'],
+            ['isReconciled', 'BOOLEAN NOT NULL DEFAULT false'],
+            ['reconciledAt', 'TIMESTAMP(3)'],
+            ['journalEntryId', 'TEXT'],
+            ['matchedSaleId', 'TEXT'],
+            ['matchedExpenseId', 'TEXT'],
+            ['branchId', 'TEXT'],
+            ['notes', 'TEXT'],
+        ]
+        for (const [col, type] of btCols) {
+            await prisma.$executeRawUnsafe(`ALTER TABLE "BankTransaction" ADD COLUMN IF NOT EXISTS "${col}" ${type};`).catch(() => {})
+        }
+        await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "BankTransaction_isReconciled_idx" ON "BankTransaction"("isReconciled")`).catch(() => {})
+        await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "BankTransaction_transactionDate_idx" ON "BankTransaction"("transactionDate")`).catch(() => {})
+        await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "BankTransaction_branchId_idx" ON "BankTransaction"("branchId")`).catch(() => {})
+        ensuredSchemas.add(key)
+    } catch (e: any) {
+        console.error('ensureTables(ebanking) error:', e?.message || e)
+    }
+}
+
+// type 'credit' (tiền vào) tăng số dư, 'debit' (tiền ra) giảm số dư.
+const signed = (type: string, amount: number) => (type === 'debit' ? -1 : 1) * (Number(amount) || 0)
+
+// Cập nhật số dư tài khoản.
+async function applyToBalance(prisma: any, bankAccountId: string, delta: number) {
+    const acc = await prisma.bankAccount.findUnique({ where: { id: bankAccountId } }).catch(() => null)
+    if (!acc) return null
+    const balance = round2((Number(acc.balance) || 0) + delta)
+    return prisma.bankAccount.update({ where: { id: bankAccountId }, data: { balance } }).catch(() => null)
+}
+
+const sameDay = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  Bank accounts
+// ═════════════════════════════════════════════════════════════════════════════
+
+// GET /api/ebanking/accounts
+router.get('/accounts', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        await ensureTables(req)
+        const prisma = req.storePrisma! as any
+        const where: any = { ...getBranchFilter(req) }
+        if (req.query.status) where.status = String(req.query.status)
+        const data = await prisma.bankAccount.findMany({ where, orderBy: { createdAt: 'asc' } })
+        res.json({ success: true, data })
+    } catch (err: any) {
+        console.error('GET /ebanking/accounts error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// POST /api/ebanking/accounts
+router.post('/accounts', authMiddleware, requireRole('admin', 'manager', 'superadmin'), async (req: AuthRequest, res: Response) => {
+    try {
+        await ensureTables(req)
+        const prisma = req.storePrisma! as any
+        const b = req.body || {}
+        if (!b.bankName?.trim() || !b.accountNumber?.trim()) {
+            return res.status(400).json({ success: false, error: 'Tên ngân hàng (bankName) và số tài khoản (accountNumber) là bắt buộc' })
+        }
+        if (b.isDefault) await prisma.bankAccount.updateMany({ data: { isDefault: false } }).catch(() => {})
+        const data = await prisma.bankAccount.create({
+            data: {
+                bankName: String(b.bankName).trim(),
+                accountNumber: String(b.accountNumber).trim(),
+                accountName: b.accountName?.trim() || null,
+                bankBranch: b.bankBranch?.trim() || null,
+                currency: b.currency || 'VND',
+                balance: round2(b.balance),
+                isDefault: !!b.isDefault,
+                status: b.status || 'active',
+                branchId: getBranchId(req) || null,
+            },
+        })
+        res.status(201).json({ success: true, data })
+    } catch (err: any) {
+        console.error('POST /ebanking/accounts error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// GET /api/ebanking/accounts/:id
+router.get('/accounts/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        await ensureTables(req)
+        const prisma = req.storePrisma! as any
+        const acc = await prisma.bankAccount.findUnique({ where: { id: String(req.params.id) } }).catch(() => null)
+        if (!acc) return res.status(404).json({ success: false, error: 'Không tìm thấy tài khoản' })
+        const txCount = await prisma.bankTransaction.count({ where: { bankAccountId: acc.id } }).catch(() => 0)
+        res.json({ success: true, data: { ...acc, transactionCount: txCount } })
+    } catch (err: any) {
+        console.error('GET /ebanking/accounts/:id error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// PUT /api/ebanking/accounts/:id
+router.put('/accounts/:id', authMiddleware, requireRole('admin', 'manager', 'superadmin'), async (req: AuthRequest, res: Response) => {
+    try {
+        await ensureTables(req)
+        const prisma = req.storePrisma! as any
+        const id = String(req.params.id)
+        const acc = await prisma.bankAccount.findUnique({ where: { id } }).catch(() => null)
+        if (!acc) return res.status(404).json({ success: false, error: 'Không tìm thấy tài khoản' })
+        const b = req.body || {}
+        if (b.isDefault) await prisma.bankAccount.updateMany({ data: { isDefault: false } }).catch(() => {})
+        const data: any = {}
+        for (const f of ['bankName', 'accountNumber', 'accountName', 'bankBranch', 'currency', 'status']) {
+            if (b[f] !== undefined) data[f] = typeof b[f] === 'string' ? b[f].trim() : b[f]
+        }
+        if (b.isDefault !== undefined) data.isDefault = !!b.isDefault
+        const updated = await prisma.bankAccount.update({ where: { id }, data })
+        res.json({ success: true, data: updated })
+    } catch (err: any) {
+        console.error('PUT /ebanking/accounts/:id error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// DELETE /api/ebanking/accounts/:id
+router.delete('/accounts/:id', authMiddleware, requireRole('admin', 'manager', 'superadmin'), async (req: AuthRequest, res: Response) => {
+    try {
+        await ensureTables(req)
+        const prisma = req.storePrisma! as any
+        const id = String(req.params.id)
+        const acc = await prisma.bankAccount.findUnique({ where: { id } }).catch(() => null)
+        if (!acc) return res.status(404).json({ success: false, error: 'Không tìm thấy tài khoản' })
+        const txCount = await prisma.bankTransaction.count({ where: { bankAccountId: id } }).catch(() => 0)
+        if (txCount > 0) return res.status(400).json({ success: false, error: `Không thể xóa: tài khoản còn ${txCount} giao dịch` })
+        await prisma.bankAccount.delete({ where: { id } })
+        res.json({ success: true, data: { id, deleted: true } })
+    } catch (err: any) {
+        console.error('DELETE /ebanking/accounts/:id error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// GET /api/ebanking/accounts/:id/balance
+router.get('/accounts/:id/balance', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        await ensureTables(req)
+        const prisma = req.storePrisma! as any
+        const id = String(req.params.id)
+        const acc = await prisma.bankAccount.findUnique({ where: { id } }).catch(() => null)
+        if (!acc) return res.status(404).json({ success: false, error: 'Không tìm thấy tài khoản' })
+        // Số dư tính lại từ giao dịch (đối chiếu với số dư lưu trữ).
+        const txns = await prisma.bankTransaction.findMany({ where: { bankAccountId: id } }).catch(() => [])
+        const computed = round2(txns.reduce((s: number, t: any) => s + signed(t.type, t.amount), 0))
+        res.json({
+            success: true,
+            data: {
+                bankAccountId: id, currency: acc.currency || 'VND',
+                storedBalance: round2(acc.balance), computedFromTransactions: computed,
+                inSync: round2(acc.balance) === computed, transactionCount: txns.length,
+            },
+        })
+    } catch (err: any) {
+        console.error('GET /ebanking/accounts/:id/balance error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  Transactions
+// ═════════════════════════════════════════════════════════════════════════════
+
+// GET /api/ebanking/accounts/:id/transactions
+router.get('/accounts/:id/transactions', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        await ensureTables(req)
+        const prisma = req.storePrisma! as any
+        const id = String(req.params.id)
+        const acc = await prisma.bankAccount.findUnique({ where: { id } }).catch(() => null)
+        if (!acc) return res.status(404).json({ success: false, error: 'Không tìm thấy tài khoản' })
+        const where: any = { bankAccountId: id }
+        if (req.query.type) where.type = String(req.query.type)
+        if (req.query.reconciled !== undefined) where.isReconciled = String(req.query.reconciled) === 'true'
+        const page = Math.max(1, Number(req.query.page) || 1)
+        const pageSize = Math.min(500, Math.max(1, Number(req.query.pageSize) || 100))
+        const [total, data] = await Promise.all([
+            prisma.bankTransaction.count({ where }).catch(() => 0),
+            prisma.bankTransaction.findMany({ where, orderBy: { date: 'desc' }, skip: (page - 1) * pageSize, take: pageSize }).catch(() => []),
+        ])
+        res.json({ success: true, data, pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) } })
+    } catch (err: any) {
+        console.error('GET /ebanking/accounts/:id/transactions error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// POST /api/ebanking/accounts/:id/transactions — thêm giao dịch thủ công
+router.post('/accounts/:id/transactions', authMiddleware, requireRole('admin', 'manager', 'superadmin'), async (req: AuthRequest, res: Response) => {
+    try {
+        await ensureTables(req)
+        const prisma = req.storePrisma! as any
+        const id = String(req.params.id)
+        const acc = await prisma.bankAccount.findUnique({ where: { id } }).catch(() => null)
+        if (!acc) return res.status(404).json({ success: false, error: 'Không tìm thấy tài khoản' })
+        const b = req.body || {}
+        const type = b.type === 'debit' ? 'debit' : 'credit'
+        const amount = round2(b.amount)
+        if (amount <= 0) return res.status(400).json({ success: false, error: 'Số tiền (amount) phải > 0' })
+        const when = b.transactionDate ? new Date(b.transactionDate) : new Date()
+
+        const tx = await prisma.bankTransaction.create({
+            data: {
+                bankAccountId: id, type, amount,
+                description: b.description || (type === 'credit' ? 'Tiền vào' : 'Tiền ra'),
+                transactionDate: when, date: when,
+                reference: b.referenceNo || b.reference || null,
+                referenceNo: b.referenceNo || b.reference || null,
+                counterpartyName: b.counterpartyName ?? null,
+                counterpartyAccount: b.counterpartyAccount ?? null,
+                isReconciled: false,
+                notes: b.notes ?? null,
+                branchId: acc.branchId || getBranchId(req) || null,
+            },
+        })
+        const account = await applyToBalance(prisma, id, signed(type, amount))
+        res.status(201).json({ success: true, data: { transaction: tx, account } })
+    } catch (err: any) {
+        console.error('POST /ebanking/accounts/:id/transactions error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// POST /api/ebanking/accounts/:id/import-csv — nhập sao kê từ CSV
+// Body: { csv: "date,amount,type,description,referenceNo,counterparty\n..." }
+//   hoặc { rows: [{ transactionDate, amount, type, description, referenceNo, counterpartyName }] }
+router.post('/accounts/:id/import-csv', authMiddleware, requireRole('admin', 'manager', 'superadmin'), async (req: AuthRequest, res: Response) => {
+    try {
+        await ensureTables(req)
+        const prisma = req.storePrisma! as any
+        const id = String(req.params.id)
+        const acc = await prisma.bankAccount.findUnique({ where: { id } }).catch(() => null)
+        if (!acc) return res.status(404).json({ success: false, error: 'Không tìm thấy tài khoản' })
+        const b = req.body || {}
+
+        let rows: any[] = []
+        if (Array.isArray(b.rows)) {
+            rows = b.rows
+        } else if (typeof b.csv === 'string' && b.csv.trim()) {
+            const lines = b.csv.split(/\r?\n/).map((l: string) => l.trim()).filter(Boolean)
+            // Bỏ dòng tiêu đề nếu cột đầu không phải ngày.
+            const looksLikeHeader = lines.length && /date|ngày|amount|số tiền/i.test(lines[0])
+            const dataLines = looksLikeHeader ? lines.slice(1) : lines
+            rows = dataLines.map((line: string) => {
+                const c = line.split(',').map((x) => x.trim())
+                return { transactionDate: c[0], amount: c[1], type: c[2], description: c[3], referenceNo: c[4], counterpartyName: c[5] }
+            })
+        } else {
+            return res.status(400).json({ success: false, error: 'Cần cung cấp csv (chuỗi) hoặc rows (mảng)' })
+        }
+        if (rows.length === 0) return res.status(400).json({ success: false, error: 'Không có dòng dữ liệu để nhập' })
+
+        let imported = 0, skipped = 0, balanceDelta = 0
+        const errors: string[] = []
+        for (let i = 0; i < rows.length; i++) {
+            const r = rows[i]
+            const amount = round2(r.amount)
+            if (!amount || amount <= 0) { skipped++; errors.push(`Dòng ${i + 1}: số tiền không hợp lệ`); continue }
+            const rawType = String(r.type || '').toLowerCase()
+            const type = (rawType.includes('debit') || rawType.includes('ra') || rawType === '-' || amount < 0) ? 'debit' : 'credit'
+            const when = r.transactionDate ? new Date(r.transactionDate) : new Date()
+            const validDate = isNaN(when.getTime()) ? new Date() : when
+            await prisma.bankTransaction.create({
+                data: {
+                    bankAccountId: id, type, amount: Math.abs(amount),
+                    description: r.description || 'Giao dịch nhập từ CSV',
+                    transactionDate: validDate, date: validDate,
+                    reference: r.referenceNo || null, referenceNo: r.referenceNo || null,
+                    counterpartyName: r.counterpartyName || null,
+                    isReconciled: false,
+                    branchId: acc.branchId || getBranchId(req) || null,
+                },
+            })
+            imported++
+            balanceDelta += signed(type, Math.abs(amount))
+        }
+        const account = await applyToBalance(prisma, id, balanceDelta)
+        await prisma.bankAccount.update({ where: { id }, data: { lastSyncAt: new Date() } }).catch(() => {})
+        res.json({ success: true, data: { imported, skipped, errors: errors.slice(0, 20), account } })
+    } catch (err: any) {
+        console.error('POST /ebanking/accounts/:id/import-csv error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// POST /api/ebanking/transactions/auto-reconcile — đối soát tự động
+// Khớp tiền vào (credit) với đơn bán hàng và tiền ra (debit) với chi phí theo
+// số tiền + ngày. Body/query: { bankAccountId? }
+router.post('/transactions/auto-reconcile', authMiddleware, requireRole('admin', 'manager', 'superadmin'), async (req: AuthRequest, res: Response) => {
+    try {
+        await ensureTables(req)
+        const prisma = req.storePrisma! as any
+        const bankAccountId = req.query.bankAccountId || req.body?.bankAccountId
+        const where: any = { isReconciled: false }
+        if (bankAccountId) where.bankAccountId = String(bankAccountId)
+        const txns = await prisma.bankTransaction.findMany({ where, take: 1000 }).catch(() => [])
+
+        let matched = 0
+        const results: any[] = []
+        for (const t of txns) {
+            const amount = round2(t.amount)
+            const when = new Date(t.transactionDate || t.date || t.createdAt)
+            let matchedSaleId: string | null = null
+            let matchedExpenseId: string | null = null
+
+            if (t.type === 'credit') {
+                // Khớp với đơn bán hàng theo tổng tiền + ngày.
+                const sales = await prisma.transaction.findMany({
+                    where: { total: amount, status: 'completed' },
+                    orderBy: { createdAt: 'desc' }, take: 50,
+                }).catch(() => [])
+                const hit = sales.find((s: any) => sameDay(new Date(s.transactionDate || s.createdAt), when))
+                if (hit) matchedSaleId = hit.id
+            } else {
+                // Khớp với chi phí theo số tiền + ngày.
+                const expenses = await prisma.expense.findMany({
+                    where: { amount, status: 'active' },
+                    orderBy: { createdAt: 'desc' }, take: 50,
+                }).catch(() => [])
+                const hit = expenses.find((e: any) => sameDay(new Date(e.date || e.createdAt), when))
+                if (hit) matchedExpenseId = hit.id
+            }
+
+            if (matchedSaleId || matchedExpenseId) {
+                await prisma.bankTransaction.update({
+                    where: { id: t.id },
+                    data: { isReconciled: true, reconciledAt: new Date(), matchedSaleId, matchedExpenseId },
+                }).catch(() => {})
+                matched++
+                results.push({ transactionId: t.id, type: t.type, amount, matchedSaleId, matchedExpenseId })
+            }
+        }
+        res.json({ success: true, data: { scanned: txns.length, matched, unmatched: txns.length - matched, results } })
+    } catch (err: any) {
+        console.error('POST /ebanking/transactions/auto-reconcile error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// POST /api/ebanking/transactions/:id/reconcile — đối soát thủ công 1 giao dịch
+// Body: { matchedSaleId?, matchedExpenseId?, journalEntryId?, reconciled? }
+router.post('/transactions/:id/reconcile', authMiddleware, requireRole('admin', 'manager', 'superadmin'), async (req: AuthRequest, res: Response) => {
+    try {
+        await ensureTables(req)
+        const prisma = req.storePrisma! as any
+        const id = String(req.params.id)
+        const tx = await prisma.bankTransaction.findUnique({ where: { id } }).catch(() => null)
+        if (!tx) return res.status(404).json({ success: false, error: 'Không tìm thấy giao dịch' })
+        const b = req.body || {}
+        const reconciled = b.reconciled === undefined ? true : !!b.reconciled
+        const updated = await prisma.bankTransaction.update({
+            where: { id },
+            data: {
+                isReconciled: reconciled,
+                reconciledAt: reconciled ? new Date() : null,
+                matchedSaleId: b.matchedSaleId ?? tx.matchedSaleId ?? null,
+                matchedExpenseId: b.matchedExpenseId ?? tx.matchedExpenseId ?? null,
+                journalEntryId: b.journalEntryId ?? tx.journalEntryId ?? null,
+            },
+        })
+        res.json({ success: true, data: updated })
+    } catch (err: any) {
+        console.error('POST /ebanking/transactions/:id/reconcile error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// GET /api/ebanking/dashboard — tổng quan
+router.get('/dashboard', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        await ensureTables(req)
+        const prisma = req.storePrisma! as any
+        const filter = getBranchFilter(req)
+        const accounts = await prisma.bankAccount.findMany({ where: { ...filter } }).catch(() => [])
+        const totalBalance = round2(accounts.reduce((s: number, a: any) => s + (Number(a.balance) || 0), 0))
+
+        const accIds = accounts.map((a: any) => a.id)
+        const txWhere: any = accIds.length ? { bankAccountId: { in: accIds } } : {}
+        const [unreconciled, recent] = await Promise.all([
+            prisma.bankTransaction.count({ where: { ...txWhere, isReconciled: false } }).catch(() => 0),
+            prisma.bankTransaction.findMany({ where: txWhere, orderBy: { date: 'desc' }, take: 10 }).catch(() => []),
+        ])
+
+        // Tổng tiền vào/ra trong tháng hiện tại.
+        const now = new Date()
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+        const monthTxns = await prisma.bankTransaction.findMany({
+            where: { ...txWhere, date: { gte: monthStart } },
+        }).catch(() => [])
+        let monthCredit = 0, monthDebit = 0
+        for (const t of monthTxns) {
+            if (t.type === 'debit') monthDebit += Number(t.amount) || 0
+            else monthCredit += Number(t.amount) || 0
+        }
+
+        res.json({
+            success: true,
+            data: {
+                accountCount: accounts.length,
+                totalBalance,
+                unreconciledCount: unreconciled,
+                month: { credit: round2(monthCredit), debit: round2(monthDebit), net: round2(monthCredit - monthDebit) },
+                accounts: accounts.map((a: any) => ({ id: a.id, bankName: a.bankName, accountNumber: a.accountNumber, balance: round2(a.balance), currency: a.currency || 'VND' })),
+                recentTransactions: recent,
+            },
+        })
+    } catch (err: any) {
+        console.error('GET /ebanking/dashboard error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+export default router

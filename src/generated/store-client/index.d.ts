@@ -329,6 +329,21 @@ export type BranchDeleteRequest = $Result.DefaultSelection<Prisma.$BranchDeleteR
  */
 export type PayrollRecord = $Result.DefaultSelection<Prisma.$PayrollRecordPayload>
 /**
+ * Model Employee
+ * 
+ */
+export type Employee = $Result.DefaultSelection<Prisma.$EmployeePayload>
+/**
+ * Model PayrollPeriod
+ * 
+ */
+export type PayrollPeriod = $Result.DefaultSelection<Prisma.$PayrollPeriodPayload>
+/**
+ * Model PayrollEntry
+ * 
+ */
+export type PayrollEntry = $Result.DefaultSelection<Prisma.$PayrollEntryPayload>
+/**
  * Model OnlineChannel
  * 
  */
@@ -363,6 +378,21 @@ export type JournalEntry = $Result.DefaultSelection<Prisma.$JournalEntryPayload>
  * 
  */
 export type FixedAsset = $Result.DefaultSelection<Prisma.$FixedAssetPayload>
+/**
+ * Model DepreciationEntry
+ * 
+ */
+export type DepreciationEntry = $Result.DefaultSelection<Prisma.$DepreciationEntryPayload>
+/**
+ * Model CCDC
+ * 
+ */
+export type CCDC = $Result.DefaultSelection<Prisma.$CCDCPayload>
+/**
+ * Model CCDCAllocation
+ * 
+ */
+export type CCDCAllocation = $Result.DefaultSelection<Prisma.$CCDCAllocationPayload>
 /**
  * Model EInvoiceConfig
  * 
@@ -1228,6 +1258,36 @@ export class PrismaClient<
   get payrollRecord(): Prisma.PayrollRecordDelegate<ExtArgs, ClientOptions>;
 
   /**
+   * `prisma.employee`: Exposes CRUD operations for the **Employee** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more Employees
+    * const employees = await prisma.employee.findMany()
+    * ```
+    */
+  get employee(): Prisma.EmployeeDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.payrollPeriod`: Exposes CRUD operations for the **PayrollPeriod** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more PayrollPeriods
+    * const payrollPeriods = await prisma.payrollPeriod.findMany()
+    * ```
+    */
+  get payrollPeriod(): Prisma.PayrollPeriodDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.payrollEntry`: Exposes CRUD operations for the **PayrollEntry** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more PayrollEntries
+    * const payrollEntries = await prisma.payrollEntry.findMany()
+    * ```
+    */
+  get payrollEntry(): Prisma.PayrollEntryDelegate<ExtArgs, ClientOptions>;
+
+  /**
    * `prisma.onlineChannel`: Exposes CRUD operations for the **OnlineChannel** model.
     * Example usage:
     * ```ts
@@ -1296,6 +1356,36 @@ export class PrismaClient<
     * ```
     */
   get fixedAsset(): Prisma.FixedAssetDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.depreciationEntry`: Exposes CRUD operations for the **DepreciationEntry** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more DepreciationEntries
+    * const depreciationEntries = await prisma.depreciationEntry.findMany()
+    * ```
+    */
+  get depreciationEntry(): Prisma.DepreciationEntryDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.cCDC`: Exposes CRUD operations for the **CCDC** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more CCDCS
+    * const cCDCS = await prisma.cCDC.findMany()
+    * ```
+    */
+  get cCDC(): Prisma.CCDCDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.cCDCAllocation`: Exposes CRUD operations for the **CCDCAllocation** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more CCDCAllocations
+    * const cCDCAllocations = await prisma.cCDCAllocation.findMany()
+    * ```
+    */
+  get cCDCAllocation(): Prisma.CCDCAllocationDelegate<ExtArgs, ClientOptions>;
 
   /**
    * `prisma.eInvoiceConfig`: Exposes CRUD operations for the **EInvoiceConfig** model.
@@ -2030,6 +2120,9 @@ export namespace Prisma {
     BranchRequest: 'BranchRequest',
     BranchDeleteRequest: 'BranchDeleteRequest',
     PayrollRecord: 'PayrollRecord',
+    Employee: 'Employee',
+    PayrollPeriod: 'PayrollPeriod',
+    PayrollEntry: 'PayrollEntry',
     OnlineChannel: 'OnlineChannel',
     OnlineOrder: 'OnlineOrder',
     OnlineProduct: 'OnlineProduct',
@@ -2037,6 +2130,9 @@ export namespace Prisma {
     SyncLog: 'SyncLog',
     JournalEntry: 'JournalEntry',
     FixedAsset: 'FixedAsset',
+    DepreciationEntry: 'DepreciationEntry',
+    CCDC: 'CCDC',
+    CCDCAllocation: 'CCDCAllocation',
     EInvoiceConfig: 'EInvoiceConfig',
     EInvoice: 'EInvoice',
     EInvoiceItem: 'EInvoiceItem',
@@ -2078,7 +2174,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "branch" | "user" | "apiKey" | "salesCheckin" | "category" | "brand" | "product" | "productSerial" | "unitConversion" | "productImage" | "customerGroup" | "customer" | "transaction" | "transactionItem" | "payment" | "inventoryTransaction" | "importReceipt" | "importReceiptItem" | "promotion" | "supplier" | "purchaseOrder" | "purchaseOrderItem" | "expense" | "cashReceipt" | "notification" | "warranty" | "repair" | "quotation" | "auditLog" | "priceHistory" | "shippingOrder" | "driver" | "vehicle" | "vehicleMaintenance" | "deliveryRoute" | "deliveryStop" | "taxConfig" | "bankAccount" | "bankTransaction" | "taxDeclaration" | "customerSegment" | "currency" | "feedback" | "schedule" | "returnOrder" | "returnItem" | "debtEntry" | "bundle" | "salesOrder" | "salesOrderItem" | "priceList" | "priceListItem" | "priceRule" | "announcement" | "attendance" | "loyaltyMember" | "loyaltyTransaction" | "review" | "storeSettings" | "store" | "branchRequest" | "branchDeleteRequest" | "payrollRecord" | "onlineChannel" | "onlineOrder" | "onlineProduct" | "onlineOrderItem" | "syncLog" | "journalEntry" | "fixedAsset" | "eInvoiceConfig" | "eInvoice" | "eInvoiceItem" | "adjustmentInvoice" | "adjustmentInvoiceItem" | "hKDRevenueEntry" | "warehouse" | "warehouseStock" | "stockTransfer" | "stockTransferItem" | "salesTrip" | "salesTripItem" | "salesTripLog" | "inventoryCount" | "inventoryCountItem" | "zReport" | "storageFile" | "chartOfAccount" | "periodLock" | "exchangeRate" | "taxDeadline" | "taxAuditLog" | "taxBudget"
+      modelProps: "branch" | "user" | "apiKey" | "salesCheckin" | "category" | "brand" | "product" | "productSerial" | "unitConversion" | "productImage" | "customerGroup" | "customer" | "transaction" | "transactionItem" | "payment" | "inventoryTransaction" | "importReceipt" | "importReceiptItem" | "promotion" | "supplier" | "purchaseOrder" | "purchaseOrderItem" | "expense" | "cashReceipt" | "notification" | "warranty" | "repair" | "quotation" | "auditLog" | "priceHistory" | "shippingOrder" | "driver" | "vehicle" | "vehicleMaintenance" | "deliveryRoute" | "deliveryStop" | "taxConfig" | "bankAccount" | "bankTransaction" | "taxDeclaration" | "customerSegment" | "currency" | "feedback" | "schedule" | "returnOrder" | "returnItem" | "debtEntry" | "bundle" | "salesOrder" | "salesOrderItem" | "priceList" | "priceListItem" | "priceRule" | "announcement" | "attendance" | "loyaltyMember" | "loyaltyTransaction" | "review" | "storeSettings" | "store" | "branchRequest" | "branchDeleteRequest" | "payrollRecord" | "employee" | "payrollPeriod" | "payrollEntry" | "onlineChannel" | "onlineOrder" | "onlineProduct" | "onlineOrderItem" | "syncLog" | "journalEntry" | "fixedAsset" | "depreciationEntry" | "cCDC" | "cCDCAllocation" | "eInvoiceConfig" | "eInvoice" | "eInvoiceItem" | "adjustmentInvoice" | "adjustmentInvoiceItem" | "hKDRevenueEntry" | "warehouse" | "warehouseStock" | "stockTransfer" | "stockTransferItem" | "salesTrip" | "salesTripItem" | "salesTripLog" | "inventoryCount" | "inventoryCountItem" | "zReport" | "storageFile" | "chartOfAccount" | "periodLock" | "exchangeRate" | "taxDeadline" | "taxAuditLog" | "taxBudget"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -6744,6 +6840,228 @@ export namespace Prisma {
           }
         }
       }
+      Employee: {
+        payload: Prisma.$EmployeePayload<ExtArgs>
+        fields: Prisma.EmployeeFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.EmployeeFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$EmployeePayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.EmployeeFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$EmployeePayload>
+          }
+          findFirst: {
+            args: Prisma.EmployeeFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$EmployeePayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.EmployeeFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$EmployeePayload>
+          }
+          findMany: {
+            args: Prisma.EmployeeFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$EmployeePayload>[]
+          }
+          create: {
+            args: Prisma.EmployeeCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$EmployeePayload>
+          }
+          createMany: {
+            args: Prisma.EmployeeCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.EmployeeCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$EmployeePayload>[]
+          }
+          delete: {
+            args: Prisma.EmployeeDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$EmployeePayload>
+          }
+          update: {
+            args: Prisma.EmployeeUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$EmployeePayload>
+          }
+          deleteMany: {
+            args: Prisma.EmployeeDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.EmployeeUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.EmployeeUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$EmployeePayload>[]
+          }
+          upsert: {
+            args: Prisma.EmployeeUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$EmployeePayload>
+          }
+          aggregate: {
+            args: Prisma.EmployeeAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateEmployee>
+          }
+          groupBy: {
+            args: Prisma.EmployeeGroupByArgs<ExtArgs>
+            result: $Utils.Optional<EmployeeGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.EmployeeCountArgs<ExtArgs>
+            result: $Utils.Optional<EmployeeCountAggregateOutputType> | number
+          }
+        }
+      }
+      PayrollPeriod: {
+        payload: Prisma.$PayrollPeriodPayload<ExtArgs>
+        fields: Prisma.PayrollPeriodFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.PayrollPeriodFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PayrollPeriodPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.PayrollPeriodFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PayrollPeriodPayload>
+          }
+          findFirst: {
+            args: Prisma.PayrollPeriodFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PayrollPeriodPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.PayrollPeriodFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PayrollPeriodPayload>
+          }
+          findMany: {
+            args: Prisma.PayrollPeriodFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PayrollPeriodPayload>[]
+          }
+          create: {
+            args: Prisma.PayrollPeriodCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PayrollPeriodPayload>
+          }
+          createMany: {
+            args: Prisma.PayrollPeriodCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.PayrollPeriodCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PayrollPeriodPayload>[]
+          }
+          delete: {
+            args: Prisma.PayrollPeriodDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PayrollPeriodPayload>
+          }
+          update: {
+            args: Prisma.PayrollPeriodUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PayrollPeriodPayload>
+          }
+          deleteMany: {
+            args: Prisma.PayrollPeriodDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.PayrollPeriodUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.PayrollPeriodUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PayrollPeriodPayload>[]
+          }
+          upsert: {
+            args: Prisma.PayrollPeriodUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PayrollPeriodPayload>
+          }
+          aggregate: {
+            args: Prisma.PayrollPeriodAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregatePayrollPeriod>
+          }
+          groupBy: {
+            args: Prisma.PayrollPeriodGroupByArgs<ExtArgs>
+            result: $Utils.Optional<PayrollPeriodGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.PayrollPeriodCountArgs<ExtArgs>
+            result: $Utils.Optional<PayrollPeriodCountAggregateOutputType> | number
+          }
+        }
+      }
+      PayrollEntry: {
+        payload: Prisma.$PayrollEntryPayload<ExtArgs>
+        fields: Prisma.PayrollEntryFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.PayrollEntryFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PayrollEntryPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.PayrollEntryFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PayrollEntryPayload>
+          }
+          findFirst: {
+            args: Prisma.PayrollEntryFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PayrollEntryPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.PayrollEntryFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PayrollEntryPayload>
+          }
+          findMany: {
+            args: Prisma.PayrollEntryFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PayrollEntryPayload>[]
+          }
+          create: {
+            args: Prisma.PayrollEntryCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PayrollEntryPayload>
+          }
+          createMany: {
+            args: Prisma.PayrollEntryCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.PayrollEntryCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PayrollEntryPayload>[]
+          }
+          delete: {
+            args: Prisma.PayrollEntryDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PayrollEntryPayload>
+          }
+          update: {
+            args: Prisma.PayrollEntryUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PayrollEntryPayload>
+          }
+          deleteMany: {
+            args: Prisma.PayrollEntryDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.PayrollEntryUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.PayrollEntryUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PayrollEntryPayload>[]
+          }
+          upsert: {
+            args: Prisma.PayrollEntryUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PayrollEntryPayload>
+          }
+          aggregate: {
+            args: Prisma.PayrollEntryAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregatePayrollEntry>
+          }
+          groupBy: {
+            args: Prisma.PayrollEntryGroupByArgs<ExtArgs>
+            result: $Utils.Optional<PayrollEntryGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.PayrollEntryCountArgs<ExtArgs>
+            result: $Utils.Optional<PayrollEntryCountAggregateOutputType> | number
+          }
+        }
+      }
       OnlineChannel: {
         payload: Prisma.$OnlineChannelPayload<ExtArgs>
         fields: Prisma.OnlineChannelFieldRefs
@@ -7259,6 +7577,228 @@ export namespace Prisma {
           count: {
             args: Prisma.FixedAssetCountArgs<ExtArgs>
             result: $Utils.Optional<FixedAssetCountAggregateOutputType> | number
+          }
+        }
+      }
+      DepreciationEntry: {
+        payload: Prisma.$DepreciationEntryPayload<ExtArgs>
+        fields: Prisma.DepreciationEntryFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.DepreciationEntryFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$DepreciationEntryPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.DepreciationEntryFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$DepreciationEntryPayload>
+          }
+          findFirst: {
+            args: Prisma.DepreciationEntryFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$DepreciationEntryPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.DepreciationEntryFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$DepreciationEntryPayload>
+          }
+          findMany: {
+            args: Prisma.DepreciationEntryFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$DepreciationEntryPayload>[]
+          }
+          create: {
+            args: Prisma.DepreciationEntryCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$DepreciationEntryPayload>
+          }
+          createMany: {
+            args: Prisma.DepreciationEntryCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.DepreciationEntryCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$DepreciationEntryPayload>[]
+          }
+          delete: {
+            args: Prisma.DepreciationEntryDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$DepreciationEntryPayload>
+          }
+          update: {
+            args: Prisma.DepreciationEntryUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$DepreciationEntryPayload>
+          }
+          deleteMany: {
+            args: Prisma.DepreciationEntryDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.DepreciationEntryUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.DepreciationEntryUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$DepreciationEntryPayload>[]
+          }
+          upsert: {
+            args: Prisma.DepreciationEntryUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$DepreciationEntryPayload>
+          }
+          aggregate: {
+            args: Prisma.DepreciationEntryAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateDepreciationEntry>
+          }
+          groupBy: {
+            args: Prisma.DepreciationEntryGroupByArgs<ExtArgs>
+            result: $Utils.Optional<DepreciationEntryGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.DepreciationEntryCountArgs<ExtArgs>
+            result: $Utils.Optional<DepreciationEntryCountAggregateOutputType> | number
+          }
+        }
+      }
+      CCDC: {
+        payload: Prisma.$CCDCPayload<ExtArgs>
+        fields: Prisma.CCDCFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.CCDCFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CCDCPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.CCDCFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CCDCPayload>
+          }
+          findFirst: {
+            args: Prisma.CCDCFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CCDCPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.CCDCFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CCDCPayload>
+          }
+          findMany: {
+            args: Prisma.CCDCFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CCDCPayload>[]
+          }
+          create: {
+            args: Prisma.CCDCCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CCDCPayload>
+          }
+          createMany: {
+            args: Prisma.CCDCCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.CCDCCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CCDCPayload>[]
+          }
+          delete: {
+            args: Prisma.CCDCDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CCDCPayload>
+          }
+          update: {
+            args: Prisma.CCDCUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CCDCPayload>
+          }
+          deleteMany: {
+            args: Prisma.CCDCDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.CCDCUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.CCDCUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CCDCPayload>[]
+          }
+          upsert: {
+            args: Prisma.CCDCUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CCDCPayload>
+          }
+          aggregate: {
+            args: Prisma.CCDCAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateCCDC>
+          }
+          groupBy: {
+            args: Prisma.CCDCGroupByArgs<ExtArgs>
+            result: $Utils.Optional<CCDCGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.CCDCCountArgs<ExtArgs>
+            result: $Utils.Optional<CCDCCountAggregateOutputType> | number
+          }
+        }
+      }
+      CCDCAllocation: {
+        payload: Prisma.$CCDCAllocationPayload<ExtArgs>
+        fields: Prisma.CCDCAllocationFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.CCDCAllocationFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CCDCAllocationPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.CCDCAllocationFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CCDCAllocationPayload>
+          }
+          findFirst: {
+            args: Prisma.CCDCAllocationFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CCDCAllocationPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.CCDCAllocationFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CCDCAllocationPayload>
+          }
+          findMany: {
+            args: Prisma.CCDCAllocationFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CCDCAllocationPayload>[]
+          }
+          create: {
+            args: Prisma.CCDCAllocationCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CCDCAllocationPayload>
+          }
+          createMany: {
+            args: Prisma.CCDCAllocationCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.CCDCAllocationCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CCDCAllocationPayload>[]
+          }
+          delete: {
+            args: Prisma.CCDCAllocationDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CCDCAllocationPayload>
+          }
+          update: {
+            args: Prisma.CCDCAllocationUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CCDCAllocationPayload>
+          }
+          deleteMany: {
+            args: Prisma.CCDCAllocationDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.CCDCAllocationUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.CCDCAllocationUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CCDCAllocationPayload>[]
+          }
+          upsert: {
+            args: Prisma.CCDCAllocationUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CCDCAllocationPayload>
+          }
+          aggregate: {
+            args: Prisma.CCDCAllocationAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateCCDCAllocation>
+          }
+          groupBy: {
+            args: Prisma.CCDCAllocationGroupByArgs<ExtArgs>
+            result: $Utils.Optional<CCDCAllocationGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.CCDCAllocationCountArgs<ExtArgs>
+            result: $Utils.Optional<CCDCAllocationCountAggregateOutputType> | number
           }
         }
       }
@@ -9123,6 +9663,9 @@ export namespace Prisma {
     branchRequest?: BranchRequestOmit
     branchDeleteRequest?: BranchDeleteRequestOmit
     payrollRecord?: PayrollRecordOmit
+    employee?: EmployeeOmit
+    payrollPeriod?: PayrollPeriodOmit
+    payrollEntry?: PayrollEntryOmit
     onlineChannel?: OnlineChannelOmit
     onlineOrder?: OnlineOrderOmit
     onlineProduct?: OnlineProductOmit
@@ -9130,6 +9673,9 @@ export namespace Prisma {
     syncLog?: SyncLogOmit
     journalEntry?: JournalEntryOmit
     fixedAsset?: FixedAssetOmit
+    depreciationEntry?: DepreciationEntryOmit
+    cCDC?: CCDCOmit
+    cCDCAllocation?: CCDCAllocationOmit
     eInvoiceConfig?: EInvoiceConfigOmit
     eInvoice?: EInvoiceOmit
     eInvoiceItem?: EInvoiceItemOmit
@@ -10025,6 +10571,68 @@ export namespace Prisma {
    */
   export type OnlineOrderCountOutputTypeCountItemsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: OnlineOrderItemWhereInput
+  }
+
+
+  /**
+   * Count Type FixedAssetCountOutputType
+   */
+
+  export type FixedAssetCountOutputType = {
+    depreciationEntries: number
+  }
+
+  export type FixedAssetCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    depreciationEntries?: boolean | FixedAssetCountOutputTypeCountDepreciationEntriesArgs
+  }
+
+  // Custom InputTypes
+  /**
+   * FixedAssetCountOutputType without action
+   */
+  export type FixedAssetCountOutputTypeDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FixedAssetCountOutputType
+     */
+    select?: FixedAssetCountOutputTypeSelect<ExtArgs> | null
+  }
+
+  /**
+   * FixedAssetCountOutputType without action
+   */
+  export type FixedAssetCountOutputTypeCountDepreciationEntriesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: DepreciationEntryWhereInput
+  }
+
+
+  /**
+   * Count Type CCDCCountOutputType
+   */
+
+  export type CCDCCountOutputType = {
+    allocations: number
+  }
+
+  export type CCDCCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    allocations?: boolean | CCDCCountOutputTypeCountAllocationsArgs
+  }
+
+  // Custom InputTypes
+  /**
+   * CCDCCountOutputType without action
+   */
+  export type CCDCCountOutputTypeDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CCDCCountOutputType
+     */
+    select?: CCDCCountOutputTypeSelect<ExtArgs> | null
+  }
+
+  /**
+   * CCDCCountOutputType without action
+   */
+  export type CCDCCountOutputTypeCountAllocationsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: CCDCAllocationWhereInput
   }
 
 
@@ -54280,8 +54888,18 @@ export namespace Prisma {
 
   export type AggregateBankAccount = {
     _count: BankAccountCountAggregateOutputType | null
+    _avg: BankAccountAvgAggregateOutputType | null
+    _sum: BankAccountSumAggregateOutputType | null
     _min: BankAccountMinAggregateOutputType | null
     _max: BankAccountMaxAggregateOutputType | null
+  }
+
+  export type BankAccountAvgAggregateOutputType = {
+    balance: number | null
+  }
+
+  export type BankAccountSumAggregateOutputType = {
+    balance: number | null
   }
 
   export type BankAccountMinAggregateOutputType = {
@@ -54291,6 +54909,11 @@ export namespace Prisma {
     accountName: string | null
     isDefault: boolean | null
     status: string | null
+    bankBranch: string | null
+    currency: string | null
+    balance: number | null
+    lastSyncAt: Date | null
+    branchId: string | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -54302,6 +54925,11 @@ export namespace Prisma {
     accountName: string | null
     isDefault: boolean | null
     status: string | null
+    bankBranch: string | null
+    currency: string | null
+    balance: number | null
+    lastSyncAt: Date | null
+    branchId: string | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -54313,11 +54941,24 @@ export namespace Prisma {
     accountName: number
     isDefault: number
     status: number
+    bankBranch: number
+    currency: number
+    balance: number
+    lastSyncAt: number
+    branchId: number
     createdAt: number
     updatedAt: number
     _all: number
   }
 
+
+  export type BankAccountAvgAggregateInputType = {
+    balance?: true
+  }
+
+  export type BankAccountSumAggregateInputType = {
+    balance?: true
+  }
 
   export type BankAccountMinAggregateInputType = {
     id?: true
@@ -54326,6 +54967,11 @@ export namespace Prisma {
     accountName?: true
     isDefault?: true
     status?: true
+    bankBranch?: true
+    currency?: true
+    balance?: true
+    lastSyncAt?: true
+    branchId?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -54337,6 +54983,11 @@ export namespace Prisma {
     accountName?: true
     isDefault?: true
     status?: true
+    bankBranch?: true
+    currency?: true
+    balance?: true
+    lastSyncAt?: true
+    branchId?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -54348,6 +54999,11 @@ export namespace Prisma {
     accountName?: true
     isDefault?: true
     status?: true
+    bankBranch?: true
+    currency?: true
+    balance?: true
+    lastSyncAt?: true
+    branchId?: true
     createdAt?: true
     updatedAt?: true
     _all?: true
@@ -54391,6 +55047,18 @@ export namespace Prisma {
     /**
      * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
      * 
+     * Select which fields to average
+    **/
+    _avg?: BankAccountAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: BankAccountSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
      * Select which fields to find the minimum value
     **/
     _min?: BankAccountMinAggregateInputType
@@ -54421,6 +55089,8 @@ export namespace Prisma {
     take?: number
     skip?: number
     _count?: BankAccountCountAggregateInputType | true
+    _avg?: BankAccountAvgAggregateInputType
+    _sum?: BankAccountSumAggregateInputType
     _min?: BankAccountMinAggregateInputType
     _max?: BankAccountMaxAggregateInputType
   }
@@ -54432,9 +55102,16 @@ export namespace Prisma {
     accountName: string | null
     isDefault: boolean
     status: string
+    bankBranch: string | null
+    currency: string
+    balance: number
+    lastSyncAt: Date | null
+    branchId: string | null
     createdAt: Date
     updatedAt: Date
     _count: BankAccountCountAggregateOutputType | null
+    _avg: BankAccountAvgAggregateOutputType | null
+    _sum: BankAccountSumAggregateOutputType | null
     _min: BankAccountMinAggregateOutputType | null
     _max: BankAccountMaxAggregateOutputType | null
   }
@@ -54460,6 +55137,11 @@ export namespace Prisma {
     accountName?: boolean
     isDefault?: boolean
     status?: boolean
+    bankBranch?: boolean
+    currency?: boolean
+    balance?: boolean
+    lastSyncAt?: boolean
+    branchId?: boolean
     createdAt?: boolean
     updatedAt?: boolean
     transactions?: boolean | BankAccount$transactionsArgs<ExtArgs>
@@ -54473,6 +55155,11 @@ export namespace Prisma {
     accountName?: boolean
     isDefault?: boolean
     status?: boolean
+    bankBranch?: boolean
+    currency?: boolean
+    balance?: boolean
+    lastSyncAt?: boolean
+    branchId?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["bankAccount"]>
@@ -54484,6 +55171,11 @@ export namespace Prisma {
     accountName?: boolean
     isDefault?: boolean
     status?: boolean
+    bankBranch?: boolean
+    currency?: boolean
+    balance?: boolean
+    lastSyncAt?: boolean
+    branchId?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["bankAccount"]>
@@ -54495,11 +55187,16 @@ export namespace Prisma {
     accountName?: boolean
     isDefault?: boolean
     status?: boolean
+    bankBranch?: boolean
+    currency?: boolean
+    balance?: boolean
+    lastSyncAt?: boolean
+    branchId?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type BankAccountOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "bankName" | "accountNumber" | "accountName" | "isDefault" | "status" | "createdAt" | "updatedAt", ExtArgs["result"]["bankAccount"]>
+  export type BankAccountOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "bankName" | "accountNumber" | "accountName" | "isDefault" | "status" | "bankBranch" | "currency" | "balance" | "lastSyncAt" | "branchId" | "createdAt" | "updatedAt", ExtArgs["result"]["bankAccount"]>
   export type BankAccountInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     transactions?: boolean | BankAccount$transactionsArgs<ExtArgs>
     _count?: boolean | BankAccountCountOutputTypeDefaultArgs<ExtArgs>
@@ -54519,6 +55216,11 @@ export namespace Prisma {
       accountName: string | null
       isDefault: boolean
       status: string
+      bankBranch: string | null
+      currency: string
+      balance: number
+      lastSyncAt: Date | null
+      branchId: string | null
       createdAt: Date
       updatedAt: Date
     }, ExtArgs["result"]["bankAccount"]>
@@ -54951,6 +55653,11 @@ export namespace Prisma {
     readonly accountName: FieldRef<"BankAccount", 'String'>
     readonly isDefault: FieldRef<"BankAccount", 'Boolean'>
     readonly status: FieldRef<"BankAccount", 'String'>
+    readonly bankBranch: FieldRef<"BankAccount", 'String'>
+    readonly currency: FieldRef<"BankAccount", 'String'>
+    readonly balance: FieldRef<"BankAccount", 'Float'>
+    readonly lastSyncAt: FieldRef<"BankAccount", 'DateTime'>
+    readonly branchId: FieldRef<"BankAccount", 'String'>
     readonly createdAt: FieldRef<"BankAccount", 'DateTime'>
     readonly updatedAt: FieldRef<"BankAccount", 'DateTime'>
   }
@@ -55411,6 +56118,17 @@ export namespace Prisma {
     description: string | null
     reference: string | null
     date: Date | null
+    transactionDate: Date | null
+    referenceNo: string | null
+    counterpartyName: string | null
+    counterpartyAccount: string | null
+    isReconciled: boolean | null
+    reconciledAt: Date | null
+    journalEntryId: string | null
+    matchedSaleId: string | null
+    matchedExpenseId: string | null
+    branchId: string | null
+    notes: string | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -55423,6 +56141,17 @@ export namespace Prisma {
     description: string | null
     reference: string | null
     date: Date | null
+    transactionDate: Date | null
+    referenceNo: string | null
+    counterpartyName: string | null
+    counterpartyAccount: string | null
+    isReconciled: boolean | null
+    reconciledAt: Date | null
+    journalEntryId: string | null
+    matchedSaleId: string | null
+    matchedExpenseId: string | null
+    branchId: string | null
+    notes: string | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -55435,6 +56164,17 @@ export namespace Prisma {
     description: number
     reference: number
     date: number
+    transactionDate: number
+    referenceNo: number
+    counterpartyName: number
+    counterpartyAccount: number
+    isReconciled: number
+    reconciledAt: number
+    journalEntryId: number
+    matchedSaleId: number
+    matchedExpenseId: number
+    branchId: number
+    notes: number
     createdAt: number
     updatedAt: number
     _all: number
@@ -55457,6 +56197,17 @@ export namespace Prisma {
     description?: true
     reference?: true
     date?: true
+    transactionDate?: true
+    referenceNo?: true
+    counterpartyName?: true
+    counterpartyAccount?: true
+    isReconciled?: true
+    reconciledAt?: true
+    journalEntryId?: true
+    matchedSaleId?: true
+    matchedExpenseId?: true
+    branchId?: true
+    notes?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -55469,6 +56220,17 @@ export namespace Prisma {
     description?: true
     reference?: true
     date?: true
+    transactionDate?: true
+    referenceNo?: true
+    counterpartyName?: true
+    counterpartyAccount?: true
+    isReconciled?: true
+    reconciledAt?: true
+    journalEntryId?: true
+    matchedSaleId?: true
+    matchedExpenseId?: true
+    branchId?: true
+    notes?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -55481,6 +56243,17 @@ export namespace Prisma {
     description?: true
     reference?: true
     date?: true
+    transactionDate?: true
+    referenceNo?: true
+    counterpartyName?: true
+    counterpartyAccount?: true
+    isReconciled?: true
+    reconciledAt?: true
+    journalEntryId?: true
+    matchedSaleId?: true
+    matchedExpenseId?: true
+    branchId?: true
+    notes?: true
     createdAt?: true
     updatedAt?: true
     _all?: true
@@ -55580,6 +56353,17 @@ export namespace Prisma {
     description: string
     reference: string | null
     date: Date
+    transactionDate: Date | null
+    referenceNo: string | null
+    counterpartyName: string | null
+    counterpartyAccount: string | null
+    isReconciled: boolean
+    reconciledAt: Date | null
+    journalEntryId: string | null
+    matchedSaleId: string | null
+    matchedExpenseId: string | null
+    branchId: string | null
+    notes: string | null
     createdAt: Date
     updatedAt: Date
     _count: BankTransactionCountAggregateOutputType | null
@@ -55611,6 +56395,17 @@ export namespace Prisma {
     description?: boolean
     reference?: boolean
     date?: boolean
+    transactionDate?: boolean
+    referenceNo?: boolean
+    counterpartyName?: boolean
+    counterpartyAccount?: boolean
+    isReconciled?: boolean
+    reconciledAt?: boolean
+    journalEntryId?: boolean
+    matchedSaleId?: boolean
+    matchedExpenseId?: boolean
+    branchId?: boolean
+    notes?: boolean
     createdAt?: boolean
     updatedAt?: boolean
     bankAccount?: boolean | BankTransaction$bankAccountArgs<ExtArgs>
@@ -55624,6 +56419,17 @@ export namespace Prisma {
     description?: boolean
     reference?: boolean
     date?: boolean
+    transactionDate?: boolean
+    referenceNo?: boolean
+    counterpartyName?: boolean
+    counterpartyAccount?: boolean
+    isReconciled?: boolean
+    reconciledAt?: boolean
+    journalEntryId?: boolean
+    matchedSaleId?: boolean
+    matchedExpenseId?: boolean
+    branchId?: boolean
+    notes?: boolean
     createdAt?: boolean
     updatedAt?: boolean
     bankAccount?: boolean | BankTransaction$bankAccountArgs<ExtArgs>
@@ -55637,6 +56443,17 @@ export namespace Prisma {
     description?: boolean
     reference?: boolean
     date?: boolean
+    transactionDate?: boolean
+    referenceNo?: boolean
+    counterpartyName?: boolean
+    counterpartyAccount?: boolean
+    isReconciled?: boolean
+    reconciledAt?: boolean
+    journalEntryId?: boolean
+    matchedSaleId?: boolean
+    matchedExpenseId?: boolean
+    branchId?: boolean
+    notes?: boolean
     createdAt?: boolean
     updatedAt?: boolean
     bankAccount?: boolean | BankTransaction$bankAccountArgs<ExtArgs>
@@ -55650,11 +56467,22 @@ export namespace Prisma {
     description?: boolean
     reference?: boolean
     date?: boolean
+    transactionDate?: boolean
+    referenceNo?: boolean
+    counterpartyName?: boolean
+    counterpartyAccount?: boolean
+    isReconciled?: boolean
+    reconciledAt?: boolean
+    journalEntryId?: boolean
+    matchedSaleId?: boolean
+    matchedExpenseId?: boolean
+    branchId?: boolean
+    notes?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type BankTransactionOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "bankAccountId" | "type" | "amount" | "description" | "reference" | "date" | "createdAt" | "updatedAt", ExtArgs["result"]["bankTransaction"]>
+  export type BankTransactionOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "bankAccountId" | "type" | "amount" | "description" | "reference" | "date" | "transactionDate" | "referenceNo" | "counterpartyName" | "counterpartyAccount" | "isReconciled" | "reconciledAt" | "journalEntryId" | "matchedSaleId" | "matchedExpenseId" | "branchId" | "notes" | "createdAt" | "updatedAt", ExtArgs["result"]["bankTransaction"]>
   export type BankTransactionInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     bankAccount?: boolean | BankTransaction$bankAccountArgs<ExtArgs>
   }
@@ -55678,6 +56506,17 @@ export namespace Prisma {
       description: string
       reference: string | null
       date: Date
+      transactionDate: Date | null
+      referenceNo: string | null
+      counterpartyName: string | null
+      counterpartyAccount: string | null
+      isReconciled: boolean
+      reconciledAt: Date | null
+      journalEntryId: string | null
+      matchedSaleId: string | null
+      matchedExpenseId: string | null
+      branchId: string | null
+      notes: string | null
       createdAt: Date
       updatedAt: Date
     }, ExtArgs["result"]["bankTransaction"]>
@@ -56111,6 +56950,17 @@ export namespace Prisma {
     readonly description: FieldRef<"BankTransaction", 'String'>
     readonly reference: FieldRef<"BankTransaction", 'String'>
     readonly date: FieldRef<"BankTransaction", 'DateTime'>
+    readonly transactionDate: FieldRef<"BankTransaction", 'DateTime'>
+    readonly referenceNo: FieldRef<"BankTransaction", 'String'>
+    readonly counterpartyName: FieldRef<"BankTransaction", 'String'>
+    readonly counterpartyAccount: FieldRef<"BankTransaction", 'String'>
+    readonly isReconciled: FieldRef<"BankTransaction", 'Boolean'>
+    readonly reconciledAt: FieldRef<"BankTransaction", 'DateTime'>
+    readonly journalEntryId: FieldRef<"BankTransaction", 'String'>
+    readonly matchedSaleId: FieldRef<"BankTransaction", 'String'>
+    readonly matchedExpenseId: FieldRef<"BankTransaction", 'String'>
+    readonly branchId: FieldRef<"BankTransaction", 'String'>
+    readonly notes: FieldRef<"BankTransaction", 'String'>
     readonly createdAt: FieldRef<"BankTransaction", 'DateTime'>
     readonly updatedAt: FieldRef<"BankTransaction", 'DateTime'>
   }
@@ -84760,6 +85610,3808 @@ export namespace Prisma {
 
 
   /**
+   * Model Employee
+   */
+
+  export type AggregateEmployee = {
+    _count: EmployeeCountAggregateOutputType | null
+    _avg: EmployeeAvgAggregateOutputType | null
+    _sum: EmployeeSumAggregateOutputType | null
+    _min: EmployeeMinAggregateOutputType | null
+    _max: EmployeeMaxAggregateOutputType | null
+  }
+
+  export type EmployeeAvgAggregateOutputType = {
+    baseSalary: number | null
+    dependents: number | null
+  }
+
+  export type EmployeeSumAggregateOutputType = {
+    baseSalary: number | null
+    dependents: number | null
+  }
+
+  export type EmployeeMinAggregateOutputType = {
+    id: string | null
+    code: string | null
+    name: string | null
+    position: string | null
+    department: string | null
+    baseSalary: number | null
+    bankAccount: string | null
+    bankName: string | null
+    taxCode: string | null
+    socialInsuranceNo: string | null
+    startDate: string | null
+    endDate: string | null
+    status: string | null
+    dependents: number | null
+    notes: string | null
+    branchId: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type EmployeeMaxAggregateOutputType = {
+    id: string | null
+    code: string | null
+    name: string | null
+    position: string | null
+    department: string | null
+    baseSalary: number | null
+    bankAccount: string | null
+    bankName: string | null
+    taxCode: string | null
+    socialInsuranceNo: string | null
+    startDate: string | null
+    endDate: string | null
+    status: string | null
+    dependents: number | null
+    notes: string | null
+    branchId: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type EmployeeCountAggregateOutputType = {
+    id: number
+    code: number
+    name: number
+    position: number
+    department: number
+    baseSalary: number
+    bankAccount: number
+    bankName: number
+    taxCode: number
+    socialInsuranceNo: number
+    startDate: number
+    endDate: number
+    status: number
+    dependents: number
+    notes: number
+    branchId: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type EmployeeAvgAggregateInputType = {
+    baseSalary?: true
+    dependents?: true
+  }
+
+  export type EmployeeSumAggregateInputType = {
+    baseSalary?: true
+    dependents?: true
+  }
+
+  export type EmployeeMinAggregateInputType = {
+    id?: true
+    code?: true
+    name?: true
+    position?: true
+    department?: true
+    baseSalary?: true
+    bankAccount?: true
+    bankName?: true
+    taxCode?: true
+    socialInsuranceNo?: true
+    startDate?: true
+    endDate?: true
+    status?: true
+    dependents?: true
+    notes?: true
+    branchId?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type EmployeeMaxAggregateInputType = {
+    id?: true
+    code?: true
+    name?: true
+    position?: true
+    department?: true
+    baseSalary?: true
+    bankAccount?: true
+    bankName?: true
+    taxCode?: true
+    socialInsuranceNo?: true
+    startDate?: true
+    endDate?: true
+    status?: true
+    dependents?: true
+    notes?: true
+    branchId?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type EmployeeCountAggregateInputType = {
+    id?: true
+    code?: true
+    name?: true
+    position?: true
+    department?: true
+    baseSalary?: true
+    bankAccount?: true
+    bankName?: true
+    taxCode?: true
+    socialInsuranceNo?: true
+    startDate?: true
+    endDate?: true
+    status?: true
+    dependents?: true
+    notes?: true
+    branchId?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type EmployeeAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which Employee to aggregate.
+     */
+    where?: EmployeeWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of Employees to fetch.
+     */
+    orderBy?: EmployeeOrderByWithRelationInput | EmployeeOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: EmployeeWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` Employees from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` Employees.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned Employees
+    **/
+    _count?: true | EmployeeCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: EmployeeAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: EmployeeSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: EmployeeMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: EmployeeMaxAggregateInputType
+  }
+
+  export type GetEmployeeAggregateType<T extends EmployeeAggregateArgs> = {
+        [P in keyof T & keyof AggregateEmployee]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateEmployee[P]>
+      : GetScalarType<T[P], AggregateEmployee[P]>
+  }
+
+
+
+
+  export type EmployeeGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: EmployeeWhereInput
+    orderBy?: EmployeeOrderByWithAggregationInput | EmployeeOrderByWithAggregationInput[]
+    by: EmployeeScalarFieldEnum[] | EmployeeScalarFieldEnum
+    having?: EmployeeScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: EmployeeCountAggregateInputType | true
+    _avg?: EmployeeAvgAggregateInputType
+    _sum?: EmployeeSumAggregateInputType
+    _min?: EmployeeMinAggregateInputType
+    _max?: EmployeeMaxAggregateInputType
+  }
+
+  export type EmployeeGroupByOutputType = {
+    id: string
+    code: string
+    name: string
+    position: string | null
+    department: string | null
+    baseSalary: number
+    bankAccount: string | null
+    bankName: string | null
+    taxCode: string | null
+    socialInsuranceNo: string | null
+    startDate: string | null
+    endDate: string | null
+    status: string
+    dependents: number
+    notes: string | null
+    branchId: string | null
+    createdAt: Date
+    updatedAt: Date
+    _count: EmployeeCountAggregateOutputType | null
+    _avg: EmployeeAvgAggregateOutputType | null
+    _sum: EmployeeSumAggregateOutputType | null
+    _min: EmployeeMinAggregateOutputType | null
+    _max: EmployeeMaxAggregateOutputType | null
+  }
+
+  type GetEmployeeGroupByPayload<T extends EmployeeGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<EmployeeGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof EmployeeGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], EmployeeGroupByOutputType[P]>
+            : GetScalarType<T[P], EmployeeGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type EmployeeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    code?: boolean
+    name?: boolean
+    position?: boolean
+    department?: boolean
+    baseSalary?: boolean
+    bankAccount?: boolean
+    bankName?: boolean
+    taxCode?: boolean
+    socialInsuranceNo?: boolean
+    startDate?: boolean
+    endDate?: boolean
+    status?: boolean
+    dependents?: boolean
+    notes?: boolean
+    branchId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["employee"]>
+
+  export type EmployeeSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    code?: boolean
+    name?: boolean
+    position?: boolean
+    department?: boolean
+    baseSalary?: boolean
+    bankAccount?: boolean
+    bankName?: boolean
+    taxCode?: boolean
+    socialInsuranceNo?: boolean
+    startDate?: boolean
+    endDate?: boolean
+    status?: boolean
+    dependents?: boolean
+    notes?: boolean
+    branchId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["employee"]>
+
+  export type EmployeeSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    code?: boolean
+    name?: boolean
+    position?: boolean
+    department?: boolean
+    baseSalary?: boolean
+    bankAccount?: boolean
+    bankName?: boolean
+    taxCode?: boolean
+    socialInsuranceNo?: boolean
+    startDate?: boolean
+    endDate?: boolean
+    status?: boolean
+    dependents?: boolean
+    notes?: boolean
+    branchId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["employee"]>
+
+  export type EmployeeSelectScalar = {
+    id?: boolean
+    code?: boolean
+    name?: boolean
+    position?: boolean
+    department?: boolean
+    baseSalary?: boolean
+    bankAccount?: boolean
+    bankName?: boolean
+    taxCode?: boolean
+    socialInsuranceNo?: boolean
+    startDate?: boolean
+    endDate?: boolean
+    status?: boolean
+    dependents?: boolean
+    notes?: boolean
+    branchId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type EmployeeOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "code" | "name" | "position" | "department" | "baseSalary" | "bankAccount" | "bankName" | "taxCode" | "socialInsuranceNo" | "startDate" | "endDate" | "status" | "dependents" | "notes" | "branchId" | "createdAt" | "updatedAt", ExtArgs["result"]["employee"]>
+
+  export type $EmployeePayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "Employee"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      code: string
+      name: string
+      position: string | null
+      department: string | null
+      baseSalary: number
+      bankAccount: string | null
+      bankName: string | null
+      taxCode: string | null
+      socialInsuranceNo: string | null
+      startDate: string | null
+      endDate: string | null
+      status: string
+      dependents: number
+      notes: string | null
+      branchId: string | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["employee"]>
+    composites: {}
+  }
+
+  type EmployeeGetPayload<S extends boolean | null | undefined | EmployeeDefaultArgs> = $Result.GetResult<Prisma.$EmployeePayload, S>
+
+  type EmployeeCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<EmployeeFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: EmployeeCountAggregateInputType | true
+    }
+
+  export interface EmployeeDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['Employee'], meta: { name: 'Employee' } }
+    /**
+     * Find zero or one Employee that matches the filter.
+     * @param {EmployeeFindUniqueArgs} args - Arguments to find a Employee
+     * @example
+     * // Get one Employee
+     * const employee = await prisma.employee.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends EmployeeFindUniqueArgs>(args: SelectSubset<T, EmployeeFindUniqueArgs<ExtArgs>>): Prisma__EmployeeClient<$Result.GetResult<Prisma.$EmployeePayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one Employee that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {EmployeeFindUniqueOrThrowArgs} args - Arguments to find a Employee
+     * @example
+     * // Get one Employee
+     * const employee = await prisma.employee.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends EmployeeFindUniqueOrThrowArgs>(args: SelectSubset<T, EmployeeFindUniqueOrThrowArgs<ExtArgs>>): Prisma__EmployeeClient<$Result.GetResult<Prisma.$EmployeePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first Employee that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {EmployeeFindFirstArgs} args - Arguments to find a Employee
+     * @example
+     * // Get one Employee
+     * const employee = await prisma.employee.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends EmployeeFindFirstArgs>(args?: SelectSubset<T, EmployeeFindFirstArgs<ExtArgs>>): Prisma__EmployeeClient<$Result.GetResult<Prisma.$EmployeePayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first Employee that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {EmployeeFindFirstOrThrowArgs} args - Arguments to find a Employee
+     * @example
+     * // Get one Employee
+     * const employee = await prisma.employee.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends EmployeeFindFirstOrThrowArgs>(args?: SelectSubset<T, EmployeeFindFirstOrThrowArgs<ExtArgs>>): Prisma__EmployeeClient<$Result.GetResult<Prisma.$EmployeePayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more Employees that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {EmployeeFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all Employees
+     * const employees = await prisma.employee.findMany()
+     * 
+     * // Get first 10 Employees
+     * const employees = await prisma.employee.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const employeeWithIdOnly = await prisma.employee.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends EmployeeFindManyArgs>(args?: SelectSubset<T, EmployeeFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$EmployeePayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a Employee.
+     * @param {EmployeeCreateArgs} args - Arguments to create a Employee.
+     * @example
+     * // Create one Employee
+     * const Employee = await prisma.employee.create({
+     *   data: {
+     *     // ... data to create a Employee
+     *   }
+     * })
+     * 
+     */
+    create<T extends EmployeeCreateArgs>(args: SelectSubset<T, EmployeeCreateArgs<ExtArgs>>): Prisma__EmployeeClient<$Result.GetResult<Prisma.$EmployeePayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many Employees.
+     * @param {EmployeeCreateManyArgs} args - Arguments to create many Employees.
+     * @example
+     * // Create many Employees
+     * const employee = await prisma.employee.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends EmployeeCreateManyArgs>(args?: SelectSubset<T, EmployeeCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many Employees and returns the data saved in the database.
+     * @param {EmployeeCreateManyAndReturnArgs} args - Arguments to create many Employees.
+     * @example
+     * // Create many Employees
+     * const employee = await prisma.employee.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many Employees and only return the `id`
+     * const employeeWithIdOnly = await prisma.employee.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends EmployeeCreateManyAndReturnArgs>(args?: SelectSubset<T, EmployeeCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$EmployeePayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a Employee.
+     * @param {EmployeeDeleteArgs} args - Arguments to delete one Employee.
+     * @example
+     * // Delete one Employee
+     * const Employee = await prisma.employee.delete({
+     *   where: {
+     *     // ... filter to delete one Employee
+     *   }
+     * })
+     * 
+     */
+    delete<T extends EmployeeDeleteArgs>(args: SelectSubset<T, EmployeeDeleteArgs<ExtArgs>>): Prisma__EmployeeClient<$Result.GetResult<Prisma.$EmployeePayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one Employee.
+     * @param {EmployeeUpdateArgs} args - Arguments to update one Employee.
+     * @example
+     * // Update one Employee
+     * const employee = await prisma.employee.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends EmployeeUpdateArgs>(args: SelectSubset<T, EmployeeUpdateArgs<ExtArgs>>): Prisma__EmployeeClient<$Result.GetResult<Prisma.$EmployeePayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more Employees.
+     * @param {EmployeeDeleteManyArgs} args - Arguments to filter Employees to delete.
+     * @example
+     * // Delete a few Employees
+     * const { count } = await prisma.employee.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends EmployeeDeleteManyArgs>(args?: SelectSubset<T, EmployeeDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more Employees.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {EmployeeUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many Employees
+     * const employee = await prisma.employee.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends EmployeeUpdateManyArgs>(args: SelectSubset<T, EmployeeUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more Employees and returns the data updated in the database.
+     * @param {EmployeeUpdateManyAndReturnArgs} args - Arguments to update many Employees.
+     * @example
+     * // Update many Employees
+     * const employee = await prisma.employee.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more Employees and only return the `id`
+     * const employeeWithIdOnly = await prisma.employee.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends EmployeeUpdateManyAndReturnArgs>(args: SelectSubset<T, EmployeeUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$EmployeePayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one Employee.
+     * @param {EmployeeUpsertArgs} args - Arguments to update or create a Employee.
+     * @example
+     * // Update or create a Employee
+     * const employee = await prisma.employee.upsert({
+     *   create: {
+     *     // ... data to create a Employee
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the Employee we want to update
+     *   }
+     * })
+     */
+    upsert<T extends EmployeeUpsertArgs>(args: SelectSubset<T, EmployeeUpsertArgs<ExtArgs>>): Prisma__EmployeeClient<$Result.GetResult<Prisma.$EmployeePayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of Employees.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {EmployeeCountArgs} args - Arguments to filter Employees to count.
+     * @example
+     * // Count the number of Employees
+     * const count = await prisma.employee.count({
+     *   where: {
+     *     // ... the filter for the Employees we want to count
+     *   }
+     * })
+    **/
+    count<T extends EmployeeCountArgs>(
+      args?: Subset<T, EmployeeCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], EmployeeCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a Employee.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {EmployeeAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends EmployeeAggregateArgs>(args: Subset<T, EmployeeAggregateArgs>): Prisma.PrismaPromise<GetEmployeeAggregateType<T>>
+
+    /**
+     * Group by Employee.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {EmployeeGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends EmployeeGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: EmployeeGroupByArgs['orderBy'] }
+        : { orderBy?: EmployeeGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, EmployeeGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetEmployeeGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the Employee model
+   */
+  readonly fields: EmployeeFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for Employee.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__EmployeeClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the Employee model
+   */
+  interface EmployeeFieldRefs {
+    readonly id: FieldRef<"Employee", 'String'>
+    readonly code: FieldRef<"Employee", 'String'>
+    readonly name: FieldRef<"Employee", 'String'>
+    readonly position: FieldRef<"Employee", 'String'>
+    readonly department: FieldRef<"Employee", 'String'>
+    readonly baseSalary: FieldRef<"Employee", 'Float'>
+    readonly bankAccount: FieldRef<"Employee", 'String'>
+    readonly bankName: FieldRef<"Employee", 'String'>
+    readonly taxCode: FieldRef<"Employee", 'String'>
+    readonly socialInsuranceNo: FieldRef<"Employee", 'String'>
+    readonly startDate: FieldRef<"Employee", 'String'>
+    readonly endDate: FieldRef<"Employee", 'String'>
+    readonly status: FieldRef<"Employee", 'String'>
+    readonly dependents: FieldRef<"Employee", 'Int'>
+    readonly notes: FieldRef<"Employee", 'String'>
+    readonly branchId: FieldRef<"Employee", 'String'>
+    readonly createdAt: FieldRef<"Employee", 'DateTime'>
+    readonly updatedAt: FieldRef<"Employee", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * Employee findUnique
+   */
+  export type EmployeeFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Employee
+     */
+    select?: EmployeeSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Employee
+     */
+    omit?: EmployeeOmit<ExtArgs> | null
+    /**
+     * Filter, which Employee to fetch.
+     */
+    where: EmployeeWhereUniqueInput
+  }
+
+  /**
+   * Employee findUniqueOrThrow
+   */
+  export type EmployeeFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Employee
+     */
+    select?: EmployeeSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Employee
+     */
+    omit?: EmployeeOmit<ExtArgs> | null
+    /**
+     * Filter, which Employee to fetch.
+     */
+    where: EmployeeWhereUniqueInput
+  }
+
+  /**
+   * Employee findFirst
+   */
+  export type EmployeeFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Employee
+     */
+    select?: EmployeeSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Employee
+     */
+    omit?: EmployeeOmit<ExtArgs> | null
+    /**
+     * Filter, which Employee to fetch.
+     */
+    where?: EmployeeWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of Employees to fetch.
+     */
+    orderBy?: EmployeeOrderByWithRelationInput | EmployeeOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for Employees.
+     */
+    cursor?: EmployeeWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` Employees from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` Employees.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of Employees.
+     */
+    distinct?: EmployeeScalarFieldEnum | EmployeeScalarFieldEnum[]
+  }
+
+  /**
+   * Employee findFirstOrThrow
+   */
+  export type EmployeeFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Employee
+     */
+    select?: EmployeeSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Employee
+     */
+    omit?: EmployeeOmit<ExtArgs> | null
+    /**
+     * Filter, which Employee to fetch.
+     */
+    where?: EmployeeWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of Employees to fetch.
+     */
+    orderBy?: EmployeeOrderByWithRelationInput | EmployeeOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for Employees.
+     */
+    cursor?: EmployeeWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` Employees from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` Employees.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of Employees.
+     */
+    distinct?: EmployeeScalarFieldEnum | EmployeeScalarFieldEnum[]
+  }
+
+  /**
+   * Employee findMany
+   */
+  export type EmployeeFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Employee
+     */
+    select?: EmployeeSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Employee
+     */
+    omit?: EmployeeOmit<ExtArgs> | null
+    /**
+     * Filter, which Employees to fetch.
+     */
+    where?: EmployeeWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of Employees to fetch.
+     */
+    orderBy?: EmployeeOrderByWithRelationInput | EmployeeOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing Employees.
+     */
+    cursor?: EmployeeWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` Employees from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` Employees.
+     */
+    skip?: number
+    distinct?: EmployeeScalarFieldEnum | EmployeeScalarFieldEnum[]
+  }
+
+  /**
+   * Employee create
+   */
+  export type EmployeeCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Employee
+     */
+    select?: EmployeeSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Employee
+     */
+    omit?: EmployeeOmit<ExtArgs> | null
+    /**
+     * The data needed to create a Employee.
+     */
+    data: XOR<EmployeeCreateInput, EmployeeUncheckedCreateInput>
+  }
+
+  /**
+   * Employee createMany
+   */
+  export type EmployeeCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many Employees.
+     */
+    data: EmployeeCreateManyInput | EmployeeCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * Employee createManyAndReturn
+   */
+  export type EmployeeCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Employee
+     */
+    select?: EmployeeSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the Employee
+     */
+    omit?: EmployeeOmit<ExtArgs> | null
+    /**
+     * The data used to create many Employees.
+     */
+    data: EmployeeCreateManyInput | EmployeeCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * Employee update
+   */
+  export type EmployeeUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Employee
+     */
+    select?: EmployeeSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Employee
+     */
+    omit?: EmployeeOmit<ExtArgs> | null
+    /**
+     * The data needed to update a Employee.
+     */
+    data: XOR<EmployeeUpdateInput, EmployeeUncheckedUpdateInput>
+    /**
+     * Choose, which Employee to update.
+     */
+    where: EmployeeWhereUniqueInput
+  }
+
+  /**
+   * Employee updateMany
+   */
+  export type EmployeeUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update Employees.
+     */
+    data: XOR<EmployeeUpdateManyMutationInput, EmployeeUncheckedUpdateManyInput>
+    /**
+     * Filter which Employees to update
+     */
+    where?: EmployeeWhereInput
+    /**
+     * Limit how many Employees to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * Employee updateManyAndReturn
+   */
+  export type EmployeeUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Employee
+     */
+    select?: EmployeeSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the Employee
+     */
+    omit?: EmployeeOmit<ExtArgs> | null
+    /**
+     * The data used to update Employees.
+     */
+    data: XOR<EmployeeUpdateManyMutationInput, EmployeeUncheckedUpdateManyInput>
+    /**
+     * Filter which Employees to update
+     */
+    where?: EmployeeWhereInput
+    /**
+     * Limit how many Employees to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * Employee upsert
+   */
+  export type EmployeeUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Employee
+     */
+    select?: EmployeeSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Employee
+     */
+    omit?: EmployeeOmit<ExtArgs> | null
+    /**
+     * The filter to search for the Employee to update in case it exists.
+     */
+    where: EmployeeWhereUniqueInput
+    /**
+     * In case the Employee found by the `where` argument doesn't exist, create a new Employee with this data.
+     */
+    create: XOR<EmployeeCreateInput, EmployeeUncheckedCreateInput>
+    /**
+     * In case the Employee was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<EmployeeUpdateInput, EmployeeUncheckedUpdateInput>
+  }
+
+  /**
+   * Employee delete
+   */
+  export type EmployeeDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Employee
+     */
+    select?: EmployeeSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Employee
+     */
+    omit?: EmployeeOmit<ExtArgs> | null
+    /**
+     * Filter which Employee to delete.
+     */
+    where: EmployeeWhereUniqueInput
+  }
+
+  /**
+   * Employee deleteMany
+   */
+  export type EmployeeDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which Employees to delete
+     */
+    where?: EmployeeWhereInput
+    /**
+     * Limit how many Employees to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * Employee without action
+   */
+  export type EmployeeDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Employee
+     */
+    select?: EmployeeSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Employee
+     */
+    omit?: EmployeeOmit<ExtArgs> | null
+  }
+
+
+  /**
+   * Model PayrollPeriod
+   */
+
+  export type AggregatePayrollPeriod = {
+    _count: PayrollPeriodCountAggregateOutputType | null
+    _avg: PayrollPeriodAvgAggregateOutputType | null
+    _sum: PayrollPeriodSumAggregateOutputType | null
+    _min: PayrollPeriodMinAggregateOutputType | null
+    _max: PayrollPeriodMaxAggregateOutputType | null
+  }
+
+  export type PayrollPeriodAvgAggregateOutputType = {
+    month: number | null
+    year: number | null
+    totalGross: number | null
+    totalDeductions: number | null
+    totalNet: number | null
+  }
+
+  export type PayrollPeriodSumAggregateOutputType = {
+    month: number | null
+    year: number | null
+    totalGross: number | null
+    totalDeductions: number | null
+    totalNet: number | null
+  }
+
+  export type PayrollPeriodMinAggregateOutputType = {
+    id: string | null
+    month: number | null
+    year: number | null
+    status: string | null
+    totalGross: number | null
+    totalDeductions: number | null
+    totalNet: number | null
+    notes: string | null
+    branchId: string | null
+    createdBy: string | null
+    confirmedAt: Date | null
+    paidAt: Date | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type PayrollPeriodMaxAggregateOutputType = {
+    id: string | null
+    month: number | null
+    year: number | null
+    status: string | null
+    totalGross: number | null
+    totalDeductions: number | null
+    totalNet: number | null
+    notes: string | null
+    branchId: string | null
+    createdBy: string | null
+    confirmedAt: Date | null
+    paidAt: Date | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type PayrollPeriodCountAggregateOutputType = {
+    id: number
+    month: number
+    year: number
+    status: number
+    totalGross: number
+    totalDeductions: number
+    totalNet: number
+    notes: number
+    branchId: number
+    createdBy: number
+    confirmedAt: number
+    paidAt: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type PayrollPeriodAvgAggregateInputType = {
+    month?: true
+    year?: true
+    totalGross?: true
+    totalDeductions?: true
+    totalNet?: true
+  }
+
+  export type PayrollPeriodSumAggregateInputType = {
+    month?: true
+    year?: true
+    totalGross?: true
+    totalDeductions?: true
+    totalNet?: true
+  }
+
+  export type PayrollPeriodMinAggregateInputType = {
+    id?: true
+    month?: true
+    year?: true
+    status?: true
+    totalGross?: true
+    totalDeductions?: true
+    totalNet?: true
+    notes?: true
+    branchId?: true
+    createdBy?: true
+    confirmedAt?: true
+    paidAt?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type PayrollPeriodMaxAggregateInputType = {
+    id?: true
+    month?: true
+    year?: true
+    status?: true
+    totalGross?: true
+    totalDeductions?: true
+    totalNet?: true
+    notes?: true
+    branchId?: true
+    createdBy?: true
+    confirmedAt?: true
+    paidAt?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type PayrollPeriodCountAggregateInputType = {
+    id?: true
+    month?: true
+    year?: true
+    status?: true
+    totalGross?: true
+    totalDeductions?: true
+    totalNet?: true
+    notes?: true
+    branchId?: true
+    createdBy?: true
+    confirmedAt?: true
+    paidAt?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type PayrollPeriodAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which PayrollPeriod to aggregate.
+     */
+    where?: PayrollPeriodWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of PayrollPeriods to fetch.
+     */
+    orderBy?: PayrollPeriodOrderByWithRelationInput | PayrollPeriodOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: PayrollPeriodWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` PayrollPeriods from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` PayrollPeriods.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned PayrollPeriods
+    **/
+    _count?: true | PayrollPeriodCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: PayrollPeriodAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: PayrollPeriodSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: PayrollPeriodMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: PayrollPeriodMaxAggregateInputType
+  }
+
+  export type GetPayrollPeriodAggregateType<T extends PayrollPeriodAggregateArgs> = {
+        [P in keyof T & keyof AggregatePayrollPeriod]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregatePayrollPeriod[P]>
+      : GetScalarType<T[P], AggregatePayrollPeriod[P]>
+  }
+
+
+
+
+  export type PayrollPeriodGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: PayrollPeriodWhereInput
+    orderBy?: PayrollPeriodOrderByWithAggregationInput | PayrollPeriodOrderByWithAggregationInput[]
+    by: PayrollPeriodScalarFieldEnum[] | PayrollPeriodScalarFieldEnum
+    having?: PayrollPeriodScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: PayrollPeriodCountAggregateInputType | true
+    _avg?: PayrollPeriodAvgAggregateInputType
+    _sum?: PayrollPeriodSumAggregateInputType
+    _min?: PayrollPeriodMinAggregateInputType
+    _max?: PayrollPeriodMaxAggregateInputType
+  }
+
+  export type PayrollPeriodGroupByOutputType = {
+    id: string
+    month: number
+    year: number
+    status: string
+    totalGross: number
+    totalDeductions: number
+    totalNet: number
+    notes: string | null
+    branchId: string | null
+    createdBy: string | null
+    confirmedAt: Date | null
+    paidAt: Date | null
+    createdAt: Date
+    updatedAt: Date
+    _count: PayrollPeriodCountAggregateOutputType | null
+    _avg: PayrollPeriodAvgAggregateOutputType | null
+    _sum: PayrollPeriodSumAggregateOutputType | null
+    _min: PayrollPeriodMinAggregateOutputType | null
+    _max: PayrollPeriodMaxAggregateOutputType | null
+  }
+
+  type GetPayrollPeriodGroupByPayload<T extends PayrollPeriodGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<PayrollPeriodGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof PayrollPeriodGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], PayrollPeriodGroupByOutputType[P]>
+            : GetScalarType<T[P], PayrollPeriodGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type PayrollPeriodSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    month?: boolean
+    year?: boolean
+    status?: boolean
+    totalGross?: boolean
+    totalDeductions?: boolean
+    totalNet?: boolean
+    notes?: boolean
+    branchId?: boolean
+    createdBy?: boolean
+    confirmedAt?: boolean
+    paidAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["payrollPeriod"]>
+
+  export type PayrollPeriodSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    month?: boolean
+    year?: boolean
+    status?: boolean
+    totalGross?: boolean
+    totalDeductions?: boolean
+    totalNet?: boolean
+    notes?: boolean
+    branchId?: boolean
+    createdBy?: boolean
+    confirmedAt?: boolean
+    paidAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["payrollPeriod"]>
+
+  export type PayrollPeriodSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    month?: boolean
+    year?: boolean
+    status?: boolean
+    totalGross?: boolean
+    totalDeductions?: boolean
+    totalNet?: boolean
+    notes?: boolean
+    branchId?: boolean
+    createdBy?: boolean
+    confirmedAt?: boolean
+    paidAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["payrollPeriod"]>
+
+  export type PayrollPeriodSelectScalar = {
+    id?: boolean
+    month?: boolean
+    year?: boolean
+    status?: boolean
+    totalGross?: boolean
+    totalDeductions?: boolean
+    totalNet?: boolean
+    notes?: boolean
+    branchId?: boolean
+    createdBy?: boolean
+    confirmedAt?: boolean
+    paidAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type PayrollPeriodOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "month" | "year" | "status" | "totalGross" | "totalDeductions" | "totalNet" | "notes" | "branchId" | "createdBy" | "confirmedAt" | "paidAt" | "createdAt" | "updatedAt", ExtArgs["result"]["payrollPeriod"]>
+
+  export type $PayrollPeriodPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "PayrollPeriod"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      month: number
+      year: number
+      status: string
+      totalGross: number
+      totalDeductions: number
+      totalNet: number
+      notes: string | null
+      branchId: string | null
+      createdBy: string | null
+      confirmedAt: Date | null
+      paidAt: Date | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["payrollPeriod"]>
+    composites: {}
+  }
+
+  type PayrollPeriodGetPayload<S extends boolean | null | undefined | PayrollPeriodDefaultArgs> = $Result.GetResult<Prisma.$PayrollPeriodPayload, S>
+
+  type PayrollPeriodCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<PayrollPeriodFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: PayrollPeriodCountAggregateInputType | true
+    }
+
+  export interface PayrollPeriodDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['PayrollPeriod'], meta: { name: 'PayrollPeriod' } }
+    /**
+     * Find zero or one PayrollPeriod that matches the filter.
+     * @param {PayrollPeriodFindUniqueArgs} args - Arguments to find a PayrollPeriod
+     * @example
+     * // Get one PayrollPeriod
+     * const payrollPeriod = await prisma.payrollPeriod.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends PayrollPeriodFindUniqueArgs>(args: SelectSubset<T, PayrollPeriodFindUniqueArgs<ExtArgs>>): Prisma__PayrollPeriodClient<$Result.GetResult<Prisma.$PayrollPeriodPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one PayrollPeriod that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {PayrollPeriodFindUniqueOrThrowArgs} args - Arguments to find a PayrollPeriod
+     * @example
+     * // Get one PayrollPeriod
+     * const payrollPeriod = await prisma.payrollPeriod.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends PayrollPeriodFindUniqueOrThrowArgs>(args: SelectSubset<T, PayrollPeriodFindUniqueOrThrowArgs<ExtArgs>>): Prisma__PayrollPeriodClient<$Result.GetResult<Prisma.$PayrollPeriodPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first PayrollPeriod that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PayrollPeriodFindFirstArgs} args - Arguments to find a PayrollPeriod
+     * @example
+     * // Get one PayrollPeriod
+     * const payrollPeriod = await prisma.payrollPeriod.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends PayrollPeriodFindFirstArgs>(args?: SelectSubset<T, PayrollPeriodFindFirstArgs<ExtArgs>>): Prisma__PayrollPeriodClient<$Result.GetResult<Prisma.$PayrollPeriodPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first PayrollPeriod that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PayrollPeriodFindFirstOrThrowArgs} args - Arguments to find a PayrollPeriod
+     * @example
+     * // Get one PayrollPeriod
+     * const payrollPeriod = await prisma.payrollPeriod.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends PayrollPeriodFindFirstOrThrowArgs>(args?: SelectSubset<T, PayrollPeriodFindFirstOrThrowArgs<ExtArgs>>): Prisma__PayrollPeriodClient<$Result.GetResult<Prisma.$PayrollPeriodPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more PayrollPeriods that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PayrollPeriodFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all PayrollPeriods
+     * const payrollPeriods = await prisma.payrollPeriod.findMany()
+     * 
+     * // Get first 10 PayrollPeriods
+     * const payrollPeriods = await prisma.payrollPeriod.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const payrollPeriodWithIdOnly = await prisma.payrollPeriod.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends PayrollPeriodFindManyArgs>(args?: SelectSubset<T, PayrollPeriodFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PayrollPeriodPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a PayrollPeriod.
+     * @param {PayrollPeriodCreateArgs} args - Arguments to create a PayrollPeriod.
+     * @example
+     * // Create one PayrollPeriod
+     * const PayrollPeriod = await prisma.payrollPeriod.create({
+     *   data: {
+     *     // ... data to create a PayrollPeriod
+     *   }
+     * })
+     * 
+     */
+    create<T extends PayrollPeriodCreateArgs>(args: SelectSubset<T, PayrollPeriodCreateArgs<ExtArgs>>): Prisma__PayrollPeriodClient<$Result.GetResult<Prisma.$PayrollPeriodPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many PayrollPeriods.
+     * @param {PayrollPeriodCreateManyArgs} args - Arguments to create many PayrollPeriods.
+     * @example
+     * // Create many PayrollPeriods
+     * const payrollPeriod = await prisma.payrollPeriod.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends PayrollPeriodCreateManyArgs>(args?: SelectSubset<T, PayrollPeriodCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many PayrollPeriods and returns the data saved in the database.
+     * @param {PayrollPeriodCreateManyAndReturnArgs} args - Arguments to create many PayrollPeriods.
+     * @example
+     * // Create many PayrollPeriods
+     * const payrollPeriod = await prisma.payrollPeriod.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many PayrollPeriods and only return the `id`
+     * const payrollPeriodWithIdOnly = await prisma.payrollPeriod.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends PayrollPeriodCreateManyAndReturnArgs>(args?: SelectSubset<T, PayrollPeriodCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PayrollPeriodPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a PayrollPeriod.
+     * @param {PayrollPeriodDeleteArgs} args - Arguments to delete one PayrollPeriod.
+     * @example
+     * // Delete one PayrollPeriod
+     * const PayrollPeriod = await prisma.payrollPeriod.delete({
+     *   where: {
+     *     // ... filter to delete one PayrollPeriod
+     *   }
+     * })
+     * 
+     */
+    delete<T extends PayrollPeriodDeleteArgs>(args: SelectSubset<T, PayrollPeriodDeleteArgs<ExtArgs>>): Prisma__PayrollPeriodClient<$Result.GetResult<Prisma.$PayrollPeriodPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one PayrollPeriod.
+     * @param {PayrollPeriodUpdateArgs} args - Arguments to update one PayrollPeriod.
+     * @example
+     * // Update one PayrollPeriod
+     * const payrollPeriod = await prisma.payrollPeriod.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends PayrollPeriodUpdateArgs>(args: SelectSubset<T, PayrollPeriodUpdateArgs<ExtArgs>>): Prisma__PayrollPeriodClient<$Result.GetResult<Prisma.$PayrollPeriodPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more PayrollPeriods.
+     * @param {PayrollPeriodDeleteManyArgs} args - Arguments to filter PayrollPeriods to delete.
+     * @example
+     * // Delete a few PayrollPeriods
+     * const { count } = await prisma.payrollPeriod.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends PayrollPeriodDeleteManyArgs>(args?: SelectSubset<T, PayrollPeriodDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more PayrollPeriods.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PayrollPeriodUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many PayrollPeriods
+     * const payrollPeriod = await prisma.payrollPeriod.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends PayrollPeriodUpdateManyArgs>(args: SelectSubset<T, PayrollPeriodUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more PayrollPeriods and returns the data updated in the database.
+     * @param {PayrollPeriodUpdateManyAndReturnArgs} args - Arguments to update many PayrollPeriods.
+     * @example
+     * // Update many PayrollPeriods
+     * const payrollPeriod = await prisma.payrollPeriod.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more PayrollPeriods and only return the `id`
+     * const payrollPeriodWithIdOnly = await prisma.payrollPeriod.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends PayrollPeriodUpdateManyAndReturnArgs>(args: SelectSubset<T, PayrollPeriodUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PayrollPeriodPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one PayrollPeriod.
+     * @param {PayrollPeriodUpsertArgs} args - Arguments to update or create a PayrollPeriod.
+     * @example
+     * // Update or create a PayrollPeriod
+     * const payrollPeriod = await prisma.payrollPeriod.upsert({
+     *   create: {
+     *     // ... data to create a PayrollPeriod
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the PayrollPeriod we want to update
+     *   }
+     * })
+     */
+    upsert<T extends PayrollPeriodUpsertArgs>(args: SelectSubset<T, PayrollPeriodUpsertArgs<ExtArgs>>): Prisma__PayrollPeriodClient<$Result.GetResult<Prisma.$PayrollPeriodPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of PayrollPeriods.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PayrollPeriodCountArgs} args - Arguments to filter PayrollPeriods to count.
+     * @example
+     * // Count the number of PayrollPeriods
+     * const count = await prisma.payrollPeriod.count({
+     *   where: {
+     *     // ... the filter for the PayrollPeriods we want to count
+     *   }
+     * })
+    **/
+    count<T extends PayrollPeriodCountArgs>(
+      args?: Subset<T, PayrollPeriodCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], PayrollPeriodCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a PayrollPeriod.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PayrollPeriodAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends PayrollPeriodAggregateArgs>(args: Subset<T, PayrollPeriodAggregateArgs>): Prisma.PrismaPromise<GetPayrollPeriodAggregateType<T>>
+
+    /**
+     * Group by PayrollPeriod.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PayrollPeriodGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends PayrollPeriodGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: PayrollPeriodGroupByArgs['orderBy'] }
+        : { orderBy?: PayrollPeriodGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, PayrollPeriodGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetPayrollPeriodGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the PayrollPeriod model
+   */
+  readonly fields: PayrollPeriodFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for PayrollPeriod.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__PayrollPeriodClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the PayrollPeriod model
+   */
+  interface PayrollPeriodFieldRefs {
+    readonly id: FieldRef<"PayrollPeriod", 'String'>
+    readonly month: FieldRef<"PayrollPeriod", 'Int'>
+    readonly year: FieldRef<"PayrollPeriod", 'Int'>
+    readonly status: FieldRef<"PayrollPeriod", 'String'>
+    readonly totalGross: FieldRef<"PayrollPeriod", 'Float'>
+    readonly totalDeductions: FieldRef<"PayrollPeriod", 'Float'>
+    readonly totalNet: FieldRef<"PayrollPeriod", 'Float'>
+    readonly notes: FieldRef<"PayrollPeriod", 'String'>
+    readonly branchId: FieldRef<"PayrollPeriod", 'String'>
+    readonly createdBy: FieldRef<"PayrollPeriod", 'String'>
+    readonly confirmedAt: FieldRef<"PayrollPeriod", 'DateTime'>
+    readonly paidAt: FieldRef<"PayrollPeriod", 'DateTime'>
+    readonly createdAt: FieldRef<"PayrollPeriod", 'DateTime'>
+    readonly updatedAt: FieldRef<"PayrollPeriod", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * PayrollPeriod findUnique
+   */
+  export type PayrollPeriodFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PayrollPeriod
+     */
+    select?: PayrollPeriodSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PayrollPeriod
+     */
+    omit?: PayrollPeriodOmit<ExtArgs> | null
+    /**
+     * Filter, which PayrollPeriod to fetch.
+     */
+    where: PayrollPeriodWhereUniqueInput
+  }
+
+  /**
+   * PayrollPeriod findUniqueOrThrow
+   */
+  export type PayrollPeriodFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PayrollPeriod
+     */
+    select?: PayrollPeriodSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PayrollPeriod
+     */
+    omit?: PayrollPeriodOmit<ExtArgs> | null
+    /**
+     * Filter, which PayrollPeriod to fetch.
+     */
+    where: PayrollPeriodWhereUniqueInput
+  }
+
+  /**
+   * PayrollPeriod findFirst
+   */
+  export type PayrollPeriodFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PayrollPeriod
+     */
+    select?: PayrollPeriodSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PayrollPeriod
+     */
+    omit?: PayrollPeriodOmit<ExtArgs> | null
+    /**
+     * Filter, which PayrollPeriod to fetch.
+     */
+    where?: PayrollPeriodWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of PayrollPeriods to fetch.
+     */
+    orderBy?: PayrollPeriodOrderByWithRelationInput | PayrollPeriodOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for PayrollPeriods.
+     */
+    cursor?: PayrollPeriodWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` PayrollPeriods from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` PayrollPeriods.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of PayrollPeriods.
+     */
+    distinct?: PayrollPeriodScalarFieldEnum | PayrollPeriodScalarFieldEnum[]
+  }
+
+  /**
+   * PayrollPeriod findFirstOrThrow
+   */
+  export type PayrollPeriodFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PayrollPeriod
+     */
+    select?: PayrollPeriodSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PayrollPeriod
+     */
+    omit?: PayrollPeriodOmit<ExtArgs> | null
+    /**
+     * Filter, which PayrollPeriod to fetch.
+     */
+    where?: PayrollPeriodWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of PayrollPeriods to fetch.
+     */
+    orderBy?: PayrollPeriodOrderByWithRelationInput | PayrollPeriodOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for PayrollPeriods.
+     */
+    cursor?: PayrollPeriodWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` PayrollPeriods from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` PayrollPeriods.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of PayrollPeriods.
+     */
+    distinct?: PayrollPeriodScalarFieldEnum | PayrollPeriodScalarFieldEnum[]
+  }
+
+  /**
+   * PayrollPeriod findMany
+   */
+  export type PayrollPeriodFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PayrollPeriod
+     */
+    select?: PayrollPeriodSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PayrollPeriod
+     */
+    omit?: PayrollPeriodOmit<ExtArgs> | null
+    /**
+     * Filter, which PayrollPeriods to fetch.
+     */
+    where?: PayrollPeriodWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of PayrollPeriods to fetch.
+     */
+    orderBy?: PayrollPeriodOrderByWithRelationInput | PayrollPeriodOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing PayrollPeriods.
+     */
+    cursor?: PayrollPeriodWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` PayrollPeriods from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` PayrollPeriods.
+     */
+    skip?: number
+    distinct?: PayrollPeriodScalarFieldEnum | PayrollPeriodScalarFieldEnum[]
+  }
+
+  /**
+   * PayrollPeriod create
+   */
+  export type PayrollPeriodCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PayrollPeriod
+     */
+    select?: PayrollPeriodSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PayrollPeriod
+     */
+    omit?: PayrollPeriodOmit<ExtArgs> | null
+    /**
+     * The data needed to create a PayrollPeriod.
+     */
+    data: XOR<PayrollPeriodCreateInput, PayrollPeriodUncheckedCreateInput>
+  }
+
+  /**
+   * PayrollPeriod createMany
+   */
+  export type PayrollPeriodCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many PayrollPeriods.
+     */
+    data: PayrollPeriodCreateManyInput | PayrollPeriodCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * PayrollPeriod createManyAndReturn
+   */
+  export type PayrollPeriodCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PayrollPeriod
+     */
+    select?: PayrollPeriodSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the PayrollPeriod
+     */
+    omit?: PayrollPeriodOmit<ExtArgs> | null
+    /**
+     * The data used to create many PayrollPeriods.
+     */
+    data: PayrollPeriodCreateManyInput | PayrollPeriodCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * PayrollPeriod update
+   */
+  export type PayrollPeriodUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PayrollPeriod
+     */
+    select?: PayrollPeriodSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PayrollPeriod
+     */
+    omit?: PayrollPeriodOmit<ExtArgs> | null
+    /**
+     * The data needed to update a PayrollPeriod.
+     */
+    data: XOR<PayrollPeriodUpdateInput, PayrollPeriodUncheckedUpdateInput>
+    /**
+     * Choose, which PayrollPeriod to update.
+     */
+    where: PayrollPeriodWhereUniqueInput
+  }
+
+  /**
+   * PayrollPeriod updateMany
+   */
+  export type PayrollPeriodUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update PayrollPeriods.
+     */
+    data: XOR<PayrollPeriodUpdateManyMutationInput, PayrollPeriodUncheckedUpdateManyInput>
+    /**
+     * Filter which PayrollPeriods to update
+     */
+    where?: PayrollPeriodWhereInput
+    /**
+     * Limit how many PayrollPeriods to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * PayrollPeriod updateManyAndReturn
+   */
+  export type PayrollPeriodUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PayrollPeriod
+     */
+    select?: PayrollPeriodSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the PayrollPeriod
+     */
+    omit?: PayrollPeriodOmit<ExtArgs> | null
+    /**
+     * The data used to update PayrollPeriods.
+     */
+    data: XOR<PayrollPeriodUpdateManyMutationInput, PayrollPeriodUncheckedUpdateManyInput>
+    /**
+     * Filter which PayrollPeriods to update
+     */
+    where?: PayrollPeriodWhereInput
+    /**
+     * Limit how many PayrollPeriods to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * PayrollPeriod upsert
+   */
+  export type PayrollPeriodUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PayrollPeriod
+     */
+    select?: PayrollPeriodSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PayrollPeriod
+     */
+    omit?: PayrollPeriodOmit<ExtArgs> | null
+    /**
+     * The filter to search for the PayrollPeriod to update in case it exists.
+     */
+    where: PayrollPeriodWhereUniqueInput
+    /**
+     * In case the PayrollPeriod found by the `where` argument doesn't exist, create a new PayrollPeriod with this data.
+     */
+    create: XOR<PayrollPeriodCreateInput, PayrollPeriodUncheckedCreateInput>
+    /**
+     * In case the PayrollPeriod was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<PayrollPeriodUpdateInput, PayrollPeriodUncheckedUpdateInput>
+  }
+
+  /**
+   * PayrollPeriod delete
+   */
+  export type PayrollPeriodDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PayrollPeriod
+     */
+    select?: PayrollPeriodSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PayrollPeriod
+     */
+    omit?: PayrollPeriodOmit<ExtArgs> | null
+    /**
+     * Filter which PayrollPeriod to delete.
+     */
+    where: PayrollPeriodWhereUniqueInput
+  }
+
+  /**
+   * PayrollPeriod deleteMany
+   */
+  export type PayrollPeriodDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which PayrollPeriods to delete
+     */
+    where?: PayrollPeriodWhereInput
+    /**
+     * Limit how many PayrollPeriods to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * PayrollPeriod without action
+   */
+  export type PayrollPeriodDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PayrollPeriod
+     */
+    select?: PayrollPeriodSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PayrollPeriod
+     */
+    omit?: PayrollPeriodOmit<ExtArgs> | null
+  }
+
+
+  /**
+   * Model PayrollEntry
+   */
+
+  export type AggregatePayrollEntry = {
+    _count: PayrollEntryCountAggregateOutputType | null
+    _avg: PayrollEntryAvgAggregateOutputType | null
+    _sum: PayrollEntrySumAggregateOutputType | null
+    _min: PayrollEntryMinAggregateOutputType | null
+    _max: PayrollEntryMaxAggregateOutputType | null
+  }
+
+  export type PayrollEntryAvgAggregateOutputType = {
+    workDays: number | null
+    baseSalary: number | null
+    allowances: number | null
+    overtimePay: number | null
+    grossSalary: number | null
+    bhxhEmployee: number | null
+    bhytEmployee: number | null
+    bhtnEmployee: number | null
+    bhxhEmployer: number | null
+    bhytEmployer: number | null
+    bhtnEmployer: number | null
+    totalInsuranceEmployee: number | null
+    totalInsuranceEmployer: number | null
+    totalInsuranceDeduction: number | null
+    taxableIncome: number | null
+    personalDeduction: number | null
+    dependentDeduction: number | null
+    dependents: number | null
+    assessableIncome: number | null
+    pitAmount: number | null
+    netSalary: number | null
+    bankTransferAmount: number | null
+  }
+
+  export type PayrollEntrySumAggregateOutputType = {
+    workDays: number | null
+    baseSalary: number | null
+    allowances: number | null
+    overtimePay: number | null
+    grossSalary: number | null
+    bhxhEmployee: number | null
+    bhytEmployee: number | null
+    bhtnEmployee: number | null
+    bhxhEmployer: number | null
+    bhytEmployer: number | null
+    bhtnEmployer: number | null
+    totalInsuranceEmployee: number | null
+    totalInsuranceEmployer: number | null
+    totalInsuranceDeduction: number | null
+    taxableIncome: number | null
+    personalDeduction: number | null
+    dependentDeduction: number | null
+    dependents: number | null
+    assessableIncome: number | null
+    pitAmount: number | null
+    netSalary: number | null
+    bankTransferAmount: number | null
+  }
+
+  export type PayrollEntryMinAggregateOutputType = {
+    id: string | null
+    periodId: string | null
+    employeeId: string | null
+    employeeCode: string | null
+    employeeName: string | null
+    workDays: number | null
+    baseSalary: number | null
+    allowances: number | null
+    overtimePay: number | null
+    grossSalary: number | null
+    bhxhEmployee: number | null
+    bhytEmployee: number | null
+    bhtnEmployee: number | null
+    bhxhEmployer: number | null
+    bhytEmployer: number | null
+    bhtnEmployer: number | null
+    totalInsuranceEmployee: number | null
+    totalInsuranceEmployer: number | null
+    totalInsuranceDeduction: number | null
+    taxableIncome: number | null
+    personalDeduction: number | null
+    dependentDeduction: number | null
+    dependents: number | null
+    assessableIncome: number | null
+    pitAmount: number | null
+    netSalary: number | null
+    bankTransferAmount: number | null
+    notes: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type PayrollEntryMaxAggregateOutputType = {
+    id: string | null
+    periodId: string | null
+    employeeId: string | null
+    employeeCode: string | null
+    employeeName: string | null
+    workDays: number | null
+    baseSalary: number | null
+    allowances: number | null
+    overtimePay: number | null
+    grossSalary: number | null
+    bhxhEmployee: number | null
+    bhytEmployee: number | null
+    bhtnEmployee: number | null
+    bhxhEmployer: number | null
+    bhytEmployer: number | null
+    bhtnEmployer: number | null
+    totalInsuranceEmployee: number | null
+    totalInsuranceEmployer: number | null
+    totalInsuranceDeduction: number | null
+    taxableIncome: number | null
+    personalDeduction: number | null
+    dependentDeduction: number | null
+    dependents: number | null
+    assessableIncome: number | null
+    pitAmount: number | null
+    netSalary: number | null
+    bankTransferAmount: number | null
+    notes: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type PayrollEntryCountAggregateOutputType = {
+    id: number
+    periodId: number
+    employeeId: number
+    employeeCode: number
+    employeeName: number
+    workDays: number
+    baseSalary: number
+    allowances: number
+    overtimePay: number
+    grossSalary: number
+    bhxhEmployee: number
+    bhytEmployee: number
+    bhtnEmployee: number
+    bhxhEmployer: number
+    bhytEmployer: number
+    bhtnEmployer: number
+    totalInsuranceEmployee: number
+    totalInsuranceEmployer: number
+    totalInsuranceDeduction: number
+    taxableIncome: number
+    personalDeduction: number
+    dependentDeduction: number
+    dependents: number
+    assessableIncome: number
+    pitAmount: number
+    netSalary: number
+    bankTransferAmount: number
+    notes: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type PayrollEntryAvgAggregateInputType = {
+    workDays?: true
+    baseSalary?: true
+    allowances?: true
+    overtimePay?: true
+    grossSalary?: true
+    bhxhEmployee?: true
+    bhytEmployee?: true
+    bhtnEmployee?: true
+    bhxhEmployer?: true
+    bhytEmployer?: true
+    bhtnEmployer?: true
+    totalInsuranceEmployee?: true
+    totalInsuranceEmployer?: true
+    totalInsuranceDeduction?: true
+    taxableIncome?: true
+    personalDeduction?: true
+    dependentDeduction?: true
+    dependents?: true
+    assessableIncome?: true
+    pitAmount?: true
+    netSalary?: true
+    bankTransferAmount?: true
+  }
+
+  export type PayrollEntrySumAggregateInputType = {
+    workDays?: true
+    baseSalary?: true
+    allowances?: true
+    overtimePay?: true
+    grossSalary?: true
+    bhxhEmployee?: true
+    bhytEmployee?: true
+    bhtnEmployee?: true
+    bhxhEmployer?: true
+    bhytEmployer?: true
+    bhtnEmployer?: true
+    totalInsuranceEmployee?: true
+    totalInsuranceEmployer?: true
+    totalInsuranceDeduction?: true
+    taxableIncome?: true
+    personalDeduction?: true
+    dependentDeduction?: true
+    dependents?: true
+    assessableIncome?: true
+    pitAmount?: true
+    netSalary?: true
+    bankTransferAmount?: true
+  }
+
+  export type PayrollEntryMinAggregateInputType = {
+    id?: true
+    periodId?: true
+    employeeId?: true
+    employeeCode?: true
+    employeeName?: true
+    workDays?: true
+    baseSalary?: true
+    allowances?: true
+    overtimePay?: true
+    grossSalary?: true
+    bhxhEmployee?: true
+    bhytEmployee?: true
+    bhtnEmployee?: true
+    bhxhEmployer?: true
+    bhytEmployer?: true
+    bhtnEmployer?: true
+    totalInsuranceEmployee?: true
+    totalInsuranceEmployer?: true
+    totalInsuranceDeduction?: true
+    taxableIncome?: true
+    personalDeduction?: true
+    dependentDeduction?: true
+    dependents?: true
+    assessableIncome?: true
+    pitAmount?: true
+    netSalary?: true
+    bankTransferAmount?: true
+    notes?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type PayrollEntryMaxAggregateInputType = {
+    id?: true
+    periodId?: true
+    employeeId?: true
+    employeeCode?: true
+    employeeName?: true
+    workDays?: true
+    baseSalary?: true
+    allowances?: true
+    overtimePay?: true
+    grossSalary?: true
+    bhxhEmployee?: true
+    bhytEmployee?: true
+    bhtnEmployee?: true
+    bhxhEmployer?: true
+    bhytEmployer?: true
+    bhtnEmployer?: true
+    totalInsuranceEmployee?: true
+    totalInsuranceEmployer?: true
+    totalInsuranceDeduction?: true
+    taxableIncome?: true
+    personalDeduction?: true
+    dependentDeduction?: true
+    dependents?: true
+    assessableIncome?: true
+    pitAmount?: true
+    netSalary?: true
+    bankTransferAmount?: true
+    notes?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type PayrollEntryCountAggregateInputType = {
+    id?: true
+    periodId?: true
+    employeeId?: true
+    employeeCode?: true
+    employeeName?: true
+    workDays?: true
+    baseSalary?: true
+    allowances?: true
+    overtimePay?: true
+    grossSalary?: true
+    bhxhEmployee?: true
+    bhytEmployee?: true
+    bhtnEmployee?: true
+    bhxhEmployer?: true
+    bhytEmployer?: true
+    bhtnEmployer?: true
+    totalInsuranceEmployee?: true
+    totalInsuranceEmployer?: true
+    totalInsuranceDeduction?: true
+    taxableIncome?: true
+    personalDeduction?: true
+    dependentDeduction?: true
+    dependents?: true
+    assessableIncome?: true
+    pitAmount?: true
+    netSalary?: true
+    bankTransferAmount?: true
+    notes?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type PayrollEntryAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which PayrollEntry to aggregate.
+     */
+    where?: PayrollEntryWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of PayrollEntries to fetch.
+     */
+    orderBy?: PayrollEntryOrderByWithRelationInput | PayrollEntryOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: PayrollEntryWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` PayrollEntries from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` PayrollEntries.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned PayrollEntries
+    **/
+    _count?: true | PayrollEntryCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: PayrollEntryAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: PayrollEntrySumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: PayrollEntryMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: PayrollEntryMaxAggregateInputType
+  }
+
+  export type GetPayrollEntryAggregateType<T extends PayrollEntryAggregateArgs> = {
+        [P in keyof T & keyof AggregatePayrollEntry]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregatePayrollEntry[P]>
+      : GetScalarType<T[P], AggregatePayrollEntry[P]>
+  }
+
+
+
+
+  export type PayrollEntryGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: PayrollEntryWhereInput
+    orderBy?: PayrollEntryOrderByWithAggregationInput | PayrollEntryOrderByWithAggregationInput[]
+    by: PayrollEntryScalarFieldEnum[] | PayrollEntryScalarFieldEnum
+    having?: PayrollEntryScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: PayrollEntryCountAggregateInputType | true
+    _avg?: PayrollEntryAvgAggregateInputType
+    _sum?: PayrollEntrySumAggregateInputType
+    _min?: PayrollEntryMinAggregateInputType
+    _max?: PayrollEntryMaxAggregateInputType
+  }
+
+  export type PayrollEntryGroupByOutputType = {
+    id: string
+    periodId: string
+    employeeId: string
+    employeeCode: string | null
+    employeeName: string | null
+    workDays: number
+    baseSalary: number
+    allowances: number
+    overtimePay: number
+    grossSalary: number
+    bhxhEmployee: number
+    bhytEmployee: number
+    bhtnEmployee: number
+    bhxhEmployer: number
+    bhytEmployer: number
+    bhtnEmployer: number
+    totalInsuranceEmployee: number
+    totalInsuranceEmployer: number
+    totalInsuranceDeduction: number
+    taxableIncome: number
+    personalDeduction: number
+    dependentDeduction: number
+    dependents: number
+    assessableIncome: number
+    pitAmount: number
+    netSalary: number
+    bankTransferAmount: number
+    notes: string | null
+    createdAt: Date
+    updatedAt: Date
+    _count: PayrollEntryCountAggregateOutputType | null
+    _avg: PayrollEntryAvgAggregateOutputType | null
+    _sum: PayrollEntrySumAggregateOutputType | null
+    _min: PayrollEntryMinAggregateOutputType | null
+    _max: PayrollEntryMaxAggregateOutputType | null
+  }
+
+  type GetPayrollEntryGroupByPayload<T extends PayrollEntryGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<PayrollEntryGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof PayrollEntryGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], PayrollEntryGroupByOutputType[P]>
+            : GetScalarType<T[P], PayrollEntryGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type PayrollEntrySelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    periodId?: boolean
+    employeeId?: boolean
+    employeeCode?: boolean
+    employeeName?: boolean
+    workDays?: boolean
+    baseSalary?: boolean
+    allowances?: boolean
+    overtimePay?: boolean
+    grossSalary?: boolean
+    bhxhEmployee?: boolean
+    bhytEmployee?: boolean
+    bhtnEmployee?: boolean
+    bhxhEmployer?: boolean
+    bhytEmployer?: boolean
+    bhtnEmployer?: boolean
+    totalInsuranceEmployee?: boolean
+    totalInsuranceEmployer?: boolean
+    totalInsuranceDeduction?: boolean
+    taxableIncome?: boolean
+    personalDeduction?: boolean
+    dependentDeduction?: boolean
+    dependents?: boolean
+    assessableIncome?: boolean
+    pitAmount?: boolean
+    netSalary?: boolean
+    bankTransferAmount?: boolean
+    notes?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["payrollEntry"]>
+
+  export type PayrollEntrySelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    periodId?: boolean
+    employeeId?: boolean
+    employeeCode?: boolean
+    employeeName?: boolean
+    workDays?: boolean
+    baseSalary?: boolean
+    allowances?: boolean
+    overtimePay?: boolean
+    grossSalary?: boolean
+    bhxhEmployee?: boolean
+    bhytEmployee?: boolean
+    bhtnEmployee?: boolean
+    bhxhEmployer?: boolean
+    bhytEmployer?: boolean
+    bhtnEmployer?: boolean
+    totalInsuranceEmployee?: boolean
+    totalInsuranceEmployer?: boolean
+    totalInsuranceDeduction?: boolean
+    taxableIncome?: boolean
+    personalDeduction?: boolean
+    dependentDeduction?: boolean
+    dependents?: boolean
+    assessableIncome?: boolean
+    pitAmount?: boolean
+    netSalary?: boolean
+    bankTransferAmount?: boolean
+    notes?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["payrollEntry"]>
+
+  export type PayrollEntrySelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    periodId?: boolean
+    employeeId?: boolean
+    employeeCode?: boolean
+    employeeName?: boolean
+    workDays?: boolean
+    baseSalary?: boolean
+    allowances?: boolean
+    overtimePay?: boolean
+    grossSalary?: boolean
+    bhxhEmployee?: boolean
+    bhytEmployee?: boolean
+    bhtnEmployee?: boolean
+    bhxhEmployer?: boolean
+    bhytEmployer?: boolean
+    bhtnEmployer?: boolean
+    totalInsuranceEmployee?: boolean
+    totalInsuranceEmployer?: boolean
+    totalInsuranceDeduction?: boolean
+    taxableIncome?: boolean
+    personalDeduction?: boolean
+    dependentDeduction?: boolean
+    dependents?: boolean
+    assessableIncome?: boolean
+    pitAmount?: boolean
+    netSalary?: boolean
+    bankTransferAmount?: boolean
+    notes?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["payrollEntry"]>
+
+  export type PayrollEntrySelectScalar = {
+    id?: boolean
+    periodId?: boolean
+    employeeId?: boolean
+    employeeCode?: boolean
+    employeeName?: boolean
+    workDays?: boolean
+    baseSalary?: boolean
+    allowances?: boolean
+    overtimePay?: boolean
+    grossSalary?: boolean
+    bhxhEmployee?: boolean
+    bhytEmployee?: boolean
+    bhtnEmployee?: boolean
+    bhxhEmployer?: boolean
+    bhytEmployer?: boolean
+    bhtnEmployer?: boolean
+    totalInsuranceEmployee?: boolean
+    totalInsuranceEmployer?: boolean
+    totalInsuranceDeduction?: boolean
+    taxableIncome?: boolean
+    personalDeduction?: boolean
+    dependentDeduction?: boolean
+    dependents?: boolean
+    assessableIncome?: boolean
+    pitAmount?: boolean
+    netSalary?: boolean
+    bankTransferAmount?: boolean
+    notes?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type PayrollEntryOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "periodId" | "employeeId" | "employeeCode" | "employeeName" | "workDays" | "baseSalary" | "allowances" | "overtimePay" | "grossSalary" | "bhxhEmployee" | "bhytEmployee" | "bhtnEmployee" | "bhxhEmployer" | "bhytEmployer" | "bhtnEmployer" | "totalInsuranceEmployee" | "totalInsuranceEmployer" | "totalInsuranceDeduction" | "taxableIncome" | "personalDeduction" | "dependentDeduction" | "dependents" | "assessableIncome" | "pitAmount" | "netSalary" | "bankTransferAmount" | "notes" | "createdAt" | "updatedAt", ExtArgs["result"]["payrollEntry"]>
+
+  export type $PayrollEntryPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "PayrollEntry"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      periodId: string
+      employeeId: string
+      employeeCode: string | null
+      employeeName: string | null
+      workDays: number
+      baseSalary: number
+      allowances: number
+      overtimePay: number
+      grossSalary: number
+      bhxhEmployee: number
+      bhytEmployee: number
+      bhtnEmployee: number
+      bhxhEmployer: number
+      bhytEmployer: number
+      bhtnEmployer: number
+      totalInsuranceEmployee: number
+      totalInsuranceEmployer: number
+      totalInsuranceDeduction: number
+      taxableIncome: number
+      personalDeduction: number
+      dependentDeduction: number
+      dependents: number
+      assessableIncome: number
+      pitAmount: number
+      netSalary: number
+      bankTransferAmount: number
+      notes: string | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["payrollEntry"]>
+    composites: {}
+  }
+
+  type PayrollEntryGetPayload<S extends boolean | null | undefined | PayrollEntryDefaultArgs> = $Result.GetResult<Prisma.$PayrollEntryPayload, S>
+
+  type PayrollEntryCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<PayrollEntryFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: PayrollEntryCountAggregateInputType | true
+    }
+
+  export interface PayrollEntryDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['PayrollEntry'], meta: { name: 'PayrollEntry' } }
+    /**
+     * Find zero or one PayrollEntry that matches the filter.
+     * @param {PayrollEntryFindUniqueArgs} args - Arguments to find a PayrollEntry
+     * @example
+     * // Get one PayrollEntry
+     * const payrollEntry = await prisma.payrollEntry.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends PayrollEntryFindUniqueArgs>(args: SelectSubset<T, PayrollEntryFindUniqueArgs<ExtArgs>>): Prisma__PayrollEntryClient<$Result.GetResult<Prisma.$PayrollEntryPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one PayrollEntry that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {PayrollEntryFindUniqueOrThrowArgs} args - Arguments to find a PayrollEntry
+     * @example
+     * // Get one PayrollEntry
+     * const payrollEntry = await prisma.payrollEntry.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends PayrollEntryFindUniqueOrThrowArgs>(args: SelectSubset<T, PayrollEntryFindUniqueOrThrowArgs<ExtArgs>>): Prisma__PayrollEntryClient<$Result.GetResult<Prisma.$PayrollEntryPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first PayrollEntry that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PayrollEntryFindFirstArgs} args - Arguments to find a PayrollEntry
+     * @example
+     * // Get one PayrollEntry
+     * const payrollEntry = await prisma.payrollEntry.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends PayrollEntryFindFirstArgs>(args?: SelectSubset<T, PayrollEntryFindFirstArgs<ExtArgs>>): Prisma__PayrollEntryClient<$Result.GetResult<Prisma.$PayrollEntryPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first PayrollEntry that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PayrollEntryFindFirstOrThrowArgs} args - Arguments to find a PayrollEntry
+     * @example
+     * // Get one PayrollEntry
+     * const payrollEntry = await prisma.payrollEntry.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends PayrollEntryFindFirstOrThrowArgs>(args?: SelectSubset<T, PayrollEntryFindFirstOrThrowArgs<ExtArgs>>): Prisma__PayrollEntryClient<$Result.GetResult<Prisma.$PayrollEntryPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more PayrollEntries that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PayrollEntryFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all PayrollEntries
+     * const payrollEntries = await prisma.payrollEntry.findMany()
+     * 
+     * // Get first 10 PayrollEntries
+     * const payrollEntries = await prisma.payrollEntry.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const payrollEntryWithIdOnly = await prisma.payrollEntry.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends PayrollEntryFindManyArgs>(args?: SelectSubset<T, PayrollEntryFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PayrollEntryPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a PayrollEntry.
+     * @param {PayrollEntryCreateArgs} args - Arguments to create a PayrollEntry.
+     * @example
+     * // Create one PayrollEntry
+     * const PayrollEntry = await prisma.payrollEntry.create({
+     *   data: {
+     *     // ... data to create a PayrollEntry
+     *   }
+     * })
+     * 
+     */
+    create<T extends PayrollEntryCreateArgs>(args: SelectSubset<T, PayrollEntryCreateArgs<ExtArgs>>): Prisma__PayrollEntryClient<$Result.GetResult<Prisma.$PayrollEntryPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many PayrollEntries.
+     * @param {PayrollEntryCreateManyArgs} args - Arguments to create many PayrollEntries.
+     * @example
+     * // Create many PayrollEntries
+     * const payrollEntry = await prisma.payrollEntry.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends PayrollEntryCreateManyArgs>(args?: SelectSubset<T, PayrollEntryCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many PayrollEntries and returns the data saved in the database.
+     * @param {PayrollEntryCreateManyAndReturnArgs} args - Arguments to create many PayrollEntries.
+     * @example
+     * // Create many PayrollEntries
+     * const payrollEntry = await prisma.payrollEntry.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many PayrollEntries and only return the `id`
+     * const payrollEntryWithIdOnly = await prisma.payrollEntry.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends PayrollEntryCreateManyAndReturnArgs>(args?: SelectSubset<T, PayrollEntryCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PayrollEntryPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a PayrollEntry.
+     * @param {PayrollEntryDeleteArgs} args - Arguments to delete one PayrollEntry.
+     * @example
+     * // Delete one PayrollEntry
+     * const PayrollEntry = await prisma.payrollEntry.delete({
+     *   where: {
+     *     // ... filter to delete one PayrollEntry
+     *   }
+     * })
+     * 
+     */
+    delete<T extends PayrollEntryDeleteArgs>(args: SelectSubset<T, PayrollEntryDeleteArgs<ExtArgs>>): Prisma__PayrollEntryClient<$Result.GetResult<Prisma.$PayrollEntryPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one PayrollEntry.
+     * @param {PayrollEntryUpdateArgs} args - Arguments to update one PayrollEntry.
+     * @example
+     * // Update one PayrollEntry
+     * const payrollEntry = await prisma.payrollEntry.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends PayrollEntryUpdateArgs>(args: SelectSubset<T, PayrollEntryUpdateArgs<ExtArgs>>): Prisma__PayrollEntryClient<$Result.GetResult<Prisma.$PayrollEntryPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more PayrollEntries.
+     * @param {PayrollEntryDeleteManyArgs} args - Arguments to filter PayrollEntries to delete.
+     * @example
+     * // Delete a few PayrollEntries
+     * const { count } = await prisma.payrollEntry.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends PayrollEntryDeleteManyArgs>(args?: SelectSubset<T, PayrollEntryDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more PayrollEntries.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PayrollEntryUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many PayrollEntries
+     * const payrollEntry = await prisma.payrollEntry.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends PayrollEntryUpdateManyArgs>(args: SelectSubset<T, PayrollEntryUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more PayrollEntries and returns the data updated in the database.
+     * @param {PayrollEntryUpdateManyAndReturnArgs} args - Arguments to update many PayrollEntries.
+     * @example
+     * // Update many PayrollEntries
+     * const payrollEntry = await prisma.payrollEntry.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more PayrollEntries and only return the `id`
+     * const payrollEntryWithIdOnly = await prisma.payrollEntry.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends PayrollEntryUpdateManyAndReturnArgs>(args: SelectSubset<T, PayrollEntryUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PayrollEntryPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one PayrollEntry.
+     * @param {PayrollEntryUpsertArgs} args - Arguments to update or create a PayrollEntry.
+     * @example
+     * // Update or create a PayrollEntry
+     * const payrollEntry = await prisma.payrollEntry.upsert({
+     *   create: {
+     *     // ... data to create a PayrollEntry
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the PayrollEntry we want to update
+     *   }
+     * })
+     */
+    upsert<T extends PayrollEntryUpsertArgs>(args: SelectSubset<T, PayrollEntryUpsertArgs<ExtArgs>>): Prisma__PayrollEntryClient<$Result.GetResult<Prisma.$PayrollEntryPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of PayrollEntries.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PayrollEntryCountArgs} args - Arguments to filter PayrollEntries to count.
+     * @example
+     * // Count the number of PayrollEntries
+     * const count = await prisma.payrollEntry.count({
+     *   where: {
+     *     // ... the filter for the PayrollEntries we want to count
+     *   }
+     * })
+    **/
+    count<T extends PayrollEntryCountArgs>(
+      args?: Subset<T, PayrollEntryCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], PayrollEntryCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a PayrollEntry.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PayrollEntryAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends PayrollEntryAggregateArgs>(args: Subset<T, PayrollEntryAggregateArgs>): Prisma.PrismaPromise<GetPayrollEntryAggregateType<T>>
+
+    /**
+     * Group by PayrollEntry.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PayrollEntryGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends PayrollEntryGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: PayrollEntryGroupByArgs['orderBy'] }
+        : { orderBy?: PayrollEntryGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, PayrollEntryGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetPayrollEntryGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the PayrollEntry model
+   */
+  readonly fields: PayrollEntryFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for PayrollEntry.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__PayrollEntryClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the PayrollEntry model
+   */
+  interface PayrollEntryFieldRefs {
+    readonly id: FieldRef<"PayrollEntry", 'String'>
+    readonly periodId: FieldRef<"PayrollEntry", 'String'>
+    readonly employeeId: FieldRef<"PayrollEntry", 'String'>
+    readonly employeeCode: FieldRef<"PayrollEntry", 'String'>
+    readonly employeeName: FieldRef<"PayrollEntry", 'String'>
+    readonly workDays: FieldRef<"PayrollEntry", 'Float'>
+    readonly baseSalary: FieldRef<"PayrollEntry", 'Float'>
+    readonly allowances: FieldRef<"PayrollEntry", 'Float'>
+    readonly overtimePay: FieldRef<"PayrollEntry", 'Float'>
+    readonly grossSalary: FieldRef<"PayrollEntry", 'Float'>
+    readonly bhxhEmployee: FieldRef<"PayrollEntry", 'Float'>
+    readonly bhytEmployee: FieldRef<"PayrollEntry", 'Float'>
+    readonly bhtnEmployee: FieldRef<"PayrollEntry", 'Float'>
+    readonly bhxhEmployer: FieldRef<"PayrollEntry", 'Float'>
+    readonly bhytEmployer: FieldRef<"PayrollEntry", 'Float'>
+    readonly bhtnEmployer: FieldRef<"PayrollEntry", 'Float'>
+    readonly totalInsuranceEmployee: FieldRef<"PayrollEntry", 'Float'>
+    readonly totalInsuranceEmployer: FieldRef<"PayrollEntry", 'Float'>
+    readonly totalInsuranceDeduction: FieldRef<"PayrollEntry", 'Float'>
+    readonly taxableIncome: FieldRef<"PayrollEntry", 'Float'>
+    readonly personalDeduction: FieldRef<"PayrollEntry", 'Float'>
+    readonly dependentDeduction: FieldRef<"PayrollEntry", 'Float'>
+    readonly dependents: FieldRef<"PayrollEntry", 'Int'>
+    readonly assessableIncome: FieldRef<"PayrollEntry", 'Float'>
+    readonly pitAmount: FieldRef<"PayrollEntry", 'Float'>
+    readonly netSalary: FieldRef<"PayrollEntry", 'Float'>
+    readonly bankTransferAmount: FieldRef<"PayrollEntry", 'Float'>
+    readonly notes: FieldRef<"PayrollEntry", 'String'>
+    readonly createdAt: FieldRef<"PayrollEntry", 'DateTime'>
+    readonly updatedAt: FieldRef<"PayrollEntry", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * PayrollEntry findUnique
+   */
+  export type PayrollEntryFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PayrollEntry
+     */
+    select?: PayrollEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PayrollEntry
+     */
+    omit?: PayrollEntryOmit<ExtArgs> | null
+    /**
+     * Filter, which PayrollEntry to fetch.
+     */
+    where: PayrollEntryWhereUniqueInput
+  }
+
+  /**
+   * PayrollEntry findUniqueOrThrow
+   */
+  export type PayrollEntryFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PayrollEntry
+     */
+    select?: PayrollEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PayrollEntry
+     */
+    omit?: PayrollEntryOmit<ExtArgs> | null
+    /**
+     * Filter, which PayrollEntry to fetch.
+     */
+    where: PayrollEntryWhereUniqueInput
+  }
+
+  /**
+   * PayrollEntry findFirst
+   */
+  export type PayrollEntryFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PayrollEntry
+     */
+    select?: PayrollEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PayrollEntry
+     */
+    omit?: PayrollEntryOmit<ExtArgs> | null
+    /**
+     * Filter, which PayrollEntry to fetch.
+     */
+    where?: PayrollEntryWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of PayrollEntries to fetch.
+     */
+    orderBy?: PayrollEntryOrderByWithRelationInput | PayrollEntryOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for PayrollEntries.
+     */
+    cursor?: PayrollEntryWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` PayrollEntries from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` PayrollEntries.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of PayrollEntries.
+     */
+    distinct?: PayrollEntryScalarFieldEnum | PayrollEntryScalarFieldEnum[]
+  }
+
+  /**
+   * PayrollEntry findFirstOrThrow
+   */
+  export type PayrollEntryFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PayrollEntry
+     */
+    select?: PayrollEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PayrollEntry
+     */
+    omit?: PayrollEntryOmit<ExtArgs> | null
+    /**
+     * Filter, which PayrollEntry to fetch.
+     */
+    where?: PayrollEntryWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of PayrollEntries to fetch.
+     */
+    orderBy?: PayrollEntryOrderByWithRelationInput | PayrollEntryOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for PayrollEntries.
+     */
+    cursor?: PayrollEntryWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` PayrollEntries from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` PayrollEntries.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of PayrollEntries.
+     */
+    distinct?: PayrollEntryScalarFieldEnum | PayrollEntryScalarFieldEnum[]
+  }
+
+  /**
+   * PayrollEntry findMany
+   */
+  export type PayrollEntryFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PayrollEntry
+     */
+    select?: PayrollEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PayrollEntry
+     */
+    omit?: PayrollEntryOmit<ExtArgs> | null
+    /**
+     * Filter, which PayrollEntries to fetch.
+     */
+    where?: PayrollEntryWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of PayrollEntries to fetch.
+     */
+    orderBy?: PayrollEntryOrderByWithRelationInput | PayrollEntryOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing PayrollEntries.
+     */
+    cursor?: PayrollEntryWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` PayrollEntries from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` PayrollEntries.
+     */
+    skip?: number
+    distinct?: PayrollEntryScalarFieldEnum | PayrollEntryScalarFieldEnum[]
+  }
+
+  /**
+   * PayrollEntry create
+   */
+  export type PayrollEntryCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PayrollEntry
+     */
+    select?: PayrollEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PayrollEntry
+     */
+    omit?: PayrollEntryOmit<ExtArgs> | null
+    /**
+     * The data needed to create a PayrollEntry.
+     */
+    data: XOR<PayrollEntryCreateInput, PayrollEntryUncheckedCreateInput>
+  }
+
+  /**
+   * PayrollEntry createMany
+   */
+  export type PayrollEntryCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many PayrollEntries.
+     */
+    data: PayrollEntryCreateManyInput | PayrollEntryCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * PayrollEntry createManyAndReturn
+   */
+  export type PayrollEntryCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PayrollEntry
+     */
+    select?: PayrollEntrySelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the PayrollEntry
+     */
+    omit?: PayrollEntryOmit<ExtArgs> | null
+    /**
+     * The data used to create many PayrollEntries.
+     */
+    data: PayrollEntryCreateManyInput | PayrollEntryCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * PayrollEntry update
+   */
+  export type PayrollEntryUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PayrollEntry
+     */
+    select?: PayrollEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PayrollEntry
+     */
+    omit?: PayrollEntryOmit<ExtArgs> | null
+    /**
+     * The data needed to update a PayrollEntry.
+     */
+    data: XOR<PayrollEntryUpdateInput, PayrollEntryUncheckedUpdateInput>
+    /**
+     * Choose, which PayrollEntry to update.
+     */
+    where: PayrollEntryWhereUniqueInput
+  }
+
+  /**
+   * PayrollEntry updateMany
+   */
+  export type PayrollEntryUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update PayrollEntries.
+     */
+    data: XOR<PayrollEntryUpdateManyMutationInput, PayrollEntryUncheckedUpdateManyInput>
+    /**
+     * Filter which PayrollEntries to update
+     */
+    where?: PayrollEntryWhereInput
+    /**
+     * Limit how many PayrollEntries to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * PayrollEntry updateManyAndReturn
+   */
+  export type PayrollEntryUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PayrollEntry
+     */
+    select?: PayrollEntrySelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the PayrollEntry
+     */
+    omit?: PayrollEntryOmit<ExtArgs> | null
+    /**
+     * The data used to update PayrollEntries.
+     */
+    data: XOR<PayrollEntryUpdateManyMutationInput, PayrollEntryUncheckedUpdateManyInput>
+    /**
+     * Filter which PayrollEntries to update
+     */
+    where?: PayrollEntryWhereInput
+    /**
+     * Limit how many PayrollEntries to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * PayrollEntry upsert
+   */
+  export type PayrollEntryUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PayrollEntry
+     */
+    select?: PayrollEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PayrollEntry
+     */
+    omit?: PayrollEntryOmit<ExtArgs> | null
+    /**
+     * The filter to search for the PayrollEntry to update in case it exists.
+     */
+    where: PayrollEntryWhereUniqueInput
+    /**
+     * In case the PayrollEntry found by the `where` argument doesn't exist, create a new PayrollEntry with this data.
+     */
+    create: XOR<PayrollEntryCreateInput, PayrollEntryUncheckedCreateInput>
+    /**
+     * In case the PayrollEntry was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<PayrollEntryUpdateInput, PayrollEntryUncheckedUpdateInput>
+  }
+
+  /**
+   * PayrollEntry delete
+   */
+  export type PayrollEntryDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PayrollEntry
+     */
+    select?: PayrollEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PayrollEntry
+     */
+    omit?: PayrollEntryOmit<ExtArgs> | null
+    /**
+     * Filter which PayrollEntry to delete.
+     */
+    where: PayrollEntryWhereUniqueInput
+  }
+
+  /**
+   * PayrollEntry deleteMany
+   */
+  export type PayrollEntryDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which PayrollEntries to delete
+     */
+    where?: PayrollEntryWhereInput
+    /**
+     * Limit how many PayrollEntries to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * PayrollEntry without action
+   */
+  export type PayrollEntryDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PayrollEntry
+     */
+    select?: PayrollEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PayrollEntry
+     */
+    omit?: PayrollEntryOmit<ExtArgs> | null
+  }
+
+
+  /**
    * Model OnlineChannel
    */
 
@@ -92240,6 +96892,8 @@ export namespace Prisma {
     netBookValue: number | null
     monthlyDepreciation: number | null
     residualValue: number | null
+    acquisitionCost: number | null
+    disposalAmount: number | null
   }
 
   export type FixedAssetSumAggregateOutputType = {
@@ -92249,6 +96903,8 @@ export namespace Prisma {
     netBookValue: number | null
     monthlyDepreciation: number | null
     residualValue: number | null
+    acquisitionCost: number | null
+    disposalAmount: number | null
   }
 
   export type FixedAssetMinAggregateOutputType = {
@@ -92269,6 +96925,14 @@ export namespace Prisma {
     description: string | null
     disposalDate: string | null
     status: string | null
+    acquisitionCost: number | null
+    depreciationMethod: string | null
+    accountCode: string | null
+    depAccAccountCode: string | null
+    expenseAccountCode: string | null
+    disposalAmount: number | null
+    branchId: string | null
+    notes: string | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -92291,6 +96955,14 @@ export namespace Prisma {
     description: string | null
     disposalDate: string | null
     status: string | null
+    acquisitionCost: number | null
+    depreciationMethod: string | null
+    accountCode: string | null
+    depAccAccountCode: string | null
+    expenseAccountCode: string | null
+    disposalAmount: number | null
+    branchId: string | null
+    notes: string | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -92313,6 +96985,14 @@ export namespace Prisma {
     description: number
     disposalDate: number
     status: number
+    acquisitionCost: number
+    depreciationMethod: number
+    accountCode: number
+    depAccAccountCode: number
+    expenseAccountCode: number
+    disposalAmount: number
+    branchId: number
+    notes: number
     createdAt: number
     updatedAt: number
     _all: number
@@ -92326,6 +97006,8 @@ export namespace Prisma {
     netBookValue?: true
     monthlyDepreciation?: true
     residualValue?: true
+    acquisitionCost?: true
+    disposalAmount?: true
   }
 
   export type FixedAssetSumAggregateInputType = {
@@ -92335,6 +97017,8 @@ export namespace Prisma {
     netBookValue?: true
     monthlyDepreciation?: true
     residualValue?: true
+    acquisitionCost?: true
+    disposalAmount?: true
   }
 
   export type FixedAssetMinAggregateInputType = {
@@ -92355,6 +97039,14 @@ export namespace Prisma {
     description?: true
     disposalDate?: true
     status?: true
+    acquisitionCost?: true
+    depreciationMethod?: true
+    accountCode?: true
+    depAccAccountCode?: true
+    expenseAccountCode?: true
+    disposalAmount?: true
+    branchId?: true
+    notes?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -92377,6 +97069,14 @@ export namespace Prisma {
     description?: true
     disposalDate?: true
     status?: true
+    acquisitionCost?: true
+    depreciationMethod?: true
+    accountCode?: true
+    depAccAccountCode?: true
+    expenseAccountCode?: true
+    disposalAmount?: true
+    branchId?: true
+    notes?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -92399,6 +97099,14 @@ export namespace Prisma {
     description?: true
     disposalDate?: true
     status?: true
+    acquisitionCost?: true
+    depreciationMethod?: true
+    accountCode?: true
+    depAccAccountCode?: true
+    expenseAccountCode?: true
+    disposalAmount?: true
+    branchId?: true
+    notes?: true
     createdAt?: true
     updatedAt?: true
     _all?: true
@@ -92508,6 +97216,14 @@ export namespace Prisma {
     description: string | null
     disposalDate: string | null
     status: string
+    acquisitionCost: number
+    depreciationMethod: string
+    accountCode: string
+    depAccAccountCode: string
+    expenseAccountCode: string
+    disposalAmount: number | null
+    branchId: string | null
+    notes: string | null
     createdAt: Date
     updatedAt: Date
     _count: FixedAssetCountAggregateOutputType | null
@@ -92549,8 +97265,18 @@ export namespace Prisma {
     description?: boolean
     disposalDate?: boolean
     status?: boolean
+    acquisitionCost?: boolean
+    depreciationMethod?: boolean
+    accountCode?: boolean
+    depAccAccountCode?: boolean
+    expenseAccountCode?: boolean
+    disposalAmount?: boolean
+    branchId?: boolean
+    notes?: boolean
     createdAt?: boolean
     updatedAt?: boolean
+    depreciationEntries?: boolean | FixedAsset$depreciationEntriesArgs<ExtArgs>
+    _count?: boolean | FixedAssetCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["fixedAsset"]>
 
   export type FixedAssetSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
@@ -92571,6 +97297,14 @@ export namespace Prisma {
     description?: boolean
     disposalDate?: boolean
     status?: boolean
+    acquisitionCost?: boolean
+    depreciationMethod?: boolean
+    accountCode?: boolean
+    depAccAccountCode?: boolean
+    expenseAccountCode?: boolean
+    disposalAmount?: boolean
+    branchId?: boolean
+    notes?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["fixedAsset"]>
@@ -92593,6 +97327,14 @@ export namespace Prisma {
     description?: boolean
     disposalDate?: boolean
     status?: boolean
+    acquisitionCost?: boolean
+    depreciationMethod?: boolean
+    accountCode?: boolean
+    depAccAccountCode?: boolean
+    expenseAccountCode?: boolean
+    disposalAmount?: boolean
+    branchId?: boolean
+    notes?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["fixedAsset"]>
@@ -92615,15 +97357,31 @@ export namespace Prisma {
     description?: boolean
     disposalDate?: boolean
     status?: boolean
+    acquisitionCost?: boolean
+    depreciationMethod?: boolean
+    accountCode?: boolean
+    depAccAccountCode?: boolean
+    expenseAccountCode?: boolean
+    disposalAmount?: boolean
+    branchId?: boolean
+    notes?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type FixedAssetOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "code" | "name" | "category" | "acquisitionDate" | "originalCost" | "usefulLifeMonths" | "method" | "accumulatedDepreciation" | "netBookValue" | "monthlyDepreciation" | "depreciationAccount" | "residualValue" | "department" | "description" | "disposalDate" | "status" | "createdAt" | "updatedAt", ExtArgs["result"]["fixedAsset"]>
+  export type FixedAssetOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "code" | "name" | "category" | "acquisitionDate" | "originalCost" | "usefulLifeMonths" | "method" | "accumulatedDepreciation" | "netBookValue" | "monthlyDepreciation" | "depreciationAccount" | "residualValue" | "department" | "description" | "disposalDate" | "status" | "acquisitionCost" | "depreciationMethod" | "accountCode" | "depAccAccountCode" | "expenseAccountCode" | "disposalAmount" | "branchId" | "notes" | "createdAt" | "updatedAt", ExtArgs["result"]["fixedAsset"]>
+  export type FixedAssetInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    depreciationEntries?: boolean | FixedAsset$depreciationEntriesArgs<ExtArgs>
+    _count?: boolean | FixedAssetCountOutputTypeDefaultArgs<ExtArgs>
+  }
+  export type FixedAssetIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {}
+  export type FixedAssetIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {}
 
   export type $FixedAssetPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     name: "FixedAsset"
-    objects: {}
+    objects: {
+      depreciationEntries: Prisma.$DepreciationEntryPayload<ExtArgs>[]
+    }
     scalars: $Extensions.GetPayloadResult<{
       id: string
       code: string
@@ -92642,6 +97400,14 @@ export namespace Prisma {
       description: string | null
       disposalDate: string | null
       status: string
+      acquisitionCost: number
+      depreciationMethod: string
+      accountCode: string
+      depAccAccountCode: string
+      expenseAccountCode: string
+      disposalAmount: number | null
+      branchId: string | null
+      notes: string | null
       createdAt: Date
       updatedAt: Date
     }, ExtArgs["result"]["fixedAsset"]>
@@ -93038,6 +97804,7 @@ export namespace Prisma {
    */
   export interface Prisma__FixedAssetClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
     readonly [Symbol.toStringTag]: "PrismaPromise"
+    depreciationEntries<T extends FixedAsset$depreciationEntriesArgs<ExtArgs> = {}>(args?: Subset<T, FixedAsset$depreciationEntriesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$DepreciationEntryPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -93084,6 +97851,14 @@ export namespace Prisma {
     readonly description: FieldRef<"FixedAsset", 'String'>
     readonly disposalDate: FieldRef<"FixedAsset", 'String'>
     readonly status: FieldRef<"FixedAsset", 'String'>
+    readonly acquisitionCost: FieldRef<"FixedAsset", 'Float'>
+    readonly depreciationMethod: FieldRef<"FixedAsset", 'String'>
+    readonly accountCode: FieldRef<"FixedAsset", 'String'>
+    readonly depAccAccountCode: FieldRef<"FixedAsset", 'String'>
+    readonly expenseAccountCode: FieldRef<"FixedAsset", 'String'>
+    readonly disposalAmount: FieldRef<"FixedAsset", 'Float'>
+    readonly branchId: FieldRef<"FixedAsset", 'String'>
+    readonly notes: FieldRef<"FixedAsset", 'String'>
     readonly createdAt: FieldRef<"FixedAsset", 'DateTime'>
     readonly updatedAt: FieldRef<"FixedAsset", 'DateTime'>
   }
@@ -93103,6 +97878,10 @@ export namespace Prisma {
      */
     omit?: FixedAssetOmit<ExtArgs> | null
     /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FixedAssetInclude<ExtArgs> | null
+    /**
      * Filter, which FixedAsset to fetch.
      */
     where: FixedAssetWhereUniqueInput
@@ -93121,6 +97900,10 @@ export namespace Prisma {
      */
     omit?: FixedAssetOmit<ExtArgs> | null
     /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FixedAssetInclude<ExtArgs> | null
+    /**
      * Filter, which FixedAsset to fetch.
      */
     where: FixedAssetWhereUniqueInput
@@ -93138,6 +97921,10 @@ export namespace Prisma {
      * Omit specific fields from the FixedAsset
      */
     omit?: FixedAssetOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FixedAssetInclude<ExtArgs> | null
     /**
      * Filter, which FixedAsset to fetch.
      */
@@ -93187,6 +97974,10 @@ export namespace Prisma {
      */
     omit?: FixedAssetOmit<ExtArgs> | null
     /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FixedAssetInclude<ExtArgs> | null
+    /**
      * Filter, which FixedAsset to fetch.
      */
     where?: FixedAssetWhereInput
@@ -93235,6 +98026,10 @@ export namespace Prisma {
      */
     omit?: FixedAssetOmit<ExtArgs> | null
     /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FixedAssetInclude<ExtArgs> | null
+    /**
      * Filter, which FixedAssets to fetch.
      */
     where?: FixedAssetWhereInput
@@ -93277,6 +98072,10 @@ export namespace Prisma {
      * Omit specific fields from the FixedAsset
      */
     omit?: FixedAssetOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FixedAssetInclude<ExtArgs> | null
     /**
      * The data needed to create a FixedAsset.
      */
@@ -93325,6 +98124,10 @@ export namespace Prisma {
      * Omit specific fields from the FixedAsset
      */
     omit?: FixedAssetOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FixedAssetInclude<ExtArgs> | null
     /**
      * The data needed to update a FixedAsset.
      */
@@ -93392,6 +98195,10 @@ export namespace Prisma {
      */
     omit?: FixedAssetOmit<ExtArgs> | null
     /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FixedAssetInclude<ExtArgs> | null
+    /**
      * The filter to search for the FixedAsset to update in case it exists.
      */
     where: FixedAssetWhereUniqueInput
@@ -93418,6 +98225,10 @@ export namespace Prisma {
      */
     omit?: FixedAssetOmit<ExtArgs> | null
     /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FixedAssetInclude<ExtArgs> | null
+    /**
      * Filter which FixedAsset to delete.
      */
     where: FixedAssetWhereUniqueInput
@@ -93438,6 +98249,30 @@ export namespace Prisma {
   }
 
   /**
+   * FixedAsset.depreciationEntries
+   */
+  export type FixedAsset$depreciationEntriesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the DepreciationEntry
+     */
+    select?: DepreciationEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the DepreciationEntry
+     */
+    omit?: DepreciationEntryOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: DepreciationEntryInclude<ExtArgs> | null
+    where?: DepreciationEntryWhereInput
+    orderBy?: DepreciationEntryOrderByWithRelationInput | DepreciationEntryOrderByWithRelationInput[]
+    cursor?: DepreciationEntryWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: DepreciationEntryScalarFieldEnum | DepreciationEntryScalarFieldEnum[]
+  }
+
+  /**
    * FixedAsset without action
    */
   export type FixedAssetDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -93449,6 +98284,3615 @@ export namespace Prisma {
      * Omit specific fields from the FixedAsset
      */
     omit?: FixedAssetOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FixedAssetInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model DepreciationEntry
+   */
+
+  export type AggregateDepreciationEntry = {
+    _count: DepreciationEntryCountAggregateOutputType | null
+    _avg: DepreciationEntryAvgAggregateOutputType | null
+    _sum: DepreciationEntrySumAggregateOutputType | null
+    _min: DepreciationEntryMinAggregateOutputType | null
+    _max: DepreciationEntryMaxAggregateOutputType | null
+  }
+
+  export type DepreciationEntryAvgAggregateOutputType = {
+    month: number | null
+    year: number | null
+    beginningValue: number | null
+    depreciationAmount: number | null
+    accumulatedDepreciation: number | null
+    endingValue: number | null
+  }
+
+  export type DepreciationEntrySumAggregateOutputType = {
+    month: number | null
+    year: number | null
+    beginningValue: number | null
+    depreciationAmount: number | null
+    accumulatedDepreciation: number | null
+    endingValue: number | null
+  }
+
+  export type DepreciationEntryMinAggregateOutputType = {
+    id: string | null
+    assetId: string | null
+    month: number | null
+    year: number | null
+    beginningValue: number | null
+    depreciationAmount: number | null
+    accumulatedDepreciation: number | null
+    endingValue: number | null
+    journalEntryId: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type DepreciationEntryMaxAggregateOutputType = {
+    id: string | null
+    assetId: string | null
+    month: number | null
+    year: number | null
+    beginningValue: number | null
+    depreciationAmount: number | null
+    accumulatedDepreciation: number | null
+    endingValue: number | null
+    journalEntryId: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type DepreciationEntryCountAggregateOutputType = {
+    id: number
+    assetId: number
+    month: number
+    year: number
+    beginningValue: number
+    depreciationAmount: number
+    accumulatedDepreciation: number
+    endingValue: number
+    journalEntryId: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type DepreciationEntryAvgAggregateInputType = {
+    month?: true
+    year?: true
+    beginningValue?: true
+    depreciationAmount?: true
+    accumulatedDepreciation?: true
+    endingValue?: true
+  }
+
+  export type DepreciationEntrySumAggregateInputType = {
+    month?: true
+    year?: true
+    beginningValue?: true
+    depreciationAmount?: true
+    accumulatedDepreciation?: true
+    endingValue?: true
+  }
+
+  export type DepreciationEntryMinAggregateInputType = {
+    id?: true
+    assetId?: true
+    month?: true
+    year?: true
+    beginningValue?: true
+    depreciationAmount?: true
+    accumulatedDepreciation?: true
+    endingValue?: true
+    journalEntryId?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type DepreciationEntryMaxAggregateInputType = {
+    id?: true
+    assetId?: true
+    month?: true
+    year?: true
+    beginningValue?: true
+    depreciationAmount?: true
+    accumulatedDepreciation?: true
+    endingValue?: true
+    journalEntryId?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type DepreciationEntryCountAggregateInputType = {
+    id?: true
+    assetId?: true
+    month?: true
+    year?: true
+    beginningValue?: true
+    depreciationAmount?: true
+    accumulatedDepreciation?: true
+    endingValue?: true
+    journalEntryId?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type DepreciationEntryAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which DepreciationEntry to aggregate.
+     */
+    where?: DepreciationEntryWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of DepreciationEntries to fetch.
+     */
+    orderBy?: DepreciationEntryOrderByWithRelationInput | DepreciationEntryOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: DepreciationEntryWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` DepreciationEntries from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` DepreciationEntries.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned DepreciationEntries
+    **/
+    _count?: true | DepreciationEntryCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: DepreciationEntryAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: DepreciationEntrySumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: DepreciationEntryMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: DepreciationEntryMaxAggregateInputType
+  }
+
+  export type GetDepreciationEntryAggregateType<T extends DepreciationEntryAggregateArgs> = {
+        [P in keyof T & keyof AggregateDepreciationEntry]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateDepreciationEntry[P]>
+      : GetScalarType<T[P], AggregateDepreciationEntry[P]>
+  }
+
+
+
+
+  export type DepreciationEntryGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: DepreciationEntryWhereInput
+    orderBy?: DepreciationEntryOrderByWithAggregationInput | DepreciationEntryOrderByWithAggregationInput[]
+    by: DepreciationEntryScalarFieldEnum[] | DepreciationEntryScalarFieldEnum
+    having?: DepreciationEntryScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: DepreciationEntryCountAggregateInputType | true
+    _avg?: DepreciationEntryAvgAggregateInputType
+    _sum?: DepreciationEntrySumAggregateInputType
+    _min?: DepreciationEntryMinAggregateInputType
+    _max?: DepreciationEntryMaxAggregateInputType
+  }
+
+  export type DepreciationEntryGroupByOutputType = {
+    id: string
+    assetId: string
+    month: number
+    year: number
+    beginningValue: number
+    depreciationAmount: number
+    accumulatedDepreciation: number
+    endingValue: number
+    journalEntryId: string | null
+    createdAt: Date
+    updatedAt: Date
+    _count: DepreciationEntryCountAggregateOutputType | null
+    _avg: DepreciationEntryAvgAggregateOutputType | null
+    _sum: DepreciationEntrySumAggregateOutputType | null
+    _min: DepreciationEntryMinAggregateOutputType | null
+    _max: DepreciationEntryMaxAggregateOutputType | null
+  }
+
+  type GetDepreciationEntryGroupByPayload<T extends DepreciationEntryGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<DepreciationEntryGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof DepreciationEntryGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], DepreciationEntryGroupByOutputType[P]>
+            : GetScalarType<T[P], DepreciationEntryGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type DepreciationEntrySelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    assetId?: boolean
+    month?: boolean
+    year?: boolean
+    beginningValue?: boolean
+    depreciationAmount?: boolean
+    accumulatedDepreciation?: boolean
+    endingValue?: boolean
+    journalEntryId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    asset?: boolean | FixedAssetDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["depreciationEntry"]>
+
+  export type DepreciationEntrySelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    assetId?: boolean
+    month?: boolean
+    year?: boolean
+    beginningValue?: boolean
+    depreciationAmount?: boolean
+    accumulatedDepreciation?: boolean
+    endingValue?: boolean
+    journalEntryId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    asset?: boolean | FixedAssetDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["depreciationEntry"]>
+
+  export type DepreciationEntrySelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    assetId?: boolean
+    month?: boolean
+    year?: boolean
+    beginningValue?: boolean
+    depreciationAmount?: boolean
+    accumulatedDepreciation?: boolean
+    endingValue?: boolean
+    journalEntryId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    asset?: boolean | FixedAssetDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["depreciationEntry"]>
+
+  export type DepreciationEntrySelectScalar = {
+    id?: boolean
+    assetId?: boolean
+    month?: boolean
+    year?: boolean
+    beginningValue?: boolean
+    depreciationAmount?: boolean
+    accumulatedDepreciation?: boolean
+    endingValue?: boolean
+    journalEntryId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type DepreciationEntryOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "assetId" | "month" | "year" | "beginningValue" | "depreciationAmount" | "accumulatedDepreciation" | "endingValue" | "journalEntryId" | "createdAt" | "updatedAt", ExtArgs["result"]["depreciationEntry"]>
+  export type DepreciationEntryInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    asset?: boolean | FixedAssetDefaultArgs<ExtArgs>
+  }
+  export type DepreciationEntryIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    asset?: boolean | FixedAssetDefaultArgs<ExtArgs>
+  }
+  export type DepreciationEntryIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    asset?: boolean | FixedAssetDefaultArgs<ExtArgs>
+  }
+
+  export type $DepreciationEntryPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "DepreciationEntry"
+    objects: {
+      asset: Prisma.$FixedAssetPayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      assetId: string
+      month: number
+      year: number
+      beginningValue: number
+      depreciationAmount: number
+      accumulatedDepreciation: number
+      endingValue: number
+      journalEntryId: string | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["depreciationEntry"]>
+    composites: {}
+  }
+
+  type DepreciationEntryGetPayload<S extends boolean | null | undefined | DepreciationEntryDefaultArgs> = $Result.GetResult<Prisma.$DepreciationEntryPayload, S>
+
+  type DepreciationEntryCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<DepreciationEntryFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: DepreciationEntryCountAggregateInputType | true
+    }
+
+  export interface DepreciationEntryDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['DepreciationEntry'], meta: { name: 'DepreciationEntry' } }
+    /**
+     * Find zero or one DepreciationEntry that matches the filter.
+     * @param {DepreciationEntryFindUniqueArgs} args - Arguments to find a DepreciationEntry
+     * @example
+     * // Get one DepreciationEntry
+     * const depreciationEntry = await prisma.depreciationEntry.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends DepreciationEntryFindUniqueArgs>(args: SelectSubset<T, DepreciationEntryFindUniqueArgs<ExtArgs>>): Prisma__DepreciationEntryClient<$Result.GetResult<Prisma.$DepreciationEntryPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one DepreciationEntry that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {DepreciationEntryFindUniqueOrThrowArgs} args - Arguments to find a DepreciationEntry
+     * @example
+     * // Get one DepreciationEntry
+     * const depreciationEntry = await prisma.depreciationEntry.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends DepreciationEntryFindUniqueOrThrowArgs>(args: SelectSubset<T, DepreciationEntryFindUniqueOrThrowArgs<ExtArgs>>): Prisma__DepreciationEntryClient<$Result.GetResult<Prisma.$DepreciationEntryPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first DepreciationEntry that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {DepreciationEntryFindFirstArgs} args - Arguments to find a DepreciationEntry
+     * @example
+     * // Get one DepreciationEntry
+     * const depreciationEntry = await prisma.depreciationEntry.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends DepreciationEntryFindFirstArgs>(args?: SelectSubset<T, DepreciationEntryFindFirstArgs<ExtArgs>>): Prisma__DepreciationEntryClient<$Result.GetResult<Prisma.$DepreciationEntryPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first DepreciationEntry that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {DepreciationEntryFindFirstOrThrowArgs} args - Arguments to find a DepreciationEntry
+     * @example
+     * // Get one DepreciationEntry
+     * const depreciationEntry = await prisma.depreciationEntry.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends DepreciationEntryFindFirstOrThrowArgs>(args?: SelectSubset<T, DepreciationEntryFindFirstOrThrowArgs<ExtArgs>>): Prisma__DepreciationEntryClient<$Result.GetResult<Prisma.$DepreciationEntryPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more DepreciationEntries that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {DepreciationEntryFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all DepreciationEntries
+     * const depreciationEntries = await prisma.depreciationEntry.findMany()
+     * 
+     * // Get first 10 DepreciationEntries
+     * const depreciationEntries = await prisma.depreciationEntry.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const depreciationEntryWithIdOnly = await prisma.depreciationEntry.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends DepreciationEntryFindManyArgs>(args?: SelectSubset<T, DepreciationEntryFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$DepreciationEntryPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a DepreciationEntry.
+     * @param {DepreciationEntryCreateArgs} args - Arguments to create a DepreciationEntry.
+     * @example
+     * // Create one DepreciationEntry
+     * const DepreciationEntry = await prisma.depreciationEntry.create({
+     *   data: {
+     *     // ... data to create a DepreciationEntry
+     *   }
+     * })
+     * 
+     */
+    create<T extends DepreciationEntryCreateArgs>(args: SelectSubset<T, DepreciationEntryCreateArgs<ExtArgs>>): Prisma__DepreciationEntryClient<$Result.GetResult<Prisma.$DepreciationEntryPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many DepreciationEntries.
+     * @param {DepreciationEntryCreateManyArgs} args - Arguments to create many DepreciationEntries.
+     * @example
+     * // Create many DepreciationEntries
+     * const depreciationEntry = await prisma.depreciationEntry.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends DepreciationEntryCreateManyArgs>(args?: SelectSubset<T, DepreciationEntryCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many DepreciationEntries and returns the data saved in the database.
+     * @param {DepreciationEntryCreateManyAndReturnArgs} args - Arguments to create many DepreciationEntries.
+     * @example
+     * // Create many DepreciationEntries
+     * const depreciationEntry = await prisma.depreciationEntry.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many DepreciationEntries and only return the `id`
+     * const depreciationEntryWithIdOnly = await prisma.depreciationEntry.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends DepreciationEntryCreateManyAndReturnArgs>(args?: SelectSubset<T, DepreciationEntryCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$DepreciationEntryPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a DepreciationEntry.
+     * @param {DepreciationEntryDeleteArgs} args - Arguments to delete one DepreciationEntry.
+     * @example
+     * // Delete one DepreciationEntry
+     * const DepreciationEntry = await prisma.depreciationEntry.delete({
+     *   where: {
+     *     // ... filter to delete one DepreciationEntry
+     *   }
+     * })
+     * 
+     */
+    delete<T extends DepreciationEntryDeleteArgs>(args: SelectSubset<T, DepreciationEntryDeleteArgs<ExtArgs>>): Prisma__DepreciationEntryClient<$Result.GetResult<Prisma.$DepreciationEntryPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one DepreciationEntry.
+     * @param {DepreciationEntryUpdateArgs} args - Arguments to update one DepreciationEntry.
+     * @example
+     * // Update one DepreciationEntry
+     * const depreciationEntry = await prisma.depreciationEntry.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends DepreciationEntryUpdateArgs>(args: SelectSubset<T, DepreciationEntryUpdateArgs<ExtArgs>>): Prisma__DepreciationEntryClient<$Result.GetResult<Prisma.$DepreciationEntryPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more DepreciationEntries.
+     * @param {DepreciationEntryDeleteManyArgs} args - Arguments to filter DepreciationEntries to delete.
+     * @example
+     * // Delete a few DepreciationEntries
+     * const { count } = await prisma.depreciationEntry.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends DepreciationEntryDeleteManyArgs>(args?: SelectSubset<T, DepreciationEntryDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more DepreciationEntries.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {DepreciationEntryUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many DepreciationEntries
+     * const depreciationEntry = await prisma.depreciationEntry.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends DepreciationEntryUpdateManyArgs>(args: SelectSubset<T, DepreciationEntryUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more DepreciationEntries and returns the data updated in the database.
+     * @param {DepreciationEntryUpdateManyAndReturnArgs} args - Arguments to update many DepreciationEntries.
+     * @example
+     * // Update many DepreciationEntries
+     * const depreciationEntry = await prisma.depreciationEntry.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more DepreciationEntries and only return the `id`
+     * const depreciationEntryWithIdOnly = await prisma.depreciationEntry.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends DepreciationEntryUpdateManyAndReturnArgs>(args: SelectSubset<T, DepreciationEntryUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$DepreciationEntryPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one DepreciationEntry.
+     * @param {DepreciationEntryUpsertArgs} args - Arguments to update or create a DepreciationEntry.
+     * @example
+     * // Update or create a DepreciationEntry
+     * const depreciationEntry = await prisma.depreciationEntry.upsert({
+     *   create: {
+     *     // ... data to create a DepreciationEntry
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the DepreciationEntry we want to update
+     *   }
+     * })
+     */
+    upsert<T extends DepreciationEntryUpsertArgs>(args: SelectSubset<T, DepreciationEntryUpsertArgs<ExtArgs>>): Prisma__DepreciationEntryClient<$Result.GetResult<Prisma.$DepreciationEntryPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of DepreciationEntries.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {DepreciationEntryCountArgs} args - Arguments to filter DepreciationEntries to count.
+     * @example
+     * // Count the number of DepreciationEntries
+     * const count = await prisma.depreciationEntry.count({
+     *   where: {
+     *     // ... the filter for the DepreciationEntries we want to count
+     *   }
+     * })
+    **/
+    count<T extends DepreciationEntryCountArgs>(
+      args?: Subset<T, DepreciationEntryCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], DepreciationEntryCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a DepreciationEntry.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {DepreciationEntryAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends DepreciationEntryAggregateArgs>(args: Subset<T, DepreciationEntryAggregateArgs>): Prisma.PrismaPromise<GetDepreciationEntryAggregateType<T>>
+
+    /**
+     * Group by DepreciationEntry.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {DepreciationEntryGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends DepreciationEntryGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: DepreciationEntryGroupByArgs['orderBy'] }
+        : { orderBy?: DepreciationEntryGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, DepreciationEntryGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetDepreciationEntryGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the DepreciationEntry model
+   */
+  readonly fields: DepreciationEntryFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for DepreciationEntry.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__DepreciationEntryClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    asset<T extends FixedAssetDefaultArgs<ExtArgs> = {}>(args?: Subset<T, FixedAssetDefaultArgs<ExtArgs>>): Prisma__FixedAssetClient<$Result.GetResult<Prisma.$FixedAssetPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the DepreciationEntry model
+   */
+  interface DepreciationEntryFieldRefs {
+    readonly id: FieldRef<"DepreciationEntry", 'String'>
+    readonly assetId: FieldRef<"DepreciationEntry", 'String'>
+    readonly month: FieldRef<"DepreciationEntry", 'Int'>
+    readonly year: FieldRef<"DepreciationEntry", 'Int'>
+    readonly beginningValue: FieldRef<"DepreciationEntry", 'Float'>
+    readonly depreciationAmount: FieldRef<"DepreciationEntry", 'Float'>
+    readonly accumulatedDepreciation: FieldRef<"DepreciationEntry", 'Float'>
+    readonly endingValue: FieldRef<"DepreciationEntry", 'Float'>
+    readonly journalEntryId: FieldRef<"DepreciationEntry", 'String'>
+    readonly createdAt: FieldRef<"DepreciationEntry", 'DateTime'>
+    readonly updatedAt: FieldRef<"DepreciationEntry", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * DepreciationEntry findUnique
+   */
+  export type DepreciationEntryFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the DepreciationEntry
+     */
+    select?: DepreciationEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the DepreciationEntry
+     */
+    omit?: DepreciationEntryOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: DepreciationEntryInclude<ExtArgs> | null
+    /**
+     * Filter, which DepreciationEntry to fetch.
+     */
+    where: DepreciationEntryWhereUniqueInput
+  }
+
+  /**
+   * DepreciationEntry findUniqueOrThrow
+   */
+  export type DepreciationEntryFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the DepreciationEntry
+     */
+    select?: DepreciationEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the DepreciationEntry
+     */
+    omit?: DepreciationEntryOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: DepreciationEntryInclude<ExtArgs> | null
+    /**
+     * Filter, which DepreciationEntry to fetch.
+     */
+    where: DepreciationEntryWhereUniqueInput
+  }
+
+  /**
+   * DepreciationEntry findFirst
+   */
+  export type DepreciationEntryFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the DepreciationEntry
+     */
+    select?: DepreciationEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the DepreciationEntry
+     */
+    omit?: DepreciationEntryOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: DepreciationEntryInclude<ExtArgs> | null
+    /**
+     * Filter, which DepreciationEntry to fetch.
+     */
+    where?: DepreciationEntryWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of DepreciationEntries to fetch.
+     */
+    orderBy?: DepreciationEntryOrderByWithRelationInput | DepreciationEntryOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for DepreciationEntries.
+     */
+    cursor?: DepreciationEntryWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` DepreciationEntries from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` DepreciationEntries.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of DepreciationEntries.
+     */
+    distinct?: DepreciationEntryScalarFieldEnum | DepreciationEntryScalarFieldEnum[]
+  }
+
+  /**
+   * DepreciationEntry findFirstOrThrow
+   */
+  export type DepreciationEntryFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the DepreciationEntry
+     */
+    select?: DepreciationEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the DepreciationEntry
+     */
+    omit?: DepreciationEntryOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: DepreciationEntryInclude<ExtArgs> | null
+    /**
+     * Filter, which DepreciationEntry to fetch.
+     */
+    where?: DepreciationEntryWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of DepreciationEntries to fetch.
+     */
+    orderBy?: DepreciationEntryOrderByWithRelationInput | DepreciationEntryOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for DepreciationEntries.
+     */
+    cursor?: DepreciationEntryWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` DepreciationEntries from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` DepreciationEntries.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of DepreciationEntries.
+     */
+    distinct?: DepreciationEntryScalarFieldEnum | DepreciationEntryScalarFieldEnum[]
+  }
+
+  /**
+   * DepreciationEntry findMany
+   */
+  export type DepreciationEntryFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the DepreciationEntry
+     */
+    select?: DepreciationEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the DepreciationEntry
+     */
+    omit?: DepreciationEntryOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: DepreciationEntryInclude<ExtArgs> | null
+    /**
+     * Filter, which DepreciationEntries to fetch.
+     */
+    where?: DepreciationEntryWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of DepreciationEntries to fetch.
+     */
+    orderBy?: DepreciationEntryOrderByWithRelationInput | DepreciationEntryOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing DepreciationEntries.
+     */
+    cursor?: DepreciationEntryWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` DepreciationEntries from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` DepreciationEntries.
+     */
+    skip?: number
+    distinct?: DepreciationEntryScalarFieldEnum | DepreciationEntryScalarFieldEnum[]
+  }
+
+  /**
+   * DepreciationEntry create
+   */
+  export type DepreciationEntryCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the DepreciationEntry
+     */
+    select?: DepreciationEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the DepreciationEntry
+     */
+    omit?: DepreciationEntryOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: DepreciationEntryInclude<ExtArgs> | null
+    /**
+     * The data needed to create a DepreciationEntry.
+     */
+    data: XOR<DepreciationEntryCreateInput, DepreciationEntryUncheckedCreateInput>
+  }
+
+  /**
+   * DepreciationEntry createMany
+   */
+  export type DepreciationEntryCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many DepreciationEntries.
+     */
+    data: DepreciationEntryCreateManyInput | DepreciationEntryCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * DepreciationEntry createManyAndReturn
+   */
+  export type DepreciationEntryCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the DepreciationEntry
+     */
+    select?: DepreciationEntrySelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the DepreciationEntry
+     */
+    omit?: DepreciationEntryOmit<ExtArgs> | null
+    /**
+     * The data used to create many DepreciationEntries.
+     */
+    data: DepreciationEntryCreateManyInput | DepreciationEntryCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: DepreciationEntryIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * DepreciationEntry update
+   */
+  export type DepreciationEntryUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the DepreciationEntry
+     */
+    select?: DepreciationEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the DepreciationEntry
+     */
+    omit?: DepreciationEntryOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: DepreciationEntryInclude<ExtArgs> | null
+    /**
+     * The data needed to update a DepreciationEntry.
+     */
+    data: XOR<DepreciationEntryUpdateInput, DepreciationEntryUncheckedUpdateInput>
+    /**
+     * Choose, which DepreciationEntry to update.
+     */
+    where: DepreciationEntryWhereUniqueInput
+  }
+
+  /**
+   * DepreciationEntry updateMany
+   */
+  export type DepreciationEntryUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update DepreciationEntries.
+     */
+    data: XOR<DepreciationEntryUpdateManyMutationInput, DepreciationEntryUncheckedUpdateManyInput>
+    /**
+     * Filter which DepreciationEntries to update
+     */
+    where?: DepreciationEntryWhereInput
+    /**
+     * Limit how many DepreciationEntries to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * DepreciationEntry updateManyAndReturn
+   */
+  export type DepreciationEntryUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the DepreciationEntry
+     */
+    select?: DepreciationEntrySelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the DepreciationEntry
+     */
+    omit?: DepreciationEntryOmit<ExtArgs> | null
+    /**
+     * The data used to update DepreciationEntries.
+     */
+    data: XOR<DepreciationEntryUpdateManyMutationInput, DepreciationEntryUncheckedUpdateManyInput>
+    /**
+     * Filter which DepreciationEntries to update
+     */
+    where?: DepreciationEntryWhereInput
+    /**
+     * Limit how many DepreciationEntries to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: DepreciationEntryIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * DepreciationEntry upsert
+   */
+  export type DepreciationEntryUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the DepreciationEntry
+     */
+    select?: DepreciationEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the DepreciationEntry
+     */
+    omit?: DepreciationEntryOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: DepreciationEntryInclude<ExtArgs> | null
+    /**
+     * The filter to search for the DepreciationEntry to update in case it exists.
+     */
+    where: DepreciationEntryWhereUniqueInput
+    /**
+     * In case the DepreciationEntry found by the `where` argument doesn't exist, create a new DepreciationEntry with this data.
+     */
+    create: XOR<DepreciationEntryCreateInput, DepreciationEntryUncheckedCreateInput>
+    /**
+     * In case the DepreciationEntry was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<DepreciationEntryUpdateInput, DepreciationEntryUncheckedUpdateInput>
+  }
+
+  /**
+   * DepreciationEntry delete
+   */
+  export type DepreciationEntryDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the DepreciationEntry
+     */
+    select?: DepreciationEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the DepreciationEntry
+     */
+    omit?: DepreciationEntryOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: DepreciationEntryInclude<ExtArgs> | null
+    /**
+     * Filter which DepreciationEntry to delete.
+     */
+    where: DepreciationEntryWhereUniqueInput
+  }
+
+  /**
+   * DepreciationEntry deleteMany
+   */
+  export type DepreciationEntryDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which DepreciationEntries to delete
+     */
+    where?: DepreciationEntryWhereInput
+    /**
+     * Limit how many DepreciationEntries to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * DepreciationEntry without action
+   */
+  export type DepreciationEntryDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the DepreciationEntry
+     */
+    select?: DepreciationEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the DepreciationEntry
+     */
+    omit?: DepreciationEntryOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: DepreciationEntryInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model CCDC
+   */
+
+  export type AggregateCCDC = {
+    _count: CCDCCountAggregateOutputType | null
+    _avg: CCDCAvgAggregateOutputType | null
+    _sum: CCDCSumAggregateOutputType | null
+    _min: CCDCMinAggregateOutputType | null
+    _max: CCDCMaxAggregateOutputType | null
+  }
+
+  export type CCDCAvgAggregateOutputType = {
+    totalValue: number | null
+    allocationMonths: number | null
+    monthlyAllocation: number | null
+    allocatedAmount: number | null
+    remainingAmount: number | null
+  }
+
+  export type CCDCSumAggregateOutputType = {
+    totalValue: number | null
+    allocationMonths: number | null
+    monthlyAllocation: number | null
+    allocatedAmount: number | null
+    remainingAmount: number | null
+  }
+
+  export type CCDCMinAggregateOutputType = {
+    id: string | null
+    code: string | null
+    name: string | null
+    category: string | null
+    acquisitionDate: string | null
+    totalValue: number | null
+    allocationMonths: number | null
+    monthlyAllocation: number | null
+    allocatedAmount: number | null
+    remainingAmount: number | null
+    accountCode: string | null
+    expenseAccountCode: string | null
+    status: string | null
+    branchId: string | null
+    notes: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type CCDCMaxAggregateOutputType = {
+    id: string | null
+    code: string | null
+    name: string | null
+    category: string | null
+    acquisitionDate: string | null
+    totalValue: number | null
+    allocationMonths: number | null
+    monthlyAllocation: number | null
+    allocatedAmount: number | null
+    remainingAmount: number | null
+    accountCode: string | null
+    expenseAccountCode: string | null
+    status: string | null
+    branchId: string | null
+    notes: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type CCDCCountAggregateOutputType = {
+    id: number
+    code: number
+    name: number
+    category: number
+    acquisitionDate: number
+    totalValue: number
+    allocationMonths: number
+    monthlyAllocation: number
+    allocatedAmount: number
+    remainingAmount: number
+    accountCode: number
+    expenseAccountCode: number
+    status: number
+    branchId: number
+    notes: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type CCDCAvgAggregateInputType = {
+    totalValue?: true
+    allocationMonths?: true
+    monthlyAllocation?: true
+    allocatedAmount?: true
+    remainingAmount?: true
+  }
+
+  export type CCDCSumAggregateInputType = {
+    totalValue?: true
+    allocationMonths?: true
+    monthlyAllocation?: true
+    allocatedAmount?: true
+    remainingAmount?: true
+  }
+
+  export type CCDCMinAggregateInputType = {
+    id?: true
+    code?: true
+    name?: true
+    category?: true
+    acquisitionDate?: true
+    totalValue?: true
+    allocationMonths?: true
+    monthlyAllocation?: true
+    allocatedAmount?: true
+    remainingAmount?: true
+    accountCode?: true
+    expenseAccountCode?: true
+    status?: true
+    branchId?: true
+    notes?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type CCDCMaxAggregateInputType = {
+    id?: true
+    code?: true
+    name?: true
+    category?: true
+    acquisitionDate?: true
+    totalValue?: true
+    allocationMonths?: true
+    monthlyAllocation?: true
+    allocatedAmount?: true
+    remainingAmount?: true
+    accountCode?: true
+    expenseAccountCode?: true
+    status?: true
+    branchId?: true
+    notes?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type CCDCCountAggregateInputType = {
+    id?: true
+    code?: true
+    name?: true
+    category?: true
+    acquisitionDate?: true
+    totalValue?: true
+    allocationMonths?: true
+    monthlyAllocation?: true
+    allocatedAmount?: true
+    remainingAmount?: true
+    accountCode?: true
+    expenseAccountCode?: true
+    status?: true
+    branchId?: true
+    notes?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type CCDCAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which CCDC to aggregate.
+     */
+    where?: CCDCWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of CCDCS to fetch.
+     */
+    orderBy?: CCDCOrderByWithRelationInput | CCDCOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: CCDCWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` CCDCS from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` CCDCS.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned CCDCS
+    **/
+    _count?: true | CCDCCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: CCDCAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: CCDCSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: CCDCMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: CCDCMaxAggregateInputType
+  }
+
+  export type GetCCDCAggregateType<T extends CCDCAggregateArgs> = {
+        [P in keyof T & keyof AggregateCCDC]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateCCDC[P]>
+      : GetScalarType<T[P], AggregateCCDC[P]>
+  }
+
+
+
+
+  export type CCDCGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: CCDCWhereInput
+    orderBy?: CCDCOrderByWithAggregationInput | CCDCOrderByWithAggregationInput[]
+    by: CCDCScalarFieldEnum[] | CCDCScalarFieldEnum
+    having?: CCDCScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: CCDCCountAggregateInputType | true
+    _avg?: CCDCAvgAggregateInputType
+    _sum?: CCDCSumAggregateInputType
+    _min?: CCDCMinAggregateInputType
+    _max?: CCDCMaxAggregateInputType
+  }
+
+  export type CCDCGroupByOutputType = {
+    id: string
+    code: string
+    name: string
+    category: string | null
+    acquisitionDate: string | null
+    totalValue: number
+    allocationMonths: number
+    monthlyAllocation: number
+    allocatedAmount: number
+    remainingAmount: number
+    accountCode: string
+    expenseAccountCode: string
+    status: string
+    branchId: string | null
+    notes: string | null
+    createdAt: Date
+    updatedAt: Date
+    _count: CCDCCountAggregateOutputType | null
+    _avg: CCDCAvgAggregateOutputType | null
+    _sum: CCDCSumAggregateOutputType | null
+    _min: CCDCMinAggregateOutputType | null
+    _max: CCDCMaxAggregateOutputType | null
+  }
+
+  type GetCCDCGroupByPayload<T extends CCDCGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<CCDCGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof CCDCGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], CCDCGroupByOutputType[P]>
+            : GetScalarType<T[P], CCDCGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type CCDCSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    code?: boolean
+    name?: boolean
+    category?: boolean
+    acquisitionDate?: boolean
+    totalValue?: boolean
+    allocationMonths?: boolean
+    monthlyAllocation?: boolean
+    allocatedAmount?: boolean
+    remainingAmount?: boolean
+    accountCode?: boolean
+    expenseAccountCode?: boolean
+    status?: boolean
+    branchId?: boolean
+    notes?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    allocations?: boolean | CCDC$allocationsArgs<ExtArgs>
+    _count?: boolean | CCDCCountOutputTypeDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["cCDC"]>
+
+  export type CCDCSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    code?: boolean
+    name?: boolean
+    category?: boolean
+    acquisitionDate?: boolean
+    totalValue?: boolean
+    allocationMonths?: boolean
+    monthlyAllocation?: boolean
+    allocatedAmount?: boolean
+    remainingAmount?: boolean
+    accountCode?: boolean
+    expenseAccountCode?: boolean
+    status?: boolean
+    branchId?: boolean
+    notes?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["cCDC"]>
+
+  export type CCDCSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    code?: boolean
+    name?: boolean
+    category?: boolean
+    acquisitionDate?: boolean
+    totalValue?: boolean
+    allocationMonths?: boolean
+    monthlyAllocation?: boolean
+    allocatedAmount?: boolean
+    remainingAmount?: boolean
+    accountCode?: boolean
+    expenseAccountCode?: boolean
+    status?: boolean
+    branchId?: boolean
+    notes?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["cCDC"]>
+
+  export type CCDCSelectScalar = {
+    id?: boolean
+    code?: boolean
+    name?: boolean
+    category?: boolean
+    acquisitionDate?: boolean
+    totalValue?: boolean
+    allocationMonths?: boolean
+    monthlyAllocation?: boolean
+    allocatedAmount?: boolean
+    remainingAmount?: boolean
+    accountCode?: boolean
+    expenseAccountCode?: boolean
+    status?: boolean
+    branchId?: boolean
+    notes?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type CCDCOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "code" | "name" | "category" | "acquisitionDate" | "totalValue" | "allocationMonths" | "monthlyAllocation" | "allocatedAmount" | "remainingAmount" | "accountCode" | "expenseAccountCode" | "status" | "branchId" | "notes" | "createdAt" | "updatedAt", ExtArgs["result"]["cCDC"]>
+  export type CCDCInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    allocations?: boolean | CCDC$allocationsArgs<ExtArgs>
+    _count?: boolean | CCDCCountOutputTypeDefaultArgs<ExtArgs>
+  }
+  export type CCDCIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {}
+  export type CCDCIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {}
+
+  export type $CCDCPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "CCDC"
+    objects: {
+      allocations: Prisma.$CCDCAllocationPayload<ExtArgs>[]
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      code: string
+      name: string
+      category: string | null
+      acquisitionDate: string | null
+      totalValue: number
+      allocationMonths: number
+      monthlyAllocation: number
+      allocatedAmount: number
+      remainingAmount: number
+      accountCode: string
+      expenseAccountCode: string
+      status: string
+      branchId: string | null
+      notes: string | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["cCDC"]>
+    composites: {}
+  }
+
+  type CCDCGetPayload<S extends boolean | null | undefined | CCDCDefaultArgs> = $Result.GetResult<Prisma.$CCDCPayload, S>
+
+  type CCDCCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<CCDCFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: CCDCCountAggregateInputType | true
+    }
+
+  export interface CCDCDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['CCDC'], meta: { name: 'CCDC' } }
+    /**
+     * Find zero or one CCDC that matches the filter.
+     * @param {CCDCFindUniqueArgs} args - Arguments to find a CCDC
+     * @example
+     * // Get one CCDC
+     * const cCDC = await prisma.cCDC.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends CCDCFindUniqueArgs>(args: SelectSubset<T, CCDCFindUniqueArgs<ExtArgs>>): Prisma__CCDCClient<$Result.GetResult<Prisma.$CCDCPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one CCDC that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {CCDCFindUniqueOrThrowArgs} args - Arguments to find a CCDC
+     * @example
+     * // Get one CCDC
+     * const cCDC = await prisma.cCDC.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends CCDCFindUniqueOrThrowArgs>(args: SelectSubset<T, CCDCFindUniqueOrThrowArgs<ExtArgs>>): Prisma__CCDCClient<$Result.GetResult<Prisma.$CCDCPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first CCDC that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CCDCFindFirstArgs} args - Arguments to find a CCDC
+     * @example
+     * // Get one CCDC
+     * const cCDC = await prisma.cCDC.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends CCDCFindFirstArgs>(args?: SelectSubset<T, CCDCFindFirstArgs<ExtArgs>>): Prisma__CCDCClient<$Result.GetResult<Prisma.$CCDCPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first CCDC that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CCDCFindFirstOrThrowArgs} args - Arguments to find a CCDC
+     * @example
+     * // Get one CCDC
+     * const cCDC = await prisma.cCDC.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends CCDCFindFirstOrThrowArgs>(args?: SelectSubset<T, CCDCFindFirstOrThrowArgs<ExtArgs>>): Prisma__CCDCClient<$Result.GetResult<Prisma.$CCDCPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more CCDCS that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CCDCFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all CCDCS
+     * const cCDCS = await prisma.cCDC.findMany()
+     * 
+     * // Get first 10 CCDCS
+     * const cCDCS = await prisma.cCDC.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const cCDCWithIdOnly = await prisma.cCDC.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends CCDCFindManyArgs>(args?: SelectSubset<T, CCDCFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$CCDCPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a CCDC.
+     * @param {CCDCCreateArgs} args - Arguments to create a CCDC.
+     * @example
+     * // Create one CCDC
+     * const CCDC = await prisma.cCDC.create({
+     *   data: {
+     *     // ... data to create a CCDC
+     *   }
+     * })
+     * 
+     */
+    create<T extends CCDCCreateArgs>(args: SelectSubset<T, CCDCCreateArgs<ExtArgs>>): Prisma__CCDCClient<$Result.GetResult<Prisma.$CCDCPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many CCDCS.
+     * @param {CCDCCreateManyArgs} args - Arguments to create many CCDCS.
+     * @example
+     * // Create many CCDCS
+     * const cCDC = await prisma.cCDC.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends CCDCCreateManyArgs>(args?: SelectSubset<T, CCDCCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many CCDCS and returns the data saved in the database.
+     * @param {CCDCCreateManyAndReturnArgs} args - Arguments to create many CCDCS.
+     * @example
+     * // Create many CCDCS
+     * const cCDC = await prisma.cCDC.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many CCDCS and only return the `id`
+     * const cCDCWithIdOnly = await prisma.cCDC.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends CCDCCreateManyAndReturnArgs>(args?: SelectSubset<T, CCDCCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$CCDCPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a CCDC.
+     * @param {CCDCDeleteArgs} args - Arguments to delete one CCDC.
+     * @example
+     * // Delete one CCDC
+     * const CCDC = await prisma.cCDC.delete({
+     *   where: {
+     *     // ... filter to delete one CCDC
+     *   }
+     * })
+     * 
+     */
+    delete<T extends CCDCDeleteArgs>(args: SelectSubset<T, CCDCDeleteArgs<ExtArgs>>): Prisma__CCDCClient<$Result.GetResult<Prisma.$CCDCPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one CCDC.
+     * @param {CCDCUpdateArgs} args - Arguments to update one CCDC.
+     * @example
+     * // Update one CCDC
+     * const cCDC = await prisma.cCDC.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends CCDCUpdateArgs>(args: SelectSubset<T, CCDCUpdateArgs<ExtArgs>>): Prisma__CCDCClient<$Result.GetResult<Prisma.$CCDCPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more CCDCS.
+     * @param {CCDCDeleteManyArgs} args - Arguments to filter CCDCS to delete.
+     * @example
+     * // Delete a few CCDCS
+     * const { count } = await prisma.cCDC.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends CCDCDeleteManyArgs>(args?: SelectSubset<T, CCDCDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more CCDCS.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CCDCUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many CCDCS
+     * const cCDC = await prisma.cCDC.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends CCDCUpdateManyArgs>(args: SelectSubset<T, CCDCUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more CCDCS and returns the data updated in the database.
+     * @param {CCDCUpdateManyAndReturnArgs} args - Arguments to update many CCDCS.
+     * @example
+     * // Update many CCDCS
+     * const cCDC = await prisma.cCDC.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more CCDCS and only return the `id`
+     * const cCDCWithIdOnly = await prisma.cCDC.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends CCDCUpdateManyAndReturnArgs>(args: SelectSubset<T, CCDCUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$CCDCPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one CCDC.
+     * @param {CCDCUpsertArgs} args - Arguments to update or create a CCDC.
+     * @example
+     * // Update or create a CCDC
+     * const cCDC = await prisma.cCDC.upsert({
+     *   create: {
+     *     // ... data to create a CCDC
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the CCDC we want to update
+     *   }
+     * })
+     */
+    upsert<T extends CCDCUpsertArgs>(args: SelectSubset<T, CCDCUpsertArgs<ExtArgs>>): Prisma__CCDCClient<$Result.GetResult<Prisma.$CCDCPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of CCDCS.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CCDCCountArgs} args - Arguments to filter CCDCS to count.
+     * @example
+     * // Count the number of CCDCS
+     * const count = await prisma.cCDC.count({
+     *   where: {
+     *     // ... the filter for the CCDCS we want to count
+     *   }
+     * })
+    **/
+    count<T extends CCDCCountArgs>(
+      args?: Subset<T, CCDCCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], CCDCCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a CCDC.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CCDCAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends CCDCAggregateArgs>(args: Subset<T, CCDCAggregateArgs>): Prisma.PrismaPromise<GetCCDCAggregateType<T>>
+
+    /**
+     * Group by CCDC.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CCDCGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends CCDCGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: CCDCGroupByArgs['orderBy'] }
+        : { orderBy?: CCDCGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, CCDCGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetCCDCGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the CCDC model
+   */
+  readonly fields: CCDCFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for CCDC.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__CCDCClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    allocations<T extends CCDC$allocationsArgs<ExtArgs> = {}>(args?: Subset<T, CCDC$allocationsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$CCDCAllocationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the CCDC model
+   */
+  interface CCDCFieldRefs {
+    readonly id: FieldRef<"CCDC", 'String'>
+    readonly code: FieldRef<"CCDC", 'String'>
+    readonly name: FieldRef<"CCDC", 'String'>
+    readonly category: FieldRef<"CCDC", 'String'>
+    readonly acquisitionDate: FieldRef<"CCDC", 'String'>
+    readonly totalValue: FieldRef<"CCDC", 'Float'>
+    readonly allocationMonths: FieldRef<"CCDC", 'Int'>
+    readonly monthlyAllocation: FieldRef<"CCDC", 'Float'>
+    readonly allocatedAmount: FieldRef<"CCDC", 'Float'>
+    readonly remainingAmount: FieldRef<"CCDC", 'Float'>
+    readonly accountCode: FieldRef<"CCDC", 'String'>
+    readonly expenseAccountCode: FieldRef<"CCDC", 'String'>
+    readonly status: FieldRef<"CCDC", 'String'>
+    readonly branchId: FieldRef<"CCDC", 'String'>
+    readonly notes: FieldRef<"CCDC", 'String'>
+    readonly createdAt: FieldRef<"CCDC", 'DateTime'>
+    readonly updatedAt: FieldRef<"CCDC", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * CCDC findUnique
+   */
+  export type CCDCFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CCDC
+     */
+    select?: CCDCSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CCDC
+     */
+    omit?: CCDCOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: CCDCInclude<ExtArgs> | null
+    /**
+     * Filter, which CCDC to fetch.
+     */
+    where: CCDCWhereUniqueInput
+  }
+
+  /**
+   * CCDC findUniqueOrThrow
+   */
+  export type CCDCFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CCDC
+     */
+    select?: CCDCSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CCDC
+     */
+    omit?: CCDCOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: CCDCInclude<ExtArgs> | null
+    /**
+     * Filter, which CCDC to fetch.
+     */
+    where: CCDCWhereUniqueInput
+  }
+
+  /**
+   * CCDC findFirst
+   */
+  export type CCDCFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CCDC
+     */
+    select?: CCDCSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CCDC
+     */
+    omit?: CCDCOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: CCDCInclude<ExtArgs> | null
+    /**
+     * Filter, which CCDC to fetch.
+     */
+    where?: CCDCWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of CCDCS to fetch.
+     */
+    orderBy?: CCDCOrderByWithRelationInput | CCDCOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for CCDCS.
+     */
+    cursor?: CCDCWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` CCDCS from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` CCDCS.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of CCDCS.
+     */
+    distinct?: CCDCScalarFieldEnum | CCDCScalarFieldEnum[]
+  }
+
+  /**
+   * CCDC findFirstOrThrow
+   */
+  export type CCDCFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CCDC
+     */
+    select?: CCDCSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CCDC
+     */
+    omit?: CCDCOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: CCDCInclude<ExtArgs> | null
+    /**
+     * Filter, which CCDC to fetch.
+     */
+    where?: CCDCWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of CCDCS to fetch.
+     */
+    orderBy?: CCDCOrderByWithRelationInput | CCDCOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for CCDCS.
+     */
+    cursor?: CCDCWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` CCDCS from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` CCDCS.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of CCDCS.
+     */
+    distinct?: CCDCScalarFieldEnum | CCDCScalarFieldEnum[]
+  }
+
+  /**
+   * CCDC findMany
+   */
+  export type CCDCFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CCDC
+     */
+    select?: CCDCSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CCDC
+     */
+    omit?: CCDCOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: CCDCInclude<ExtArgs> | null
+    /**
+     * Filter, which CCDCS to fetch.
+     */
+    where?: CCDCWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of CCDCS to fetch.
+     */
+    orderBy?: CCDCOrderByWithRelationInput | CCDCOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing CCDCS.
+     */
+    cursor?: CCDCWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` CCDCS from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` CCDCS.
+     */
+    skip?: number
+    distinct?: CCDCScalarFieldEnum | CCDCScalarFieldEnum[]
+  }
+
+  /**
+   * CCDC create
+   */
+  export type CCDCCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CCDC
+     */
+    select?: CCDCSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CCDC
+     */
+    omit?: CCDCOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: CCDCInclude<ExtArgs> | null
+    /**
+     * The data needed to create a CCDC.
+     */
+    data: XOR<CCDCCreateInput, CCDCUncheckedCreateInput>
+  }
+
+  /**
+   * CCDC createMany
+   */
+  export type CCDCCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many CCDCS.
+     */
+    data: CCDCCreateManyInput | CCDCCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * CCDC createManyAndReturn
+   */
+  export type CCDCCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CCDC
+     */
+    select?: CCDCSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the CCDC
+     */
+    omit?: CCDCOmit<ExtArgs> | null
+    /**
+     * The data used to create many CCDCS.
+     */
+    data: CCDCCreateManyInput | CCDCCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * CCDC update
+   */
+  export type CCDCUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CCDC
+     */
+    select?: CCDCSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CCDC
+     */
+    omit?: CCDCOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: CCDCInclude<ExtArgs> | null
+    /**
+     * The data needed to update a CCDC.
+     */
+    data: XOR<CCDCUpdateInput, CCDCUncheckedUpdateInput>
+    /**
+     * Choose, which CCDC to update.
+     */
+    where: CCDCWhereUniqueInput
+  }
+
+  /**
+   * CCDC updateMany
+   */
+  export type CCDCUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update CCDCS.
+     */
+    data: XOR<CCDCUpdateManyMutationInput, CCDCUncheckedUpdateManyInput>
+    /**
+     * Filter which CCDCS to update
+     */
+    where?: CCDCWhereInput
+    /**
+     * Limit how many CCDCS to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * CCDC updateManyAndReturn
+   */
+  export type CCDCUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CCDC
+     */
+    select?: CCDCSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the CCDC
+     */
+    omit?: CCDCOmit<ExtArgs> | null
+    /**
+     * The data used to update CCDCS.
+     */
+    data: XOR<CCDCUpdateManyMutationInput, CCDCUncheckedUpdateManyInput>
+    /**
+     * Filter which CCDCS to update
+     */
+    where?: CCDCWhereInput
+    /**
+     * Limit how many CCDCS to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * CCDC upsert
+   */
+  export type CCDCUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CCDC
+     */
+    select?: CCDCSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CCDC
+     */
+    omit?: CCDCOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: CCDCInclude<ExtArgs> | null
+    /**
+     * The filter to search for the CCDC to update in case it exists.
+     */
+    where: CCDCWhereUniqueInput
+    /**
+     * In case the CCDC found by the `where` argument doesn't exist, create a new CCDC with this data.
+     */
+    create: XOR<CCDCCreateInput, CCDCUncheckedCreateInput>
+    /**
+     * In case the CCDC was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<CCDCUpdateInput, CCDCUncheckedUpdateInput>
+  }
+
+  /**
+   * CCDC delete
+   */
+  export type CCDCDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CCDC
+     */
+    select?: CCDCSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CCDC
+     */
+    omit?: CCDCOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: CCDCInclude<ExtArgs> | null
+    /**
+     * Filter which CCDC to delete.
+     */
+    where: CCDCWhereUniqueInput
+  }
+
+  /**
+   * CCDC deleteMany
+   */
+  export type CCDCDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which CCDCS to delete
+     */
+    where?: CCDCWhereInput
+    /**
+     * Limit how many CCDCS to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * CCDC.allocations
+   */
+  export type CCDC$allocationsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CCDCAllocation
+     */
+    select?: CCDCAllocationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CCDCAllocation
+     */
+    omit?: CCDCAllocationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: CCDCAllocationInclude<ExtArgs> | null
+    where?: CCDCAllocationWhereInput
+    orderBy?: CCDCAllocationOrderByWithRelationInput | CCDCAllocationOrderByWithRelationInput[]
+    cursor?: CCDCAllocationWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: CCDCAllocationScalarFieldEnum | CCDCAllocationScalarFieldEnum[]
+  }
+
+  /**
+   * CCDC without action
+   */
+  export type CCDCDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CCDC
+     */
+    select?: CCDCSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CCDC
+     */
+    omit?: CCDCOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: CCDCInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model CCDCAllocation
+   */
+
+  export type AggregateCCDCAllocation = {
+    _count: CCDCAllocationCountAggregateOutputType | null
+    _avg: CCDCAllocationAvgAggregateOutputType | null
+    _sum: CCDCAllocationSumAggregateOutputType | null
+    _min: CCDCAllocationMinAggregateOutputType | null
+    _max: CCDCAllocationMaxAggregateOutputType | null
+  }
+
+  export type CCDCAllocationAvgAggregateOutputType = {
+    month: number | null
+    year: number | null
+    amount: number | null
+  }
+
+  export type CCDCAllocationSumAggregateOutputType = {
+    month: number | null
+    year: number | null
+    amount: number | null
+  }
+
+  export type CCDCAllocationMinAggregateOutputType = {
+    id: string | null
+    ccdcId: string | null
+    month: number | null
+    year: number | null
+    amount: number | null
+    journalEntryId: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type CCDCAllocationMaxAggregateOutputType = {
+    id: string | null
+    ccdcId: string | null
+    month: number | null
+    year: number | null
+    amount: number | null
+    journalEntryId: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type CCDCAllocationCountAggregateOutputType = {
+    id: number
+    ccdcId: number
+    month: number
+    year: number
+    amount: number
+    journalEntryId: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type CCDCAllocationAvgAggregateInputType = {
+    month?: true
+    year?: true
+    amount?: true
+  }
+
+  export type CCDCAllocationSumAggregateInputType = {
+    month?: true
+    year?: true
+    amount?: true
+  }
+
+  export type CCDCAllocationMinAggregateInputType = {
+    id?: true
+    ccdcId?: true
+    month?: true
+    year?: true
+    amount?: true
+    journalEntryId?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type CCDCAllocationMaxAggregateInputType = {
+    id?: true
+    ccdcId?: true
+    month?: true
+    year?: true
+    amount?: true
+    journalEntryId?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type CCDCAllocationCountAggregateInputType = {
+    id?: true
+    ccdcId?: true
+    month?: true
+    year?: true
+    amount?: true
+    journalEntryId?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type CCDCAllocationAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which CCDCAllocation to aggregate.
+     */
+    where?: CCDCAllocationWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of CCDCAllocations to fetch.
+     */
+    orderBy?: CCDCAllocationOrderByWithRelationInput | CCDCAllocationOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: CCDCAllocationWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` CCDCAllocations from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` CCDCAllocations.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned CCDCAllocations
+    **/
+    _count?: true | CCDCAllocationCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: CCDCAllocationAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: CCDCAllocationSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: CCDCAllocationMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: CCDCAllocationMaxAggregateInputType
+  }
+
+  export type GetCCDCAllocationAggregateType<T extends CCDCAllocationAggregateArgs> = {
+        [P in keyof T & keyof AggregateCCDCAllocation]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateCCDCAllocation[P]>
+      : GetScalarType<T[P], AggregateCCDCAllocation[P]>
+  }
+
+
+
+
+  export type CCDCAllocationGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: CCDCAllocationWhereInput
+    orderBy?: CCDCAllocationOrderByWithAggregationInput | CCDCAllocationOrderByWithAggregationInput[]
+    by: CCDCAllocationScalarFieldEnum[] | CCDCAllocationScalarFieldEnum
+    having?: CCDCAllocationScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: CCDCAllocationCountAggregateInputType | true
+    _avg?: CCDCAllocationAvgAggregateInputType
+    _sum?: CCDCAllocationSumAggregateInputType
+    _min?: CCDCAllocationMinAggregateInputType
+    _max?: CCDCAllocationMaxAggregateInputType
+  }
+
+  export type CCDCAllocationGroupByOutputType = {
+    id: string
+    ccdcId: string
+    month: number
+    year: number
+    amount: number
+    journalEntryId: string | null
+    createdAt: Date
+    updatedAt: Date
+    _count: CCDCAllocationCountAggregateOutputType | null
+    _avg: CCDCAllocationAvgAggregateOutputType | null
+    _sum: CCDCAllocationSumAggregateOutputType | null
+    _min: CCDCAllocationMinAggregateOutputType | null
+    _max: CCDCAllocationMaxAggregateOutputType | null
+  }
+
+  type GetCCDCAllocationGroupByPayload<T extends CCDCAllocationGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<CCDCAllocationGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof CCDCAllocationGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], CCDCAllocationGroupByOutputType[P]>
+            : GetScalarType<T[P], CCDCAllocationGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type CCDCAllocationSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    ccdcId?: boolean
+    month?: boolean
+    year?: boolean
+    amount?: boolean
+    journalEntryId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    ccdc?: boolean | CCDCDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["cCDCAllocation"]>
+
+  export type CCDCAllocationSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    ccdcId?: boolean
+    month?: boolean
+    year?: boolean
+    amount?: boolean
+    journalEntryId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    ccdc?: boolean | CCDCDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["cCDCAllocation"]>
+
+  export type CCDCAllocationSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    ccdcId?: boolean
+    month?: boolean
+    year?: boolean
+    amount?: boolean
+    journalEntryId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    ccdc?: boolean | CCDCDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["cCDCAllocation"]>
+
+  export type CCDCAllocationSelectScalar = {
+    id?: boolean
+    ccdcId?: boolean
+    month?: boolean
+    year?: boolean
+    amount?: boolean
+    journalEntryId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type CCDCAllocationOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "ccdcId" | "month" | "year" | "amount" | "journalEntryId" | "createdAt" | "updatedAt", ExtArgs["result"]["cCDCAllocation"]>
+  export type CCDCAllocationInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    ccdc?: boolean | CCDCDefaultArgs<ExtArgs>
+  }
+  export type CCDCAllocationIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    ccdc?: boolean | CCDCDefaultArgs<ExtArgs>
+  }
+  export type CCDCAllocationIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    ccdc?: boolean | CCDCDefaultArgs<ExtArgs>
+  }
+
+  export type $CCDCAllocationPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "CCDCAllocation"
+    objects: {
+      ccdc: Prisma.$CCDCPayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      ccdcId: string
+      month: number
+      year: number
+      amount: number
+      journalEntryId: string | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["cCDCAllocation"]>
+    composites: {}
+  }
+
+  type CCDCAllocationGetPayload<S extends boolean | null | undefined | CCDCAllocationDefaultArgs> = $Result.GetResult<Prisma.$CCDCAllocationPayload, S>
+
+  type CCDCAllocationCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<CCDCAllocationFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: CCDCAllocationCountAggregateInputType | true
+    }
+
+  export interface CCDCAllocationDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['CCDCAllocation'], meta: { name: 'CCDCAllocation' } }
+    /**
+     * Find zero or one CCDCAllocation that matches the filter.
+     * @param {CCDCAllocationFindUniqueArgs} args - Arguments to find a CCDCAllocation
+     * @example
+     * // Get one CCDCAllocation
+     * const cCDCAllocation = await prisma.cCDCAllocation.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends CCDCAllocationFindUniqueArgs>(args: SelectSubset<T, CCDCAllocationFindUniqueArgs<ExtArgs>>): Prisma__CCDCAllocationClient<$Result.GetResult<Prisma.$CCDCAllocationPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one CCDCAllocation that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {CCDCAllocationFindUniqueOrThrowArgs} args - Arguments to find a CCDCAllocation
+     * @example
+     * // Get one CCDCAllocation
+     * const cCDCAllocation = await prisma.cCDCAllocation.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends CCDCAllocationFindUniqueOrThrowArgs>(args: SelectSubset<T, CCDCAllocationFindUniqueOrThrowArgs<ExtArgs>>): Prisma__CCDCAllocationClient<$Result.GetResult<Prisma.$CCDCAllocationPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first CCDCAllocation that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CCDCAllocationFindFirstArgs} args - Arguments to find a CCDCAllocation
+     * @example
+     * // Get one CCDCAllocation
+     * const cCDCAllocation = await prisma.cCDCAllocation.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends CCDCAllocationFindFirstArgs>(args?: SelectSubset<T, CCDCAllocationFindFirstArgs<ExtArgs>>): Prisma__CCDCAllocationClient<$Result.GetResult<Prisma.$CCDCAllocationPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first CCDCAllocation that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CCDCAllocationFindFirstOrThrowArgs} args - Arguments to find a CCDCAllocation
+     * @example
+     * // Get one CCDCAllocation
+     * const cCDCAllocation = await prisma.cCDCAllocation.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends CCDCAllocationFindFirstOrThrowArgs>(args?: SelectSubset<T, CCDCAllocationFindFirstOrThrowArgs<ExtArgs>>): Prisma__CCDCAllocationClient<$Result.GetResult<Prisma.$CCDCAllocationPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more CCDCAllocations that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CCDCAllocationFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all CCDCAllocations
+     * const cCDCAllocations = await prisma.cCDCAllocation.findMany()
+     * 
+     * // Get first 10 CCDCAllocations
+     * const cCDCAllocations = await prisma.cCDCAllocation.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const cCDCAllocationWithIdOnly = await prisma.cCDCAllocation.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends CCDCAllocationFindManyArgs>(args?: SelectSubset<T, CCDCAllocationFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$CCDCAllocationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a CCDCAllocation.
+     * @param {CCDCAllocationCreateArgs} args - Arguments to create a CCDCAllocation.
+     * @example
+     * // Create one CCDCAllocation
+     * const CCDCAllocation = await prisma.cCDCAllocation.create({
+     *   data: {
+     *     // ... data to create a CCDCAllocation
+     *   }
+     * })
+     * 
+     */
+    create<T extends CCDCAllocationCreateArgs>(args: SelectSubset<T, CCDCAllocationCreateArgs<ExtArgs>>): Prisma__CCDCAllocationClient<$Result.GetResult<Prisma.$CCDCAllocationPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many CCDCAllocations.
+     * @param {CCDCAllocationCreateManyArgs} args - Arguments to create many CCDCAllocations.
+     * @example
+     * // Create many CCDCAllocations
+     * const cCDCAllocation = await prisma.cCDCAllocation.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends CCDCAllocationCreateManyArgs>(args?: SelectSubset<T, CCDCAllocationCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many CCDCAllocations and returns the data saved in the database.
+     * @param {CCDCAllocationCreateManyAndReturnArgs} args - Arguments to create many CCDCAllocations.
+     * @example
+     * // Create many CCDCAllocations
+     * const cCDCAllocation = await prisma.cCDCAllocation.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many CCDCAllocations and only return the `id`
+     * const cCDCAllocationWithIdOnly = await prisma.cCDCAllocation.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends CCDCAllocationCreateManyAndReturnArgs>(args?: SelectSubset<T, CCDCAllocationCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$CCDCAllocationPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a CCDCAllocation.
+     * @param {CCDCAllocationDeleteArgs} args - Arguments to delete one CCDCAllocation.
+     * @example
+     * // Delete one CCDCAllocation
+     * const CCDCAllocation = await prisma.cCDCAllocation.delete({
+     *   where: {
+     *     // ... filter to delete one CCDCAllocation
+     *   }
+     * })
+     * 
+     */
+    delete<T extends CCDCAllocationDeleteArgs>(args: SelectSubset<T, CCDCAllocationDeleteArgs<ExtArgs>>): Prisma__CCDCAllocationClient<$Result.GetResult<Prisma.$CCDCAllocationPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one CCDCAllocation.
+     * @param {CCDCAllocationUpdateArgs} args - Arguments to update one CCDCAllocation.
+     * @example
+     * // Update one CCDCAllocation
+     * const cCDCAllocation = await prisma.cCDCAllocation.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends CCDCAllocationUpdateArgs>(args: SelectSubset<T, CCDCAllocationUpdateArgs<ExtArgs>>): Prisma__CCDCAllocationClient<$Result.GetResult<Prisma.$CCDCAllocationPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more CCDCAllocations.
+     * @param {CCDCAllocationDeleteManyArgs} args - Arguments to filter CCDCAllocations to delete.
+     * @example
+     * // Delete a few CCDCAllocations
+     * const { count } = await prisma.cCDCAllocation.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends CCDCAllocationDeleteManyArgs>(args?: SelectSubset<T, CCDCAllocationDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more CCDCAllocations.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CCDCAllocationUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many CCDCAllocations
+     * const cCDCAllocation = await prisma.cCDCAllocation.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends CCDCAllocationUpdateManyArgs>(args: SelectSubset<T, CCDCAllocationUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more CCDCAllocations and returns the data updated in the database.
+     * @param {CCDCAllocationUpdateManyAndReturnArgs} args - Arguments to update many CCDCAllocations.
+     * @example
+     * // Update many CCDCAllocations
+     * const cCDCAllocation = await prisma.cCDCAllocation.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more CCDCAllocations and only return the `id`
+     * const cCDCAllocationWithIdOnly = await prisma.cCDCAllocation.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends CCDCAllocationUpdateManyAndReturnArgs>(args: SelectSubset<T, CCDCAllocationUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$CCDCAllocationPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one CCDCAllocation.
+     * @param {CCDCAllocationUpsertArgs} args - Arguments to update or create a CCDCAllocation.
+     * @example
+     * // Update or create a CCDCAllocation
+     * const cCDCAllocation = await prisma.cCDCAllocation.upsert({
+     *   create: {
+     *     // ... data to create a CCDCAllocation
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the CCDCAllocation we want to update
+     *   }
+     * })
+     */
+    upsert<T extends CCDCAllocationUpsertArgs>(args: SelectSubset<T, CCDCAllocationUpsertArgs<ExtArgs>>): Prisma__CCDCAllocationClient<$Result.GetResult<Prisma.$CCDCAllocationPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of CCDCAllocations.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CCDCAllocationCountArgs} args - Arguments to filter CCDCAllocations to count.
+     * @example
+     * // Count the number of CCDCAllocations
+     * const count = await prisma.cCDCAllocation.count({
+     *   where: {
+     *     // ... the filter for the CCDCAllocations we want to count
+     *   }
+     * })
+    **/
+    count<T extends CCDCAllocationCountArgs>(
+      args?: Subset<T, CCDCAllocationCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], CCDCAllocationCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a CCDCAllocation.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CCDCAllocationAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends CCDCAllocationAggregateArgs>(args: Subset<T, CCDCAllocationAggregateArgs>): Prisma.PrismaPromise<GetCCDCAllocationAggregateType<T>>
+
+    /**
+     * Group by CCDCAllocation.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CCDCAllocationGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends CCDCAllocationGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: CCDCAllocationGroupByArgs['orderBy'] }
+        : { orderBy?: CCDCAllocationGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, CCDCAllocationGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetCCDCAllocationGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the CCDCAllocation model
+   */
+  readonly fields: CCDCAllocationFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for CCDCAllocation.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__CCDCAllocationClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    ccdc<T extends CCDCDefaultArgs<ExtArgs> = {}>(args?: Subset<T, CCDCDefaultArgs<ExtArgs>>): Prisma__CCDCClient<$Result.GetResult<Prisma.$CCDCPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the CCDCAllocation model
+   */
+  interface CCDCAllocationFieldRefs {
+    readonly id: FieldRef<"CCDCAllocation", 'String'>
+    readonly ccdcId: FieldRef<"CCDCAllocation", 'String'>
+    readonly month: FieldRef<"CCDCAllocation", 'Int'>
+    readonly year: FieldRef<"CCDCAllocation", 'Int'>
+    readonly amount: FieldRef<"CCDCAllocation", 'Float'>
+    readonly journalEntryId: FieldRef<"CCDCAllocation", 'String'>
+    readonly createdAt: FieldRef<"CCDCAllocation", 'DateTime'>
+    readonly updatedAt: FieldRef<"CCDCAllocation", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * CCDCAllocation findUnique
+   */
+  export type CCDCAllocationFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CCDCAllocation
+     */
+    select?: CCDCAllocationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CCDCAllocation
+     */
+    omit?: CCDCAllocationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: CCDCAllocationInclude<ExtArgs> | null
+    /**
+     * Filter, which CCDCAllocation to fetch.
+     */
+    where: CCDCAllocationWhereUniqueInput
+  }
+
+  /**
+   * CCDCAllocation findUniqueOrThrow
+   */
+  export type CCDCAllocationFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CCDCAllocation
+     */
+    select?: CCDCAllocationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CCDCAllocation
+     */
+    omit?: CCDCAllocationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: CCDCAllocationInclude<ExtArgs> | null
+    /**
+     * Filter, which CCDCAllocation to fetch.
+     */
+    where: CCDCAllocationWhereUniqueInput
+  }
+
+  /**
+   * CCDCAllocation findFirst
+   */
+  export type CCDCAllocationFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CCDCAllocation
+     */
+    select?: CCDCAllocationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CCDCAllocation
+     */
+    omit?: CCDCAllocationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: CCDCAllocationInclude<ExtArgs> | null
+    /**
+     * Filter, which CCDCAllocation to fetch.
+     */
+    where?: CCDCAllocationWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of CCDCAllocations to fetch.
+     */
+    orderBy?: CCDCAllocationOrderByWithRelationInput | CCDCAllocationOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for CCDCAllocations.
+     */
+    cursor?: CCDCAllocationWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` CCDCAllocations from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` CCDCAllocations.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of CCDCAllocations.
+     */
+    distinct?: CCDCAllocationScalarFieldEnum | CCDCAllocationScalarFieldEnum[]
+  }
+
+  /**
+   * CCDCAllocation findFirstOrThrow
+   */
+  export type CCDCAllocationFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CCDCAllocation
+     */
+    select?: CCDCAllocationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CCDCAllocation
+     */
+    omit?: CCDCAllocationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: CCDCAllocationInclude<ExtArgs> | null
+    /**
+     * Filter, which CCDCAllocation to fetch.
+     */
+    where?: CCDCAllocationWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of CCDCAllocations to fetch.
+     */
+    orderBy?: CCDCAllocationOrderByWithRelationInput | CCDCAllocationOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for CCDCAllocations.
+     */
+    cursor?: CCDCAllocationWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` CCDCAllocations from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` CCDCAllocations.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of CCDCAllocations.
+     */
+    distinct?: CCDCAllocationScalarFieldEnum | CCDCAllocationScalarFieldEnum[]
+  }
+
+  /**
+   * CCDCAllocation findMany
+   */
+  export type CCDCAllocationFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CCDCAllocation
+     */
+    select?: CCDCAllocationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CCDCAllocation
+     */
+    omit?: CCDCAllocationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: CCDCAllocationInclude<ExtArgs> | null
+    /**
+     * Filter, which CCDCAllocations to fetch.
+     */
+    where?: CCDCAllocationWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of CCDCAllocations to fetch.
+     */
+    orderBy?: CCDCAllocationOrderByWithRelationInput | CCDCAllocationOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing CCDCAllocations.
+     */
+    cursor?: CCDCAllocationWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` CCDCAllocations from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` CCDCAllocations.
+     */
+    skip?: number
+    distinct?: CCDCAllocationScalarFieldEnum | CCDCAllocationScalarFieldEnum[]
+  }
+
+  /**
+   * CCDCAllocation create
+   */
+  export type CCDCAllocationCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CCDCAllocation
+     */
+    select?: CCDCAllocationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CCDCAllocation
+     */
+    omit?: CCDCAllocationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: CCDCAllocationInclude<ExtArgs> | null
+    /**
+     * The data needed to create a CCDCAllocation.
+     */
+    data: XOR<CCDCAllocationCreateInput, CCDCAllocationUncheckedCreateInput>
+  }
+
+  /**
+   * CCDCAllocation createMany
+   */
+  export type CCDCAllocationCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many CCDCAllocations.
+     */
+    data: CCDCAllocationCreateManyInput | CCDCAllocationCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * CCDCAllocation createManyAndReturn
+   */
+  export type CCDCAllocationCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CCDCAllocation
+     */
+    select?: CCDCAllocationSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the CCDCAllocation
+     */
+    omit?: CCDCAllocationOmit<ExtArgs> | null
+    /**
+     * The data used to create many CCDCAllocations.
+     */
+    data: CCDCAllocationCreateManyInput | CCDCAllocationCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: CCDCAllocationIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * CCDCAllocation update
+   */
+  export type CCDCAllocationUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CCDCAllocation
+     */
+    select?: CCDCAllocationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CCDCAllocation
+     */
+    omit?: CCDCAllocationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: CCDCAllocationInclude<ExtArgs> | null
+    /**
+     * The data needed to update a CCDCAllocation.
+     */
+    data: XOR<CCDCAllocationUpdateInput, CCDCAllocationUncheckedUpdateInput>
+    /**
+     * Choose, which CCDCAllocation to update.
+     */
+    where: CCDCAllocationWhereUniqueInput
+  }
+
+  /**
+   * CCDCAllocation updateMany
+   */
+  export type CCDCAllocationUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update CCDCAllocations.
+     */
+    data: XOR<CCDCAllocationUpdateManyMutationInput, CCDCAllocationUncheckedUpdateManyInput>
+    /**
+     * Filter which CCDCAllocations to update
+     */
+    where?: CCDCAllocationWhereInput
+    /**
+     * Limit how many CCDCAllocations to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * CCDCAllocation updateManyAndReturn
+   */
+  export type CCDCAllocationUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CCDCAllocation
+     */
+    select?: CCDCAllocationSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the CCDCAllocation
+     */
+    omit?: CCDCAllocationOmit<ExtArgs> | null
+    /**
+     * The data used to update CCDCAllocations.
+     */
+    data: XOR<CCDCAllocationUpdateManyMutationInput, CCDCAllocationUncheckedUpdateManyInput>
+    /**
+     * Filter which CCDCAllocations to update
+     */
+    where?: CCDCAllocationWhereInput
+    /**
+     * Limit how many CCDCAllocations to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: CCDCAllocationIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * CCDCAllocation upsert
+   */
+  export type CCDCAllocationUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CCDCAllocation
+     */
+    select?: CCDCAllocationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CCDCAllocation
+     */
+    omit?: CCDCAllocationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: CCDCAllocationInclude<ExtArgs> | null
+    /**
+     * The filter to search for the CCDCAllocation to update in case it exists.
+     */
+    where: CCDCAllocationWhereUniqueInput
+    /**
+     * In case the CCDCAllocation found by the `where` argument doesn't exist, create a new CCDCAllocation with this data.
+     */
+    create: XOR<CCDCAllocationCreateInput, CCDCAllocationUncheckedCreateInput>
+    /**
+     * In case the CCDCAllocation was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<CCDCAllocationUpdateInput, CCDCAllocationUncheckedUpdateInput>
+  }
+
+  /**
+   * CCDCAllocation delete
+   */
+  export type CCDCAllocationDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CCDCAllocation
+     */
+    select?: CCDCAllocationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CCDCAllocation
+     */
+    omit?: CCDCAllocationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: CCDCAllocationInclude<ExtArgs> | null
+    /**
+     * Filter which CCDCAllocation to delete.
+     */
+    where: CCDCAllocationWhereUniqueInput
+  }
+
+  /**
+   * CCDCAllocation deleteMany
+   */
+  export type CCDCAllocationDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which CCDCAllocations to delete
+     */
+    where?: CCDCAllocationWhereInput
+    /**
+     * Limit how many CCDCAllocations to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * CCDCAllocation without action
+   */
+  export type CCDCAllocationDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CCDCAllocation
+     */
+    select?: CCDCAllocationSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CCDCAllocation
+     */
+    omit?: CCDCAllocationOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: CCDCAllocationInclude<ExtArgs> | null
   }
 
 
@@ -121704,6 +130148,11 @@ export namespace Prisma {
     accountName: 'accountName',
     isDefault: 'isDefault',
     status: 'status',
+    bankBranch: 'bankBranch',
+    currency: 'currency',
+    balance: 'balance',
+    lastSyncAt: 'lastSyncAt',
+    branchId: 'branchId',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
   };
@@ -121719,6 +130168,17 @@ export namespace Prisma {
     description: 'description',
     reference: 'reference',
     date: 'date',
+    transactionDate: 'transactionDate',
+    referenceNo: 'referenceNo',
+    counterpartyName: 'counterpartyName',
+    counterpartyAccount: 'counterpartyAccount',
+    isReconciled: 'isReconciled',
+    reconciledAt: 'reconciledAt',
+    journalEntryId: 'journalEntryId',
+    matchedSaleId: 'matchedSaleId',
+    matchedExpenseId: 'matchedExpenseId',
+    branchId: 'branchId',
+    notes: 'notes',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
   };
@@ -122203,6 +130663,86 @@ export namespace Prisma {
   export type PayrollRecordScalarFieldEnum = (typeof PayrollRecordScalarFieldEnum)[keyof typeof PayrollRecordScalarFieldEnum]
 
 
+  export const EmployeeScalarFieldEnum: {
+    id: 'id',
+    code: 'code',
+    name: 'name',
+    position: 'position',
+    department: 'department',
+    baseSalary: 'baseSalary',
+    bankAccount: 'bankAccount',
+    bankName: 'bankName',
+    taxCode: 'taxCode',
+    socialInsuranceNo: 'socialInsuranceNo',
+    startDate: 'startDate',
+    endDate: 'endDate',
+    status: 'status',
+    dependents: 'dependents',
+    notes: 'notes',
+    branchId: 'branchId',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type EmployeeScalarFieldEnum = (typeof EmployeeScalarFieldEnum)[keyof typeof EmployeeScalarFieldEnum]
+
+
+  export const PayrollPeriodScalarFieldEnum: {
+    id: 'id',
+    month: 'month',
+    year: 'year',
+    status: 'status',
+    totalGross: 'totalGross',
+    totalDeductions: 'totalDeductions',
+    totalNet: 'totalNet',
+    notes: 'notes',
+    branchId: 'branchId',
+    createdBy: 'createdBy',
+    confirmedAt: 'confirmedAt',
+    paidAt: 'paidAt',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type PayrollPeriodScalarFieldEnum = (typeof PayrollPeriodScalarFieldEnum)[keyof typeof PayrollPeriodScalarFieldEnum]
+
+
+  export const PayrollEntryScalarFieldEnum: {
+    id: 'id',
+    periodId: 'periodId',
+    employeeId: 'employeeId',
+    employeeCode: 'employeeCode',
+    employeeName: 'employeeName',
+    workDays: 'workDays',
+    baseSalary: 'baseSalary',
+    allowances: 'allowances',
+    overtimePay: 'overtimePay',
+    grossSalary: 'grossSalary',
+    bhxhEmployee: 'bhxhEmployee',
+    bhytEmployee: 'bhytEmployee',
+    bhtnEmployee: 'bhtnEmployee',
+    bhxhEmployer: 'bhxhEmployer',
+    bhytEmployer: 'bhytEmployer',
+    bhtnEmployer: 'bhtnEmployer',
+    totalInsuranceEmployee: 'totalInsuranceEmployee',
+    totalInsuranceEmployer: 'totalInsuranceEmployer',
+    totalInsuranceDeduction: 'totalInsuranceDeduction',
+    taxableIncome: 'taxableIncome',
+    personalDeduction: 'personalDeduction',
+    dependentDeduction: 'dependentDeduction',
+    dependents: 'dependents',
+    assessableIncome: 'assessableIncome',
+    pitAmount: 'pitAmount',
+    netSalary: 'netSalary',
+    bankTransferAmount: 'bankTransferAmount',
+    notes: 'notes',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type PayrollEntryScalarFieldEnum = (typeof PayrollEntryScalarFieldEnum)[keyof typeof PayrollEntryScalarFieldEnum]
+
+
   export const OnlineChannelScalarFieldEnum: {
     id: 'id',
     name: 'name',
@@ -122352,11 +130892,73 @@ export namespace Prisma {
     description: 'description',
     disposalDate: 'disposalDate',
     status: 'status',
+    acquisitionCost: 'acquisitionCost',
+    depreciationMethod: 'depreciationMethod',
+    accountCode: 'accountCode',
+    depAccAccountCode: 'depAccAccountCode',
+    expenseAccountCode: 'expenseAccountCode',
+    disposalAmount: 'disposalAmount',
+    branchId: 'branchId',
+    notes: 'notes',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
   };
 
   export type FixedAssetScalarFieldEnum = (typeof FixedAssetScalarFieldEnum)[keyof typeof FixedAssetScalarFieldEnum]
+
+
+  export const DepreciationEntryScalarFieldEnum: {
+    id: 'id',
+    assetId: 'assetId',
+    month: 'month',
+    year: 'year',
+    beginningValue: 'beginningValue',
+    depreciationAmount: 'depreciationAmount',
+    accumulatedDepreciation: 'accumulatedDepreciation',
+    endingValue: 'endingValue',
+    journalEntryId: 'journalEntryId',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type DepreciationEntryScalarFieldEnum = (typeof DepreciationEntryScalarFieldEnum)[keyof typeof DepreciationEntryScalarFieldEnum]
+
+
+  export const CCDCScalarFieldEnum: {
+    id: 'id',
+    code: 'code',
+    name: 'name',
+    category: 'category',
+    acquisitionDate: 'acquisitionDate',
+    totalValue: 'totalValue',
+    allocationMonths: 'allocationMonths',
+    monthlyAllocation: 'monthlyAllocation',
+    allocatedAmount: 'allocatedAmount',
+    remainingAmount: 'remainingAmount',
+    accountCode: 'accountCode',
+    expenseAccountCode: 'expenseAccountCode',
+    status: 'status',
+    branchId: 'branchId',
+    notes: 'notes',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type CCDCScalarFieldEnum = (typeof CCDCScalarFieldEnum)[keyof typeof CCDCScalarFieldEnum]
+
+
+  export const CCDCAllocationScalarFieldEnum: {
+    id: 'id',
+    ccdcId: 'ccdcId',
+    month: 'month',
+    year: 'year',
+    amount: 'amount',
+    journalEntryId: 'journalEntryId',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type CCDCAllocationScalarFieldEnum = (typeof CCDCAllocationScalarFieldEnum)[keyof typeof CCDCAllocationScalarFieldEnum]
 
 
   export const EInvoiceConfigScalarFieldEnum: {
@@ -126428,6 +135030,11 @@ export namespace Prisma {
     accountName?: StringNullableFilter<"BankAccount"> | string | null
     isDefault?: BoolFilter<"BankAccount"> | boolean
     status?: StringFilter<"BankAccount"> | string
+    bankBranch?: StringNullableFilter<"BankAccount"> | string | null
+    currency?: StringFilter<"BankAccount"> | string
+    balance?: FloatFilter<"BankAccount"> | number
+    lastSyncAt?: DateTimeNullableFilter<"BankAccount"> | Date | string | null
+    branchId?: StringNullableFilter<"BankAccount"> | string | null
     createdAt?: DateTimeFilter<"BankAccount"> | Date | string
     updatedAt?: DateTimeFilter<"BankAccount"> | Date | string
     transactions?: BankTransactionListRelationFilter
@@ -126440,6 +135047,11 @@ export namespace Prisma {
     accountName?: SortOrderInput | SortOrder
     isDefault?: SortOrder
     status?: SortOrder
+    bankBranch?: SortOrderInput | SortOrder
+    currency?: SortOrder
+    balance?: SortOrder
+    lastSyncAt?: SortOrderInput | SortOrder
+    branchId?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     transactions?: BankTransactionOrderByRelationAggregateInput
@@ -126455,6 +135067,11 @@ export namespace Prisma {
     accountName?: StringNullableFilter<"BankAccount"> | string | null
     isDefault?: BoolFilter<"BankAccount"> | boolean
     status?: StringFilter<"BankAccount"> | string
+    bankBranch?: StringNullableFilter<"BankAccount"> | string | null
+    currency?: StringFilter<"BankAccount"> | string
+    balance?: FloatFilter<"BankAccount"> | number
+    lastSyncAt?: DateTimeNullableFilter<"BankAccount"> | Date | string | null
+    branchId?: StringNullableFilter<"BankAccount"> | string | null
     createdAt?: DateTimeFilter<"BankAccount"> | Date | string
     updatedAt?: DateTimeFilter<"BankAccount"> | Date | string
     transactions?: BankTransactionListRelationFilter
@@ -126467,11 +135084,18 @@ export namespace Prisma {
     accountName?: SortOrderInput | SortOrder
     isDefault?: SortOrder
     status?: SortOrder
+    bankBranch?: SortOrderInput | SortOrder
+    currency?: SortOrder
+    balance?: SortOrder
+    lastSyncAt?: SortOrderInput | SortOrder
+    branchId?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     _count?: BankAccountCountOrderByAggregateInput
+    _avg?: BankAccountAvgOrderByAggregateInput
     _max?: BankAccountMaxOrderByAggregateInput
     _min?: BankAccountMinOrderByAggregateInput
+    _sum?: BankAccountSumOrderByAggregateInput
   }
 
   export type BankAccountScalarWhereWithAggregatesInput = {
@@ -126484,6 +135108,11 @@ export namespace Prisma {
     accountName?: StringNullableWithAggregatesFilter<"BankAccount"> | string | null
     isDefault?: BoolWithAggregatesFilter<"BankAccount"> | boolean
     status?: StringWithAggregatesFilter<"BankAccount"> | string
+    bankBranch?: StringNullableWithAggregatesFilter<"BankAccount"> | string | null
+    currency?: StringWithAggregatesFilter<"BankAccount"> | string
+    balance?: FloatWithAggregatesFilter<"BankAccount"> | number
+    lastSyncAt?: DateTimeNullableWithAggregatesFilter<"BankAccount"> | Date | string | null
+    branchId?: StringNullableWithAggregatesFilter<"BankAccount"> | string | null
     createdAt?: DateTimeWithAggregatesFilter<"BankAccount"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"BankAccount"> | Date | string
   }
@@ -126499,6 +135128,17 @@ export namespace Prisma {
     description?: StringFilter<"BankTransaction"> | string
     reference?: StringNullableFilter<"BankTransaction"> | string | null
     date?: DateTimeFilter<"BankTransaction"> | Date | string
+    transactionDate?: DateTimeNullableFilter<"BankTransaction"> | Date | string | null
+    referenceNo?: StringNullableFilter<"BankTransaction"> | string | null
+    counterpartyName?: StringNullableFilter<"BankTransaction"> | string | null
+    counterpartyAccount?: StringNullableFilter<"BankTransaction"> | string | null
+    isReconciled?: BoolFilter<"BankTransaction"> | boolean
+    reconciledAt?: DateTimeNullableFilter<"BankTransaction"> | Date | string | null
+    journalEntryId?: StringNullableFilter<"BankTransaction"> | string | null
+    matchedSaleId?: StringNullableFilter<"BankTransaction"> | string | null
+    matchedExpenseId?: StringNullableFilter<"BankTransaction"> | string | null
+    branchId?: StringNullableFilter<"BankTransaction"> | string | null
+    notes?: StringNullableFilter<"BankTransaction"> | string | null
     createdAt?: DateTimeFilter<"BankTransaction"> | Date | string
     updatedAt?: DateTimeFilter<"BankTransaction"> | Date | string
     bankAccount?: XOR<BankAccountNullableScalarRelationFilter, BankAccountWhereInput> | null
@@ -126512,6 +135152,17 @@ export namespace Prisma {
     description?: SortOrder
     reference?: SortOrderInput | SortOrder
     date?: SortOrder
+    transactionDate?: SortOrderInput | SortOrder
+    referenceNo?: SortOrderInput | SortOrder
+    counterpartyName?: SortOrderInput | SortOrder
+    counterpartyAccount?: SortOrderInput | SortOrder
+    isReconciled?: SortOrder
+    reconciledAt?: SortOrderInput | SortOrder
+    journalEntryId?: SortOrderInput | SortOrder
+    matchedSaleId?: SortOrderInput | SortOrder
+    matchedExpenseId?: SortOrderInput | SortOrder
+    branchId?: SortOrderInput | SortOrder
+    notes?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     bankAccount?: BankAccountOrderByWithRelationInput
@@ -126528,6 +135179,17 @@ export namespace Prisma {
     description?: StringFilter<"BankTransaction"> | string
     reference?: StringNullableFilter<"BankTransaction"> | string | null
     date?: DateTimeFilter<"BankTransaction"> | Date | string
+    transactionDate?: DateTimeNullableFilter<"BankTransaction"> | Date | string | null
+    referenceNo?: StringNullableFilter<"BankTransaction"> | string | null
+    counterpartyName?: StringNullableFilter<"BankTransaction"> | string | null
+    counterpartyAccount?: StringNullableFilter<"BankTransaction"> | string | null
+    isReconciled?: BoolFilter<"BankTransaction"> | boolean
+    reconciledAt?: DateTimeNullableFilter<"BankTransaction"> | Date | string | null
+    journalEntryId?: StringNullableFilter<"BankTransaction"> | string | null
+    matchedSaleId?: StringNullableFilter<"BankTransaction"> | string | null
+    matchedExpenseId?: StringNullableFilter<"BankTransaction"> | string | null
+    branchId?: StringNullableFilter<"BankTransaction"> | string | null
+    notes?: StringNullableFilter<"BankTransaction"> | string | null
     createdAt?: DateTimeFilter<"BankTransaction"> | Date | string
     updatedAt?: DateTimeFilter<"BankTransaction"> | Date | string
     bankAccount?: XOR<BankAccountNullableScalarRelationFilter, BankAccountWhereInput> | null
@@ -126541,6 +135203,17 @@ export namespace Prisma {
     description?: SortOrder
     reference?: SortOrderInput | SortOrder
     date?: SortOrder
+    transactionDate?: SortOrderInput | SortOrder
+    referenceNo?: SortOrderInput | SortOrder
+    counterpartyName?: SortOrderInput | SortOrder
+    counterpartyAccount?: SortOrderInput | SortOrder
+    isReconciled?: SortOrder
+    reconciledAt?: SortOrderInput | SortOrder
+    journalEntryId?: SortOrderInput | SortOrder
+    matchedSaleId?: SortOrderInput | SortOrder
+    matchedExpenseId?: SortOrderInput | SortOrder
+    branchId?: SortOrderInput | SortOrder
+    notes?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     _count?: BankTransactionCountOrderByAggregateInput
@@ -126561,6 +135234,17 @@ export namespace Prisma {
     description?: StringWithAggregatesFilter<"BankTransaction"> | string
     reference?: StringNullableWithAggregatesFilter<"BankTransaction"> | string | null
     date?: DateTimeWithAggregatesFilter<"BankTransaction"> | Date | string
+    transactionDate?: DateTimeNullableWithAggregatesFilter<"BankTransaction"> | Date | string | null
+    referenceNo?: StringNullableWithAggregatesFilter<"BankTransaction"> | string | null
+    counterpartyName?: StringNullableWithAggregatesFilter<"BankTransaction"> | string | null
+    counterpartyAccount?: StringNullableWithAggregatesFilter<"BankTransaction"> | string | null
+    isReconciled?: BoolWithAggregatesFilter<"BankTransaction"> | boolean
+    reconciledAt?: DateTimeNullableWithAggregatesFilter<"BankTransaction"> | Date | string | null
+    journalEntryId?: StringNullableWithAggregatesFilter<"BankTransaction"> | string | null
+    matchedSaleId?: StringNullableWithAggregatesFilter<"BankTransaction"> | string | null
+    matchedExpenseId?: StringNullableWithAggregatesFilter<"BankTransaction"> | string | null
+    branchId?: StringNullableWithAggregatesFilter<"BankTransaction"> | string | null
+    notes?: StringNullableWithAggregatesFilter<"BankTransaction"> | string | null
     createdAt?: DateTimeWithAggregatesFilter<"BankTransaction"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"BankTransaction"> | Date | string
   }
@@ -128955,6 +137639,403 @@ export namespace Prisma {
     updatedAt?: DateTimeWithAggregatesFilter<"PayrollRecord"> | Date | string
   }
 
+  export type EmployeeWhereInput = {
+    AND?: EmployeeWhereInput | EmployeeWhereInput[]
+    OR?: EmployeeWhereInput[]
+    NOT?: EmployeeWhereInput | EmployeeWhereInput[]
+    id?: StringFilter<"Employee"> | string
+    code?: StringFilter<"Employee"> | string
+    name?: StringFilter<"Employee"> | string
+    position?: StringNullableFilter<"Employee"> | string | null
+    department?: StringNullableFilter<"Employee"> | string | null
+    baseSalary?: FloatFilter<"Employee"> | number
+    bankAccount?: StringNullableFilter<"Employee"> | string | null
+    bankName?: StringNullableFilter<"Employee"> | string | null
+    taxCode?: StringNullableFilter<"Employee"> | string | null
+    socialInsuranceNo?: StringNullableFilter<"Employee"> | string | null
+    startDate?: StringNullableFilter<"Employee"> | string | null
+    endDate?: StringNullableFilter<"Employee"> | string | null
+    status?: StringFilter<"Employee"> | string
+    dependents?: IntFilter<"Employee"> | number
+    notes?: StringNullableFilter<"Employee"> | string | null
+    branchId?: StringNullableFilter<"Employee"> | string | null
+    createdAt?: DateTimeFilter<"Employee"> | Date | string
+    updatedAt?: DateTimeFilter<"Employee"> | Date | string
+  }
+
+  export type EmployeeOrderByWithRelationInput = {
+    id?: SortOrder
+    code?: SortOrder
+    name?: SortOrder
+    position?: SortOrderInput | SortOrder
+    department?: SortOrderInput | SortOrder
+    baseSalary?: SortOrder
+    bankAccount?: SortOrderInput | SortOrder
+    bankName?: SortOrderInput | SortOrder
+    taxCode?: SortOrderInput | SortOrder
+    socialInsuranceNo?: SortOrderInput | SortOrder
+    startDate?: SortOrderInput | SortOrder
+    endDate?: SortOrderInput | SortOrder
+    status?: SortOrder
+    dependents?: SortOrder
+    notes?: SortOrderInput | SortOrder
+    branchId?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type EmployeeWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: EmployeeWhereInput | EmployeeWhereInput[]
+    OR?: EmployeeWhereInput[]
+    NOT?: EmployeeWhereInput | EmployeeWhereInput[]
+    code?: StringFilter<"Employee"> | string
+    name?: StringFilter<"Employee"> | string
+    position?: StringNullableFilter<"Employee"> | string | null
+    department?: StringNullableFilter<"Employee"> | string | null
+    baseSalary?: FloatFilter<"Employee"> | number
+    bankAccount?: StringNullableFilter<"Employee"> | string | null
+    bankName?: StringNullableFilter<"Employee"> | string | null
+    taxCode?: StringNullableFilter<"Employee"> | string | null
+    socialInsuranceNo?: StringNullableFilter<"Employee"> | string | null
+    startDate?: StringNullableFilter<"Employee"> | string | null
+    endDate?: StringNullableFilter<"Employee"> | string | null
+    status?: StringFilter<"Employee"> | string
+    dependents?: IntFilter<"Employee"> | number
+    notes?: StringNullableFilter<"Employee"> | string | null
+    branchId?: StringNullableFilter<"Employee"> | string | null
+    createdAt?: DateTimeFilter<"Employee"> | Date | string
+    updatedAt?: DateTimeFilter<"Employee"> | Date | string
+  }, "id">
+
+  export type EmployeeOrderByWithAggregationInput = {
+    id?: SortOrder
+    code?: SortOrder
+    name?: SortOrder
+    position?: SortOrderInput | SortOrder
+    department?: SortOrderInput | SortOrder
+    baseSalary?: SortOrder
+    bankAccount?: SortOrderInput | SortOrder
+    bankName?: SortOrderInput | SortOrder
+    taxCode?: SortOrderInput | SortOrder
+    socialInsuranceNo?: SortOrderInput | SortOrder
+    startDate?: SortOrderInput | SortOrder
+    endDate?: SortOrderInput | SortOrder
+    status?: SortOrder
+    dependents?: SortOrder
+    notes?: SortOrderInput | SortOrder
+    branchId?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: EmployeeCountOrderByAggregateInput
+    _avg?: EmployeeAvgOrderByAggregateInput
+    _max?: EmployeeMaxOrderByAggregateInput
+    _min?: EmployeeMinOrderByAggregateInput
+    _sum?: EmployeeSumOrderByAggregateInput
+  }
+
+  export type EmployeeScalarWhereWithAggregatesInput = {
+    AND?: EmployeeScalarWhereWithAggregatesInput | EmployeeScalarWhereWithAggregatesInput[]
+    OR?: EmployeeScalarWhereWithAggregatesInput[]
+    NOT?: EmployeeScalarWhereWithAggregatesInput | EmployeeScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"Employee"> | string
+    code?: StringWithAggregatesFilter<"Employee"> | string
+    name?: StringWithAggregatesFilter<"Employee"> | string
+    position?: StringNullableWithAggregatesFilter<"Employee"> | string | null
+    department?: StringNullableWithAggregatesFilter<"Employee"> | string | null
+    baseSalary?: FloatWithAggregatesFilter<"Employee"> | number
+    bankAccount?: StringNullableWithAggregatesFilter<"Employee"> | string | null
+    bankName?: StringNullableWithAggregatesFilter<"Employee"> | string | null
+    taxCode?: StringNullableWithAggregatesFilter<"Employee"> | string | null
+    socialInsuranceNo?: StringNullableWithAggregatesFilter<"Employee"> | string | null
+    startDate?: StringNullableWithAggregatesFilter<"Employee"> | string | null
+    endDate?: StringNullableWithAggregatesFilter<"Employee"> | string | null
+    status?: StringWithAggregatesFilter<"Employee"> | string
+    dependents?: IntWithAggregatesFilter<"Employee"> | number
+    notes?: StringNullableWithAggregatesFilter<"Employee"> | string | null
+    branchId?: StringNullableWithAggregatesFilter<"Employee"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"Employee"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"Employee"> | Date | string
+  }
+
+  export type PayrollPeriodWhereInput = {
+    AND?: PayrollPeriodWhereInput | PayrollPeriodWhereInput[]
+    OR?: PayrollPeriodWhereInput[]
+    NOT?: PayrollPeriodWhereInput | PayrollPeriodWhereInput[]
+    id?: StringFilter<"PayrollPeriod"> | string
+    month?: IntFilter<"PayrollPeriod"> | number
+    year?: IntFilter<"PayrollPeriod"> | number
+    status?: StringFilter<"PayrollPeriod"> | string
+    totalGross?: FloatFilter<"PayrollPeriod"> | number
+    totalDeductions?: FloatFilter<"PayrollPeriod"> | number
+    totalNet?: FloatFilter<"PayrollPeriod"> | number
+    notes?: StringNullableFilter<"PayrollPeriod"> | string | null
+    branchId?: StringNullableFilter<"PayrollPeriod"> | string | null
+    createdBy?: StringNullableFilter<"PayrollPeriod"> | string | null
+    confirmedAt?: DateTimeNullableFilter<"PayrollPeriod"> | Date | string | null
+    paidAt?: DateTimeNullableFilter<"PayrollPeriod"> | Date | string | null
+    createdAt?: DateTimeFilter<"PayrollPeriod"> | Date | string
+    updatedAt?: DateTimeFilter<"PayrollPeriod"> | Date | string
+  }
+
+  export type PayrollPeriodOrderByWithRelationInput = {
+    id?: SortOrder
+    month?: SortOrder
+    year?: SortOrder
+    status?: SortOrder
+    totalGross?: SortOrder
+    totalDeductions?: SortOrder
+    totalNet?: SortOrder
+    notes?: SortOrderInput | SortOrder
+    branchId?: SortOrderInput | SortOrder
+    createdBy?: SortOrderInput | SortOrder
+    confirmedAt?: SortOrderInput | SortOrder
+    paidAt?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type PayrollPeriodWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: PayrollPeriodWhereInput | PayrollPeriodWhereInput[]
+    OR?: PayrollPeriodWhereInput[]
+    NOT?: PayrollPeriodWhereInput | PayrollPeriodWhereInput[]
+    month?: IntFilter<"PayrollPeriod"> | number
+    year?: IntFilter<"PayrollPeriod"> | number
+    status?: StringFilter<"PayrollPeriod"> | string
+    totalGross?: FloatFilter<"PayrollPeriod"> | number
+    totalDeductions?: FloatFilter<"PayrollPeriod"> | number
+    totalNet?: FloatFilter<"PayrollPeriod"> | number
+    notes?: StringNullableFilter<"PayrollPeriod"> | string | null
+    branchId?: StringNullableFilter<"PayrollPeriod"> | string | null
+    createdBy?: StringNullableFilter<"PayrollPeriod"> | string | null
+    confirmedAt?: DateTimeNullableFilter<"PayrollPeriod"> | Date | string | null
+    paidAt?: DateTimeNullableFilter<"PayrollPeriod"> | Date | string | null
+    createdAt?: DateTimeFilter<"PayrollPeriod"> | Date | string
+    updatedAt?: DateTimeFilter<"PayrollPeriod"> | Date | string
+  }, "id">
+
+  export type PayrollPeriodOrderByWithAggregationInput = {
+    id?: SortOrder
+    month?: SortOrder
+    year?: SortOrder
+    status?: SortOrder
+    totalGross?: SortOrder
+    totalDeductions?: SortOrder
+    totalNet?: SortOrder
+    notes?: SortOrderInput | SortOrder
+    branchId?: SortOrderInput | SortOrder
+    createdBy?: SortOrderInput | SortOrder
+    confirmedAt?: SortOrderInput | SortOrder
+    paidAt?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: PayrollPeriodCountOrderByAggregateInput
+    _avg?: PayrollPeriodAvgOrderByAggregateInput
+    _max?: PayrollPeriodMaxOrderByAggregateInput
+    _min?: PayrollPeriodMinOrderByAggregateInput
+    _sum?: PayrollPeriodSumOrderByAggregateInput
+  }
+
+  export type PayrollPeriodScalarWhereWithAggregatesInput = {
+    AND?: PayrollPeriodScalarWhereWithAggregatesInput | PayrollPeriodScalarWhereWithAggregatesInput[]
+    OR?: PayrollPeriodScalarWhereWithAggregatesInput[]
+    NOT?: PayrollPeriodScalarWhereWithAggregatesInput | PayrollPeriodScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"PayrollPeriod"> | string
+    month?: IntWithAggregatesFilter<"PayrollPeriod"> | number
+    year?: IntWithAggregatesFilter<"PayrollPeriod"> | number
+    status?: StringWithAggregatesFilter<"PayrollPeriod"> | string
+    totalGross?: FloatWithAggregatesFilter<"PayrollPeriod"> | number
+    totalDeductions?: FloatWithAggregatesFilter<"PayrollPeriod"> | number
+    totalNet?: FloatWithAggregatesFilter<"PayrollPeriod"> | number
+    notes?: StringNullableWithAggregatesFilter<"PayrollPeriod"> | string | null
+    branchId?: StringNullableWithAggregatesFilter<"PayrollPeriod"> | string | null
+    createdBy?: StringNullableWithAggregatesFilter<"PayrollPeriod"> | string | null
+    confirmedAt?: DateTimeNullableWithAggregatesFilter<"PayrollPeriod"> | Date | string | null
+    paidAt?: DateTimeNullableWithAggregatesFilter<"PayrollPeriod"> | Date | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"PayrollPeriod"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"PayrollPeriod"> | Date | string
+  }
+
+  export type PayrollEntryWhereInput = {
+    AND?: PayrollEntryWhereInput | PayrollEntryWhereInput[]
+    OR?: PayrollEntryWhereInput[]
+    NOT?: PayrollEntryWhereInput | PayrollEntryWhereInput[]
+    id?: StringFilter<"PayrollEntry"> | string
+    periodId?: StringFilter<"PayrollEntry"> | string
+    employeeId?: StringFilter<"PayrollEntry"> | string
+    employeeCode?: StringNullableFilter<"PayrollEntry"> | string | null
+    employeeName?: StringNullableFilter<"PayrollEntry"> | string | null
+    workDays?: FloatFilter<"PayrollEntry"> | number
+    baseSalary?: FloatFilter<"PayrollEntry"> | number
+    allowances?: FloatFilter<"PayrollEntry"> | number
+    overtimePay?: FloatFilter<"PayrollEntry"> | number
+    grossSalary?: FloatFilter<"PayrollEntry"> | number
+    bhxhEmployee?: FloatFilter<"PayrollEntry"> | number
+    bhytEmployee?: FloatFilter<"PayrollEntry"> | number
+    bhtnEmployee?: FloatFilter<"PayrollEntry"> | number
+    bhxhEmployer?: FloatFilter<"PayrollEntry"> | number
+    bhytEmployer?: FloatFilter<"PayrollEntry"> | number
+    bhtnEmployer?: FloatFilter<"PayrollEntry"> | number
+    totalInsuranceEmployee?: FloatFilter<"PayrollEntry"> | number
+    totalInsuranceEmployer?: FloatFilter<"PayrollEntry"> | number
+    totalInsuranceDeduction?: FloatFilter<"PayrollEntry"> | number
+    taxableIncome?: FloatFilter<"PayrollEntry"> | number
+    personalDeduction?: FloatFilter<"PayrollEntry"> | number
+    dependentDeduction?: FloatFilter<"PayrollEntry"> | number
+    dependents?: IntFilter<"PayrollEntry"> | number
+    assessableIncome?: FloatFilter<"PayrollEntry"> | number
+    pitAmount?: FloatFilter<"PayrollEntry"> | number
+    netSalary?: FloatFilter<"PayrollEntry"> | number
+    bankTransferAmount?: FloatFilter<"PayrollEntry"> | number
+    notes?: StringNullableFilter<"PayrollEntry"> | string | null
+    createdAt?: DateTimeFilter<"PayrollEntry"> | Date | string
+    updatedAt?: DateTimeFilter<"PayrollEntry"> | Date | string
+  }
+
+  export type PayrollEntryOrderByWithRelationInput = {
+    id?: SortOrder
+    periodId?: SortOrder
+    employeeId?: SortOrder
+    employeeCode?: SortOrderInput | SortOrder
+    employeeName?: SortOrderInput | SortOrder
+    workDays?: SortOrder
+    baseSalary?: SortOrder
+    allowances?: SortOrder
+    overtimePay?: SortOrder
+    grossSalary?: SortOrder
+    bhxhEmployee?: SortOrder
+    bhytEmployee?: SortOrder
+    bhtnEmployee?: SortOrder
+    bhxhEmployer?: SortOrder
+    bhytEmployer?: SortOrder
+    bhtnEmployer?: SortOrder
+    totalInsuranceEmployee?: SortOrder
+    totalInsuranceEmployer?: SortOrder
+    totalInsuranceDeduction?: SortOrder
+    taxableIncome?: SortOrder
+    personalDeduction?: SortOrder
+    dependentDeduction?: SortOrder
+    dependents?: SortOrder
+    assessableIncome?: SortOrder
+    pitAmount?: SortOrder
+    netSalary?: SortOrder
+    bankTransferAmount?: SortOrder
+    notes?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type PayrollEntryWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: PayrollEntryWhereInput | PayrollEntryWhereInput[]
+    OR?: PayrollEntryWhereInput[]
+    NOT?: PayrollEntryWhereInput | PayrollEntryWhereInput[]
+    periodId?: StringFilter<"PayrollEntry"> | string
+    employeeId?: StringFilter<"PayrollEntry"> | string
+    employeeCode?: StringNullableFilter<"PayrollEntry"> | string | null
+    employeeName?: StringNullableFilter<"PayrollEntry"> | string | null
+    workDays?: FloatFilter<"PayrollEntry"> | number
+    baseSalary?: FloatFilter<"PayrollEntry"> | number
+    allowances?: FloatFilter<"PayrollEntry"> | number
+    overtimePay?: FloatFilter<"PayrollEntry"> | number
+    grossSalary?: FloatFilter<"PayrollEntry"> | number
+    bhxhEmployee?: FloatFilter<"PayrollEntry"> | number
+    bhytEmployee?: FloatFilter<"PayrollEntry"> | number
+    bhtnEmployee?: FloatFilter<"PayrollEntry"> | number
+    bhxhEmployer?: FloatFilter<"PayrollEntry"> | number
+    bhytEmployer?: FloatFilter<"PayrollEntry"> | number
+    bhtnEmployer?: FloatFilter<"PayrollEntry"> | number
+    totalInsuranceEmployee?: FloatFilter<"PayrollEntry"> | number
+    totalInsuranceEmployer?: FloatFilter<"PayrollEntry"> | number
+    totalInsuranceDeduction?: FloatFilter<"PayrollEntry"> | number
+    taxableIncome?: FloatFilter<"PayrollEntry"> | number
+    personalDeduction?: FloatFilter<"PayrollEntry"> | number
+    dependentDeduction?: FloatFilter<"PayrollEntry"> | number
+    dependents?: IntFilter<"PayrollEntry"> | number
+    assessableIncome?: FloatFilter<"PayrollEntry"> | number
+    pitAmount?: FloatFilter<"PayrollEntry"> | number
+    netSalary?: FloatFilter<"PayrollEntry"> | number
+    bankTransferAmount?: FloatFilter<"PayrollEntry"> | number
+    notes?: StringNullableFilter<"PayrollEntry"> | string | null
+    createdAt?: DateTimeFilter<"PayrollEntry"> | Date | string
+    updatedAt?: DateTimeFilter<"PayrollEntry"> | Date | string
+  }, "id">
+
+  export type PayrollEntryOrderByWithAggregationInput = {
+    id?: SortOrder
+    periodId?: SortOrder
+    employeeId?: SortOrder
+    employeeCode?: SortOrderInput | SortOrder
+    employeeName?: SortOrderInput | SortOrder
+    workDays?: SortOrder
+    baseSalary?: SortOrder
+    allowances?: SortOrder
+    overtimePay?: SortOrder
+    grossSalary?: SortOrder
+    bhxhEmployee?: SortOrder
+    bhytEmployee?: SortOrder
+    bhtnEmployee?: SortOrder
+    bhxhEmployer?: SortOrder
+    bhytEmployer?: SortOrder
+    bhtnEmployer?: SortOrder
+    totalInsuranceEmployee?: SortOrder
+    totalInsuranceEmployer?: SortOrder
+    totalInsuranceDeduction?: SortOrder
+    taxableIncome?: SortOrder
+    personalDeduction?: SortOrder
+    dependentDeduction?: SortOrder
+    dependents?: SortOrder
+    assessableIncome?: SortOrder
+    pitAmount?: SortOrder
+    netSalary?: SortOrder
+    bankTransferAmount?: SortOrder
+    notes?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: PayrollEntryCountOrderByAggregateInput
+    _avg?: PayrollEntryAvgOrderByAggregateInput
+    _max?: PayrollEntryMaxOrderByAggregateInput
+    _min?: PayrollEntryMinOrderByAggregateInput
+    _sum?: PayrollEntrySumOrderByAggregateInput
+  }
+
+  export type PayrollEntryScalarWhereWithAggregatesInput = {
+    AND?: PayrollEntryScalarWhereWithAggregatesInput | PayrollEntryScalarWhereWithAggregatesInput[]
+    OR?: PayrollEntryScalarWhereWithAggregatesInput[]
+    NOT?: PayrollEntryScalarWhereWithAggregatesInput | PayrollEntryScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"PayrollEntry"> | string
+    periodId?: StringWithAggregatesFilter<"PayrollEntry"> | string
+    employeeId?: StringWithAggregatesFilter<"PayrollEntry"> | string
+    employeeCode?: StringNullableWithAggregatesFilter<"PayrollEntry"> | string | null
+    employeeName?: StringNullableWithAggregatesFilter<"PayrollEntry"> | string | null
+    workDays?: FloatWithAggregatesFilter<"PayrollEntry"> | number
+    baseSalary?: FloatWithAggregatesFilter<"PayrollEntry"> | number
+    allowances?: FloatWithAggregatesFilter<"PayrollEntry"> | number
+    overtimePay?: FloatWithAggregatesFilter<"PayrollEntry"> | number
+    grossSalary?: FloatWithAggregatesFilter<"PayrollEntry"> | number
+    bhxhEmployee?: FloatWithAggregatesFilter<"PayrollEntry"> | number
+    bhytEmployee?: FloatWithAggregatesFilter<"PayrollEntry"> | number
+    bhtnEmployee?: FloatWithAggregatesFilter<"PayrollEntry"> | number
+    bhxhEmployer?: FloatWithAggregatesFilter<"PayrollEntry"> | number
+    bhytEmployer?: FloatWithAggregatesFilter<"PayrollEntry"> | number
+    bhtnEmployer?: FloatWithAggregatesFilter<"PayrollEntry"> | number
+    totalInsuranceEmployee?: FloatWithAggregatesFilter<"PayrollEntry"> | number
+    totalInsuranceEmployer?: FloatWithAggregatesFilter<"PayrollEntry"> | number
+    totalInsuranceDeduction?: FloatWithAggregatesFilter<"PayrollEntry"> | number
+    taxableIncome?: FloatWithAggregatesFilter<"PayrollEntry"> | number
+    personalDeduction?: FloatWithAggregatesFilter<"PayrollEntry"> | number
+    dependentDeduction?: FloatWithAggregatesFilter<"PayrollEntry"> | number
+    dependents?: IntWithAggregatesFilter<"PayrollEntry"> | number
+    assessableIncome?: FloatWithAggregatesFilter<"PayrollEntry"> | number
+    pitAmount?: FloatWithAggregatesFilter<"PayrollEntry"> | number
+    netSalary?: FloatWithAggregatesFilter<"PayrollEntry"> | number
+    bankTransferAmount?: FloatWithAggregatesFilter<"PayrollEntry"> | number
+    notes?: StringNullableWithAggregatesFilter<"PayrollEntry"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"PayrollEntry"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"PayrollEntry"> | Date | string
+  }
+
   export type OnlineChannelWhereInput = {
     AND?: OnlineChannelWhereInput | OnlineChannelWhereInput[]
     OR?: OnlineChannelWhereInput[]
@@ -129650,8 +138731,17 @@ export namespace Prisma {
     description?: StringNullableFilter<"FixedAsset"> | string | null
     disposalDate?: StringNullableFilter<"FixedAsset"> | string | null
     status?: StringFilter<"FixedAsset"> | string
+    acquisitionCost?: FloatFilter<"FixedAsset"> | number
+    depreciationMethod?: StringFilter<"FixedAsset"> | string
+    accountCode?: StringFilter<"FixedAsset"> | string
+    depAccAccountCode?: StringFilter<"FixedAsset"> | string
+    expenseAccountCode?: StringFilter<"FixedAsset"> | string
+    disposalAmount?: FloatNullableFilter<"FixedAsset"> | number | null
+    branchId?: StringNullableFilter<"FixedAsset"> | string | null
+    notes?: StringNullableFilter<"FixedAsset"> | string | null
     createdAt?: DateTimeFilter<"FixedAsset"> | Date | string
     updatedAt?: DateTimeFilter<"FixedAsset"> | Date | string
+    depreciationEntries?: DepreciationEntryListRelationFilter
   }
 
   export type FixedAssetOrderByWithRelationInput = {
@@ -129672,8 +138762,17 @@ export namespace Prisma {
     description?: SortOrderInput | SortOrder
     disposalDate?: SortOrderInput | SortOrder
     status?: SortOrder
+    acquisitionCost?: SortOrder
+    depreciationMethod?: SortOrder
+    accountCode?: SortOrder
+    depAccAccountCode?: SortOrder
+    expenseAccountCode?: SortOrder
+    disposalAmount?: SortOrderInput | SortOrder
+    branchId?: SortOrderInput | SortOrder
+    notes?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
+    depreciationEntries?: DepreciationEntryOrderByRelationAggregateInput
   }
 
   export type FixedAssetWhereUniqueInput = Prisma.AtLeast<{
@@ -129697,8 +138796,17 @@ export namespace Prisma {
     description?: StringNullableFilter<"FixedAsset"> | string | null
     disposalDate?: StringNullableFilter<"FixedAsset"> | string | null
     status?: StringFilter<"FixedAsset"> | string
+    acquisitionCost?: FloatFilter<"FixedAsset"> | number
+    depreciationMethod?: StringFilter<"FixedAsset"> | string
+    accountCode?: StringFilter<"FixedAsset"> | string
+    depAccAccountCode?: StringFilter<"FixedAsset"> | string
+    expenseAccountCode?: StringFilter<"FixedAsset"> | string
+    disposalAmount?: FloatNullableFilter<"FixedAsset"> | number | null
+    branchId?: StringNullableFilter<"FixedAsset"> | string | null
+    notes?: StringNullableFilter<"FixedAsset"> | string | null
     createdAt?: DateTimeFilter<"FixedAsset"> | Date | string
     updatedAt?: DateTimeFilter<"FixedAsset"> | Date | string
+    depreciationEntries?: DepreciationEntryListRelationFilter
   }, "id" | "code">
 
   export type FixedAssetOrderByWithAggregationInput = {
@@ -129719,6 +138827,14 @@ export namespace Prisma {
     description?: SortOrderInput | SortOrder
     disposalDate?: SortOrderInput | SortOrder
     status?: SortOrder
+    acquisitionCost?: SortOrder
+    depreciationMethod?: SortOrder
+    accountCode?: SortOrder
+    depAccAccountCode?: SortOrder
+    expenseAccountCode?: SortOrder
+    disposalAmount?: SortOrderInput | SortOrder
+    branchId?: SortOrderInput | SortOrder
+    notes?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     _count?: FixedAssetCountOrderByAggregateInput
@@ -129749,8 +138865,292 @@ export namespace Prisma {
     description?: StringNullableWithAggregatesFilter<"FixedAsset"> | string | null
     disposalDate?: StringNullableWithAggregatesFilter<"FixedAsset"> | string | null
     status?: StringWithAggregatesFilter<"FixedAsset"> | string
+    acquisitionCost?: FloatWithAggregatesFilter<"FixedAsset"> | number
+    depreciationMethod?: StringWithAggregatesFilter<"FixedAsset"> | string
+    accountCode?: StringWithAggregatesFilter<"FixedAsset"> | string
+    depAccAccountCode?: StringWithAggregatesFilter<"FixedAsset"> | string
+    expenseAccountCode?: StringWithAggregatesFilter<"FixedAsset"> | string
+    disposalAmount?: FloatNullableWithAggregatesFilter<"FixedAsset"> | number | null
+    branchId?: StringNullableWithAggregatesFilter<"FixedAsset"> | string | null
+    notes?: StringNullableWithAggregatesFilter<"FixedAsset"> | string | null
     createdAt?: DateTimeWithAggregatesFilter<"FixedAsset"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"FixedAsset"> | Date | string
+  }
+
+  export type DepreciationEntryWhereInput = {
+    AND?: DepreciationEntryWhereInput | DepreciationEntryWhereInput[]
+    OR?: DepreciationEntryWhereInput[]
+    NOT?: DepreciationEntryWhereInput | DepreciationEntryWhereInput[]
+    id?: StringFilter<"DepreciationEntry"> | string
+    assetId?: StringFilter<"DepreciationEntry"> | string
+    month?: IntFilter<"DepreciationEntry"> | number
+    year?: IntFilter<"DepreciationEntry"> | number
+    beginningValue?: FloatFilter<"DepreciationEntry"> | number
+    depreciationAmount?: FloatFilter<"DepreciationEntry"> | number
+    accumulatedDepreciation?: FloatFilter<"DepreciationEntry"> | number
+    endingValue?: FloatFilter<"DepreciationEntry"> | number
+    journalEntryId?: StringNullableFilter<"DepreciationEntry"> | string | null
+    createdAt?: DateTimeFilter<"DepreciationEntry"> | Date | string
+    updatedAt?: DateTimeFilter<"DepreciationEntry"> | Date | string
+    asset?: XOR<FixedAssetScalarRelationFilter, FixedAssetWhereInput>
+  }
+
+  export type DepreciationEntryOrderByWithRelationInput = {
+    id?: SortOrder
+    assetId?: SortOrder
+    month?: SortOrder
+    year?: SortOrder
+    beginningValue?: SortOrder
+    depreciationAmount?: SortOrder
+    accumulatedDepreciation?: SortOrder
+    endingValue?: SortOrder
+    journalEntryId?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    asset?: FixedAssetOrderByWithRelationInput
+  }
+
+  export type DepreciationEntryWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: DepreciationEntryWhereInput | DepreciationEntryWhereInput[]
+    OR?: DepreciationEntryWhereInput[]
+    NOT?: DepreciationEntryWhereInput | DepreciationEntryWhereInput[]
+    assetId?: StringFilter<"DepreciationEntry"> | string
+    month?: IntFilter<"DepreciationEntry"> | number
+    year?: IntFilter<"DepreciationEntry"> | number
+    beginningValue?: FloatFilter<"DepreciationEntry"> | number
+    depreciationAmount?: FloatFilter<"DepreciationEntry"> | number
+    accumulatedDepreciation?: FloatFilter<"DepreciationEntry"> | number
+    endingValue?: FloatFilter<"DepreciationEntry"> | number
+    journalEntryId?: StringNullableFilter<"DepreciationEntry"> | string | null
+    createdAt?: DateTimeFilter<"DepreciationEntry"> | Date | string
+    updatedAt?: DateTimeFilter<"DepreciationEntry"> | Date | string
+    asset?: XOR<FixedAssetScalarRelationFilter, FixedAssetWhereInput>
+  }, "id">
+
+  export type DepreciationEntryOrderByWithAggregationInput = {
+    id?: SortOrder
+    assetId?: SortOrder
+    month?: SortOrder
+    year?: SortOrder
+    beginningValue?: SortOrder
+    depreciationAmount?: SortOrder
+    accumulatedDepreciation?: SortOrder
+    endingValue?: SortOrder
+    journalEntryId?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: DepreciationEntryCountOrderByAggregateInput
+    _avg?: DepreciationEntryAvgOrderByAggregateInput
+    _max?: DepreciationEntryMaxOrderByAggregateInput
+    _min?: DepreciationEntryMinOrderByAggregateInput
+    _sum?: DepreciationEntrySumOrderByAggregateInput
+  }
+
+  export type DepreciationEntryScalarWhereWithAggregatesInput = {
+    AND?: DepreciationEntryScalarWhereWithAggregatesInput | DepreciationEntryScalarWhereWithAggregatesInput[]
+    OR?: DepreciationEntryScalarWhereWithAggregatesInput[]
+    NOT?: DepreciationEntryScalarWhereWithAggregatesInput | DepreciationEntryScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"DepreciationEntry"> | string
+    assetId?: StringWithAggregatesFilter<"DepreciationEntry"> | string
+    month?: IntWithAggregatesFilter<"DepreciationEntry"> | number
+    year?: IntWithAggregatesFilter<"DepreciationEntry"> | number
+    beginningValue?: FloatWithAggregatesFilter<"DepreciationEntry"> | number
+    depreciationAmount?: FloatWithAggregatesFilter<"DepreciationEntry"> | number
+    accumulatedDepreciation?: FloatWithAggregatesFilter<"DepreciationEntry"> | number
+    endingValue?: FloatWithAggregatesFilter<"DepreciationEntry"> | number
+    journalEntryId?: StringNullableWithAggregatesFilter<"DepreciationEntry"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"DepreciationEntry"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"DepreciationEntry"> | Date | string
+  }
+
+  export type CCDCWhereInput = {
+    AND?: CCDCWhereInput | CCDCWhereInput[]
+    OR?: CCDCWhereInput[]
+    NOT?: CCDCWhereInput | CCDCWhereInput[]
+    id?: StringFilter<"CCDC"> | string
+    code?: StringFilter<"CCDC"> | string
+    name?: StringFilter<"CCDC"> | string
+    category?: StringNullableFilter<"CCDC"> | string | null
+    acquisitionDate?: StringNullableFilter<"CCDC"> | string | null
+    totalValue?: FloatFilter<"CCDC"> | number
+    allocationMonths?: IntFilter<"CCDC"> | number
+    monthlyAllocation?: FloatFilter<"CCDC"> | number
+    allocatedAmount?: FloatFilter<"CCDC"> | number
+    remainingAmount?: FloatFilter<"CCDC"> | number
+    accountCode?: StringFilter<"CCDC"> | string
+    expenseAccountCode?: StringFilter<"CCDC"> | string
+    status?: StringFilter<"CCDC"> | string
+    branchId?: StringNullableFilter<"CCDC"> | string | null
+    notes?: StringNullableFilter<"CCDC"> | string | null
+    createdAt?: DateTimeFilter<"CCDC"> | Date | string
+    updatedAt?: DateTimeFilter<"CCDC"> | Date | string
+    allocations?: CCDCAllocationListRelationFilter
+  }
+
+  export type CCDCOrderByWithRelationInput = {
+    id?: SortOrder
+    code?: SortOrder
+    name?: SortOrder
+    category?: SortOrderInput | SortOrder
+    acquisitionDate?: SortOrderInput | SortOrder
+    totalValue?: SortOrder
+    allocationMonths?: SortOrder
+    monthlyAllocation?: SortOrder
+    allocatedAmount?: SortOrder
+    remainingAmount?: SortOrder
+    accountCode?: SortOrder
+    expenseAccountCode?: SortOrder
+    status?: SortOrder
+    branchId?: SortOrderInput | SortOrder
+    notes?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    allocations?: CCDCAllocationOrderByRelationAggregateInput
+  }
+
+  export type CCDCWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    code?: string
+    AND?: CCDCWhereInput | CCDCWhereInput[]
+    OR?: CCDCWhereInput[]
+    NOT?: CCDCWhereInput | CCDCWhereInput[]
+    name?: StringFilter<"CCDC"> | string
+    category?: StringNullableFilter<"CCDC"> | string | null
+    acquisitionDate?: StringNullableFilter<"CCDC"> | string | null
+    totalValue?: FloatFilter<"CCDC"> | number
+    allocationMonths?: IntFilter<"CCDC"> | number
+    monthlyAllocation?: FloatFilter<"CCDC"> | number
+    allocatedAmount?: FloatFilter<"CCDC"> | number
+    remainingAmount?: FloatFilter<"CCDC"> | number
+    accountCode?: StringFilter<"CCDC"> | string
+    expenseAccountCode?: StringFilter<"CCDC"> | string
+    status?: StringFilter<"CCDC"> | string
+    branchId?: StringNullableFilter<"CCDC"> | string | null
+    notes?: StringNullableFilter<"CCDC"> | string | null
+    createdAt?: DateTimeFilter<"CCDC"> | Date | string
+    updatedAt?: DateTimeFilter<"CCDC"> | Date | string
+    allocations?: CCDCAllocationListRelationFilter
+  }, "id" | "code">
+
+  export type CCDCOrderByWithAggregationInput = {
+    id?: SortOrder
+    code?: SortOrder
+    name?: SortOrder
+    category?: SortOrderInput | SortOrder
+    acquisitionDate?: SortOrderInput | SortOrder
+    totalValue?: SortOrder
+    allocationMonths?: SortOrder
+    monthlyAllocation?: SortOrder
+    allocatedAmount?: SortOrder
+    remainingAmount?: SortOrder
+    accountCode?: SortOrder
+    expenseAccountCode?: SortOrder
+    status?: SortOrder
+    branchId?: SortOrderInput | SortOrder
+    notes?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: CCDCCountOrderByAggregateInput
+    _avg?: CCDCAvgOrderByAggregateInput
+    _max?: CCDCMaxOrderByAggregateInput
+    _min?: CCDCMinOrderByAggregateInput
+    _sum?: CCDCSumOrderByAggregateInput
+  }
+
+  export type CCDCScalarWhereWithAggregatesInput = {
+    AND?: CCDCScalarWhereWithAggregatesInput | CCDCScalarWhereWithAggregatesInput[]
+    OR?: CCDCScalarWhereWithAggregatesInput[]
+    NOT?: CCDCScalarWhereWithAggregatesInput | CCDCScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"CCDC"> | string
+    code?: StringWithAggregatesFilter<"CCDC"> | string
+    name?: StringWithAggregatesFilter<"CCDC"> | string
+    category?: StringNullableWithAggregatesFilter<"CCDC"> | string | null
+    acquisitionDate?: StringNullableWithAggregatesFilter<"CCDC"> | string | null
+    totalValue?: FloatWithAggregatesFilter<"CCDC"> | number
+    allocationMonths?: IntWithAggregatesFilter<"CCDC"> | number
+    monthlyAllocation?: FloatWithAggregatesFilter<"CCDC"> | number
+    allocatedAmount?: FloatWithAggregatesFilter<"CCDC"> | number
+    remainingAmount?: FloatWithAggregatesFilter<"CCDC"> | number
+    accountCode?: StringWithAggregatesFilter<"CCDC"> | string
+    expenseAccountCode?: StringWithAggregatesFilter<"CCDC"> | string
+    status?: StringWithAggregatesFilter<"CCDC"> | string
+    branchId?: StringNullableWithAggregatesFilter<"CCDC"> | string | null
+    notes?: StringNullableWithAggregatesFilter<"CCDC"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"CCDC"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"CCDC"> | Date | string
+  }
+
+  export type CCDCAllocationWhereInput = {
+    AND?: CCDCAllocationWhereInput | CCDCAllocationWhereInput[]
+    OR?: CCDCAllocationWhereInput[]
+    NOT?: CCDCAllocationWhereInput | CCDCAllocationWhereInput[]
+    id?: StringFilter<"CCDCAllocation"> | string
+    ccdcId?: StringFilter<"CCDCAllocation"> | string
+    month?: IntFilter<"CCDCAllocation"> | number
+    year?: IntFilter<"CCDCAllocation"> | number
+    amount?: FloatFilter<"CCDCAllocation"> | number
+    journalEntryId?: StringNullableFilter<"CCDCAllocation"> | string | null
+    createdAt?: DateTimeFilter<"CCDCAllocation"> | Date | string
+    updatedAt?: DateTimeFilter<"CCDCAllocation"> | Date | string
+    ccdc?: XOR<CCDCScalarRelationFilter, CCDCWhereInput>
+  }
+
+  export type CCDCAllocationOrderByWithRelationInput = {
+    id?: SortOrder
+    ccdcId?: SortOrder
+    month?: SortOrder
+    year?: SortOrder
+    amount?: SortOrder
+    journalEntryId?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    ccdc?: CCDCOrderByWithRelationInput
+  }
+
+  export type CCDCAllocationWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: CCDCAllocationWhereInput | CCDCAllocationWhereInput[]
+    OR?: CCDCAllocationWhereInput[]
+    NOT?: CCDCAllocationWhereInput | CCDCAllocationWhereInput[]
+    ccdcId?: StringFilter<"CCDCAllocation"> | string
+    month?: IntFilter<"CCDCAllocation"> | number
+    year?: IntFilter<"CCDCAllocation"> | number
+    amount?: FloatFilter<"CCDCAllocation"> | number
+    journalEntryId?: StringNullableFilter<"CCDCAllocation"> | string | null
+    createdAt?: DateTimeFilter<"CCDCAllocation"> | Date | string
+    updatedAt?: DateTimeFilter<"CCDCAllocation"> | Date | string
+    ccdc?: XOR<CCDCScalarRelationFilter, CCDCWhereInput>
+  }, "id">
+
+  export type CCDCAllocationOrderByWithAggregationInput = {
+    id?: SortOrder
+    ccdcId?: SortOrder
+    month?: SortOrder
+    year?: SortOrder
+    amount?: SortOrder
+    journalEntryId?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: CCDCAllocationCountOrderByAggregateInput
+    _avg?: CCDCAllocationAvgOrderByAggregateInput
+    _max?: CCDCAllocationMaxOrderByAggregateInput
+    _min?: CCDCAllocationMinOrderByAggregateInput
+    _sum?: CCDCAllocationSumOrderByAggregateInput
+  }
+
+  export type CCDCAllocationScalarWhereWithAggregatesInput = {
+    AND?: CCDCAllocationScalarWhereWithAggregatesInput | CCDCAllocationScalarWhereWithAggregatesInput[]
+    OR?: CCDCAllocationScalarWhereWithAggregatesInput[]
+    NOT?: CCDCAllocationScalarWhereWithAggregatesInput | CCDCAllocationScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"CCDCAllocation"> | string
+    ccdcId?: StringWithAggregatesFilter<"CCDCAllocation"> | string
+    month?: IntWithAggregatesFilter<"CCDCAllocation"> | number
+    year?: IntWithAggregatesFilter<"CCDCAllocation"> | number
+    amount?: FloatWithAggregatesFilter<"CCDCAllocation"> | number
+    journalEntryId?: StringNullableWithAggregatesFilter<"CCDCAllocation"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"CCDCAllocation"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"CCDCAllocation"> | Date | string
   }
 
   export type EInvoiceConfigWhereInput = {
@@ -136190,6 +145590,11 @@ export namespace Prisma {
     accountName?: string | null
     isDefault?: boolean
     status?: string
+    bankBranch?: string | null
+    currency?: string
+    balance?: number
+    lastSyncAt?: Date | string | null
+    branchId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     transactions?: BankTransactionCreateNestedManyWithoutBankAccountInput
@@ -136202,6 +145607,11 @@ export namespace Prisma {
     accountName?: string | null
     isDefault?: boolean
     status?: string
+    bankBranch?: string | null
+    currency?: string
+    balance?: number
+    lastSyncAt?: Date | string | null
+    branchId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     transactions?: BankTransactionUncheckedCreateNestedManyWithoutBankAccountInput
@@ -136214,6 +145624,11 @@ export namespace Prisma {
     accountName?: NullableStringFieldUpdateOperationsInput | string | null
     isDefault?: BoolFieldUpdateOperationsInput | boolean
     status?: StringFieldUpdateOperationsInput | string
+    bankBranch?: NullableStringFieldUpdateOperationsInput | string | null
+    currency?: StringFieldUpdateOperationsInput | string
+    balance?: FloatFieldUpdateOperationsInput | number
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     transactions?: BankTransactionUpdateManyWithoutBankAccountNestedInput
@@ -136226,6 +145641,11 @@ export namespace Prisma {
     accountName?: NullableStringFieldUpdateOperationsInput | string | null
     isDefault?: BoolFieldUpdateOperationsInput | boolean
     status?: StringFieldUpdateOperationsInput | string
+    bankBranch?: NullableStringFieldUpdateOperationsInput | string | null
+    currency?: StringFieldUpdateOperationsInput | string
+    balance?: FloatFieldUpdateOperationsInput | number
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     transactions?: BankTransactionUncheckedUpdateManyWithoutBankAccountNestedInput
@@ -136238,6 +145658,11 @@ export namespace Prisma {
     accountName?: string | null
     isDefault?: boolean
     status?: string
+    bankBranch?: string | null
+    currency?: string
+    balance?: number
+    lastSyncAt?: Date | string | null
+    branchId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -136249,6 +145674,11 @@ export namespace Prisma {
     accountName?: NullableStringFieldUpdateOperationsInput | string | null
     isDefault?: BoolFieldUpdateOperationsInput | boolean
     status?: StringFieldUpdateOperationsInput | string
+    bankBranch?: NullableStringFieldUpdateOperationsInput | string | null
+    currency?: StringFieldUpdateOperationsInput | string
+    balance?: FloatFieldUpdateOperationsInput | number
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -136260,6 +145690,11 @@ export namespace Prisma {
     accountName?: NullableStringFieldUpdateOperationsInput | string | null
     isDefault?: BoolFieldUpdateOperationsInput | boolean
     status?: StringFieldUpdateOperationsInput | string
+    bankBranch?: NullableStringFieldUpdateOperationsInput | string | null
+    currency?: StringFieldUpdateOperationsInput | string
+    balance?: FloatFieldUpdateOperationsInput | number
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -136271,6 +145706,17 @@ export namespace Prisma {
     description: string
     reference?: string | null
     date?: Date | string
+    transactionDate?: Date | string | null
+    referenceNo?: string | null
+    counterpartyName?: string | null
+    counterpartyAccount?: string | null
+    isReconciled?: boolean
+    reconciledAt?: Date | string | null
+    journalEntryId?: string | null
+    matchedSaleId?: string | null
+    matchedExpenseId?: string | null
+    branchId?: string | null
+    notes?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     bankAccount?: BankAccountCreateNestedOneWithoutTransactionsInput
@@ -136284,6 +145730,17 @@ export namespace Prisma {
     description: string
     reference?: string | null
     date?: Date | string
+    transactionDate?: Date | string | null
+    referenceNo?: string | null
+    counterpartyName?: string | null
+    counterpartyAccount?: string | null
+    isReconciled?: boolean
+    reconciledAt?: Date | string | null
+    journalEntryId?: string | null
+    matchedSaleId?: string | null
+    matchedExpenseId?: string | null
+    branchId?: string | null
+    notes?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -136295,6 +145752,17 @@ export namespace Prisma {
     description?: StringFieldUpdateOperationsInput | string
     reference?: NullableStringFieldUpdateOperationsInput | string | null
     date?: DateTimeFieldUpdateOperationsInput | Date | string
+    transactionDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    referenceNo?: NullableStringFieldUpdateOperationsInput | string | null
+    counterpartyName?: NullableStringFieldUpdateOperationsInput | string | null
+    counterpartyAccount?: NullableStringFieldUpdateOperationsInput | string | null
+    isReconciled?: BoolFieldUpdateOperationsInput | boolean
+    reconciledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    journalEntryId?: NullableStringFieldUpdateOperationsInput | string | null
+    matchedSaleId?: NullableStringFieldUpdateOperationsInput | string | null
+    matchedExpenseId?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     bankAccount?: BankAccountUpdateOneWithoutTransactionsNestedInput
@@ -136308,6 +145776,17 @@ export namespace Prisma {
     description?: StringFieldUpdateOperationsInput | string
     reference?: NullableStringFieldUpdateOperationsInput | string | null
     date?: DateTimeFieldUpdateOperationsInput | Date | string
+    transactionDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    referenceNo?: NullableStringFieldUpdateOperationsInput | string | null
+    counterpartyName?: NullableStringFieldUpdateOperationsInput | string | null
+    counterpartyAccount?: NullableStringFieldUpdateOperationsInput | string | null
+    isReconciled?: BoolFieldUpdateOperationsInput | boolean
+    reconciledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    journalEntryId?: NullableStringFieldUpdateOperationsInput | string | null
+    matchedSaleId?: NullableStringFieldUpdateOperationsInput | string | null
+    matchedExpenseId?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -136320,6 +145799,17 @@ export namespace Prisma {
     description: string
     reference?: string | null
     date?: Date | string
+    transactionDate?: Date | string | null
+    referenceNo?: string | null
+    counterpartyName?: string | null
+    counterpartyAccount?: string | null
+    isReconciled?: boolean
+    reconciledAt?: Date | string | null
+    journalEntryId?: string | null
+    matchedSaleId?: string | null
+    matchedExpenseId?: string | null
+    branchId?: string | null
+    notes?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -136331,6 +145821,17 @@ export namespace Prisma {
     description?: StringFieldUpdateOperationsInput | string
     reference?: NullableStringFieldUpdateOperationsInput | string | null
     date?: DateTimeFieldUpdateOperationsInput | Date | string
+    transactionDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    referenceNo?: NullableStringFieldUpdateOperationsInput | string | null
+    counterpartyName?: NullableStringFieldUpdateOperationsInput | string | null
+    counterpartyAccount?: NullableStringFieldUpdateOperationsInput | string | null
+    isReconciled?: BoolFieldUpdateOperationsInput | boolean
+    reconciledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    journalEntryId?: NullableStringFieldUpdateOperationsInput | string | null
+    matchedSaleId?: NullableStringFieldUpdateOperationsInput | string | null
+    matchedExpenseId?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -136343,6 +145844,17 @@ export namespace Prisma {
     description?: StringFieldUpdateOperationsInput | string
     reference?: NullableStringFieldUpdateOperationsInput | string | null
     date?: DateTimeFieldUpdateOperationsInput | Date | string
+    transactionDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    referenceNo?: NullableStringFieldUpdateOperationsInput | string | null
+    counterpartyName?: NullableStringFieldUpdateOperationsInput | string | null
+    counterpartyAccount?: NullableStringFieldUpdateOperationsInput | string | null
+    isReconciled?: BoolFieldUpdateOperationsInput | boolean
+    reconciledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    journalEntryId?: NullableStringFieldUpdateOperationsInput | string | null
+    matchedSaleId?: NullableStringFieldUpdateOperationsInput | string | null
+    matchedExpenseId?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -139194,6 +148706,503 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type EmployeeCreateInput = {
+    id?: string
+    code: string
+    name: string
+    position?: string | null
+    department?: string | null
+    baseSalary?: number
+    bankAccount?: string | null
+    bankName?: string | null
+    taxCode?: string | null
+    socialInsuranceNo?: string | null
+    startDate?: string | null
+    endDate?: string | null
+    status?: string
+    dependents?: number
+    notes?: string | null
+    branchId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type EmployeeUncheckedCreateInput = {
+    id?: string
+    code: string
+    name: string
+    position?: string | null
+    department?: string | null
+    baseSalary?: number
+    bankAccount?: string | null
+    bankName?: string | null
+    taxCode?: string | null
+    socialInsuranceNo?: string | null
+    startDate?: string | null
+    endDate?: string | null
+    status?: string
+    dependents?: number
+    notes?: string | null
+    branchId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type EmployeeUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    code?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    position?: NullableStringFieldUpdateOperationsInput | string | null
+    department?: NullableStringFieldUpdateOperationsInput | string | null
+    baseSalary?: FloatFieldUpdateOperationsInput | number
+    bankAccount?: NullableStringFieldUpdateOperationsInput | string | null
+    bankName?: NullableStringFieldUpdateOperationsInput | string | null
+    taxCode?: NullableStringFieldUpdateOperationsInput | string | null
+    socialInsuranceNo?: NullableStringFieldUpdateOperationsInput | string | null
+    startDate?: NullableStringFieldUpdateOperationsInput | string | null
+    endDate?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    dependents?: IntFieldUpdateOperationsInput | number
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type EmployeeUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    code?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    position?: NullableStringFieldUpdateOperationsInput | string | null
+    department?: NullableStringFieldUpdateOperationsInput | string | null
+    baseSalary?: FloatFieldUpdateOperationsInput | number
+    bankAccount?: NullableStringFieldUpdateOperationsInput | string | null
+    bankName?: NullableStringFieldUpdateOperationsInput | string | null
+    taxCode?: NullableStringFieldUpdateOperationsInput | string | null
+    socialInsuranceNo?: NullableStringFieldUpdateOperationsInput | string | null
+    startDate?: NullableStringFieldUpdateOperationsInput | string | null
+    endDate?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    dependents?: IntFieldUpdateOperationsInput | number
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type EmployeeCreateManyInput = {
+    id?: string
+    code: string
+    name: string
+    position?: string | null
+    department?: string | null
+    baseSalary?: number
+    bankAccount?: string | null
+    bankName?: string | null
+    taxCode?: string | null
+    socialInsuranceNo?: string | null
+    startDate?: string | null
+    endDate?: string | null
+    status?: string
+    dependents?: number
+    notes?: string | null
+    branchId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type EmployeeUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    code?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    position?: NullableStringFieldUpdateOperationsInput | string | null
+    department?: NullableStringFieldUpdateOperationsInput | string | null
+    baseSalary?: FloatFieldUpdateOperationsInput | number
+    bankAccount?: NullableStringFieldUpdateOperationsInput | string | null
+    bankName?: NullableStringFieldUpdateOperationsInput | string | null
+    taxCode?: NullableStringFieldUpdateOperationsInput | string | null
+    socialInsuranceNo?: NullableStringFieldUpdateOperationsInput | string | null
+    startDate?: NullableStringFieldUpdateOperationsInput | string | null
+    endDate?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    dependents?: IntFieldUpdateOperationsInput | number
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type EmployeeUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    code?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    position?: NullableStringFieldUpdateOperationsInput | string | null
+    department?: NullableStringFieldUpdateOperationsInput | string | null
+    baseSalary?: FloatFieldUpdateOperationsInput | number
+    bankAccount?: NullableStringFieldUpdateOperationsInput | string | null
+    bankName?: NullableStringFieldUpdateOperationsInput | string | null
+    taxCode?: NullableStringFieldUpdateOperationsInput | string | null
+    socialInsuranceNo?: NullableStringFieldUpdateOperationsInput | string | null
+    startDate?: NullableStringFieldUpdateOperationsInput | string | null
+    endDate?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    dependents?: IntFieldUpdateOperationsInput | number
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PayrollPeriodCreateInput = {
+    id?: string
+    month: number
+    year: number
+    status?: string
+    totalGross?: number
+    totalDeductions?: number
+    totalNet?: number
+    notes?: string | null
+    branchId?: string | null
+    createdBy?: string | null
+    confirmedAt?: Date | string | null
+    paidAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type PayrollPeriodUncheckedCreateInput = {
+    id?: string
+    month: number
+    year: number
+    status?: string
+    totalGross?: number
+    totalDeductions?: number
+    totalNet?: number
+    notes?: string | null
+    branchId?: string | null
+    createdBy?: string | null
+    confirmedAt?: Date | string | null
+    paidAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type PayrollPeriodUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    month?: IntFieldUpdateOperationsInput | number
+    year?: IntFieldUpdateOperationsInput | number
+    status?: StringFieldUpdateOperationsInput | string
+    totalGross?: FloatFieldUpdateOperationsInput | number
+    totalDeductions?: FloatFieldUpdateOperationsInput | number
+    totalNet?: FloatFieldUpdateOperationsInput | number
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    confirmedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PayrollPeriodUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    month?: IntFieldUpdateOperationsInput | number
+    year?: IntFieldUpdateOperationsInput | number
+    status?: StringFieldUpdateOperationsInput | string
+    totalGross?: FloatFieldUpdateOperationsInput | number
+    totalDeductions?: FloatFieldUpdateOperationsInput | number
+    totalNet?: FloatFieldUpdateOperationsInput | number
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    confirmedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PayrollPeriodCreateManyInput = {
+    id?: string
+    month: number
+    year: number
+    status?: string
+    totalGross?: number
+    totalDeductions?: number
+    totalNet?: number
+    notes?: string | null
+    branchId?: string | null
+    createdBy?: string | null
+    confirmedAt?: Date | string | null
+    paidAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type PayrollPeriodUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    month?: IntFieldUpdateOperationsInput | number
+    year?: IntFieldUpdateOperationsInput | number
+    status?: StringFieldUpdateOperationsInput | string
+    totalGross?: FloatFieldUpdateOperationsInput | number
+    totalDeductions?: FloatFieldUpdateOperationsInput | number
+    totalNet?: FloatFieldUpdateOperationsInput | number
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    confirmedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PayrollPeriodUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    month?: IntFieldUpdateOperationsInput | number
+    year?: IntFieldUpdateOperationsInput | number
+    status?: StringFieldUpdateOperationsInput | string
+    totalGross?: FloatFieldUpdateOperationsInput | number
+    totalDeductions?: FloatFieldUpdateOperationsInput | number
+    totalNet?: FloatFieldUpdateOperationsInput | number
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    confirmedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PayrollEntryCreateInput = {
+    id?: string
+    periodId: string
+    employeeId: string
+    employeeCode?: string | null
+    employeeName?: string | null
+    workDays?: number
+    baseSalary?: number
+    allowances?: number
+    overtimePay?: number
+    grossSalary?: number
+    bhxhEmployee?: number
+    bhytEmployee?: number
+    bhtnEmployee?: number
+    bhxhEmployer?: number
+    bhytEmployer?: number
+    bhtnEmployer?: number
+    totalInsuranceEmployee?: number
+    totalInsuranceEmployer?: number
+    totalInsuranceDeduction?: number
+    taxableIncome?: number
+    personalDeduction?: number
+    dependentDeduction?: number
+    dependents?: number
+    assessableIncome?: number
+    pitAmount?: number
+    netSalary?: number
+    bankTransferAmount?: number
+    notes?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type PayrollEntryUncheckedCreateInput = {
+    id?: string
+    periodId: string
+    employeeId: string
+    employeeCode?: string | null
+    employeeName?: string | null
+    workDays?: number
+    baseSalary?: number
+    allowances?: number
+    overtimePay?: number
+    grossSalary?: number
+    bhxhEmployee?: number
+    bhytEmployee?: number
+    bhtnEmployee?: number
+    bhxhEmployer?: number
+    bhytEmployer?: number
+    bhtnEmployer?: number
+    totalInsuranceEmployee?: number
+    totalInsuranceEmployer?: number
+    totalInsuranceDeduction?: number
+    taxableIncome?: number
+    personalDeduction?: number
+    dependentDeduction?: number
+    dependents?: number
+    assessableIncome?: number
+    pitAmount?: number
+    netSalary?: number
+    bankTransferAmount?: number
+    notes?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type PayrollEntryUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    periodId?: StringFieldUpdateOperationsInput | string
+    employeeId?: StringFieldUpdateOperationsInput | string
+    employeeCode?: NullableStringFieldUpdateOperationsInput | string | null
+    employeeName?: NullableStringFieldUpdateOperationsInput | string | null
+    workDays?: FloatFieldUpdateOperationsInput | number
+    baseSalary?: FloatFieldUpdateOperationsInput | number
+    allowances?: FloatFieldUpdateOperationsInput | number
+    overtimePay?: FloatFieldUpdateOperationsInput | number
+    grossSalary?: FloatFieldUpdateOperationsInput | number
+    bhxhEmployee?: FloatFieldUpdateOperationsInput | number
+    bhytEmployee?: FloatFieldUpdateOperationsInput | number
+    bhtnEmployee?: FloatFieldUpdateOperationsInput | number
+    bhxhEmployer?: FloatFieldUpdateOperationsInput | number
+    bhytEmployer?: FloatFieldUpdateOperationsInput | number
+    bhtnEmployer?: FloatFieldUpdateOperationsInput | number
+    totalInsuranceEmployee?: FloatFieldUpdateOperationsInput | number
+    totalInsuranceEmployer?: FloatFieldUpdateOperationsInput | number
+    totalInsuranceDeduction?: FloatFieldUpdateOperationsInput | number
+    taxableIncome?: FloatFieldUpdateOperationsInput | number
+    personalDeduction?: FloatFieldUpdateOperationsInput | number
+    dependentDeduction?: FloatFieldUpdateOperationsInput | number
+    dependents?: IntFieldUpdateOperationsInput | number
+    assessableIncome?: FloatFieldUpdateOperationsInput | number
+    pitAmount?: FloatFieldUpdateOperationsInput | number
+    netSalary?: FloatFieldUpdateOperationsInput | number
+    bankTransferAmount?: FloatFieldUpdateOperationsInput | number
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PayrollEntryUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    periodId?: StringFieldUpdateOperationsInput | string
+    employeeId?: StringFieldUpdateOperationsInput | string
+    employeeCode?: NullableStringFieldUpdateOperationsInput | string | null
+    employeeName?: NullableStringFieldUpdateOperationsInput | string | null
+    workDays?: FloatFieldUpdateOperationsInput | number
+    baseSalary?: FloatFieldUpdateOperationsInput | number
+    allowances?: FloatFieldUpdateOperationsInput | number
+    overtimePay?: FloatFieldUpdateOperationsInput | number
+    grossSalary?: FloatFieldUpdateOperationsInput | number
+    bhxhEmployee?: FloatFieldUpdateOperationsInput | number
+    bhytEmployee?: FloatFieldUpdateOperationsInput | number
+    bhtnEmployee?: FloatFieldUpdateOperationsInput | number
+    bhxhEmployer?: FloatFieldUpdateOperationsInput | number
+    bhytEmployer?: FloatFieldUpdateOperationsInput | number
+    bhtnEmployer?: FloatFieldUpdateOperationsInput | number
+    totalInsuranceEmployee?: FloatFieldUpdateOperationsInput | number
+    totalInsuranceEmployer?: FloatFieldUpdateOperationsInput | number
+    totalInsuranceDeduction?: FloatFieldUpdateOperationsInput | number
+    taxableIncome?: FloatFieldUpdateOperationsInput | number
+    personalDeduction?: FloatFieldUpdateOperationsInput | number
+    dependentDeduction?: FloatFieldUpdateOperationsInput | number
+    dependents?: IntFieldUpdateOperationsInput | number
+    assessableIncome?: FloatFieldUpdateOperationsInput | number
+    pitAmount?: FloatFieldUpdateOperationsInput | number
+    netSalary?: FloatFieldUpdateOperationsInput | number
+    bankTransferAmount?: FloatFieldUpdateOperationsInput | number
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PayrollEntryCreateManyInput = {
+    id?: string
+    periodId: string
+    employeeId: string
+    employeeCode?: string | null
+    employeeName?: string | null
+    workDays?: number
+    baseSalary?: number
+    allowances?: number
+    overtimePay?: number
+    grossSalary?: number
+    bhxhEmployee?: number
+    bhytEmployee?: number
+    bhtnEmployee?: number
+    bhxhEmployer?: number
+    bhytEmployer?: number
+    bhtnEmployer?: number
+    totalInsuranceEmployee?: number
+    totalInsuranceEmployer?: number
+    totalInsuranceDeduction?: number
+    taxableIncome?: number
+    personalDeduction?: number
+    dependentDeduction?: number
+    dependents?: number
+    assessableIncome?: number
+    pitAmount?: number
+    netSalary?: number
+    bankTransferAmount?: number
+    notes?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type PayrollEntryUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    periodId?: StringFieldUpdateOperationsInput | string
+    employeeId?: StringFieldUpdateOperationsInput | string
+    employeeCode?: NullableStringFieldUpdateOperationsInput | string | null
+    employeeName?: NullableStringFieldUpdateOperationsInput | string | null
+    workDays?: FloatFieldUpdateOperationsInput | number
+    baseSalary?: FloatFieldUpdateOperationsInput | number
+    allowances?: FloatFieldUpdateOperationsInput | number
+    overtimePay?: FloatFieldUpdateOperationsInput | number
+    grossSalary?: FloatFieldUpdateOperationsInput | number
+    bhxhEmployee?: FloatFieldUpdateOperationsInput | number
+    bhytEmployee?: FloatFieldUpdateOperationsInput | number
+    bhtnEmployee?: FloatFieldUpdateOperationsInput | number
+    bhxhEmployer?: FloatFieldUpdateOperationsInput | number
+    bhytEmployer?: FloatFieldUpdateOperationsInput | number
+    bhtnEmployer?: FloatFieldUpdateOperationsInput | number
+    totalInsuranceEmployee?: FloatFieldUpdateOperationsInput | number
+    totalInsuranceEmployer?: FloatFieldUpdateOperationsInput | number
+    totalInsuranceDeduction?: FloatFieldUpdateOperationsInput | number
+    taxableIncome?: FloatFieldUpdateOperationsInput | number
+    personalDeduction?: FloatFieldUpdateOperationsInput | number
+    dependentDeduction?: FloatFieldUpdateOperationsInput | number
+    dependents?: IntFieldUpdateOperationsInput | number
+    assessableIncome?: FloatFieldUpdateOperationsInput | number
+    pitAmount?: FloatFieldUpdateOperationsInput | number
+    netSalary?: FloatFieldUpdateOperationsInput | number
+    bankTransferAmount?: FloatFieldUpdateOperationsInput | number
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PayrollEntryUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    periodId?: StringFieldUpdateOperationsInput | string
+    employeeId?: StringFieldUpdateOperationsInput | string
+    employeeCode?: NullableStringFieldUpdateOperationsInput | string | null
+    employeeName?: NullableStringFieldUpdateOperationsInput | string | null
+    workDays?: FloatFieldUpdateOperationsInput | number
+    baseSalary?: FloatFieldUpdateOperationsInput | number
+    allowances?: FloatFieldUpdateOperationsInput | number
+    overtimePay?: FloatFieldUpdateOperationsInput | number
+    grossSalary?: FloatFieldUpdateOperationsInput | number
+    bhxhEmployee?: FloatFieldUpdateOperationsInput | number
+    bhytEmployee?: FloatFieldUpdateOperationsInput | number
+    bhtnEmployee?: FloatFieldUpdateOperationsInput | number
+    bhxhEmployer?: FloatFieldUpdateOperationsInput | number
+    bhytEmployer?: FloatFieldUpdateOperationsInput | number
+    bhtnEmployer?: FloatFieldUpdateOperationsInput | number
+    totalInsuranceEmployee?: FloatFieldUpdateOperationsInput | number
+    totalInsuranceEmployer?: FloatFieldUpdateOperationsInput | number
+    totalInsuranceDeduction?: FloatFieldUpdateOperationsInput | number
+    taxableIncome?: FloatFieldUpdateOperationsInput | number
+    personalDeduction?: FloatFieldUpdateOperationsInput | number
+    dependentDeduction?: FloatFieldUpdateOperationsInput | number
+    dependents?: IntFieldUpdateOperationsInput | number
+    assessableIncome?: FloatFieldUpdateOperationsInput | number
+    pitAmount?: FloatFieldUpdateOperationsInput | number
+    netSalary?: FloatFieldUpdateOperationsInput | number
+    bankTransferAmount?: FloatFieldUpdateOperationsInput | number
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type OnlineChannelCreateInput = {
     id?: string
     name: string
@@ -140010,8 +150019,17 @@ export namespace Prisma {
     description?: string | null
     disposalDate?: string | null
     status?: string
+    acquisitionCost?: number
+    depreciationMethod?: string
+    accountCode?: string
+    depAccAccountCode?: string
+    expenseAccountCode?: string
+    disposalAmount?: number | null
+    branchId?: string | null
+    notes?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
+    depreciationEntries?: DepreciationEntryCreateNestedManyWithoutAssetInput
   }
 
   export type FixedAssetUncheckedCreateInput = {
@@ -140032,8 +150050,17 @@ export namespace Prisma {
     description?: string | null
     disposalDate?: string | null
     status?: string
+    acquisitionCost?: number
+    depreciationMethod?: string
+    accountCode?: string
+    depAccAccountCode?: string
+    expenseAccountCode?: string
+    disposalAmount?: number | null
+    branchId?: string | null
+    notes?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
+    depreciationEntries?: DepreciationEntryUncheckedCreateNestedManyWithoutAssetInput
   }
 
   export type FixedAssetUpdateInput = {
@@ -140054,8 +150081,17 @@ export namespace Prisma {
     description?: NullableStringFieldUpdateOperationsInput | string | null
     disposalDate?: NullableStringFieldUpdateOperationsInput | string | null
     status?: StringFieldUpdateOperationsInput | string
+    acquisitionCost?: FloatFieldUpdateOperationsInput | number
+    depreciationMethod?: StringFieldUpdateOperationsInput | string
+    accountCode?: StringFieldUpdateOperationsInput | string
+    depAccAccountCode?: StringFieldUpdateOperationsInput | string
+    expenseAccountCode?: StringFieldUpdateOperationsInput | string
+    disposalAmount?: NullableFloatFieldUpdateOperationsInput | number | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    depreciationEntries?: DepreciationEntryUpdateManyWithoutAssetNestedInput
   }
 
   export type FixedAssetUncheckedUpdateInput = {
@@ -140076,8 +150112,17 @@ export namespace Prisma {
     description?: NullableStringFieldUpdateOperationsInput | string | null
     disposalDate?: NullableStringFieldUpdateOperationsInput | string | null
     status?: StringFieldUpdateOperationsInput | string
+    acquisitionCost?: FloatFieldUpdateOperationsInput | number
+    depreciationMethod?: StringFieldUpdateOperationsInput | string
+    accountCode?: StringFieldUpdateOperationsInput | string
+    depAccAccountCode?: StringFieldUpdateOperationsInput | string
+    expenseAccountCode?: StringFieldUpdateOperationsInput | string
+    disposalAmount?: NullableFloatFieldUpdateOperationsInput | number | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    depreciationEntries?: DepreciationEntryUncheckedUpdateManyWithoutAssetNestedInput
   }
 
   export type FixedAssetCreateManyInput = {
@@ -140098,6 +150143,14 @@ export namespace Prisma {
     description?: string | null
     disposalDate?: string | null
     status?: string
+    acquisitionCost?: number
+    depreciationMethod?: string
+    accountCode?: string
+    depAccAccountCode?: string
+    expenseAccountCode?: string
+    disposalAmount?: number | null
+    branchId?: string | null
+    notes?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -140120,6 +150173,14 @@ export namespace Prisma {
     description?: NullableStringFieldUpdateOperationsInput | string | null
     disposalDate?: NullableStringFieldUpdateOperationsInput | string | null
     status?: StringFieldUpdateOperationsInput | string
+    acquisitionCost?: FloatFieldUpdateOperationsInput | number
+    depreciationMethod?: StringFieldUpdateOperationsInput | string
+    accountCode?: StringFieldUpdateOperationsInput | string
+    depAccAccountCode?: StringFieldUpdateOperationsInput | string
+    expenseAccountCode?: StringFieldUpdateOperationsInput | string
+    disposalAmount?: NullableFloatFieldUpdateOperationsInput | number | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -140142,6 +150203,331 @@ export namespace Prisma {
     description?: NullableStringFieldUpdateOperationsInput | string | null
     disposalDate?: NullableStringFieldUpdateOperationsInput | string | null
     status?: StringFieldUpdateOperationsInput | string
+    acquisitionCost?: FloatFieldUpdateOperationsInput | number
+    depreciationMethod?: StringFieldUpdateOperationsInput | string
+    accountCode?: StringFieldUpdateOperationsInput | string
+    depAccAccountCode?: StringFieldUpdateOperationsInput | string
+    expenseAccountCode?: StringFieldUpdateOperationsInput | string
+    disposalAmount?: NullableFloatFieldUpdateOperationsInput | number | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type DepreciationEntryCreateInput = {
+    id?: string
+    month: number
+    year: number
+    beginningValue?: number
+    depreciationAmount?: number
+    accumulatedDepreciation?: number
+    endingValue?: number
+    journalEntryId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    asset: FixedAssetCreateNestedOneWithoutDepreciationEntriesInput
+  }
+
+  export type DepreciationEntryUncheckedCreateInput = {
+    id?: string
+    assetId: string
+    month: number
+    year: number
+    beginningValue?: number
+    depreciationAmount?: number
+    accumulatedDepreciation?: number
+    endingValue?: number
+    journalEntryId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type DepreciationEntryUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    month?: IntFieldUpdateOperationsInput | number
+    year?: IntFieldUpdateOperationsInput | number
+    beginningValue?: FloatFieldUpdateOperationsInput | number
+    depreciationAmount?: FloatFieldUpdateOperationsInput | number
+    accumulatedDepreciation?: FloatFieldUpdateOperationsInput | number
+    endingValue?: FloatFieldUpdateOperationsInput | number
+    journalEntryId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    asset?: FixedAssetUpdateOneRequiredWithoutDepreciationEntriesNestedInput
+  }
+
+  export type DepreciationEntryUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    assetId?: StringFieldUpdateOperationsInput | string
+    month?: IntFieldUpdateOperationsInput | number
+    year?: IntFieldUpdateOperationsInput | number
+    beginningValue?: FloatFieldUpdateOperationsInput | number
+    depreciationAmount?: FloatFieldUpdateOperationsInput | number
+    accumulatedDepreciation?: FloatFieldUpdateOperationsInput | number
+    endingValue?: FloatFieldUpdateOperationsInput | number
+    journalEntryId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type DepreciationEntryCreateManyInput = {
+    id?: string
+    assetId: string
+    month: number
+    year: number
+    beginningValue?: number
+    depreciationAmount?: number
+    accumulatedDepreciation?: number
+    endingValue?: number
+    journalEntryId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type DepreciationEntryUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    month?: IntFieldUpdateOperationsInput | number
+    year?: IntFieldUpdateOperationsInput | number
+    beginningValue?: FloatFieldUpdateOperationsInput | number
+    depreciationAmount?: FloatFieldUpdateOperationsInput | number
+    accumulatedDepreciation?: FloatFieldUpdateOperationsInput | number
+    endingValue?: FloatFieldUpdateOperationsInput | number
+    journalEntryId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type DepreciationEntryUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    assetId?: StringFieldUpdateOperationsInput | string
+    month?: IntFieldUpdateOperationsInput | number
+    year?: IntFieldUpdateOperationsInput | number
+    beginningValue?: FloatFieldUpdateOperationsInput | number
+    depreciationAmount?: FloatFieldUpdateOperationsInput | number
+    accumulatedDepreciation?: FloatFieldUpdateOperationsInput | number
+    endingValue?: FloatFieldUpdateOperationsInput | number
+    journalEntryId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type CCDCCreateInput = {
+    id?: string
+    code: string
+    name: string
+    category?: string | null
+    acquisitionDate?: string | null
+    totalValue?: number
+    allocationMonths?: number
+    monthlyAllocation?: number
+    allocatedAmount?: number
+    remainingAmount?: number
+    accountCode?: string
+    expenseAccountCode?: string
+    status?: string
+    branchId?: string | null
+    notes?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    allocations?: CCDCAllocationCreateNestedManyWithoutCcdcInput
+  }
+
+  export type CCDCUncheckedCreateInput = {
+    id?: string
+    code: string
+    name: string
+    category?: string | null
+    acquisitionDate?: string | null
+    totalValue?: number
+    allocationMonths?: number
+    monthlyAllocation?: number
+    allocatedAmount?: number
+    remainingAmount?: number
+    accountCode?: string
+    expenseAccountCode?: string
+    status?: string
+    branchId?: string | null
+    notes?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    allocations?: CCDCAllocationUncheckedCreateNestedManyWithoutCcdcInput
+  }
+
+  export type CCDCUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    code?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    category?: NullableStringFieldUpdateOperationsInput | string | null
+    acquisitionDate?: NullableStringFieldUpdateOperationsInput | string | null
+    totalValue?: FloatFieldUpdateOperationsInput | number
+    allocationMonths?: IntFieldUpdateOperationsInput | number
+    monthlyAllocation?: FloatFieldUpdateOperationsInput | number
+    allocatedAmount?: FloatFieldUpdateOperationsInput | number
+    remainingAmount?: FloatFieldUpdateOperationsInput | number
+    accountCode?: StringFieldUpdateOperationsInput | string
+    expenseAccountCode?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    allocations?: CCDCAllocationUpdateManyWithoutCcdcNestedInput
+  }
+
+  export type CCDCUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    code?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    category?: NullableStringFieldUpdateOperationsInput | string | null
+    acquisitionDate?: NullableStringFieldUpdateOperationsInput | string | null
+    totalValue?: FloatFieldUpdateOperationsInput | number
+    allocationMonths?: IntFieldUpdateOperationsInput | number
+    monthlyAllocation?: FloatFieldUpdateOperationsInput | number
+    allocatedAmount?: FloatFieldUpdateOperationsInput | number
+    remainingAmount?: FloatFieldUpdateOperationsInput | number
+    accountCode?: StringFieldUpdateOperationsInput | string
+    expenseAccountCode?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    allocations?: CCDCAllocationUncheckedUpdateManyWithoutCcdcNestedInput
+  }
+
+  export type CCDCCreateManyInput = {
+    id?: string
+    code: string
+    name: string
+    category?: string | null
+    acquisitionDate?: string | null
+    totalValue?: number
+    allocationMonths?: number
+    monthlyAllocation?: number
+    allocatedAmount?: number
+    remainingAmount?: number
+    accountCode?: string
+    expenseAccountCode?: string
+    status?: string
+    branchId?: string | null
+    notes?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type CCDCUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    code?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    category?: NullableStringFieldUpdateOperationsInput | string | null
+    acquisitionDate?: NullableStringFieldUpdateOperationsInput | string | null
+    totalValue?: FloatFieldUpdateOperationsInput | number
+    allocationMonths?: IntFieldUpdateOperationsInput | number
+    monthlyAllocation?: FloatFieldUpdateOperationsInput | number
+    allocatedAmount?: FloatFieldUpdateOperationsInput | number
+    remainingAmount?: FloatFieldUpdateOperationsInput | number
+    accountCode?: StringFieldUpdateOperationsInput | string
+    expenseAccountCode?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type CCDCUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    code?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    category?: NullableStringFieldUpdateOperationsInput | string | null
+    acquisitionDate?: NullableStringFieldUpdateOperationsInput | string | null
+    totalValue?: FloatFieldUpdateOperationsInput | number
+    allocationMonths?: IntFieldUpdateOperationsInput | number
+    monthlyAllocation?: FloatFieldUpdateOperationsInput | number
+    allocatedAmount?: FloatFieldUpdateOperationsInput | number
+    remainingAmount?: FloatFieldUpdateOperationsInput | number
+    accountCode?: StringFieldUpdateOperationsInput | string
+    expenseAccountCode?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type CCDCAllocationCreateInput = {
+    id?: string
+    month: number
+    year: number
+    amount?: number
+    journalEntryId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    ccdc: CCDCCreateNestedOneWithoutAllocationsInput
+  }
+
+  export type CCDCAllocationUncheckedCreateInput = {
+    id?: string
+    ccdcId: string
+    month: number
+    year: number
+    amount?: number
+    journalEntryId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type CCDCAllocationUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    month?: IntFieldUpdateOperationsInput | number
+    year?: IntFieldUpdateOperationsInput | number
+    amount?: FloatFieldUpdateOperationsInput | number
+    journalEntryId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    ccdc?: CCDCUpdateOneRequiredWithoutAllocationsNestedInput
+  }
+
+  export type CCDCAllocationUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    ccdcId?: StringFieldUpdateOperationsInput | string
+    month?: IntFieldUpdateOperationsInput | number
+    year?: IntFieldUpdateOperationsInput | number
+    amount?: FloatFieldUpdateOperationsInput | number
+    journalEntryId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type CCDCAllocationCreateManyInput = {
+    id?: string
+    ccdcId: string
+    month: number
+    year: number
+    amount?: number
+    journalEntryId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type CCDCAllocationUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    month?: IntFieldUpdateOperationsInput | number
+    year?: IntFieldUpdateOperationsInput | number
+    amount?: FloatFieldUpdateOperationsInput | number
+    journalEntryId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type CCDCAllocationUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    ccdcId?: StringFieldUpdateOperationsInput | string
+    month?: IntFieldUpdateOperationsInput | number
+    year?: IntFieldUpdateOperationsInput | number
+    amount?: FloatFieldUpdateOperationsInput | number
+    journalEntryId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -145549,8 +155935,17 @@ export namespace Prisma {
     accountName?: SortOrder
     isDefault?: SortOrder
     status?: SortOrder
+    bankBranch?: SortOrder
+    currency?: SortOrder
+    balance?: SortOrder
+    lastSyncAt?: SortOrder
+    branchId?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
+  }
+
+  export type BankAccountAvgOrderByAggregateInput = {
+    balance?: SortOrder
   }
 
   export type BankAccountMaxOrderByAggregateInput = {
@@ -145560,6 +155955,11 @@ export namespace Prisma {
     accountName?: SortOrder
     isDefault?: SortOrder
     status?: SortOrder
+    bankBranch?: SortOrder
+    currency?: SortOrder
+    balance?: SortOrder
+    lastSyncAt?: SortOrder
+    branchId?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -145571,8 +155971,17 @@ export namespace Prisma {
     accountName?: SortOrder
     isDefault?: SortOrder
     status?: SortOrder
+    bankBranch?: SortOrder
+    currency?: SortOrder
+    balance?: SortOrder
+    lastSyncAt?: SortOrder
+    branchId?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
+  }
+
+  export type BankAccountSumOrderByAggregateInput = {
+    balance?: SortOrder
   }
 
   export type BankAccountNullableScalarRelationFilter = {
@@ -145588,6 +155997,17 @@ export namespace Prisma {
     description?: SortOrder
     reference?: SortOrder
     date?: SortOrder
+    transactionDate?: SortOrder
+    referenceNo?: SortOrder
+    counterpartyName?: SortOrder
+    counterpartyAccount?: SortOrder
+    isReconciled?: SortOrder
+    reconciledAt?: SortOrder
+    journalEntryId?: SortOrder
+    matchedSaleId?: SortOrder
+    matchedExpenseId?: SortOrder
+    branchId?: SortOrder
+    notes?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -145604,6 +156024,17 @@ export namespace Prisma {
     description?: SortOrder
     reference?: SortOrder
     date?: SortOrder
+    transactionDate?: SortOrder
+    referenceNo?: SortOrder
+    counterpartyName?: SortOrder
+    counterpartyAccount?: SortOrder
+    isReconciled?: SortOrder
+    reconciledAt?: SortOrder
+    journalEntryId?: SortOrder
+    matchedSaleId?: SortOrder
+    matchedExpenseId?: SortOrder
+    branchId?: SortOrder
+    notes?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -145616,6 +156047,17 @@ export namespace Prisma {
     description?: SortOrder
     reference?: SortOrder
     date?: SortOrder
+    transactionDate?: SortOrder
+    referenceNo?: SortOrder
+    counterpartyName?: SortOrder
+    counterpartyAccount?: SortOrder
+    isReconciled?: SortOrder
+    reconciledAt?: SortOrder
+    journalEntryId?: SortOrder
+    matchedSaleId?: SortOrder
+    matchedExpenseId?: SortOrder
+    branchId?: SortOrder
+    notes?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -147182,6 +157624,295 @@ export namespace Prisma {
     dependents?: SortOrder
   }
 
+  export type EmployeeCountOrderByAggregateInput = {
+    id?: SortOrder
+    code?: SortOrder
+    name?: SortOrder
+    position?: SortOrder
+    department?: SortOrder
+    baseSalary?: SortOrder
+    bankAccount?: SortOrder
+    bankName?: SortOrder
+    taxCode?: SortOrder
+    socialInsuranceNo?: SortOrder
+    startDate?: SortOrder
+    endDate?: SortOrder
+    status?: SortOrder
+    dependents?: SortOrder
+    notes?: SortOrder
+    branchId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type EmployeeAvgOrderByAggregateInput = {
+    baseSalary?: SortOrder
+    dependents?: SortOrder
+  }
+
+  export type EmployeeMaxOrderByAggregateInput = {
+    id?: SortOrder
+    code?: SortOrder
+    name?: SortOrder
+    position?: SortOrder
+    department?: SortOrder
+    baseSalary?: SortOrder
+    bankAccount?: SortOrder
+    bankName?: SortOrder
+    taxCode?: SortOrder
+    socialInsuranceNo?: SortOrder
+    startDate?: SortOrder
+    endDate?: SortOrder
+    status?: SortOrder
+    dependents?: SortOrder
+    notes?: SortOrder
+    branchId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type EmployeeMinOrderByAggregateInput = {
+    id?: SortOrder
+    code?: SortOrder
+    name?: SortOrder
+    position?: SortOrder
+    department?: SortOrder
+    baseSalary?: SortOrder
+    bankAccount?: SortOrder
+    bankName?: SortOrder
+    taxCode?: SortOrder
+    socialInsuranceNo?: SortOrder
+    startDate?: SortOrder
+    endDate?: SortOrder
+    status?: SortOrder
+    dependents?: SortOrder
+    notes?: SortOrder
+    branchId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type EmployeeSumOrderByAggregateInput = {
+    baseSalary?: SortOrder
+    dependents?: SortOrder
+  }
+
+  export type PayrollPeriodCountOrderByAggregateInput = {
+    id?: SortOrder
+    month?: SortOrder
+    year?: SortOrder
+    status?: SortOrder
+    totalGross?: SortOrder
+    totalDeductions?: SortOrder
+    totalNet?: SortOrder
+    notes?: SortOrder
+    branchId?: SortOrder
+    createdBy?: SortOrder
+    confirmedAt?: SortOrder
+    paidAt?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type PayrollPeriodAvgOrderByAggregateInput = {
+    month?: SortOrder
+    year?: SortOrder
+    totalGross?: SortOrder
+    totalDeductions?: SortOrder
+    totalNet?: SortOrder
+  }
+
+  export type PayrollPeriodMaxOrderByAggregateInput = {
+    id?: SortOrder
+    month?: SortOrder
+    year?: SortOrder
+    status?: SortOrder
+    totalGross?: SortOrder
+    totalDeductions?: SortOrder
+    totalNet?: SortOrder
+    notes?: SortOrder
+    branchId?: SortOrder
+    createdBy?: SortOrder
+    confirmedAt?: SortOrder
+    paidAt?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type PayrollPeriodMinOrderByAggregateInput = {
+    id?: SortOrder
+    month?: SortOrder
+    year?: SortOrder
+    status?: SortOrder
+    totalGross?: SortOrder
+    totalDeductions?: SortOrder
+    totalNet?: SortOrder
+    notes?: SortOrder
+    branchId?: SortOrder
+    createdBy?: SortOrder
+    confirmedAt?: SortOrder
+    paidAt?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type PayrollPeriodSumOrderByAggregateInput = {
+    month?: SortOrder
+    year?: SortOrder
+    totalGross?: SortOrder
+    totalDeductions?: SortOrder
+    totalNet?: SortOrder
+  }
+
+  export type PayrollEntryCountOrderByAggregateInput = {
+    id?: SortOrder
+    periodId?: SortOrder
+    employeeId?: SortOrder
+    employeeCode?: SortOrder
+    employeeName?: SortOrder
+    workDays?: SortOrder
+    baseSalary?: SortOrder
+    allowances?: SortOrder
+    overtimePay?: SortOrder
+    grossSalary?: SortOrder
+    bhxhEmployee?: SortOrder
+    bhytEmployee?: SortOrder
+    bhtnEmployee?: SortOrder
+    bhxhEmployer?: SortOrder
+    bhytEmployer?: SortOrder
+    bhtnEmployer?: SortOrder
+    totalInsuranceEmployee?: SortOrder
+    totalInsuranceEmployer?: SortOrder
+    totalInsuranceDeduction?: SortOrder
+    taxableIncome?: SortOrder
+    personalDeduction?: SortOrder
+    dependentDeduction?: SortOrder
+    dependents?: SortOrder
+    assessableIncome?: SortOrder
+    pitAmount?: SortOrder
+    netSalary?: SortOrder
+    bankTransferAmount?: SortOrder
+    notes?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type PayrollEntryAvgOrderByAggregateInput = {
+    workDays?: SortOrder
+    baseSalary?: SortOrder
+    allowances?: SortOrder
+    overtimePay?: SortOrder
+    grossSalary?: SortOrder
+    bhxhEmployee?: SortOrder
+    bhytEmployee?: SortOrder
+    bhtnEmployee?: SortOrder
+    bhxhEmployer?: SortOrder
+    bhytEmployer?: SortOrder
+    bhtnEmployer?: SortOrder
+    totalInsuranceEmployee?: SortOrder
+    totalInsuranceEmployer?: SortOrder
+    totalInsuranceDeduction?: SortOrder
+    taxableIncome?: SortOrder
+    personalDeduction?: SortOrder
+    dependentDeduction?: SortOrder
+    dependents?: SortOrder
+    assessableIncome?: SortOrder
+    pitAmount?: SortOrder
+    netSalary?: SortOrder
+    bankTransferAmount?: SortOrder
+  }
+
+  export type PayrollEntryMaxOrderByAggregateInput = {
+    id?: SortOrder
+    periodId?: SortOrder
+    employeeId?: SortOrder
+    employeeCode?: SortOrder
+    employeeName?: SortOrder
+    workDays?: SortOrder
+    baseSalary?: SortOrder
+    allowances?: SortOrder
+    overtimePay?: SortOrder
+    grossSalary?: SortOrder
+    bhxhEmployee?: SortOrder
+    bhytEmployee?: SortOrder
+    bhtnEmployee?: SortOrder
+    bhxhEmployer?: SortOrder
+    bhytEmployer?: SortOrder
+    bhtnEmployer?: SortOrder
+    totalInsuranceEmployee?: SortOrder
+    totalInsuranceEmployer?: SortOrder
+    totalInsuranceDeduction?: SortOrder
+    taxableIncome?: SortOrder
+    personalDeduction?: SortOrder
+    dependentDeduction?: SortOrder
+    dependents?: SortOrder
+    assessableIncome?: SortOrder
+    pitAmount?: SortOrder
+    netSalary?: SortOrder
+    bankTransferAmount?: SortOrder
+    notes?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type PayrollEntryMinOrderByAggregateInput = {
+    id?: SortOrder
+    periodId?: SortOrder
+    employeeId?: SortOrder
+    employeeCode?: SortOrder
+    employeeName?: SortOrder
+    workDays?: SortOrder
+    baseSalary?: SortOrder
+    allowances?: SortOrder
+    overtimePay?: SortOrder
+    grossSalary?: SortOrder
+    bhxhEmployee?: SortOrder
+    bhytEmployee?: SortOrder
+    bhtnEmployee?: SortOrder
+    bhxhEmployer?: SortOrder
+    bhytEmployer?: SortOrder
+    bhtnEmployer?: SortOrder
+    totalInsuranceEmployee?: SortOrder
+    totalInsuranceEmployer?: SortOrder
+    totalInsuranceDeduction?: SortOrder
+    taxableIncome?: SortOrder
+    personalDeduction?: SortOrder
+    dependentDeduction?: SortOrder
+    dependents?: SortOrder
+    assessableIncome?: SortOrder
+    pitAmount?: SortOrder
+    netSalary?: SortOrder
+    bankTransferAmount?: SortOrder
+    notes?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type PayrollEntrySumOrderByAggregateInput = {
+    workDays?: SortOrder
+    baseSalary?: SortOrder
+    allowances?: SortOrder
+    overtimePay?: SortOrder
+    grossSalary?: SortOrder
+    bhxhEmployee?: SortOrder
+    bhytEmployee?: SortOrder
+    bhtnEmployee?: SortOrder
+    bhxhEmployer?: SortOrder
+    bhytEmployer?: SortOrder
+    bhtnEmployer?: SortOrder
+    totalInsuranceEmployee?: SortOrder
+    totalInsuranceEmployer?: SortOrder
+    totalInsuranceDeduction?: SortOrder
+    taxableIncome?: SortOrder
+    personalDeduction?: SortOrder
+    dependentDeduction?: SortOrder
+    dependents?: SortOrder
+    assessableIncome?: SortOrder
+    pitAmount?: SortOrder
+    netSalary?: SortOrder
+    bankTransferAmount?: SortOrder
+  }
+
   export type OnlineOrderListRelationFilter = {
     every?: OnlineOrderWhereInput
     some?: OnlineOrderWhereInput
@@ -147628,6 +158359,16 @@ export namespace Prisma {
     amount?: SortOrder
   }
 
+  export type DepreciationEntryListRelationFilter = {
+    every?: DepreciationEntryWhereInput
+    some?: DepreciationEntryWhereInput
+    none?: DepreciationEntryWhereInput
+  }
+
+  export type DepreciationEntryOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
   export type FixedAssetCountOrderByAggregateInput = {
     id?: SortOrder
     code?: SortOrder
@@ -147646,6 +158387,14 @@ export namespace Prisma {
     description?: SortOrder
     disposalDate?: SortOrder
     status?: SortOrder
+    acquisitionCost?: SortOrder
+    depreciationMethod?: SortOrder
+    accountCode?: SortOrder
+    depAccAccountCode?: SortOrder
+    expenseAccountCode?: SortOrder
+    disposalAmount?: SortOrder
+    branchId?: SortOrder
+    notes?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -147657,6 +158406,8 @@ export namespace Prisma {
     netBookValue?: SortOrder
     monthlyDepreciation?: SortOrder
     residualValue?: SortOrder
+    acquisitionCost?: SortOrder
+    disposalAmount?: SortOrder
   }
 
   export type FixedAssetMaxOrderByAggregateInput = {
@@ -147677,6 +158428,14 @@ export namespace Prisma {
     description?: SortOrder
     disposalDate?: SortOrder
     status?: SortOrder
+    acquisitionCost?: SortOrder
+    depreciationMethod?: SortOrder
+    accountCode?: SortOrder
+    depAccAccountCode?: SortOrder
+    expenseAccountCode?: SortOrder
+    disposalAmount?: SortOrder
+    branchId?: SortOrder
+    notes?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -147699,6 +158458,14 @@ export namespace Prisma {
     description?: SortOrder
     disposalDate?: SortOrder
     status?: SortOrder
+    acquisitionCost?: SortOrder
+    depreciationMethod?: SortOrder
+    accountCode?: SortOrder
+    depAccAccountCode?: SortOrder
+    expenseAccountCode?: SortOrder
+    disposalAmount?: SortOrder
+    branchId?: SortOrder
+    notes?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -147710,6 +158477,209 @@ export namespace Prisma {
     netBookValue?: SortOrder
     monthlyDepreciation?: SortOrder
     residualValue?: SortOrder
+    acquisitionCost?: SortOrder
+    disposalAmount?: SortOrder
+  }
+
+  export type FixedAssetScalarRelationFilter = {
+    is?: FixedAssetWhereInput
+    isNot?: FixedAssetWhereInput
+  }
+
+  export type DepreciationEntryCountOrderByAggregateInput = {
+    id?: SortOrder
+    assetId?: SortOrder
+    month?: SortOrder
+    year?: SortOrder
+    beginningValue?: SortOrder
+    depreciationAmount?: SortOrder
+    accumulatedDepreciation?: SortOrder
+    endingValue?: SortOrder
+    journalEntryId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type DepreciationEntryAvgOrderByAggregateInput = {
+    month?: SortOrder
+    year?: SortOrder
+    beginningValue?: SortOrder
+    depreciationAmount?: SortOrder
+    accumulatedDepreciation?: SortOrder
+    endingValue?: SortOrder
+  }
+
+  export type DepreciationEntryMaxOrderByAggregateInput = {
+    id?: SortOrder
+    assetId?: SortOrder
+    month?: SortOrder
+    year?: SortOrder
+    beginningValue?: SortOrder
+    depreciationAmount?: SortOrder
+    accumulatedDepreciation?: SortOrder
+    endingValue?: SortOrder
+    journalEntryId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type DepreciationEntryMinOrderByAggregateInput = {
+    id?: SortOrder
+    assetId?: SortOrder
+    month?: SortOrder
+    year?: SortOrder
+    beginningValue?: SortOrder
+    depreciationAmount?: SortOrder
+    accumulatedDepreciation?: SortOrder
+    endingValue?: SortOrder
+    journalEntryId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type DepreciationEntrySumOrderByAggregateInput = {
+    month?: SortOrder
+    year?: SortOrder
+    beginningValue?: SortOrder
+    depreciationAmount?: SortOrder
+    accumulatedDepreciation?: SortOrder
+    endingValue?: SortOrder
+  }
+
+  export type CCDCAllocationListRelationFilter = {
+    every?: CCDCAllocationWhereInput
+    some?: CCDCAllocationWhereInput
+    none?: CCDCAllocationWhereInput
+  }
+
+  export type CCDCAllocationOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type CCDCCountOrderByAggregateInput = {
+    id?: SortOrder
+    code?: SortOrder
+    name?: SortOrder
+    category?: SortOrder
+    acquisitionDate?: SortOrder
+    totalValue?: SortOrder
+    allocationMonths?: SortOrder
+    monthlyAllocation?: SortOrder
+    allocatedAmount?: SortOrder
+    remainingAmount?: SortOrder
+    accountCode?: SortOrder
+    expenseAccountCode?: SortOrder
+    status?: SortOrder
+    branchId?: SortOrder
+    notes?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type CCDCAvgOrderByAggregateInput = {
+    totalValue?: SortOrder
+    allocationMonths?: SortOrder
+    monthlyAllocation?: SortOrder
+    allocatedAmount?: SortOrder
+    remainingAmount?: SortOrder
+  }
+
+  export type CCDCMaxOrderByAggregateInput = {
+    id?: SortOrder
+    code?: SortOrder
+    name?: SortOrder
+    category?: SortOrder
+    acquisitionDate?: SortOrder
+    totalValue?: SortOrder
+    allocationMonths?: SortOrder
+    monthlyAllocation?: SortOrder
+    allocatedAmount?: SortOrder
+    remainingAmount?: SortOrder
+    accountCode?: SortOrder
+    expenseAccountCode?: SortOrder
+    status?: SortOrder
+    branchId?: SortOrder
+    notes?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type CCDCMinOrderByAggregateInput = {
+    id?: SortOrder
+    code?: SortOrder
+    name?: SortOrder
+    category?: SortOrder
+    acquisitionDate?: SortOrder
+    totalValue?: SortOrder
+    allocationMonths?: SortOrder
+    monthlyAllocation?: SortOrder
+    allocatedAmount?: SortOrder
+    remainingAmount?: SortOrder
+    accountCode?: SortOrder
+    expenseAccountCode?: SortOrder
+    status?: SortOrder
+    branchId?: SortOrder
+    notes?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type CCDCSumOrderByAggregateInput = {
+    totalValue?: SortOrder
+    allocationMonths?: SortOrder
+    monthlyAllocation?: SortOrder
+    allocatedAmount?: SortOrder
+    remainingAmount?: SortOrder
+  }
+
+  export type CCDCScalarRelationFilter = {
+    is?: CCDCWhereInput
+    isNot?: CCDCWhereInput
+  }
+
+  export type CCDCAllocationCountOrderByAggregateInput = {
+    id?: SortOrder
+    ccdcId?: SortOrder
+    month?: SortOrder
+    year?: SortOrder
+    amount?: SortOrder
+    journalEntryId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type CCDCAllocationAvgOrderByAggregateInput = {
+    month?: SortOrder
+    year?: SortOrder
+    amount?: SortOrder
+  }
+
+  export type CCDCAllocationMaxOrderByAggregateInput = {
+    id?: SortOrder
+    ccdcId?: SortOrder
+    month?: SortOrder
+    year?: SortOrder
+    amount?: SortOrder
+    journalEntryId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type CCDCAllocationMinOrderByAggregateInput = {
+    id?: SortOrder
+    ccdcId?: SortOrder
+    month?: SortOrder
+    year?: SortOrder
+    amount?: SortOrder
+    journalEntryId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type CCDCAllocationSumOrderByAggregateInput = {
+    month?: SortOrder
+    year?: SortOrder
+    amount?: SortOrder
   }
 
   export type EInvoiceConfigCountOrderByAggregateInput = {
@@ -151613,6 +162583,118 @@ export namespace Prisma {
     delete?: ProductWhereInput | boolean
     connect?: ProductWhereUniqueInput
     update?: XOR<XOR<ProductUpdateToOneWithWhereWithoutOnlineOrderItemsInput, ProductUpdateWithoutOnlineOrderItemsInput>, ProductUncheckedUpdateWithoutOnlineOrderItemsInput>
+  }
+
+  export type DepreciationEntryCreateNestedManyWithoutAssetInput = {
+    create?: XOR<DepreciationEntryCreateWithoutAssetInput, DepreciationEntryUncheckedCreateWithoutAssetInput> | DepreciationEntryCreateWithoutAssetInput[] | DepreciationEntryUncheckedCreateWithoutAssetInput[]
+    connectOrCreate?: DepreciationEntryCreateOrConnectWithoutAssetInput | DepreciationEntryCreateOrConnectWithoutAssetInput[]
+    createMany?: DepreciationEntryCreateManyAssetInputEnvelope
+    connect?: DepreciationEntryWhereUniqueInput | DepreciationEntryWhereUniqueInput[]
+  }
+
+  export type DepreciationEntryUncheckedCreateNestedManyWithoutAssetInput = {
+    create?: XOR<DepreciationEntryCreateWithoutAssetInput, DepreciationEntryUncheckedCreateWithoutAssetInput> | DepreciationEntryCreateWithoutAssetInput[] | DepreciationEntryUncheckedCreateWithoutAssetInput[]
+    connectOrCreate?: DepreciationEntryCreateOrConnectWithoutAssetInput | DepreciationEntryCreateOrConnectWithoutAssetInput[]
+    createMany?: DepreciationEntryCreateManyAssetInputEnvelope
+    connect?: DepreciationEntryWhereUniqueInput | DepreciationEntryWhereUniqueInput[]
+  }
+
+  export type DepreciationEntryUpdateManyWithoutAssetNestedInput = {
+    create?: XOR<DepreciationEntryCreateWithoutAssetInput, DepreciationEntryUncheckedCreateWithoutAssetInput> | DepreciationEntryCreateWithoutAssetInput[] | DepreciationEntryUncheckedCreateWithoutAssetInput[]
+    connectOrCreate?: DepreciationEntryCreateOrConnectWithoutAssetInput | DepreciationEntryCreateOrConnectWithoutAssetInput[]
+    upsert?: DepreciationEntryUpsertWithWhereUniqueWithoutAssetInput | DepreciationEntryUpsertWithWhereUniqueWithoutAssetInput[]
+    createMany?: DepreciationEntryCreateManyAssetInputEnvelope
+    set?: DepreciationEntryWhereUniqueInput | DepreciationEntryWhereUniqueInput[]
+    disconnect?: DepreciationEntryWhereUniqueInput | DepreciationEntryWhereUniqueInput[]
+    delete?: DepreciationEntryWhereUniqueInput | DepreciationEntryWhereUniqueInput[]
+    connect?: DepreciationEntryWhereUniqueInput | DepreciationEntryWhereUniqueInput[]
+    update?: DepreciationEntryUpdateWithWhereUniqueWithoutAssetInput | DepreciationEntryUpdateWithWhereUniqueWithoutAssetInput[]
+    updateMany?: DepreciationEntryUpdateManyWithWhereWithoutAssetInput | DepreciationEntryUpdateManyWithWhereWithoutAssetInput[]
+    deleteMany?: DepreciationEntryScalarWhereInput | DepreciationEntryScalarWhereInput[]
+  }
+
+  export type DepreciationEntryUncheckedUpdateManyWithoutAssetNestedInput = {
+    create?: XOR<DepreciationEntryCreateWithoutAssetInput, DepreciationEntryUncheckedCreateWithoutAssetInput> | DepreciationEntryCreateWithoutAssetInput[] | DepreciationEntryUncheckedCreateWithoutAssetInput[]
+    connectOrCreate?: DepreciationEntryCreateOrConnectWithoutAssetInput | DepreciationEntryCreateOrConnectWithoutAssetInput[]
+    upsert?: DepreciationEntryUpsertWithWhereUniqueWithoutAssetInput | DepreciationEntryUpsertWithWhereUniqueWithoutAssetInput[]
+    createMany?: DepreciationEntryCreateManyAssetInputEnvelope
+    set?: DepreciationEntryWhereUniqueInput | DepreciationEntryWhereUniqueInput[]
+    disconnect?: DepreciationEntryWhereUniqueInput | DepreciationEntryWhereUniqueInput[]
+    delete?: DepreciationEntryWhereUniqueInput | DepreciationEntryWhereUniqueInput[]
+    connect?: DepreciationEntryWhereUniqueInput | DepreciationEntryWhereUniqueInput[]
+    update?: DepreciationEntryUpdateWithWhereUniqueWithoutAssetInput | DepreciationEntryUpdateWithWhereUniqueWithoutAssetInput[]
+    updateMany?: DepreciationEntryUpdateManyWithWhereWithoutAssetInput | DepreciationEntryUpdateManyWithWhereWithoutAssetInput[]
+    deleteMany?: DepreciationEntryScalarWhereInput | DepreciationEntryScalarWhereInput[]
+  }
+
+  export type FixedAssetCreateNestedOneWithoutDepreciationEntriesInput = {
+    create?: XOR<FixedAssetCreateWithoutDepreciationEntriesInput, FixedAssetUncheckedCreateWithoutDepreciationEntriesInput>
+    connectOrCreate?: FixedAssetCreateOrConnectWithoutDepreciationEntriesInput
+    connect?: FixedAssetWhereUniqueInput
+  }
+
+  export type FixedAssetUpdateOneRequiredWithoutDepreciationEntriesNestedInput = {
+    create?: XOR<FixedAssetCreateWithoutDepreciationEntriesInput, FixedAssetUncheckedCreateWithoutDepreciationEntriesInput>
+    connectOrCreate?: FixedAssetCreateOrConnectWithoutDepreciationEntriesInput
+    upsert?: FixedAssetUpsertWithoutDepreciationEntriesInput
+    connect?: FixedAssetWhereUniqueInput
+    update?: XOR<XOR<FixedAssetUpdateToOneWithWhereWithoutDepreciationEntriesInput, FixedAssetUpdateWithoutDepreciationEntriesInput>, FixedAssetUncheckedUpdateWithoutDepreciationEntriesInput>
+  }
+
+  export type CCDCAllocationCreateNestedManyWithoutCcdcInput = {
+    create?: XOR<CCDCAllocationCreateWithoutCcdcInput, CCDCAllocationUncheckedCreateWithoutCcdcInput> | CCDCAllocationCreateWithoutCcdcInput[] | CCDCAllocationUncheckedCreateWithoutCcdcInput[]
+    connectOrCreate?: CCDCAllocationCreateOrConnectWithoutCcdcInput | CCDCAllocationCreateOrConnectWithoutCcdcInput[]
+    createMany?: CCDCAllocationCreateManyCcdcInputEnvelope
+    connect?: CCDCAllocationWhereUniqueInput | CCDCAllocationWhereUniqueInput[]
+  }
+
+  export type CCDCAllocationUncheckedCreateNestedManyWithoutCcdcInput = {
+    create?: XOR<CCDCAllocationCreateWithoutCcdcInput, CCDCAllocationUncheckedCreateWithoutCcdcInput> | CCDCAllocationCreateWithoutCcdcInput[] | CCDCAllocationUncheckedCreateWithoutCcdcInput[]
+    connectOrCreate?: CCDCAllocationCreateOrConnectWithoutCcdcInput | CCDCAllocationCreateOrConnectWithoutCcdcInput[]
+    createMany?: CCDCAllocationCreateManyCcdcInputEnvelope
+    connect?: CCDCAllocationWhereUniqueInput | CCDCAllocationWhereUniqueInput[]
+  }
+
+  export type CCDCAllocationUpdateManyWithoutCcdcNestedInput = {
+    create?: XOR<CCDCAllocationCreateWithoutCcdcInput, CCDCAllocationUncheckedCreateWithoutCcdcInput> | CCDCAllocationCreateWithoutCcdcInput[] | CCDCAllocationUncheckedCreateWithoutCcdcInput[]
+    connectOrCreate?: CCDCAllocationCreateOrConnectWithoutCcdcInput | CCDCAllocationCreateOrConnectWithoutCcdcInput[]
+    upsert?: CCDCAllocationUpsertWithWhereUniqueWithoutCcdcInput | CCDCAllocationUpsertWithWhereUniqueWithoutCcdcInput[]
+    createMany?: CCDCAllocationCreateManyCcdcInputEnvelope
+    set?: CCDCAllocationWhereUniqueInput | CCDCAllocationWhereUniqueInput[]
+    disconnect?: CCDCAllocationWhereUniqueInput | CCDCAllocationWhereUniqueInput[]
+    delete?: CCDCAllocationWhereUniqueInput | CCDCAllocationWhereUniqueInput[]
+    connect?: CCDCAllocationWhereUniqueInput | CCDCAllocationWhereUniqueInput[]
+    update?: CCDCAllocationUpdateWithWhereUniqueWithoutCcdcInput | CCDCAllocationUpdateWithWhereUniqueWithoutCcdcInput[]
+    updateMany?: CCDCAllocationUpdateManyWithWhereWithoutCcdcInput | CCDCAllocationUpdateManyWithWhereWithoutCcdcInput[]
+    deleteMany?: CCDCAllocationScalarWhereInput | CCDCAllocationScalarWhereInput[]
+  }
+
+  export type CCDCAllocationUncheckedUpdateManyWithoutCcdcNestedInput = {
+    create?: XOR<CCDCAllocationCreateWithoutCcdcInput, CCDCAllocationUncheckedCreateWithoutCcdcInput> | CCDCAllocationCreateWithoutCcdcInput[] | CCDCAllocationUncheckedCreateWithoutCcdcInput[]
+    connectOrCreate?: CCDCAllocationCreateOrConnectWithoutCcdcInput | CCDCAllocationCreateOrConnectWithoutCcdcInput[]
+    upsert?: CCDCAllocationUpsertWithWhereUniqueWithoutCcdcInput | CCDCAllocationUpsertWithWhereUniqueWithoutCcdcInput[]
+    createMany?: CCDCAllocationCreateManyCcdcInputEnvelope
+    set?: CCDCAllocationWhereUniqueInput | CCDCAllocationWhereUniqueInput[]
+    disconnect?: CCDCAllocationWhereUniqueInput | CCDCAllocationWhereUniqueInput[]
+    delete?: CCDCAllocationWhereUniqueInput | CCDCAllocationWhereUniqueInput[]
+    connect?: CCDCAllocationWhereUniqueInput | CCDCAllocationWhereUniqueInput[]
+    update?: CCDCAllocationUpdateWithWhereUniqueWithoutCcdcInput | CCDCAllocationUpdateWithWhereUniqueWithoutCcdcInput[]
+    updateMany?: CCDCAllocationUpdateManyWithWhereWithoutCcdcInput | CCDCAllocationUpdateManyWithWhereWithoutCcdcInput[]
+    deleteMany?: CCDCAllocationScalarWhereInput | CCDCAllocationScalarWhereInput[]
+  }
+
+  export type CCDCCreateNestedOneWithoutAllocationsInput = {
+    create?: XOR<CCDCCreateWithoutAllocationsInput, CCDCUncheckedCreateWithoutAllocationsInput>
+    connectOrCreate?: CCDCCreateOrConnectWithoutAllocationsInput
+    connect?: CCDCWhereUniqueInput
+  }
+
+  export type CCDCUpdateOneRequiredWithoutAllocationsNestedInput = {
+    create?: XOR<CCDCCreateWithoutAllocationsInput, CCDCUncheckedCreateWithoutAllocationsInput>
+    connectOrCreate?: CCDCCreateOrConnectWithoutAllocationsInput
+    upsert?: CCDCUpsertWithoutAllocationsInput
+    connect?: CCDCWhereUniqueInput
+    update?: XOR<XOR<CCDCUpdateToOneWithWhereWithoutAllocationsInput, CCDCUpdateWithoutAllocationsInput>, CCDCUncheckedUpdateWithoutAllocationsInput>
   }
 
   export type EInvoiceItemCreateNestedManyWithoutEInvoiceInput = {
@@ -157533,6 +168615,17 @@ export namespace Prisma {
     description: string
     reference?: string | null
     date?: Date | string
+    transactionDate?: Date | string | null
+    referenceNo?: string | null
+    counterpartyName?: string | null
+    counterpartyAccount?: string | null
+    isReconciled?: boolean
+    reconciledAt?: Date | string | null
+    journalEntryId?: string | null
+    matchedSaleId?: string | null
+    matchedExpenseId?: string | null
+    branchId?: string | null
+    notes?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -157544,6 +168637,17 @@ export namespace Prisma {
     description: string
     reference?: string | null
     date?: Date | string
+    transactionDate?: Date | string | null
+    referenceNo?: string | null
+    counterpartyName?: string | null
+    counterpartyAccount?: string | null
+    isReconciled?: boolean
+    reconciledAt?: Date | string | null
+    journalEntryId?: string | null
+    matchedSaleId?: string | null
+    matchedExpenseId?: string | null
+    branchId?: string | null
+    notes?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -157585,6 +168689,17 @@ export namespace Prisma {
     description?: StringFilter<"BankTransaction"> | string
     reference?: StringNullableFilter<"BankTransaction"> | string | null
     date?: DateTimeFilter<"BankTransaction"> | Date | string
+    transactionDate?: DateTimeNullableFilter<"BankTransaction"> | Date | string | null
+    referenceNo?: StringNullableFilter<"BankTransaction"> | string | null
+    counterpartyName?: StringNullableFilter<"BankTransaction"> | string | null
+    counterpartyAccount?: StringNullableFilter<"BankTransaction"> | string | null
+    isReconciled?: BoolFilter<"BankTransaction"> | boolean
+    reconciledAt?: DateTimeNullableFilter<"BankTransaction"> | Date | string | null
+    journalEntryId?: StringNullableFilter<"BankTransaction"> | string | null
+    matchedSaleId?: StringNullableFilter<"BankTransaction"> | string | null
+    matchedExpenseId?: StringNullableFilter<"BankTransaction"> | string | null
+    branchId?: StringNullableFilter<"BankTransaction"> | string | null
+    notes?: StringNullableFilter<"BankTransaction"> | string | null
     createdAt?: DateTimeFilter<"BankTransaction"> | Date | string
     updatedAt?: DateTimeFilter<"BankTransaction"> | Date | string
   }
@@ -157596,6 +168711,11 @@ export namespace Prisma {
     accountName?: string | null
     isDefault?: boolean
     status?: string
+    bankBranch?: string | null
+    currency?: string
+    balance?: number
+    lastSyncAt?: Date | string | null
+    branchId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -157607,6 +168727,11 @@ export namespace Prisma {
     accountName?: string | null
     isDefault?: boolean
     status?: string
+    bankBranch?: string | null
+    currency?: string
+    balance?: number
+    lastSyncAt?: Date | string | null
+    branchId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -157634,6 +168759,11 @@ export namespace Prisma {
     accountName?: NullableStringFieldUpdateOperationsInput | string | null
     isDefault?: BoolFieldUpdateOperationsInput | boolean
     status?: StringFieldUpdateOperationsInput | string
+    bankBranch?: NullableStringFieldUpdateOperationsInput | string | null
+    currency?: StringFieldUpdateOperationsInput | string
+    balance?: FloatFieldUpdateOperationsInput | number
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -157645,6 +168775,11 @@ export namespace Prisma {
     accountName?: NullableStringFieldUpdateOperationsInput | string | null
     isDefault?: BoolFieldUpdateOperationsInput | boolean
     status?: StringFieldUpdateOperationsInput | string
+    bankBranch?: NullableStringFieldUpdateOperationsInput | string | null
+    currency?: StringFieldUpdateOperationsInput | string
+    balance?: FloatFieldUpdateOperationsInput | number
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -159598,6 +170733,367 @@ export namespace Prisma {
     salesOrderItems?: SalesOrderItemUncheckedUpdateManyWithoutProductNestedInput
     serials?: ProductSerialUncheckedUpdateManyWithoutProductNestedInput
     onlineProducts?: OnlineProductUncheckedUpdateManyWithoutLocalProductNestedInput
+  }
+
+  export type DepreciationEntryCreateWithoutAssetInput = {
+    id?: string
+    month: number
+    year: number
+    beginningValue?: number
+    depreciationAmount?: number
+    accumulatedDepreciation?: number
+    endingValue?: number
+    journalEntryId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type DepreciationEntryUncheckedCreateWithoutAssetInput = {
+    id?: string
+    month: number
+    year: number
+    beginningValue?: number
+    depreciationAmount?: number
+    accumulatedDepreciation?: number
+    endingValue?: number
+    journalEntryId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type DepreciationEntryCreateOrConnectWithoutAssetInput = {
+    where: DepreciationEntryWhereUniqueInput
+    create: XOR<DepreciationEntryCreateWithoutAssetInput, DepreciationEntryUncheckedCreateWithoutAssetInput>
+  }
+
+  export type DepreciationEntryCreateManyAssetInputEnvelope = {
+    data: DepreciationEntryCreateManyAssetInput | DepreciationEntryCreateManyAssetInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type DepreciationEntryUpsertWithWhereUniqueWithoutAssetInput = {
+    where: DepreciationEntryWhereUniqueInput
+    update: XOR<DepreciationEntryUpdateWithoutAssetInput, DepreciationEntryUncheckedUpdateWithoutAssetInput>
+    create: XOR<DepreciationEntryCreateWithoutAssetInput, DepreciationEntryUncheckedCreateWithoutAssetInput>
+  }
+
+  export type DepreciationEntryUpdateWithWhereUniqueWithoutAssetInput = {
+    where: DepreciationEntryWhereUniqueInput
+    data: XOR<DepreciationEntryUpdateWithoutAssetInput, DepreciationEntryUncheckedUpdateWithoutAssetInput>
+  }
+
+  export type DepreciationEntryUpdateManyWithWhereWithoutAssetInput = {
+    where: DepreciationEntryScalarWhereInput
+    data: XOR<DepreciationEntryUpdateManyMutationInput, DepreciationEntryUncheckedUpdateManyWithoutAssetInput>
+  }
+
+  export type DepreciationEntryScalarWhereInput = {
+    AND?: DepreciationEntryScalarWhereInput | DepreciationEntryScalarWhereInput[]
+    OR?: DepreciationEntryScalarWhereInput[]
+    NOT?: DepreciationEntryScalarWhereInput | DepreciationEntryScalarWhereInput[]
+    id?: StringFilter<"DepreciationEntry"> | string
+    assetId?: StringFilter<"DepreciationEntry"> | string
+    month?: IntFilter<"DepreciationEntry"> | number
+    year?: IntFilter<"DepreciationEntry"> | number
+    beginningValue?: FloatFilter<"DepreciationEntry"> | number
+    depreciationAmount?: FloatFilter<"DepreciationEntry"> | number
+    accumulatedDepreciation?: FloatFilter<"DepreciationEntry"> | number
+    endingValue?: FloatFilter<"DepreciationEntry"> | number
+    journalEntryId?: StringNullableFilter<"DepreciationEntry"> | string | null
+    createdAt?: DateTimeFilter<"DepreciationEntry"> | Date | string
+    updatedAt?: DateTimeFilter<"DepreciationEntry"> | Date | string
+  }
+
+  export type FixedAssetCreateWithoutDepreciationEntriesInput = {
+    id?: string
+    code: string
+    name: string
+    category: string
+    acquisitionDate: string
+    originalCost: number
+    usefulLifeMonths: number
+    method?: string
+    accumulatedDepreciation?: number
+    netBookValue?: number
+    monthlyDepreciation?: number
+    depreciationAccount?: string
+    residualValue?: number
+    department?: string | null
+    description?: string | null
+    disposalDate?: string | null
+    status?: string
+    acquisitionCost?: number
+    depreciationMethod?: string
+    accountCode?: string
+    depAccAccountCode?: string
+    expenseAccountCode?: string
+    disposalAmount?: number | null
+    branchId?: string | null
+    notes?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FixedAssetUncheckedCreateWithoutDepreciationEntriesInput = {
+    id?: string
+    code: string
+    name: string
+    category: string
+    acquisitionDate: string
+    originalCost: number
+    usefulLifeMonths: number
+    method?: string
+    accumulatedDepreciation?: number
+    netBookValue?: number
+    monthlyDepreciation?: number
+    depreciationAccount?: string
+    residualValue?: number
+    department?: string | null
+    description?: string | null
+    disposalDate?: string | null
+    status?: string
+    acquisitionCost?: number
+    depreciationMethod?: string
+    accountCode?: string
+    depAccAccountCode?: string
+    expenseAccountCode?: string
+    disposalAmount?: number | null
+    branchId?: string | null
+    notes?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FixedAssetCreateOrConnectWithoutDepreciationEntriesInput = {
+    where: FixedAssetWhereUniqueInput
+    create: XOR<FixedAssetCreateWithoutDepreciationEntriesInput, FixedAssetUncheckedCreateWithoutDepreciationEntriesInput>
+  }
+
+  export type FixedAssetUpsertWithoutDepreciationEntriesInput = {
+    update: XOR<FixedAssetUpdateWithoutDepreciationEntriesInput, FixedAssetUncheckedUpdateWithoutDepreciationEntriesInput>
+    create: XOR<FixedAssetCreateWithoutDepreciationEntriesInput, FixedAssetUncheckedCreateWithoutDepreciationEntriesInput>
+    where?: FixedAssetWhereInput
+  }
+
+  export type FixedAssetUpdateToOneWithWhereWithoutDepreciationEntriesInput = {
+    where?: FixedAssetWhereInput
+    data: XOR<FixedAssetUpdateWithoutDepreciationEntriesInput, FixedAssetUncheckedUpdateWithoutDepreciationEntriesInput>
+  }
+
+  export type FixedAssetUpdateWithoutDepreciationEntriesInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    code?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    category?: StringFieldUpdateOperationsInput | string
+    acquisitionDate?: StringFieldUpdateOperationsInput | string
+    originalCost?: FloatFieldUpdateOperationsInput | number
+    usefulLifeMonths?: IntFieldUpdateOperationsInput | number
+    method?: StringFieldUpdateOperationsInput | string
+    accumulatedDepreciation?: FloatFieldUpdateOperationsInput | number
+    netBookValue?: FloatFieldUpdateOperationsInput | number
+    monthlyDepreciation?: FloatFieldUpdateOperationsInput | number
+    depreciationAccount?: StringFieldUpdateOperationsInput | string
+    residualValue?: FloatFieldUpdateOperationsInput | number
+    department?: NullableStringFieldUpdateOperationsInput | string | null
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    disposalDate?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    acquisitionCost?: FloatFieldUpdateOperationsInput | number
+    depreciationMethod?: StringFieldUpdateOperationsInput | string
+    accountCode?: StringFieldUpdateOperationsInput | string
+    depAccAccountCode?: StringFieldUpdateOperationsInput | string
+    expenseAccountCode?: StringFieldUpdateOperationsInput | string
+    disposalAmount?: NullableFloatFieldUpdateOperationsInput | number | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FixedAssetUncheckedUpdateWithoutDepreciationEntriesInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    code?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    category?: StringFieldUpdateOperationsInput | string
+    acquisitionDate?: StringFieldUpdateOperationsInput | string
+    originalCost?: FloatFieldUpdateOperationsInput | number
+    usefulLifeMonths?: IntFieldUpdateOperationsInput | number
+    method?: StringFieldUpdateOperationsInput | string
+    accumulatedDepreciation?: FloatFieldUpdateOperationsInput | number
+    netBookValue?: FloatFieldUpdateOperationsInput | number
+    monthlyDepreciation?: FloatFieldUpdateOperationsInput | number
+    depreciationAccount?: StringFieldUpdateOperationsInput | string
+    residualValue?: FloatFieldUpdateOperationsInput | number
+    department?: NullableStringFieldUpdateOperationsInput | string | null
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    disposalDate?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    acquisitionCost?: FloatFieldUpdateOperationsInput | number
+    depreciationMethod?: StringFieldUpdateOperationsInput | string
+    accountCode?: StringFieldUpdateOperationsInput | string
+    depAccAccountCode?: StringFieldUpdateOperationsInput | string
+    expenseAccountCode?: StringFieldUpdateOperationsInput | string
+    disposalAmount?: NullableFloatFieldUpdateOperationsInput | number | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type CCDCAllocationCreateWithoutCcdcInput = {
+    id?: string
+    month: number
+    year: number
+    amount?: number
+    journalEntryId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type CCDCAllocationUncheckedCreateWithoutCcdcInput = {
+    id?: string
+    month: number
+    year: number
+    amount?: number
+    journalEntryId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type CCDCAllocationCreateOrConnectWithoutCcdcInput = {
+    where: CCDCAllocationWhereUniqueInput
+    create: XOR<CCDCAllocationCreateWithoutCcdcInput, CCDCAllocationUncheckedCreateWithoutCcdcInput>
+  }
+
+  export type CCDCAllocationCreateManyCcdcInputEnvelope = {
+    data: CCDCAllocationCreateManyCcdcInput | CCDCAllocationCreateManyCcdcInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type CCDCAllocationUpsertWithWhereUniqueWithoutCcdcInput = {
+    where: CCDCAllocationWhereUniqueInput
+    update: XOR<CCDCAllocationUpdateWithoutCcdcInput, CCDCAllocationUncheckedUpdateWithoutCcdcInput>
+    create: XOR<CCDCAllocationCreateWithoutCcdcInput, CCDCAllocationUncheckedCreateWithoutCcdcInput>
+  }
+
+  export type CCDCAllocationUpdateWithWhereUniqueWithoutCcdcInput = {
+    where: CCDCAllocationWhereUniqueInput
+    data: XOR<CCDCAllocationUpdateWithoutCcdcInput, CCDCAllocationUncheckedUpdateWithoutCcdcInput>
+  }
+
+  export type CCDCAllocationUpdateManyWithWhereWithoutCcdcInput = {
+    where: CCDCAllocationScalarWhereInput
+    data: XOR<CCDCAllocationUpdateManyMutationInput, CCDCAllocationUncheckedUpdateManyWithoutCcdcInput>
+  }
+
+  export type CCDCAllocationScalarWhereInput = {
+    AND?: CCDCAllocationScalarWhereInput | CCDCAllocationScalarWhereInput[]
+    OR?: CCDCAllocationScalarWhereInput[]
+    NOT?: CCDCAllocationScalarWhereInput | CCDCAllocationScalarWhereInput[]
+    id?: StringFilter<"CCDCAllocation"> | string
+    ccdcId?: StringFilter<"CCDCAllocation"> | string
+    month?: IntFilter<"CCDCAllocation"> | number
+    year?: IntFilter<"CCDCAllocation"> | number
+    amount?: FloatFilter<"CCDCAllocation"> | number
+    journalEntryId?: StringNullableFilter<"CCDCAllocation"> | string | null
+    createdAt?: DateTimeFilter<"CCDCAllocation"> | Date | string
+    updatedAt?: DateTimeFilter<"CCDCAllocation"> | Date | string
+  }
+
+  export type CCDCCreateWithoutAllocationsInput = {
+    id?: string
+    code: string
+    name: string
+    category?: string | null
+    acquisitionDate?: string | null
+    totalValue?: number
+    allocationMonths?: number
+    monthlyAllocation?: number
+    allocatedAmount?: number
+    remainingAmount?: number
+    accountCode?: string
+    expenseAccountCode?: string
+    status?: string
+    branchId?: string | null
+    notes?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type CCDCUncheckedCreateWithoutAllocationsInput = {
+    id?: string
+    code: string
+    name: string
+    category?: string | null
+    acquisitionDate?: string | null
+    totalValue?: number
+    allocationMonths?: number
+    monthlyAllocation?: number
+    allocatedAmount?: number
+    remainingAmount?: number
+    accountCode?: string
+    expenseAccountCode?: string
+    status?: string
+    branchId?: string | null
+    notes?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type CCDCCreateOrConnectWithoutAllocationsInput = {
+    where: CCDCWhereUniqueInput
+    create: XOR<CCDCCreateWithoutAllocationsInput, CCDCUncheckedCreateWithoutAllocationsInput>
+  }
+
+  export type CCDCUpsertWithoutAllocationsInput = {
+    update: XOR<CCDCUpdateWithoutAllocationsInput, CCDCUncheckedUpdateWithoutAllocationsInput>
+    create: XOR<CCDCCreateWithoutAllocationsInput, CCDCUncheckedCreateWithoutAllocationsInput>
+    where?: CCDCWhereInput
+  }
+
+  export type CCDCUpdateToOneWithWhereWithoutAllocationsInput = {
+    where?: CCDCWhereInput
+    data: XOR<CCDCUpdateWithoutAllocationsInput, CCDCUncheckedUpdateWithoutAllocationsInput>
+  }
+
+  export type CCDCUpdateWithoutAllocationsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    code?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    category?: NullableStringFieldUpdateOperationsInput | string | null
+    acquisitionDate?: NullableStringFieldUpdateOperationsInput | string | null
+    totalValue?: FloatFieldUpdateOperationsInput | number
+    allocationMonths?: IntFieldUpdateOperationsInput | number
+    monthlyAllocation?: FloatFieldUpdateOperationsInput | number
+    allocatedAmount?: FloatFieldUpdateOperationsInput | number
+    remainingAmount?: FloatFieldUpdateOperationsInput | number
+    accountCode?: StringFieldUpdateOperationsInput | string
+    expenseAccountCode?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type CCDCUncheckedUpdateWithoutAllocationsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    code?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    category?: NullableStringFieldUpdateOperationsInput | string | null
+    acquisitionDate?: NullableStringFieldUpdateOperationsInput | string | null
+    totalValue?: FloatFieldUpdateOperationsInput | number
+    allocationMonths?: IntFieldUpdateOperationsInput | number
+    monthlyAllocation?: FloatFieldUpdateOperationsInput | number
+    allocatedAmount?: FloatFieldUpdateOperationsInput | number
+    remainingAmount?: FloatFieldUpdateOperationsInput | number
+    accountCode?: StringFieldUpdateOperationsInput | string
+    expenseAccountCode?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type EInvoiceItemCreateWithoutEInvoiceInput = {
@@ -163570,6 +175066,17 @@ export namespace Prisma {
     description: string
     reference?: string | null
     date?: Date | string
+    transactionDate?: Date | string | null
+    referenceNo?: string | null
+    counterpartyName?: string | null
+    counterpartyAccount?: string | null
+    isReconciled?: boolean
+    reconciledAt?: Date | string | null
+    journalEntryId?: string | null
+    matchedSaleId?: string | null
+    matchedExpenseId?: string | null
+    branchId?: string | null
+    notes?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -163581,6 +175088,17 @@ export namespace Prisma {
     description?: StringFieldUpdateOperationsInput | string
     reference?: NullableStringFieldUpdateOperationsInput | string | null
     date?: DateTimeFieldUpdateOperationsInput | Date | string
+    transactionDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    referenceNo?: NullableStringFieldUpdateOperationsInput | string | null
+    counterpartyName?: NullableStringFieldUpdateOperationsInput | string | null
+    counterpartyAccount?: NullableStringFieldUpdateOperationsInput | string | null
+    isReconciled?: BoolFieldUpdateOperationsInput | boolean
+    reconciledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    journalEntryId?: NullableStringFieldUpdateOperationsInput | string | null
+    matchedSaleId?: NullableStringFieldUpdateOperationsInput | string | null
+    matchedExpenseId?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -163592,6 +175110,17 @@ export namespace Prisma {
     description?: StringFieldUpdateOperationsInput | string
     reference?: NullableStringFieldUpdateOperationsInput | string | null
     date?: DateTimeFieldUpdateOperationsInput | Date | string
+    transactionDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    referenceNo?: NullableStringFieldUpdateOperationsInput | string | null
+    counterpartyName?: NullableStringFieldUpdateOperationsInput | string | null
+    counterpartyAccount?: NullableStringFieldUpdateOperationsInput | string | null
+    isReconciled?: BoolFieldUpdateOperationsInput | boolean
+    reconciledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    journalEntryId?: NullableStringFieldUpdateOperationsInput | string | null
+    matchedSaleId?: NullableStringFieldUpdateOperationsInput | string | null
+    matchedExpenseId?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -163603,6 +175132,17 @@ export namespace Prisma {
     description?: StringFieldUpdateOperationsInput | string
     reference?: NullableStringFieldUpdateOperationsInput | string | null
     date?: DateTimeFieldUpdateOperationsInput | Date | string
+    transactionDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    referenceNo?: NullableStringFieldUpdateOperationsInput | string | null
+    counterpartyName?: NullableStringFieldUpdateOperationsInput | string | null
+    counterpartyAccount?: NullableStringFieldUpdateOperationsInput | string | null
+    isReconciled?: BoolFieldUpdateOperationsInput | boolean
+    reconciledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    journalEntryId?: NullableStringFieldUpdateOperationsInput | string | null
+    matchedSaleId?: NullableStringFieldUpdateOperationsInput | string | null
+    matchedExpenseId?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -164063,6 +175603,98 @@ export namespace Prisma {
     unitPrice?: FloatFieldUpdateOperationsInput | number
     discount?: FloatFieldUpdateOperationsInput | number
     lineTotal?: FloatFieldUpdateOperationsInput | number
+  }
+
+  export type DepreciationEntryCreateManyAssetInput = {
+    id?: string
+    month: number
+    year: number
+    beginningValue?: number
+    depreciationAmount?: number
+    accumulatedDepreciation?: number
+    endingValue?: number
+    journalEntryId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type DepreciationEntryUpdateWithoutAssetInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    month?: IntFieldUpdateOperationsInput | number
+    year?: IntFieldUpdateOperationsInput | number
+    beginningValue?: FloatFieldUpdateOperationsInput | number
+    depreciationAmount?: FloatFieldUpdateOperationsInput | number
+    accumulatedDepreciation?: FloatFieldUpdateOperationsInput | number
+    endingValue?: FloatFieldUpdateOperationsInput | number
+    journalEntryId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type DepreciationEntryUncheckedUpdateWithoutAssetInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    month?: IntFieldUpdateOperationsInput | number
+    year?: IntFieldUpdateOperationsInput | number
+    beginningValue?: FloatFieldUpdateOperationsInput | number
+    depreciationAmount?: FloatFieldUpdateOperationsInput | number
+    accumulatedDepreciation?: FloatFieldUpdateOperationsInput | number
+    endingValue?: FloatFieldUpdateOperationsInput | number
+    journalEntryId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type DepreciationEntryUncheckedUpdateManyWithoutAssetInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    month?: IntFieldUpdateOperationsInput | number
+    year?: IntFieldUpdateOperationsInput | number
+    beginningValue?: FloatFieldUpdateOperationsInput | number
+    depreciationAmount?: FloatFieldUpdateOperationsInput | number
+    accumulatedDepreciation?: FloatFieldUpdateOperationsInput | number
+    endingValue?: FloatFieldUpdateOperationsInput | number
+    journalEntryId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type CCDCAllocationCreateManyCcdcInput = {
+    id?: string
+    month: number
+    year: number
+    amount?: number
+    journalEntryId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type CCDCAllocationUpdateWithoutCcdcInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    month?: IntFieldUpdateOperationsInput | number
+    year?: IntFieldUpdateOperationsInput | number
+    amount?: FloatFieldUpdateOperationsInput | number
+    journalEntryId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type CCDCAllocationUncheckedUpdateWithoutCcdcInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    month?: IntFieldUpdateOperationsInput | number
+    year?: IntFieldUpdateOperationsInput | number
+    amount?: FloatFieldUpdateOperationsInput | number
+    journalEntryId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type CCDCAllocationUncheckedUpdateManyWithoutCcdcInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    month?: IntFieldUpdateOperationsInput | number
+    year?: IntFieldUpdateOperationsInput | number
+    amount?: FloatFieldUpdateOperationsInput | number
+    journalEntryId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type EInvoiceItemCreateManyEInvoiceInput = {
