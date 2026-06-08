@@ -14,28 +14,46 @@ export class TikTokService extends PlatformService {
     // ─── Auth ────────────────────────────────────────────────────────────────────
 
     private signRequest(path: string, params: Record<string, string>, body?: string): string {
+        // TikTok v202309: exclude `sign` and the access-token params, sort the rest
+        // alphabetically, concat as {key}{value}, prepend path, append body (non-GET,
+        // non-multipart), then wrap with app_secret on both sides. HMAC-SHA256 hex.
         const sorted = Object.keys(params)
-            .filter(k => !['sign', 'access_token', 'app_secret'].includes(k))
+            .filter(k => !['sign', 'access_token', 'x-tts-access-token', 'app_secret'].includes(k))
             .sort()
         const paramString = sorted.map(k => `${k}${params[k]}`).join('')
         const signBase = `${this.credentials.apiSecret}${path}${paramString}${body || ''}${this.credentials.apiSecret}`
         return this.hmacSha256(signBase, this.credentials.apiSecret)
     }
 
-    private buildUrl(path: string, extraParams: Record<string, string> = {}, body?: string): string {
+    /**
+     * Build the signed request URL plus the headers TikTok v202309 requires.
+     * The access token is passed via the `x-tts-access-token` header (NOT a query
+     * param) and is excluded from the signature. Empty params (e.g. an unresolved
+     * shop_cipher during testConnection) are omitted so they don't poison the sign.
+     */
+    private buildUrl(path: string, extraParams: Record<string, string> = {}, body?: string, opts: { noShopCipher?: boolean } = {}): { url: string; headers: Record<string, string> } {
         const timestamp = Math.floor(Date.now() / 1000)
-        const params: Record<string, string> = {
+        const rawParams: Record<string, string> = {
             app_key: this.credentials.apiKey,
             timestamp: String(timestamp),
-            shop_id: this.credentials.shopId || '',
-            version: '202309',
+            // The /authorization/202309/shops endpoint is shop-agnostic — it must NOT
+            // carry a shop_cipher, otherwise TikTok rejects the request.
+            ...(this.credentials.shopId && !opts.noShopCipher ? { shop_cipher: this.credentials.shopId } : {}),
             ...extraParams,
         }
-        const sign = this.signRequest(path, params, body)
-        params.sign = sign
-        if (this.credentials.accessToken) params.access_token = this.credentials.accessToken
+        // Drop any empty-valued params before signing/sending.
+        const params: Record<string, string> = {}
+        for (const [k, v] of Object.entries(rawParams)) {
+            if (v !== undefined && v !== null && v !== '') params[k] = v
+        }
+
+        params.sign = this.signRequest(path, params, body)
         const qs = Object.entries(params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&')
-        return `${TIKTOK_API}${path}?${qs}`
+
+        const headers: Record<string, string> = {}
+        if (this.credentials.accessToken) headers['x-tts-access-token'] = this.credentials.accessToken
+
+        return { url: `${TIKTOK_API}${path}?${qs}`, headers }
     }
 
     generateAuthUrl(redirectUri: string, state: string): string {
@@ -105,8 +123,8 @@ export class TikTokService extends PlatformService {
         }
 
         const bodyStr = JSON.stringify(bodyObj)
-        const url = this.buildUrl(path, {}, bodyStr)
-        const data = await this.httpPost(url, bodyObj)
+        const { url, headers } = this.buildUrl(path, {}, bodyStr)
+        const data = await this.httpPost(url, bodyObj, headers)
 
         if (data.code !== 0) throw new Error(`TikTok getOrders: ${data.message}`)
 
@@ -122,8 +140,8 @@ export class TikTokService extends PlatformService {
 
     async getOrderDetail(externalOrderId: string): Promise<PlatformOrder | null> {
         const path = `/order/202309/orders`
-        const url = this.buildUrl(path, { ids: externalOrderId })
-        const data = await this.httpGet(url)
+        const { url, headers } = this.buildUrl(path, { ids: externalOrderId })
+        const data = await this.httpGet(url, headers)
 
         if (data.code !== 0) return null
         const order = data.data?.orders?.[0]
@@ -131,16 +149,30 @@ export class TikTokService extends PlatformService {
     }
 
     async testConnection(): Promise<{ success: boolean; shopName?: string; error?: string }> {
+        const path = '/authorization/202309/shops'
         try {
-            const path = '/authorization/202309/shops'
-            const url = this.buildUrl(path)
-            const data = await this.httpGet(url)
+            if (!this.credentials.accessToken) {
+                return { success: false, error: 'Chưa có access token — vui lòng ủy quyền (authorize) TikTok Shop trước' }
+            }
 
-            if (data.code !== 0) return { success: false, error: data.message || 'Unknown error' }
+            const { url, headers } = this.buildUrl(path, {}, undefined, { noShopCipher: true })
+            const data = await this.httpGet(url, headers)
+
+            if (data.code !== 0) {
+                // Surface the full TikTok error so the actual code/message is visible
+                // (e.g. 105002 invalid access_token, 36004003 invalid signature, ...).
+                console.error('[TikTok] testConnection failed:', JSON.stringify({
+                    code: data.code,
+                    message: data.message,
+                    request_id: data.request_id,
+                }))
+                return { success: false, error: `[${data.code}] ${data.message || 'Unknown error'}` }
+            }
             const shop = data.data?.shops?.[0]
             return { success: true, shopName: shop?.shop_name || shop?.shop_id || 'TikTok Shop' }
         } catch (err: any) {
-            return { success: false, error: err.message }
+            console.error('[TikTok] testConnection exception:', err)
+            return { success: false, error: err?.message || String(err) }
         }
     }
 

@@ -119,7 +119,7 @@ export abstract class PlatformService {
 
     protected async httpGet(url: string, headers: Record<string, string> = {}): Promise<any> {
         const res = await fetch(url, { method: 'GET', headers: { 'Content-Type': 'application/json', ...headers } })
-        return res.json()
+        return this.parseResponse(res)
     }
 
     protected async httpPost(url: string, body: any, headers: Record<string, string> = {}): Promise<any> {
@@ -128,7 +128,17 @@ export abstract class PlatformService {
             headers: { 'Content-Type': 'application/json', ...headers },
             body: JSON.stringify(body),
         })
-        return res.json()
+        return this.parseResponse(res)
+    }
+
+    /** Parse a fetch Response as JSON, surfacing the HTTP status + raw body when it isn't valid JSON. */
+    private async parseResponse(res: Response): Promise<any> {
+        const text = await res.text()
+        try {
+            return JSON.parse(text)
+        } catch {
+            throw new Error(`HTTP ${res.status} ${res.statusText}: ${text.slice(0, 500)}`)
+        }
     }
 
     /** Map platform-specific status to our internal status */
