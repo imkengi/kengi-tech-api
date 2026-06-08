@@ -102,7 +102,9 @@ export abstract class PlatformService {
         pageSize?: number
         /** Platform-native status to filter by (single value per call) */
         status?: string
-    }): Promise<{ orders: PlatformOrder[]; hasMore: boolean; total: number }>
+        /** Opaque cursor for token-based pagination (TikTok v202309 page_token) */
+        pageToken?: string
+    }): Promise<{ orders: PlatformOrder[]; hasMore: boolean; total: number; nextPageToken?: string }>
 
     /** Fetch product catalog from platform */
     abstract fetchProducts(): Promise<{ products: PlatformProduct[]; total: number }>

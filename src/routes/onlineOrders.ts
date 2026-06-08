@@ -1305,6 +1305,17 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
             } catch (cipherErr: any) {
                 console.error(`[Sync] Failed to resolve TikTok shop_cipher for ${channel.name}:`, cipherErr.message)
             }
+
+            // Order endpoints are unusable without a shop_cipher. If we still don't have
+            // one (resolution failed AND none was stored), stop here with a clear,
+            // actionable message rather than letting fetchOrders 500 opaquely.
+            if (!(service as any).credentials.shopId) {
+                res.status(400).json({
+                    success: false,
+                    error: 'Không lấy được shop_cipher từ TikTok — vui lòng kết nối lại (authorize) TikTok Shop',
+                })
+                return
+            }
         }
 
         // Fetch orders from platform (with retry-on-token-error)
@@ -1327,9 +1338,14 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
             for (const st of statusList) {
                 page = 1
                 hasMore = true
+                // TikTok v202309 uses opaque page_token cursors; other platforms use
+                // numeric `page`. Thread both — each platform reads what it needs.
+                let pageToken: string | undefined = undefined
                 while (hasMore && page <= 10) {
-                    const result = await service.fetchOrders({ since, page, pageSize: 50, status: st })
+                    const result: { orders: PlatformOrder[]; hasMore: boolean; total: number; nextPageToken?: string } =
+                        await service.fetchOrders({ since, page, pageSize: 50, status: st, pageToken })
                     allOrders = allOrders.concat(result.orders)
+                    pageToken = result.nextPageToken
                     hasMore = result.hasMore
                     page++
                 }
@@ -1339,8 +1355,12 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
         try {
             await fetchWithRetry()
         } catch (fetchErr: any) {
-            // If it's a token error, try refresh once and retry
-            if (fetchErr.message?.includes('invalid_access_token') || fetchErr.message?.includes('error_auth')) {
+            // If it's a token error, try refresh once and retry.
+            // Shopee: invalid_access_token / error_auth. TikTok v202309: code 105002
+            // (invalid access_token) / 105001 (access_token expired).
+            const msg = String(fetchErr.message || '')
+            if (msg.includes('invalid_access_token') || msg.includes('error_auth')
+                || msg.includes('105002') || msg.includes('105001')) {
                 console.log(`[Sync] Token error during fetch, attempting refresh and retry...`)
                 try {
                     const tokens = await service.refreshAccessToken();

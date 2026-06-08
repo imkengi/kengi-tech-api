@@ -147,6 +147,12 @@ export class TikTokService extends PlatformService {
         const { url, headers } = this.buildUrl(path, {}, undefined, { noShopCipher: true })
         const data = await this.httpGet(url, headers)
         if (data.code !== 0) {
+            console.error('[TikTok] getAuthorizedShops failed:', JSON.stringify({
+                code: data.code,
+                message: data.message,
+                request_id: data.request_id,
+                hasAccessToken: !!this.credentials.accessToken,
+            }))
             throw new Error(`TikTok getShops: [${data.code}] ${data.message || 'Unknown error'}`)
         }
         return data.data?.shops || []
@@ -162,7 +168,7 @@ export class TikTokService extends PlatformService {
         const url = `${TIKTOK_AUTH}/api/v2/token/refresh?${params}`
         const data = await this.httpGet(url)
 
-        if (data.code !== 0) throw new Error(`TikTok refresh error: ${data.message}`)
+        if (data.code !== 0) throw new Error(`TikTok refresh error: [${data.code}] ${data.message || 'Unknown error'}`)
 
         const tokenData = data.data || {}
         return {
@@ -174,16 +180,31 @@ export class TikTokService extends PlatformService {
 
     // ─── Orders ──────────────────────────────────────────────────────────────────
 
-    async fetchOrders(params: { since?: Date; page?: number; pageSize?: number; status?: string }) {
+    async fetchOrders(params: { since?: Date; page?: number; pageSize?: number; status?: string; pageToken?: string }) {
         const path = '/order/202309/orders/search'
-        const bodyObj: any = {
-            page_size: Math.min(params.pageSize || 50, 100),
-            sort_field: 'CREATE_TIME',
+
+        // Order endpoints REQUIRE a real shop_cipher. If we don't have one (cipher
+        // resolution failed or this is an old connection that only stored open_id),
+        // fail with an actionable message instead of letting TikTok reject the call
+        // with an opaque error that gets masked as "Internal server error".
+        if (!this.credentials.shopId) {
+            throw new Error('TikTok getOrders: thiếu shop_cipher — vui lòng kết nối lại (authorize) TikTok Shop')
+        }
+
+        // v202309 orders/search: page_size / sort_field / sort_order / page_token are
+        // QUERY params (signed alongside app_key/timestamp/shop_cipher), NOT body.
+        // The body carries only the filter object (order_status + time range).
+        const query: Record<string, string> = {
+            page_size: String(Math.min(params.pageSize || 50, 100)),
+            sort_field: 'create_time',
             sort_order: 'DESC',
         }
+        if (params.pageToken) query.page_token = params.pageToken
+
         // TikTok v202309 orders/search filters by a single native order_status
         // (UNPAID, ON_HOLD, AWAITING_SHIPMENT, AWAITING_COLLECTION, IN_TRANSIT,
         // DELIVERED, COMPLETED, CANCELLED). Caller loops per-status for multiple.
+        const bodyObj: any = {}
         if (params.status) {
             bodyObj.order_status = params.status
         }
@@ -191,23 +212,31 @@ export class TikTokService extends PlatformService {
             bodyObj.create_time_ge = Math.floor(params.since.getTime() / 1000)
             bodyObj.create_time_lt = Math.floor(Date.now() / 1000)
         }
-        if (params.page && params.page > 1) {
-            bodyObj.cursor = String((params.page - 1) * (params.pageSize || 50))
-        }
 
         const bodyStr = JSON.stringify(bodyObj)
-        const { url, headers } = this.buildUrl(path, {}, bodyStr)
+        const { url, headers } = this.buildUrl(path, query, bodyStr)
         const data = await this.httpPost(url, bodyObj, headers)
 
-        if (data.code !== 0) throw new Error(`TikTok getOrders: ${data.message}`)
+        if (data.code !== 0) {
+            console.error('[TikTok] fetchOrders failed:', JSON.stringify({
+                code: data.code,
+                message: data.message,
+                request_id: data.request_id,
+                status: params.status,
+                hasShopCipher: !!this.credentials.shopId,
+            }))
+            throw new Error(`TikTok getOrders: [${data.code}] ${data.message || 'Unknown error'}`)
+        }
 
         const orderList = data.data?.orders || []
         const orders: PlatformOrder[] = orderList.map((o: any) => this.mapOrder(o))
+        const nextPageToken = data.data?.next_page_token || undefined
 
         return {
             orders,
-            hasMore: data.data?.next_page_token ? true : false,
+            hasMore: !!nextPageToken,
             total: data.data?.total_count || orders.length,
+            nextPageToken,
         }
     }
 
