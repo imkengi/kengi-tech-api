@@ -1152,7 +1152,9 @@ router.get('/channels/:id/auth-url', authMiddleware, async (req: AuthRequest, re
         if (!service) { res.status(400).json({ success: false, error: 'Nền tảng chưa được hỗ trợ' }); return }
 
         const baseUrl = process.env.APP_BASE_URL || `${req.protocol}://${req.get('host')}`
-        const redirectUri = `${baseUrl}/api/online-orders/tiktok/callback`
+        const redirectUri = channel.platform === 'tiktok'
+            ? `${baseUrl}/api/online-orders/tiktok/callback`
+            : `${baseUrl}/api/online-orders/channels/${channel.id}/callback`
         const state = Buffer.from(JSON.stringify({ channelId: channel.id })).toString('base64')
         const authUrl = service.generateAuthUrl(redirectUri, state)
 
