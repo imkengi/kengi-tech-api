@@ -1654,6 +1654,22 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
             })
         } catch (_) { }
 
+        // Known TikTok authorization failures are user-actionable, not server bugs:
+        //   105005 — token lacks the required access scope for the endpoint
+        //   106011 — invalid shop_cipher (stale/old connection storing open_id)
+        //   105001/105002 — access token expired / invalid
+        // errMsg() masks everything as a generic 500 in production, which is why the
+        // UI only ever showed "Internal server error". Surface a clear reconnect
+        // prompt (400) for these so the operator knows to re-authorize TikTok Shop.
+        const m = String(err?.message || '')
+        if (/\b(105005|106011|105001|105002)\b/.test(m) || /shop_cipher|access scope|access token/i.test(m)) {
+            res.status(400).json({
+                success: false,
+                error: 'TikTok Shop cần được kết nối lại: token thiếu quyền hoặc shop_cipher không hợp lệ. Vui lòng vào phần Kênh → TikTok → Kết nối lại (authorize), và đảm bảo app đã được cấp đủ scope (Order Information, Authorization) trong TikTok Partner Center.',
+            })
+            return
+        }
+
         res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
