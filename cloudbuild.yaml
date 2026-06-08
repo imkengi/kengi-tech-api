@@ -4,7 +4,7 @@ substitutions:
   _CLOUD_SQL_INSTANCE: kengi-tech:asia-southeast1:kengi-tech-db
   _DB_NAME: kengi_tech
   _DB_USER: postgres
-  _DB_PASSWORD: KengiTech2026@
+  _DB_PASSWORD: KengiTech2026%40
   _REDIS_URL: ""
 
 steps:
