@@ -286,19 +286,47 @@ export class TikTokService extends PlatformService {
 
     // ─── Mappers ─────────────────────────────────────────────────────────────────
 
+    /**
+     * ISO 4217 currencies with NO minor unit (zero decimal places). TikTok Shop
+     * returns amounts in the smallest currency unit for currencies that HAVE a
+     * minor unit (USD/EUR → cents, divide by 100), but for these currencies the
+     * value is already the full amount — dividing would give 1/100th the real value
+     * (e.g. a 500,000 VND order showing as 5,000 VND).
+     */
+    private static readonly ZERO_DECIMAL_CURRENCIES = new Set([
+        'BIF', 'CLP', 'DJF', 'GNF', 'ISK', 'JPY', 'KMF', 'KRW',
+        'PYG', 'RWF', 'UGX', 'VND', 'VUV', 'XAF', 'XOF', 'XPF',
+    ])
+
+    /** Minor-unit divisor for a currency: 1 for zero-decimal (VND, JPY, …), else 100. */
+    private minorUnitFactor(currency?: string): number {
+        const code = (currency || '').toUpperCase()
+        return TikTokService.ZERO_DECIMAL_CURRENCIES.has(code) ? 1 : 100
+    }
+
+    /** Parse a TikTok money string into the major currency unit, currency-aware. */
+    private toMajor(raw: any, factor: number): number {
+        return parseFloat(raw || '0') / factor
+    }
+
     private mapOrder(o: any): PlatformOrder {
         const addr = o.recipient_address || {}
+        const payment = o.payment || {}
+        // TikTok returns amounts in the smallest unit for minor-unit currencies
+        // (USD/EUR cents) but as the full amount for zero-decimal ones (VND, JPY…).
+        // Resolve the order currency once and convert all money fields accordingly.
+        const currency = payment.currency || o.currency || o.line_items?.[0]?.currency
+        const factor = this.minorUnitFactor(currency)
+
         const items: PlatformOrderItem[] = (o.line_items || o.order_line_list || []).map((item: any) => ({
             externalItemId: item.id || item.order_line_id,
             productName: item.product_name || item.sku_name || '',
             sku: item.seller_sku || item.sku_id || '',
             quantity: item.quantity || 1,
-            unitPrice: parseFloat(item.sale_price || item.original_price || '0') / 100, // TikTok uses cents
-            discount: (parseFloat(item.platform_discount || '0') + parseFloat(item.seller_discount || '0')) / 100,
-            lineTotal: parseFloat(item.sale_price || '0') * (item.quantity || 1) / 100,
+            unitPrice: this.toMajor(item.sale_price || item.original_price, factor),
+            discount: (this.toMajor(item.platform_discount, factor) + this.toMajor(item.seller_discount, factor)),
+            lineTotal: this.toMajor(item.sale_price, factor) * (item.quantity || 1),
         }))
-
-        const payment = o.payment || {}
 
         return {
             externalOrderId: o.id || o.order_id,
@@ -311,7 +339,7 @@ export class TikTokService extends PlatformService {
             shippingAddress: [addr.address_detail, addr.district, addr.city, addr.region_code].filter(Boolean).join(', '),
             subtotal: items.reduce((s, i) => s + i.lineTotal, 0),
             discount: 0,
-            shippingFee: parseFloat(payment.shipping_fee || o.shipping_fee || '0') / 100,
+            shippingFee: this.toMajor(payment.shipping_fee || o.shipping_fee, factor),
             total: items.reduce((s, i) => s + i.lineTotal, 0),
             paymentMethod: payment.payment_method || 'TikTok',
             paymentStatus: this.mapPaymentStatus(o.status?.toString() || ''),
