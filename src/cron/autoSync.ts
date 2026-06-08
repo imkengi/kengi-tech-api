@@ -1,5 +1,5 @@
 import { registryPrisma, getStorePrisma } from '../lib/prisma'
-import { getPlatformService, type PlatformOrder } from '../services/platforms'
+import { getPlatformService, TikTokService, type PlatformOrder } from '../services/platforms'
 import { processNewOrders } from '../services/orderSync'
 
 const SYNC_INTERVAL    = 10 * 60 * 1000       // 10 phút
@@ -21,14 +21,41 @@ async function syncChannel(storePrisma: any, channel: any): Promise<{ imported: 
     })
     if (!service) return { imported: 0, updated: 0, errors: ['Platform not supported'] }
 
+    // ── TikTok: ensure we have the real shop_cipher (self-heal) ──────────────
+    // Order endpoints require shop_cipher (NOT open_id). Older connections stored
+    // open_id as shopId → TikTok rejects with 106011 "Invalid shop_cipher". The
+    // manual /sync route already re-resolves this; the cron must do the same, or
+    // it loops forever on the stale cipher. Re-resolve from
+    // /authorization/202309/shops and persist if it changed.
+    if (channel.platform === 'tiktok' && service instanceof TikTokService && (service as any).credentials.accessToken) {
+        try {
+            const cipher = await service.getShopCipher()
+            if (cipher && cipher !== channel.shopId) {
+                (service as any).credentials.shopId = cipher
+                await storePrisma.onlineChannel.update({
+                    where: { id: channel.id },
+                    data: { shopId: cipher },
+                })
+                console.log(`[AutoSync] Resolved TikTok shop_cipher for ${channel.name}`)
+            }
+        } catch (cipherErr: any) {
+            console.error(`[AutoSync] Failed to resolve TikTok shop_cipher for ${channel.name}:`, cipherErr.message)
+        }
+    }
+
     const since = channel.lastSyncAt || new Date(Date.now() - 7 * 86400_000)
     let allOrders: PlatformOrder[] = []
     let page = 1
     let hasMore = true
 
+    // TikTok v202309 paginates by opaque page_token cursor, not numeric page; thread
+    // both so each platform reads what it needs (otherwise TikTok re-fetches page 1).
+    let pageToken: string | undefined = undefined
     while (hasMore && page <= 10) {
-        const result = await service.fetchOrders({ since, page, pageSize: 50 })
+        const result: { orders: PlatformOrder[]; hasMore: boolean; total: number; nextPageToken?: string } =
+            await service.fetchOrders({ since, page, pageSize: 50, pageToken })
         allOrders = allOrders.concat(result.orders)
+        pageToken = result.nextPageToken
         hasMore = result.hasMore
         page++
     }
