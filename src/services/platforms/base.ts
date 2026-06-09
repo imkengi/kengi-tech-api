@@ -80,7 +80,16 @@ export abstract class PlatformService {
     protected credentials: PlatformCredentials
 
     constructor(credentials: PlatformCredentials) {
-        this.credentials = credentials
+        // Trim all string credentials — copy-paste from web UIs often includes
+        // invisible whitespace that breaks HMAC signatures (TikTok 106001).
+        this.credentials = {
+            ...credentials,
+            apiKey: credentials.apiKey?.trim(),
+            apiSecret: credentials.apiSecret?.trim(),
+            accessToken: credentials.accessToken?.trim(),
+            refreshToken: credentials.refreshToken?.trim(),
+            shopId: credentials.shopId?.trim(),
+        }
     }
 
     /** Platform name identifier */
