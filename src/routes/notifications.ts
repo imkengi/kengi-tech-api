@@ -42,7 +42,13 @@ router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => 
 })
 
 // GET /api/notifications/stream — SSE connection
-router.get('/stream', authMiddleware, (req: AuthRequest, res: Response) => {
+router.get('/stream', (req, _res, next) => {
+    // EventSource can't set headers — accept token from query param
+    if (req.query.token && !req.headers.authorization) {
+        req.headers.authorization = `Bearer ${req.query.token}`
+    }
+    next()
+}, authMiddleware, (req: AuthRequest, res: Response) => {
     const storeId = (req as any).storeId || req.user?.storeSchema || 'default'
 
     res.writeHead(200, {
