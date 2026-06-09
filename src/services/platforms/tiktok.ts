@@ -21,8 +21,15 @@ export class TikTokService extends PlatformService {
             .filter(k => !['sign', 'access_token', 'x-tts-access-token', 'app_secret'].includes(k))
             .sort()
         const paramString = sorted.map(k => `${k}${params[k]}`).join('')
-        const signBase = `${this.credentials.apiSecret}${path}${paramString}${body || ''}${this.credentials.apiSecret}`
-        return this.hmacSha256(signBase, this.credentials.apiSecret)
+        const secret = this.credentials.apiSecret
+        const signBase = `${secret}${path}${paramString}${body || ''}${secret}`
+        const sign = this.hmacSha256(signBase, secret)
+
+        // Diagnostic: log signing details to debug 106001 "invalid sign"
+        const redacted = secret.length > 8 ? `${secret.slice(0, 4)}...${secret.slice(-4)}` : '***'
+        console.log(`[TikTok][sign] path=${path} params=[${sorted.join(',')}] secret=${redacted}(${secret.length}ch) appKey=${this.credentials.apiKey} sign=${sign.slice(0, 12)}...`)
+
+        return sign
     }
 
     /**
@@ -144,7 +151,9 @@ export class TikTokService extends PlatformService {
      */
     async getAuthorizedShops(): Promise<any[]> {
         const path = '/authorization/202309/shops'
+        console.log(`[TikTok] getAuthorizedShops: appKey=${this.credentials.apiKey}, hasToken=${!!this.credentials.accessToken}, shopId=${this.credentials.shopId || '(none)'}`)
         const { url, headers } = this.buildUrl(path, {}, undefined, { noShopCipher: true })
+        console.log(`[TikTok] getAuthorizedShops URL: ${url.replace(/sign=[^&]+/, 'sign=REDACTED')}`)
         const data = await this.httpGet(url, headers)
         if (data.code !== 0) {
             console.error('[TikTok] getAuthorizedShops failed:', JSON.stringify({
@@ -152,9 +161,11 @@ export class TikTokService extends PlatformService {
                 message: data.message,
                 request_id: data.request_id,
                 hasAccessToken: !!this.credentials.accessToken,
+                appKey: this.credentials.apiKey,
             }))
             throw new Error(`TikTok getShops: [${data.code}] ${data.message || 'Unknown error'}`)
         }
+        console.log(`[TikTok] getAuthorizedShops OK: ${JSON.stringify(data.data?.shops?.map((s: any) => ({ id: s.id, name: s.name, cipher: s.cipher })))}`)
         return data.data?.shops || []
     }
 
