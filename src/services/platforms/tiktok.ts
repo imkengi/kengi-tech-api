@@ -110,6 +110,18 @@ export class TikTokService extends PlatformService {
         const tokenData = data.data || {}
         const accessToken = tokenData.access_token
 
+        // Log full token exchange response for debugging scope issues
+        console.log('[TikTok] Token exchange response:', JSON.stringify({
+            granted_scopes: tokenData.granted_scopes,
+            open_id: tokenData.open_id,
+            seller_name: tokenData.seller_name,
+            seller_base_region: tokenData.seller_base_region,
+            user_type: tokenData.user_type,
+            hasAccessToken: !!accessToken,
+            hasRefreshToken: !!tokenData.refresh_token,
+            access_token_expire_in: tokenData.access_token_expire_in,
+        }))
+
         // Order/product endpoints need the real shop_cipher (NOT open_id or shop_id).
         // Resolve it now via /authorization/202309/shops using the fresh access token,
         // and store it as shopId so buildUrl() can pass it as shop_cipher.
@@ -339,12 +351,20 @@ export class TikTokService extends PlatformService {
             lineTotal: this.toMajor(item.sale_price, factor) * (item.quantity || 1),
         }))
 
+        // TikTok v202309 returns `status` as a string enum (COMPLETED, IN_TRANSIT,
+        // AWAITING_SHIPMENT, etc.). Earlier API versions used numeric codes. Accept
+        // both `status` and `order_status` for resilience.
+        const rawStatus = (o.status || o.order_status)?.toString() || ''
+
+        // Diagnostic: log the first few orders' status fields so we can verify mapping
+        console.log(`[TikTok][mapOrder] id=${o.id || o.order_id} status=${o.status} order_status=${o.order_status} rawStatus=${rawStatus} → ${this.mapStatus(rawStatus)}`)
+
         return {
             externalOrderId: o.id || o.order_id,
             orderNumber: `TIK-${o.id || o.order_id}`,
             platform: 'tiktok',
-            status: this.mapStatus(o.status?.toString() || ''),
-            externalStatus: o.status?.toString() || '',
+            status: this.mapStatus(rawStatus),
+            externalStatus: rawStatus,
             customerName: addr.name || addr.full_name || 'Khách TikTok',
             customerPhone: addr.phone_number || addr.phone || '',
             shippingAddress: [addr.address_detail, addr.district, addr.city, addr.region_code].filter(Boolean).join(', '),
@@ -353,7 +373,7 @@ export class TikTokService extends PlatformService {
             shippingFee: this.toMajor(payment.shipping_fee || o.shipping_fee, factor),
             total: items.reduce((s, i) => s + i.lineTotal, 0),
             paymentMethod: payment.payment_method || 'TikTok',
-            paymentStatus: this.mapPaymentStatus(o.status?.toString() || ''),
+            paymentStatus: this.mapPaymentStatus(rawStatus),
             trackingNumber: o.tracking_number || undefined,
             shippingCarrier: o.shipping_provider || o.shipping_provider_id || undefined,
             items,

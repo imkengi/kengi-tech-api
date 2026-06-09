@@ -59,8 +59,8 @@ router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => 
                 totalNetRevenue: canSeeProfits ? (totals._sum.netRevenue ?? 0) : undefined,
                 // Completion rate: gom cả COMPLETED và completed
                 completionRate: totalOrders > 0 ? Math.round((countFor('COMPLETED', 'completed') / totalOrders) * 100) : 0,
-                // Pending count (Chờ xử lý): UNPAID + READY_TO_SHIP + pending + confirmed
-                pendingCount: countFor('UNPAID', 'READY_TO_SHIP', 'pending', 'confirmed'),
+                // Pending count (Chờ xử lý): only orders ready to process/ship, NOT unpaid orders
+                pendingCount: countFor('READY_TO_SHIP', 'AWAITING_SHIPMENT', 'confirmed'),
                 // Processing count (Đã xử lý): PROCESSED + processing
                 processingCount: countFor('PROCESSED', 'processing'),
                 // Shipping count: SHIPPED + shipping
@@ -280,8 +280,16 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
                 cancelled:   ['cancelled', 'CANCELLED'],
                 returned:    ['returned', 'TO_RETURN'],
             }
-            const variants = STATUS_VARIANTS[status as string]
-            where.status = variants ? { in: variants } : status as string
+            // Frontend gửi nhiều trạng thái cùng lúc dạng `?status=A,B,C`
+            // (mỗi tab gom Shopee UPPERCASE + TikTok + legacy lowercase).
+            // Tách CSV, expand từng giá trị qua STATUS_VARIANTS, rồi lọc bằng { in: [...] }.
+            const requested = (status as string).split(',').map(s => s.trim()).filter(Boolean)
+            const expanded = new Set<string>()
+            for (const s of requested) {
+                expanded.add(s)
+                for (const v of STATUS_VARIANTS[s] ?? []) expanded.add(v)
+            }
+            where.status = { in: [...expanded] }
         }
         if (channelId) where.channelId = channelId as string
         if (platform && platform !== 'all') where.platform = platform
