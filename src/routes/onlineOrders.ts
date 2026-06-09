@@ -48,6 +48,34 @@ router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => 
         const countFor = (...statuses: string[]) =>
             statuses.reduce((sum, s) => sum + (byStatus.find(b => b.status === s)?._count ?? 0), 0)
 
+        // Group synonym statuses into their primary key for the donut chart so that
+        // e.g. READY_TO_SHIP/AWAITING_SHIPMENT/confirmed collapse into one slice.
+        const STATUS_GROUP: Record<string, string> = {
+            'UNPAID': 'UNPAID', 'ON_HOLD': 'UNPAID', 'pending': 'UNPAID',
+            'READY_TO_SHIP': 'READY_TO_SHIP', 'AWAITING_SHIPMENT': 'READY_TO_SHIP', 'confirmed': 'READY_TO_SHIP',
+            'PROCESSED': 'PROCESSED', 'AWAITING_COLLECTION': 'PROCESSED', 'processing': 'PROCESSED',
+            'SHIPPED': 'SHIPPED', 'IN_TRANSIT': 'SHIPPED', 'shipping': 'SHIPPED',
+            'TO_CONFIRM_RECEIVE': 'TO_CONFIRM_RECEIVE', 'DELIVERED': 'TO_CONFIRM_RECEIVE', 'delivered': 'TO_CONFIRM_RECEIVE',
+            'COMPLETED': 'COMPLETED', 'completed': 'COMPLETED',
+            'IN_CANCEL': 'IN_CANCEL',
+            'CANCELLED': 'CANCELLED', 'cancelled': 'CANCELLED',
+            'TO_RETURN': 'TO_RETURN',
+        }
+        const grouped = new Map<string, { _count: number; _sum: { total: number } }>()
+        for (const b of byStatus) {
+            const key = STATUS_GROUP[b.status] || b.status
+            const existing = grouped.get(key)
+            if (existing) {
+                existing._count += b._count
+                existing._sum.total += (b._sum?.total || 0)
+            } else {
+                grouped.set(key, { _count: b._count, _sum: { total: b._sum?.total || 0 } })
+            }
+        }
+        const groupedByStatus = [...grouped.entries()]
+            .map(([status, data]) => ({ status, _count: data._count, _sum: data._sum }))
+            .sort((a, b) => b._count - a._count)
+
         res.json({
             success: true,
             data: {
@@ -65,7 +93,7 @@ router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => 
                 processingCount: countFor('PROCESSED', 'processing'),
                 // Shipping count: SHIPPED + shipping
                 shippingCount: countFor('SHIPPED', 'shipping'),
-                byStatus: byStatus.map(s => ({ status: s.status, count: s._count, revenue: s._sum.total ?? 0 })),
+                byStatus: groupedByStatus.map(s => ({ status: s.status, count: s._count, revenue: s._sum.total ?? 0 })),
                 byChannel: byChannel.map(c => ({ platform: c.platform, count: c._count, revenue: c._sum.total ?? 0 })),
                 canSeeProfits,
             },
