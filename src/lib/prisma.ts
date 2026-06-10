@@ -142,6 +142,23 @@ async function createBranchSchema(schemaName: string): Promise<void> {
 }
 
 /**
+ * Sync an EXISTING branch schema with the current schema-store.prisma.
+ * Unlike createBranchSchema, this propagates errors (no raw-SQL fallback) so
+ * the caller can report exactly which schema failed and why. Used by
+ * POST /admin/sync-schemas after schema-store.prisma gains tables/columns.
+ */
+async function syncBranchSchemaTables(schemaName: string): Promise<void> {
+    validateSchemaName(schemaName)
+    const base = getBaseDbUrl()
+    const sep = base.includes('?') ? '&' : '?'
+    const schemaUrl = `${base}${sep}schema=${schemaName}`
+    execSync('npx prisma db push --schema=prisma/schema-store.prisma --skip-generate --accept-data-loss', {
+        stdio: 'pipe',
+        env: { ...process.env, STORE_DATABASE_URL: schemaUrl, DATABASE_URL: schemaUrl },
+    })
+}
+
+/**
  * Fallback: create minimal tables via raw SQL if prisma db push is unavailable.
  * This creates the core tables needed for a branch to function.
  */
@@ -264,6 +281,7 @@ export {
     getStorePrisma,
     branchIdToSchema,
     createBranchSchema,
+    syncBranchSchemaTables,
     dropBranchSchema,
     disconnectAll,
     mapWithConcurrency,

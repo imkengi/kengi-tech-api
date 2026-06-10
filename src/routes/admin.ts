@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express'
 import { errMsg } from '../lib/errorResponse'
-import { registryPrisma, getStorePrisma, dropStoreSchema, mapWithConcurrency } from '../lib/prisma'
+import { registryPrisma, getStorePrisma, dropStoreSchema, mapWithConcurrency, syncBranchSchemaTables } from '../lib/prisma'
 import { invalidateStoreStatus } from '../lib/storeStatusCache'
 
 const router = Router()
@@ -558,6 +558,42 @@ if (process.env.NODE_ENV === 'development') {
         res.status(403).json({ success: false, error: 'This endpoint is disabled in production' })
     })
 }
+
+// ─── POST /admin/sync-schemas — prisma db push for every branch schema ───────
+// Brings ALL existing branch schemas up to date with schema-store.prisma
+// (new tables like ChartOfAccount, new columns like FixedAsset.residualValue).
+// Body (optional): { schema: "branch_xxx" } to sync a single schema.
+router.post('/sync-schemas', async (req: Request, res: Response) => {
+    try {
+        let schemas: string[]
+        if (req.body?.schema) {
+            schemas = [String(req.body.schema)]
+        } else {
+            const rows = await (prisma as any).$queryRawUnsafe(
+                `SELECT schema_name FROM information_schema.schemata WHERE schema_name LIKE 'branch_%' ORDER BY schema_name`
+            ) as { schema_name: string }[]
+            schemas = rows.map(r => r.schema_name)
+        }
+
+        const results: { schema: string; status: string; ms: number }[] = []
+        for (const schema of schemas) {
+            const t0 = Date.now()
+            try {
+                await syncBranchSchemaTables(schema)
+                results.push({ schema, status: 'ok', ms: Date.now() - t0 })
+            } catch (e: any) {
+                const detail = (e.stderr?.toString?.() || e.message || '').slice(0, 500)
+                results.push({ schema, status: `error: ${detail}`, ms: Date.now() - t0 })
+            }
+        }
+
+        const failed = results.filter(r => r.status !== 'ok')
+        res.json({ success: failed.length === 0, synced: results.length - failed.length, failed: failed.length, results })
+    } catch (err: any) {
+        console.error('Sync schemas error:', err)
+        res.status(500).json({ success: false, error: errMsg(err, 'Sync schemas failed') })
+    }
+})
 
 // ─── POST /admin/migrate — Add new columns to registry + store schemas ───────
 router.post('/migrate', async (_req: Request, res: Response) => {
