@@ -1103,6 +1103,7 @@ router.get('/shipping-label/:id', authMiddleware, async (req: AuthRequest, res: 
             pdf = result.pdf
             contentType = result.contentType
         }
+
         res.setHeader('Content-Type', contentType)
         res.setHeader('Content-Disposition', `inline; filename="shipping-label-${order.orderNumber}.pdf"`)
         res.send(pdf)
@@ -1224,6 +1225,7 @@ router.post('/shipping-label-batch', authMiddleware, async (req: AuthRequest, re
             }
             pdf = Buffer.from(await merged.save())
         }
+
         // Log any partial errors
         if (errors.length > 0) {
             console.warn(`[Shipping Label Batch] Partial errors: ${errors.join('; ')}`)

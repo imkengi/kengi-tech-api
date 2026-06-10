@@ -5,7 +5,7 @@ import jwt from 'jsonwebtoken'
 import crypto from 'crypto'
 import { execSync } from 'child_process'
 import { registryPrisma, getStorePrisma, branchIdToSchema, createBranchSchema, dropBranchSchema } from '../lib/prisma'
-import { authMiddleware, AuthRequest } from '../middleware/auth'
+import { authMiddleware, AuthRequest, AuthPayload, registerSseRefresh } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
 import { generateOtpCode, saveOtp, verifyOtp, consumeOtp, canSendOtp, OTP_CONFIG } from '../lib/otp'
 import { generateDeviceToken, saveTrustedDevice, isDeviceTrusted, TRUSTED_DEVICE_CONFIG } from '../lib/trustedDevice'
@@ -1404,6 +1404,10 @@ router.post('/token', async (req: Request, res: Response) => {
 
         // Find main branch for JWT payload
         const mainBranch = await storePrisma.branch.findFirst({ where: { isMainBranch: true } })
+        if (!mainBranch) {
+            res.status(500).json({ success: false, error: 'Store has no main branch configured' })
+            return
+        }
 
         // Find API key by clientId (keyId)
         const apiKey = await storePrisma.apiKey.findFirst({
@@ -1456,6 +1460,35 @@ router.post('/token', async (req: Request, res: Response) => {
         console.error('Token exchange error:', err?.message || err)
         res.status(500).json({ success: false, error: 'Internal server error' })
     }
+})
+
+// ─── Wire SSE auto-refresh so streaming endpoints can transparently renew ────
+registerSseRefresh(async (rt: string): Promise<{ token: string; payload: AuthPayload } | null> => {
+    try {
+        const stored = await loadRefreshToken(rt)
+        if (!stored || stored.expiresAt < new Date()) {
+            if (stored) await deleteRefreshToken(rt)
+            return null
+        }
+        const storePrisma = getStorePrisma(stored.branchSchema)
+        const user = await storePrisma.user.findUnique({
+            where: { id: stored.userId },
+            select: { id: true, email: true, role: true, isLocked: true, permissions: true },
+        }).catch(() => null)
+        if (!user || (user as any).isLocked) return null
+
+        const { userId, email, storeId, storeCode, branchId, branchSchema, isMainBranch } = stored
+        const payload: AuthPayload = {
+            userId, email, role: user.role,
+            storeId, storeCode, branchId: branchId || undefined,
+            branchSchema, storeSchema: branchSchema, isMainBranch,
+        }
+        const token = jwt.sign(
+            { ...payload, permissions: JSON.parse((user as any).permissions || '[]') },
+            JWT_SECRET, { expiresIn: ACCESS_TOKEN_TTL } as any,
+        )
+        return { token, payload }
+    } catch { return null }
 })
 
 export default router

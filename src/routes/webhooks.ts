@@ -11,7 +11,7 @@ const router = Router()
 // Cache shop_id → store schema for 1h. Avoids scanning every active store schema
 // on every webhook delivery; invalidates naturally when channel credentials rotate.
 const SHOP_SCHEMA_TTL = 3600
-const shopSchemaCacheKey = (shopId: string) => `webhook:shopee:shop:h${shopId}:schema`
+const shopSchemaCacheKey = (shopId: string) => `webhook:shopee:shop:${shopId}:schema`
 const tiktokSchemaCacheKey = (shopId: string) => `webhook:tiktok:shop:${shopId}:schema`
 
 // Shopee push signature: HMAC-SHA256(partner_key, push_url + "|" + raw_body) hex.
@@ -34,7 +34,7 @@ function verifyShopeeSignature(rawBody: Buffer, url: string, partnerKey: string,
 //  No auth required — Shopee sends POST to this endpoint
 //  Push Codes:
 //    0  = shop authorization
-//    3  = order status change
+//    3  = order status change  
 //    4  = tracking number update
 //    5  = Shopee updates
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -266,7 +266,7 @@ router.post('/tiktok', async (req: Request, res: Response) => {
 
         console.log(`[TikTok Webhook] type=${pushType} shop=${shopId} data=${JSON.stringify(data).substring(0, 300)}`)
 
-        // Only process order-related push types (1 = order status change, 6 = package update)
+        // Only process order-related push types (1 = order status change, 4 = package update)
         if (pushType !== 1 && pushType !== 4) {
             console.log(`[TikTok Webhook] Ignoring push type ${pushType}`)
             return

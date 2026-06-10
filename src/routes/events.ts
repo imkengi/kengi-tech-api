@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { Router, Request, Response } from 'express'
-import { authMiddleware, AuthRequest } from '../middleware/auth'
+import { sseAuthMiddleware, AuthRequest } from '../middleware/auth'
 import { localEmitter } from '../lib/pubsub'
 
 const router = Router()
@@ -13,13 +13,7 @@ const router = Router()
 const sseClients = new Map<string, Set<Response>>()
 
 // ─── SSE Endpoint: GET /api/events ──────────────────────────────────────────
-router.get('/', (req, _res, next) => {
-    // EventSource API can't set custom headers — accept token from query param
-    if (req.query.token && !req.headers.authorization) {
-        req.headers.authorization = `Bearer ${req.query.token}`
-    }
-    next()
-}, authMiddleware, (req: AuthRequest, res: Response) => {
+router.get('/', sseAuthMiddleware, (req: AuthRequest, res: Response) => {
     const schema = req.user?.storeSchema
     if (!schema) {
         res.status(401).json({ error: 'Unauthorized' })

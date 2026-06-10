@@ -217,3 +217,76 @@ export function canAccessBranch(req: AuthRequest, recordBranchId: string | null 
     if (!userBranchId) return true
     return recordBranchId === userBranchId
 }
+
+// ─── SSE Auth: auto-refresh for long-lived streaming connections ────────────
+// SSE (EventSource) cannot set custom headers and tokens expire while streams
+// are alive. This middleware transparently refreshes expired access tokens when
+// a valid refresh token is supplied via query param (?rt=<refreshToken>).
+
+type SseRefreshFn = (rt: string) => Promise<{ token: string; payload: AuthPayload } | null>
+let _sseRefreshFn: SseRefreshFn | null = null
+
+/** Called by auth routes at startup to wire in the internal refresh logic. */
+export function registerSseRefresh(fn: SseRefreshFn): void { _sseRefreshFn = fn }
+
+/**
+ * SSE-specific auth middleware:
+ * 1. Extracts token from ?token= query param (EventSource can't set headers)
+ * 2. On expired JWT + ?rt= present, auto-refreshes transparently
+ * 3. Sets X-New-Token response header so clients can update their stored token
+ */
+export const sseAuthMiddleware = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
+    // EventSource can't set headers — accept token from query param
+    if (req.query.token && !req.headers.authorization) {
+        req.headers.authorization = `Bearer ${req.query.token}`
+    }
+
+    const authHeader = req.headers.authorization
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.split(' ')[1]
+        try {
+            const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as AuthPayload
+            req.user = decoded
+
+            const schema = resolveSchema(decoded)
+            if (schema) {
+                req.storePrisma = getStorePrisma(schema)
+
+                if (decoded.storeId && decoded.role !== 'superadmin') {
+                    const status = await getStoreStatus(decoded.storeId)
+                    if (status === 'suspended') {
+                        res.status(403).json({ success: false, error: 'Store suspended', code: 'STORE_SUSPENDED' })
+                        return
+                    }
+                }
+            }
+
+            next()
+            return
+        } catch (err: any) {
+            // If token expired and we have a refresh token, try auto-refresh
+            if (err.name === 'TokenExpiredError' && req.query.rt && _sseRefreshFn) {
+                try {
+                    const result = await _sseRefreshFn(String(req.query.rt))
+                    if (result) {
+                        req.user = result.payload
+                        const schema = resolveSchema(result.payload)
+                        if (schema) req.storePrisma = getStorePrisma(schema)
+                        // Tell client about the new token via response header
+                        res.setHeader('X-New-Token', result.token)
+                        next()
+                        return
+                    }
+                } catch { /* fall through to 401 */ }
+            }
+            // JWT invalid and no refresh — try API key
+        }
+    }
+
+    // Fallback: X-API-Key
+    const authenticated = await tryApiKeyAuth(req)
+    if (authenticated) { next(); return }
+
+    res.status(401).json({ success: false, error: 'Access token required' })
+}

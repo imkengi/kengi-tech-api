@@ -307,12 +307,11 @@ export class TikTokService extends PlatformService {
         return { products: [], total: 0 }
     }
 
-
-    // âââ Shipping Documents ââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    // ─── Shipping Documents ────────────────────────────────────────────────────
 
     /**
-     * Download the shipping label (váº­n ÄÆ¡n) for a TikTok order.
-     * Flow: get order detail â extract first package_id â call fulfillment API â download PDF from doc_url.
+     * Download the shipping label (vận đơn) for a TikTok order.
+     * Flow: get order detail → extract first package_id → call fulfillment API → download PDF from doc_url.
      * TikTok API: GET /fulfillment/202309/packages/{package_id}/shipping_documents
      */
     async downloadShippingLabel(orderId: string): Promise<{ pdf: Buffer; contentType: string }> {
@@ -326,20 +325,20 @@ export class TikTokService extends PlatformService {
         }
 
         const order = orderData.data?.orders?.[0]
-        if (!order) throw new Error(`ÄÆ¡n TikTok ${orderId} khÃ´ng tá»n táº¡i`)
+        if (!order) throw new Error(`Đơn TikTok ${orderId} không tồn tại`)
 
         // Extract package_id from the order's packages array
         const packages = order.packages || order.package_list || []
         if (packages.length === 0) {
-            throw new Error(`ÄÆ¡n TikTok ${orderId} chÆ°a cÃ³ kiá»n hÃ ng (package). Cáº§n á» tráº¡ng thÃ¡i "Chá» gá»­i hÃ ng" trá» lÃªn.`)
+            throw new Error(`Đơn TikTok ${orderId} chưa có kiện hàng (package). Cần ở trạng thái "Chờ gửi hàng" trở lên.`)
         }
 
         const packageId = packages[0].id || packages[0].package_id
         if (!packageId) {
-            throw new Error(`ÄÆ¡n TikTok ${orderId} khÃ´ng cÃ³ package_id. Packages: ${JSON.stringify(packages).substring(0, 200)}`)
+            throw new Error(`Đơn TikTok ${orderId} không có package_id. Packages: ${JSON.stringify(packages).substring(0, 200)}`)
         }
 
-        console.log(`[TikTok AWB] Order ${orderId} â package ${packageId}`)
+        console.log(`[TikTok AWB] Order ${orderId} → package ${packageId}`)
 
         // Step 2: Get shipping document URL
         const docPath = `/fulfillment/202309/packages/${packageId}/shipping_documents`
@@ -356,14 +355,14 @@ export class TikTokService extends PlatformService {
 
         const pdfUrl = docData.data?.doc_url
         if (!pdfUrl) {
-            throw new Error(`TikTok khÃ´ng tráº£ vá» URL váº­n ÄÆ¡n cho package ${packageId}`)
+            throw new Error(`TikTok không trả về URL vận đơn cho package ${packageId}`)
         }
 
         console.log(`[TikTok AWB] doc_url: ${pdfUrl.substring(0, 80)}...`)
 
         // Step 3: Download the PDF from the URL
         const pdfRes = await fetch(pdfUrl)
-        if (!pdfRes.ok) throw new Error(`Lá»i táº£i váº­n ÄÆ¡n TikTok: HTTP ${pdfRes.status}`)
+        if (!pdfRes.ok) throw new Error(`Lỗi tải vận đơn TikTok: HTTP ${pdfRes.status}`)
 
         const arrayBuf = await pdfRes.arrayBuffer()
         const contentType = pdfRes.headers.get('content-type') || 'application/pdf'
