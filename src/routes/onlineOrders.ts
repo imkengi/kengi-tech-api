@@ -1781,6 +1781,16 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
         //   105001/105002 — access token expired / invalid
         //   106001 — invalid HMAC sign (app secret wrong/changed, or algorithm mismatch)
         const m = String(err?.message || '')
+        // Shopee blocks API calls from server IPs not declared in its console.
+        // Cloud Run egress IPs rotate, so surface the offending IP for the operator.
+        if (/source_ip_undeclared/i.test(m)) {
+            const ip = m.match(/\(([\d.]+)\)/)?.[1]
+            res.status(400).json({
+                success: false,
+                error: `Shopee chặn IP máy chủ${ip ? ` (${ip})` : ''}: cần thêm IP này vào Shopee Open Platform Console → App List → IP Address Whitelist. Lưu ý: IP Cloud Run có thể thay đổi theo thời gian — nếu lỗi lặp lại với IP khác, cân nhắc cấu hình IP tĩnh (VPC connector + Cloud NAT).`,
+            })
+            return
+        }
         if (/\b106001\b/.test(m) || /sign.*invalid|invalid.*sign/i.test(m)) {
             res.status(400).json({
                 success: false,

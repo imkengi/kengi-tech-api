@@ -25,10 +25,6 @@ export class TikTokService extends PlatformService {
         const signBase = `${secret}${path}${paramString}${body || ''}${secret}`
         const sign = this.hmacSha256(signBase, secret)
 
-        // Diagnostic: log signing details to debug 106001 "invalid sign"
-        const redacted = secret.length > 8 ? `${secret.slice(0, 4)}...${secret.slice(-4)}` : '***'
-        console.log(`[TikTok][sign] path=${path} params=[${sorted.join(',')}] secret=${redacted}(${secret.length}ch) appKey=${this.credentials.apiKey} sign=${sign.slice(0, 12)}...`)
-
         return sign
     }
 
@@ -419,9 +415,6 @@ export class TikTokService extends PlatformService {
         // AWAITING_SHIPMENT, etc.). Earlier API versions used numeric codes. Accept
         // both `status` and `order_status` for resilience.
         const rawStatus = (o.status || o.order_status)?.toString() || ''
-
-        // Diagnostic: log the first few orders' status fields so we can verify mapping
-        console.log(`[TikTok][mapOrder] id=${o.id || o.order_id} status=${o.status} order_status=${o.order_status} rawStatus=${rawStatus} → ${this.mapStatus(rawStatus)}`)
 
         return {
             externalOrderId: o.id || o.order_id,
