@@ -1,9 +1,5 @@
 import { Router, Response } from 'express'
-
-        } else if (msg.includes('chưa có kiện hàng')) {
-            friendly = msg // Already Vietnamese
-        } else if (msg.includes('TikTok shipping document')) {
-            friendly = `Lỗi lấy vận đơn TikTok: ${msg}`import { errMsg } from '../lib/errorResponse'
+import { errMsg } from '../lib/errorResponse'
 import { authMiddleware, AuthRequest, getBranchFilter } from '../middleware/auth'
 import { nextCode } from '../lib/codeGenerator'
 
@@ -900,7 +896,7 @@ router.get('/shipping-label-debug/:id', authMiddleware, async (req: AuthRequest,
         })
         if (!order) { res.json({ error: 'not found' }); return }
         const channel = order.channel
-        if (!channel || !['shopee', 'tiktok'].includes(channel.platform)) { res.json({ error: 'not shopee' }); return }
+        if (!channel || channel.platform !== 'shopee') { res.json({ error: 'not shopee' }); return }
 
         let orderSn = (order.externalOrderId || '').replace(/^(SPE-|TIK-|LAZ-)/i, '')
         const shopee = new ShopeeService({
@@ -1014,7 +1010,7 @@ router.get('/shipping-label/:id', authMiddleware, async (req: AuthRequest, res: 
         if (!order) { res.status(404).json({ success: false, error: 'Đơn hàng không tồn tại' }); return }
 
         const channel = order.channel
-        if (!channel || channel.platform !== 'shopee') {
+        if (!channel || !['shopee', 'tiktok'].includes(channel.platform)) {
             res.status(400).json({ success: false, error: 'Chỉ hỗ trợ in vận đơn Shopee và TikTok. Đơn này thuộc kênh: ' + (channel?.platform || 'không rõ') })
             return
         }
@@ -1119,6 +1115,10 @@ router.get('/shipping-label/:id', authMiddleware, async (req: AuthRequest, res: 
             friendly = 'Đơn chưa sẵn sàng in vận đơn. Cần ở trạng thái "Chờ gửi hàng" (READY_TO_SHIP) trên Shopee.'
         } else if (msg.includes('order_status')) {
             friendly = 'Trạng thái đơn không hỗ trợ in vận đơn. Đơn phải đang "Chờ gửi hàng".'
+        } else if (msg.includes('chưa có kiện hàng')) {
+            friendly = msg // Already Vietnamese
+        } else if (msg.includes('TikTok shipping document')) {
+            friendly = `Lỗi lấy vận đơn TikTok: ${msg}`
         }
         res.status(500).json({ success: false, error: friendly })
     }
