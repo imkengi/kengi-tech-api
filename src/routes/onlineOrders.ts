@@ -1,5 +1,9 @@
 import { Router, Response } from 'express'
-import { errMsg } from '../lib/errorResponse'
+
+        } else if (msg.includes('chưa có kiện hàng')) {
+            friendly = msg // Already Vietnamese
+        } else if (msg.includes('TikTok shipping document')) {
+            friendly = `Lỗi lấy vận đơn TikTok: ${msg}`import { errMsg } from '../lib/errorResponse'
 import { authMiddleware, AuthRequest, getBranchFilter } from '../middleware/auth'
 import { nextCode } from '../lib/codeGenerator'
 
@@ -896,7 +900,7 @@ router.get('/shipping-label-debug/:id', authMiddleware, async (req: AuthRequest,
         })
         if (!order) { res.json({ error: 'not found' }); return }
         const channel = order.channel
-        if (!channel || channel.platform !== 'shopee') { res.json({ error: 'not shopee' }); return }
+        if (!channel || !['shopee', 'tiktok'].includes(channel.platform)) { res.json({ error: 'not shopee' }); return }
 
         let orderSn = (order.externalOrderId || '').replace(/^(SPE-|TIK-|LAZ-)/i, '')
         const shopee = new ShopeeService({
@@ -1011,57 +1015,98 @@ router.get('/shipping-label/:id', authMiddleware, async (req: AuthRequest, res: 
 
         const channel = order.channel
         if (!channel || channel.platform !== 'shopee') {
-            res.status(400).json({ success: false, error: 'Chỉ hỗ trợ in vận đơn Shopee. Đơn này thuộc kênh: ' + (channel?.platform || 'không rõ') })
+            res.status(400).json({ success: false, error: 'Chỉ hỗ trợ in vận đơn Shopee và TikTok. Đơn này thuộc kênh: ' + (channel?.platform || 'không rõ') })
             return
         }
 
-        // Extract the real Shopee order_sn — strip any SPE- prefix
-        let orderSn = order.externalOrderId || ''
-        orderSn = orderSn.replace(/^(SPE-|TIK-|LAZ-)/i, '')
-        if (!orderSn) {
-            res.status(400).json({ success: false, error: 'Đơn này không có mã Shopee (externalOrderId)' })
+        // Extract the real external order ID — strip any platform prefix
+        let externalId = order.externalOrderId || ''
+        externalId = externalId.replace(/^(SPE-|TIK-|LAZ-)/i, '')
+        if (!externalId) {
+            res.status(400).json({ success: false, error: 'Đơn này không có mã đơn ngoài (externalOrderId)' })
             return
         }
 
-        console.log(`[Shipping Label] Order: ${order.orderNumber}, Shopee order_sn: ${orderSn}, Status: ${order.externalStatus}`)
+        console.log(`[Shipping Label] Order: ${order.orderNumber}, platform: ${channel.platform}, externalId: ${externalId}, Status: ${order.externalStatus}`)
 
         let accessToken = (channel as any).accessToken || ''
         const refreshToken = (channel as any).refreshToken || ''
         const tokenExpiresAt = (channel as any).tokenExpiresAt
 
-        const shopee = new ShopeeService({
-            apiKey: channel.apiKey || '',
-            apiSecret: channel.apiSecret || '',
-            accessToken,
-            refreshToken,
-            shopId: channel.shopId || '',
-        })
+        let pdf: Buffer
+        let contentType: string
 
-        // Auto-refresh token if expired or about to expire (5 min buffer)
-        if (tokenExpiresAt && new Date(tokenExpiresAt).getTime() < Date.now() + 5 * 60 * 1000) {
-            console.log(`[Shipping Label] Token expired, refreshing...`)
-            try {
-                const tokens = await shopee.refreshAccessToken()
-                accessToken = tokens.accessToken;
-                (shopee as any).credentials.accessToken = tokens.accessToken;
-                (shopee as any).credentials.refreshToken = tokens.refreshToken;
-                // Save new tokens to DB
-                await prisma.onlineChannel.update({
-                    where: { id: channel.id },
-                    data: {
-                        accessToken: tokens.accessToken,
-                        refreshToken: tokens.refreshToken,
-                        tokenExpiresAt: new Date(Date.now() + tokens.expiresIn * 1000),
-                    },
-                })
-                console.log(`[Shipping Label] Token refreshed successfully`)
-            } catch (refreshErr: any) {
-                console.error('[Shipping Label] Token refresh failed:', refreshErr.message)
+        if (channel.platform === 'tiktok') {
+            // ── TikTok shipping label ──
+            const tiktok = new TikTokService({
+                apiKey: channel.apiKey || '',
+                apiSecret: channel.apiSecret || '',
+                accessToken,
+                refreshToken,
+                shopId: channel.shopId || '',
+            })
+
+            // Auto-refresh token if expired or about to expire (5 min buffer)
+            if (tokenExpiresAt && new Date(tokenExpiresAt).getTime() < Date.now() + 5 * 60 * 1000) {
+                console.log(`[Shipping Label] TikTok token expired, refreshing...`)
+                try {
+                    const tokens = await tiktok.refreshAccessToken()
+                    accessToken = tokens.accessToken;
+                    (tiktok as any).credentials.accessToken = tokens.accessToken;
+                    (tiktok as any).credentials.refreshToken = tokens.refreshToken;
+                    await prisma.onlineChannel.update({
+                        where: { id: channel.id },
+                        data: {
+                            accessToken: tokens.accessToken,
+                            refreshToken: tokens.refreshToken,
+                            tokenExpiresAt: new Date(Date.now() + tokens.expiresIn * 1000),
+                        },
+                    })
+                    console.log(`[Shipping Label] TikTok token refreshed successfully`)
+                } catch (refreshErr: any) {
+                    console.error('[Shipping Label] TikTok token refresh failed:', refreshErr.message)
+                }
             }
+
+            const result = await tiktok.downloadShippingLabel(externalId)
+            pdf = result.pdf
+            contentType = result.contentType
+        } else {
+            // ── Shopee shipping label ──
+            const shopee = new ShopeeService({
+                apiKey: channel.apiKey || '',
+                apiSecret: channel.apiSecret || '',
+                accessToken,
+                refreshToken,
+                shopId: channel.shopId || '',
+            })
+
+            // Auto-refresh token if expired or about to expire (5 min buffer)
+            if (tokenExpiresAt && new Date(tokenExpiresAt).getTime() < Date.now() + 5 * 60 * 1000) {
+                console.log(`[Shipping Label] Shopee token expired, refreshing...`)
+                try {
+                    const tokens = await shopee.refreshAccessToken()
+                    accessToken = tokens.accessToken;
+                    (shopee as any).credentials.accessToken = tokens.accessToken;
+                    (shopee as any).credentials.refreshToken = tokens.refreshToken;
+                    await prisma.onlineChannel.update({
+                        where: { id: channel.id },
+                        data: {
+                            accessToken: tokens.accessToken,
+                            refreshToken: tokens.refreshToken,
+                            tokenExpiresAt: new Date(Date.now() + tokens.expiresIn * 1000),
+                        },
+                    })
+                    console.log(`[Shipping Label] Shopee token refreshed successfully`)
+                } catch (refreshErr: any) {
+                    console.error('[Shipping Label] Shopee token refresh failed:', refreshErr.message)
+                }
+            }
+
+            const result = await shopee.downloadShippingLabel(externalId)
+            pdf = result.pdf
+            contentType = result.contentType
         }
-
-        const { pdf, contentType } = await shopee.downloadShippingLabel(orderSn)
-
         res.setHeader('Content-Type', contentType)
         res.setHeader('Content-Disposition', `inline; filename="shipping-label-${order.orderNumber}.pdf"`)
         res.send(pdf)
@@ -1094,58 +1139,91 @@ router.post('/shipping-label-batch', authMiddleware, async (req: AuthRequest, re
             include: { channel: true },
         })
 
-        // Group by channel (should be same channel, but handle edge case)
-        const shopeeOrders = orders.filter(o => o.channel?.platform === 'shopee')
-        if (shopeeOrders.length === 0) {
-            res.status(400).json({ success: false, error: 'Không có đơn Shopee nào trong danh sách' }); return
+        // Group by platform — support Shopee + TikTok
+        const supportedOrders = orders.filter(o => ['shopee', 'tiktok'].includes(o.channel?.platform || ''))
+        if (supportedOrders.length === 0) {
+            res.status(400).json({ success: false, error: 'Không có đơn Shopee/TikTok nào trong danh sách' }); return
         }
 
-        const channel = shopeeOrders[0].channel!
+        const { PDFDocument } = await import('pdf-lib')
+        const pdfBuffers: Buffer[] = []
+        const errors: string[] = []
 
-        // Build order_sn list (strip prefix)
-        const orderSnList = shopeeOrders.map(o => {
-            let sn = o.externalOrderId || ''
-            sn = sn.replace(/^(SPE-|TIK-|LAZ-)/i, '')
-            return sn
-        }).filter(sn => sn.length > 0)
+        // Group orders by channelId to batch by channel
+        const byChannel = new Map<string, typeof supportedOrders>()
+        for (const o of supportedOrders) {
+            const cid = o.channelId || 'unknown'
+            if (!byChannel.has(cid)) byChannel.set(cid, [])
+            byChannel.get(cid)!.push(o)
+        }
 
-        console.log(`[Shipping Label Batch] ${orderSnList.length} orders: ${orderSnList.join(', ')}`)
+        for (const [channelId, channelOrders] of byChannel) {
+            const channel = channelOrders[0].channel!
+            let accessToken = (channel as any).accessToken || ''
+            const refreshToken = (channel as any).refreshToken || ''
+            const tokenExpiresAt = (channel as any).tokenExpiresAt
 
-        let accessToken = (channel as any).accessToken || ''
-        const refreshToken = (channel as any).refreshToken || ''
-        const tokenExpiresAt = (channel as any).tokenExpiresAt
-
-        const shopee = new ShopeeService({
-            apiKey: channel.apiKey || '',
-            apiSecret: channel.apiSecret || '',
-            accessToken,
-            refreshToken,
-            shopId: channel.shopId || '',
-        })
-
-        // Auto-refresh token if expired
-        if (tokenExpiresAt && new Date(tokenExpiresAt).getTime() < Date.now() + 5 * 60 * 1000) {
-            console.log(`[Shipping Label Batch] Token expired, refreshing...`)
-            try {
-                const tokens = await shopee.refreshAccessToken();
-                (shopee as any).credentials.accessToken = tokens.accessToken;
-                (shopee as any).credentials.refreshToken = tokens.refreshToken;
-                await prisma.onlineChannel.update({
-                    where: { id: channel.id },
-                    data: {
-                        accessToken: tokens.accessToken,
-                        refreshToken: tokens.refreshToken,
-                        tokenExpiresAt: new Date(Date.now() + tokens.expiresIn * 1000),
-                    },
+            if (channel.platform === 'tiktok') {
+                // ── TikTok batch ──
+                const tiktok = new TikTokService({
+                    apiKey: channel.apiKey || '', apiSecret: channel.apiSecret || '',
+                    accessToken, refreshToken, shopId: channel.shopId || '',
                 })
-                console.log(`[Shipping Label Batch] Token refreshed`)
-            } catch (refreshErr: any) {
-                console.error('[Shipping Label Batch] Token refresh failed:', refreshErr.message)
+                if (tokenExpiresAt && new Date(tokenExpiresAt).getTime() < Date.now() + 5 * 60 * 1000) {
+                    try {
+                        const tokens = await tiktok.refreshAccessToken();
+                        (tiktok as any).credentials.accessToken = tokens.accessToken;
+                        (tiktok as any).credentials.refreshToken = tokens.refreshToken;
+                        await prisma.onlineChannel.update({ where: { id: channel.id }, data: { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken, tokenExpiresAt: new Date(Date.now() + tokens.expiresIn * 1000) } })
+                    } catch (e: any) { console.error('[Batch] TikTok token refresh failed:', e.message) }
+                }
+                for (const o of channelOrders) {
+                    let eid = (o.externalOrderId || '').replace(/^(SPE-|TIK-|LAZ-)/i, '')
+                    if (!eid) { errors.push(`${o.orderNumber}: không có externalOrderId`); continue }
+                    try {
+                        const { pdf } = await tiktok.downloadShippingLabel(eid)
+                        pdfBuffers.push(pdf)
+                    } catch (e: any) { errors.push(`${o.orderNumber}: ${e.message}`) }
+                }
+            } else {
+                // ── Shopee batch ──
+                const shopee = new ShopeeService({
+                    apiKey: channel.apiKey || '', apiSecret: channel.apiSecret || '',
+                    accessToken, refreshToken, shopId: channel.shopId || '',
+                })
+                if (tokenExpiresAt && new Date(tokenExpiresAt).getTime() < Date.now() + 5 * 60 * 1000) {
+                    try {
+                        const tokens = await shopee.refreshAccessToken();
+                        (shopee as any).credentials.accessToken = tokens.accessToken;
+                        (shopee as any).credentials.refreshToken = tokens.refreshToken;
+                        await prisma.onlineChannel.update({ where: { id: channel.id }, data: { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken, tokenExpiresAt: new Date(Date.now() + tokens.expiresIn * 1000) } })
+                    } catch (e: any) { console.error('[Batch] Shopee token refresh failed:', e.message) }
+                }
+                const orderSnList = channelOrders.map(o => (o.externalOrderId || '').replace(/^(SPE-|TIK-|LAZ-)/i, '')).filter(sn => sn.length > 0)
+                const { pdf: batchPdf, errors: batchErrors } = await shopee.downloadShippingLabelBatch(orderSnList)
+                pdfBuffers.push(batchPdf)
+                errors.push(...batchErrors)
             }
         }
 
-        const { pdf, contentType, errors } = await shopee.downloadShippingLabelBatch(orderSnList)
+        if (pdfBuffers.length === 0) throw new Error(`Không tải được vận đơn. ${errors.join('; ')}`)
 
+        // Merge all PDFs into 1
+        let pdf: Buffer
+        let contentType = 'application/pdf'
+        if (pdfBuffers.length === 1) {
+            pdf = pdfBuffers[0]
+        } else {
+            const merged = await PDFDocument.create()
+            for (const buf of pdfBuffers) {
+                try {
+                    const src = await PDFDocument.load(buf, { ignoreEncryption: true })
+                    const pages = await merged.copyPages(src, src.getPageIndices())
+                    pages.forEach(p => merged.addPage(p))
+                } catch (e: any) { errors.push(`PDF merge error: ${e.message}`) }
+            }
+            pdf = Buffer.from(await merged.save())
+        }
         // Log any partial errors
         if (errors.length > 0) {
             console.warn(`[Shipping Label Batch] Partial errors: ${errors.join('; ')}`)
@@ -1690,14 +1768,24 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
             })
         } catch (_) { }
 
-        // Known TikTok authorization failures are user-actionable, not server bugs:
+        // Known TikTok / platform failures that are user-actionable, NOT server bugs.
+        // errMsg() masks everything as a generic 500 in production, which is why the
+        // UI only showed "Internal server error". Surface a clear reconnect prompt
+        // (400) so the operator knows what to fix.
+        //
+        // Error codes:
         //   105005 — token lacks the required access scope for the endpoint
         //   106011 — invalid shop_cipher (stale/old connection storing open_id)
         //   105001/105002 — access token expired / invalid
-        // errMsg() masks everything as a generic 500 in production, which is why the
-        // UI only ever showed "Internal server error". Surface a clear reconnect
-        // prompt (400) for these so the operator knows to re-authorize TikTok Shop.
+        //   106001 — invalid HMAC sign (app secret wrong/changed, or algorithm mismatch)
         const m = String(err?.message || '')
+        if (/\b106001\b/.test(m) || /sign.*invalid|invalid.*sign/i.test(m)) {
+            res.status(400).json({
+                success: false,
+                error: 'TikTok Shop: Chữ ký API không hợp lệ (106001). App Secret có thể đã thay đổi. Vui lòng kiểm tra App Key và App Secret trong TikTok Partner Center, sau đó cập nhật lại trong phần Kênh → TikTok → Cài đặt.',
+            })
+            return
+        }
         if (/\b(105005|106011|105001|105002)\b/.test(m) || /shop_cipher|access scope|access token/i.test(m)) {
             res.status(400).json({
                 success: false,
