@@ -307,6 +307,71 @@ export class TikTokService extends PlatformService {
         return { products: [], total: 0 }
     }
 
+
+    // âââ Shipping Documents ââââââââââââââââââââââââââââââââââââââââââââââââââââ
+
+    /**
+     * Download the shipping label (váº­n ÄÆ¡n) for a TikTok order.
+     * Flow: get order detail â extract first package_id â call fulfillment API â download PDF from doc_url.
+     * TikTok API: GET /fulfillment/202309/packages/{package_id}/shipping_documents
+     */
+    async downloadShippingLabel(orderId: string): Promise<{ pdf: Buffer; contentType: string }> {
+        // Step 1: Get order detail to find package IDs
+        const orderPath = `/order/202309/orders`
+        const { url: orderUrl, headers: orderHeaders } = this.buildUrl(orderPath, { ids: orderId })
+        const orderData = await this.httpGet(orderUrl, orderHeaders)
+
+        if (orderData.code !== 0) {
+            throw new Error(`TikTok getOrder: [${orderData.code}] ${orderData.message || 'Unknown error'}`)
+        }
+
+        const order = orderData.data?.orders?.[0]
+        if (!order) throw new Error(`ÄÆ¡n TikTok ${orderId} khÃ´ng tá»n táº¡i`)
+
+        // Extract package_id from the order's packages array
+        const packages = order.packages || order.package_list || []
+        if (packages.length === 0) {
+            throw new Error(`ÄÆ¡n TikTok ${orderId} chÆ°a cÃ³ kiá»n hÃ ng (package). Cáº§n á» tráº¡ng thÃ¡i "Chá» gá»­i hÃ ng" trá» lÃªn.`)
+        }
+
+        const packageId = packages[0].id || packages[0].package_id
+        if (!packageId) {
+            throw new Error(`ÄÆ¡n TikTok ${orderId} khÃ´ng cÃ³ package_id. Packages: ${JSON.stringify(packages).substring(0, 200)}`)
+        }
+
+        console.log(`[TikTok AWB] Order ${orderId} â package ${packageId}`)
+
+        // Step 2: Get shipping document URL
+        const docPath = `/fulfillment/202309/packages/${packageId}/shipping_documents`
+        const { url: docUrl, headers: docHeaders } = this.buildUrl(docPath, {
+            document_type: 'SHIPPING_LABEL',
+            document_size: 'A6',
+        })
+        docHeaders['content-type'] = 'application/json'
+        const docData = await this.httpGet(docUrl, docHeaders)
+
+        if (docData.code !== 0) {
+            throw new Error(`TikTok shipping document: [${docData.code}] ${docData.message || 'Unknown error'}`)
+        }
+
+        const pdfUrl = docData.data?.doc_url
+        if (!pdfUrl) {
+            throw new Error(`TikTok khÃ´ng tráº£ vá» URL váº­n ÄÆ¡n cho package ${packageId}`)
+        }
+
+        console.log(`[TikTok AWB] doc_url: ${pdfUrl.substring(0, 80)}...`)
+
+        // Step 3: Download the PDF from the URL
+        const pdfRes = await fetch(pdfUrl)
+        if (!pdfRes.ok) throw new Error(`Lá»i táº£i váº­n ÄÆ¡n TikTok: HTTP ${pdfRes.status}`)
+
+        const arrayBuf = await pdfRes.arrayBuffer()
+        const contentType = pdfRes.headers.get('content-type') || 'application/pdf'
+        console.log(`[TikTok AWB] Downloaded ${arrayBuf.byteLength}b, type=${contentType}`)
+
+        return { pdf: Buffer.from(arrayBuf), contentType }
+    }
+
     // ─── Mappers ─────────────────────────────────────────────────────────────────
 
     /**
