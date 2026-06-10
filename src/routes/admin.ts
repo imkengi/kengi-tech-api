@@ -575,16 +575,42 @@ router.post('/sync-schemas', async (req: Request, res: Response) => {
             schemas = rows.map(r => r.schema_name)
         }
 
-        const results: { schema: string; status: string; ms: number }[] = []
+        const results: { schema: string; status: string; ms: number; dropped?: string[] }[] = []
         for (const schema of schemas) {
             const t0 = Date.now()
-            try {
-                await syncBranchSchemaTables(schema)
-                results.push({ schema, status: 'ok', ms: Date.now() - t0 })
-            } catch (e: any) {
-                const detail = (e.stderr?.toString?.() || e.message || '').slice(0, 500)
-                results.push({ schema, status: `error: ${detail}`, ms: Date.now() - t0 })
+            const dropped: string[] = []
+            // db push can collide with legacy index/constraint names that drifted
+            // from the Prisma naming (e.g. an index where a unique constraint is
+            // expected). Drop the conflicting relation and retry — push recreates
+            // it in the correct shape. Only _key/_idx names are eligible.
+            let lastErr = ''
+            let ok = false
+            for (let attempt = 0; attempt < 6; attempt++) {
+                try {
+                    await syncBranchSchemaTables(schema)
+                    ok = true
+                    break
+                } catch (e: any) {
+                    lastErr = (e.stderr?.toString?.() || e.message || '')
+                    const m = lastErr.match(/relation "([^"]+)" already exists/)
+                    const rel = m?.[1]
+                    if (!rel || !/_key$|_idx$/.test(rel) || dropped.includes(rel)) break
+                    try {
+                        await (prisma as any).$executeRawUnsafe(`DROP INDEX IF EXISTS "${schema}"."${rel}"`)
+                    } catch {
+                        // Constraint-backed index: derive the table from the name prefix
+                        const table = rel.split('_')[0]
+                        await (prisma as any).$executeRawUnsafe(`ALTER TABLE "${schema}"."${table}" DROP CONSTRAINT IF EXISTS "${rel}"`).catch(() => { })
+                    }
+                    dropped.push(rel)
+                }
             }
+            results.push({
+                schema,
+                status: ok ? 'ok' : `error: ${lastErr.slice(0, 500)}`,
+                ms: Date.now() - t0,
+                ...(dropped.length ? { dropped } : {}),
+            })
         }
 
         const failed = results.filter(r => r.status !== 'ok')
