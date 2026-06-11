@@ -1254,6 +1254,7 @@ router.post('/shipping-label-batch', authMiddleware, async (req: AuthRequest, re
 
 import { getPlatformService, isSupportedPlatform, TikTokService, type PlatformOrder } from '../services/platforms'
 import { processNewOrders } from '../services/orderSync'
+import { syncChannelReturns } from '../services/returnSync'
 
 // GET /api/online-orders/channels/:id/auth-url
 router.get('/channels/:id/auth-url', authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -2376,140 +2377,9 @@ router.post('/channels/:id/sync-returns', authMiddleware, async (req: AuthReques
             return
         }
 
-        const isTikTok = channel.platform === 'tiktok'
-        const platformLabel = isTikTok ? 'TikTok' : 'Shopee'
-        // Mã phiếu trả khác prefix theo sàn để dedup không đụng nhau
-        const codePrefix = isTikTok ? 'RTN-TT-' : 'RTN-SH-'
-
-        const creds = {
-            apiKey: channel.apiKey || '', apiSecret: channel.apiSecret || '',
-            accessToken: channel.accessToken || undefined,
-            refreshToken: channel.refreshToken || undefined,
-            shopId: channel.shopId || undefined,
-        }
-        const service = isTikTok ? new TikTokService(creds) : new ShopeeService(creds)
-
-        // Auto-refresh token if expired or about to expire (5 min buffer)
-        const tokenExpiresAt = (channel as any).tokenExpiresAt
-        if (tokenExpiresAt && new Date(tokenExpiresAt).getTime() < Date.now() + 5 * 60 * 1000) {
-            try {
-                const tokens = await service.refreshAccessToken();
-                (service as any).credentials.accessToken = tokens.accessToken;
-                (service as any).credentials.refreshToken = tokens.refreshToken;
-                await prisma.onlineChannel.update({
-                    where: { id: channel.id },
-                    data: {
-                        accessToken: tokens.accessToken,
-                        refreshToken: tokens.refreshToken,
-                        tokenExpiresAt: new Date(Date.now() + tokens.expiresIn * 1000),
-                    },
-                })
-            } catch (refreshErr: any) {
-                console.error(`[Sync Returns] ${platformLabel} token refresh failed:`, refreshErr.message)
-            }
-        }
-
-        // Fetch returns from last 15 days
+        // Logic dùng chung với webhook TikTok type 2 (returns realtime) — see services/returnSync.ts
         const since = new Date(Date.now() - 15 * 86400_000)
-        const shopeeReturns = await service.fetchReturns({ since })
-
-        let synced = 0, skipped = 0
-        const errors: string[] = []
-
-        for (const ret of shopeeReturns) {
-            try {
-                const nativeStatus = (ret as any).platformStatus || (ret as any).shopeeStatus || ''
-                // Check if already synced
-                const existingReturn = await prisma.returnOrder.findFirst({
-                    where: { code: `${codePrefix}${ret.returnSn}` },
-                })
-                if (existingReturn) {
-                    // Update status if changed
-                    if (existingReturn.status !== ret.status) {
-                        await prisma.returnOrder.update({
-                            where: { id: existingReturn.id },
-                            data: {
-                                status: ret.status,
-                                notes: `${existingReturn.notes || ''}\n[${platformLabel}] ${nativeStatus} (${new Date().toLocaleString('vi-VN')})`,
-                                ...(ret.status === 'refunded' ? { refundedAt: new Date(), processedAt: new Date() } : {}),
-                            },
-                        })
-
-                        // If refunded, update order status
-                        if (ret.status === 'refunded') {
-                            const order = await prisma.onlineOrder.findFirst({
-                                where: { externalOrderId: ret.orderSn, channelId: channel.id },
-                            })
-                            if (order) {
-                                await prisma.onlineOrder.update({
-                                    where: { id: order.id },
-                                    data: { status: 'returned', paymentStatus: 'refunded' },
-                                })
-                            }
-                        }
-                    }
-                    skipped++
-                    continue
-                }
-
-                // Find original order
-                const order = await prisma.onlineOrder.findFirst({
-                    where: { externalOrderId: ret.orderSn, channelId: channel.id },
-                    include: { items: true },
-                })
-
-                // Create ReturnOrder
-                const returnCode = `${codePrefix}${ret.returnSn}`
-                const refundAmount = typeof ret.refundAmount === 'number' ? ret.refundAmount : 0
-
-                const returnItems = ret.items.map((i: any) => ({
-                    productName: i.name || i.modelName || `SP ${platformLabel}`,
-                    sku: '',
-                    quantity: i.amount || 1,
-                    unitPrice: i.itemPrice || 0,
-                    returnReason: ret.reason || ret.textReason || `Trả hàng từ ${platformLabel}`,
-                    condition: 'used',
-                }))
-
-                await prisma.returnOrder.create({
-                    data: {
-                        code: returnCode,
-                        originalInvoice: order?.orderNumber || ret.orderSn,
-                        customerName: order?.customerName || `Khách ${platformLabel}`,
-                        customerPhone: order?.customerPhone || undefined,
-                        reason: ret.reason || ret.textReason || `Trả hàng từ ${platformLabel}`,
-                        refundMethod: 'platform_refund',
-                        refundAmount,
-                        totalRefund: refundAmount,
-                        notes: `[${platformLabel}] Status: ${nativeStatus}\nReturn SN: ${ret.returnSn}\nTracking: ${ret.trackingNumber || 'N/A'}\nNeed return: ${ret.needReturn ? 'Có' : 'Không'}`,
-                        staffName: `${platformLabel} Auto-Sync`,
-                        status: ret.status,
-                        ...(ret.status === 'refunded' ? { refundedAt: ret.updateTime, processedAt: ret.updateTime } : {}),
-                        items: {
-                            create: returnItems.length > 0 ? returnItems : [{
-                                productName: `SP từ ${platformLabel}`,
-                                quantity: 1,
-                                unitPrice: refundAmount,
-                                returnReason: ret.reason || `Trả hàng ${platformLabel}`,
-                                condition: 'used',
-                            }],
-                        },
-                    },
-                })
-
-                // Update order status if refunded
-                if (order && ret.status === 'refunded') {
-                    await prisma.onlineOrder.update({
-                        where: { id: order.id },
-                        data: { status: 'returned', paymentStatus: 'refunded' },
-                    })
-                }
-
-                synced++
-            } catch (itemErr: any) {
-                errors.push(`Return ${ret.returnSn}: ${itemErr.message}`)
-            }
-        }
+        const result = await syncChannelReturns(prisma, channel, since)
 
         // Audit log
         try {
@@ -2520,7 +2390,7 @@ router.post('/channels/:id/sync-returns', authMiddleware, async (req: AuthReques
                     action: 'sync_returns',
                     entity: 'OnlineChannel',
                     entityId: channel.id,
-                    details: JSON.stringify({ synced, skipped, errors: errors.length, total: shopeeReturns.length }),
+                    details: JSON.stringify({ synced: result.synced, skipped: result.skipped, errors: result.errors.length, total: result.total }),
                 },
             })
         } catch { }
@@ -2528,10 +2398,10 @@ router.post('/channels/:id/sync-returns', authMiddleware, async (req: AuthReques
         res.json({
             success: true,
             data: {
-                total: shopeeReturns.length,
-                synced,
-                skipped,
-                errors,
+                total: result.total,
+                synced: result.synced,
+                skipped: result.skipped,
+                errors: result.errors,
             },
         })
     } catch (err: any) {

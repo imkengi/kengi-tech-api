@@ -4,6 +4,7 @@ import registryPrisma, { getStorePrisma } from '../lib/prisma'
 import { ShopeeService } from '../services/platforms/shopee'
 import { TikTokService } from '../services/platforms/tiktok'
 import { convertOnlineOrderToTransaction } from '../services/orderSync'
+import { syncChannelReturns } from '../services/returnSync'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 
 const router = Router()
@@ -268,14 +269,15 @@ router.post('/tiktok', async (req: Request, res: Response) => {
 
         console.log(`[TikTok Webhook] type=${pushType} shop=${shopId} data=${JSON.stringify(data).substring(0, 300)}`)
 
-        // Only process order-related push types (1 = order status change, 4 = package update)
-        if (pushType !== 1 && pushType !== 4) {
+        // Push types we process: 1 = order status change, 2 = reverse order
+        // (return/refund) status change, 4 = package update
+        if (pushType !== 1 && pushType !== 2 && pushType !== 4) {
             console.log(`[TikTok Webhook] Ignoring push type ${pushType}`)
             return
         }
 
         const orderId = data.order_id
-        if (!orderId) {
+        if (pushType !== 2 && !orderId) {
             console.log(`[TikTok Webhook] No order_id in data`)
             return
         }
@@ -352,6 +354,25 @@ router.post('/tiktok', async (req: Request, res: Response) => {
             // so a signature mismatch can't inject data — log loudly but continue
             // rather than silently dropping real status updates.
             console.warn(`[TikTok Webhook] ⚠️ Signature mismatch for shop_id=${shopId} — processing anyway (order re-fetched from API)`)
+        }
+
+        // ── Type 2: return/refund status change → sync returns realtime ──
+        // Webhook là kênh cập nhật chính cho trả hàng; nút sync tay chỉ là fallback.
+        // Debounce 60s/kênh: một đợt event dồn dập chỉ chạy 1 lần quét (7 ngày).
+        if (pushType === 2) {
+            const debounceKey = `webhook:tiktok:returns:${channel.id}`
+            if (await cacheGet(debounceKey)) {
+                console.log(`[TikTok Webhook] Returns sync debounced for ${channel.name}`)
+                return
+            }
+            await cacheSet(debounceKey, '1', 60)
+            try {
+                const r = await syncChannelReturns(storePrisma, channel, new Date(Date.now() - 7 * 86400_000))
+                console.log(`[TikTok Webhook] 🔄 Returns synced for ${channel.name}: +${r.synced} new, ${r.skipped} existing, ${r.errors.length} errors`)
+            } catch (retErr: any) {
+                console.error(`[TikTok Webhook] Returns sync failed for ${channel.name}:`, retErr.message)
+            }
+            return
         }
 
         // ── Fetch full order detail from TikTok API ──
