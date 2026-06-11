@@ -1475,7 +1475,8 @@ model OnlineChannel {
   accessToken    String?
   refreshToken   String?
   tokenExpiresAt DateTime?
-  shopId         String?
+  shopId         String? // Shopee: shop_id; TikTok: shop_cipher (bắt buộc cho API đơn hàng)
+  platformShopId String? // TikTok: shop_id dạng số — webhook gửi id này, không gửi cipher
   webhookSecret  String?
   syncEnabled    Boolean   @default(false)
   syncFromDate   DateTime? // mốc bắt đầu đồng bộ đơn (chọn lúc kết nối); sau lần sync đầu chỉ lấy gia số từ lastSyncAt + webhook

@@ -63,6 +63,8 @@ export interface TokenResponse {
     refreshToken: string
     expiresIn: number     // seconds
     shopId?: string
+    /** TikTok: numeric shop_id (webhooks carry this, not the cipher stored in shopId) */
+    platformShopId?: string
 }
 
 export interface SyncResult {

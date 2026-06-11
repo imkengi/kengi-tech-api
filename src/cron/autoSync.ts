@@ -29,14 +29,20 @@ async function syncChannel(storePrisma: any, channel: any): Promise<{ imported: 
     // /authorization/202309/shops and persist if it changed.
     if (channel.platform === 'tiktok' && service instanceof TikTokService && (service as any).credentials.accessToken) {
         try {
-            const cipher = await service.getShopCipher()
+            const shops = await service.getAuthorizedShops()
+            const cipher = shops[0]?.cipher || shops[0]?.shop_cipher || undefined
+            // Webhook payloads carry the numeric shop id — persist it so the webhook
+            // handler can match the channel (shopId holds the cipher).
+            const numericId = shops[0]?.id ? String(shops[0].id) : undefined
+            const heal: any = {}
             if (cipher && cipher !== channel.shopId) {
                 (service as any).credentials.shopId = cipher
-                await storePrisma.onlineChannel.update({
-                    where: { id: channel.id },
-                    data: { shopId: cipher },
-                })
-                console.log(`[AutoSync] Resolved TikTok shop_cipher for ${channel.name}`)
+                heal.shopId = cipher
+            }
+            if (numericId && numericId !== channel.platformShopId) heal.platformShopId = numericId
+            if (Object.keys(heal).length) {
+                await storePrisma.onlineChannel.update({ where: { id: channel.id }, data: heal })
+                console.log(`[AutoSync] Resolved TikTok shop ids for ${channel.name}: ${JSON.stringify(Object.keys(heal))}`)
             }
         } catch (cipherErr: any) {
             console.error(`[AutoSync] Failed to resolve TikTok shop_cipher for ${channel.name}:`, cipherErr.message)

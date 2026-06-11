@@ -124,8 +124,12 @@ export class TikTokService extends PlatformService {
         // Fall back to open_id only if the lookup fails (sync will self-heal later).
         this.credentials.accessToken = accessToken
         let shopCipher: string | undefined
+        let numericShopId: string | undefined
         try {
-            shopCipher = await this.getShopCipher()
+            const shops = await this.getAuthorizedShops()
+            shopCipher = shops[0]?.cipher || shops[0]?.shop_cipher || undefined
+            // Webhook payloads carry the numeric shop id, NOT the cipher — keep both
+            numericShopId = shops[0]?.id ? String(shops[0].id) : undefined
         } catch (err) {
             console.error('[TikTok] Failed to resolve shop_cipher after token exchange:', err)
         }
@@ -135,6 +139,7 @@ export class TikTokService extends PlatformService {
             refreshToken: tokenData.refresh_token,
             expiresIn: this.toRelativeExpiry(tokenData.access_token_expire_in),
             shopId: shopCipher || tokenData.open_id || undefined,
+            platformShopId: numericShopId,
         }
     }
 

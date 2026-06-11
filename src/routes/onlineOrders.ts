@@ -1364,6 +1364,7 @@ router.post('/channels/:id/exchange-token', authMiddleware, async (req: AuthRequ
                 refreshToken: tokens.refreshToken,
                 tokenExpiresAt: new Date(Date.now() + tokens.expiresIn * 1000),
                 shopId: tokens.shopId || channel.shopId,
+                ...(tokens.platformShopId ? { platformShopId: tokens.platformShopId } : {}),
                 syncEnabled: true,
                 ...(syncFromDate ? { syncFromDate, lastSyncAt: null } : {}),
             },
@@ -1425,14 +1426,20 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
         // /authorization/202309/shops and persist if it changed (self-heal).
         if (channel.platform === 'tiktok' && service instanceof TikTokService && (service as any).credentials.accessToken) {
             try {
-                const cipher = await service.getShopCipher()
+                const shops = await service.getAuthorizedShops()
+                const cipher = shops[0]?.cipher || shops[0]?.shop_cipher || undefined
+                // Webhook payloads carry the numeric shop id — persist it so the
+                // webhook handler can match the channel (shopId holds the cipher).
+                const numericId = shops[0]?.id ? String(shops[0].id) : undefined
+                const heal: any = {}
                 if (cipher && cipher !== channel.shopId) {
                     (service as any).credentials.shopId = cipher
-                    await prisma.onlineChannel.update({
-                        where: { id: channel.id },
-                        data: { shopId: cipher },
-                    })
-                    console.log(`[Sync] Resolved TikTok shop_cipher for ${channel.name}`)
+                    heal.shopId = cipher
+                }
+                if (numericId && numericId !== (channel as any).platformShopId) heal.platformShopId = numericId
+                if (Object.keys(heal).length) {
+                    await prisma.onlineChannel.update({ where: { id: channel.id }, data: heal })
+                    console.log(`[Sync] Resolved TikTok shop ids for ${channel.name}: ${JSON.stringify(Object.keys(heal))}`)
                 }
             } catch (cipherErr: any) {
                 console.error(`[Sync] Failed to resolve TikTok shop_cipher for ${channel.name}:`, cipherErr.message)
@@ -1736,6 +1743,51 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                 }
             } catch (refreshErr: any) {
                 console.error('[Sync] Batch status refresh failed:', refreshErr.message)
+            }
+        } else if (channel.platform === 'tiktok' && service instanceof TikTokService) {
+            // TikTok sync lọc theo create_time → đơn cũ đổi trạng thái không được cập
+            // nhật qua polling. Webhook lo realtime; đây là lưới an toàn khi bấm Sync:
+            // refresh từng đơn chưa kết thúc qua getOrderDetail (mới nhất trước, tối đa 60).
+            try {
+                const NON_TERMINAL = ['pending', 'confirmed', 'processing', 'shipping', 'delivered']
+                const pendingOrders = await prisma.onlineOrder.findMany({
+                    where: { channelId: channel.id, status: { in: NON_TERMINAL }, externalOrderId: { not: null } },
+                    select: { id: true, externalOrderId: true, status: true, trackingNumber: true, shippingCarrier: true },
+                    orderBy: { createdAt: 'desc' },
+                    take: 60,
+                })
+                if (pendingOrders.length > 0) {
+                    console.log(`[Sync] Refreshing status of ${pendingOrders.length} pending TikTok orders...`)
+                    for (const o of pendingOrders) {
+                        const eid = (o.externalOrderId || '').replace(/^(SPE-|TIK-|LAZ-)/i, '')
+                        if (!eid) continue
+                        try {
+                            const detail = await service.getOrderDetail(eid)
+                            if (!detail) continue
+                            if (detail.status !== o.status || (detail.trackingNumber && detail.trackingNumber !== o.trackingNumber)) {
+                                await prisma.onlineOrder.update({
+                                    where: { id: o.id },
+                                    data: {
+                                        status: detail.status,
+                                        externalStatus: detail.externalStatus,
+                                        paymentStatus: detail.paymentStatus,
+                                        trackingNumber: detail.trackingNumber || o.trackingNumber,
+                                        shippingCarrier: detail.shippingCarrier || o.shippingCarrier,
+                                        shippedAt: detail.shippedAt ? new Date(detail.shippedAt) : undefined,
+                                        deliveredAt: detail.deliveredAt ? new Date(detail.deliveredAt) : undefined,
+                                        syncedAt: new Date(),
+                                    },
+                                })
+                                statusRefreshed++
+                            }
+                        } catch (oneErr: any) {
+                            console.error(`[Sync] TikTok status refresh error for ${eid}:`, oneErr.message)
+                        }
+                    }
+                    console.log(`[Sync] TikTok status refreshed: ${statusRefreshed}/${pendingOrders.length} orders updated`)
+                }
+            } catch (refreshErr: any) {
+                console.error('[Sync] TikTok status refresh failed:', refreshErr.message)
             }
         }
 
