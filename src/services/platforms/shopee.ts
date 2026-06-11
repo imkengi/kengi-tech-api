@@ -354,6 +354,102 @@ export class ShopeeService extends PlatformService {
     }
 
     /**
+     * Seller-initiated cancellation — POST /api/v2/order/cancel_order.
+     * Reason OUT_OF_STOCK requires item_list; when not provided we cancel with
+     * every item on the order (fetched from order detail).
+     */
+    async cancelOrder(orderSn: string, reason: string = 'OUT_OF_STOCK'): Promise<void> {
+        const body: any = { order_sn: orderSn, cancel_reason: reason }
+
+        if (reason === 'OUT_OF_STOCK') {
+            const detailUrl = this.apiUrl('/api/v2/order/get_order_detail') +
+                `&order_sn_list=${orderSn}&response_optional_fields=item_list`
+            const detailData = await this.httpGet(detailUrl)
+            const items = detailData?.response?.order_list?.[0]?.item_list || []
+            body.item_list = items.map((i: any) => ({
+                item_id: i.item_id,
+                ...(i.model_id ? { model_id: i.model_id } : {}),
+            }))
+        }
+
+        const data = await this.httpPost(this.apiUrl('/api/v2/order/cancel_order'), body)
+        if (data.error) throw new Error(`Shopee cancel_order: ${data.error} - ${data.message}`)
+    }
+
+    /**
+     * Accept or reject a buyer's cancellation request (order in IN_CANCEL).
+     * POST /api/v2/order/handle_buyer_cancellation.
+     */
+    async handleBuyerCancellation(orderSn: string, operation: 'ACCEPT' | 'REJECT'): Promise<void> {
+        const body = { order_sn: orderSn, operation }
+        const data = await this.httpPost(this.apiUrl('/api/v2/order/handle_buyer_cancellation'), body)
+        if (data.error) throw new Error(`Shopee handle_buyer_cancellation: ${data.error} - ${data.message}`)
+    }
+
+    /**
+     * Accept a return/refund request — POST /api/v2/returns/confirm.
+     * Seller agrees to the return; Shopee proceeds with the refund.
+     */
+    async confirmReturn(returnSn: string): Promise<void> {
+        const data = await this.httpPost(this.apiUrl('/api/v2/returns/confirm'), { return_sn: returnSn })
+        if (data.error) throw new Error(`Shopee returns/confirm: ${data.error} - ${data.message}`)
+    }
+
+    /**
+     * Dispute (disagree with) a return request — POST /api/v2/returns/dispute.
+     * Shopee requires a contact email + dispute reason; images optional.
+     * dispute_reason enum (Shopee v2): 1 NON_RECEIPT, 2 OTHER, 3 NOT_RECEIVED,
+     * 4 WRONG_ITEM, 5 ITEM_DAMAGED... — caller passes the applicable code.
+     */
+    async disputeReturn(returnSn: string, params: { email: string; reason: number; textReason: string; images?: string[] }): Promise<void> {
+        const body: any = {
+            return_sn: returnSn,
+            email: params.email,
+            dispute_reason: params.reason,
+            dispute_text_reason: params.textReason,
+        }
+        if (params.images?.length) body.image = params.images
+        const data = await this.httpPost(this.apiUrl('/api/v2/returns/dispute'), body)
+        if (data.error) throw new Error(`Shopee returns/dispute: ${data.error} - ${data.message}`)
+    }
+
+    /**
+     * Real fees + actual payout for an order — GET /api/v2/payment/get_escrow_detail.
+     * Returns the escrow (money the seller actually receives) and the platform
+     * fees Shopee charged, replacing commissionRate-based estimates.
+     */
+    async getEscrowDetail(orderSn: string): Promise<{
+        escrowAmount: number
+        totalFees: number
+        commissionFee: number
+        serviceFee: number
+        transactionFee: number
+        buyerTotal: number
+    } | null> {
+        const url = this.apiUrl('/api/v2/payment/get_escrow_detail') + `&order_sn=${orderSn}`
+        const data = await this.httpGet(url)
+        if (data.error) {
+            // Escrow chưa có (đơn chưa đối soát) — không phải lỗi cứng
+            console.warn(`[Shopee Escrow] ${orderSn}: ${data.error} - ${data.message}`)
+            return null
+        }
+        const income = data.response?.order_income
+        if (!income) return null
+
+        const commissionFee = income.commission_fee || 0
+        const serviceFee = income.service_fee || 0
+        const transactionFee = (income.transaction_fee || 0) + (income.credit_card_transaction_fee || 0)
+        return {
+            escrowAmount: income.escrow_amount || 0,
+            totalFees: commissionFee + serviceFee + transactionFee,
+            commissionFee,
+            serviceFee,
+            transactionFee,
+            buyerTotal: income.buyer_total_amount || 0,
+        }
+    }
+
+    /**
      * Push stock for one item — POST /api/v2/product/update_stock.
      * Items WITH variations require model_id; without it Shopee rejects the call,
      * which we surface to the caller per-item.

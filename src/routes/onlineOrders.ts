@@ -763,14 +763,19 @@ router.put('/:id/status', authMiddleware, async (req: AuthRequest, res: Response
             return
         }
 
-        // ── Đơn Shopee: nút "Giao vận chuyển" → gọi ship_order THẬT trên sàn ──
-        // Chỉ chặn khi đơn đang READY_TO_SHIP (trạng thái duy nhất RTS hợp lệ);
-        // các chuyển trạng thái khác giữ hành vi cập nhật DB như cũ.
+        // ── Đơn Shopee: nút bấm → hành động THẬT trên sàn ────────────────────
+        // "Giao vận chuyển": chỉ khi đơn đang READY_TO_SHIP (trạng thái duy nhất
+        // RTS hợp lệ). "Hủy đơn": chỉ khi đơn chưa giao (UNPAID/READY_TO_SHIP/
+        // PROCESSED). Các chuyển trạng thái khác giữ hành vi cập nhật DB như cũ
+        // (vd: đánh dấu CANCELLED cho đơn sàn đã tự hủy).
         const speChannel: any = (oldOrder as any)?.channel
         const SPE_SHIP_STATUSES = ['SHIPPED', 'shipping', 'PROCESSED', 'processing']
+        const SPE_CANCEL_STATUSES = ['CANCELLED', 'cancelled', 'cancelling']
+        const speCurrent = oldOrder?.externalStatus || oldOrder?.status || ''
+        const speDoShip = SPE_SHIP_STATUSES.includes(status) && speCurrent === 'READY_TO_SHIP'
+        const speDoCancel = SPE_CANCEL_STATUSES.includes(status) && ['UNPAID', 'READY_TO_SHIP', 'PROCESSED'].includes(speCurrent)
         if (speChannel?.platform === 'shopee' && speChannel.accessToken && oldOrder?.externalOrderId
-            && SPE_SHIP_STATUSES.includes(status)
-            && (oldOrder.externalStatus === 'READY_TO_SHIP' || oldOrder.status === 'READY_TO_SHIP')) {
+            && (speDoShip || speDoCancel)) {
 
             const eid = (oldOrder.externalOrderId || '').replace(/^(SPE-|TIK-|LAZ-)/i, '')
             const shopee = new ShopeeService({
@@ -793,13 +798,14 @@ router.put('/:id/status', authMiddleware, async (req: AuthRequest, res: Response
             }
 
             try {
-                await shopee.shipOrder(eid)
+                if (speDoShip) await shopee.shipOrder(eid)
+                else await shopee.cancelOrder(eid, req.body.cancelReason || 'OUT_OF_STOCK')
             } catch (platformErr: any) {
                 res.status(400).json({ success: false, error: `Shopee từ chối: ${platformErr.message}` })
                 return
             }
 
-            // Lấy trạng thái thật từ sàn sau RTS (READY_TO_SHIP → PROCESSED...)
+            // Lấy trạng thái thật từ sàn sau hành động (RTS → PROCESSED, hủy → CANCELLED...)
             let actual: any = null
             try { actual = await shopee.getOrderDetail(eid) } catch { }
             const order = await prisma.onlineOrder.update({
@@ -811,7 +817,7 @@ router.put('/:id/status', authMiddleware, async (req: AuthRequest, res: Response
                     trackingNumber: actual.trackingNumber || oldOrder.trackingNumber,
                     shippingCarrier: actual.shippingCarrier || oldOrder.shippingCarrier,
                     syncedAt: new Date(),
-                } : { status: 'PROCESSED', syncedAt: new Date() },
+                } : { status: speDoShip ? 'PROCESSED' : 'CANCELLED', syncedAt: new Date() },
                 include: { items: true, channel: true },
             })
 
@@ -820,7 +826,7 @@ router.put('/:id/status', authMiddleware, async (req: AuthRequest, res: Response
                     data: {
                         userId: req.user?.userId,
                         userName: req.user?.email || 'system',
-                        action: 'shopee_rts',
+                        action: speDoShip ? 'shopee_rts' : 'shopee_cancel',
                         entity: 'OnlineOrder',
                         entityId: order.id,
                         details: JSON.stringify({ orderNumber: order.orderNumber, oldStatus, newStatus: order.status }),
@@ -915,6 +921,94 @@ router.put('/:id/status', authMiddleware, async (req: AuthRequest, res: Response
     } catch (err) {
         console.error('Update online order status error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// POST /api/online-orders/:id/handle-cancellation — Shopee: chấp nhận/từ chối
+// yêu cầu hủy của NGƯỜI MUA (đơn đang IN_CANCEL). Body: { operation: 'ACCEPT' | 'REJECT' }
+router.post('/:id/handle-cancellation', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const { id } = req.params
+        const operation = String(req.body?.operation || '').toUpperCase()
+        if (!['ACCEPT', 'REJECT'].includes(operation)) {
+            res.status(400).json({ success: false, error: "operation phải là 'ACCEPT' hoặc 'REJECT'" })
+            return
+        }
+
+        const order = await prisma.onlineOrder.findUnique({
+            where: { id: id as string },
+            include: { channel: true },
+        })
+        if (!order) { res.status(404).json({ success: false, error: 'Không tìm thấy đơn' }); return }
+
+        const channel: any = (order as any).channel
+        if (channel?.platform !== 'shopee' || !channel.accessToken) {
+            res.status(400).json({ success: false, error: 'Chỉ hỗ trợ đơn Shopee đã kết nối API' })
+            return
+        }
+        if (order.externalStatus !== 'IN_CANCEL' && order.status !== 'IN_CANCEL') {
+            res.status(400).json({ success: false, error: 'Đơn không ở trạng thái chờ duyệt hủy (IN_CANCEL)' })
+            return
+        }
+
+        const shopee = new ShopeeService({
+            apiKey: channel.apiKey || '', apiSecret: channel.apiSecret || '',
+            accessToken: channel.accessToken || undefined,
+            refreshToken: channel.refreshToken || undefined,
+            shopId: channel.shopId || undefined,
+        })
+        if (channel.tokenExpiresAt && new Date(channel.tokenExpiresAt).getTime() < Date.now() + 5 * 60 * 1000) {
+            try {
+                const tokens = await shopee.refreshAccessToken();
+                (shopee as any).credentials.accessToken = tokens.accessToken;
+                (shopee as any).credentials.refreshToken = tokens.refreshToken;
+                await prisma.onlineChannel.update({
+                    where: { id: channel.id },
+                    data: { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken, tokenExpiresAt: new Date(Date.now() + tokens.expiresIn * 1000) },
+                })
+            } catch (e: any) { console.error('[HandleCancellation] Token refresh failed:', e.message) }
+        }
+
+        const eid = (order.externalOrderId || '').replace(/^(SPE-|TIK-|LAZ-)/i, '')
+        try {
+            await shopee.handleBuyerCancellation(eid, operation as 'ACCEPT' | 'REJECT')
+        } catch (platformErr: any) {
+            res.status(400).json({ success: false, error: `Shopee từ chối: ${platformErr.message}` })
+            return
+        }
+
+        // Lấy trạng thái thật sau khi xử lý (ACCEPT → CANCELLED, REJECT → trạng thái cũ)
+        let actual: any = null
+        try { actual = await shopee.getOrderDetail(eid) } catch { }
+        const updated = await prisma.onlineOrder.update({
+            where: { id: id as string },
+            data: actual ? {
+                status: actual.status,
+                externalStatus: actual.externalStatus,
+                paymentStatus: actual.paymentStatus,
+                syncedAt: new Date(),
+            } : { status: operation === 'ACCEPT' ? 'CANCELLED' : 'READY_TO_SHIP', syncedAt: new Date() },
+            include: { items: true, channel: true },
+        })
+
+        try {
+            await prisma.auditLog.create({
+                data: {
+                    userId: req.user?.userId,
+                    userName: req.user?.email || 'system',
+                    action: operation === 'ACCEPT' ? 'shopee_accept_cancel' : 'shopee_reject_cancel',
+                    entity: 'OnlineOrder',
+                    entityId: updated.id,
+                    details: JSON.stringify({ orderNumber: updated.orderNumber, operation, newStatus: updated.status }),
+                },
+            })
+        } catch { }
+
+        res.json({ success: true, data: updated })
+    } catch (err: any) {
+        console.error('Handle buyer cancellation error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
@@ -2499,6 +2593,83 @@ router.put('/returns/:returnId/process', authMiddleware, async (req: AuthRequest
             return
         }
 
+        // ── Phiếu trả từ sàn (RTN-TT-/RTN-SH-): đẩy quyết định LÊN SÀN trước ──
+        // Sàn chấp nhận mới ghi DB. Không tìm được kênh/token thì xử lý local-only
+        // (kèm cảnh báo) để không khóa cứng nghiệp vụ.
+        const rtnCode = returnOrder.code || ''
+        const isTikTokReturn = rtnCode.startsWith('RTN-TT-')
+        const isShopeeReturn = rtnCode.startsWith('RTN-SH-')
+        let platformWarning: string | null = null
+        if (isTikTokReturn || isShopeeReturn) {
+            const returnSn = rtnCode.replace(/^RTN-(TT|SH)-/, '')
+            const origOrder = await prisma.onlineOrder.findFirst({
+                where: { orderNumber: returnOrder.originalInvoice },
+                include: { channel: true },
+            })
+            let channel: any = (origOrder as any)?.channel
+            if (!channel?.accessToken) {
+                channel = await prisma.onlineChannel.findFirst({
+                    where: { platform: isTikTokReturn ? 'tiktok' : 'shopee', accessToken: { not: null } },
+                })
+            }
+
+            if (channel?.accessToken) {
+                const creds = {
+                    apiKey: channel.apiKey || '', apiSecret: channel.apiSecret || '',
+                    accessToken: channel.accessToken || undefined,
+                    refreshToken: channel.refreshToken || undefined,
+                    shopId: channel.shopId || undefined,
+                }
+                const service: any = isTikTokReturn ? new TikTokService(creds) : new ShopeeService(creds)
+                if (channel.tokenExpiresAt && new Date(channel.tokenExpiresAt).getTime() < Date.now() + 5 * 60 * 1000) {
+                    try {
+                        const tokens = await service.refreshAccessToken()
+                        service.credentials.accessToken = tokens.accessToken
+                        service.credentials.refreshToken = tokens.refreshToken
+                        await prisma.onlineChannel.update({
+                            where: { id: channel.id },
+                            data: { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken, tokenExpiresAt: new Date(Date.now() + tokens.expiresIn * 1000) },
+                        })
+                    } catch (e: any) { console.error('[ProcessReturn] Token refresh failed:', e.message) }
+                }
+
+                try {
+                    if (isTikTokReturn) {
+                        if (action === 'approve') await service.approveReturn(returnSn)
+                        else await service.rejectReturn(returnSn, reviewNote)
+                    } else {
+                        if (action === 'approve') {
+                            await service.confirmReturn(returnSn)
+                        } else {
+                            // Shopee từ chối = mở khiếu nại (dispute) — bắt buộc email + lý do
+                            const { disputeEmail, disputeReason } = req.body
+                            if (!disputeEmail) {
+                                res.status(400).json({
+                                    success: false,
+                                    error: 'Từ chối trả hàng Shopee = mở khiếu nại — cần gửi kèm disputeEmail (email liên hệ) và disputeReason (mã lý do)',
+                                })
+                                return
+                            }
+                            await service.disputeReturn(returnSn, {
+                                email: String(disputeEmail),
+                                reason: Number(disputeReason) || 2,
+                                textReason: reviewNote || 'Người bán không đồng ý yêu cầu trả hàng',
+                            })
+                        }
+                    }
+                } catch (platformErr: any) {
+                    res.status(400).json({
+                        success: false,
+                        error: `${isTikTokReturn ? 'TikTok' : 'Shopee'} từ chối: ${platformErr.message}`,
+                    })
+                    return
+                }
+            } else {
+                platformWarning = `Không tìm thấy kênh ${isTikTokReturn ? 'TikTok' : 'Shopee'} đã kết nối — chỉ cập nhật nội bộ, quyết định CHƯA được đẩy lên sàn`
+                console.warn(`[ProcessReturn] ${platformWarning} (${rtnCode})`)
+            }
+        }
+
         const newStatus = action === 'approve' ? 'approved' : 'rejected'
         const updateData: any = {
             status: newStatus,
@@ -2571,7 +2742,7 @@ router.put('/returns/:returnId/process', authMiddleware, async (req: AuthRequest
             })
         } catch { }
 
-        res.json({ success: true, data: updated })
+        res.json({ success: true, data: updated, ...(platformWarning ? { warning: platformWarning } : {}) })
     } catch (err) {
         console.error('Process return error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
@@ -2824,6 +2995,117 @@ router.post('/channels/:id/push-stock', authMiddleware, async (req: AuthRequest,
         res.json({ success: true, data: { pushed, skipped, failed, errors } })
     } catch (err: any) {
         console.error('Push stock error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// POST /api/online-orders/channels/:id/sync-fees
+// Đối soát phí THẬT từ sàn (Shopee escrow / TikTok statement) cho các đơn đã
+// hoàn thành — thay con số ước lượng theo commissionRate bằng phí sàn thực thu
+// và tiền thực nhận. Body: { days?: number } (mặc định 30, tối đa 90).
+router.post('/channels/:id/sync-fees', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const channel = await prisma.onlineChannel.findUnique({ where: { id: req.params.id as string } })
+        if (!channel) { res.status(404).json({ success: false, error: 'Kênh không tồn tại' }); return }
+        if (!['shopee', 'tiktok'].includes(channel.platform)) {
+            res.status(400).json({ success: false, error: `Nền tảng ${channel.platform} chưa hỗ trợ đối soát phí` })
+            return
+        }
+        if (!channel.accessToken) {
+            res.status(400).json({ success: false, error: 'Kênh chưa kết nối API (thiếu access token)' })
+            return
+        }
+
+        const creds = {
+            apiKey: channel.apiKey || '', apiSecret: channel.apiSecret || '',
+            accessToken: channel.accessToken || undefined,
+            refreshToken: channel.refreshToken || undefined,
+            shopId: channel.shopId || undefined,
+        }
+        const service: any = channel.platform === 'tiktok' ? new TikTokService(creds) : new ShopeeService(creds)
+
+        // Auto-refresh token if expiring (5 min buffer)
+        const tokenExpiresAt = (channel as any).tokenExpiresAt
+        if (tokenExpiresAt && new Date(tokenExpiresAt).getTime() < Date.now() + 5 * 60 * 1000) {
+            try {
+                const tokens = await service.refreshAccessToken()
+                service.credentials.accessToken = tokens.accessToken
+                service.credentials.refreshToken = tokens.refreshToken
+                await prisma.onlineChannel.update({
+                    where: { id: channel.id },
+                    data: { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken, tokenExpiresAt: new Date(Date.now() + tokens.expiresIn * 1000) },
+                })
+            } catch (e: any) { console.warn('[sync-fees] Token refresh failed:', e.message) }
+        }
+
+        const days = Math.min(90, Math.max(1, Number(req.body?.days) || 30))
+        // Phí thật chỉ có sau khi sàn quyết toán — quét đơn đã giao/hoàn thành
+        const orders = await prisma.onlineOrder.findMany({
+            where: {
+                channelId: channel.id,
+                status: { in: ['COMPLETED', 'completed', 'DELIVERED', 'TO_CONFIRM_RECEIVE', 'delivered'] },
+                createdAt: { gte: new Date(Date.now() - days * 86400_000) },
+            },
+            select: { id: true, externalOrderId: true, orderNumber: true, total: true, shippingFee: true },
+            orderBy: { createdAt: 'desc' },
+            take: 200,
+        })
+
+        let updated = 0, unsettled = 0, failed = 0
+        const errors: string[] = []
+
+        for (const order of orders) {
+            const eid = (order.externalOrderId || '').replace(/^(SPE-|TIK-|LAZ-)/i, '')
+            if (!eid) { unsettled++; continue }
+            try {
+                let platformFee: number | null = null
+                let netRevenue: number | null = null
+
+                if (channel.platform === 'shopee') {
+                    const escrow = await service.getEscrowDetail(eid)
+                    if (escrow && escrow.escrowAmount > 0) {
+                        platformFee = escrow.totalFees
+                        netRevenue = escrow.escrowAmount
+                    }
+                } else {
+                    const settlement = await service.getOrderSettlement(eid)
+                    if (settlement && settlement.settlementAmount > 0) {
+                        platformFee = Math.round(settlement.feeAmount)
+                        netRevenue = Math.round(settlement.settlementAmount)
+                    }
+                }
+
+                if (platformFee === null || netRevenue === null) { unsettled++; continue }
+
+                await prisma.onlineOrder.update({
+                    where: { id: order.id },
+                    data: { platformFee, netRevenue },
+                })
+                updated++
+            } catch (e: any) {
+                failed++
+                errors.push(`${order.orderNumber}: ${e.message}`)
+                console.error(`[sync-fees] ${channel.name} ${order.orderNumber}:`, e.message)
+            }
+
+            // Soft throttle để không vượt rate limit của sàn
+            await new Promise(r => setTimeout(r, 250))
+        }
+
+        await prisma.syncLog.create({
+            data: {
+                channelId: channel.id,
+                action: 'sync_fees',
+                status: failed > 0 ? 'partial' : 'success',
+                details: `Fees updated: ${updated}, unsettled: ${unsettled}, failed: ${failed}${errors.length ? '\n' + errors.slice(0, 5).join('\n') : ''}`,
+                ordersCount: updated,
+            },
+        }).catch(() => { })
+
+        res.json({ success: true, data: { scanned: orders.length, updated, unsettled, failed, errors } })
+    } catch (err: any) {
+        console.error('Sync fees error:', err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }
 })

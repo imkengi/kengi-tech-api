@@ -507,6 +507,78 @@ export class TikTokService extends PlatformService {
         }
     }
 
+    /**
+     * Approve a return/refund request — POST /return_refund/202309/returns/{return_id}/approve.
+     */
+    async approveReturn(returnId: string): Promise<void> {
+        const path = `/return_refund/202309/returns/${returnId}/approve`
+        const bodyObj = { decision: 'APPROVE_RETURN' }
+        const bodyStr = JSON.stringify(bodyObj)
+        const { url, headers } = this.buildUrl(path, {}, bodyStr)
+        const data = await this.httpPost(url, bodyObj, headers)
+        if (data.code !== 0) {
+            throw new Error(`TikTok approveReturn: [${data.code}] ${data.message || 'Unknown error'}`)
+        }
+    }
+
+    /**
+     * Reject a return/refund request — POST /return_refund/202309/returns/{return_id}/reject.
+     * TikTok requires a reject_reason from its own catalog, so we look up the
+     * available reasons for this return first and use the given/first one.
+     */
+    async rejectReturn(returnId: string, comment?: string, rejectReason?: string): Promise<void> {
+        let reason = rejectReason
+        if (!reason) {
+            const { url: rUrl, headers: rHeaders } = this.buildUrl('/return_refund/202309/reject_reasons', {
+                return_or_cancel_id: returnId,
+                locale: 'vi-VN',
+            })
+            const reasonsData = await this.httpGet(rUrl, rHeaders)
+            reason = reasonsData.data?.reasons?.[0]?.name
+            if (!reason) {
+                throw new Error(`TikTok: không lấy được danh sách lý do từ chối cho phiếu ${returnId}${reasonsData.code !== 0 ? ` ([${reasonsData.code}] ${reasonsData.message})` : ''}`)
+            }
+        }
+
+        const path = `/return_refund/202309/returns/${returnId}/reject`
+        const bodyObj: any = { decision: 'REJECT_RETURN', reject_reason: reason }
+        if (comment) bodyObj.comment = comment
+        const bodyStr = JSON.stringify(bodyObj)
+        const { url, headers } = this.buildUrl(path, {}, bodyStr)
+        const data = await this.httpPost(url, bodyObj, headers)
+        if (data.code !== 0) {
+            throw new Error(`TikTok rejectReturn: [${data.code}] ${data.message || 'Unknown error'}`)
+        }
+    }
+
+    /**
+     * Real settlement for an order — GET /finance/202309/orders/{order_id}/statement_transactions.
+     * Amounts come back as strings; fee = revenue - settlement when no explicit
+     * fee field is present. Returns null when the order isn't settled yet.
+     */
+    async getOrderSettlement(orderId: string): Promise<{ settlementAmount: number; feeAmount: number; revenueAmount: number } | null> {
+        const path = `/finance/202309/orders/${orderId}/statement_transactions`
+        const { url, headers } = this.buildUrl(path, {})
+        const data = await this.httpGet(url, headers)
+        if (data.code !== 0) {
+            // Đơn chưa được đối soát/quyết toán — không phải lỗi cứng
+            console.warn(`[TikTok Settlement] ${orderId}: [${data.code}] ${data.message}`)
+            return null
+        }
+
+        const txs = data.data?.statement_transactions || []
+        if (txs.length === 0) return null
+
+        let settlement = 0, revenue = 0, fee = 0
+        for (const t of txs) {
+            settlement += Number(t.settlement_amount || 0)
+            revenue += Number(t.revenue_amount || 0)
+            fee += Math.abs(Number(t.fee_amount ?? t.fee_and_tax_amount ?? t.fee_tax_amount ?? 0))
+        }
+        if (fee === 0 && revenue > settlement) fee = revenue - settlement
+        return { settlementAmount: settlement, feeAmount: fee, revenueAmount: revenue }
+    }
+
     // ─── Returns / Refunds ──────────────────────────────────────────────────────
 
     /**
