@@ -821,14 +821,30 @@ router.put('/:id/void', authMiddleware, async (req: AuthRequest, res: Response) 
             })
         }
 
-        // Revert customer stats
+        // Revert customer stats + outstanding debt of this sale
         if (existing.customerId) {
+            const customerUpdate: any = {
+                totalPurchases: { decrement: existing.total },
+                totalOrders: { decrement: 1 },
+            }
+
+            // A 'partial' sale still carries unpaid credit — remove it from the
+            // customer's balance, clamped so the balance can never go negative.
+            const outstanding = existing.status === 'partial'
+                ? Math.max(0, existing.total - (existing.amountReceived ?? 0))
+                : 0
+            if (outstanding > 0) {
+                const customer = await prisma.customer.findUnique({
+                    where: { id: existing.customerId },
+                    select: { debt: true },
+                })
+                const debtReduction = Math.min(outstanding, Math.max(0, customer?.debt ?? 0))
+                if (debtReduction > 0) customerUpdate.debt = { decrement: debtReduction }
+            }
+
             await prisma.customer.update({
                 where: { id: existing.customerId },
-                data: {
-                    totalPurchases: { decrement: existing.total },
-                    totalOrders: { decrement: 1 },
-                },
+                data: customerUpdate,
             })
         }
 
@@ -876,43 +892,68 @@ router.put('/:id/pay-debt', authMiddleware, async (req: AuthRequest, res: Respon
             return
         }
 
-        // Calculate debt: credit payment amount
-        const creditPayment = existing.payments.find(p => p.type === 'credit')
-        const debtAmount = creditPayment?.amount || 0
-        const payAmount = amount || debtAmount
-
-        // Add new payment record
-        await prisma.payment.create({
-            data: {
-                transactionId: existing.id,
-                type: paymentType || 'cash',
-                amount: payAmount,
-                reference: reference || `Thanh toán nợ ${existing.receiptNumber}`,
-            },
-        })
-
-        // Update transaction status to completed
-        const transaction = await prisma.transaction.update({
-            where: { id: existing.id },
-            data: {
-                status: 'completed',
-                amountReceived: existing.amountReceived + payAmount,
-            },
-            include: { 
-                items: { include: { product: { select: { costPrice: true } } } }, 
-                payments: true 
-            },
-        })
-
-        // Reduce customer debt
-        if (existing.customerId) {
-            try {
-                await prisma.customer.update({
-                    where: { id: existing.customerId },
-                    data: { debt: { decrement: payAmount } },
-                })
-            } catch { }
+        // Remaining debt of this sale = total minus everything received so far.
+        // (More reliable than the original credit payment amount, which stays
+        // unchanged across partial repayments.)
+        const remainingDebt = Math.max(0, existing.total - (existing.amountReceived ?? 0))
+        if (remainingDebt <= 0) {
+            res.status(400).json({ success: false, error: 'Giao dịch không còn nợ' })
+            return
         }
+
+        const payAmount = amount !== undefined && amount !== null ? Number(amount) : remainingDebt
+        if (!Number.isFinite(payAmount) || payAmount <= 0) {
+            res.status(400).json({ success: false, error: 'Số tiền thanh toán không hợp lệ' })
+            return
+        }
+        if (payAmount > remainingDebt) {
+            res.status(400).json({ success: false, error: `Số tiền vượt quá nợ còn lại (${remainingDebt})` })
+            return
+        }
+
+        const fullyPaid = payAmount >= remainingDebt
+
+        // Payment record + transaction status + customer debt must move together.
+        const transaction = await prisma.$transaction(async (tx) => {
+            await tx.payment.create({
+                data: {
+                    transactionId: existing.id,
+                    type: paymentType || 'cash',
+                    amount: payAmount,
+                    reference: reference || `Thanh toán nợ ${existing.receiptNumber}`,
+                },
+            })
+
+            const updated = await tx.transaction.update({
+                where: { id: existing.id },
+                data: {
+                    // Keep 'partial' until the debt is fully settled so reports and
+                    // follow-up payments still see the remaining balance.
+                    status: fullyPaid ? 'completed' : 'partial',
+                    amountReceived: existing.amountReceived + payAmount,
+                },
+                include: {
+                    items: { include: { product: { select: { costPrice: true } } } },
+                    payments: true
+                },
+            })
+
+            if (existing.customerId) {
+                const customer = await tx.customer.findUnique({
+                    where: { id: existing.customerId },
+                    select: { debt: true },
+                })
+                const debtReduction = Math.min(payAmount, Math.max(0, customer?.debt ?? 0))
+                if (debtReduction > 0) {
+                    await tx.customer.update({
+                        where: { id: existing.customerId },
+                        data: { debt: { decrement: debtReduction } },
+                    })
+                }
+            }
+
+            return updated
+        })
 
         // Audit log
         try {
@@ -1082,14 +1123,20 @@ router.put('/:id/return', authMiddleware, async (req: AuthRequest, res: Response
                 totalOrders: { decrement: 1 },
             }
 
-            // If original sale had credit (debt), reduce customer debt on return
-            const existingWithPayments = await prisma.transaction.findUnique({
-                where: { id: existing.id },
-                include: { payments: true },
-            })
-            const creditPayment = existingWithPayments?.payments.find(p => p.type === 'credit')
-            if (creditPayment && creditPayment.amount > 0) {
-                updateData.debt = { decrement: Math.min(creditPayment.amount, returnTotal) }
+            // If the sale still carried unpaid credit, reduce customer debt on
+            // return. Use the live remaining debt (total - amountReceived) — the
+            // original credit payment record never shrinks after repayments, so
+            // relying on it would deduct the debt twice.
+            const outstanding = existing.status === 'partial'
+                ? Math.max(0, existing.total - (existing.amountReceived ?? 0))
+                : 0
+            if (outstanding > 0) {
+                const customer = await prisma.customer.findUnique({
+                    where: { id: existing.customerId },
+                    select: { debt: true },
+                })
+                const debtReduction = Math.min(outstanding, returnTotal, Math.max(0, customer?.debt ?? 0))
+                if (debtReduction > 0) updateData.debt = { decrement: debtReduction }
             }
 
             await prisma.customer.update({

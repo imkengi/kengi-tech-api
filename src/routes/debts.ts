@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express'
-import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
+import { authMiddleware, AuthRequest } from '../middleware/auth'
 
 const router = Router()
 
@@ -165,24 +165,40 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         if (!customerId?.trim()) return res.status(400).json({ success: false, error: 'Customer ID required' })
         if (!amount || amount <= 0) return res.status(400).json({ success: false, error: 'Valid amount required' })
 
-        // Get current balance for this customer
-        const lastEntry = await prisma.debtEntry.findFirst({
-            where: { ...getBranchFilter(req as any), customerId },
-            orderBy: { createdAt: 'desc' },
+        // Customer.debt is the authoritative balance — the ledger entry and the
+        // balance must move together, so both writes share one transaction.
+        // (DebtEntry has no branchId column; don't apply the branch filter here.)
+        const customer = await prisma.customer.findUnique({
+            where: { id: customerId.trim() },
+            select: { id: true, name: true, phone: true, debt: true },
         })
-        const currentBalance = lastEntry?.balance ?? 0
-        const newBalance = type === 'debt' ? currentBalance + Number(amount) : currentBalance - Number(amount)
+        if (!customer) return res.status(404).json({ success: false, error: 'Không tìm thấy khách hàng' })
 
-        const entry = await prisma.debtEntry.create({
-            data: {
-                customerId: customerId.trim(),
-                customerName: customerName?.trim() || 'Khách hàng',
-                phone: phone || null,
-                type: type || 'debt',
-                amount: Number(amount),
-                description: description?.trim() || (type === 'debt' ? 'Ghi nợ' : 'Trả nợ'),
-                balance: Math.max(0, newBalance),
-            },
+        const currentBalance = Math.max(0, customer.debt ?? 0)
+        // A payment can't exceed the outstanding balance.
+        const entryAmount = type === 'payment' ? Math.min(Number(amount), currentBalance) : Number(amount)
+        if (type === 'payment' && entryAmount <= 0) {
+            return res.status(400).json({ success: false, error: 'Khách hàng không còn công nợ' })
+        }
+        const newBalance = type === 'payment' ? currentBalance - entryAmount : currentBalance + entryAmount
+
+        const entry = await prisma.$transaction(async (tx) => {
+            const created = await tx.debtEntry.create({
+                data: {
+                    customerId: customer.id,
+                    customerName: customerName?.trim() || customer.name || 'Khách hàng',
+                    phone: phone || customer.phone || null,
+                    type: type || 'debt',
+                    amount: entryAmount,
+                    description: description?.trim() || (type === 'payment' ? 'Trả nợ' : 'Ghi nợ'),
+                    balance: newBalance,
+                },
+            })
+            await tx.customer.update({
+                where: { id: customer.id },
+                data: { debt: newBalance },
+            })
+            return created
         })
         res.status(201).json({ success: true, data: entry })
     } catch (err) {
