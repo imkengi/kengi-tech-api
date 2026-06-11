@@ -207,13 +207,15 @@ router.get('/sub-ledger/:type/:id', authMiddleware, async (req: AuthRequest, res
                 prisma.debtEntry.findMany({ where: { customerId: id, createdAt: { gte: start, lte: end } }, orderBy: { createdAt: 'asc' } }).catch(() => []),
                 prisma.transaction.findMany({ where: { customerId: id, createdAt: { gte: start, lte: end } }, select: { id: true, receiptNumber: true, total: true, amountReceived: true, status: true, createdAt: true } }).catch(() => []),
             ])
-            // Debt entries already model receivable movements (type: debit/credit) with a running balance.
+            // Debt entries model receivable movements with a running balance.
+            // DebtEntry.type: 'debt' (ghi nợ — debit side of 131), 'payment'/'return'
+            // (thu nợ/giảm nợ — credit side).
             const rows = debtEntries.map((d: any) => ({
                 id: d.id, date: d.createdAt, description: d.description,
                 type: d.type, amount: d.amount, balance: d.balance,
             }))
-            const totalDebit = debtEntries.filter((d: any) => d.type === 'debit').reduce((s: number, d: any) => s + d.amount, 0)
-            const totalCredit = debtEntries.filter((d: any) => d.type !== 'debit').reduce((s: number, d: any) => s + d.amount, 0)
+            const totalDebit = debtEntries.filter((d: any) => d.type === 'debt').reduce((s: number, d: any) => s + d.amount, 0)
+            const totalCredit = debtEntries.filter((d: any) => d.type !== 'debt').reduce((s: number, d: any) => s + d.amount, 0)
             return res.json({
                 success: true,
                 data: {
@@ -228,25 +230,30 @@ router.get('/sub-ledger/:type/:id', authMiddleware, async (req: AuthRequest, res
         if (type === 'supplier') {
             const [supplier, receipts] = await Promise.all([
                 prisma.supplier.findUnique({ where: { id } }).catch(() => null),
-                prisma.importReceipt.findMany({ where: { supplierId: id, createdAt: { gte: start, lte: end } }, orderBy: { createdAt: 'asc' }, select: { id: true, code: true, totalCost: true, status: true, createdAt: true, transactionDate: true, note: true } }).catch(() => []),
+                prisma.importReceipt.findMany({ where: { supplierId: id, status: { not: 'cancelled' }, createdAt: { gte: start, lte: end } }, orderBy: { createdAt: 'asc' }, select: { id: true, code: true, totalCost: true, paidAmount: true, paymentStatus: true, status: true, createdAt: true, transactionDate: true, note: true } }).catch(() => []),
             ])
             let balance = 0
             const rows = receipts.map((r: any) => {
-                // Each import receipt increases the payable to the supplier (credit side of 331).
+                // Each import receipt increases the payable (credit side of 331);
+                // the amount already paid to the supplier is the debit side.
+                // Receipts created before payment tracking default to paymentStatus
+                // 'paid' with paidAmount 0 — treat those as fully settled.
                 const credit = r.totalCost || 0
-                balance += credit
+                const debit = r.paymentStatus === 'paid' ? credit : Math.min(credit, r.paidAmount || 0)
+                balance += credit - debit
                 return {
                     id: r.id, date: r.transactionDate || r.createdAt, description: `Nhập hàng ${r.code}${r.note ? ' - ' + r.note : ''}`,
-                    code: r.code, status: r.status, debit: 0, credit, balance,
+                    code: r.code, status: r.status, debit, credit, balance,
                 }
             })
             const totalCredit = rows.reduce((s: number, r: any) => s + r.credit, 0)
+            const totalDebit = rows.reduce((s: number, r: any) => s + r.debit, 0)
             return res.json({
                 success: true,
                 data: {
                     type, period: label, account: '331', accountName: accountName('331'),
                     object: supplier ? { id: supplier.id, name: supplier.name, phone: supplier.phone } : { id },
-                    entries: rows, totalDebit: 0, totalCredit, closingBalance: balance,
+                    entries: rows, totalDebit, totalCredit, closingBalance: balance,
                 },
             })
         }

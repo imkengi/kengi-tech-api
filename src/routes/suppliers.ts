@@ -230,6 +230,7 @@ router.get('/:id/debt-history', authMiddleware, async (req: AuthRequest, res: Re
 
         // Process ImportReceipts
         for (const ir of importReceipts) {
+            if (ir.status === 'cancelled') continue
             if (ir.totalCost > 0) {
                 history.push({
                     id: ir.id,
@@ -241,15 +242,20 @@ router.get('/:id/debt-history', authMiddleware, async (req: AuthRequest, res: Re
                     balance: 0,
                 })
             }
-            // If completed, treat as fully paid
-            if (ir.status === 'completed' && ir.totalCost > 0) {
+            // Real payment tracking: paidAmount on the receipt. Receipts created
+            // before tracking default to paymentStatus 'paid' with paidAmount 0 —
+            // treat those as fully settled.
+            const paid = (ir as any).paymentStatus === 'paid'
+                ? ir.totalCost
+                : Math.min(ir.totalCost, (ir as any).paidAmount || 0)
+            if (paid > 0) {
                 history.push({
                     id: `${ir.id}-pay`,
                     code: `TT-${ir.code}`,
                     date: (ir.updatedAt || ir.createdAt).toISOString(),
                     type: 'payment',
                     label: 'Thanh toán nhập hàng',
-                    amount: -ir.totalCost,
+                    amount: -paid,
                     balance: 0,
                 })
             }

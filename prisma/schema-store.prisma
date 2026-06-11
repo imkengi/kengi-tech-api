@@ -368,6 +368,10 @@ model ImportReceipt {
   totalCost       Float     @default(0)
   totalItems      Int       @default(0)
   status          String    @default("draft")
+  // Công nợ NCC: số đã trả + trạng thái thanh toán. Mặc định "paid" để phiếu
+  // nhập cũ (trước khi có tracking) không bị tính thành nợ ảo trong báo cáo.
+  paidAmount      Float     @default(0)
+  paymentStatus   String    @default("paid") // "paid" | "partial" | "unpaid"
   note            String?
   branchId        String?
   userId          String

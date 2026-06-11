@@ -126,12 +126,21 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         const totalCost = items.reduce((sum: number, item: any) => sum + (item.quantity * item.costPrice), 0)
         const totalItems = items.reduce((sum: number, item: any) => sum + item.quantity, 0)
 
+        // Công nợ NCC: client gửi paidAmount (số đã trả NCC). Không gửi → coi như
+        // trả đủ (giữ nguyên hành vi cũ, không phát sinh nợ ảo).
+        const paidAmount = receiptData.paidAmount !== undefined && receiptData.paidAmount !== null
+            ? Math.min(Math.max(0, Number(receiptData.paidAmount) || 0), totalCost)
+            : totalCost
+        const paymentStatus = paidAmount >= totalCost ? 'paid' : (paidAmount > 0 ? 'partial' : 'unpaid')
+
         const receipt = await prisma.importReceipt.create({ data: { code,
                 supplierId: receiptData.supplierId || null,
                 supplierName: receiptData.supplierName || null,
                 totalCost,
                 totalItems,
                 status: receiptData.status || 'draft',
+                paidAmount,
+                paymentStatus,
                 note: receiptData.note || null,
                 userId: user.userId || user.id,
                 userName,
@@ -312,6 +321,83 @@ router.put('/:id/cancel', authMiddleware, async (req: AuthRequest, res: Response
         })
     } catch (err) {
         console.error('Cancel import receipt error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// PUT /api/import-receipts/:id/pay — Trả tiền NCC cho phiếu nhập (một phần hoặc đủ)
+// Body: { amount?: number } — không gửi amount = trả nốt phần còn lại.
+router.put('/:id/pay', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const receipt = await prisma.importReceipt.findUnique({ where: { id: String(req.params.id) } })
+        if (!receipt) { res.status(404).json({ success: false, error: 'Not found' }); return }
+        if (!canAccessBranch(req, receipt.branchId)) { res.status(404).json({ success: false, error: 'Not found' }); return }
+        if (receipt.status === 'cancelled') {
+            res.status(400).json({ success: false, error: 'Phiếu đã hủy — không thể thanh toán' })
+            return
+        }
+
+        const paid = (receipt as any).paymentStatus === 'paid' ? receipt.totalCost : ((receipt as any).paidAmount ?? 0)
+        const remaining = Math.max(0, receipt.totalCost - paid)
+        if (remaining <= 0) {
+            res.status(400).json({ success: false, error: 'Phiếu đã thanh toán đủ' })
+            return
+        }
+
+        const rawAmount = req.body?.amount
+        const payAmount = rawAmount !== undefined && rawAmount !== null ? Number(rawAmount) : remaining
+        if (!Number.isFinite(payAmount) || payAmount <= 0) {
+            res.status(400).json({ success: false, error: 'Số tiền thanh toán không hợp lệ' })
+            return
+        }
+        if (payAmount > remaining) {
+            res.status(400).json({ success: false, error: `Số tiền vượt quá nợ còn lại (${remaining})` })
+            return
+        }
+
+        const newPaid = paid + payAmount
+        const updated = await prisma.importReceipt.update({
+            where: { id: receipt.id },
+            data: {
+                paidAmount: newPaid,
+                paymentStatus: newPaid >= receipt.totalCost ? 'paid' : 'partial',
+            } as any,
+            include: { items: true },
+        })
+
+        // Mirror vào sổ chi (Expense) để sổ quỹ phản ánh dòng tiền ra — best-effort
+        await (prisma as any).expense.create({
+            data: {
+                description: `Trả tiền NCC ${receipt.supplierName || ''} - phiếu nhập ${receipt.code}`.trim(),
+                amount: payAmount,
+                category: 'supplier_payment',
+                date: new Date(),
+                branchId: receipt.branchId || null,
+            },
+        }).catch((e: any) => console.error('Expense mirror failed:', e.message))
+
+        // Audit log (best-effort)
+        try {
+            const user = await prisma.user.findUnique({ where: { id: req.user!.userId } })
+            await prisma.auditLog.create({
+                data: {
+                    userId: req.user!.userId,
+                    userName: user?.name || 'Admin',
+                    action: 'pay_supplier',
+                    entity: 'ImportReceipt',
+                    entityId: receipt.id,
+                    details: JSON.stringify({ code: receipt.code, amount: payAmount, remaining: receipt.totalCost - newPaid }),
+                },
+            })
+        } catch { }
+
+        res.json({
+            success: true,
+            data: { ...updated, createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString() },
+        })
+    } catch (err) {
+        console.error('Pay import receipt error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
     }
 })

@@ -1262,24 +1262,29 @@ router.get('/debt-aging', authMiddleware, async (req: AuthRequest, res: Response
             }
             res.json({ success: true, data: { rows, totalDebt, totalCurrent, totalOverdue, agingSummary } })
         } else {
-            // Payable: from import receipts with status != completed (pending payments to suppliers)
+            // Payable: import receipts not fully paid (paymentStatus unpaid/partial).
+            // Outstanding = totalCost - paidAmount.
             const imports = await prisma.importReceipt.findMany({
-                where: { status: { in: ['pending', 'partial'] } },
-                select: { id: true, supplierName: true, totalCost: true, createdAt: true },
+                where: {
+                    status: { not: 'cancelled' },
+                    paymentStatus: { in: ['unpaid', 'partial'] },
+                } as any,
+                select: { id: true, supplierName: true, totalCost: true, paidAmount: true, createdAt: true } as any,
                 orderBy: { totalCost: 'desc' },
             })
-            const rows = imports.map(i => {
+            const rows = (imports as any[]).map(i => {
+                const remaining = Math.max(0, (i.totalCost || 0) - (i.paidAmount || 0))
                 const daysSince = Math.floor((now.getTime() - new Date(i.createdAt).getTime()) / 86400000)
                 return {
-                    partnerId: i.id, partnerName: i.supplierName || 'NCC', totalDebt: i.totalCost,
-                    current: daysSince <= 0 ? i.totalCost : 0,
-                    days30: daysSince > 0 && daysSince <= 30 ? i.totalCost : 0,
-                    days60: daysSince > 30 && daysSince <= 60 ? i.totalCost : 0,
-                    days90: daysSince > 60 && daysSince <= 90 ? i.totalCost : 0,
-                    overdue90: daysSince > 90 ? i.totalCost : 0,
+                    partnerId: i.id, partnerName: i.supplierName || 'NCC', totalDebt: remaining,
+                    current: daysSince <= 0 ? remaining : 0,
+                    days30: daysSince > 0 && daysSince <= 30 ? remaining : 0,
+                    days60: daysSince > 30 && daysSince <= 60 ? remaining : 0,
+                    days90: daysSince > 60 && daysSince <= 90 ? remaining : 0,
+                    overdue90: daysSince > 90 ? remaining : 0,
                     lastTransactionDate: i.createdAt,
                 }
-            })
+            }).filter(r => r.totalDebt > 0)
             const totalDebt = rows.reduce((s, r) => s + r.totalDebt, 0)
             const totalCurrent = rows.reduce((s, r) => s + r.current, 0)
             const totalOverdue = totalDebt - totalCurrent

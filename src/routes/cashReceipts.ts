@@ -55,6 +55,23 @@ router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => 
     }
 })
 
+// Hoàn tác phần trừ nợ của một phiếu thu debt_collection (khi hủy/xóa phiếu):
+// xóa dòng sổ DebtEntry đã ghi lúc tạo phiếu và cộng lại Customer.debt.
+async function revertDebtCollection(prisma: any, receipt: any): Promise<void> {
+    if (receipt.category !== 'debt_collection' || !receipt.customerId) return
+    const entry = await prisma.debtEntry.findFirst({
+        where: { customerId: receipt.customerId, type: 'payment', description: { contains: receipt.id } },
+    })
+    if (!entry) return
+    await prisma.$transaction(async (tx: any) => {
+        await tx.debtEntry.delete({ where: { id: entry.id } })
+        await tx.customer.update({
+            where: { id: receipt.customerId },
+            data: { debt: { increment: entry.amount } },
+        })
+    })
+}
+
 // POST /api/cash-receipts — create
 router.post('/', authMiddleware, requireRole('admin', 'manager'), enforcePeriodLock('date'), async (req: AuthRequest, res: Response) => {
     try {
@@ -67,20 +84,54 @@ router.post('/', authMiddleware, requireRole('admin', 'manager'), enforcePeriodL
         if (!description?.trim()) return res.status(400).json({ success: false, error: 'Mô tả không được để trống' })
         if (!amount || Number(amount) <= 0) return res.status(400).json({ success: false, error: 'Số tiền phải lớn hơn 0' })
 
-        const receipt = await prisma.cashReceipt.create({
-            data: {
-                description: String(description).trim(),
-                amount: Number(amount),
-                category: category || 'other',
-                date: date ? new Date(date) : new Date(),
-                receivedVia: receivedVia || (bankAccountId ? 'Chuyển khoản' : 'Tiền mặt'),
-                bankAccountId: bankAccountId || null,
-                customerId: customerId || null,
-                customerName: customerName?.trim() || null,
-                reference: reference?.trim() || null,
-                branchId: getBranchId(req) || null,
-            },
-        })
+        const receiptData = {
+            description: String(description).trim(),
+            amount: Number(amount),
+            category: category || 'other',
+            date: date ? new Date(date) : new Date(),
+            receivedVia: receivedVia || (bankAccountId ? 'Chuyển khoản' : 'Tiền mặt'),
+            bankAccountId: bankAccountId || null,
+            customerId: customerId || null,
+            customerName: customerName?.trim() || null,
+            reference: reference?.trim() || null,
+            branchId: getBranchId(req) || null,
+        }
+
+        // Phiếu thu nợ khách hàng: phải giảm Customer.debt + ghi sổ DebtEntry cùng
+        // transaction với phiếu — nếu không, màn hình công nợ không thấy tiền thu.
+        let receipt: any
+        if (receiptData.category === 'debt_collection' && customerId) {
+            const customer = await prisma.customer.findUnique({ where: { id: String(customerId) } })
+            if (!customer) return res.status(404).json({ success: false, error: 'Không tìm thấy khách hàng' })
+
+            const currentDebt = Math.max(0, customer.debt ?? 0)
+            // Số trừ nợ tối đa bằng nợ hiện có — phần vượt vẫn ghi nhận trên phiếu thu
+            const reduction = Math.min(Number(amount), currentDebt)
+
+            receipt = await prisma.$transaction(async (tx: any) => {
+                const created = await tx.cashReceipt.create({ data: receiptData })
+                if (reduction > 0) {
+                    await tx.customer.update({
+                        where: { id: customer.id },
+                        data: { debt: currentDebt - reduction },
+                    })
+                    await tx.debtEntry.create({
+                        data: {
+                            customerId: customer.id,
+                            customerName: customer.name,
+                            phone: customer.phone || null,
+                            type: 'payment',
+                            amount: reduction,
+                            description: `Thu nợ - phiếu thu ${created.id}`,
+                            balance: currentDebt - reduction,
+                        },
+                    })
+                }
+                return created
+            })
+        } else {
+            receipt = await prisma.cashReceipt.create({ data: receiptData })
+        }
 
         // Mirror to BankTransaction when paid via bank account
         if (bankAccountId) {
@@ -157,6 +208,10 @@ router.post('/:id/cancel', authMiddleware, requireRole('admin', 'manager'), asyn
             },
         })
 
+        // Restore customer debt if this receipt had reduced it
+        await revertDebtCollection(prisma, existing)
+            .catch((e: any) => console.error('Debt collection reversal failed:', e.message))
+
         // Reverse the mirrored bank transaction (withdraw same amount) if it was a bank receipt
         if (existing.bankAccountId) {
             await prisma.bankTransaction.create({
@@ -186,6 +241,13 @@ router.delete('/:id', authMiddleware, requireRole('admin', 'manager'), async (re
         const existing = await prisma.cashReceipt.findUnique({ where: { id } })
         if (!existing) return res.status(404).json({ success: false, error: 'Không tìm thấy phiếu thu' })
         if (!canAccessBranch(req, existing.branchId)) return res.status(404).json({ success: false, error: 'Không tìm thấy phiếu thu' })
+
+        // A cancelled receipt was already reverted at cancel time — only revert active ones
+        if (existing.status !== 'cancelled') {
+            await revertDebtCollection(prisma, existing)
+                .catch((e: any) => console.error('Debt collection reversal failed:', e.message))
+        }
+
         await prisma.cashReceipt.delete({ where: { id } })
         res.json({ success: true })
     } catch (err) {

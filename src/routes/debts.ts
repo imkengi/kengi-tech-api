@@ -207,13 +207,35 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     }
 })
 
-// DELETE /api/debts/:id
+// DELETE /api/debts/:id — remove a ledger entry AND undo its effect on the balance
 router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        await prisma.debtEntry.delete({ where: { id: String(req.params.id) } })
+        const entry = await prisma.debtEntry.findUnique({ where: { id: String(req.params.id) } })
+        if (!entry) return res.status(404).json({ success: false, error: 'Không tìm thấy bút toán' })
+
+        await prisma.$transaction(async (tx) => {
+            await tx.debtEntry.delete({ where: { id: entry.id } })
+            const customer = await tx.customer.findUnique({
+                where: { id: entry.customerId },
+                select: { debt: true },
+            })
+            if (!customer) return // customer already deleted — nothing to adjust
+            const currentDebt = Math.max(0, customer.debt ?? 0)
+            // Deleting a 'debt' entry removes that debt; deleting a 'payment'/'return'
+            // entry restores it. Clamp so the balance never goes negative.
+            const newDebt = entry.type === 'debt'
+                ? Math.max(0, currentDebt - entry.amount)
+                : currentDebt + entry.amount
+            await tx.customer.update({
+                where: { id: entry.customerId },
+                data: { debt: newDebt },
+            })
+        })
+
         res.json({ success: true })
     } catch (err) {
+        console.error('Delete debt entry error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
     }
 })

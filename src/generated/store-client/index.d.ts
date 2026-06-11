@@ -30571,11 +30571,13 @@ export namespace Prisma {
   export type ImportReceiptAvgAggregateOutputType = {
     totalCost: number | null
     totalItems: number | null
+    paidAmount: number | null
   }
 
   export type ImportReceiptSumAggregateOutputType = {
     totalCost: number | null
     totalItems: number | null
+    paidAmount: number | null
   }
 
   export type ImportReceiptMinAggregateOutputType = {
@@ -30586,6 +30588,8 @@ export namespace Prisma {
     totalCost: number | null
     totalItems: number | null
     status: string | null
+    paidAmount: number | null
+    paymentStatus: string | null
     note: string | null
     branchId: string | null
     userId: string | null
@@ -30603,6 +30607,8 @@ export namespace Prisma {
     totalCost: number | null
     totalItems: number | null
     status: string | null
+    paidAmount: number | null
+    paymentStatus: string | null
     note: string | null
     branchId: string | null
     userId: string | null
@@ -30620,6 +30626,8 @@ export namespace Prisma {
     totalCost: number
     totalItems: number
     status: number
+    paidAmount: number
+    paymentStatus: number
     note: number
     branchId: number
     userId: number
@@ -30634,11 +30642,13 @@ export namespace Prisma {
   export type ImportReceiptAvgAggregateInputType = {
     totalCost?: true
     totalItems?: true
+    paidAmount?: true
   }
 
   export type ImportReceiptSumAggregateInputType = {
     totalCost?: true
     totalItems?: true
+    paidAmount?: true
   }
 
   export type ImportReceiptMinAggregateInputType = {
@@ -30649,6 +30659,8 @@ export namespace Prisma {
     totalCost?: true
     totalItems?: true
     status?: true
+    paidAmount?: true
+    paymentStatus?: true
     note?: true
     branchId?: true
     userId?: true
@@ -30666,6 +30678,8 @@ export namespace Prisma {
     totalCost?: true
     totalItems?: true
     status?: true
+    paidAmount?: true
+    paymentStatus?: true
     note?: true
     branchId?: true
     userId?: true
@@ -30683,6 +30697,8 @@ export namespace Prisma {
     totalCost?: true
     totalItems?: true
     status?: true
+    paidAmount?: true
+    paymentStatus?: true
     note?: true
     branchId?: true
     userId?: true
@@ -30787,6 +30803,8 @@ export namespace Prisma {
     totalCost: number
     totalItems: number
     status: string
+    paidAmount: number
+    paymentStatus: string
     note: string | null
     branchId: string | null
     userId: string
@@ -30823,6 +30841,8 @@ export namespace Prisma {
     totalCost?: boolean
     totalItems?: boolean
     status?: boolean
+    paidAmount?: boolean
+    paymentStatus?: boolean
     note?: boolean
     branchId?: boolean
     userId?: boolean
@@ -30843,6 +30863,8 @@ export namespace Prisma {
     totalCost?: boolean
     totalItems?: boolean
     status?: boolean
+    paidAmount?: boolean
+    paymentStatus?: boolean
     note?: boolean
     branchId?: boolean
     userId?: boolean
@@ -30861,6 +30883,8 @@ export namespace Prisma {
     totalCost?: boolean
     totalItems?: boolean
     status?: boolean
+    paidAmount?: boolean
+    paymentStatus?: boolean
     note?: boolean
     branchId?: boolean
     userId?: boolean
@@ -30879,6 +30903,8 @@ export namespace Prisma {
     totalCost?: boolean
     totalItems?: boolean
     status?: boolean
+    paidAmount?: boolean
+    paymentStatus?: boolean
     note?: boolean
     branchId?: boolean
     userId?: boolean
@@ -30888,7 +30914,7 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type ImportReceiptOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "code" | "supplierId" | "supplierName" | "totalCost" | "totalItems" | "status" | "note" | "branchId" | "userId" | "userName" | "transactionDate" | "createdAt" | "updatedAt", ExtArgs["result"]["importReceipt"]>
+  export type ImportReceiptOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "code" | "supplierId" | "supplierName" | "totalCost" | "totalItems" | "status" | "paidAmount" | "paymentStatus" | "note" | "branchId" | "userId" | "userName" | "transactionDate" | "createdAt" | "updatedAt", ExtArgs["result"]["importReceipt"]>
   export type ImportReceiptInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     user?: boolean | UserDefaultArgs<ExtArgs>
     items?: boolean | ImportReceipt$itemsArgs<ExtArgs>
@@ -30915,6 +30941,8 @@ export namespace Prisma {
       totalCost: number
       totalItems: number
       status: string
+      paidAmount: number
+      paymentStatus: string
       note: string | null
       branchId: string | null
       userId: string
@@ -31354,6 +31382,8 @@ export namespace Prisma {
     readonly totalCost: FieldRef<"ImportReceipt", 'Float'>
     readonly totalItems: FieldRef<"ImportReceipt", 'Int'>
     readonly status: FieldRef<"ImportReceipt", 'String'>
+    readonly paidAmount: FieldRef<"ImportReceipt", 'Float'>
+    readonly paymentStatus: FieldRef<"ImportReceipt", 'String'>
     readonly note: FieldRef<"ImportReceipt", 'String'>
     readonly branchId: FieldRef<"ImportReceipt", 'String'>
     readonly userId: FieldRef<"ImportReceipt", 'String'>
@@ -90611,8 +90641,10 @@ export namespace Prisma {
     refreshToken: string | null
     tokenExpiresAt: Date | null
     shopId: string | null
+    platformShopId: string | null
     webhookSecret: string | null
     syncEnabled: boolean | null
+    syncFromDate: Date | null
     lastSyncAt: Date | null
     totalOrders: number | null
     totalRevenue: number | null
@@ -90633,8 +90665,10 @@ export namespace Prisma {
     refreshToken: string | null
     tokenExpiresAt: Date | null
     shopId: string | null
+    platformShopId: string | null
     webhookSecret: string | null
     syncEnabled: boolean | null
+    syncFromDate: Date | null
     lastSyncAt: Date | null
     totalOrders: number | null
     totalRevenue: number | null
@@ -90655,8 +90689,10 @@ export namespace Prisma {
     refreshToken: number
     tokenExpiresAt: number
     shopId: number
+    platformShopId: number
     webhookSecret: number
     syncEnabled: number
+    syncFromDate: number
     lastSyncAt: number
     totalOrders: number
     totalRevenue: number
@@ -90691,8 +90727,10 @@ export namespace Prisma {
     refreshToken?: true
     tokenExpiresAt?: true
     shopId?: true
+    platformShopId?: true
     webhookSecret?: true
     syncEnabled?: true
+    syncFromDate?: true
     lastSyncAt?: true
     totalOrders?: true
     totalRevenue?: true
@@ -90713,8 +90751,10 @@ export namespace Prisma {
     refreshToken?: true
     tokenExpiresAt?: true
     shopId?: true
+    platformShopId?: true
     webhookSecret?: true
     syncEnabled?: true
+    syncFromDate?: true
     lastSyncAt?: true
     totalOrders?: true
     totalRevenue?: true
@@ -90735,8 +90775,10 @@ export namespace Prisma {
     refreshToken?: true
     tokenExpiresAt?: true
     shopId?: true
+    platformShopId?: true
     webhookSecret?: true
     syncEnabled?: true
+    syncFromDate?: true
     lastSyncAt?: true
     totalOrders?: true
     totalRevenue?: true
@@ -90844,8 +90886,10 @@ export namespace Prisma {
     refreshToken: string | null
     tokenExpiresAt: Date | null
     shopId: string | null
+    platformShopId: string | null
     webhookSecret: string | null
     syncEnabled: boolean
+    syncFromDate: Date | null
     lastSyncAt: Date | null
     totalOrders: number
     totalRevenue: number
@@ -90885,8 +90929,10 @@ export namespace Prisma {
     refreshToken?: boolean
     tokenExpiresAt?: boolean
     shopId?: boolean
+    platformShopId?: boolean
     webhookSecret?: boolean
     syncEnabled?: boolean
+    syncFromDate?: boolean
     lastSyncAt?: boolean
     totalOrders?: boolean
     totalRevenue?: boolean
@@ -90910,8 +90956,10 @@ export namespace Prisma {
     refreshToken?: boolean
     tokenExpiresAt?: boolean
     shopId?: boolean
+    platformShopId?: boolean
     webhookSecret?: boolean
     syncEnabled?: boolean
+    syncFromDate?: boolean
     lastSyncAt?: boolean
     totalOrders?: boolean
     totalRevenue?: boolean
@@ -90932,8 +90980,10 @@ export namespace Prisma {
     refreshToken?: boolean
     tokenExpiresAt?: boolean
     shopId?: boolean
+    platformShopId?: boolean
     webhookSecret?: boolean
     syncEnabled?: boolean
+    syncFromDate?: boolean
     lastSyncAt?: boolean
     totalOrders?: boolean
     totalRevenue?: boolean
@@ -90954,8 +91004,10 @@ export namespace Prisma {
     refreshToken?: boolean
     tokenExpiresAt?: boolean
     shopId?: boolean
+    platformShopId?: boolean
     webhookSecret?: boolean
     syncEnabled?: boolean
+    syncFromDate?: boolean
     lastSyncAt?: boolean
     totalOrders?: boolean
     totalRevenue?: boolean
@@ -90964,7 +91016,7 @@ export namespace Prisma {
     commissionRate?: boolean
   }
 
-  export type OnlineChannelOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "platform" | "status" | "shopUrl" | "apiKey" | "apiSecret" | "accessToken" | "refreshToken" | "tokenExpiresAt" | "shopId" | "webhookSecret" | "syncEnabled" | "lastSyncAt" | "totalOrders" | "totalRevenue" | "createdAt" | "updatedAt" | "commissionRate", ExtArgs["result"]["onlineChannel"]>
+  export type OnlineChannelOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "platform" | "status" | "shopUrl" | "apiKey" | "apiSecret" | "accessToken" | "refreshToken" | "tokenExpiresAt" | "shopId" | "platformShopId" | "webhookSecret" | "syncEnabled" | "syncFromDate" | "lastSyncAt" | "totalOrders" | "totalRevenue" | "createdAt" | "updatedAt" | "commissionRate", ExtArgs["result"]["onlineChannel"]>
   export type OnlineChannelInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     orders?: boolean | OnlineChannel$ordersArgs<ExtArgs>
     products?: boolean | OnlineChannel$productsArgs<ExtArgs>
@@ -90991,8 +91043,10 @@ export namespace Prisma {
       refreshToken: string | null
       tokenExpiresAt: Date | null
       shopId: string | null
+      platformShopId: string | null
       webhookSecret: string | null
       syncEnabled: boolean
+      syncFromDate: Date | null
       lastSyncAt: Date | null
       totalOrders: number
       totalRevenue: number
@@ -91435,8 +91489,10 @@ export namespace Prisma {
     readonly refreshToken: FieldRef<"OnlineChannel", 'String'>
     readonly tokenExpiresAt: FieldRef<"OnlineChannel", 'DateTime'>
     readonly shopId: FieldRef<"OnlineChannel", 'String'>
+    readonly platformShopId: FieldRef<"OnlineChannel", 'String'>
     readonly webhookSecret: FieldRef<"OnlineChannel", 'String'>
     readonly syncEnabled: FieldRef<"OnlineChannel", 'Boolean'>
+    readonly syncFromDate: FieldRef<"OnlineChannel", 'DateTime'>
     readonly lastSyncAt: FieldRef<"OnlineChannel", 'DateTime'>
     readonly totalOrders: FieldRef<"OnlineChannel", 'Int'>
     readonly totalRevenue: FieldRef<"OnlineChannel", 'Float'>
@@ -130919,6 +130975,8 @@ export namespace Prisma {
     totalCost: 'totalCost',
     totalItems: 'totalItems',
     status: 'status',
+    paidAmount: 'paidAmount',
+    paymentStatus: 'paymentStatus',
     note: 'note',
     branchId: 'branchId',
     userId: 'userId',
@@ -131936,8 +131994,10 @@ export namespace Prisma {
     refreshToken: 'refreshToken',
     tokenExpiresAt: 'tokenExpiresAt',
     shopId: 'shopId',
+    platformShopId: 'platformShopId',
     webhookSecret: 'webhookSecret',
     syncEnabled: 'syncEnabled',
+    syncFromDate: 'syncFromDate',
     lastSyncAt: 'lastSyncAt',
     totalOrders: 'totalOrders',
     totalRevenue: 'totalRevenue',
@@ -134229,6 +134289,8 @@ export namespace Prisma {
     totalCost?: FloatFilter<"ImportReceipt"> | number
     totalItems?: IntFilter<"ImportReceipt"> | number
     status?: StringFilter<"ImportReceipt"> | string
+    paidAmount?: FloatFilter<"ImportReceipt"> | number
+    paymentStatus?: StringFilter<"ImportReceipt"> | string
     note?: StringNullableFilter<"ImportReceipt"> | string | null
     branchId?: StringNullableFilter<"ImportReceipt"> | string | null
     userId?: StringFilter<"ImportReceipt"> | string
@@ -134248,6 +134310,8 @@ export namespace Prisma {
     totalCost?: SortOrder
     totalItems?: SortOrder
     status?: SortOrder
+    paidAmount?: SortOrder
+    paymentStatus?: SortOrder
     note?: SortOrderInput | SortOrder
     branchId?: SortOrderInput | SortOrder
     userId?: SortOrder
@@ -134270,6 +134334,8 @@ export namespace Prisma {
     totalCost?: FloatFilter<"ImportReceipt"> | number
     totalItems?: IntFilter<"ImportReceipt"> | number
     status?: StringFilter<"ImportReceipt"> | string
+    paidAmount?: FloatFilter<"ImportReceipt"> | number
+    paymentStatus?: StringFilter<"ImportReceipt"> | string
     note?: StringNullableFilter<"ImportReceipt"> | string | null
     branchId?: StringNullableFilter<"ImportReceipt"> | string | null
     userId?: StringFilter<"ImportReceipt"> | string
@@ -134289,6 +134355,8 @@ export namespace Prisma {
     totalCost?: SortOrder
     totalItems?: SortOrder
     status?: SortOrder
+    paidAmount?: SortOrder
+    paymentStatus?: SortOrder
     note?: SortOrderInput | SortOrder
     branchId?: SortOrderInput | SortOrder
     userId?: SortOrder
@@ -134314,6 +134382,8 @@ export namespace Prisma {
     totalCost?: FloatWithAggregatesFilter<"ImportReceipt"> | number
     totalItems?: IntWithAggregatesFilter<"ImportReceipt"> | number
     status?: StringWithAggregatesFilter<"ImportReceipt"> | string
+    paidAmount?: FloatWithAggregatesFilter<"ImportReceipt"> | number
+    paymentStatus?: StringWithAggregatesFilter<"ImportReceipt"> | string
     note?: StringNullableWithAggregatesFilter<"ImportReceipt"> | string | null
     branchId?: StringNullableWithAggregatesFilter<"ImportReceipt"> | string | null
     userId?: StringWithAggregatesFilter<"ImportReceipt"> | string
@@ -139314,8 +139384,10 @@ export namespace Prisma {
     refreshToken?: StringNullableFilter<"OnlineChannel"> | string | null
     tokenExpiresAt?: DateTimeNullableFilter<"OnlineChannel"> | Date | string | null
     shopId?: StringNullableFilter<"OnlineChannel"> | string | null
+    platformShopId?: StringNullableFilter<"OnlineChannel"> | string | null
     webhookSecret?: StringNullableFilter<"OnlineChannel"> | string | null
     syncEnabled?: BoolFilter<"OnlineChannel"> | boolean
+    syncFromDate?: DateTimeNullableFilter<"OnlineChannel"> | Date | string | null
     lastSyncAt?: DateTimeNullableFilter<"OnlineChannel"> | Date | string | null
     totalOrders?: IntFilter<"OnlineChannel"> | number
     totalRevenue?: FloatFilter<"OnlineChannel"> | number
@@ -139338,8 +139410,10 @@ export namespace Prisma {
     refreshToken?: SortOrderInput | SortOrder
     tokenExpiresAt?: SortOrderInput | SortOrder
     shopId?: SortOrderInput | SortOrder
+    platformShopId?: SortOrderInput | SortOrder
     webhookSecret?: SortOrderInput | SortOrder
     syncEnabled?: SortOrder
+    syncFromDate?: SortOrderInput | SortOrder
     lastSyncAt?: SortOrderInput | SortOrder
     totalOrders?: SortOrder
     totalRevenue?: SortOrder
@@ -139365,8 +139439,10 @@ export namespace Prisma {
     refreshToken?: StringNullableFilter<"OnlineChannel"> | string | null
     tokenExpiresAt?: DateTimeNullableFilter<"OnlineChannel"> | Date | string | null
     shopId?: StringNullableFilter<"OnlineChannel"> | string | null
+    platformShopId?: StringNullableFilter<"OnlineChannel"> | string | null
     webhookSecret?: StringNullableFilter<"OnlineChannel"> | string | null
     syncEnabled?: BoolFilter<"OnlineChannel"> | boolean
+    syncFromDate?: DateTimeNullableFilter<"OnlineChannel"> | Date | string | null
     lastSyncAt?: DateTimeNullableFilter<"OnlineChannel"> | Date | string | null
     totalOrders?: IntFilter<"OnlineChannel"> | number
     totalRevenue?: FloatFilter<"OnlineChannel"> | number
@@ -139389,8 +139465,10 @@ export namespace Prisma {
     refreshToken?: SortOrderInput | SortOrder
     tokenExpiresAt?: SortOrderInput | SortOrder
     shopId?: SortOrderInput | SortOrder
+    platformShopId?: SortOrderInput | SortOrder
     webhookSecret?: SortOrderInput | SortOrder
     syncEnabled?: SortOrder
+    syncFromDate?: SortOrderInput | SortOrder
     lastSyncAt?: SortOrderInput | SortOrder
     totalOrders?: SortOrder
     totalRevenue?: SortOrder
@@ -139419,8 +139497,10 @@ export namespace Prisma {
     refreshToken?: StringNullableWithAggregatesFilter<"OnlineChannel"> | string | null
     tokenExpiresAt?: DateTimeNullableWithAggregatesFilter<"OnlineChannel"> | Date | string | null
     shopId?: StringNullableWithAggregatesFilter<"OnlineChannel"> | string | null
+    platformShopId?: StringNullableWithAggregatesFilter<"OnlineChannel"> | string | null
     webhookSecret?: StringNullableWithAggregatesFilter<"OnlineChannel"> | string | null
     syncEnabled?: BoolWithAggregatesFilter<"OnlineChannel"> | boolean
+    syncFromDate?: DateTimeNullableWithAggregatesFilter<"OnlineChannel"> | Date | string | null
     lastSyncAt?: DateTimeNullableWithAggregatesFilter<"OnlineChannel"> | Date | string | null
     totalOrders?: IntWithAggregatesFilter<"OnlineChannel"> | number
     totalRevenue?: FloatWithAggregatesFilter<"OnlineChannel"> | number
@@ -144516,6 +144596,8 @@ export namespace Prisma {
     totalCost?: number
     totalItems?: number
     status?: string
+    paidAmount?: number
+    paymentStatus?: string
     note?: string | null
     branchId?: string | null
     userName: string
@@ -144534,6 +144616,8 @@ export namespace Prisma {
     totalCost?: number
     totalItems?: number
     status?: string
+    paidAmount?: number
+    paymentStatus?: string
     note?: string | null
     branchId?: string | null
     userId: string
@@ -144552,6 +144636,8 @@ export namespace Prisma {
     totalCost?: FloatFieldUpdateOperationsInput | number
     totalItems?: IntFieldUpdateOperationsInput | number
     status?: StringFieldUpdateOperationsInput | string
+    paidAmount?: FloatFieldUpdateOperationsInput | number
+    paymentStatus?: StringFieldUpdateOperationsInput | string
     note?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     userName?: StringFieldUpdateOperationsInput | string
@@ -144570,6 +144656,8 @@ export namespace Prisma {
     totalCost?: FloatFieldUpdateOperationsInput | number
     totalItems?: IntFieldUpdateOperationsInput | number
     status?: StringFieldUpdateOperationsInput | string
+    paidAmount?: FloatFieldUpdateOperationsInput | number
+    paymentStatus?: StringFieldUpdateOperationsInput | string
     note?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     userId?: StringFieldUpdateOperationsInput | string
@@ -144588,6 +144676,8 @@ export namespace Prisma {
     totalCost?: number
     totalItems?: number
     status?: string
+    paidAmount?: number
+    paymentStatus?: string
     note?: string | null
     branchId?: string | null
     userId: string
@@ -144605,6 +144695,8 @@ export namespace Prisma {
     totalCost?: FloatFieldUpdateOperationsInput | number
     totalItems?: IntFieldUpdateOperationsInput | number
     status?: StringFieldUpdateOperationsInput | string
+    paidAmount?: FloatFieldUpdateOperationsInput | number
+    paymentStatus?: StringFieldUpdateOperationsInput | string
     note?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     userName?: StringFieldUpdateOperationsInput | string
@@ -144621,6 +144713,8 @@ export namespace Prisma {
     totalCost?: FloatFieldUpdateOperationsInput | number
     totalItems?: IntFieldUpdateOperationsInput | number
     status?: StringFieldUpdateOperationsInput | string
+    paidAmount?: FloatFieldUpdateOperationsInput | number
+    paymentStatus?: StringFieldUpdateOperationsInput | string
     note?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     userId?: StringFieldUpdateOperationsInput | string
@@ -150576,8 +150670,10 @@ export namespace Prisma {
     refreshToken?: string | null
     tokenExpiresAt?: Date | string | null
     shopId?: string | null
+    platformShopId?: string | null
     webhookSecret?: string | null
     syncEnabled?: boolean
+    syncFromDate?: Date | string | null
     lastSyncAt?: Date | string | null
     totalOrders?: number
     totalRevenue?: number
@@ -150600,8 +150696,10 @@ export namespace Prisma {
     refreshToken?: string | null
     tokenExpiresAt?: Date | string | null
     shopId?: string | null
+    platformShopId?: string | null
     webhookSecret?: string | null
     syncEnabled?: boolean
+    syncFromDate?: Date | string | null
     lastSyncAt?: Date | string | null
     totalOrders?: number
     totalRevenue?: number
@@ -150624,8 +150722,10 @@ export namespace Prisma {
     refreshToken?: NullableStringFieldUpdateOperationsInput | string | null
     tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     shopId?: NullableStringFieldUpdateOperationsInput | string | null
+    platformShopId?: NullableStringFieldUpdateOperationsInput | string | null
     webhookSecret?: NullableStringFieldUpdateOperationsInput | string | null
     syncEnabled?: BoolFieldUpdateOperationsInput | boolean
+    syncFromDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     totalOrders?: IntFieldUpdateOperationsInput | number
     totalRevenue?: FloatFieldUpdateOperationsInput | number
@@ -150648,8 +150748,10 @@ export namespace Prisma {
     refreshToken?: NullableStringFieldUpdateOperationsInput | string | null
     tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     shopId?: NullableStringFieldUpdateOperationsInput | string | null
+    platformShopId?: NullableStringFieldUpdateOperationsInput | string | null
     webhookSecret?: NullableStringFieldUpdateOperationsInput | string | null
     syncEnabled?: BoolFieldUpdateOperationsInput | boolean
+    syncFromDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     totalOrders?: IntFieldUpdateOperationsInput | number
     totalRevenue?: FloatFieldUpdateOperationsInput | number
@@ -150672,8 +150774,10 @@ export namespace Prisma {
     refreshToken?: string | null
     tokenExpiresAt?: Date | string | null
     shopId?: string | null
+    platformShopId?: string | null
     webhookSecret?: string | null
     syncEnabled?: boolean
+    syncFromDate?: Date | string | null
     lastSyncAt?: Date | string | null
     totalOrders?: number
     totalRevenue?: number
@@ -150694,8 +150798,10 @@ export namespace Prisma {
     refreshToken?: NullableStringFieldUpdateOperationsInput | string | null
     tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     shopId?: NullableStringFieldUpdateOperationsInput | string | null
+    platformShopId?: NullableStringFieldUpdateOperationsInput | string | null
     webhookSecret?: NullableStringFieldUpdateOperationsInput | string | null
     syncEnabled?: BoolFieldUpdateOperationsInput | boolean
+    syncFromDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     totalOrders?: IntFieldUpdateOperationsInput | number
     totalRevenue?: FloatFieldUpdateOperationsInput | number
@@ -150716,8 +150822,10 @@ export namespace Prisma {
     refreshToken?: NullableStringFieldUpdateOperationsInput | string | null
     tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     shopId?: NullableStringFieldUpdateOperationsInput | string | null
+    platformShopId?: NullableStringFieldUpdateOperationsInput | string | null
     webhookSecret?: NullableStringFieldUpdateOperationsInput | string | null
     syncEnabled?: BoolFieldUpdateOperationsInput | boolean
+    syncFromDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     totalOrders?: IntFieldUpdateOperationsInput | number
     totalRevenue?: FloatFieldUpdateOperationsInput | number
@@ -156009,6 +156117,8 @@ export namespace Prisma {
     totalCost?: SortOrder
     totalItems?: SortOrder
     status?: SortOrder
+    paidAmount?: SortOrder
+    paymentStatus?: SortOrder
     note?: SortOrder
     branchId?: SortOrder
     userId?: SortOrder
@@ -156021,6 +156131,7 @@ export namespace Prisma {
   export type ImportReceiptAvgOrderByAggregateInput = {
     totalCost?: SortOrder
     totalItems?: SortOrder
+    paidAmount?: SortOrder
   }
 
   export type ImportReceiptMaxOrderByAggregateInput = {
@@ -156031,6 +156142,8 @@ export namespace Prisma {
     totalCost?: SortOrder
     totalItems?: SortOrder
     status?: SortOrder
+    paidAmount?: SortOrder
+    paymentStatus?: SortOrder
     note?: SortOrder
     branchId?: SortOrder
     userId?: SortOrder
@@ -156048,6 +156161,8 @@ export namespace Prisma {
     totalCost?: SortOrder
     totalItems?: SortOrder
     status?: SortOrder
+    paidAmount?: SortOrder
+    paymentStatus?: SortOrder
     note?: SortOrder
     branchId?: SortOrder
     userId?: SortOrder
@@ -156060,6 +156175,7 @@ export namespace Prisma {
   export type ImportReceiptSumOrderByAggregateInput = {
     totalCost?: SortOrder
     totalItems?: SortOrder
+    paidAmount?: SortOrder
   }
 
   export type ImportReceiptScalarRelationFilter = {
@@ -159338,8 +159454,10 @@ export namespace Prisma {
     refreshToken?: SortOrder
     tokenExpiresAt?: SortOrder
     shopId?: SortOrder
+    platformShopId?: SortOrder
     webhookSecret?: SortOrder
     syncEnabled?: SortOrder
+    syncFromDate?: SortOrder
     lastSyncAt?: SortOrder
     totalOrders?: SortOrder
     totalRevenue?: SortOrder
@@ -159366,8 +159484,10 @@ export namespace Prisma {
     refreshToken?: SortOrder
     tokenExpiresAt?: SortOrder
     shopId?: SortOrder
+    platformShopId?: SortOrder
     webhookSecret?: SortOrder
     syncEnabled?: SortOrder
+    syncFromDate?: SortOrder
     lastSyncAt?: SortOrder
     totalOrders?: SortOrder
     totalRevenue?: SortOrder
@@ -159388,8 +159508,10 @@ export namespace Prisma {
     refreshToken?: SortOrder
     tokenExpiresAt?: SortOrder
     shopId?: SortOrder
+    platformShopId?: SortOrder
     webhookSecret?: SortOrder
     syncEnabled?: SortOrder
+    syncFromDate?: SortOrder
     lastSyncAt?: SortOrder
     totalOrders?: SortOrder
     totalRevenue?: SortOrder
@@ -165202,6 +165324,8 @@ export namespace Prisma {
     totalCost?: number
     totalItems?: number
     status?: string
+    paidAmount?: number
+    paymentStatus?: string
     note?: string | null
     branchId?: string | null
     userName: string
@@ -165219,6 +165343,8 @@ export namespace Prisma {
     totalCost?: number
     totalItems?: number
     status?: string
+    paidAmount?: number
+    paymentStatus?: string
     note?: string | null
     branchId?: string | null
     userName: string
@@ -165510,6 +165636,8 @@ export namespace Prisma {
     totalCost?: FloatFilter<"ImportReceipt"> | number
     totalItems?: IntFilter<"ImportReceipt"> | number
     status?: StringFilter<"ImportReceipt"> | string
+    paidAmount?: FloatFilter<"ImportReceipt"> | number
+    paymentStatus?: StringFilter<"ImportReceipt"> | string
     note?: StringNullableFilter<"ImportReceipt"> | string | null
     branchId?: StringNullableFilter<"ImportReceipt"> | string | null
     userId?: StringFilter<"ImportReceipt"> | string
@@ -168984,6 +169112,8 @@ export namespace Prisma {
     totalCost?: number
     totalItems?: number
     status?: string
+    paidAmount?: number
+    paymentStatus?: string
     note?: string | null
     branchId?: string | null
     userName: string
@@ -169001,6 +169131,8 @@ export namespace Prisma {
     totalCost?: number
     totalItems?: number
     status?: string
+    paidAmount?: number
+    paymentStatus?: string
     note?: string | null
     branchId?: string | null
     userId: string
@@ -169097,6 +169229,8 @@ export namespace Prisma {
     totalCost?: FloatFieldUpdateOperationsInput | number
     totalItems?: IntFieldUpdateOperationsInput | number
     status?: StringFieldUpdateOperationsInput | string
+    paidAmount?: FloatFieldUpdateOperationsInput | number
+    paymentStatus?: StringFieldUpdateOperationsInput | string
     note?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     userName?: StringFieldUpdateOperationsInput | string
@@ -169114,6 +169248,8 @@ export namespace Prisma {
     totalCost?: FloatFieldUpdateOperationsInput | number
     totalItems?: IntFieldUpdateOperationsInput | number
     status?: StringFieldUpdateOperationsInput | string
+    paidAmount?: FloatFieldUpdateOperationsInput | number
+    paymentStatus?: StringFieldUpdateOperationsInput | string
     note?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     userId?: StringFieldUpdateOperationsInput | string
@@ -171470,8 +171606,10 @@ export namespace Prisma {
     refreshToken?: string | null
     tokenExpiresAt?: Date | string | null
     shopId?: string | null
+    platformShopId?: string | null
     webhookSecret?: string | null
     syncEnabled?: boolean
+    syncFromDate?: Date | string | null
     lastSyncAt?: Date | string | null
     totalOrders?: number
     totalRevenue?: number
@@ -171493,8 +171631,10 @@ export namespace Prisma {
     refreshToken?: string | null
     tokenExpiresAt?: Date | string | null
     shopId?: string | null
+    platformShopId?: string | null
     webhookSecret?: string | null
     syncEnabled?: boolean
+    syncFromDate?: Date | string | null
     lastSyncAt?: Date | string | null
     totalOrders?: number
     totalRevenue?: number
@@ -171564,8 +171704,10 @@ export namespace Prisma {
     refreshToken?: NullableStringFieldUpdateOperationsInput | string | null
     tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     shopId?: NullableStringFieldUpdateOperationsInput | string | null
+    platformShopId?: NullableStringFieldUpdateOperationsInput | string | null
     webhookSecret?: NullableStringFieldUpdateOperationsInput | string | null
     syncEnabled?: BoolFieldUpdateOperationsInput | boolean
+    syncFromDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     totalOrders?: IntFieldUpdateOperationsInput | number
     totalRevenue?: FloatFieldUpdateOperationsInput | number
@@ -171587,8 +171729,10 @@ export namespace Prisma {
     refreshToken?: NullableStringFieldUpdateOperationsInput | string | null
     tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     shopId?: NullableStringFieldUpdateOperationsInput | string | null
+    platformShopId?: NullableStringFieldUpdateOperationsInput | string | null
     webhookSecret?: NullableStringFieldUpdateOperationsInput | string | null
     syncEnabled?: BoolFieldUpdateOperationsInput | boolean
+    syncFromDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     totalOrders?: IntFieldUpdateOperationsInput | number
     totalRevenue?: FloatFieldUpdateOperationsInput | number
@@ -171626,8 +171770,10 @@ export namespace Prisma {
     refreshToken?: string | null
     tokenExpiresAt?: Date | string | null
     shopId?: string | null
+    platformShopId?: string | null
     webhookSecret?: string | null
     syncEnabled?: boolean
+    syncFromDate?: Date | string | null
     lastSyncAt?: Date | string | null
     totalOrders?: number
     totalRevenue?: number
@@ -171649,8 +171795,10 @@ export namespace Prisma {
     refreshToken?: string | null
     tokenExpiresAt?: Date | string | null
     shopId?: string | null
+    platformShopId?: string | null
     webhookSecret?: string | null
     syncEnabled?: boolean
+    syncFromDate?: Date | string | null
     lastSyncAt?: Date | string | null
     totalOrders?: number
     totalRevenue?: number
@@ -171751,8 +171899,10 @@ export namespace Prisma {
     refreshToken?: NullableStringFieldUpdateOperationsInput | string | null
     tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     shopId?: NullableStringFieldUpdateOperationsInput | string | null
+    platformShopId?: NullableStringFieldUpdateOperationsInput | string | null
     webhookSecret?: NullableStringFieldUpdateOperationsInput | string | null
     syncEnabled?: BoolFieldUpdateOperationsInput | boolean
+    syncFromDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     totalOrders?: IntFieldUpdateOperationsInput | number
     totalRevenue?: FloatFieldUpdateOperationsInput | number
@@ -171774,8 +171924,10 @@ export namespace Prisma {
     refreshToken?: NullableStringFieldUpdateOperationsInput | string | null
     tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     shopId?: NullableStringFieldUpdateOperationsInput | string | null
+    platformShopId?: NullableStringFieldUpdateOperationsInput | string | null
     webhookSecret?: NullableStringFieldUpdateOperationsInput | string | null
     syncEnabled?: BoolFieldUpdateOperationsInput | boolean
+    syncFromDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     totalOrders?: IntFieldUpdateOperationsInput | number
     totalRevenue?: FloatFieldUpdateOperationsInput | number
@@ -174650,6 +174802,8 @@ export namespace Prisma {
     totalCost?: number
     totalItems?: number
     status?: string
+    paidAmount?: number
+    paymentStatus?: string
     note?: string | null
     branchId?: string | null
     userName: string
@@ -174864,6 +175018,8 @@ export namespace Prisma {
     totalCost?: FloatFieldUpdateOperationsInput | number
     totalItems?: IntFieldUpdateOperationsInput | number
     status?: StringFieldUpdateOperationsInput | string
+    paidAmount?: FloatFieldUpdateOperationsInput | number
+    paymentStatus?: StringFieldUpdateOperationsInput | string
     note?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     userName?: StringFieldUpdateOperationsInput | string
@@ -174881,6 +175037,8 @@ export namespace Prisma {
     totalCost?: FloatFieldUpdateOperationsInput | number
     totalItems?: IntFieldUpdateOperationsInput | number
     status?: StringFieldUpdateOperationsInput | string
+    paidAmount?: FloatFieldUpdateOperationsInput | number
+    paymentStatus?: StringFieldUpdateOperationsInput | string
     note?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     userName?: StringFieldUpdateOperationsInput | string
@@ -174898,6 +175056,8 @@ export namespace Prisma {
     totalCost?: FloatFieldUpdateOperationsInput | number
     totalItems?: IntFieldUpdateOperationsInput | number
     status?: StringFieldUpdateOperationsInput | string
+    paidAmount?: FloatFieldUpdateOperationsInput | number
+    paymentStatus?: StringFieldUpdateOperationsInput | string
     note?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     userName?: StringFieldUpdateOperationsInput | string
