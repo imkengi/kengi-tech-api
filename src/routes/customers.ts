@@ -369,8 +369,20 @@ router.get('/:id/debt-history', authMiddleware, requirePermission('customers.vie
 
         // ❌ AuditLog source REMOVED — already covered by Payment records above
 
-        // From DebtEntry records
+        // From DebtEntry records.
+        // Các entry TỰ ĐỘNG sinh từ luồng hóa đơn (bán chịu POS, thu nợ theo HĐ,
+        // trả hàng theo HĐ, hủy đơn, hủy phiếu thu) phải BỎ QUA ở đây — phía
+        // transaction/payment phía trên đã thể hiện đúng các phát sinh đó, đếm
+        // thêm entry là double-count. Entry thủ công / phiếu thu độc lập vẫn tính.
+        const TX_LINKED_ENTRY = [
+            /^Nợ từ HĐ /,
+            /^Thanh toán nợ HĐ /,
+            /^Trả hàng theo HĐ /,
+            /^Hủy đơn .+ - xóa nợ$/,
+            /^Hủy phiếu thu( nợ)? HĐ /,
+        ]
         for (const e of debtEntries) {
+            if (TX_LINKED_ENTRY.some(rx => rx.test(e.description || ''))) continue
             let entryCode = makePTCode()
             let entryType: DebtHistoryItem['type'] = 'manual_payment'
             let entryLabel = 'Phiếu thu'
@@ -510,6 +522,18 @@ router.post('/:id/cancel-receipt', authMiddleware, async (req: AuthRequest, res:
                     where: { id: customerId },
                     data: { debt: { increment: cancelledAmount } },
                 })
+                // Ghi sổ chi tiết: hủy phiếu thu = ghi nợ lại
+                await tx2.debtEntry.create({
+                    data: {
+                        customerId,
+                        customerName: customer.name,
+                        phone: customer.phone || null,
+                        type: 'debt',
+                        amount: cancelledAmount,
+                        description: `Hủy phiếu thu HĐ ${tx.receiptNumber} - ghi nợ lại`,
+                        balance: Math.max(0, customer.debt) + cancelledAmount,
+                    },
+                })
             })
 
             cancelledCode = `PT${(tx.receiptNumber || '').replace(/\D/g, '')}`
@@ -546,6 +570,18 @@ router.post('/:id/cancel-receipt', authMiddleware, async (req: AuthRequest, res:
                 await tx2.customer.update({
                     where: { id: customerId },
                     data: { debt: { increment: cancelledAmount } },
+                })
+                // Ghi sổ chi tiết: hủy phiếu thu nợ = ghi nợ lại
+                await tx2.debtEntry.create({
+                    data: {
+                        customerId,
+                        customerName: customer.name,
+                        phone: customer.phone || null,
+                        type: 'debt',
+                        amount: cancelledAmount,
+                        description: `Hủy phiếu thu nợ HĐ ${tx.receiptNumber} - ghi nợ lại`,
+                        balance: Math.max(0, customer.debt) + cancelledAmount,
+                    },
                 })
             })
 

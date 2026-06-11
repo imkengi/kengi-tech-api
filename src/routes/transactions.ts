@@ -673,10 +673,27 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
                 customerUpdate.debt = { increment: debtAmount }
             }
 
-            await prisma.customer.update({
+            const updatedCustomer = await prisma.customer.update({
                 where: { id: txData.customerId },
                 data: customerUpdate,
             })
+
+            // Ghi sổ chi tiết công nợ cho phần bán chịu — DebtEntry là sổ cái,
+            // Customer.debt là số dư; hai bên phải đi cùng nhau (best-effort,
+            // không làm fail đơn đã tạo).
+            if (debtAmount > 0) {
+                await prisma.debtEntry.create({
+                    data: {
+                        customerId: txData.customerId,
+                        customerName: updatedCustomer.name,
+                        phone: updatedCustomer.phone || null,
+                        type: 'debt',
+                        amount: debtAmount,
+                        description: `Nợ từ HĐ ${receiptNumber}`,
+                        balance: Math.max(0, updatedCustomer.debt),
+                    },
+                }).catch((e: any) => console.error('DebtEntry create failed (non-fatal):', e.message))
+            }
 
             // ── Loyalty points earn ───────────────────────────────────────────────
             try {
@@ -833,19 +850,36 @@ router.put('/:id/void', authMiddleware, async (req: AuthRequest, res: Response) 
             const outstanding = existing.status === 'partial'
                 ? Math.max(0, existing.total - (existing.amountReceived ?? 0))
                 : 0
+            let voidDebtReduction = 0
+            let voidCustomer: any = null
             if (outstanding > 0) {
-                const customer = await prisma.customer.findUnique({
+                voidCustomer = await prisma.customer.findUnique({
                     where: { id: existing.customerId },
-                    select: { debt: true },
+                    select: { debt: true, name: true, phone: true },
                 })
-                const debtReduction = Math.min(outstanding, Math.max(0, customer?.debt ?? 0))
-                if (debtReduction > 0) customerUpdate.debt = { decrement: debtReduction }
+                voidDebtReduction = Math.min(outstanding, Math.max(0, voidCustomer?.debt ?? 0))
+                if (voidDebtReduction > 0) customerUpdate.debt = { decrement: voidDebtReduction }
             }
 
             await prisma.customer.update({
                 where: { id: existing.customerId },
                 data: customerUpdate,
             })
+
+            // Ghi sổ chi tiết phần xóa nợ do hủy đơn (best-effort)
+            if (voidDebtReduction > 0) {
+                await prisma.debtEntry.create({
+                    data: {
+                        customerId: existing.customerId,
+                        customerName: voidCustomer?.name || (existing as any).customerName || 'Khách hàng',
+                        phone: voidCustomer?.phone || null,
+                        type: 'return',
+                        amount: voidDebtReduction,
+                        description: `Hủy đơn ${existing.receiptNumber} - xóa nợ`,
+                        balance: Math.max(0, (voidCustomer?.debt ?? 0) - voidDebtReduction),
+                    },
+                }).catch((e: any) => console.error('DebtEntry create failed (non-fatal):', e.message))
+            }
         }
 
         cacheDel(`${req.user?.storeSchema || 'default'}:*:transactions:*`).catch(() => { })
@@ -941,13 +975,25 @@ router.put('/:id/pay-debt', authMiddleware, async (req: AuthRequest, res: Respon
             if (existing.customerId) {
                 const customer = await tx.customer.findUnique({
                     where: { id: existing.customerId },
-                    select: { debt: true },
+                    select: { debt: true, name: true, phone: true },
                 })
-                const debtReduction = Math.min(payAmount, Math.max(0, customer?.debt ?? 0))
+                const currentDebt = Math.max(0, customer?.debt ?? 0)
+                const debtReduction = Math.min(payAmount, currentDebt)
                 if (debtReduction > 0) {
                     await tx.customer.update({
                         where: { id: existing.customerId },
                         data: { debt: { decrement: debtReduction } },
+                    })
+                    await tx.debtEntry.create({
+                        data: {
+                            customerId: existing.customerId,
+                            customerName: customer?.name || existing.customerName || 'Khách hàng',
+                            phone: customer?.phone || null,
+                            type: 'payment',
+                            amount: debtReduction,
+                            description: `Thanh toán nợ HĐ ${existing.receiptNumber}`,
+                            balance: Math.max(0, currentDebt - debtReduction),
+                        },
                     })
                 }
             }
@@ -1130,19 +1176,36 @@ router.put('/:id/return', authMiddleware, async (req: AuthRequest, res: Response
             const outstanding = existing.status === 'partial'
                 ? Math.max(0, existing.total - (existing.amountReceived ?? 0))
                 : 0
+            let returnDebtReduction = 0
+            let returnCustomer: any = null
             if (outstanding > 0) {
-                const customer = await prisma.customer.findUnique({
+                returnCustomer = await prisma.customer.findUnique({
                     where: { id: existing.customerId },
-                    select: { debt: true },
+                    select: { debt: true, name: true, phone: true },
                 })
-                const debtReduction = Math.min(outstanding, returnTotal, Math.max(0, customer?.debt ?? 0))
-                if (debtReduction > 0) updateData.debt = { decrement: debtReduction }
+                returnDebtReduction = Math.min(outstanding, returnTotal, Math.max(0, returnCustomer?.debt ?? 0))
+                if (returnDebtReduction > 0) updateData.debt = { decrement: returnDebtReduction }
             }
 
             await prisma.customer.update({
                 where: { id: existing.customerId },
                 data: updateData,
             })
+
+            // Ghi sổ chi tiết phần giảm nợ do trả hàng (best-effort)
+            if (returnDebtReduction > 0) {
+                await prisma.debtEntry.create({
+                    data: {
+                        customerId: existing.customerId,
+                        customerName: returnCustomer?.name || (existing as any).customerName || 'Khách hàng',
+                        phone: returnCustomer?.phone || null,
+                        type: 'return',
+                        amount: returnDebtReduction,
+                        description: `Trả hàng theo HĐ ${existing.receiptNumber} (${returnCode})`,
+                        balance: Math.max(0, (returnCustomer?.debt ?? 0) - returnDebtReduction),
+                    },
+                }).catch((e: any) => console.error('DebtEntry create failed (non-fatal):', e.message))
+            }
         }
 
         cacheDel(`${req.user?.storeSchema || 'default'}:*:transactions:*`).catch(() => { })
