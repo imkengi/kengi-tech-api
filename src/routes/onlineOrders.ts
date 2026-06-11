@@ -2305,7 +2305,7 @@ router.put('/returns/:returnId/process', authMiddleware, async (req: AuthRequest
 })
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  SYNC RETURNS FROM SHOPEE
+//  SYNC RETURNS FROM SHOPEE / TIKTOK
 // ═══════════════════════════════════════════════════════════════════════════════
 
 router.post('/channels/:id/sync-returns', authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -2314,17 +2314,43 @@ router.post('/channels/:id/sync-returns', authMiddleware, async (req: AuthReques
         const channel = await prisma.onlineChannel.findUnique({ where: { id: req.params.id as string } })
         if (!channel) { res.status(404).json({ success: false, error: 'Kênh không tồn tại' }); return }
 
-        if (channel.platform !== 'shopee') {
-            res.status(400).json({ success: false, error: 'Hiện chỉ hỗ trợ sync trả hàng từ Shopee' })
+        if (!['shopee', 'tiktok'].includes(channel.platform)) {
+            res.status(400).json({ success: false, error: 'Hiện chỉ hỗ trợ sync trả hàng từ Shopee và TikTok' })
             return
         }
 
-        const service = new ShopeeService({
+        const isTikTok = channel.platform === 'tiktok'
+        const platformLabel = isTikTok ? 'TikTok' : 'Shopee'
+        // Mã phiếu trả khác prefix theo sàn để dedup không đụng nhau
+        const codePrefix = isTikTok ? 'RTN-TT-' : 'RTN-SH-'
+
+        const creds = {
             apiKey: channel.apiKey || '', apiSecret: channel.apiSecret || '',
             accessToken: channel.accessToken || undefined,
             refreshToken: channel.refreshToken || undefined,
             shopId: channel.shopId || undefined,
-        })
+        }
+        const service = isTikTok ? new TikTokService(creds) : new ShopeeService(creds)
+
+        // Auto-refresh token if expired or about to expire (5 min buffer)
+        const tokenExpiresAt = (channel as any).tokenExpiresAt
+        if (tokenExpiresAt && new Date(tokenExpiresAt).getTime() < Date.now() + 5 * 60 * 1000) {
+            try {
+                const tokens = await service.refreshAccessToken();
+                (service as any).credentials.accessToken = tokens.accessToken;
+                (service as any).credentials.refreshToken = tokens.refreshToken;
+                await prisma.onlineChannel.update({
+                    where: { id: channel.id },
+                    data: {
+                        accessToken: tokens.accessToken,
+                        refreshToken: tokens.refreshToken,
+                        tokenExpiresAt: new Date(Date.now() + tokens.expiresIn * 1000),
+                    },
+                })
+            } catch (refreshErr: any) {
+                console.error(`[Sync Returns] ${platformLabel} token refresh failed:`, refreshErr.message)
+            }
+        }
 
         // Fetch returns from last 15 days
         const since = new Date(Date.now() - 15 * 86400_000)
@@ -2335,9 +2361,10 @@ router.post('/channels/:id/sync-returns', authMiddleware, async (req: AuthReques
 
         for (const ret of shopeeReturns) {
             try {
+                const nativeStatus = (ret as any).platformStatus || (ret as any).shopeeStatus || ''
                 // Check if already synced
                 const existingReturn = await prisma.returnOrder.findFirst({
-                    where: { code: `RTN-SH-${ret.returnSn}` },
+                    where: { code: `${codePrefix}${ret.returnSn}` },
                 })
                 if (existingReturn) {
                     // Update status if changed
@@ -2346,7 +2373,7 @@ router.post('/channels/:id/sync-returns', authMiddleware, async (req: AuthReques
                             where: { id: existingReturn.id },
                             data: {
                                 status: ret.status,
-                                notes: `${existingReturn.notes || ''}\n[Shopee] ${ret.shopeeStatus} (${new Date().toLocaleString('vi-VN')})`,
+                                notes: `${existingReturn.notes || ''}\n[${platformLabel}] ${nativeStatus} (${new Date().toLocaleString('vi-VN')})`,
                                 ...(ret.status === 'refunded' ? { refundedAt: new Date(), processedAt: new Date() } : {}),
                             },
                         })
@@ -2375,15 +2402,15 @@ router.post('/channels/:id/sync-returns', authMiddleware, async (req: AuthReques
                 })
 
                 // Create ReturnOrder
-                const returnCode = `RTN-SH-${ret.returnSn}`
+                const returnCode = `${codePrefix}${ret.returnSn}`
                 const refundAmount = typeof ret.refundAmount === 'number' ? ret.refundAmount : 0
 
                 const returnItems = ret.items.map((i: any) => ({
-                    productName: i.name || i.modelName || 'SP Shopee',
+                    productName: i.name || i.modelName || `SP ${platformLabel}`,
                     sku: '',
                     quantity: i.amount || 1,
                     unitPrice: i.itemPrice || 0,
-                    returnReason: ret.reason || ret.textReason || 'Trả hàng từ Shopee',
+                    returnReason: ret.reason || ret.textReason || `Trả hàng từ ${platformLabel}`,
                     condition: 'used',
                 }))
 
@@ -2391,22 +2418,22 @@ router.post('/channels/:id/sync-returns', authMiddleware, async (req: AuthReques
                     data: {
                         code: returnCode,
                         originalInvoice: order?.orderNumber || ret.orderSn,
-                        customerName: order?.customerName || 'Khách Shopee',
+                        customerName: order?.customerName || `Khách ${platformLabel}`,
                         customerPhone: order?.customerPhone || undefined,
-                        reason: ret.reason || ret.textReason || 'Trả hàng từ Shopee',
+                        reason: ret.reason || ret.textReason || `Trả hàng từ ${platformLabel}`,
                         refundMethod: 'platform_refund',
                         refundAmount,
                         totalRefund: refundAmount,
-                        notes: `[Shopee] Status: ${ret.shopeeStatus}\nReturn SN: ${ret.returnSn}\nTracking: ${ret.trackingNumber || 'N/A'}\nNeed return: ${ret.needReturn ? 'Có' : 'Không'}`,
-                        staffName: 'Shopee Auto-Sync',
+                        notes: `[${platformLabel}] Status: ${nativeStatus}\nReturn SN: ${ret.returnSn}\nTracking: ${ret.trackingNumber || 'N/A'}\nNeed return: ${ret.needReturn ? 'Có' : 'Không'}`,
+                        staffName: `${platformLabel} Auto-Sync`,
                         status: ret.status,
                         ...(ret.status === 'refunded' ? { refundedAt: ret.updateTime, processedAt: ret.updateTime } : {}),
                         items: {
                             create: returnItems.length > 0 ? returnItems : [{
-                                productName: 'SP từ Shopee',
+                                productName: `SP từ ${platformLabel}`,
                                 quantity: 1,
                                 unitPrice: refundAmount,
-                                returnReason: ret.reason || 'Trả hàng Shopee',
+                                returnReason: ret.reason || `Trả hàng ${platformLabel}`,
                                 condition: 'used',
                             }],
                         },

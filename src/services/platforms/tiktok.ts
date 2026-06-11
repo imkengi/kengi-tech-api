@@ -367,6 +367,79 @@ export class TikTokService extends PlatformService {
         return { pdf: Buffer.from(arrayBuf), contentType }
     }
 
+    // ─── Returns / Refunds ──────────────────────────────────────────────────────
+
+    /**
+     * Fetch return/refund requests via POST /return_refund/202309/returns/search.
+     * Returns the same record shape as ShopeeService.fetchReturns so the
+     * /channels/:id/sync-returns route can treat both platforms uniformly.
+     */
+    async fetchReturns(params: { since?: Date }) {
+        if (!this.credentials.shopId) {
+            throw new Error('TikTok getReturns: thiếu shop_cipher — vui lòng kết nối lại (authorize) TikTok Shop')
+        }
+        const path = '/return_refund/202309/returns/search'
+        const all: any[] = []
+        let pageToken: string | undefined
+        for (let i = 0; i < 10; i++) {
+            const query: Record<string, string> = { page_size: '50' }
+            if (pageToken) query.page_token = pageToken
+            const bodyObj: any = {}
+            if (params.since) {
+                bodyObj.create_time_ge = Math.floor(params.since.getTime() / 1000)
+                bodyObj.create_time_le = Math.floor(Date.now() / 1000)
+            }
+            const bodyStr = JSON.stringify(bodyObj)
+            const { url, headers } = this.buildUrl(path, query, bodyStr)
+            const data = await this.httpPost(url, bodyObj, headers)
+            if (data.code !== 0) {
+                throw new Error(`TikTok getReturns: [${data.code}] ${data.message || 'Unknown error'}`)
+            }
+            all.push(...(data.data?.return_orders || []))
+            pageToken = data.data?.next_page_token || undefined
+            if (!pageToken) break
+        }
+        return all.map(r => this.mapReturn(r))
+    }
+
+    private mapReturn(r: any) {
+        // TikTok v202309 return_status → internal status (same vocab as ShopeeService.mapReturn)
+        const RETURN_STATUS_MAP: Record<string, string> = {
+            RETURN_OR_REFUND_REQUEST_PENDING: 'pending',
+            AWAITING_BUYER_SHIP: 'approved',
+            BUYER_SHIPPED_ITEM: 'approved',
+            REJECT_RECEIVE_PACKAGE: 'rejected',
+            REFUND_OR_RETURN_REQUEST_REJECT: 'rejected',
+            RETURN_OR_REFUND_REQUEST_CANCEL: 'rejected',
+            RETURN_OR_REFUND_REQUEST_SUCCESS: 'refunded',
+            RETURN_OR_REFUND_REQUEST_COMPLETE: 'refunded',
+        }
+        const num = (v: any) => { const n = parseFloat(v); return isNaN(n) ? 0 : n }
+        return {
+            returnSn: String(r.return_id || ''),
+            orderSn: String(r.order_id || ''),
+            status: RETURN_STATUS_MAP[r.return_status] || 'pending',
+            platformStatus: r.return_status || '',
+            reason: r.return_reason_text || r.return_reason || '',
+            textReason: r.return_reason_text || '',
+            refundAmount: num(r.refund_amount?.refund_total),
+            currency: r.refund_amount?.currency || 'VND',
+            trackingNumber: r.return_tracking_number || '',
+            images: [],
+            items: (r.return_line_items || []).map((li: any) => ({
+                itemId: String(li.order_line_item_id || li.return_line_item_id || ''),
+                name: li.product_name || li.sku_name || '',
+                modelName: li.sku_name || '',
+                amount: 1, // TikTok return_line_items là từng đơn vị sản phẩm
+                itemPrice: num(li.refund_amount?.refund_total),
+            })),
+            createTime: r.create_time ? new Date(r.create_time * 1000) : new Date(),
+            updateTime: r.update_time ? new Date(r.update_time * 1000) : new Date(),
+            needReturn: r.return_type === 'RETURN_AND_REFUND',
+            disputeReason: '',
+        }
+    }
+
     // ─── Mappers ─────────────────────────────────────────────────────────────────
 
     /**
