@@ -680,9 +680,88 @@ router.put('/:id/status', authMiddleware, async (req: AuthRequest, res: Response
         // Get old order to check previous status (for inventory sync)
         const oldOrder = await prisma.onlineOrder.findUnique({
             where: { id: id as string },
-            include: { items: true },
+            include: { items: true, channel: true },
         })
         const oldStatus = oldOrder?.status
+
+        // ── Đơn TikTok: ánh xạ nút bấm → hành động THẬT trên sàn ─────────────
+        // Trạng thái đơn TikTok do sàn quản lý (webhook phản chiếu về). Seller chỉ
+        // có 2 hành động qua API: Giao vận chuyển (RTS) và Huỷ đơn. Gọi sàn thành
+        // công mới ghi DB — và ghi bằng trạng thái THẬT fetch lại từ sàn.
+        const tkChannel: any = (oldOrder as any)?.channel
+        if (tkChannel?.platform === 'tiktok' && tkChannel.accessToken && oldOrder?.externalOrderId) {
+            const SHIP_STATUSES = ['SHIPPED', 'shipping', 'PROCESSED', 'processing']
+            const CANCEL_STATUSES = ['CANCELLED', 'cancelled', 'cancelling', 'IN_CANCEL']
+            const isShip = SHIP_STATUSES.includes(status)
+            const isCancel = CANCEL_STATUSES.includes(status)
+            if (!isShip && !isCancel) {
+                res.status(400).json({
+                    success: false,
+                    error: 'Đơn TikTok: trạng thái do sàn tự cập nhật (webhook). Hành động khả dụng: "Giao vận chuyển" (đơn chờ xử lý) hoặc "Hủy đơn".',
+                })
+                return
+            }
+
+            const eid = (oldOrder.externalOrderId || '').replace(/^(SPE-|TIK-|LAZ-)/i, '')
+            const tiktok = new TikTokService({
+                apiKey: tkChannel.apiKey || '', apiSecret: tkChannel.apiSecret || '',
+                accessToken: tkChannel.accessToken || undefined,
+                refreshToken: tkChannel.refreshToken || undefined,
+                shopId: tkChannel.shopId || undefined,
+            })
+            // Auto-refresh token if expiring (5 min buffer)
+            if (tkChannel.tokenExpiresAt && new Date(tkChannel.tokenExpiresAt).getTime() < Date.now() + 5 * 60 * 1000) {
+                try {
+                    const tokens = await tiktok.refreshAccessToken();
+                    (tiktok as any).credentials.accessToken = tokens.accessToken;
+                    (tiktok as any).credentials.refreshToken = tokens.refreshToken;
+                    await prisma.onlineChannel.update({
+                        where: { id: tkChannel.id },
+                        data: { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken, tokenExpiresAt: new Date(Date.now() + tokens.expiresIn * 1000) },
+                    })
+                } catch (e: any) { console.error('[Status] TikTok token refresh failed:', e.message) }
+            }
+
+            try {
+                if (isShip) await tiktok.shipOrder(eid)
+                else await tiktok.cancelOrder(eid)
+            } catch (platformErr: any) {
+                res.status(400).json({ success: false, error: `TikTok từ chối: ${platformErr.message}` })
+                return
+            }
+
+            // Lấy trạng thái thật từ sàn sau hành động (RTS → AWAITING_COLLECTION...)
+            let actual: any = null
+            try { actual = await tiktok.getOrderDetail(eid) } catch { }
+            const order = await prisma.onlineOrder.update({
+                where: { id: id as string },
+                data: actual ? {
+                    status: actual.status,
+                    externalStatus: actual.externalStatus,
+                    paymentStatus: actual.paymentStatus,
+                    trackingNumber: actual.trackingNumber || oldOrder.trackingNumber,
+                    shippingCarrier: actual.shippingCarrier || oldOrder.shippingCarrier,
+                    syncedAt: new Date(),
+                } : { status: isShip ? 'AWAITING_COLLECTION' : 'IN_CANCEL', syncedAt: new Date() },
+                include: { items: true, channel: true },
+            })
+
+            try {
+                await prisma.auditLog.create({
+                    data: {
+                        userId: req.user?.userId,
+                        userName: req.user?.email || 'system',
+                        action: isShip ? 'tiktok_rts' : 'tiktok_cancel',
+                        entity: 'OnlineOrder',
+                        entityId: order.id,
+                        details: JSON.stringify({ orderNumber: order.orderNumber, oldStatus, newStatus: order.status }),
+                    },
+                })
+            } catch { }
+
+            res.json({ success: true, data: order })
+            return
+        }
 
         const updateData: any = { status }
         // Timestamp auto-fill: map cả Shopee UPPERCASE và legacy lowercase
@@ -868,12 +947,75 @@ router.post('/bulk-update', authMiddleware, async (req: AuthRequest, res: Respon
         if (status === 'TO_CONFIRM_RECEIVE' || status === 'delivered') data.deliveredAt = new Date()
         if (['COMPLETED', 'completed', 'TO_CONFIRM_RECEIVE', 'delivered'].includes(status)) data.paymentStatus = 'paid'
 
-        const result = await prisma.onlineOrder.updateMany({
+        // ── Đơn TikTok: gọi hành động thật trên sàn từng đơn (RTS / Huỷ) ─────
+        // Đơn không phải TikTok giữ nguyên updateMany như cũ. Đơn TikTok mà hành
+        // động không có ánh xạ trên sàn thì bỏ qua kèm thông báo.
+        const targets = await prisma.onlineOrder.findMany({
             where: { id: { in: ids } },
-            data,
+            include: { channel: true },
         })
+        const tiktokOrders = targets.filter((o: any) => o.channel?.platform === 'tiktok' && o.channel?.accessToken && o.externalOrderId)
+        const normalIds = targets.filter((o: any) => !tiktokOrders.includes(o)).map((o: any) => o.id)
 
-        res.json({ success: true, data: { updated: result.count } })
+        const errors: string[] = []
+        let tiktokUpdated = 0
+        if (tiktokOrders.length > 0) {
+            const SHIP_STATUSES = ['SHIPPED', 'shipping', 'PROCESSED', 'processing']
+            const CANCEL_STATUSES = ['CANCELLED', 'cancelled', 'cancelling', 'IN_CANCEL']
+            const isShip = SHIP_STATUSES.includes(status)
+            const isCancel = CANCEL_STATUSES.includes(status)
+            if (!isShip && !isCancel) {
+                errors.push(`${tiktokOrders.length} đơn TikTok bị bỏ qua: trạng thái này do sàn tự cập nhật, chỉ hỗ trợ "Giao vận chuyển" hoặc "Hủy"`)
+            } else {
+                const ch: any = tiktokOrders[0].channel
+                const tiktok = new TikTokService({
+                    apiKey: ch.apiKey || '', apiSecret: ch.apiSecret || '',
+                    accessToken: ch.accessToken || undefined,
+                    refreshToken: ch.refreshToken || undefined,
+                    shopId: ch.shopId || undefined,
+                })
+                if (ch.tokenExpiresAt && new Date(ch.tokenExpiresAt).getTime() < Date.now() + 5 * 60 * 1000) {
+                    try {
+                        const tokens = await tiktok.refreshAccessToken();
+                        (tiktok as any).credentials.accessToken = tokens.accessToken;
+                        (tiktok as any).credentials.refreshToken = tokens.refreshToken;
+                        await prisma.onlineChannel.update({
+                            where: { id: ch.id },
+                            data: { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken, tokenExpiresAt: new Date(Date.now() + tokens.expiresIn * 1000) },
+                        })
+                    } catch (e: any) { console.error('[BulkUpdate] TikTok token refresh failed:', e.message) }
+                }
+                for (const o of tiktokOrders) {
+                    const eid = (o.externalOrderId || '').replace(/^(SPE-|TIK-|LAZ-)/i, '')
+                    try {
+                        if (isShip) await tiktok.shipOrder(eid)
+                        else await tiktok.cancelOrder(eid)
+                        let actual: any = null
+                        try { actual = await tiktok.getOrderDetail(eid) } catch { }
+                        await prisma.onlineOrder.update({
+                            where: { id: o.id },
+                            data: actual ? {
+                                status: actual.status,
+                                externalStatus: actual.externalStatus,
+                                paymentStatus: actual.paymentStatus,
+                                trackingNumber: actual.trackingNumber || o.trackingNumber,
+                                shippingCarrier: actual.shippingCarrier || o.shippingCarrier,
+                                syncedAt: new Date(),
+                            } : { status: isShip ? 'AWAITING_COLLECTION' : 'IN_CANCEL', syncedAt: new Date() },
+                        })
+                        tiktokUpdated++
+                    } catch (e: any) {
+                        errors.push(`${o.orderNumber}: ${e.message}`)
+                    }
+                }
+            }
+        }
+
+        const result = normalIds.length > 0
+            ? await prisma.onlineOrder.updateMany({ where: { id: { in: normalIds } }, data })
+            : { count: 0 }
+
+        res.json({ success: true, data: { updated: result.count + tiktokUpdated, errors } })
     } catch (err) {
         console.error('Bulk update error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
@@ -1750,7 +1892,12 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
             // nhật qua polling. Webhook lo realtime; đây là lưới an toàn khi bấm Sync:
             // refresh từng đơn chưa kết thúc qua getOrderDetail (mới nhất trước, tối đa 60).
             try {
-                const NON_TERMINAL = ['pending', 'confirmed', 'processing', 'shipping', 'delivered']
+                // Native TikTok statuses + legacy lowercase (đơn sync trước khi mapStatus giữ native)
+                const NON_TERMINAL = [
+                    'UNPAID', 'ON_HOLD', 'AWAITING_SHIPMENT', 'AWAITING_COLLECTION',
+                    'PARTIALLY_SHIPPING', 'IN_TRANSIT', 'DELIVERED',
+                    'pending', 'confirmed', 'processing', 'shipping', 'delivered',
+                ]
                 const pendingOrders = await prisma.onlineOrder.findMany({
                     where: { channelId: channel.id, status: { in: NON_TERMINAL }, externalOrderId: { not: null } },
                     select: { id: true, externalOrderId: true, status: true, trackingNumber: true, shippingCarrier: true },

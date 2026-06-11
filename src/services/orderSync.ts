@@ -168,6 +168,8 @@ export async function processNewOrders(prisma: StorePrisma, channelId: string): 
             status: { in: [
                 'confirmed', 'processing', 'shipping', 'completed',
                 'READY_TO_SHIP', 'PROCESSED', 'SHIPPED', 'COMPLETED',
+                // TikTok native (mapStatus giữ nguyên trạng thái gốc từ 2026-06-11)
+                'AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'PARTIALLY_SHIPPING', 'IN_TRANSIT',
             ] },
         },
         select: { id: true, orderNumber: true },

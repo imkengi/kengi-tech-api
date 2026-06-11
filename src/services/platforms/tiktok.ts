@@ -376,6 +376,51 @@ export class TikTokService extends PlatformService {
         return { pdf: Buffer.from(arrayBuf), contentType }
     }
 
+    // ─── Seller actions (ánh xạ nút bấm → hành động THẬT trên sàn) ──────────────
+
+    /**
+     * Arrange shipment (RTS) for a package.
+     * POST /fulfillment/202309/packages/{package_id}/ship — body { handover_method }.
+     */
+    async shipPackage(packageId: string, handoverMethod: 'PICKUP' | 'DROP_OFF' = 'PICKUP'): Promise<void> {
+        const path = `/fulfillment/202309/packages/${packageId}/ship`
+        const bodyObj = { handover_method: handoverMethod }
+        const bodyStr = JSON.stringify(bodyObj)
+        const { url, headers } = this.buildUrl(path, {}, bodyStr)
+        const data = await this.httpPost(url, bodyObj, headers)
+        if (data.code !== 0) {
+            throw new Error(`TikTok shipPackage: [${data.code}] ${data.message || 'Unknown error'}`)
+        }
+    }
+
+    /** Resolve the order's first package and arrange its shipment (RTS). */
+    async shipOrder(orderId: string): Promise<void> {
+        const { url, headers } = this.buildUrl('/order/202309/orders', { ids: orderId })
+        const data = await this.httpGet(url, headers)
+        if (data.code !== 0) throw new Error(`TikTok getOrder: [${data.code}] ${data.message || 'Unknown error'}`)
+        const order = data.data?.orders?.[0]
+        if (!order) throw new Error(`Đơn TikTok ${orderId} không tồn tại`)
+        const packages = order.packages || order.package_list || []
+        const packageId = packages[0]?.id || packages[0]?.package_id
+        if (!packageId) throw new Error('Đơn chưa có kiện hàng (package) — TikTok chưa sẵn sàng giao vận chuyển')
+        await this.shipPackage(String(packageId))
+    }
+
+    /**
+     * Seller-initiated order cancellation.
+     * POST /return_refund/202309/cancellations — body { order_id, cancel_reason }.
+     */
+    async cancelOrder(orderId: string, cancelReason = 'seller_cancel_reason_out_of_stock'): Promise<void> {
+        const path = '/return_refund/202309/cancellations'
+        const bodyObj = { order_id: orderId, cancel_reason: cancelReason }
+        const bodyStr = JSON.stringify(bodyObj)
+        const { url, headers } = this.buildUrl(path, {}, bodyStr)
+        const data = await this.httpPost(url, bodyObj, headers)
+        if (data.code !== 0) {
+            throw new Error(`TikTok cancelOrder: [${data.code}] ${data.message || 'Unknown error'}`)
+        }
+    }
+
     // ─── Returns / Refunds ──────────────────────────────────────────────────────
 
     /**
@@ -524,18 +569,17 @@ export class TikTokService extends PlatformService {
     }
 
     protected mapStatus(s: string): string {
-        const MAP: Record<string, string> = {
-            '100': 'pending', UNPAID: 'pending',
-            '105': 'pending', ON_HOLD: 'pending',
-            '111': 'confirmed', AWAITING_SHIPMENT: 'confirmed',
-            '112': 'confirmed', AWAITING_COLLECTION: 'confirmed',
-            '114': 'processing', PARTIALLY_SHIPPING: 'processing',
-            '121': 'shipping', IN_TRANSIT: 'shipping',
-            '122': 'delivered', DELIVERED: 'delivered',
-            '130': 'completed', COMPLETED: 'completed',
-            '140': 'cancelled', CANCELLED: 'cancelled',
+        // Giữ NGUYÊN trạng thái gốc TikTok (UPPERCASE) — frontend tabs/badge và
+        // stats backend đều thiết kế theo native status (như Shopee). Quy đổi về
+        // lowercase trước đây làm AWAITING_COLLECTION (chờ lấy hàng) rơi nhầm
+        // tab "Chờ xử lý" thay vì "Đã xử lý". Chỉ dịch mã số API cũ → enum.
+        const NUMERIC: Record<string, string> = {
+            '100': 'UNPAID', '105': 'ON_HOLD',
+            '111': 'AWAITING_SHIPMENT', '112': 'AWAITING_COLLECTION',
+            '114': 'PARTIALLY_SHIPPING', '121': 'IN_TRANSIT',
+            '122': 'DELIVERED', '130': 'COMPLETED', '140': 'CANCELLED',
         }
-        return MAP[s] || 'pending'
+        return NUMERIC[s] || s || 'UNPAID'
     }
 
     protected mapPaymentStatus(s: string): string {
