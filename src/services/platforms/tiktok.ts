@@ -376,6 +376,35 @@ export class TikTokService extends PlatformService {
         if (data.code !== 0) throw new Error(`TikTok inventory/update: [${data.code}] ${data.message || 'Unknown error'}`)
     }
 
+    /**
+     * Push price for one product — POST /product/202309/products/{id}/prices/update.
+     * Same sku_id resolution as updateStock; amount goes as a string per TikTok spec.
+     */
+    async updatePrice(productId: string, price: number, skuId?: string, sellerSku?: string, currency: string = 'VND'): Promise<void> {
+        let resolvedSkuId = skuId
+        if (!resolvedSkuId) {
+            const detail = await this.getProductDetail(productId)
+            const skus = detail?.skus || []
+            const match = sellerSku ? skus.find((s: any) => s.seller_sku === sellerSku) : (skus.length === 1 ? skus[0] : null)
+            resolvedSkuId = match?.id ? String(match.id) : undefined
+            if (!resolvedSkuId) {
+                throw new Error(`TikTok: không xác định được SKU ${sellerSku ? `"${sellerSku}"` : ''} trong sản phẩm ${productId} (${skus.length} biến thể)`)
+            }
+        }
+
+        const path = `/product/202309/products/${productId}/prices/update`
+        const bodyObj = {
+            skus: [{
+                id: String(resolvedSkuId),
+                price: { amount: String(Math.max(0, Math.round(price))), currency },
+            }],
+        }
+        const bodyStr = JSON.stringify(bodyObj)
+        const { url, headers } = this.buildUrl(path, {}, bodyStr)
+        const data = await this.httpPost(url, bodyObj, headers)
+        if (data.code !== 0) throw new Error(`TikTok prices/update: [${data.code}] ${data.message || 'Unknown error'}`)
+    }
+
     // ─── Shipping Documents ────────────────────────────────────────────────────
 
     /**
@@ -396,19 +425,47 @@ export class TikTokService extends PlatformService {
         const order = orderData.data?.orders?.[0]
         if (!order) throw new Error(`Đơn TikTok ${orderId} không tồn tại`)
 
-        // Extract package_id from the order's packages array
+        // Extract package ids from the order's packages array
         const packages = order.packages || order.package_list || []
         if (packages.length === 0) {
             throw new Error(`Đơn TikTok ${orderId} chưa có kiện hàng (package). Cần ở trạng thái "Chờ gửi hàng" trở lên.`)
         }
 
-        const packageId = packages[0].id || packages[0].package_id
-        if (!packageId) {
+        const packageIds = packages.map((p: any) => p.id || p.package_id).filter(Boolean)
+        if (packageIds.length === 0) {
             throw new Error(`Đơn TikTok ${orderId} không có package_id. Packages: ${JSON.stringify(packages).substring(0, 200)}`)
         }
 
-        console.log(`[TikTok AWB] Order ${orderId} → package ${packageId}`)
+        console.log(`[TikTok AWB] Order ${orderId} → ${packageIds.length} package(s): ${packageIds.join(', ')}`)
 
+        // Đơn 1 kiện (đa số): trả thẳng. Nhiều kiện: tải từng kiện rồi merge PDF.
+        if (packageIds.length === 1) {
+            return this.downloadPackageLabel(String(packageIds[0]))
+        }
+
+        const { PDFDocument } = await import('pdf-lib')
+        const merged = await PDFDocument.create()
+        const errors: string[] = []
+        for (const pkgId of packageIds) {
+            try {
+                const { pdf } = await this.downloadPackageLabel(String(pkgId))
+                const src = await PDFDocument.load(pdf, { ignoreEncryption: true })
+                const pages = await merged.copyPages(src, src.getPageIndices())
+                pages.forEach(p => merged.addPage(p))
+            } catch (e: any) {
+                errors.push(`Kiện ${pkgId}: ${e.message}`)
+            }
+        }
+        if (merged.getPageCount() === 0) {
+            throw new Error(`Không tải được vận đơn kiện nào. ${errors.join('; ')}`)
+        }
+        if (errors.length > 0) console.warn(`[TikTok AWB] ${orderId}: ${errors.join('; ')}`)
+        const out = await merged.save()
+        return { pdf: Buffer.from(out), contentType: 'application/pdf' }
+    }
+
+    /** Download the shipping document PDF for ONE package. */
+    private async downloadPackageLabel(packageId: string): Promise<{ pdf: Buffer; contentType: string }> {
         // Step 2: Get shipping document URL.
         // Ưu tiên bản GỘP nhãn vận chuyển + phiếu danh sách sản phẩm (pack list) —
         // TikTok in chung 2 thứ trong 1 tài liệu. Region/đơn nào không hỗ trợ bản
@@ -479,7 +536,7 @@ export class TikTokService extends PlatformService {
         }
     }
 
-    /** Resolve the order's first package and arrange its shipment (RTS). */
+    /** Resolve ALL of the order's packages and arrange their shipment (RTS). */
     async shipOrder(orderId: string): Promise<void> {
         const { url, headers } = this.buildUrl('/order/202309/orders', { ids: orderId })
         const data = await this.httpGet(url, headers)
@@ -487,9 +544,25 @@ export class TikTokService extends PlatformService {
         const order = data.data?.orders?.[0]
         if (!order) throw new Error(`Đơn TikTok ${orderId} không tồn tại`)
         const packages = order.packages || order.package_list || []
-        const packageId = packages[0]?.id || packages[0]?.package_id
-        if (!packageId) throw new Error('Đơn chưa có kiện hàng (package) — TikTok chưa sẵn sàng giao vận chuyển')
-        await this.shipPackage(String(packageId))
+        const packageIds = packages.map((p: any) => p.id || p.package_id).filter(Boolean)
+        if (packageIds.length === 0) throw new Error('Đơn chưa có kiện hàng (package) — TikTok chưa sẵn sàng giao vận chuyển')
+
+        // Đơn nhiều kiện: RTS từng kiện. Kiện đã RTS trước đó lỗi thì bỏ qua,
+        // chỉ throw khi TẤT CẢ các kiện đều thất bại.
+        const errors: string[] = []
+        for (const pkgId of packageIds) {
+            try {
+                await this.shipPackage(String(pkgId))
+            } catch (e: any) {
+                errors.push(`Kiện ${pkgId}: ${e.message}`)
+            }
+        }
+        if (errors.length === packageIds.length) {
+            throw new Error(errors.join('; '))
+        }
+        if (errors.length > 0) {
+            console.warn(`[TikTok RTS] ${orderId}: ${errors.length}/${packageIds.length} kiện lỗi — ${errors.join('; ')}`)
+        }
     }
 
     /**
@@ -577,6 +650,152 @@ export class TikTokService extends PlatformService {
         }
         if (fee === 0 && revenue > settlement) fee = revenue - settlement
         return { settlementAmount: settlement, feeAmount: fee, revenueAmount: revenue }
+    }
+
+    // ─── Customer Service Chat (IM) ─────────────────────────────────────────────
+    // Docs: /customer_service/202309/* — message content là chuỗi JSON.
+
+    /** Parse TikTok IM message content (JSON string) to display text + image. */
+    private parseImContent(type: string, raw: string): { content: string; imageUrl?: string } {
+        let parsed: any = {}
+        try { parsed = JSON.parse(raw || '{}') } catch { }
+        const t = (type || '').toUpperCase()
+        if (t === 'TEXT') return { content: parsed.content || '' }
+        if (t === 'IMAGE') return { content: '[Hình ảnh]', imageUrl: parsed.url || parsed.image_url || '' }
+        if (t === 'ORDER_CARD') return { content: `[Đơn hàng #${parsed.order_id || ''}]` }
+        if (t === 'PRODUCT_CARD') return { content: `[Sản phẩm: ${parsed.title || parsed.product_id || ''}]` }
+        return { content: parsed.content || `[${type}]` }
+    }
+
+    /**
+     * List chat conversations — GET /customer_service/202309/conversations.
+     * Trả về shape giống ShopeeService.getConversationList để route dùng chung.
+     */
+    async getConversationList(params: { pageSize?: number } = {}): Promise<{
+        conversations: Array<{
+            conversationId: string
+            toId: number | string
+            toName: string
+            toAvatar: string
+            lastMessage: string
+            lastMessageType: string
+            lastSenderId: number | string
+            unreadCount: number
+            pinned: boolean
+            lastMessageTimestamp: number
+            lastReadMessageId: string
+        }>
+        hasMore: boolean
+        nextOffset: string
+    }> {
+        const all: any[] = []
+        let pageToken: string | undefined
+        for (let page = 0; page < 10; page++) {
+            const query: Record<string, string> = { page_size: String(params.pageSize || 20) }
+            if (pageToken) query.page_token = pageToken
+            const { url, headers } = this.buildUrl('/customer_service/202309/conversations', query)
+            const data = await this.httpGet(url, headers)
+            if (data.code !== 0) throw new Error(`TikTok conversations: [${data.code}] ${data.message || 'Unknown error'}`)
+            all.push(...(data.data?.conversations || []))
+            pageToken = data.data?.next_page_token
+            if (!pageToken) break
+        }
+
+        const conversations = all.map((c: any) => {
+            const buyer = (c.participants || []).find((p: any) => (p.role || '').toUpperCase() !== 'SHOP') || {}
+            const latest = c.latest_message || {}
+            const { content } = this.parseImContent(latest.type, latest.content)
+            // create_time: epoch giây (chuẩn hóa nếu sàn trả ms)
+            let ts = Number(latest.create_time || c.create_time || 0)
+            if (ts > 1e12) ts = Math.floor(ts / 1000)
+            return {
+                conversationId: String(c.id || ''),
+                toId: buyer.im_user_id || '',
+                toName: buyer.nickname || 'Khách TikTok',
+                toAvatar: buyer.avatar || '',
+                lastMessage: content,
+                lastMessageType: (latest.type || 'TEXT').toLowerCase(),
+                lastSenderId: latest.sender?.im_user_id || '',
+                unreadCount: c.unread_count || 0,
+                pinned: false,
+                lastMessageTimestamp: ts,
+                lastReadMessageId: '',
+            }
+        })
+        conversations.sort((a, b) => (b.lastMessageTimestamp || 0) - (a.lastMessageTimestamp || 0))
+        return { conversations, hasMore: false, nextOffset: '' }
+    }
+
+    /**
+     * Messages of one conversation — GET /customer_service/202309/conversations/{id}/messages.
+     */
+    async getMessages(conversationId: string, params: { pageSize?: number; offset?: string } = {}): Promise<{
+        messages: Array<{
+            messageId: string
+            messageType: string
+            content: string
+            imageUrl?: string
+            fromId: number | string
+            fromName: string
+            fromRole: string
+            createdTimestamp: number
+            sourceContent?: any
+        }>
+        hasMore: boolean
+        nextOffset: string
+    }> {
+        const query: Record<string, string> = { page_size: String(params.pageSize || 25), sort_order: 'DESC' }
+        if (params.offset) query.page_token = params.offset
+        const { url, headers } = this.buildUrl(`/customer_service/202309/conversations/${conversationId}/messages`, query)
+        const data = await this.httpGet(url, headers)
+        if (data.code !== 0) throw new Error(`TikTok messages: [${data.code}] ${data.message || 'Unknown error'}`)
+
+        const messages = (data.data?.messages || []).map((m: any) => {
+            const { content, imageUrl } = this.parseImContent(m.type, m.content)
+            let ts = Number(m.create_time || 0)
+            if (ts > 1e12) ts = Math.floor(ts / 1000)
+            return {
+                messageId: String(m.id || ''),
+                messageType: (m.type || 'TEXT').toLowerCase(),
+                content,
+                imageUrl,
+                fromId: m.sender?.im_user_id || '',
+                fromName: m.sender?.nickname || '',
+                fromRole: (m.sender?.role || '').toUpperCase(), // SHOP | BUYER
+                createdTimestamp: ts,
+                sourceContent: m.content,
+            }
+        })
+        return {
+            messages,
+            hasMore: !!data.data?.next_page_token,
+            nextOffset: String(data.data?.next_page_token || ''),
+        }
+    }
+
+    /**
+     * Send a text message — POST /customer_service/202309/conversations/{id}/messages.
+     */
+    async sendMessage(conversationId: string, content: string): Promise<{ messageId: string; conversationId: string }> {
+        const path = `/customer_service/202309/conversations/${conversationId}/messages`
+        const bodyObj = { type: 'TEXT', content: JSON.stringify({ content }) }
+        const bodyStr = JSON.stringify(bodyObj)
+        const { url, headers } = this.buildUrl(path, {}, bodyStr)
+        const data = await this.httpPost(url, bodyObj, headers)
+        if (data.code !== 0) throw new Error(`TikTok sendMessage: [${data.code}] ${data.message || 'Unknown error'}`)
+        return { messageId: String(data.data?.message_id || ''), conversationId }
+    }
+
+    /**
+     * Mark a conversation as read — POST /customer_service/202309/conversations/{id}/messages/read.
+     */
+    async readConversation(conversationId: string): Promise<void> {
+        const path = `/customer_service/202309/conversations/${conversationId}/messages/read`
+        const bodyObj = {}
+        const bodyStr = JSON.stringify(bodyObj)
+        const { url, headers } = this.buildUrl(path, {}, bodyStr)
+        const data = await this.httpPost(url, bodyObj, headers)
+        if (data.code !== 0) throw new Error(`TikTok readConversation: [${data.code}] ${data.message || 'Unknown error'}`)
     }
 
     // ─── Returns / Refunds ──────────────────────────────────────────────────────

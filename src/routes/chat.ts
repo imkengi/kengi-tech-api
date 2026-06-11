@@ -562,6 +562,154 @@ router.post('/shopee/read', authMiddleware, async (req: AuthRequest, res: Respon
 
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// ─── TIKTOK CHAT API (proxy to TikTok customer service IM) ──────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+
+import { TikTokService } from '../services/platforms'
+
+// Helper: load channel credentials and create TikTokService
+async function getTikTokServiceForChannel(prisma: any, channelId: string): Promise<{ tiktok: TikTokService; channel: any }> {
+    const channels = await prisma.$queryRawUnsafe(
+        `SELECT * FROM "OnlineChannel" WHERE "id" = $1 AND "platform" = 'tiktok' LIMIT 1`, channelId
+    ) as any[]
+    const channel = channels[0]
+    if (!channel) throw new Error('Kênh TikTok không tồn tại')
+    if (!channel.accessToken) throw new Error('Kênh TikTok chưa kết nối (thiếu access token)')
+
+    const tiktok = new TikTokService({
+        apiKey: channel.apiKey || '',
+        apiSecret: channel.apiSecret || '',
+        accessToken: channel.accessToken || '',
+        refreshToken: channel.refreshToken || '',
+        shopId: channel.shopId || '',
+    })
+
+    // Auto-refresh token if expiring (5 min buffer)
+    if (channel.tokenExpiresAt && new Date(channel.tokenExpiresAt).getTime() < Date.now() + 5 * 60 * 1000) {
+        try {
+            const tokens = await tiktok.refreshAccessToken();
+            (tiktok as any).credentials.accessToken = tokens.accessToken;
+            (tiktok as any).credentials.refreshToken = tokens.refreshToken;
+            await prisma.$executeRawUnsafe(
+                `UPDATE "OnlineChannel" SET "accessToken" = $1, "refreshToken" = $2, "tokenExpiresAt" = $3, "updatedAt" = NOW() WHERE "id" = $4`,
+                tokens.accessToken, tokens.refreshToken, new Date(Date.now() + tokens.expiresIn * 1000), channel.id
+            )
+        } catch (e: any) { console.error('[TikTok Chat] Token refresh failed:', e.message) }
+    }
+
+    return { tiktok, channel }
+}
+
+// GET /tiktok/conversations
+router.get('/tiktok/conversations', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const { channelId, pageSize } = req.query
+        if (!channelId) return res.status(400).json({ success: false, error: 'channelId is required' })
+
+        const { tiktok, channel } = await getTikTokServiceForChannel(prisma, channelId as string)
+        const result = await tiktok.getConversationList({ pageSize: parseInt(pageSize as string) || 20 })
+
+        const items = result.conversations.map((c: any) => ({
+            id: c.conversationId,
+            customerName: c.toName || 'Khách TikTok',
+            customerAvatar: c.toAvatar || '',
+            platform: 'tiktok',
+            channelId,
+            channelName: channel.name || 'TikTok',
+            status: 'active',
+            lastMessage: c.lastMessage || '',
+            lastMessageAt: c.lastMessageTimestamp ? new Date(c.lastMessageTimestamp * 1000).toISOString() : null,
+            _sortTimestamp: c.lastMessageTimestamp || 0,
+            unreadCount: c.unreadCount || 0,
+        }))
+        items.sort((a: any, b: any) => {
+            if (a.unreadCount > 0 && b.unreadCount === 0) return -1
+            if (a.unreadCount === 0 && b.unreadCount > 0) return 1
+            return (b._sortTimestamp || 0) - (a._sortTimestamp || 0)
+        })
+
+        res.json({ success: true, data: { items, total: items.length, hasMore: false, nextOffset: '', source: 'tiktok' } })
+    } catch (err: any) {
+        console.error('TikTok get conversations error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// GET /tiktok/messages/:conversationId
+router.get('/tiktok/messages/:conversationId', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const { channelId, pageSize, offset } = req.query
+        const { conversationId } = req.params
+        if (!channelId) return res.status(400).json({ success: false, error: 'channelId is required' })
+
+        const { tiktok, channel } = await getTikTokServiceForChannel(prisma, channelId as string)
+        const result = await tiktok.getMessages(conversationId as string, {
+            pageSize: parseInt(String(pageSize) || '25') || 25,
+            offset: offset ? String(offset) : undefined,
+        })
+
+        const messages = result.messages.map((m: any) => ({
+            id: m.messageId,
+            conversationId,
+            senderName: m.fromRole === 'SHOP' ? (channel.name || 'Shop') : (m.fromName || 'Khách TikTok'),
+            senderType: m.fromRole === 'SHOP' ? 'staff' : 'customer',
+            content: m.content,
+            contentType: m.messageType === 'image' ? 'image' : 'text',
+            imageUrl: m.imageUrl || null,
+            isRead: true,
+            createdAt: m.createdTimestamp ? new Date(m.createdTimestamp * 1000).toISOString() : new Date().toISOString(),
+        }))
+        // DESC từ TikTok → đảo thành cũ trước mới sau cho khung chat
+        messages.reverse()
+
+        res.json({ success: true, data: { messages, hasMore: result.hasMore, nextOffset: result.nextOffset, source: 'tiktok' } })
+    } catch (err: any) {
+        console.error('TikTok get messages error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// POST /tiktok/send — body { channelId, conversationId, content }
+router.post('/tiktok/send', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const { channelId, conversationId, content } = req.body
+        if (!channelId || !conversationId || !content) {
+            return res.status(400).json({ success: false, error: 'channelId, conversationId, and content are required' })
+        }
+
+        const { tiktok } = await getTikTokServiceForChannel(prisma, channelId as string)
+        const result = await tiktok.sendMessage(String(conversationId), String(content))
+
+        res.json({ success: true, data: result })
+    } catch (err: any) {
+        console.error('TikTok send message error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// POST /tiktok/read — body { channelId, conversationId }
+router.post('/tiktok/read', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const { channelId, conversationId } = req.body
+        if (!channelId || !conversationId) {
+            return res.status(400).json({ success: false, error: 'channelId and conversationId are required' })
+        }
+
+        const { tiktok } = await getTikTokServiceForChannel(prisma, channelId as string)
+        await tiktok.readConversation(String(conversationId))
+
+        res.json({ success: true })
+    } catch (err: any) {
+        console.error('TikTok read conversation error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // ─── PUBLIC ENDPOINTS (customer-facing, no auth required) ───────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
 

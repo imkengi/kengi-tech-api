@@ -6,6 +6,7 @@ import { TikTokService } from '../services/platforms/tiktok'
 import { convertOnlineOrderToTransaction } from '../services/orderSync'
 import { syncChannelReturns } from '../services/returnSync'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
+import { publishEvent } from '../lib/pubsub'
 
 const router = Router()
 
@@ -57,14 +58,14 @@ router.post('/shopee', async (req: Request, res: Response) => {
 
         console.log(`[Shopee Webhook] code=${pushCode} shop=${shopId} data=${JSON.stringify(data).substring(0, 300)}`)
 
-        // Only process order-related push codes
-        if (pushCode !== 3 && pushCode !== 4) {
+        // Process order pushes (3, 4) + new chat message push (10)
+        if (pushCode !== 3 && pushCode !== 4 && pushCode !== 10) {
             console.log(`[Shopee Webhook] Ignoring push code ${pushCode}`)
             return
         }
 
         const orderSn = data.ordersn || data.order_sn
-        if (!orderSn) {
+        if (!orderSn && pushCode !== 10) {
             console.log(`[Shopee Webhook] No ordersn in data`)
             return
         }
@@ -131,6 +132,25 @@ router.post('/shopee', async (req: Request, res: Response) => {
             console.warn(`[Shopee Webhook] Raw body unavailable — processing without signature check`)
         } else if (!verifyShopeeSignature(rawBody, pushUrl, partnerKey, signature)) {
             console.warn(`[Shopee Webhook] ❌ Invalid signature for shop_id=${shopId} — rejecting`)
+            return
+        }
+
+        // ── Code 10: tin nhắn chat mới → đẩy realtime cho FE refresh khung chat ──
+        // (FE đang poll chat; event này cho phép refresh tức thì khi có socket.)
+        if (pushCode === 10) {
+            let content: any = data.content || data
+            if (typeof content === 'string') { try { content = JSON.parse(content) } catch { } }
+            publishEvent(resolvedSchema || undefined, 'chat:new-platform-message', {
+                platform: 'shopee',
+                channelId: channel.id,
+                channelName: channel.name,
+                conversationId: String(content.conversation_id || ''),
+                messageId: String(content.message_id || ''),
+                fromUserName: content.from_user_name || content.from_user_id || '',
+                messageType: content.message_type || 'text',
+                text: content.content?.text || '',
+            }).catch(() => { })
+            console.log(`[Shopee Webhook] 💬 New chat message → published for channel ${channel.name}`)
             return
         }
 

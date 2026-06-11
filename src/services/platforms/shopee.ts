@@ -469,6 +469,21 @@ export class ShopeeService extends PlatformService {
         if (fail) throw new Error(`Shopee update_stock item ${itemId}: ${fail.failed_reason || JSON.stringify(fail)}`)
     }
 
+    /**
+     * Push price for one item — POST /api/v2/product/update_price.
+     * Items WITH variations require model_id (same caveat as updateStock).
+     */
+    async updatePrice(itemId: string | number, price: number, modelId?: string | number): Promise<void> {
+        const priceEntry: any = { original_price: Math.max(0, price) }
+        if (modelId) priceEntry.model_id = Number(modelId)
+        const body = { item_id: Number(itemId), price_list: [priceEntry] }
+
+        const data = await this.httpPost(this.apiUrl('/api/v2/product/update_price'), body)
+        if (data.error) throw new Error(`Shopee update_price: ${data.error} - ${data.message}`)
+        const fail = data.response?.failure_list?.[0]
+        if (fail) throw new Error(`Shopee update_price item ${itemId}: ${fail.failed_reason || JSON.stringify(fail)}`)
+    }
+
     protected mapStatus(s: string): string {
         // Giữ nguyên UPPERCASE Shopee status để đồng nhất với frontend tab filter
         // Full Shopee status flow:

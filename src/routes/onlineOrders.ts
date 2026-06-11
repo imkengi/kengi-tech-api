@@ -2999,6 +2999,108 @@ router.post('/channels/:id/push-stock', authMiddleware, async (req: AuthRequest,
     }
 })
 
+// POST /api/online-orders/channels/:id/push-price
+// Đẩy GIÁ BÁN local LÊN sàn (TikTok prices/update, Shopee update_price).
+// Map qua OnlineProduct giống push-stock. Body: { onlineProductIds?: string[], force?: boolean }
+router.post('/channels/:id/push-price', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const channel = await prisma.onlineChannel.findUnique({ where: { id: req.params.id as string } })
+        if (!channel) { res.status(404).json({ success: false, error: 'Kênh không tồn tại' }); return }
+        if (!['shopee', 'tiktok'].includes(channel.platform)) {
+            res.status(400).json({ success: false, error: `Nền tảng ${channel.platform} chưa hỗ trợ đẩy giá` })
+            return
+        }
+        if (!channel.accessToken) {
+            res.status(400).json({ success: false, error: 'Kênh chưa kết nối API (thiếu access token)' })
+            return
+        }
+
+        const service = getPlatformService(channel.platform, {
+            apiKey: channel.apiKey || '', apiSecret: channel.apiSecret || '',
+            accessToken: channel.accessToken || undefined,
+            refreshToken: channel.refreshToken || undefined,
+            shopId: channel.shopId || undefined,
+        }) as any
+        if (!service) { res.status(400).json({ success: false, error: 'Nền tảng chưa được hỗ trợ' }); return }
+
+        // Auto-refresh token if expiring (5 min buffer)
+        const tokenExpiresAt = (channel as any).tokenExpiresAt
+        if (tokenExpiresAt && new Date(tokenExpiresAt).getTime() < Date.now() + 5 * 60 * 1000) {
+            try {
+                const tokens = await service.refreshAccessToken();
+                service.credentials.accessToken = tokens.accessToken;
+                service.credentials.refreshToken = tokens.refreshToken;
+                await prisma.onlineChannel.update({
+                    where: { id: channel.id },
+                    data: { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken, tokenExpiresAt: new Date(Date.now() + tokens.expiresIn * 1000) },
+                })
+            } catch (e: any) { console.warn('[push-price] Token refresh failed:', e.message) }
+        }
+
+        const { onlineProductIds, force } = req.body || {}
+        const where: any = { channelId: channel.id }
+        if (Array.isArray(onlineProductIds) && onlineProductIds.length > 0) where.id = { in: onlineProductIds.map(String) }
+
+        const onlineProducts = await prisma.onlineProduct.findMany({
+            where,
+            include: { localProduct: { select: { id: true, sku: true, sellingPrice: true } } },
+        })
+
+        let pushed = 0, skipped = 0, failed = 0
+        const errors: string[] = []
+
+        for (const p of onlineProducts) {
+            let local = p.localProduct
+            if (!local && p.sku) {
+                local = await prisma.product.findFirst({
+                    where: { sku: p.sku },
+                    select: { id: true, sku: true, sellingPrice: true },
+                })
+            }
+            if (!local || !(local.sellingPrice > 0)) { skipped++; continue }
+
+            const targetPrice = local.sellingPrice
+            if (!force && p.price === targetPrice) { skipped++; continue }
+
+            try {
+                if (channel.platform === 'shopee') {
+                    await service.updatePrice(p.platformProductId, targetPrice)
+                } else {
+                    await service.updatePrice(p.platformProductId, targetPrice, undefined, p.sku || undefined)
+                }
+                await prisma.onlineProduct.update({
+                    where: { id: p.id },
+                    data: { price: targetPrice, syncedAt: new Date() },
+                })
+                pushed++
+            } catch (e: any) {
+                failed++
+                errors.push(`${p.sku || p.platformProductId}: ${e.message}`)
+                console.error(`[push-price] ${channel.name} ${p.platformProductId}:`, e.message)
+            }
+
+            // Soft throttle between platform calls to stay under rate limits
+            await new Promise(r => setTimeout(r, 300))
+        }
+
+        await prisma.syncLog.create({
+            data: {
+                channelId: channel.id,
+                action: 'push_price',
+                status: failed > 0 ? 'partial' : 'success',
+                details: `Pushed: ${pushed}, skipped: ${skipped}, failed: ${failed}${errors.length ? '\n' + errors.slice(0, 5).join('\n') : ''}`,
+                ordersCount: pushed,
+            },
+        }).catch(() => { })
+
+        res.json({ success: true, data: { pushed, skipped, failed, errors } })
+    } catch (err: any) {
+        console.error('Push price error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
 // POST /api/online-orders/channels/:id/sync-fees
 // Đối soát phí THẬT từ sàn (Shopee escrow / TikTok statement) cho các đơn đã
 // hoàn thành — thay con số ước lượng theo commissionRate bằng phí sàn thực thu
