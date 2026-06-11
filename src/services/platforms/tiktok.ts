@@ -346,9 +346,11 @@ export class TikTokService extends PlatformService {
         // TikTok in chung 2 thứ trong 1 tài liệu. Region/đơn nào không hỗ trợ bản
         // gộp thì fallback về SHIPPING_LABEL thuần.
         const docPath = `/fulfillment/202309/packages/${packageId}/shipping_documents`
+        // Enum hợp lệ (theo lỗi 36009004 của TikTok): SHIPPING_LABEL, PACKING_SLIP,
+        // SHIPPING_LABEL_AND_PACKING_SLIP, SHIPPING_LABEL_PICTURE, HAZMAT_LABEL, INVOICE_LABEL
         const candidates: { document_type: string; document_size?: string }[] = [
-            { document_type: 'SHIPPING_LABEL_AND_PACK_LIST', document_size: 'A6' },
-            { document_type: 'SHIPPING_LABEL_AND_PACK_LIST' },
+            { document_type: 'SHIPPING_LABEL_AND_PACKING_SLIP', document_size: 'A6' },
+            { document_type: 'SHIPPING_LABEL_AND_PACKING_SLIP' },
             { document_type: 'SHIPPING_LABEL', document_size: 'A6' },
         ]
         let docData: any = null
@@ -362,6 +364,10 @@ export class TikTokService extends PlatformService {
             // 21042102: package already picked up by the carrier — label can no longer be printed
             if (docData.code === 21042102) {
                 throw new Error('Đơn đã được đơn vị vận chuyển lấy hàng — TikTok không cho in vận đơn sau khi đã lấy hàng')
+            }
+            // 21042104: shipping not arranged yet — must RTS before printing
+            if (docData.code === 21042104) {
+                throw new Error('Đơn chưa sắp xếp giao vận chuyển — bấm "Giao vận chuyển" trước rồi mới in được vận đơn')
             }
             console.warn(`[TikTok AWB] ${params.document_type}${params.document_size ? '/' + params.document_size : ''} failed: [${docData.code}] ${docData.message} — trying next variant`)
         }
