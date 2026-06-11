@@ -21,6 +21,29 @@ async function syncChannel(storePrisma: any, channel: any): Promise<{ imported: 
     })
     if (!service) return { imported: 0, updated: 0, errors: ['Platform not supported'] }
 
+    // ── Auto-refresh token if expired or about to expire (5 min buffer) ──────
+    // Without this the cron fails every 10 minutes once the token lapses, until
+    // someone presses the manual sync button (which does refresh).
+    if (channel.tokenExpiresAt && new Date(channel.tokenExpiresAt).getTime() < Date.now() + 5 * 60 * 1000) {
+        try {
+            const tokens = await service.refreshAccessToken();
+            (service as any).credentials.accessToken = tokens.accessToken;
+            (service as any).credentials.refreshToken = tokens.refreshToken;
+            await storePrisma.onlineChannel.update({
+                where: { id: channel.id },
+                data: {
+                    accessToken: tokens.accessToken,
+                    refreshToken: tokens.refreshToken,
+                    tokenExpiresAt: new Date(Date.now() + tokens.expiresIn * 1000),
+                },
+            })
+            console.log(`[AutoSync] Token refreshed for ${channel.name}`)
+        } catch (refreshErr: any) {
+            console.error(`[AutoSync] Token refresh failed for ${channel.name}:`, refreshErr.message)
+            // Continue anyway — the old token might still work briefly
+        }
+    }
+
     // ── TikTok: ensure we have the real shop_cipher (self-heal) ──────────────
     // Order endpoints require shop_cipher (NOT open_id). Older connections stored
     // open_id as shopId → TikTok rejects with 106011 "Invalid shop_cipher". The

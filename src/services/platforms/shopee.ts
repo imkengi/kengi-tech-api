@@ -99,18 +99,21 @@ export class ShopeeService extends PlatformService {
         return `${SHOPEE_HOST}${path}?partner_id=${partnerId}&timestamp=${timestamp}&sign=${sign}&shop_id=${this.credentials.shopId}&access_token=${this.credentials.accessToken}`
     }
 
-    async fetchOrders(params: { since?: Date; until?: Date; page?: number; pageSize?: number }) {
+    async fetchOrders(params: { since?: Date; until?: Date; page?: number; pageSize?: number; status?: string; pageToken?: string }) {
         const path = '/api/v2/order/get_order_list'
         const now = Math.floor(Date.now() / 1000)
         const timeFrom = params.since ? Math.floor(params.since.getTime() / 1000) : now - 14 * 86400
         // Shopee rejects windows > 15 days — clamp time_to so a stray wide window degrades instead of erroring
         const timeTo = Math.min(params.until ? Math.floor(params.until.getTime() / 1000) : now, timeFrom + 15 * 86400 - 1)
 
-        const cursor = ((params.page || 1) - 1) * (params.pageSize || 50)
+        // Shopee v2 dùng cursor OPAQUE trả về trong response.next_cursor — phải
+        // truyền lại nguyên văn (không tự chế offset số, sẽ sót/trùng đơn).
+        const cursor = params.pageToken || ''
 
-        const url = this.apiUrl(path) +
+        let url = this.apiUrl(path) +
             `&time_range_field=update_time&time_from=${timeFrom}&time_to=${timeTo}` +
-            `&page_size=${params.pageSize || 50}&cursor=${cursor}&response_optional_fields=order_status`
+            `&page_size=${params.pageSize || 50}&cursor=${encodeURIComponent(cursor)}&response_optional_fields=order_status`
+        if (params.status) url += `&order_status=${encodeURIComponent(params.status)}`
 
         const data = await this.httpGet(url)
 
@@ -137,8 +140,9 @@ export class ShopeeService extends PlatformService {
 
         return {
             orders,
-            hasMore: data.response?.more || false,
+            hasMore: (data.response?.more || false) && !!data.response?.next_cursor,
             total: orders.length,
+            nextPageToken: data.response?.next_cursor || undefined,
         }
     }
 
@@ -634,15 +638,21 @@ export class ShopeeService extends PlatformService {
         const now = Math.floor(Date.now() / 1000)
         const timeFrom = params.since ? Math.floor(params.since.getTime() / 1000) : now - 15 * 86400
 
-        const url = this.apiUrl(path) +
-            `&create_time_from=${timeFrom}&create_time_to=${now}` +
-            `&page_no=1&page_size=50`
+        // Phân trang đầy đủ (trước đây cố định page 1 → quá 50 yêu cầu là sót)
+        const all: any[] = []
+        for (let pageNo = 1; pageNo <= 10; pageNo++) {
+            const url = this.apiUrl(path) +
+                `&create_time_from=${timeFrom}&create_time_to=${now}` +
+                `&page_no=${pageNo}&page_size=50`
 
-        const data = await this.httpGet(url)
-        if (data.error) throw new Error(`Shopee getReturns: ${data.error} - ${data.message}`)
+            const data = await this.httpGet(url)
+            if (data.error) throw new Error(`Shopee getReturns: ${data.error} - ${data.message}`)
 
-        const returnList = data.response?.return || []
-        return returnList.map((r: any) => this.mapReturn(r))
+            const returnList = data.response?.return || []
+            all.push(...returnList)
+            if (returnList.length < 50 || !data.response?.more) break
+        }
+        return all.map((r: any) => this.mapReturn(r))
     }
 
     async getReturnDetail(returnSn: string) {
