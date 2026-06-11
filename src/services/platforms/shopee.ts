@@ -304,6 +304,71 @@ export class ShopeeService extends PlatformService {
         }
     }
 
+    /**
+     * Arrange shipment (RTS) for a READY_TO_SHIP order.
+     * Flow: get_shipping_parameter → build pickup/dropoff body from what Shopee
+     * says it needs → POST /api/v2/logistics/ship_order.
+     */
+    async shipOrder(orderSn: string): Promise<void> {
+        const paramUrl = this.apiUrl('/api/v2/logistics/get_shipping_parameter') + `&order_sn=${orderSn}`
+        const paramData = await this.httpGet(paramUrl)
+        if (paramData.error) throw new Error(`Shopee get_shipping_parameter: ${paramData.error} - ${paramData.message}`)
+
+        const resp = paramData.response || {}
+        const infoNeeded = resp.info_needed || {}
+        const body: any = { order_sn: orderSn }
+
+        if (Array.isArray(infoNeeded.pickup)) {
+            // Seller pickup: Shopee returns the usable warehouse addresses + time slots
+            const addresses = resp.pickup?.address_list || []
+            const addr = addresses.find((a: any) => (a.address_flag || []).includes('pickup_address')) || addresses[0]
+            if (!addr) throw new Error(`Đơn ${orderSn}: Shopee không trả về địa chỉ lấy hàng — kiểm tra địa chỉ kho trên Seller Center`)
+            const pickup: any = {}
+            if (infoNeeded.pickup.includes('address_id')) pickup.address_id = addr.address_id
+            if (infoNeeded.pickup.includes('pickup_time_id')) {
+                const slot = (addr.time_slot_list || [])[0]
+                if (!slot?.pickup_time_id) throw new Error(`Đơn ${orderSn}: không có khung giờ lấy hàng khả dụng — thử lại sau hoặc RTS trên Seller Center`)
+                pickup.pickup_time_id = slot.pickup_time_id
+            }
+            body.pickup = pickup
+        } else if (Array.isArray(infoNeeded.dropoff)) {
+            const dropoff: any = {}
+            const branch = (resp.dropoff?.branch_list || [])[0]
+            if (infoNeeded.dropoff.includes('branch_id')) {
+                if (!branch?.branch_id) throw new Error(`Đơn ${orderSn}: Shopee không trả về điểm gửi hàng (branch) — RTS trên Seller Center`)
+                dropoff.branch_id = branch.branch_id
+            }
+            if (infoNeeded.dropoff.includes('sender_real_name')) dropoff.sender_real_name = resp.dropoff?.sender_real_name || ''
+            body.dropoff = dropoff
+        } else if (Array.isArray(infoNeeded.non_integrated)) {
+            // Self-arranged shipping — tracking number is optional at RTS time
+            body.non_integrated = {}
+        } else {
+            // Shopee says nothing is needed — ship with the default (pickup) method
+            body.pickup = {}
+        }
+
+        console.log(`[Shopee RTS] ship_order ${orderSn}:`, JSON.stringify(body).substring(0, 300))
+        const data = await this.httpPost(this.apiUrl('/api/v2/logistics/ship_order'), body)
+        if (data.error) throw new Error(`Shopee ship_order: ${data.error} - ${data.message}`)
+    }
+
+    /**
+     * Push stock for one item — POST /api/v2/product/update_stock.
+     * Items WITH variations require model_id; without it Shopee rejects the call,
+     * which we surface to the caller per-item.
+     */
+    async updateStock(itemId: string | number, stock: number, modelId?: string | number): Promise<void> {
+        const stockEntry: any = { seller_stock: [{ stock: Math.max(0, Math.floor(stock)) }] }
+        if (modelId) stockEntry.model_id = Number(modelId)
+        const body = { item_id: Number(itemId), stock_list: [stockEntry] }
+
+        const data = await this.httpPost(this.apiUrl('/api/v2/product/update_stock'), body)
+        if (data.error) throw new Error(`Shopee update_stock: ${data.error} - ${data.message}`)
+        const fail = data.response?.failure_list?.[0]
+        if (fail) throw new Error(`Shopee update_stock item ${itemId}: ${fail.failed_reason || JSON.stringify(fail)}`)
+    }
+
     protected mapStatus(s: string): string {
         // Giữ nguyên UPPERCASE Shopee status để đồng nhất với frontend tab filter
         // Full Shopee status flow:

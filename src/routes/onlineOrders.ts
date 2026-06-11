@@ -763,6 +763,75 @@ router.put('/:id/status', authMiddleware, async (req: AuthRequest, res: Response
             return
         }
 
+        // ── Đơn Shopee: nút "Giao vận chuyển" → gọi ship_order THẬT trên sàn ──
+        // Chỉ chặn khi đơn đang READY_TO_SHIP (trạng thái duy nhất RTS hợp lệ);
+        // các chuyển trạng thái khác giữ hành vi cập nhật DB như cũ.
+        const speChannel: any = (oldOrder as any)?.channel
+        const SPE_SHIP_STATUSES = ['SHIPPED', 'shipping', 'PROCESSED', 'processing']
+        if (speChannel?.platform === 'shopee' && speChannel.accessToken && oldOrder?.externalOrderId
+            && SPE_SHIP_STATUSES.includes(status)
+            && (oldOrder.externalStatus === 'READY_TO_SHIP' || oldOrder.status === 'READY_TO_SHIP')) {
+
+            const eid = (oldOrder.externalOrderId || '').replace(/^(SPE-|TIK-|LAZ-)/i, '')
+            const shopee = new ShopeeService({
+                apiKey: speChannel.apiKey || '', apiSecret: speChannel.apiSecret || '',
+                accessToken: speChannel.accessToken || undefined,
+                refreshToken: speChannel.refreshToken || undefined,
+                shopId: speChannel.shopId || undefined,
+            })
+            // Auto-refresh token if expiring (5 min buffer)
+            if (speChannel.tokenExpiresAt && new Date(speChannel.tokenExpiresAt).getTime() < Date.now() + 5 * 60 * 1000) {
+                try {
+                    const tokens = await shopee.refreshAccessToken();
+                    (shopee as any).credentials.accessToken = tokens.accessToken;
+                    (shopee as any).credentials.refreshToken = tokens.refreshToken;
+                    await prisma.onlineChannel.update({
+                        where: { id: speChannel.id },
+                        data: { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken, tokenExpiresAt: new Date(Date.now() + tokens.expiresIn * 1000) },
+                    })
+                } catch (e: any) { console.error('[Status] Shopee token refresh failed:', e.message) }
+            }
+
+            try {
+                await shopee.shipOrder(eid)
+            } catch (platformErr: any) {
+                res.status(400).json({ success: false, error: `Shopee từ chối: ${platformErr.message}` })
+                return
+            }
+
+            // Lấy trạng thái thật từ sàn sau RTS (READY_TO_SHIP → PROCESSED...)
+            let actual: any = null
+            try { actual = await shopee.getOrderDetail(eid) } catch { }
+            const order = await prisma.onlineOrder.update({
+                where: { id: id as string },
+                data: actual ? {
+                    status: actual.status,
+                    externalStatus: actual.externalStatus,
+                    paymentStatus: actual.paymentStatus,
+                    trackingNumber: actual.trackingNumber || oldOrder.trackingNumber,
+                    shippingCarrier: actual.shippingCarrier || oldOrder.shippingCarrier,
+                    syncedAt: new Date(),
+                } : { status: 'PROCESSED', syncedAt: new Date() },
+                include: { items: true, channel: true },
+            })
+
+            try {
+                await prisma.auditLog.create({
+                    data: {
+                        userId: req.user?.userId,
+                        userName: req.user?.email || 'system',
+                        action: 'shopee_rts',
+                        entity: 'OnlineOrder',
+                        entityId: order.id,
+                        details: JSON.stringify({ orderNumber: order.orderNumber, oldStatus, newStatus: order.status }),
+                    },
+                })
+            } catch { }
+
+            res.json({ success: true, data: order })
+            return
+        }
+
         const updateData: any = { status }
         // Timestamp auto-fill: map cả Shopee UPPERCASE và legacy lowercase
         if (status === 'SHIPPED' || status === 'shipping') {
@@ -2650,6 +2719,111 @@ router.post('/channels/:id/sync-products', authMiddleware, async (req: AuthReque
         })
     } catch (err: any) {
         console.error('Sync products error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// POST /api/online-orders/channels/:id/push-stock
+// Đẩy tồn kho local LÊN sàn (TikTok inventory/update, Shopee update_stock).
+// Map qua OnlineProduct: ưu tiên localProductId (gán tay), fallback khớp SKU.
+// Body: { onlineProductIds?: string[], force?: boolean } — mặc định bỏ qua
+// sản phẩm có tồn sàn đã bằng tồn local (tránh đốt rate limit).
+router.post('/channels/:id/push-stock', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const channel = await prisma.onlineChannel.findUnique({ where: { id: req.params.id as string } })
+        if (!channel) { res.status(404).json({ success: false, error: 'Kênh không tồn tại' }); return }
+        if (!['shopee', 'tiktok'].includes(channel.platform)) {
+            res.status(400).json({ success: false, error: `Nền tảng ${channel.platform} chưa hỗ trợ đẩy tồn kho` })
+            return
+        }
+        if (!channel.accessToken) {
+            res.status(400).json({ success: false, error: 'Kênh chưa kết nối API (thiếu access token)' })
+            return
+        }
+
+        const service = getPlatformService(channel.platform, {
+            apiKey: channel.apiKey || '', apiSecret: channel.apiSecret || '',
+            accessToken: channel.accessToken || undefined,
+            refreshToken: channel.refreshToken || undefined,
+            shopId: channel.shopId || undefined,
+        }) as any
+        if (!service) { res.status(400).json({ success: false, error: 'Nền tảng chưa được hỗ trợ' }); return }
+
+        // Auto-refresh token if expiring (5 min buffer)
+        const tokenExpiresAt = (channel as any).tokenExpiresAt
+        if (tokenExpiresAt && new Date(tokenExpiresAt).getTime() < Date.now() + 5 * 60 * 1000) {
+            try {
+                const tokens = await service.refreshAccessToken();
+                service.credentials.accessToken = tokens.accessToken;
+                service.credentials.refreshToken = tokens.refreshToken;
+                await prisma.onlineChannel.update({
+                    where: { id: channel.id },
+                    data: { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken, tokenExpiresAt: new Date(Date.now() + tokens.expiresIn * 1000) },
+                })
+            } catch (e: any) { console.warn('[push-stock] Token refresh failed:', e.message) }
+        }
+
+        const { onlineProductIds, force } = req.body || {}
+        const where: any = { channelId: channel.id }
+        if (Array.isArray(onlineProductIds) && onlineProductIds.length > 0) where.id = { in: onlineProductIds.map(String) }
+
+        const onlineProducts = await prisma.onlineProduct.findMany({
+            where,
+            include: { localProduct: { select: { id: true, sku: true, stock: true } } },
+        })
+
+        let pushed = 0, skipped = 0, failed = 0
+        const errors: string[] = []
+
+        for (const p of onlineProducts) {
+            // Resolve the local product: explicit link first, then SKU match
+            let local = p.localProduct
+            if (!local && p.sku) {
+                local = await prisma.product.findFirst({
+                    where: { sku: p.sku },
+                    select: { id: true, sku: true, stock: true },
+                })
+            }
+            if (!local) { skipped++; continue }
+
+            const targetStock = Math.max(0, Math.floor(local.stock || 0))
+            if (!force && p.stock === targetStock) { skipped++; continue }
+
+            try {
+                if (channel.platform === 'shopee') {
+                    await service.updateStock(p.platformProductId, targetStock)
+                } else {
+                    await service.updateStock(p.platformProductId, targetStock, undefined, p.sku || undefined)
+                }
+                await prisma.onlineProduct.update({
+                    where: { id: p.id },
+                    data: { stock: targetStock, syncedAt: new Date() },
+                })
+                pushed++
+            } catch (e: any) {
+                failed++
+                errors.push(`${p.sku || p.platformProductId}: ${e.message}`)
+                console.error(`[push-stock] ${channel.name} ${p.platformProductId}:`, e.message)
+            }
+
+            // Soft throttle between platform calls to stay under rate limits
+            await new Promise(r => setTimeout(r, 300))
+        }
+
+        await prisma.syncLog.create({
+            data: {
+                channelId: channel.id,
+                action: 'push_stock',
+                status: failed > 0 ? 'partial' : 'success',
+                details: `Pushed: ${pushed}, skipped: ${skipped}, failed: ${failed}${errors.length ? '\n' + errors.slice(0, 5).join('\n') : ''}`,
+                ordersCount: pushed,
+            },
+        }).catch(() => { })
+
+        res.json({ success: true, data: { pushed, skipped, failed, errors } })
+    } catch (err: any) {
+        console.error('Push stock error:', err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }
 })

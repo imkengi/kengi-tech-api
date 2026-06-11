@@ -302,10 +302,78 @@ export class TikTokService extends PlatformService {
         }
     }
 
+    /**
+     * Pull the product catalog — POST /product/202309/products/search
+     * (page_token cursor, max 100/page). Stock = sum of every SKU's inventory.
+     */
     async fetchProducts(): Promise<{ products: PlatformProduct[]; total: number }> {
-        // TODO: Implement TikTok product sync
-        console.log('[TikTok] fetchProducts not yet implemented')
-        return { products: [], total: 0 }
+        const products: PlatformProduct[] = []
+        let pageToken: string | undefined
+        const bodyObj = {} // no filter → all statuses
+        const bodyStr = JSON.stringify(bodyObj)
+
+        for (let page = 0; page < 50; page++) { // Safety: max 5000 products
+            const query: Record<string, string> = { page_size: '100' }
+            if (pageToken) query.page_token = pageToken
+            const { url, headers } = this.buildUrl('/product/202309/products/search', query, bodyStr)
+            const data = await this.httpPost(url, bodyObj, headers)
+            if (data.code !== 0) throw new Error(`TikTok products/search: [${data.code}] ${data.message || 'Unknown error'}`)
+
+            for (const p of data.data?.products || []) {
+                const skus = p.skus || []
+                const firstSku = skus[0]
+                const stock = skus.reduce((sum: number, sk: any) =>
+                    sum + (sk.inventory || []).reduce((a: number, inv: any) => a + (inv.quantity || 0), 0), 0)
+                products.push({
+                    platformProductId: String(p.id),
+                    name: p.title || 'Unnamed',
+                    sku: firstSku?.seller_sku || undefined,
+                    price: Number(firstSku?.price?.tax_exclusive_price || firstSku?.price?.sale_price || 0),
+                    stock,
+                    status: p.status || 'ACTIVATE',
+                    imageUrl: p.main_images?.[0]?.thumb_urls?.[0] || p.main_images?.[0]?.urls?.[0] || undefined,
+                })
+            }
+
+            pageToken = data.data?.next_page_token
+            if (!pageToken) break
+        }
+
+        console.log(`[TikTok Products] Total: ${products.length} products fetched`)
+        return { products, total: products.length }
+    }
+
+    /** Product detail (skus with ids) — GET /product/202309/products/{product_id}. */
+    async getProductDetail(productId: string): Promise<any> {
+        const { url, headers } = this.buildUrl(`/product/202309/products/${productId}`, {})
+        const data = await this.httpGet(url, headers)
+        if (data.code !== 0) throw new Error(`TikTok getProduct: [${data.code}] ${data.message || 'Unknown error'}`)
+        return data.data
+    }
+
+    /**
+     * Push inventory for one product — POST /product/202309/products/{id}/inventory/update.
+     * TikTok needs the sku_id (not seller_sku); when the caller only knows the
+     * seller_sku we resolve it via product detail first.
+     */
+    async updateStock(productId: string, stock: number, skuId?: string, sellerSku?: string): Promise<void> {
+        let resolvedSkuId = skuId
+        if (!resolvedSkuId) {
+            const detail = await this.getProductDetail(productId)
+            const skus = detail?.skus || []
+            const match = sellerSku ? skus.find((s: any) => s.seller_sku === sellerSku) : (skus.length === 1 ? skus[0] : null)
+            resolvedSkuId = match?.id ? String(match.id) : undefined
+            if (!resolvedSkuId) {
+                throw new Error(`TikTok: không xác định được SKU ${sellerSku ? `"${sellerSku}"` : ''} trong sản phẩm ${productId} (${skus.length} biến thể)`)
+            }
+        }
+
+        const path = `/product/202309/products/${productId}/inventory/update`
+        const bodyObj = { skus: [{ id: String(resolvedSkuId), inventory: [{ quantity: Math.max(0, Math.floor(stock)) }] }] }
+        const bodyStr = JSON.stringify(bodyObj)
+        const { url, headers } = this.buildUrl(path, {}, bodyStr)
+        const data = await this.httpPost(url, bodyObj, headers)
+        if (data.code !== 0) throw new Error(`TikTok inventory/update: [${data.code}] ${data.message || 'Unknown error'}`)
     }
 
     // ─── Shipping Documents ────────────────────────────────────────────────────
