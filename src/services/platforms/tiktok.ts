@@ -341,21 +341,33 @@ export class TikTokService extends PlatformService {
 
         console.log(`[TikTok AWB] Order ${orderId} → package ${packageId}`)
 
-        // Step 2: Get shipping document URL
+        // Step 2: Get shipping document URL.
+        // Ưu tiên bản GỘP nhãn vận chuyển + phiếu danh sách sản phẩm (pack list) —
+        // TikTok in chung 2 thứ trong 1 tài liệu. Region/đơn nào không hỗ trợ bản
+        // gộp thì fallback về SHIPPING_LABEL thuần.
         const docPath = `/fulfillment/202309/packages/${packageId}/shipping_documents`
-        const { url: docUrl, headers: docHeaders } = this.buildUrl(docPath, {
-            document_type: 'SHIPPING_LABEL',
-            document_size: 'A6',
-        })
-        docHeaders['content-type'] = 'application/json'
-        const docData = await this.httpGet(docUrl, docHeaders)
-
-        if (docData.code !== 0) {
+        const candidates: { document_type: string; document_size?: string }[] = [
+            { document_type: 'SHIPPING_LABEL_AND_PACK_LIST', document_size: 'A6' },
+            { document_type: 'SHIPPING_LABEL_AND_PACK_LIST' },
+            { document_type: 'SHIPPING_LABEL', document_size: 'A6' },
+        ]
+        let docData: any = null
+        for (const params of candidates) {
+            const query: Record<string, string> = { document_type: params.document_type }
+            if (params.document_size) query.document_size = params.document_size
+            const { url: docUrl, headers: docHeaders } = this.buildUrl(docPath, query)
+            docHeaders['content-type'] = 'application/json'
+            docData = await this.httpGet(docUrl, docHeaders)
+            if (docData.code === 0) break
             // 21042102: package already picked up by the carrier — label can no longer be printed
             if (docData.code === 21042102) {
                 throw new Error('Đơn đã được đơn vị vận chuyển lấy hàng — TikTok không cho in vận đơn sau khi đã lấy hàng')
             }
-            throw new Error(`TikTok shipping document: [${docData.code}] ${docData.message || 'Unknown error'}`)
+            console.warn(`[TikTok AWB] ${params.document_type}${params.document_size ? '/' + params.document_size : ''} failed: [${docData.code}] ${docData.message} — trying next variant`)
+        }
+
+        if (!docData || docData.code !== 0) {
+            throw new Error(`TikTok shipping document: [${docData?.code}] ${docData?.message || 'Unknown error'}`)
         }
 
         const pdfUrl = docData.data?.doc_url
