@@ -1207,7 +1207,12 @@ router.post('/shipping-label-batch', authMiddleware, async (req: AuthRequest, re
             }
         }
 
-        if (pdfBuffers.length === 0) throw new Error(`Không tải được vận đơn. ${errors.join('; ')}`)
+        if (pdfBuffers.length === 0) {
+            // Lỗi từ sàn (đơn chưa sẵn sàng / đã lấy hàng...) là thông tin người dùng cần
+            // thấy — trả 400 với chi tiết từng đơn thay vì 500 bị errMsg che trong prod.
+            res.status(400).json({ success: false, error: `Không tải được vận đơn:\n${errors.join('\n')}` })
+            return
+        }
 
         // Merge all PDFs into 1
         let pdf: Buffer

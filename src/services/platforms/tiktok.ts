@@ -346,6 +346,10 @@ export class TikTokService extends PlatformService {
         const docData = await this.httpGet(docUrl, docHeaders)
 
         if (docData.code !== 0) {
+            // 21042102: package already picked up by the carrier — label can no longer be printed
+            if (docData.code === 21042102) {
+                throw new Error('Đơn đã được đơn vị vận chuyển lấy hàng — TikTok không cho in vận đơn sau khi đã lấy hàng')
+            }
             throw new Error(`TikTok shipping document: [${docData.code}] ${docData.message || 'Unknown error'}`)
         }
 
