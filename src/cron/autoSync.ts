@@ -43,7 +43,11 @@ async function syncChannel(storePrisma: any, channel: any): Promise<{ imported: 
         }
     }
 
-    const since = channel.lastSyncAt || new Date(Date.now() - 7 * 86400_000)
+    // Gia số từ lastSyncAt (lùi 30' để không sót đơn ở biên). Đợt kéo lịch sử
+    // từ syncFromDate do route /sync đảm nhiệm (có chia khung 14 ngày cho Shopee).
+    const since = channel.lastSyncAt
+        ? new Date(new Date(channel.lastSyncAt).getTime() - 30 * 60_000)
+        : new Date(Date.now() - 7 * 86400_000)
     let allOrders: PlatformOrder[] = []
     let page = 1
     let hasMore = true
@@ -182,6 +186,10 @@ async function runAutoSync() {
 
                 for (const channel of channels) {
                     try {
+                        // Kênh vừa kết nối với mốc syncFromDate nhưng chưa chạy sync lần
+                        // đầu (lastSyncAt null): để route /sync kéo lịch sử trước — nếu
+                        // cron chạy trước nó sẽ set lastSyncAt và làm mất đợt kéo lịch sử.
+                        if (!channel.lastSyncAt && (channel as any).syncFromDate) continue
                         const result = await syncChannel(storePrisma, channel)
                         if (result.imported > 0 || result.updated > 0) {
                             console.log(`[AutoSync] ${store.name}/${channel.name}: +${result.imported} new, ${result.updated} updated`)

@@ -1325,12 +1325,22 @@ router.get('/channels/:id/callback', async (req: AuthRequest, res: Response) => 
     }
 })
 
-// POST /api/online-orders/channels/:id/exchange-token  (body: { code })
+// POST /api/online-orders/channels/:id/exchange-token  (body: { code, shopId?, syncFromDate? })
 router.post('/channels/:id/exchange-token', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const channel = await prisma.onlineChannel.findUnique({ where: { id: req.params.id as string } })
         if (!channel) { res.status(404).json({ success: false, error: 'Kênh không tồn tại' }); return }
+
+        // Mốc đồng bộ lịch sử do người dùng chọn lúc kết nối. Lần sync đầu lấy đơn
+        // từ mốc này; sau đó chỉ nhận gia số (lastSyncAt) + webhook. Giới hạn 365 ngày.
+        let syncFromDate: Date | null = null
+        if (req.body.syncFromDate) {
+            const d = new Date(req.body.syncFromDate)
+            if (isNaN(d.getTime())) { res.status(400).json({ success: false, error: 'syncFromDate không hợp lệ' }); return }
+            const oneYearAgo = Date.now() - 365 * 86400_000
+            syncFromDate = new Date(Math.min(Math.max(d.getTime(), oneYearAgo), Date.now()))
+        }
 
         const service = getPlatformService(channel.platform, {
             apiKey: channel.apiKey || '', apiSecret: channel.apiSecret || '',
@@ -1350,6 +1360,7 @@ router.post('/channels/:id/exchange-token', authMiddleware, async (req: AuthRequ
                 tokenExpiresAt: new Date(Date.now() + tokens.expiresIn * 1000),
                 shopId: tokens.shopId || channel.shopId,
                 syncEnabled: true,
+                ...(syncFromDate ? { syncFromDate, lastSyncAt: null } : {}),
             },
         })
 
@@ -1434,13 +1445,29 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
             }
         }
 
-        // Fetch orders from platform (with retry-on-token-error)
-        // Với update_time, luôn dùng 15 ngày để bắt đơn cũ đã thay đổi status
-        // (lastSyncAt quá ngắn — đơn cũ có thể update_time trong window 15 ngày)
-        const since = new Date(Date.now() - 14 * 86400_000)
+        // ── Khoảng thời gian sync ────────────────────────────────────────────
+        // Lần sync đầu (chưa có lastSyncAt): kéo lịch sử từ syncFromDate người
+        // dùng chọn lúc kết nối (mặc định 14 ngày). Các lần sau: chỉ lấy gia số
+        // từ lastSyncAt (lùi 1h để không sót đơn ở biên) — đơn phát sinh giữa
+        // các lần sync đã có webhook đẩy về realtime.
+        const now = new Date()
+        const syncFromDate = (channel as any).syncFromDate ? new Date((channel as any).syncFromDate) : null
+        const since = channel.lastSyncAt
+            ? new Date(new Date(channel.lastSyncAt).getTime() - 60 * 60_000)
+            : (syncFromDate || new Date(now.getTime() - 14 * 86400_000))
+
+        // Shopee giới hạn cửa sổ thời gian 15 ngày/lần gọi → chia range dài thành
+        // các khung 14 ngày. TikTok/Lazada nhận range tuỳ ý → một khung duy nhất.
+        const WINDOW_MS = 14 * 86400_000
+        const windows: { from: Date; to: Date }[] = []
+        if (channel.platform === 'shopee') {
+            for (let t = since.getTime(); t < now.getTime(); t += WINDOW_MS) {
+                windows.push({ from: new Date(t), to: new Date(Math.min(t + WINDOW_MS, now.getTime())) })
+            }
+        }
+        if (windows.length === 0) windows.push({ from: since, to: now })
+
         let allOrders: PlatformOrder[] = []
-        let page = 1
-        let hasMore = true
 
         // Optional status filter: ?status=UNPAID,AWAITING_SHIPMENT,...
         // TikTok orders/search only filters by ONE native status per call, so we
@@ -1449,21 +1476,24 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
             .split(',').map(s => s.trim()).filter(Boolean)
         const statusList: (string | undefined)[] = statusFilter.length ? statusFilter : [undefined]
 
+        const MAX_ORDERS = 5000 // chặn full-sync lịch sử chạy quá đà
         const fetchWithRetry = async () => {
             allOrders = []
-            for (const st of statusList) {
-                page = 1
-                hasMore = true
-                // TikTok v202309 uses opaque page_token cursors; other platforms use
-                // numeric `page`. Thread both — each platform reads what it needs.
-                let pageToken: string | undefined = undefined
-                while (hasMore && page <= 10) {
-                    const result: { orders: PlatformOrder[]; hasMore: boolean; total: number; nextPageToken?: string } =
-                        await service.fetchOrders({ since, page, pageSize: 50, status: st, pageToken })
-                    allOrders = allOrders.concat(result.orders)
-                    pageToken = result.nextPageToken
-                    hasMore = result.hasMore
-                    page++
+            for (const win of windows) {
+                for (const st of statusList) {
+                    let page = 1
+                    let hasMore = true
+                    // TikTok v202309 uses opaque page_token cursors; other platforms use
+                    // numeric `page`. Thread both — each platform reads what it needs.
+                    let pageToken: string | undefined = undefined
+                    while (hasMore && page <= 20 && allOrders.length < MAX_ORDERS) {
+                        const result: { orders: PlatformOrder[]; hasMore: boolean; total: number; nextPageToken?: string } =
+                            await service.fetchOrders({ since: win.from, until: win.to, page, pageSize: 50, status: st, pageToken })
+                        allOrders = allOrders.concat(result.orders)
+                        pageToken = result.nextPageToken
+                        hasMore = result.hasMore
+                        page++
+                    }
                 }
             }
         }
@@ -1491,9 +1521,6 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                         },
                     })
                     console.log(`[Sync] Token refreshed on retry, re-fetching...`)
-                    allOrders = []
-                    page = 1
-                    hasMore = true
                     await fetchWithRetry()
                 } catch (retryErr: any) {
                     throw new Error(`Shopee token refresh failed: ${retryErr.message}. Vui lòng kết nối lại Shopee.`)

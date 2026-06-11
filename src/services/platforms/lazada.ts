@@ -93,7 +93,7 @@ export class LazadaService extends PlatformService {
 
     // ─── Orders ──────────────────────────────────────────────────────────────────
 
-    async fetchOrders(params: { since?: Date; page?: number; pageSize?: number }) {
+    async fetchOrders(params: { since?: Date; until?: Date; page?: number; pageSize?: number }) {
         const offset = ((params.page || 1) - 1) * (params.pageSize || 50)
         const extraParams: Record<string, string> = {
             sort_direction: 'DESC',
@@ -103,6 +103,9 @@ export class LazadaService extends PlatformService {
         }
         if (params.since) {
             extraParams.update_after = params.since.toISOString()
+        }
+        if (params.until) {
+            extraParams.update_before = params.until.toISOString()
         }
 
         const url = this.buildUrl('/orders/get', extraParams)

@@ -99,14 +99,17 @@ export class ShopeeService extends PlatformService {
         return `${SHOPEE_HOST}${path}?partner_id=${partnerId}&timestamp=${timestamp}&sign=${sign}&shop_id=${this.credentials.shopId}&access_token=${this.credentials.accessToken}`
     }
 
-    async fetchOrders(params: { since?: Date; page?: number; pageSize?: number }) {
+    async fetchOrders(params: { since?: Date; until?: Date; page?: number; pageSize?: number }) {
         const path = '/api/v2/order/get_order_list'
         const now = Math.floor(Date.now() / 1000)
         const timeFrom = params.since ? Math.floor(params.since.getTime() / 1000) : now - 14 * 86400
+        // Shopee rejects windows > 15 days — clamp time_to so a stray wide window degrades instead of erroring
+        const timeTo = Math.min(params.until ? Math.floor(params.until.getTime() / 1000) : now, timeFrom + 15 * 86400 - 1)
+
         const cursor = ((params.page || 1) - 1) * (params.pageSize || 50)
 
         const url = this.apiUrl(path) +
-            `&time_range_field=update_time&time_from=${timeFrom}&time_to=${now}` +
+            `&time_range_field=update_time&time_from=${timeFrom}&time_to=${timeTo}` +
             `&page_size=${params.pageSize || 50}&cursor=${cursor}&response_optional_fields=order_status`
 
         const data = await this.httpGet(url)

@@ -199,7 +199,7 @@ export class TikTokService extends PlatformService {
 
     // ─── Orders ──────────────────────────────────────────────────────────────────
 
-    async fetchOrders(params: { since?: Date; page?: number; pageSize?: number; status?: string; pageToken?: string }) {
+    async fetchOrders(params: { since?: Date; until?: Date; page?: number; pageSize?: number; status?: string; pageToken?: string }) {
         const path = '/order/202309/orders/search'
 
         // Order endpoints REQUIRE a real shop_cipher. If we don't have one (cipher
@@ -229,7 +229,7 @@ export class TikTokService extends PlatformService {
         }
         if (params.since) {
             bodyObj.create_time_ge = Math.floor(params.since.getTime() / 1000)
-            bodyObj.create_time_lt = Math.floor(Date.now() / 1000)
+            bodyObj.create_time_lt = Math.floor((params.until?.getTime() ?? Date.now()) / 1000)
         }
 
         const bodyStr = JSON.stringify(bodyObj)

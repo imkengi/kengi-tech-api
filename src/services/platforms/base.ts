@@ -107,6 +107,8 @@ export abstract class PlatformService {
     /** Fetch orders list from platform (since lastSync or date range) */
     abstract fetchOrders(params: {
         since?: Date
+        /** Upper bound of the time window (defaults to now). Shopee caps a window at 15 days, so callers chunk long ranges. */
+        until?: Date
         page?: number
         pageSize?: number
         /** Platform-native status to filter by (single value per call) */

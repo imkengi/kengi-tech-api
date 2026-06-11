@@ -1478,6 +1478,7 @@ model OnlineChannel {
   shopId         String?
   webhookSecret  String?
   syncEnabled    Boolean   @default(false)
+  syncFromDate   DateTime? // mốc bắt đầu đồng bộ đơn (chọn lúc kết nối); sau lần sync đầu chỉ lấy gia số từ lastSyncAt + webhook
   lastSyncAt     DateTime?
   totalOrders    Int       @default(0)
   totalRevenue   Float     @default(0)
