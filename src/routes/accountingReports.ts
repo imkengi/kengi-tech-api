@@ -114,7 +114,12 @@ router.get('/trial-balance', authMiddleware, async (req: AuthRequest, res: Respo
 router.get('/general-journal', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma: any = req.storePrisma!
-        const { gte, lte, label } = rangeFromQuery(req.query)
+        // Hỗ trợ cả ?from=YYYY-MM-DD&to=... (FE gửi) lẫn ?year/&month/&quarter
+        const fromQ = String(req.query.from || '')
+        const toQ = String(req.query.to || '')
+        const { gte, lte, label } = /^\d{4}-\d{2}-\d{2}$/.test(fromQ) && /^\d{4}-\d{2}-\d{2}$/.test(toQ)
+            ? { gte: fromQ, lte: toQ, label: `${fromQ} → ${toQ}` }
+            : rangeFromQuery(req.query)
         const take = Math.min(Number(req.query.limit) || 5000, 20000)
         const entries = await prisma.journalEntry.findMany({
             where: { date: { gte, lte } },

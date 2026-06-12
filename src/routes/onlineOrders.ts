@@ -3258,6 +3258,14 @@ router.post('/channels/:id/sync-fees', authMiddleware, async (req: AuthRequest, 
                     where: { id: order.id },
                     data: { platformFee, netRevenue },
                 })
+
+                // Đồng bộ bút toán phí sàn (FEE-ONLINE-<orderNumber>) sang phí THẬT
+                // — bút toán được autoJournal tạo bằng phí ước tính lúc convert.
+                await prisma.journalEntry.updateMany({
+                    where: { reference: { in: [`FEE-ONLINE-${order.orderNumber}`, `FEE-${order.orderNumber}`] } },
+                    data: { amount: platformFee },
+                }).catch(() => { })
+
                 updated++
             } catch (e: any) {
                 failed++

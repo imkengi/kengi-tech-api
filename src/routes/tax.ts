@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express'
 import { errMsg } from '../lib/errorResponse'
 import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
 import { createJournalEntriesForTransaction, AUTO_JOURNAL_REF_TYPES } from '../lib/autoJournal'
-import { COA_SEED } from '../lib/chartOfAccounts'
+import { COA_SEED, accountName } from '../lib/chartOfAccounts'
 import { enforcePeriodLock, assertNotLocked } from '../lib/periodLock'
 
 const router = Router()
@@ -1051,6 +1051,90 @@ router.post('/journal-entries', authMiddleware, enforcePeriodLock('date'), async
         })
         res.status(201).json({ success: true, data })
     } catch (err) { console.error('POST /journal-entries error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
+})
+
+// PUT /api/tax/journal-entries/:id — kế toán chỉnh sửa bút toán (đổi TK Nợ/Có,
+// số tiền, diễn giải, ngày). Áp dụng cho cả bút toán tự sinh lẫn nhập tay —
+// chặn sửa trong kỳ đã khóa sổ (cả ngày cũ lẫn ngày mới), ghi audit log.
+router.put('/journal-entries/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
+        const entry = await prisma.journalEntry.findUnique({ where: { id } })
+        if (!entry) return res.status(404).json({ success: false, error: 'Không tìm thấy bút toán' })
+
+        const { date, description, debitAccount, debitAccountName, creditAccount, creditAccountName, amount, notes } = req.body
+
+        // Khóa sổ: chặn sửa chứng từ thuộc kỳ đã khóa (ngày hiện tại của bút toán
+        // VÀ ngày mới nếu đổi ngày — không cho "kéo" chứng từ ra/vào kỳ khóa).
+        const branchForLock = (req as any).branchId ?? req.user?.branchId ?? null
+        try {
+            await assertNotLocked(prisma, branchForLock, entry.date)
+            if (date && date !== entry.date) await assertNotLocked(prisma, branchForLock, date)
+        } catch (lockErr: any) {
+            if (lockErr?.code === 'PERIOD_LOCKED') {
+                return res.status(423).json({ success: false, code: 'PERIOD_LOCKED', lockDate: lockErr.lockDate, error: lockErr.message })
+            }
+            throw lockErr
+        }
+
+        // Merge + validate
+        const newDebit = debitAccount !== undefined ? String(debitAccount).trim() : entry.debitAccount
+        const newCredit = creditAccount !== undefined ? String(creditAccount).trim() : entry.creditAccount
+        const newAmount = amount !== undefined ? Number(amount) : entry.amount
+        if (!newDebit || !newCredit) {
+            return res.status(400).json({ success: false, error: 'TK Nợ và TK Có không được để trống' })
+        }
+        if (newDebit === newCredit) {
+            return res.status(400).json({ success: false, error: 'TK Nợ và TK Có không được trùng nhau' })
+        }
+        if (!Number.isFinite(newAmount) || newAmount <= 0) {
+            return res.status(400).json({ success: false, error: 'Số tiền phải > 0' })
+        }
+
+        // Tên TK: ưu tiên client gửi, đổi mã TK thì tra lại danh mục, giữ tên cũ nếu không đổi
+        const resolveName = (code: string, provided: any, prevCode: string, prevName: string | null) => {
+            if (provided !== undefined && provided !== null && String(provided).trim()) return String(provided).trim()
+            if (code !== prevCode) {
+                const looked = accountName(code)
+                return looked !== code ? looked : prevName // mã lạ (vd 131-SHOPEE): giữ tên cũ nếu có
+            }
+            return prevName
+        }
+
+        const updated = await prisma.journalEntry.update({
+            where: { id },
+            data: {
+                ...(date !== undefined ? { date: String(date) } : {}),
+                ...(description !== undefined ? { description: String(description) } : {}),
+                debitAccount: newDebit,
+                debitAccountName: resolveName(newDebit, debitAccountName, entry.debitAccount, entry.debitAccountName),
+                creditAccount: newCredit,
+                creditAccountName: resolveName(newCredit, creditAccountName, entry.creditAccount, entry.creditAccountName),
+                amount: newAmount,
+                ...(notes !== undefined ? { notes: notes || null } : {}),
+            },
+        })
+
+        // Audit log (best-effort) — lưu giá trị trước/sau để truy vết điều chỉnh
+        try {
+            await prisma.auditLog.create({
+                data: {
+                    userId: req.user?.userId,
+                    userName: req.user?.email || 'system',
+                    action: 'edit_journal_entry',
+                    entity: 'JournalEntry',
+                    entityId: id,
+                    details: JSON.stringify({
+                        before: { date: entry.date, debitAccount: entry.debitAccount, creditAccount: entry.creditAccount, amount: entry.amount, description: entry.description },
+                        after: { date: updated.date, debitAccount: updated.debitAccount, creditAccount: updated.creditAccount, amount: updated.amount, description: updated.description },
+                    }),
+                },
+            })
+        } catch { }
+
+        res.json({ success: true, data: updated })
+    } catch (err) { console.error('PUT /journal-entries error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
 
 // DELETE /api/tax/journal-entries/:id
