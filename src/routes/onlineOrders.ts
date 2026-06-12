@@ -2503,18 +2503,33 @@ router.post('/:id/return', authMiddleware, async (req: AuthRequest, res: Respons
 router.get('/returns/list', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        const { status, page = '1', pageSize = '20' } = req.query
+        const { status, platform, search, page = '1', pageSize = '20' } = req.query
 
         // Online returns carry per-platform code prefixes: RTN-TT- (TikTok),
         // RTN-SH- (Shopee), RTN-ON (legacy/manual online).
-        const where: any = {
-            OR: [
+        const PREFIX_BY_PLATFORM: Record<string, string> = {
+            tiktok: 'RTN-TT-', shopee: 'RTN-SH-', online: 'RTN-ON',
+        }
+        const codeFilter = platform && PREFIX_BY_PLATFORM[String(platform)]
+            ? [{ code: { startsWith: PREFIX_BY_PLATFORM[String(platform)] } }]
+            : [
                 { code: { startsWith: 'RTN-ON' } },
                 { code: { startsWith: 'RTN-TT-' } },
                 { code: { startsWith: 'RTN-SH-' } },
-            ],
-        }
+            ]
+
+        const where: any = { OR: codeFilter }
         if (status && status !== 'all') where.status = status as string
+        if (search && String(search).trim()) {
+            const q = String(search).trim()
+            where.AND = [{
+                OR: [
+                    { code: { contains: q, mode: 'insensitive' } },
+                    { originalInvoice: { contains: q, mode: 'insensitive' } },
+                    { customerName: { contains: q, mode: 'insensitive' } },
+                ],
+            }]
+        }
 
         const [returns, total] = await Promise.all([
             prisma.returnOrder.findMany({
@@ -2527,10 +2542,33 @@ router.get('/returns/list', authMiddleware, async (req: AuthRequest, res: Respon
             prisma.returnOrder.count({ where }),
         ])
 
+        // Enrich: platform từ prefix mã phiếu + thông tin đơn gốc (kênh, trạng thái,
+        // tracking) để màn hình hiển thị chi tiết mà không phải tự parse notes.
+        const invoiceNos = [...new Set(returns.map(r => r.originalInvoice).filter(Boolean))]
+        const orders = invoiceNos.length > 0
+            ? await prisma.onlineOrder.findMany({
+                where: { orderNumber: { in: invoiceNos } },
+                select: {
+                    id: true, orderNumber: true, channelName: true, platform: true,
+                    status: true, externalStatus: true, trackingNumber: true, total: true,
+                },
+            })
+            : []
+        const orderMap = new Map(orders.map(o => [o.orderNumber, o]))
+        const codePlatform = (code: string) =>
+            code.startsWith('RTN-TT-') ? 'tiktok' : code.startsWith('RTN-SH-') ? 'shopee' : 'online'
+
+        const enriched = returns.map(r => ({
+            ...r,
+            platform: codePlatform(r.code),
+            returnSn: r.code.replace(/^RTN-(TT|SH)-/, '').replace(/^RTN-ON-?/, ''),
+            order: orderMap.get(r.originalInvoice) || null,
+        }))
+
         res.json({
             success: true,
             data: {
-                data: returns,
+                data: enriched,
                 total,
                 page: parseInt(page as string),
                 totalPages: Math.ceil(total / parseInt(pageSize as string)),
@@ -2547,13 +2585,19 @@ router.get('/returns/stats', authMiddleware, async (req: AuthRequest, res: Respo
     try {
         const prisma = req.storePrisma!
 
-        // Same per-platform prefixes as /returns/list
+        // Same per-platform prefixes as /returns/list (optional ?platform= filter)
+        const PREFIX_BY_PLATFORM: Record<string, string> = {
+            tiktok: 'RTN-TT-', shopee: 'RTN-SH-', online: 'RTN-ON',
+        }
+        const statPlatform = String(req.query.platform || '')
         const onlineCode = {
-            OR: [
-                { code: { startsWith: 'RTN-ON' } },
-                { code: { startsWith: 'RTN-TT-' } },
-                { code: { startsWith: 'RTN-SH-' } },
-            ],
+            OR: PREFIX_BY_PLATFORM[statPlatform]
+                ? [{ code: { startsWith: PREFIX_BY_PLATFORM[statPlatform] } }]
+                : [
+                    { code: { startsWith: 'RTN-ON' } },
+                    { code: { startsWith: 'RTN-TT-' } },
+                    { code: { startsWith: 'RTN-SH-' } },
+                ],
         }
         const [total, pending, approved, rejected, totalRefunded] = await Promise.all([
             prisma.returnOrder.count({ where: onlineCode }),
