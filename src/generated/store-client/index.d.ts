@@ -64616,6 +64616,7 @@ export namespace Prisma {
     notes: string | null
     staffName: string | null
     branchId: string | null
+    channelId: string | null
     processedAt: Date | null
     refundedAt: Date | null
     createdAt: Date | null
@@ -64637,6 +64638,7 @@ export namespace Prisma {
     notes: string | null
     staffName: string | null
     branchId: string | null
+    channelId: string | null
     processedAt: Date | null
     refundedAt: Date | null
     createdAt: Date | null
@@ -64658,6 +64660,7 @@ export namespace Prisma {
     notes: number
     staffName: number
     branchId: number
+    channelId: number
     processedAt: number
     refundedAt: number
     createdAt: number
@@ -64691,6 +64694,7 @@ export namespace Prisma {
     notes?: true
     staffName?: true
     branchId?: true
+    channelId?: true
     processedAt?: true
     refundedAt?: true
     createdAt?: true
@@ -64712,6 +64716,7 @@ export namespace Prisma {
     notes?: true
     staffName?: true
     branchId?: true
+    channelId?: true
     processedAt?: true
     refundedAt?: true
     createdAt?: true
@@ -64733,6 +64738,7 @@ export namespace Prisma {
     notes?: true
     staffName?: true
     branchId?: true
+    channelId?: true
     processedAt?: true
     refundedAt?: true
     createdAt?: true
@@ -64841,6 +64847,7 @@ export namespace Prisma {
     notes: string | null
     staffName: string | null
     branchId: string | null
+    channelId: string | null
     processedAt: Date | null
     refundedAt: Date | null
     createdAt: Date
@@ -64881,6 +64888,7 @@ export namespace Prisma {
     notes?: boolean
     staffName?: boolean
     branchId?: boolean
+    channelId?: boolean
     processedAt?: boolean
     refundedAt?: boolean
     createdAt?: boolean
@@ -64904,6 +64912,7 @@ export namespace Prisma {
     notes?: boolean
     staffName?: boolean
     branchId?: boolean
+    channelId?: boolean
     processedAt?: boolean
     refundedAt?: boolean
     createdAt?: boolean
@@ -64925,6 +64934,7 @@ export namespace Prisma {
     notes?: boolean
     staffName?: boolean
     branchId?: boolean
+    channelId?: boolean
     processedAt?: boolean
     refundedAt?: boolean
     createdAt?: boolean
@@ -64946,13 +64956,14 @@ export namespace Prisma {
     notes?: boolean
     staffName?: boolean
     branchId?: boolean
+    channelId?: boolean
     processedAt?: boolean
     refundedAt?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type ReturnOrderOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "code" | "originalInvoice" | "transactionId" | "customerName" | "customerPhone" | "status" | "reason" | "refundMethod" | "refundAmount" | "totalRefund" | "notes" | "staffName" | "branchId" | "processedAt" | "refundedAt" | "createdAt" | "updatedAt", ExtArgs["result"]["returnOrder"]>
+  export type ReturnOrderOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "code" | "originalInvoice" | "transactionId" | "customerName" | "customerPhone" | "status" | "reason" | "refundMethod" | "refundAmount" | "totalRefund" | "notes" | "staffName" | "branchId" | "channelId" | "processedAt" | "refundedAt" | "createdAt" | "updatedAt", ExtArgs["result"]["returnOrder"]>
   export type ReturnOrderInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     items?: boolean | ReturnOrder$itemsArgs<ExtArgs>
     _count?: boolean | ReturnOrderCountOutputTypeDefaultArgs<ExtArgs>
@@ -64980,6 +64991,7 @@ export namespace Prisma {
       notes: string | null
       staffName: string | null
       branchId: string | null
+      channelId: string | null
       processedAt: Date | null
       refundedAt: Date | null
       createdAt: Date
@@ -65422,6 +65434,7 @@ export namespace Prisma {
     readonly notes: FieldRef<"ReturnOrder", 'String'>
     readonly staffName: FieldRef<"ReturnOrder", 'String'>
     readonly branchId: FieldRef<"ReturnOrder", 'String'>
+    readonly channelId: FieldRef<"ReturnOrder", 'String'>
     readonly processedAt: FieldRef<"ReturnOrder", 'DateTime'>
     readonly refundedAt: FieldRef<"ReturnOrder", 'DateTime'>
     readonly createdAt: FieldRef<"ReturnOrder", 'DateTime'>
@@ -131553,6 +131566,7 @@ export namespace Prisma {
     notes: 'notes',
     staffName: 'staffName',
     branchId: 'branchId',
+    channelId: 'channelId',
     processedAt: 'processedAt',
     refundedAt: 'refundedAt',
     createdAt: 'createdAt',
@@ -137158,6 +137172,7 @@ export namespace Prisma {
     notes?: StringNullableFilter<"ReturnOrder"> | string | null
     staffName?: StringNullableFilter<"ReturnOrder"> | string | null
     branchId?: StringNullableFilter<"ReturnOrder"> | string | null
+    channelId?: StringNullableFilter<"ReturnOrder"> | string | null
     processedAt?: DateTimeNullableFilter<"ReturnOrder"> | Date | string | null
     refundedAt?: DateTimeNullableFilter<"ReturnOrder"> | Date | string | null
     createdAt?: DateTimeFilter<"ReturnOrder"> | Date | string
@@ -137180,6 +137195,7 @@ export namespace Prisma {
     notes?: SortOrderInput | SortOrder
     staffName?: SortOrderInput | SortOrder
     branchId?: SortOrderInput | SortOrder
+    channelId?: SortOrderInput | SortOrder
     processedAt?: SortOrderInput | SortOrder
     refundedAt?: SortOrderInput | SortOrder
     createdAt?: SortOrder
@@ -137205,6 +137221,7 @@ export namespace Prisma {
     notes?: StringNullableFilter<"ReturnOrder"> | string | null
     staffName?: StringNullableFilter<"ReturnOrder"> | string | null
     branchId?: StringNullableFilter<"ReturnOrder"> | string | null
+    channelId?: StringNullableFilter<"ReturnOrder"> | string | null
     processedAt?: DateTimeNullableFilter<"ReturnOrder"> | Date | string | null
     refundedAt?: DateTimeNullableFilter<"ReturnOrder"> | Date | string | null
     createdAt?: DateTimeFilter<"ReturnOrder"> | Date | string
@@ -137227,6 +137244,7 @@ export namespace Prisma {
     notes?: SortOrderInput | SortOrder
     staffName?: SortOrderInput | SortOrder
     branchId?: SortOrderInput | SortOrder
+    channelId?: SortOrderInput | SortOrder
     processedAt?: SortOrderInput | SortOrder
     refundedAt?: SortOrderInput | SortOrder
     createdAt?: SortOrder
@@ -137256,6 +137274,7 @@ export namespace Prisma {
     notes?: StringNullableWithAggregatesFilter<"ReturnOrder"> | string | null
     staffName?: StringNullableWithAggregatesFilter<"ReturnOrder"> | string | null
     branchId?: StringNullableWithAggregatesFilter<"ReturnOrder"> | string | null
+    channelId?: StringNullableWithAggregatesFilter<"ReturnOrder"> | string | null
     processedAt?: DateTimeNullableWithAggregatesFilter<"ReturnOrder"> | Date | string | null
     refundedAt?: DateTimeNullableWithAggregatesFilter<"ReturnOrder"> | Date | string | null
     createdAt?: DateTimeWithAggregatesFilter<"ReturnOrder"> | Date | string
@@ -148015,6 +148034,7 @@ export namespace Prisma {
     notes?: string | null
     staffName?: string | null
     branchId?: string | null
+    channelId?: string | null
     processedAt?: Date | string | null
     refundedAt?: Date | string | null
     createdAt?: Date | string
@@ -148037,6 +148057,7 @@ export namespace Prisma {
     notes?: string | null
     staffName?: string | null
     branchId?: string | null
+    channelId?: string | null
     processedAt?: Date | string | null
     refundedAt?: Date | string | null
     createdAt?: Date | string
@@ -148059,6 +148080,7 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     staffName?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    channelId?: NullableStringFieldUpdateOperationsInput | string | null
     processedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     refundedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -148081,6 +148103,7 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     staffName?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    channelId?: NullableStringFieldUpdateOperationsInput | string | null
     processedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     refundedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -148103,6 +148126,7 @@ export namespace Prisma {
     notes?: string | null
     staffName?: string | null
     branchId?: string | null
+    channelId?: string | null
     processedAt?: Date | string | null
     refundedAt?: Date | string | null
     createdAt?: Date | string
@@ -148124,6 +148148,7 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     staffName?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    channelId?: NullableStringFieldUpdateOperationsInput | string | null
     processedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     refundedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -148145,6 +148170,7 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     staffName?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    channelId?: NullableStringFieldUpdateOperationsInput | string | null
     processedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     refundedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -157998,6 +158024,7 @@ export namespace Prisma {
     notes?: SortOrder
     staffName?: SortOrder
     branchId?: SortOrder
+    channelId?: SortOrder
     processedAt?: SortOrder
     refundedAt?: SortOrder
     createdAt?: SortOrder
@@ -158024,6 +158051,7 @@ export namespace Prisma {
     notes?: SortOrder
     staffName?: SortOrder
     branchId?: SortOrder
+    channelId?: SortOrder
     processedAt?: SortOrder
     refundedAt?: SortOrder
     createdAt?: SortOrder
@@ -158045,6 +158073,7 @@ export namespace Prisma {
     notes?: SortOrder
     staffName?: SortOrder
     branchId?: SortOrder
+    channelId?: SortOrder
     processedAt?: SortOrder
     refundedAt?: SortOrder
     createdAt?: SortOrder
@@ -170404,6 +170433,7 @@ export namespace Prisma {
     notes?: string | null
     staffName?: string | null
     branchId?: string | null
+    channelId?: string | null
     processedAt?: Date | string | null
     refundedAt?: Date | string | null
     createdAt?: Date | string
@@ -170425,6 +170455,7 @@ export namespace Prisma {
     notes?: string | null
     staffName?: string | null
     branchId?: string | null
+    channelId?: string | null
     processedAt?: Date | string | null
     refundedAt?: Date | string | null
     createdAt?: Date | string
@@ -170462,6 +170493,7 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     staffName?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    channelId?: NullableStringFieldUpdateOperationsInput | string | null
     processedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     refundedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -170483,6 +170515,7 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     staffName?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    channelId?: NullableStringFieldUpdateOperationsInput | string | null
     processedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     refundedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string

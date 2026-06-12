@@ -2503,7 +2503,7 @@ router.post('/:id/return', authMiddleware, async (req: AuthRequest, res: Respons
 router.get('/returns/list', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        const { status, platform, search, page = '1', pageSize = '20' } = req.query
+        const { status, platform, channelId, search, page = '1', pageSize = '20' } = req.query
 
         // Online returns carry per-platform code prefixes: RTN-TT- (TikTok),
         // RTN-SH- (Shopee), RTN-ON (legacy/manual online).
@@ -2520,6 +2520,7 @@ router.get('/returns/list', authMiddleware, async (req: AuthRequest, res: Respon
 
         const where: any = { OR: codeFilter }
         if (status && status !== 'all') where.status = status as string
+        if (channelId && channelId !== 'all') (where as any).channelId = String(channelId)
         if (search && String(search).trim()) {
             const q = String(search).trim()
             where.AND = [{
@@ -2549,7 +2550,7 @@ router.get('/returns/list', authMiddleware, async (req: AuthRequest, res: Respon
             ? await prisma.onlineOrder.findMany({
                 where: { orderNumber: { in: invoiceNos } },
                 select: {
-                    id: true, orderNumber: true, channelName: true, platform: true,
+                    id: true, orderNumber: true, channelId: true, channelName: true, platform: true,
                     status: true, externalStatus: true, trackingNumber: true, total: true,
                 },
             })
@@ -2557,6 +2558,19 @@ router.get('/returns/list', authMiddleware, async (req: AuthRequest, res: Respon
         const orderMap = new Map(orders.map(o => [o.orderNumber, o]))
         const codePlatform = (code: string) =>
             code.startsWith('RTN-TT-') ? 'tiktok' : code.startsWith('RTN-SH-') ? 'shopee' : 'online'
+
+        // Lazy backfill: phiếu sync trước khi có cột channelId → điền dần từ đơn gốc
+        // (best-effort, không chặn response)
+        for (const r of returns) {
+            const o = orderMap.get(r.originalInvoice)
+            if (!(r as any).channelId && o?.channelId) {
+                (r as any).channelId = o.channelId
+                prisma.returnOrder.update({
+                    where: { id: r.id },
+                    data: { channelId: o.channelId } as any,
+                }).catch(() => { })
+            }
+        }
 
         const enriched = returns.map(r => ({
             ...r,
@@ -2590,7 +2604,8 @@ router.get('/returns/stats', authMiddleware, async (req: AuthRequest, res: Respo
             tiktok: 'RTN-TT-', shopee: 'RTN-SH-', online: 'RTN-ON',
         }
         const statPlatform = String(req.query.platform || '')
-        const onlineCode = {
+        const statChannelId = String(req.query.channelId || '')
+        const onlineCode: any = {
             OR: PREFIX_BY_PLATFORM[statPlatform]
                 ? [{ code: { startsWith: PREFIX_BY_PLATFORM[statPlatform] } }]
                 : [
@@ -2598,6 +2613,7 @@ router.get('/returns/stats', authMiddleware, async (req: AuthRequest, res: Respo
                     { code: { startsWith: 'RTN-TT-' } },
                     { code: { startsWith: 'RTN-SH-' } },
                 ],
+            ...(statChannelId && statChannelId !== 'all' ? { channelId: statChannelId } : {}),
         }
         const [total, pending, approved, rejected, totalRefunded] = await Promise.all([
             prisma.returnOrder.count({ where: onlineCode }),

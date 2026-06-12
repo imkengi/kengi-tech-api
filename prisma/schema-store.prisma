@@ -995,6 +995,9 @@ model ReturnOrder {
   notes           String?
   staffName       String?
   branchId        String?
+  // Kênh sàn của phiếu trả (filter theo shop). Phiếu cũ null — backfill lazy
+  // qua originalInvoice → OnlineOrder.channelId khi list.
+  channelId       String?
   processedAt     DateTime?
   refundedAt      DateTime?
   createdAt       DateTime  @default(now())
@@ -1005,6 +1008,7 @@ model ReturnOrder {
   @@index([branchId])
   @@index([status])
   @@index([createdAt])
+  @@index([channelId])
 }
 
 model ReturnItem {

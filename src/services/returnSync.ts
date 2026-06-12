@@ -65,6 +65,13 @@ export async function syncChannelReturns(prisma: any, channel: any, since: Date)
                 where: { code: `${codePrefix}${ret.returnSn}` },
             })
             if (existingReturn) {
+                // Backfill channelId for returns synced before the column existed
+                if (!existingReturn.channelId) {
+                    await prisma.returnOrder.update({
+                        where: { id: existingReturn.id },
+                        data: { channelId: channel.id },
+                    }).catch(() => { })
+                }
                 // Update status if changed
                 if (existingReturn.status !== ret.status) {
                     await prisma.returnOrder.update({
@@ -115,6 +122,7 @@ export async function syncChannelReturns(prisma: any, channel: any, since: Date)
             await prisma.returnOrder.create({
                 data: {
                     code: returnCode,
+                    channelId: channel.id,
                     originalInvoice: order?.orderNumber || ret.orderSn,
                     customerName: order?.customerName || `Khách ${platformLabel}`,
                     customerPhone: order?.customerPhone || undefined,

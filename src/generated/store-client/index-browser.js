@@ -854,6 +854,7 @@ exports.Prisma.ReturnOrderScalarFieldEnum = {
   notes: 'notes',
   staffName: 'staffName',
   branchId: 'branchId',
+  channelId: 'channelId',
   processedAt: 'processedAt',
   refundedAt: 'refundedAt',
   createdAt: 'createdAt',
