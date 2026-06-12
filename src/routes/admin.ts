@@ -858,6 +858,55 @@ router.post('/sync-schemas', async (_req: Request, res: Response) => {
     }
 })
 
+// ─── POST /admin/seed-coa ─────────────────────────────────────────────────────
+// (Re)seed the full Vietnamese chart of accounts (TT99/2025, có dấu) into EVERY
+// store. force mặc định = true: cập nhật lại tên TK hệ thống (sửa tên không dấu
+// cũ), tạo TK còn thiếu; TK người dùng tự thêm (isSystem=false) không bị đụng.
+router.post('/seed-coa', async (req: Request, res: Response) => {
+    try {
+        const { COA_SEED } = await import('../lib/chartOfAccounts')
+        const force = req.body?.force !== false
+        const stores = await registryPrisma.store.findMany({ select: { name: true, schema: true, code: true } }) as any[]
+        const results: { store: string; created: number; updated: number; skipped: number; error?: string }[] = []
+
+        for (const store of stores) {
+            let created = 0, updated = 0, skipped = 0
+            try {
+                const sp: any = getStorePrisma(store.schema)
+                for (const acc of COA_SEED) {
+                    const data = {
+                        code: acc.code, name: acc.name, nameEn: acc.nameEn ?? null,
+                        level: acc.level, parentCode: acc.parentCode ?? null,
+                        type: acc.type, nature: acc.nature, description: acc.description ?? null,
+                        isSystem: true, isActive: true,
+                    }
+                    const existing = await sp.chartOfAccount.findUnique({ where: { code: acc.code } })
+                    if (existing) {
+                        if (!force) { skipped++; continue }
+                        const { code: _c, ...updateData } = data
+                        await sp.chartOfAccount.update({ where: { code: acc.code }, data: updateData })
+                        updated++
+                    } else {
+                        await sp.chartOfAccount.create({ data }).then(() => created++).catch((e: any) => {
+                            if (e?.code === 'P2002') skipped++; else throw e
+                        })
+                    }
+                }
+                results.push({ store: store.code, created, updated, skipped })
+                console.log(`✅ COA seeded: ${store.code} (+${created} new, ${updated} updated)`)
+            } catch (err: any) {
+                results.push({ store: store.code, created, updated, skipped, error: err?.message?.slice(0, 200) })
+                console.error(`❌ COA seed failed: ${store.code}`, err?.message?.slice(0, 300))
+            }
+        }
+
+        res.json({ success: true, total: COA_SEED.length, stores: results })
+    } catch (err) {
+        console.error('Seed COA error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
 // ─── GET /admin/cloud-metrics ─────────────────────────────────────────────────
 // Fetches real Cloud Run metrics from Google Cloud Monitoring API + DB stats
 router.get('/cloud-metrics', async (_req: Request, res: Response) => {
