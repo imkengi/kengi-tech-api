@@ -744,7 +744,8 @@ export class ShopeeService extends PlatformService {
         nextOffset: string
     }> {
         const path = '/api/v2/sellerchat/get_conversation_list'
-        const pageSize = params.pageSize || 100 // Get max per page
+        // Shopee caps page_size at 60 — anything larger returns param_error
+        const pageSize = Math.min(params.pageSize || 60, 60)
 
         // Auto-paginate to collect ALL conversations
         let allConvs: any[] = []
@@ -753,10 +754,13 @@ export class ShopeeService extends PlatformService {
         const maxPages = 10 // Safety limit
 
         do {
+            // `direction` là tham số BẮT BUỘC của Shopee (thiếu → param_error):
+            // 'latest' cho trang đầu, 'older' + next_timestamp_nano khi phân trang.
             let url = this.apiUrl(path) +
+                `&direction=${nextOffset ? 'older' : 'latest'}` +
                 `&type=${params.type || 'all'}` +
                 `&page_size=${pageSize}`
-            if (nextOffset) url += `&offset=${nextOffset}&direction=older`
+            if (nextOffset) url += `&next_timestamp_nano=${encodeURIComponent(nextOffset)}`
 
             const data = await this.httpGet(url)
             console.log(`[Shopee Chat] get_conversation_list page ${pageCount + 1}:`, JSON.stringify(data).substring(0, 500))
@@ -772,7 +776,9 @@ export class ShopeeService extends PlatformService {
                 allConvs = allConvs.concat(convList)
             }
 
-            nextOffset = resp.page_result?.next_offset || resp.next_offset
+            nextOffset = resp.page_result?.next_offset
+                || resp.page_result?.next_cursor?.next_message_time_nano
+                || resp.next_offset
             const hasMore = resp.page_result?.more || resp.more || false
             pageCount++
 
