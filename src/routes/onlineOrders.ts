@@ -2505,8 +2505,14 @@ router.get('/returns/list', authMiddleware, async (req: AuthRequest, res: Respon
         const prisma = req.storePrisma!
         const { status, page = '1', pageSize = '20' } = req.query
 
+        // Online returns carry per-platform code prefixes: RTN-TT- (TikTok),
+        // RTN-SH- (Shopee), RTN-ON (legacy/manual online).
         const where: any = {
-            code: { startsWith: 'RTN-ON' }, // only online order returns
+            OR: [
+                { code: { startsWith: 'RTN-ON' } },
+                { code: { startsWith: 'RTN-TT-' } },
+                { code: { startsWith: 'RTN-SH-' } },
+            ],
         }
         if (status && status !== 'all') where.status = status as string
 
@@ -2541,13 +2547,21 @@ router.get('/returns/stats', authMiddleware, async (req: AuthRequest, res: Respo
     try {
         const prisma = req.storePrisma!
 
+        // Same per-platform prefixes as /returns/list
+        const onlineCode = {
+            OR: [
+                { code: { startsWith: 'RTN-ON' } },
+                { code: { startsWith: 'RTN-TT-' } },
+                { code: { startsWith: 'RTN-SH-' } },
+            ],
+        }
         const [total, pending, approved, rejected, totalRefunded] = await Promise.all([
-            prisma.returnOrder.count({ where: { code: { startsWith: 'RTN-ON' } } }),
-            prisma.returnOrder.count({ where: { code: { startsWith: 'RTN-ON' }, status: 'pending' } }),
-            prisma.returnOrder.count({ where: { code: { startsWith: 'RTN-ON' }, status: { in: ['approved', 'refunded'] } } }),
-            prisma.returnOrder.count({ where: { code: { startsWith: 'RTN-ON' }, status: 'rejected' } }),
+            prisma.returnOrder.count({ where: onlineCode }),
+            prisma.returnOrder.count({ where: { ...onlineCode, status: 'pending' } }),
+            prisma.returnOrder.count({ where: { ...onlineCode, status: { in: ['approved', 'refunded'] } } }),
+            prisma.returnOrder.count({ where: { ...onlineCode, status: 'rejected' } }),
             prisma.returnOrder.aggregate({
-                where: { code: { startsWith: 'RTN-ON' }, status: { in: ['approved', 'refunded'] } },
+                where: { ...onlineCode, status: { in: ['approved', 'refunded'] } },
                 _sum: { totalRefund: true },
             }),
         ])
