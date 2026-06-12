@@ -23,6 +23,13 @@ const pad2 = (n: number) => String(n).padStart(2, '0')
 
 // Resolve year/month/quarter query into an inclusive YYYY-MM-DD range + the day before the period start.
 function rangeFromQuery(q: any): { gte: string; lte: string; dayBefore: string; year: number; label: string } {
+    // ?from/?to (YYYY-MM-DD) override — FE kế toán gửi khoảng ngày trực tiếp;
+    // trước đây bị bỏ qua nên mọi sổ luôn hiển thị cả năm hiện tại.
+    const fromQ = String(q.from || '')
+    const toQ = String(q.to || '')
+    if (/^\d{4}-\d{2}-\d{2}$/.test(fromQ) && /^\d{4}-\d{2}-\d{2}$/.test(toQ)) {
+        return { gte: fromQ, lte: toQ, dayBefore: fromQ, year: Number(fromQ.slice(0, 4)), label: `${fromQ} → ${toQ}` }
+    }
     const year = Number(q.year) || new Date().getFullYear()
     const month = q.month ? Number(q.month) : undefined
     const quarter = q.quarter ? Number(q.quarter) : undefined

@@ -197,8 +197,8 @@ router.post('/lock-period', authMiddleware, requireRole('admin', 'manager', 'sup
     }
 })
 
-// POST /api/accounting/unlock-period — admin only
-router.post('/unlock-period', authMiddleware, requireRole('admin', 'superadmin'), async (req: AuthRequest, res: Response) => {
+// POST /api/accounting/unlock-period — owner/admin only
+router.post('/unlock-period', authMiddleware, requireRole('owner', 'admin', 'superadmin'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma: any = req.storePrisma!
         const branchId = getBranchId(req) || null
