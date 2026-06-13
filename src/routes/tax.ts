@@ -1158,6 +1158,117 @@ router.delete('/journal-entries/:id', authMiddleware, async (req: AuthRequest, r
     } catch (err) { console.error('DELETE /journal-entries error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
 
+// ── HOÁ ĐƠN PHÍ SÀN (Platform Fee Invoice) ─────────────────────────────────
+// Phí sàn KHÔNG tự book per-đơn theo commissionRate nữa. Kế toán nhập hoá đơn
+// GTGT do sàn (Shopee/TikTok/Lazada) xuất về cuối kỳ; mỗi hoá đơn sinh 2 bút
+// toán cân đối, idempotent theo platform + key (kỳ hoặc số HĐ):
+//   Nợ 641 / Có 131-<SÀN>   = phí dịch vụ chưa thuế
+//   Nợ 133 / Có 131-<SÀN>   = thuế GTGT đầu vào được khấu trừ
+// Sàn trừ thẳng vào escrow nên ghi giảm 131-<SÀN> (phải thu từ sàn).
+
+function platformKeyOf(platform: string): keyof typeof PLATFORM_AR {
+    const p = String(platform || '').toLowerCase()
+    return (p in PLATFORM_AR ? p : 'online') as keyof typeof PLATFORM_AR
+}
+function feeInvoiceRefs(platformKey: string, key: string) {
+    const tag = `${platformKey.toUpperCase()}-${key}`
+    return { feeRef: `PFEEINV-${tag}`, vatRef: `PFEEINV-VAT-${tag}` }
+}
+
+// GET /api/tax/platform-fee-invoices?year=&month= — liệt kê hoá đơn phí đã nhập
+router.get('/platform-fee-invoices', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const entries = await prisma.journalEntry.findMany({
+            where: { referenceType: 'platform-fee-invoice', reference: { startsWith: 'PFEEINV-', not: { startsWith: 'PFEEINV-VAT-' } } },
+            orderBy: { date: 'desc' },
+        })
+        const vats = await prisma.journalEntry.findMany({ where: { reference: { startsWith: 'PFEEINV-VAT-' } } })
+        const vatByRef = new Map(vats.map((v: any) => [v.reference, v.amount]))
+        const data = entries.map((e: any) => {
+            const vat = vatByRef.get(e.reference?.replace('PFEEINV-', 'PFEEINV-VAT-')) || 0
+            return { id: e.id, reference: e.reference, date: e.date, description: e.description, platformAccount: e.creditAccount, feeExVat: e.amount, vat, total: e.amount + vat, notes: e.notes }
+        })
+        res.json({ success: true, data })
+    } catch (err) { console.error('GET /platform-fee-invoices error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
+})
+
+// POST /api/tax/platform-fee-invoice — nhập/ghi đè 1 hoá đơn phí sàn
+//   body: { platform, period?|invoiceNo?, date, totalAmount, taxRate=10, amountIncludesVat=true, notes? }
+router.post('/platform-fee-invoice', authMiddleware, enforcePeriodLock('date'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const b = req.body || {}
+        const platformKey = platformKeyOf(b.platform)
+        const ar = PLATFORM_AR[platformKey]!
+        const key = String(b.invoiceNo || b.period || '').trim()
+        const date = String(b.date || '').trim()
+        if (!key) return res.status(400).json({ success: false, error: 'Thiếu kỳ (period) hoặc số hoá đơn (invoiceNo)' })
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ success: false, error: 'Ngày hoá đơn (date) không hợp lệ, cần YYYY-MM-DD' })
+        const total = Number(b.totalAmount)
+        if (!Number.isFinite(total) || total <= 0) return res.status(400).json({ success: false, error: 'totalAmount phải > 0' })
+        const taxRate = b.taxRate === undefined ? 10 : Number(b.taxRate)
+        if (!Number.isFinite(taxRate) || taxRate < 0) return res.status(400).json({ success: false, error: 'taxRate không hợp lệ' })
+        const includesVat = b.amountIncludesVat === undefined ? true : !!b.amountIncludesVat
+
+        const feeExVat = includesVat ? Math.round(total / (1 + taxRate / 100)) : Math.round(total)
+        const vat = includesVat ? total - feeExVat : Math.round(total * taxRate / 100)
+
+        const { feeRef, vatRef } = feeInvoiceRefs(platformKey, key)
+        const branchId = (req as any).branchId || null
+        const createdBy = (req as any).userId || null
+        const label = `Phí sàn ${ar.label} kỳ ${key}${b.invoiceNo ? ` - HĐ ${b.invoiceNo}` : ''}`
+
+        // Idempotent: ghi đè bản nhập trước của cùng platform+key
+        await prisma.journalEntry.deleteMany({ where: { reference: { in: [feeRef, vatRef] } } })
+
+        const created: any[] = []
+        created.push(await prisma.journalEntry.create({
+            data: {
+                date, description: label,
+                debitAccount: '641', debitAccountName: accountName('641') || 'Chi phí bán hàng',
+                creditAccount: ar.account, creditAccountName: ar.name,
+                amount: feeExVat, reference: feeRef, referenceType: 'platform-fee-invoice',
+                notes: b.notes || null, branchId, createdBy,
+            },
+        }))
+        if (vat > 0) {
+            created.push(await prisma.journalEntry.create({
+                data: {
+                    date, description: `VAT ${label}`,
+                    debitAccount: '133', debitAccountName: accountName('133') || 'Thuế GTGT được khấu trừ',
+                    creditAccount: ar.account, creditAccountName: ar.name,
+                    amount: vat, reference: vatRef, referenceType: 'platform-fee-invoice',
+                    notes: b.notes || null, branchId, createdBy,
+                },
+            }))
+        }
+        res.status(201).json({ success: true, data: { platform: platformKey, key, date, feeExVat, vat, total: feeExVat + vat, entries: created } })
+    } catch (err) { console.error('POST /platform-fee-invoice error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
+})
+
+// DELETE /api/tax/platform-fee-invoice?platform=&key= — xoá 1 hoá đơn phí (cả 2 dòng)
+router.delete('/platform-fee-invoice', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const platformKey = platformKeyOf(req.query.platform as string)
+        const key = String(req.query.key || '').trim()
+        if (!key) return res.status(400).json({ success: false, error: 'Thiếu key' })
+        const { feeRef, vatRef } = feeInvoiceRefs(platformKey, key)
+        const fee = await prisma.journalEntry.findFirst({ where: { reference: feeRef } })
+        if (fee) {
+            try {
+                await assertNotLocked(prisma, (req as any).branchId ?? req.user?.branchId ?? null, fee.date)
+            } catch (lockErr: any) {
+                if (lockErr?.code === 'PERIOD_LOCKED') return res.status(423).json({ success: false, code: 'PERIOD_LOCKED', lockDate: lockErr.lockDate, error: lockErr.message })
+                throw lockErr
+            }
+        }
+        const r = await prisma.journalEntry.deleteMany({ where: { reference: { in: [feeRef, vatRef] } } })
+        res.json({ success: true, deleted: r.count })
+    } catch (err) { console.error('DELETE /platform-fee-invoice error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
+})
+
 // ── LEDGER (Sổ Cái) ────────────────────────────────────────────────────────
 
 // GET /api/tax/ledger?account=111&year=2026&month=3
@@ -2174,7 +2285,6 @@ router.post('/auto-journal', authMiddleware, async (req: AuthRequest, res: Respo
 
             for (const ord of onlineOrders) {
                 const saleRef = `SALE-ONLINE-${ord.orderNumber}`
-                const feeRef = `FEE-ONLINE-${ord.orderNumber}`
                 const cogsRef = `COGS-ONLINE-${ord.orderNumber}`
                 // Bộ ref cũ (trước khi sửa nghiệp vụ) — nếu còn thì coi như đã ghi,
                 // POST /admin/fix-online-journal sẽ chuyển chúng về bộ ref/TK mới.
@@ -2201,22 +2311,8 @@ router.post('/auto-journal', authMiddleware, async (req: AuthRequest, res: Respo
                     } catch (_) { }
                 }
 
-                // Platform fee entry — Nợ 641 / Có 131-<SÀN>
-                if ((ord.platformFee || 0) > 0 && !existingRefs.has(feeRef) && !existingRefs.has(`PFEE-${ord.orderNumber}`)) {
-                    try {
-                        await prisma.journalEntry.create({
-                            data: {
-                                date, description: `Phí sàn ${ar.label} ${ord.orderNumber}`,
-                                debitAccount: '641', debitAccountName: 'Chi phí bán hàng',
-                                creditAccount: ar.account, creditAccountName: ar.name,
-                                amount: ord.platformFee, reference: feeRef, referenceType: 'online',
-                                branchId, createdBy: userId,
-                            }
-                        })
-                        created.push({ type: 'platform-fee', ref: feeRef, amount: ord.platformFee })
-                        existingRefs.add(feeRef)
-                    } catch (_) { }
-                }
+                // Phí sàn KHÔNG book per-đơn — ghi nhận theo hoá đơn GTGT cuối kỳ
+                // qua POST /api/tax/platform-fee-invoice (Nợ 641 + Nợ 133 / Có 131-<SÀN>).
 
                 // COGS entry — Nợ 632 / Có 156
                 if (!existingRefs.has(cogsRef) && !existingRefs.has(`OCOGS-${ord.orderNumber}`)) {

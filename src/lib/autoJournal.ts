@@ -95,7 +95,6 @@ export async function createJournalEntriesForTransaction(
     const vatRef = `VAT-${tx.receiptNumber}`
     const discRef = `DISC-${tx.receiptNumber}`
     const cogsRef = `COGS-${tx.receiptNumber}`
-    const feeRef = `FEE-${tx.receiptNumber}`
 
     // Probe existing refs (unless caller already deduped) — keep this scoped
     // to just the refs for this tx so we don't load the whole table.
@@ -103,7 +102,7 @@ export async function createJournalEntriesForTransaction(
     if (!opts.skipDupCheck) {
         try {
             const rows = await prisma.journalEntry.findMany({
-                where: { reference: { in: [saleRef, vatRef, discRef, cogsRef, feeRef] } },
+                where: { reference: { in: [saleRef, vatRef, discRef, cogsRef] } },
                 select: { reference: true },
             })
             existing = new Set(rows.map((r: any) => r.reference).filter(Boolean))
@@ -215,32 +214,9 @@ export async function createJournalEntriesForTransaction(
         }
     }
 
-    // 5. Phí sàn (chỉ đơn TMĐT) — Nợ TK641 / Có TK131-<SÀN>
-    // Lấy platformFee từ OnlineOrder gốc (ước theo commissionRate lúc sync;
-    // /channels/:id/sync-fees sẽ cập nhật lại bút toán này bằng phí thật).
-    if (platformAr && !existing.has(feeRef)) {
-        try {
-            const orderNumber = tx.receiptNumber.replace(/^ONLINE-/, '')
-            const onlineOrder = await prisma.onlineOrder.findFirst({
-                where: { orderNumber },
-                select: { platformFee: true },
-            })
-            const fee = onlineOrder?.platformFee || 0
-            if (fee > 0) {
-                await prisma.journalEntry.create({
-                    data: {
-                        date,
-                        description: `Phí sàn ${platformAr.label} ${tx.receiptNumber}`,
-                        debitAccount: '641', debitAccountName: 'Chi phí bán hàng',
-                        creditAccount: platformAr.account, creditAccountName: platformAr.name,
-                        amount: fee, reference: feeRef, referenceType: 'sale',
-                        branchId, createdBy: userId,
-                    },
-                })
-                result.created.push({ type: 'platform-fee', ref: feeRef, amount: fee })
-            }
-        } catch (_) { /* onlineOrder table missing or fee unknown — non-fatal */ }
-    }
+    // 5. Phí sàn — KHÔNG còn book per-đơn theo commissionRate ước tính. Phí sàn
+    // ghi nhận theo hoá đơn GTGT sàn xuất về cuối kỳ, nhập tay qua
+    // POST /api/tax/platform-fee-invoice (Nợ 641 + Nợ 133 / Có 131-<SÀN>).
 
     return result
 }

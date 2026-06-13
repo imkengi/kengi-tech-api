@@ -909,11 +909,10 @@ router.post('/seed-coa', async (req: Request, res: Response) => {
 
 // ─── POST /admin/fix-online-journal ──────────────────────────────────────────
 // Dọn dữ liệu bút toán đơn TMĐT cũ trong MỌI store:
-//   1. Xóa bút toán KÉP: bộ ref cũ (ONLINE-/PFEE-/OCOGS-) khi đã có bộ chuẩn
-//      (SALE-/FEE-/COGS-ONLINE-) cho cùng đơn.
-//   2. Bút toán cũ còn lại: đổi sang bộ ref chuẩn + hạch toán đúng nghiệp vụ
-//      (doanh thu Nợ 131-<SÀN> thay vì 112/131 chung; phí sàn Có 131-<SÀN>
-//      thay vì Có 112 — tiền còn nằm bên sàn tới khi rút).
+//   1. Doanh thu/giá vốn cũ (ONLINE-/OCOGS-): xóa nếu đã có bộ chuẩn
+//      (SALE-/COGS-ONLINE-), ngược lại đổi sang ref chuẩn + Nợ 131-<SÀN>.
+//   2. XÓA HẾT bút toán phí per-đơn (PFEE-/FEE-ONLINE-) — phí sàn nay ghi nhận
+//      theo hoá đơn GTGT cuối kỳ (PFEEINV-*), không book ước tính per-đơn nữa.
 //   3. SALE-/VAT-ONLINE- đã ghi nhầm Nợ 111/112/131 → sửa về 131-<SÀN>.
 //   4. Sửa mojibake (BÃƒÂ¡n → Bán) trong description/tên TK của TOÀN BỘ bút toán.
 router.post('/fix-online-journal', async (_req: Request, res: Response) => {
@@ -965,25 +964,12 @@ router.post('/fix-online-journal', async (_req: Request, res: Response) => {
                         }
                         continue
                     }
-                    if ((m = ref.match(/^PFEE-(.+)$/))) {
-                        const orderNumber = m[1]!
-                        if (refSet.has(`FEE-ONLINE-${orderNumber}`)) {
-                            await sp.journalEntry.delete({ where: { id: e.id } }).catch(() => { })
-                            deleted++
-                        } else {
-                            const ar = arFor(orderNumber)
-                            await sp.journalEntry.update({
-                                where: { id: e.id },
-                                data: {
-                                    reference: `FEE-ONLINE-${orderNumber}`,
-                                    debitAccount: '641', debitAccountName: 'Chi phí bán hàng',
-                                    creditAccount: ar.account, creditAccountName: ar.name,
-                                    description: `Phí sàn ${ar.label} ${orderNumber}`,
-                                },
-                            }).catch(() => { })
-                            refSet.add(`FEE-ONLINE-${orderNumber}`)
-                            rebooked++
-                        }
+                    // Phí sàn per-đơn (ước tính) bị bỏ — phí giờ ghi theo hoá đơn
+                    // GTGT cuối kỳ (PFEEINV-*). Xoá hết bút toán phí per-đơn cũ.
+                    // Lưu ý: /^PFEE-/ KHÔNG khớp PFEEINV-* (sau "PFEE" là "I", không phải "-").
+                    if (ref.match(/^PFEE-/) || ref.match(/^FEE-ONLINE-/)) {
+                        await sp.journalEntry.delete({ where: { id: e.id } }).catch(() => { })
+                        deleted++
                         continue
                     }
                     if ((m = ref.match(/^OCOGS-(.+)$/))) {
@@ -1012,20 +998,6 @@ router.post('/fix-online-journal', async (_req: Request, res: Response) => {
                         repointed++
                         continue
                     }
-                    // FEE-ONLINE- ghi nhầm Có tiền mặt/ngân hàng
-                    if ((m = ref.match(/^FEE-ONLINE-(.+)$/)) && ['111', '112', '131'].includes(e.creditAccount)) {
-                        const ar = arFor(m[1]!)
-                        await sp.journalEntry.update({
-                            where: { id: e.id },
-                            data: {
-                                creditAccount: ar.account, creditAccountName: ar.name,
-                                ...(e.debitAccount === '6418' ? { debitAccount: '641', debitAccountName: 'Chi phí bán hàng' } : {}),
-                            },
-                        }).catch(() => { })
-                        repointed++
-                        continue
-                    }
-
                     // 4: mojibake trong description / tên TK
                     const fixedDesc = fixMojibake(e.description)
                     const fixedDn = fixMojibake(e.debitAccountName)

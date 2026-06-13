@@ -3268,17 +3268,13 @@ router.post('/channels/:id/sync-fees', authMiddleware, async (req: AuthRequest, 
 
                 if (platformFee === null || netRevenue === null) { unsettled++; continue }
 
+                // Chỉ cập nhật số liệu đối chiếu trên đơn (phí THẬT sàn trừ + tiền
+                // thực nhận). KHÔNG sinh/ghi đè bút toán — phí sàn ghi nhận theo
+                // hoá đơn GTGT cuối kỳ qua POST /api/tax/platform-fee-invoice.
                 await prisma.onlineOrder.update({
                     where: { id: order.id },
                     data: { platformFee, netRevenue },
                 })
-
-                // Đồng bộ bút toán phí sàn (FEE-ONLINE-<orderNumber>) sang phí THẬT
-                // — bút toán được autoJournal tạo bằng phí ước tính lúc convert.
-                await prisma.journalEntry.updateMany({
-                    where: { reference: { in: [`FEE-ONLINE-${order.orderNumber}`, `FEE-${order.orderNumber}`] } },
-                    data: { amount: platformFee },
-                }).catch(() => { })
 
                 updated++
             } catch (e: any) {
