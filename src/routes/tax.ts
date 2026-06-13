@@ -1287,6 +1287,90 @@ router.delete('/platform-fee-invoice', authMiddleware, async (req: AuthRequest, 
     } catch (err) { console.error('DELETE /platform-fee-invoice error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
 
+// ── QUYẾT TOÁN SÀN (escrow về tài khoản ngân hàng) ──────────────────────────
+// Khi sàn (Shopee/TikTok/Lazada) quyết toán chuyển tiền escrow về tài khoản
+// ngân hàng của shop, kế toán nhập 1 bản ghi quyết toán; mỗi bản sinh 1 bút
+// toán idempotent theo platform + key (số sao kê hoặc ngày):
+//   Nợ 112 / Có 131-<SÀN>   = tiền sàn trả về, giảm phải thu từ sàn
+// Đây là cơ chế làm giảm số dư 131-<SÀN> (escrow sàn đang giữ) trên CĐKT.
+
+function settlementRef(platformKey: string, key: string) {
+    return `PSETTLE-${platformKey.toUpperCase()}-${key}`
+}
+
+// GET /api/tax/platform-settlements — liệt kê các phiếu quyết toán sàn đã nhập
+router.get('/platform-settlements', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const entries = await prisma.journalEntry.findMany({
+            where: { referenceType: 'platform-settlement', reference: { startsWith: 'PSETTLE-' } },
+            orderBy: { date: 'desc' },
+        })
+        const data = entries.map((e: any) => ({
+            id: e.id, reference: e.reference, date: e.date, description: e.description,
+            platformAccount: e.creditAccount, amount: e.amount, notes: e.notes,
+        }))
+        res.json({ success: true, data })
+    } catch (err) { console.error('GET /platform-settlements error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
+})
+
+// POST /api/tax/platform-settlement — nhập/ghi đè 1 phiếu quyết toán sàn
+//   body: { platform, date(YYYY-MM-DD), amount, reference?(số sao kê), notes? }
+router.post('/platform-settlement', authMiddleware, enforcePeriodLock('date'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const b = req.body || {}
+        const platformKey = platformKeyOf(b.platform)
+        const ar = PLATFORM_AR[platformKey]!
+        const date = String(b.date || '').trim()
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ success: false, error: 'Ngày quyết toán (date) không hợp lệ, cần YYYY-MM-DD' })
+        const amount = Math.round(Number(b.amount))
+        if (!Number.isFinite(amount) || amount <= 0) return res.status(400).json({ success: false, error: 'amount phải > 0' })
+        const key = String(b.reference || date).trim()
+
+        const ref = settlementRef(platformKey, key)
+        const branchId = (req as any).branchId || null
+        const createdBy = (req as any).userId || null
+        const label = `Quyết toán ${ar.label}${b.reference ? ` - sao kê ${b.reference}` : ` ngày ${date}`}`
+
+        // Idempotent: ghi đè bản nhập trước của cùng platform+key
+        await prisma.journalEntry.deleteMany({ where: { reference: ref } })
+
+        const created = await prisma.journalEntry.create({
+            data: {
+                date, description: label,
+                debitAccount: '112', debitAccountName: accountName('112') || 'Tiền gửi ngân hàng',
+                creditAccount: ar.account, creditAccountName: ar.name,
+                amount, reference: ref, referenceType: 'platform-settlement',
+                notes: b.notes || null, branchId, createdBy,
+            },
+        })
+        res.status(201).json({ success: true, data: { platform: platformKey, key, date, amount, entry: created } })
+    } catch (err) { console.error('POST /platform-settlement error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
+})
+
+// DELETE /api/tax/platform-settlement?platform=&key= — xoá 1 phiếu quyết toán
+router.delete('/platform-settlement', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const platformKey = platformKeyOf(req.query.platform as string)
+        const key = String(req.query.key || '').trim()
+        if (!key) return res.status(400).json({ success: false, error: 'Thiếu key' })
+        const ref = settlementRef(platformKey, key)
+        const entry = await prisma.journalEntry.findFirst({ where: { reference: ref } })
+        if (entry) {
+            try {
+                await assertNotLocked(prisma, (req as any).branchId ?? req.user?.branchId ?? null, entry.date)
+            } catch (lockErr: any) {
+                if (lockErr?.code === 'PERIOD_LOCKED') return res.status(423).json({ success: false, code: 'PERIOD_LOCKED', lockDate: lockErr.lockDate, error: lockErr.message })
+                throw lockErr
+            }
+        }
+        const r = await prisma.journalEntry.deleteMany({ where: { reference: ref } })
+        res.json({ success: true, deleted: r.count })
+    } catch (err) { console.error('DELETE /platform-settlement error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
+})
+
 // ── LEDGER (Sổ Cái) ────────────────────────────────────────────────────────
 
 // GET /api/tax/ledger?account=111&year=2026&month=3
