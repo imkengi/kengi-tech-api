@@ -1030,6 +1030,86 @@ router.post('/fix-online-journal', async (_req: Request, res: Response) => {
     }
 })
 
+// ─── POST /admin/fix-debt-journal ────────────────────────────────────────────
+// Dọn dữ liệu kế toán công nợ LỊCH SỬ (mọi store):
+//   A. TK 331: bút toán trả tiền NCC cũ ghi nhầm Nợ 6428 (CP khác) → sửa về Nợ 331.
+//   B. TK 131: đơn bán chịu cũ chỉ có vế Nợ 131 (chưa trừ tiền đã thu) → thêm bút
+//      toán COLLECT-<HĐ>-BF: Nợ 111/112 / Có 131 cho phần đã thu còn THIẾU, để 131
+//      khớp Customer.debt. Idempotent (chỉ bù phần chưa có COLLECT-).
+router.post('/fix-debt-journal', async (_req: Request, res: Response) => {
+    try {
+        const stores = await registryPrisma.store.findMany({ select: { schema: true, code: true } }) as any[]
+        const results: any[] = []
+
+        for (const store of stores) {
+            let repointed331 = 0, backfilled131 = 0
+            try {
+                const sp: any = getStorePrisma(store.schema)
+
+                // A. Trả tiền NCC ghi nhầm 6428 → 331
+                const supPays: any[] = await sp.journalEntry.findMany({
+                    where: { debitAccount: '6428', reference: { startsWith: 'EXP-' }, description: { startsWith: 'Trả tiền NCC' } },
+                    select: { id: true },
+                }).catch(() => [])
+                for (const e of supPays) {
+                    await sp.journalEntry.update({
+                        where: { id: e.id },
+                        data: { debitAccount: '331', debitAccountName: 'Phải trả người bán' },
+                    }).catch(() => { })
+                    repointed331++
+                }
+
+                // B. Bù bút toán thu tiền cho đơn bán chịu (Nợ 131) còn thiếu
+                const creditSales: any[] = await sp.journalEntry.findMany({
+                    where: { reference: { startsWith: 'SALE-' }, referenceType: 'sale', debitAccount: '131' },
+                    select: { reference: true, branchId: true, date: true },
+                }).catch(() => [])
+                for (const sale of creditSales) {
+                    const receipt = String(sale.reference).replace(/^SALE-/, '')
+                    if (!receipt || receipt.startsWith('ONLINE-')) continue
+                    const tx = await sp.transaction.findFirst({
+                        where: { receiptNumber: receipt },
+                        select: { amountReceived: true, total: true, status: true, customerName: true, payments: { select: { type: true } } },
+                    }).catch(() => null)
+                    if (!tx || tx.status === 'voided') continue
+                    const collected = Math.min(Math.round(tx.amountReceived || 0), Math.round(tx.total || 0))
+                    if (collected <= 0) continue
+                    const existing: any[] = await sp.journalEntry.findMany({
+                        where: { reference: { startsWith: `COLLECT-${receipt}` }, creditAccount: { startsWith: '131' } },
+                        select: { amount: true },
+                    }).catch(() => [])
+                    const already = Math.round(existing.reduce((s: number, x: any) => s + (x.amount || 0), 0))
+                    const missing = collected - already
+                    if (missing <= 0) continue
+                    const payType = tx.payments?.[0]?.type
+                    const isBank = payType === 'bank' || payType === 'transfer'
+                    await sp.journalEntry.create({
+                        data: {
+                            date: sale.date,
+                            description: `Thu tiền bán hàng ${receipt}${tx.customerName ? ' - KH: ' + tx.customerName : ''}`,
+                            debitAccount: isBank ? '112' : '111', debitAccountName: isBank ? 'Tiền gửi ngân hàng' : 'Tiền mặt',
+                            creditAccount: '131', creditAccountName: 'Phải thu khách hàng',
+                            amount: missing, reference: `COLLECT-${receipt}-BF`, referenceType: 'sale',
+                            branchId: sale.branchId || null,
+                        },
+                    }).catch(() => { })
+                    backfilled131++
+                }
+
+                results.push({ store: store.code, repointed331, backfilled131 })
+                console.log(`✅ fix-debt-journal ${store.code}: 331→${repointed331}, 131 backfill ${backfilled131}`)
+            } catch (err: any) {
+                results.push({ store: store.code, error: err?.message?.slice(0, 200) })
+                console.error(`❌ fix-debt-journal ${store.code}:`, err?.message?.slice(0, 300))
+            }
+        }
+        res.json({ success: true, stores: results })
+    } catch (err) {
+        console.error('fix-debt-journal error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
 // ─── GET /admin/cloud-metrics ─────────────────────────────────────────────────
 // Fetches real Cloud Run metrics from Google Cloud Monitoring API + DB stats
 router.get('/cloud-metrics', async (_req: Request, res: Response) => {
