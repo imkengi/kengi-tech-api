@@ -907,6 +907,157 @@ router.post('/seed-coa', async (req: Request, res: Response) => {
     }
 })
 
+// ─── POST /admin/fix-online-journal ──────────────────────────────────────────
+// Dọn dữ liệu bút toán đơn TMĐT cũ trong MỌI store:
+//   1. Xóa bút toán KÉP: bộ ref cũ (ONLINE-/PFEE-/OCOGS-) khi đã có bộ chuẩn
+//      (SALE-/FEE-/COGS-ONLINE-) cho cùng đơn.
+//   2. Bút toán cũ còn lại: đổi sang bộ ref chuẩn + hạch toán đúng nghiệp vụ
+//      (doanh thu Nợ 131-<SÀN> thay vì 112/131 chung; phí sàn Có 131-<SÀN>
+//      thay vì Có 112 — tiền còn nằm bên sàn tới khi rút).
+//   3. SALE-/VAT-ONLINE- đã ghi nhầm Nợ 111/112/131 → sửa về 131-<SÀN>.
+//   4. Sửa mojibake (BÃƒÂ¡n → Bán) trong description/tên TK của TOÀN BỘ bút toán.
+router.post('/fix-online-journal', async (_req: Request, res: Response) => {
+    try {
+        const { PLATFORM_AR, detectOnlinePlatform } = await import('../lib/autoJournal')
+        const { fixMojibake } = await import('../lib/fixMojibake')
+        const stores = await registryPrisma.store.findMany({ select: { name: true, schema: true, code: true } }) as any[]
+        const results: any[] = []
+
+        const arFor = (orderNumber: string) => {
+            const pf = detectOnlinePlatform(orderNumber) || detectOnlinePlatform(`ONLINE-${orderNumber}`)
+            return PLATFORM_AR[pf || 'online'] ?? PLATFORM_AR.online!
+        }
+
+        for (const store of stores) {
+            let deleted = 0, rebooked = 0, repointed = 0, demojibaked = 0
+            try {
+                const sp: any = getStorePrisma(store.schema)
+                const entries: any[] = await sp.journalEntry.findMany({
+                    select: {
+                        id: true, reference: true, referenceType: true, description: true,
+                        debitAccount: true, debitAccountName: true, creditAccount: true, creditAccountName: true,
+                    },
+                })
+                const refSet = new Set(entries.map(e => e.reference).filter(Boolean))
+
+                for (const e of entries) {
+                    const ref: string = e.reference || ''
+
+                    // 1+2: bộ ref cũ ONLINE-/PFEE-/OCOGS-
+                    let m: RegExpMatchArray | null
+                    if ((m = ref.match(/^ONLINE-(.+)$/)) && e.referenceType === 'online') {
+                        const orderNumber = m[1]!
+                        if (refSet.has(`SALE-ONLINE-${orderNumber}`)) {
+                            await sp.journalEntry.delete({ where: { id: e.id } }).catch(() => { })
+                            deleted++
+                        } else {
+                            const ar = arFor(orderNumber)
+                            await sp.journalEntry.update({
+                                where: { id: e.id },
+                                data: {
+                                    reference: `SALE-ONLINE-${orderNumber}`,
+                                    debitAccount: ar.account, debitAccountName: ar.name,
+                                    description: `Bán hàng qua ${ar.label} ${orderNumber}`,
+                                },
+                            }).catch(() => { })
+                            refSet.add(`SALE-ONLINE-${orderNumber}`)
+                            rebooked++
+                        }
+                        continue
+                    }
+                    if ((m = ref.match(/^PFEE-(.+)$/))) {
+                        const orderNumber = m[1]!
+                        if (refSet.has(`FEE-ONLINE-${orderNumber}`)) {
+                            await sp.journalEntry.delete({ where: { id: e.id } }).catch(() => { })
+                            deleted++
+                        } else {
+                            const ar = arFor(orderNumber)
+                            await sp.journalEntry.update({
+                                where: { id: e.id },
+                                data: {
+                                    reference: `FEE-ONLINE-${orderNumber}`,
+                                    debitAccount: '641', debitAccountName: 'Chi phí bán hàng',
+                                    creditAccount: ar.account, creditAccountName: ar.name,
+                                    description: `Phí sàn ${ar.label} ${orderNumber}`,
+                                },
+                            }).catch(() => { })
+                            refSet.add(`FEE-ONLINE-${orderNumber}`)
+                            rebooked++
+                        }
+                        continue
+                    }
+                    if ((m = ref.match(/^OCOGS-(.+)$/))) {
+                        const orderNumber = m[1]!
+                        if (refSet.has(`COGS-ONLINE-${orderNumber}`)) {
+                            await sp.journalEntry.delete({ where: { id: e.id } }).catch(() => { })
+                            deleted++
+                        } else {
+                            await sp.journalEntry.update({
+                                where: { id: e.id },
+                                data: { reference: `COGS-ONLINE-${orderNumber}`, description: `Giá vốn online ${orderNumber}` },
+                            }).catch(() => { })
+                            refSet.add(`COGS-ONLINE-${orderNumber}`)
+                            rebooked++
+                        }
+                        continue
+                    }
+
+                    // 3: SALE-/VAT-ONLINE- ghi nhầm tiền mặt/ngân hàng/131 chung
+                    if ((m = ref.match(/^(SALE|VAT)-ONLINE-(.+)$/)) && ['111', '112', '131'].includes(e.debitAccount)) {
+                        const ar = arFor(m[2]!)
+                        await sp.journalEntry.update({
+                            where: { id: e.id },
+                            data: { debitAccount: ar.account, debitAccountName: ar.name },
+                        }).catch(() => { })
+                        repointed++
+                        continue
+                    }
+                    // FEE-ONLINE- ghi nhầm Có tiền mặt/ngân hàng
+                    if ((m = ref.match(/^FEE-ONLINE-(.+)$/)) && ['111', '112', '131'].includes(e.creditAccount)) {
+                        const ar = arFor(m[1]!)
+                        await sp.journalEntry.update({
+                            where: { id: e.id },
+                            data: {
+                                creditAccount: ar.account, creditAccountName: ar.name,
+                                ...(e.debitAccount === '6418' ? { debitAccount: '641', debitAccountName: 'Chi phí bán hàng' } : {}),
+                            },
+                        }).catch(() => { })
+                        repointed++
+                        continue
+                    }
+
+                    // 4: mojibake trong description / tên TK
+                    const fixedDesc = fixMojibake(e.description)
+                    const fixedDn = fixMojibake(e.debitAccountName)
+                    const fixedCn = fixMojibake(e.creditAccountName)
+                    if (fixedDesc !== (e.description || '') || fixedDn !== (e.debitAccountName || '') || fixedCn !== (e.creditAccountName || '')) {
+                        await sp.journalEntry.update({
+                            where: { id: e.id },
+                            data: {
+                                ...(fixedDesc !== (e.description || '') ? { description: fixedDesc } : {}),
+                                ...(fixedDn !== (e.debitAccountName || '') ? { debitAccountName: fixedDn } : {}),
+                                ...(fixedCn !== (e.creditAccountName || '') ? { creditAccountName: fixedCn } : {}),
+                            },
+                        }).catch(() => { })
+                        demojibaked++
+                    }
+                }
+
+                results.push({ store: store.code, total: entries.length, deleted, rebooked, repointed, demojibaked })
+                console.log(`✅ fix-online-journal ${store.code}: -${deleted} dup, ${rebooked} rebooked, ${repointed} repointed, ${demojibaked} demojibaked`)
+            } catch (err: any) {
+                results.push({ store: store.code, error: err?.message?.slice(0, 200) })
+                console.error(`❌ fix-online-journal failed: ${store.code}`, err?.message?.slice(0, 300))
+            }
+        }
+
+        res.json({ success: true, stores: results })
+    } catch (err) {
+        console.error('fix-online-journal error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
 // ─── GET /admin/cloud-metrics ─────────────────────────────────────────────────
 // Fetches real Cloud Run metrics from Google Cloud Monitoring API + DB stats
 router.get('/cloud-metrics', async (_req: Request, res: Response) => {

@@ -315,7 +315,7 @@ router.post('/close-period', authMiddleware, requireRole('admin', 'manager', 'su
 // Compute closing balances per account up to `${year}-12-31`, keeping only
 // balance-sheet accounts (asset/liability/equity) — P&L accounts net to zero
 // after closing and are never carried forward.
-async function computeOpeningBalances(prisma: any, year: number) {
+export async function computeOpeningBalances(prisma: any, year: number) {
     const entries = await prisma.journalEntry.findMany({
         where: { date: { lte: `${year}-12-31` } },
         select: { debitAccount: true, debitAccountName: true, creditAccount: true, creditAccountName: true, amount: true },

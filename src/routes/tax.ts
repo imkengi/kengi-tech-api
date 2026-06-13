@@ -1,15 +1,15 @@
 import { Router, Request, Response } from 'express'
 import { errMsg } from '../lib/errorResponse'
 import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
-import { createJournalEntriesForTransaction, AUTO_JOURNAL_REF_TYPES } from '../lib/autoJournal'
+import { createJournalEntriesForTransaction, AUTO_JOURNAL_REF_TYPES, PLATFORM_AR } from '../lib/autoJournal'
 import { COA_SEED, accountName } from '../lib/chartOfAccounts'
 import { enforcePeriodLock, assertNotLocked } from '../lib/periodLock'
 
 const router = Router()
 
-// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// ═══════════════════════════════════════════════════════════════════════════════
 //  TAX CONFIG (existing CRUD)
-// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// ═══════════════════════════════════════════════════════════════════════════════
 
 // GET /api/tax
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -32,7 +32,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     } catch (err) { res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
 
-// â”€â”€â”€ Store Info (for tax declarations) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Store Info (for tax declarations) ──────────────────────────────────────
 
 // GET /api/tax/store-info
 router.get('/store-info', authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -178,9 +178,9 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
     } catch (err) { res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
 
-// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// ═══════════════════════════════════════════════════════════════════════════════
 //  REVENUE CHECK & INVOICE LISTING
-// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// ═══════════════════════════════════════════════════════════════════════════════
 
 // GET /api/tax/revenue-check?year=2026
 router.get('/revenue-check', authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -256,11 +256,11 @@ router.get('/invoices', authMiddleware, async (req: AuthRequest, res: Response) 
     }
 })
 
-// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// ═══════════════════════════════════════════════════════════════════════════════
 //  TAX DECLARATIONS (01/GTGT + 01/CNKD)
-// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// ═══════════════════════════════════════════════════════════════════════════════
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ Helper: get date range for period Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── Helper: get date range for period ───────────────────────────────────────
 function getPeriodDateRange(periodType: string, year: number, month?: number, quarter?: number) {
     let startDate: Date, endDate: Date
     if (periodType === 'quarter' && quarter) {
@@ -275,7 +275,7 @@ function getPeriodDateRange(periodType: string, year: number, month?: number, qu
     return { startDate, endDate }
 }
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ Helper: calculate 01/GTGT data from transactions & imports Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── Helper: calculate 01/GTGT data from transactions & imports ──────────────
 async function calculate01GTGT(prisma: any, req: any, periodType: string, year: number, month?: number, quarter?: number) {
     const { startDate, endDate } = getPeriodDateRange(periodType, year, month, quarter)
 
@@ -316,7 +316,7 @@ async function calculate01GTGT(prisma: any, req: any, periodType: string, year: 
     return { ct21, ct22, ct23, ct24, ct25, ct26, ct27, ct28, ct29, ct30, ct31, ct32, ct33, ct34, ct35, ct36, ct37, ct38, ct39, ct40a, ct40b }
 }
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ Helper: calculate 01/CNKD data (Household / Individual business) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── Helper: calculate 01/CNKD data (Household / Individual business) ────────
 async function calculate01CNKD(prisma: any, periodType: string, year: number, month?: number, quarter?: number) {
     const { startDate, endDate } = getPeriodDateRange(periodType, year, month, quarter)
 
@@ -327,17 +327,17 @@ async function calculate01CNKD(prisma: any, periodType: string, year: number, mo
     })
     const cnkdRevenue = transactions.reduce((s: number, t: any) => s + (t.total || 0), 0)
 
-    // VAT rate for retail/trade: 1% (ThÃƒÂ´ng tÃ†Â° 40/2021)
+    // VAT rate for retail/trade: 1% (Thông tư 40/2021)
     const cnkdVatRate = 1
     // PIT rate for retail/trade: 0.5%
     const cnkdPitRate = 0.5
-    const cnkdThreshold = 500000000 // 500 triÃ¡Â»â€¡u/nÃ„Æ’m
+    const cnkdThreshold = 500000000 // 500 triệu/năm
 
     // Annualized revenue for threshold check (estimate)
     const monthsInPeriod = periodType === 'quarter' ? 3 : 1
     const annualizedRevenue = cnkdRevenue * (12 / monthsInPeriod)
 
-    // If annualized revenue below threshold Ã¢â€ â€™ no tax
+    // If annualized revenue below threshold → no tax
     const isAboveThreshold = annualizedRevenue > cnkdThreshold
     const cnkdVatAmount = isAboveThreshold ? cnkdRevenue * (cnkdVatRate / 100) : 0
     const cnkdPitAmount = isAboveThreshold ? cnkdRevenue * (cnkdPitRate / 100) : 0
@@ -346,7 +346,7 @@ async function calculate01CNKD(prisma: any, periodType: string, year: number, mo
     return { cnkdRevenue, cnkdVatRate, cnkdVatAmount, cnkdPitRate, cnkdPitAmount, cnkdTotalTax, cnkdThreshold }
 }
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ XML builder helpers Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── XML builder helpers ─────────────────────────────────────────────────────
 function escXml(s: string): string {
     return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;')
 }
@@ -362,7 +362,7 @@ function build01GTGT_Xml(decl: any): string {
   <HSoKhaiThue>
     <TTChung>
       <ma_nd>01/GTGT</ma_nd>
-      <ten_nd>TÃ¡Â»Å“ KHAI THUÃ¡ÂºÂ¾ GIÃƒÂ TRÃ¡Â»Å  GIA TÃ„â€šNG (MÃ¡ÂºÂ«u sÃ¡Â»â€˜ 01/GTGT)</ten_nd>
+      <ten_nd>TỜ KHAI THUẾ GIÁ TRỊ GIA TĂNG (Mẫu số 01/GTGT)</ten_nd>
       <mso_thue>${escXml(decl.taxCode)}</mso_thue>
       <ten_NNT>${escXml(decl.companyName)}</ten_NNT>
       <dchi_NNT>${escXml(decl.companyAddress || '')}</dchi_NNT>
@@ -413,7 +413,7 @@ function build01CNKD_Xml(decl: any): string {
   <HSoKhaiThue>
     <TTChung>
       <ma_nd>01/CNKD</ma_nd>
-      <ten_nd>TÃ¡Â»Å“ KHAI THUÃ¡ÂºÂ¾ Ã„ÂÃ¡Â»ÂI VÃ¡Â»Å¡I CÃƒÂ NHÃƒâ€šN KINH DOANH (MÃ¡ÂºÂ«u sÃ¡Â»â€˜ 01/CNKD)</ten_nd>
+      <ten_nd>TỜ KHAI THUẾ ĐỐI VỚI CÁ NHÂN KINH DOANH (Mẫu số 01/CNKD)</ten_nd>
       <mso_thue>${escXml(decl.taxCode)}</mso_thue>
       <ten_NNT>${escXml(decl.companyName)}</ten_NNT>
       <dchi_NNT>${escXml(decl.companyAddress || '')}</dchi_NNT>
@@ -441,7 +441,7 @@ function build01CNKD_Xml(decl: any): string {
 </HSoThueDTu>`
 }
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ GET /api/tax/declarations Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── GET /api/tax/declarations ───────────────────────────────────────────────
 router.get('/declarations', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
@@ -453,7 +453,7 @@ router.get('/declarations', authMiddleware, async (req: AuthRequest, res: Respon
     }
 })
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ POST /api/tax/declarations Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── POST /api/tax/declarations ──────────────────────────────────────────────
 router.post('/declarations', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
@@ -476,7 +476,7 @@ router.post('/declarations', authMiddleware, async (req: AuthRequest, res: Respo
         const annualRevenue = allYearTx.reduce((s, t) => s + (t.total || 0), 0)
         const isAboveThreshold = annualRevenue >= 500000000
 
-        // Ã†Â¯u tiÃƒÂªn businessType tÃ¡Â»Â« user chÃ¡Â»Ân, fallback theo doanh thu
+        // Ưu tiên businessType từ user chọn, fallback theo doanh thu
         const businessType = (reqBusinessType === 'company' || reqBusinessType === 'household')
             ? reqBusinessType
             : (isAboveThreshold ? 'company' : 'household')
@@ -562,7 +562,7 @@ router.post('/declarations', authMiddleware, async (req: AuthRequest, res: Respo
     }
 })
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ PUT /api/tax/declarations/:id Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── PUT /api/tax/declarations/:id ───────────────────────────────────────────
 router.put('/declarations/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
@@ -572,7 +572,7 @@ router.put('/declarations/:id', authMiddleware, async (req: AuthRequest, res: Re
         if (status) updateData.status = status
         if (notes !== undefined) updateData.notes = notes
         if (filedAt) updateData.filedAt = new Date(filedAt)
-        // Allow updating individual chÃ¡Â»â€° tiÃƒÂªu (for manual adjustments)
+        // Allow updating individual chỉ tiêu (for manual adjustments)
         const allowedFields = [
             'ct21', 'ct22', 'ct23', 'ct24', 'ct25', 'ct26', 'ct27', 'ct28',
             'ct31', 'ct32', 'ct33', 'ct34', 'ct36', 'ct37', 'ct40a',
@@ -622,7 +622,7 @@ router.put('/declarations/:id', authMiddleware, async (req: AuthRequest, res: Re
     }
 })
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ DELETE /api/tax/declarations/:id Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── DELETE /api/tax/declarations/:id ────────────────────────────────────────
 router.delete('/declarations/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
@@ -635,7 +635,7 @@ router.delete('/declarations/:id', authMiddleware, async (req: AuthRequest, res:
     }
 })
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ GET /api/tax/declarations/:id/xml Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── GET /api/tax/declarations/:id/xml ───────────────────────────────────────
 router.get('/declarations/:id/xml', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
@@ -925,11 +925,11 @@ router.post('/vat-amendment/:id/submit', authMiddleware, async (req: AuthRequest
 })
 
 
-// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
-//  ACCOUNTING MODULE Ã¢â‚¬â€ Wave 1+2 Routes
-// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// ═══════════════════════════════════════════════════════════════════════════════
+//  ACCOUNTING MODULE — Wave 1+2 Routes
+// ═══════════════════════════════════════════════════════════════════════════════
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ GET /api/tax/summary?year=2026 (Dashboard KPI Ã¢â‚¬â€ Enhanced) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── GET /api/tax/summary?year=2026 (Dashboard KPI — Enhanced) ───────────────
 router.get('/summary', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
@@ -992,7 +992,7 @@ router.get('/summary', authMiddleware, async (req: AuthRequest, res: Response) =
     } catch (err) { console.error('GET /summary error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ JOURNAL ENTRIES CRUD Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── JOURNAL ENTRIES CRUD ────────────────────────────────────────────────────
 
 // GET /api/tax/journal-entries?year=2026&month=3
 router.get('/journal-entries', authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -1158,7 +1158,7 @@ router.delete('/journal-entries/:id', authMiddleware, async (req: AuthRequest, r
     } catch (err) { console.error('DELETE /journal-entries error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ LEDGER (SÃ¡Â»â€¢ CÃƒÂ¡i) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── LEDGER (Sổ Cái) ────────────────────────────────────────────────────────
 
 // GET /api/tax/ledger?account=111&year=2026&month=3
 router.get('/ledger', authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -1172,15 +1172,31 @@ router.get('/ledger', authMiddleware, async (req: AuthRequest, res: Response) =>
         const dateGte = month ? `${year}-${String(month).padStart(2, '0')}-01` : `${year}-01-01`
         const dateEnd = month ? `${year}-${String(month).padStart(2, '0')}-31` : `${year}-12-31`
 
-        const entries = await prisma.journalEntry.findMany({
-            where: {
-                OR: [{ debitAccount: account }, { creditAccount: account }],
-                date: { gte: dateGte, lte: dateEnd },
-            },
-            orderBy: { date: 'asc' },
-        })
+        const [entries, openingEntries] = await Promise.all([
+            prisma.journalEntry.findMany({
+                where: {
+                    OR: [{ debitAccount: account }, { creditAccount: account }],
+                    date: { gte: dateGte, lte: dateEnd },
+                },
+                orderBy: { date: 'asc' },
+            }),
+            // Số dư đầu kỳ = lũy kế trước ngày bắt đầu kỳ
+            prisma.journalEntry.findMany({
+                where: {
+                    OR: [{ debitAccount: account }, { creditAccount: account }],
+                    date: { lt: dateGte },
+                },
+                select: { debitAccount: true, creditAccount: true, amount: true },
+            }),
+        ])
 
-        let runningBalance = 0
+        let openingBalance = 0
+        for (const e of openingEntries) {
+            if (e.debitAccount === account) openingBalance += e.amount
+            if (e.creditAccount === account) openingBalance -= e.amount
+        }
+
+        let runningBalance = openingBalance
         const ledgerEntries = entries.map(e => {
             const debit = e.debitAccount === account ? e.amount : 0
             const credit = e.creditAccount === account ? e.amount : 0
@@ -1201,8 +1217,10 @@ router.get('/ledger', authMiddleware, async (req: AuthRequest, res: Response) =>
             success: true,
             data: {
                 account,
+                accountCode: account,
+                accountName: accountName(account),
                 entries: ledgerEntries,
-                openingBalance: 0,
+                openingBalance,
                 totalDebit, totalCredit,
                 closingBalance: runningBalance,
             }
@@ -1210,7 +1228,7 @@ router.get('/ledger', authMiddleware, async (req: AuthRequest, res: Response) =>
     } catch (err) { console.error('GET /ledger error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ TRIAL BALANCE (BÃ¡ÂºÂ£ng CÃƒÂ¢n Ã„ÂÃ¡Â»â€˜i PS) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── TRIAL BALANCE (Bảng Cân Đối PS) ────────────────────────────────────────
 
 // GET /api/tax/trial-balance?year=2026&month=3
 router.get('/trial-balance', authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -1251,7 +1269,7 @@ router.get('/trial-balance', authMiddleware, async (req: AuthRequest, res: Respo
     } catch (err) { console.error('GET /trial-balance error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ CASH BOOK (SÃ¡Â»â€¢ QuÃ¡Â»Â¹ TiÃ¡Â»Ân MÃ¡ÂºÂ·t) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── CASH BOOK (Sổ Quỹ Tiền Mặt) ───────────────────────────────────────────
 
 // GET /api/tax/cash-book?year=2026&month=3
 router.get('/cash-book', authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -1262,23 +1280,39 @@ router.get('/cash-book', authMiddleware, async (req: AuthRequest, res: Response)
         const dateGte = month ? `${year}-${String(month).padStart(2, '0')}-01` : `${year}-01-01`
         const dateEnd = month ? `${year}-${String(month).padStart(2, '0')}-31` : `${year}-12-31`
 
-        // Cash = account 111 journal entries
-        const entries = await prisma.journalEntry.findMany({
-            where: {
-                OR: [{ debitAccount: { startsWith: '111' } }, { creditAccount: { startsWith: '111' } }],
-                date: { gte: dateGte, lte: dateEnd },
-            },
-            orderBy: { date: 'asc' },
-        })
+        // accountType=bank → sổ tiền gửi NH (TK 112); mặc định tiền mặt (TK 111)
+        const prefix = String(req.query.accountType || '') === 'bank' ? '112' : '111'
+        const [entries, openingEntries] = await Promise.all([
+            prisma.journalEntry.findMany({
+                where: {
+                    OR: [{ debitAccount: { startsWith: prefix } }, { creditAccount: { startsWith: prefix } }],
+                    date: { gte: dateGte, lte: dateEnd },
+                },
+                orderBy: { date: 'asc' },
+            }),
+            prisma.journalEntry.findMany({
+                where: {
+                    OR: [{ debitAccount: { startsWith: prefix } }, { creditAccount: { startsWith: prefix } }],
+                    date: { lt: dateGte },
+                },
+                select: { debitAccount: true, creditAccount: true, amount: true },
+            }),
+        ])
 
-        let balance = 0
+        let openingBalance = 0
+        for (const e of openingEntries) {
+            if (e.debitAccount.startsWith(prefix)) openingBalance += e.amount
+            if (e.creditAccount.startsWith(prefix)) openingBalance -= e.amount
+        }
+
+        let balance = openingBalance
         const cashEntries = entries.map(e => {
-            const receipt = e.debitAccount.startsWith('111') ? e.amount : 0
-            const payment = e.creditAccount.startsWith('111') ? e.amount : 0
+            const receipt = e.debitAccount.startsWith(prefix) ? e.amount : 0
+            const payment = e.creditAccount.startsWith(prefix) ? e.amount : 0
             balance += receipt - payment
             return {
                 id: e.id, date: e.date, description: e.description,
-                counterAccount: e.debitAccount.startsWith('111') ? e.creditAccount : e.debitAccount,
+                counterAccount: e.debitAccount.startsWith(prefix) ? e.creditAccount : e.debitAccount,
                 receipt, payment, balance, reference: e.reference,
                 referenceType: e.referenceType || 'manual',
             }
@@ -1309,7 +1343,7 @@ router.get('/cash-book', authMiddleware, async (req: AuthRequest, res: Response)
     } catch (err) { console.error('GET /cash-book error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ DEBT AGING (CÃƒÂ´ng NÃ¡Â»Â£ PhÃ¡ÂºÂ£i Thu/TrÃ¡ÂºÂ£) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── DEBT AGING (Công Nợ Phải Thu/Trả) ──────────────────────────────────────
 
 // GET /api/tax/debt-aging?type=receivable&year=2026
 router.get('/debt-aging', authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -1384,7 +1418,7 @@ router.get('/debt-aging', authMiddleware, async (req: AuthRequest, res: Response
     } catch (err) { console.error('GET /debt-aging error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ FIXED ASSETS (TSCÃ„Â + KhÃ¡ÂºÂ¥u Hao) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── FIXED ASSETS (TSCĐ + Khấu Hao) ─────────────────────────────────────────
 
 // ─── Fixed Asset helpers ──────────────────────────────────────────────────────
 // Compute monthly depreciation given method, depreciable base, useful life, and current net book value.
@@ -1810,7 +1844,7 @@ router.delete('/fixed-assets/:id', authMiddleware, async (req: AuthRequest, res:
     } catch (err) { console.error('DELETE /fixed-assets/:id error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ PAYROLL ACCOUNTING (BÃ¡ÂºÂ£ng LÃ†Â°Ã†Â¡ng KT) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── PAYROLL ACCOUNTING (Bảng Lương KT) ──────────────────────────────────────
 
 // GET /api/tax/payroll-accounting?year=2026&month=3
 router.get('/payroll-accounting', authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -1851,7 +1885,7 @@ router.get('/payroll-accounting', authMiddleware, async (req: AuthRequest, res: 
     } catch (err) { console.error('GET /payroll-accounting error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ REVENUE ANALYSIS (PhÃƒÂ¢n TÃƒÂ­ch Thu Chi) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── REVENUE ANALYSIS (Phân Tích Thu Chi) ────────────────────────────────────
 
 // GET /api/tax/revenue-analysis?year=2026
 router.get('/revenue-analysis', authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -1890,7 +1924,7 @@ router.get('/revenue-analysis', authMiddleware, async (req: AuthRequest, res: Re
         expenses.forEach(e => { catMap[e.category] = (catMap[e.category] || 0) + (e.amount || 0) })
         const totalCost = cogs + totalExpenses
         const costBreakdown = [
-            { category: 'GiÃƒÂ¡ vÃ¡Â»â€˜n hÃƒÂ ng bÃƒÂ¡n', amount: cogs, percentage: totalCost > 0 ? (cogs / totalCost) * 100 : 0 },
+            { category: 'Giá vốn hàng bán', amount: cogs, percentage: totalCost > 0 ? (cogs / totalCost) * 100 : 0 },
             ...Object.entries(catMap).map(([category, amount]) => ({
                 category, amount, percentage: totalCost > 0 ? (amount / totalCost) * 100 : 0,
             })),
@@ -1905,13 +1939,13 @@ router.get('/revenue-analysis', authMiddleware, async (req: AuthRequest, res: Re
 
         // P&L Summary
         const plSummary = [
-            { label: 'Doanh thu bÃƒÂ¡n hÃƒÂ ng', amount: netRevenue, level: 0, isTotal: false },
-            { label: 'GiÃƒÂ¡ vÃ¡Â»â€˜n hÃƒÂ ng bÃƒÂ¡n', amount: -cogs, level: 1, isTotal: false },
-            { label: 'LÃ¡Â»Â£i nhuÃ¡ÂºÂ­n gÃ¡Â»â„¢p', amount: grossProfit, level: 0, isTotal: true },
+            { label: 'Doanh thu bán hàng', amount: netRevenue, level: 0, isTotal: false },
+            { label: 'Giá vốn hàng bán', amount: -cogs, level: 1, isTotal: false },
+            { label: 'Lợi nhuận gộp', amount: grossProfit, level: 0, isTotal: true },
             ...Object.entries(catMap).map(([cat, amt]) => ({ label: cat, amount: -amt, level: 1, isTotal: false })),
-            { label: 'TÃ¡Â»â€¢ng chi phÃƒÂ­ hoÃ¡ÂºÂ¡t Ã„â€˜Ã¡Â»â„¢ng', amount: -totalExpenses, level: 0, isTotal: true },
-            { label: 'ThuÃ¡ÂºÂ¿ GTGT', amount: -taxDue, level: 1, isTotal: false },
-            { label: 'LÃ¡Â»Â£i nhuÃ¡ÂºÂ­n rÃƒÂ²ng', amount: netProfit, level: 0, isTotal: true },
+            { label: 'Tổng chi phí hoạt động', amount: -totalExpenses, level: 0, isTotal: true },
+            { label: 'Thuế GTGT', amount: -taxDue, level: 1, isTotal: false },
+            { label: 'Lợi nhuận ròng', amount: netProfit, level: 0, isTotal: true },
         ]
 
         res.json({
@@ -1923,7 +1957,7 @@ router.get('/revenue-analysis', authMiddleware, async (req: AuthRequest, res: Re
     } catch (err) { console.error('GET /revenue-analysis error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ AUTO-JOURNAL (Ã„ÂÃ¡Â»â€œng bÃ¡Â»â„¢ dÃ¡Â»Â¯ liÃ¡Â»â€¡u Ã¢â€ â€™ BÃƒÂºt toÃƒÂ¡n kÃ¡ÂºÂ¿ toÃƒÂ¡n) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── AUTO-JOURNAL (Đồng bộ dữ liệu → Bút toán kế toán) ─────────────────────
 
 // POST /api/tax/auto-journal?year=2026&month=3
 // Generates journal entries from Transaction, Expense, ImportReceipt, PayrollRecord
@@ -1950,7 +1984,7 @@ router.post('/auto-journal', authMiddleware, async (req: AuthRequest, res: Respo
         const branchId = (req as any).branchId || null
         const userId = (req as any).userId || null
 
-        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â 1. TRANSACTIONS Ã¢â€ â€™ Revenue + VAT + COGS journal entries Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+        // ═══ 1. TRANSACTIONS → Revenue + VAT + COGS journal entries ═══
         const txs = await prisma.transaction.findMany({
             where: { status: 'completed', createdAt: { gte: start, lte: end } },
             include: { payments: true, items: { include: { product: { select: { costPrice: true } } } } },
@@ -1972,7 +2006,7 @@ router.post('/auto-journal', authMiddleware, async (req: AuthRequest, res: Respo
             }
         }
 
-        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â 2. EXPENSES Ã¢â€ â€™ Operating expense journal entries Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+        // ═══ 2. EXPENSES → Operating expense journal entries ═══
         const expenses = await prisma.expense.findMany({
             where: { date: { gte: start, lte: end } },
             orderBy: { date: 'asc' },
@@ -1980,15 +2014,15 @@ router.post('/auto-journal', authMiddleware, async (req: AuthRequest, res: Respo
 
         // Map expense category to account code
         const expenseAccountMap: Record<string, { code: string; name: string }> = {
-            'rent': { code: '6421', name: 'CP thuÃƒÂª mÃ¡ÂºÂ·t bÃ¡ÂºÂ±ng' },
-            'utilities': { code: '6422', name: 'CP Ã„â€˜iÃ¡Â»â€¡n nÃ†Â°Ã¡Â»â€ºc' },
-            'salary': { code: '6411', name: 'CP lÃ†Â°Ã†Â¡ng nhÃƒÂ¢n viÃƒÂªn' },
-            'transport': { code: '6415', name: 'CP vÃ¡ÂºÂ­n chuyÃ¡Â»Æ’n' },
+            'rent': { code: '6421', name: 'CP thuê mặt bằng' },
+            'utilities': { code: '6422', name: 'CP điện nước' },
+            'salary': { code: '6411', name: 'CP lương nhân viên' },
+            'transport': { code: '6415', name: 'CP vận chuyển' },
             'marketing': { code: '6418', name: 'CP marketing' },
-            'maintenance': { code: '6423', name: 'CP sÃ¡Â»Â­a chÃ¡Â»Â¯a' },
-            'supplies': { code: '6424', name: 'CP vÃ¡ÂºÂ­t tÃ†Â°' },
-            'insurance': { code: '6425', name: 'CP bÃ¡ÂºÂ£o hiÃ¡Â»Æ’m' },
-            'other': { code: '6428', name: 'CP khÃƒÂ¡c' },
+            'maintenance': { code: '6423', name: 'CP sửa chữa' },
+            'supplies': { code: '6424', name: 'CP vật tư' },
+            'insurance': { code: '6425', name: 'CP bảo hiểm' },
+            'other': { code: '6428', name: 'CP khác' },
         }
 
         for (const exp of expenses) {
@@ -2001,10 +2035,10 @@ router.post('/auto-journal', authMiddleware, async (req: AuthRequest, res: Respo
             try {
                 await prisma.journalEntry.create({
                     data: {
-                        date, description: exp.description || `Chi phÃƒÂ­ ${exp.category}`,
+                        date, description: exp.description || `Chi phí ${exp.category}`,
                         debitAccount: acct.code, debitAccountName: acct.name,
                         creditAccount: (exp.paidBy === 'bank' || exp.paidBy === 'transfer') ? '112' : '111',
-                        creditAccountName: (exp.paidBy === 'bank' || exp.paidBy === 'transfer') ? 'TiÃ¡Â»Ân gÃ¡Â»Â­i ngÃƒÂ¢n hÃƒÂ ng' : 'TiÃ¡Â»Ân mÃ¡ÂºÂ·t',
+                        creditAccountName: (exp.paidBy === 'bank' || exp.paidBy === 'transfer') ? 'Tiền gửi ngân hàng' : 'Tiền mặt',
                         amount: exp.amount, reference: ref, referenceType: 'expense',
                         branchId: exp.branchId || branchId, createdBy: userId,
                     }
@@ -2013,7 +2047,7 @@ router.post('/auto-journal', authMiddleware, async (req: AuthRequest, res: Respo
             } catch (_) { }
         }
 
-        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â 3. IMPORT RECEIPTS Ã¢â€ â€™ Inventory + Payable journal entries Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+        // ═══ 3. IMPORT RECEIPTS → Inventory + Payable journal entries ═══
         const imports = await prisma.importReceipt.findMany({
             where: { status: { not: 'draft' }, createdAt: { gte: start, lte: end } },
             orderBy: { createdAt: 'asc' },
@@ -2026,12 +2060,12 @@ router.post('/auto-journal', authMiddleware, async (req: AuthRequest, res: Respo
             const date = fmtDate(imp.transactionDate || imp.createdAt)
 
             try {
-                // NÃ¡Â»Â£ TK156 (HÃƒÂ ng hÃƒÂ³a), CÃƒÂ³ TK331 (PhÃ¡ÂºÂ£i trÃ¡ÂºÂ£ NCC)
+                // Nợ TK156 (Hàng hóa), Có TK331 (Phải trả NCC)
                 await prisma.journalEntry.create({
                     data: {
-                        date, description: `NhÃ¡ÂºÂ­p hÃƒÂ ng ${imp.code}${imp.supplierName ? ' - NCC: ' + imp.supplierName : ''}`,
-                        debitAccount: '156', debitAccountName: 'HÃƒÂ ng hÃƒÂ³a',
-                        creditAccount: '331', creditAccountName: 'PhÃ¡ÂºÂ£i trÃ¡ÂºÂ£ ngÃ†Â°Ã¡Â»Âi bÃƒÂ¡n',
+                        date, description: `Nhập hàng ${imp.code}${imp.supplierName ? ' - NCC: ' + imp.supplierName : ''}`,
+                        debitAccount: '156', debitAccountName: 'Hàng hóa',
+                        creditAccount: '331', creditAccountName: 'Phải trả người bán',
                         amount: imp.totalCost, reference: ref, referenceType: 'import',
                         branchId: imp.branchId || branchId, createdBy: userId,
                     }
@@ -2040,7 +2074,7 @@ router.post('/auto-journal', authMiddleware, async (req: AuthRequest, res: Respo
             } catch (_) { }
         }
 
-        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â 4. PAYROLL Ã¢â€ â€™ Salary expense journal entries Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+        // ═══ 4. PAYROLL → Salary expense journal entries ═══
         try {
             const payrollRecords = await prisma.payrollRecord.findMany({
                 where: { year, ...(month ? { month } : {}) },
@@ -2055,12 +2089,12 @@ router.post('/auto-journal', authMiddleware, async (req: AuthRequest, res: Respo
 
                     const date = `${pr.year}-${String(pr.month).padStart(2, '0')}-25`
                     try {
-                        // NÃ¡Â»Â£ TK622 (CP nhÃƒÂ¢n cÃƒÂ´ng), CÃƒÂ³ TK334 (PhÃ¡ÂºÂ£i trÃ¡ÂºÂ£ NLÃ„Â) Ã¢â‚¬â€ Net salary
+                        // Nợ TK622 (CP nhân công), Có TK334 (Phải trả NLĐ) — Net salary
                         await prisma.journalEntry.create({
                             data: {
-                                date, description: `LÃ†Â°Ã†Â¡ng T${pr.month}/${pr.year} - ${pr.employeeName}`,
-                                debitAccount: '622', debitAccountName: 'CP nhÃƒÂ¢n cÃƒÂ´ng trÃ¡Â»Â±c tiÃ¡ÂºÂ¿p',
-                                creditAccount: '334', creditAccountName: 'PhÃ¡ÂºÂ£i trÃ¡ÂºÂ£ ngÃ†Â°Ã¡Â»Âi lao Ã„â€˜Ã¡Â»â„¢ng',
+                                date, description: `Lương T${pr.month}/${pr.year} - ${pr.employeeName}`,
+                                debitAccount: '622', debitAccountName: 'CP nhân công trực tiếp',
+                                creditAccount: '334', creditAccountName: 'Phải trả người lao động',
                                 amount: pr.totalCost, reference: ref, referenceType: 'payroll',
                                 branchId, createdBy: userId,
                             }
@@ -2068,7 +2102,7 @@ router.post('/auto-journal', authMiddleware, async (req: AuthRequest, res: Respo
                         created.push({ type: 'payroll', ref, amount: pr.totalCost })
                     } catch (_) { }
 
-                    // BHXH employer contribution Ã¢â‚¬â€ NÃ¡Â»Â£ TK622, CÃƒÂ³ TK3383
+                    // BHXH employer contribution — Nợ TK622, Có TK3383
                     const bhxhER = (pr.bhxh_er || 0) + (pr.bhyt_er || 0) + (pr.bhtn_er || 0)
                     if (bhxhER > 0) {
                         const bhRef = `BH-${pr.employeeId}-${pr.year}-${pr.month}`
@@ -2076,8 +2110,8 @@ router.post('/auto-journal', authMiddleware, async (req: AuthRequest, res: Respo
                             try {
                                 await prisma.journalEntry.create({
                                     data: {
-                                        date, description: `BHXH cÃƒÂ´ng ty T${pr.month}/${pr.year} - ${pr.employeeName}`,
-                                        debitAccount: '622', debitAccountName: 'CP nhÃƒÂ¢n cÃƒÂ´ng trÃ¡Â»Â±c tiÃ¡ÂºÂ¿p',
+                                        date, description: `BHXH công ty T${pr.month}/${pr.year} - ${pr.employeeName}`,
+                                        debitAccount: '622', debitAccountName: 'CP nhân công trực tiếp',
                                         creditAccount: '3383', creditAccountName: 'BHXH, BHYT, BHTN',
                                         amount: bhxhER, reference: bhRef, referenceType: 'payroll',
                                         branchId, createdBy: userId,
@@ -2108,9 +2142,9 @@ router.post('/auto-journal', authMiddleware, async (req: AuthRequest, res: Respo
                         try {
                             await prisma.journalEntry.create({
                                 data: {
-                                    date, description: `LÃ†Â°Ã†Â¡ng T${m}/${year} - ${emp.name}`,
-                                    debitAccount: '622', debitAccountName: 'CP nhÃƒÂ¢n cÃƒÂ´ng trÃ¡Â»Â±c tiÃ¡ÂºÂ¿p',
-                                    creditAccount: '334', creditAccountName: 'PhÃ¡ÂºÂ£i trÃ¡ÂºÂ£ ngÃ†Â°Ã¡Â»Âi lao Ã„â€˜Ã¡Â»â„¢ng',
+                                    date, description: `Lương T${m}/${year} - ${emp.name}`,
+                                    debitAccount: '622', debitAccountName: 'CP nhân công trực tiếp',
+                                    creditAccount: '334', creditAccountName: 'Phải trả người lao động',
                                     amount: salaryAmount, reference: ref, referenceType: 'payroll',
                                     branchId, createdBy: userId,
                                 }
@@ -2122,60 +2156,70 @@ router.post('/auto-journal', authMiddleware, async (req: AuthRequest, res: Respo
             }
         } catch (_) { /* PayrollRecord or User table might not exist */ }
 
-        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â 5. ONLINE ORDERS Ã¢â€ â€™ E-commerce revenue journal entries Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+        // ═══ 5. ONLINE ORDERS → E-commerce revenue journal entries ═══
+        // Đơn sàn TMĐT: tiền NẰM BÊN SÀN tới khi rút — doanh thu ghi Nợ
+        // 131-<SÀN> (phải thu pháp nhân Shopee/TikTok), KHÔNG ghi 111/112.
+        // Phí sàn trừ vào phải thu: Nợ 641 / Có 131-<SÀN>. Khi sàn chuyển tiền
+        // về tài khoản, kế toán ghi Nợ 112 / Có 131-<SÀN>.
+        //
+        // Dùng CÙNG bộ reference với đường Transaction (SALE-/FEE-/COGS-ONLINE-
+        // <orderNumber>) — đơn đã convert thành Transaction (section 1) tự bị
+        // skip, hết ghi sổ kép như bộ ref cũ (ONLINE-/PFEE-/OCOGS-).
         try {
             const onlineOrders = await (prisma as any).onlineOrder.findMany({
-                where: { status: { in: ['completed', 'delivered'] }, createdAt: { gte: start, lte: end } },
+                where: { status: { in: ['completed', 'delivered', 'COMPLETED', 'DELIVERED'] }, createdAt: { gte: start, lte: end } },
                 include: { items: { include: { product: { select: { costPrice: true } } } } },
                 orderBy: { createdAt: 'asc' },
             })
 
             for (const ord of onlineOrders) {
-                const ref = `ONLINE-${ord.orderNumber}`
-                if (existingRefs.has(ref)) continue
+                const saleRef = `SALE-ONLINE-${ord.orderNumber}`
+                const feeRef = `FEE-ONLINE-${ord.orderNumber}`
+                const cogsRef = `COGS-ONLINE-${ord.orderNumber}`
+                // Bộ ref cũ (trước khi sửa nghiệp vụ) — nếu còn thì coi như đã ghi,
+                // POST /admin/fix-online-journal sẽ chuyển chúng về bộ ref/TK mới.
+                const legacyBooked = existingRefs.has(`ONLINE-${ord.orderNumber}`)
 
                 const date = fmtDate(ord.createdAt)
                 const revenue = ord.subtotal || (ord.total - (ord.shippingFee || 0))
-                const isPaid = ord.paymentStatus === 'paid'
+                const ar = PLATFORM_AR[ord.platform] ?? PLATFORM_AR.online!
 
-                // Revenue entry
-                if (revenue > 0) {
+                // Revenue entry — Nợ 131-<SÀN> / Có 511
+                if (revenue > 0 && !existingRefs.has(saleRef) && !legacyBooked) {
                     try {
                         await prisma.journalEntry.create({
                             data: {
-                                date, description: `BÃƒÂ¡n online ${ord.orderNumber} - ${ord.customerName}${ord.platform ? ' (' + ord.platform + ')' : ''}`,
-                                debitAccount: isPaid ? '112' : '131',
-                                debitAccountName: isPaid ? 'TiÃ¡Â»Ân gÃ¡Â»Â­i ngÃƒÂ¢n hÃƒÂ ng' : 'PhÃ¡ÂºÂ£i thu khÃƒÂ¡ch hÃƒÂ ng',
-                                creditAccount: '511', creditAccountName: 'Doanh thu bÃƒÂ¡n hÃƒÂ ng',
-                                amount: revenue, reference: ref, referenceType: 'online',
+                                date, description: `Bán hàng qua ${ar.label} ${ord.orderNumber}${ord.customerName ? ' - KH: ' + ord.customerName : ''}`,
+                                debitAccount: ar.account, debitAccountName: ar.name,
+                                creditAccount: '511', creditAccountName: 'Doanh thu bán hàng',
+                                amount: revenue, reference: saleRef, referenceType: 'online',
                                 branchId, createdBy: userId,
                             }
                         })
-                        created.push({ type: 'online', ref, amount: revenue })
+                        created.push({ type: 'online', ref: saleRef, amount: revenue })
+                        existingRefs.add(saleRef)
                     } catch (_) { }
                 }
 
-                // Platform fee entry Ã¢â‚¬â€ NÃ¡Â»Â£ TK6418 (CP sÃƒÂ n), CÃƒÂ³ TK112
-                if ((ord.platformFee || 0) > 0) {
-                    const feeRef = `PFEE-${ord.orderNumber}`
-                    if (!existingRefs.has(feeRef)) {
-                        try {
-                            await prisma.journalEntry.create({
-                                data: {
-                                    date, description: `PhÃƒÂ­ sÃƒÂ n ${ord.platform || 'online'} - ${ord.orderNumber}`,
-                                    debitAccount: '6418', debitAccountName: 'CP phÃƒÂ­ sÃƒÂ n TMÃ„ÂT',
-                                    creditAccount: '112', creditAccountName: 'TiÃ¡Â»Ân gÃ¡Â»Â­i ngÃƒÂ¢n hÃƒÂ ng',
-                                    amount: ord.platformFee, reference: feeRef, referenceType: 'online',
-                                    branchId, createdBy: userId,
-                                }
-                            })
-                            created.push({ type: 'platform-fee', ref: feeRef, amount: ord.platformFee })
-                        } catch (_) { }
-                    }
+                // Platform fee entry — Nợ 641 / Có 131-<SÀN>
+                if ((ord.platformFee || 0) > 0 && !existingRefs.has(feeRef) && !existingRefs.has(`PFEE-${ord.orderNumber}`)) {
+                    try {
+                        await prisma.journalEntry.create({
+                            data: {
+                                date, description: `Phí sàn ${ar.label} ${ord.orderNumber}`,
+                                debitAccount: '641', debitAccountName: 'Chi phí bán hàng',
+                                creditAccount: ar.account, creditAccountName: ar.name,
+                                amount: ord.platformFee, reference: feeRef, referenceType: 'online',
+                                branchId, createdBy: userId,
+                            }
+                        })
+                        created.push({ type: 'platform-fee', ref: feeRef, amount: ord.platformFee })
+                        existingRefs.add(feeRef)
+                    } catch (_) { }
                 }
-                // COGS entry for online orders Ã¢â‚¬â€ NÃ¡Â»Â£ TK632 (GiÃƒÂ¡ vÃ¡Â»â€˜n), CÃƒÂ³ TK156 (HÃƒÂ ng hÃƒÂ³a)
-                const cogsRef = `OCOGS-${ord.orderNumber}`
-                if (!existingRefs.has(cogsRef)) {
+
+                // COGS entry — Nợ 632 / Có 156
+                if (!existingRefs.has(cogsRef) && !existingRefs.has(`OCOGS-${ord.orderNumber}`)) {
                     const cogsAmount = (ord.items || []).reduce((s: number, item: any) => {
                         const cost = item.product?.costPrice || 0
                         return s + (cost * item.quantity)
@@ -2184,21 +2228,22 @@ router.post('/auto-journal', authMiddleware, async (req: AuthRequest, res: Respo
                         try {
                             await prisma.journalEntry.create({
                                 data: {
-                                    date, description: `GiÃƒÂ¡ vÃ¡Â»â€˜n online ${ord.orderNumber}`,
-                                    debitAccount: '632', debitAccountName: 'GiÃƒÂ¡ vÃ¡Â»â€˜n hÃƒÂ ng bÃƒÂ¡n',
-                                    creditAccount: '156', creditAccountName: 'HÃƒÂ ng hÃƒÂ³a',
+                                    date, description: `Giá vốn online ${ord.orderNumber}`,
+                                    debitAccount: '632', debitAccountName: 'Giá vốn hàng bán',
+                                    creditAccount: '156', creditAccountName: 'Hàng hóa',
                                     amount: cogsAmount, reference: cogsRef, referenceType: 'cogs',
                                     branchId, createdBy: userId,
                                 }
                             })
                             created.push({ type: 'cogs', ref: cogsRef, amount: cogsAmount })
+                            existingRefs.add(cogsRef)
                         } catch (_) { }
                     }
                 }
             }
         } catch (_) { /* OnlineOrder table might not exist */ }
 
-        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â 6. DEPRECIATION Ã¢â€ â€™ Fixed asset depreciation journal entries Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+        // ═══ 6. DEPRECIATION → Fixed asset depreciation journal entries ═══
         try {
             const assets = await (prisma as any).fixedAsset.findMany({
                 where: { status: 'active', monthlyDepreciation: { gt: 0 } },
@@ -2216,10 +2261,10 @@ router.post('/auto-journal', authMiddleware, async (req: AuthRequest, res: Respo
                         await prisma.journalEntry.create({
                             data: {
                                 date: depDate,
-                                description: `KhÃ¡ÂºÂ¥u hao T${m}/${year} - ${asset.name}`,
+                                description: `Khấu hao T${m}/${year} - ${asset.name}`,
                                 debitAccount: asset.depreciationAccount || '6274',
-                                debitAccountName: 'CP khÃ¡ÂºÂ¥u hao TSCÃ„Â',
-                                creditAccount: '214', creditAccountName: 'Hao mÃƒÂ²n TSCÃ„Â',
+                                debitAccountName: 'CP khấu hao TSCĐ',
+                                creditAccount: '214', creditAccountName: 'Hao mòn TSCĐ',
                                 amount: asset.monthlyDepreciation, reference: depRef, referenceType: 'depreciation',
                                 branchId, createdBy: userId,
                             }
@@ -2479,7 +2524,7 @@ router.post('/closing-entries', authMiddleware, async (req: AuthRequest, res: Re
     }
 })
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ BALANCE SHEET (BÃ¡ÂºÂ£ng CÃƒÂ¢n Ã„ÂÃ¡Â»â€˜i KÃ¡ÂºÂ¿ ToÃƒÂ¡n) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── BALANCE SHEET (Bảng Cân Đối Kế Toán) ───────────────────────────────────
 
 router.get('/balance-sheet', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
@@ -2491,7 +2536,7 @@ router.get('/balance-sheet', authMiddleware, async (req: AuthRequest, res: Respo
         let entries: any[] = []
         try { entries = await prisma.journalEntry.findMany({ where: { date: { lte: dateEnd } } }) } catch (_) { }
 
-        // Aggregate by account Ã¢â‚¬â€ compute net balance per account
+        // Aggregate by account — compute net balance per account
         const accountBalances: Record<string, { debit: number; credit: number; name: string }> = {}
         for (const e of entries) {
             if (!accountBalances[e.debitAccount]) accountBalances[e.debitAccount] = { debit: 0, credit: 0, name: e.debitAccountName || '' }
@@ -2503,14 +2548,14 @@ router.get('/balance-sheet', authMiddleware, async (req: AuthRequest, res: Respo
         // Classify accounts by VN chart of accounts
         const classify = (code: string) => {
             const c1 = code.charAt(0)
-            if (c1 === '1') return 'asset'        // TÃƒÂ i sÃ¡ÂºÂ£n
-            if (c1 === '2') return 'asset'         // TÃƒÂ i sÃ¡ÂºÂ£n dÃƒÂ i hÃ¡ÂºÂ¡n
-            if (c1 === '3') return 'liability'     // NÃ¡Â»Â£ phÃ¡ÂºÂ£i trÃ¡ÂºÂ£
-            if (c1 === '4') return 'equity'        // VÃ¡Â»â€˜n chÃ¡Â»Â§ sÃ¡Â»Å¸ hÃ¡Â»Â¯u
+            if (c1 === '1') return 'asset'        // Tài sản
+            if (c1 === '2') return 'asset'         // Tài sản dài hạn
+            if (c1 === '3') return 'liability'     // Nợ phải trả
+            if (c1 === '4') return 'equity'        // Vốn chủ sở hữu
             if (c1 === '5') return 'revenue'       // Doanh thu
-            if (c1 === '6') return 'expense'       // Chi phÃƒÂ­
-            if (c1 === '7') return 'revenue'       // Thu nhÃ¡ÂºÂ­p khÃƒÂ¡c
-            if (c1 === '8') return 'expense'       // Chi phÃƒÂ­ khÃƒÂ¡c
+            if (c1 === '6') return 'expense'       // Chi phí
+            if (c1 === '7') return 'revenue'       // Thu nhập khác
+            if (c1 === '8') return 'expense'       // Chi phí khác
             return 'other'
         }
 
@@ -2535,7 +2580,7 @@ router.get('/balance-sheet', authMiddleware, async (req: AuthRequest, res: Respo
             if (cls === 'expense') retainedEarnings -= (bal.debit - bal.credit)
         }
         if (retainedEarnings !== 0) {
-            equity.push({ code: '421', name: 'LÃ¡Â»Â£i nhuÃ¡ÂºÂ­n chÃ†Â°a phÃƒÂ¢n phÃ¡Â»â€˜i', balance: retainedEarnings })
+            equity.push({ code: '421', name: 'Lợi nhuận chưa phân phối', balance: retainedEarnings })
         }
 
         const totalAssets = assets.reduce((s, a) => s + a.balance, 0)
@@ -2554,7 +2599,7 @@ router.get('/balance-sheet', authMiddleware, async (req: AuthRequest, res: Respo
     } catch (err) { console.error('GET /balance-sheet error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ INCOME STATEMENT (BÃƒÂ¡o CÃƒÂ¡o KÃ¡ÂºÂ¿t QuÃ¡ÂºÂ£ Kinh Doanh) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── INCOME STATEMENT (Báo Cáo Kết Quả Kinh Doanh) ──────────────────────────
 
 router.get('/income-statement', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
@@ -2581,14 +2626,14 @@ router.get('/income-statement', authMiddleware, async (req: AuthRequest, res: Re
             entries.filter(e => (side === 'debit' ? e.debitAccount : e.creditAccount).startsWith(acctPrefix))
                 .reduce((s, e) => s + e.amount, 0)
 
-        const revenue511 = sumByAccount('511', 'credit')      // Doanh thu bÃƒÂ¡n hÃƒÂ ng
-        const discount521 = sumByAccount('521', 'debit')       // ChiÃ¡ÂºÂ¿t khÃ¡ÂºÂ¥u
+        const revenue511 = sumByAccount('511', 'credit')      // Doanh thu bán hàng
+        const discount521 = sumByAccount('521', 'debit')       // Chiết khấu
         const netRevenue = revenue511 - discount521
-        const cogs632 = sumByAccount('632', 'debit')           // GiÃƒÂ¡ vÃ¡Â»â€˜n
+        const cogs632 = sumByAccount('632', 'debit')           // Giá vốn
         const grossProfit = netRevenue - cogs632
-        const sellingExp641 = sumByAccount('641', 'debit')     // CP bÃƒÂ¡n hÃƒÂ ng
+        const sellingExp641 = sumByAccount('641', 'debit')     // CP bán hàng
         const adminExp642 = sumByAccount('642', 'debit')       // CP QLDN
-        const laborExp622 = sumByAccount('622', 'debit')       // CP nhÃƒÂ¢n cÃƒÂ´ng
+        const laborExp622 = sumByAccount('622', 'debit')       // CP nhân công
         const totalOpExp = sellingExp641 + adminExp642 + laborExp622
         const operatingProfit = grossProfit - totalOpExp
         const financialIncome515 = sumByAccount('515', 'credit')   // Doanh thu hoat dong tai chinh (TT200 line 21)
@@ -2596,8 +2641,8 @@ router.get('/income-statement', authMiddleware, async (req: AuthRequest, res: Re
         const otherIncome711 = sumByAccount('711', 'credit')   // Thu nhap khac (TT200 line 31)
         const otherExpense811 = sumByAccount('811', 'debit')   // Chi phi khac (TT200 line 32)
         const profitBeforeTax = operatingProfit + financialIncome515 - financialExpense635 + otherIncome711 - otherExpense811
-        const taxExpense = sumByAccount('3331', 'credit')      // ThuÃ¡ÂºÂ¿ GTGT
-        const netIncome = profitBeforeTax  // Simplified Ã¢â‚¬â€ tax already in revenue
+        const taxExpense = sumByAccount('3331', 'credit')      // Thuế GTGT
+        const netIncome = profitBeforeTax  // Simplified — tax already in revenue
 
         // Raw data for supplemental info
         const totalRawRevenue = txs.reduce((s, t) => s + (t.subtotal || t.total || 0), 0)
@@ -2643,7 +2688,7 @@ router.get('/income-statement', authMiddleware, async (req: AuthRequest, res: Re
     } catch (err) { console.error('GET /income-statement error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ ACCOUNT BALANCES (SÃ¡Â»â€˜ dÃ†Â° tÃƒÂ i khoÃ¡ÂºÂ£n) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── ACCOUNT BALANCES (Số dư tài khoản) ──────────────────────────────────────
 
 router.get('/account-balances', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
@@ -2673,7 +2718,7 @@ router.get('/account-balances', authMiddleware, async (req: AuthRequest, res: Re
     } catch (err) { console.error('GET /account-balances error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ CASH FLOW STATEMENT (BÃƒÂ¡o CÃƒÂ¡o LÃ†Â°u ChuyÃ¡Â»Æ’n TiÃ¡Â»Ân TÃ¡Â»â€¡) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── CASH FLOW STATEMENT (Báo Cáo Lưu Chuyển Tiền Tệ) ───────────────────────
 
 router.get('/cash-flow', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
@@ -2690,11 +2735,11 @@ router.get('/cash-flow', authMiddleware, async (req: AuthRequest, res: Response)
         const cashAccounts = ['111', '112', '1111', '1112', '1121', '1122']
         const isCash = (code: string) => cashAccounts.some(c => code.startsWith(c))
 
-        // OPERATING ACTIVITIES Ã¢â‚¬â€ Cash from revenue (TK511Ã¢â€ â€™cash), Cash expenses (cashÃ¢â€ â€™TK6xx)
+        // OPERATING ACTIVITIES — Cash from revenue (TK511→cash), Cash expenses (cash→TK6xx)
         let cashFromSales = 0, cashFromExpenses = 0, cashFromPayroll = 0, cashFromTax = 0
-        // INVESTING Ã¢â‚¬â€ Fixed assets (TK211, TK213)
+        // INVESTING — Fixed assets (TK211, TK213)
         let cashInvesting = 0
-        // FINANCING Ã¢â‚¬â€ Loans (TK341), Equity (TK411)
+        // FINANCING — Loans (TK341), Equity (TK411)
         let cashFinancing = 0
 
         for (const e of entries) {
@@ -2723,7 +2768,7 @@ router.get('/cash-flow', authMiddleware, async (req: AuthRequest, res: Response)
         const operatingCashFlow = cashFromSales + cashFromExpenses + cashFromPayroll + cashFromTax
         const netCashFlow = operatingCashFlow + cashInvesting + cashFinancing
 
-        // Opening/closing cash Ã¢â‚¬â€ sum all cash account balances
+        // Opening/closing cash — sum all cash account balances
         let allEntries: any[] = []
         try { allEntries = await prisma.journalEntry.findMany({ where: { date: { lte: dateEnd } } }) } catch (_) { }
         let openingEntries: any[] = []
@@ -2753,7 +2798,7 @@ router.get('/cash-flow', authMiddleware, async (req: AuthRequest, res: Response)
     } catch (err) { console.error('GET /cash-flow error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
 
-// Ã¢â€â‚¬Ã¢â€â‚¬ SEED TEST DATA Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// ── SEED TEST DATA ──────────────────────────────────────────────────────────
 
 router.post('/seed-test-data', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
@@ -2763,12 +2808,12 @@ router.post('/seed-test-data', authMiddleware, async (req: AuthRequest, res: Res
         const doReset = req.query.reset === 'true'
         const counts = { transactions: 0, expenses: 0, imports: 0, onlineOrders: 0, fixedAssets: 0, payroll: 0, products: 0, customers: 0, suppliers: 0, returns: 0, warranties: 0, repairs: 0, branches: 0, schedules: 0, attendance: 0, salesCheckins: 0 }
 
-        // Ã¢â€â‚¬Ã¢â€â‚¬ Helpers Ã¢â€â‚¬Ã¢â€â‚¬
+        // ── Helpers ──
         const rng = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min
         const pick = <T>(arr: T[]) => arr[rng(0, arr.length - 1)]
         const pad = (n: number, l = 2) => String(n).padStart(l, '0')
 
-        // 13 months: Mar 2025 Ã¢â€ â€™ Mar 2026
+        // 13 months: Mar 2025 → Mar 2026
         const months = [
             { year: 2025, month: 3 }, { year: 2025, month: 4 }, { year: 2025, month: 5 },
             { year: 2025, month: 6 }, { year: 2025, month: 7 }, { year: 2025, month: 8 },
@@ -2781,9 +2826,9 @@ router.post('/seed-test-data', authMiddleware, async (req: AuthRequest, res: Res
             return new Date(y, m - 1, d, rng(8, 20), rng(0, 59))
         }
 
-        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â RESET (optional) Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+        // ═══ RESET (optional) ═══
         if (doReset) {
-            console.log('Ã°Å¸â€”â€˜Ã¯Â¸Â Resetting data...')
+            console.log('🗑️ Resetting data...')
             const tables = [
                 'JournalEntry', 'TransactionItem', 'TransactionPayment', 'Transaction',
                 'Expense', 'ImportReceiptItem', 'ImportReceipt',
@@ -2795,11 +2840,11 @@ router.post('/seed-test-data', authMiddleware, async (req: AuthRequest, res: Res
             for (const t of tables) {
                 try { await (prisma as any).$executeRawUnsafe(`TRUNCATE TABLE "${t}" CASCADE`) } catch (_) { }
             }
-            console.log('Ã¢Å“â€¦ Reset complete')
+            console.log('✅ Reset complete')
         }
 
-        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â 1. CATEGORIES + PRODUCTS Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
-        const categoryNames = ['Ã„ÂiÃ¡Â»â€¡n thoÃ¡ÂºÂ¡i', 'Laptop', 'Tablet', 'PhÃ¡Â»Â¥ kiÃ¡Â»â€¡n', 'Ã„ÂÃ¡Â»â€œng hÃ¡Â»â€œ', 'Loa/Tai nghe']
+        // ═══ 1. CATEGORIES + PRODUCTS ═══
+        const categoryNames = ['Điện thoại', 'Laptop', 'Tablet', 'Phụ kiện', 'Đồng hồ', 'Loa/Tai nghe']
         const categoryMap: Record<string, string> = {}
         for (const catName of categoryNames) {
             try {
@@ -2814,36 +2859,36 @@ router.post('/seed-test-data', authMiddleware, async (req: AuthRequest, res: Res
         }
 
         const sampleProducts = [
-            { name: 'iPhone 15 Pro Max 256GB', sku: 'IP15PM-256', price: 34990000, costPrice: 28500000, cat: 'Ã„ÂiÃ¡Â»â€¡n thoÃ¡ÂºÂ¡i' },
-            { name: 'iPhone 15 128GB', sku: 'IP15-128', price: 22990000, costPrice: 18500000, cat: 'Ã„ÂiÃ¡Â»â€¡n thoÃ¡ÂºÂ¡i' },
-            { name: 'iPhone 14 128GB', sku: 'IP14-128', price: 17990000, costPrice: 14500000, cat: 'Ã„ÂiÃ¡Â»â€¡n thoÃ¡ÂºÂ¡i' },
-            { name: 'Samsung Galaxy S24 Ultra', sku: 'SS-S24U', price: 31990000, costPrice: 25200000, cat: 'Ã„ÂiÃ¡Â»â€¡n thoÃ¡ÂºÂ¡i' },
-            { name: 'Samsung Galaxy S24', sku: 'SS-S24', price: 22990000, costPrice: 18200000, cat: 'Ã„ÂiÃ¡Â»â€¡n thoÃ¡ÂºÂ¡i' },
-            { name: 'Samsung Galaxy A15', sku: 'SS-A15', price: 4690000, costPrice: 3600000, cat: 'Ã„ÂiÃ¡Â»â€¡n thoÃ¡ÂºÂ¡i' },
-            { name: 'OPPO Reno 11 5G', sku: 'OPPO-R11', price: 9990000, costPrice: 7800000, cat: 'Ã„ÂiÃ¡Â»â€¡n thoÃ¡ÂºÂ¡i' },
-            { name: 'Xiaomi Redmi Note 13', sku: 'XM-RN13', price: 5490000, costPrice: 4200000, cat: 'Ã„ÂiÃ¡Â»â€¡n thoÃ¡ÂºÂ¡i' },
+            { name: 'iPhone 15 Pro Max 256GB', sku: 'IP15PM-256', price: 34990000, costPrice: 28500000, cat: 'Điện thoại' },
+            { name: 'iPhone 15 128GB', sku: 'IP15-128', price: 22990000, costPrice: 18500000, cat: 'Điện thoại' },
+            { name: 'iPhone 14 128GB', sku: 'IP14-128', price: 17990000, costPrice: 14500000, cat: 'Điện thoại' },
+            { name: 'Samsung Galaxy S24 Ultra', sku: 'SS-S24U', price: 31990000, costPrice: 25200000, cat: 'Điện thoại' },
+            { name: 'Samsung Galaxy S24', sku: 'SS-S24', price: 22990000, costPrice: 18200000, cat: 'Điện thoại' },
+            { name: 'Samsung Galaxy A15', sku: 'SS-A15', price: 4690000, costPrice: 3600000, cat: 'Điện thoại' },
+            { name: 'OPPO Reno 11 5G', sku: 'OPPO-R11', price: 9990000, costPrice: 7800000, cat: 'Điện thoại' },
+            { name: 'Xiaomi Redmi Note 13', sku: 'XM-RN13', price: 5490000, costPrice: 4200000, cat: 'Điện thoại' },
             { name: 'MacBook Air M3 13"', sku: 'MBA-M3-13', price: 27990000, costPrice: 23000000, cat: 'Laptop' },
             { name: 'MacBook Pro M3 14"', sku: 'MBP-M3-14', price: 42990000, costPrice: 35000000, cat: 'Laptop' },
             { name: 'Laptop Dell Inspiron 15', sku: 'DELL-I15', price: 15990000, costPrice: 12500000, cat: 'Laptop' },
             { name: 'iPad Air M2', sku: 'IPAD-M2', price: 16990000, costPrice: 13500000, cat: 'Tablet' },
             { name: 'iPad Gen 10', sku: 'IPAD-G10', price: 9990000, costPrice: 7800000, cat: 'Tablet' },
             { name: 'Samsung Galaxy Tab S9', sku: 'SGT-S9', price: 19990000, costPrice: 15800000, cat: 'Tablet' },
-            { name: 'AirPods Pro 2 USB-C', sku: 'APP2-USBC', price: 5990000, costPrice: 4200000, cat: 'PhÃ¡Â»Â¥ kiÃ¡Â»â€¡n' },
-            { name: 'AirPods 3', sku: 'AP3-2022', price: 4290000, costPrice: 3100000, cat: 'PhÃ¡Â»Â¥ kiÃ¡Â»â€¡n' },
-            { name: 'Apple Watch Ultra 2', sku: 'AWU2-49', price: 21490000, costPrice: 17000000, cat: 'Ã„ÂÃ¡Â»â€œng hÃ¡Â»â€œ' },
-            { name: 'Apple Watch SE 2', sku: 'AWSE2', price: 6990000, costPrice: 5200000, cat: 'Ã„ÂÃ¡Â»â€œng hÃ¡Â»â€œ' },
-            { name: 'Samsung Galaxy Watch 6', sku: 'SGW6', price: 7490000, costPrice: 5800000, cat: 'Ã„ÂÃ¡Â»â€œng hÃ¡Â»â€œ' },
+            { name: 'AirPods Pro 2 USB-C', sku: 'APP2-USBC', price: 5990000, costPrice: 4200000, cat: 'Phụ kiện' },
+            { name: 'AirPods 3', sku: 'AP3-2022', price: 4290000, costPrice: 3100000, cat: 'Phụ kiện' },
+            { name: 'Apple Watch Ultra 2', sku: 'AWU2-49', price: 21490000, costPrice: 17000000, cat: 'Đồng hồ' },
+            { name: 'Apple Watch SE 2', sku: 'AWSE2', price: 6990000, costPrice: 5200000, cat: 'Đồng hồ' },
+            { name: 'Samsung Galaxy Watch 6', sku: 'SGW6', price: 7490000, costPrice: 5800000, cat: 'Đồng hồ' },
             { name: 'JBL Flip 6', sku: 'JBL-F6', price: 2990000, costPrice: 1800000, cat: 'Loa/Tai nghe' },
             { name: 'Sony WH-1000XM5', sku: 'SONY-XM5', price: 7490000, costPrice: 5500000, cat: 'Loa/Tai nghe' },
-            { name: 'Ã¡Â»Âp lÃ†Â°ng iPhone 15 PM', sku: 'CASE-IP15PM', price: 350000, costPrice: 80000, cat: 'PhÃ¡Â»Â¥ kiÃ¡Â»â€¡n' },
-            { name: 'CÃƒÂ¡p sÃ¡ÂºÂ¡c USB-C 2m', sku: 'CABLE-USBC', price: 250000, costPrice: 50000, cat: 'PhÃ¡Â»Â¥ kiÃ¡Â»â€¡n' },
-            { name: 'KÃƒÂ­nh cÃ†Â°Ã¡Â»Âng lÃ¡Â»Â±c iPhone', sku: 'GLASS-IP', price: 150000, costPrice: 25000, cat: 'PhÃ¡Â»Â¥ kiÃ¡Â»â€¡n' },
-            { name: 'Pin sÃ¡ÂºÂ¡c dÃ¡Â»Â± phÃƒÂ²ng 20000mAh', sku: 'PB-20K', price: 690000, costPrice: 350000, cat: 'PhÃ¡Â»Â¥ kiÃ¡Â»â€¡n' },
-            { name: 'ChuÃ¡Â»â„¢t Logitech MX Master 3S', sku: 'LG-MXM3S', price: 2490000, costPrice: 1500000, cat: 'PhÃ¡Â»Â¥ kiÃ¡Â»â€¡n' },
-            { name: 'BÃƒÂ n phÃƒÂ­m Logitech K380', sku: 'LG-K380', price: 890000, costPrice: 520000, cat: 'PhÃ¡Â»Â¥ kiÃ¡Â»â€¡n' },
-            { name: 'BÃ¡Â»â„¢ sÃ¡ÂºÂ¡c nhanh 65W GaN', sku: 'CHRG-65W', price: 890000, costPrice: 380000, cat: 'PhÃ¡Â»Â¥ kiÃ¡Â»â€¡n' },
-            { name: 'Ã„ÂÃ¡ÂºÂ¿ sÃ¡ÂºÂ¡c khÃƒÂ´ng dÃƒÂ¢y MagSafe', sku: 'MS-CHR', price: 990000, costPrice: 450000, cat: 'PhÃ¡Â»Â¥ kiÃ¡Â»â€¡n' },
-            { name: 'TÃƒÂºi chÃ¡Â»â€˜ng sÃ¡Â»â€˜c Laptop 14"', sku: 'BAG-14', price: 390000, costPrice: 150000, cat: 'PhÃ¡Â»Â¥ kiÃ¡Â»â€¡n' },
+            { name: 'Ốp lưng iPhone 15 PM', sku: 'CASE-IP15PM', price: 350000, costPrice: 80000, cat: 'Phụ kiện' },
+            { name: 'Cáp sạc USB-C 2m', sku: 'CABLE-USBC', price: 250000, costPrice: 50000, cat: 'Phụ kiện' },
+            { name: 'Kính cường lực iPhone', sku: 'GLASS-IP', price: 150000, costPrice: 25000, cat: 'Phụ kiện' },
+            { name: 'Pin sạc dự phòng 20000mAh', sku: 'PB-20K', price: 690000, costPrice: 350000, cat: 'Phụ kiện' },
+            { name: 'Chuột Logitech MX Master 3S', sku: 'LG-MXM3S', price: 2490000, costPrice: 1500000, cat: 'Phụ kiện' },
+            { name: 'Bàn phím Logitech K380', sku: 'LG-K380', price: 890000, costPrice: 520000, cat: 'Phụ kiện' },
+            { name: 'Bộ sạc nhanh 65W GaN', sku: 'CHRG-65W', price: 890000, costPrice: 380000, cat: 'Phụ kiện' },
+            { name: 'Đế sạc không dây MagSafe', sku: 'MS-CHR', price: 990000, costPrice: 450000, cat: 'Phụ kiện' },
+            { name: 'Túi chống sốc Laptop 14"', sku: 'BAG-14', price: 390000, costPrice: 150000, cat: 'Phụ kiện' },
         ]
         let products: any[] = []
         for (const p of sampleProducts) {
@@ -2851,7 +2896,7 @@ router.post('/seed-test-data', authMiddleware, async (req: AuthRequest, res: Res
             if (!catId) continue
             try {
                 const created = await (prisma as any).product.create({
-                    data: { name: p.name, sku: p.sku, barcode: p.sku, stock: rng(10, 200), costPrice: p.costPrice, sellingPrice: p.price, baseUnit: 'cÃƒÂ¡i', categoryId: catId }
+                    data: { name: p.name, sku: p.sku, barcode: p.sku, stock: rng(10, 200), costPrice: p.costPrice, sellingPrice: p.price, baseUnit: 'cái', categoryId: catId }
                 })
                 counts.products++
                 products.push({ id: created.id, name: p.name, sku: p.sku, price: p.price, costPrice: p.costPrice })
@@ -2859,28 +2904,28 @@ router.post('/seed-test-data', authMiddleware, async (req: AuthRequest, res: Res
         }
         if (products.length < 5) products = await (prisma as any).product.findMany({ take: 30 })
 
-        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â 2. CUSTOMERS (20) Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+        // ═══ 2. CUSTOMERS (20) ═══
         const custData = [
-            { name: 'NguyÃ¡Â»â€¦n VÃ„Æ’n An', phone: '0901234567', email: 'an.nguyen@gmail.com', address: '123 NguyÃ¡Â»â€¦n HuÃ¡Â»â€¡, Q.1, HCM' },
-            { name: 'TrÃ¡ÂºÂ§n ThÃ¡Â»â€¹ BÃƒÂ¬nh', phone: '0912345678', email: 'binh.tran@gmail.com', address: '456 LÃƒÂª LÃ¡Â»Â£i, Q.1, HCM' },
-            { name: 'LÃƒÂª HoÃƒÂ ng DÃ…Â©ng', phone: '0923456789', email: 'dung.le@yahoo.com', address: '789 CÃƒÂ¡ch MÃ¡ÂºÂ¡ng T8, Q.3, HCM' },
-            { name: 'PhÃ¡ÂºÂ¡m Minh QuÃƒÂ¢n', phone: '0934567890', email: 'quan.pham@outlook.com', address: '12 NguyÃ¡Â»â€¦n TrÃƒÂ£i, Q.5, HCM' },
-            { name: 'HoÃƒÂ ng ThÃƒÂ¹y Linh', phone: '0945678901', email: 'linh.hoang@gmail.com', address: '34 Hai BÃƒÂ  TrÃ†Â°ng, Q.1, HCM' },
-            { name: 'VÃƒÂµ Ã„ÂÃƒÂ¬nh BÃ¡ÂºÂ£o', phone: '0956789012', email: 'bao.vo@gmail.com', address: '567 Ã„ÂiÃ¡Â»â€¡n BiÃƒÂªn PhÃ¡Â»Â§, BÃƒÂ¬nh ThÃ¡ÂºÂ¡nh' },
-            { name: 'Ã„ÂÃ¡ÂºÂ·ng Kim NgÃƒÂ¢n', phone: '0967890123', email: 'ngan.dang@gmail.com', address: '89 Phan XÃƒÂ­ch Long, PhÃƒÂº NhuÃ¡ÂºÂ­n' },
-            { name: 'BÃƒÂ¹i Thanh TÃƒÂ¹ng', phone: '0978901234', email: 'tung.bui@gmail.com', address: '101 Quang Trung, GÃƒÂ² VÃ¡ÂºÂ¥p' },
-            { name: 'NgÃƒÂ´ ThÃ¡Â»â€¹ Mai', phone: '0989012345', email: 'mai.ngo@gmail.com', address: '202 LÃƒÂ½ ThÃ†Â°Ã¡Â»Âng KiÃ¡Â»â€¡t, Q.10' },
-            { name: 'HuÃ¡Â»Â³nh Gia Huy', phone: '0990123456', email: 'huy.huynh@gmail.com', address: '303 VÃƒÂµ VÃ„Æ’n TÃ¡ÂºÂ§n, Q.3' },
-            { name: 'TrÃ†Â°Ã†Â¡ng ThÃ¡Â»â€¹ HÃƒÂ ', phone: '0901112233', email: 'ha.truong@gmail.com', address: '15 NTM Khai, Q.1' },
-            { name: 'LÃƒÂ½ QuÃ¡Â»â€˜c Ã„ÂÃ¡ÂºÂ¡t', phone: '0912223344', email: 'dat.ly@gmail.com', address: '42 TrÃ¡ÂºÂ§n HÃ†Â°ng Ã„ÂÃ¡ÂºÂ¡o, Q.5' },
-            { name: 'Ã„Âinh ThÃ¡ÂºÂ¿ Anh', phone: '0923334455', email: 'anh.dinh@gmail.com', address: '77 NguyÃ¡Â»â€¦n VÃ„Æ’n CÃ¡Â»Â«, Q.5' },
-            { name: 'Phan NhÃ†Â° QuÃ¡Â»Â³nh', phone: '0934445566', email: 'quynh.phan@gmail.com', address: '158 Pasteur, Q.3' },
-            { name: 'CT TNHH Minh PhÃƒÂ¡t', phone: '02838123456', email: 'minhphat@corp.vn', address: '27 NÃ„Â ChiÃ¡Â»Æ’u, Q.3' },
-            { name: 'CT BÃƒÂ¡ch Khoa Tech', phone: '02839876543', email: 'bktech@corp.vn', address: '100 TÃƒÂ´ HiÃ¡ÂºÂ¿n ThÃƒÂ nh, Q.10' },
-            { name: 'GÃ„Â TrÃ¡ÂºÂ§n Minh TuÃ¡ÂºÂ¥n', phone: '0908765432', email: 'tuan.tran@biz.vn', address: '201 LÃ…Â©y BÃƒÂ¡n BÃƒÂ­ch, TÃƒÂ¢n PhÃƒÂº' },
-            { name: 'CafÃƒÂ© An NhiÃƒÂªn', phone: '0918765432', email: 'annhien@cafe.vn', address: '35 NguyÃ¡Â»â€¦n HuÃ¡Â»â€¡, Q.1' },
-            { name: 'CH ThiÃƒÂªn Long', phone: '0928765432', email: 'thienlong@shop.vn', address: '88 TrÃ¡ÂºÂ§n QuÃ¡Â»â€˜c ToÃ¡ÂºÂ£n, Q.3' },
-            { name: 'VÃ…Â© HoÃƒÂ ng Nam', phone: '0938765432', email: 'nam.vu@gmail.com', address: '55 LÃ¡ÂºÂ¡c Long QuÃƒÂ¢n, TÃƒÂ¢n BÃƒÂ¬nh' },
+            { name: 'Nguyễn Văn An', phone: '0901234567', email: 'an.nguyen@gmail.com', address: '123 Nguyễn Huệ, Q.1, HCM' },
+            { name: 'Trần Thị Bình', phone: '0912345678', email: 'binh.tran@gmail.com', address: '456 Lê Lợi, Q.1, HCM' },
+            { name: 'Lê Hoàng Dũng', phone: '0923456789', email: 'dung.le@yahoo.com', address: '789 Cách Mạng T8, Q.3, HCM' },
+            { name: 'Phạm Minh Quân', phone: '0934567890', email: 'quan.pham@outlook.com', address: '12 Nguyễn Trãi, Q.5, HCM' },
+            { name: 'Hoàng Thùy Linh', phone: '0945678901', email: 'linh.hoang@gmail.com', address: '34 Hai Bà Trưng, Q.1, HCM' },
+            { name: 'Võ Đình Bảo', phone: '0956789012', email: 'bao.vo@gmail.com', address: '567 Điện Biên Phủ, Bình Thạnh' },
+            { name: 'Đặng Kim Ngân', phone: '0967890123', email: 'ngan.dang@gmail.com', address: '89 Phan Xích Long, Phú Nhuận' },
+            { name: 'Bùi Thanh Tùng', phone: '0978901234', email: 'tung.bui@gmail.com', address: '101 Quang Trung, Gò Vấp' },
+            { name: 'Ngô Thị Mai', phone: '0989012345', email: 'mai.ngo@gmail.com', address: '202 Lý Thường Kiệt, Q.10' },
+            { name: 'Huỳnh Gia Huy', phone: '0990123456', email: 'huy.huynh@gmail.com', address: '303 Võ Văn Tần, Q.3' },
+            { name: 'Trương Thị Hà', phone: '0901112233', email: 'ha.truong@gmail.com', address: '15 NTM Khai, Q.1' },
+            { name: 'Lý Quốc Đạt', phone: '0912223344', email: 'dat.ly@gmail.com', address: '42 Trần Hưng Đạo, Q.5' },
+            { name: 'Đinh Thế Anh', phone: '0923334455', email: 'anh.dinh@gmail.com', address: '77 Nguyễn Văn Cừ, Q.5' },
+            { name: 'Phan Như Quỳnh', phone: '0934445566', email: 'quynh.phan@gmail.com', address: '158 Pasteur, Q.3' },
+            { name: 'CT TNHH Minh Phát', phone: '02838123456', email: 'minhphat@corp.vn', address: '27 NĐ Chiểu, Q.3' },
+            { name: 'CT Bách Khoa Tech', phone: '02839876543', email: 'bktech@corp.vn', address: '100 Tô Hiến Thành, Q.10' },
+            { name: 'GĐ Trần Minh Tuấn', phone: '0908765432', email: 'tuan.tran@biz.vn', address: '201 Lũy Bán Bích, Tân Phú' },
+            { name: 'Café An Nhiên', phone: '0918765432', email: 'annhien@cafe.vn', address: '35 Nguyễn Huệ, Q.1' },
+            { name: 'CH Thiên Long', phone: '0928765432', email: 'thienlong@shop.vn', address: '88 Trần Quốc Toản, Q.3' },
+            { name: 'Vũ Hoàng Nam', phone: '0938765432', email: 'nam.vu@gmail.com', address: '55 Lạc Long Quân, Tân Bình' },
         ]
         let customers: any[] = []
         for (let i = 0; i < custData.length; i++) {
@@ -2892,16 +2937,16 @@ router.post('/seed-test-data', authMiddleware, async (req: AuthRequest, res: Res
         }
         if (customers.length < 5) try { customers = await prisma.customer.findMany({ take: 20 }) } catch (_) { }
 
-        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â 3. SUPPLIERS (8) Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+        // ═══ 3. SUPPLIERS (8) ═══
         const supplierData = [
-            { name: 'CÃƒÂ´ng ty TNHH Apple ViÃ¡Â»â€¡t Nam', phone: '02838001001', email: 'apple.vn@supplier.com', address: '1 LÃƒÂª DuÃ¡ÂºÂ©n, Q.1, HCM', contact: 'NguyÃ¡Â»â€¦n VÃ„Æ’n HÃƒÂ¹ng' },
-            { name: 'Samsung Vina Electronics', phone: '02838002002', email: 'samsung.vn@supplier.com', address: 'KCN YÃƒÂªn Phong, BÃ¡ÂºÂ¯c Ninh', contact: 'TrÃ¡ÂºÂ§n QuÃ¡Â»â€˜c BÃ¡ÂºÂ£o' },
-            { name: 'PhÃ¡Â»Â¥ KiÃ¡Â»â€¡n SÃƒÂ i GÃƒÂ²n JSC', phone: '02838003003', email: 'pksg@supplier.com', address: '112 NTM Khai, Q.3, HCM', contact: 'LÃƒÂª Minh Ã„ÂÃ¡Â»Â©c' },
-            { name: 'Synnex FPT Distribution', phone: '02838004004', email: 'synnex@fpt.com.vn', address: '89 LÃƒÂª ThÃƒÂ¡nh TÃƒÂ´n, Q.1', contact: 'PhÃ¡ÂºÂ¡m HÃ¡Â»â€œng PhÃƒÂºc' },
-            { name: 'Digiworld Corporation', phone: '02838005005', email: 'digiworld@dw.com.vn', address: 'TÃ¡ÂºÂ§ng 12, Etown, TÃƒÂ¢n BÃƒÂ¬nh', contact: 'HoÃƒÂ ng Minh TuÃ¡Â»â€¡' },
-            { name: 'JBL & Harman Vietnam', phone: '02838006006', email: 'jbl.vn@harman.com', address: '45 TrÃ†Â°Ã¡Â»Âng SÃ†Â¡n, TÃƒÂ¢n BÃƒÂ¬nh', contact: 'VÃ…Â© Ã„ÂÃ¡Â»Â©c ThÃ¡ÂºÂ¯ng' },
-            { name: 'Logitech Asia Pacific', phone: '02838007007', email: 'logitech@logi.com', address: '15 NK KhÃ¡Â»Å¸i NghÃ„Â©a, Q.1', contact: 'Ã„ÂÃƒÂ m Thu HÃƒÂ ' },
-            { name: 'Dell Technologies VN', phone: '02838008008', email: 'dell.vn@dell.com', address: '30 LT TÃƒÂ´n, Q.1', contact: 'NguyÃ¡Â»â€¦n Ã„ÂÃƒÂ¬nh Quang' },
+            { name: 'Công ty TNHH Apple Việt Nam', phone: '02838001001', email: 'apple.vn@supplier.com', address: '1 Lê Duẩn, Q.1, HCM', contact: 'Nguyễn Văn Hùng' },
+            { name: 'Samsung Vina Electronics', phone: '02838002002', email: 'samsung.vn@supplier.com', address: 'KCN Yên Phong, Bắc Ninh', contact: 'Trần Quốc Bảo' },
+            { name: 'Phụ Kiện Sài Gòn JSC', phone: '02838003003', email: 'pksg@supplier.com', address: '112 NTM Khai, Q.3, HCM', contact: 'Lê Minh Đức' },
+            { name: 'Synnex FPT Distribution', phone: '02838004004', email: 'synnex@fpt.com.vn', address: '89 Lê Thánh Tôn, Q.1', contact: 'Phạm Hồng Phúc' },
+            { name: 'Digiworld Corporation', phone: '02838005005', email: 'digiworld@dw.com.vn', address: 'Tầng 12, Etown, Tân Bình', contact: 'Hoàng Minh Tuệ' },
+            { name: 'JBL & Harman Vietnam', phone: '02838006006', email: 'jbl.vn@harman.com', address: '45 Trường Sơn, Tân Bình', contact: 'Vũ Đức Thắng' },
+            { name: 'Logitech Asia Pacific', phone: '02838007007', email: 'logitech@logi.com', address: '15 NK Khởi Nghĩa, Q.1', contact: 'Đàm Thu Hà' },
+            { name: 'Dell Technologies VN', phone: '02838008008', email: 'dell.vn@dell.com', address: '30 LT Tôn, Q.1', contact: 'Nguyễn Đình Quang' },
         ]
         for (let i = 0; i < supplierData.length; i++) {
             try {
@@ -2911,13 +2956,13 @@ router.post('/seed-test-data', authMiddleware, async (req: AuthRequest, res: Res
         }
         const supplierNames = supplierData.map(s => s.name)
 
-        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â 4. USER for createdBy Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+        // ═══ 4. USER for createdBy ═══
         let createdByUser: any = null
         try { createdByUser = await prisma.user.findFirst() } catch (_) { }
         const creatorId = createdByUser?.id || userId
-        const creatorName = createdByUser?.name || 'NhÃƒÂ¢n viÃƒÂªn'
+        const creatorName = createdByUser?.name || 'Nhân viên'
 
-        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â 5. TRANSACTIONS (seasonal: ~400 total over 13 months) Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+        // ═══ 5. TRANSACTIONS (seasonal: ~400 total over 13 months) ═══
         for (const { year, month } of months) {
             let baseCount = 30
             if (month === 12) baseCount = 50
@@ -2968,17 +3013,17 @@ router.post('/seed-test-data', authMiddleware, async (req: AuthRequest, res: Res
             }
         }
 
-        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â 6. EXPENSES (monthly fixed + variable) Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+        // ═══ 6. EXPENSES (monthly fixed + variable) ═══
         const expCategories = [
-            { cat: 'rent', desc: 'ThuÃƒÂª mÃ¡ÂºÂ·t bÃ¡ÂºÂ±ng cÃ¡Â»Â­a hÃƒÂ ng', min: 18000000, max: 22000000, monthly: true },
-            { cat: 'utilities', desc: 'Ã„ÂiÃ¡Â»â€¡n nÃ†Â°Ã¡Â»â€ºc', min: 3500000, max: 7000000, monthly: true },
-            { cat: 'salary', desc: 'LÃ†Â°Ã†Â¡ng nhÃƒÂ¢n viÃƒÂªn cÃ¡Â»Â­a hÃƒÂ ng', min: 35000000, max: 55000000, monthly: true },
-            { cat: 'transport', desc: 'Chi phÃƒÂ­ vÃ¡ÂºÂ­n chuyÃ¡Â»Æ’n hÃƒÂ ng', min: 2000000, max: 5000000, monthly: true },
-            { cat: 'marketing', desc: 'QuÃ¡ÂºÂ£ng cÃƒÂ¡o online', min: 5000000, max: 15000000, monthly: false },
-            { cat: 'maintenance', desc: 'BÃ¡ÂºÂ£o trÃƒÂ¬ sÃ¡Â»Â­a chÃ¡Â»Â¯a', min: 500000, max: 3000000, monthly: false },
-            { cat: 'supplies', desc: 'VÃ„Æ’n phÃƒÂ²ng phÃ¡ÂºÂ©m', min: 300000, max: 1500000, monthly: false },
-            { cat: 'insurance', desc: 'BÃ¡ÂºÂ£o hiÃ¡Â»Æ’m cÃ¡Â»Â­a hÃƒÂ ng', min: 2000000, max: 4000000, monthly: false },
-            { cat: 'other', desc: 'Chi phÃƒÂ­ khÃƒÂ¡c', min: 300000, max: 2000000, monthly: false },
+            { cat: 'rent', desc: 'Thuê mặt bằng cửa hàng', min: 18000000, max: 22000000, monthly: true },
+            { cat: 'utilities', desc: 'Điện nước', min: 3500000, max: 7000000, monthly: true },
+            { cat: 'salary', desc: 'Lương nhân viên cửa hàng', min: 35000000, max: 55000000, monthly: true },
+            { cat: 'transport', desc: 'Chi phí vận chuyển hàng', min: 2000000, max: 5000000, monthly: true },
+            { cat: 'marketing', desc: 'Quảng cáo online', min: 5000000, max: 15000000, monthly: false },
+            { cat: 'maintenance', desc: 'Bảo trì sửa chữa', min: 500000, max: 3000000, monthly: false },
+            { cat: 'supplies', desc: 'Văn phòng phẩm', min: 300000, max: 1500000, monthly: false },
+            { cat: 'insurance', desc: 'Bảo hiểm cửa hàng', min: 2000000, max: 4000000, monthly: false },
+            { cat: 'other', desc: 'Chi phí khác', min: 300000, max: 2000000, monthly: false },
         ]
         for (const { year, month } of months) {
             for (const ec of expCategories.filter(c => c.monthly)) {
@@ -2997,7 +3042,7 @@ router.post('/seed-test-data', authMiddleware, async (req: AuthRequest, res: Res
             }
         }
 
-        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â 7. IMPORT RECEIPTS (3-6 per month) Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+        // ═══ 7. IMPORT RECEIPTS (3-6 per month) ═══
         for (const { year, month } of months) {
             const impCount = rng(3, 6)
             for (let i = 0; i < impCount; i++) {
@@ -3023,7 +3068,7 @@ router.post('/seed-test-data', authMiddleware, async (req: AuthRequest, res: Res
             }
         }
 
-        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â 8. ONLINE ORDERS (5-8 per month) Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+        // ═══ 8. ONLINE ORDERS (5-8 per month) ═══
         const platforms = ['Shopee', 'Lazada', 'Tiki', 'TikTok Shop']
         const customerNames = custData.map(c => c.name)
         const customerPhones = custData.map(c => c.phone)
@@ -3066,13 +3111,13 @@ router.post('/seed-test-data', authMiddleware, async (req: AuthRequest, res: Res
             }
         }
 
-        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â 9. FIXED ASSETS Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+        // ═══ 9. FIXED ASSETS ═══
         const assets = [
-            { code: 'FA-HCM-001', name: 'TÃ¡Â»Â§ trÃ†Â°ng bÃƒÂ y kÃƒÂ­nh cÃ†Â°Ã¡Â»Âng lÃ¡Â»Â±c', category: 'furniture', originalCost: 45000000, usefulLifeMonths: 60 },
-            { code: 'FA-HCM-002', name: 'MÃƒÂ¡y tÃƒÂ­nh POS Dell', category: 'machine', originalCost: 18000000, usefulLifeMonths: 36 },
+            { code: 'FA-HCM-001', name: 'Tủ trưng bày kính cường lực', category: 'furniture', originalCost: 45000000, usefulLifeMonths: 60 },
+            { code: 'FA-HCM-002', name: 'Máy tính POS Dell', category: 'machine', originalCost: 18000000, usefulLifeMonths: 36 },
             { code: 'FA-HCM-003', name: 'Camera an ninh Hikvision', category: 'machine', originalCost: 12000000, usefulLifeMonths: 48 },
-            { code: 'FA-HCM-004', name: 'BiÃ¡Â»Æ’n hiÃ¡Â»â€¡u LED cÃ¡Â»Â­a hÃƒÂ ng', category: 'furniture', originalCost: 25000000, usefulLifeMonths: 60 },
-            { code: 'FA-HCM-005', name: 'MÃƒÂ¡y in hÃƒÂ³a Ã„â€˜Ã†Â¡n Epson', category: 'machine', originalCost: 8500000, usefulLifeMonths: 36 },
+            { code: 'FA-HCM-004', name: 'Biển hiệu LED cửa hàng', category: 'furniture', originalCost: 25000000, usefulLifeMonths: 60 },
+            { code: 'FA-HCM-005', name: 'Máy in hóa đơn Epson', category: 'machine', originalCost: 8500000, usefulLifeMonths: 36 },
         ]
         for (const a of assets) {
             const monthly = Math.round(a.originalCost / a.usefulLifeMonths)
@@ -3084,7 +3129,7 @@ router.post('/seed-test-data', authMiddleware, async (req: AuthRequest, res: Res
             } catch (_) { }
         }
 
-        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â 10. PAYROLL Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+        // ═══ 10. PAYROLL ═══
         try {
             const employees = await prisma.user.findMany({ where: { salary: { gt: 0 } }, select: { id: true, name: true, salary: true } })
             for (const { year, month } of months) {
@@ -3110,8 +3155,8 @@ router.post('/seed-test-data', authMiddleware, async (req: AuthRequest, res: Res
             }
         } catch (_) { }
 
-        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â 11. RETURN ORDERS (~3 per month) Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
-        const returnReasons = ['HÃƒÂ ng lÃ¡Â»â€”i', 'Sai sÃ¡ÂºÂ£n phÃ¡ÂºÂ©m', 'KhÃƒÂ´ng Ã„â€˜ÃƒÂºng mÃƒÂ´ tÃ¡ÂºÂ£', 'KhÃƒÂ¡ch Ã„â€˜Ã¡Â»â€¢i ÃƒÂ½', 'HÃƒÂ ng hÃ†Â° hÃ¡Â»Âng khi vÃ¡ÂºÂ­n chuyÃ¡Â»Æ’n']
+        // ═══ 11. RETURN ORDERS (~3 per month) ═══
+        const returnReasons = ['Hàng lỗi', 'Sai sản phẩm', 'Không đúng mô tả', 'Khách đổi ý', 'Hàng hư hỏng khi vận chuyển']
         const returnConditions = ['new', 'used', 'damaged', 'defective']
         const refundMethods = ['cash', 'bank_transfer', 'store_credit', 'exchange']
         for (const { year, month } of months) {
@@ -3148,7 +3193,7 @@ router.post('/seed-test-data', authMiddleware, async (req: AuthRequest, res: Res
             }
         }
 
-        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â 12. WARRANTIES (~5 per month) Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+        // ═══ 12. WARRANTIES (~5 per month) ═══
         for (const { year, month } of months) {
             const warCount = rng(3, 6)
             for (let w = 0; w < warCount; w++) {
@@ -3166,7 +3211,7 @@ router.post('/seed-test-data', authMiddleware, async (req: AuthRequest, res: Res
                             serialNumber: `SN-${p.sku}-${rng(10000, 99999)}`,
                             startDate, endDate,
                             status: endDate > new Date() ? 'active' : 'expired',
-                            notes: `BÃ¡ÂºÂ£o hÃƒÂ nh ${warrantyMonths} thÃƒÂ¡ng`,
+                            notes: `Bảo hành ${warrantyMonths} tháng`,
                         }
                     })
                     counts.warranties++
@@ -3174,8 +3219,8 @@ router.post('/seed-test-data', authMiddleware, async (req: AuthRequest, res: Res
             }
         }
 
-        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â 13. REPAIRS (~2 per month) Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
-        const repairIssues = ['MÃƒÂ n hÃƒÂ¬nh bÃ¡Â»â€¹ vÃ¡Â»Â¡', 'Pin chai khÃƒÂ´ng giÃ¡Â»Â¯ sÃ¡ÂºÂ¡c', 'KhÃƒÂ´ng nhÃ¡ÂºÂ­n sÃ¡ÂºÂ¡c', 'Loa bÃ¡Â»â€¹ rÃƒÂ¨', 'Camera mÃ¡Â»Â', 'NÃƒÂºt nguÃ¡Â»â€œn kÃ¡ÂºÂ¹t', 'Wifi yÃ¡ÂºÂ¿u', 'SÃ¡Â»Âc mÃƒÂ n hÃƒÂ¬nh', 'MÃ¡ÂºÂ¥t vÃƒÂ¢n tay', 'PhÃ¡ÂºÂ§n mÃ¡Â»Âm lÃ¡Â»â€”i']
+        // ═══ 13. REPAIRS (~2 per month) ═══
+        const repairIssues = ['Màn hình bị vỡ', 'Pin chai không giữ sạc', 'Không nhận sạc', 'Loa bị rè', 'Camera mờ', 'Nút nguồn kẹt', 'Wifi yếu', 'Sọc màn hình', 'Mất vân tay', 'Phần mềm lỗi']
         const repairStatuses = ['received', 'diagnosing', 'repairing', 'completed', 'delivered']
         for (const { year, month } of months) {
             const repCount = rng(1, 3)
@@ -3194,7 +3239,7 @@ router.post('/seed-test-data', authMiddleware, async (req: AuthRequest, res: Res
                             issue: pick(repairIssues), status, cost,
                             estimatedDate: new Date(date.getTime() + rng(3, 7) * 86400000),
                             completedDate: (status === 'completed' || status === 'delivered') ? new Date(date.getTime() + rng(3, 10) * 86400000) : null,
-                            notes: `SÃ¡Â»Â­a chÃ¡Â»Â¯a ${p.name}`,
+                            notes: `Sửa chữa ${p.name}`,
                             createdAt: date, updatedAt: date,
                         }
                     })
@@ -3203,11 +3248,11 @@ router.post('/seed-test-data', authMiddleware, async (req: AuthRequest, res: Res
             }
         }
 
-        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â 14. BRANCHES Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+        // ═══ 14. BRANCHES ═══
         const branchData = [
-            { name: 'Chi nhÃƒÂ¡nh Q.7', code: 'HCM-Q7', address: '123 NguyÃ¡Â»â€¦n ThÃ¡Â»â€¹ ThÃ¡ÂºÂ­p, Q.7, HCM', phone: '02837001001' },
-            { name: 'Chi nhÃƒÂ¡nh ThÃ¡Â»Â§ Ã„ÂÃ¡Â»Â©c', code: 'HCM-TD', address: '456 VÃƒÂµ VÃ„Æ’n NgÃƒÂ¢n, TP.ThÃ¡Â»Â§ Ã„ÂÃ¡Â»Â©c, HCM', phone: '02837002002' },
-            { name: 'Chi nhÃƒÂ¡nh BÃƒÂ¬nh TÃƒÂ¢n', code: 'HCM-BT', address: '789 LÃƒÂª VÃ„Æ’n QuÃ¡Â»â€ºi, BÃƒÂ¬nh TÃƒÂ¢n, HCM', phone: '02837003003' },
+            { name: 'Chi nhánh Q.7', code: 'HCM-Q7', address: '123 Nguyễn Thị Thập, Q.7, HCM', phone: '02837001001' },
+            { name: 'Chi nhánh Thủ Đức', code: 'HCM-TD', address: '456 Võ Văn Ngân, TP.Thủ Đức, HCM', phone: '02837002002' },
+            { name: 'Chi nhánh Bình Tân', code: 'HCM-BT', address: '789 Lê Văn Quới, Bình Tân, HCM', phone: '02837003003' },
         ]
         for (const b of branchData) {
             try {
@@ -3216,9 +3261,9 @@ router.post('/seed-test-data', authMiddleware, async (req: AuthRequest, res: Res
             } catch (_) { }
         }
 
-        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â 15. SCHEDULES (lÃ¡Â»â€¹ch ca) Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+        // ═══ 15. SCHEDULES (lịch ca) ═══
         const shiftTypes = ['morning', 'afternoon', 'evening']
-        const shiftLabels: Record<string, string> = { morning: 'Ca sÃƒÂ¡ng (8:00-14:00)', afternoon: 'Ca chiÃ¡Â»Âu (14:00-20:00)', evening: 'Ca tÃ¡Â»â€˜i (18:00-22:00)' }
+        const shiftLabels: Record<string, string> = { morning: 'Ca sáng (8:00-14:00)', afternoon: 'Ca chiều (14:00-20:00)', evening: 'Ca tối (18:00-22:00)' }
         try {
             const allUsers = await prisma.user.findMany({ select: { id: true, name: true } })
             if (allUsers.length > 0) {
@@ -3245,7 +3290,7 @@ router.post('/seed-test-data', authMiddleware, async (req: AuthRequest, res: Res
             }
         } catch (_) { }
 
-        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â 16. ATTENDANCE (chÃ¡ÂºÂ¥m cÃƒÂ´ng) Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+        // ═══ 16. ATTENDANCE (chấm công) ═══
         try {
             const allUsers = await prisma.user.findMany({ select: { id: true, name: true, role: true } })
             if (allUsers.length > 0) {
@@ -3254,9 +3299,9 @@ router.post('/seed-test-data', authMiddleware, async (req: AuthRequest, res: Res
                     for (let d = 1; d <= daysInMonth; d++) {
                         const date = new Date(year, month - 1, d)
                         const dayOfWeek = date.getDay()
-                        if (dayOfWeek === 0) continue // ChÃ¡Â»Â§ nhÃ¡ÂºÂ­t nghÃ¡Â»â€°
+                        if (dayOfWeek === 0) continue // Chủ nhật nghỉ
                         for (const user of allUsers) {
-                            // 90% Ã„â€˜i lÃƒÂ m, 5% nghÃ¡Â»â€° phÃƒÂ©p, 5% vÃ¡ÂºÂ¯ng
+                            // 90% đi làm, 5% nghỉ phép, 5% vắng
                             const rand = rng(1, 100)
                             let status = 'present'
                             let checkIn: Date | null = null
@@ -3268,13 +3313,13 @@ router.post('/seed-test-data', authMiddleware, async (req: AuthRequest, res: Res
                                 checkIn = new Date(year, month - 1, d, inH, inM)
                                 const outH = rng(17, 19), outM = rng(0, 59)
                                 checkOut = new Date(year, month - 1, d, outH, outM)
-                                if (inH >= 8 && inM > 15) { status = 'late'; note = 'Ã„Âi trÃ¡Â»â€¦ ' + inM + ' phÃƒÂºt' }
+                                if (inH >= 8 && inM > 15) { status = 'late'; note = 'Đi trễ ' + inM + ' phút' }
                             } else if (rand <= 95) {
                                 status = 'leave'
-                                note = pick(['NghÃ¡Â»â€° phÃƒÂ©p', 'NghÃ¡Â»â€° Ã¡Â»â€˜m', 'ViÃ¡Â»â€¡c gia Ã„â€˜ÃƒÂ¬nh'])
+                                note = pick(['Nghỉ phép', 'Nghỉ ốm', 'Việc gia đình'])
                             } else {
                                 status = 'absent'
-                                note = 'VÃ¡ÂºÂ¯ng khÃƒÂ´ng phÃƒÂ©p'
+                                note = 'Vắng không phép'
                             }
                             try {
                                 await (prisma as any).attendance.create({
@@ -3288,21 +3333,21 @@ router.post('/seed-test-data', authMiddleware, async (req: AuthRequest, res: Res
             }
         } catch (_) { }
 
-        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â 17. SALES CHECKINS (giÃƒÂ¡m sÃƒÂ¡t sale) Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+        // ═══ 17. SALES CHECKINS (giám sát sale) ═══
         const hcmLocations = [
-            { lat: 10.7769, lng: 106.7009, addr: '123 NguyÃ¡Â»â€¦n HuÃ¡Â»â€¡, Q.1, HCM' },
-            { lat: 10.7731, lng: 106.6982, addr: '456 LÃƒÂª LÃ¡Â»Â£i, Q.1, HCM' },
+            { lat: 10.7769, lng: 106.7009, addr: '123 Nguyễn Huệ, Q.1, HCM' },
+            { lat: 10.7731, lng: 106.6982, addr: '456 Lê Lợi, Q.1, HCM' },
             { lat: 10.7867, lng: 106.6802, addr: '789 CMT8, Q.3, HCM' },
-            { lat: 10.7588, lng: 106.6683, addr: '12 NguyÃ¡Â»â€¦n TrÃƒÂ£i, Q.5, HCM' },
-            { lat: 10.8017, lng: 106.7148, addr: '34 Hai BÃƒÂ  TrÃ†Â°ng, Q.1, HCM' },
-            { lat: 10.8113, lng: 106.6813, addr: '101 Quang Trung, GÃƒÂ² VÃ¡ÂºÂ¥p' },
-            { lat: 10.7942, lng: 106.6753, addr: '89 Phan XÃƒÂ­ch Long, PhÃƒÂº NhuÃ¡ÂºÂ­n' },
-            { lat: 10.7657, lng: 106.6652, addr: '202 LÃƒÂ½ ThÃ†Â°Ã¡Â»Âng KiÃ¡Â»â€¡t, Q.10' },
-            { lat: 10.7356, lng: 106.7241, addr: '55 NguyÃ¡Â»â€¦n ThÃ¡Â»â€¹ ThÃ¡ÂºÂ­p, Q.7' },
-            { lat: 10.8488, lng: 106.7713, addr: '456 VÃƒÂµ VÃ„Æ’n NgÃƒÂ¢n, ThÃ¡Â»Â§ Ã„ÂÃ¡Â»Â©c' },
+            { lat: 10.7588, lng: 106.6683, addr: '12 Nguyễn Trãi, Q.5, HCM' },
+            { lat: 10.8017, lng: 106.7148, addr: '34 Hai Bà Trưng, Q.1, HCM' },
+            { lat: 10.8113, lng: 106.6813, addr: '101 Quang Trung, Gò Vấp' },
+            { lat: 10.7942, lng: 106.6753, addr: '89 Phan Xích Long, Phú Nhuận' },
+            { lat: 10.7657, lng: 106.6652, addr: '202 Lý Thường Kiệt, Q.10' },
+            { lat: 10.7356, lng: 106.7241, addr: '55 Nguyễn Thị Thập, Q.7' },
+            { lat: 10.8488, lng: 106.7713, addr: '456 Võ Văn Ngân, Thủ Đức' },
         ]
         const checkinTypes = ['check_in', 'check_out', 'visit']
-        const visitNotes = ['GÃ¡ÂºÂ·p KH tÃ†Â° vÃ¡ÂºÂ¥n sÃ¡ÂºÂ£n phÃ¡ÂºÂ©m mÃ¡Â»â€ºi', 'Thu nÃ¡Â»Â£ khÃƒÂ¡ch hÃƒÂ ng', 'Giao hÃƒÂ ng tÃ¡ÂºÂ­n nÃ†Â¡i', 'KhÃ¡ÂºÂ£o sÃƒÂ¡t thÃ¡Â»â€¹ trÃ†Â°Ã¡Â»Âng', 'ChÃ„Æ’m sÃƒÂ³c khÃƒÂ¡ch hÃƒÂ ng cÃ…Â©', 'GiÃ¡Â»â€ºi thiÃ¡Â»â€¡u chÃ†Â°Ã†Â¡ng trÃƒÂ¬nh khuyÃ¡ÂºÂ¿n mÃƒÂ£i', 'Thu thÃ¡ÂºÂ­p feedback', 'Demo sÃ¡ÂºÂ£n phÃ¡ÂºÂ©m tÃ¡ÂºÂ¡i cÃ¡Â»Â­a hÃƒÂ ng KH']
+        const visitNotes = ['Gặp KH tư vấn sản phẩm mới', 'Thu nợ khách hàng', 'Giao hàng tận nơi', 'Khảo sát thị trường', 'Chăm sóc khách hàng cũ', 'Giới thiệu chương trình khuyến mãi', 'Thu thập feedback', 'Demo sản phẩm tại cửa hàng KH']
         try {
             const salesUsers = await prisma.user.findMany({ select: { id: true, name: true } })
             if (salesUsers.length > 0) {
@@ -3326,7 +3371,7 @@ router.post('/seed-test-data', authMiddleware, async (req: AuthRequest, res: Res
                                         latitude: loc.lat + (Math.random() - 0.5) * 0.005,
                                         longitude: loc.lng + (Math.random() - 0.5) * 0.005,
                                         address: loc.addr,
-                                        note: type === 'visit' ? pick(visitNotes) : type === 'check_in' ? 'Check-in Ã„â€˜Ã¡ÂºÂ§u ca' : 'Check-out cuÃ¡Â»â€˜i ca',
+                                        note: type === 'visit' ? pick(visitNotes) : type === 'check_in' ? 'Check-in đầu ca' : 'Check-out cuối ca',
                                         customerId: cust?.id || null,
                                         customerName: cust?.name || null,
                                         createdAt,
@@ -3342,7 +3387,7 @@ router.post('/seed-test-data', authMiddleware, async (req: AuthRequest, res: Res
 
         res.json({
             success: true,
-            message: `Ã„ÂÃƒÂ£ tÃ¡ÂºÂ¡o data 13 thÃƒÂ¡ng (T3/2025 Ã¢â‚¬â€œ T3/2026)${doReset ? ' (Ã„â€˜ÃƒÂ£ xÃƒÂ³a data cÃ…Â©)' : ''}`,
+            message: `Đã tạo data 13 tháng (T3/2025 – T3/2026)${doReset ? ' (đã xóa data cũ)' : ''}`,
             data: counts,
         })
     } catch (err) { console.error('POST /seed-test-data error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
@@ -6421,9 +6466,45 @@ router.get('/deadlines', authMiddleware, async (req: AuthRequest, res: Response)
             where,
             orderBy: [{ dueDate: 'asc' }],
         })
-        res.json({ success: true, data })
+        // Bổ sung field FE cần: type/label/daysUntilDue/estimatedAmount + status
+        // upcoming|due_soon (giữ nguyên field gốc để không vỡ chỗ khác)
+        const nowMs = Date.now()
+        const enriched = data.map((d: any) => {
+            const daysUntilDue = Math.ceil((new Date(d.dueDate).getTime() - nowMs) / 86400000)
+            const feStatus = d.status === 'pending'
+                ? (daysUntilDue <= 7 ? 'due_soon' : 'upcoming')
+                : d.status
+            return {
+                ...d,
+                type: d.taxType,
+                label: d.description || d.taxType,
+                daysUntilDue,
+                estimatedAmount: d.estimatedAmount ?? d.amount ?? 0,
+                status: feStatus,
+                rawStatus: d.status,
+            }
+        })
+        res.json({ success: true, data: enriched })
     } catch (err: any) {
         console.error('GET /deadlines error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// POST /api/tax/deadlines/:id/submit — đánh dấu đã nộp (FE TaxDeadlinesTab)
+router.post('/deadlines/:id/submit', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
+        const existing = await prisma.taxDeadline.findUnique({ where: { id } }).catch(() => null)
+        if (!existing) return res.status(404).json({ success: false, error: 'Không tìm thấy hạn nộp' })
+        const data = await prisma.taxDeadline.update({
+            where: { id },
+            data: { status: 'submitted', submittedAt: new Date() },
+        })
+        res.json({ success: true, data })
+    } catch (err: any) {
+        console.error('POST /deadlines/:id/submit error:', err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }
 })

@@ -12,16 +12,27 @@ const router = Router()
 router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        const { channelId, startDate, endDate } = req.query
+        const { channelId, platform, startDate, endDate } = req.query
         const userRole = req.user?.role || 'cashier'
         const canSeeProfits = ['owner', 'admin'].includes(userRole)
 
+        // Parse ngày an toàn — chuỗi rỗng/sai trả về Invalid Date làm Prisma throw → 500
+        const parseDate = (v: any): Date | null => {
+            if (!v) return null
+            const d = new Date(String(v))
+            return isNaN(d.getTime()) ? null : d
+        }
+
         const where: any = {}
-        if (channelId) where.channelId = channelId as string
-        if (startDate || endDate) {
+        // Lọc theo kênh: ưu tiên channelId (1 shop cụ thể), hoặc platform (cả sàn)
+        if (channelId && channelId !== 'all') where.channelId = channelId as string
+        if (platform && platform !== 'all') where.platform = platform as string
+        const gte = parseDate(startDate)
+        const lte = parseDate(endDate)
+        if (gte || lte) {
             where.createdAt = {}
-            if (startDate) where.createdAt.gte = new Date(startDate as string)
-            if (endDate) where.createdAt.lte = new Date(endDate as string)
+            if (gte) where.createdAt.gte = gte
+            if (lte) where.createdAt.lte = lte
         }
 
         const [totalOrders, totals, byStatus, byChannel] = await Promise.all([
@@ -331,9 +342,12 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
             ]
         }
         if (startDate || endDate) {
+            const gte = startDate ? new Date(startDate as string) : null
+            const lte = endDate ? new Date(endDate as string) : null
             where.createdAt = {}
-            if (startDate) where.createdAt.gte = new Date(startDate as string)
-            if (endDate) where.createdAt.lte = new Date(endDate as string)
+            if (gte && !isNaN(gte.getTime())) where.createdAt.gte = gte
+            if (lte && !isNaN(lte.getTime())) where.createdAt.lte = lte
+            if (Object.keys(where.createdAt).length === 0) delete where.createdAt
         }
 
         const [total, orders] = await Promise.all([
