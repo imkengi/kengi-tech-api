@@ -947,18 +947,36 @@ router.get('/summary', authMiddleware, async (req: AuthRequest, res: Response) =
         ])
 
         let journalEntries: any[] = []
+        let prevJournalEntries: any[] = []
         try { journalEntries = await prisma.journalEntry.findMany({ where: { date: { gte: year + '-01-01', lte: year + '-12-31' } } }) } catch (_) { }
+        try {
+            prevJournalEntries = await prisma.journalEntry.findMany({
+                where: { date: { gte: (year - 1) + '-01-01', lte: (year - 1) + '-12-31' }, OR: [{ creditAccount: { startsWith: '511' } }, { debitAccount: { startsWith: '511' } }] },
+                select: { debitAccount: true, creditAccount: true, amount: true },
+            })
+        } catch (_) { }
 
-        const totalRevenue = txs.reduce((s, t) => s + (t.subtotal || t.total || 0), 0)
+        // Doanh thu & giá vốn lấy TỪ SỔ NHẬT KÝ (đồng nhất với Kết Quả Kinh Doanh B02):
+        // DT = net credit TK 511, giá vốn = net debit TK 632. KHÔNG dùng Transaction
+        // (thiếu doanh thu đơn online ghi thẳng sổ) hay ImportReceipt (tiền nhập hàng
+        // ≠ giá vốn hàng bán). Fallback về cách cũ khi store chưa hạch toán sổ.
+        const netCredit = (entries: any[], prefix: string) => entries.reduce((s: number, j: any) =>
+            s + ((j.creditAccount?.startsWith(prefix) ? j.amount : 0) - (j.debitAccount?.startsWith(prefix) ? j.amount : 0)), 0)
+        const netDebit = (entries: any[], prefix: string) => entries.reduce((s: number, j: any) =>
+            s + ((j.debitAccount?.startsWith(prefix) ? j.amount : 0) - (j.creditAccount?.startsWith(prefix) ? j.amount : 0)), 0)
+
+        const revFromJournal = netCredit(journalEntries, '511')
+        const cogsFromJournal = netDebit(journalEntries, '632')
+        const totalRevenue = revFromJournal > 0 ? revFromJournal : txs.reduce((s, t) => s + (t.subtotal || t.total || 0), 0)
+        const totalCOGS = cogsFromJournal > 0 ? cogsFromJournal : imports.reduce((s: number, i: any) => s + (i.totalCost || 0), 0)
         const totalTax = txs.reduce((s, t) => s + (t.tax || 0), 0)
         const totalExpenses = expenses.reduce((s, e) => s + (e.amount || 0), 0)
-        const totalCOGS = imports.reduce((s: number, i: any) => s + (i.totalCost || 0), 0)
         const grossProfit = totalRevenue - totalCOGS
         const netProfit = grossProfit - totalExpenses
         const totalDiscount = txs.reduce((s, t) => s + ((t as any).discount || 0), 0)
 
-        // Previous year for trend comparison
-        const prevRevenue = prevTxs.reduce((s: number, t: any) => s + (t.total || 0), 0)
+        // Previous year for trend comparison (cùng cơ sở với doanh thu kỳ này)
+        const prevRevenue = revFromJournal > 0 ? netCredit(prevJournalEntries, '511') : prevTxs.reduce((s: number, t: any) => s + (t.total || 0), 0)
         const prevExpenseTotal = prevExpenses.reduce((s: number, e: any) => s + (e.amount || 0), 0)
 
         // Journal aggregates
