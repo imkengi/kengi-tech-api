@@ -2,6 +2,7 @@ import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest, getBranchFilter, getBranchId, canAccessBranch } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
 import { enforcePeriodLock } from '../lib/periodLock'
+import { postDebtCollectionJournal } from '../lib/autoJournal'
 
 const router = Router()
 
@@ -125,6 +126,17 @@ router.post('/', authMiddleware, requireRole('admin', 'manager'), enforcePeriodL
                             description: `Thu nợ - phiếu thu ${created.id}`,
                             balance: currentDebt - reduction,
                         },
+                    })
+                    // Bút toán giảm phải thu: Nợ 111/112 / Có 131
+                    await postDebtCollectionJournal(tx, {
+                        amount: reduction,
+                        refKey: `COLLECT-CR-${created.id}`,
+                        date: new Date().toISOString().slice(0, 10),
+                        paymentType: bankAccountId ? 'bank' : 'cash',
+                        customerName: customer.name,
+                        receiptNumber: receiptData.reference,
+                        branchId: receiptData.branchId,
+                        userId: req.user?.userId ?? null,
                     })
                 }
                 return created

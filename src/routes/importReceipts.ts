@@ -366,12 +366,16 @@ router.put('/:id/pay', authMiddleware, async (req: AuthRequest, res: Response) =
             include: { items: true },
         })
 
-        // Mirror vào sổ chi (Expense) để sổ quỹ phản ánh dòng tiền ra — best-effort
+        // Mirror vào sổ chi (Expense) để sổ quỹ phản ánh dòng tiền ra — best-effort.
+        // category 'supplier_payment' → auto-journal ghi Nợ 331/Có 11x (giảm phải
+        // trả), KHÔNG vào chi phí 6428. paidBy quyết định vế Có 111 (cash) hay 112.
+        const payBy = String(req.body?.paidBy || req.body?.method || 'cash').toLowerCase()
         await (prisma as any).expense.create({
             data: {
                 description: `Trả tiền NCC ${receipt.supplierName || ''} - phiếu nhập ${receipt.code}`.trim(),
                 amount: payAmount,
                 category: 'supplier_payment',
+                paidBy: payBy === 'bank' || payBy === 'transfer' ? 'bank' : 'cash',
                 date: new Date(),
                 branchId: receipt.branchId || null,
             },

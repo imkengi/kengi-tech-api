@@ -5,7 +5,7 @@ import { validate } from '../middleware/validate'
 import { CreateTransactionSchema } from '../schemas'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { publishEvent } from '../lib/pubsub'
-import { createJournalEntriesForTransaction } from '../lib/autoJournal'
+import { createJournalEntriesForTransaction, postDebtCollectionJournal } from '../lib/autoJournal'
 import { nextCode } from '../lib/codeGenerator'
 import { getOrCreateDefaultWarehouse, updateWarehouseStock } from '../lib/warehouseHelper'
 
@@ -994,6 +994,17 @@ router.put('/:id/pay-debt', authMiddleware, async (req: AuthRequest, res: Respon
                             description: `Thanh toán nợ HĐ ${existing.receiptNumber}`,
                             balance: Math.max(0, currentDebt - debtReduction),
                         },
+                    })
+                    // Bút toán giảm phải thu: Nợ 111/112 / Có 131
+                    await postDebtCollectionJournal(tx, {
+                        amount: debtReduction,
+                        refKey: `COLLECT-${existing.receiptNumber}-${existing.amountReceived + payAmount}`,
+                        date: new Date().toISOString().slice(0, 10),
+                        paymentType: paymentType,
+                        customerName: customer?.name || existing.customerName,
+                        receiptNumber: existing.receiptNumber,
+                        branchId: (existing as any).branchId ?? null,
+                        userId: req.user?.userId ?? null,
                     })
                 }
             }

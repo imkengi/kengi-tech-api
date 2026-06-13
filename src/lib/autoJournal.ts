@@ -63,6 +63,37 @@ export function detectOnlinePlatform(receiptNumber: string): keyof typeof PLATFO
     return 'online'
 }
 
+// Bút toán THU NỢ khách: Nợ 111/112 / Có 131 — giảm phải thu khi khách trả nợ.
+// Gọi từ mọi đường thu nợ (pay-debt theo HĐ / theo khách / phiếu thu) để TK 131
+// trên sổ luôn khớp Customer.debt. `client` là prisma hoặc tx ($transaction).
+export async function postDebtCollectionJournal(client: any, opts: {
+    amount: number
+    refKey: string
+    date: string
+    paymentType?: string | null
+    customerName?: string | null
+    receiptNumber?: string | null
+    branchId?: string | null
+    userId?: string | null
+}): Promise<void> {
+    const amount = Math.round(opts.amount || 0)
+    if (amount <= 0) return
+    const isBank = opts.paymentType === 'bank' || opts.paymentType === 'transfer'
+    try {
+        await client.journalEntry.create({
+            data: {
+                date: opts.date,
+                description: `Thu nợ khách${opts.customerName ? ' ' + opts.customerName : ''}${opts.receiptNumber ? ' - HĐ ' + opts.receiptNumber : ''}`,
+                debitAccount: isBank ? '112' : '111',
+                debitAccountName: isBank ? 'Tiền gửi ngân hàng' : 'Tiền mặt',
+                creditAccount: '131', creditAccountName: 'Phải thu khách hàng',
+                amount, reference: opts.refKey, referenceType: 'debt-collection',
+                branchId: opts.branchId ?? null, createdBy: opts.userId ?? null,
+            },
+        })
+    } catch (_) { /* dup ref / schema missing — non-fatal */ }
+}
+
 export interface AutoJournalOptions {
     branchId?: string | null
     userId?: string | null
@@ -95,6 +126,7 @@ export async function createJournalEntriesForTransaction(
     const vatRef = `VAT-${tx.receiptNumber}`
     const discRef = `DISC-${tx.receiptNumber}`
     const cogsRef = `COGS-${tx.receiptNumber}`
+    const collectRef = `COLLECT-${tx.receiptNumber}`
 
     // Probe existing refs (unless caller already deduped) — keep this scoped
     // to just the refs for this tx so we don't load the whole table.
@@ -102,7 +134,7 @@ export async function createJournalEntriesForTransaction(
     if (!opts.skipDupCheck) {
         try {
             const rows = await prisma.journalEntry.findMany({
-                where: { reference: { in: [saleRef, vatRef, discRef, cogsRef] } },
+                where: { reference: { in: [saleRef, vatRef, discRef, cogsRef, collectRef] } },
                 select: { reference: true },
             })
             existing = new Set(rows.map((r: any) => r.reference).filter(Boolean))
@@ -217,6 +249,28 @@ export async function createJournalEntriesForTransaction(
     // 5. Phí sàn — KHÔNG còn book per-đơn theo commissionRate ước tính. Phí sàn
     // ghi nhận theo hoá đơn GTGT sàn xuất về cuối kỳ, nhập tay qua
     // POST /api/tax/platform-fee-invoice (Nợ 641 + Nợ 133 / Có 131-<SÀN>).
+
+    // 6. Bán CHỊU MỘT PHẦN — phần đã thu tại quầy: Nợ 111/112 / Có 131.
+    // Doanh thu+VAT ở trên ghi Nợ 131 toàn bộ; bút toán này trừ lại phần đã thu
+    // để 131 chỉ còn đúng số khách thực nợ (= Customer.debt). Chỉ áp dụng đơn
+    // bán chịu thường (debitAccount==='131'), KHÔNG áp dụng đơn sàn (131-<SÀN>).
+    if (debitAccount === '131' && totalPaid > 0 && !existing.has(collectRef)) {
+        const payType = tx.payments?.[0]?.type || 'cash'
+        const isBank = payType === 'bank' || payType === 'transfer'
+        try {
+            await prisma.journalEntry.create({
+                data: {
+                    date,
+                    description: `Thu tiền bán hàng ${tx.receiptNumber}${tx.customerName ? ' - KH: ' + tx.customerName : ''}`,
+                    debitAccount: isBank ? '112' : '111', debitAccountName: isBank ? 'Tiền gửi ngân hàng' : 'Tiền mặt',
+                    creditAccount: '131', creditAccountName: 'Phải thu khách hàng',
+                    amount: Math.round(totalPaid), reference: collectRef, referenceType: 'sale',
+                    branchId, createdBy: userId,
+                },
+            })
+            result.created.push({ type: 'collect', ref: collectRef, amount: totalPaid })
+        } catch (_) { }
+    }
 
     return result
 }

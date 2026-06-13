@@ -2151,6 +2151,9 @@ router.post('/auto-journal', authMiddleware, async (req: AuthRequest, res: Respo
             'maintenance': { code: '6423', name: 'CP sửa chữa' },
             'supplies': { code: '6424', name: 'CP vật tư' },
             'insurance': { code: '6425', name: 'CP bảo hiểm' },
+            // Trả tiền NCC: KHÔNG phải chi phí — là giảm phải trả. Ghi Nợ 331 / Có 11x
+            // (vế Có do paidBy quyết định). Tránh double-count vào 6428.
+            'supplier_payment': { code: '331', name: 'Phải trả người bán' },
             'other': { code: '6428', name: 'CP khác' },
         }
 

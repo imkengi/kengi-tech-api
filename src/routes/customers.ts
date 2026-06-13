@@ -6,6 +6,7 @@ import { validate } from '../middleware/validate'
 import { CreateCustomerSchema, UpdateCustomerSchema } from '../schemas'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { nextCode } from '../lib/codeGenerator'
+import { postDebtCollectionJournal } from '../lib/autoJournal'
 
 const router = Router()
 
@@ -832,6 +833,17 @@ router.post('/:id/pay-debt', authMiddleware, async (req: AuthRequest, res: Respo
                 debt: { decrement: payAmount },
             },
             include: { group: true },
+        })
+
+        // Bút toán giảm phải thu: Nợ 111/112 / Có 131
+        await postDebtCollectionJournal(prisma, {
+            amount: payAmount,
+            refKey: `COLLECT-CUST-${customer.id}-${Date.now()}`,
+            date: new Date().toISOString().slice(0, 10),
+            paymentType: method,
+            customerName: customer.name,
+            branchId: (customer as any).branchId ?? null,
+            userId: req.user?.userId ?? null,
         })
 
         console.log(`💰 Customer ${customer.name} paid debt: ${payAmount} (remaining: ${updated.debt})`)
