@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import { authMiddleware, AuthRequest, getBranchFilter } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
+import { ensureDefaultWarehouses } from './warehouses'
 
 const router = Router()
 
@@ -189,6 +190,11 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         const branch = await prisma.branch.create({
             data: { name: name.trim(), code: code.trim().toUpperCase(), address: address?.trim() || null, phone: phone?.trim() || null },
         })
+
+        // Seed the 3 default warehouses for the new branch (idempotent, best-effort)
+        await ensureDefaultWarehouses(prisma, branch.id).catch((e: any) =>
+            console.error('ensureDefaultWarehouses (branch create) error:', e),
+        )
 
         cacheDel(`${req.user?.storeSchema || 'default'}:branches:*`).catch(() => { })
         res.status(201).json({ success: true, data: branch, message: 'Chi nhánh đã được tạo thành công' })

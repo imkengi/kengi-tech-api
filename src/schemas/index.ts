@@ -140,6 +140,7 @@ export const CreateSupplierSchema = z.object({
     contactPerson: z.string().max(200).optional().nullable(),
     paymentTerms: z.string().max(200).optional().nullable(),
     note: z.string().max(1000).optional().nullable(),
+    payable: z.number().min(0).optional().default(0),
     status: z.enum(['active', 'inactive']).default('active'),
 })
 

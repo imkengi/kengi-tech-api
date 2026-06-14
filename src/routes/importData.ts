@@ -81,8 +81,8 @@ const TEMPLATES: Record<string, { filename: string; headers: string[]; sample: s
     },
     suppliers: {
         filename: 'mau_nha_cung_cap.xlsx',
-        headers: ['Mã NCC', 'Tên NCC', 'Người liên hệ', 'SĐT', 'Email', 'Địa chỉ', 'MST', 'Ghi chú'],
-        sample: [['NCC001', 'Công ty TNHH ABC', 'Nguyễn Văn X', '0909123456', 'abc@company.vn', '123 Nguyễn Huệ, Q1', '0312345678', '']]
+        headers: ['Mã NCC', 'Tên NCC', 'Người liên hệ', 'SĐT', 'Email', 'Địa chỉ', 'MST', 'Ghi chú', 'Công nợ'],
+        sample: [['NCC001', 'Công ty TNHH ABC', 'Nguyễn Văn X', '0909123456', 'abc@company.vn', '123 Nguyễn Huệ, Q1', '0312345678', '', '0']]
     },
     transactions: {
         filename: 'mau_don_hang.xlsx',
@@ -602,11 +602,11 @@ router.post('/customers', authMiddleware, upload.single('file'), async (req: Aut
 
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i]
-            const name = col(row, 'Tên khách hàng', 'Tên KH', 'Tên', 'name', 'customer_name')
-            const phone = col(row, 'SĐT', 'Số điện thoại', 'Phone', 'phone', 'sdt')
-            if (!name || !phone) { errors.push(`Dòng ${i + 2}: Thiếu tên hoặc SĐT`); continue }
+            const code = col(row, 'Mã KH', 'Mã khách hàng', 'code', 'customer_code')
+            if (!code) { errors.push(`Dòng ${i + 2}: Thiếu mã khách`); continue }
 
-            const code = col(row, 'Mã KH', 'Mã khách hàng', 'code', 'customer_code') || `KH-${Date.now()}-${i}`
+            const name = col(row, 'Tên khách hàng', 'Tên KH', 'Tên', 'name', 'customer_name') || code
+            const phone = col(row, 'SĐT', 'Số điện thoại', 'Phone', 'phone', 'sdt') || '' // Customer.phone non-nullable
             const email = col(row, 'Email', 'email') || null
             const address = col(row, 'Địa chỉ', 'Address', 'dia_chi') || null
             const groupName = col(row, 'Nhóm KH', 'Nhóm khách hàng', 'group', 'nhom_kh')
@@ -683,20 +683,21 @@ router.post('/suppliers', authMiddleware, upload.single('file'), async (req: Aut
 
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i]
-            const name = col(row, 'Tên NCC', 'Tên nhà cung cấp', 'Nhà cung cấp', 'name', 'supplier_name')
-            if (!name) { errors.push(`Dòng ${i + 2}: Thiếu tên nhà cung cấp`); continue }
+            const code = col(row, 'Mã NCC', 'Mã nhà cung cấp', 'code', 'supplier_code')
+            if (!code) { errors.push(`Dòng ${i + 2}: Thiếu mã NCC`); continue }
 
-            const code = col(row, 'Mã NCC', 'Mã nhà cung cấp', 'code', 'supplier_code') || `NCC-${Date.now()}-${i}`
+            const name = col(row, 'Tên NCC', 'Tên nhà cung cấp', 'Nhà cung cấp', 'name', 'supplier_name') || code
             const contactName = col(row, 'Người liên hệ', 'Liên hệ', 'contact', 'contact_name') || null
             const phone = col(row, 'SĐT', 'Số điện thoại', 'Phone', 'phone', 'sdt') || null
             const email = col(row, 'Email', 'email') || null
             const address = col(row, 'Địa chỉ', 'Address', 'dia_chi') || null
             const taxCode = col(row, 'MST', 'Mã số thuế', 'Tax', 'tax_code', 'ma_so_thue') || null
             const notes = col(row, 'Ghi chú', 'Notes', 'ghi_chu') || null
+            const payable = toNumber(col(row, 'Công nợ', 'Nợ', 'payable', 'cong_no'))
 
             try {
                 const existing = await getPrisma(req).supplier.findFirst({ where: { code } })
-                const supplierData = { name, contactName, phone, email, address, taxCode, notes }
+                const supplierData = { name, contactName, phone, email, address, taxCode, notes, payable }
 
                 if (existing) {
                     await getPrisma(req).supplier.update({ where: { id: existing.id }, data: supplierData })

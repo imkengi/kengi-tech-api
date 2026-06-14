@@ -166,7 +166,7 @@ router.get('/:id/debt-history', authMiddleware, async (req: AuthRequest, res: Re
 
         const supplier = await prisma.supplier.findUnique({
             where: { id: supplierId },
-            select: { name: true, totalValue: true },
+            select: { name: true, totalValue: true, payable: true, createdAt: true },
         })
         if (!supplier) return res.status(404).json({ success: false, error: 'Supplier not found' })
 
@@ -201,6 +201,22 @@ router.get('/:id/debt-history', authMiddleware, async (req: AuthRequest, res: Re
         }
 
         const history: DebtHistoryItem[] = []
+
+        // Opening balance (số dư đầu kỳ) — công nợ phải trả NCC nhập tay / từ import.
+        // Coi như một khoản "phải trả" phát sinh tại thời điểm tạo NCC để running
+        // balance bên dưới cộng dồn đúng. Không tạo nếu = 0.
+        const openingPayable = (supplier as any).payable || 0
+        if (openingPayable > 0) {
+            history.push({
+                id: `${supplierId}-opening`,
+                code: 'SDĐK',
+                date: ((supplier as any).createdAt || new Date(0)).toISOString(),
+                type: 'purchase',
+                label: 'Số dư đầu kỳ',
+                amount: openingPayable,
+                balance: 0,
+            })
+        }
 
         // Process PurchaseOrders
         for (const po of purchaseOrders) {
@@ -299,11 +315,11 @@ router.get('/:id/debt-history', authMiddleware, async (req: AuthRequest, res: Re
 router.post('/', authMiddleware, requireRole('admin', 'manager'), validate(CreateSupplierSchema), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        const { name, contactName, phone, email, address, taxCode, status, notes } = req.body
+        const { name, contactName, phone, email, address, taxCode, status, notes, payable } = req.body
         if (!name?.trim()) return res.status(400).json({ success: false, error: 'Name required' })
         const code = await nextCode(prisma, 'supplierCodeSeq', 'NCC', 3, '-', 'Supplier', 'code')
         const supplier = await prisma.supplier.create({
-            data: { code, name: name.trim(), contactName, phone, email, address, taxCode, status: status || 'active', notes },
+            data: { code, name: name.trim(), contactName, phone, email, address, taxCode, status: status || 'active', notes, payable: payable ?? 0 },
         })
         cacheDel(`${req.user?.storeSchema || 'default'}:suppliers:*`).catch(() => { })
         res.status(201).json({ success: true, data: supplier })
@@ -317,10 +333,10 @@ router.post('/', authMiddleware, requireRole('admin', 'manager'), validate(Creat
 router.put('/:id', authMiddleware, requireRole('admin', 'manager'), validate(UpdateSupplierSchema), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        const { name, contactName, phone, email, address, taxCode, status, notes } = req.body
+        const { name, contactName, phone, email, address, taxCode, status, notes, payable } = req.body
         const supplier = await prisma.supplier.update({
             where: { id: String(req.params.id) },
-            data: { name, contactName, phone, email, address, taxCode, status, notes },
+            data: { name, contactName, phone, email, address, taxCode, status, notes, payable },
         })
         res.json({ success: true, data: supplier })
     } catch (err) {

@@ -443,6 +443,7 @@ model Supplier {
   totalValue  Float    @default(0)
   status      String   @default("active")
   notes       String?
+  payable     Float    @default(0) // công nợ phải trả NCC (số dư đầu kỳ + phát sinh)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

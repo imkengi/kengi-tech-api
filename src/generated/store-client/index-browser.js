@@ -421,6 +421,7 @@ exports.Prisma.SupplierScalarFieldEnum = {
   totalValue: 'totalValue',
   status: 'status',
   notes: 'notes',
+  payable: 'payable',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };

@@ -34239,11 +34239,13 @@ export namespace Prisma {
   export type SupplierAvgAggregateOutputType = {
     totalOrders: number | null
     totalValue: number | null
+    payable: number | null
   }
 
   export type SupplierSumAggregateOutputType = {
     totalOrders: number | null
     totalValue: number | null
+    payable: number | null
   }
 
   export type SupplierMinAggregateOutputType = {
@@ -34259,6 +34261,7 @@ export namespace Prisma {
     totalValue: number | null
     status: string | null
     notes: string | null
+    payable: number | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -34276,6 +34279,7 @@ export namespace Prisma {
     totalValue: number | null
     status: string | null
     notes: string | null
+    payable: number | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -34293,6 +34297,7 @@ export namespace Prisma {
     totalValue: number
     status: number
     notes: number
+    payable: number
     createdAt: number
     updatedAt: number
     _all: number
@@ -34302,11 +34307,13 @@ export namespace Prisma {
   export type SupplierAvgAggregateInputType = {
     totalOrders?: true
     totalValue?: true
+    payable?: true
   }
 
   export type SupplierSumAggregateInputType = {
     totalOrders?: true
     totalValue?: true
+    payable?: true
   }
 
   export type SupplierMinAggregateInputType = {
@@ -34322,6 +34329,7 @@ export namespace Prisma {
     totalValue?: true
     status?: true
     notes?: true
+    payable?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -34339,6 +34347,7 @@ export namespace Prisma {
     totalValue?: true
     status?: true
     notes?: true
+    payable?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -34356,6 +34365,7 @@ export namespace Prisma {
     totalValue?: true
     status?: true
     notes?: true
+    payable?: true
     createdAt?: true
     updatedAt?: true
     _all?: true
@@ -34460,6 +34470,7 @@ export namespace Prisma {
     totalValue: number
     status: string
     notes: string | null
+    payable: number
     createdAt: Date
     updatedAt: Date
     _count: SupplierCountAggregateOutputType | null
@@ -34496,6 +34507,7 @@ export namespace Prisma {
     totalValue?: boolean
     status?: boolean
     notes?: boolean
+    payable?: boolean
     createdAt?: boolean
     updatedAt?: boolean
     purchaseOrders?: boolean | Supplier$purchaseOrdersArgs<ExtArgs>
@@ -34515,6 +34527,7 @@ export namespace Prisma {
     totalValue?: boolean
     status?: boolean
     notes?: boolean
+    payable?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["supplier"]>
@@ -34532,6 +34545,7 @@ export namespace Prisma {
     totalValue?: boolean
     status?: boolean
     notes?: boolean
+    payable?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["supplier"]>
@@ -34549,11 +34563,12 @@ export namespace Prisma {
     totalValue?: boolean
     status?: boolean
     notes?: boolean
+    payable?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type SupplierOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "code" | "name" | "contactName" | "phone" | "email" | "address" | "taxCode" | "totalOrders" | "totalValue" | "status" | "notes" | "createdAt" | "updatedAt", ExtArgs["result"]["supplier"]>
+  export type SupplierOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "code" | "name" | "contactName" | "phone" | "email" | "address" | "taxCode" | "totalOrders" | "totalValue" | "status" | "notes" | "payable" | "createdAt" | "updatedAt", ExtArgs["result"]["supplier"]>
   export type SupplierInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     purchaseOrders?: boolean | Supplier$purchaseOrdersArgs<ExtArgs>
     _count?: boolean | SupplierCountOutputTypeDefaultArgs<ExtArgs>
@@ -34579,6 +34594,7 @@ export namespace Prisma {
       totalValue: number
       status: string
       notes: string | null
+      payable: number
       createdAt: Date
       updatedAt: Date
     }, ExtArgs["result"]["supplier"]>
@@ -35017,6 +35033,7 @@ export namespace Prisma {
     readonly totalValue: FieldRef<"Supplier", 'Float'>
     readonly status: FieldRef<"Supplier", 'String'>
     readonly notes: FieldRef<"Supplier", 'String'>
+    readonly payable: FieldRef<"Supplier", 'Float'>
     readonly createdAt: FieldRef<"Supplier", 'DateTime'>
     readonly updatedAt: FieldRef<"Supplier", 'DateTime'>
   }
@@ -131055,6 +131072,7 @@ export namespace Prisma {
     totalValue: 'totalValue',
     status: 'status',
     notes: 'notes',
+    payable: 'payable',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
   };
@@ -134627,6 +134645,7 @@ export namespace Prisma {
     totalValue?: FloatFilter<"Supplier"> | number
     status?: StringFilter<"Supplier"> | string
     notes?: StringNullableFilter<"Supplier"> | string | null
+    payable?: FloatFilter<"Supplier"> | number
     createdAt?: DateTimeFilter<"Supplier"> | Date | string
     updatedAt?: DateTimeFilter<"Supplier"> | Date | string
     purchaseOrders?: PurchaseOrderListRelationFilter
@@ -134645,6 +134664,7 @@ export namespace Prisma {
     totalValue?: SortOrder
     status?: SortOrder
     notes?: SortOrderInput | SortOrder
+    payable?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     purchaseOrders?: PurchaseOrderOrderByRelationAggregateInput
@@ -134666,6 +134686,7 @@ export namespace Prisma {
     totalValue?: FloatFilter<"Supplier"> | number
     status?: StringFilter<"Supplier"> | string
     notes?: StringNullableFilter<"Supplier"> | string | null
+    payable?: FloatFilter<"Supplier"> | number
     createdAt?: DateTimeFilter<"Supplier"> | Date | string
     updatedAt?: DateTimeFilter<"Supplier"> | Date | string
     purchaseOrders?: PurchaseOrderListRelationFilter
@@ -134684,6 +134705,7 @@ export namespace Prisma {
     totalValue?: SortOrder
     status?: SortOrder
     notes?: SortOrderInput | SortOrder
+    payable?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     _count?: SupplierCountOrderByAggregateInput
@@ -134709,6 +134731,7 @@ export namespace Prisma {
     totalValue?: FloatWithAggregatesFilter<"Supplier"> | number
     status?: StringWithAggregatesFilter<"Supplier"> | string
     notes?: StringNullableWithAggregatesFilter<"Supplier"> | string | null
+    payable?: FloatWithAggregatesFilter<"Supplier"> | number
     createdAt?: DateTimeWithAggregatesFilter<"Supplier"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"Supplier"> | Date | string
   }
@@ -144992,6 +145015,7 @@ export namespace Prisma {
     totalValue?: number
     status?: string
     notes?: string | null
+    payable?: number
     createdAt?: Date | string
     updatedAt?: Date | string
     purchaseOrders?: PurchaseOrderCreateNestedManyWithoutSupplierInput
@@ -145010,6 +145034,7 @@ export namespace Prisma {
     totalValue?: number
     status?: string
     notes?: string | null
+    payable?: number
     createdAt?: Date | string
     updatedAt?: Date | string
     purchaseOrders?: PurchaseOrderUncheckedCreateNestedManyWithoutSupplierInput
@@ -145028,6 +145053,7 @@ export namespace Prisma {
     totalValue?: FloatFieldUpdateOperationsInput | number
     status?: StringFieldUpdateOperationsInput | string
     notes?: NullableStringFieldUpdateOperationsInput | string | null
+    payable?: FloatFieldUpdateOperationsInput | number
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     purchaseOrders?: PurchaseOrderUpdateManyWithoutSupplierNestedInput
@@ -145046,6 +145072,7 @@ export namespace Prisma {
     totalValue?: FloatFieldUpdateOperationsInput | number
     status?: StringFieldUpdateOperationsInput | string
     notes?: NullableStringFieldUpdateOperationsInput | string | null
+    payable?: FloatFieldUpdateOperationsInput | number
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     purchaseOrders?: PurchaseOrderUncheckedUpdateManyWithoutSupplierNestedInput
@@ -145064,6 +145091,7 @@ export namespace Prisma {
     totalValue?: number
     status?: string
     notes?: string | null
+    payable?: number
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -145081,6 +145109,7 @@ export namespace Prisma {
     totalValue?: FloatFieldUpdateOperationsInput | number
     status?: StringFieldUpdateOperationsInput | string
     notes?: NullableStringFieldUpdateOperationsInput | string | null
+    payable?: FloatFieldUpdateOperationsInput | number
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -145098,6 +145127,7 @@ export namespace Prisma {
     totalValue?: FloatFieldUpdateOperationsInput | number
     status?: StringFieldUpdateOperationsInput | string
     notes?: NullableStringFieldUpdateOperationsInput | string | null
+    payable?: FloatFieldUpdateOperationsInput | number
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -156393,6 +156423,7 @@ export namespace Prisma {
     totalValue?: SortOrder
     status?: SortOrder
     notes?: SortOrder
+    payable?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -156400,6 +156431,7 @@ export namespace Prisma {
   export type SupplierAvgOrderByAggregateInput = {
     totalOrders?: SortOrder
     totalValue?: SortOrder
+    payable?: SortOrder
   }
 
   export type SupplierMaxOrderByAggregateInput = {
@@ -156415,6 +156447,7 @@ export namespace Prisma {
     totalValue?: SortOrder
     status?: SortOrder
     notes?: SortOrder
+    payable?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -156432,6 +156465,7 @@ export namespace Prisma {
     totalValue?: SortOrder
     status?: SortOrder
     notes?: SortOrder
+    payable?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -156439,6 +156473,7 @@ export namespace Prisma {
   export type SupplierSumOrderByAggregateInput = {
     totalOrders?: SortOrder
     totalValue?: SortOrder
+    payable?: SortOrder
   }
 
   export type SupplierNullableScalarRelationFilter = {
@@ -169444,6 +169479,7 @@ export namespace Prisma {
     totalValue?: number
     status?: string
     notes?: string | null
+    payable?: number
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -169461,6 +169497,7 @@ export namespace Prisma {
     totalValue?: number
     status?: string
     notes?: string | null
+    payable?: number
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -169520,6 +169557,7 @@ export namespace Prisma {
     totalValue?: FloatFieldUpdateOperationsInput | number
     status?: StringFieldUpdateOperationsInput | string
     notes?: NullableStringFieldUpdateOperationsInput | string | null
+    payable?: FloatFieldUpdateOperationsInput | number
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -169537,6 +169575,7 @@ export namespace Prisma {
     totalValue?: FloatFieldUpdateOperationsInput | number
     status?: StringFieldUpdateOperationsInput | string
     notes?: NullableStringFieldUpdateOperationsInput | string | null
+    payable?: FloatFieldUpdateOperationsInput | number
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }

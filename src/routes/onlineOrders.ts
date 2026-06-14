@@ -1784,20 +1784,45 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
         // các lần sync đã có webhook đẩy về realtime.
         const now = new Date()
         const syncFromDate = (channel as any).syncFromDate ? new Date((channel as any).syncFromDate) : null
-        const since = channel.lastSyncAt
-            ? new Date(new Date(channel.lastSyncAt).getTime() - 60 * 60_000)
-            : (syncFromDate || new Date(now.getTime() - 14 * 86400_000))
+
+        // Khoảng tuỳ chọn từ client: { from, to } (ISO). Nếu có thì ưu tiên,
+        // ngược lại giữ nguyên hành vi cũ (lastSyncAt gia số / syncFromDate / 14 ngày).
+        const bodyFrom = req.body?.from ? new Date(String(req.body.from)) : null
+        const bodyTo = req.body?.to ? new Date(String(req.body.to)) : null
+        if ((bodyFrom && isNaN(bodyFrom.getTime())) || (bodyTo && isNaN(bodyTo.getTime()))) {
+            res.status(400).json({ success: false, error: 'Ngày không hợp lệ (from/to phải là ISO date)' }); return
+        }
+
+        let since: Date
+        let until: Date
+        if (bodyFrom || bodyTo) {
+            since = bodyFrom || (channel.lastSyncAt
+                ? new Date(new Date(channel.lastSyncAt).getTime() - 60 * 60_000)
+                : (syncFromDate || new Date(now.getTime() - 14 * 86400_000)))
+            until = bodyTo || now
+            if (until.getTime() < since.getTime()) {
+                res.status(400).json({ success: false, error: 'Khoảng thời gian không hợp lệ (to phải >= from)' }); return
+            }
+            if (until.getTime() - since.getTime() > 2 * 365 * 86400_000) {
+                res.status(400).json({ success: false, error: 'Khoảng thời gian quá lớn (tối đa ~2 năm)' }); return
+            }
+        } else {
+            since = channel.lastSyncAt
+                ? new Date(new Date(channel.lastSyncAt).getTime() - 60 * 60_000)
+                : (syncFromDate || new Date(now.getTime() - 14 * 86400_000))
+            until = now
+        }
 
         // Shopee giới hạn cửa sổ thời gian 15 ngày/lần gọi → chia range dài thành
         // các khung 14 ngày. TikTok/Lazada nhận range tuỳ ý → một khung duy nhất.
         const WINDOW_MS = 14 * 86400_000
         const windows: { from: Date; to: Date }[] = []
         if (channel.platform === 'shopee') {
-            for (let t = since.getTime(); t < now.getTime(); t += WINDOW_MS) {
-                windows.push({ from: new Date(t), to: new Date(Math.min(t + WINDOW_MS, now.getTime())) })
+            for (let t = since.getTime(); t < until.getTime(); t += WINDOW_MS) {
+                windows.push({ from: new Date(t), to: new Date(Math.min(t + WINDOW_MS, until.getTime())) })
             }
         }
-        if (windows.length === 0) windows.push({ from: since, to: now })
+        if (windows.length === 0) windows.push({ from: since, to: until })
 
         let allOrders: PlatformOrder[] = []
 

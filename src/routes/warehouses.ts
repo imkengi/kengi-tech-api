@@ -45,11 +45,15 @@ function warehouseBranchFilter(req: AuthRequest): Record<string, any> {
     return getBranchFilter(req as any)
 }
 
-// ─── Helper: ensure default warehouses exist (lazy seed) ────────────────────────
-async function ensureDefaultWarehouses(prisma: any, branchId: string | null | undefined): Promise<void> {
+// ─── Helper: ensure default warehouses exist (lazy seed, idempotent) ────────────
+export async function ensureDefaultWarehouses(prisma: any, branchId: string | null | undefined): Promise<void> {
+    const normalizedBranchId = branchId || null
     for (const w of DEFAULT_WAREHOUSES) {
+        // Idempotent: only seed a default warehouse of this type when none exists
+        // yet for this branch. Re-check inside the loop so concurrent calls from
+        // multiple contexts (GET list, branch create) don't each create one.
         const existing = await prisma.warehouse.findFirst({
-            where: { type: w.type, isDefault: true, branchId: branchId || null },
+            where: { type: w.type, isDefault: true, branchId: normalizedBranchId },
         })
         if (!existing) {
             try {
@@ -61,13 +65,63 @@ async function ensureDefaultWarehouses(prisma: any, branchId: string | null | un
                         description: w.description,
                         isDefault: true,
                         isActive: true,
-                        branchId: branchId || null,
+                        branchId: normalizedBranchId,
                     },
                 })
             } catch {
                 // Ignore unique constraint races; another request seeded the same warehouse
             }
         }
+    }
+    // Best-effort cleanup of any duplicates left over from earlier non-idempotent seeding
+    await dedupDefaultWarehouses(prisma, normalizedBranchId)
+}
+
+// ─── Helper: de-dup default warehouses for a branch (SAFE) ───────────────────────
+// For each default type, if more than one DEFAULT warehouse exists for the branch,
+// KEEP exactly one (prefer one that HAS stock, else the oldest by createdAt) and
+// DELETE only duplicates that are completely EMPTY and UNREFERENCED — zero
+// WarehouseStock rows AND no stock transfers AND no sales trips. NEVER delete a
+// warehouse that has stock or references. Fully guarded with try/catch.
+async function dedupDefaultWarehouses(prisma: any, branchId: string | null | undefined): Promise<void> {
+    const normalizedBranchId = branchId || null
+    try {
+        for (const w of DEFAULT_WAREHOUSES) {
+            const candidates = await prisma.warehouse.findMany({
+                where: { type: w.type, isDefault: true, branchId: normalizedBranchId },
+                orderBy: { createdAt: 'asc' },
+            })
+            if (candidates.length <= 1) continue
+
+            // Count references per candidate
+            const enriched: Array<{ wh: any; stockCount: number; refCount: number }> = []
+            for (const wh of candidates) {
+                const [stockCount, fromCount, toCount, tripCount] = await Promise.all([
+                    prisma.warehouseStock.count({ where: { warehouseId: wh.id } }).catch(() => 0),
+                    prisma.stockTransfer.count({ where: { fromWarehouseId: wh.id } }).catch(() => 0),
+                    prisma.stockTransfer.count({ where: { toWarehouseId: wh.id } }).catch(() => 0),
+                    prisma.salesTrip.count({ where: { warehouseId: wh.id } }).catch(() => 0),
+                ])
+                enriched.push({ wh, stockCount, refCount: fromCount + toCount + tripCount })
+            }
+
+            // Pick the keeper: first one with stock, else the oldest (already sorted asc)
+            const keeper = enriched.find((e) => e.stockCount > 0) || enriched[0]
+
+            for (const e of enriched) {
+                if (e.wh.id === keeper.wh.id) continue
+                // Only delete duplicates that are truly empty and unreferenced
+                if (e.stockCount === 0 && e.refCount === 0 && !e.wh.vehicleId) {
+                    try {
+                        await prisma.warehouse.delete({ where: { id: e.wh.id } })
+                    } catch {
+                        // Leave it in place if delete fails (e.g. unexpected FK reference)
+                    }
+                }
+            }
+        }
+    } catch (err) {
+        console.error('dedupDefaultWarehouses error (non-fatal):', err)
     }
 }
 
@@ -680,4 +734,3 @@ router.post(
 )
 
 export default router
-export { ensureDefaultWarehouses }
