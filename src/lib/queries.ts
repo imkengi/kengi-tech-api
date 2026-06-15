@@ -36,13 +36,13 @@ export async function getDashboardStats(prisma: StorePrisma, branchFilter: Recor
     const [txRows, productRows, customerRows, expenseRows] = await Promise.all([
         prisma.$queryRawUnsafe<any[]>(
             `SELECT
-                COALESCE(SUM(total) FILTER (WHERE status <> 'voided'), 0) AS total_revenue,
-                COALESCE(SUM(total) FILTER (WHERE status <> 'voided' AND "createdAt" >= $1), 0) AS today_revenue,
-                COALESCE(SUM(total) FILTER (WHERE status <> 'voided' AND "createdAt" >= $2), 0) AS this_month_revenue,
-                COALESCE(SUM(total) FILTER (WHERE status <> 'voided' AND "createdAt" >= $3 AND "createdAt" <= $4), 0) AS last_month_revenue,
-                COUNT(*) FILTER (WHERE status <> 'voided') AS total_orders,
-                COUNT(*) FILTER (WHERE status <> 'voided' AND "createdAt" >= $1) AS today_orders,
-                COUNT(*) FILTER (WHERE status <> 'voided' AND "createdAt" >= $3 AND "createdAt" <= $4) AS last_month_orders
+                COALESCE(SUM(total) FILTER (WHERE status NOT IN ('voided', 'returned')), 0) AS total_revenue,
+                COALESCE(SUM(total) FILTER (WHERE status NOT IN ('voided', 'returned') AND "createdAt" >= $1), 0) AS today_revenue,
+                COALESCE(SUM(total) FILTER (WHERE status NOT IN ('voided', 'returned') AND "createdAt" >= $2), 0) AS this_month_revenue,
+                COALESCE(SUM(total) FILTER (WHERE status NOT IN ('voided', 'returned') AND "createdAt" >= $3 AND "createdAt" <= $4), 0) AS last_month_revenue,
+                COUNT(*) FILTER (WHERE status NOT IN ('voided', 'returned')) AS total_orders,
+                COUNT(*) FILTER (WHERE status NOT IN ('voided', 'returned') AND "createdAt" >= $1) AS today_orders,
+                COUNT(*) FILTER (WHERE status NOT IN ('voided', 'returned') AND "createdAt" >= $3 AND "createdAt" <= $4) AS last_month_orders
              FROM "Transaction"
              WHERE ($5::text IS NULL OR "branchId" = $5)`,
             todayStart, monthStart, lastMonthStart, lastMonthEnd, branchId,
@@ -143,7 +143,7 @@ export async function getRevenueByDays(prisma: StorePrisma, days: number = 7, br
         where: {
             ...branchFilter,
             createdAt: { gte: since },
-            status: { not: 'voided' },
+            status: { notIn: ['voided', 'returned'] },
         },
         select: { total: true, subtotal: true, discount: true, createdAt: true },
         orderBy: { createdAt: 'asc' },
@@ -249,7 +249,7 @@ export async function getTodayShiftSummary(prisma: StorePrisma): Promise<ShiftSu
     todayStart.setHours(0, 0, 0, 0)
 
     const transactions = await prisma.transaction.findMany({
-        where: { createdAt: { gte: todayStart }, status: { not: 'voided' } },
+        where: { createdAt: { gte: todayStart }, status: { notIn: ['voided', 'returned'] } },
         select: { createdBy: true, createdByName: true, total: true },
     })
 
