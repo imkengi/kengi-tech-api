@@ -35,7 +35,16 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
             where: { ...getBranchFilter(req as any) },
             orderBy: { createdAt: 'desc' },
         })
-        const _response = brands.map(b => ({ ...b, createdAt: b.createdAt.toISOString() }))
+        // Đếm số sản phẩm theo từng thương hiệu (1 query gộp thay vì N query)
+        const distribution = await prisma.product.groupBy({ by: ['brandId'], _count: true })
+        const countMap = new Map<string, number>(
+            distribution.map((d: any) => [d.brandId, d._count as number]),
+        )
+        const _response = brands.map(b => ({
+            ...b,
+            createdAt: b.createdAt.toISOString(),
+            productCount: countMap.get(b.id) || 0,
+        }))
         await cacheSet(cacheKey, _response, 300)
         res.json(_response)
     } catch (err) {
