@@ -3,6 +3,11 @@ import { authMiddleware, AuthRequest } from '../middleware/auth'
 
 const router = Router()
 
+// Nhận diện bút toán điều chỉnh/hủy (không phải giao dịch bán/thu thật) để loại khỏi
+// "chi tiết công nợ". Cũng loại "Nợ từ HĐ" vì nợ hóa đơn đã được liệt kê từ txEntries.
+const isAdjustmentDesc = (d: string | null | undefined) =>
+    /hủy|xóa nợ|ghi nợ lại|điều chỉnh|nợ từ hđ/i.test(d || '')
+
 // GET /api/debts/stats
 router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
@@ -56,10 +61,8 @@ router.get('/summary', authMiddleware, async (req: AuthRequest, res: Response) =
         // 3. Get transactions with unpaid amounts (same pattern as customer debt-history)
         const debtTransactions = await prisma.transaction.findMany({
             where: {
-                OR: [
-                    { status: 'partial' },
-                    // transactions where amountReceived < total
-                ],
+                customerId: { not: null },
+                status: { notIn: ['voided', 'returned'] },
             },
             select: {
                 id: true, receiptNumber: true, total: true, amountReceived: true,
@@ -98,26 +101,39 @@ router.get('/summary', authMiddleware, async (req: AuthRequest, res: Response) =
         // 6. Build summary: start from customers with debt, merge with entries
         const summaryMap: Record<string, {
             customerId: string; customerName: string; phone: string
-            totalDebt: number; entries: any[]
+            totalDebt: number; openingBalance: number; entries: any[]
         }> = {}
 
-        // Add customers with debt from Customer model
+        // Add customers with debt from Customer model.
+        // Chi tiết công nợ = hóa đơn bán chưa thu (nguồn phát sinh nợ) + các lần thu nợ.
+        // Loại bút toán điều chỉnh/hủy (churn). Tổng nợ vẫn lấy Customer.debt (uy quyền);
+        // phần chưa liệt kê được dồn vào "dư nợ đầu kỳ" để phiếu luôn cân đối.
         for (const c of customersWithDebt) {
             const debtEntries = entryMap[c.id] || []
             const txEntries = txEntryMap[c.id] || []
-            // Merge and sort chronologically
-            const allEntries = [...debtEntries, ...txEntries].sort((a, b) =>
+
+            const payments = debtEntries.filter(e => e.type === 'payment')
+            const manualDebts = debtEntries.filter(e => e.type === 'debt' && !isAdjustmentDesc(e.description))
+            const completed = [...txEntries, ...manualDebts, ...payments].sort((a, b) =>
                 new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
             )
-            // Deduplicate: if DebtEntry records exist, they're authoritative - skip tx entries
-            const finalEntries = debtEntries.length > 0 ? debtEntries : allEntries
+
+            const net = completed.reduce((s, e) => s + (e.type === 'payment' ? -e.amount : e.amount), 0)
+            const openingBalance = c.debt - net
+            // Số dư luỹ kế: bắt đầu từ dư nợ đầu kỳ, kết thúc đúng bằng tổng nợ.
+            let running = openingBalance
+            for (const e of completed) {
+                running += e.type === 'payment' ? -e.amount : e.amount
+                e.balance = running
+            }
 
             summaryMap[c.id] = {
                 customerId: c.id,
                 customerName: c.name,
                 phone: c.phone || '',
                 totalDebt: c.debt,
-                entries: finalEntries,
+                openingBalance,
+                entries: completed,
             }
         }
 
@@ -130,6 +146,7 @@ router.get('/summary', authMiddleware, async (req: AuthRequest, res: Response) =
                     customerName: last.customerName,
                     phone: last.phone || '',
                     totalDebt: last.balance,
+                    openingBalance: 0,
                     entries: custEntries,
                 }
             }
@@ -144,6 +161,7 @@ router.get('/summary', authMiddleware, async (req: AuthRequest, res: Response) =
                     customerName: cust?.name || txEntries[0].customerName || 'Khách lẻ',
                     phone: cust?.phone || '',
                     totalDebt: txEntries.reduce((s: number, e: any) => s + e.amount, 0),
+                    openingBalance: 0,
                     entries: txEntries,
                 }
             }
