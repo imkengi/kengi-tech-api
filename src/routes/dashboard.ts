@@ -1,9 +1,11 @@
 import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest, getBranchFilter } from '../middleware/auth'
 import { cacheGet, cacheSet } from '../lib/cache'
-import { getDashboardStats, getRevenueByDays, getTopProducts, getRecentActivity } from '../lib/queries'
+import { getDashboardStats, getRevenueByDays, getTopProducts, getRecentActivity, DashboardPeriod } from '../lib/queries'
 
 const router = Router()
+
+const VALID_PERIODS: DashboardPeriod[] = ['today', '7days', 'thisMonth', 'lastMonth', 'thisYear']
 
 // ─── GET /api/dashboard/stats ───────────────────────────────────────────────
 router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -14,12 +16,14 @@ router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => 
         // Cache key derived from JWT, never client headers — prevents cross-branch
         // cache poisoning by clients that spoof x-branch-id.
         const cacheBranch = req.user?.isMainBranch ? 'all' : (req.user?.branchId || 'none')
+        const period = (VALID_PERIODS.includes(req.query.period as DashboardPeriod)
+            ? req.query.period : 'thisMonth') as DashboardPeriod
 
-        const cacheKey = `${schema}:${cacheBranch}:dashboard:stats`
+        const cacheKey = `${schema}:${cacheBranch}:dashboard:stats:${period}`
         const cached = await cacheGet(cacheKey)
         if (cached) return res.json({ success: true, source: 'cache', data: cached })
 
-        const stats = await getDashboardStats(prisma, branchFilter)
+        const stats = await getDashboardStats(prisma, branchFilter, period)
 
         await cacheSet(cacheKey, stats, 300)
         res.json({ success: true, source: 'prisma', data: stats })

@@ -15,14 +15,68 @@ export interface DashboardStats {
     products: { total: number; lowStock: number; outOfStock: number; growth: number }
     customers: { total: number; newThisMonth: number; withDebt: number; growth: number }
     expenses: { thisMonth: number; growth: number }
+    // Số liệu theo kỳ được chọn (preset). Doanh thu/đơn trong kỳ + tăng trưởng
+    // so với kỳ liền trước cùng độ dài. Dùng cho bộ lọc thời gian trên dashboard.
+    period: {
+        key: string
+        label: string
+        revenue: number
+        orders: number
+        revenueGrowth: number
+        ordersGrowth: number
+        avgOrderValue: number
+    }
 }
 
-export async function getDashboardStats(prisma: StorePrisma, branchFilter: Record<string, any> = {}): Promise<DashboardStats> {
+// Các preset thời gian hỗ trợ cho dashboard. Giữ đồng bộ với FE.
+export type DashboardPeriod = 'today' | '7days' | 'thisMonth' | 'lastMonth' | 'thisYear'
+const PERIOD_LABELS: Record<DashboardPeriod, string> = {
+    today: 'Hôm nay',
+    '7days': '7 ngày',
+    thisMonth: 'Tháng này',
+    lastMonth: 'Tháng trước',
+    thisYear: 'Năm nay',
+}
+
+export async function getDashboardStats(
+    prisma: StorePrisma,
+    branchFilter: Record<string, any> = {},
+    period: DashboardPeriod = 'thisMonth',
+): Promise<DashboardStats> {
     const now = new Date()
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
     const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
     const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999)
+
+    // ─── Cửa sổ thời gian cho kỳ đã chọn + kỳ liền trước (để tính tăng trưởng) ──
+    // prevEnd luôn = ngay trước pStart (−1ms) nên hai cửa sổ không chồng lấn.
+    const periodKey: DashboardPeriod = PERIOD_LABELS[period] ? period : 'thisMonth'
+    let pStart: Date, pEnd: Date, prevStart: Date
+    switch (periodKey) {
+        case 'today':
+            pStart = todayStart; pEnd = now
+            prevStart = new Date(todayStart); prevStart.setDate(prevStart.getDate() - 1)
+            break
+        case '7days':
+            pStart = new Date(todayStart); pStart.setDate(pStart.getDate() - 6); pEnd = now
+            prevStart = new Date(pStart); prevStart.setDate(prevStart.getDate() - 7)
+            break
+        case 'lastMonth':
+            pStart = lastMonthStart; pEnd = lastMonthEnd
+            prevStart = new Date(now.getFullYear(), now.getMonth() - 2, 1)
+            break
+        case 'thisYear':
+            pStart = new Date(now.getFullYear(), 0, 1); pEnd = now
+            prevStart = new Date(now.getFullYear() - 1, 0, 1)
+            break
+        case 'thisMonth':
+        default:
+            pStart = monthStart; pEnd = now
+            prevStart = lastMonthStart
+            break
+    }
+    const prevEnd = new Date(pStart.getTime() - 1)
 
     // The previous implementation issued 16 round-trips. Consolidate into 4
     // FILTER-style aggregate queries (one per table). Each pushes counting and
@@ -42,10 +96,14 @@ export async function getDashboardStats(prisma: StorePrisma, branchFilter: Recor
                 COALESCE(SUM(total) FILTER (WHERE status NOT IN ('voided', 'returned') AND "createdAt" >= $3 AND "createdAt" <= $4), 0) AS last_month_revenue,
                 COUNT(*) FILTER (WHERE status NOT IN ('voided', 'returned')) AS total_orders,
                 COUNT(*) FILTER (WHERE status NOT IN ('voided', 'returned') AND "createdAt" >= $1) AS today_orders,
-                COUNT(*) FILTER (WHERE status NOT IN ('voided', 'returned') AND "createdAt" >= $3 AND "createdAt" <= $4) AS last_month_orders
+                COUNT(*) FILTER (WHERE status NOT IN ('voided', 'returned') AND "createdAt" >= $3 AND "createdAt" <= $4) AS last_month_orders,
+                COALESCE(SUM(total) FILTER (WHERE status NOT IN ('voided', 'returned') AND "createdAt" >= $6 AND "createdAt" <= $7), 0) AS period_revenue,
+                COUNT(*) FILTER (WHERE status NOT IN ('voided', 'returned') AND "createdAt" >= $6 AND "createdAt" <= $7) AS period_orders,
+                COALESCE(SUM(total) FILTER (WHERE status NOT IN ('voided', 'returned') AND "createdAt" >= $8 AND "createdAt" <= $9), 0) AS prev_period_revenue,
+                COUNT(*) FILTER (WHERE status NOT IN ('voided', 'returned') AND "createdAt" >= $8 AND "createdAt" <= $9) AS prev_period_orders
              FROM "Transaction"
              WHERE ($5::text IS NULL OR "branchId" = $5)`,
-            todayStart, monthStart, lastMonthStart, lastMonthEnd, branchId,
+            todayStart, monthStart, lastMonthStart, lastMonthEnd, branchId, pStart, pEnd, prevStart, prevEnd,
         ),
         prisma.$queryRawUnsafe<any[]>(
             `SELECT
@@ -91,6 +149,11 @@ export async function getDashboardStats(prisma: StorePrisma, branchFilter: Recor
     const calcGrowth = (current: number, previous: number) =>
         previous > 0 ? Math.round(((current - previous) / previous) * 100) : 0
 
+    const periodRevenue = num(tx.period_revenue)
+    const periodOrders = num(tx.period_orders)
+    const prevPeriodRevenue = num(tx.prev_period_revenue)
+    const prevPeriodOrders = num(tx.prev_period_orders)
+
     return {
         revenue: {
             total: num(tx.total_revenue),
@@ -119,6 +182,15 @@ export async function getDashboardStats(prisma: StorePrisma, branchFilter: Recor
         expenses: {
             thisMonth: thisMonthExp,
             growth: calcGrowth(thisMonthExp, lastMonthExp),
+        },
+        period: {
+            key: periodKey,
+            label: PERIOD_LABELS[periodKey],
+            revenue: periodRevenue,
+            orders: periodOrders,
+            revenueGrowth: calcGrowth(periodRevenue, prevPeriodRevenue),
+            ordersGrowth: calcGrowth(periodOrders, prevPeriodOrders),
+            avgOrderValue: periodOrders > 0 ? Math.round(periodRevenue / periodOrders) : 0,
         },
     }
 }
