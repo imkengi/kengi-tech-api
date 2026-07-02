@@ -49,7 +49,7 @@ router.get('/', authMiddleware, requirePermission('customers.view'), async (req:
         if (salesUserId) where.salesUserId = salesUserId
 
         const pageNum = Math.max(1, parseInt(page as string))
-        const size = Math.max(1, Math.min(200, parseInt(pageSize as string)))
+        const size = Math.max(1, Math.min(1000, parseInt(pageSize as string)))
         const skip = (pageNum - 1) * size
 
         const [total, customers] = await Promise.all([
@@ -114,7 +114,8 @@ router.get('/:id', authMiddleware, requirePermission('customers.view'), async (r
 
         const [txAgg, txCount, lastTx] = await Promise.all([
             prisma.transaction.aggregate({
-                where: { OR: whereConditions, status: { not: 'voided' } },
+                // Loại cả đơn trả hàng — tiền đã hoàn thì không tính vào tổng mua
+                where: { OR: whereConditions, status: { notIn: ['voided', 'returned'] } },
                 _sum: { total: true },
             }),
             prisma.transaction.count({
@@ -255,9 +256,11 @@ router.get('/:id/debt-history', authMiddleware, requirePermission('customers.vie
         }
 
         // 1. Get ALL transactions for this customer
+        // Ưu tiên match theo customerId; chỉ fallback name/phone cho giao dịch cũ
+        // CHƯA gắn customerId — tránh dính giao dịch của khách khác trùng tên/SĐT.
         const whereConditions: any[] = [{ customerId: custId }]
-        if (customer.name) whereConditions.push({ customerName: customer.name })
-        if (customer.phone) whereConditions.push({ customerPhone: customer.phone })
+        if (customer.name) whereConditions.push({ customerId: null, customerName: customer.name })
+        if (customer.phone) whereConditions.push({ customerId: null, customerPhone: customer.phone })
 
         const transactions = await prisma.transaction.findMany({
             where: { OR: whereConditions },
@@ -303,19 +306,22 @@ router.get('/:id/debt-history', authMiddleware, requirePermission('customers.vie
             // Skip voided transactions
             if (t.status === 'voided') continue
 
-            // Handle returned transactions — create "Phiếu trả hàng" entry
+            // Đơn trả hàng: KHÔNG continue — vẫn ghi entry bán hàng + các phiếu thu
+            // của chính đơn đó như đơn thường (continue làm mất chúng → running
+            // balance âm giả), chỉ THÊM entry "Trả hàng"; sort theo thời gian ở
+            // cuối lo thứ tự. Schema chưa có trường refund/returnedAmount riêng
+            // nên số hoàn vẫn dùng total như cũ.
             if (t.status === 'returned') {
                 const digits = t.receiptNumber?.replace(/\D/g, '') || ''
                 history.push({
                     id: `${t.id}-return`,
                     code: `TH${digits || String(++ptCounter).padStart(5, '0')}`,
-                    date: ((t as any).updatedAt || t.createdAt).toISOString(),
+                    date: ((t as any).returnedAt || (t as any).updatedAt || t.createdAt).toISOString(),
                     type: 'return',
                     label: 'Trả hàng',
                     amount: -t.total,
                     balance: 0,
                 })
-                continue
             }
 
             // ── 1. "Bán hàng" entry: total invoice amount (increases debt)
@@ -474,6 +480,17 @@ router.post('/:id/cancel-receipt', authMiddleware, async (req: AuthRequest, res:
                 res.status(404).json({ success: false, error: 'Transaction not found' })
                 return
             }
+            // Chống nhầm khách: giao dịch phải thuộc đúng khách :id — gọi với id khách X
+            // + phiếu của khách Y sẽ làm sổ nợ CẢ HAI khách sai. Giao dịch cũ chưa gắn
+            // customerId thì đối chiếu tên/SĐT (cùng logic match của debt-history).
+            const ownsTx = tx.customerId
+                ? tx.customerId === customerId
+                : Boolean((customer.name && tx.customerName === customer.name) ||
+                    (customer.phone && tx.customerPhone === customer.phone))
+            if (!ownsTx) {
+                res.status(404).json({ success: false, error: 'Transaction not found' })
+                return
+            }
             if (tx.status === 'voided' || tx.status === 'returned') {
                 res.status(400).json({ success: false, error: 'Giao dịch đã hủy/trả hàng' })
                 return
@@ -555,6 +572,17 @@ router.post('/:id/cancel-receipt', authMiddleware, async (req: AuthRequest, res:
                 res.status(400).json({ success: false, error: 'Phiếu này không phải phiếu thu nợ — vui lòng hủy theo đường khác' })
                 return
             }
+            // Chống nhầm khách: so customerId của giao dịch cha với khách :id
+            // (giao dịch cũ chưa gắn customerId thì đối chiếu tên/SĐT).
+            const parentTx = payment.transaction
+            const ownsPayment = parentTx.customerId
+                ? parentTx.customerId === customerId
+                : Boolean((customer.name && parentTx.customerName === customer.name) ||
+                    (customer.phone && parentTx.customerPhone === customer.phone))
+            if (!ownsPayment) {
+                res.status(404).json({ success: false, error: 'Payment not found' })
+                return
+            }
             cancelledAmount = payment.amount
             const tx = payment.transaction
 
@@ -599,6 +627,11 @@ router.post('/:id/cancel-receipt', authMiddleware, async (req: AuthRequest, res:
             }
             if (entry.type !== 'payment') {
                 res.status(400).json({ success: false, error: 'Mục này không phải phiếu thu' })
+                return
+            }
+            // Chống nhầm khách: entry phải thuộc đúng khách :id
+            if (entry.customerId !== customerId) {
+                res.status(404).json({ success: false, error: 'Debt entry not found' })
                 return
             }
             cancelledAmount = entry.amount
@@ -806,44 +839,53 @@ router.post('/:id/pay-debt', authMiddleware, async (req: AuthRequest, res: Respo
             return
         }
 
+        // Không cho thu quá số nợ hiện có (clamp về Customer.debt — nguồn sự thật)
         const payAmount = Math.min(amount, customer.debt)
+        if (payAmount <= 0) {
+            res.status(400).json({ success: false, error: 'Khách hàng không còn công nợ' })
+            return
+        }
 
-        // Create DebtEntry record for tracking
-        const lastEntry = await prisma.debtEntry.findFirst({
-            where: { customerId: customer.id },
-            orderBy: { createdAt: 'desc' },
-        })
-        const currentBalance = lastEntry?.balance ?? customer.debt
+        // Số dư hiện tại lấy từ Customer.debt (nguồn sự thật) — KHÔNG lấy từ
+        // lastEntry.balance vì sổ chi tiết có thể lệch (entry cũ/xóa tay).
+        const currentBalance = Math.max(0, customer.debt)
 
-        await prisma.debtEntry.create({
-            data: {
-                customerId: customer.id,
-                customerName: customer.name,
-                phone: customer.phone || '',
-                type: 'payment',
+        // Sổ chi tiết + số dư + bút toán phải đi cùng nhau trong một transaction
+        const updated = await prisma.$transaction(async (tx) => {
+            const debtEntry = await tx.debtEntry.create({
+                data: {
+                    customerId: customer.id,
+                    customerName: customer.name,
+                    phone: customer.phone || '',
+                    type: 'payment',
+                    amount: payAmount,
+                    description: note || reference || `Thanh toán nợ (${method || 'cash'})`,
+                    balance: Math.max(0, currentBalance - payAmount),
+                },
+            })
+
+            const updatedCustomer = await tx.customer.update({
+                where: { id: String(req.params.id) },
+                data: {
+                    debt: { decrement: payAmount },
+                },
+                include: { group: true },
+            })
+
+            // Bút toán giảm phải thu: Nợ 111/112 / Có 131.
+            // refKey xác định theo DebtEntry vừa tạo (không dùng Date.now()) —
+            // idempotent khi retry nhờ JournalEntry.reference @unique.
+            await postDebtCollectionJournal(tx, {
                 amount: payAmount,
-                description: note || reference || `Thanh toán nợ (${method || 'cash'})`,
-                balance: Math.max(0, currentBalance - payAmount),
-            },
-        })
+                refKey: `COLLECT-CUST-${customer.id}-${debtEntry.id}`,
+                date: new Date().toISOString().slice(0, 10),
+                paymentType: method,
+                customerName: customer.name,
+                branchId: (customer as any).branchId ?? null,
+                userId: req.user?.userId ?? null,
+            })
 
-        const updated = await prisma.customer.update({
-            where: { id: String(req.params.id) },
-            data: {
-                debt: { decrement: payAmount },
-            },
-            include: { group: true },
-        })
-
-        // Bút toán giảm phải thu: Nợ 111/112 / Có 131
-        await postDebtCollectionJournal(prisma, {
-            amount: payAmount,
-            refKey: `COLLECT-CUST-${customer.id}-${Date.now()}`,
-            date: new Date().toISOString().slice(0, 10),
-            paymentType: method,
-            customerName: customer.name,
-            branchId: (customer as any).branchId ?? null,
-            userId: req.user?.userId ?? null,
+            return updatedCustomer
         })
 
         console.log(`💰 Customer ${customer.name} paid debt: ${payAmount} (remaining: ${updated.debt})`)

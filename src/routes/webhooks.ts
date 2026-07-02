@@ -5,8 +5,10 @@ import { ShopeeService } from '../services/platforms/shopee'
 import { TikTokService } from '../services/platforms/tiktok'
 import { convertOnlineOrderToTransaction } from '../services/orderSync'
 import { syncChannelReturns } from '../services/returnSync'
+import { reverseOnlineOrderEffects, isReversalStatus } from '../services/onlineOrderReversal'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { publishEvent } from '../lib/pubsub'
+import { processComment } from '../services/fanpageAutoReply'
 
 const router = Router()
 
@@ -15,6 +17,7 @@ const router = Router()
 const SHOP_SCHEMA_TTL = 3600
 const shopSchemaCacheKey = (shopId: string) => `webhook:shopee:shop:${shopId}:schema`
 const tiktokSchemaCacheKey = (shopId: string) => `webhook:tiktok:shop:${shopId}:schema`
+const fbPageSchemaCacheKey = (pageId: string) => `webhook:facebook:page:${pageId}:schema`
 
 // Shopee push signature: HMAC-SHA256(partner_key, push_url + "|" + raw_body) hex.
 // Sent in the Authorization header. Returns true when signature matches.
@@ -192,6 +195,16 @@ router.post('/shopee', async (req: Request, res: Response) => {
                 },
             })
             console.log(`[Shopee Webhook] ✅ Updated ${orderSn} → status=${orderDetail.status} tracking=${orderDetail.trackingNumber || 'none'}`)
+
+            // Đơn chuyển sang hủy/hoàn chung cuộc → đảo hiệu ứng (hoàn kho + void
+            // HĐ đã convert + đảo bút toán). Idempotent nên gọi lặp lại vô hại.
+            if (isReversalStatus(orderDetail.status)) {
+                try {
+                    await reverseOnlineOrderEffects(storePrisma, existing)
+                } catch (revErr: any) {
+                    console.error(`[Shopee Webhook] Reversal failed for ${orderSn}:`, revErr.message)
+                }
+            }
         } else {
             // Create new order
             await storePrisma.onlineOrder.create({
@@ -462,6 +475,15 @@ router.post('/tiktok', async (req: Request, res: Response) => {
             })
             console.log(`[TikTok Webhook] ✅ Updated ${orderId} → status=${orderDetail.status} tracking=${orderDetail.trackingNumber || 'none'}`)
 
+            // Đơn CANCELLED/hoàn → đảo hiệu ứng (hoàn kho + void HĐ + đảo bút toán)
+            if (isReversalStatus(orderDetail.status)) {
+                try {
+                    await reverseOnlineOrderEffects(storePrisma, existing)
+                } catch (revErr: any) {
+                    console.error(`[TikTok Webhook] Reversal failed for ${orderId}:`, revErr.message)
+                }
+            }
+
             // Auto-convert eligible orders to transactions
             try {
                 await convertOnlineOrderToTransaction(storePrisma, existing.id)
@@ -523,6 +545,142 @@ router.post('/tiktok', async (req: Request, res: Response) => {
 
     } catch (err: any) {
         console.error('[TikTok Webhook] Error:', err.message)
+    }
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  FACEBOOK PAGE WEBHOOK (Fanpage Manager)
+//  GET  = xác minh (hub.challenge) khi đăng ký callback URL trong FB App
+//  POST = sự kiện `feed` (comment mới) → chạy engine auto-reply server-side
+//  FB gửi numeric page id trong entry[].id → khớp FbPage.pageId (quét store).
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Cache MISS trong bộ nhớ (pageId → timestamp, TTL 10 phút): pageId lạ không có
+// cache hit ở trên → mỗi request spam sẽ quét lại MỌI schema. Nhớ pageId không
+// tìm thấy để các request sau trả về null ngay, khỏi quét.
+const FB_PAGE_MISS_TTL_MS = 10 * 60 * 1000
+const fbPageMissCache = new Map<string, number>()
+
+// Tìm store schema + FbPage theo pageId (cache 1h → fallback quét).
+async function resolveFbPage(pageId: string): Promise<{ storePrisma: any; page: any; schema: string } | null> {
+    // MISS cache: pageId đã biết là không có → khỏi quét lại trong TTL
+    const missedAt = fbPageMissCache.get(pageId)
+    if (missedAt !== undefined) {
+        if (Date.now() - missedAt < FB_PAGE_MISS_TTL_MS) return null
+        fbPageMissCache.delete(pageId) // hết TTL → cho quét lại
+    }
+
+    const cached = await cacheGet<string>(fbPageSchemaCacheKey(pageId))
+    if (cached) {
+        try {
+            const prisma = getStorePrisma(cached)
+            const page = await prisma.fbPage.findUnique({ where: { pageId } })
+            if (page) return { storePrisma: prisma, page, schema: cached }
+        } catch { /* schema stale → quét lại */ }
+    }
+    const stores = await registryPrisma.store.findMany({ where: { status: 'active' } })
+    for (const store of stores) {
+        try {
+            const prisma = getStorePrisma(store.schema)
+            const page = await prisma.fbPage.findUnique({ where: { pageId } })
+            if (page) {
+                await cacheSet(fbPageSchemaCacheKey(pageId), store.schema, SHOP_SCHEMA_TTL)
+                return { storePrisma: prisma, page, schema: store.schema }
+            }
+        } catch { continue }
+    }
+    // Không tìm thấy → ghi nhớ MISS. Dọn entry hết hạn khi Map phình (bị spam
+    // pageId ngẫu nhiên) để không rò bộ nhớ.
+    if (fbPageMissCache.size > 1000) {
+        const now = Date.now()
+        for (const [k, t] of fbPageMissCache) {
+            if (now - t >= FB_PAGE_MISS_TTL_MS) fbPageMissCache.delete(k)
+        }
+    }
+    fbPageMissCache.set(pageId, Date.now())
+    return null
+}
+
+// Facebook webhook signature: header `X-Hub-Signature-256` = 'sha256=' +
+// HMAC-SHA256(app_secret, raw_body) hex — mirror pattern verify của Shopee/TikTok
+// ở trên (rawBody stash sẵn trong express.json verify hook, xem src/index.ts).
+function verifyFacebookSignature(rawBody: Buffer, appSecret: string, header: string): boolean {
+    const expected = 'sha256=' + crypto.createHmac('sha256', appSecret).update(rawBody).digest('hex')
+    try {
+        const a = Buffer.from(expected)
+        const b = Buffer.from(header)
+        if (a.length !== b.length) return false
+        return crypto.timingSafeEqual(a, b)
+    } catch {
+        return false
+    }
+}
+
+// GET /api/webhooks/facebook — verification handshake
+router.get('/facebook', (req: Request, res: Response) => {
+    const mode = req.query['hub.mode']
+    const token = req.query['hub.verify_token']
+    const challenge = req.query['hub.challenge']
+    const verifyToken = process.env.FB_WEBHOOK_VERIFY_TOKEN || ''
+    if (mode === 'subscribe' && token === verifyToken && verifyToken) {
+        return res.status(200).send(String(challenge))
+    }
+    return res.sendStatus(403)
+})
+
+// POST /api/webhooks/facebook — feed events
+router.post('/facebook', async (req: Request, res: Response) => {
+    // ── Verify chữ ký TRƯỚC KHI xử lý — khác Shopee/TikTok (re-fetch từ API),
+    // body FB được dùng TRỰC TIẾP (processComment ghi DB + gọi Graph API) nên
+    // thiếu secret hoặc sai chữ ký là từ chối thẳng, không có chế độ lenient.
+    const fbAppSecret = process.env.FB_APP_SECRET || ''
+    const fbSignature = String(req.header('x-hub-signature-256') || '').trim()
+    const fbRawBody: Buffer | undefined = (req as any).rawBody
+    if (!fbAppSecret || !fbSignature || !fbRawBody
+        || !verifyFacebookSignature(fbRawBody, fbAppSecret, fbSignature)) {
+        console.warn(`[FB Webhook] ❌ Từ chối: ${!fbAppSecret ? 'thiếu FB_APP_SECRET' : !fbSignature ? 'thiếu X-Hub-Signature-256' : 'chữ ký không hợp lệ'}`)
+        res.sendStatus(403)
+        return
+    }
+
+    // Trả 200 ngay (FB retry nếu non-200)
+    res.sendStatus(200)
+
+    try {
+        const body = req.body
+        if (body?.object !== 'page') return
+
+        for (const entry of body.entry || []) {
+            const pageId = String(entry.id)
+            const commentChanges = (entry.changes || []).filter(
+                (c: any) => c.field === 'feed' && c.value?.item === 'comment' && c.value?.verb === 'add',
+            )
+            if (!commentChanges.length) continue
+
+            const resolved = await resolveFbPage(pageId)
+            if (!resolved) {
+                console.log(`[FB Webhook] Không tìm thấy page ${pageId} (chưa kết nối)`)
+                continue
+            }
+            if (!resolved.page.autoReplyEnabled) continue
+
+            for (const change of commentChanges) {
+                const v = change.value
+                try {
+                    await processComment(resolved.storePrisma, resolved.page, {
+                        commentId: String(v.comment_id),
+                        postId: v.post_id ? String(v.post_id) : undefined,
+                        message: String(v.message || ''),
+                        fromId: v.from?.id ? String(v.from.id) : undefined,
+                        fromName: v.from?.name,
+                    })
+                } catch (e: any) {
+                    console.error(`[FB Webhook] auto-reply error page=${pageId}:`, e.message)
+                }
+            }
+        }
+    } catch (err: any) {
+        console.error('[FB Webhook] Error:', err.message)
     }
 })
 

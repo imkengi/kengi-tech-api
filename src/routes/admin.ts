@@ -639,6 +639,8 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineOrder" ADD COLUMN IF NOT EXISTS "platformFee" DOUBLE PRECISION NOT NULL DEFAULT 0`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineOrder" ADD COLUMN IF NOT EXISTS "platformFeeRate" DOUBLE PRECISION NOT NULL DEFAULT 0`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineOrder" ADD COLUMN IF NOT EXISTS "netRevenue" DOUBLE PRECISION NOT NULL DEFAULT 0`)
+                // Shopee Ads Smart Voucher — chỉ quan sát (2026-06-24)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineOrder" ADD COLUMN IF NOT EXISTS "adsVoucherDiscount" DOUBLE PRECISION NOT NULL DEFAULT 0`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineChannel" ADD COLUMN IF NOT EXISTS "commissionRate" DOUBLE PRECISION NOT NULL DEFAULT 6`)
                 // Geocode coordinates
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "latitude" DOUBLE PRECISION`)
@@ -676,6 +678,133 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 `)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SalesTripLog_tripId_idx" ON "SalesTripLog"("tripId")`)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SalesTripLog_createdAt_idx" ON "SalesTripLog"("createdAt")`)
+
+                // Supplier payable + Import receipt payment/due-date tracking (2026-06)
+                // db push trong container không áp dụng được — thêm cột trực tiếp ở đây.
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Supplier" ADD COLUMN IF NOT EXISTS "payable" DOUBLE PRECISION NOT NULL DEFAULT 0`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "ImportReceipt" ADD COLUMN IF NOT EXISTS "paidAmount" DOUBLE PRECISION NOT NULL DEFAULT 0`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "ImportReceipt" ADD COLUMN IF NOT EXISTS "paymentStatus" TEXT NOT NULL DEFAULT 'paid'`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "ImportReceipt" ADD COLUMN IF NOT EXISTS "dueDate" TIMESTAMP(3)`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "ImportReceipt" ADD COLUMN IF NOT EXISTS "paymentTerm" TEXT`)
+
+                // Hoàn kho đúng đơn vị gốc + chống trừ kho 2 lần đơn sàn (2026-07-02)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "TransactionItem" ADD COLUMN IF NOT EXISTS "baseQuantity" DOUBLE PRECISION NOT NULL DEFAULT 0`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineOrder" ADD COLUMN IF NOT EXISTS "stockDeducted" BOOLEAN NOT NULL DEFAULT false`)
+
+                // Idempotency bút toán: unique trên JournalEntry.reference.
+                // Nếu dữ liệu cũ đã lỡ double-post thì index tạo fail — báo riêng để xử lý tay,
+                // KHÔNG tự xóa bút toán.
+                try {
+                    await (sp as any).$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "JournalEntry_reference_key" ON "JournalEntry"("reference")`)
+                } catch (idxErr: any) {
+                    storeResults.push(`${store.name}: JournalEntry.reference unique FAILED (trùng ref cũ?): ${String(idxErr?.message || idxErr).slice(0, 200)}`)
+                }
+
+                // Fanpage Manager — 5 bảng Fb* (2026-07-02). db push không chạy được
+                // trong prod nên CREATE TABLE trực tiếp, khớp schema-store.prisma.
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "FbUserToken" (
+                        "id" TEXT NOT NULL,
+                        "fbUserId" TEXT NOT NULL,
+                        "name" TEXT,
+                        "accessToken" TEXT NOT NULL,
+                        "tokenExpiresAt" TIMESTAMP(3),
+                        "scopes" TEXT NOT NULL DEFAULT '[]',
+                        "connectedBy" TEXT,
+                        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "FbUserToken_pkey" PRIMARY KEY ("id")
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "FbUserToken_fbUserId_key" ON "FbUserToken"("fbUserId")`)
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "FbPage" (
+                        "id" TEXT NOT NULL,
+                        "pageId" TEXT NOT NULL,
+                        "name" TEXT NOT NULL,
+                        "category" TEXT,
+                        "avatar" TEXT,
+                        "fanCount" INTEGER NOT NULL DEFAULT 0,
+                        "accessToken" TEXT NOT NULL,
+                        "tokenExpiresAt" TIMESTAMP(3),
+                        "igUserId" TEXT,
+                        "adAccountId" TEXT,
+                        "webhookSubscribed" BOOLEAN NOT NULL DEFAULT false,
+                        "autoReplyEnabled" BOOLEAN NOT NULL DEFAULT false,
+                        "status" TEXT NOT NULL DEFAULT 'active',
+                        "connectedBy" TEXT,
+                        "lastSyncAt" TIMESTAMP(3),
+                        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "FbPage_pkey" PRIMARY KEY ("id")
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "FbPage_pageId_key" ON "FbPage"("pageId")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "FbPage_status_idx" ON "FbPage"("status")`)
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "FbScheduledPost" (
+                        "id" TEXT NOT NULL,
+                        "pageId" TEXT NOT NULL,
+                        "fbPostId" TEXT,
+                        "message" TEXT NOT NULL DEFAULT '',
+                        "mediaType" TEXT NOT NULL DEFAULT 'text',
+                        "mediaUrls" TEXT NOT NULL DEFAULT '[]',
+                        "linkUrl" TEXT,
+                        "scheduledAt" TIMESTAMP(3) NOT NULL,
+                        "status" TEXT NOT NULL DEFAULT 'scheduled',
+                        "errorMessage" TEXT,
+                        "publishedAt" TIMESTAMP(3),
+                        "createdBy" TEXT,
+                        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "FbScheduledPost_pkey" PRIMARY KEY ("id"),
+                        CONSTRAINT "FbScheduledPost_pageId_fkey" FOREIGN KEY ("pageId") REFERENCES "FbPage"("pageId") ON DELETE CASCADE ON UPDATE CASCADE
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "FbScheduledPost_pageId_idx" ON "FbScheduledPost"("pageId")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "FbScheduledPost_status_idx" ON "FbScheduledPost"("status")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "FbScheduledPost_scheduledAt_idx" ON "FbScheduledPost"("scheduledAt")`)
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "FbCommentRule" (
+                        "id" TEXT NOT NULL,
+                        "pageId" TEXT NOT NULL,
+                        "name" TEXT NOT NULL DEFAULT '',
+                        "keyword" TEXT NOT NULL,
+                        "matchType" TEXT NOT NULL DEFAULT 'contains',
+                        "replyText" TEXT NOT NULL,
+                        "privateReply" BOOLEAN NOT NULL DEFAULT false,
+                        "hideComment" BOOLEAN NOT NULL DEFAULT false,
+                        "enabled" BOOLEAN NOT NULL DEFAULT true,
+                        "priority" INTEGER NOT NULL DEFAULT 0,
+                        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "FbCommentRule_pkey" PRIMARY KEY ("id"),
+                        CONSTRAINT "FbCommentRule_pageId_fkey" FOREIGN KEY ("pageId") REFERENCES "FbPage"("pageId") ON DELETE CASCADE ON UPDATE CASCADE
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "FbCommentRule_pageId_idx" ON "FbCommentRule"("pageId")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "FbCommentRule_enabled_idx" ON "FbCommentRule"("enabled")`)
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "FbAutoReplyLog" (
+                        "id" TEXT NOT NULL,
+                        "pageId" TEXT NOT NULL,
+                        "commentId" TEXT NOT NULL,
+                        "ruleId" TEXT,
+                        "postId" TEXT,
+                        "fromName" TEXT,
+                        "commentMsg" TEXT,
+                        "action" TEXT NOT NULL DEFAULT 'reply',
+                        "replyText" TEXT,
+                        "success" BOOLEAN NOT NULL DEFAULT true,
+                        "errorMessage" TEXT,
+                        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "FbAutoReplyLog_pkey" PRIMARY KEY ("id"),
+                        CONSTRAINT "FbAutoReplyLog_pageId_fkey" FOREIGN KEY ("pageId") REFERENCES "FbPage"("pageId") ON DELETE CASCADE ON UPDATE CASCADE
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "FbAutoReplyLog_pageId_commentId_key" ON "FbAutoReplyLog"("pageId", "commentId")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "FbAutoReplyLog_pageId_idx" ON "FbAutoReplyLog"("pageId")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "FbAutoReplyLog_createdAt_idx" ON "FbAutoReplyLog"("createdAt")`)
 
                 storeResults.push(`${store.name}: OK`)
             } catch (e: any) {

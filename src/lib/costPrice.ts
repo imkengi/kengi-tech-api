@@ -53,8 +53,9 @@ export function calculateCostPrice(
  */
 export async function getCostPriceMethod(prisma: PrismaClient): Promise<CostPriceMethod> {
     try {
-        const store = await prisma.store.findFirst()
-        return ((store as any)?.costPriceMethod as CostPriceMethod) || 'fixed'
+        // Cấu hình nằm ở StoreSettings (ghi bởi storeSettings.ts), KHÔNG phải model Store
+        const settings = await (prisma as any).storeSettings.findFirst()
+        return (settings?.costPriceMethod as CostPriceMethod) || 'fixed'
     } catch {
         return 'fixed'
     }

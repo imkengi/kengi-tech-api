@@ -496,7 +496,8 @@ router.post('/receipts', authMiddleware, async (req: AuthRequest, res: Response)
 router.post('/adjustments', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        const { productId, productName, productSku, quantity, reason, note, userId, userName } = req.body
+        // userId lấy từ JWT — không nhận từ body để tránh mạo danh audit log
+        const { productId, productName, productSku, quantity, reason, note, userName } = req.body
 
         await prisma.product.update({
             where: { id: productId },
@@ -507,7 +508,7 @@ router.post('/adjustments', authMiddleware, async (req: AuthRequest, res: Respon
             data: {
                 type: 'adjustment',
                 productId, productName, productSku, quantity, reason, note,
-                userId: userId || req.user!.userId, userName: userName || 'Admin',
+                userId: req.user!.userId, userName: userName || 'Admin',
             },
         })
 

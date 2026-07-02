@@ -307,6 +307,9 @@ model TransactionItem {
   discount      Float  @default(0)
   discountType  String? @default("fixed")
   lineTotal     Float
+  // Số lượng đã trừ kho theo ĐƠN VỊ GỐC (quantity × conversionRate lúc bán).
+  // 0 = bản ghi cũ chưa có dữ liệu → khi hoàn kho fallback về quantity.
+  baseQuantity  Float  @default(0)
 
   transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
   product     Product     @relation(fields: [productId], references: [id])
@@ -372,6 +375,8 @@ model ImportReceipt {
   // nhập cũ (trước khi có tracking) không bị tính thành nợ ảo trong báo cáo.
   paidAmount      Float     @default(0)
   paymentStatus   String    @default("paid") // "paid" | "partial" | "unpaid"
+  dueDate         DateTime? // hạn trả nợ NCC (ngày cụ thể, tính từ điều khoản)
+  paymentTerm     String?   // điều khoản TT dạng nhãn (vd "Sau 30 ngày", "Cuối tháng sau")
   note            String?
   branchId        String?
   userId          String
@@ -1532,6 +1537,10 @@ model OnlineOrder {
   platformFee     Float     @default(0)
   platformFeeRate Float     @default(0)
   netRevenue      Float     @default(0)
+  adsVoucherDiscount Float  @default(0) // Shopee Ads Smart Voucher — chỉ quan sát, chưa trừ netRevenue
+  // Cờ chống trừ kho 2 lần: true khi BẤT KỲ đường nào (đổi status tay / convert
+  // sync / webhook) đã trừ kho cho đơn này; hoàn kho khi hủy phải reset false.
+  stockDeducted   Boolean   @default(false)
   syncedAt        DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -1618,7 +1627,9 @@ model JournalEntry {
   creditAccount     String
   creditAccountName String?
   amount            Float
-  reference         String?
+  // Khóa idempotency (SALE-/VAT-/DISC-/COGS-/COLLECT-...) — unique để 2 request
+  // đồng thời không double-post; bút toán manual để null (nhiều null vẫn hợp lệ).
+  reference         String?  @unique
   referenceType     String   @default("manual")
   notes             String?
   branchId          String?
@@ -2313,4 +2324,122 @@ model TaxBudget {
   @@unique([accountCode, year, month])
   @@index([year])
   @@index([accountCode])
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  FANPAGE MANAGER — quản lý fanpage Facebook (lịch đăng, comment, ads)
+//  Token page dài hạn (~60 ngày) lưu ở đây thay vì localStorage của trình duyệt.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── Token người dùng (cho Marketing API / ads) ───────────────────────────────
+// Page token KHÔNG quản lý được ads — cần user token có quyền ads_management.
+
+model FbUserToken {
+  id             String    @id @default(cuid())
+  fbUserId       String    @unique // Facebook user id (chủ tài khoản ads)
+  name           String?
+  accessToken    String // long-lived user token (~60 ngày)
+  tokenExpiresAt DateTime?
+  scopes         String    @default("[]") // JSON array quyền đã cấp
+  connectedBy    String? // userId nội bộ
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+// ─── Kết nối Fanpage ──────────────────────────────────────────────────────────
+
+model FbPage {
+  id             String    @id @default(cuid())
+  pageId         String    @unique // Facebook Page ID (số) — dùng khớp webhook
+  name           String
+  category       String?
+  avatar         String?
+  fanCount       Int       @default(0)
+  accessToken    String // long-lived page access token (đổi từ user token khi kết nối)
+  tokenExpiresAt DateTime? // hạn token; cron refresh trước khi hết
+  igUserId       String? // Instagram business account nối với page (nếu có)
+  adAccountId    String? // act_<id> ad account mặc định để chạy ads
+  webhookSubscribed Boolean @default(false) // đã subscribe app vào page feed chưa
+  autoReplyEnabled  Boolean @default(false) // bật engine auto-reply comment cho page này
+  status         String    @default("active") // active, disconnected, token_expired
+  connectedBy    String? // userId người kết nối
+  lastSyncAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  scheduledPosts FbScheduledPost[]
+  commentRules   FbCommentRule[]
+  autoReplyLogs  FbAutoReplyLog[]
+
+  @@index([status])
+}
+
+// ─── Bài viết lên lịch (mirror trạng thái FB) ─────────────────────────────────
+
+model FbScheduledPost {
+  id              String    @id @default(cuid())
+  pageId          String // FbPage.pageId
+  fbPostId        String? // id post trên FB sau khi tạo (published=false)
+  message         String    @default("")
+  mediaType       String    @default("text") // text, photo, video, link, multi_photo
+  mediaUrls       String    @default("[]") // JSON array URL ảnh/video đã upload
+  linkUrl         String?
+  scheduledAt     DateTime // thời điểm hẹn đăng
+  status          String    @default("scheduled") // scheduled, published, failed, cancelled
+  errorMessage    String? // lý do nếu status=failed
+  publishedAt     DateTime? // thời điểm FB thực đăng (từ reconcile)
+  createdBy       String? // userId
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  page FbPage @relation(fields: [pageId], references: [pageId], onDelete: Cascade)
+
+  @@index([pageId])
+  @@index([status])
+  @@index([scheduledAt])
+}
+
+// ─── Rule auto-reply comment ──────────────────────────────────────────────────
+
+model FbCommentRule {
+  id           String   @id @default(cuid())
+  pageId       String // FbPage.pageId
+  name         String   @default("")
+  keyword      String // từ khóa trigger
+  matchType    String   @default("contains") // contains, exact, starts
+  replyText    String // nội dung phản hồi công khai
+  privateReply Boolean  @default(false) // gửi kèm private reply (Messenger)
+  hideComment  Boolean  @default(false) // ẩn comment sau khi rớt rule
+  enabled      Boolean  @default(true)
+  priority     Int      @default(0) // rule nhỏ chạy trước (0 = cao nhất)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  page FbPage @relation(fields: [pageId], references: [pageId], onDelete: Cascade)
+
+  @@index([pageId])
+  @@index([enabled])
+}
+
+// ─── Log auto-reply (chống trùng + audit) ─────────────────────────────────────
+
+model FbAutoReplyLog {
+  id         String   @id @default(cuid())
+  pageId     String // FbPage.pageId
+  commentId  String // id comment đã xử lý (idempotency key)
+  ruleId     String? // rule đã khớp
+  postId     String?
+  fromName   String?
+  commentMsg String?
+  action     String   @default("reply") // reply, hide, reply_hide, skipped
+  replyText  String?
+  success    Boolean  @default(true)
+  errorMessage String?
+  createdAt  DateTime @default(now())
+
+  page FbPage @relation(fields: [pageId], references: [pageId], onDelete: Cascade)
+
+  @@unique([pageId, commentId]) // mỗi comment chỉ auto-reply 1 lần
+  @@index([pageId])
+  @@index([createdAt])
 }

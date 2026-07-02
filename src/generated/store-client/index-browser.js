@@ -322,7 +322,8 @@ exports.Prisma.TransactionItemScalarFieldEnum = {
   unitPrice: 'unitPrice',
   discount: 'discount',
   discountType: 'discountType',
-  lineTotal: 'lineTotal'
+  lineTotal: 'lineTotal',
+  baseQuantity: 'baseQuantity'
 };
 
 exports.Prisma.PaymentScalarFieldEnum = {
@@ -365,6 +366,8 @@ exports.Prisma.ImportReceiptScalarFieldEnum = {
   status: 'status',
   paidAmount: 'paidAmount',
   paymentStatus: 'paymentStatus',
+  dueDate: 'dueDate',
+  paymentTerm: 'paymentTerm',
   note: 'note',
   branchId: 'branchId',
   userId: 'userId',
@@ -1272,6 +1275,8 @@ exports.Prisma.OnlineOrderScalarFieldEnum = {
   platformFee: 'platformFee',
   platformFeeRate: 'platformFeeRate',
   netRevenue: 'netRevenue',
+  adsVoucherDiscount: 'adsVoucherDiscount',
+  stockDeducted: 'stockDeducted',
   syncedAt: 'syncedAt',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
@@ -1807,6 +1812,85 @@ exports.Prisma.TaxBudgetScalarFieldEnum = {
   updatedAt: 'updatedAt'
 };
 
+exports.Prisma.FbUserTokenScalarFieldEnum = {
+  id: 'id',
+  fbUserId: 'fbUserId',
+  name: 'name',
+  accessToken: 'accessToken',
+  tokenExpiresAt: 'tokenExpiresAt',
+  scopes: 'scopes',
+  connectedBy: 'connectedBy',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.FbPageScalarFieldEnum = {
+  id: 'id',
+  pageId: 'pageId',
+  name: 'name',
+  category: 'category',
+  avatar: 'avatar',
+  fanCount: 'fanCount',
+  accessToken: 'accessToken',
+  tokenExpiresAt: 'tokenExpiresAt',
+  igUserId: 'igUserId',
+  adAccountId: 'adAccountId',
+  webhookSubscribed: 'webhookSubscribed',
+  autoReplyEnabled: 'autoReplyEnabled',
+  status: 'status',
+  connectedBy: 'connectedBy',
+  lastSyncAt: 'lastSyncAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.FbScheduledPostScalarFieldEnum = {
+  id: 'id',
+  pageId: 'pageId',
+  fbPostId: 'fbPostId',
+  message: 'message',
+  mediaType: 'mediaType',
+  mediaUrls: 'mediaUrls',
+  linkUrl: 'linkUrl',
+  scheduledAt: 'scheduledAt',
+  status: 'status',
+  errorMessage: 'errorMessage',
+  publishedAt: 'publishedAt',
+  createdBy: 'createdBy',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.FbCommentRuleScalarFieldEnum = {
+  id: 'id',
+  pageId: 'pageId',
+  name: 'name',
+  keyword: 'keyword',
+  matchType: 'matchType',
+  replyText: 'replyText',
+  privateReply: 'privateReply',
+  hideComment: 'hideComment',
+  enabled: 'enabled',
+  priority: 'priority',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.FbAutoReplyLogScalarFieldEnum = {
+  id: 'id',
+  pageId: 'pageId',
+  commentId: 'commentId',
+  ruleId: 'ruleId',
+  postId: 'postId',
+  fromName: 'fromName',
+  commentMsg: 'commentMsg',
+  action: 'action',
+  replyText: 'replyText',
+  success: 'success',
+  errorMessage: 'errorMessage',
+  createdAt: 'createdAt'
+};
+
 exports.Prisma.SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -1923,7 +2007,12 @@ exports.Prisma.ModelName = {
   ExchangeRate: 'ExchangeRate',
   TaxDeadline: 'TaxDeadline',
   TaxAuditLog: 'TaxAuditLog',
-  TaxBudget: 'TaxBudget'
+  TaxBudget: 'TaxBudget',
+  FbUserToken: 'FbUserToken',
+  FbPage: 'FbPage',
+  FbScheduledPost: 'FbScheduledPost',
+  FbCommentRule: 'FbCommentRule',
+  FbAutoReplyLog: 'FbAutoReplyLog'
 };
 
 /**

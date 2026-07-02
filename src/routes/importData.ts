@@ -138,11 +138,38 @@ function col(row: Record<string, string>, ...names: string[]): string {
     return ''
 }
 
-function toNumber(val: string): number {
-    if (!val) return 0
-    const cleaned = String(val).replace(/[^\d.,\-]/g, '').replace(',', '.')
-    const n = parseFloat(cleaned)
-    return isNaN(n) ? 0 : n
+// Parse a numeric cell that may be a real number OR a localized text string.
+// Handles both VN format "1.234.567,89" and US format "1,234,567.89", plus plain
+// "1234567.89" / "1234567". Heuristic: the LAST '.' or ',' is the decimal point
+// ONLY when it's followed by 1–2 digits; otherwise every '.'/',' is a thousands
+// separator and is stripped. This is what broke price imports before: the old
+// code replaced just the first comma then parseFloat("272.817.38") → 272.817.
+function toNumber(val: string | number | null | undefined): number {
+    if (val === null || val === undefined) return 0
+    if (typeof val === 'number') return isFinite(val) ? val : 0
+    let s = String(val).trim().replace(/[^\d.,\-]/g, '')
+    if (!s) return 0
+    const neg = s.startsWith('-')
+    s = s.replace(/-/g, '')
+    if (!s) return 0
+    const lastSep = Math.max(s.lastIndexOf('.'), s.lastIndexOf(','))
+    let n: number
+    if (lastSep === -1) {
+        n = parseFloat(s)
+    } else {
+        const decimals = s.length - lastSep - 1
+        if (decimals === 1 || decimals === 2) {
+            // last separator is the decimal point; everything else is grouping
+            const intPart = s.slice(0, lastSep).replace(/[.,]/g, '')
+            const fracPart = s.slice(lastSep + 1)
+            n = parseFloat(`${intPart || '0'}.${fracPart}`)
+        } else {
+            // all separators are thousands grouping
+            n = parseFloat(s.replace(/[.,]/g, ''))
+        }
+    }
+    if (isNaN(n)) return 0
+    return neg ? -n : n
 }
 
 async function findOrCreateCategory(prisma: StorePrisma, level1?: string, level2?: string, level3?: string): Promise<string> {
@@ -172,15 +199,41 @@ async function findOrCreateBrand(prisma: StorePrisma, name: string): Promise<str
 }
 
 function parseDateTime(str: string, defaultHour: number, defaultMin: number): Date {
-    if (!str) {
-        const d = new Date(); d.setHours(defaultHour, defaultMin, 0, 0); return d
+    const withDefaultTime = () => { const d = new Date(); d.setHours(defaultHour, defaultMin, 0, 0); return d }
+    if (str === null || str === undefined || String(str).trim() === '') return withDefaultTime()
+    str = String(str).trim()
+
+    // Excel serial date number (vd "46176" hoặc "46176.5"). Ô được Excel coi là NGÀY
+    // sẽ về đây dưới dạng số serial (raw value), không phải chuỗi dd/MM/yyyy — đây là
+    // lỗi khiến mọi hoá đơn import bị gán ngày hôm nay thay vì ngày trong file.
+    // Epoch Excel = 1899-12-30 (đã tính cả lỗi năm nhuận 1900). Dựng wall-clock theo
+    // UTC rồi build lại bằng giờ local để khớp đúng giá trị Excel hiển thị (tránh lệch TZ).
+    if (/^\d+(\.\d+)?$/.test(str)) {
+        const serial = parseFloat(str)
+        if (serial >= 29000 && serial <= 80000) { // ~1979 → 2119, tránh nhầm mã số thành ngày
+            const whole = Math.floor(serial)
+            const frac = serial - whole
+            const utc = new Date(Date.UTC(1899, 11, 30) + whole * 86400000 + Math.round(frac * 86400000))
+            const d = new Date(utc.getUTCFullYear(), utc.getUTCMonth(), utc.getUTCDate(), utc.getUTCHours(), utc.getUTCMinutes(), utc.getUTCSeconds())
+            if (frac === 0) d.setHours(defaultHour, defaultMin, 0, 0) // serial chỉ có ngày → giờ mặc định
+            return d
+        }
     }
+
+    // dd/MM/yyyy [HH:mm[:ss]]
     const match = str.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})\s*(\d{1,2}):(\d{2})(?::(\d{2}))?/)
     if (match) return new Date(parseInt(match[3]), parseInt(match[2]) - 1, parseInt(match[1]), parseInt(match[4]), parseInt(match[5]), parseInt(match[6] || '0'))
+
+    // ISO yyyy-MM-dd[ T HH:mm[:ss]] (một số file/export dùng định dạng này)
+    const iso = str.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/)
+    if (iso) return new Date(parseInt(iso[1]), parseInt(iso[2]) - 1, parseInt(iso[3]), iso[4] ? parseInt(iso[4]) : defaultHour, iso[5] ? parseInt(iso[5]) : defaultMin, iso[6] ? parseInt(iso[6]) : 0)
+
+    // dd/MM/yyyy (chỉ ngày)
     const parts = str.split(/[\/\-\.]/)
     if (parts.length === 3 && parseInt(parts[2]) > 100)
         return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]), defaultHour, defaultMin)
-    const d = new Date(); d.setHours(defaultHour, defaultMin, 0, 0); return d
+
+    return withDefaultTime()
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -238,6 +291,7 @@ router.post('/products', authMiddleware, upload.single('file'), async (req: Auth
                 }
 
                 let product
+                let stockDelta = 0 // delta tồn kho THẬT của lần import này (0 = không đổi)
                 if (existing) {
                     // Sản phẩm đã tồn tại (dữ liệu kỳ sau) → KHÔNG ghi đè stock
                     // Chỉ cập nhật tên, giá, category, brand
@@ -246,14 +300,17 @@ router.post('/products', authMiddleware, upload.single('file'), async (req: Auth
                 } else {
                     // Dòng đầu tiên (kỳ đầu) → tạo mới với stock = tồn đầu kỳ
                     product = await getPrisma(req).product.create({ data: { sku, ...productData } })
+                    stockDelta = openingStock
                 }
 
-                // InventoryTransaction for opening stock (tồn đầu kỳ = data ban đầu)
-                if (openingStock > 0) {
+                // InventoryTransaction tồn đầu kỳ: CHỈ ghi khi stock thực sự thay đổi
+                // (sản phẩm mới tạo). Import lần 2 stock không đổi mà vẫn ghi +N sẽ làm
+                // thẻ kho lệch so với tồn thật.
+                if (stockDelta > 0) {
                     await getPrisma(req).inventoryTransaction.create({
                         data: {
                             type: 'stocktaking', productId: product.id, productName: name, productSku: sku,
-                            quantity: openingStock, reason: 'Tồn đầu kỳ - Import',
+                            quantity: stockDelta, reason: 'Tồn đầu kỳ - Import',
                             referenceType: 'adjustment', referenceId: `IMP-${sku}`, branchId,
                             userName: 'System Import'
                         }
@@ -355,9 +412,12 @@ router.post('/transactions', authMiddleware, upload.single('file'), async (req: 
                     if (!product) { errors.push(`Mã hàng "${sku}" không tồn tại`); continue }
                     const qty = Math.round(toNumber(col(row, 'Số lượng', 'SL', 'quantity', 'Số Lượng')))
                     const price = toNumber(col(row, 'Đơn giá', 'Giá bán', 'unit_price', 'Đơn Giá')) || product.sellingPrice
-                    const itemDiscount = toNumber(col(row, 'Giảm giá', 'Chiết khấu', 'discount'))
                     if (qty <= 0) continue
-                    itemsData.push({ productId: product.id, productName: product.name, sku, quantity: qty, unitPrice: price, discount: itemDiscount, lineTotal: Math.max(0, qty * price - itemDiscount) })
+                    // "Giảm giá" trong Excel là giảm trên ĐƠN GIÁ (mỗi cái), nên giảm cả dòng = giảm/cái × SL.
+                    // Item.discount lưu theo TỔNG cả dòng (khớp cách hiển thị & cách tính total ở nơi khác).
+                    const unitDiscount = toNumber(col(row, 'Giảm giá', 'Chiết khấu', 'discount'))
+                    const lineDiscount = Math.max(0, unitDiscount * qty)
+                    itemsData.push({ productId: product.id, productName: product.name, sku, quantity: qty, unitPrice: price, discount: lineDiscount, lineTotal: Math.max(0, qty * price - lineDiscount) })
                 }
                 if (itemsData.length === 0) { orderIdx++; continue }
 
@@ -365,18 +425,48 @@ router.post('/transactions', authMiddleware, upload.single('file'), async (req: 
                 const discount = itemsData.reduce((s, i) => s + i.discount, 0)
                 const total = subtotal - discount
 
+                // Đơn import = đã thu đủ (status completed). Tạo 1 phiếu thu (Payment non-credit)
+                // cho cả đơn để: (1) khớp với "Tiền vào" ở Sổ quỹ, (2) sau này HUỶ PHIẾU THU được
+                // — cancel-receipt yêu cầu có payment non-credit, nếu không sẽ báo "Không có phiếu
+                // thu để hủy". Mặc định tiền mặt; đọc cột 'Thanh toán'/'Hình thức' nếu file có.
+                const payRaw = col(firstRow, 'Thanh toán', 'Hình thức', 'Hình thức TT', 'Phương thức', 'payment_method', 'thanh_toan').toLowerCase()
+                let payType = 'cash'
+                if (payRaw.includes('chuyển') || payRaw.includes('ck') || payRaw.includes('transfer') || payRaw.includes('bank')) payType = 'transfer'
+                else if (payRaw.includes('thẻ') || payRaw.includes('card')) payType = 'card'
+                else if (payRaw.includes('ví') || payRaw.includes('ewallet') || payRaw.includes('momo') || payRaw.includes('vnpay')) payType = 'ewallet'
+                const paymentsCreate = total > 0 ? [{ type: payType, amount: total, reference: `Phiếu thu import ${receiptNumber}` }] : []
+
                 // Upsert: if receiptNumber already exists, update; otherwise create
                 const existing = await getPrisma(req).transaction.findUnique({ where: { receiptNumber } })
                 if (existing) {
-                    // Delete old items and update transaction
+                    // Re-import ghi đè: HOÀN KHO items cũ trước khi xóa — nếu không, mỗi lần
+                    // import lại cùng file kho bị trừ thêm 1 lần (hoàn cũ + trừ mới → net = 0)
+                    const oldItems = await getPrisma(req).transactionItem.findMany({ where: { transactionId: existing.id } })
+                    for (const oldItem of oldItems) {
+                        await getPrisma(req).product.update({ where: { id: oldItem.productId }, data: { stock: { increment: oldItem.quantity } } })
+                    }
                     await getPrisma(req).transactionItem.deleteMany({ where: { transactionId: existing.id } })
+
+                    // GIỮ LẠI payment type 'credit' (sinh từ "Hủy phiếu thu" — đã tăng
+                    // Customer.debt + ghi DebtEntry). Xóa credit ở đây làm công nợ lệch
+                    // không có bút toán bù; chỉ xóa các phiếu thu thường rồi tạo lại.
+                    const keptCredits = await getPrisma(req).payment.findMany({ where: { transactionId: existing.id, type: 'credit' } })
+                    const creditKept = keptCredits.reduce((s, p) => s + (p.amount || 0), 0)
+                    await getPrisma(req).payment.deleteMany({ where: { transactionId: existing.id, type: { not: 'credit' } } })
+
+                    // amountReceived = tổng thanh toán từ file − phần đã hủy thu (credit giữ lại), floor 0.
+                    // Phiếu thu tạo lại cũng chỉ bằng phần thực thu để khớp Sổ quỹ / luồng hủy phiếu thu.
+                    const received = Math.max(0, total - creditKept)
+                    const paymentsForUpdate = received > 0 ? [{ type: payType, amount: received, reference: `Phiếu thu import ${receiptNumber}` }] : []
                     await getPrisma(req).transaction.update({
                         where: { id: existing.id },
                         data: {
                             customerName, customerPhone, customerId,
-                            subtotal, discount, total, branchId: branchId || null,
-                            status: 'completed', notes, createdAt,
-                            items: { create: itemsData }
+                            subtotal, discount, total, amountReceived: received, branchId: branchId || null,
+                            // còn credit giữ lại = chưa thu đủ → status 'partial' như luồng hủy phiếu thu
+                            status: creditKept > 0 ? 'partial' : 'completed', notes, createdAt,
+                            items: { create: itemsData },
+                            payments: { create: paymentsForUpdate }
                         }
                     })
                 } else {
@@ -384,10 +474,11 @@ router.post('/transactions', authMiddleware, upload.single('file'), async (req: 
                         data: {
                             receiptNumber, customerName, customerPhone,
                             customerId,
-                            subtotal, discount, total, branchId: branchId || null,
+                            subtotal, discount, total, amountReceived: total, branchId: branchId || null,
                             status: 'completed', createdBy: userId, notes,
                             createdAt,
-                            items: { create: itemsData }
+                            items: { create: itemsData },
+                            payments: { create: paymentsCreate }
                         }
                     })
                 }
@@ -553,12 +644,23 @@ router.post('/returns', authMiddleware, upload.single('file'), async (req: AuthR
 
                 const totalRefund = itemsList.reduce((s, i) => s + i.total, 0)
 
+                // ReturnOrder.items là relation sang ReturnItem — phải nested create,
+                // truyền chuỗi JSON sẽ bị Prisma reject và cả phiếu import fail.
                 await getPrisma(req).returnOrder.create({
                     data: {
                         code, originalInvoice, customerName, customerPhone,
                         reason, notes, status: 'refunded', branchId: branchId || null,
-                        items: JSON.stringify(itemsList), totalRefund,
-                        createdAt
+                        totalRefund, createdAt,
+                        items: {
+                            create: itemsList.map(i => ({
+                                productId: i.productId,
+                                productName: i.name,
+                                sku: i.sku,
+                                quantity: i.quantity,
+                                unitPrice: i.unitPrice,
+                                restocked: true,
+                            }))
+                        },
                     }
                 })
 

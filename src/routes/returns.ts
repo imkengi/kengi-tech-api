@@ -49,7 +49,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        const returns = await prisma.returnOrder.findMany({ ...getBranchFilter(req as any) })
+        const returns = await prisma.returnOrder.findMany({ where: getBranchFilter(req as any) })
         const total = returns.length
         const pending = returns.filter(r => r.status === 'pending').length
         const approved = returns.filter(r => r.status === 'approved').length

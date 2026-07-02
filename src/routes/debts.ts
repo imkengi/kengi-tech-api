@@ -1,5 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
+import { requireRole } from '../middleware/roleMiddleware'
+import { postDebtCollectionJournal } from '../lib/autoJournal'
 
 const router = Router()
 
@@ -176,10 +178,12 @@ router.get('/summary', authMiddleware, async (req: AuthRequest, res: Response) =
 })
 
 // POST /api/debts — add debt or payment entry
-router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
+// Ghi nợ/thu nợ thủ công điều chỉnh thẳng số dư khách → chỉ admin/manager
+// (cùng pattern requireRole của cashReceipts/accounting)
+router.post('/', authMiddleware, requireRole('admin', 'manager', 'superadmin'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        const { customerId, customerName, phone, type, amount, description } = req.body
+        const { customerId, customerName, phone, type, amount, description, paymentType } = req.body
         if (!customerId?.trim()) return res.status(400).json({ success: false, error: 'Customer ID required' })
         if (!amount || amount <= 0) return res.status(400).json({ success: false, error: 'Valid amount required' })
 
@@ -216,6 +220,20 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
                 where: { id: customer.id },
                 data: { debt: newBalance },
             })
+            // Thu nợ phải có bút toán giảm phải thu: Nợ 111/112 / Có 131.
+            // refKey xác định theo DebtEntry vừa tạo — idempotent khi retry
+            // nhờ JournalEntry.reference @unique (P2002 = đã post, hàm tự bỏ qua).
+            if ((type || 'debt') === 'payment') {
+                await postDebtCollectionJournal(tx, {
+                    amount: entryAmount,
+                    refKey: `COLLECT-DEBT-${created.id}`,
+                    date: new Date().toISOString().slice(0, 10),
+                    paymentType: paymentType || null,
+                    customerName: customer.name,
+                    branchId: req.user?.branchId ?? null,
+                    userId: req.user?.userId ?? null,
+                })
+            }
             return created
         })
         res.status(201).json({ success: true, data: entry })
@@ -226,11 +244,18 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 })
 
 // DELETE /api/debts/:id — remove a ledger entry AND undo its effect on the balance
-router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+// Xóa bút toán làm thay đổi số dư khách → chỉ admin/manager (pattern requireRole của repo)
+router.delete('/:id', authMiddleware, requireRole('admin', 'manager', 'superadmin'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const entry = await prisma.debtEntry.findUnique({ where: { id: String(req.params.id) } })
         if (!entry) return res.status(404).json({ success: false, error: 'Không tìm thấy bút toán' })
+
+        // Entry "Nợ từ HĐ" gắn với hóa đơn còn 'partial' — xóa ở đây làm debt giảm
+        // nhưng hóa đơn vẫn treo → /debts/summary sinh dư nợ đầu kỳ âm. Chặn lại.
+        if ((entry.description || '').startsWith('Nợ từ HĐ')) {
+            return res.status(400).json({ success: false, error: 'Không thể xóa bút toán gắn hóa đơn — hãy void/điều chỉnh hóa đơn gốc' })
+        }
 
         await prisma.$transaction(async (tx) => {
             await tx.debtEntry.delete({ where: { id: entry.id } })

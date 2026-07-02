@@ -513,6 +513,31 @@ export type TaxAuditLog = $Result.DefaultSelection<Prisma.$TaxAuditLogPayload>
  * 
  */
 export type TaxBudget = $Result.DefaultSelection<Prisma.$TaxBudgetPayload>
+/**
+ * Model FbUserToken
+ * 
+ */
+export type FbUserToken = $Result.DefaultSelection<Prisma.$FbUserTokenPayload>
+/**
+ * Model FbPage
+ * 
+ */
+export type FbPage = $Result.DefaultSelection<Prisma.$FbPagePayload>
+/**
+ * Model FbScheduledPost
+ * 
+ */
+export type FbScheduledPost = $Result.DefaultSelection<Prisma.$FbScheduledPostPayload>
+/**
+ * Model FbCommentRule
+ * 
+ */
+export type FbCommentRule = $Result.DefaultSelection<Prisma.$FbCommentRulePayload>
+/**
+ * Model FbAutoReplyLog
+ * 
+ */
+export type FbAutoReplyLog = $Result.DefaultSelection<Prisma.$FbAutoReplyLogPayload>
 
 /**
  * ##  Prisma Client ʲˢ
@@ -1631,6 +1656,56 @@ export class PrismaClient<
     * ```
     */
   get taxBudget(): Prisma.TaxBudgetDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.fbUserToken`: Exposes CRUD operations for the **FbUserToken** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more FbUserTokens
+    * const fbUserTokens = await prisma.fbUserToken.findMany()
+    * ```
+    */
+  get fbUserToken(): Prisma.FbUserTokenDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.fbPage`: Exposes CRUD operations for the **FbPage** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more FbPages
+    * const fbPages = await prisma.fbPage.findMany()
+    * ```
+    */
+  get fbPage(): Prisma.FbPageDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.fbScheduledPost`: Exposes CRUD operations for the **FbScheduledPost** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more FbScheduledPosts
+    * const fbScheduledPosts = await prisma.fbScheduledPost.findMany()
+    * ```
+    */
+  get fbScheduledPost(): Prisma.FbScheduledPostDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.fbCommentRule`: Exposes CRUD operations for the **FbCommentRule** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more FbCommentRules
+    * const fbCommentRules = await prisma.fbCommentRule.findMany()
+    * ```
+    */
+  get fbCommentRule(): Prisma.FbCommentRuleDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.fbAutoReplyLog`: Exposes CRUD operations for the **FbAutoReplyLog** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more FbAutoReplyLogs
+    * const fbAutoReplyLogs = await prisma.fbAutoReplyLog.findMany()
+    * ```
+    */
+  get fbAutoReplyLog(): Prisma.FbAutoReplyLogDelegate<ExtArgs, ClientOptions>;
 }
 
 export namespace Prisma {
@@ -2171,7 +2246,12 @@ export namespace Prisma {
     ExchangeRate: 'ExchangeRate',
     TaxDeadline: 'TaxDeadline',
     TaxAuditLog: 'TaxAuditLog',
-    TaxBudget: 'TaxBudget'
+    TaxBudget: 'TaxBudget',
+    FbUserToken: 'FbUserToken',
+    FbPage: 'FbPage',
+    FbScheduledPost: 'FbScheduledPost',
+    FbCommentRule: 'FbCommentRule',
+    FbAutoReplyLog: 'FbAutoReplyLog'
   };
 
   export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -2190,7 +2270,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "branch" | "user" | "apiKey" | "salesCheckin" | "category" | "brand" | "product" | "productSerial" | "unitConversion" | "productImage" | "customerGroup" | "customer" | "transaction" | "transactionItem" | "payment" | "inventoryTransaction" | "importReceipt" | "importReceiptItem" | "promotion" | "supplier" | "purchaseOrder" | "purchaseOrderItem" | "expense" | "cashReceipt" | "notification" | "warranty" | "repair" | "quotation" | "auditLog" | "priceHistory" | "shippingOrder" | "driver" | "vehicle" | "vehicleMaintenance" | "deliveryRoute" | "deliveryStop" | "taxConfig" | "bankAccount" | "bankTransaction" | "bankConnectionConfig" | "taxDeclaration" | "customerSegment" | "currency" | "feedback" | "schedule" | "returnOrder" | "returnItem" | "debtEntry" | "bundle" | "salesOrder" | "salesOrderItem" | "priceList" | "priceListItem" | "priceRule" | "announcement" | "attendance" | "loyaltyMember" | "loyaltyTransaction" | "review" | "storeSettings" | "store" | "branchRequest" | "branchDeleteRequest" | "payrollRecord" | "employee" | "payrollPeriod" | "payrollEntry" | "onlineChannel" | "onlineOrder" | "onlineProduct" | "onlineOrderItem" | "syncLog" | "journalEntry" | "fixedAsset" | "depreciationEntry" | "cCDC" | "cCDCAllocation" | "eInvoiceConfig" | "eInvoice" | "eInvoiceItem" | "adjustmentInvoice" | "adjustmentInvoiceItem" | "hKDRevenueEntry" | "warehouse" | "warehouseStock" | "stockTransfer" | "stockTransferItem" | "salesTrip" | "salesTripItem" | "salesTripLog" | "inventoryCount" | "inventoryCountItem" | "zReport" | "storageFile" | "chartOfAccount" | "periodLock" | "exchangeRate" | "taxDeadline" | "taxAuditLog" | "taxBudget"
+      modelProps: "branch" | "user" | "apiKey" | "salesCheckin" | "category" | "brand" | "product" | "productSerial" | "unitConversion" | "productImage" | "customerGroup" | "customer" | "transaction" | "transactionItem" | "payment" | "inventoryTransaction" | "importReceipt" | "importReceiptItem" | "promotion" | "supplier" | "purchaseOrder" | "purchaseOrderItem" | "expense" | "cashReceipt" | "notification" | "warranty" | "repair" | "quotation" | "auditLog" | "priceHistory" | "shippingOrder" | "driver" | "vehicle" | "vehicleMaintenance" | "deliveryRoute" | "deliveryStop" | "taxConfig" | "bankAccount" | "bankTransaction" | "bankConnectionConfig" | "taxDeclaration" | "customerSegment" | "currency" | "feedback" | "schedule" | "returnOrder" | "returnItem" | "debtEntry" | "bundle" | "salesOrder" | "salesOrderItem" | "priceList" | "priceListItem" | "priceRule" | "announcement" | "attendance" | "loyaltyMember" | "loyaltyTransaction" | "review" | "storeSettings" | "store" | "branchRequest" | "branchDeleteRequest" | "payrollRecord" | "employee" | "payrollPeriod" | "payrollEntry" | "onlineChannel" | "onlineOrder" | "onlineProduct" | "onlineOrderItem" | "syncLog" | "journalEntry" | "fixedAsset" | "depreciationEntry" | "cCDC" | "cCDCAllocation" | "eInvoiceConfig" | "eInvoice" | "eInvoiceItem" | "adjustmentInvoice" | "adjustmentInvoiceItem" | "hKDRevenueEntry" | "warehouse" | "warehouseStock" | "stockTransfer" | "stockTransferItem" | "salesTrip" | "salesTripItem" | "salesTripLog" | "inventoryCount" | "inventoryCountItem" | "zReport" | "storageFile" | "chartOfAccount" | "periodLock" | "exchangeRate" | "taxDeadline" | "taxAuditLog" | "taxBudget" | "fbUserToken" | "fbPage" | "fbScheduledPost" | "fbCommentRule" | "fbAutoReplyLog"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -9594,6 +9674,376 @@ export namespace Prisma {
           }
         }
       }
+      FbUserToken: {
+        payload: Prisma.$FbUserTokenPayload<ExtArgs>
+        fields: Prisma.FbUserTokenFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.FbUserTokenFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbUserTokenPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.FbUserTokenFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbUserTokenPayload>
+          }
+          findFirst: {
+            args: Prisma.FbUserTokenFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbUserTokenPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.FbUserTokenFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbUserTokenPayload>
+          }
+          findMany: {
+            args: Prisma.FbUserTokenFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbUserTokenPayload>[]
+          }
+          create: {
+            args: Prisma.FbUserTokenCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbUserTokenPayload>
+          }
+          createMany: {
+            args: Prisma.FbUserTokenCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.FbUserTokenCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbUserTokenPayload>[]
+          }
+          delete: {
+            args: Prisma.FbUserTokenDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbUserTokenPayload>
+          }
+          update: {
+            args: Prisma.FbUserTokenUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbUserTokenPayload>
+          }
+          deleteMany: {
+            args: Prisma.FbUserTokenDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.FbUserTokenUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.FbUserTokenUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbUserTokenPayload>[]
+          }
+          upsert: {
+            args: Prisma.FbUserTokenUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbUserTokenPayload>
+          }
+          aggregate: {
+            args: Prisma.FbUserTokenAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateFbUserToken>
+          }
+          groupBy: {
+            args: Prisma.FbUserTokenGroupByArgs<ExtArgs>
+            result: $Utils.Optional<FbUserTokenGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.FbUserTokenCountArgs<ExtArgs>
+            result: $Utils.Optional<FbUserTokenCountAggregateOutputType> | number
+          }
+        }
+      }
+      FbPage: {
+        payload: Prisma.$FbPagePayload<ExtArgs>
+        fields: Prisma.FbPageFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.FbPageFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbPagePayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.FbPageFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbPagePayload>
+          }
+          findFirst: {
+            args: Prisma.FbPageFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbPagePayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.FbPageFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbPagePayload>
+          }
+          findMany: {
+            args: Prisma.FbPageFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbPagePayload>[]
+          }
+          create: {
+            args: Prisma.FbPageCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbPagePayload>
+          }
+          createMany: {
+            args: Prisma.FbPageCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.FbPageCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbPagePayload>[]
+          }
+          delete: {
+            args: Prisma.FbPageDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbPagePayload>
+          }
+          update: {
+            args: Prisma.FbPageUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbPagePayload>
+          }
+          deleteMany: {
+            args: Prisma.FbPageDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.FbPageUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.FbPageUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbPagePayload>[]
+          }
+          upsert: {
+            args: Prisma.FbPageUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbPagePayload>
+          }
+          aggregate: {
+            args: Prisma.FbPageAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateFbPage>
+          }
+          groupBy: {
+            args: Prisma.FbPageGroupByArgs<ExtArgs>
+            result: $Utils.Optional<FbPageGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.FbPageCountArgs<ExtArgs>
+            result: $Utils.Optional<FbPageCountAggregateOutputType> | number
+          }
+        }
+      }
+      FbScheduledPost: {
+        payload: Prisma.$FbScheduledPostPayload<ExtArgs>
+        fields: Prisma.FbScheduledPostFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.FbScheduledPostFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbScheduledPostPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.FbScheduledPostFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbScheduledPostPayload>
+          }
+          findFirst: {
+            args: Prisma.FbScheduledPostFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbScheduledPostPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.FbScheduledPostFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbScheduledPostPayload>
+          }
+          findMany: {
+            args: Prisma.FbScheduledPostFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbScheduledPostPayload>[]
+          }
+          create: {
+            args: Prisma.FbScheduledPostCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbScheduledPostPayload>
+          }
+          createMany: {
+            args: Prisma.FbScheduledPostCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.FbScheduledPostCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbScheduledPostPayload>[]
+          }
+          delete: {
+            args: Prisma.FbScheduledPostDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbScheduledPostPayload>
+          }
+          update: {
+            args: Prisma.FbScheduledPostUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbScheduledPostPayload>
+          }
+          deleteMany: {
+            args: Prisma.FbScheduledPostDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.FbScheduledPostUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.FbScheduledPostUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbScheduledPostPayload>[]
+          }
+          upsert: {
+            args: Prisma.FbScheduledPostUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbScheduledPostPayload>
+          }
+          aggregate: {
+            args: Prisma.FbScheduledPostAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateFbScheduledPost>
+          }
+          groupBy: {
+            args: Prisma.FbScheduledPostGroupByArgs<ExtArgs>
+            result: $Utils.Optional<FbScheduledPostGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.FbScheduledPostCountArgs<ExtArgs>
+            result: $Utils.Optional<FbScheduledPostCountAggregateOutputType> | number
+          }
+        }
+      }
+      FbCommentRule: {
+        payload: Prisma.$FbCommentRulePayload<ExtArgs>
+        fields: Prisma.FbCommentRuleFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.FbCommentRuleFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbCommentRulePayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.FbCommentRuleFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbCommentRulePayload>
+          }
+          findFirst: {
+            args: Prisma.FbCommentRuleFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbCommentRulePayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.FbCommentRuleFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbCommentRulePayload>
+          }
+          findMany: {
+            args: Prisma.FbCommentRuleFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbCommentRulePayload>[]
+          }
+          create: {
+            args: Prisma.FbCommentRuleCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbCommentRulePayload>
+          }
+          createMany: {
+            args: Prisma.FbCommentRuleCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.FbCommentRuleCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbCommentRulePayload>[]
+          }
+          delete: {
+            args: Prisma.FbCommentRuleDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbCommentRulePayload>
+          }
+          update: {
+            args: Prisma.FbCommentRuleUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbCommentRulePayload>
+          }
+          deleteMany: {
+            args: Prisma.FbCommentRuleDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.FbCommentRuleUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.FbCommentRuleUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbCommentRulePayload>[]
+          }
+          upsert: {
+            args: Prisma.FbCommentRuleUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbCommentRulePayload>
+          }
+          aggregate: {
+            args: Prisma.FbCommentRuleAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateFbCommentRule>
+          }
+          groupBy: {
+            args: Prisma.FbCommentRuleGroupByArgs<ExtArgs>
+            result: $Utils.Optional<FbCommentRuleGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.FbCommentRuleCountArgs<ExtArgs>
+            result: $Utils.Optional<FbCommentRuleCountAggregateOutputType> | number
+          }
+        }
+      }
+      FbAutoReplyLog: {
+        payload: Prisma.$FbAutoReplyLogPayload<ExtArgs>
+        fields: Prisma.FbAutoReplyLogFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.FbAutoReplyLogFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbAutoReplyLogPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.FbAutoReplyLogFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbAutoReplyLogPayload>
+          }
+          findFirst: {
+            args: Prisma.FbAutoReplyLogFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbAutoReplyLogPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.FbAutoReplyLogFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbAutoReplyLogPayload>
+          }
+          findMany: {
+            args: Prisma.FbAutoReplyLogFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbAutoReplyLogPayload>[]
+          }
+          create: {
+            args: Prisma.FbAutoReplyLogCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbAutoReplyLogPayload>
+          }
+          createMany: {
+            args: Prisma.FbAutoReplyLogCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.FbAutoReplyLogCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbAutoReplyLogPayload>[]
+          }
+          delete: {
+            args: Prisma.FbAutoReplyLogDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbAutoReplyLogPayload>
+          }
+          update: {
+            args: Prisma.FbAutoReplyLogUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbAutoReplyLogPayload>
+          }
+          deleteMany: {
+            args: Prisma.FbAutoReplyLogDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.FbAutoReplyLogUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.FbAutoReplyLogUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbAutoReplyLogPayload>[]
+          }
+          upsert: {
+            args: Prisma.FbAutoReplyLogUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbAutoReplyLogPayload>
+          }
+          aggregate: {
+            args: Prisma.FbAutoReplyLogAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateFbAutoReplyLog>
+          }
+          groupBy: {
+            args: Prisma.FbAutoReplyLogGroupByArgs<ExtArgs>
+            result: $Utils.Optional<FbAutoReplyLogGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.FbAutoReplyLogCountArgs<ExtArgs>
+            result: $Utils.Optional<FbAutoReplyLogCountAggregateOutputType> | number
+          }
+        }
+      }
     }
   } & {
     other: {
@@ -9790,6 +10240,11 @@ export namespace Prisma {
     taxDeadline?: TaxDeadlineOmit
     taxAuditLog?: TaxAuditLogOmit
     taxBudget?: TaxBudgetOmit
+    fbUserToken?: FbUserTokenOmit
+    fbPage?: FbPageOmit
+    fbScheduledPost?: FbScheduledPostOmit
+    fbCommentRule?: FbCommentRuleOmit
+    fbAutoReplyLog?: FbAutoReplyLogOmit
   }
 
   /* Types for Logging */
@@ -10946,6 +11401,55 @@ export namespace Prisma {
    */
   export type InventoryCountCountOutputTypeCountItemsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: InventoryCountItemWhereInput
+  }
+
+
+  /**
+   * Count Type FbPageCountOutputType
+   */
+
+  export type FbPageCountOutputType = {
+    scheduledPosts: number
+    commentRules: number
+    autoReplyLogs: number
+  }
+
+  export type FbPageCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    scheduledPosts?: boolean | FbPageCountOutputTypeCountScheduledPostsArgs
+    commentRules?: boolean | FbPageCountOutputTypeCountCommentRulesArgs
+    autoReplyLogs?: boolean | FbPageCountOutputTypeCountAutoReplyLogsArgs
+  }
+
+  // Custom InputTypes
+  /**
+   * FbPageCountOutputType without action
+   */
+  export type FbPageCountOutputTypeDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbPageCountOutputType
+     */
+    select?: FbPageCountOutputTypeSelect<ExtArgs> | null
+  }
+
+  /**
+   * FbPageCountOutputType without action
+   */
+  export type FbPageCountOutputTypeCountScheduledPostsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: FbScheduledPostWhereInput
+  }
+
+  /**
+   * FbPageCountOutputType without action
+   */
+  export type FbPageCountOutputTypeCountCommentRulesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: FbCommentRuleWhereInput
+  }
+
+  /**
+   * FbPageCountOutputType without action
+   */
+  export type FbPageCountOutputTypeCountAutoReplyLogsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: FbAutoReplyLogWhereInput
   }
 
 
@@ -26995,6 +27499,7 @@ export namespace Prisma {
     unitPrice: number | null
     discount: number | null
     lineTotal: number | null
+    baseQuantity: number | null
   }
 
   export type TransactionItemSumAggregateOutputType = {
@@ -27002,6 +27507,7 @@ export namespace Prisma {
     unitPrice: number | null
     discount: number | null
     lineTotal: number | null
+    baseQuantity: number | null
   }
 
   export type TransactionItemMinAggregateOutputType = {
@@ -27015,6 +27521,7 @@ export namespace Prisma {
     discount: number | null
     discountType: string | null
     lineTotal: number | null
+    baseQuantity: number | null
   }
 
   export type TransactionItemMaxAggregateOutputType = {
@@ -27028,6 +27535,7 @@ export namespace Prisma {
     discount: number | null
     discountType: string | null
     lineTotal: number | null
+    baseQuantity: number | null
   }
 
   export type TransactionItemCountAggregateOutputType = {
@@ -27041,6 +27549,7 @@ export namespace Prisma {
     discount: number
     discountType: number
     lineTotal: number
+    baseQuantity: number
     _all: number
   }
 
@@ -27050,6 +27559,7 @@ export namespace Prisma {
     unitPrice?: true
     discount?: true
     lineTotal?: true
+    baseQuantity?: true
   }
 
   export type TransactionItemSumAggregateInputType = {
@@ -27057,6 +27567,7 @@ export namespace Prisma {
     unitPrice?: true
     discount?: true
     lineTotal?: true
+    baseQuantity?: true
   }
 
   export type TransactionItemMinAggregateInputType = {
@@ -27070,6 +27581,7 @@ export namespace Prisma {
     discount?: true
     discountType?: true
     lineTotal?: true
+    baseQuantity?: true
   }
 
   export type TransactionItemMaxAggregateInputType = {
@@ -27083,6 +27595,7 @@ export namespace Prisma {
     discount?: true
     discountType?: true
     lineTotal?: true
+    baseQuantity?: true
   }
 
   export type TransactionItemCountAggregateInputType = {
@@ -27096,6 +27609,7 @@ export namespace Prisma {
     discount?: true
     discountType?: true
     lineTotal?: true
+    baseQuantity?: true
     _all?: true
   }
 
@@ -27196,6 +27710,7 @@ export namespace Prisma {
     discount: number
     discountType: string | null
     lineTotal: number
+    baseQuantity: number
     _count: TransactionItemCountAggregateOutputType | null
     _avg: TransactionItemAvgAggregateOutputType | null
     _sum: TransactionItemSumAggregateOutputType | null
@@ -27228,6 +27743,7 @@ export namespace Prisma {
     discount?: boolean
     discountType?: boolean
     lineTotal?: boolean
+    baseQuantity?: boolean
     transaction?: boolean | TransactionDefaultArgs<ExtArgs>
     product?: boolean | ProductDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["transactionItem"]>
@@ -27243,6 +27759,7 @@ export namespace Prisma {
     discount?: boolean
     discountType?: boolean
     lineTotal?: boolean
+    baseQuantity?: boolean
     transaction?: boolean | TransactionDefaultArgs<ExtArgs>
     product?: boolean | ProductDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["transactionItem"]>
@@ -27258,6 +27775,7 @@ export namespace Prisma {
     discount?: boolean
     discountType?: boolean
     lineTotal?: boolean
+    baseQuantity?: boolean
     transaction?: boolean | TransactionDefaultArgs<ExtArgs>
     product?: boolean | ProductDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["transactionItem"]>
@@ -27273,9 +27791,10 @@ export namespace Prisma {
     discount?: boolean
     discountType?: boolean
     lineTotal?: boolean
+    baseQuantity?: boolean
   }
 
-  export type TransactionItemOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "transactionId" | "productId" | "productName" | "sku" | "quantity" | "unitPrice" | "discount" | "discountType" | "lineTotal", ExtArgs["result"]["transactionItem"]>
+  export type TransactionItemOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "transactionId" | "productId" | "productName" | "sku" | "quantity" | "unitPrice" | "discount" | "discountType" | "lineTotal" | "baseQuantity", ExtArgs["result"]["transactionItem"]>
   export type TransactionItemInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     transaction?: boolean | TransactionDefaultArgs<ExtArgs>
     product?: boolean | ProductDefaultArgs<ExtArgs>
@@ -27306,6 +27825,7 @@ export namespace Prisma {
       discount: number
       discountType: string | null
       lineTotal: number
+      baseQuantity: number
     }, ExtArgs["result"]["transactionItem"]>
     composites: {}
   }
@@ -27741,6 +28261,7 @@ export namespace Prisma {
     readonly discount: FieldRef<"TransactionItem", 'Float'>
     readonly discountType: FieldRef<"TransactionItem", 'String'>
     readonly lineTotal: FieldRef<"TransactionItem", 'Float'>
+    readonly baseQuantity: FieldRef<"TransactionItem", 'Float'>
   }
     
 
@@ -30590,6 +31111,8 @@ export namespace Prisma {
     status: string | null
     paidAmount: number | null
     paymentStatus: string | null
+    dueDate: Date | null
+    paymentTerm: string | null
     note: string | null
     branchId: string | null
     userId: string | null
@@ -30609,6 +31132,8 @@ export namespace Prisma {
     status: string | null
     paidAmount: number | null
     paymentStatus: string | null
+    dueDate: Date | null
+    paymentTerm: string | null
     note: string | null
     branchId: string | null
     userId: string | null
@@ -30628,6 +31153,8 @@ export namespace Prisma {
     status: number
     paidAmount: number
     paymentStatus: number
+    dueDate: number
+    paymentTerm: number
     note: number
     branchId: number
     userId: number
@@ -30661,6 +31188,8 @@ export namespace Prisma {
     status?: true
     paidAmount?: true
     paymentStatus?: true
+    dueDate?: true
+    paymentTerm?: true
     note?: true
     branchId?: true
     userId?: true
@@ -30680,6 +31209,8 @@ export namespace Prisma {
     status?: true
     paidAmount?: true
     paymentStatus?: true
+    dueDate?: true
+    paymentTerm?: true
     note?: true
     branchId?: true
     userId?: true
@@ -30699,6 +31230,8 @@ export namespace Prisma {
     status?: true
     paidAmount?: true
     paymentStatus?: true
+    dueDate?: true
+    paymentTerm?: true
     note?: true
     branchId?: true
     userId?: true
@@ -30805,6 +31338,8 @@ export namespace Prisma {
     status: string
     paidAmount: number
     paymentStatus: string
+    dueDate: Date | null
+    paymentTerm: string | null
     note: string | null
     branchId: string | null
     userId: string
@@ -30843,6 +31378,8 @@ export namespace Prisma {
     status?: boolean
     paidAmount?: boolean
     paymentStatus?: boolean
+    dueDate?: boolean
+    paymentTerm?: boolean
     note?: boolean
     branchId?: boolean
     userId?: boolean
@@ -30865,6 +31402,8 @@ export namespace Prisma {
     status?: boolean
     paidAmount?: boolean
     paymentStatus?: boolean
+    dueDate?: boolean
+    paymentTerm?: boolean
     note?: boolean
     branchId?: boolean
     userId?: boolean
@@ -30885,6 +31424,8 @@ export namespace Prisma {
     status?: boolean
     paidAmount?: boolean
     paymentStatus?: boolean
+    dueDate?: boolean
+    paymentTerm?: boolean
     note?: boolean
     branchId?: boolean
     userId?: boolean
@@ -30905,6 +31446,8 @@ export namespace Prisma {
     status?: boolean
     paidAmount?: boolean
     paymentStatus?: boolean
+    dueDate?: boolean
+    paymentTerm?: boolean
     note?: boolean
     branchId?: boolean
     userId?: boolean
@@ -30914,7 +31457,7 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type ImportReceiptOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "code" | "supplierId" | "supplierName" | "totalCost" | "totalItems" | "status" | "paidAmount" | "paymentStatus" | "note" | "branchId" | "userId" | "userName" | "transactionDate" | "createdAt" | "updatedAt", ExtArgs["result"]["importReceipt"]>
+  export type ImportReceiptOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "code" | "supplierId" | "supplierName" | "totalCost" | "totalItems" | "status" | "paidAmount" | "paymentStatus" | "dueDate" | "paymentTerm" | "note" | "branchId" | "userId" | "userName" | "transactionDate" | "createdAt" | "updatedAt", ExtArgs["result"]["importReceipt"]>
   export type ImportReceiptInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     user?: boolean | UserDefaultArgs<ExtArgs>
     items?: boolean | ImportReceipt$itemsArgs<ExtArgs>
@@ -30943,6 +31486,8 @@ export namespace Prisma {
       status: string
       paidAmount: number
       paymentStatus: string
+      dueDate: Date | null
+      paymentTerm: string | null
       note: string | null
       branchId: string | null
       userId: string
@@ -31384,6 +31929,8 @@ export namespace Prisma {
     readonly status: FieldRef<"ImportReceipt", 'String'>
     readonly paidAmount: FieldRef<"ImportReceipt", 'Float'>
     readonly paymentStatus: FieldRef<"ImportReceipt", 'String'>
+    readonly dueDate: FieldRef<"ImportReceipt", 'DateTime'>
+    readonly paymentTerm: FieldRef<"ImportReceipt", 'String'>
     readonly note: FieldRef<"ImportReceipt", 'String'>
     readonly branchId: FieldRef<"ImportReceipt", 'String'>
     readonly userId: FieldRef<"ImportReceipt", 'String'>
@@ -92003,6 +92550,7 @@ export namespace Prisma {
     platformFee: number | null
     platformFeeRate: number | null
     netRevenue: number | null
+    adsVoucherDiscount: number | null
   }
 
   export type OnlineOrderSumAggregateOutputType = {
@@ -92013,6 +92561,7 @@ export namespace Prisma {
     platformFee: number | null
     platformFeeRate: number | null
     netRevenue: number | null
+    adsVoucherDiscount: number | null
   }
 
   export type OnlineOrderMinAggregateOutputType = {
@@ -92044,6 +92593,8 @@ export namespace Prisma {
     platformFee: number | null
     platformFeeRate: number | null
     netRevenue: number | null
+    adsVoucherDiscount: number | null
+    stockDeducted: boolean | null
     syncedAt: Date | null
     createdAt: Date | null
     updatedAt: Date | null
@@ -92078,6 +92629,8 @@ export namespace Prisma {
     platformFee: number | null
     platformFeeRate: number | null
     netRevenue: number | null
+    adsVoucherDiscount: number | null
+    stockDeducted: boolean | null
     syncedAt: Date | null
     createdAt: Date | null
     updatedAt: Date | null
@@ -92112,6 +92665,8 @@ export namespace Prisma {
     platformFee: number
     platformFeeRate: number
     netRevenue: number
+    adsVoucherDiscount: number
+    stockDeducted: number
     syncedAt: number
     createdAt: number
     updatedAt: number
@@ -92127,6 +92682,7 @@ export namespace Prisma {
     platformFee?: true
     platformFeeRate?: true
     netRevenue?: true
+    adsVoucherDiscount?: true
   }
 
   export type OnlineOrderSumAggregateInputType = {
@@ -92137,6 +92693,7 @@ export namespace Prisma {
     platformFee?: true
     platformFeeRate?: true
     netRevenue?: true
+    adsVoucherDiscount?: true
   }
 
   export type OnlineOrderMinAggregateInputType = {
@@ -92168,6 +92725,8 @@ export namespace Prisma {
     platformFee?: true
     platformFeeRate?: true
     netRevenue?: true
+    adsVoucherDiscount?: true
+    stockDeducted?: true
     syncedAt?: true
     createdAt?: true
     updatedAt?: true
@@ -92202,6 +92761,8 @@ export namespace Prisma {
     platformFee?: true
     platformFeeRate?: true
     netRevenue?: true
+    adsVoucherDiscount?: true
+    stockDeducted?: true
     syncedAt?: true
     createdAt?: true
     updatedAt?: true
@@ -92236,6 +92797,8 @@ export namespace Prisma {
     platformFee?: true
     platformFeeRate?: true
     netRevenue?: true
+    adsVoucherDiscount?: true
+    stockDeducted?: true
     syncedAt?: true
     createdAt?: true
     updatedAt?: true
@@ -92357,6 +92920,8 @@ export namespace Prisma {
     platformFee: number
     platformFeeRate: number
     netRevenue: number
+    adsVoucherDiscount: number
+    stockDeducted: boolean
     syncedAt: Date | null
     createdAt: Date
     updatedAt: Date
@@ -92410,6 +92975,8 @@ export namespace Prisma {
     platformFee?: boolean
     platformFeeRate?: boolean
     netRevenue?: boolean
+    adsVoucherDiscount?: boolean
+    stockDeducted?: boolean
     syncedAt?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -92447,6 +93014,8 @@ export namespace Prisma {
     platformFee?: boolean
     platformFeeRate?: boolean
     netRevenue?: boolean
+    adsVoucherDiscount?: boolean
+    stockDeducted?: boolean
     syncedAt?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -92482,6 +93051,8 @@ export namespace Prisma {
     platformFee?: boolean
     platformFeeRate?: boolean
     netRevenue?: boolean
+    adsVoucherDiscount?: boolean
+    stockDeducted?: boolean
     syncedAt?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -92517,12 +93088,14 @@ export namespace Prisma {
     platformFee?: boolean
     platformFeeRate?: boolean
     netRevenue?: boolean
+    adsVoucherDiscount?: boolean
+    stockDeducted?: boolean
     syncedAt?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type OnlineOrderOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "orderNumber" | "channelId" | "channelName" | "platform" | "customerName" | "customerPhone" | "customerEmail" | "shippingAddress" | "status" | "subtotal" | "discount" | "shippingFee" | "total" | "paymentMethod" | "paymentStatus" | "paidAt" | "trackingNumber" | "shippingCarrier" | "shippedAt" | "deliveredAt" | "note" | "internalNote" | "externalOrderId" | "externalStatus" | "platformFee" | "platformFeeRate" | "netRevenue" | "syncedAt" | "createdAt" | "updatedAt", ExtArgs["result"]["onlineOrder"]>
+  export type OnlineOrderOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "orderNumber" | "channelId" | "channelName" | "platform" | "customerName" | "customerPhone" | "customerEmail" | "shippingAddress" | "status" | "subtotal" | "discount" | "shippingFee" | "total" | "paymentMethod" | "paymentStatus" | "paidAt" | "trackingNumber" | "shippingCarrier" | "shippedAt" | "deliveredAt" | "note" | "internalNote" | "externalOrderId" | "externalStatus" | "platformFee" | "platformFeeRate" | "netRevenue" | "adsVoucherDiscount" | "stockDeducted" | "syncedAt" | "createdAt" | "updatedAt", ExtArgs["result"]["onlineOrder"]>
   export type OnlineOrderInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     channel?: boolean | OnlineOrder$channelArgs<ExtArgs>
     items?: boolean | OnlineOrder$itemsArgs<ExtArgs>
@@ -92570,6 +93143,8 @@ export namespace Prisma {
       platformFee: number
       platformFeeRate: number
       netRevenue: number
+      adsVoucherDiscount: number
+      stockDeducted: boolean
       syncedAt: Date | null
       createdAt: Date
       updatedAt: Date
@@ -93026,6 +93601,8 @@ export namespace Prisma {
     readonly platformFee: FieldRef<"OnlineOrder", 'Float'>
     readonly platformFeeRate: FieldRef<"OnlineOrder", 'Float'>
     readonly netRevenue: FieldRef<"OnlineOrder", 'Float'>
+    readonly adsVoucherDiscount: FieldRef<"OnlineOrder", 'Float'>
+    readonly stockDeducted: FieldRef<"OnlineOrder", 'Boolean'>
     readonly syncedAt: FieldRef<"OnlineOrder", 'DateTime'>
     readonly createdAt: FieldRef<"OnlineOrder", 'DateTime'>
     readonly updatedAt: FieldRef<"OnlineOrder", 'DateTime'>
@@ -130702,6 +131279,5876 @@ export namespace Prisma {
 
 
   /**
+   * Model FbUserToken
+   */
+
+  export type AggregateFbUserToken = {
+    _count: FbUserTokenCountAggregateOutputType | null
+    _min: FbUserTokenMinAggregateOutputType | null
+    _max: FbUserTokenMaxAggregateOutputType | null
+  }
+
+  export type FbUserTokenMinAggregateOutputType = {
+    id: string | null
+    fbUserId: string | null
+    name: string | null
+    accessToken: string | null
+    tokenExpiresAt: Date | null
+    scopes: string | null
+    connectedBy: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type FbUserTokenMaxAggregateOutputType = {
+    id: string | null
+    fbUserId: string | null
+    name: string | null
+    accessToken: string | null
+    tokenExpiresAt: Date | null
+    scopes: string | null
+    connectedBy: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type FbUserTokenCountAggregateOutputType = {
+    id: number
+    fbUserId: number
+    name: number
+    accessToken: number
+    tokenExpiresAt: number
+    scopes: number
+    connectedBy: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type FbUserTokenMinAggregateInputType = {
+    id?: true
+    fbUserId?: true
+    name?: true
+    accessToken?: true
+    tokenExpiresAt?: true
+    scopes?: true
+    connectedBy?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type FbUserTokenMaxAggregateInputType = {
+    id?: true
+    fbUserId?: true
+    name?: true
+    accessToken?: true
+    tokenExpiresAt?: true
+    scopes?: true
+    connectedBy?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type FbUserTokenCountAggregateInputType = {
+    id?: true
+    fbUserId?: true
+    name?: true
+    accessToken?: true
+    tokenExpiresAt?: true
+    scopes?: true
+    connectedBy?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type FbUserTokenAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which FbUserToken to aggregate.
+     */
+    where?: FbUserTokenWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FbUserTokens to fetch.
+     */
+    orderBy?: FbUserTokenOrderByWithRelationInput | FbUserTokenOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: FbUserTokenWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FbUserTokens from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FbUserTokens.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned FbUserTokens
+    **/
+    _count?: true | FbUserTokenCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: FbUserTokenMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: FbUserTokenMaxAggregateInputType
+  }
+
+  export type GetFbUserTokenAggregateType<T extends FbUserTokenAggregateArgs> = {
+        [P in keyof T & keyof AggregateFbUserToken]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateFbUserToken[P]>
+      : GetScalarType<T[P], AggregateFbUserToken[P]>
+  }
+
+
+
+
+  export type FbUserTokenGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: FbUserTokenWhereInput
+    orderBy?: FbUserTokenOrderByWithAggregationInput | FbUserTokenOrderByWithAggregationInput[]
+    by: FbUserTokenScalarFieldEnum[] | FbUserTokenScalarFieldEnum
+    having?: FbUserTokenScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: FbUserTokenCountAggregateInputType | true
+    _min?: FbUserTokenMinAggregateInputType
+    _max?: FbUserTokenMaxAggregateInputType
+  }
+
+  export type FbUserTokenGroupByOutputType = {
+    id: string
+    fbUserId: string
+    name: string | null
+    accessToken: string
+    tokenExpiresAt: Date | null
+    scopes: string
+    connectedBy: string | null
+    createdAt: Date
+    updatedAt: Date
+    _count: FbUserTokenCountAggregateOutputType | null
+    _min: FbUserTokenMinAggregateOutputType | null
+    _max: FbUserTokenMaxAggregateOutputType | null
+  }
+
+  type GetFbUserTokenGroupByPayload<T extends FbUserTokenGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<FbUserTokenGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof FbUserTokenGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], FbUserTokenGroupByOutputType[P]>
+            : GetScalarType<T[P], FbUserTokenGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type FbUserTokenSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    fbUserId?: boolean
+    name?: boolean
+    accessToken?: boolean
+    tokenExpiresAt?: boolean
+    scopes?: boolean
+    connectedBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["fbUserToken"]>
+
+  export type FbUserTokenSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    fbUserId?: boolean
+    name?: boolean
+    accessToken?: boolean
+    tokenExpiresAt?: boolean
+    scopes?: boolean
+    connectedBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["fbUserToken"]>
+
+  export type FbUserTokenSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    fbUserId?: boolean
+    name?: boolean
+    accessToken?: boolean
+    tokenExpiresAt?: boolean
+    scopes?: boolean
+    connectedBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["fbUserToken"]>
+
+  export type FbUserTokenSelectScalar = {
+    id?: boolean
+    fbUserId?: boolean
+    name?: boolean
+    accessToken?: boolean
+    tokenExpiresAt?: boolean
+    scopes?: boolean
+    connectedBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type FbUserTokenOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "fbUserId" | "name" | "accessToken" | "tokenExpiresAt" | "scopes" | "connectedBy" | "createdAt" | "updatedAt", ExtArgs["result"]["fbUserToken"]>
+
+  export type $FbUserTokenPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "FbUserToken"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      fbUserId: string
+      name: string | null
+      accessToken: string
+      tokenExpiresAt: Date | null
+      scopes: string
+      connectedBy: string | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["fbUserToken"]>
+    composites: {}
+  }
+
+  type FbUserTokenGetPayload<S extends boolean | null | undefined | FbUserTokenDefaultArgs> = $Result.GetResult<Prisma.$FbUserTokenPayload, S>
+
+  type FbUserTokenCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<FbUserTokenFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: FbUserTokenCountAggregateInputType | true
+    }
+
+  export interface FbUserTokenDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['FbUserToken'], meta: { name: 'FbUserToken' } }
+    /**
+     * Find zero or one FbUserToken that matches the filter.
+     * @param {FbUserTokenFindUniqueArgs} args - Arguments to find a FbUserToken
+     * @example
+     * // Get one FbUserToken
+     * const fbUserToken = await prisma.fbUserToken.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends FbUserTokenFindUniqueArgs>(args: SelectSubset<T, FbUserTokenFindUniqueArgs<ExtArgs>>): Prisma__FbUserTokenClient<$Result.GetResult<Prisma.$FbUserTokenPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one FbUserToken that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {FbUserTokenFindUniqueOrThrowArgs} args - Arguments to find a FbUserToken
+     * @example
+     * // Get one FbUserToken
+     * const fbUserToken = await prisma.fbUserToken.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends FbUserTokenFindUniqueOrThrowArgs>(args: SelectSubset<T, FbUserTokenFindUniqueOrThrowArgs<ExtArgs>>): Prisma__FbUserTokenClient<$Result.GetResult<Prisma.$FbUserTokenPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first FbUserToken that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbUserTokenFindFirstArgs} args - Arguments to find a FbUserToken
+     * @example
+     * // Get one FbUserToken
+     * const fbUserToken = await prisma.fbUserToken.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends FbUserTokenFindFirstArgs>(args?: SelectSubset<T, FbUserTokenFindFirstArgs<ExtArgs>>): Prisma__FbUserTokenClient<$Result.GetResult<Prisma.$FbUserTokenPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first FbUserToken that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbUserTokenFindFirstOrThrowArgs} args - Arguments to find a FbUserToken
+     * @example
+     * // Get one FbUserToken
+     * const fbUserToken = await prisma.fbUserToken.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends FbUserTokenFindFirstOrThrowArgs>(args?: SelectSubset<T, FbUserTokenFindFirstOrThrowArgs<ExtArgs>>): Prisma__FbUserTokenClient<$Result.GetResult<Prisma.$FbUserTokenPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more FbUserTokens that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbUserTokenFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all FbUserTokens
+     * const fbUserTokens = await prisma.fbUserToken.findMany()
+     * 
+     * // Get first 10 FbUserTokens
+     * const fbUserTokens = await prisma.fbUserToken.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const fbUserTokenWithIdOnly = await prisma.fbUserToken.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends FbUserTokenFindManyArgs>(args?: SelectSubset<T, FbUserTokenFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FbUserTokenPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a FbUserToken.
+     * @param {FbUserTokenCreateArgs} args - Arguments to create a FbUserToken.
+     * @example
+     * // Create one FbUserToken
+     * const FbUserToken = await prisma.fbUserToken.create({
+     *   data: {
+     *     // ... data to create a FbUserToken
+     *   }
+     * })
+     * 
+     */
+    create<T extends FbUserTokenCreateArgs>(args: SelectSubset<T, FbUserTokenCreateArgs<ExtArgs>>): Prisma__FbUserTokenClient<$Result.GetResult<Prisma.$FbUserTokenPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many FbUserTokens.
+     * @param {FbUserTokenCreateManyArgs} args - Arguments to create many FbUserTokens.
+     * @example
+     * // Create many FbUserTokens
+     * const fbUserToken = await prisma.fbUserToken.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends FbUserTokenCreateManyArgs>(args?: SelectSubset<T, FbUserTokenCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many FbUserTokens and returns the data saved in the database.
+     * @param {FbUserTokenCreateManyAndReturnArgs} args - Arguments to create many FbUserTokens.
+     * @example
+     * // Create many FbUserTokens
+     * const fbUserToken = await prisma.fbUserToken.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many FbUserTokens and only return the `id`
+     * const fbUserTokenWithIdOnly = await prisma.fbUserToken.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends FbUserTokenCreateManyAndReturnArgs>(args?: SelectSubset<T, FbUserTokenCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FbUserTokenPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a FbUserToken.
+     * @param {FbUserTokenDeleteArgs} args - Arguments to delete one FbUserToken.
+     * @example
+     * // Delete one FbUserToken
+     * const FbUserToken = await prisma.fbUserToken.delete({
+     *   where: {
+     *     // ... filter to delete one FbUserToken
+     *   }
+     * })
+     * 
+     */
+    delete<T extends FbUserTokenDeleteArgs>(args: SelectSubset<T, FbUserTokenDeleteArgs<ExtArgs>>): Prisma__FbUserTokenClient<$Result.GetResult<Prisma.$FbUserTokenPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one FbUserToken.
+     * @param {FbUserTokenUpdateArgs} args - Arguments to update one FbUserToken.
+     * @example
+     * // Update one FbUserToken
+     * const fbUserToken = await prisma.fbUserToken.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends FbUserTokenUpdateArgs>(args: SelectSubset<T, FbUserTokenUpdateArgs<ExtArgs>>): Prisma__FbUserTokenClient<$Result.GetResult<Prisma.$FbUserTokenPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more FbUserTokens.
+     * @param {FbUserTokenDeleteManyArgs} args - Arguments to filter FbUserTokens to delete.
+     * @example
+     * // Delete a few FbUserTokens
+     * const { count } = await prisma.fbUserToken.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends FbUserTokenDeleteManyArgs>(args?: SelectSubset<T, FbUserTokenDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more FbUserTokens.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbUserTokenUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many FbUserTokens
+     * const fbUserToken = await prisma.fbUserToken.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends FbUserTokenUpdateManyArgs>(args: SelectSubset<T, FbUserTokenUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more FbUserTokens and returns the data updated in the database.
+     * @param {FbUserTokenUpdateManyAndReturnArgs} args - Arguments to update many FbUserTokens.
+     * @example
+     * // Update many FbUserTokens
+     * const fbUserToken = await prisma.fbUserToken.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more FbUserTokens and only return the `id`
+     * const fbUserTokenWithIdOnly = await prisma.fbUserToken.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends FbUserTokenUpdateManyAndReturnArgs>(args: SelectSubset<T, FbUserTokenUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FbUserTokenPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one FbUserToken.
+     * @param {FbUserTokenUpsertArgs} args - Arguments to update or create a FbUserToken.
+     * @example
+     * // Update or create a FbUserToken
+     * const fbUserToken = await prisma.fbUserToken.upsert({
+     *   create: {
+     *     // ... data to create a FbUserToken
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the FbUserToken we want to update
+     *   }
+     * })
+     */
+    upsert<T extends FbUserTokenUpsertArgs>(args: SelectSubset<T, FbUserTokenUpsertArgs<ExtArgs>>): Prisma__FbUserTokenClient<$Result.GetResult<Prisma.$FbUserTokenPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of FbUserTokens.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbUserTokenCountArgs} args - Arguments to filter FbUserTokens to count.
+     * @example
+     * // Count the number of FbUserTokens
+     * const count = await prisma.fbUserToken.count({
+     *   where: {
+     *     // ... the filter for the FbUserTokens we want to count
+     *   }
+     * })
+    **/
+    count<T extends FbUserTokenCountArgs>(
+      args?: Subset<T, FbUserTokenCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], FbUserTokenCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a FbUserToken.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbUserTokenAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends FbUserTokenAggregateArgs>(args: Subset<T, FbUserTokenAggregateArgs>): Prisma.PrismaPromise<GetFbUserTokenAggregateType<T>>
+
+    /**
+     * Group by FbUserToken.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbUserTokenGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends FbUserTokenGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: FbUserTokenGroupByArgs['orderBy'] }
+        : { orderBy?: FbUserTokenGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, FbUserTokenGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetFbUserTokenGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the FbUserToken model
+   */
+  readonly fields: FbUserTokenFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for FbUserToken.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__FbUserTokenClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the FbUserToken model
+   */
+  interface FbUserTokenFieldRefs {
+    readonly id: FieldRef<"FbUserToken", 'String'>
+    readonly fbUserId: FieldRef<"FbUserToken", 'String'>
+    readonly name: FieldRef<"FbUserToken", 'String'>
+    readonly accessToken: FieldRef<"FbUserToken", 'String'>
+    readonly tokenExpiresAt: FieldRef<"FbUserToken", 'DateTime'>
+    readonly scopes: FieldRef<"FbUserToken", 'String'>
+    readonly connectedBy: FieldRef<"FbUserToken", 'String'>
+    readonly createdAt: FieldRef<"FbUserToken", 'DateTime'>
+    readonly updatedAt: FieldRef<"FbUserToken", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * FbUserToken findUnique
+   */
+  export type FbUserTokenFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbUserToken
+     */
+    select?: FbUserTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbUserToken
+     */
+    omit?: FbUserTokenOmit<ExtArgs> | null
+    /**
+     * Filter, which FbUserToken to fetch.
+     */
+    where: FbUserTokenWhereUniqueInput
+  }
+
+  /**
+   * FbUserToken findUniqueOrThrow
+   */
+  export type FbUserTokenFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbUserToken
+     */
+    select?: FbUserTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbUserToken
+     */
+    omit?: FbUserTokenOmit<ExtArgs> | null
+    /**
+     * Filter, which FbUserToken to fetch.
+     */
+    where: FbUserTokenWhereUniqueInput
+  }
+
+  /**
+   * FbUserToken findFirst
+   */
+  export type FbUserTokenFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbUserToken
+     */
+    select?: FbUserTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbUserToken
+     */
+    omit?: FbUserTokenOmit<ExtArgs> | null
+    /**
+     * Filter, which FbUserToken to fetch.
+     */
+    where?: FbUserTokenWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FbUserTokens to fetch.
+     */
+    orderBy?: FbUserTokenOrderByWithRelationInput | FbUserTokenOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for FbUserTokens.
+     */
+    cursor?: FbUserTokenWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FbUserTokens from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FbUserTokens.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of FbUserTokens.
+     */
+    distinct?: FbUserTokenScalarFieldEnum | FbUserTokenScalarFieldEnum[]
+  }
+
+  /**
+   * FbUserToken findFirstOrThrow
+   */
+  export type FbUserTokenFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbUserToken
+     */
+    select?: FbUserTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbUserToken
+     */
+    omit?: FbUserTokenOmit<ExtArgs> | null
+    /**
+     * Filter, which FbUserToken to fetch.
+     */
+    where?: FbUserTokenWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FbUserTokens to fetch.
+     */
+    orderBy?: FbUserTokenOrderByWithRelationInput | FbUserTokenOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for FbUserTokens.
+     */
+    cursor?: FbUserTokenWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FbUserTokens from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FbUserTokens.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of FbUserTokens.
+     */
+    distinct?: FbUserTokenScalarFieldEnum | FbUserTokenScalarFieldEnum[]
+  }
+
+  /**
+   * FbUserToken findMany
+   */
+  export type FbUserTokenFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbUserToken
+     */
+    select?: FbUserTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbUserToken
+     */
+    omit?: FbUserTokenOmit<ExtArgs> | null
+    /**
+     * Filter, which FbUserTokens to fetch.
+     */
+    where?: FbUserTokenWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FbUserTokens to fetch.
+     */
+    orderBy?: FbUserTokenOrderByWithRelationInput | FbUserTokenOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing FbUserTokens.
+     */
+    cursor?: FbUserTokenWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FbUserTokens from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FbUserTokens.
+     */
+    skip?: number
+    distinct?: FbUserTokenScalarFieldEnum | FbUserTokenScalarFieldEnum[]
+  }
+
+  /**
+   * FbUserToken create
+   */
+  export type FbUserTokenCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbUserToken
+     */
+    select?: FbUserTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbUserToken
+     */
+    omit?: FbUserTokenOmit<ExtArgs> | null
+    /**
+     * The data needed to create a FbUserToken.
+     */
+    data: XOR<FbUserTokenCreateInput, FbUserTokenUncheckedCreateInput>
+  }
+
+  /**
+   * FbUserToken createMany
+   */
+  export type FbUserTokenCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many FbUserTokens.
+     */
+    data: FbUserTokenCreateManyInput | FbUserTokenCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * FbUserToken createManyAndReturn
+   */
+  export type FbUserTokenCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbUserToken
+     */
+    select?: FbUserTokenSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbUserToken
+     */
+    omit?: FbUserTokenOmit<ExtArgs> | null
+    /**
+     * The data used to create many FbUserTokens.
+     */
+    data: FbUserTokenCreateManyInput | FbUserTokenCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * FbUserToken update
+   */
+  export type FbUserTokenUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbUserToken
+     */
+    select?: FbUserTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbUserToken
+     */
+    omit?: FbUserTokenOmit<ExtArgs> | null
+    /**
+     * The data needed to update a FbUserToken.
+     */
+    data: XOR<FbUserTokenUpdateInput, FbUserTokenUncheckedUpdateInput>
+    /**
+     * Choose, which FbUserToken to update.
+     */
+    where: FbUserTokenWhereUniqueInput
+  }
+
+  /**
+   * FbUserToken updateMany
+   */
+  export type FbUserTokenUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update FbUserTokens.
+     */
+    data: XOR<FbUserTokenUpdateManyMutationInput, FbUserTokenUncheckedUpdateManyInput>
+    /**
+     * Filter which FbUserTokens to update
+     */
+    where?: FbUserTokenWhereInput
+    /**
+     * Limit how many FbUserTokens to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * FbUserToken updateManyAndReturn
+   */
+  export type FbUserTokenUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbUserToken
+     */
+    select?: FbUserTokenSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbUserToken
+     */
+    omit?: FbUserTokenOmit<ExtArgs> | null
+    /**
+     * The data used to update FbUserTokens.
+     */
+    data: XOR<FbUserTokenUpdateManyMutationInput, FbUserTokenUncheckedUpdateManyInput>
+    /**
+     * Filter which FbUserTokens to update
+     */
+    where?: FbUserTokenWhereInput
+    /**
+     * Limit how many FbUserTokens to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * FbUserToken upsert
+   */
+  export type FbUserTokenUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbUserToken
+     */
+    select?: FbUserTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbUserToken
+     */
+    omit?: FbUserTokenOmit<ExtArgs> | null
+    /**
+     * The filter to search for the FbUserToken to update in case it exists.
+     */
+    where: FbUserTokenWhereUniqueInput
+    /**
+     * In case the FbUserToken found by the `where` argument doesn't exist, create a new FbUserToken with this data.
+     */
+    create: XOR<FbUserTokenCreateInput, FbUserTokenUncheckedCreateInput>
+    /**
+     * In case the FbUserToken was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<FbUserTokenUpdateInput, FbUserTokenUncheckedUpdateInput>
+  }
+
+  /**
+   * FbUserToken delete
+   */
+  export type FbUserTokenDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbUserToken
+     */
+    select?: FbUserTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbUserToken
+     */
+    omit?: FbUserTokenOmit<ExtArgs> | null
+    /**
+     * Filter which FbUserToken to delete.
+     */
+    where: FbUserTokenWhereUniqueInput
+  }
+
+  /**
+   * FbUserToken deleteMany
+   */
+  export type FbUserTokenDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which FbUserTokens to delete
+     */
+    where?: FbUserTokenWhereInput
+    /**
+     * Limit how many FbUserTokens to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * FbUserToken without action
+   */
+  export type FbUserTokenDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbUserToken
+     */
+    select?: FbUserTokenSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbUserToken
+     */
+    omit?: FbUserTokenOmit<ExtArgs> | null
+  }
+
+
+  /**
+   * Model FbPage
+   */
+
+  export type AggregateFbPage = {
+    _count: FbPageCountAggregateOutputType | null
+    _avg: FbPageAvgAggregateOutputType | null
+    _sum: FbPageSumAggregateOutputType | null
+    _min: FbPageMinAggregateOutputType | null
+    _max: FbPageMaxAggregateOutputType | null
+  }
+
+  export type FbPageAvgAggregateOutputType = {
+    fanCount: number | null
+  }
+
+  export type FbPageSumAggregateOutputType = {
+    fanCount: number | null
+  }
+
+  export type FbPageMinAggregateOutputType = {
+    id: string | null
+    pageId: string | null
+    name: string | null
+    category: string | null
+    avatar: string | null
+    fanCount: number | null
+    accessToken: string | null
+    tokenExpiresAt: Date | null
+    igUserId: string | null
+    adAccountId: string | null
+    webhookSubscribed: boolean | null
+    autoReplyEnabled: boolean | null
+    status: string | null
+    connectedBy: string | null
+    lastSyncAt: Date | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type FbPageMaxAggregateOutputType = {
+    id: string | null
+    pageId: string | null
+    name: string | null
+    category: string | null
+    avatar: string | null
+    fanCount: number | null
+    accessToken: string | null
+    tokenExpiresAt: Date | null
+    igUserId: string | null
+    adAccountId: string | null
+    webhookSubscribed: boolean | null
+    autoReplyEnabled: boolean | null
+    status: string | null
+    connectedBy: string | null
+    lastSyncAt: Date | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type FbPageCountAggregateOutputType = {
+    id: number
+    pageId: number
+    name: number
+    category: number
+    avatar: number
+    fanCount: number
+    accessToken: number
+    tokenExpiresAt: number
+    igUserId: number
+    adAccountId: number
+    webhookSubscribed: number
+    autoReplyEnabled: number
+    status: number
+    connectedBy: number
+    lastSyncAt: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type FbPageAvgAggregateInputType = {
+    fanCount?: true
+  }
+
+  export type FbPageSumAggregateInputType = {
+    fanCount?: true
+  }
+
+  export type FbPageMinAggregateInputType = {
+    id?: true
+    pageId?: true
+    name?: true
+    category?: true
+    avatar?: true
+    fanCount?: true
+    accessToken?: true
+    tokenExpiresAt?: true
+    igUserId?: true
+    adAccountId?: true
+    webhookSubscribed?: true
+    autoReplyEnabled?: true
+    status?: true
+    connectedBy?: true
+    lastSyncAt?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type FbPageMaxAggregateInputType = {
+    id?: true
+    pageId?: true
+    name?: true
+    category?: true
+    avatar?: true
+    fanCount?: true
+    accessToken?: true
+    tokenExpiresAt?: true
+    igUserId?: true
+    adAccountId?: true
+    webhookSubscribed?: true
+    autoReplyEnabled?: true
+    status?: true
+    connectedBy?: true
+    lastSyncAt?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type FbPageCountAggregateInputType = {
+    id?: true
+    pageId?: true
+    name?: true
+    category?: true
+    avatar?: true
+    fanCount?: true
+    accessToken?: true
+    tokenExpiresAt?: true
+    igUserId?: true
+    adAccountId?: true
+    webhookSubscribed?: true
+    autoReplyEnabled?: true
+    status?: true
+    connectedBy?: true
+    lastSyncAt?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type FbPageAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which FbPage to aggregate.
+     */
+    where?: FbPageWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FbPages to fetch.
+     */
+    orderBy?: FbPageOrderByWithRelationInput | FbPageOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: FbPageWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FbPages from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FbPages.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned FbPages
+    **/
+    _count?: true | FbPageCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: FbPageAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: FbPageSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: FbPageMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: FbPageMaxAggregateInputType
+  }
+
+  export type GetFbPageAggregateType<T extends FbPageAggregateArgs> = {
+        [P in keyof T & keyof AggregateFbPage]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateFbPage[P]>
+      : GetScalarType<T[P], AggregateFbPage[P]>
+  }
+
+
+
+
+  export type FbPageGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: FbPageWhereInput
+    orderBy?: FbPageOrderByWithAggregationInput | FbPageOrderByWithAggregationInput[]
+    by: FbPageScalarFieldEnum[] | FbPageScalarFieldEnum
+    having?: FbPageScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: FbPageCountAggregateInputType | true
+    _avg?: FbPageAvgAggregateInputType
+    _sum?: FbPageSumAggregateInputType
+    _min?: FbPageMinAggregateInputType
+    _max?: FbPageMaxAggregateInputType
+  }
+
+  export type FbPageGroupByOutputType = {
+    id: string
+    pageId: string
+    name: string
+    category: string | null
+    avatar: string | null
+    fanCount: number
+    accessToken: string
+    tokenExpiresAt: Date | null
+    igUserId: string | null
+    adAccountId: string | null
+    webhookSubscribed: boolean
+    autoReplyEnabled: boolean
+    status: string
+    connectedBy: string | null
+    lastSyncAt: Date | null
+    createdAt: Date
+    updatedAt: Date
+    _count: FbPageCountAggregateOutputType | null
+    _avg: FbPageAvgAggregateOutputType | null
+    _sum: FbPageSumAggregateOutputType | null
+    _min: FbPageMinAggregateOutputType | null
+    _max: FbPageMaxAggregateOutputType | null
+  }
+
+  type GetFbPageGroupByPayload<T extends FbPageGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<FbPageGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof FbPageGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], FbPageGroupByOutputType[P]>
+            : GetScalarType<T[P], FbPageGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type FbPageSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    pageId?: boolean
+    name?: boolean
+    category?: boolean
+    avatar?: boolean
+    fanCount?: boolean
+    accessToken?: boolean
+    tokenExpiresAt?: boolean
+    igUserId?: boolean
+    adAccountId?: boolean
+    webhookSubscribed?: boolean
+    autoReplyEnabled?: boolean
+    status?: boolean
+    connectedBy?: boolean
+    lastSyncAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    scheduledPosts?: boolean | FbPage$scheduledPostsArgs<ExtArgs>
+    commentRules?: boolean | FbPage$commentRulesArgs<ExtArgs>
+    autoReplyLogs?: boolean | FbPage$autoReplyLogsArgs<ExtArgs>
+    _count?: boolean | FbPageCountOutputTypeDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["fbPage"]>
+
+  export type FbPageSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    pageId?: boolean
+    name?: boolean
+    category?: boolean
+    avatar?: boolean
+    fanCount?: boolean
+    accessToken?: boolean
+    tokenExpiresAt?: boolean
+    igUserId?: boolean
+    adAccountId?: boolean
+    webhookSubscribed?: boolean
+    autoReplyEnabled?: boolean
+    status?: boolean
+    connectedBy?: boolean
+    lastSyncAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["fbPage"]>
+
+  export type FbPageSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    pageId?: boolean
+    name?: boolean
+    category?: boolean
+    avatar?: boolean
+    fanCount?: boolean
+    accessToken?: boolean
+    tokenExpiresAt?: boolean
+    igUserId?: boolean
+    adAccountId?: boolean
+    webhookSubscribed?: boolean
+    autoReplyEnabled?: boolean
+    status?: boolean
+    connectedBy?: boolean
+    lastSyncAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["fbPage"]>
+
+  export type FbPageSelectScalar = {
+    id?: boolean
+    pageId?: boolean
+    name?: boolean
+    category?: boolean
+    avatar?: boolean
+    fanCount?: boolean
+    accessToken?: boolean
+    tokenExpiresAt?: boolean
+    igUserId?: boolean
+    adAccountId?: boolean
+    webhookSubscribed?: boolean
+    autoReplyEnabled?: boolean
+    status?: boolean
+    connectedBy?: boolean
+    lastSyncAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type FbPageOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "pageId" | "name" | "category" | "avatar" | "fanCount" | "accessToken" | "tokenExpiresAt" | "igUserId" | "adAccountId" | "webhookSubscribed" | "autoReplyEnabled" | "status" | "connectedBy" | "lastSyncAt" | "createdAt" | "updatedAt", ExtArgs["result"]["fbPage"]>
+  export type FbPageInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    scheduledPosts?: boolean | FbPage$scheduledPostsArgs<ExtArgs>
+    commentRules?: boolean | FbPage$commentRulesArgs<ExtArgs>
+    autoReplyLogs?: boolean | FbPage$autoReplyLogsArgs<ExtArgs>
+    _count?: boolean | FbPageCountOutputTypeDefaultArgs<ExtArgs>
+  }
+  export type FbPageIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {}
+  export type FbPageIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {}
+
+  export type $FbPagePayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "FbPage"
+    objects: {
+      scheduledPosts: Prisma.$FbScheduledPostPayload<ExtArgs>[]
+      commentRules: Prisma.$FbCommentRulePayload<ExtArgs>[]
+      autoReplyLogs: Prisma.$FbAutoReplyLogPayload<ExtArgs>[]
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      pageId: string
+      name: string
+      category: string | null
+      avatar: string | null
+      fanCount: number
+      accessToken: string
+      tokenExpiresAt: Date | null
+      igUserId: string | null
+      adAccountId: string | null
+      webhookSubscribed: boolean
+      autoReplyEnabled: boolean
+      status: string
+      connectedBy: string | null
+      lastSyncAt: Date | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["fbPage"]>
+    composites: {}
+  }
+
+  type FbPageGetPayload<S extends boolean | null | undefined | FbPageDefaultArgs> = $Result.GetResult<Prisma.$FbPagePayload, S>
+
+  type FbPageCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<FbPageFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: FbPageCountAggregateInputType | true
+    }
+
+  export interface FbPageDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['FbPage'], meta: { name: 'FbPage' } }
+    /**
+     * Find zero or one FbPage that matches the filter.
+     * @param {FbPageFindUniqueArgs} args - Arguments to find a FbPage
+     * @example
+     * // Get one FbPage
+     * const fbPage = await prisma.fbPage.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends FbPageFindUniqueArgs>(args: SelectSubset<T, FbPageFindUniqueArgs<ExtArgs>>): Prisma__FbPageClient<$Result.GetResult<Prisma.$FbPagePayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one FbPage that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {FbPageFindUniqueOrThrowArgs} args - Arguments to find a FbPage
+     * @example
+     * // Get one FbPage
+     * const fbPage = await prisma.fbPage.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends FbPageFindUniqueOrThrowArgs>(args: SelectSubset<T, FbPageFindUniqueOrThrowArgs<ExtArgs>>): Prisma__FbPageClient<$Result.GetResult<Prisma.$FbPagePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first FbPage that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbPageFindFirstArgs} args - Arguments to find a FbPage
+     * @example
+     * // Get one FbPage
+     * const fbPage = await prisma.fbPage.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends FbPageFindFirstArgs>(args?: SelectSubset<T, FbPageFindFirstArgs<ExtArgs>>): Prisma__FbPageClient<$Result.GetResult<Prisma.$FbPagePayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first FbPage that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbPageFindFirstOrThrowArgs} args - Arguments to find a FbPage
+     * @example
+     * // Get one FbPage
+     * const fbPage = await prisma.fbPage.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends FbPageFindFirstOrThrowArgs>(args?: SelectSubset<T, FbPageFindFirstOrThrowArgs<ExtArgs>>): Prisma__FbPageClient<$Result.GetResult<Prisma.$FbPagePayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more FbPages that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbPageFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all FbPages
+     * const fbPages = await prisma.fbPage.findMany()
+     * 
+     * // Get first 10 FbPages
+     * const fbPages = await prisma.fbPage.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const fbPageWithIdOnly = await prisma.fbPage.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends FbPageFindManyArgs>(args?: SelectSubset<T, FbPageFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FbPagePayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a FbPage.
+     * @param {FbPageCreateArgs} args - Arguments to create a FbPage.
+     * @example
+     * // Create one FbPage
+     * const FbPage = await prisma.fbPage.create({
+     *   data: {
+     *     // ... data to create a FbPage
+     *   }
+     * })
+     * 
+     */
+    create<T extends FbPageCreateArgs>(args: SelectSubset<T, FbPageCreateArgs<ExtArgs>>): Prisma__FbPageClient<$Result.GetResult<Prisma.$FbPagePayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many FbPages.
+     * @param {FbPageCreateManyArgs} args - Arguments to create many FbPages.
+     * @example
+     * // Create many FbPages
+     * const fbPage = await prisma.fbPage.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends FbPageCreateManyArgs>(args?: SelectSubset<T, FbPageCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many FbPages and returns the data saved in the database.
+     * @param {FbPageCreateManyAndReturnArgs} args - Arguments to create many FbPages.
+     * @example
+     * // Create many FbPages
+     * const fbPage = await prisma.fbPage.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many FbPages and only return the `id`
+     * const fbPageWithIdOnly = await prisma.fbPage.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends FbPageCreateManyAndReturnArgs>(args?: SelectSubset<T, FbPageCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FbPagePayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a FbPage.
+     * @param {FbPageDeleteArgs} args - Arguments to delete one FbPage.
+     * @example
+     * // Delete one FbPage
+     * const FbPage = await prisma.fbPage.delete({
+     *   where: {
+     *     // ... filter to delete one FbPage
+     *   }
+     * })
+     * 
+     */
+    delete<T extends FbPageDeleteArgs>(args: SelectSubset<T, FbPageDeleteArgs<ExtArgs>>): Prisma__FbPageClient<$Result.GetResult<Prisma.$FbPagePayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one FbPage.
+     * @param {FbPageUpdateArgs} args - Arguments to update one FbPage.
+     * @example
+     * // Update one FbPage
+     * const fbPage = await prisma.fbPage.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends FbPageUpdateArgs>(args: SelectSubset<T, FbPageUpdateArgs<ExtArgs>>): Prisma__FbPageClient<$Result.GetResult<Prisma.$FbPagePayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more FbPages.
+     * @param {FbPageDeleteManyArgs} args - Arguments to filter FbPages to delete.
+     * @example
+     * // Delete a few FbPages
+     * const { count } = await prisma.fbPage.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends FbPageDeleteManyArgs>(args?: SelectSubset<T, FbPageDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more FbPages.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbPageUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many FbPages
+     * const fbPage = await prisma.fbPage.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends FbPageUpdateManyArgs>(args: SelectSubset<T, FbPageUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more FbPages and returns the data updated in the database.
+     * @param {FbPageUpdateManyAndReturnArgs} args - Arguments to update many FbPages.
+     * @example
+     * // Update many FbPages
+     * const fbPage = await prisma.fbPage.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more FbPages and only return the `id`
+     * const fbPageWithIdOnly = await prisma.fbPage.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends FbPageUpdateManyAndReturnArgs>(args: SelectSubset<T, FbPageUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FbPagePayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one FbPage.
+     * @param {FbPageUpsertArgs} args - Arguments to update or create a FbPage.
+     * @example
+     * // Update or create a FbPage
+     * const fbPage = await prisma.fbPage.upsert({
+     *   create: {
+     *     // ... data to create a FbPage
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the FbPage we want to update
+     *   }
+     * })
+     */
+    upsert<T extends FbPageUpsertArgs>(args: SelectSubset<T, FbPageUpsertArgs<ExtArgs>>): Prisma__FbPageClient<$Result.GetResult<Prisma.$FbPagePayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of FbPages.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbPageCountArgs} args - Arguments to filter FbPages to count.
+     * @example
+     * // Count the number of FbPages
+     * const count = await prisma.fbPage.count({
+     *   where: {
+     *     // ... the filter for the FbPages we want to count
+     *   }
+     * })
+    **/
+    count<T extends FbPageCountArgs>(
+      args?: Subset<T, FbPageCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], FbPageCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a FbPage.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbPageAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends FbPageAggregateArgs>(args: Subset<T, FbPageAggregateArgs>): Prisma.PrismaPromise<GetFbPageAggregateType<T>>
+
+    /**
+     * Group by FbPage.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbPageGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends FbPageGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: FbPageGroupByArgs['orderBy'] }
+        : { orderBy?: FbPageGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, FbPageGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetFbPageGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the FbPage model
+   */
+  readonly fields: FbPageFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for FbPage.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__FbPageClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    scheduledPosts<T extends FbPage$scheduledPostsArgs<ExtArgs> = {}>(args?: Subset<T, FbPage$scheduledPostsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FbScheduledPostPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    commentRules<T extends FbPage$commentRulesArgs<ExtArgs> = {}>(args?: Subset<T, FbPage$commentRulesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FbCommentRulePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    autoReplyLogs<T extends FbPage$autoReplyLogsArgs<ExtArgs> = {}>(args?: Subset<T, FbPage$autoReplyLogsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FbAutoReplyLogPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the FbPage model
+   */
+  interface FbPageFieldRefs {
+    readonly id: FieldRef<"FbPage", 'String'>
+    readonly pageId: FieldRef<"FbPage", 'String'>
+    readonly name: FieldRef<"FbPage", 'String'>
+    readonly category: FieldRef<"FbPage", 'String'>
+    readonly avatar: FieldRef<"FbPage", 'String'>
+    readonly fanCount: FieldRef<"FbPage", 'Int'>
+    readonly accessToken: FieldRef<"FbPage", 'String'>
+    readonly tokenExpiresAt: FieldRef<"FbPage", 'DateTime'>
+    readonly igUserId: FieldRef<"FbPage", 'String'>
+    readonly adAccountId: FieldRef<"FbPage", 'String'>
+    readonly webhookSubscribed: FieldRef<"FbPage", 'Boolean'>
+    readonly autoReplyEnabled: FieldRef<"FbPage", 'Boolean'>
+    readonly status: FieldRef<"FbPage", 'String'>
+    readonly connectedBy: FieldRef<"FbPage", 'String'>
+    readonly lastSyncAt: FieldRef<"FbPage", 'DateTime'>
+    readonly createdAt: FieldRef<"FbPage", 'DateTime'>
+    readonly updatedAt: FieldRef<"FbPage", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * FbPage findUnique
+   */
+  export type FbPageFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbPage
+     */
+    select?: FbPageSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbPage
+     */
+    omit?: FbPageOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbPageInclude<ExtArgs> | null
+    /**
+     * Filter, which FbPage to fetch.
+     */
+    where: FbPageWhereUniqueInput
+  }
+
+  /**
+   * FbPage findUniqueOrThrow
+   */
+  export type FbPageFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbPage
+     */
+    select?: FbPageSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbPage
+     */
+    omit?: FbPageOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbPageInclude<ExtArgs> | null
+    /**
+     * Filter, which FbPage to fetch.
+     */
+    where: FbPageWhereUniqueInput
+  }
+
+  /**
+   * FbPage findFirst
+   */
+  export type FbPageFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbPage
+     */
+    select?: FbPageSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbPage
+     */
+    omit?: FbPageOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbPageInclude<ExtArgs> | null
+    /**
+     * Filter, which FbPage to fetch.
+     */
+    where?: FbPageWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FbPages to fetch.
+     */
+    orderBy?: FbPageOrderByWithRelationInput | FbPageOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for FbPages.
+     */
+    cursor?: FbPageWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FbPages from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FbPages.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of FbPages.
+     */
+    distinct?: FbPageScalarFieldEnum | FbPageScalarFieldEnum[]
+  }
+
+  /**
+   * FbPage findFirstOrThrow
+   */
+  export type FbPageFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbPage
+     */
+    select?: FbPageSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbPage
+     */
+    omit?: FbPageOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbPageInclude<ExtArgs> | null
+    /**
+     * Filter, which FbPage to fetch.
+     */
+    where?: FbPageWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FbPages to fetch.
+     */
+    orderBy?: FbPageOrderByWithRelationInput | FbPageOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for FbPages.
+     */
+    cursor?: FbPageWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FbPages from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FbPages.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of FbPages.
+     */
+    distinct?: FbPageScalarFieldEnum | FbPageScalarFieldEnum[]
+  }
+
+  /**
+   * FbPage findMany
+   */
+  export type FbPageFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbPage
+     */
+    select?: FbPageSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbPage
+     */
+    omit?: FbPageOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbPageInclude<ExtArgs> | null
+    /**
+     * Filter, which FbPages to fetch.
+     */
+    where?: FbPageWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FbPages to fetch.
+     */
+    orderBy?: FbPageOrderByWithRelationInput | FbPageOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing FbPages.
+     */
+    cursor?: FbPageWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FbPages from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FbPages.
+     */
+    skip?: number
+    distinct?: FbPageScalarFieldEnum | FbPageScalarFieldEnum[]
+  }
+
+  /**
+   * FbPage create
+   */
+  export type FbPageCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbPage
+     */
+    select?: FbPageSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbPage
+     */
+    omit?: FbPageOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbPageInclude<ExtArgs> | null
+    /**
+     * The data needed to create a FbPage.
+     */
+    data: XOR<FbPageCreateInput, FbPageUncheckedCreateInput>
+  }
+
+  /**
+   * FbPage createMany
+   */
+  export type FbPageCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many FbPages.
+     */
+    data: FbPageCreateManyInput | FbPageCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * FbPage createManyAndReturn
+   */
+  export type FbPageCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbPage
+     */
+    select?: FbPageSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbPage
+     */
+    omit?: FbPageOmit<ExtArgs> | null
+    /**
+     * The data used to create many FbPages.
+     */
+    data: FbPageCreateManyInput | FbPageCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * FbPage update
+   */
+  export type FbPageUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbPage
+     */
+    select?: FbPageSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbPage
+     */
+    omit?: FbPageOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbPageInclude<ExtArgs> | null
+    /**
+     * The data needed to update a FbPage.
+     */
+    data: XOR<FbPageUpdateInput, FbPageUncheckedUpdateInput>
+    /**
+     * Choose, which FbPage to update.
+     */
+    where: FbPageWhereUniqueInput
+  }
+
+  /**
+   * FbPage updateMany
+   */
+  export type FbPageUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update FbPages.
+     */
+    data: XOR<FbPageUpdateManyMutationInput, FbPageUncheckedUpdateManyInput>
+    /**
+     * Filter which FbPages to update
+     */
+    where?: FbPageWhereInput
+    /**
+     * Limit how many FbPages to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * FbPage updateManyAndReturn
+   */
+  export type FbPageUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbPage
+     */
+    select?: FbPageSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbPage
+     */
+    omit?: FbPageOmit<ExtArgs> | null
+    /**
+     * The data used to update FbPages.
+     */
+    data: XOR<FbPageUpdateManyMutationInput, FbPageUncheckedUpdateManyInput>
+    /**
+     * Filter which FbPages to update
+     */
+    where?: FbPageWhereInput
+    /**
+     * Limit how many FbPages to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * FbPage upsert
+   */
+  export type FbPageUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbPage
+     */
+    select?: FbPageSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbPage
+     */
+    omit?: FbPageOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbPageInclude<ExtArgs> | null
+    /**
+     * The filter to search for the FbPage to update in case it exists.
+     */
+    where: FbPageWhereUniqueInput
+    /**
+     * In case the FbPage found by the `where` argument doesn't exist, create a new FbPage with this data.
+     */
+    create: XOR<FbPageCreateInput, FbPageUncheckedCreateInput>
+    /**
+     * In case the FbPage was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<FbPageUpdateInput, FbPageUncheckedUpdateInput>
+  }
+
+  /**
+   * FbPage delete
+   */
+  export type FbPageDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbPage
+     */
+    select?: FbPageSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbPage
+     */
+    omit?: FbPageOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbPageInclude<ExtArgs> | null
+    /**
+     * Filter which FbPage to delete.
+     */
+    where: FbPageWhereUniqueInput
+  }
+
+  /**
+   * FbPage deleteMany
+   */
+  export type FbPageDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which FbPages to delete
+     */
+    where?: FbPageWhereInput
+    /**
+     * Limit how many FbPages to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * FbPage.scheduledPosts
+   */
+  export type FbPage$scheduledPostsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbScheduledPost
+     */
+    select?: FbScheduledPostSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbScheduledPost
+     */
+    omit?: FbScheduledPostOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbScheduledPostInclude<ExtArgs> | null
+    where?: FbScheduledPostWhereInput
+    orderBy?: FbScheduledPostOrderByWithRelationInput | FbScheduledPostOrderByWithRelationInput[]
+    cursor?: FbScheduledPostWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: FbScheduledPostScalarFieldEnum | FbScheduledPostScalarFieldEnum[]
+  }
+
+  /**
+   * FbPage.commentRules
+   */
+  export type FbPage$commentRulesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbCommentRule
+     */
+    select?: FbCommentRuleSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbCommentRule
+     */
+    omit?: FbCommentRuleOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbCommentRuleInclude<ExtArgs> | null
+    where?: FbCommentRuleWhereInput
+    orderBy?: FbCommentRuleOrderByWithRelationInput | FbCommentRuleOrderByWithRelationInput[]
+    cursor?: FbCommentRuleWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: FbCommentRuleScalarFieldEnum | FbCommentRuleScalarFieldEnum[]
+  }
+
+  /**
+   * FbPage.autoReplyLogs
+   */
+  export type FbPage$autoReplyLogsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbAutoReplyLog
+     */
+    select?: FbAutoReplyLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbAutoReplyLog
+     */
+    omit?: FbAutoReplyLogOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbAutoReplyLogInclude<ExtArgs> | null
+    where?: FbAutoReplyLogWhereInput
+    orderBy?: FbAutoReplyLogOrderByWithRelationInput | FbAutoReplyLogOrderByWithRelationInput[]
+    cursor?: FbAutoReplyLogWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: FbAutoReplyLogScalarFieldEnum | FbAutoReplyLogScalarFieldEnum[]
+  }
+
+  /**
+   * FbPage without action
+   */
+  export type FbPageDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbPage
+     */
+    select?: FbPageSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbPage
+     */
+    omit?: FbPageOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbPageInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model FbScheduledPost
+   */
+
+  export type AggregateFbScheduledPost = {
+    _count: FbScheduledPostCountAggregateOutputType | null
+    _min: FbScheduledPostMinAggregateOutputType | null
+    _max: FbScheduledPostMaxAggregateOutputType | null
+  }
+
+  export type FbScheduledPostMinAggregateOutputType = {
+    id: string | null
+    pageId: string | null
+    fbPostId: string | null
+    message: string | null
+    mediaType: string | null
+    mediaUrls: string | null
+    linkUrl: string | null
+    scheduledAt: Date | null
+    status: string | null
+    errorMessage: string | null
+    publishedAt: Date | null
+    createdBy: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type FbScheduledPostMaxAggregateOutputType = {
+    id: string | null
+    pageId: string | null
+    fbPostId: string | null
+    message: string | null
+    mediaType: string | null
+    mediaUrls: string | null
+    linkUrl: string | null
+    scheduledAt: Date | null
+    status: string | null
+    errorMessage: string | null
+    publishedAt: Date | null
+    createdBy: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type FbScheduledPostCountAggregateOutputType = {
+    id: number
+    pageId: number
+    fbPostId: number
+    message: number
+    mediaType: number
+    mediaUrls: number
+    linkUrl: number
+    scheduledAt: number
+    status: number
+    errorMessage: number
+    publishedAt: number
+    createdBy: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type FbScheduledPostMinAggregateInputType = {
+    id?: true
+    pageId?: true
+    fbPostId?: true
+    message?: true
+    mediaType?: true
+    mediaUrls?: true
+    linkUrl?: true
+    scheduledAt?: true
+    status?: true
+    errorMessage?: true
+    publishedAt?: true
+    createdBy?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type FbScheduledPostMaxAggregateInputType = {
+    id?: true
+    pageId?: true
+    fbPostId?: true
+    message?: true
+    mediaType?: true
+    mediaUrls?: true
+    linkUrl?: true
+    scheduledAt?: true
+    status?: true
+    errorMessage?: true
+    publishedAt?: true
+    createdBy?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type FbScheduledPostCountAggregateInputType = {
+    id?: true
+    pageId?: true
+    fbPostId?: true
+    message?: true
+    mediaType?: true
+    mediaUrls?: true
+    linkUrl?: true
+    scheduledAt?: true
+    status?: true
+    errorMessage?: true
+    publishedAt?: true
+    createdBy?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type FbScheduledPostAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which FbScheduledPost to aggregate.
+     */
+    where?: FbScheduledPostWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FbScheduledPosts to fetch.
+     */
+    orderBy?: FbScheduledPostOrderByWithRelationInput | FbScheduledPostOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: FbScheduledPostWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FbScheduledPosts from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FbScheduledPosts.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned FbScheduledPosts
+    **/
+    _count?: true | FbScheduledPostCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: FbScheduledPostMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: FbScheduledPostMaxAggregateInputType
+  }
+
+  export type GetFbScheduledPostAggregateType<T extends FbScheduledPostAggregateArgs> = {
+        [P in keyof T & keyof AggregateFbScheduledPost]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateFbScheduledPost[P]>
+      : GetScalarType<T[P], AggregateFbScheduledPost[P]>
+  }
+
+
+
+
+  export type FbScheduledPostGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: FbScheduledPostWhereInput
+    orderBy?: FbScheduledPostOrderByWithAggregationInput | FbScheduledPostOrderByWithAggregationInput[]
+    by: FbScheduledPostScalarFieldEnum[] | FbScheduledPostScalarFieldEnum
+    having?: FbScheduledPostScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: FbScheduledPostCountAggregateInputType | true
+    _min?: FbScheduledPostMinAggregateInputType
+    _max?: FbScheduledPostMaxAggregateInputType
+  }
+
+  export type FbScheduledPostGroupByOutputType = {
+    id: string
+    pageId: string
+    fbPostId: string | null
+    message: string
+    mediaType: string
+    mediaUrls: string
+    linkUrl: string | null
+    scheduledAt: Date
+    status: string
+    errorMessage: string | null
+    publishedAt: Date | null
+    createdBy: string | null
+    createdAt: Date
+    updatedAt: Date
+    _count: FbScheduledPostCountAggregateOutputType | null
+    _min: FbScheduledPostMinAggregateOutputType | null
+    _max: FbScheduledPostMaxAggregateOutputType | null
+  }
+
+  type GetFbScheduledPostGroupByPayload<T extends FbScheduledPostGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<FbScheduledPostGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof FbScheduledPostGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], FbScheduledPostGroupByOutputType[P]>
+            : GetScalarType<T[P], FbScheduledPostGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type FbScheduledPostSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    pageId?: boolean
+    fbPostId?: boolean
+    message?: boolean
+    mediaType?: boolean
+    mediaUrls?: boolean
+    linkUrl?: boolean
+    scheduledAt?: boolean
+    status?: boolean
+    errorMessage?: boolean
+    publishedAt?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    page?: boolean | FbPageDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["fbScheduledPost"]>
+
+  export type FbScheduledPostSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    pageId?: boolean
+    fbPostId?: boolean
+    message?: boolean
+    mediaType?: boolean
+    mediaUrls?: boolean
+    linkUrl?: boolean
+    scheduledAt?: boolean
+    status?: boolean
+    errorMessage?: boolean
+    publishedAt?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    page?: boolean | FbPageDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["fbScheduledPost"]>
+
+  export type FbScheduledPostSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    pageId?: boolean
+    fbPostId?: boolean
+    message?: boolean
+    mediaType?: boolean
+    mediaUrls?: boolean
+    linkUrl?: boolean
+    scheduledAt?: boolean
+    status?: boolean
+    errorMessage?: boolean
+    publishedAt?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    page?: boolean | FbPageDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["fbScheduledPost"]>
+
+  export type FbScheduledPostSelectScalar = {
+    id?: boolean
+    pageId?: boolean
+    fbPostId?: boolean
+    message?: boolean
+    mediaType?: boolean
+    mediaUrls?: boolean
+    linkUrl?: boolean
+    scheduledAt?: boolean
+    status?: boolean
+    errorMessage?: boolean
+    publishedAt?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type FbScheduledPostOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "pageId" | "fbPostId" | "message" | "mediaType" | "mediaUrls" | "linkUrl" | "scheduledAt" | "status" | "errorMessage" | "publishedAt" | "createdBy" | "createdAt" | "updatedAt", ExtArgs["result"]["fbScheduledPost"]>
+  export type FbScheduledPostInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    page?: boolean | FbPageDefaultArgs<ExtArgs>
+  }
+  export type FbScheduledPostIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    page?: boolean | FbPageDefaultArgs<ExtArgs>
+  }
+  export type FbScheduledPostIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    page?: boolean | FbPageDefaultArgs<ExtArgs>
+  }
+
+  export type $FbScheduledPostPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "FbScheduledPost"
+    objects: {
+      page: Prisma.$FbPagePayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      pageId: string
+      fbPostId: string | null
+      message: string
+      mediaType: string
+      mediaUrls: string
+      linkUrl: string | null
+      scheduledAt: Date
+      status: string
+      errorMessage: string | null
+      publishedAt: Date | null
+      createdBy: string | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["fbScheduledPost"]>
+    composites: {}
+  }
+
+  type FbScheduledPostGetPayload<S extends boolean | null | undefined | FbScheduledPostDefaultArgs> = $Result.GetResult<Prisma.$FbScheduledPostPayload, S>
+
+  type FbScheduledPostCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<FbScheduledPostFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: FbScheduledPostCountAggregateInputType | true
+    }
+
+  export interface FbScheduledPostDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['FbScheduledPost'], meta: { name: 'FbScheduledPost' } }
+    /**
+     * Find zero or one FbScheduledPost that matches the filter.
+     * @param {FbScheduledPostFindUniqueArgs} args - Arguments to find a FbScheduledPost
+     * @example
+     * // Get one FbScheduledPost
+     * const fbScheduledPost = await prisma.fbScheduledPost.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends FbScheduledPostFindUniqueArgs>(args: SelectSubset<T, FbScheduledPostFindUniqueArgs<ExtArgs>>): Prisma__FbScheduledPostClient<$Result.GetResult<Prisma.$FbScheduledPostPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one FbScheduledPost that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {FbScheduledPostFindUniqueOrThrowArgs} args - Arguments to find a FbScheduledPost
+     * @example
+     * // Get one FbScheduledPost
+     * const fbScheduledPost = await prisma.fbScheduledPost.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends FbScheduledPostFindUniqueOrThrowArgs>(args: SelectSubset<T, FbScheduledPostFindUniqueOrThrowArgs<ExtArgs>>): Prisma__FbScheduledPostClient<$Result.GetResult<Prisma.$FbScheduledPostPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first FbScheduledPost that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbScheduledPostFindFirstArgs} args - Arguments to find a FbScheduledPost
+     * @example
+     * // Get one FbScheduledPost
+     * const fbScheduledPost = await prisma.fbScheduledPost.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends FbScheduledPostFindFirstArgs>(args?: SelectSubset<T, FbScheduledPostFindFirstArgs<ExtArgs>>): Prisma__FbScheduledPostClient<$Result.GetResult<Prisma.$FbScheduledPostPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first FbScheduledPost that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbScheduledPostFindFirstOrThrowArgs} args - Arguments to find a FbScheduledPost
+     * @example
+     * // Get one FbScheduledPost
+     * const fbScheduledPost = await prisma.fbScheduledPost.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends FbScheduledPostFindFirstOrThrowArgs>(args?: SelectSubset<T, FbScheduledPostFindFirstOrThrowArgs<ExtArgs>>): Prisma__FbScheduledPostClient<$Result.GetResult<Prisma.$FbScheduledPostPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more FbScheduledPosts that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbScheduledPostFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all FbScheduledPosts
+     * const fbScheduledPosts = await prisma.fbScheduledPost.findMany()
+     * 
+     * // Get first 10 FbScheduledPosts
+     * const fbScheduledPosts = await prisma.fbScheduledPost.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const fbScheduledPostWithIdOnly = await prisma.fbScheduledPost.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends FbScheduledPostFindManyArgs>(args?: SelectSubset<T, FbScheduledPostFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FbScheduledPostPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a FbScheduledPost.
+     * @param {FbScheduledPostCreateArgs} args - Arguments to create a FbScheduledPost.
+     * @example
+     * // Create one FbScheduledPost
+     * const FbScheduledPost = await prisma.fbScheduledPost.create({
+     *   data: {
+     *     // ... data to create a FbScheduledPost
+     *   }
+     * })
+     * 
+     */
+    create<T extends FbScheduledPostCreateArgs>(args: SelectSubset<T, FbScheduledPostCreateArgs<ExtArgs>>): Prisma__FbScheduledPostClient<$Result.GetResult<Prisma.$FbScheduledPostPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many FbScheduledPosts.
+     * @param {FbScheduledPostCreateManyArgs} args - Arguments to create many FbScheduledPosts.
+     * @example
+     * // Create many FbScheduledPosts
+     * const fbScheduledPost = await prisma.fbScheduledPost.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends FbScheduledPostCreateManyArgs>(args?: SelectSubset<T, FbScheduledPostCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many FbScheduledPosts and returns the data saved in the database.
+     * @param {FbScheduledPostCreateManyAndReturnArgs} args - Arguments to create many FbScheduledPosts.
+     * @example
+     * // Create many FbScheduledPosts
+     * const fbScheduledPost = await prisma.fbScheduledPost.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many FbScheduledPosts and only return the `id`
+     * const fbScheduledPostWithIdOnly = await prisma.fbScheduledPost.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends FbScheduledPostCreateManyAndReturnArgs>(args?: SelectSubset<T, FbScheduledPostCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FbScheduledPostPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a FbScheduledPost.
+     * @param {FbScheduledPostDeleteArgs} args - Arguments to delete one FbScheduledPost.
+     * @example
+     * // Delete one FbScheduledPost
+     * const FbScheduledPost = await prisma.fbScheduledPost.delete({
+     *   where: {
+     *     // ... filter to delete one FbScheduledPost
+     *   }
+     * })
+     * 
+     */
+    delete<T extends FbScheduledPostDeleteArgs>(args: SelectSubset<T, FbScheduledPostDeleteArgs<ExtArgs>>): Prisma__FbScheduledPostClient<$Result.GetResult<Prisma.$FbScheduledPostPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one FbScheduledPost.
+     * @param {FbScheduledPostUpdateArgs} args - Arguments to update one FbScheduledPost.
+     * @example
+     * // Update one FbScheduledPost
+     * const fbScheduledPost = await prisma.fbScheduledPost.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends FbScheduledPostUpdateArgs>(args: SelectSubset<T, FbScheduledPostUpdateArgs<ExtArgs>>): Prisma__FbScheduledPostClient<$Result.GetResult<Prisma.$FbScheduledPostPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more FbScheduledPosts.
+     * @param {FbScheduledPostDeleteManyArgs} args - Arguments to filter FbScheduledPosts to delete.
+     * @example
+     * // Delete a few FbScheduledPosts
+     * const { count } = await prisma.fbScheduledPost.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends FbScheduledPostDeleteManyArgs>(args?: SelectSubset<T, FbScheduledPostDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more FbScheduledPosts.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbScheduledPostUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many FbScheduledPosts
+     * const fbScheduledPost = await prisma.fbScheduledPost.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends FbScheduledPostUpdateManyArgs>(args: SelectSubset<T, FbScheduledPostUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more FbScheduledPosts and returns the data updated in the database.
+     * @param {FbScheduledPostUpdateManyAndReturnArgs} args - Arguments to update many FbScheduledPosts.
+     * @example
+     * // Update many FbScheduledPosts
+     * const fbScheduledPost = await prisma.fbScheduledPost.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more FbScheduledPosts and only return the `id`
+     * const fbScheduledPostWithIdOnly = await prisma.fbScheduledPost.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends FbScheduledPostUpdateManyAndReturnArgs>(args: SelectSubset<T, FbScheduledPostUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FbScheduledPostPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one FbScheduledPost.
+     * @param {FbScheduledPostUpsertArgs} args - Arguments to update or create a FbScheduledPost.
+     * @example
+     * // Update or create a FbScheduledPost
+     * const fbScheduledPost = await prisma.fbScheduledPost.upsert({
+     *   create: {
+     *     // ... data to create a FbScheduledPost
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the FbScheduledPost we want to update
+     *   }
+     * })
+     */
+    upsert<T extends FbScheduledPostUpsertArgs>(args: SelectSubset<T, FbScheduledPostUpsertArgs<ExtArgs>>): Prisma__FbScheduledPostClient<$Result.GetResult<Prisma.$FbScheduledPostPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of FbScheduledPosts.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbScheduledPostCountArgs} args - Arguments to filter FbScheduledPosts to count.
+     * @example
+     * // Count the number of FbScheduledPosts
+     * const count = await prisma.fbScheduledPost.count({
+     *   where: {
+     *     // ... the filter for the FbScheduledPosts we want to count
+     *   }
+     * })
+    **/
+    count<T extends FbScheduledPostCountArgs>(
+      args?: Subset<T, FbScheduledPostCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], FbScheduledPostCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a FbScheduledPost.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbScheduledPostAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends FbScheduledPostAggregateArgs>(args: Subset<T, FbScheduledPostAggregateArgs>): Prisma.PrismaPromise<GetFbScheduledPostAggregateType<T>>
+
+    /**
+     * Group by FbScheduledPost.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbScheduledPostGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends FbScheduledPostGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: FbScheduledPostGroupByArgs['orderBy'] }
+        : { orderBy?: FbScheduledPostGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, FbScheduledPostGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetFbScheduledPostGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the FbScheduledPost model
+   */
+  readonly fields: FbScheduledPostFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for FbScheduledPost.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__FbScheduledPostClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    page<T extends FbPageDefaultArgs<ExtArgs> = {}>(args?: Subset<T, FbPageDefaultArgs<ExtArgs>>): Prisma__FbPageClient<$Result.GetResult<Prisma.$FbPagePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the FbScheduledPost model
+   */
+  interface FbScheduledPostFieldRefs {
+    readonly id: FieldRef<"FbScheduledPost", 'String'>
+    readonly pageId: FieldRef<"FbScheduledPost", 'String'>
+    readonly fbPostId: FieldRef<"FbScheduledPost", 'String'>
+    readonly message: FieldRef<"FbScheduledPost", 'String'>
+    readonly mediaType: FieldRef<"FbScheduledPost", 'String'>
+    readonly mediaUrls: FieldRef<"FbScheduledPost", 'String'>
+    readonly linkUrl: FieldRef<"FbScheduledPost", 'String'>
+    readonly scheduledAt: FieldRef<"FbScheduledPost", 'DateTime'>
+    readonly status: FieldRef<"FbScheduledPost", 'String'>
+    readonly errorMessage: FieldRef<"FbScheduledPost", 'String'>
+    readonly publishedAt: FieldRef<"FbScheduledPost", 'DateTime'>
+    readonly createdBy: FieldRef<"FbScheduledPost", 'String'>
+    readonly createdAt: FieldRef<"FbScheduledPost", 'DateTime'>
+    readonly updatedAt: FieldRef<"FbScheduledPost", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * FbScheduledPost findUnique
+   */
+  export type FbScheduledPostFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbScheduledPost
+     */
+    select?: FbScheduledPostSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbScheduledPost
+     */
+    omit?: FbScheduledPostOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbScheduledPostInclude<ExtArgs> | null
+    /**
+     * Filter, which FbScheduledPost to fetch.
+     */
+    where: FbScheduledPostWhereUniqueInput
+  }
+
+  /**
+   * FbScheduledPost findUniqueOrThrow
+   */
+  export type FbScheduledPostFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbScheduledPost
+     */
+    select?: FbScheduledPostSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbScheduledPost
+     */
+    omit?: FbScheduledPostOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbScheduledPostInclude<ExtArgs> | null
+    /**
+     * Filter, which FbScheduledPost to fetch.
+     */
+    where: FbScheduledPostWhereUniqueInput
+  }
+
+  /**
+   * FbScheduledPost findFirst
+   */
+  export type FbScheduledPostFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbScheduledPost
+     */
+    select?: FbScheduledPostSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbScheduledPost
+     */
+    omit?: FbScheduledPostOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbScheduledPostInclude<ExtArgs> | null
+    /**
+     * Filter, which FbScheduledPost to fetch.
+     */
+    where?: FbScheduledPostWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FbScheduledPosts to fetch.
+     */
+    orderBy?: FbScheduledPostOrderByWithRelationInput | FbScheduledPostOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for FbScheduledPosts.
+     */
+    cursor?: FbScheduledPostWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FbScheduledPosts from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FbScheduledPosts.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of FbScheduledPosts.
+     */
+    distinct?: FbScheduledPostScalarFieldEnum | FbScheduledPostScalarFieldEnum[]
+  }
+
+  /**
+   * FbScheduledPost findFirstOrThrow
+   */
+  export type FbScheduledPostFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbScheduledPost
+     */
+    select?: FbScheduledPostSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbScheduledPost
+     */
+    omit?: FbScheduledPostOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbScheduledPostInclude<ExtArgs> | null
+    /**
+     * Filter, which FbScheduledPost to fetch.
+     */
+    where?: FbScheduledPostWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FbScheduledPosts to fetch.
+     */
+    orderBy?: FbScheduledPostOrderByWithRelationInput | FbScheduledPostOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for FbScheduledPosts.
+     */
+    cursor?: FbScheduledPostWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FbScheduledPosts from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FbScheduledPosts.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of FbScheduledPosts.
+     */
+    distinct?: FbScheduledPostScalarFieldEnum | FbScheduledPostScalarFieldEnum[]
+  }
+
+  /**
+   * FbScheduledPost findMany
+   */
+  export type FbScheduledPostFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbScheduledPost
+     */
+    select?: FbScheduledPostSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbScheduledPost
+     */
+    omit?: FbScheduledPostOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbScheduledPostInclude<ExtArgs> | null
+    /**
+     * Filter, which FbScheduledPosts to fetch.
+     */
+    where?: FbScheduledPostWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FbScheduledPosts to fetch.
+     */
+    orderBy?: FbScheduledPostOrderByWithRelationInput | FbScheduledPostOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing FbScheduledPosts.
+     */
+    cursor?: FbScheduledPostWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FbScheduledPosts from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FbScheduledPosts.
+     */
+    skip?: number
+    distinct?: FbScheduledPostScalarFieldEnum | FbScheduledPostScalarFieldEnum[]
+  }
+
+  /**
+   * FbScheduledPost create
+   */
+  export type FbScheduledPostCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbScheduledPost
+     */
+    select?: FbScheduledPostSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbScheduledPost
+     */
+    omit?: FbScheduledPostOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbScheduledPostInclude<ExtArgs> | null
+    /**
+     * The data needed to create a FbScheduledPost.
+     */
+    data: XOR<FbScheduledPostCreateInput, FbScheduledPostUncheckedCreateInput>
+  }
+
+  /**
+   * FbScheduledPost createMany
+   */
+  export type FbScheduledPostCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many FbScheduledPosts.
+     */
+    data: FbScheduledPostCreateManyInput | FbScheduledPostCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * FbScheduledPost createManyAndReturn
+   */
+  export type FbScheduledPostCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbScheduledPost
+     */
+    select?: FbScheduledPostSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbScheduledPost
+     */
+    omit?: FbScheduledPostOmit<ExtArgs> | null
+    /**
+     * The data used to create many FbScheduledPosts.
+     */
+    data: FbScheduledPostCreateManyInput | FbScheduledPostCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbScheduledPostIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * FbScheduledPost update
+   */
+  export type FbScheduledPostUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbScheduledPost
+     */
+    select?: FbScheduledPostSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbScheduledPost
+     */
+    omit?: FbScheduledPostOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbScheduledPostInclude<ExtArgs> | null
+    /**
+     * The data needed to update a FbScheduledPost.
+     */
+    data: XOR<FbScheduledPostUpdateInput, FbScheduledPostUncheckedUpdateInput>
+    /**
+     * Choose, which FbScheduledPost to update.
+     */
+    where: FbScheduledPostWhereUniqueInput
+  }
+
+  /**
+   * FbScheduledPost updateMany
+   */
+  export type FbScheduledPostUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update FbScheduledPosts.
+     */
+    data: XOR<FbScheduledPostUpdateManyMutationInput, FbScheduledPostUncheckedUpdateManyInput>
+    /**
+     * Filter which FbScheduledPosts to update
+     */
+    where?: FbScheduledPostWhereInput
+    /**
+     * Limit how many FbScheduledPosts to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * FbScheduledPost updateManyAndReturn
+   */
+  export type FbScheduledPostUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbScheduledPost
+     */
+    select?: FbScheduledPostSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbScheduledPost
+     */
+    omit?: FbScheduledPostOmit<ExtArgs> | null
+    /**
+     * The data used to update FbScheduledPosts.
+     */
+    data: XOR<FbScheduledPostUpdateManyMutationInput, FbScheduledPostUncheckedUpdateManyInput>
+    /**
+     * Filter which FbScheduledPosts to update
+     */
+    where?: FbScheduledPostWhereInput
+    /**
+     * Limit how many FbScheduledPosts to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbScheduledPostIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * FbScheduledPost upsert
+   */
+  export type FbScheduledPostUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbScheduledPost
+     */
+    select?: FbScheduledPostSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbScheduledPost
+     */
+    omit?: FbScheduledPostOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbScheduledPostInclude<ExtArgs> | null
+    /**
+     * The filter to search for the FbScheduledPost to update in case it exists.
+     */
+    where: FbScheduledPostWhereUniqueInput
+    /**
+     * In case the FbScheduledPost found by the `where` argument doesn't exist, create a new FbScheduledPost with this data.
+     */
+    create: XOR<FbScheduledPostCreateInput, FbScheduledPostUncheckedCreateInput>
+    /**
+     * In case the FbScheduledPost was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<FbScheduledPostUpdateInput, FbScheduledPostUncheckedUpdateInput>
+  }
+
+  /**
+   * FbScheduledPost delete
+   */
+  export type FbScheduledPostDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbScheduledPost
+     */
+    select?: FbScheduledPostSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbScheduledPost
+     */
+    omit?: FbScheduledPostOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbScheduledPostInclude<ExtArgs> | null
+    /**
+     * Filter which FbScheduledPost to delete.
+     */
+    where: FbScheduledPostWhereUniqueInput
+  }
+
+  /**
+   * FbScheduledPost deleteMany
+   */
+  export type FbScheduledPostDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which FbScheduledPosts to delete
+     */
+    where?: FbScheduledPostWhereInput
+    /**
+     * Limit how many FbScheduledPosts to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * FbScheduledPost without action
+   */
+  export type FbScheduledPostDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbScheduledPost
+     */
+    select?: FbScheduledPostSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbScheduledPost
+     */
+    omit?: FbScheduledPostOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbScheduledPostInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model FbCommentRule
+   */
+
+  export type AggregateFbCommentRule = {
+    _count: FbCommentRuleCountAggregateOutputType | null
+    _avg: FbCommentRuleAvgAggregateOutputType | null
+    _sum: FbCommentRuleSumAggregateOutputType | null
+    _min: FbCommentRuleMinAggregateOutputType | null
+    _max: FbCommentRuleMaxAggregateOutputType | null
+  }
+
+  export type FbCommentRuleAvgAggregateOutputType = {
+    priority: number | null
+  }
+
+  export type FbCommentRuleSumAggregateOutputType = {
+    priority: number | null
+  }
+
+  export type FbCommentRuleMinAggregateOutputType = {
+    id: string | null
+    pageId: string | null
+    name: string | null
+    keyword: string | null
+    matchType: string | null
+    replyText: string | null
+    privateReply: boolean | null
+    hideComment: boolean | null
+    enabled: boolean | null
+    priority: number | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type FbCommentRuleMaxAggregateOutputType = {
+    id: string | null
+    pageId: string | null
+    name: string | null
+    keyword: string | null
+    matchType: string | null
+    replyText: string | null
+    privateReply: boolean | null
+    hideComment: boolean | null
+    enabled: boolean | null
+    priority: number | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type FbCommentRuleCountAggregateOutputType = {
+    id: number
+    pageId: number
+    name: number
+    keyword: number
+    matchType: number
+    replyText: number
+    privateReply: number
+    hideComment: number
+    enabled: number
+    priority: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type FbCommentRuleAvgAggregateInputType = {
+    priority?: true
+  }
+
+  export type FbCommentRuleSumAggregateInputType = {
+    priority?: true
+  }
+
+  export type FbCommentRuleMinAggregateInputType = {
+    id?: true
+    pageId?: true
+    name?: true
+    keyword?: true
+    matchType?: true
+    replyText?: true
+    privateReply?: true
+    hideComment?: true
+    enabled?: true
+    priority?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type FbCommentRuleMaxAggregateInputType = {
+    id?: true
+    pageId?: true
+    name?: true
+    keyword?: true
+    matchType?: true
+    replyText?: true
+    privateReply?: true
+    hideComment?: true
+    enabled?: true
+    priority?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type FbCommentRuleCountAggregateInputType = {
+    id?: true
+    pageId?: true
+    name?: true
+    keyword?: true
+    matchType?: true
+    replyText?: true
+    privateReply?: true
+    hideComment?: true
+    enabled?: true
+    priority?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type FbCommentRuleAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which FbCommentRule to aggregate.
+     */
+    where?: FbCommentRuleWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FbCommentRules to fetch.
+     */
+    orderBy?: FbCommentRuleOrderByWithRelationInput | FbCommentRuleOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: FbCommentRuleWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FbCommentRules from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FbCommentRules.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned FbCommentRules
+    **/
+    _count?: true | FbCommentRuleCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: FbCommentRuleAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: FbCommentRuleSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: FbCommentRuleMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: FbCommentRuleMaxAggregateInputType
+  }
+
+  export type GetFbCommentRuleAggregateType<T extends FbCommentRuleAggregateArgs> = {
+        [P in keyof T & keyof AggregateFbCommentRule]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateFbCommentRule[P]>
+      : GetScalarType<T[P], AggregateFbCommentRule[P]>
+  }
+
+
+
+
+  export type FbCommentRuleGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: FbCommentRuleWhereInput
+    orderBy?: FbCommentRuleOrderByWithAggregationInput | FbCommentRuleOrderByWithAggregationInput[]
+    by: FbCommentRuleScalarFieldEnum[] | FbCommentRuleScalarFieldEnum
+    having?: FbCommentRuleScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: FbCommentRuleCountAggregateInputType | true
+    _avg?: FbCommentRuleAvgAggregateInputType
+    _sum?: FbCommentRuleSumAggregateInputType
+    _min?: FbCommentRuleMinAggregateInputType
+    _max?: FbCommentRuleMaxAggregateInputType
+  }
+
+  export type FbCommentRuleGroupByOutputType = {
+    id: string
+    pageId: string
+    name: string
+    keyword: string
+    matchType: string
+    replyText: string
+    privateReply: boolean
+    hideComment: boolean
+    enabled: boolean
+    priority: number
+    createdAt: Date
+    updatedAt: Date
+    _count: FbCommentRuleCountAggregateOutputType | null
+    _avg: FbCommentRuleAvgAggregateOutputType | null
+    _sum: FbCommentRuleSumAggregateOutputType | null
+    _min: FbCommentRuleMinAggregateOutputType | null
+    _max: FbCommentRuleMaxAggregateOutputType | null
+  }
+
+  type GetFbCommentRuleGroupByPayload<T extends FbCommentRuleGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<FbCommentRuleGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof FbCommentRuleGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], FbCommentRuleGroupByOutputType[P]>
+            : GetScalarType<T[P], FbCommentRuleGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type FbCommentRuleSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    pageId?: boolean
+    name?: boolean
+    keyword?: boolean
+    matchType?: boolean
+    replyText?: boolean
+    privateReply?: boolean
+    hideComment?: boolean
+    enabled?: boolean
+    priority?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    page?: boolean | FbPageDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["fbCommentRule"]>
+
+  export type FbCommentRuleSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    pageId?: boolean
+    name?: boolean
+    keyword?: boolean
+    matchType?: boolean
+    replyText?: boolean
+    privateReply?: boolean
+    hideComment?: boolean
+    enabled?: boolean
+    priority?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    page?: boolean | FbPageDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["fbCommentRule"]>
+
+  export type FbCommentRuleSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    pageId?: boolean
+    name?: boolean
+    keyword?: boolean
+    matchType?: boolean
+    replyText?: boolean
+    privateReply?: boolean
+    hideComment?: boolean
+    enabled?: boolean
+    priority?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    page?: boolean | FbPageDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["fbCommentRule"]>
+
+  export type FbCommentRuleSelectScalar = {
+    id?: boolean
+    pageId?: boolean
+    name?: boolean
+    keyword?: boolean
+    matchType?: boolean
+    replyText?: boolean
+    privateReply?: boolean
+    hideComment?: boolean
+    enabled?: boolean
+    priority?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type FbCommentRuleOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "pageId" | "name" | "keyword" | "matchType" | "replyText" | "privateReply" | "hideComment" | "enabled" | "priority" | "createdAt" | "updatedAt", ExtArgs["result"]["fbCommentRule"]>
+  export type FbCommentRuleInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    page?: boolean | FbPageDefaultArgs<ExtArgs>
+  }
+  export type FbCommentRuleIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    page?: boolean | FbPageDefaultArgs<ExtArgs>
+  }
+  export type FbCommentRuleIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    page?: boolean | FbPageDefaultArgs<ExtArgs>
+  }
+
+  export type $FbCommentRulePayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "FbCommentRule"
+    objects: {
+      page: Prisma.$FbPagePayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      pageId: string
+      name: string
+      keyword: string
+      matchType: string
+      replyText: string
+      privateReply: boolean
+      hideComment: boolean
+      enabled: boolean
+      priority: number
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["fbCommentRule"]>
+    composites: {}
+  }
+
+  type FbCommentRuleGetPayload<S extends boolean | null | undefined | FbCommentRuleDefaultArgs> = $Result.GetResult<Prisma.$FbCommentRulePayload, S>
+
+  type FbCommentRuleCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<FbCommentRuleFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: FbCommentRuleCountAggregateInputType | true
+    }
+
+  export interface FbCommentRuleDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['FbCommentRule'], meta: { name: 'FbCommentRule' } }
+    /**
+     * Find zero or one FbCommentRule that matches the filter.
+     * @param {FbCommentRuleFindUniqueArgs} args - Arguments to find a FbCommentRule
+     * @example
+     * // Get one FbCommentRule
+     * const fbCommentRule = await prisma.fbCommentRule.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends FbCommentRuleFindUniqueArgs>(args: SelectSubset<T, FbCommentRuleFindUniqueArgs<ExtArgs>>): Prisma__FbCommentRuleClient<$Result.GetResult<Prisma.$FbCommentRulePayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one FbCommentRule that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {FbCommentRuleFindUniqueOrThrowArgs} args - Arguments to find a FbCommentRule
+     * @example
+     * // Get one FbCommentRule
+     * const fbCommentRule = await prisma.fbCommentRule.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends FbCommentRuleFindUniqueOrThrowArgs>(args: SelectSubset<T, FbCommentRuleFindUniqueOrThrowArgs<ExtArgs>>): Prisma__FbCommentRuleClient<$Result.GetResult<Prisma.$FbCommentRulePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first FbCommentRule that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbCommentRuleFindFirstArgs} args - Arguments to find a FbCommentRule
+     * @example
+     * // Get one FbCommentRule
+     * const fbCommentRule = await prisma.fbCommentRule.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends FbCommentRuleFindFirstArgs>(args?: SelectSubset<T, FbCommentRuleFindFirstArgs<ExtArgs>>): Prisma__FbCommentRuleClient<$Result.GetResult<Prisma.$FbCommentRulePayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first FbCommentRule that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbCommentRuleFindFirstOrThrowArgs} args - Arguments to find a FbCommentRule
+     * @example
+     * // Get one FbCommentRule
+     * const fbCommentRule = await prisma.fbCommentRule.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends FbCommentRuleFindFirstOrThrowArgs>(args?: SelectSubset<T, FbCommentRuleFindFirstOrThrowArgs<ExtArgs>>): Prisma__FbCommentRuleClient<$Result.GetResult<Prisma.$FbCommentRulePayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more FbCommentRules that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbCommentRuleFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all FbCommentRules
+     * const fbCommentRules = await prisma.fbCommentRule.findMany()
+     * 
+     * // Get first 10 FbCommentRules
+     * const fbCommentRules = await prisma.fbCommentRule.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const fbCommentRuleWithIdOnly = await prisma.fbCommentRule.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends FbCommentRuleFindManyArgs>(args?: SelectSubset<T, FbCommentRuleFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FbCommentRulePayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a FbCommentRule.
+     * @param {FbCommentRuleCreateArgs} args - Arguments to create a FbCommentRule.
+     * @example
+     * // Create one FbCommentRule
+     * const FbCommentRule = await prisma.fbCommentRule.create({
+     *   data: {
+     *     // ... data to create a FbCommentRule
+     *   }
+     * })
+     * 
+     */
+    create<T extends FbCommentRuleCreateArgs>(args: SelectSubset<T, FbCommentRuleCreateArgs<ExtArgs>>): Prisma__FbCommentRuleClient<$Result.GetResult<Prisma.$FbCommentRulePayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many FbCommentRules.
+     * @param {FbCommentRuleCreateManyArgs} args - Arguments to create many FbCommentRules.
+     * @example
+     * // Create many FbCommentRules
+     * const fbCommentRule = await prisma.fbCommentRule.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends FbCommentRuleCreateManyArgs>(args?: SelectSubset<T, FbCommentRuleCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many FbCommentRules and returns the data saved in the database.
+     * @param {FbCommentRuleCreateManyAndReturnArgs} args - Arguments to create many FbCommentRules.
+     * @example
+     * // Create many FbCommentRules
+     * const fbCommentRule = await prisma.fbCommentRule.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many FbCommentRules and only return the `id`
+     * const fbCommentRuleWithIdOnly = await prisma.fbCommentRule.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends FbCommentRuleCreateManyAndReturnArgs>(args?: SelectSubset<T, FbCommentRuleCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FbCommentRulePayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a FbCommentRule.
+     * @param {FbCommentRuleDeleteArgs} args - Arguments to delete one FbCommentRule.
+     * @example
+     * // Delete one FbCommentRule
+     * const FbCommentRule = await prisma.fbCommentRule.delete({
+     *   where: {
+     *     // ... filter to delete one FbCommentRule
+     *   }
+     * })
+     * 
+     */
+    delete<T extends FbCommentRuleDeleteArgs>(args: SelectSubset<T, FbCommentRuleDeleteArgs<ExtArgs>>): Prisma__FbCommentRuleClient<$Result.GetResult<Prisma.$FbCommentRulePayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one FbCommentRule.
+     * @param {FbCommentRuleUpdateArgs} args - Arguments to update one FbCommentRule.
+     * @example
+     * // Update one FbCommentRule
+     * const fbCommentRule = await prisma.fbCommentRule.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends FbCommentRuleUpdateArgs>(args: SelectSubset<T, FbCommentRuleUpdateArgs<ExtArgs>>): Prisma__FbCommentRuleClient<$Result.GetResult<Prisma.$FbCommentRulePayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more FbCommentRules.
+     * @param {FbCommentRuleDeleteManyArgs} args - Arguments to filter FbCommentRules to delete.
+     * @example
+     * // Delete a few FbCommentRules
+     * const { count } = await prisma.fbCommentRule.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends FbCommentRuleDeleteManyArgs>(args?: SelectSubset<T, FbCommentRuleDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more FbCommentRules.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbCommentRuleUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many FbCommentRules
+     * const fbCommentRule = await prisma.fbCommentRule.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends FbCommentRuleUpdateManyArgs>(args: SelectSubset<T, FbCommentRuleUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more FbCommentRules and returns the data updated in the database.
+     * @param {FbCommentRuleUpdateManyAndReturnArgs} args - Arguments to update many FbCommentRules.
+     * @example
+     * // Update many FbCommentRules
+     * const fbCommentRule = await prisma.fbCommentRule.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more FbCommentRules and only return the `id`
+     * const fbCommentRuleWithIdOnly = await prisma.fbCommentRule.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends FbCommentRuleUpdateManyAndReturnArgs>(args: SelectSubset<T, FbCommentRuleUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FbCommentRulePayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one FbCommentRule.
+     * @param {FbCommentRuleUpsertArgs} args - Arguments to update or create a FbCommentRule.
+     * @example
+     * // Update or create a FbCommentRule
+     * const fbCommentRule = await prisma.fbCommentRule.upsert({
+     *   create: {
+     *     // ... data to create a FbCommentRule
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the FbCommentRule we want to update
+     *   }
+     * })
+     */
+    upsert<T extends FbCommentRuleUpsertArgs>(args: SelectSubset<T, FbCommentRuleUpsertArgs<ExtArgs>>): Prisma__FbCommentRuleClient<$Result.GetResult<Prisma.$FbCommentRulePayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of FbCommentRules.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbCommentRuleCountArgs} args - Arguments to filter FbCommentRules to count.
+     * @example
+     * // Count the number of FbCommentRules
+     * const count = await prisma.fbCommentRule.count({
+     *   where: {
+     *     // ... the filter for the FbCommentRules we want to count
+     *   }
+     * })
+    **/
+    count<T extends FbCommentRuleCountArgs>(
+      args?: Subset<T, FbCommentRuleCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], FbCommentRuleCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a FbCommentRule.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbCommentRuleAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends FbCommentRuleAggregateArgs>(args: Subset<T, FbCommentRuleAggregateArgs>): Prisma.PrismaPromise<GetFbCommentRuleAggregateType<T>>
+
+    /**
+     * Group by FbCommentRule.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbCommentRuleGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends FbCommentRuleGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: FbCommentRuleGroupByArgs['orderBy'] }
+        : { orderBy?: FbCommentRuleGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, FbCommentRuleGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetFbCommentRuleGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the FbCommentRule model
+   */
+  readonly fields: FbCommentRuleFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for FbCommentRule.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__FbCommentRuleClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    page<T extends FbPageDefaultArgs<ExtArgs> = {}>(args?: Subset<T, FbPageDefaultArgs<ExtArgs>>): Prisma__FbPageClient<$Result.GetResult<Prisma.$FbPagePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the FbCommentRule model
+   */
+  interface FbCommentRuleFieldRefs {
+    readonly id: FieldRef<"FbCommentRule", 'String'>
+    readonly pageId: FieldRef<"FbCommentRule", 'String'>
+    readonly name: FieldRef<"FbCommentRule", 'String'>
+    readonly keyword: FieldRef<"FbCommentRule", 'String'>
+    readonly matchType: FieldRef<"FbCommentRule", 'String'>
+    readonly replyText: FieldRef<"FbCommentRule", 'String'>
+    readonly privateReply: FieldRef<"FbCommentRule", 'Boolean'>
+    readonly hideComment: FieldRef<"FbCommentRule", 'Boolean'>
+    readonly enabled: FieldRef<"FbCommentRule", 'Boolean'>
+    readonly priority: FieldRef<"FbCommentRule", 'Int'>
+    readonly createdAt: FieldRef<"FbCommentRule", 'DateTime'>
+    readonly updatedAt: FieldRef<"FbCommentRule", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * FbCommentRule findUnique
+   */
+  export type FbCommentRuleFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbCommentRule
+     */
+    select?: FbCommentRuleSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbCommentRule
+     */
+    omit?: FbCommentRuleOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbCommentRuleInclude<ExtArgs> | null
+    /**
+     * Filter, which FbCommentRule to fetch.
+     */
+    where: FbCommentRuleWhereUniqueInput
+  }
+
+  /**
+   * FbCommentRule findUniqueOrThrow
+   */
+  export type FbCommentRuleFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbCommentRule
+     */
+    select?: FbCommentRuleSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbCommentRule
+     */
+    omit?: FbCommentRuleOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbCommentRuleInclude<ExtArgs> | null
+    /**
+     * Filter, which FbCommentRule to fetch.
+     */
+    where: FbCommentRuleWhereUniqueInput
+  }
+
+  /**
+   * FbCommentRule findFirst
+   */
+  export type FbCommentRuleFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbCommentRule
+     */
+    select?: FbCommentRuleSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbCommentRule
+     */
+    omit?: FbCommentRuleOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbCommentRuleInclude<ExtArgs> | null
+    /**
+     * Filter, which FbCommentRule to fetch.
+     */
+    where?: FbCommentRuleWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FbCommentRules to fetch.
+     */
+    orderBy?: FbCommentRuleOrderByWithRelationInput | FbCommentRuleOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for FbCommentRules.
+     */
+    cursor?: FbCommentRuleWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FbCommentRules from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FbCommentRules.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of FbCommentRules.
+     */
+    distinct?: FbCommentRuleScalarFieldEnum | FbCommentRuleScalarFieldEnum[]
+  }
+
+  /**
+   * FbCommentRule findFirstOrThrow
+   */
+  export type FbCommentRuleFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbCommentRule
+     */
+    select?: FbCommentRuleSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbCommentRule
+     */
+    omit?: FbCommentRuleOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbCommentRuleInclude<ExtArgs> | null
+    /**
+     * Filter, which FbCommentRule to fetch.
+     */
+    where?: FbCommentRuleWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FbCommentRules to fetch.
+     */
+    orderBy?: FbCommentRuleOrderByWithRelationInput | FbCommentRuleOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for FbCommentRules.
+     */
+    cursor?: FbCommentRuleWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FbCommentRules from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FbCommentRules.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of FbCommentRules.
+     */
+    distinct?: FbCommentRuleScalarFieldEnum | FbCommentRuleScalarFieldEnum[]
+  }
+
+  /**
+   * FbCommentRule findMany
+   */
+  export type FbCommentRuleFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbCommentRule
+     */
+    select?: FbCommentRuleSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbCommentRule
+     */
+    omit?: FbCommentRuleOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbCommentRuleInclude<ExtArgs> | null
+    /**
+     * Filter, which FbCommentRules to fetch.
+     */
+    where?: FbCommentRuleWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FbCommentRules to fetch.
+     */
+    orderBy?: FbCommentRuleOrderByWithRelationInput | FbCommentRuleOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing FbCommentRules.
+     */
+    cursor?: FbCommentRuleWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FbCommentRules from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FbCommentRules.
+     */
+    skip?: number
+    distinct?: FbCommentRuleScalarFieldEnum | FbCommentRuleScalarFieldEnum[]
+  }
+
+  /**
+   * FbCommentRule create
+   */
+  export type FbCommentRuleCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbCommentRule
+     */
+    select?: FbCommentRuleSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbCommentRule
+     */
+    omit?: FbCommentRuleOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbCommentRuleInclude<ExtArgs> | null
+    /**
+     * The data needed to create a FbCommentRule.
+     */
+    data: XOR<FbCommentRuleCreateInput, FbCommentRuleUncheckedCreateInput>
+  }
+
+  /**
+   * FbCommentRule createMany
+   */
+  export type FbCommentRuleCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many FbCommentRules.
+     */
+    data: FbCommentRuleCreateManyInput | FbCommentRuleCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * FbCommentRule createManyAndReturn
+   */
+  export type FbCommentRuleCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbCommentRule
+     */
+    select?: FbCommentRuleSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbCommentRule
+     */
+    omit?: FbCommentRuleOmit<ExtArgs> | null
+    /**
+     * The data used to create many FbCommentRules.
+     */
+    data: FbCommentRuleCreateManyInput | FbCommentRuleCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbCommentRuleIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * FbCommentRule update
+   */
+  export type FbCommentRuleUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbCommentRule
+     */
+    select?: FbCommentRuleSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbCommentRule
+     */
+    omit?: FbCommentRuleOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbCommentRuleInclude<ExtArgs> | null
+    /**
+     * The data needed to update a FbCommentRule.
+     */
+    data: XOR<FbCommentRuleUpdateInput, FbCommentRuleUncheckedUpdateInput>
+    /**
+     * Choose, which FbCommentRule to update.
+     */
+    where: FbCommentRuleWhereUniqueInput
+  }
+
+  /**
+   * FbCommentRule updateMany
+   */
+  export type FbCommentRuleUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update FbCommentRules.
+     */
+    data: XOR<FbCommentRuleUpdateManyMutationInput, FbCommentRuleUncheckedUpdateManyInput>
+    /**
+     * Filter which FbCommentRules to update
+     */
+    where?: FbCommentRuleWhereInput
+    /**
+     * Limit how many FbCommentRules to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * FbCommentRule updateManyAndReturn
+   */
+  export type FbCommentRuleUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbCommentRule
+     */
+    select?: FbCommentRuleSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbCommentRule
+     */
+    omit?: FbCommentRuleOmit<ExtArgs> | null
+    /**
+     * The data used to update FbCommentRules.
+     */
+    data: XOR<FbCommentRuleUpdateManyMutationInput, FbCommentRuleUncheckedUpdateManyInput>
+    /**
+     * Filter which FbCommentRules to update
+     */
+    where?: FbCommentRuleWhereInput
+    /**
+     * Limit how many FbCommentRules to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbCommentRuleIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * FbCommentRule upsert
+   */
+  export type FbCommentRuleUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbCommentRule
+     */
+    select?: FbCommentRuleSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbCommentRule
+     */
+    omit?: FbCommentRuleOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbCommentRuleInclude<ExtArgs> | null
+    /**
+     * The filter to search for the FbCommentRule to update in case it exists.
+     */
+    where: FbCommentRuleWhereUniqueInput
+    /**
+     * In case the FbCommentRule found by the `where` argument doesn't exist, create a new FbCommentRule with this data.
+     */
+    create: XOR<FbCommentRuleCreateInput, FbCommentRuleUncheckedCreateInput>
+    /**
+     * In case the FbCommentRule was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<FbCommentRuleUpdateInput, FbCommentRuleUncheckedUpdateInput>
+  }
+
+  /**
+   * FbCommentRule delete
+   */
+  export type FbCommentRuleDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbCommentRule
+     */
+    select?: FbCommentRuleSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbCommentRule
+     */
+    omit?: FbCommentRuleOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbCommentRuleInclude<ExtArgs> | null
+    /**
+     * Filter which FbCommentRule to delete.
+     */
+    where: FbCommentRuleWhereUniqueInput
+  }
+
+  /**
+   * FbCommentRule deleteMany
+   */
+  export type FbCommentRuleDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which FbCommentRules to delete
+     */
+    where?: FbCommentRuleWhereInput
+    /**
+     * Limit how many FbCommentRules to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * FbCommentRule without action
+   */
+  export type FbCommentRuleDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbCommentRule
+     */
+    select?: FbCommentRuleSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbCommentRule
+     */
+    omit?: FbCommentRuleOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbCommentRuleInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model FbAutoReplyLog
+   */
+
+  export type AggregateFbAutoReplyLog = {
+    _count: FbAutoReplyLogCountAggregateOutputType | null
+    _min: FbAutoReplyLogMinAggregateOutputType | null
+    _max: FbAutoReplyLogMaxAggregateOutputType | null
+  }
+
+  export type FbAutoReplyLogMinAggregateOutputType = {
+    id: string | null
+    pageId: string | null
+    commentId: string | null
+    ruleId: string | null
+    postId: string | null
+    fromName: string | null
+    commentMsg: string | null
+    action: string | null
+    replyText: string | null
+    success: boolean | null
+    errorMessage: string | null
+    createdAt: Date | null
+  }
+
+  export type FbAutoReplyLogMaxAggregateOutputType = {
+    id: string | null
+    pageId: string | null
+    commentId: string | null
+    ruleId: string | null
+    postId: string | null
+    fromName: string | null
+    commentMsg: string | null
+    action: string | null
+    replyText: string | null
+    success: boolean | null
+    errorMessage: string | null
+    createdAt: Date | null
+  }
+
+  export type FbAutoReplyLogCountAggregateOutputType = {
+    id: number
+    pageId: number
+    commentId: number
+    ruleId: number
+    postId: number
+    fromName: number
+    commentMsg: number
+    action: number
+    replyText: number
+    success: number
+    errorMessage: number
+    createdAt: number
+    _all: number
+  }
+
+
+  export type FbAutoReplyLogMinAggregateInputType = {
+    id?: true
+    pageId?: true
+    commentId?: true
+    ruleId?: true
+    postId?: true
+    fromName?: true
+    commentMsg?: true
+    action?: true
+    replyText?: true
+    success?: true
+    errorMessage?: true
+    createdAt?: true
+  }
+
+  export type FbAutoReplyLogMaxAggregateInputType = {
+    id?: true
+    pageId?: true
+    commentId?: true
+    ruleId?: true
+    postId?: true
+    fromName?: true
+    commentMsg?: true
+    action?: true
+    replyText?: true
+    success?: true
+    errorMessage?: true
+    createdAt?: true
+  }
+
+  export type FbAutoReplyLogCountAggregateInputType = {
+    id?: true
+    pageId?: true
+    commentId?: true
+    ruleId?: true
+    postId?: true
+    fromName?: true
+    commentMsg?: true
+    action?: true
+    replyText?: true
+    success?: true
+    errorMessage?: true
+    createdAt?: true
+    _all?: true
+  }
+
+  export type FbAutoReplyLogAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which FbAutoReplyLog to aggregate.
+     */
+    where?: FbAutoReplyLogWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FbAutoReplyLogs to fetch.
+     */
+    orderBy?: FbAutoReplyLogOrderByWithRelationInput | FbAutoReplyLogOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: FbAutoReplyLogWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FbAutoReplyLogs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FbAutoReplyLogs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned FbAutoReplyLogs
+    **/
+    _count?: true | FbAutoReplyLogCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: FbAutoReplyLogMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: FbAutoReplyLogMaxAggregateInputType
+  }
+
+  export type GetFbAutoReplyLogAggregateType<T extends FbAutoReplyLogAggregateArgs> = {
+        [P in keyof T & keyof AggregateFbAutoReplyLog]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateFbAutoReplyLog[P]>
+      : GetScalarType<T[P], AggregateFbAutoReplyLog[P]>
+  }
+
+
+
+
+  export type FbAutoReplyLogGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: FbAutoReplyLogWhereInput
+    orderBy?: FbAutoReplyLogOrderByWithAggregationInput | FbAutoReplyLogOrderByWithAggregationInput[]
+    by: FbAutoReplyLogScalarFieldEnum[] | FbAutoReplyLogScalarFieldEnum
+    having?: FbAutoReplyLogScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: FbAutoReplyLogCountAggregateInputType | true
+    _min?: FbAutoReplyLogMinAggregateInputType
+    _max?: FbAutoReplyLogMaxAggregateInputType
+  }
+
+  export type FbAutoReplyLogGroupByOutputType = {
+    id: string
+    pageId: string
+    commentId: string
+    ruleId: string | null
+    postId: string | null
+    fromName: string | null
+    commentMsg: string | null
+    action: string
+    replyText: string | null
+    success: boolean
+    errorMessage: string | null
+    createdAt: Date
+    _count: FbAutoReplyLogCountAggregateOutputType | null
+    _min: FbAutoReplyLogMinAggregateOutputType | null
+    _max: FbAutoReplyLogMaxAggregateOutputType | null
+  }
+
+  type GetFbAutoReplyLogGroupByPayload<T extends FbAutoReplyLogGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<FbAutoReplyLogGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof FbAutoReplyLogGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], FbAutoReplyLogGroupByOutputType[P]>
+            : GetScalarType<T[P], FbAutoReplyLogGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type FbAutoReplyLogSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    pageId?: boolean
+    commentId?: boolean
+    ruleId?: boolean
+    postId?: boolean
+    fromName?: boolean
+    commentMsg?: boolean
+    action?: boolean
+    replyText?: boolean
+    success?: boolean
+    errorMessage?: boolean
+    createdAt?: boolean
+    page?: boolean | FbPageDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["fbAutoReplyLog"]>
+
+  export type FbAutoReplyLogSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    pageId?: boolean
+    commentId?: boolean
+    ruleId?: boolean
+    postId?: boolean
+    fromName?: boolean
+    commentMsg?: boolean
+    action?: boolean
+    replyText?: boolean
+    success?: boolean
+    errorMessage?: boolean
+    createdAt?: boolean
+    page?: boolean | FbPageDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["fbAutoReplyLog"]>
+
+  export type FbAutoReplyLogSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    pageId?: boolean
+    commentId?: boolean
+    ruleId?: boolean
+    postId?: boolean
+    fromName?: boolean
+    commentMsg?: boolean
+    action?: boolean
+    replyText?: boolean
+    success?: boolean
+    errorMessage?: boolean
+    createdAt?: boolean
+    page?: boolean | FbPageDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["fbAutoReplyLog"]>
+
+  export type FbAutoReplyLogSelectScalar = {
+    id?: boolean
+    pageId?: boolean
+    commentId?: boolean
+    ruleId?: boolean
+    postId?: boolean
+    fromName?: boolean
+    commentMsg?: boolean
+    action?: boolean
+    replyText?: boolean
+    success?: boolean
+    errorMessage?: boolean
+    createdAt?: boolean
+  }
+
+  export type FbAutoReplyLogOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "pageId" | "commentId" | "ruleId" | "postId" | "fromName" | "commentMsg" | "action" | "replyText" | "success" | "errorMessage" | "createdAt", ExtArgs["result"]["fbAutoReplyLog"]>
+  export type FbAutoReplyLogInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    page?: boolean | FbPageDefaultArgs<ExtArgs>
+  }
+  export type FbAutoReplyLogIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    page?: boolean | FbPageDefaultArgs<ExtArgs>
+  }
+  export type FbAutoReplyLogIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    page?: boolean | FbPageDefaultArgs<ExtArgs>
+  }
+
+  export type $FbAutoReplyLogPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "FbAutoReplyLog"
+    objects: {
+      page: Prisma.$FbPagePayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      pageId: string
+      commentId: string
+      ruleId: string | null
+      postId: string | null
+      fromName: string | null
+      commentMsg: string | null
+      action: string
+      replyText: string | null
+      success: boolean
+      errorMessage: string | null
+      createdAt: Date
+    }, ExtArgs["result"]["fbAutoReplyLog"]>
+    composites: {}
+  }
+
+  type FbAutoReplyLogGetPayload<S extends boolean | null | undefined | FbAutoReplyLogDefaultArgs> = $Result.GetResult<Prisma.$FbAutoReplyLogPayload, S>
+
+  type FbAutoReplyLogCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<FbAutoReplyLogFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: FbAutoReplyLogCountAggregateInputType | true
+    }
+
+  export interface FbAutoReplyLogDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['FbAutoReplyLog'], meta: { name: 'FbAutoReplyLog' } }
+    /**
+     * Find zero or one FbAutoReplyLog that matches the filter.
+     * @param {FbAutoReplyLogFindUniqueArgs} args - Arguments to find a FbAutoReplyLog
+     * @example
+     * // Get one FbAutoReplyLog
+     * const fbAutoReplyLog = await prisma.fbAutoReplyLog.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends FbAutoReplyLogFindUniqueArgs>(args: SelectSubset<T, FbAutoReplyLogFindUniqueArgs<ExtArgs>>): Prisma__FbAutoReplyLogClient<$Result.GetResult<Prisma.$FbAutoReplyLogPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one FbAutoReplyLog that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {FbAutoReplyLogFindUniqueOrThrowArgs} args - Arguments to find a FbAutoReplyLog
+     * @example
+     * // Get one FbAutoReplyLog
+     * const fbAutoReplyLog = await prisma.fbAutoReplyLog.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends FbAutoReplyLogFindUniqueOrThrowArgs>(args: SelectSubset<T, FbAutoReplyLogFindUniqueOrThrowArgs<ExtArgs>>): Prisma__FbAutoReplyLogClient<$Result.GetResult<Prisma.$FbAutoReplyLogPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first FbAutoReplyLog that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbAutoReplyLogFindFirstArgs} args - Arguments to find a FbAutoReplyLog
+     * @example
+     * // Get one FbAutoReplyLog
+     * const fbAutoReplyLog = await prisma.fbAutoReplyLog.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends FbAutoReplyLogFindFirstArgs>(args?: SelectSubset<T, FbAutoReplyLogFindFirstArgs<ExtArgs>>): Prisma__FbAutoReplyLogClient<$Result.GetResult<Prisma.$FbAutoReplyLogPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first FbAutoReplyLog that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbAutoReplyLogFindFirstOrThrowArgs} args - Arguments to find a FbAutoReplyLog
+     * @example
+     * // Get one FbAutoReplyLog
+     * const fbAutoReplyLog = await prisma.fbAutoReplyLog.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends FbAutoReplyLogFindFirstOrThrowArgs>(args?: SelectSubset<T, FbAutoReplyLogFindFirstOrThrowArgs<ExtArgs>>): Prisma__FbAutoReplyLogClient<$Result.GetResult<Prisma.$FbAutoReplyLogPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more FbAutoReplyLogs that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbAutoReplyLogFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all FbAutoReplyLogs
+     * const fbAutoReplyLogs = await prisma.fbAutoReplyLog.findMany()
+     * 
+     * // Get first 10 FbAutoReplyLogs
+     * const fbAutoReplyLogs = await prisma.fbAutoReplyLog.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const fbAutoReplyLogWithIdOnly = await prisma.fbAutoReplyLog.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends FbAutoReplyLogFindManyArgs>(args?: SelectSubset<T, FbAutoReplyLogFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FbAutoReplyLogPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a FbAutoReplyLog.
+     * @param {FbAutoReplyLogCreateArgs} args - Arguments to create a FbAutoReplyLog.
+     * @example
+     * // Create one FbAutoReplyLog
+     * const FbAutoReplyLog = await prisma.fbAutoReplyLog.create({
+     *   data: {
+     *     // ... data to create a FbAutoReplyLog
+     *   }
+     * })
+     * 
+     */
+    create<T extends FbAutoReplyLogCreateArgs>(args: SelectSubset<T, FbAutoReplyLogCreateArgs<ExtArgs>>): Prisma__FbAutoReplyLogClient<$Result.GetResult<Prisma.$FbAutoReplyLogPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many FbAutoReplyLogs.
+     * @param {FbAutoReplyLogCreateManyArgs} args - Arguments to create many FbAutoReplyLogs.
+     * @example
+     * // Create many FbAutoReplyLogs
+     * const fbAutoReplyLog = await prisma.fbAutoReplyLog.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends FbAutoReplyLogCreateManyArgs>(args?: SelectSubset<T, FbAutoReplyLogCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many FbAutoReplyLogs and returns the data saved in the database.
+     * @param {FbAutoReplyLogCreateManyAndReturnArgs} args - Arguments to create many FbAutoReplyLogs.
+     * @example
+     * // Create many FbAutoReplyLogs
+     * const fbAutoReplyLog = await prisma.fbAutoReplyLog.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many FbAutoReplyLogs and only return the `id`
+     * const fbAutoReplyLogWithIdOnly = await prisma.fbAutoReplyLog.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends FbAutoReplyLogCreateManyAndReturnArgs>(args?: SelectSubset<T, FbAutoReplyLogCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FbAutoReplyLogPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a FbAutoReplyLog.
+     * @param {FbAutoReplyLogDeleteArgs} args - Arguments to delete one FbAutoReplyLog.
+     * @example
+     * // Delete one FbAutoReplyLog
+     * const FbAutoReplyLog = await prisma.fbAutoReplyLog.delete({
+     *   where: {
+     *     // ... filter to delete one FbAutoReplyLog
+     *   }
+     * })
+     * 
+     */
+    delete<T extends FbAutoReplyLogDeleteArgs>(args: SelectSubset<T, FbAutoReplyLogDeleteArgs<ExtArgs>>): Prisma__FbAutoReplyLogClient<$Result.GetResult<Prisma.$FbAutoReplyLogPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one FbAutoReplyLog.
+     * @param {FbAutoReplyLogUpdateArgs} args - Arguments to update one FbAutoReplyLog.
+     * @example
+     * // Update one FbAutoReplyLog
+     * const fbAutoReplyLog = await prisma.fbAutoReplyLog.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends FbAutoReplyLogUpdateArgs>(args: SelectSubset<T, FbAutoReplyLogUpdateArgs<ExtArgs>>): Prisma__FbAutoReplyLogClient<$Result.GetResult<Prisma.$FbAutoReplyLogPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more FbAutoReplyLogs.
+     * @param {FbAutoReplyLogDeleteManyArgs} args - Arguments to filter FbAutoReplyLogs to delete.
+     * @example
+     * // Delete a few FbAutoReplyLogs
+     * const { count } = await prisma.fbAutoReplyLog.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends FbAutoReplyLogDeleteManyArgs>(args?: SelectSubset<T, FbAutoReplyLogDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more FbAutoReplyLogs.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbAutoReplyLogUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many FbAutoReplyLogs
+     * const fbAutoReplyLog = await prisma.fbAutoReplyLog.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends FbAutoReplyLogUpdateManyArgs>(args: SelectSubset<T, FbAutoReplyLogUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more FbAutoReplyLogs and returns the data updated in the database.
+     * @param {FbAutoReplyLogUpdateManyAndReturnArgs} args - Arguments to update many FbAutoReplyLogs.
+     * @example
+     * // Update many FbAutoReplyLogs
+     * const fbAutoReplyLog = await prisma.fbAutoReplyLog.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more FbAutoReplyLogs and only return the `id`
+     * const fbAutoReplyLogWithIdOnly = await prisma.fbAutoReplyLog.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends FbAutoReplyLogUpdateManyAndReturnArgs>(args: SelectSubset<T, FbAutoReplyLogUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FbAutoReplyLogPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one FbAutoReplyLog.
+     * @param {FbAutoReplyLogUpsertArgs} args - Arguments to update or create a FbAutoReplyLog.
+     * @example
+     * // Update or create a FbAutoReplyLog
+     * const fbAutoReplyLog = await prisma.fbAutoReplyLog.upsert({
+     *   create: {
+     *     // ... data to create a FbAutoReplyLog
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the FbAutoReplyLog we want to update
+     *   }
+     * })
+     */
+    upsert<T extends FbAutoReplyLogUpsertArgs>(args: SelectSubset<T, FbAutoReplyLogUpsertArgs<ExtArgs>>): Prisma__FbAutoReplyLogClient<$Result.GetResult<Prisma.$FbAutoReplyLogPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of FbAutoReplyLogs.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbAutoReplyLogCountArgs} args - Arguments to filter FbAutoReplyLogs to count.
+     * @example
+     * // Count the number of FbAutoReplyLogs
+     * const count = await prisma.fbAutoReplyLog.count({
+     *   where: {
+     *     // ... the filter for the FbAutoReplyLogs we want to count
+     *   }
+     * })
+    **/
+    count<T extends FbAutoReplyLogCountArgs>(
+      args?: Subset<T, FbAutoReplyLogCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], FbAutoReplyLogCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a FbAutoReplyLog.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbAutoReplyLogAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends FbAutoReplyLogAggregateArgs>(args: Subset<T, FbAutoReplyLogAggregateArgs>): Prisma.PrismaPromise<GetFbAutoReplyLogAggregateType<T>>
+
+    /**
+     * Group by FbAutoReplyLog.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbAutoReplyLogGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends FbAutoReplyLogGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: FbAutoReplyLogGroupByArgs['orderBy'] }
+        : { orderBy?: FbAutoReplyLogGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, FbAutoReplyLogGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetFbAutoReplyLogGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the FbAutoReplyLog model
+   */
+  readonly fields: FbAutoReplyLogFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for FbAutoReplyLog.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__FbAutoReplyLogClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    page<T extends FbPageDefaultArgs<ExtArgs> = {}>(args?: Subset<T, FbPageDefaultArgs<ExtArgs>>): Prisma__FbPageClient<$Result.GetResult<Prisma.$FbPagePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the FbAutoReplyLog model
+   */
+  interface FbAutoReplyLogFieldRefs {
+    readonly id: FieldRef<"FbAutoReplyLog", 'String'>
+    readonly pageId: FieldRef<"FbAutoReplyLog", 'String'>
+    readonly commentId: FieldRef<"FbAutoReplyLog", 'String'>
+    readonly ruleId: FieldRef<"FbAutoReplyLog", 'String'>
+    readonly postId: FieldRef<"FbAutoReplyLog", 'String'>
+    readonly fromName: FieldRef<"FbAutoReplyLog", 'String'>
+    readonly commentMsg: FieldRef<"FbAutoReplyLog", 'String'>
+    readonly action: FieldRef<"FbAutoReplyLog", 'String'>
+    readonly replyText: FieldRef<"FbAutoReplyLog", 'String'>
+    readonly success: FieldRef<"FbAutoReplyLog", 'Boolean'>
+    readonly errorMessage: FieldRef<"FbAutoReplyLog", 'String'>
+    readonly createdAt: FieldRef<"FbAutoReplyLog", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * FbAutoReplyLog findUnique
+   */
+  export type FbAutoReplyLogFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbAutoReplyLog
+     */
+    select?: FbAutoReplyLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbAutoReplyLog
+     */
+    omit?: FbAutoReplyLogOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbAutoReplyLogInclude<ExtArgs> | null
+    /**
+     * Filter, which FbAutoReplyLog to fetch.
+     */
+    where: FbAutoReplyLogWhereUniqueInput
+  }
+
+  /**
+   * FbAutoReplyLog findUniqueOrThrow
+   */
+  export type FbAutoReplyLogFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbAutoReplyLog
+     */
+    select?: FbAutoReplyLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbAutoReplyLog
+     */
+    omit?: FbAutoReplyLogOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbAutoReplyLogInclude<ExtArgs> | null
+    /**
+     * Filter, which FbAutoReplyLog to fetch.
+     */
+    where: FbAutoReplyLogWhereUniqueInput
+  }
+
+  /**
+   * FbAutoReplyLog findFirst
+   */
+  export type FbAutoReplyLogFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbAutoReplyLog
+     */
+    select?: FbAutoReplyLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbAutoReplyLog
+     */
+    omit?: FbAutoReplyLogOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbAutoReplyLogInclude<ExtArgs> | null
+    /**
+     * Filter, which FbAutoReplyLog to fetch.
+     */
+    where?: FbAutoReplyLogWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FbAutoReplyLogs to fetch.
+     */
+    orderBy?: FbAutoReplyLogOrderByWithRelationInput | FbAutoReplyLogOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for FbAutoReplyLogs.
+     */
+    cursor?: FbAutoReplyLogWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FbAutoReplyLogs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FbAutoReplyLogs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of FbAutoReplyLogs.
+     */
+    distinct?: FbAutoReplyLogScalarFieldEnum | FbAutoReplyLogScalarFieldEnum[]
+  }
+
+  /**
+   * FbAutoReplyLog findFirstOrThrow
+   */
+  export type FbAutoReplyLogFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbAutoReplyLog
+     */
+    select?: FbAutoReplyLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbAutoReplyLog
+     */
+    omit?: FbAutoReplyLogOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbAutoReplyLogInclude<ExtArgs> | null
+    /**
+     * Filter, which FbAutoReplyLog to fetch.
+     */
+    where?: FbAutoReplyLogWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FbAutoReplyLogs to fetch.
+     */
+    orderBy?: FbAutoReplyLogOrderByWithRelationInput | FbAutoReplyLogOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for FbAutoReplyLogs.
+     */
+    cursor?: FbAutoReplyLogWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FbAutoReplyLogs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FbAutoReplyLogs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of FbAutoReplyLogs.
+     */
+    distinct?: FbAutoReplyLogScalarFieldEnum | FbAutoReplyLogScalarFieldEnum[]
+  }
+
+  /**
+   * FbAutoReplyLog findMany
+   */
+  export type FbAutoReplyLogFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbAutoReplyLog
+     */
+    select?: FbAutoReplyLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbAutoReplyLog
+     */
+    omit?: FbAutoReplyLogOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbAutoReplyLogInclude<ExtArgs> | null
+    /**
+     * Filter, which FbAutoReplyLogs to fetch.
+     */
+    where?: FbAutoReplyLogWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FbAutoReplyLogs to fetch.
+     */
+    orderBy?: FbAutoReplyLogOrderByWithRelationInput | FbAutoReplyLogOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing FbAutoReplyLogs.
+     */
+    cursor?: FbAutoReplyLogWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FbAutoReplyLogs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FbAutoReplyLogs.
+     */
+    skip?: number
+    distinct?: FbAutoReplyLogScalarFieldEnum | FbAutoReplyLogScalarFieldEnum[]
+  }
+
+  /**
+   * FbAutoReplyLog create
+   */
+  export type FbAutoReplyLogCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbAutoReplyLog
+     */
+    select?: FbAutoReplyLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbAutoReplyLog
+     */
+    omit?: FbAutoReplyLogOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbAutoReplyLogInclude<ExtArgs> | null
+    /**
+     * The data needed to create a FbAutoReplyLog.
+     */
+    data: XOR<FbAutoReplyLogCreateInput, FbAutoReplyLogUncheckedCreateInput>
+  }
+
+  /**
+   * FbAutoReplyLog createMany
+   */
+  export type FbAutoReplyLogCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many FbAutoReplyLogs.
+     */
+    data: FbAutoReplyLogCreateManyInput | FbAutoReplyLogCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * FbAutoReplyLog createManyAndReturn
+   */
+  export type FbAutoReplyLogCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbAutoReplyLog
+     */
+    select?: FbAutoReplyLogSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbAutoReplyLog
+     */
+    omit?: FbAutoReplyLogOmit<ExtArgs> | null
+    /**
+     * The data used to create many FbAutoReplyLogs.
+     */
+    data: FbAutoReplyLogCreateManyInput | FbAutoReplyLogCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbAutoReplyLogIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * FbAutoReplyLog update
+   */
+  export type FbAutoReplyLogUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbAutoReplyLog
+     */
+    select?: FbAutoReplyLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbAutoReplyLog
+     */
+    omit?: FbAutoReplyLogOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbAutoReplyLogInclude<ExtArgs> | null
+    /**
+     * The data needed to update a FbAutoReplyLog.
+     */
+    data: XOR<FbAutoReplyLogUpdateInput, FbAutoReplyLogUncheckedUpdateInput>
+    /**
+     * Choose, which FbAutoReplyLog to update.
+     */
+    where: FbAutoReplyLogWhereUniqueInput
+  }
+
+  /**
+   * FbAutoReplyLog updateMany
+   */
+  export type FbAutoReplyLogUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update FbAutoReplyLogs.
+     */
+    data: XOR<FbAutoReplyLogUpdateManyMutationInput, FbAutoReplyLogUncheckedUpdateManyInput>
+    /**
+     * Filter which FbAutoReplyLogs to update
+     */
+    where?: FbAutoReplyLogWhereInput
+    /**
+     * Limit how many FbAutoReplyLogs to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * FbAutoReplyLog updateManyAndReturn
+   */
+  export type FbAutoReplyLogUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbAutoReplyLog
+     */
+    select?: FbAutoReplyLogSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbAutoReplyLog
+     */
+    omit?: FbAutoReplyLogOmit<ExtArgs> | null
+    /**
+     * The data used to update FbAutoReplyLogs.
+     */
+    data: XOR<FbAutoReplyLogUpdateManyMutationInput, FbAutoReplyLogUncheckedUpdateManyInput>
+    /**
+     * Filter which FbAutoReplyLogs to update
+     */
+    where?: FbAutoReplyLogWhereInput
+    /**
+     * Limit how many FbAutoReplyLogs to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbAutoReplyLogIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * FbAutoReplyLog upsert
+   */
+  export type FbAutoReplyLogUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbAutoReplyLog
+     */
+    select?: FbAutoReplyLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbAutoReplyLog
+     */
+    omit?: FbAutoReplyLogOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbAutoReplyLogInclude<ExtArgs> | null
+    /**
+     * The filter to search for the FbAutoReplyLog to update in case it exists.
+     */
+    where: FbAutoReplyLogWhereUniqueInput
+    /**
+     * In case the FbAutoReplyLog found by the `where` argument doesn't exist, create a new FbAutoReplyLog with this data.
+     */
+    create: XOR<FbAutoReplyLogCreateInput, FbAutoReplyLogUncheckedCreateInput>
+    /**
+     * In case the FbAutoReplyLog was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<FbAutoReplyLogUpdateInput, FbAutoReplyLogUncheckedUpdateInput>
+  }
+
+  /**
+   * FbAutoReplyLog delete
+   */
+  export type FbAutoReplyLogDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbAutoReplyLog
+     */
+    select?: FbAutoReplyLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbAutoReplyLog
+     */
+    omit?: FbAutoReplyLogOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbAutoReplyLogInclude<ExtArgs> | null
+    /**
+     * Filter which FbAutoReplyLog to delete.
+     */
+    where: FbAutoReplyLogWhereUniqueInput
+  }
+
+  /**
+   * FbAutoReplyLog deleteMany
+   */
+  export type FbAutoReplyLogDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which FbAutoReplyLogs to delete
+     */
+    where?: FbAutoReplyLogWhereInput
+    /**
+     * Limit how many FbAutoReplyLogs to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * FbAutoReplyLog without action
+   */
+  export type FbAutoReplyLogDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbAutoReplyLog
+     */
+    select?: FbAutoReplyLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbAutoReplyLog
+     */
+    omit?: FbAutoReplyLogOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbAutoReplyLogInclude<ExtArgs> | null
+  }
+
+
+  /**
    * Enums
    */
 
@@ -130955,7 +137402,8 @@ export namespace Prisma {
     unitPrice: 'unitPrice',
     discount: 'discount',
     discountType: 'discountType',
-    lineTotal: 'lineTotal'
+    lineTotal: 'lineTotal',
+    baseQuantity: 'baseQuantity'
   };
 
   export type TransactionItemScalarFieldEnum = (typeof TransactionItemScalarFieldEnum)[keyof typeof TransactionItemScalarFieldEnum]
@@ -131007,6 +137455,8 @@ export namespace Prisma {
     status: 'status',
     paidAmount: 'paidAmount',
     paymentStatus: 'paymentStatus',
+    dueDate: 'dueDate',
+    paymentTerm: 'paymentTerm',
     note: 'note',
     branchId: 'branchId',
     userId: 'userId',
@@ -132070,6 +138520,8 @@ export namespace Prisma {
     platformFee: 'platformFee',
     platformFeeRate: 'platformFeeRate',
     netRevenue: 'netRevenue',
+    adsVoucherDiscount: 'adsVoucherDiscount',
+    stockDeducted: 'stockDeducted',
     syncedAt: 'syncedAt',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
@@ -132699,6 +139151,100 @@ export namespace Prisma {
   };
 
   export type TaxBudgetScalarFieldEnum = (typeof TaxBudgetScalarFieldEnum)[keyof typeof TaxBudgetScalarFieldEnum]
+
+
+  export const FbUserTokenScalarFieldEnum: {
+    id: 'id',
+    fbUserId: 'fbUserId',
+    name: 'name',
+    accessToken: 'accessToken',
+    tokenExpiresAt: 'tokenExpiresAt',
+    scopes: 'scopes',
+    connectedBy: 'connectedBy',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type FbUserTokenScalarFieldEnum = (typeof FbUserTokenScalarFieldEnum)[keyof typeof FbUserTokenScalarFieldEnum]
+
+
+  export const FbPageScalarFieldEnum: {
+    id: 'id',
+    pageId: 'pageId',
+    name: 'name',
+    category: 'category',
+    avatar: 'avatar',
+    fanCount: 'fanCount',
+    accessToken: 'accessToken',
+    tokenExpiresAt: 'tokenExpiresAt',
+    igUserId: 'igUserId',
+    adAccountId: 'adAccountId',
+    webhookSubscribed: 'webhookSubscribed',
+    autoReplyEnabled: 'autoReplyEnabled',
+    status: 'status',
+    connectedBy: 'connectedBy',
+    lastSyncAt: 'lastSyncAt',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type FbPageScalarFieldEnum = (typeof FbPageScalarFieldEnum)[keyof typeof FbPageScalarFieldEnum]
+
+
+  export const FbScheduledPostScalarFieldEnum: {
+    id: 'id',
+    pageId: 'pageId',
+    fbPostId: 'fbPostId',
+    message: 'message',
+    mediaType: 'mediaType',
+    mediaUrls: 'mediaUrls',
+    linkUrl: 'linkUrl',
+    scheduledAt: 'scheduledAt',
+    status: 'status',
+    errorMessage: 'errorMessage',
+    publishedAt: 'publishedAt',
+    createdBy: 'createdBy',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type FbScheduledPostScalarFieldEnum = (typeof FbScheduledPostScalarFieldEnum)[keyof typeof FbScheduledPostScalarFieldEnum]
+
+
+  export const FbCommentRuleScalarFieldEnum: {
+    id: 'id',
+    pageId: 'pageId',
+    name: 'name',
+    keyword: 'keyword',
+    matchType: 'matchType',
+    replyText: 'replyText',
+    privateReply: 'privateReply',
+    hideComment: 'hideComment',
+    enabled: 'enabled',
+    priority: 'priority',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type FbCommentRuleScalarFieldEnum = (typeof FbCommentRuleScalarFieldEnum)[keyof typeof FbCommentRuleScalarFieldEnum]
+
+
+  export const FbAutoReplyLogScalarFieldEnum: {
+    id: 'id',
+    pageId: 'pageId',
+    commentId: 'commentId',
+    ruleId: 'ruleId',
+    postId: 'postId',
+    fromName: 'fromName',
+    commentMsg: 'commentMsg',
+    action: 'action',
+    replyText: 'replyText',
+    success: 'success',
+    errorMessage: 'errorMessage',
+    createdAt: 'createdAt'
+  };
+
+  export type FbAutoReplyLogScalarFieldEnum = (typeof FbAutoReplyLogScalarFieldEnum)[keyof typeof FbAutoReplyLogScalarFieldEnum]
 
 
   export const SortOrder: {
@@ -134052,6 +140598,7 @@ export namespace Prisma {
     discount?: FloatFilter<"TransactionItem"> | number
     discountType?: StringNullableFilter<"TransactionItem"> | string | null
     lineTotal?: FloatFilter<"TransactionItem"> | number
+    baseQuantity?: FloatFilter<"TransactionItem"> | number
     transaction?: XOR<TransactionScalarRelationFilter, TransactionWhereInput>
     product?: XOR<ProductScalarRelationFilter, ProductWhereInput>
   }
@@ -134067,6 +140614,7 @@ export namespace Prisma {
     discount?: SortOrder
     discountType?: SortOrderInput | SortOrder
     lineTotal?: SortOrder
+    baseQuantity?: SortOrder
     transaction?: TransactionOrderByWithRelationInput
     product?: ProductOrderByWithRelationInput
   }
@@ -134085,6 +140633,7 @@ export namespace Prisma {
     discount?: FloatFilter<"TransactionItem"> | number
     discountType?: StringNullableFilter<"TransactionItem"> | string | null
     lineTotal?: FloatFilter<"TransactionItem"> | number
+    baseQuantity?: FloatFilter<"TransactionItem"> | number
     transaction?: XOR<TransactionScalarRelationFilter, TransactionWhereInput>
     product?: XOR<ProductScalarRelationFilter, ProductWhereInput>
   }, "id">
@@ -134100,6 +140649,7 @@ export namespace Prisma {
     discount?: SortOrder
     discountType?: SortOrderInput | SortOrder
     lineTotal?: SortOrder
+    baseQuantity?: SortOrder
     _count?: TransactionItemCountOrderByAggregateInput
     _avg?: TransactionItemAvgOrderByAggregateInput
     _max?: TransactionItemMaxOrderByAggregateInput
@@ -134121,6 +140671,7 @@ export namespace Prisma {
     discount?: FloatWithAggregatesFilter<"TransactionItem"> | number
     discountType?: StringNullableWithAggregatesFilter<"TransactionItem"> | string | null
     lineTotal?: FloatWithAggregatesFilter<"TransactionItem"> | number
+    baseQuantity?: FloatWithAggregatesFilter<"TransactionItem"> | number
   }
 
   export type PaymentWhereInput = {
@@ -134323,6 +140874,8 @@ export namespace Prisma {
     status?: StringFilter<"ImportReceipt"> | string
     paidAmount?: FloatFilter<"ImportReceipt"> | number
     paymentStatus?: StringFilter<"ImportReceipt"> | string
+    dueDate?: DateTimeNullableFilter<"ImportReceipt"> | Date | string | null
+    paymentTerm?: StringNullableFilter<"ImportReceipt"> | string | null
     note?: StringNullableFilter<"ImportReceipt"> | string | null
     branchId?: StringNullableFilter<"ImportReceipt"> | string | null
     userId?: StringFilter<"ImportReceipt"> | string
@@ -134344,6 +140897,8 @@ export namespace Prisma {
     status?: SortOrder
     paidAmount?: SortOrder
     paymentStatus?: SortOrder
+    dueDate?: SortOrderInput | SortOrder
+    paymentTerm?: SortOrderInput | SortOrder
     note?: SortOrderInput | SortOrder
     branchId?: SortOrderInput | SortOrder
     userId?: SortOrder
@@ -134368,6 +140923,8 @@ export namespace Prisma {
     status?: StringFilter<"ImportReceipt"> | string
     paidAmount?: FloatFilter<"ImportReceipt"> | number
     paymentStatus?: StringFilter<"ImportReceipt"> | string
+    dueDate?: DateTimeNullableFilter<"ImportReceipt"> | Date | string | null
+    paymentTerm?: StringNullableFilter<"ImportReceipt"> | string | null
     note?: StringNullableFilter<"ImportReceipt"> | string | null
     branchId?: StringNullableFilter<"ImportReceipt"> | string | null
     userId?: StringFilter<"ImportReceipt"> | string
@@ -134389,6 +140946,8 @@ export namespace Prisma {
     status?: SortOrder
     paidAmount?: SortOrder
     paymentStatus?: SortOrder
+    dueDate?: SortOrderInput | SortOrder
+    paymentTerm?: SortOrderInput | SortOrder
     note?: SortOrderInput | SortOrder
     branchId?: SortOrderInput | SortOrder
     userId?: SortOrder
@@ -134416,6 +140975,8 @@ export namespace Prisma {
     status?: StringWithAggregatesFilter<"ImportReceipt"> | string
     paidAmount?: FloatWithAggregatesFilter<"ImportReceipt"> | number
     paymentStatus?: StringWithAggregatesFilter<"ImportReceipt"> | string
+    dueDate?: DateTimeNullableWithAggregatesFilter<"ImportReceipt"> | Date | string | null
+    paymentTerm?: StringNullableWithAggregatesFilter<"ImportReceipt"> | string | null
     note?: StringNullableWithAggregatesFilter<"ImportReceipt"> | string | null
     branchId?: StringNullableWithAggregatesFilter<"ImportReceipt"> | string | null
     userId?: StringWithAggregatesFilter<"ImportReceipt"> | string
@@ -139583,6 +146144,8 @@ export namespace Prisma {
     platformFee?: FloatFilter<"OnlineOrder"> | number
     platformFeeRate?: FloatFilter<"OnlineOrder"> | number
     netRevenue?: FloatFilter<"OnlineOrder"> | number
+    adsVoucherDiscount?: FloatFilter<"OnlineOrder"> | number
+    stockDeducted?: BoolFilter<"OnlineOrder"> | boolean
     syncedAt?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     createdAt?: DateTimeFilter<"OnlineOrder"> | Date | string
     updatedAt?: DateTimeFilter<"OnlineOrder"> | Date | string
@@ -139619,6 +146182,8 @@ export namespace Prisma {
     platformFee?: SortOrder
     platformFeeRate?: SortOrder
     netRevenue?: SortOrder
+    adsVoucherDiscount?: SortOrder
+    stockDeducted?: SortOrder
     syncedAt?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -139658,6 +146223,8 @@ export namespace Prisma {
     platformFee?: FloatFilter<"OnlineOrder"> | number
     platformFeeRate?: FloatFilter<"OnlineOrder"> | number
     netRevenue?: FloatFilter<"OnlineOrder"> | number
+    adsVoucherDiscount?: FloatFilter<"OnlineOrder"> | number
+    stockDeducted?: BoolFilter<"OnlineOrder"> | boolean
     syncedAt?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     createdAt?: DateTimeFilter<"OnlineOrder"> | Date | string
     updatedAt?: DateTimeFilter<"OnlineOrder"> | Date | string
@@ -139694,6 +146261,8 @@ export namespace Prisma {
     platformFee?: SortOrder
     platformFeeRate?: SortOrder
     netRevenue?: SortOrder
+    adsVoucherDiscount?: SortOrder
+    stockDeducted?: SortOrder
     syncedAt?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -139736,6 +146305,8 @@ export namespace Prisma {
     platformFee?: FloatWithAggregatesFilter<"OnlineOrder"> | number
     platformFeeRate?: FloatWithAggregatesFilter<"OnlineOrder"> | number
     netRevenue?: FloatWithAggregatesFilter<"OnlineOrder"> | number
+    adsVoucherDiscount?: FloatWithAggregatesFilter<"OnlineOrder"> | number
+    stockDeducted?: BoolWithAggregatesFilter<"OnlineOrder"> | boolean
     syncedAt?: DateTimeNullableWithAggregatesFilter<"OnlineOrder"> | Date | string | null
     createdAt?: DateTimeWithAggregatesFilter<"OnlineOrder"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"OnlineOrder"> | Date | string
@@ -140032,6 +146603,7 @@ export namespace Prisma {
 
   export type JournalEntryWhereUniqueInput = Prisma.AtLeast<{
     id?: string
+    reference?: string
     AND?: JournalEntryWhereInput | JournalEntryWhereInput[]
     OR?: JournalEntryWhereInput[]
     NOT?: JournalEntryWhereInput | JournalEntryWhereInput[]
@@ -140042,14 +146614,13 @@ export namespace Prisma {
     creditAccount?: StringFilter<"JournalEntry"> | string
     creditAccountName?: StringNullableFilter<"JournalEntry"> | string | null
     amount?: FloatFilter<"JournalEntry"> | number
-    reference?: StringNullableFilter<"JournalEntry"> | string | null
     referenceType?: StringFilter<"JournalEntry"> | string
     notes?: StringNullableFilter<"JournalEntry"> | string | null
     branchId?: StringNullableFilter<"JournalEntry"> | string | null
     createdBy?: StringNullableFilter<"JournalEntry"> | string | null
     createdAt?: DateTimeFilter<"JournalEntry"> | Date | string
     updatedAt?: DateTimeFilter<"JournalEntry"> | Date | string
-  }, "id">
+  }, "id" | "reference">
 
   export type JournalEntryOrderByWithAggregationInput = {
     id?: SortOrder
@@ -142910,6 +149481,484 @@ export namespace Prisma {
     updatedAt?: DateTimeWithAggregatesFilter<"TaxBudget"> | Date | string
   }
 
+  export type FbUserTokenWhereInput = {
+    AND?: FbUserTokenWhereInput | FbUserTokenWhereInput[]
+    OR?: FbUserTokenWhereInput[]
+    NOT?: FbUserTokenWhereInput | FbUserTokenWhereInput[]
+    id?: StringFilter<"FbUserToken"> | string
+    fbUserId?: StringFilter<"FbUserToken"> | string
+    name?: StringNullableFilter<"FbUserToken"> | string | null
+    accessToken?: StringFilter<"FbUserToken"> | string
+    tokenExpiresAt?: DateTimeNullableFilter<"FbUserToken"> | Date | string | null
+    scopes?: StringFilter<"FbUserToken"> | string
+    connectedBy?: StringNullableFilter<"FbUserToken"> | string | null
+    createdAt?: DateTimeFilter<"FbUserToken"> | Date | string
+    updatedAt?: DateTimeFilter<"FbUserToken"> | Date | string
+  }
+
+  export type FbUserTokenOrderByWithRelationInput = {
+    id?: SortOrder
+    fbUserId?: SortOrder
+    name?: SortOrderInput | SortOrder
+    accessToken?: SortOrder
+    tokenExpiresAt?: SortOrderInput | SortOrder
+    scopes?: SortOrder
+    connectedBy?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type FbUserTokenWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    fbUserId?: string
+    AND?: FbUserTokenWhereInput | FbUserTokenWhereInput[]
+    OR?: FbUserTokenWhereInput[]
+    NOT?: FbUserTokenWhereInput | FbUserTokenWhereInput[]
+    name?: StringNullableFilter<"FbUserToken"> | string | null
+    accessToken?: StringFilter<"FbUserToken"> | string
+    tokenExpiresAt?: DateTimeNullableFilter<"FbUserToken"> | Date | string | null
+    scopes?: StringFilter<"FbUserToken"> | string
+    connectedBy?: StringNullableFilter<"FbUserToken"> | string | null
+    createdAt?: DateTimeFilter<"FbUserToken"> | Date | string
+    updatedAt?: DateTimeFilter<"FbUserToken"> | Date | string
+  }, "id" | "fbUserId">
+
+  export type FbUserTokenOrderByWithAggregationInput = {
+    id?: SortOrder
+    fbUserId?: SortOrder
+    name?: SortOrderInput | SortOrder
+    accessToken?: SortOrder
+    tokenExpiresAt?: SortOrderInput | SortOrder
+    scopes?: SortOrder
+    connectedBy?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: FbUserTokenCountOrderByAggregateInput
+    _max?: FbUserTokenMaxOrderByAggregateInput
+    _min?: FbUserTokenMinOrderByAggregateInput
+  }
+
+  export type FbUserTokenScalarWhereWithAggregatesInput = {
+    AND?: FbUserTokenScalarWhereWithAggregatesInput | FbUserTokenScalarWhereWithAggregatesInput[]
+    OR?: FbUserTokenScalarWhereWithAggregatesInput[]
+    NOT?: FbUserTokenScalarWhereWithAggregatesInput | FbUserTokenScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"FbUserToken"> | string
+    fbUserId?: StringWithAggregatesFilter<"FbUserToken"> | string
+    name?: StringNullableWithAggregatesFilter<"FbUserToken"> | string | null
+    accessToken?: StringWithAggregatesFilter<"FbUserToken"> | string
+    tokenExpiresAt?: DateTimeNullableWithAggregatesFilter<"FbUserToken"> | Date | string | null
+    scopes?: StringWithAggregatesFilter<"FbUserToken"> | string
+    connectedBy?: StringNullableWithAggregatesFilter<"FbUserToken"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"FbUserToken"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"FbUserToken"> | Date | string
+  }
+
+  export type FbPageWhereInput = {
+    AND?: FbPageWhereInput | FbPageWhereInput[]
+    OR?: FbPageWhereInput[]
+    NOT?: FbPageWhereInput | FbPageWhereInput[]
+    id?: StringFilter<"FbPage"> | string
+    pageId?: StringFilter<"FbPage"> | string
+    name?: StringFilter<"FbPage"> | string
+    category?: StringNullableFilter<"FbPage"> | string | null
+    avatar?: StringNullableFilter<"FbPage"> | string | null
+    fanCount?: IntFilter<"FbPage"> | number
+    accessToken?: StringFilter<"FbPage"> | string
+    tokenExpiresAt?: DateTimeNullableFilter<"FbPage"> | Date | string | null
+    igUserId?: StringNullableFilter<"FbPage"> | string | null
+    adAccountId?: StringNullableFilter<"FbPage"> | string | null
+    webhookSubscribed?: BoolFilter<"FbPage"> | boolean
+    autoReplyEnabled?: BoolFilter<"FbPage"> | boolean
+    status?: StringFilter<"FbPage"> | string
+    connectedBy?: StringNullableFilter<"FbPage"> | string | null
+    lastSyncAt?: DateTimeNullableFilter<"FbPage"> | Date | string | null
+    createdAt?: DateTimeFilter<"FbPage"> | Date | string
+    updatedAt?: DateTimeFilter<"FbPage"> | Date | string
+    scheduledPosts?: FbScheduledPostListRelationFilter
+    commentRules?: FbCommentRuleListRelationFilter
+    autoReplyLogs?: FbAutoReplyLogListRelationFilter
+  }
+
+  export type FbPageOrderByWithRelationInput = {
+    id?: SortOrder
+    pageId?: SortOrder
+    name?: SortOrder
+    category?: SortOrderInput | SortOrder
+    avatar?: SortOrderInput | SortOrder
+    fanCount?: SortOrder
+    accessToken?: SortOrder
+    tokenExpiresAt?: SortOrderInput | SortOrder
+    igUserId?: SortOrderInput | SortOrder
+    adAccountId?: SortOrderInput | SortOrder
+    webhookSubscribed?: SortOrder
+    autoReplyEnabled?: SortOrder
+    status?: SortOrder
+    connectedBy?: SortOrderInput | SortOrder
+    lastSyncAt?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    scheduledPosts?: FbScheduledPostOrderByRelationAggregateInput
+    commentRules?: FbCommentRuleOrderByRelationAggregateInput
+    autoReplyLogs?: FbAutoReplyLogOrderByRelationAggregateInput
+  }
+
+  export type FbPageWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    pageId?: string
+    AND?: FbPageWhereInput | FbPageWhereInput[]
+    OR?: FbPageWhereInput[]
+    NOT?: FbPageWhereInput | FbPageWhereInput[]
+    name?: StringFilter<"FbPage"> | string
+    category?: StringNullableFilter<"FbPage"> | string | null
+    avatar?: StringNullableFilter<"FbPage"> | string | null
+    fanCount?: IntFilter<"FbPage"> | number
+    accessToken?: StringFilter<"FbPage"> | string
+    tokenExpiresAt?: DateTimeNullableFilter<"FbPage"> | Date | string | null
+    igUserId?: StringNullableFilter<"FbPage"> | string | null
+    adAccountId?: StringNullableFilter<"FbPage"> | string | null
+    webhookSubscribed?: BoolFilter<"FbPage"> | boolean
+    autoReplyEnabled?: BoolFilter<"FbPage"> | boolean
+    status?: StringFilter<"FbPage"> | string
+    connectedBy?: StringNullableFilter<"FbPage"> | string | null
+    lastSyncAt?: DateTimeNullableFilter<"FbPage"> | Date | string | null
+    createdAt?: DateTimeFilter<"FbPage"> | Date | string
+    updatedAt?: DateTimeFilter<"FbPage"> | Date | string
+    scheduledPosts?: FbScheduledPostListRelationFilter
+    commentRules?: FbCommentRuleListRelationFilter
+    autoReplyLogs?: FbAutoReplyLogListRelationFilter
+  }, "id" | "pageId">
+
+  export type FbPageOrderByWithAggregationInput = {
+    id?: SortOrder
+    pageId?: SortOrder
+    name?: SortOrder
+    category?: SortOrderInput | SortOrder
+    avatar?: SortOrderInput | SortOrder
+    fanCount?: SortOrder
+    accessToken?: SortOrder
+    tokenExpiresAt?: SortOrderInput | SortOrder
+    igUserId?: SortOrderInput | SortOrder
+    adAccountId?: SortOrderInput | SortOrder
+    webhookSubscribed?: SortOrder
+    autoReplyEnabled?: SortOrder
+    status?: SortOrder
+    connectedBy?: SortOrderInput | SortOrder
+    lastSyncAt?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: FbPageCountOrderByAggregateInput
+    _avg?: FbPageAvgOrderByAggregateInput
+    _max?: FbPageMaxOrderByAggregateInput
+    _min?: FbPageMinOrderByAggregateInput
+    _sum?: FbPageSumOrderByAggregateInput
+  }
+
+  export type FbPageScalarWhereWithAggregatesInput = {
+    AND?: FbPageScalarWhereWithAggregatesInput | FbPageScalarWhereWithAggregatesInput[]
+    OR?: FbPageScalarWhereWithAggregatesInput[]
+    NOT?: FbPageScalarWhereWithAggregatesInput | FbPageScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"FbPage"> | string
+    pageId?: StringWithAggregatesFilter<"FbPage"> | string
+    name?: StringWithAggregatesFilter<"FbPage"> | string
+    category?: StringNullableWithAggregatesFilter<"FbPage"> | string | null
+    avatar?: StringNullableWithAggregatesFilter<"FbPage"> | string | null
+    fanCount?: IntWithAggregatesFilter<"FbPage"> | number
+    accessToken?: StringWithAggregatesFilter<"FbPage"> | string
+    tokenExpiresAt?: DateTimeNullableWithAggregatesFilter<"FbPage"> | Date | string | null
+    igUserId?: StringNullableWithAggregatesFilter<"FbPage"> | string | null
+    adAccountId?: StringNullableWithAggregatesFilter<"FbPage"> | string | null
+    webhookSubscribed?: BoolWithAggregatesFilter<"FbPage"> | boolean
+    autoReplyEnabled?: BoolWithAggregatesFilter<"FbPage"> | boolean
+    status?: StringWithAggregatesFilter<"FbPage"> | string
+    connectedBy?: StringNullableWithAggregatesFilter<"FbPage"> | string | null
+    lastSyncAt?: DateTimeNullableWithAggregatesFilter<"FbPage"> | Date | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"FbPage"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"FbPage"> | Date | string
+  }
+
+  export type FbScheduledPostWhereInput = {
+    AND?: FbScheduledPostWhereInput | FbScheduledPostWhereInput[]
+    OR?: FbScheduledPostWhereInput[]
+    NOT?: FbScheduledPostWhereInput | FbScheduledPostWhereInput[]
+    id?: StringFilter<"FbScheduledPost"> | string
+    pageId?: StringFilter<"FbScheduledPost"> | string
+    fbPostId?: StringNullableFilter<"FbScheduledPost"> | string | null
+    message?: StringFilter<"FbScheduledPost"> | string
+    mediaType?: StringFilter<"FbScheduledPost"> | string
+    mediaUrls?: StringFilter<"FbScheduledPost"> | string
+    linkUrl?: StringNullableFilter<"FbScheduledPost"> | string | null
+    scheduledAt?: DateTimeFilter<"FbScheduledPost"> | Date | string
+    status?: StringFilter<"FbScheduledPost"> | string
+    errorMessage?: StringNullableFilter<"FbScheduledPost"> | string | null
+    publishedAt?: DateTimeNullableFilter<"FbScheduledPost"> | Date | string | null
+    createdBy?: StringNullableFilter<"FbScheduledPost"> | string | null
+    createdAt?: DateTimeFilter<"FbScheduledPost"> | Date | string
+    updatedAt?: DateTimeFilter<"FbScheduledPost"> | Date | string
+    page?: XOR<FbPageScalarRelationFilter, FbPageWhereInput>
+  }
+
+  export type FbScheduledPostOrderByWithRelationInput = {
+    id?: SortOrder
+    pageId?: SortOrder
+    fbPostId?: SortOrderInput | SortOrder
+    message?: SortOrder
+    mediaType?: SortOrder
+    mediaUrls?: SortOrder
+    linkUrl?: SortOrderInput | SortOrder
+    scheduledAt?: SortOrder
+    status?: SortOrder
+    errorMessage?: SortOrderInput | SortOrder
+    publishedAt?: SortOrderInput | SortOrder
+    createdBy?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    page?: FbPageOrderByWithRelationInput
+  }
+
+  export type FbScheduledPostWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: FbScheduledPostWhereInput | FbScheduledPostWhereInput[]
+    OR?: FbScheduledPostWhereInput[]
+    NOT?: FbScheduledPostWhereInput | FbScheduledPostWhereInput[]
+    pageId?: StringFilter<"FbScheduledPost"> | string
+    fbPostId?: StringNullableFilter<"FbScheduledPost"> | string | null
+    message?: StringFilter<"FbScheduledPost"> | string
+    mediaType?: StringFilter<"FbScheduledPost"> | string
+    mediaUrls?: StringFilter<"FbScheduledPost"> | string
+    linkUrl?: StringNullableFilter<"FbScheduledPost"> | string | null
+    scheduledAt?: DateTimeFilter<"FbScheduledPost"> | Date | string
+    status?: StringFilter<"FbScheduledPost"> | string
+    errorMessage?: StringNullableFilter<"FbScheduledPost"> | string | null
+    publishedAt?: DateTimeNullableFilter<"FbScheduledPost"> | Date | string | null
+    createdBy?: StringNullableFilter<"FbScheduledPost"> | string | null
+    createdAt?: DateTimeFilter<"FbScheduledPost"> | Date | string
+    updatedAt?: DateTimeFilter<"FbScheduledPost"> | Date | string
+    page?: XOR<FbPageScalarRelationFilter, FbPageWhereInput>
+  }, "id">
+
+  export type FbScheduledPostOrderByWithAggregationInput = {
+    id?: SortOrder
+    pageId?: SortOrder
+    fbPostId?: SortOrderInput | SortOrder
+    message?: SortOrder
+    mediaType?: SortOrder
+    mediaUrls?: SortOrder
+    linkUrl?: SortOrderInput | SortOrder
+    scheduledAt?: SortOrder
+    status?: SortOrder
+    errorMessage?: SortOrderInput | SortOrder
+    publishedAt?: SortOrderInput | SortOrder
+    createdBy?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: FbScheduledPostCountOrderByAggregateInput
+    _max?: FbScheduledPostMaxOrderByAggregateInput
+    _min?: FbScheduledPostMinOrderByAggregateInput
+  }
+
+  export type FbScheduledPostScalarWhereWithAggregatesInput = {
+    AND?: FbScheduledPostScalarWhereWithAggregatesInput | FbScheduledPostScalarWhereWithAggregatesInput[]
+    OR?: FbScheduledPostScalarWhereWithAggregatesInput[]
+    NOT?: FbScheduledPostScalarWhereWithAggregatesInput | FbScheduledPostScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"FbScheduledPost"> | string
+    pageId?: StringWithAggregatesFilter<"FbScheduledPost"> | string
+    fbPostId?: StringNullableWithAggregatesFilter<"FbScheduledPost"> | string | null
+    message?: StringWithAggregatesFilter<"FbScheduledPost"> | string
+    mediaType?: StringWithAggregatesFilter<"FbScheduledPost"> | string
+    mediaUrls?: StringWithAggregatesFilter<"FbScheduledPost"> | string
+    linkUrl?: StringNullableWithAggregatesFilter<"FbScheduledPost"> | string | null
+    scheduledAt?: DateTimeWithAggregatesFilter<"FbScheduledPost"> | Date | string
+    status?: StringWithAggregatesFilter<"FbScheduledPost"> | string
+    errorMessage?: StringNullableWithAggregatesFilter<"FbScheduledPost"> | string | null
+    publishedAt?: DateTimeNullableWithAggregatesFilter<"FbScheduledPost"> | Date | string | null
+    createdBy?: StringNullableWithAggregatesFilter<"FbScheduledPost"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"FbScheduledPost"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"FbScheduledPost"> | Date | string
+  }
+
+  export type FbCommentRuleWhereInput = {
+    AND?: FbCommentRuleWhereInput | FbCommentRuleWhereInput[]
+    OR?: FbCommentRuleWhereInput[]
+    NOT?: FbCommentRuleWhereInput | FbCommentRuleWhereInput[]
+    id?: StringFilter<"FbCommentRule"> | string
+    pageId?: StringFilter<"FbCommentRule"> | string
+    name?: StringFilter<"FbCommentRule"> | string
+    keyword?: StringFilter<"FbCommentRule"> | string
+    matchType?: StringFilter<"FbCommentRule"> | string
+    replyText?: StringFilter<"FbCommentRule"> | string
+    privateReply?: BoolFilter<"FbCommentRule"> | boolean
+    hideComment?: BoolFilter<"FbCommentRule"> | boolean
+    enabled?: BoolFilter<"FbCommentRule"> | boolean
+    priority?: IntFilter<"FbCommentRule"> | number
+    createdAt?: DateTimeFilter<"FbCommentRule"> | Date | string
+    updatedAt?: DateTimeFilter<"FbCommentRule"> | Date | string
+    page?: XOR<FbPageScalarRelationFilter, FbPageWhereInput>
+  }
+
+  export type FbCommentRuleOrderByWithRelationInput = {
+    id?: SortOrder
+    pageId?: SortOrder
+    name?: SortOrder
+    keyword?: SortOrder
+    matchType?: SortOrder
+    replyText?: SortOrder
+    privateReply?: SortOrder
+    hideComment?: SortOrder
+    enabled?: SortOrder
+    priority?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    page?: FbPageOrderByWithRelationInput
+  }
+
+  export type FbCommentRuleWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: FbCommentRuleWhereInput | FbCommentRuleWhereInput[]
+    OR?: FbCommentRuleWhereInput[]
+    NOT?: FbCommentRuleWhereInput | FbCommentRuleWhereInput[]
+    pageId?: StringFilter<"FbCommentRule"> | string
+    name?: StringFilter<"FbCommentRule"> | string
+    keyword?: StringFilter<"FbCommentRule"> | string
+    matchType?: StringFilter<"FbCommentRule"> | string
+    replyText?: StringFilter<"FbCommentRule"> | string
+    privateReply?: BoolFilter<"FbCommentRule"> | boolean
+    hideComment?: BoolFilter<"FbCommentRule"> | boolean
+    enabled?: BoolFilter<"FbCommentRule"> | boolean
+    priority?: IntFilter<"FbCommentRule"> | number
+    createdAt?: DateTimeFilter<"FbCommentRule"> | Date | string
+    updatedAt?: DateTimeFilter<"FbCommentRule"> | Date | string
+    page?: XOR<FbPageScalarRelationFilter, FbPageWhereInput>
+  }, "id">
+
+  export type FbCommentRuleOrderByWithAggregationInput = {
+    id?: SortOrder
+    pageId?: SortOrder
+    name?: SortOrder
+    keyword?: SortOrder
+    matchType?: SortOrder
+    replyText?: SortOrder
+    privateReply?: SortOrder
+    hideComment?: SortOrder
+    enabled?: SortOrder
+    priority?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: FbCommentRuleCountOrderByAggregateInput
+    _avg?: FbCommentRuleAvgOrderByAggregateInput
+    _max?: FbCommentRuleMaxOrderByAggregateInput
+    _min?: FbCommentRuleMinOrderByAggregateInput
+    _sum?: FbCommentRuleSumOrderByAggregateInput
+  }
+
+  export type FbCommentRuleScalarWhereWithAggregatesInput = {
+    AND?: FbCommentRuleScalarWhereWithAggregatesInput | FbCommentRuleScalarWhereWithAggregatesInput[]
+    OR?: FbCommentRuleScalarWhereWithAggregatesInput[]
+    NOT?: FbCommentRuleScalarWhereWithAggregatesInput | FbCommentRuleScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"FbCommentRule"> | string
+    pageId?: StringWithAggregatesFilter<"FbCommentRule"> | string
+    name?: StringWithAggregatesFilter<"FbCommentRule"> | string
+    keyword?: StringWithAggregatesFilter<"FbCommentRule"> | string
+    matchType?: StringWithAggregatesFilter<"FbCommentRule"> | string
+    replyText?: StringWithAggregatesFilter<"FbCommentRule"> | string
+    privateReply?: BoolWithAggregatesFilter<"FbCommentRule"> | boolean
+    hideComment?: BoolWithAggregatesFilter<"FbCommentRule"> | boolean
+    enabled?: BoolWithAggregatesFilter<"FbCommentRule"> | boolean
+    priority?: IntWithAggregatesFilter<"FbCommentRule"> | number
+    createdAt?: DateTimeWithAggregatesFilter<"FbCommentRule"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"FbCommentRule"> | Date | string
+  }
+
+  export type FbAutoReplyLogWhereInput = {
+    AND?: FbAutoReplyLogWhereInput | FbAutoReplyLogWhereInput[]
+    OR?: FbAutoReplyLogWhereInput[]
+    NOT?: FbAutoReplyLogWhereInput | FbAutoReplyLogWhereInput[]
+    id?: StringFilter<"FbAutoReplyLog"> | string
+    pageId?: StringFilter<"FbAutoReplyLog"> | string
+    commentId?: StringFilter<"FbAutoReplyLog"> | string
+    ruleId?: StringNullableFilter<"FbAutoReplyLog"> | string | null
+    postId?: StringNullableFilter<"FbAutoReplyLog"> | string | null
+    fromName?: StringNullableFilter<"FbAutoReplyLog"> | string | null
+    commentMsg?: StringNullableFilter<"FbAutoReplyLog"> | string | null
+    action?: StringFilter<"FbAutoReplyLog"> | string
+    replyText?: StringNullableFilter<"FbAutoReplyLog"> | string | null
+    success?: BoolFilter<"FbAutoReplyLog"> | boolean
+    errorMessage?: StringNullableFilter<"FbAutoReplyLog"> | string | null
+    createdAt?: DateTimeFilter<"FbAutoReplyLog"> | Date | string
+    page?: XOR<FbPageScalarRelationFilter, FbPageWhereInput>
+  }
+
+  export type FbAutoReplyLogOrderByWithRelationInput = {
+    id?: SortOrder
+    pageId?: SortOrder
+    commentId?: SortOrder
+    ruleId?: SortOrderInput | SortOrder
+    postId?: SortOrderInput | SortOrder
+    fromName?: SortOrderInput | SortOrder
+    commentMsg?: SortOrderInput | SortOrder
+    action?: SortOrder
+    replyText?: SortOrderInput | SortOrder
+    success?: SortOrder
+    errorMessage?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    page?: FbPageOrderByWithRelationInput
+  }
+
+  export type FbAutoReplyLogWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    pageId_commentId?: FbAutoReplyLogPageIdCommentIdCompoundUniqueInput
+    AND?: FbAutoReplyLogWhereInput | FbAutoReplyLogWhereInput[]
+    OR?: FbAutoReplyLogWhereInput[]
+    NOT?: FbAutoReplyLogWhereInput | FbAutoReplyLogWhereInput[]
+    pageId?: StringFilter<"FbAutoReplyLog"> | string
+    commentId?: StringFilter<"FbAutoReplyLog"> | string
+    ruleId?: StringNullableFilter<"FbAutoReplyLog"> | string | null
+    postId?: StringNullableFilter<"FbAutoReplyLog"> | string | null
+    fromName?: StringNullableFilter<"FbAutoReplyLog"> | string | null
+    commentMsg?: StringNullableFilter<"FbAutoReplyLog"> | string | null
+    action?: StringFilter<"FbAutoReplyLog"> | string
+    replyText?: StringNullableFilter<"FbAutoReplyLog"> | string | null
+    success?: BoolFilter<"FbAutoReplyLog"> | boolean
+    errorMessage?: StringNullableFilter<"FbAutoReplyLog"> | string | null
+    createdAt?: DateTimeFilter<"FbAutoReplyLog"> | Date | string
+    page?: XOR<FbPageScalarRelationFilter, FbPageWhereInput>
+  }, "id" | "pageId_commentId">
+
+  export type FbAutoReplyLogOrderByWithAggregationInput = {
+    id?: SortOrder
+    pageId?: SortOrder
+    commentId?: SortOrder
+    ruleId?: SortOrderInput | SortOrder
+    postId?: SortOrderInput | SortOrder
+    fromName?: SortOrderInput | SortOrder
+    commentMsg?: SortOrderInput | SortOrder
+    action?: SortOrder
+    replyText?: SortOrderInput | SortOrder
+    success?: SortOrder
+    errorMessage?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    _count?: FbAutoReplyLogCountOrderByAggregateInput
+    _max?: FbAutoReplyLogMaxOrderByAggregateInput
+    _min?: FbAutoReplyLogMinOrderByAggregateInput
+  }
+
+  export type FbAutoReplyLogScalarWhereWithAggregatesInput = {
+    AND?: FbAutoReplyLogScalarWhereWithAggregatesInput | FbAutoReplyLogScalarWhereWithAggregatesInput[]
+    OR?: FbAutoReplyLogScalarWhereWithAggregatesInput[]
+    NOT?: FbAutoReplyLogScalarWhereWithAggregatesInput | FbAutoReplyLogScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"FbAutoReplyLog"> | string
+    pageId?: StringWithAggregatesFilter<"FbAutoReplyLog"> | string
+    commentId?: StringWithAggregatesFilter<"FbAutoReplyLog"> | string
+    ruleId?: StringNullableWithAggregatesFilter<"FbAutoReplyLog"> | string | null
+    postId?: StringNullableWithAggregatesFilter<"FbAutoReplyLog"> | string | null
+    fromName?: StringNullableWithAggregatesFilter<"FbAutoReplyLog"> | string | null
+    commentMsg?: StringNullableWithAggregatesFilter<"FbAutoReplyLog"> | string | null
+    action?: StringWithAggregatesFilter<"FbAutoReplyLog"> | string
+    replyText?: StringNullableWithAggregatesFilter<"FbAutoReplyLog"> | string | null
+    success?: BoolWithAggregatesFilter<"FbAutoReplyLog"> | boolean
+    errorMessage?: StringNullableWithAggregatesFilter<"FbAutoReplyLog"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"FbAutoReplyLog"> | Date | string
+  }
+
   export type BranchCreateInput = {
     id?: string
     name: string
@@ -144343,6 +151392,7 @@ export namespace Prisma {
     discount?: number
     discountType?: string | null
     lineTotal: number
+    baseQuantity?: number
     transaction: TransactionCreateNestedOneWithoutItemsInput
     product: ProductCreateNestedOneWithoutTransactionItemsInput
   }
@@ -144358,6 +151408,7 @@ export namespace Prisma {
     discount?: number
     discountType?: string | null
     lineTotal: number
+    baseQuantity?: number
   }
 
   export type TransactionItemUpdateInput = {
@@ -144369,6 +151420,7 @@ export namespace Prisma {
     discount?: FloatFieldUpdateOperationsInput | number
     discountType?: NullableStringFieldUpdateOperationsInput | string | null
     lineTotal?: FloatFieldUpdateOperationsInput | number
+    baseQuantity?: FloatFieldUpdateOperationsInput | number
     transaction?: TransactionUpdateOneRequiredWithoutItemsNestedInput
     product?: ProductUpdateOneRequiredWithoutTransactionItemsNestedInput
   }
@@ -144384,6 +151436,7 @@ export namespace Prisma {
     discount?: FloatFieldUpdateOperationsInput | number
     discountType?: NullableStringFieldUpdateOperationsInput | string | null
     lineTotal?: FloatFieldUpdateOperationsInput | number
+    baseQuantity?: FloatFieldUpdateOperationsInput | number
   }
 
   export type TransactionItemCreateManyInput = {
@@ -144397,6 +151450,7 @@ export namespace Prisma {
     discount?: number
     discountType?: string | null
     lineTotal: number
+    baseQuantity?: number
   }
 
   export type TransactionItemUpdateManyMutationInput = {
@@ -144408,6 +151462,7 @@ export namespace Prisma {
     discount?: FloatFieldUpdateOperationsInput | number
     discountType?: NullableStringFieldUpdateOperationsInput | string | null
     lineTotal?: FloatFieldUpdateOperationsInput | number
+    baseQuantity?: FloatFieldUpdateOperationsInput | number
   }
 
   export type TransactionItemUncheckedUpdateManyInput = {
@@ -144421,6 +151476,7 @@ export namespace Prisma {
     discount?: FloatFieldUpdateOperationsInput | number
     discountType?: NullableStringFieldUpdateOperationsInput | string | null
     lineTotal?: FloatFieldUpdateOperationsInput | number
+    baseQuantity?: FloatFieldUpdateOperationsInput | number
   }
 
   export type PaymentCreateInput = {
@@ -144640,6 +151696,8 @@ export namespace Prisma {
     status?: string
     paidAmount?: number
     paymentStatus?: string
+    dueDate?: Date | string | null
+    paymentTerm?: string | null
     note?: string | null
     branchId?: string | null
     userName: string
@@ -144660,6 +151718,8 @@ export namespace Prisma {
     status?: string
     paidAmount?: number
     paymentStatus?: string
+    dueDate?: Date | string | null
+    paymentTerm?: string | null
     note?: string | null
     branchId?: string | null
     userId: string
@@ -144680,6 +151740,8 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     paidAmount?: FloatFieldUpdateOperationsInput | number
     paymentStatus?: StringFieldUpdateOperationsInput | string
+    dueDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    paymentTerm?: NullableStringFieldUpdateOperationsInput | string | null
     note?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     userName?: StringFieldUpdateOperationsInput | string
@@ -144700,6 +151762,8 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     paidAmount?: FloatFieldUpdateOperationsInput | number
     paymentStatus?: StringFieldUpdateOperationsInput | string
+    dueDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    paymentTerm?: NullableStringFieldUpdateOperationsInput | string | null
     note?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     userId?: StringFieldUpdateOperationsInput | string
@@ -144720,6 +151784,8 @@ export namespace Prisma {
     status?: string
     paidAmount?: number
     paymentStatus?: string
+    dueDate?: Date | string | null
+    paymentTerm?: string | null
     note?: string | null
     branchId?: string | null
     userId: string
@@ -144739,6 +151805,8 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     paidAmount?: FloatFieldUpdateOperationsInput | number
     paymentStatus?: StringFieldUpdateOperationsInput | string
+    dueDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    paymentTerm?: NullableStringFieldUpdateOperationsInput | string | null
     note?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     userName?: StringFieldUpdateOperationsInput | string
@@ -144757,6 +151825,8 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     paidAmount?: FloatFieldUpdateOperationsInput | number
     paymentStatus?: StringFieldUpdateOperationsInput | string
+    dueDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    paymentTerm?: NullableStringFieldUpdateOperationsInput | string | null
     note?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     userId?: StringFieldUpdateOperationsInput | string
@@ -150918,6 +157988,8 @@ export namespace Prisma {
     platformFee?: number
     platformFeeRate?: number
     netRevenue?: number
+    adsVoucherDiscount?: number
+    stockDeducted?: boolean
     syncedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -150954,6 +158026,8 @@ export namespace Prisma {
     platformFee?: number
     platformFeeRate?: number
     netRevenue?: number
+    adsVoucherDiscount?: number
+    stockDeducted?: boolean
     syncedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -150988,6 +158062,8 @@ export namespace Prisma {
     platformFee?: FloatFieldUpdateOperationsInput | number
     platformFeeRate?: FloatFieldUpdateOperationsInput | number
     netRevenue?: FloatFieldUpdateOperationsInput | number
+    adsVoucherDiscount?: FloatFieldUpdateOperationsInput | number
+    stockDeducted?: BoolFieldUpdateOperationsInput | boolean
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -151024,6 +158100,8 @@ export namespace Prisma {
     platformFee?: FloatFieldUpdateOperationsInput | number
     platformFeeRate?: FloatFieldUpdateOperationsInput | number
     netRevenue?: FloatFieldUpdateOperationsInput | number
+    adsVoucherDiscount?: FloatFieldUpdateOperationsInput | number
+    stockDeducted?: BoolFieldUpdateOperationsInput | boolean
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -151059,6 +158137,8 @@ export namespace Prisma {
     platformFee?: number
     platformFeeRate?: number
     netRevenue?: number
+    adsVoucherDiscount?: number
+    stockDeducted?: boolean
     syncedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -151092,6 +158172,8 @@ export namespace Prisma {
     platformFee?: FloatFieldUpdateOperationsInput | number
     platformFeeRate?: FloatFieldUpdateOperationsInput | number
     netRevenue?: FloatFieldUpdateOperationsInput | number
+    adsVoucherDiscount?: FloatFieldUpdateOperationsInput | number
+    stockDeducted?: BoolFieldUpdateOperationsInput | boolean
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -151126,6 +158208,8 @@ export namespace Prisma {
     platformFee?: FloatFieldUpdateOperationsInput | number
     platformFeeRate?: FloatFieldUpdateOperationsInput | number
     netRevenue?: FloatFieldUpdateOperationsInput | number
+    adsVoucherDiscount?: FloatFieldUpdateOperationsInput | number
+    stockDeducted?: BoolFieldUpdateOperationsInput | boolean
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -154871,6 +161955,568 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type FbUserTokenCreateInput = {
+    id?: string
+    fbUserId: string
+    name?: string | null
+    accessToken: string
+    tokenExpiresAt?: Date | string | null
+    scopes?: string
+    connectedBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FbUserTokenUncheckedCreateInput = {
+    id?: string
+    fbUserId: string
+    name?: string | null
+    accessToken: string
+    tokenExpiresAt?: Date | string | null
+    scopes?: string
+    connectedBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FbUserTokenUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    fbUserId?: StringFieldUpdateOperationsInput | string
+    name?: NullableStringFieldUpdateOperationsInput | string | null
+    accessToken?: StringFieldUpdateOperationsInput | string
+    tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    scopes?: StringFieldUpdateOperationsInput | string
+    connectedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FbUserTokenUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    fbUserId?: StringFieldUpdateOperationsInput | string
+    name?: NullableStringFieldUpdateOperationsInput | string | null
+    accessToken?: StringFieldUpdateOperationsInput | string
+    tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    scopes?: StringFieldUpdateOperationsInput | string
+    connectedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FbUserTokenCreateManyInput = {
+    id?: string
+    fbUserId: string
+    name?: string | null
+    accessToken: string
+    tokenExpiresAt?: Date | string | null
+    scopes?: string
+    connectedBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FbUserTokenUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    fbUserId?: StringFieldUpdateOperationsInput | string
+    name?: NullableStringFieldUpdateOperationsInput | string | null
+    accessToken?: StringFieldUpdateOperationsInput | string
+    tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    scopes?: StringFieldUpdateOperationsInput | string
+    connectedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FbUserTokenUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    fbUserId?: StringFieldUpdateOperationsInput | string
+    name?: NullableStringFieldUpdateOperationsInput | string | null
+    accessToken?: StringFieldUpdateOperationsInput | string
+    tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    scopes?: StringFieldUpdateOperationsInput | string
+    connectedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FbPageCreateInput = {
+    id?: string
+    pageId: string
+    name: string
+    category?: string | null
+    avatar?: string | null
+    fanCount?: number
+    accessToken: string
+    tokenExpiresAt?: Date | string | null
+    igUserId?: string | null
+    adAccountId?: string | null
+    webhookSubscribed?: boolean
+    autoReplyEnabled?: boolean
+    status?: string
+    connectedBy?: string | null
+    lastSyncAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    scheduledPosts?: FbScheduledPostCreateNestedManyWithoutPageInput
+    commentRules?: FbCommentRuleCreateNestedManyWithoutPageInput
+    autoReplyLogs?: FbAutoReplyLogCreateNestedManyWithoutPageInput
+  }
+
+  export type FbPageUncheckedCreateInput = {
+    id?: string
+    pageId: string
+    name: string
+    category?: string | null
+    avatar?: string | null
+    fanCount?: number
+    accessToken: string
+    tokenExpiresAt?: Date | string | null
+    igUserId?: string | null
+    adAccountId?: string | null
+    webhookSubscribed?: boolean
+    autoReplyEnabled?: boolean
+    status?: string
+    connectedBy?: string | null
+    lastSyncAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    scheduledPosts?: FbScheduledPostUncheckedCreateNestedManyWithoutPageInput
+    commentRules?: FbCommentRuleUncheckedCreateNestedManyWithoutPageInput
+    autoReplyLogs?: FbAutoReplyLogUncheckedCreateNestedManyWithoutPageInput
+  }
+
+  export type FbPageUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    pageId?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    category?: NullableStringFieldUpdateOperationsInput | string | null
+    avatar?: NullableStringFieldUpdateOperationsInput | string | null
+    fanCount?: IntFieldUpdateOperationsInput | number
+    accessToken?: StringFieldUpdateOperationsInput | string
+    tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    igUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    adAccountId?: NullableStringFieldUpdateOperationsInput | string | null
+    webhookSubscribed?: BoolFieldUpdateOperationsInput | boolean
+    autoReplyEnabled?: BoolFieldUpdateOperationsInput | boolean
+    status?: StringFieldUpdateOperationsInput | string
+    connectedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    scheduledPosts?: FbScheduledPostUpdateManyWithoutPageNestedInput
+    commentRules?: FbCommentRuleUpdateManyWithoutPageNestedInput
+    autoReplyLogs?: FbAutoReplyLogUpdateManyWithoutPageNestedInput
+  }
+
+  export type FbPageUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    pageId?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    category?: NullableStringFieldUpdateOperationsInput | string | null
+    avatar?: NullableStringFieldUpdateOperationsInput | string | null
+    fanCount?: IntFieldUpdateOperationsInput | number
+    accessToken?: StringFieldUpdateOperationsInput | string
+    tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    igUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    adAccountId?: NullableStringFieldUpdateOperationsInput | string | null
+    webhookSubscribed?: BoolFieldUpdateOperationsInput | boolean
+    autoReplyEnabled?: BoolFieldUpdateOperationsInput | boolean
+    status?: StringFieldUpdateOperationsInput | string
+    connectedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    scheduledPosts?: FbScheduledPostUncheckedUpdateManyWithoutPageNestedInput
+    commentRules?: FbCommentRuleUncheckedUpdateManyWithoutPageNestedInput
+    autoReplyLogs?: FbAutoReplyLogUncheckedUpdateManyWithoutPageNestedInput
+  }
+
+  export type FbPageCreateManyInput = {
+    id?: string
+    pageId: string
+    name: string
+    category?: string | null
+    avatar?: string | null
+    fanCount?: number
+    accessToken: string
+    tokenExpiresAt?: Date | string | null
+    igUserId?: string | null
+    adAccountId?: string | null
+    webhookSubscribed?: boolean
+    autoReplyEnabled?: boolean
+    status?: string
+    connectedBy?: string | null
+    lastSyncAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FbPageUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    pageId?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    category?: NullableStringFieldUpdateOperationsInput | string | null
+    avatar?: NullableStringFieldUpdateOperationsInput | string | null
+    fanCount?: IntFieldUpdateOperationsInput | number
+    accessToken?: StringFieldUpdateOperationsInput | string
+    tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    igUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    adAccountId?: NullableStringFieldUpdateOperationsInput | string | null
+    webhookSubscribed?: BoolFieldUpdateOperationsInput | boolean
+    autoReplyEnabled?: BoolFieldUpdateOperationsInput | boolean
+    status?: StringFieldUpdateOperationsInput | string
+    connectedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FbPageUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    pageId?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    category?: NullableStringFieldUpdateOperationsInput | string | null
+    avatar?: NullableStringFieldUpdateOperationsInput | string | null
+    fanCount?: IntFieldUpdateOperationsInput | number
+    accessToken?: StringFieldUpdateOperationsInput | string
+    tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    igUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    adAccountId?: NullableStringFieldUpdateOperationsInput | string | null
+    webhookSubscribed?: BoolFieldUpdateOperationsInput | boolean
+    autoReplyEnabled?: BoolFieldUpdateOperationsInput | boolean
+    status?: StringFieldUpdateOperationsInput | string
+    connectedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FbScheduledPostCreateInput = {
+    id?: string
+    fbPostId?: string | null
+    message?: string
+    mediaType?: string
+    mediaUrls?: string
+    linkUrl?: string | null
+    scheduledAt: Date | string
+    status?: string
+    errorMessage?: string | null
+    publishedAt?: Date | string | null
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    page: FbPageCreateNestedOneWithoutScheduledPostsInput
+  }
+
+  export type FbScheduledPostUncheckedCreateInput = {
+    id?: string
+    pageId: string
+    fbPostId?: string | null
+    message?: string
+    mediaType?: string
+    mediaUrls?: string
+    linkUrl?: string | null
+    scheduledAt: Date | string
+    status?: string
+    errorMessage?: string | null
+    publishedAt?: Date | string | null
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FbScheduledPostUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    fbPostId?: NullableStringFieldUpdateOperationsInput | string | null
+    message?: StringFieldUpdateOperationsInput | string
+    mediaType?: StringFieldUpdateOperationsInput | string
+    mediaUrls?: StringFieldUpdateOperationsInput | string
+    linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    scheduledAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    status?: StringFieldUpdateOperationsInput | string
+    errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    page?: FbPageUpdateOneRequiredWithoutScheduledPostsNestedInput
+  }
+
+  export type FbScheduledPostUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    pageId?: StringFieldUpdateOperationsInput | string
+    fbPostId?: NullableStringFieldUpdateOperationsInput | string | null
+    message?: StringFieldUpdateOperationsInput | string
+    mediaType?: StringFieldUpdateOperationsInput | string
+    mediaUrls?: StringFieldUpdateOperationsInput | string
+    linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    scheduledAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    status?: StringFieldUpdateOperationsInput | string
+    errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FbScheduledPostCreateManyInput = {
+    id?: string
+    pageId: string
+    fbPostId?: string | null
+    message?: string
+    mediaType?: string
+    mediaUrls?: string
+    linkUrl?: string | null
+    scheduledAt: Date | string
+    status?: string
+    errorMessage?: string | null
+    publishedAt?: Date | string | null
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FbScheduledPostUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    fbPostId?: NullableStringFieldUpdateOperationsInput | string | null
+    message?: StringFieldUpdateOperationsInput | string
+    mediaType?: StringFieldUpdateOperationsInput | string
+    mediaUrls?: StringFieldUpdateOperationsInput | string
+    linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    scheduledAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    status?: StringFieldUpdateOperationsInput | string
+    errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FbScheduledPostUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    pageId?: StringFieldUpdateOperationsInput | string
+    fbPostId?: NullableStringFieldUpdateOperationsInput | string | null
+    message?: StringFieldUpdateOperationsInput | string
+    mediaType?: StringFieldUpdateOperationsInput | string
+    mediaUrls?: StringFieldUpdateOperationsInput | string
+    linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    scheduledAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    status?: StringFieldUpdateOperationsInput | string
+    errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FbCommentRuleCreateInput = {
+    id?: string
+    name?: string
+    keyword: string
+    matchType?: string
+    replyText: string
+    privateReply?: boolean
+    hideComment?: boolean
+    enabled?: boolean
+    priority?: number
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    page: FbPageCreateNestedOneWithoutCommentRulesInput
+  }
+
+  export type FbCommentRuleUncheckedCreateInput = {
+    id?: string
+    pageId: string
+    name?: string
+    keyword: string
+    matchType?: string
+    replyText: string
+    privateReply?: boolean
+    hideComment?: boolean
+    enabled?: boolean
+    priority?: number
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FbCommentRuleUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    keyword?: StringFieldUpdateOperationsInput | string
+    matchType?: StringFieldUpdateOperationsInput | string
+    replyText?: StringFieldUpdateOperationsInput | string
+    privateReply?: BoolFieldUpdateOperationsInput | boolean
+    hideComment?: BoolFieldUpdateOperationsInput | boolean
+    enabled?: BoolFieldUpdateOperationsInput | boolean
+    priority?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    page?: FbPageUpdateOneRequiredWithoutCommentRulesNestedInput
+  }
+
+  export type FbCommentRuleUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    pageId?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    keyword?: StringFieldUpdateOperationsInput | string
+    matchType?: StringFieldUpdateOperationsInput | string
+    replyText?: StringFieldUpdateOperationsInput | string
+    privateReply?: BoolFieldUpdateOperationsInput | boolean
+    hideComment?: BoolFieldUpdateOperationsInput | boolean
+    enabled?: BoolFieldUpdateOperationsInput | boolean
+    priority?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FbCommentRuleCreateManyInput = {
+    id?: string
+    pageId: string
+    name?: string
+    keyword: string
+    matchType?: string
+    replyText: string
+    privateReply?: boolean
+    hideComment?: boolean
+    enabled?: boolean
+    priority?: number
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FbCommentRuleUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    keyword?: StringFieldUpdateOperationsInput | string
+    matchType?: StringFieldUpdateOperationsInput | string
+    replyText?: StringFieldUpdateOperationsInput | string
+    privateReply?: BoolFieldUpdateOperationsInput | boolean
+    hideComment?: BoolFieldUpdateOperationsInput | boolean
+    enabled?: BoolFieldUpdateOperationsInput | boolean
+    priority?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FbCommentRuleUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    pageId?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    keyword?: StringFieldUpdateOperationsInput | string
+    matchType?: StringFieldUpdateOperationsInput | string
+    replyText?: StringFieldUpdateOperationsInput | string
+    privateReply?: BoolFieldUpdateOperationsInput | boolean
+    hideComment?: BoolFieldUpdateOperationsInput | boolean
+    enabled?: BoolFieldUpdateOperationsInput | boolean
+    priority?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FbAutoReplyLogCreateInput = {
+    id?: string
+    commentId: string
+    ruleId?: string | null
+    postId?: string | null
+    fromName?: string | null
+    commentMsg?: string | null
+    action?: string
+    replyText?: string | null
+    success?: boolean
+    errorMessage?: string | null
+    createdAt?: Date | string
+    page: FbPageCreateNestedOneWithoutAutoReplyLogsInput
+  }
+
+  export type FbAutoReplyLogUncheckedCreateInput = {
+    id?: string
+    pageId: string
+    commentId: string
+    ruleId?: string | null
+    postId?: string | null
+    fromName?: string | null
+    commentMsg?: string | null
+    action?: string
+    replyText?: string | null
+    success?: boolean
+    errorMessage?: string | null
+    createdAt?: Date | string
+  }
+
+  export type FbAutoReplyLogUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    commentId?: StringFieldUpdateOperationsInput | string
+    ruleId?: NullableStringFieldUpdateOperationsInput | string | null
+    postId?: NullableStringFieldUpdateOperationsInput | string | null
+    fromName?: NullableStringFieldUpdateOperationsInput | string | null
+    commentMsg?: NullableStringFieldUpdateOperationsInput | string | null
+    action?: StringFieldUpdateOperationsInput | string
+    replyText?: NullableStringFieldUpdateOperationsInput | string | null
+    success?: BoolFieldUpdateOperationsInput | boolean
+    errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    page?: FbPageUpdateOneRequiredWithoutAutoReplyLogsNestedInput
+  }
+
+  export type FbAutoReplyLogUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    pageId?: StringFieldUpdateOperationsInput | string
+    commentId?: StringFieldUpdateOperationsInput | string
+    ruleId?: NullableStringFieldUpdateOperationsInput | string | null
+    postId?: NullableStringFieldUpdateOperationsInput | string | null
+    fromName?: NullableStringFieldUpdateOperationsInput | string | null
+    commentMsg?: NullableStringFieldUpdateOperationsInput | string | null
+    action?: StringFieldUpdateOperationsInput | string
+    replyText?: NullableStringFieldUpdateOperationsInput | string | null
+    success?: BoolFieldUpdateOperationsInput | boolean
+    errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FbAutoReplyLogCreateManyInput = {
+    id?: string
+    pageId: string
+    commentId: string
+    ruleId?: string | null
+    postId?: string | null
+    fromName?: string | null
+    commentMsg?: string | null
+    action?: string
+    replyText?: string | null
+    success?: boolean
+    errorMessage?: string | null
+    createdAt?: Date | string
+  }
+
+  export type FbAutoReplyLogUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    commentId?: StringFieldUpdateOperationsInput | string
+    ruleId?: NullableStringFieldUpdateOperationsInput | string | null
+    postId?: NullableStringFieldUpdateOperationsInput | string | null
+    fromName?: NullableStringFieldUpdateOperationsInput | string | null
+    commentMsg?: NullableStringFieldUpdateOperationsInput | string | null
+    action?: StringFieldUpdateOperationsInput | string
+    replyText?: NullableStringFieldUpdateOperationsInput | string | null
+    success?: BoolFieldUpdateOperationsInput | boolean
+    errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FbAutoReplyLogUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    pageId?: StringFieldUpdateOperationsInput | string
+    commentId?: StringFieldUpdateOperationsInput | string
+    ruleId?: NullableStringFieldUpdateOperationsInput | string | null
+    postId?: NullableStringFieldUpdateOperationsInput | string | null
+    fromName?: NullableStringFieldUpdateOperationsInput | string | null
+    commentMsg?: NullableStringFieldUpdateOperationsInput | string | null
+    action?: StringFieldUpdateOperationsInput | string
+    replyText?: NullableStringFieldUpdateOperationsInput | string | null
+    success?: BoolFieldUpdateOperationsInput | boolean
+    errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type StringFilter<$PrismaModel = never> = {
     equals?: string | StringFieldRefInput<$PrismaModel>
     in?: string[] | ListStringFieldRefInput<$PrismaModel>
@@ -156008,6 +163654,7 @@ export namespace Prisma {
     discount?: SortOrder
     discountType?: SortOrder
     lineTotal?: SortOrder
+    baseQuantity?: SortOrder
   }
 
   export type TransactionItemAvgOrderByAggregateInput = {
@@ -156015,6 +163662,7 @@ export namespace Prisma {
     unitPrice?: SortOrder
     discount?: SortOrder
     lineTotal?: SortOrder
+    baseQuantity?: SortOrder
   }
 
   export type TransactionItemMaxOrderByAggregateInput = {
@@ -156028,6 +163676,7 @@ export namespace Prisma {
     discount?: SortOrder
     discountType?: SortOrder
     lineTotal?: SortOrder
+    baseQuantity?: SortOrder
   }
 
   export type TransactionItemMinOrderByAggregateInput = {
@@ -156041,6 +163690,7 @@ export namespace Prisma {
     discount?: SortOrder
     discountType?: SortOrder
     lineTotal?: SortOrder
+    baseQuantity?: SortOrder
   }
 
   export type TransactionItemSumOrderByAggregateInput = {
@@ -156048,6 +163698,7 @@ export namespace Prisma {
     unitPrice?: SortOrder
     discount?: SortOrder
     lineTotal?: SortOrder
+    baseQuantity?: SortOrder
   }
 
   export type PaymentCountOrderByAggregateInput = {
@@ -156175,6 +163826,8 @@ export namespace Prisma {
     status?: SortOrder
     paidAmount?: SortOrder
     paymentStatus?: SortOrder
+    dueDate?: SortOrder
+    paymentTerm?: SortOrder
     note?: SortOrder
     branchId?: SortOrder
     userId?: SortOrder
@@ -156200,6 +163853,8 @@ export namespace Prisma {
     status?: SortOrder
     paidAmount?: SortOrder
     paymentStatus?: SortOrder
+    dueDate?: SortOrder
+    paymentTerm?: SortOrder
     note?: SortOrder
     branchId?: SortOrder
     userId?: SortOrder
@@ -156219,6 +163874,8 @@ export namespace Prisma {
     status?: SortOrder
     paidAmount?: SortOrder
     paymentStatus?: SortOrder
+    dueDate?: SortOrder
+    paymentTerm?: SortOrder
     note?: SortOrder
     branchId?: SortOrder
     userId?: SortOrder
@@ -159624,6 +167281,8 @@ export namespace Prisma {
     platformFee?: SortOrder
     platformFeeRate?: SortOrder
     netRevenue?: SortOrder
+    adsVoucherDiscount?: SortOrder
+    stockDeducted?: SortOrder
     syncedAt?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -159637,6 +167296,7 @@ export namespace Prisma {
     platformFee?: SortOrder
     platformFeeRate?: SortOrder
     netRevenue?: SortOrder
+    adsVoucherDiscount?: SortOrder
   }
 
   export type OnlineOrderMaxOrderByAggregateInput = {
@@ -159668,6 +167328,8 @@ export namespace Prisma {
     platformFee?: SortOrder
     platformFeeRate?: SortOrder
     netRevenue?: SortOrder
+    adsVoucherDiscount?: SortOrder
+    stockDeducted?: SortOrder
     syncedAt?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -159702,6 +167364,8 @@ export namespace Prisma {
     platformFee?: SortOrder
     platformFeeRate?: SortOrder
     netRevenue?: SortOrder
+    adsVoucherDiscount?: SortOrder
+    stockDeducted?: SortOrder
     syncedAt?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -159715,6 +167379,7 @@ export namespace Prisma {
     platformFee?: SortOrder
     platformFeeRate?: SortOrder
     netRevenue?: SortOrder
+    adsVoucherDiscount?: SortOrder
   }
 
   export type OnlineChannelScalarRelationFilter = {
@@ -161836,6 +169501,299 @@ export namespace Prisma {
     year?: SortOrder
     month?: SortOrder
     amount?: SortOrder
+  }
+
+  export type FbUserTokenCountOrderByAggregateInput = {
+    id?: SortOrder
+    fbUserId?: SortOrder
+    name?: SortOrder
+    accessToken?: SortOrder
+    tokenExpiresAt?: SortOrder
+    scopes?: SortOrder
+    connectedBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type FbUserTokenMaxOrderByAggregateInput = {
+    id?: SortOrder
+    fbUserId?: SortOrder
+    name?: SortOrder
+    accessToken?: SortOrder
+    tokenExpiresAt?: SortOrder
+    scopes?: SortOrder
+    connectedBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type FbUserTokenMinOrderByAggregateInput = {
+    id?: SortOrder
+    fbUserId?: SortOrder
+    name?: SortOrder
+    accessToken?: SortOrder
+    tokenExpiresAt?: SortOrder
+    scopes?: SortOrder
+    connectedBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type FbScheduledPostListRelationFilter = {
+    every?: FbScheduledPostWhereInput
+    some?: FbScheduledPostWhereInput
+    none?: FbScheduledPostWhereInput
+  }
+
+  export type FbCommentRuleListRelationFilter = {
+    every?: FbCommentRuleWhereInput
+    some?: FbCommentRuleWhereInput
+    none?: FbCommentRuleWhereInput
+  }
+
+  export type FbAutoReplyLogListRelationFilter = {
+    every?: FbAutoReplyLogWhereInput
+    some?: FbAutoReplyLogWhereInput
+    none?: FbAutoReplyLogWhereInput
+  }
+
+  export type FbScheduledPostOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type FbCommentRuleOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type FbAutoReplyLogOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type FbPageCountOrderByAggregateInput = {
+    id?: SortOrder
+    pageId?: SortOrder
+    name?: SortOrder
+    category?: SortOrder
+    avatar?: SortOrder
+    fanCount?: SortOrder
+    accessToken?: SortOrder
+    tokenExpiresAt?: SortOrder
+    igUserId?: SortOrder
+    adAccountId?: SortOrder
+    webhookSubscribed?: SortOrder
+    autoReplyEnabled?: SortOrder
+    status?: SortOrder
+    connectedBy?: SortOrder
+    lastSyncAt?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type FbPageAvgOrderByAggregateInput = {
+    fanCount?: SortOrder
+  }
+
+  export type FbPageMaxOrderByAggregateInput = {
+    id?: SortOrder
+    pageId?: SortOrder
+    name?: SortOrder
+    category?: SortOrder
+    avatar?: SortOrder
+    fanCount?: SortOrder
+    accessToken?: SortOrder
+    tokenExpiresAt?: SortOrder
+    igUserId?: SortOrder
+    adAccountId?: SortOrder
+    webhookSubscribed?: SortOrder
+    autoReplyEnabled?: SortOrder
+    status?: SortOrder
+    connectedBy?: SortOrder
+    lastSyncAt?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type FbPageMinOrderByAggregateInput = {
+    id?: SortOrder
+    pageId?: SortOrder
+    name?: SortOrder
+    category?: SortOrder
+    avatar?: SortOrder
+    fanCount?: SortOrder
+    accessToken?: SortOrder
+    tokenExpiresAt?: SortOrder
+    igUserId?: SortOrder
+    adAccountId?: SortOrder
+    webhookSubscribed?: SortOrder
+    autoReplyEnabled?: SortOrder
+    status?: SortOrder
+    connectedBy?: SortOrder
+    lastSyncAt?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type FbPageSumOrderByAggregateInput = {
+    fanCount?: SortOrder
+  }
+
+  export type FbPageScalarRelationFilter = {
+    is?: FbPageWhereInput
+    isNot?: FbPageWhereInput
+  }
+
+  export type FbScheduledPostCountOrderByAggregateInput = {
+    id?: SortOrder
+    pageId?: SortOrder
+    fbPostId?: SortOrder
+    message?: SortOrder
+    mediaType?: SortOrder
+    mediaUrls?: SortOrder
+    linkUrl?: SortOrder
+    scheduledAt?: SortOrder
+    status?: SortOrder
+    errorMessage?: SortOrder
+    publishedAt?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type FbScheduledPostMaxOrderByAggregateInput = {
+    id?: SortOrder
+    pageId?: SortOrder
+    fbPostId?: SortOrder
+    message?: SortOrder
+    mediaType?: SortOrder
+    mediaUrls?: SortOrder
+    linkUrl?: SortOrder
+    scheduledAt?: SortOrder
+    status?: SortOrder
+    errorMessage?: SortOrder
+    publishedAt?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type FbScheduledPostMinOrderByAggregateInput = {
+    id?: SortOrder
+    pageId?: SortOrder
+    fbPostId?: SortOrder
+    message?: SortOrder
+    mediaType?: SortOrder
+    mediaUrls?: SortOrder
+    linkUrl?: SortOrder
+    scheduledAt?: SortOrder
+    status?: SortOrder
+    errorMessage?: SortOrder
+    publishedAt?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type FbCommentRuleCountOrderByAggregateInput = {
+    id?: SortOrder
+    pageId?: SortOrder
+    name?: SortOrder
+    keyword?: SortOrder
+    matchType?: SortOrder
+    replyText?: SortOrder
+    privateReply?: SortOrder
+    hideComment?: SortOrder
+    enabled?: SortOrder
+    priority?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type FbCommentRuleAvgOrderByAggregateInput = {
+    priority?: SortOrder
+  }
+
+  export type FbCommentRuleMaxOrderByAggregateInput = {
+    id?: SortOrder
+    pageId?: SortOrder
+    name?: SortOrder
+    keyword?: SortOrder
+    matchType?: SortOrder
+    replyText?: SortOrder
+    privateReply?: SortOrder
+    hideComment?: SortOrder
+    enabled?: SortOrder
+    priority?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type FbCommentRuleMinOrderByAggregateInput = {
+    id?: SortOrder
+    pageId?: SortOrder
+    name?: SortOrder
+    keyword?: SortOrder
+    matchType?: SortOrder
+    replyText?: SortOrder
+    privateReply?: SortOrder
+    hideComment?: SortOrder
+    enabled?: SortOrder
+    priority?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type FbCommentRuleSumOrderByAggregateInput = {
+    priority?: SortOrder
+  }
+
+  export type FbAutoReplyLogPageIdCommentIdCompoundUniqueInput = {
+    pageId: string
+    commentId: string
+  }
+
+  export type FbAutoReplyLogCountOrderByAggregateInput = {
+    id?: SortOrder
+    pageId?: SortOrder
+    commentId?: SortOrder
+    ruleId?: SortOrder
+    postId?: SortOrder
+    fromName?: SortOrder
+    commentMsg?: SortOrder
+    action?: SortOrder
+    replyText?: SortOrder
+    success?: SortOrder
+    errorMessage?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type FbAutoReplyLogMaxOrderByAggregateInput = {
+    id?: SortOrder
+    pageId?: SortOrder
+    commentId?: SortOrder
+    ruleId?: SortOrder
+    postId?: SortOrder
+    fromName?: SortOrder
+    commentMsg?: SortOrder
+    action?: SortOrder
+    replyText?: SortOrder
+    success?: SortOrder
+    errorMessage?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type FbAutoReplyLogMinOrderByAggregateInput = {
+    id?: SortOrder
+    pageId?: SortOrder
+    commentId?: SortOrder
+    ruleId?: SortOrder
+    postId?: SortOrder
+    fromName?: SortOrder
+    commentMsg?: SortOrder
+    action?: SortOrder
+    replyText?: SortOrder
+    success?: SortOrder
+    errorMessage?: SortOrder
+    createdAt?: SortOrder
   }
 
   export type UserCreateNestedManyWithoutBranchInput = {
@@ -164880,6 +172838,174 @@ export namespace Prisma {
     update?: XOR<XOR<InventoryCountUpdateToOneWithWhereWithoutItemsInput, InventoryCountUpdateWithoutItemsInput>, InventoryCountUncheckedUpdateWithoutItemsInput>
   }
 
+  export type FbScheduledPostCreateNestedManyWithoutPageInput = {
+    create?: XOR<FbScheduledPostCreateWithoutPageInput, FbScheduledPostUncheckedCreateWithoutPageInput> | FbScheduledPostCreateWithoutPageInput[] | FbScheduledPostUncheckedCreateWithoutPageInput[]
+    connectOrCreate?: FbScheduledPostCreateOrConnectWithoutPageInput | FbScheduledPostCreateOrConnectWithoutPageInput[]
+    createMany?: FbScheduledPostCreateManyPageInputEnvelope
+    connect?: FbScheduledPostWhereUniqueInput | FbScheduledPostWhereUniqueInput[]
+  }
+
+  export type FbCommentRuleCreateNestedManyWithoutPageInput = {
+    create?: XOR<FbCommentRuleCreateWithoutPageInput, FbCommentRuleUncheckedCreateWithoutPageInput> | FbCommentRuleCreateWithoutPageInput[] | FbCommentRuleUncheckedCreateWithoutPageInput[]
+    connectOrCreate?: FbCommentRuleCreateOrConnectWithoutPageInput | FbCommentRuleCreateOrConnectWithoutPageInput[]
+    createMany?: FbCommentRuleCreateManyPageInputEnvelope
+    connect?: FbCommentRuleWhereUniqueInput | FbCommentRuleWhereUniqueInput[]
+  }
+
+  export type FbAutoReplyLogCreateNestedManyWithoutPageInput = {
+    create?: XOR<FbAutoReplyLogCreateWithoutPageInput, FbAutoReplyLogUncheckedCreateWithoutPageInput> | FbAutoReplyLogCreateWithoutPageInput[] | FbAutoReplyLogUncheckedCreateWithoutPageInput[]
+    connectOrCreate?: FbAutoReplyLogCreateOrConnectWithoutPageInput | FbAutoReplyLogCreateOrConnectWithoutPageInput[]
+    createMany?: FbAutoReplyLogCreateManyPageInputEnvelope
+    connect?: FbAutoReplyLogWhereUniqueInput | FbAutoReplyLogWhereUniqueInput[]
+  }
+
+  export type FbScheduledPostUncheckedCreateNestedManyWithoutPageInput = {
+    create?: XOR<FbScheduledPostCreateWithoutPageInput, FbScheduledPostUncheckedCreateWithoutPageInput> | FbScheduledPostCreateWithoutPageInput[] | FbScheduledPostUncheckedCreateWithoutPageInput[]
+    connectOrCreate?: FbScheduledPostCreateOrConnectWithoutPageInput | FbScheduledPostCreateOrConnectWithoutPageInput[]
+    createMany?: FbScheduledPostCreateManyPageInputEnvelope
+    connect?: FbScheduledPostWhereUniqueInput | FbScheduledPostWhereUniqueInput[]
+  }
+
+  export type FbCommentRuleUncheckedCreateNestedManyWithoutPageInput = {
+    create?: XOR<FbCommentRuleCreateWithoutPageInput, FbCommentRuleUncheckedCreateWithoutPageInput> | FbCommentRuleCreateWithoutPageInput[] | FbCommentRuleUncheckedCreateWithoutPageInput[]
+    connectOrCreate?: FbCommentRuleCreateOrConnectWithoutPageInput | FbCommentRuleCreateOrConnectWithoutPageInput[]
+    createMany?: FbCommentRuleCreateManyPageInputEnvelope
+    connect?: FbCommentRuleWhereUniqueInput | FbCommentRuleWhereUniqueInput[]
+  }
+
+  export type FbAutoReplyLogUncheckedCreateNestedManyWithoutPageInput = {
+    create?: XOR<FbAutoReplyLogCreateWithoutPageInput, FbAutoReplyLogUncheckedCreateWithoutPageInput> | FbAutoReplyLogCreateWithoutPageInput[] | FbAutoReplyLogUncheckedCreateWithoutPageInput[]
+    connectOrCreate?: FbAutoReplyLogCreateOrConnectWithoutPageInput | FbAutoReplyLogCreateOrConnectWithoutPageInput[]
+    createMany?: FbAutoReplyLogCreateManyPageInputEnvelope
+    connect?: FbAutoReplyLogWhereUniqueInput | FbAutoReplyLogWhereUniqueInput[]
+  }
+
+  export type FbScheduledPostUpdateManyWithoutPageNestedInput = {
+    create?: XOR<FbScheduledPostCreateWithoutPageInput, FbScheduledPostUncheckedCreateWithoutPageInput> | FbScheduledPostCreateWithoutPageInput[] | FbScheduledPostUncheckedCreateWithoutPageInput[]
+    connectOrCreate?: FbScheduledPostCreateOrConnectWithoutPageInput | FbScheduledPostCreateOrConnectWithoutPageInput[]
+    upsert?: FbScheduledPostUpsertWithWhereUniqueWithoutPageInput | FbScheduledPostUpsertWithWhereUniqueWithoutPageInput[]
+    createMany?: FbScheduledPostCreateManyPageInputEnvelope
+    set?: FbScheduledPostWhereUniqueInput | FbScheduledPostWhereUniqueInput[]
+    disconnect?: FbScheduledPostWhereUniqueInput | FbScheduledPostWhereUniqueInput[]
+    delete?: FbScheduledPostWhereUniqueInput | FbScheduledPostWhereUniqueInput[]
+    connect?: FbScheduledPostWhereUniqueInput | FbScheduledPostWhereUniqueInput[]
+    update?: FbScheduledPostUpdateWithWhereUniqueWithoutPageInput | FbScheduledPostUpdateWithWhereUniqueWithoutPageInput[]
+    updateMany?: FbScheduledPostUpdateManyWithWhereWithoutPageInput | FbScheduledPostUpdateManyWithWhereWithoutPageInput[]
+    deleteMany?: FbScheduledPostScalarWhereInput | FbScheduledPostScalarWhereInput[]
+  }
+
+  export type FbCommentRuleUpdateManyWithoutPageNestedInput = {
+    create?: XOR<FbCommentRuleCreateWithoutPageInput, FbCommentRuleUncheckedCreateWithoutPageInput> | FbCommentRuleCreateWithoutPageInput[] | FbCommentRuleUncheckedCreateWithoutPageInput[]
+    connectOrCreate?: FbCommentRuleCreateOrConnectWithoutPageInput | FbCommentRuleCreateOrConnectWithoutPageInput[]
+    upsert?: FbCommentRuleUpsertWithWhereUniqueWithoutPageInput | FbCommentRuleUpsertWithWhereUniqueWithoutPageInput[]
+    createMany?: FbCommentRuleCreateManyPageInputEnvelope
+    set?: FbCommentRuleWhereUniqueInput | FbCommentRuleWhereUniqueInput[]
+    disconnect?: FbCommentRuleWhereUniqueInput | FbCommentRuleWhereUniqueInput[]
+    delete?: FbCommentRuleWhereUniqueInput | FbCommentRuleWhereUniqueInput[]
+    connect?: FbCommentRuleWhereUniqueInput | FbCommentRuleWhereUniqueInput[]
+    update?: FbCommentRuleUpdateWithWhereUniqueWithoutPageInput | FbCommentRuleUpdateWithWhereUniqueWithoutPageInput[]
+    updateMany?: FbCommentRuleUpdateManyWithWhereWithoutPageInput | FbCommentRuleUpdateManyWithWhereWithoutPageInput[]
+    deleteMany?: FbCommentRuleScalarWhereInput | FbCommentRuleScalarWhereInput[]
+  }
+
+  export type FbAutoReplyLogUpdateManyWithoutPageNestedInput = {
+    create?: XOR<FbAutoReplyLogCreateWithoutPageInput, FbAutoReplyLogUncheckedCreateWithoutPageInput> | FbAutoReplyLogCreateWithoutPageInput[] | FbAutoReplyLogUncheckedCreateWithoutPageInput[]
+    connectOrCreate?: FbAutoReplyLogCreateOrConnectWithoutPageInput | FbAutoReplyLogCreateOrConnectWithoutPageInput[]
+    upsert?: FbAutoReplyLogUpsertWithWhereUniqueWithoutPageInput | FbAutoReplyLogUpsertWithWhereUniqueWithoutPageInput[]
+    createMany?: FbAutoReplyLogCreateManyPageInputEnvelope
+    set?: FbAutoReplyLogWhereUniqueInput | FbAutoReplyLogWhereUniqueInput[]
+    disconnect?: FbAutoReplyLogWhereUniqueInput | FbAutoReplyLogWhereUniqueInput[]
+    delete?: FbAutoReplyLogWhereUniqueInput | FbAutoReplyLogWhereUniqueInput[]
+    connect?: FbAutoReplyLogWhereUniqueInput | FbAutoReplyLogWhereUniqueInput[]
+    update?: FbAutoReplyLogUpdateWithWhereUniqueWithoutPageInput | FbAutoReplyLogUpdateWithWhereUniqueWithoutPageInput[]
+    updateMany?: FbAutoReplyLogUpdateManyWithWhereWithoutPageInput | FbAutoReplyLogUpdateManyWithWhereWithoutPageInput[]
+    deleteMany?: FbAutoReplyLogScalarWhereInput | FbAutoReplyLogScalarWhereInput[]
+  }
+
+  export type FbScheduledPostUncheckedUpdateManyWithoutPageNestedInput = {
+    create?: XOR<FbScheduledPostCreateWithoutPageInput, FbScheduledPostUncheckedCreateWithoutPageInput> | FbScheduledPostCreateWithoutPageInput[] | FbScheduledPostUncheckedCreateWithoutPageInput[]
+    connectOrCreate?: FbScheduledPostCreateOrConnectWithoutPageInput | FbScheduledPostCreateOrConnectWithoutPageInput[]
+    upsert?: FbScheduledPostUpsertWithWhereUniqueWithoutPageInput | FbScheduledPostUpsertWithWhereUniqueWithoutPageInput[]
+    createMany?: FbScheduledPostCreateManyPageInputEnvelope
+    set?: FbScheduledPostWhereUniqueInput | FbScheduledPostWhereUniqueInput[]
+    disconnect?: FbScheduledPostWhereUniqueInput | FbScheduledPostWhereUniqueInput[]
+    delete?: FbScheduledPostWhereUniqueInput | FbScheduledPostWhereUniqueInput[]
+    connect?: FbScheduledPostWhereUniqueInput | FbScheduledPostWhereUniqueInput[]
+    update?: FbScheduledPostUpdateWithWhereUniqueWithoutPageInput | FbScheduledPostUpdateWithWhereUniqueWithoutPageInput[]
+    updateMany?: FbScheduledPostUpdateManyWithWhereWithoutPageInput | FbScheduledPostUpdateManyWithWhereWithoutPageInput[]
+    deleteMany?: FbScheduledPostScalarWhereInput | FbScheduledPostScalarWhereInput[]
+  }
+
+  export type FbCommentRuleUncheckedUpdateManyWithoutPageNestedInput = {
+    create?: XOR<FbCommentRuleCreateWithoutPageInput, FbCommentRuleUncheckedCreateWithoutPageInput> | FbCommentRuleCreateWithoutPageInput[] | FbCommentRuleUncheckedCreateWithoutPageInput[]
+    connectOrCreate?: FbCommentRuleCreateOrConnectWithoutPageInput | FbCommentRuleCreateOrConnectWithoutPageInput[]
+    upsert?: FbCommentRuleUpsertWithWhereUniqueWithoutPageInput | FbCommentRuleUpsertWithWhereUniqueWithoutPageInput[]
+    createMany?: FbCommentRuleCreateManyPageInputEnvelope
+    set?: FbCommentRuleWhereUniqueInput | FbCommentRuleWhereUniqueInput[]
+    disconnect?: FbCommentRuleWhereUniqueInput | FbCommentRuleWhereUniqueInput[]
+    delete?: FbCommentRuleWhereUniqueInput | FbCommentRuleWhereUniqueInput[]
+    connect?: FbCommentRuleWhereUniqueInput | FbCommentRuleWhereUniqueInput[]
+    update?: FbCommentRuleUpdateWithWhereUniqueWithoutPageInput | FbCommentRuleUpdateWithWhereUniqueWithoutPageInput[]
+    updateMany?: FbCommentRuleUpdateManyWithWhereWithoutPageInput | FbCommentRuleUpdateManyWithWhereWithoutPageInput[]
+    deleteMany?: FbCommentRuleScalarWhereInput | FbCommentRuleScalarWhereInput[]
+  }
+
+  export type FbAutoReplyLogUncheckedUpdateManyWithoutPageNestedInput = {
+    create?: XOR<FbAutoReplyLogCreateWithoutPageInput, FbAutoReplyLogUncheckedCreateWithoutPageInput> | FbAutoReplyLogCreateWithoutPageInput[] | FbAutoReplyLogUncheckedCreateWithoutPageInput[]
+    connectOrCreate?: FbAutoReplyLogCreateOrConnectWithoutPageInput | FbAutoReplyLogCreateOrConnectWithoutPageInput[]
+    upsert?: FbAutoReplyLogUpsertWithWhereUniqueWithoutPageInput | FbAutoReplyLogUpsertWithWhereUniqueWithoutPageInput[]
+    createMany?: FbAutoReplyLogCreateManyPageInputEnvelope
+    set?: FbAutoReplyLogWhereUniqueInput | FbAutoReplyLogWhereUniqueInput[]
+    disconnect?: FbAutoReplyLogWhereUniqueInput | FbAutoReplyLogWhereUniqueInput[]
+    delete?: FbAutoReplyLogWhereUniqueInput | FbAutoReplyLogWhereUniqueInput[]
+    connect?: FbAutoReplyLogWhereUniqueInput | FbAutoReplyLogWhereUniqueInput[]
+    update?: FbAutoReplyLogUpdateWithWhereUniqueWithoutPageInput | FbAutoReplyLogUpdateWithWhereUniqueWithoutPageInput[]
+    updateMany?: FbAutoReplyLogUpdateManyWithWhereWithoutPageInput | FbAutoReplyLogUpdateManyWithWhereWithoutPageInput[]
+    deleteMany?: FbAutoReplyLogScalarWhereInput | FbAutoReplyLogScalarWhereInput[]
+  }
+
+  export type FbPageCreateNestedOneWithoutScheduledPostsInput = {
+    create?: XOR<FbPageCreateWithoutScheduledPostsInput, FbPageUncheckedCreateWithoutScheduledPostsInput>
+    connectOrCreate?: FbPageCreateOrConnectWithoutScheduledPostsInput
+    connect?: FbPageWhereUniqueInput
+  }
+
+  export type FbPageUpdateOneRequiredWithoutScheduledPostsNestedInput = {
+    create?: XOR<FbPageCreateWithoutScheduledPostsInput, FbPageUncheckedCreateWithoutScheduledPostsInput>
+    connectOrCreate?: FbPageCreateOrConnectWithoutScheduledPostsInput
+    upsert?: FbPageUpsertWithoutScheduledPostsInput
+    connect?: FbPageWhereUniqueInput
+    update?: XOR<XOR<FbPageUpdateToOneWithWhereWithoutScheduledPostsInput, FbPageUpdateWithoutScheduledPostsInput>, FbPageUncheckedUpdateWithoutScheduledPostsInput>
+  }
+
+  export type FbPageCreateNestedOneWithoutCommentRulesInput = {
+    create?: XOR<FbPageCreateWithoutCommentRulesInput, FbPageUncheckedCreateWithoutCommentRulesInput>
+    connectOrCreate?: FbPageCreateOrConnectWithoutCommentRulesInput
+    connect?: FbPageWhereUniqueInput
+  }
+
+  export type FbPageUpdateOneRequiredWithoutCommentRulesNestedInput = {
+    create?: XOR<FbPageCreateWithoutCommentRulesInput, FbPageUncheckedCreateWithoutCommentRulesInput>
+    connectOrCreate?: FbPageCreateOrConnectWithoutCommentRulesInput
+    upsert?: FbPageUpsertWithoutCommentRulesInput
+    connect?: FbPageWhereUniqueInput
+    update?: XOR<XOR<FbPageUpdateToOneWithWhereWithoutCommentRulesInput, FbPageUpdateWithoutCommentRulesInput>, FbPageUncheckedUpdateWithoutCommentRulesInput>
+  }
+
+  export type FbPageCreateNestedOneWithoutAutoReplyLogsInput = {
+    create?: XOR<FbPageCreateWithoutAutoReplyLogsInput, FbPageUncheckedCreateWithoutAutoReplyLogsInput>
+    connectOrCreate?: FbPageCreateOrConnectWithoutAutoReplyLogsInput
+    connect?: FbPageWhereUniqueInput
+  }
+
+  export type FbPageUpdateOneRequiredWithoutAutoReplyLogsNestedInput = {
+    create?: XOR<FbPageCreateWithoutAutoReplyLogsInput, FbPageUncheckedCreateWithoutAutoReplyLogsInput>
+    connectOrCreate?: FbPageCreateOrConnectWithoutAutoReplyLogsInput
+    upsert?: FbPageUpsertWithoutAutoReplyLogsInput
+    connect?: FbPageWhereUniqueInput
+    update?: XOR<XOR<FbPageUpdateToOneWithWhereWithoutAutoReplyLogsInput, FbPageUpdateWithoutAutoReplyLogsInput>, FbPageUncheckedUpdateWithoutAutoReplyLogsInput>
+  }
+
   export type NestedStringFilter<$PrismaModel = never> = {
     equals?: string | StringFieldRefInput<$PrismaModel>
     in?: string[] | ListStringFieldRefInput<$PrismaModel>
@@ -165390,6 +173516,8 @@ export namespace Prisma {
     status?: string
     paidAmount?: number
     paymentStatus?: string
+    dueDate?: Date | string | null
+    paymentTerm?: string | null
     note?: string | null
     branchId?: string | null
     userName: string
@@ -165409,6 +173537,8 @@ export namespace Prisma {
     status?: string
     paidAmount?: number
     paymentStatus?: string
+    dueDate?: Date | string | null
+    paymentTerm?: string | null
     note?: string | null
     branchId?: string | null
     userName: string
@@ -165702,6 +173832,8 @@ export namespace Prisma {
     status?: StringFilter<"ImportReceipt"> | string
     paidAmount?: FloatFilter<"ImportReceipt"> | number
     paymentStatus?: StringFilter<"ImportReceipt"> | string
+    dueDate?: DateTimeNullableFilter<"ImportReceipt"> | Date | string | null
+    paymentTerm?: StringNullableFilter<"ImportReceipt"> | string | null
     note?: StringNullableFilter<"ImportReceipt"> | string | null
     branchId?: StringNullableFilter<"ImportReceipt"> | string | null
     userId?: StringFilter<"ImportReceipt"> | string
@@ -166627,6 +174759,7 @@ export namespace Prisma {
     discount?: number
     discountType?: string | null
     lineTotal: number
+    baseQuantity?: number
     transaction: TransactionCreateNestedOneWithoutItemsInput
   }
 
@@ -166640,6 +174773,7 @@ export namespace Prisma {
     discount?: number
     discountType?: string | null
     lineTotal: number
+    baseQuantity?: number
   }
 
   export type TransactionItemCreateOrConnectWithoutProductInput = {
@@ -167013,6 +175147,7 @@ export namespace Prisma {
     discount?: FloatFilter<"TransactionItem"> | number
     discountType?: StringNullableFilter<"TransactionItem"> | string | null
     lineTotal?: FloatFilter<"TransactionItem"> | number
+    baseQuantity?: FloatFilter<"TransactionItem"> | number
   }
 
   export type InventoryTransactionUpsertWithWhereUniqueWithoutProductInput = {
@@ -168074,6 +176209,7 @@ export namespace Prisma {
     discount?: number
     discountType?: string | null
     lineTotal: number
+    baseQuantity?: number
     product: ProductCreateNestedOneWithoutTransactionItemsInput
   }
 
@@ -168087,6 +176223,7 @@ export namespace Prisma {
     discount?: number
     discountType?: string | null
     lineTotal: number
+    baseQuantity?: number
   }
 
   export type TransactionItemCreateOrConnectWithoutTransactionInput = {
@@ -169178,6 +177315,8 @@ export namespace Prisma {
     status?: string
     paidAmount?: number
     paymentStatus?: string
+    dueDate?: Date | string | null
+    paymentTerm?: string | null
     note?: string | null
     branchId?: string | null
     userName: string
@@ -169197,6 +177336,8 @@ export namespace Prisma {
     status?: string
     paidAmount?: number
     paymentStatus?: string
+    dueDate?: Date | string | null
+    paymentTerm?: string | null
     note?: string | null
     branchId?: string | null
     userId: string
@@ -169295,6 +177436,8 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     paidAmount?: FloatFieldUpdateOperationsInput | number
     paymentStatus?: StringFieldUpdateOperationsInput | string
+    dueDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    paymentTerm?: NullableStringFieldUpdateOperationsInput | string | null
     note?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     userName?: StringFieldUpdateOperationsInput | string
@@ -169314,6 +177457,8 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     paidAmount?: FloatFieldUpdateOperationsInput | number
     paymentStatus?: StringFieldUpdateOperationsInput | string
+    dueDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    paymentTerm?: NullableStringFieldUpdateOperationsInput | string | null
     note?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     userId?: StringFieldUpdateOperationsInput | string
@@ -171505,6 +179650,8 @@ export namespace Prisma {
     platformFee?: number
     platformFeeRate?: number
     netRevenue?: number
+    adsVoucherDiscount?: number
+    stockDeducted?: boolean
     syncedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -171539,6 +179686,8 @@ export namespace Prisma {
     platformFee?: number
     platformFeeRate?: number
     netRevenue?: number
+    adsVoucherDiscount?: number
+    stockDeducted?: boolean
     syncedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -171645,6 +179794,8 @@ export namespace Prisma {
     platformFee?: FloatFilter<"OnlineOrder"> | number
     platformFeeRate?: FloatFilter<"OnlineOrder"> | number
     netRevenue?: FloatFilter<"OnlineOrder"> | number
+    adsVoucherDiscount?: FloatFilter<"OnlineOrder"> | number
+    stockDeducted?: BoolFilter<"OnlineOrder"> | boolean
     syncedAt?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     createdAt?: DateTimeFilter<"OnlineOrder"> | Date | string
     updatedAt?: DateTimeFilter<"OnlineOrder"> | Date | string
@@ -172106,6 +180257,8 @@ export namespace Prisma {
     platformFee?: number
     platformFeeRate?: number
     netRevenue?: number
+    adsVoucherDiscount?: number
+    stockDeducted?: boolean
     syncedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -172141,6 +180294,8 @@ export namespace Prisma {
     platformFee?: number
     platformFeeRate?: number
     netRevenue?: number
+    adsVoucherDiscount?: number
+    stockDeducted?: boolean
     syncedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -172253,6 +180408,8 @@ export namespace Prisma {
     platformFee?: FloatFieldUpdateOperationsInput | number
     platformFeeRate?: FloatFieldUpdateOperationsInput | number
     netRevenue?: FloatFieldUpdateOperationsInput | number
+    adsVoucherDiscount?: FloatFieldUpdateOperationsInput | number
+    stockDeducted?: BoolFieldUpdateOperationsInput | boolean
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -172288,6 +180445,8 @@ export namespace Prisma {
     platformFee?: FloatFieldUpdateOperationsInput | number
     platformFeeRate?: FloatFieldUpdateOperationsInput | number
     netRevenue?: FloatFieldUpdateOperationsInput | number
+    adsVoucherDiscount?: FloatFieldUpdateOperationsInput | number
+    stockDeducted?: BoolFieldUpdateOperationsInput | boolean
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -174708,6 +182867,540 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type FbScheduledPostCreateWithoutPageInput = {
+    id?: string
+    fbPostId?: string | null
+    message?: string
+    mediaType?: string
+    mediaUrls?: string
+    linkUrl?: string | null
+    scheduledAt: Date | string
+    status?: string
+    errorMessage?: string | null
+    publishedAt?: Date | string | null
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FbScheduledPostUncheckedCreateWithoutPageInput = {
+    id?: string
+    fbPostId?: string | null
+    message?: string
+    mediaType?: string
+    mediaUrls?: string
+    linkUrl?: string | null
+    scheduledAt: Date | string
+    status?: string
+    errorMessage?: string | null
+    publishedAt?: Date | string | null
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FbScheduledPostCreateOrConnectWithoutPageInput = {
+    where: FbScheduledPostWhereUniqueInput
+    create: XOR<FbScheduledPostCreateWithoutPageInput, FbScheduledPostUncheckedCreateWithoutPageInput>
+  }
+
+  export type FbScheduledPostCreateManyPageInputEnvelope = {
+    data: FbScheduledPostCreateManyPageInput | FbScheduledPostCreateManyPageInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type FbCommentRuleCreateWithoutPageInput = {
+    id?: string
+    name?: string
+    keyword: string
+    matchType?: string
+    replyText: string
+    privateReply?: boolean
+    hideComment?: boolean
+    enabled?: boolean
+    priority?: number
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FbCommentRuleUncheckedCreateWithoutPageInput = {
+    id?: string
+    name?: string
+    keyword: string
+    matchType?: string
+    replyText: string
+    privateReply?: boolean
+    hideComment?: boolean
+    enabled?: boolean
+    priority?: number
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FbCommentRuleCreateOrConnectWithoutPageInput = {
+    where: FbCommentRuleWhereUniqueInput
+    create: XOR<FbCommentRuleCreateWithoutPageInput, FbCommentRuleUncheckedCreateWithoutPageInput>
+  }
+
+  export type FbCommentRuleCreateManyPageInputEnvelope = {
+    data: FbCommentRuleCreateManyPageInput | FbCommentRuleCreateManyPageInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type FbAutoReplyLogCreateWithoutPageInput = {
+    id?: string
+    commentId: string
+    ruleId?: string | null
+    postId?: string | null
+    fromName?: string | null
+    commentMsg?: string | null
+    action?: string
+    replyText?: string | null
+    success?: boolean
+    errorMessage?: string | null
+    createdAt?: Date | string
+  }
+
+  export type FbAutoReplyLogUncheckedCreateWithoutPageInput = {
+    id?: string
+    commentId: string
+    ruleId?: string | null
+    postId?: string | null
+    fromName?: string | null
+    commentMsg?: string | null
+    action?: string
+    replyText?: string | null
+    success?: boolean
+    errorMessage?: string | null
+    createdAt?: Date | string
+  }
+
+  export type FbAutoReplyLogCreateOrConnectWithoutPageInput = {
+    where: FbAutoReplyLogWhereUniqueInput
+    create: XOR<FbAutoReplyLogCreateWithoutPageInput, FbAutoReplyLogUncheckedCreateWithoutPageInput>
+  }
+
+  export type FbAutoReplyLogCreateManyPageInputEnvelope = {
+    data: FbAutoReplyLogCreateManyPageInput | FbAutoReplyLogCreateManyPageInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type FbScheduledPostUpsertWithWhereUniqueWithoutPageInput = {
+    where: FbScheduledPostWhereUniqueInput
+    update: XOR<FbScheduledPostUpdateWithoutPageInput, FbScheduledPostUncheckedUpdateWithoutPageInput>
+    create: XOR<FbScheduledPostCreateWithoutPageInput, FbScheduledPostUncheckedCreateWithoutPageInput>
+  }
+
+  export type FbScheduledPostUpdateWithWhereUniqueWithoutPageInput = {
+    where: FbScheduledPostWhereUniqueInput
+    data: XOR<FbScheduledPostUpdateWithoutPageInput, FbScheduledPostUncheckedUpdateWithoutPageInput>
+  }
+
+  export type FbScheduledPostUpdateManyWithWhereWithoutPageInput = {
+    where: FbScheduledPostScalarWhereInput
+    data: XOR<FbScheduledPostUpdateManyMutationInput, FbScheduledPostUncheckedUpdateManyWithoutPageInput>
+  }
+
+  export type FbScheduledPostScalarWhereInput = {
+    AND?: FbScheduledPostScalarWhereInput | FbScheduledPostScalarWhereInput[]
+    OR?: FbScheduledPostScalarWhereInput[]
+    NOT?: FbScheduledPostScalarWhereInput | FbScheduledPostScalarWhereInput[]
+    id?: StringFilter<"FbScheduledPost"> | string
+    pageId?: StringFilter<"FbScheduledPost"> | string
+    fbPostId?: StringNullableFilter<"FbScheduledPost"> | string | null
+    message?: StringFilter<"FbScheduledPost"> | string
+    mediaType?: StringFilter<"FbScheduledPost"> | string
+    mediaUrls?: StringFilter<"FbScheduledPost"> | string
+    linkUrl?: StringNullableFilter<"FbScheduledPost"> | string | null
+    scheduledAt?: DateTimeFilter<"FbScheduledPost"> | Date | string
+    status?: StringFilter<"FbScheduledPost"> | string
+    errorMessage?: StringNullableFilter<"FbScheduledPost"> | string | null
+    publishedAt?: DateTimeNullableFilter<"FbScheduledPost"> | Date | string | null
+    createdBy?: StringNullableFilter<"FbScheduledPost"> | string | null
+    createdAt?: DateTimeFilter<"FbScheduledPost"> | Date | string
+    updatedAt?: DateTimeFilter<"FbScheduledPost"> | Date | string
+  }
+
+  export type FbCommentRuleUpsertWithWhereUniqueWithoutPageInput = {
+    where: FbCommentRuleWhereUniqueInput
+    update: XOR<FbCommentRuleUpdateWithoutPageInput, FbCommentRuleUncheckedUpdateWithoutPageInput>
+    create: XOR<FbCommentRuleCreateWithoutPageInput, FbCommentRuleUncheckedCreateWithoutPageInput>
+  }
+
+  export type FbCommentRuleUpdateWithWhereUniqueWithoutPageInput = {
+    where: FbCommentRuleWhereUniqueInput
+    data: XOR<FbCommentRuleUpdateWithoutPageInput, FbCommentRuleUncheckedUpdateWithoutPageInput>
+  }
+
+  export type FbCommentRuleUpdateManyWithWhereWithoutPageInput = {
+    where: FbCommentRuleScalarWhereInput
+    data: XOR<FbCommentRuleUpdateManyMutationInput, FbCommentRuleUncheckedUpdateManyWithoutPageInput>
+  }
+
+  export type FbCommentRuleScalarWhereInput = {
+    AND?: FbCommentRuleScalarWhereInput | FbCommentRuleScalarWhereInput[]
+    OR?: FbCommentRuleScalarWhereInput[]
+    NOT?: FbCommentRuleScalarWhereInput | FbCommentRuleScalarWhereInput[]
+    id?: StringFilter<"FbCommentRule"> | string
+    pageId?: StringFilter<"FbCommentRule"> | string
+    name?: StringFilter<"FbCommentRule"> | string
+    keyword?: StringFilter<"FbCommentRule"> | string
+    matchType?: StringFilter<"FbCommentRule"> | string
+    replyText?: StringFilter<"FbCommentRule"> | string
+    privateReply?: BoolFilter<"FbCommentRule"> | boolean
+    hideComment?: BoolFilter<"FbCommentRule"> | boolean
+    enabled?: BoolFilter<"FbCommentRule"> | boolean
+    priority?: IntFilter<"FbCommentRule"> | number
+    createdAt?: DateTimeFilter<"FbCommentRule"> | Date | string
+    updatedAt?: DateTimeFilter<"FbCommentRule"> | Date | string
+  }
+
+  export type FbAutoReplyLogUpsertWithWhereUniqueWithoutPageInput = {
+    where: FbAutoReplyLogWhereUniqueInput
+    update: XOR<FbAutoReplyLogUpdateWithoutPageInput, FbAutoReplyLogUncheckedUpdateWithoutPageInput>
+    create: XOR<FbAutoReplyLogCreateWithoutPageInput, FbAutoReplyLogUncheckedCreateWithoutPageInput>
+  }
+
+  export type FbAutoReplyLogUpdateWithWhereUniqueWithoutPageInput = {
+    where: FbAutoReplyLogWhereUniqueInput
+    data: XOR<FbAutoReplyLogUpdateWithoutPageInput, FbAutoReplyLogUncheckedUpdateWithoutPageInput>
+  }
+
+  export type FbAutoReplyLogUpdateManyWithWhereWithoutPageInput = {
+    where: FbAutoReplyLogScalarWhereInput
+    data: XOR<FbAutoReplyLogUpdateManyMutationInput, FbAutoReplyLogUncheckedUpdateManyWithoutPageInput>
+  }
+
+  export type FbAutoReplyLogScalarWhereInput = {
+    AND?: FbAutoReplyLogScalarWhereInput | FbAutoReplyLogScalarWhereInput[]
+    OR?: FbAutoReplyLogScalarWhereInput[]
+    NOT?: FbAutoReplyLogScalarWhereInput | FbAutoReplyLogScalarWhereInput[]
+    id?: StringFilter<"FbAutoReplyLog"> | string
+    pageId?: StringFilter<"FbAutoReplyLog"> | string
+    commentId?: StringFilter<"FbAutoReplyLog"> | string
+    ruleId?: StringNullableFilter<"FbAutoReplyLog"> | string | null
+    postId?: StringNullableFilter<"FbAutoReplyLog"> | string | null
+    fromName?: StringNullableFilter<"FbAutoReplyLog"> | string | null
+    commentMsg?: StringNullableFilter<"FbAutoReplyLog"> | string | null
+    action?: StringFilter<"FbAutoReplyLog"> | string
+    replyText?: StringNullableFilter<"FbAutoReplyLog"> | string | null
+    success?: BoolFilter<"FbAutoReplyLog"> | boolean
+    errorMessage?: StringNullableFilter<"FbAutoReplyLog"> | string | null
+    createdAt?: DateTimeFilter<"FbAutoReplyLog"> | Date | string
+  }
+
+  export type FbPageCreateWithoutScheduledPostsInput = {
+    id?: string
+    pageId: string
+    name: string
+    category?: string | null
+    avatar?: string | null
+    fanCount?: number
+    accessToken: string
+    tokenExpiresAt?: Date | string | null
+    igUserId?: string | null
+    adAccountId?: string | null
+    webhookSubscribed?: boolean
+    autoReplyEnabled?: boolean
+    status?: string
+    connectedBy?: string | null
+    lastSyncAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    commentRules?: FbCommentRuleCreateNestedManyWithoutPageInput
+    autoReplyLogs?: FbAutoReplyLogCreateNestedManyWithoutPageInput
+  }
+
+  export type FbPageUncheckedCreateWithoutScheduledPostsInput = {
+    id?: string
+    pageId: string
+    name: string
+    category?: string | null
+    avatar?: string | null
+    fanCount?: number
+    accessToken: string
+    tokenExpiresAt?: Date | string | null
+    igUserId?: string | null
+    adAccountId?: string | null
+    webhookSubscribed?: boolean
+    autoReplyEnabled?: boolean
+    status?: string
+    connectedBy?: string | null
+    lastSyncAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    commentRules?: FbCommentRuleUncheckedCreateNestedManyWithoutPageInput
+    autoReplyLogs?: FbAutoReplyLogUncheckedCreateNestedManyWithoutPageInput
+  }
+
+  export type FbPageCreateOrConnectWithoutScheduledPostsInput = {
+    where: FbPageWhereUniqueInput
+    create: XOR<FbPageCreateWithoutScheduledPostsInput, FbPageUncheckedCreateWithoutScheduledPostsInput>
+  }
+
+  export type FbPageUpsertWithoutScheduledPostsInput = {
+    update: XOR<FbPageUpdateWithoutScheduledPostsInput, FbPageUncheckedUpdateWithoutScheduledPostsInput>
+    create: XOR<FbPageCreateWithoutScheduledPostsInput, FbPageUncheckedCreateWithoutScheduledPostsInput>
+    where?: FbPageWhereInput
+  }
+
+  export type FbPageUpdateToOneWithWhereWithoutScheduledPostsInput = {
+    where?: FbPageWhereInput
+    data: XOR<FbPageUpdateWithoutScheduledPostsInput, FbPageUncheckedUpdateWithoutScheduledPostsInput>
+  }
+
+  export type FbPageUpdateWithoutScheduledPostsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    pageId?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    category?: NullableStringFieldUpdateOperationsInput | string | null
+    avatar?: NullableStringFieldUpdateOperationsInput | string | null
+    fanCount?: IntFieldUpdateOperationsInput | number
+    accessToken?: StringFieldUpdateOperationsInput | string
+    tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    igUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    adAccountId?: NullableStringFieldUpdateOperationsInput | string | null
+    webhookSubscribed?: BoolFieldUpdateOperationsInput | boolean
+    autoReplyEnabled?: BoolFieldUpdateOperationsInput | boolean
+    status?: StringFieldUpdateOperationsInput | string
+    connectedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    commentRules?: FbCommentRuleUpdateManyWithoutPageNestedInput
+    autoReplyLogs?: FbAutoReplyLogUpdateManyWithoutPageNestedInput
+  }
+
+  export type FbPageUncheckedUpdateWithoutScheduledPostsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    pageId?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    category?: NullableStringFieldUpdateOperationsInput | string | null
+    avatar?: NullableStringFieldUpdateOperationsInput | string | null
+    fanCount?: IntFieldUpdateOperationsInput | number
+    accessToken?: StringFieldUpdateOperationsInput | string
+    tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    igUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    adAccountId?: NullableStringFieldUpdateOperationsInput | string | null
+    webhookSubscribed?: BoolFieldUpdateOperationsInput | boolean
+    autoReplyEnabled?: BoolFieldUpdateOperationsInput | boolean
+    status?: StringFieldUpdateOperationsInput | string
+    connectedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    commentRules?: FbCommentRuleUncheckedUpdateManyWithoutPageNestedInput
+    autoReplyLogs?: FbAutoReplyLogUncheckedUpdateManyWithoutPageNestedInput
+  }
+
+  export type FbPageCreateWithoutCommentRulesInput = {
+    id?: string
+    pageId: string
+    name: string
+    category?: string | null
+    avatar?: string | null
+    fanCount?: number
+    accessToken: string
+    tokenExpiresAt?: Date | string | null
+    igUserId?: string | null
+    adAccountId?: string | null
+    webhookSubscribed?: boolean
+    autoReplyEnabled?: boolean
+    status?: string
+    connectedBy?: string | null
+    lastSyncAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    scheduledPosts?: FbScheduledPostCreateNestedManyWithoutPageInput
+    autoReplyLogs?: FbAutoReplyLogCreateNestedManyWithoutPageInput
+  }
+
+  export type FbPageUncheckedCreateWithoutCommentRulesInput = {
+    id?: string
+    pageId: string
+    name: string
+    category?: string | null
+    avatar?: string | null
+    fanCount?: number
+    accessToken: string
+    tokenExpiresAt?: Date | string | null
+    igUserId?: string | null
+    adAccountId?: string | null
+    webhookSubscribed?: boolean
+    autoReplyEnabled?: boolean
+    status?: string
+    connectedBy?: string | null
+    lastSyncAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    scheduledPosts?: FbScheduledPostUncheckedCreateNestedManyWithoutPageInput
+    autoReplyLogs?: FbAutoReplyLogUncheckedCreateNestedManyWithoutPageInput
+  }
+
+  export type FbPageCreateOrConnectWithoutCommentRulesInput = {
+    where: FbPageWhereUniqueInput
+    create: XOR<FbPageCreateWithoutCommentRulesInput, FbPageUncheckedCreateWithoutCommentRulesInput>
+  }
+
+  export type FbPageUpsertWithoutCommentRulesInput = {
+    update: XOR<FbPageUpdateWithoutCommentRulesInput, FbPageUncheckedUpdateWithoutCommentRulesInput>
+    create: XOR<FbPageCreateWithoutCommentRulesInput, FbPageUncheckedCreateWithoutCommentRulesInput>
+    where?: FbPageWhereInput
+  }
+
+  export type FbPageUpdateToOneWithWhereWithoutCommentRulesInput = {
+    where?: FbPageWhereInput
+    data: XOR<FbPageUpdateWithoutCommentRulesInput, FbPageUncheckedUpdateWithoutCommentRulesInput>
+  }
+
+  export type FbPageUpdateWithoutCommentRulesInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    pageId?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    category?: NullableStringFieldUpdateOperationsInput | string | null
+    avatar?: NullableStringFieldUpdateOperationsInput | string | null
+    fanCount?: IntFieldUpdateOperationsInput | number
+    accessToken?: StringFieldUpdateOperationsInput | string
+    tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    igUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    adAccountId?: NullableStringFieldUpdateOperationsInput | string | null
+    webhookSubscribed?: BoolFieldUpdateOperationsInput | boolean
+    autoReplyEnabled?: BoolFieldUpdateOperationsInput | boolean
+    status?: StringFieldUpdateOperationsInput | string
+    connectedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    scheduledPosts?: FbScheduledPostUpdateManyWithoutPageNestedInput
+    autoReplyLogs?: FbAutoReplyLogUpdateManyWithoutPageNestedInput
+  }
+
+  export type FbPageUncheckedUpdateWithoutCommentRulesInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    pageId?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    category?: NullableStringFieldUpdateOperationsInput | string | null
+    avatar?: NullableStringFieldUpdateOperationsInput | string | null
+    fanCount?: IntFieldUpdateOperationsInput | number
+    accessToken?: StringFieldUpdateOperationsInput | string
+    tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    igUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    adAccountId?: NullableStringFieldUpdateOperationsInput | string | null
+    webhookSubscribed?: BoolFieldUpdateOperationsInput | boolean
+    autoReplyEnabled?: BoolFieldUpdateOperationsInput | boolean
+    status?: StringFieldUpdateOperationsInput | string
+    connectedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    scheduledPosts?: FbScheduledPostUncheckedUpdateManyWithoutPageNestedInput
+    autoReplyLogs?: FbAutoReplyLogUncheckedUpdateManyWithoutPageNestedInput
+  }
+
+  export type FbPageCreateWithoutAutoReplyLogsInput = {
+    id?: string
+    pageId: string
+    name: string
+    category?: string | null
+    avatar?: string | null
+    fanCount?: number
+    accessToken: string
+    tokenExpiresAt?: Date | string | null
+    igUserId?: string | null
+    adAccountId?: string | null
+    webhookSubscribed?: boolean
+    autoReplyEnabled?: boolean
+    status?: string
+    connectedBy?: string | null
+    lastSyncAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    scheduledPosts?: FbScheduledPostCreateNestedManyWithoutPageInput
+    commentRules?: FbCommentRuleCreateNestedManyWithoutPageInput
+  }
+
+  export type FbPageUncheckedCreateWithoutAutoReplyLogsInput = {
+    id?: string
+    pageId: string
+    name: string
+    category?: string | null
+    avatar?: string | null
+    fanCount?: number
+    accessToken: string
+    tokenExpiresAt?: Date | string | null
+    igUserId?: string | null
+    adAccountId?: string | null
+    webhookSubscribed?: boolean
+    autoReplyEnabled?: boolean
+    status?: string
+    connectedBy?: string | null
+    lastSyncAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    scheduledPosts?: FbScheduledPostUncheckedCreateNestedManyWithoutPageInput
+    commentRules?: FbCommentRuleUncheckedCreateNestedManyWithoutPageInput
+  }
+
+  export type FbPageCreateOrConnectWithoutAutoReplyLogsInput = {
+    where: FbPageWhereUniqueInput
+    create: XOR<FbPageCreateWithoutAutoReplyLogsInput, FbPageUncheckedCreateWithoutAutoReplyLogsInput>
+  }
+
+  export type FbPageUpsertWithoutAutoReplyLogsInput = {
+    update: XOR<FbPageUpdateWithoutAutoReplyLogsInput, FbPageUncheckedUpdateWithoutAutoReplyLogsInput>
+    create: XOR<FbPageCreateWithoutAutoReplyLogsInput, FbPageUncheckedCreateWithoutAutoReplyLogsInput>
+    where?: FbPageWhereInput
+  }
+
+  export type FbPageUpdateToOneWithWhereWithoutAutoReplyLogsInput = {
+    where?: FbPageWhereInput
+    data: XOR<FbPageUpdateWithoutAutoReplyLogsInput, FbPageUncheckedUpdateWithoutAutoReplyLogsInput>
+  }
+
+  export type FbPageUpdateWithoutAutoReplyLogsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    pageId?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    category?: NullableStringFieldUpdateOperationsInput | string | null
+    avatar?: NullableStringFieldUpdateOperationsInput | string | null
+    fanCount?: IntFieldUpdateOperationsInput | number
+    accessToken?: StringFieldUpdateOperationsInput | string
+    tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    igUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    adAccountId?: NullableStringFieldUpdateOperationsInput | string | null
+    webhookSubscribed?: BoolFieldUpdateOperationsInput | boolean
+    autoReplyEnabled?: BoolFieldUpdateOperationsInput | boolean
+    status?: StringFieldUpdateOperationsInput | string
+    connectedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    scheduledPosts?: FbScheduledPostUpdateManyWithoutPageNestedInput
+    commentRules?: FbCommentRuleUpdateManyWithoutPageNestedInput
+  }
+
+  export type FbPageUncheckedUpdateWithoutAutoReplyLogsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    pageId?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    category?: NullableStringFieldUpdateOperationsInput | string | null
+    avatar?: NullableStringFieldUpdateOperationsInput | string | null
+    fanCount?: IntFieldUpdateOperationsInput | number
+    accessToken?: StringFieldUpdateOperationsInput | string
+    tokenExpiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    igUserId?: NullableStringFieldUpdateOperationsInput | string | null
+    adAccountId?: NullableStringFieldUpdateOperationsInput | string | null
+    webhookSubscribed?: BoolFieldUpdateOperationsInput | boolean
+    autoReplyEnabled?: BoolFieldUpdateOperationsInput | boolean
+    status?: StringFieldUpdateOperationsInput | string
+    connectedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    scheduledPosts?: FbScheduledPostUncheckedUpdateManyWithoutPageNestedInput
+    commentRules?: FbCommentRuleUncheckedUpdateManyWithoutPageNestedInput
+  }
+
   export type UserCreateManyBranchInput = {
     id?: string
     email: string
@@ -174876,6 +183569,8 @@ export namespace Prisma {
     status?: string
     paidAmount?: number
     paymentStatus?: string
+    dueDate?: Date | string | null
+    paymentTerm?: string | null
     note?: string | null
     branchId?: string | null
     userName: string
@@ -175092,6 +183787,8 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     paidAmount?: FloatFieldUpdateOperationsInput | number
     paymentStatus?: StringFieldUpdateOperationsInput | string
+    dueDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    paymentTerm?: NullableStringFieldUpdateOperationsInput | string | null
     note?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     userName?: StringFieldUpdateOperationsInput | string
@@ -175111,6 +183808,8 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     paidAmount?: FloatFieldUpdateOperationsInput | number
     paymentStatus?: StringFieldUpdateOperationsInput | string
+    dueDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    paymentTerm?: NullableStringFieldUpdateOperationsInput | string | null
     note?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     userName?: StringFieldUpdateOperationsInput | string
@@ -175130,6 +183829,8 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     paidAmount?: FloatFieldUpdateOperationsInput | number
     paymentStatus?: StringFieldUpdateOperationsInput | string
+    dueDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    paymentTerm?: NullableStringFieldUpdateOperationsInput | string | null
     note?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     userName?: StringFieldUpdateOperationsInput | string
@@ -175531,6 +184232,7 @@ export namespace Prisma {
     discount?: number
     discountType?: string | null
     lineTotal: number
+    baseQuantity?: number
   }
 
   export type InventoryTransactionCreateManyProductInput = {
@@ -175660,6 +184362,7 @@ export namespace Prisma {
     discount?: FloatFieldUpdateOperationsInput | number
     discountType?: NullableStringFieldUpdateOperationsInput | string | null
     lineTotal?: FloatFieldUpdateOperationsInput | number
+    baseQuantity?: FloatFieldUpdateOperationsInput | number
     transaction?: TransactionUpdateOneRequiredWithoutItemsNestedInput
   }
 
@@ -175673,6 +184376,7 @@ export namespace Prisma {
     discount?: FloatFieldUpdateOperationsInput | number
     discountType?: NullableStringFieldUpdateOperationsInput | string | null
     lineTotal?: FloatFieldUpdateOperationsInput | number
+    baseQuantity?: FloatFieldUpdateOperationsInput | number
   }
 
   export type TransactionItemUncheckedUpdateManyWithoutProductInput = {
@@ -175685,6 +184389,7 @@ export namespace Prisma {
     discount?: FloatFieldUpdateOperationsInput | number
     discountType?: NullableStringFieldUpdateOperationsInput | string | null
     lineTotal?: FloatFieldUpdateOperationsInput | number
+    baseQuantity?: FloatFieldUpdateOperationsInput | number
   }
 
   export type InventoryTransactionUpdateWithoutProductInput = {
@@ -176282,6 +184987,7 @@ export namespace Prisma {
     discount?: number
     discountType?: string | null
     lineTotal: number
+    baseQuantity?: number
   }
 
   export type PaymentCreateManyTransactionInput = {
@@ -176300,6 +185006,7 @@ export namespace Prisma {
     discount?: FloatFieldUpdateOperationsInput | number
     discountType?: NullableStringFieldUpdateOperationsInput | string | null
     lineTotal?: FloatFieldUpdateOperationsInput | number
+    baseQuantity?: FloatFieldUpdateOperationsInput | number
     product?: ProductUpdateOneRequiredWithoutTransactionItemsNestedInput
   }
 
@@ -176313,6 +185020,7 @@ export namespace Prisma {
     discount?: FloatFieldUpdateOperationsInput | number
     discountType?: NullableStringFieldUpdateOperationsInput | string | null
     lineTotal?: FloatFieldUpdateOperationsInput | number
+    baseQuantity?: FloatFieldUpdateOperationsInput | number
   }
 
   export type TransactionItemUncheckedUpdateManyWithoutTransactionInput = {
@@ -176325,6 +185033,7 @@ export namespace Prisma {
     discount?: FloatFieldUpdateOperationsInput | number
     discountType?: NullableStringFieldUpdateOperationsInput | string | null
     lineTotal?: FloatFieldUpdateOperationsInput | number
+    baseQuantity?: FloatFieldUpdateOperationsInput | number
   }
 
   export type PaymentUpdateWithoutTransactionInput = {
@@ -177026,6 +185735,8 @@ export namespace Prisma {
     platformFee?: number
     platformFeeRate?: number
     netRevenue?: number
+    adsVoucherDiscount?: number
+    stockDeducted?: boolean
     syncedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -177075,6 +185786,8 @@ export namespace Prisma {
     platformFee?: FloatFieldUpdateOperationsInput | number
     platformFeeRate?: FloatFieldUpdateOperationsInput | number
     netRevenue?: FloatFieldUpdateOperationsInput | number
+    adsVoucherDiscount?: FloatFieldUpdateOperationsInput | number
+    stockDeducted?: BoolFieldUpdateOperationsInput | boolean
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -177109,6 +185822,8 @@ export namespace Prisma {
     platformFee?: FloatFieldUpdateOperationsInput | number
     platformFeeRate?: FloatFieldUpdateOperationsInput | number
     netRevenue?: FloatFieldUpdateOperationsInput | number
+    adsVoucherDiscount?: FloatFieldUpdateOperationsInput | number
+    stockDeducted?: BoolFieldUpdateOperationsInput | boolean
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -177143,6 +185858,8 @@ export namespace Prisma {
     platformFee?: FloatFieldUpdateOperationsInput | number
     platformFeeRate?: FloatFieldUpdateOperationsInput | number
     netRevenue?: FloatFieldUpdateOperationsInput | number
+    adsVoucherDiscount?: FloatFieldUpdateOperationsInput | number
+    stockDeducted?: BoolFieldUpdateOperationsInput | boolean
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -177902,6 +186619,182 @@ export namespace Prisma {
     netBookValue?: NullableFloatFieldUpdateOperationsInput | number | null
     condition?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type FbScheduledPostCreateManyPageInput = {
+    id?: string
+    fbPostId?: string | null
+    message?: string
+    mediaType?: string
+    mediaUrls?: string
+    linkUrl?: string | null
+    scheduledAt: Date | string
+    status?: string
+    errorMessage?: string | null
+    publishedAt?: Date | string | null
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FbCommentRuleCreateManyPageInput = {
+    id?: string
+    name?: string
+    keyword: string
+    matchType?: string
+    replyText: string
+    privateReply?: boolean
+    hideComment?: boolean
+    enabled?: boolean
+    priority?: number
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FbAutoReplyLogCreateManyPageInput = {
+    id?: string
+    commentId: string
+    ruleId?: string | null
+    postId?: string | null
+    fromName?: string | null
+    commentMsg?: string | null
+    action?: string
+    replyText?: string | null
+    success?: boolean
+    errorMessage?: string | null
+    createdAt?: Date | string
+  }
+
+  export type FbScheduledPostUpdateWithoutPageInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    fbPostId?: NullableStringFieldUpdateOperationsInput | string | null
+    message?: StringFieldUpdateOperationsInput | string
+    mediaType?: StringFieldUpdateOperationsInput | string
+    mediaUrls?: StringFieldUpdateOperationsInput | string
+    linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    scheduledAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    status?: StringFieldUpdateOperationsInput | string
+    errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FbScheduledPostUncheckedUpdateWithoutPageInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    fbPostId?: NullableStringFieldUpdateOperationsInput | string | null
+    message?: StringFieldUpdateOperationsInput | string
+    mediaType?: StringFieldUpdateOperationsInput | string
+    mediaUrls?: StringFieldUpdateOperationsInput | string
+    linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    scheduledAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    status?: StringFieldUpdateOperationsInput | string
+    errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FbScheduledPostUncheckedUpdateManyWithoutPageInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    fbPostId?: NullableStringFieldUpdateOperationsInput | string | null
+    message?: StringFieldUpdateOperationsInput | string
+    mediaType?: StringFieldUpdateOperationsInput | string
+    mediaUrls?: StringFieldUpdateOperationsInput | string
+    linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    scheduledAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    status?: StringFieldUpdateOperationsInput | string
+    errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    publishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FbCommentRuleUpdateWithoutPageInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    keyword?: StringFieldUpdateOperationsInput | string
+    matchType?: StringFieldUpdateOperationsInput | string
+    replyText?: StringFieldUpdateOperationsInput | string
+    privateReply?: BoolFieldUpdateOperationsInput | boolean
+    hideComment?: BoolFieldUpdateOperationsInput | boolean
+    enabled?: BoolFieldUpdateOperationsInput | boolean
+    priority?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FbCommentRuleUncheckedUpdateWithoutPageInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    keyword?: StringFieldUpdateOperationsInput | string
+    matchType?: StringFieldUpdateOperationsInput | string
+    replyText?: StringFieldUpdateOperationsInput | string
+    privateReply?: BoolFieldUpdateOperationsInput | boolean
+    hideComment?: BoolFieldUpdateOperationsInput | boolean
+    enabled?: BoolFieldUpdateOperationsInput | boolean
+    priority?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FbCommentRuleUncheckedUpdateManyWithoutPageInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    keyword?: StringFieldUpdateOperationsInput | string
+    matchType?: StringFieldUpdateOperationsInput | string
+    replyText?: StringFieldUpdateOperationsInput | string
+    privateReply?: BoolFieldUpdateOperationsInput | boolean
+    hideComment?: BoolFieldUpdateOperationsInput | boolean
+    enabled?: BoolFieldUpdateOperationsInput | boolean
+    priority?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FbAutoReplyLogUpdateWithoutPageInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    commentId?: StringFieldUpdateOperationsInput | string
+    ruleId?: NullableStringFieldUpdateOperationsInput | string | null
+    postId?: NullableStringFieldUpdateOperationsInput | string | null
+    fromName?: NullableStringFieldUpdateOperationsInput | string | null
+    commentMsg?: NullableStringFieldUpdateOperationsInput | string | null
+    action?: StringFieldUpdateOperationsInput | string
+    replyText?: NullableStringFieldUpdateOperationsInput | string | null
+    success?: BoolFieldUpdateOperationsInput | boolean
+    errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FbAutoReplyLogUncheckedUpdateWithoutPageInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    commentId?: StringFieldUpdateOperationsInput | string
+    ruleId?: NullableStringFieldUpdateOperationsInput | string | null
+    postId?: NullableStringFieldUpdateOperationsInput | string | null
+    fromName?: NullableStringFieldUpdateOperationsInput | string | null
+    commentMsg?: NullableStringFieldUpdateOperationsInput | string | null
+    action?: StringFieldUpdateOperationsInput | string
+    replyText?: NullableStringFieldUpdateOperationsInput | string | null
+    success?: BoolFieldUpdateOperationsInput | boolean
+    errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FbAutoReplyLogUncheckedUpdateManyWithoutPageInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    commentId?: StringFieldUpdateOperationsInput | string
+    ruleId?: NullableStringFieldUpdateOperationsInput | string | null
+    postId?: NullableStringFieldUpdateOperationsInput | string | null
+    fromName?: NullableStringFieldUpdateOperationsInput | string | null
+    commentMsg?: NullableStringFieldUpdateOperationsInput | string | null
+    action?: StringFieldUpdateOperationsInput | string
+    replyText?: NullableStringFieldUpdateOperationsInput | string | null
+    success?: BoolFieldUpdateOperationsInput | boolean
+    errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
 

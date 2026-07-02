@@ -12,6 +12,10 @@ RUN npm run build
 
 FROM node:20-alpine AS runner
 WORKDIR /app
+# Múi giờ VN cho mọi phép tính "hôm nay"/đầu tháng (new Date(y,m,d) dùng TZ server;
+# thiếu dòng này Cloud Run chạy UTC → ngày bắt đầu lúc 7h sáng VN)
+RUN apk add --no-cache tzdata
+ENV TZ=Asia/Ho_Chi_Minh
 COPY package.json package-lock.json ./
 COPY prisma ./prisma
 RUN npm install --omit=dev --ignore-scripts

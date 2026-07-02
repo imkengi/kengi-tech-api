@@ -429,6 +429,7 @@ export class ShopeeService extends PlatformService {
         serviceFee: number
         transactionFee: number
         buyerTotal: number
+        adsVoucherDiscount: number
     } | null> {
         const url = this.apiUrl('/api/v2/payment/get_escrow_detail') + `&order_sn=${orderSn}`
         const data = await this.httpGet(url)
@@ -443,6 +444,9 @@ export class ShopeeService extends PlatformService {
         const commissionFee = income.commission_fee || 0
         const serviceFee = income.service_fee || 0
         const transactionFee = (income.transaction_fee || 0) + (income.credit_card_transaction_fee || 0)
+        // Ads Smart Voucher: phần giảm giá do voucher quảng cáo (advertiser tài trợ).
+        // Chỉ QUAN SÁT — chưa trừ vào netRevenue cho tới khi xác định seller có gánh hay không.
+        const adsVoucherDiscount = data.response?.buyer_payment_info?.ads_voucher_discount || 0
         return {
             escrowAmount: income.escrow_amount || 0,
             totalFees: commissionFee + serviceFee + transactionFee,
@@ -450,6 +454,7 @@ export class ShopeeService extends PlatformService {
             serviceFee,
             transactionFee,
             buyerTotal: income.buyer_total_amount || 0,
+            adsVoucherDiscount,
         }
     }
 

@@ -3,6 +3,7 @@ import { errorDetail } from '../lib/errorResponse'
 import { authMiddleware, getBranchFilter, AuthRequest, getBranchId, canAccessBranch } from '../middleware/auth'
 import { calculateCostPrice, getCostPriceMethod } from '../lib/costPrice'
 import { nextCode } from '../lib/codeGenerator'
+import { getOrCreateDefaultWarehouse, updateWarehouseStock } from '../lib/warehouseHelper'
 
 const router = Router()
 
@@ -16,7 +17,8 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
             page = '1', pageSize = '20',
         } = req.query
 
-        const where: any = {}
+        // Branch filter như các route khác: chi nhánh con chỉ thấy phiếu của mình
+        const where: any = { ...getBranchFilter(req) }
 
         if (search) {
             const s = String(search)
@@ -53,6 +55,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
                         ? (r as any).transactionDate.toISOString().slice(0, 10)
                         : null,
                     transactionDate: (r as any).transactionDate?.toISOString() || r.createdAt.toISOString(),
+                    dueDate: (r as any).dueDate ? (r as any).dueDate.toISOString().slice(0, 10) : null,
                     updatedAt: r.updatedAt.toISOString(),
                     // returnedQtyMap: productId -> returnedQuantity (stored directly on items)
                     returnedQtyMap: Object.fromEntries(
@@ -134,6 +137,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         const paymentStatus = paidAmount >= totalCost ? 'paid' : (paidAmount > 0 ? 'partial' : 'unpaid')
 
         const receipt = await prisma.importReceipt.create({ data: { code,
+                branchId: branchId || null, // gắn chi nhánh của phiếu — thiếu sẽ khiến branch filter/canAccessBranch không có tác dụng
                 supplierId: receiptData.supplierId || null,
                 supplierName: receiptData.supplierName || null,
                 totalCost,
@@ -141,6 +145,8 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
                 status: receiptData.status || 'draft',
                 paidAmount,
                 paymentStatus,
+                dueDate: receiptData.dueDate ? new Date(receiptData.dueDate) : null,
+                paymentTerm: receiptData.paymentTerm || null,
                 note: receiptData.note || null,
                 userId: user.userId || user.id,
                 userName,
@@ -162,6 +168,10 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         // If completed immediately, update product stock + log inventory transactions
         if (receipt.status === 'completed') {
             const method = await getCostPriceMethod(prisma as any)
+            // Đồng bộ WarehouseStock theo kho mặc định của chi nhánh phiếu —
+            // POS check tồn theo WarehouseStock nên nhập hàng phải tăng cả kho này
+            const defaultWarehouse = await getOrCreateDefaultWarehouse(prisma as any, branchId || null)
+            const defaultWarehouseId: string | null = defaultWarehouse?.id || null
             for (const item of receipt.items) {
                 // Fetch product BEFORE updating stock to get current state
                 const productBefore = await prisma.product.findUnique({ where: { id: item.productId } })
@@ -185,6 +195,12 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
                         costPrice: newCostPrice,
                     },
                 })
+
+                // Tăng tồn theo kho (WarehouseStock) — best-effort như luồng inventory
+                if (defaultWarehouseId) {
+                    await updateWarehouseStock(prisma as any, defaultWarehouseId, item.productId, item.quantity)
+                        .catch((err: any) => console.error(`[ImportReceipt] WarehouseStock increment failed for product ${item.productId}:`, err))
+                }
 
                 await prisma.inventoryTransaction.create({
                     data: {
@@ -237,12 +253,28 @@ router.put('/:id/complete', authMiddleware, async (req: AuthRequest, res: Respon
         if (!receipt) { res.status(404).json({ success: false, error: 'Not found' }); return }
         if (receipt.status !== 'draft') { res.status(400).json({ success: false, error: 'Only drafts can be completed' }); return }
 
+        // Claim trạng thái trước khi tăng kho (chống race): 2 request đồng thời cùng
+        // đọc status='draft' sẽ tăng kho 2 lần. updateMany có điều kiện status='draft'
+        // là atomic — chỉ 1 request claim được, request còn lại nhận count=0 → 409.
+        const claimed = await prisma.importReceipt.updateMany({
+            where: { id: String(req.params.id), status: 'draft' },
+            data: { status: 'processing' },
+        })
+        if (claimed.count === 0) {
+            res.status(409).json({ success: false, error: 'Phiếu đã được xử lý' })
+            return
+        }
+
         const user = (req as any).user
         const dbUser = await prisma.user.findUnique({ where: { id: user.userId || user.id } })
         const userName = dbUser?.name || user.email || 'Unknown'
 
         // Update stock for each item + log inventory transactions
         const method = await getCostPriceMethod(prisma as any)
+        // Đồng bộ WarehouseStock theo kho mặc định của chi nhánh phiếu —
+        // POS check tồn theo WarehouseStock nên nhập hàng phải tăng cả kho này
+        const defaultWarehouse = await getOrCreateDefaultWarehouse(prisma as any, receipt.branchId || null)
+        const defaultWarehouseId: string | null = defaultWarehouse?.id || null
         for (const item of receipt.items) {
             // Fetch product BEFORE updating stock
             const productBefore = await prisma.product.findUnique({ where: { id: item.productId } })
@@ -264,6 +296,11 @@ router.put('/:id/complete', authMiddleware, async (req: AuthRequest, res: Respon
                     costPrice: newCostPrice,
                 },
             })
+            // Tăng tồn theo kho (WarehouseStock) — best-effort như luồng inventory
+            if (defaultWarehouseId) {
+                await updateWarehouseStock(prisma as any, defaultWarehouseId, item.productId, item.quantity)
+                    .catch((err: any) => console.error(`[ImportReceipt] WarehouseStock increment failed for product ${item.productId}:`, err))
+            }
             await prisma.inventoryTransaction.create({
                 data: {
                     type: 'import',
@@ -356,15 +393,37 @@ router.put('/:id/pay', authMiddleware, async (req: AuthRequest, res: Response) =
             return
         }
 
-        const newPaid = paid + payAmount
-        const updated = await prisma.importReceipt.update({
-            where: { id: receipt.id },
-            data: {
-                paidAmount: newPaid,
-                paymentStatus: newPaid >= receipt.totalCost ? 'paid' : 'partial',
-            } as any,
-            include: { items: true },
-        })
+        // Chống race đọc-cộng-ghi: 2 request /pay đồng thời cùng đọc paidAmount cũ sẽ
+        // mất 1 lần trả hoặc trả vượt totalCost. Gói vào $transaction, đọc lại phiếu
+        // bên trong, kiểm tra paid + số trả <= totalCost, và ghi bằng khóa lạc quan
+        // theo paidAmount cũ (updateMany có điều kiện) — request thua nhận 409.
+        let newPaid = 0
+        let updated: any
+        try {
+            updated = await prisma.$transaction(async (tx) => {
+                const fresh = await tx.importReceipt.findUnique({ where: { id: receipt.id } })
+                if (!fresh || fresh.status === 'cancelled') throw new Error('PAY_CONFLICT')
+                const freshPaid = (fresh as any).paymentStatus === 'paid' ? fresh.totalCost : ((fresh as any).paidAmount ?? 0)
+                if (freshPaid + payAmount > fresh.totalCost) throw new Error('PAY_CONFLICT')
+                newPaid = freshPaid + payAmount
+                const write = await tx.importReceipt.updateMany({
+                    where: { id: fresh.id, paidAmount: (fresh as any).paidAmount } as any,
+                    data: {
+                        paidAmount: newPaid,
+                        paymentStatus: newPaid >= fresh.totalCost ? 'paid' : 'partial',
+                    } as any,
+                })
+                if (write.count === 0) throw new Error('PAY_CONFLICT')
+                return tx.importReceipt.findUnique({ where: { id: fresh.id }, include: { items: true } })
+            })
+        } catch (e: any) {
+            if (e?.message === 'PAY_CONFLICT') {
+                res.status(409).json({ success: false, error: 'Phiếu vừa được thanh toán bởi thao tác khác — vui lòng tải lại và thử lại' })
+                return
+            }
+            throw e
+        }
+        if (!updated) { res.status(404).json({ success: false, error: 'Not found' }); return }
 
         // Mirror vào sổ chi (Expense) để sổ quỹ phản ánh dòng tiền ra — best-effort.
         // category 'supplier_payment' → auto-journal ghi Nợ 331/Có 11x (giảm phải
@@ -694,7 +753,10 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
                     let newCostPrice = product.costPrice
                     if (method === 'average' && newStock > 0) {
                         const totalValue = (product.costPrice * product.stock) - (item.costPrice * item.quantity)
-                        newCostPrice = Math.round(totalValue / newStock)
+                        const recalced = Math.round(totalValue / newStock)
+                        // Giá vốn không được ÂM — dữ liệu lịch sử thiếu/lệch (totalValue < 0
+                        // hoặc kết quả không hợp lệ) thì giữ nguyên giá vốn hiện tại
+                        newCostPrice = Number.isFinite(recalced) ? Math.max(0, recalced) : product.costPrice
                     }
                     await prisma.product.update({
                         where: { id: item.productId },

@@ -5,6 +5,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { ShopeeService, TikTokService } from './platforms'
+import { reverseOnlineOrderEffects } from './onlineOrderReversal'
 
 export interface ReturnsSyncResult {
     total: number
@@ -83,7 +84,8 @@ export async function syncChannelReturns(prisma: any, channel: any, since: Date)
                         },
                     })
 
-                    // If refunded, update order status
+                    // If refunded, update order status + đảo hiệu ứng của đơn
+                    // (hoàn kho + void HĐ đã convert + đảo bút toán) — idempotent
                     if (ret.status === 'refunded') {
                         const order = await prisma.onlineOrder.findFirst({
                             where: { externalOrderId: ret.orderSn, channelId: channel.id },
@@ -93,6 +95,11 @@ export async function syncChannelReturns(prisma: any, channel: any, since: Date)
                                 where: { id: order.id },
                                 data: { status: 'returned', paymentStatus: 'refunded' },
                             })
+                            try {
+                                await reverseOnlineOrderEffects(prisma, order, { reason: `Hoàn tiền ${platformLabel} - phiếu ${ret.returnSn}` })
+                            } catch (revErr: any) {
+                                console.error(`[Sync Returns] Reversal failed for ${order.orderNumber}:`, revErr.message)
+                            }
                         }
                     }
                 }
@@ -110,14 +117,29 @@ export async function syncChannelReturns(prisma: any, channel: any, since: Date)
             const returnCode = `${codePrefix}${ret.returnSn}`
             const refundAmount = typeof ret.refundAmount === 'number' ? ret.refundAmount : 0
 
-            const returnItems = ret.items.map((i: any) => ({
-                productName: i.name || i.modelName || `SP ${platformLabel}`,
-                sku: '',
-                quantity: i.amount || 1,
-                unitPrice: i.itemPrice || 0,
-                returnReason: ret.reason || ret.textReason || `Trả hàng từ ${platformLabel}`,
-                condition: 'used',
-            }))
+            // Lấy sku + productId từ OnlineOrderItem của đơn gốc — nếu để sku rỗng
+            // thì phiếu trả từ sàn không bao giờ hoàn kho được. Match theo thứ tự:
+            // externalItemId (Shopee item_id / TikTok order_line_item_id) → tên SP
+            // → nếu đơn chỉ có 1 item thì lấy luôn item đó.
+            const orderItems: any[] = order?.items || []
+            const matchOrderItem = (i: any) => {
+                const rid = String(i.itemId || '')
+                return (rid && orderItems.find((oi: any) => String(oi.externalItemId || '') === rid))
+                    || orderItems.find((oi: any) => i.name && oi.productName === i.name)
+                    || (orderItems.length === 1 ? orderItems[0] : undefined)
+            }
+            const returnItems = ret.items.map((i: any) => {
+                const oi = matchOrderItem(i)
+                return {
+                    productId: oi?.productId || undefined,
+                    productName: i.name || i.modelName || oi?.productName || `SP ${platformLabel}`,
+                    sku: oi?.sku || '',
+                    quantity: i.amount || 1,
+                    unitPrice: i.itemPrice || 0,
+                    returnReason: ret.reason || ret.textReason || `Trả hàng từ ${platformLabel}`,
+                    condition: 'used',
+                }
+            })
 
             await prisma.returnOrder.create({
                 data: {
@@ -146,12 +168,17 @@ export async function syncChannelReturns(prisma: any, channel: any, since: Date)
                 },
             })
 
-            // Update order status if refunded
+            // Update order status if refunded + đảo hiệu ứng (kho/HĐ/bút toán)
             if (order && ret.status === 'refunded') {
                 await prisma.onlineOrder.update({
                     where: { id: order.id },
                     data: { status: 'returned', paymentStatus: 'refunded' },
                 })
+                try {
+                    await reverseOnlineOrderEffects(prisma, order, { reason: `Hoàn tiền ${platformLabel} - phiếu ${ret.returnSn}` })
+                } catch (revErr: any) {
+                    console.error(`[Sync Returns] Reversal failed for ${order.orderNumber}:`, revErr.message)
+                }
             }
 
             synced++

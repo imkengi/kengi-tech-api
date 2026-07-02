@@ -74,7 +74,9 @@ export const CreateTransactionSchema = z.object({
     change: z.number().min(0).optional().nullable(),
     debtAmount: z.number().min(0).optional().nullable(),
     notes: z.string().max(500).optional().nullable(),
-    status: z.enum(['completed', 'partial', 'voided']).default('completed'),
+    // Whitelist status khi tạo — KHÔNG cho client tự set 'voided'/'returned'
+    // (phải đi qua các endpoint void/return để hoàn kho + hoàn nợ đúng).
+    status: z.enum(['completed', 'partial', 'pending']).default('completed'),
     revisionOfId: z.string().optional().nullable(),
     appliedPromotionIds: z.array(z.string()).optional(),
     // Optional target warehouse for the per-warehouse stock decrement. When omitted

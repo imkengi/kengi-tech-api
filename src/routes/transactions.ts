@@ -11,6 +11,10 @@ import { getOrCreateDefaultWarehouse, updateWarehouseStock } from '../lib/wareho
 
 const router = Router()
 
+// Lỗi hết hàng khi trừ kho có guard chống âm — throw bên trong $transaction
+// để rollback toàn bộ đơn, handler bắt và trả 409.
+class StockConflictError extends Error { }
+
 // Resolve how many base units 1 `selectedUnit` represents for a given product.
 // Returns 1 when selectedUnit equals the product's baseUnit or no matching conversion.
 // Mirrors POS price logic: if conv.toUnit === selectedUnit, rate = conv.conversionRate;
@@ -64,7 +68,8 @@ router.get('/', authMiddleware, requirePermission('pos.view'), async (req: AuthR
         if (customerId) where.customerId = customerId as string
 
         const pageNum = Math.max(1, parseInt(page as string))
-        const size = Math.max(1, Math.min(200, parseInt(pageSize as string)))
+        // Clamp 1000 để frontend export được nhiều dòng hơn
+        const size = Math.max(1, Math.min(1000, parseInt(pageSize as string)))
         const skip = (pageNum - 1) * size
 
         const [total, transactions] = await Promise.all([
@@ -101,6 +106,16 @@ router.get('/', authMiddleware, requirePermission('pos.view'), async (req: AuthR
             branchMap = Object.fromEntries(branches.map(b => [b.id, b.name]))
         }
 
+        // Resolve seller names: legacy transactions may have a null createdByName,
+        // in which case the client used to fall back to the raw createdBy id (a cuid).
+        // Look those names up from the User table by createdBy id so the UI shows a name.
+        const sellerIds = [...new Set(filteredTx.map((t: any) => t.createdBy).filter(Boolean))] as string[]
+        let userMap: Record<string, string> = {}
+        if (sellerIds.length > 0) {
+            const users = await prisma.user.findMany({ where: { id: { in: sellerIds } }, select: { id: true, name: true } })
+            userMap = Object.fromEntries(users.map(u => [u.id, u.name]))
+        }
+
         const data = filteredTx.map(t => ({
             id: t.id,
             receiptNumber: t.receiptNumber,
@@ -130,7 +145,7 @@ router.get('/', authMiddleware, requirePermission('pos.view'), async (req: AuthR
             change: t.change,
             status: t.status,
             createdBy: t.createdBy,
-            createdByName: t.createdByName,
+            createdByName: t.createdByName || (t.createdBy ? userMap[t.createdBy] : null) || null,
             notes: t.notes,
             createdAt: t.createdAt.toISOString(),
             transactionDate: t.transactionDate?.toISOString() || t.createdAt.toISOString(),
@@ -164,7 +179,10 @@ router.get('/stats', authMiddleware, requirePermission('pos.view'), async (req: 
         const prisma = req.storePrisma!
         const schema = req.user?.storeSchema || 'default'
         const { startDate, endDate } = req.query
-        const statsCacheKey = `${schema}:transactions:stats:${startDate || ''}:${endDate || ''}`
+        // Lọc theo chi nhánh như các route khác (main branch thấy tất cả)
+        const branchFilter = getBranchFilter(req as any)
+        // Key phải khớp pattern invalidate `${schema}:*:transactions:*` và tách theo chi nhánh
+        const statsCacheKey = `${schema}:${branchFilter.branchId || 'all'}:transactions:stats:${startDate || ''}:${endDate || ''}`
         const cachedStats = await cacheGet(statsCacheKey)
         if (cachedStats) return res.json(cachedStats)
 
@@ -178,7 +196,7 @@ router.get('/stats', authMiddleware, requirePermission('pos.view'), async (req: 
 
         // Get all transactions in the specified range
         const recent = await prisma.transaction.findMany({
-            where: { createdAt: { gte: rangeStart, lte: rangeEnd } },
+            where: { ...branchFilter, createdAt: { gte: rangeStart, lte: rangeEnd } },
             include: { 
                 items: {
                     include: { product: { select: { costPrice: true } } }
@@ -254,18 +272,23 @@ router.get('/stats', authMiddleware, requirePermission('pos.view'), async (req: 
             .sort((a, b) => b.revenue - a.revenue)
             .slice(0, 10)
 
-        // Unique cashiers
+        // Unique cashiers — resolve names from the User table for legacy
+        // transactions whose createdByName was never persisted (avoids showing the raw id).
+        const cashierIds = [...new Set(recent.map(t => t.createdBy).filter(Boolean))] as string[]
+        const cashierUsers = cashierIds.length
+            ? await prisma.user.findMany({ where: { id: { in: cashierIds } }, select: { id: true, name: true } })
+            : []
+        const cashierNameMap = Object.fromEntries(cashierUsers.map(u => [u.id, u.name]))
         const cashierSet = new Map<string, string>()
         for (const t of recent) {
-            if (t.createdBy) cashierSet.set(t.createdBy, t.createdByName || t.createdBy)
+            if (t.createdBy) cashierSet.set(t.createdBy, t.createdByName || cashierNameMap[t.createdBy] || t.createdBy)
         }
         const cashiers = Array.from(cashierSet.entries()).map(([id, name]) => ({ id, name }))
 
-        // Total debt
-        const totalDebt = partial.reduce((s, t) => {
-            const creditPayment = t.payments.find(p => p.type === 'credit')
-            return s + (creditPayment?.amount || 0)
-        }, 0)
+        // Total debt: nợ còn lại thực = total - amountReceived của đơn 'partial'
+        // (payment 'credit' gốc không giảm khi khách trả nợ — /pay-debt chỉ cộng
+        // amountReceived — nên cộng payment credit sẽ đếm dư sau khi thu nợ).
+        const totalDebt = partial.reduce((s, t) => s + Math.max(0, t.total - (t.amountReceived ?? 0)), 0)
 
         const statsResponse = {
             success: true,
@@ -366,7 +389,10 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
         const count = await prisma.transaction.count()
         let receiptNumber = txData.receiptNumber || `HD${Date.now()}${String(count + 1).padStart(4, '0')}`
 
-        // If this is a revision of an existing transaction, generate .1/.2/.3 suffix
+        // If this is a revision of an existing transaction, generate .1/.2/.3 suffix.
+        // Giữ base + suffix ra biến riêng để retry khi 2 revise đồng thời đụng số (P2002).
+        let revisionBaseReceipt: string | null = null
+        let revisionSuffix = 0
         if (txData.revisionOfId) {
             try {
                 const sourceTransaction = await prisma.transaction.findUnique({
@@ -375,12 +401,13 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
                 })
                 if (sourceTransaction) {
                     // Get the base receipt number (strip any existing .N suffix)
-                    const baseReceipt = sourceTransaction.receiptNumber.replace(/\.\d+$/, '')
+                    revisionBaseReceipt = sourceTransaction.receiptNumber.replace(/\.\d+$/, '')
                     // Count how many revisions already exist
                     const existingRevisions = await prisma.transaction.count({
-                        where: { receiptNumber: { startsWith: baseReceipt + '.' } },
+                        where: { receiptNumber: { startsWith: revisionBaseReceipt + '.' } },
                     })
-                    receiptNumber = `${baseReceipt}.${existingRevisions + 1}`
+                    revisionSuffix = existingRevisions + 1
+                    receiptNumber = `${revisionBaseReceipt}.${revisionSuffix}`
                 }
             } catch (revErr) {
                 console.warn('[Revision] Could not generate revision receipt number:', revErr)
@@ -410,39 +437,17 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
             return { ...item, selectedUnit, conversionRate: rate, baseQuantity }
         })
 
-        // Van-sales stock check: confirm the vehicle's mobile warehouse has enough of
-        // each product (in base units) to cover this sale. Aggregates per-product so
-        // duplicate line items can't individually pass the check then collectively
-        // exceed available stock.
-        if (isVanSale) {
-            const stocks = await (prisma as any).warehouseStock.findMany({
-                where: { warehouseId: String(vanWarehouseId), productId: { in: productIds } },
-            })
-            const stockMap = new Map<string, any>(stocks.map((s: any) => [s.productId, s]))
+        // Cấu hình cửa hàng: cho phép bán âm kho + tự động hạch toán (đọc 1 lần
+        // trước transaction). Guard chống oversell thật nằm BÊN TRONG $transaction
+        // bên dưới (updateMany + gte) nên không còn race check-rồi-mới-trừ.
+        const settings = await prisma.storeSettings
+            .findFirst({ select: { allowNegativeStock: true, autoCreateJournalEntries: true } })
+            .catch(() => null)
+        const allowNegativeStock = settings?.allowNegativeStock ?? false
 
-            const requiredByProduct = new Map<string, { qty: number; name: string }>()
-            for (const item of itemsWithConversion) {
-                const cur = requiredByProduct.get(item.productId) || { qty: 0, name: item.productName }
-                cur.qty += item.baseQuantity
-                requiredByProduct.set(item.productId, cur)
-            }
-
-            for (const [productId, { qty, name }] of requiredByProduct) {
-                const stk = stockMap.get(productId)
-                const available = stk?.quantity || 0
-                if (available < qty) {
-                    res.status(400).json({
-                        success: false,
-                        error: `Sản phẩm "${stk?.productName || name}" chỉ còn ${available} trên xe (cần ${qty})`,
-                    })
-                    return
-                }
-            }
-        }
-
-        // Ordinary sale: the branch's default "main" warehouse is the source of truth for
-        // branch-level availability. Resolve it up front (an explicit body warehouseId wins)
-        // so we can both validate stock here and decrement the same warehouse after the sale.
+        // Ordinary sale: the branch's default "main" warehouse is decremented in
+        // lock-step with Product.stock. Resolve it up front (an explicit body
+        // warehouseId wins). Van sales decrement the vehicle warehouse instead.
         let defaultWarehouseId: string | null = null
         if (!isVanSale) {
             if (txData.warehouseId) {
@@ -450,36 +455,6 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
             } else {
                 const wh = await getOrCreateDefaultWarehouse(prisma as any, branchId || null)
                 defaultWarehouseId = wh?.id || null
-            }
-
-            // Check WarehouseStock (not Product.stock) for availability. Aggregate per
-            // product so duplicate line items can't each pass then collectively oversell.
-            // When a product has no WarehouseStock row yet (legacy data not migrated via
-            // reindex), fall back to the global Product.stock so existing sales still work.
-            if (defaultWarehouseId) {
-                const stocks = await (prisma as any).warehouseStock.findMany({
-                    where: { warehouseId: defaultWarehouseId, productId: { in: productIds } },
-                })
-                const stockMap = new Map<string, any>(stocks.map((s: any) => [s.productId, s]))
-
-                const requiredByProduct = new Map<string, { qty: number; name: string }>()
-                for (const item of itemsWithConversion) {
-                    const cur = requiredByProduct.get(item.productId) || { qty: 0, name: item.productName }
-                    cur.qty += item.baseQuantity
-                    requiredByProduct.set(item.productId, cur)
-                }
-
-                for (const [productId, { qty, name }] of requiredByProduct) {
-                    const stk = stockMap.get(productId)
-                    const available = stk ? stk.quantity : (productMap.get(productId)?.stock ?? 0)
-                    if (available < qty) {
-                        res.status(400).json({
-                            success: false,
-                            error: `Sản phẩm "${stk?.productName || name}" chỉ còn ${available} trong kho (cần ${qty})`,
-                        })
-                        return
-                    }
-                }
             }
         }
 
@@ -517,6 +492,8 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
                     discount: item.discount || 0,
                     discountType: item.discountType || 'fixed',
                     lineTotal: item.lineTotal,
+                    // Số đã trừ kho thật theo đơn vị gốc — dùng khi hoàn kho (void/return/revise)
+                    baseQuantity: item.baseQuantity,
                 })),
             },
         }
@@ -539,28 +516,207 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
             }
         }
 
-        // Create the transaction and bump Promotion.usageCount in one atomic batch
-        // so a partial failure can't leave the receipt persisted while the promo
-        // counter stays at zero.
-        const writes: any[] = [
-            prisma.transaction.create({
-                data: createData,
-                include: {
-                    items: {
-                        include: { product: { select: { costPrice: true } } }
-                    },
-                    payments: true
-                },
-            }),
-            ...promoIds.map(promoId => prisma.promotion.update({
-                where: { id: promoId },
-                data: { usageCount: { increment: 1 } },
-            })),
-        ]
-        const results = await prisma.$transaction(writes)
-        const transaction = results[0]
+        // ── Checkout ATOMIC ──────────────────────────────────────────────────────
+        // Tạo đơn + items + payments + trừ Product.stock + WarehouseStock + van-sale
+        // + công nợ khách + DebtEntry + bút toán: cùng sống chết trong 1 transaction.
+        // Lỗi ở bất kỳ bước nào → rollback hết (hết hàng trả 409, không nuốt lỗi).
+        // Retry tối đa 5 lần khi số phiếu revision đụng unique (2 revise đồng thời).
+        let transaction: any
+        for (let attempt = 0; ; attempt++) {
+            createData.receiptNumber = receiptNumber
+            try {
+                transaction = await prisma.$transaction(async (tx) => {
+                    const created = await tx.transaction.create({
+                        data: createData,
+                        include: {
+                            items: {
+                                include: { product: { select: { costPrice: true } } }
+                            },
+                            payments: true
+                        },
+                    })
 
-        // Increment bundle soldCount for any bundles included in the order
+                    // Bump promo usage cùng transaction với đơn
+                    for (const promoId of promoIds) {
+                        await tx.promotion.update({
+                            where: { id: promoId },
+                            data: { usageCount: { increment: 1 } },
+                        })
+                    }
+
+                    // Trừ kho + ghi thẻ kho theo ĐƠN VỊ GỐC (baseQuantity).
+                    // Van sale: Product.stock đã trừ lúc chất hàng lên xe — chỉ trừ kho xe.
+                    for (const item of itemsWithConversion) {
+                        let productAfter: { costPrice: number } | null = null
+                        if (isVanSale) {
+                            productAfter = await tx.product.findUnique({ where: { id: item.productId }, select: { costPrice: true } })
+                        } else if (allowNegativeStock) {
+                            productAfter = await tx.product.update({
+                                where: { id: item.productId },
+                                data: { stock: { decrement: item.baseQuantity } },
+                            })
+                        } else {
+                            // Guard chống âm race-safe: chỉ trừ khi còn đủ; count=0 = hết hàng
+                            const dec = await tx.product.updateMany({
+                                where: { id: item.productId, stock: { gte: item.baseQuantity } },
+                                data: { stock: { decrement: item.baseQuantity } },
+                            })
+                            if (dec.count === 0) {
+                                const p = await tx.product.findUnique({ where: { id: item.productId }, select: { stock: true } })
+                                throw new StockConflictError(`Sản phẩm "${item.productName}" chỉ còn ${p?.stock ?? 0} trong kho (cần ${item.baseQuantity})`)
+                            }
+                            productAfter = await tx.product.findUnique({ where: { id: item.productId }, select: { costPrice: true } })
+                        }
+
+                        // Kho mặc định đi lock-step với Product.stock
+                        if (defaultWarehouseId) {
+                            if (allowNegativeStock) {
+                                await updateWarehouseStock(tx as any, defaultWarehouseId, item.productId, -item.baseQuantity)
+                            } else {
+                                const whDec = await (tx as any).warehouseStock.updateMany({
+                                    where: { warehouseId: defaultWarehouseId, productId: item.productId, quantity: { gte: item.baseQuantity } },
+                                    data: { quantity: { decrement: item.baseQuantity } },
+                                })
+                                if (whDec.count === 0) {
+                                    const row = await (tx as any).warehouseStock.findUnique({
+                                        where: { warehouseId_productId: { warehouseId: defaultWarehouseId, productId: item.productId } },
+                                    })
+                                    if (row) {
+                                        throw new StockConflictError(`Sản phẩm "${item.productName}" chỉ còn ${row.quantity} trong kho (cần ${item.baseQuantity})`)
+                                    }
+                                    // Row chưa tồn tại (dữ liệu cũ chưa reindex) — Product.stock đã guard ở trên,
+                                    // upsert theo hành vi cũ để kho bắt đầu được theo dõi.
+                                    await updateWarehouseStock(tx as any, defaultWarehouseId, item.productId, -item.baseQuantity)
+                                }
+                            }
+                        }
+
+                        // Create inventory transaction record for stock tracking
+                        await tx.inventoryTransaction.create({
+                            data: {
+                                type: 'sale',
+                                productId: item.productId,
+                                productName: item.productName,
+                                productSku: item.sku || item.productSku || '',
+                                quantity: -item.baseQuantity,
+                                reason: `Bán hàng - ${receiptNumber}`,
+                                note: `Giao dịch ${receiptNumber}`,
+                                referenceId: receiptNumber,
+                                referenceType: 'sale',
+                                unitPrice: item.unitPrice || 0,
+                                costPriceAfter: productAfter?.costPrice || 0,
+                                userId: req.user!.userId,
+                                userName: user?.name || 'Admin',
+                            },
+                        })
+                    }
+
+                    // Van-sales: trừ kho xe (guard chống âm — không bán quá số trên xe)
+                    // + cộng dồn SalesTripItem/SalesTrip. Lỗi thật phải rollback cả đơn.
+                    if (isVanSale) {
+                        for (const item of itemsWithConversion) {
+                            const dec = await (tx as any).warehouseStock.updateMany({
+                                where: { warehouseId: String(vanWarehouseId), productId: item.productId, quantity: { gte: item.baseQuantity } },
+                                data: { quantity: { decrement: item.baseQuantity } },
+                            })
+                            if (dec.count === 0) {
+                                const row = await (tx as any).warehouseStock.findUnique({
+                                    where: { warehouseId_productId: { warehouseId: String(vanWarehouseId), productId: item.productId } },
+                                })
+                                throw new StockConflictError(`Sản phẩm "${item.productName}" chỉ còn ${row?.quantity ?? 0} trên xe (cần ${item.baseQuantity})`)
+                            }
+                        }
+
+                        if (salesTripId) {
+                            const totalBaseQty = itemsWithConversion.reduce((s: number, i: any) => s + i.baseQuantity, 0)
+
+                            for (const item of itemsWithConversion) {
+                                await (tx as any).salesTripItem.upsert({
+                                    where: { tripId_productId: { tripId: String(salesTripId), productId: item.productId } },
+                                    update: { soldQty: { increment: item.baseQuantity } },
+                                    create: {
+                                        tripId: String(salesTripId),
+                                        productId: item.productId,
+                                        productName: item.productName,
+                                        productSku: item.sku || item.productSku || null,
+                                        loadedQty: 0,
+                                        soldQty: item.baseQuantity,
+                                        unitPrice: item.unitPrice || 0,
+                                    },
+                                })
+                            }
+
+                            await (tx as any).salesTrip.update({
+                                where: { id: String(salesTripId) },
+                                data: {
+                                    totalSold: { increment: totalBaseQty },
+                                    totalRevenue: { increment: created.total },
+                                },
+                            })
+                        }
+                    }
+
+                    // Customer stats + công nợ + DebtEntry — cùng transaction, lỗi thật rollback
+                    if (txData.customerId) {
+                        const customerUpdate: any = {
+                            totalPurchases: { increment: created.total },
+                            totalOrders: { increment: 1 },
+                            lastPurchaseDate: new Date(),
+                        }
+
+                        // Add debt if credit payment
+                        if (debtAmount > 0) {
+                            customerUpdate.debt = { increment: debtAmount }
+                        }
+
+                        const updatedCustomer = await tx.customer.update({
+                            where: { id: txData.customerId },
+                            data: customerUpdate,
+                        })
+
+                        // Ghi sổ chi tiết công nợ cho phần bán chịu — DebtEntry là sổ cái,
+                        // Customer.debt là số dư; hai bên phải đi cùng nhau.
+                        if (debtAmount > 0) {
+                            await tx.debtEntry.create({
+                                data: {
+                                    customerId: txData.customerId,
+                                    customerName: updatedCustomer.name,
+                                    phone: updatedCustomer.phone || null,
+                                    type: 'debt',
+                                    amount: debtAmount,
+                                    description: `Nợ từ HĐ ${receiptNumber}`,
+                                    balance: Math.max(0, updatedCustomer.debt),
+                                },
+                            })
+                        }
+                    }
+
+                    // Bút toán tự động (doanh thu/VAT/giá vốn) — cùng transaction khi bật.
+                    // Helper tự bỏ qua ref đã tồn tại (idempotent theo SALE-/VAT-/COGS-...).
+                    if (settings?.autoCreateJournalEntries !== false) {
+                        await createJournalEntriesForTransaction(tx, created as any, {
+                            branchId: branchId || null,
+                            userId: req.user!.userId,
+                            skipDupCheck: false,
+                        })
+                    }
+
+                    return created
+                }, { timeout: 30000 })
+                break
+            } catch (txErr: any) {
+                // 2 revise đồng thời sinh trùng số phiếu → tăng suffix rồi thử lại (tối đa 5 lần)
+                if (txErr?.code === 'P2002' && revisionBaseReceipt && attempt < 4
+                    && String(txErr?.meta?.target ?? '').includes('receiptNumber')) {
+                    revisionSuffix++
+                    receiptNumber = `${revisionBaseReceipt}.${revisionSuffix}`
+                    continue
+                }
+                throw txErr
+            }
+        }
+
+        // Increment bundle soldCount for any bundles included in the order (best-effort)
         const bundleIds = [...new Set(items.filter((i: any) => i.isBundle && i.bundleId).map((i: any) => i.bundleId))]
         for (const bundleId of bundleIds) {
             await prisma.bundle.update({
@@ -571,130 +727,7 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
             })
         }
 
-        // Decrease product stock + create inventory transaction records for each item.
-        // Stock and InventoryTransaction.quantity are tracked in the product's BASE unit,
-        // so we use baseQuantity (sale-unit qty × conversion rate) — not the raw line qty.
-        // For van sales, Product.stock was already decremented when stock was loaded onto
-        // the vehicle, so we only touch the vehicle's WarehouseStock here.
-
-        // defaultWarehouseId was resolved during the availability check above; the same
-        // warehouse is decremented below so its WarehouseStock stays in lock-step with
-        // Product.stock. (Van sales are handled separately against the vehicle warehouse.)
-
-        for (const item of itemsWithConversion) {
-            const productAfter = isVanSale
-                ? await prisma.product.findUnique({ where: { id: item.productId }, select: { costPrice: true } })
-                : await prisma.product.update({
-                    where: { id: item.productId },
-                    data: { stock: { decrement: item.baseQuantity } },
-                })
-
-            // Keep the default warehouse's stock in lock-step with Product.stock.
-            if (defaultWarehouseId) {
-                await updateWarehouseStock(prisma as any, defaultWarehouseId, item.productId, -item.baseQuantity)
-                    .catch((err: any) => console.error(`[Sale] WarehouseStock decrement failed for product ${item.productId}:`, err))
-            }
-
-            // Create inventory transaction record for stock tracking
-            await prisma.inventoryTransaction.create({
-                data: {
-                    type: 'sale',
-                    productId: item.productId,
-                    productName: item.productName,
-                    productSku: item.sku || item.productSku || '',
-                    quantity: -item.baseQuantity,
-                    reason: `Bán hàng - ${receiptNumber}`,
-                    note: `Giao dịch ${receiptNumber}`,
-                    referenceId: receiptNumber,
-                    referenceType: 'sale',
-                    unitPrice: item.unitPrice || 0,
-                    costPriceAfter: productAfter?.costPrice || 0,
-                    userId: req.user!.userId,
-                    userName: user?.name || 'Admin',
-                },
-            })
-        }
-
-        // Van-sales bookkeeping: decrement WarehouseStock on the vehicle, and roll the
-        // sale into SalesTripItem.soldQty + SalesTrip totals when a trip is in scope.
-        if (isVanSale) {
-            for (const item of itemsWithConversion) {
-                await (prisma as any).warehouseStock.update({
-                    where: { warehouseId_productId: { warehouseId: String(vanWarehouseId), productId: item.productId } },
-                    data: { quantity: { decrement: item.baseQuantity } },
-                }).catch((err: any) => {
-                    console.error(`[VanSale] WarehouseStock decrement failed for product ${item.productId}:`, err)
-                })
-            }
-
-            if (salesTripId) {
-                const totalBaseQty = itemsWithConversion.reduce((s: number, i: any) => s + i.baseQuantity, 0)
-
-                for (const item of itemsWithConversion) {
-                    await (prisma as any).salesTripItem.upsert({
-                        where: { tripId_productId: { tripId: String(salesTripId), productId: item.productId } },
-                        update: { soldQty: { increment: item.baseQuantity } },
-                        create: {
-                            tripId: String(salesTripId),
-                            productId: item.productId,
-                            productName: item.productName,
-                            productSku: item.sku || item.productSku || null,
-                            loadedQty: 0,
-                            soldQty: item.baseQuantity,
-                            unitPrice: item.unitPrice || 0,
-                        },
-                    }).catch((err: any) => {
-                        console.error(`[VanSale] SalesTripItem upsert failed for product ${item.productId}:`, err)
-                    })
-                }
-
-                await (prisma as any).salesTrip.update({
-                    where: { id: String(salesTripId) },
-                    data: {
-                        totalSold: { increment: totalBaseQty },
-                        totalRevenue: { increment: transaction.total },
-                    },
-                }).catch((err: any) => {
-                    console.error(`[VanSale] SalesTrip totals update failed for ${salesTripId}:`, err)
-                })
-            }
-        }
-
-        // Update customer stats if customer exists
         if (txData.customerId) {
-            const customerUpdate: any = {
-                totalPurchases: { increment: transaction.total },
-                totalOrders: { increment: 1 },
-                lastPurchaseDate: new Date(),
-            }
-
-            // Add debt if credit payment
-            if (debtAmount > 0) {
-                customerUpdate.debt = { increment: debtAmount }
-            }
-
-            const updatedCustomer = await prisma.customer.update({
-                where: { id: txData.customerId },
-                data: customerUpdate,
-            })
-
-            // Ghi sổ chi tiết công nợ cho phần bán chịu — DebtEntry là sổ cái,
-            // Customer.debt là số dư; hai bên phải đi cùng nhau (best-effort,
-            // không làm fail đơn đã tạo).
-            if (debtAmount > 0) {
-                await prisma.debtEntry.create({
-                    data: {
-                        customerId: txData.customerId,
-                        customerName: updatedCustomer.name,
-                        phone: updatedCustomer.phone || null,
-                        type: 'debt',
-                        amount: debtAmount,
-                        description: `Nợ từ HĐ ${receiptNumber}`,
-                        balance: Math.max(0, updatedCustomer.debt),
-                    },
-                }).catch((e: any) => console.error('DebtEntry create failed (non-fatal):', e.message))
-            }
-
             // ── Loyalty points earn ───────────────────────────────────────────────
             try {
                 const customer = await prisma.customer.findUnique({ where: { id: txData.customerId } })
@@ -727,23 +760,6 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
             }
         }
 
-        // Auto-generate journal entries (revenue/VAT/COGS) when the store opted in.
-        // Gated on StoreSettings.autoCreateJournalEntries so accountants can fall back
-        // to the manual /api/tax/auto-journal backfill if they prefer batch posting.
-        // Non-fatal: a failure here must not roll back the sale itself.
-        try {
-            const settings = await prisma.storeSettings.findFirst({ select: { autoCreateJournalEntries: true } })
-            if (settings?.autoCreateJournalEntries !== false) {
-                await createJournalEntriesForTransaction(prisma, transaction as any, {
-                    branchId: branchId || null,
-                    userId: req.user!.userId,
-                    skipDupCheck: false,
-                })
-            }
-        } catch (jeErr) {
-            console.warn(`[AutoJournal] Failed for ${receiptNumber} (non-fatal):`, jeErr)
-        }
-
         cacheDel(`${req.user?.storeSchema || 'default'}:*:transactions:*`).catch(() => { })
         if (promoIds.length > 0) {
             cacheDel(`${req.user?.storeSchema || 'default'}:promotions:*`).catch(() => { })
@@ -771,19 +787,24 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
             },
         })
     } catch (err) {
+        // Hết hàng khi trừ kho trong transaction → đã rollback toàn bộ, trả 409
+        if (err instanceof StockConflictError) {
+            res.status(409).json({ success: false, error: err.message })
+            return
+        }
         console.error('Create transaction error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
     }
 })
 
 // PUT /api/transactions/:id/void
-router.put('/:id/void', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.put('/:id/void', authMiddleware, requirePermission('pos.create_order'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const branchId = getBranchId(req)
         const existing = await prisma.transaction.findUnique({
             where: { id: String(req.params.id) },
-            include: { 
+            include: {
                 items: {
                     include: { product: { select: { costPrice: true } } }
                 }
@@ -791,6 +812,12 @@ router.put('/:id/void', authMiddleware, async (req: AuthRequest, res: Response) 
         })
 
         if (!existing) {
+            res.status(404).json({ success: false, error: 'Transaction not found' })
+            return
+        }
+
+        // Chặn thao tác chéo chi nhánh (mirror GET /:id)
+        if (!canAccessBranch(req, existing.branchId)) {
             res.status(404).json({ success: false, error: 'Transaction not found' })
             return
         }
@@ -812,12 +839,22 @@ router.put('/:id/void', authMiddleware, async (req: AuthRequest, res: Response) 
             },
         })
 
-        // Restore stock for each item + create inventory records
+        // Restore stock for each item + create inventory records.
+        // Hoàn theo ĐƠN VỊ GỐC đã trừ lúc bán (baseQuantity); bản ghi cũ
+        // baseQuantity=0 → fallback quantity. Hoàn cả kho mặc định của chi nhánh
+        // (nơi bị trừ lock-step lúc bán).
+        const voidWarehouse = await getOrCreateDefaultWarehouse(prisma as any, existing.branchId || null)
         for (const item of transaction.items) {
+            const restoreQty = (item as any).baseQuantity > 0 ? (item as any).baseQuantity : item.quantity
             const updatedProduct = await prisma.product.update({
                 where: { id: item.productId },
-                data: { stock: { increment: item.quantity } },
+                data: { stock: { increment: restoreQty } },
             })
+
+            if (voidWarehouse?.id) {
+                await updateWarehouseStock(prisma as any, voidWarehouse.id, item.productId, restoreQty)
+                    .catch((err: any) => console.error(`[Void] WarehouseStock restore failed for product ${item.productId}:`, err))
+            }
 
             await prisma.inventoryTransaction.create({
                 data: {
@@ -825,7 +862,7 @@ router.put('/:id/void', authMiddleware, async (req: AuthRequest, res: Response) 
                     productId: item.productId,
                     productName: item.productName,
                     productSku: item.sku,
-                    quantity: item.quantity,
+                    quantity: restoreQty,
                     reason: `Hủy đơn - ${existing.receiptNumber}`,
                     note: `Hoàn kho do hủy giao dịch ${existing.receiptNumber}`,
                     referenceId: existing.receiptNumber,
@@ -906,7 +943,7 @@ router.put('/:id/void', authMiddleware, async (req: AuthRequest, res: Response) 
 })
 
 // PUT /api/transactions/:id/pay-debt — Pay off debt for partial transaction
-router.put('/:id/pay-debt', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.put('/:id/pay-debt', authMiddleware, requirePermission('pos.create_order'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { paymentType, amount, reference } = req.body
@@ -917,6 +954,12 @@ router.put('/:id/pay-debt', authMiddleware, async (req: AuthRequest, res: Respon
         })
 
         if (!existing) {
+            res.status(404).json({ success: false, error: 'Không tìm thấy giao dịch' })
+            return
+        }
+
+        // Chặn thao tác chéo chi nhánh (mirror GET /:id)
+        if (!canAccessBranch(req, existing.branchId)) {
             res.status(404).json({ success: false, error: 'Không tìm thấy giao dịch' })
             return
         }
@@ -1044,7 +1087,7 @@ router.put('/:id/pay-debt', authMiddleware, async (req: AuthRequest, res: Respon
 })
 
 // PUT /api/transactions/:id/return — Return a transaction
-router.put('/:id/return', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.put('/:id/return', authMiddleware, requirePermission('pos.create_order'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const branchId = getBranchId(req)
@@ -1052,12 +1095,18 @@ router.put('/:id/return', authMiddleware, async (req: AuthRequest, res: Response
 
         const existing = await prisma.transaction.findUnique({
             where: { id: String(req.params.id) },
-            include: { 
+            include: {
                 items: { include: { product: { select: { costPrice: true } } } }
             },
         })
 
         if (!existing) {
+            res.status(404).json({ success: false, error: 'Transaction not found' })
+            return
+        }
+
+        // Chặn thao tác chéo chi nhánh (mirror GET /:id)
+        if (!canAccessBranch(req, existing.branchId)) {
             res.status(404).json({ success: false, error: 'Transaction not found' })
             return
         }
@@ -1086,22 +1135,35 @@ router.put('/:id/return', authMiddleware, async (req: AuthRequest, res: Response
             }
         }
 
-        // Calculate return total
+        // Tiền hoàn theo giá THỰC TRẢ: đơn giá hiệu lực = lineTotal/quantity (đã gồm
+        // chiết khấu dòng), trừ thêm phần giảm giá cấp đơn phân bổ theo tỷ trọng
+        // lineTotal — không dùng unitPrice thô (hoàn dư cho đơn có giảm giá).
+        const orderDiscountAmount = existing.discountType === 'percent'
+            ? Math.round((existing.subtotal || 0) * (existing.discount || 0) / 100)
+            : (existing.discount || 0)
         const returnTotal = itemsToReturn.reduce((sum, item) => {
             const qty = returnQtyMap.get(item.productId) || item.quantity
-            return sum + (item.unitPrice * qty)
+            if (!item.quantity) return sum
+            const discountShare = existing.subtotal > 0
+                ? orderDiscountAmount * (item.lineTotal / existing.subtotal)
+                : 0
+            return sum + Math.round((item.lineTotal - discountShare) * qty / item.quantity)
         }, 0)
+
+        // Trả MỘT PHẦN không được đánh dấu cả đơn 'returned' (dashboard sẽ mất
+        // toàn bộ doanh thu đơn). Chỉ 'returned' khi MỌI dòng đều trả đủ số lượng.
+        const isFullReturn = existing.items.every(i => (returnQtyMap.get(i.productId) || 0) >= i.quantity)
 
         const transaction = await prisma.transaction.update({
             where: { id: String(req.params.id) },
             data: {
-                status: 'returned',
+                status: isFullReturn ? 'returned' : existing.status,
                 returnedAt: new Date(),
                 returnReason: reason || 'Trả hàng',
             },
-            include: { 
-                items: { include: { product: { select: { costPrice: true } } } }, 
-                payments: true 
+            include: {
+                items: { include: { product: { select: { costPrice: true } } } },
+                payments: true
             },
         })
 
@@ -1146,13 +1208,24 @@ router.put('/:id/return', authMiddleware, async (req: AuthRequest, res: Response
             console.warn(`⚠️ ReturnOrder table not ready: ${roErr.message} — returning without ReturnOrder record`)
         }
 
-        // Restore stock for returned items + create inventory records
+        // Restore stock for returned items + create inventory records.
+        // Hoàn theo ĐƠN VỊ GỐC: trả một phần hoàn tỷ lệ baseQuantity × (qtyTrả/quantity);
+        // bản ghi cũ baseQuantity=0 → fallback qty. Hoàn cả kho mặc định chi nhánh.
+        const returnWarehouse = await getOrCreateDefaultWarehouse(prisma as any, existing.branchId || null)
         for (const item of itemsToReturn) {
             const qty = returnQtyMap.get(item.productId) || item.quantity
+            const baseRestore = (item as any).baseQuantity > 0 && item.quantity > 0
+                ? Math.round((item as any).baseQuantity * (qty / item.quantity))
+                : qty
             const updatedProduct = await prisma.product.update({
                 where: { id: item.productId },
-                data: { stock: { increment: qty } },
+                data: { stock: { increment: baseRestore } },
             })
+
+            if (returnWarehouse?.id) {
+                await updateWarehouseStock(prisma as any, returnWarehouse.id, item.productId, baseRestore)
+                    .catch((err: any) => console.error(`[Return] WarehouseStock restore failed for product ${item.productId}:`, err))
+            }
 
             await prisma.inventoryTransaction.create({
                 data: {
@@ -1160,7 +1233,7 @@ router.put('/:id/return', authMiddleware, async (req: AuthRequest, res: Response
                     productId: item.productId,
                     productName: item.productName,
                     productSku: item.sku,
-                    quantity: qty,
+                    quantity: baseRestore,
                     reason: `Trả hàng - ${returnCode} (${existing.receiptNumber})`,
                     note: reason || `Trả hàng giao dịch ${existing.receiptNumber}`,
                     referenceId: returnCode,
@@ -1177,8 +1250,9 @@ router.put('/:id/return', authMiddleware, async (req: AuthRequest, res: Response
         if (existing.customerId) {
             const updateData: any = {
                 totalPurchases: { decrement: returnTotal },
-                totalOrders: { decrement: 1 },
             }
+            // Chỉ trừ 1 đơn của khách khi trả TOÀN BỘ — trả một phần đơn vẫn tồn tại
+            if (isFullReturn) updateData.totalOrders = { decrement: 1 }
 
             // If the sale still carried unpaid credit, reduce customer debt on
             // return. Use the live remaining debt (total - amountReceived) — the
@@ -1251,7 +1325,7 @@ router.put('/:id/return', authMiddleware, async (req: AuthRequest, res: Response
 })
 
 // PUT /api/transactions/:id — Edit transaction notes/customer info
-router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.put('/:id', authMiddleware, requirePermission('pos.create_order'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const id = String(req.params.id)
@@ -1259,6 +1333,12 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
 
         const existing = await prisma.transaction.findUnique({ where: { id } })
         if (!existing) {
+            res.status(404).json({ success: false, error: 'Transaction not found' })
+            return
+        }
+
+        // Chặn thao tác chéo chi nhánh (mirror GET /:id)
+        if (!canAccessBranch(req, existing.branchId)) {
             res.status(404).json({ success: false, error: 'Transaction not found' })
             return
         }
@@ -1333,7 +1413,7 @@ router.put('/:id/vat', authMiddleware, async (req: AuthRequest, res: Response) =
 })
 
 // POST /api/transactions/:id/revise — Void old transaction and link warranties to new one
-router.post('/:id/revise', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.post('/:id/revise', authMiddleware, requirePermission('pos.create_order'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const branchId = getBranchId(req)
@@ -1358,6 +1438,12 @@ router.post('/:id/revise', authMiddleware, async (req: AuthRequest, res: Respons
             return
         }
 
+        // Chặn thao tác chéo chi nhánh (mirror GET /:id)
+        if (!canAccessBranch(req, existing.branchId)) {
+            res.status(404).json({ success: false, error: 'Source transaction not found' })
+            return
+        }
+
         if (existing.status === 'voided') {
             res.status(400).json({ success: false, error: 'Transaction already voided' })
             return
@@ -1371,12 +1457,21 @@ router.post('/:id/revise', authMiddleware, async (req: AuthRequest, res: Respons
             data: { status: 'voided', notes: (existing.notes ? existing.notes + '\n' : '') + `[Cập nhật] → ${newReceiptNumber}` },
         })
 
-        // 3. Restore stock from old transaction
+        // 3. Restore stock from old transaction.
+        // Hoàn theo ĐƠN VỊ GỐC đã trừ lúc bán (baseQuantity; bản ghi cũ → quantity),
+        // kèm hoàn kho mặc định của chi nhánh (nơi bị trừ lock-step lúc bán).
+        const reviseWarehouse = await getOrCreateDefaultWarehouse(prisma as any, existing.branchId || null)
         for (const item of existing.items) {
+            const restoreQty = (item as any).baseQuantity > 0 ? (item as any).baseQuantity : item.quantity
             const updatedProduct = await prisma.product.update({
                 where: { id: item.productId },
-                data: { stock: { increment: item.quantity } },
+                data: { stock: { increment: restoreQty } },
             })
+
+            if (reviseWarehouse?.id) {
+                await updateWarehouseStock(prisma as any, reviseWarehouse.id, item.productId, restoreQty)
+                    .catch((err: any) => console.error(`[Revision] WarehouseStock restore failed for product ${item.productId}:`, err))
+            }
 
             await prisma.inventoryTransaction.create({
                 data: {
@@ -1384,7 +1479,7 @@ router.post('/:id/revise', authMiddleware, async (req: AuthRequest, res: Respons
                     productId: item.productId,
                     productName: item.productName,
                     productSku: item.sku,
-                    quantity: item.quantity,
+                    quantity: restoreQty,
                     reason: `Cập nhật phiếu - ${existing.receiptNumber} → ${newReceiptNumber}`,
                     note: `Hoàn kho do cập nhật giao dịch ${existing.receiptNumber}`,
                     referenceId: existing.receiptNumber,

@@ -37,7 +37,20 @@ router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => 
         const prisma = req.storePrisma!
         const outOfStock = await prisma.product.count({ where: { stock: 0, productType: { not: 'service' } } })
         const lowStock = await prisma.product.count({ where: { stock: { gt: 0, lte: 5 }, productType: { not: 'service' } } })
-        res.json({ success: true, data: { total: outOfStock + lowStock, critical: outOfStock, warning: lowStock } })
+        // Phiếu nhập đến hạn/quá hạn thanh toán (còn công nợ, dueDate <= hôm nay+3)
+        let dueCount = 0
+        try {
+            const now = new Date()
+            const lead = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 4) // < đầu ngày (hôm nay+4) = hết hôm nay+3
+            dueCount = await prisma.importReceipt.count({
+                where: {
+                    dueDate: { not: null, lt: lead },
+                    paymentStatus: { not: 'paid' },
+                    status: { notIn: ['cancelled', 'draft', 'returned'] },
+                },
+            })
+        } catch { /* cột chưa migrate ở store cũ — bỏ qua */ }
+        res.json({ success: true, data: { total: outOfStock + lowStock + dueCount, critical: outOfStock, warning: lowStock + dueCount } })
     } catch { res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
 
@@ -91,7 +104,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
             take: 20,
         })
 
-        const notifications = lowStock.map((p: any) => ({
+        const lowStockNotifs = lowStock.map((p: any) => ({
             id: `low-${p.id}`,
             type: 'low_stock',
             title: 'Sắp hết hàng',
@@ -100,6 +113,42 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
             severity: p.stock === 0 ? 'critical' : 'warning',
             createdAt: new Date().toISOString(),
         }))
+
+        // Đến hạn / quá hạn thanh toán NCC: phiếu nhập còn công nợ, dueDate <= hôm nay+3 ngày.
+        // Tính trực tiếp ở đây (không cần cron) — admin mở thông báo là thấy.
+        let duePaymentNotifs: any[] = []
+        try {
+            const now = new Date()
+            const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+            const lead = new Date(startToday.getTime() + 3 * 86400_000 + 86399_999) // hết ngày (hôm nay + 3)
+            const duePayments = await prisma.importReceipt.findMany({
+                where: {
+                    dueDate: { not: null, lte: lead },
+                    paymentStatus: { not: 'paid' },
+                    status: { notIn: ['cancelled', 'draft', 'returned'] },
+                },
+                select: { id: true, code: true, supplierName: true, totalCost: true, paidAmount: true, dueDate: true, paymentTerm: true },
+                orderBy: { dueDate: 'asc' },
+                take: 30,
+            })
+            duePaymentNotifs = duePayments.map((r: any) => {
+                const remaining = Math.max(0, (r.totalCost || 0) - (r.paidAmount || 0))
+                const overdue = r.dueDate && new Date(r.dueDate) < startToday
+                const dueStr = r.dueDate ? new Date(r.dueDate).toLocaleDateString('vi-VN') : ''
+                return {
+                    id: `due-${r.id}`,
+                    type: 'payment_due',
+                    title: overdue ? 'Quá hạn thanh toán NCC' : 'Sắp đến hạn thanh toán NCC',
+                    message: `Phiếu ${r.code}${r.supplierName ? ' — ' + r.supplierName : ''}: còn nợ ${remaining.toLocaleString('vi-VN')}₫, hạn ${dueStr}${r.paymentTerm ? ' (' + r.paymentTerm + ')' : ''}`,
+                    receiptId: r.id,
+                    severity: overdue ? 'critical' : 'warning',
+                    createdAt: new Date().toISOString(),
+                }
+            })
+        } catch { /* cột dueDate có thể chưa migrate ở store cũ — bỏ qua, không chặn thông báo khác */ }
+
+        // Đến hạn lên trước (ưu tiên), rồi tới low-stock
+        const notifications = [...duePaymentNotifs, ...lowStockNotifs]
 
         const _response = { success: true, data: notifications, count: notifications.length }
         await cacheSet(cacheKey, _response, 300)

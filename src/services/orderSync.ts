@@ -109,6 +109,9 @@ export async function convertOnlineOrderToTransaction(prisma: StorePrisma, order
             amountReceived: order.total,
             change: 0,
             status: 'completed',
+            // Kênh bán: đánh dấu 'online' để báo cáo theo kênh lọc thẳng bằng cột
+            // channel thay vì phải đoán qua prefix receiptNumber (ONLINE-/SPE-/TIK-)
+            channel: 'online',
             createdBy: systemUser.id,
             createdByName: 'Hệ thống',
             notes: `Đơn online ${order.platform || 'Shopee'} - ${order.orderNumber}`,
@@ -126,34 +129,50 @@ export async function convertOnlineOrderToTransaction(prisma: StorePrisma, order
         },
     })
 
-    // Deduct inventory for each matched product
-    for (const inv of inventoryUpdates) {
-        // Decrease product stock
-        await prisma.product.update({
-            where: { id: inv.productId },
-            data: { stock: { decrement: inv.quantity } },
+    // Deduct inventory for each matched product.
+    // CHỐNG TRỪ KHO 2 LẦN: đường PUT /online-orders/:id/status cũng trừ kho độc
+    // lập → claim cờ stockDeducted trước (updateMany điều kiện false→true là
+    // atomic). count=0 nghĩa là đường kia đã trừ rồi → SKIP toàn bộ khối trừ kho.
+    // Cờ này cũng là nguồn sự thật để reverseOnlineOrderEffects hoàn kho khi hủy.
+    let deducted = 0
+    if (inventoryUpdates.length > 0) {
+        const claim = await prisma.onlineOrder.updateMany({
+            where: { id: order.id, stockDeducted: false },
+            data: { stockDeducted: true },
         })
+        if (claim.count === 0) {
+            console.log(`[OrderSync] Order ${order.orderNumber} đã trừ kho trước đó (stockDeducted=true) — bỏ qua trừ kho`)
+        } else {
+            for (const inv of inventoryUpdates) {
+                // Decrease product stock
+                await prisma.product.update({
+                    where: { id: inv.productId },
+                    data: { stock: { decrement: inv.quantity } },
+                })
 
-        // Create inventory transaction log
-        await prisma.inventoryTransaction.create({
-            data: {
-                type: 'out',
-                productId: inv.productId,
-                productName: inv.productName,
-                productSku: inv.productSku,
-                quantity: -inv.quantity,
-                reason: 'Bán hàng online',
-                note: `Đơn ${order.orderNumber} (${order.platform || 'Shopee'})`,
-                referenceId: `ONLINE-${order.orderNumber}`,
-                referenceType: 'sale',
-                userId: systemUser.id,
-                userName: 'Hệ thống',
-                transactionDate: order.createdAt,
-            },
-        })
+                // Create inventory transaction log
+                await prisma.inventoryTransaction.create({
+                    data: {
+                        type: 'out',
+                        productId: inv.productId,
+                        productName: inv.productName,
+                        productSku: inv.productSku,
+                        quantity: -inv.quantity,
+                        reason: 'Bán hàng online',
+                        note: `Đơn ${order.orderNumber} (${order.platform || 'Shopee'})`,
+                        referenceId: `ONLINE-${order.orderNumber}`,
+                        referenceType: 'sale',
+                        userId: systemUser.id,
+                        userName: 'Hệ thống',
+                        transactionDate: order.createdAt,
+                    },
+                })
+                deducted++
+            }
+        }
     }
 
-    console.log(`[OrderSync] Converted order ${order.orderNumber} → Transaction + ${inventoryUpdates.length} inventory updates`)
+    console.log(`[OrderSync] Converted order ${order.orderNumber} → Transaction + ${deducted} inventory updates`)
     return true
 }
 

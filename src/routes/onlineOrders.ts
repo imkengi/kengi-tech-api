@@ -2,6 +2,7 @@ import { Router, Response } from 'express'
 import { errMsg } from '../lib/errorResponse'
 import { authMiddleware, AuthRequest, getBranchFilter } from '../middleware/auth'
 import { nextCode } from '../lib/codeGenerator'
+import { reverseOnlineOrderEffects, isReversalStatus } from '../services/onlineOrderReversal'
 
 const router = Router()
 
@@ -35,10 +36,16 @@ router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => 
             if (lte) where.createdAt.lte = lte
         }
 
+        // Trạng thái hủy/hoàn — LOẠI khỏi doanh thu và số đếm doanh thu (đơn hủy
+        // không phải doanh thu). byStatus/byChannel bên dưới vẫn giữ đầy đủ.
+        const CANCELLED_STATUSES = ['CANCELLED', 'IN_CANCEL', 'TO_RETURN', 'cancelled', 'cancelling', 'returned']
+        const revenueWhere = { ...where, status: { notIn: CANCELLED_STATUSES } }
+
         const [totalOrders, totals, byStatus, byChannel] = await Promise.all([
             prisma.onlineOrder.count({ where }),
             prisma.onlineOrder.aggregate({
-                where,
+                where: revenueWhere,
+                _count: true,
                 _sum: { total: true, shippingFee: true, discount: true, platformFee: true, netRevenue: true },
             }),
             prisma.onlineOrder.groupBy({
@@ -91,6 +98,8 @@ router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => 
             success: true,
             data: {
                 totalOrders,
+                // Số đơn tính doanh thu (đã loại hủy/hoàn) — totalOrders vẫn đếm mọi đơn
+                revenueOrders: totals._count ?? 0,
                 totalRevenue: totals._sum.total ?? 0,
                 totalShippingFee: totals._sum.shippingFee ?? 0,
                 totalDiscount: totals._sum.discount ?? 0,
@@ -292,7 +301,8 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         } = req.query
 
         const pageNum = Math.max(1, parseInt(page as string, 10) || 1)
-        const size = Math.min(100, Math.max(1, parseInt(pageSize as string, 10) || 20))
+        // Clamp 1000: cho phép FE kéo trang lớn (export/đối soát) mà vẫn chặn abuse
+        const size = Math.min(1000, Math.max(1, parseInt(pageSize as string, 10) || 20))
         const skip = (pageNum - 1) * size
 
         const where: any = {}
@@ -410,7 +420,7 @@ router.get('/products', authMiddleware, async (req: AuthRequest, res: Response) 
         const { search, channelId, platform, status, page = '1', pageSize = '50' } = req.query
 
         const pageNum = Math.max(1, parseInt(page as string) || 1)
-        const size = Math.min(200, Math.max(1, parseInt(pageSize as string) || 50))
+        const size = Math.min(1000, Math.max(1, parseInt(pageSize as string) || 50))
 
         // Build where clause
         const where: any = {}
@@ -760,6 +770,16 @@ router.put('/:id/status', authMiddleware, async (req: AuthRequest, res: Response
                 include: { items: true, channel: true },
             })
 
+            // Sàn xác nhận hủy chung cuộc (CANCELLED) → đảo hiệu ứng ngay; nếu mới
+            // IN_CANCEL thì webhook sẽ đảo khi sàn chốt hủy (reversal idempotent).
+            if (isReversalStatus(order.status)) {
+                try {
+                    await reverseOnlineOrderEffects(prisma, order, { userId: req.user?.userId })
+                } catch (revErr: any) {
+                    console.error(`[Status] Reversal failed for ${order.orderNumber}:`, revErr.message)
+                }
+            }
+
             try {
                 await prisma.auditLog.create({
                     data: {
@@ -835,6 +855,16 @@ router.put('/:id/status', authMiddleware, async (req: AuthRequest, res: Response
                 include: { items: true, channel: true },
             })
 
+            // Hủy chốt trên sàn (CANCELLED/fallback) → đảo hiệu ứng (idempotent —
+            // webhook Shopee về sau có gọi lại cũng vô hại).
+            if (isReversalStatus(order.status)) {
+                try {
+                    await reverseOnlineOrderEffects(prisma, order, { userId: req.user?.userId })
+                } catch (revErr: any) {
+                    console.error(`[Status] Reversal failed for ${order.orderNumber}:`, revErr.message)
+                }
+            }
+
             try {
                 await prisma.auditLog.create({
                     data: {
@@ -872,16 +902,21 @@ router.put('/:id/status', authMiddleware, async (req: AuthRequest, res: Response
         })
 
         // ── Inventory auto-sync ──────────────────────────────────────────
-        // Deduct stock when order is confirmed/processed, restore when cancelled/returned
+        // Deduct stock when order is confirmed/processed, reverse when cancelled/returned
         const confirmStatuses = ['READY_TO_SHIP', 'PROCESSED', 'SHIPPED', 'confirmed', 'processing', 'shipping']
         const wasNotConfirmed = !oldStatus || !confirmStatuses.includes(oldStatus)
         const isNowConfirmed = confirmStatuses.includes(status)
-        const isCancelled = ['CANCELLED', 'TO_RETURN', 'IN_CANCEL', 'cancelled', 'returned'].includes(status)
-        const wasConfirmed = oldStatus && confirmStatuses.includes(oldStatus)
 
-        if (order.items?.length) {
+        if (order.items?.length && wasNotConfirmed && isNowConfirmed) {
             try {
-                if (wasNotConfirmed && isNowConfirmed) {
+                // CHỐNG TRỪ KHO 2 LẦN: đường convert (orderSync) cũng trừ kho độc lập
+                // → claim cờ stockDeducted trước (updateMany false→true là atomic).
+                // count=0 nghĩa là đơn đã trừ rồi (đường kia nhanh hơn) → SKIP.
+                const claim = await prisma.onlineOrder.updateMany({
+                    where: { id: order.id, stockDeducted: false },
+                    data: { stockDeducted: true },
+                })
+                if (claim.count > 0) {
                     // Deduct inventory
                     for (const item of order.items) {
                         if (item.sku) {
@@ -892,21 +927,23 @@ router.put('/:id/status', authMiddleware, async (req: AuthRequest, res: Response
                         }
                     }
                     console.log(`[Inventory Sync] ✅ Deducted stock for order ${order.orderNumber} (${order.items.length} items)`)
-                } else if (isCancelled && wasConfirmed) {
-                    // Restore inventory
-                    for (const item of order.items) {
-                        if (item.sku) {
-                            await prisma.product.updateMany({
-                                where: { sku: item.sku },
-                                data: { stock: { increment: item.quantity } },
-                            })
-                        }
-                    }
-                    console.log(`[Inventory Sync] ✅ Restored stock for cancelled order ${order.orderNumber}`)
+                } else {
+                    console.log(`[Inventory Sync] Order ${order.orderNumber} đã trừ kho trước đó (stockDeducted=true) — bỏ qua`)
                 }
             } catch (invErr) {
                 console.error(`[Inventory Sync] ⚠️ Error syncing inventory for ${order.orderNumber}:`, invErr)
                 // Don't fail the status update due to inventory errors
+            }
+        }
+
+        // Hủy/hoàn CHUNG CUỘC (cancelled/returned) → đảo toàn bộ hiệu ứng: hoàn
+        // kho theo cờ stockDeducted + void Transaction đã convert + đảo bút toán.
+        // IN_CANCEL/cancelling là "chờ duyệt" — chưa đảo (sàn có thể từ chối hủy).
+        if (isReversalStatus(status)) {
+            try {
+                await reverseOnlineOrderEffects(prisma, order, { userId: req.user?.userId })
+            } catch (revErr: any) {
+                console.error(`[Inventory Sync] ⚠️ Reversal failed for ${order.orderNumber}:`, revErr.message)
             }
         }
 
@@ -1181,6 +1218,15 @@ router.post('/bulk-update', authMiddleware, async (req: AuthRequest, res: Respon
                             } : { status: isShip ? 'AWAITING_COLLECTION' : 'IN_CANCEL', syncedAt: new Date() },
                         })
                         tiktokUpdated++
+                        // Sàn chốt hủy chung cuộc → đảo hiệu ứng (kho/HĐ/bút toán)
+                        const tkNewStatus = actual ? actual.status : (isShip ? 'AWAITING_COLLECTION' : 'IN_CANCEL')
+                        if (isReversalStatus(tkNewStatus)) {
+                            try {
+                                await reverseOnlineOrderEffects(prisma, o, { userId: req.user?.userId })
+                            } catch (revErr: any) {
+                                console.error(`[BulkUpdate] Reversal failed for ${o.orderNumber}:`, revErr.message)
+                            }
+                        }
                     } catch (e: any) {
                         errors.push(`${o.orderNumber}: ${e.message}`)
                     }
@@ -1191,6 +1237,20 @@ router.post('/bulk-update', authMiddleware, async (req: AuthRequest, res: Respon
         const result = normalIds.length > 0
             ? await prisma.onlineOrder.updateMany({ where: { id: { in: normalIds } }, data })
             : { count: 0 }
+
+        // Bulk chuyển sang hủy/hoàn chung cuộc → đảo hiệu ứng từng đơn thường
+        // (reverseOnlineOrderEffects idempotent — đơn chưa trừ kho/chưa convert
+        // thì không làm gì, chỉ tốn vài query).
+        if (isReversalStatus(status) && normalIds.length > 0) {
+            for (const o of targets) {
+                if (!normalIds.includes(o.id)) continue
+                try {
+                    await reverseOnlineOrderEffects(prisma, o, { userId: req.user?.userId })
+                } catch (revErr: any) {
+                    console.error(`[BulkUpdate] Reversal failed for ${o.orderNumber}:`, revErr.message)
+                }
+            }
+        }
 
         res.json({ success: true, data: { updated: result.count + tiktokUpdated, errors } })
     } catch (err) {
@@ -3276,12 +3336,18 @@ router.post('/channels/:id/sync-fees', authMiddleware, async (req: AuthRequest, 
             try {
                 let platformFee: number | null = null
                 let netRevenue: number | null = null
+                let adsVoucherDiscount = 0
 
                 if (channel.platform === 'shopee') {
                     const escrow = await service.getEscrowDetail(eid)
                     if (escrow && escrow.escrowAmount > 0) {
                         platformFee = escrow.totalFees
                         netRevenue = escrow.escrowAmount
+                        adsVoucherDiscount = escrow.adsVoucherDiscount || 0
+                        // Ads Smart Voucher mới: chỉ quan sát, chưa biết seller có gánh hay không
+                        if (adsVoucherDiscount > 0) {
+                            console.log(`[sync-fees] ${order.orderNumber}: ads_voucher_discount=${adsVoucherDiscount}`)
+                        }
                     }
                 } else {
                     const settlement = await service.getOrderSettlement(eid)
@@ -3298,7 +3364,7 @@ router.post('/channels/:id/sync-fees', authMiddleware, async (req: AuthRequest, 
                 // hoá đơn GTGT cuối kỳ qua POST /api/tax/platform-fee-invoice.
                 await prisma.onlineOrder.update({
                     where: { id: order.id },
-                    data: { platformFee, netRevenue },
+                    data: { platformFee, netRevenue, adsVoucherDiscount },
                 })
 
                 updated++
@@ -3332,8 +3398,21 @@ router.post('/channels/:id/sync-fees', authMiddleware, async (req: AuthRequest, 
 // POST /api/online-orders/fix-totals - TEMPORARY endpoint to fix historical totals
 router.post('/fix-totals', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
+        // Raw UPDATE ghi đè TOÀN BỘ OnlineOrder/Transaction/Payment — cực kỳ phá
+        // hoại nếu gọi nhầm. Chỉ admin/owner được chạy, VÀ phải xác nhận chủ đích
+        // bằng body { confirm: 'FIX-TOTALS' }.
+        const role = req.user?.role || ''
+        if (!['admin', 'owner', 'superadmin'].includes(role)) {
+            res.status(403).json({ success: false, error: 'Chỉ quản trị viên (admin/owner) được chạy fix-totals' })
+            return
+        }
+        if (req.body?.confirm !== 'FIX-TOTALS') {
+            res.status(400).json({ success: false, error: "Thiếu xác nhận: gửi body { confirm: 'FIX-TOTALS' } để chạy (endpoint ghi đè toàn bộ tổng tiền đơn online)" })
+            return
+        }
+
         const prisma = req.storePrisma!
-        
+
         // 1. Update OnlineOrder: total = subtotal, discount = 0
         await prisma.$executeRawUnsafe(`
             UPDATE "OnlineOrder" 
