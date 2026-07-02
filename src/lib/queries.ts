@@ -25,6 +25,11 @@ export interface DashboardStats {
         revenueGrowth: number
         ordersGrowth: number
         avgOrderValue: number
+        // Lợi nhuận gộp = doanh thu kỳ − COGS (SL bán × giá vốn HIỆN TẠI của SP —
+        // xấp xỉ, không phải giá vốn tại thời điểm bán); margin = % trên doanh thu.
+        profit: number
+        profitGrowth: number
+        margin: number
     }
 }
 
@@ -87,7 +92,7 @@ export async function getDashboardStats(
     // Product + Customer don't have branchId, so they use a single aggregate.
     const branchId: string | null = (branchFilter && (branchFilter as any).branchId) || null
 
-    const [txRows, productRows, customerRows, expenseRows] = await Promise.all([
+    const [txRows, productRows, customerRows, expenseRows, cogsRows] = await Promise.all([
         prisma.$queryRawUnsafe<any[]>(
             `SELECT
                 COALESCE(SUM(total) FILTER (WHERE status NOT IN ('voided', 'returned')), 0) AS total_revenue,
@@ -129,6 +134,19 @@ export async function getDashboardStats(
              WHERE ($4::text IS NULL OR "branchId" = $4)`,
             monthStart, lastMonthStart, lastMonthEnd, branchId,
         ),
+        // COGS theo kỳ (+ kỳ liền trước) cho thẻ Lợi nhuận gộp — giá vốn hiện tại
+        prisma.$queryRawUnsafe<any[]>(
+            `SELECT
+                COALESCE(SUM(ti.quantity * COALESCE(p."costPrice", 0)) FILTER (WHERE t."createdAt" >= $1 AND t."createdAt" <= $2), 0) AS period_cogs,
+                COALESCE(SUM(ti.quantity * COALESCE(p."costPrice", 0)) FILTER (WHERE t."createdAt" >= $3 AND t."createdAt" <= $4), 0) AS prev_period_cogs
+             FROM "TransactionItem" ti
+             JOIN "Transaction" t ON t.id = ti."transactionId"
+             LEFT JOIN "Product" p ON p.id = ti."productId"
+             WHERE t.status NOT IN ('voided', 'returned')
+               AND t."createdAt" >= LEAST($1, $3) AND t."createdAt" <= GREATEST($2, $4)
+               AND ($5::text IS NULL OR t."branchId" = $5)`,
+            pStart, pEnd, prevStart, prevEnd, branchId,
+        ),
     ])
 
     const num = (v: unknown): number => Number(v ?? 0)
@@ -153,6 +171,10 @@ export async function getDashboardStats(
     const periodOrders = num(tx.period_orders)
     const prevPeriodRevenue = num(tx.prev_period_revenue)
     const prevPeriodOrders = num(tx.prev_period_orders)
+
+    const cg = cogsRows[0] || {}
+    const periodProfit = periodRevenue - num(cg.period_cogs)
+    const prevPeriodProfit = prevPeriodRevenue - num(cg.prev_period_cogs)
 
     return {
         revenue: {
@@ -191,6 +213,9 @@ export async function getDashboardStats(
             revenueGrowth: calcGrowth(periodRevenue, prevPeriodRevenue),
             ordersGrowth: calcGrowth(periodOrders, prevPeriodOrders),
             avgOrderValue: periodOrders > 0 ? Math.round(periodRevenue / periodOrders) : 0,
+            profit: Math.round(periodProfit),
+            profitGrowth: calcGrowth(periodProfit, prevPeriodProfit),
+            margin: periodRevenue > 0 ? Math.round((periodProfit / periodRevenue) * 100) : 0,
         },
     }
 }
