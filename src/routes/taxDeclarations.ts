@@ -193,7 +193,7 @@ router.get('/vat-sales-list', authMiddleware, async (req: AuthRequest, res: Resp
         // Only invoiced sales carry VAT (tax > 0 or a VAT invoice was issued).
         const txs = await prisma.transaction.findMany({
             where: {
-                status: 'completed',
+                status: { in: ['completed', 'partial'] },
                 createdAt: { gte: p.start, lte: p.end },
                 OR: [{ tax: { gt: 0 } }, { vatStatus: 'issued' }],
             },

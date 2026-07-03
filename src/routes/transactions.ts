@@ -210,17 +210,19 @@ router.get('/stats', authMiddleware, requirePermission('pos.view'), async (req: 
         const partial = recent.filter(t => t.status === 'partial')
         const voided = recent.filter(t => t.status === 'voided')
         const returned = recent.filter(t => t.status === 'returned')
+        // Doanh thu = đơn hoàn thành + đơn GHI NỢ (hàng đã giao, chỉ chưa thu đủ tiền)
+        const revenueTx = recent.filter(t => t.status === 'completed' || t.status === 'partial')
 
         // KPI aggregations
         const totalOrders = recent.length
-        const totalRevenue = completed.reduce((s, t) => s + t.total, 0)
+        const totalRevenue = revenueTx.reduce((s, t) => s + t.total, 0)
         const completedCount = completed.length
         const voidedCount = voided.length
         const returnedCount = returned.length
 
         // Today vs yesterday
-        const todayTx = completed.filter(t => t.createdAt >= todayStart)
-        const yesterdayTx = completed.filter(t => t.createdAt >= yesterdayStart && t.createdAt < todayStart)
+        const todayTx = revenueTx.filter(t => t.createdAt >= todayStart)
+        const yesterdayTx = revenueTx.filter(t => t.createdAt >= yesterdayStart && t.createdAt < todayStart)
         const revenueToday = todayTx.reduce((s, t) => s + t.total, 0)
         const revenueYesterday = yesterdayTx.reduce((s, t) => s + t.total, 0)
 
@@ -241,7 +243,7 @@ router.get('/stats', authMiddleware, requirePermission('pos.view'), async (req: 
             const dayStart = new Date(now.getTime() - d * 86400_000)
             dayStart.setHours(0, 0, 0, 0)
             const dayEnd = new Date(dayStart.getTime() + 86400_000)
-            const dayTx = completed.filter(t => t.createdAt >= dayStart && t.createdAt < dayEnd)
+            const dayTx = revenueTx.filter(t => t.createdAt >= dayStart && t.createdAt < dayEnd)
             byDay.push({
                 date: dayStart.toISOString().slice(0, 10),
                 revenue: dayTx.reduce((s, t) => s + t.total, 0),

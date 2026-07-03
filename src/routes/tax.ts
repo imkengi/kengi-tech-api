@@ -191,7 +191,7 @@ router.get('/revenue-check', authMiddleware, async (req: AuthRequest, res: Respo
         const endDate = new Date(year, 11, 31, 23, 59, 59, 999)
 
         const transactions = await prisma.transaction.findMany({
-            where: { status: 'completed', createdAt: { gte: startDate, lte: endDate } },
+            where: { status: { in: ['completed', 'partial'] }, createdAt: { gte: startDate, lte: endDate } },
             select: { total: true },
         })
         const totalRevenue = transactions.reduce((s, t) => s + (t.total || 0), 0)
@@ -224,7 +224,7 @@ router.get('/invoices', authMiddleware, async (req: AuthRequest, res: Response) 
         }
 
         const where: any = {
-            status: 'completed',
+            status: { in: ['completed', 'partial'] },
             createdAt: { gte: startDate, lte: endDate },
         }
         if (vatOnly) {
@@ -280,7 +280,7 @@ async function calculate01GTGT(prisma: any, req: any, periodType: string, year: 
     const { startDate, endDate } = getPeriodDateRange(periodType, year, month, quarter)
 
     const transactions = await prisma.transaction.findMany({
-        where: { status: 'completed', createdAt: { gte: startDate, lte: endDate } },
+        where: { status: { in: ['completed', 'partial'] }, createdAt: { gte: startDate, lte: endDate } },
         select: { subtotal: true, tax: true, total: true, discount: true },
     })
     const imports = await prisma.importReceipt.findMany({
@@ -322,7 +322,7 @@ async function calculate01CNKD(prisma: any, periodType: string, year: number, mo
 
     // Total revenue from completed transactions
     const transactions = await prisma.transaction.findMany({
-        where: { status: 'completed', createdAt: { gte: startDate, lte: endDate } },
+        where: { status: { in: ['completed', 'partial'] }, createdAt: { gte: startDate, lte: endDate } },
         select: { total: true },
     })
     const cnkdRevenue = transactions.reduce((s: number, t: any) => s + (t.total || 0), 0)
@@ -470,7 +470,7 @@ router.post('/declarations', authMiddleware, async (req: AuthRequest, res: Respo
         const yearStart = new Date(year, 0, 1)
         const yearEnd = new Date(year, 11, 31, 23, 59, 59, 999)
         const allYearTx = await prisma.transaction.findMany({
-            where: { status: 'completed', createdAt: { gte: yearStart, lte: yearEnd } },
+            where: { status: { in: ['completed', 'partial'] }, createdAt: { gte: yearStart, lte: yearEnd } },
             select: { total: true },
         })
         const annualRevenue = allYearTx.reduce((s, t) => s + (t.total || 0), 0)
@@ -493,7 +493,7 @@ router.post('/declarations', authMiddleware, async (req: AuthRequest, res: Respo
         if (transactionIds && transactionIds.length > 0) {
             // Calculate from selected transactions only
             const selectedTx = await prisma.transaction.findMany({
-                where: { id: { in: transactionIds }, status: 'completed' },
+                where: { id: { in: transactionIds }, status: { in: ['completed', 'partial'] } },
                 select: { subtotal: true, tax: true, total: true, discount: true },
             })
 
@@ -939,9 +939,9 @@ router.get('/summary', authMiddleware, async (req: AuthRequest, res: Response) =
 
         // Current year data
         const [txs, expenses, prevTxs, prevExpenses, imports] = await Promise.all([
-            prisma.transaction.findMany({ where: { status: 'completed', createdAt: { gte: start, lte: end } }, select: { total: true, tax: true, subtotal: true, discount: true }, }),
+            prisma.transaction.findMany({ where: { status: { in: ['completed', 'partial'] }, createdAt: { gte: start, lte: end } }, select: { total: true, tax: true, subtotal: true, discount: true }, }),
             prisma.expense.findMany({ where: { date: { gte: start, lte: end } }, select: { amount: true } }),
-            prisma.transaction.findMany({ where: { status: 'completed', createdAt: { gte: prevStart, lte: prevEnd } }, select: { total: true } }).catch(() => []),
+            prisma.transaction.findMany({ where: { status: { in: ['completed', 'partial'] }, createdAt: { gte: prevStart, lte: prevEnd } }, select: { total: true } }).catch(() => []),
             prisma.expense.findMany({ where: { date: { gte: prevStart, lte: prevEnd } }, select: { amount: true } }).catch(() => []),
             prisma.importReceipt.findMany({ where: { status: { not: 'draft' }, createdAt: { gte: start, lte: end } }, select: { totalCost: true } }).catch(() => []),
         ])
@@ -2108,7 +2108,7 @@ router.get('/revenue-analysis', authMiddleware, async (req: AuthRequest, res: Re
         const start = new Date(year, 0, 1), end = new Date(year, 11, 31, 23, 59, 59, 999)
 
         const [txs, expenses, imports] = await Promise.all([
-            prisma.transaction.findMany({ where: { status: 'completed', createdAt: { gte: start, lte: end } }, select: { total: true, subtotal: true, tax: true, discount: true, createdAt: true } }),
+            prisma.transaction.findMany({ where: { status: { in: ['completed', 'partial'] }, createdAt: { gte: start, lte: end } }, select: { total: true, subtotal: true, tax: true, discount: true, createdAt: true } }),
             prisma.expense.findMany({ where: { date: { gte: start, lte: end } }, select: { amount: true, category: true, date: true } }),
             prisma.importReceipt.findMany({ where: { createdAt: { gte: start, lte: end } }, select: { totalCost: true, createdAt: true } }),
         ])
@@ -2199,7 +2199,7 @@ router.post('/auto-journal', authMiddleware, async (req: AuthRequest, res: Respo
 
         // ═══ 1. TRANSACTIONS → Revenue + VAT + COGS journal entries ═══
         const txs = await prisma.transaction.findMany({
-            where: { status: 'completed', createdAt: { gte: start, lte: end } },
+            where: { status: { in: ['completed', 'partial'] }, createdAt: { gte: start, lte: end } },
             include: { payments: true, items: { include: { product: { select: { costPrice: true } } } } },
             orderBy: { createdAt: 'asc' },
         })
@@ -2818,7 +2818,7 @@ router.get('/income-statement', authMiddleware, async (req: AuthRequest, res: Re
         const end = month ? new Date(year, month, 0, 23, 59, 59, 999) : new Date(year, 11, 31, 23, 59, 59, 999)
 
         const [txs, rawExpenses] = await Promise.all([
-            prisma.transaction.findMany({ where: { status: 'completed', createdAt: { gte: start, lte: end } }, select: { total: true, tax: true, subtotal: true, discount: true } }),
+            prisma.transaction.findMany({ where: { status: { in: ['completed', 'partial'] }, createdAt: { gte: start, lte: end } }, select: { total: true, tax: true, subtotal: true, discount: true } }),
             prisma.expense.findMany({ where: { date: { gte: start, lte: end } }, select: { amount: true, category: true } }),
         ])
 
@@ -3624,7 +3624,7 @@ router.get('/hkd/s1', authMiddleware, async (req: AuthRequest, res: Response) =>
         // Filter by transactionDate if set, otherwise by createdAt
         const txs = await p.transaction.findMany({
             where: {
-                status: 'completed',
+                status: { in: ['completed', 'partial'] },
                 OR: [
                     { transactionDate: { gte: start, lte: end } },
                     { transactionDate: null, createdAt: { gte: start, lte: end } },
@@ -3681,7 +3681,7 @@ router.get('/hkd/s2', authMiddleware, async (req: AuthRequest, res: Response) =>
                 orderBy: { createdAt: 'asc' }
             }),
             p.transaction.findMany({
-                where: { status: 'completed', ...orDateFilter() },
+                where: { status: { in: ['completed', 'partial'] }, ...orDateFilter() },
                 include: { items: { include: { product: true } } },
                 orderBy: [{ transactionDate: 'asc' }, { createdAt: 'asc' }]
             }),
@@ -3750,9 +3750,9 @@ router.get('/hkd/s2-summary', authMiddleware, async (req: AuthRequest, res: Resp
         })
         const [prevImports, prevSales, kyImports, kySales] = await Promise.all([
             p.importReceipt.findMany({ where: { createdAt: { gte: veryOldStart, lte: dauKyEnd } }, include: { items: true } }),
-            p.transaction.findMany({ where: { status: 'completed', ...orDate(veryOldStart, dauKyEnd) }, include: { items: { include: { product: true } } } }),
+            p.transaction.findMany({ where: { status: { in: ['completed', 'partial'] }, ...orDate(veryOldStart, dauKyEnd) }, include: { items: { include: { product: true } } } }),
             p.importReceipt.findMany({ where: { createdAt: { gte: kyStart, lte: kyEnd } }, include: { items: true } }),
-            p.transaction.findMany({ where: { status: 'completed', ...orDate(kyStart, kyEnd) }, include: { items: { include: { product: true } } } }),
+            p.transaction.findMany({ where: { status: { in: ['completed', 'partial'] }, ...orDate(kyStart, kyEnd) }, include: { items: { include: { product: true } } } }),
         ])
         // ImportReceiptItem key: productSku. TransactionItem key: sku
         const itemKey = (item: any) => item.productSku || item.sku || (item.productId ? item.productId.slice(-8).toUpperCase() : item.productName || '—')
@@ -3797,7 +3797,7 @@ router.get('/hkd/s3', authMiddleware, async (req: AuthRequest, res: Response) =>
         const txOrDate: any = { OR: [{ transactionDate: { gte: start, lte: end } }, { transactionDate: null, createdAt: { gte: start, lte: end } }] }
         // Fetch transactions với items+product để tính COGS (giá vốn hàng bán)
         const [txs, expenses] = await Promise.all([
-            p.transaction.findMany({ where: { status: 'completed', ...txOrDate }, include: { items: { include: { product: true } } }, orderBy: [{ transactionDate: 'asc' }, { createdAt: 'asc' }] }),
+            p.transaction.findMany({ where: { status: { in: ['completed', 'partial'] }, ...txOrDate }, include: { items: { include: { product: true } } }, orderBy: [{ transactionDate: 'asc' }, { createdAt: 'asc' }] }),
             p.expense.findMany({ where: { date: { gte: start, lte: end } }, orderBy: { date: 'asc' } }),
         ])
         // Map expense category → nhóm chi phí hợp lý theo TT152/2025/TT-BTC (Điều 5)
@@ -4082,21 +4082,22 @@ router.get('/hkd/s6', authMiddleware, async (req: AuthRequest, res: Response) =>
         
         // ═══ TIỀN MẶT (auto từ POS + Expense) ═══
         // Đầu kỳ tiền mặt
-        const prevTxs = await p.transaction.findMany({ where: { status: 'completed', createdAt: { lt: start } } })
+        const prevTxs = await p.transaction.findMany({ where: { status: { in: ['completed', 'partial'] }, createdAt: { lt: start } } })
         const prevExps = await p.expense.findMany({ where: { date: { lt: start } } })
         let tienMatDauKy = 0
-        for (const t of prevTxs) { if (t.paymentMethod === 'Tiền mặt') tienMatDauKy += (t.totalAmount || 0) }
+        // Sổ quỹ là THỰC THU: đơn ghi nợ (partial) chỉ cộng phần đã thu (amountReceived)
+        for (const t of prevTxs) { if (t.paymentMethod === 'Tiền mặt') tienMatDauKy += (t.status === 'partial' ? (t.amountReceived || 0) : (t.totalAmount || 0)) }
         for (const e of prevExps) {
             if (e.paidBy !== 'Tiền mặt') continue
             tienMatDauKy += e.category === 'hkd_cash_thu' ? (e.amount||0) : -(e.amount||0)
         }
         // Giao dịch tiền mặt trong kỳ
-        const txs = await p.transaction.findMany({ where: { status: 'completed', createdAt: { gte: start, lte: end } }, orderBy: { createdAt: 'asc' } })
+        const txs = await p.transaction.findMany({ where: { status: { in: ['completed', 'partial'] }, createdAt: { gte: start, lte: end } }, orderBy: { createdAt: 'asc' } })
         const expenses = await p.expense.findMany({ where: { date: { gte: start, lte: end } }, orderBy: { date: 'asc' } })
         const tmEvents: any[] = []
         for (const t of txs) {
             if (t.paymentMethod !== 'Tiền mặt') continue
-            tmEvents.push({ id: t.id, rawDate: t.transactionDate || t.createdAt, soChungTu: t.receiptNumber || `HD-${t.id.slice(-6)}`, dienGiai: `Thu tiền bán hàng - ${t.customerName || 'Khách lẻ'}`, thu: t.totalAmount, chi: 0, isManual: false })
+            tmEvents.push({ id: t.id, rawDate: t.transactionDate || t.createdAt, soChungTu: t.receiptNumber || `HD-${t.id.slice(-6)}`, dienGiai: `Thu tiền bán hàng - ${t.customerName || 'Khách lẻ'}`, thu: t.status === 'partial' ? (t.amountReceived || 0) : t.totalAmount, chi: 0, isManual: false })
         }
         for (const e of expenses) {
             if (e.paidBy !== 'Tiền mặt') continue
@@ -4191,12 +4192,13 @@ router.get('/hkd/s7', authMiddleware, async (req: AuthRequest, res: Response) =>
         const txOrDate7 = { OR: [{ transactionDate: { gte: start, lte: end } }, { transactionDate: null, createdAt: { gte: start, lte: end } }] }
         const BANK_KEYWORDS = ['bank','transfer','banking','chuyen_khoan','momo','vnpay','zalopay','atm','Bank','Transfer']
         const [allTxs, allExp] = await Promise.all([
-            p.transaction.findMany({ where: { status: 'completed', ...txOrDate7 }, orderBy: [{ transactionDate: 'asc' }, { createdAt: 'asc' }] }),
+            p.transaction.findMany({ where: { status: { in: ['completed', 'partial'] }, ...txOrDate7 }, orderBy: [{ transactionDate: 'asc' }, { createdAt: 'asc' }] }),
             p.expense.findMany({ where: { date: { gte: start, lte: end }, paidBy: { in: BANK_KEYWORDS } }, orderBy: { date: 'asc' } }),
         ])
         const bankTxs = allTxs.filter((t: any) => BANK_KEYWORDS.includes((t.paymentMethod || '').toLowerCase()))
         const items = [
-            ...bankTxs.map((t: any) => ({ ngay: fmtDate(t.transactionDate || t.createdAt), soChungTu: t.receiptNumber || '', dienGiai: `Thu - ${t.customerName || 'Khách'}`, thu: t.total || 0, chi: 0, phuongThucTT: t.paymentMethod || 'bank' })),
+            // Sổ tiền gửi là THỰC THU: đơn ghi nợ chỉ tính phần đã thu
+            ...bankTxs.map((t: any) => ({ ngay: fmtDate(t.transactionDate || t.createdAt), soChungTu: t.receiptNumber || '', dienGiai: `Thu - ${t.customerName || 'Khách'}`, thu: t.status === 'partial' ? (t.amountReceived || 0) : (t.total || 0), chi: 0, phuongThucTT: t.paymentMethod || 'bank' })),
             ...allExp.map((e: any) => ({ ngay: fmtDate(e.date), soChungTu: `CP-${e.id.slice(-6)}`, dienGiai: e.description || e.category || 'Chi', thu: 0, chi: e.amount || 0, phuongThucTT: e.paidBy || 'bank' })),
         ].sort((a, b) => a.ngay.localeCompare(b.ngay))
         let balance = 0
@@ -4748,7 +4750,7 @@ router.get('/z-reports/calculate', authMiddleware, async (req: AuthRequest, res:
         const branchFilter = getBranchFilter(req as any)
         // Transactions for the day: prefer transactionDate, fall back to createdAt
         const txWhere: any = {
-            status: 'completed',
+            status: { in: ['completed', 'partial'] },
             OR: [
                 { transactionDate: { gte: dayStart, lte: dayEnd } },
                 { transactionDate: null, createdAt: { gte: dayStart, lte: dayEnd } },
@@ -5104,7 +5106,7 @@ router.get('/cit-declaration/appendix/pl01-1', authMiddleware, async (req: AuthR
 
         const txs = await prisma.transaction.findMany({
             where: {
-                status: 'completed',
+                status: { in: ['completed', 'partial'] },
                 ...bf,
                 OR: [
                     { transactionDate: { gte: txStart, lte: txEnd } },
