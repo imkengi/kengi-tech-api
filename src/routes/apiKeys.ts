@@ -98,7 +98,9 @@ router.post('/regenerate', authMiddleware, async (req: AuthRequest, res: Respons
 })
 
 // ─── POST /api/api-keys/test — Test a key (via X-API-Key header) ────────────
-router.post('/test', async (req: AuthRequest, res: Response) => {
+// Cần authMiddleware: (a) storePrisma do middleware inject — thiếu là 500 ngay;
+// (b) endpoint bcrypt-compare qua mọi key nên không được để public cho spam.
+router.post('/test', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const apiKeyHeader = req.headers['x-api-key'] as string

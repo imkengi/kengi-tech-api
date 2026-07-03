@@ -1394,8 +1394,17 @@ router.post('/token', async (req: Request, res: Response) => {
             )
             if (stores.length > 0) store = stores[0]
         }
+        // 401 THỐNG NHẤT cho mọi trường hợp sai (store/clientId/secret) — trả lỗi
+        // khác nhau sẽ cho kẻ dò biết storeCode/clientId nào tồn tại.
+        const invalidCreds = () => res.status(401).json({ success: false, error: 'Invalid credentials' })
         if (!store) {
-            res.status(404).json({ success: false, error: 'Store not found' })
+            console.warn(`[Token] Unknown storeCode: ${normalizedCode}`)
+            invalidCreds()
+            return
+        }
+        // Store bị khóa/tạm ngưng thì API key cũng phải ngưng theo
+        if ((store as any).status && (store as any).status !== 'active') {
+            res.status(403).json({ success: false, error: 'Store is not active' })
             return
         }
 
@@ -1415,14 +1424,26 @@ router.post('/token', async (req: Request, res: Response) => {
             include: { user: true },
         })
         if (!apiKey) {
-            res.status(401).json({ success: false, error: 'Invalid clientId' })
+            console.warn(`[Token] Invalid clientId for store ${store.code}`)
+            invalidCreds()
+            return
+        }
+        if (apiKey.expiresAt && apiKey.expiresAt < new Date()) {
+            invalidCreds()
             return
         }
 
         // Verify clientSecret against stored hash
         const valid = await bcrypt.compare(clientSecret, apiKey.secretHash)
         if (!valid) {
-            res.status(401).json({ success: false, error: 'Invalid clientSecret' })
+            console.warn(`[Token] Invalid clientSecret for store ${store.code}`)
+            invalidCreds()
+            return
+        }
+
+        // User chủ key bị khóa → key cũng vô hiệu
+        if ((apiKey.user as any).isLocked) {
+            invalidCreds()
             return
         }
 

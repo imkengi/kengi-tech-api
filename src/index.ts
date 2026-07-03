@@ -142,6 +142,28 @@ const signupLimiter = rateLimit({
     skip: (req: express.Request) => process.env.NODE_ENV === 'development' && (req.ip === '::1' || req.ip === '127.0.0.1'),
 })
 
+// Token exchange (API key → JWT) — mỗi request tốn 1 bcrypt.compare (~100ms CPU)
+// nên là mục tiêu DoS/brute-force; siết chặt hơn hẳn limiter chung.
+const tokenLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, error: 'Quá nhiều yêu cầu đổi token. Vui lòng thử lại sau 15 phút.' },
+    skip: (req: express.Request) => process.env.NODE_ENV === 'development' && (req.ip === '::1' || req.ip === '127.0.0.1'),
+})
+
+// Gửi OTP email: route đã có cooldown theo (email, store) nhưng xoay vòng email
+// lạ sẽ lách được — chặn thêm theo IP để không bị lợi dụng bắn mail hàng loạt.
+const otpLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, error: 'Quá nhiều yêu cầu gửi mã. Vui lòng thử lại sau 15 phút.' },
+    skip: (req: express.Request) => process.env.NODE_ENV === 'development' && (req.ip === '::1' || req.ip === '127.0.0.1'),
+})
+
 // General API rate limit
 const apiLimiter = rateLimit({
     windowMs: 60 * 1000, // 1 minute
@@ -154,6 +176,8 @@ const apiLimiter = rateLimit({
 
 app.use('/api/auth/signup', signupLimiter)
 app.use('/api/auth/login', authLimiter)
+app.use('/api/auth/token', tokenLimiter)
+app.use('/api/auth/send-otp', otpLimiter)
 app.use('/api', apiLimiter)
 
 // ─── Request Logger (dev) ───────────────────────────────────────────────────
