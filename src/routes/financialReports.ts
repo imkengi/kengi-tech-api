@@ -25,6 +25,13 @@ router.get('/', authMiddleware, requirePermission('reports.view'), async (req: A
         let endDate: Date = now
 
         switch (period) {
+            // Android app gửi today|week|month|year
+            case 'today':
+                startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+                break
+            case 'week':
+                startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+                break
             case 'lastMonth': {
                 startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
                 endDate = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999)
@@ -228,23 +235,32 @@ async function buildReportFromPrisma(prisma: any, startDate: Date, endDate: Date
             where: { createdAt: { lte: endDate } },
             select: { totalCost: true, status: true },
         }).catch(() => [] as any[]),
-        // Daily/monthly transaction buckets — revenue + orders + COGS
+        // Daily/monthly transaction buckets — revenue + orders + COGS.
+        // COGS is aggregated in its own derived table: a correlated subquery on
+        // t."createdAt" is invalid under the outer GROUP BY (Postgres 42803).
         prisma.$queryRawUnsafe(
             `SELECT
-                to_char(date_trunc('${bucketUnit}', t.\"createdAt\"), 'YYYY-MM-DD') AS bucket,
-                COALESCE(SUM(t.total), 0) AS revenue,
-                COUNT(*) AS orders,
-                COALESCE((
-                    SELECT SUM(p.\"costPrice\" * ti.quantity)
-                    FROM \"TransactionItem\" ti
-                    JOIN \"Transaction\" t2 ON t2.id = ti.\"transactionId\"
-                    LEFT JOIN \"Product\" p ON p.id = ti.\"productId\"
-                    WHERE t2.status <> 'voided'
-                      AND date_trunc('${bucketUnit}', t2.\"createdAt\") = date_trunc('${bucketUnit}', t.\"createdAt\")
-                ), 0) AS cogs
-             FROM \"Transaction\" t
-             WHERE t.\"createdAt\" >= $1 AND t.\"createdAt\" <= $2 AND t.status <> 'voided'
-             GROUP BY 1
+                to_char(d.bucket, 'YYYY-MM-DD') AS bucket,
+                d.revenue,
+                d.orders,
+                COALESCE(c.cogs, 0) AS cogs
+             FROM (
+                SELECT date_trunc('${bucketUnit}', t.\"createdAt\") AS bucket,
+                       COALESCE(SUM(t.total), 0) AS revenue,
+                       COUNT(*) AS orders
+                FROM \"Transaction\" t
+                WHERE t.\"createdAt\" >= $1 AND t.\"createdAt\" <= $2 AND t.status <> 'voided'
+                GROUP BY 1
+             ) d
+             LEFT JOIN (
+                SELECT date_trunc('${bucketUnit}', t2.\"createdAt\") AS bucket,
+                       SUM(p.\"costPrice\" * ti.quantity) AS cogs
+                FROM \"TransactionItem\" ti
+                JOIN \"Transaction\" t2 ON t2.id = ti.\"transactionId\"
+                LEFT JOIN \"Product\" p ON p.id = ti.\"productId\"
+                WHERE t2.\"createdAt\" >= $1 AND t2.\"createdAt\" <= $2 AND t2.status <> 'voided'
+                GROUP BY 1
+             ) c ON c.bucket = d.bucket
              ORDER BY 1`,
             startDate, endDate,
         ),
