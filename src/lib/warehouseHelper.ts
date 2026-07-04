@@ -47,6 +47,65 @@ export async function getOrCreateDefaultWarehouse(
     }
 }
 
+// ─── Canonical sellable-stock mutation ──────────────────────────────────────
+// BẤT BIẾN của hệ thống: WarehouseStock[kho main của chi nhánh] LUÔN bằng phần
+// Product.stock bán được của chi nhánh đó. POS check tồn theo kho main, nên MỌI
+// chỗ đổi Product.stock PHẢI mirror cùng delta sang kho main — nếu không, tồn
+// lệch, POS bán khống hoặc không bán được hàng đã nhập.
+//
+// Dùng helper này thay cho `prisma.product.update({ data: { stock: {...} } })`
+// ở mọi flow bán/nhập/trả/điều chỉnh/đơn sàn. Có thể gọi trong $transaction
+// (truyền tx) hoặc ngoài (truyền prisma). `delta` dương = nhập, âm = xuất.
+//
+// KHÔNG dùng cho việc chuyển hàng sang kho damaged/warranty/xe — đó là "rời khỏi
+// hàng bán được": gọi adjustSellableStock(-qty) rồi updateWarehouseStock(khoĐặcBiệt,+qty).
+export async function adjustSellableStock(
+    client: AnyPrisma,
+    productId: string,
+    branchId: string | null | undefined,
+    delta: number,
+): Promise<void> {
+    if (!delta) return
+    // 1) Product.stock (tồn tổng bán được)
+    await client.product.update({
+        where: { id: productId },
+        data: { stock: { increment: delta } },
+    })
+    // 2) Mirror sang kho main của chi nhánh (best-effort — không chặn nghiệp vụ
+    //    chính nếu bảng kho chưa migrate ở schema cũ)
+    try {
+        const wh = await getOrCreateDefaultWarehouse(client, branchId ?? null)
+        if (wh?.id) await updateWarehouseStock(client, wh.id, productId, delta)
+    } catch { /* schema chưa có bảng Warehouse — Product.stock vẫn đúng */ }
+}
+
+// Biến thể chống bán âm: chỉ trừ khi tồn đủ (updateMany có guard gte). Trả về
+// true nếu trừ thành công, false nếu không đủ tồn (caller tự rollback/báo lỗi).
+// delta PHẢI âm (số lượng xuất). allowNegative=true thì trừ thẳng không guard.
+export async function decrementSellableStock(
+    client: AnyPrisma,
+    productId: string,
+    branchId: string | null | undefined,
+    qty: number,
+    allowNegative = false,
+): Promise<boolean> {
+    if (qty <= 0) return true
+    if (allowNegative) {
+        await adjustSellableStock(client, productId, branchId, -qty)
+        return true
+    }
+    const r = await client.product.updateMany({
+        where: { id: productId, stock: { gte: qty } },
+        data: { stock: { decrement: qty } },
+    })
+    if (r.count === 0) return false
+    try {
+        const wh = await getOrCreateDefaultWarehouse(client, branchId ?? null)
+        if (wh?.id) await updateWarehouseStock(client, wh.id, productId, -qty)
+    } catch { /* ignore */ }
+    return true
+}
+
 // Upsert a WarehouseStock row, applying a signed delta to its quantity.
 // Positive delta = stock in, negative = stock out. Product name/sku are looked
 // up so the row stays self-describing when first created.

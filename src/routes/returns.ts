@@ -4,6 +4,7 @@ import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../mi
 import { validate } from '../middleware/validate'
 import { CreateReturnSchema, UpdateReturnSchema } from '../schemas'
 import { nextCode } from '../lib/codeGenerator'
+import { adjustSellableStock } from '../lib/warehouseHelper'
 
 const router = Router()
 
@@ -258,11 +259,8 @@ router.post('/', authMiddleware, validate(CreateReturnSchema), async (req: AuthR
                         data: { restocked: true },
                     })
 
-                    // Increment stock
-                    await prisma.product.update({
-                        where: { id: item.productId },
-                        data: { stock: { increment: item.quantity } },
-                    })
+                    // Increment stock — mirror sang kho main của chi nhánh phiếu trả
+                    await adjustSellableStock(prisma, item.productId, returnOrder.branchId, item.quantity)
 
                     // Create inventory transaction
                     await (prisma as any).inventoryTransaction.create({
@@ -462,10 +460,8 @@ router.post('/:id/restock', authMiddleware, async (req: AuthRequest, res: Respon
             // Update product stock if productId exists
             if (item.productId) {
                 try {
-                    await prisma.product.update({
-                        where: { id: item.productId },
-                        data: { stock: { increment: item.quantity } },
-                    })
+                    // mirror Product.stock + kho main của chi nhánh phiếu trả
+                    await adjustSellableStock(prisma, item.productId, returnOrder.branchId, item.quantity)
 
                     // Create inventory transaction to show in stock card
                     await (prisma as any).inventoryTransaction.create({

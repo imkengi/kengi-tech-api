@@ -3,6 +3,8 @@
  * Called after sync imports/updates orders
  */
 
+import { adjustSellableStock } from '../lib/warehouseHelper'
+
 type StorePrisma = any
 
 /**
@@ -144,11 +146,9 @@ export async function convertOnlineOrderToTransaction(prisma: StorePrisma, order
             console.log(`[OrderSync] Order ${order.orderNumber} đã trừ kho trước đó (stockDeducted=true) — bỏ qua trừ kho`)
         } else {
             for (const inv of inventoryUpdates) {
-                // Decrease product stock
-                await prisma.product.update({
-                    where: { id: inv.productId },
-                    data: { stock: { decrement: inv.quantity } },
-                })
+                // Decrease product stock — mirror sang kho main (đơn sàn không có
+                // branchId → null, dùng kho main null-branch khớp reindex/sync)
+                await adjustSellableStock(prisma, inv.productId, null, -inv.quantity)
 
                 // Create inventory transaction log
                 await prisma.inventoryTransaction.create({

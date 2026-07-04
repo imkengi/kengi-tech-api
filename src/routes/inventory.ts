@@ -4,7 +4,7 @@ import { authMiddleware, AuthRequest, getBranchFilter, getBranchId } from '../mi
 import { requireRole } from '../middleware/roleMiddleware'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { nextCode } from '../lib/codeGenerator'
-import { getOrCreateDefaultWarehouse, updateWarehouseStock } from '../lib/warehouseHelper'
+import { getOrCreateDefaultWarehouse, updateWarehouseStock, adjustSellableStock } from '../lib/warehouseHelper'
 
 const router = Router()
 
@@ -499,17 +499,18 @@ router.post('/adjustments', authMiddleware, async (req: AuthRequest, res: Respon
         // userId lấy từ JWT — không nhận từ body để tránh mạo danh audit log
         const { productId, productName, productSku, quantity, reason, note, userName } = req.body
 
-        await prisma.product.update({
-            where: { id: productId },
-            data: { stock: { increment: quantity } },
-        })
-
-        const transaction = await prisma.inventoryTransaction.create({
-            data: {
-                type: 'adjustment',
-                productId, productName, productSku, quantity, reason, note,
-                userId: req.user!.userId, userName: userName || 'Admin',
-            },
+        // Kiểm kê thường cần cho phép tồn âm → dùng adjustSellableStock (không guard).
+        // Bọc trong $transaction để Product.stock, kho main và InventoryTransaction
+        // luôn nhất quán.
+        const transaction = await prisma.$transaction(async (tx: any) => {
+            await adjustSellableStock(tx, productId, getBranchId(req), quantity)
+            return tx.inventoryTransaction.create({
+                data: {
+                    type: 'adjustment',
+                    productId, productName, productSku, quantity, reason, note,
+                    userId: req.user!.userId, userName: userName || 'Admin',
+                },
+            })
         })
 
         res.status(201).json({
@@ -626,8 +627,10 @@ router.post('/free-return', authMiddleware, async (req: AuthRequest, res: Respon
                 unitPrice = Number((lastImport as any)?.unitPrice) || Number(product.costPrice) || 0
             }
 
-            const newStock = Math.max(0, product.stock - quantity)
-            await prisma.product.update({ where: { id: String(productId) }, data: { stock: newStock } })
+            // Trả hàng ra (-qty): mirror Product.stock + kho main. Bỏ clamp Math.max
+            // vốn che lỗi lệch tồn; không ép âm ở đây vì đây là xuất hàng hợp lệ.
+            await adjustSellableStock(prisma, String(productId), getBranchId(req), -quantity)
+            const newStock = product.stock - quantity
 
             await (prisma as any).inventoryTransaction.create({
                 data: {

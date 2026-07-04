@@ -14,6 +14,8 @@
 //  PUT /online-orders/:id/status + bulk-update khi chuyển cancelled/returned.
 // ═══════════════════════════════════════════════════════════════════════════════
 
+import { adjustSellableStock } from '../lib/warehouseHelper'
+
 type StorePrisma = any
 
 // Trạng thái CHUNG CUỘC cần đảo hiệu ứng. IN_CANCEL/cancelling là "chờ duyệt hủy"
@@ -71,18 +73,16 @@ export async function reverseOnlineOrderEffects(
         result.stockRestored = true
         for (const item of full.items || []) {
             try {
-                // Ưu tiên productId (chính xác), fallback SKU — mirror đúng cách
-                // trừ kho hiện tại (PUT /:id/status trừ theo SKU, convert theo productId)
-                if (item.productId) {
-                    await sp.product.update({
-                        where: { id: item.productId },
-                        data: { stock: { increment: item.quantity } },
-                    })
-                } else if (item.sku) {
-                    await sp.product.updateMany({
-                        where: { sku: item.sku },
-                        data: { stock: { increment: item.quantity } },
-                    })
+                // Ưu tiên productId (chính xác), fallback resolve từ SKU — mirror kho
+                // main qua adjustSellableStock. Đơn sàn không có branchId → null
+                // (kho main null-branch, khớp cách trừ kho ở PUT status/convert).
+                let productId: string | null = item.productId ?? null
+                if (!productId && item.sku) {
+                    const p = await sp.product.findFirst({ where: { sku: item.sku } })
+                    productId = p?.id ?? null
+                }
+                if (productId) {
+                    await adjustSellableStock(sp, productId, null, item.quantity)
                 }
             } catch (e: any) {
                 console.error(`[OrderReversal] Hoàn kho lỗi cho item ${item.productName} (đơn ${full.orderNumber}):`, e.message)

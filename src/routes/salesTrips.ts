@@ -15,8 +15,29 @@ import {
     PauseSalesTripSchema,
     ResumeSalesTripSchema,
 } from '../schemas'
+import { adjustSellableStock, getOrCreateDefaultWarehouse, updateWarehouseStock } from '../lib/warehouseHelper'
+
+// Trừ hàng bán được (Product.stock + kho main) CÓ GUARD gte chống tồn âm do race.
+// Ném TripConflictError nếu tồn không đủ tại thời điểm ghi. delta là số dương (qty xuất).
+async function decrementSellableGuarded(tx: any, productId: string, branchId: string | null, qty: number, label: string) {
+    if (qty <= 0) return
+    const r = await tx.product.updateMany({
+        where: { id: productId, stock: { gte: qty } },
+        data: { stock: { decrement: qty } },
+    })
+    if (r.count === 0) {
+        throw new TripConflictError(`Tồn kho chính không đủ cho "${label}" (đã thay đổi trong lúc xử lý)`)
+    }
+    try {
+        const mainWh = await getOrCreateDefaultWarehouse(tx, branchId)
+        if (mainWh?.id) await updateWarehouseStock(tx, mainWh.id, productId, -qty)
+    } catch { /* schema cũ chưa có bảng kho — Product.stock vẫn đúng */ }
+}
 
 const router = Router()
+
+// Ném ra khi guard tồn (gte) / optimistic lock không khớp do race → rollback + 409.
+class TripConflictError extends Error {}
 
 // ─── State machine ────────────────────────────────────────────────────────────
 // loading → active ⇄ paused → reconciling → closed
@@ -359,13 +380,11 @@ router.post(
                         },
                     })
 
-                    // 2) Move stock: decrement Product.stock, upsert WarehouseStock
+                    // 2) Move stock: hàng rời quầy lên xe = rời hàng bán được. Trừ CẢ
+                    //    Product.stock LẪN kho main (guard gte), rồi tăng WarehouseStock[kho xe].
                     for (const it of inputItems) {
                         const p = productMap.get(it.productId)
-                        await tx.product.update({
-                            where: { id: it.productId },
-                            data: { stock: { decrement: it.quantity } },
-                        })
+                        await decrementSellableGuarded(tx, it.productId, branchId, it.quantity, p.name)
                         await tx.warehouseStock.upsert({
                             where: { warehouseId_productId: { warehouseId: warehouse.id, productId: it.productId } },
                             update: { quantity: { increment: it.quantity }, productName: p.name, productSku: p.sku || null },
@@ -398,6 +417,9 @@ router.post(
 
             res.status(201).json({ success: true, data: shapeTrip(trip) })
         } catch (err: any) {
+            if (err instanceof TripConflictError) {
+                return res.status(409).json({ success: false, error: err.message })
+            }
             console.error('Create sales trip error:', err)
             res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
         }
@@ -471,13 +493,11 @@ const loadHandler = async (req: AuthRequest, res: Response) => {
                     },
                 })
 
-                // Move stock
+                // Move stock: rời quầy lên xe = rời hàng bán được → trừ Product.stock +
+                // kho main (guard gte), tăng WarehouseStock[kho xe].
                 for (const it of items) {
                     const p = productMap.get(it.productId)
-                    await tx.product.update({
-                        where: { id: it.productId },
-                        data: { stock: { decrement: it.quantity } },
-                    })
+                    await decrementSellableGuarded(tx, it.productId, branchId, it.quantity, p.name)
                     await tx.warehouseStock.upsert({
                         where: { warehouseId_productId: { warehouseId: trip.warehouseId, productId: it.productId } },
                         update: { quantity: { increment: it.quantity }, productName: p.name, productSku: p.sku || null },
@@ -528,6 +548,9 @@ const loadHandler = async (req: AuthRequest, res: Response) => {
 
             res.json({ success: true, data: shapeTrip(updated) })
         } catch (err: any) {
+            if (err instanceof TripConflictError) {
+                return res.status(409).json({ success: false, error: err.message })
+            }
             console.error('Load sales trip error:', err)
             res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
         }
@@ -627,16 +650,14 @@ const unloadHandler = async (req: AuthRequest, res: Response) => {
                 },
             })
 
-            // Move stock back: vehicle warehouse → main Product.stock
+            // Move stock back: hàng dỡ khỏi xe về lại hàng bán được → giảm kho xe,
+            // tăng CẢ Product.stock LẪN kho main qua adjustSellableStock.
             for (const it of items) {
                 await tx.warehouseStock.update({
                     where: { warehouseId_productId: { warehouseId: trip.warehouseId, productId: it.productId } },
                     data: { quantity: { decrement: it.quantity } },
                 })
-                await tx.product.update({
-                    where: { id: it.productId },
-                    data: { stock: { increment: it.quantity } },
-                })
+                await adjustSellableStock(tx, it.productId, branchId, it.quantity)
                 await tx.salesTripItem.update({
                     where: { tripId_productId: { tripId: trip.id, productId: it.productId } },
                     data: { loadedQty: { decrement: it.quantity } },
@@ -1074,6 +1095,16 @@ const closeHandler = async (req: AuthRequest, res: Response) => {
             const callerName = req.user?.email || null
 
             const updated = await withCodeCollisionRetry<any>(() => prisma.$transaction(async (tx: any) => {
+                // Optimistic lock chống double-close: chỉ tiếp tục nếu chuyến VẪN đang ở
+                // trạng thái đóng-được. Nếu request khác đã đóng trước → count===0 → 409.
+                const lock = await tx.salesTrip.updateMany({
+                    where: { id: trip.id, status: { in: ['active', 'paused', 'reconciling'] } },
+                    data: { status: 'reconciling' },
+                })
+                if (lock.count === 0) {
+                    throw new TripConflictError('Chuyến đã được xử lý')
+                }
+
                 // Vehicle warehouse → main stock (back to Product.stock)
                 if (remaining.length > 0) {
                     const transferCode = await nextTransferCode(tx)
@@ -1105,10 +1136,9 @@ const closeHandler = async (req: AuthRequest, res: Response) => {
                             where: { warehouseId_productId: { warehouseId: trip.warehouseId, productId: r.productId } },
                             data: { quantity: 0 },
                         })
-                        await tx.product.update({
-                            where: { id: r.productId },
-                            data: { stock: { increment: r.quantity } },
-                        })
+                        // Hàng thừa trả về quầy = quay lại hàng bán được → tăng cả
+                        // Product.stock lẫn kho main.
+                        await adjustSellableStock(tx, r.productId, branchId, r.quantity)
                         // Reflect actual return on trip items (only if returnedQty wasn't already
                         // reconciled to a non-zero value)
                         await tx.salesTripItem.updateMany({
@@ -1140,6 +1170,9 @@ const closeHandler = async (req: AuthRequest, res: Response) => {
 
             res.json({ success: true, data: shapeTrip(updated) })
         } catch (err: any) {
+            if (err instanceof TripConflictError) {
+                return res.status(409).json({ success: false, error: err.message })
+            }
             console.error('Close sales trip error:', err)
             res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
         }
@@ -1194,6 +1227,16 @@ router.post(
             const callerName = req.user?.email || null
 
             const updated = await withCodeCollisionRetry<any>(() => prisma.$transaction(async (tx: any) => {
+                // Optimistic lock chống double-cancel: chỉ tiếp tục nếu chuyến VẪN đang
+                // ở trạng thái hủy-được. Request khác đã hủy trước → count===0 → 409.
+                const lock = await tx.salesTrip.updateMany({
+                    where: { id: trip.id, status: { in: LOADING_STATUSES } },
+                    data: { status: 'cancelled' },
+                })
+                if (lock.count === 0) {
+                    throw new TripConflictError('Chuyến đã được xử lý')
+                }
+
                 if (stocks.length > 0) {
                     const transferCode = await nextTransferCode(tx)
                     await tx.stockTransfer.create({
@@ -1224,10 +1267,9 @@ router.post(
                             where: { warehouseId_productId: { warehouseId: trip.warehouseId, productId: r.productId } },
                             data: { quantity: 0 },
                         })
-                        await tx.product.update({
-                            where: { id: r.productId },
-                            data: { stock: { increment: r.quantity } },
-                        })
+                        // Trả hàng về quầy = quay lại hàng bán được → tăng cả Product.stock
+                        // lẫn kho main.
+                        await adjustSellableStock(tx, r.productId, branchId, r.quantity)
                         // Mirror the physical return on the trip item so the books
                         // line up after cancellation (loadedQty = returnedQty).
                         await tx.salesTripItem.updateMany({
@@ -1266,6 +1308,9 @@ router.post(
 
             res.json({ success: true, data: shapeTrip(updated) })
         } catch (err: any) {
+            if (err instanceof TripConflictError) {
+                return res.status(409).json({ success: false, error: err.message })
+            }
             console.error('Cancel sales trip error:', err)
             res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
         }

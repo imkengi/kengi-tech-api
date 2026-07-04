@@ -3,6 +3,7 @@ import { errMsg } from '../lib/errorResponse'
 import { authMiddleware, AuthRequest, getBranchFilter } from '../middleware/auth'
 import { nextCode } from '../lib/codeGenerator'
 import { reverseOnlineOrderEffects, isReversalStatus } from '../services/onlineOrderReversal'
+import { adjustSellableStock } from '../lib/warehouseHelper'
 
 const router = Router()
 
@@ -917,13 +918,17 @@ router.put('/:id/status', authMiddleware, async (req: AuthRequest, res: Response
                     data: { stockDeducted: true },
                 })
                 if (claim.count > 0) {
-                    // Deduct inventory
+                    // Deduct inventory — mirror sang kho main (adjustSellableStock cần
+                    // productId): ưu tiên item.productId, fallback resolve theo SKU.
+                    // Đơn sàn không có branchId → null (kho main null-branch).
                     for (const item of order.items) {
-                        if (item.sku) {
-                            await prisma.product.updateMany({
-                                where: { sku: item.sku },
-                                data: { stock: { decrement: item.quantity } },
-                            })
+                        let productId = item.productId as string | null
+                        if (!productId && item.sku) {
+                            const p = await prisma.product.findFirst({ where: { sku: item.sku } })
+                            productId = p?.id ?? null
+                        }
+                        if (productId) {
+                            await adjustSellableStock(prisma, productId, null, -item.quantity)
                         }
                     }
                     console.log(`[Inventory Sync] ✅ Deducted stock for order ${order.orderNumber} (${order.items.length} items)`)
@@ -2854,17 +2859,21 @@ router.put('/returns/:returnId/process', authMiddleware, async (req: AuthRequest
             updateData.refundedAt = new Date()
             updateData.status = 'refunded' // auto-mark as refunded on approve
 
-            // ── Restore inventory ──
+            // ── Restore inventory ── mirror sang kho main (adjustSellableStock cần
+            // productId): ưu tiên item.productId, fallback resolve theo SKU.
+            // Đơn sàn không có branchId → null (kho main null-branch).
             for (const item of returnOrder.items) {
-                if (item.sku) {
+                let productId = item.productId as string | null
+                if (!productId && item.sku) {
+                    const p = await prisma.product.findFirst({ where: { sku: item.sku } })
+                    productId = p?.id ?? null
+                }
+                if (productId) {
                     try {
-                        await prisma.product.updateMany({
-                            where: { sku: item.sku },
-                            data: { stock: { increment: item.quantity } },
-                        })
-                        console.log(`[Return] ✅ Restored ${item.quantity}x ${item.sku}`)
+                        await adjustSellableStock(prisma, productId, null, item.quantity)
+                        console.log(`[Return] ✅ Restored ${item.quantity}x ${item.sku || productId}`)
                     } catch (invErr) {
-                        console.error(`[Return] ⚠️ Failed to restore stock for ${item.sku}:`, invErr)
+                        console.error(`[Return] ⚠️ Failed to restore stock for ${item.sku || productId}:`, invErr)
                     }
                 }
                 // Mark as restocked

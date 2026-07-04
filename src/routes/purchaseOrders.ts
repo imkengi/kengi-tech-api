@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
 import { nextCode, withCodeCollisionRetry } from '../lib/codeGenerator'
+import { adjustSellableStock } from '../lib/warehouseHelper'
 
 const router = Router()
 
@@ -236,10 +237,8 @@ router.put('/:id/status', authMiddleware, requireRole('admin', 'manager'), async
                 include: { items: true },
             })
             for (const u of stockUpdates) {
-                await tx.product.update({
-                    where: { id: u.productId },
-                    data: { stock: { increment: u.quantity } },
-                })
+                // Mirror sang kho main của chi nhánh PO (existing.branchId có thể null)
+                await adjustSellableStock(tx, u.productId, existing.branchId, u.quantity)
             }
             return updated
         })

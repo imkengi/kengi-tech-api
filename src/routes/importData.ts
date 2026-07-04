@@ -4,6 +4,7 @@ import multer from 'multer'
 import * as XLSX from 'xlsx'
 import { authMiddleware, AuthRequest, getBranchFilter, getBranchId } from '../middleware/auth'
 import { PrismaClient as StorePrisma } from '../generated/store-client'
+import { adjustSellableStock, getOrCreateDefaultWarehouse, updateWarehouseStock } from '../lib/warehouseHelper'
 
 // Helper: get the per-branch prisma client from request (injected by authMiddleware)
 function getPrisma(req: AuthRequest): StorePrisma {
@@ -301,6 +302,15 @@ router.post('/products', authMiddleware, upload.single('file'), async (req: Auth
                     // Dòng đầu tiên (kỳ đầu) → tạo mới với stock = tồn đầu kỳ
                     product = await getPrisma(req).product.create({ data: { sku, ...productData } })
                     stockDelta = openingStock
+                    // product.create đã set Product.stock = openingStock → KHÔNG dùng
+                    // adjustSellableStock (sẽ cộng thêm lần nữa). Set thẳng WarehouseStock
+                    // kho main = openingStock để POS thấy tồn ngay sau import.
+                    if (openingStock > 0) {
+                        try {
+                            const wh = await getOrCreateDefaultWarehouse(getPrisma(req), branchId)
+                            if (wh?.id) await updateWarehouseStock(getPrisma(req), wh.id, product.id, openingStock)
+                        } catch { /* schema chưa có bảng Warehouse — Product.stock vẫn đúng */ }
+                    }
                 }
 
                 // InventoryTransaction tồn đầu kỳ: CHỈ ghi khi stock thực sự thay đổi
@@ -443,7 +453,7 @@ router.post('/transactions', authMiddleware, upload.single('file'), async (req: 
                     // import lại cùng file kho bị trừ thêm 1 lần (hoàn cũ + trừ mới → net = 0)
                     const oldItems = await getPrisma(req).transactionItem.findMany({ where: { transactionId: existing.id } })
                     for (const oldItem of oldItems) {
-                        await getPrisma(req).product.update({ where: { id: oldItem.productId }, data: { stock: { increment: oldItem.quantity } } })
+                        await adjustSellableStock(getPrisma(req), oldItem.productId, branchId, oldItem.quantity)
                     }
                     await getPrisma(req).transactionItem.deleteMany({ where: { transactionId: existing.id } })
 
@@ -484,7 +494,7 @@ router.post('/transactions', authMiddleware, upload.single('file'), async (req: 
                 }
 
                 for (const item of itemsData) {
-                    await getPrisma(req).product.update({ where: { id: item.productId }, data: { stock: { decrement: item.quantity } } })
+                    await adjustSellableStock(getPrisma(req), item.productId, branchId, -item.quantity)
                 }
                 imported++
             } catch (err: any) {
@@ -571,7 +581,7 @@ router.post('/import-receipts', authMiddleware, upload.single('file'), async (re
                 })
 
                 for (const item of itemsData) {
-                    await getPrisma(req).product.update({ where: { id: item.productId }, data: { stock: { increment: item.quantity } } })
+                    await adjustSellableStock(getPrisma(req), item.productId, branchId, item.quantity)
                 }
                 imported++
             } catch (err: any) {
@@ -665,7 +675,7 @@ router.post('/returns', authMiddleware, upload.single('file'), async (req: AuthR
                 })
 
                 for (const item of itemsList) {
-                    await getPrisma(req).product.update({ where: { id: item.productId }, data: { stock: { increment: item.quantity } } })
+                    await adjustSellableStock(getPrisma(req), item.productId, branchId, item.quantity)
                 }
                 imported++
             } catch (err: any) {

@@ -9,6 +9,10 @@ import {
     CreateStockTransferSchema,
 } from '../schemas'
 import { nextCode } from '../lib/codeGenerator'
+import { adjustSellableStock, getOrCreateDefaultWarehouse, updateWarehouseStock } from '../lib/warehouseHelper'
+
+// Ném ra khi guard tồn (gte) không trừ được vì tồn đã đổi do race → rollback + 409.
+class TransferConflictError extends Error {}
 
 const router = Router()
 
@@ -551,6 +555,26 @@ router.post(
                 return res.status(403).json({ success: false, error: msg })
             }
 
+            // Mô hình tồn: "kho chính" (type === 'main') CHÍNH LÀ Product.stock — không
+            // phải một pool tách biệt. Vì vậy warehouseId=null (tồn kho tổng) và kho main
+            // là CÙNG MỘT nguồn hàng bán được. Chuyển giữa hai đầu đều-là-bán-được là vô
+            // nghĩa (và trước đây gây double-count), nên chặn thẳng.
+            const fromIsSellable = !fromWarehouseId || fromWh?.type === 'main'
+            const toIsSellable = !toWarehouseId || toWh?.type === 'main'
+            if (fromIsSellable && toIsSellable) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Không thể chuyển giữa kho chính và tồn kho tổng (cùng một nguồn)',
+                })
+            }
+
+            // Chi nhánh của kho main để mirror Product.stock đúng chi nhánh. Ưu tiên
+            // branchId của warehouse main liên quan, fallback về branch của request.
+            const mainBranchId =
+                (fromIsSellable ? fromWh?.branchId : null) ??
+                (toIsSellable ? toWh?.branchId : null) ??
+                (getBranchId(req) || null)
+
             // Pre-resolve product info for all items
             const productIds = items.map((it: any) => it.productId)
             const products = await prisma.product.findMany({
@@ -631,25 +655,55 @@ router.post(
                     include: { items: true },
                 })
 
-                // Apply stock movements
+                // Apply stock movements.
+                // Kho main lock-step Product.stock: khi một đầu là "hàng bán được"
+                // (warehouseId=null hoặc kho type='main') ta gọi adjustSellableStock —
+                // helper tự chỉnh CẢ Product.stock LẪN WarehouseStock[main], không tự tay
+                // đụng warehouseStock[main] nữa. Kho đặc biệt (damaged/warranty/mobile) thì
+                // chỉ dời WarehouseStock của kho đó như cũ.
                 for (const it of items) {
                     const p = productMap.get(it.productId)!
 
                     // Decrement source
-                    if (fromWarehouseId) {
-                        await tx.warehouseStock.update({
-                            where: { warehouseId_productId: { warehouseId: fromWarehouseId, productId: it.productId } },
-                            data: { quantity: { decrement: it.quantity } },
-                        })
-                    } else {
-                        await tx.product.update({
-                            where: { id: it.productId },
+                    if (fromIsSellable) {
+                        // Nguồn là hàng bán được → guard gte để chống tồn âm do race.
+                        const r = await tx.product.updateMany({
+                            where: { id: it.productId, stock: { gte: it.quantity } },
                             data: { stock: { decrement: it.quantity } },
                         })
+                        if (r.count === 0) {
+                            throw new TransferConflictError(
+                                `Tồn kho chính không đủ cho "${p.name}" (đã thay đổi trong lúc xử lý)`,
+                            )
+                        }
+                        // Mirror giảm sang WarehouseStock[main] (helper best-effort). Không
+                        // dùng adjustSellableStock trọn gói vì đã tự trừ Product.stock có guard
+                        // ở trên; chỉ cần đồng bộ kho main.
+                        try {
+                            const mainWh = await getOrCreateDefaultWarehouse(tx, mainBranchId)
+                            if (mainWh?.id) {
+                                await updateWarehouseStock(tx, mainWh.id, it.productId, -it.quantity)
+                            }
+                        } catch { /* schema cũ chưa có bảng kho — Product.stock vẫn đúng */ }
+                    } else {
+                        // Nguồn là kho đặc biệt → chỉ dời WarehouseStock của kho đó, guard gte.
+                        const r = await tx.warehouseStock.updateMany({
+                            where: { warehouseId: fromWarehouseId, productId: it.productId, quantity: { gte: it.quantity } },
+                            data: { quantity: { decrement: it.quantity } },
+                        })
+                        if (r.count === 0) {
+                            throw new TransferConflictError(
+                                `Tồn kho nguồn không đủ cho "${p.name}" (đã thay đổi trong lúc xử lý)`,
+                            )
+                        }
                     }
 
                     // Increment destination
-                    if (toWarehouseId) {
+                    if (toIsSellable) {
+                        // Đích là hàng bán được → tăng cả Product.stock lẫn kho main.
+                        await adjustSellableStock(tx, it.productId, mainBranchId, it.quantity)
+                    } else {
+                        // Đích là kho đặc biệt → chỉ tăng WarehouseStock của kho đó.
                         await tx.warehouseStock.upsert({
                             where: { warehouseId_productId: { warehouseId: toWarehouseId, productId: it.productId } },
                             update: { quantity: { increment: it.quantity }, productName: p.name, productSku: p.sku || null },
@@ -661,11 +715,6 @@ router.post(
                                 quantity: it.quantity,
                             },
                         })
-                    } else {
-                        await tx.product.update({
-                            where: { id: it.productId },
-                            data: { stock: { increment: it.quantity } },
-                        })
                     }
                 }
 
@@ -674,6 +723,9 @@ router.post(
 
             res.status(201).json({ success: true, data: transfer })
         } catch (err: any) {
+            if (err instanceof TransferConflictError) {
+                return res.status(409).json({ success: false, error: err.message })
+            }
             console.error('Create stock transfer error:', err)
             res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
         }

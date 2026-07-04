@@ -3,7 +3,7 @@ import { errorDetail } from '../lib/errorResponse'
 import { authMiddleware, getBranchFilter, AuthRequest, getBranchId, canAccessBranch } from '../middleware/auth'
 import { calculateCostPrice, getCostPriceMethod } from '../lib/costPrice'
 import { nextCode } from '../lib/codeGenerator'
-import { getOrCreateDefaultWarehouse, updateWarehouseStock } from '../lib/warehouseHelper'
+import { getOrCreateDefaultWarehouse, updateWarehouseStock, adjustSellableStock } from '../lib/warehouseHelper'
 
 const router = Router()
 
@@ -526,15 +526,8 @@ router.put('/:id/return', authMiddleware, async (req: AuthRequest, res: Response
                 data: { returnedQuantity: { increment: ri.quantity } },
             })
 
-            // 2. Decrement product stock
-            const product = await prisma.product.findUnique({ where: { id: ri.productId } })
-            if (product) {
-                const newStock = Math.max(0, product.stock - ri.quantity)
-                await prisma.product.update({
-                    where: { id: ri.productId },
-                    data: { stock: newStock },
-                })
-            }
+            // 2. Decrement product stock (mirror sang kho main của chi nhánh phiếu)
+            await adjustSellableStock(prisma, ri.productId, receipt.branchId, -ri.quantity)
 
             totalReturnCost += receiptItem.costPrice * ri.quantity
             totalReturnQty += ri.quantity
@@ -650,7 +643,7 @@ router.get('/:id/return-history', authMiddleware, async (req: AuthRequest, res: 
 router.delete('/:id/return/:batchId', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        const { batchId } = req.params
+        const batchId = String(req.params.batchId)
 
         const receipt = await prisma.importReceipt.findUnique({
             where: { id: String(req.params.id) },
@@ -670,10 +663,7 @@ router.delete('/:id/return/:batchId', authMiddleware, async (req: AuthRequest, r
         for (const txn of batchTxns) {
             if (!txn.productId) continue
             const returnedQty = Math.abs(txn.quantity)
-            await prisma.product.update({
-                where: { id: txn.productId },
-                data: { stock: { increment: returnedQty } },
-            })
+            await adjustSellableStock(prisma, txn.productId, receipt.branchId, returnedQty)
 
             // 2. Decrement returnedQuantity on the receipt item
             const receiptItem = receipt.items.find(i => i.productId === txn.productId)
@@ -758,13 +748,15 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
                         // hoặc kết quả không hợp lệ) thì giữ nguyên giá vốn hiện tại
                         newCostPrice = Number.isFinite(recalced) ? Math.max(0, recalced) : product.costPrice
                     }
-                    await prisma.product.update({
-                        where: { id: item.productId },
-                        data: {
-                            stock: newStock,
-                            costPrice: newStock > 0 ? newCostPrice : product.costPrice,
-                        },
-                    })
+                    // Trừ tồn qua helper để mirror sang kho main; costPrice cập nhật riêng.
+                    // delta = newStock - product.stock (âm khi thật sự trừ; 0 nếu đã chạm sàn 0)
+                    await adjustSellableStock(prisma, item.productId, receipt.branchId, newStock - product.stock)
+                    if (newStock > 0 && newCostPrice !== product.costPrice) {
+                        await prisma.product.update({
+                            where: { id: item.productId },
+                            data: { costPrice: newCostPrice },
+                        })
+                    }
                 }
             }
 
