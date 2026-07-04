@@ -5,18 +5,53 @@
 
 type AnyPrisma = any
 
-// Find (or lazily create) the branch's default "main" warehouse. The lookup key
-// (type + isDefault + branchId) matches the seeder in routes/warehouses.ts, so
-// this returns the same record those routes manage rather than a duplicate.
+// Find (or lazily create) the branch's default "main" warehouse. Robust cho
+// scale nhiều store/chi nhánh — tránh 2 vấn đề đã gặp trong prod:
+//  (1) Boot migration seed kho với mã theo TÊN SCHEMA + branchId=null, còn hàm này
+//      tìm theo id CHI NHÁNH. Khi hậu tố schema trùng hậu tố branch, tạo mới bị
+//      đụng mã → trước đây trả undefined → POS âm thầm không cập nhật kho.
+//  (2) Kho null-branch boot-seed thành "mồ côi" bên cạnh kho theo chi nhánh.
+// Cách xử lý: nếu chưa có kho theo chi nhánh, NHẬN kho main null-branch có sẵn
+// (gán branchId cho chi nhánh) thay vì tạo trùng; khi tạo mới thì dùng mã duy nhất
+// nếu mã cơ bản đã bị chiếm.
 export async function getOrCreateDefaultWarehouse(
     prisma: AnyPrisma,
     branchId: string | null | undefined,
     branchName?: string | null,
 ): Promise<any> {
-    const where = { type: 'main', isDefault: true, branchId: branchId || null }
+    // Resolve "kho bán được" chuẩn: nếu KHÔNG truyền branch (đơn sàn, import không
+    // gắn chi nhánh...), quy về kho của CHI NHÁNH CHÍNH — đúng kho mà POS dùng — để
+    // online và POS cùng trỏ một kho, giữ WarehouseStock[main] == Product.stock.
+    let nb = branchId || null
+    if (!nb) {
+        const mainBranch = await prisma.branch
+            .findFirst({ where: { isMainBranch: true }, select: { id: true, name: true } })
+            .catch(() => null)
+        if (mainBranch?.id) {
+            nb = mainBranch.id
+            if (!branchName) branchName = mainBranch.name
+        }
+    }
+    const where = { type: 'main', isDefault: true, branchId: nb }
 
     const existing = await prisma.warehouse.findFirst({ where })
     if (existing) return existing
+
+    // Hỏi kho theo chi nhánh cụ thể mà chưa có → nhận kho main null-branch boot-seed
+    // (nếu có) làm kho của chi nhánh này, tránh tạo bản trùng/mồ côi.
+    if (nb) {
+        const orphan = await prisma.warehouse
+            .findFirst({ where: { type: 'main', isDefault: true, branchId: null } })
+            .catch(() => null)
+        if (orphan) {
+            try {
+                return await prisma.warehouse.update({ where: { id: orphan.id }, data: { branchId: nb } })
+            } catch {
+                // race: kho vừa được nhận bởi request khác — trả lại đúng kho chi nhánh
+                return (await prisma.warehouse.findFirst({ where })) || orphan
+            }
+        }
+    }
 
     // Resolve a human-readable name only when we actually need to create.
     let name = branchName || undefined
@@ -27,24 +62,30 @@ export async function getOrCreateDefaultWarehouse(
         name = branch?.name || undefined
     }
 
-    const code = branchId ? `WH-MAIN-${branchId.slice(-6).toUpperCase()}` : 'WH-MAIN'
-
-    try {
-        return await prisma.warehouse.create({
-            data: {
-                code,
-                name: name ? `Kho chính - ${name}` : 'Kho chính',
-                type: 'main',
-                description: 'Kho hàng hóa chính, đồng bộ với tồn kho sản phẩm',
-                isDefault: true,
-                isActive: true,
-                branchId: branchId || null,
-            },
-        })
-    } catch {
-        // Unique-constraint race: another request seeded it first — re-fetch.
-        return prisma.warehouse.findFirst({ where })
+    const baseCode = nb ? `WH-MAIN-${nb.slice(-6).toUpperCase()}` : 'WH-MAIN'
+    // Thử mã cơ bản trước; nếu đã bị chiếm (đụng schema-suffix), dùng mã duy nhất để
+    // LUÔN tạo được kho gắn đúng branchId — không bao giờ trả về undefined.
+    const codes = [baseCode, `${baseCode}-${Date.now().toString(36).slice(-4).toUpperCase()}`, `WH-MAIN-${Date.now().toString(36).toUpperCase()}`]
+    for (const code of codes) {
+        try {
+            return await prisma.warehouse.create({
+                data: {
+                    code,
+                    name: name ? `Kho chính - ${name}` : 'Kho chính',
+                    type: 'main',
+                    description: 'Kho hàng hóa chính, đồng bộ với tồn kho sản phẩm',
+                    isDefault: true,
+                    isActive: true,
+                    branchId: nb,
+                },
+            })
+        } catch {
+            // Đụng mã hoặc race: nếu đã có kho đúng chi nhánh thì trả về; else thử mã kế.
+            const w = await prisma.warehouse.findFirst({ where }).catch(() => null)
+            if (w) return w
+        }
     }
+    return prisma.warehouse.findFirst({ where }).catch(() => null)
 }
 
 // ─── Canonical sellable-stock mutation ──────────────────────────────────────
