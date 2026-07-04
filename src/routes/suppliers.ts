@@ -51,7 +51,46 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
             ]
         }
         const suppliers = await prisma.supplier.findMany({ where, orderBy: { createdAt: 'desc' } })
-        const _response = { success: true, data: suppliers }
+
+        // Tính động cho MỖI NCC: số đơn, tổng giá trị nhập, và CÔNG NỢ phải trả hiện tại.
+        // (Field totalOrders/totalValue lưu trên record NCC không được cập nhật → luôn 0;
+        //  công nợ = số dư đầu kỳ (payable) + Σ phiếu nhập chưa trả (totalCost - paidAmount)
+        //  + Σ PO chưa nhận. Khớp công thức debt-history ở endpoint chi tiết.)
+        const supplierIds = suppliers.map(s => s.id)
+        const agg: Record<string, { orders: number; value: number; debt: number }> = {}
+        for (const s of suppliers) agg[s.id] = { orders: 0, value: 0, debt: (s as any).payable || 0 }
+        if (supplierIds.length) {
+            const [receipts, pos] = await Promise.all([
+                prisma.importReceipt.findMany({
+                    where: { supplierId: { in: supplierIds }, status: { notIn: ['cancelled', 'draft'] } },
+                    select: { supplierId: true, totalCost: true, paidAmount: true, paymentStatus: true } as any,
+                }),
+                prisma.purchaseOrder.findMany({
+                    where: { supplierId: { in: supplierIds } },
+                    select: { supplierId: true, totalAmount: true, status: true },
+                }),
+            ])
+            for (const ir of receipts as any[]) {
+                const a = ir.supplierId && agg[ir.supplierId]; if (!a) continue
+                a.orders++; a.value += ir.totalCost || 0
+                const paid = ir.paymentStatus === 'paid' ? (ir.totalCost || 0) : Math.min(ir.totalCost || 0, ir.paidAmount || 0)
+                a.debt += Math.max(0, (ir.totalCost || 0) - paid)
+            }
+            for (const po of pos as any[]) {
+                const a = po.supplierId && agg[po.supplierId]; if (!a) continue
+                a.orders++; a.value += po.totalAmount || 0
+                // PO đã nhận coi như đã thanh toán; chưa nhận (và chưa hủy) còn nợ.
+                if (po.status !== 'received' && po.status !== 'cancelled') a.debt += po.totalAmount || 0
+            }
+        }
+        const enriched = suppliers.map(s => ({
+            ...s,
+            totalOrders: agg[s.id]?.orders ?? 0,
+            totalValue: agg[s.id]?.value ?? 0,
+            debt: Math.max(0, Math.round(agg[s.id]?.debt ?? 0)),
+        }))
+
+        const _response = { success: true, data: enriched }
         await cacheSet(cacheKey, _response, 300)
         res.json(_response)
     } catch (err) {
