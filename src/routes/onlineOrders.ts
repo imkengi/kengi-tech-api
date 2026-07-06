@@ -4,8 +4,15 @@ import { authMiddleware, AuthRequest, getBranchFilter } from '../middleware/auth
 import { nextCode } from '../lib/codeGenerator'
 import { reverseOnlineOrderEffects, isReversalStatus } from '../services/onlineOrderReversal'
 import { adjustSellableStock } from '../lib/warehouseHelper'
+import { registryPrisma } from '../lib/prisma'
 
 const router = Router()
+
+// Bật cờ registry để autoSync/cleanup CHỈ chạm store có kênh online (tránh quét toàn bộ)
+function markHasOnlineChannels(schema?: string) {
+    if (!schema) return
+    ;(registryPrisma as any).store.updateMany({ where: { schema }, data: { hasOnlineChannels: true } }).catch(() => { })
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  ONLINE ORDER STATS
@@ -230,6 +237,7 @@ router.post('/channels', authMiddleware, async (req: AuthRequest, res: Response)
         const channel = await prisma.onlineChannel.create({
             data: { name, platform, shopUrl, apiKey, apiSecret, accessToken, syncEnabled: syncEnabled ?? false },
         })
+        markHasOnlineChannels(req.user?.storeSchema)
 
         res.json({ success: true, data: channel })
     } catch (err) {

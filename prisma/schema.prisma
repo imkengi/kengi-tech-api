@@ -27,6 +27,8 @@ model Store {
   addOns    String   @default("[]")      // JSON array of add-on IDs e.g. ["online","extra_branch"]
   extraBranches Int  @default(0)         // number of extra branches
   hasWebhooks Boolean @default(false)    // có webhook đầu ra active — cron chỉ chạm store này (tránh quét toàn bộ)
+  hasOnlineChannels Boolean @default(false) // có kênh online (Shopee/TikTok...) — autoSync/cleanup chỉ chạm store này
+  hasFanpages Boolean @default(false)    // có FB page — fanpageCron chỉ chạm store này (tránh quét toàn bộ → cạn kết nối)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

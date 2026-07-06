@@ -41,17 +41,26 @@ export async function getOrCreateDefaultWarehouse(
 
     // Hỏi kho theo chi nhánh cụ thể mà chưa có → nhận kho main null-branch boot-seed
     // (nếu có) làm kho của chi nhánh này, tránh tạo bản trùng/mồ côi.
+    // QUAN TRỌNG: kho null-branch mặc định thuộc CHI NHÁNH CHÍNH. Chỉ nhánh chính
+    // mới được "nhận" nó — nhánh phụ nhận sẽ CƯỚP kho (+tồn) của nhánh chính. Nhánh
+    // phụ chưa có kho → rơi xuống dưới tạo kho main mới rỗng.
     if (nb) {
         const orphan = await prisma.warehouse
             .findFirst({ where: { type: 'main', isDefault: true, branchId: null } })
             .catch(() => null)
         if (orphan) {
-            try {
-                return await prisma.warehouse.update({ where: { id: orphan.id }, data: { branchId: nb } })
-            } catch {
-                // race: kho vừa được nhận bởi request khác — trả lại đúng kho chi nhánh
-                return (await prisma.warehouse.findFirst({ where })) || orphan
+            const br = await prisma.branch
+                .findUnique({ where: { id: nb }, select: { isMainBranch: true } })
+                .catch(() => null)
+            if (br?.isMainBranch) {
+                try {
+                    return await prisma.warehouse.update({ where: { id: orphan.id }, data: { branchId: nb } })
+                } catch {
+                    // race: kho vừa được nhận bởi request khác — trả lại đúng kho chi nhánh
+                    return (await prisma.warehouse.findFirst({ where })) || orphan
+                }
             }
+            // nhánh phụ → KHÔNG nhận orphan, tạo kho main mới rỗng ở dưới
         }
     }
 

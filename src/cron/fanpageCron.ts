@@ -102,7 +102,9 @@ async function healPageTokens(storePrisma: any, storeKey: string): Promise<void>
 
 async function runReconcile(): Promise<void> {
     try {
-        const stores = await registryPrisma.store.findMany({ where: { status: 'active' } }) as any[]
+        // Chỉ store CÓ FB page (cờ registry) — KHÔNG quét toàn bộ + mở client per-store
+        // mỗi 5 phút (đó là cron chạy dày nhất, nguồn cạn kết nối). Cờ set khi kết nối page.
+        const stores = await registryPrisma.store.findMany({ where: { status: 'active', hasFanpages: true } as any }) as any[]
         for (const store of stores) {
             try {
                 const storePrisma = getStorePrisma(store.schema)

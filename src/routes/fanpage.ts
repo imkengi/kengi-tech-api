@@ -6,6 +6,7 @@
 
 import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
+import { registryPrisma } from '../lib/prisma'
 import { requireRole } from '../middleware/roleMiddleware'
 import { FacebookService, FbGraphError } from '../services/platforms/facebook'
 
@@ -94,6 +95,10 @@ router.post('/connect', authMiddleware, requireRole('admin', 'manager', 'superad
                     accessToken: p.accessToken, igUserId: p.igUserId, status: 'active', lastSyncAt: new Date(),
                 },
             })
+        }
+        // Bật cờ registry để fanpageCron CHỈ chạm store có page (tránh quét toàn bộ → cạn kết nối)
+        if (pages.length && req.user?.storeSchema) {
+            ;(registryPrisma as any).store.updateMany({ where: { schema: req.user.storeSchema }, data: { hasFanpages: true } }).catch(() => { })
         }
 
         const saved = await prisma.fbPage.findMany({

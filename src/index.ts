@@ -180,6 +180,8 @@ app.use('/api/auth/signup', signupLimiter)
 app.use('/api/auth/login', authLimiter)
 app.use('/api/auth/token', tokenLimiter)
 app.use('/api/auth/send-otp', otpLimiter)
+app.use('/api/auth/verify-2fa', otpLimiter) // chống brute-force mã TOTP
+app.use('/api/auth/verify-otp', otpLimiter)
 app.use('/api', apiLimiter)
 
 // ─── Request Logger (dev) ───────────────────────────────────────────────────

@@ -197,8 +197,9 @@ async function syncChannel(storePrisma: any, channel: any): Promise<{ imported: 
  */
 async function runAutoSync() {
     try {
-        // Get all active stores
-        const stores = await registryPrisma.store.findMany({ where: { status: 'active' } }) as any[]
+        // Chỉ store CÓ kênh online (cờ registry) — KHÔNG quét toàn bộ + mở client per-store
+        // (đó là nguyên nhân cạn kết nối Cloud SQL). Cờ set khi kết nối kênh.
+        const stores = await registryPrisma.store.findMany({ where: { status: 'active', hasOnlineChannels: true } as any }) as any[]
         let totalSynced = 0
 
         for (const store of stores) {
@@ -258,7 +259,7 @@ async function runCleanup() {
     const cleanStatuses = ['COMPLETED', 'completed', 'CANCELLED', 'cancelled', 'TO_RETURN', 'returned']
 
     try {
-        const stores = await registryPrisma.store.findMany({ where: { status: 'active' } }) as any[]
+        const stores = await registryPrisma.store.findMany({ where: { status: 'active', hasOnlineChannels: true } as any }) as any[]
         let totalDeleted = 0
 
         for (const store of stores) {

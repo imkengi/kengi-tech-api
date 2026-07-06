@@ -203,7 +203,6 @@ export async function drainStoreBySchema(schema: string): Promise<void> {
 let cleanupTick = 0
 
 async function drainStore(sp: AnyPrisma): Promise<void> {
-    const now = new Date()
     // Dọn log giao đã kết thúc cũ hơn RETENTION — thưa (mỗi ~30 lượt drain ≈ 6 phút),
     // chỉ trên store có webhook nên không tốn kém.
     if (++cleanupTick % 30 === 0) {
@@ -211,20 +210,23 @@ async function drainStore(sp: AnyPrisma): Promise<void> {
             where: { status: { in: ['success', 'dead'] }, createdAt: { lt: new Date(Date.now() - RETENTION_MS) } },
         }).catch(() => { })
     }
-    // Lấy các delivery đến hạn (pending/failed và nextRetryAt <= now)
-    const due = await sp.webhookDelivery.findMany({
-        where: {
-            status: { in: ['pending', 'failed'] },
-            OR: [{ nextRetryAt: null }, { nextRetryAt: { lte: now } }],
-        },
-        orderBy: { createdAt: 'asc' },
-        take: 50,
-    }).catch(() => [])
-    if (!due.length) return
 
-    // Claim: đánh dấu 'sending' để lần drain chồng lấn không gửi trùng.
-    const ids = due.map((d: any) => d.id)
-    await sp.webhookDelivery.updateMany({ where: { id: { in: ids } }, data: { status: 'sending' } }).catch(() => { })
+    // Claim ATOMIC (chống gửi trùng cross-instance) + LEASE (reaper cho row kẹt).
+    // FOR UPDATE SKIP LOCKED → mỗi instance nhận tập id RỜI NHAU, không cùng gửi 1 row.
+    // nextRetryAt = hạn lease 2 phút: row 'sending' quá hạn (instance chết giữa chừng)
+    // sẽ tự được nhận lại thay vì kẹt vĩnh viễn. Terminal update ghi đè lại nextRetryAt.
+    const due: any[] = await sp.$queryRawUnsafe(`
+        UPDATE "WebhookDelivery" SET status='sending', "nextRetryAt" = now() + interval '2 minutes'
+        WHERE id IN (
+            SELECT id FROM "WebhookDelivery"
+            WHERE (status IN ('pending','failed') AND ("nextRetryAt" IS NULL OR "nextRetryAt" <= now()))
+               OR (status='sending' AND "nextRetryAt" <= now())
+            ORDER BY "createdAt" ASC LIMIT 50
+            FOR UPDATE SKIP LOCKED
+        )
+        RETURNING *
+    `).catch(() => [])
+    if (!due.length) return
 
     // Cache endpoint theo id để lấy url/secret
     const endpointIds = Array.from(new Set(due.map((d: any) => d.endpointId)))

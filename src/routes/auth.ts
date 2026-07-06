@@ -10,6 +10,7 @@ import { requireRole } from '../middleware/roleMiddleware'
 import { generateOtpCode, saveOtp, verifyOtp, consumeOtp, canSendOtp, OTP_CONFIG } from '../lib/otp'
 import { generateDeviceToken, saveTrustedDevice, isDeviceTrusted, TRUSTED_DEVICE_CONFIG } from '../lib/trustedDevice'
 import { sendEmail, buildOtpEmail } from '../services/emailService'
+import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 
 const router = Router()
 const JWT_SECRET = process.env.JWT_SECRET || ''
@@ -550,10 +551,21 @@ router.post('/verify-2fa', async (req: Request, res: Response) => {
 
         const result = await otplib.verify({ secret: user.twoFactorSecret, token: totpCode })
         if (!result.valid) {
-            return res.status(401).json({ success: false, error: 'Mã xác thực không đúng' })
+            // Chống brute-force TOTP: đếm số lần sai theo loginToken (cache, TTL = TTL pending).
+            // Quá 5 lần → hủy phiên 2FA, buộc đăng nhập lại.
+            const failKey = `2fa:fail:${loginToken}`
+            const fails = ((await cacheGet<number>(failKey)) || 0) + 1
+            await cacheSet(failKey, fails, Math.ceil(PENDING_2FA_TTL_MS / 1000))
+            if (fails >= 5) {
+                await deletePending2FA(loginToken)
+                await cacheDel(failKey)
+                return res.status(429).json({ success: false, error: 'Sai mã 2FA quá nhiều lần. Vui lòng đăng nhập lại.' })
+            }
+            return res.status(401).json({ success: false, error: `Mã xác thực không đúng (còn ${5 - fails} lần thử)` })
         }
 
-        // 2FA valid — consume the pending token
+        // 2FA valid — consume the pending token + xóa bộ đếm sai
+        await cacheDel(`2fa:fail:${loginToken}`)
         await deletePending2FA(loginToken)
 
         // Optionally trust device
