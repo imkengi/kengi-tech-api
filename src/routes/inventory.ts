@@ -458,29 +458,33 @@ router.post('/receipts', authMiddleware, async (req: AuthRequest, res: Response)
             defaultWarehouseId = defaultWarehouse?.id || null
         }
 
-        for (const item of items) {
-            const _u = await prisma.product.update({
-                where: { id: item.productId },
-                data: { stock: { increment: item.quantity } },
-            })
-            if (defaultWarehouseId) {
-                await updateWarehouseStock(prisma as any, defaultWarehouseId, item.productId, item.quantity)
-                    .catch((err: any) => console.error(`[Import] WarehouseStock increment failed for product ${item.productId}:`, err))
+        // ATOMIC (#16): tăng Product.stock + WarehouseStock + ledger cùng 1 transaction
+        // — crash giữa chừng không để tồn lệch. Webhook emit sau commit.
+        const stockEmits: any[] = []
+        await prisma.$transaction(async (tx: any) => {
+            for (const item of items) {
+                const _u = await tx.product.update({
+                    where: { id: item.productId },
+                    data: { stock: { increment: item.quantity } },
+                })
+                if (defaultWarehouseId) await updateWarehouseStock(tx, defaultWarehouseId, item.productId, item.quantity)
+                stockEmits.push({ productId: item.productId, sku: (_u as any).sku, name: (_u as any).name, delta: item.quantity, stock: (_u as any).stock })
+                await tx.inventoryTransaction.create({
+                    data: {
+                        type: 'import',
+                        productId: item.productId, productName: item.productName,
+                        productSku: item.productSku, quantity: item.quantity,
+                        reason: `Nhập kho theo phiếu ${code}`, referenceId: code,
+                        referenceType: 'import_receipt',
+                        unitPrice: item.costPrice || 0, costPriceAfter: item.costPrice || 0,
+                        supplierId: receiptData.supplierId, supplierName: receiptData.supplierName,
+                        userId: req.user!.userId, userName: receiptData.userName || 'Admin',
+                    },
+                })
             }
-            // Webhook đầu ra: stock.changed khi nhập kho (gated + fire-and-forget)
-            emitStockChanged(prisma as any, { productId: item.productId, sku: (_u as any).sku, name: (_u as any).name, branchId: getBranchId(req) ?? null, delta: item.quantity, stock: (_u as any).stock, reason: 'import' }, req.user?.storeSchema).catch(() => { })
-            await prisma.inventoryTransaction.create({
-                data: {
-                    type: 'import',
-                    productId: item.productId, productName: item.productName,
-                    productSku: item.productSku, quantity: item.quantity,
-                    reason: `Nhập kho theo phiếu ${code}`, referenceId: code,
-                    referenceType: 'import_receipt',
-                    unitPrice: item.costPrice || 0, costPriceAfter: item.costPrice || 0,
-                    supplierId: receiptData.supplierId, supplierName: receiptData.supplierName,
-                    userId: req.user!.userId, userName: receiptData.userName || 'Admin',
-                },
-            })
+        })
+        for (const s of stockEmits) {
+            emitStockChanged(prisma as any, { ...s, branchId: getBranchId(req) ?? null, reason: 'import' }, req.user?.storeSchema).catch(() => { })
         }
 
         res.status(201).json({
@@ -632,27 +636,29 @@ router.post('/free-return', authMiddleware, async (req: AuthRequest, res: Respon
 
             // Trả hàng ra (-qty): mirror Product.stock + kho main. Bỏ clamp Math.max
             // vốn che lỗi lệch tồn; không ép âm ở đây vì đây là xuất hàng hợp lệ.
-            await adjustSellableStock(prisma, String(productId), getBranchId(req), -quantity)
-            const newStock = product.stock - quantity
-
-            await (prisma as any).inventoryTransaction.create({
-                data: {
-                    type: 'export',
-                    productId: String(productId),
-                    productName: product.name,
-                    productSku: product.sku,
-                    quantity: -quantity,
-                    reason: itemReason ? (methodText ? `${itemReason} - ${methodText}` : itemReason) : defaultReason,
-                    note: batchId,
-                    referenceId: batchId,
-                    referenceType: 'import_return',
-                    unitPrice,
-                    supplierId: supplierId || null,
-                    supplierName: supplierName || null,
-                    userId: user.userId || (user as any).id,
-                    userName,
-                },
+            // ATOMIC (#24): trừ tồn + ghi thẻ kho cùng 1 transaction (tránh mất ledger).
+            await prisma.$transaction(async (tx: any) => {
+                await adjustSellableStock(tx, String(productId), getBranchId(req), -quantity)
+                await tx.inventoryTransaction.create({
+                    data: {
+                        type: 'export',
+                        productId: String(productId),
+                        productName: product.name,
+                        productSku: product.sku,
+                        quantity: -quantity,
+                        reason: itemReason ? (methodText ? `${itemReason} - ${methodText}` : itemReason) : defaultReason,
+                        note: batchId,
+                        referenceId: batchId,
+                        referenceType: 'import_return',
+                        unitPrice,
+                        supplierId: supplierId || null,
+                        supplierName: supplierName || null,
+                        userId: user.userId || (user as any).id,
+                        userName,
+                    },
+                })
             })
+            const newStock = product.stock - quantity
 
             results.push({ productId, productName: product.name, quantity, unitPrice, newStock })
         }

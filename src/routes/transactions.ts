@@ -446,8 +446,14 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
             }
         }
 
-        // Calculate debt amount from credit payments
-        const debtAmount = txData.debtAmount || 0
+        // Công nợ SUY RA từ dữ liệu đơn (không tin debtAmount client gửi để tránh lệch
+        // với stats total-amountReceived): đơn 'partial' nợ = total - đã thu, else 0 (#15).
+        const _status = txData.status || 'completed'
+        const _amountReceived = Number(txData.amountReceived) || 0
+        const _totalForDebt = Number(txData.total) || 0
+        const debtAmount = _status === 'partial'
+            ? Math.max(0, Math.round(_totalForDebt - _amountReceived))
+            : 0
 
         // Look up products with their unit conversions so we can convert
         // sale-unit quantities (e.g., 1 cuộn) into base-unit stock movements (e.g., 1000 m).
@@ -737,11 +743,17 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
                 }, { timeout: 30000 })
                 break
             } catch (txErr: any) {
-                // 2 revise đồng thời sinh trùng số phiếu → tăng suffix rồi thử lại (tối đa 5 lần)
-                if (txErr?.code === 'P2002' && revisionBaseReceipt && attempt < 4
+                // Trùng số phiếu (unique receiptNumber) → sinh lại rồi thử lại (tối đa 5 lần).
+                // Xảy ra khi 2 checkout đồng thời cùng đọc count (#14) HOẶC 2 revise đụng suffix.
+                if (txErr?.code === 'P2002' && attempt < 4
                     && String(txErr?.meta?.target ?? '').includes('receiptNumber')) {
-                    revisionSuffix++
-                    receiptNumber = `${revisionBaseReceipt}.${revisionSuffix}`
+                    if (revisionBaseReceipt) {
+                        revisionSuffix++
+                        receiptNumber = `${revisionBaseReceipt}.${revisionSuffix}`
+                    } else {
+                        // đơn thường: số mới theo timestamp + hậu tố ngẫu nhiên, tránh đụng lại
+                        receiptNumber = `HD${Date.now()}${String(Math.floor(Math.random() * 9000) + 1000)}`
+                    }
                     continue
                 }
                 throw txErr
@@ -1041,7 +1053,7 @@ router.put('/:id/pay-debt', authMiddleware, requirePermission('pos.create_order'
 
         // Payment record + transaction status + customer debt must move together.
         const transaction = await prisma.$transaction(async (tx) => {
-            await tx.payment.create({
+            const payment = await tx.payment.create({
                 data: {
                     transactionId: existing.id,
                     type: paymentType || 'cash',
@@ -1090,7 +1102,7 @@ router.put('/:id/pay-debt', authMiddleware, requirePermission('pos.create_order'
                     // Bút toán giảm phải thu: Nợ 111/112 / Có 131
                     await postDebtCollectionJournal(tx, {
                         amount: debtReduction,
-                        refKey: `COLLECT-${existing.receiptNumber}-${existing.amountReceived + payAmount}`,
+                        refKey: `COLLECT-${existing.receiptNumber}-${payment.id}`, // khóa duy nhất theo lần thu (#19)
                         date: new Date().toISOString().slice(0, 10),
                         paymentType: paymentType,
                         customerName: customer?.name || existing.customerName,

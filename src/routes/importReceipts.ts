@@ -785,42 +785,34 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
         })
         if (!receipt) { res.status(404).json({ success: false, error: 'Not found' }); return }
 
-        // If receipt was completed, reverse stock changes
-        if (receipt.status === 'completed') {
-            const method = await getCostPriceMethod(prisma as any)
-            for (const item of receipt.items) {
-                const product = await prisma.product.findUnique({ where: { id: item.productId } })
-                if (product) {
-                    const newStock = Math.max(0, product.stock - item.quantity)
-                    // Recalculate cost price after removing this import
-                    let newCostPrice = product.costPrice
-                    if (method === 'average' && newStock > 0) {
-                        const totalValue = (product.costPrice * product.stock) - (item.costPrice * item.quantity)
-                        const recalced = Math.round(totalValue / newStock)
-                        // Giá vốn không được ÂM — dữ liệu lịch sử thiếu/lệch (totalValue < 0
-                        // hoặc kết quả không hợp lệ) thì giữ nguyên giá vốn hiện tại
-                        newCostPrice = Number.isFinite(recalced) ? Math.max(0, recalced) : product.costPrice
-                    }
-                    // Trừ tồn qua helper để mirror sang kho main; costPrice cập nhật riêng.
-                    // delta = newStock - product.stock (âm khi thật sự trừ; 0 nếu đã chạm sàn 0)
-                    await adjustSellableStock(prisma, item.productId, receipt.branchId, newStock - product.stock)
-                    if (newStock > 0 && newCostPrice !== product.costPrice) {
-                        await prisma.product.update({
-                            where: { id: item.productId },
-                            data: { costPrice: newCostPrice },
-                        })
+        // ATOMIC (#17): đảo tồn + xóa ledger nhập + xóa phiếu cùng 1 transaction —
+        // crash giữa chừng không để tồn/thẻ kho lệch nhau.
+        const method = receipt.status === 'completed' ? await getCostPriceMethod(prisma as any) : null
+        await prisma.$transaction(async (tx: any) => {
+            if (receipt.status === 'completed') {
+                for (const item of receipt.items) {
+                    const product = await tx.product.findUnique({ where: { id: item.productId } })
+                    if (product) {
+                        const newStock = Math.max(0, product.stock - item.quantity)
+                        let newCostPrice = product.costPrice
+                        if (method === 'average' && newStock > 0) {
+                            const totalValue = (product.costPrice * product.stock) - (item.costPrice * item.quantity)
+                            const recalced = Math.round(totalValue / newStock)
+                            newCostPrice = Number.isFinite(recalced) ? Math.max(0, recalced) : product.costPrice
+                        }
+                        // delta = newStock - product.stock (âm khi thật sự trừ; 0 nếu chạm sàn 0)
+                        await adjustSellableStock(tx, item.productId, receipt.branchId, newStock - product.stock)
+                        if (newStock > 0 && newCostPrice !== product.costPrice) {
+                            await tx.product.update({ where: { id: item.productId }, data: { costPrice: newCostPrice } })
+                        }
                     }
                 }
+                await tx.inventoryTransaction.deleteMany({
+                    where: { referenceId: receipt.code, referenceType: 'import_receipt' },
+                })
             }
-
-            // Delete related inventory transactions
-            await prisma.inventoryTransaction.deleteMany({
-                where: { referenceId: receipt.code, referenceType: 'import_receipt' },
-            })
-        }
-
-        // Delete the receipt (cascade deletes items)
-        await prisma.importReceipt.delete({ where: { id: String(req.params.id) } })
+            await tx.importReceipt.delete({ where: { id: String(req.params.id) } }) // cascade xóa items
+        })
         res.json({ success: true, message: 'Deleted' })
     } catch (err: any) {
         console.error('Delete import receipt error:', err?.message || err)
