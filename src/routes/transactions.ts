@@ -800,36 +800,7 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
             createdAt: transaction.createdAt.toISOString(),
         }, branchId).catch(() => { })
 
-        // Webhook đầu ra: tạo hóa đơn
-        emitEntityEvent(prisma, 'invoice.created', invoicePayload(transaction), req.user?.storeSchema).catch(() => { })
-
-        // ── Webhook đầu ra: stock.changed cho từng mặt hàng (post-commit) ──────────
-        // POS trừ Product.stock trực tiếp trong tx (không qua adjustSellableStock) nên
-        // phải tự phát ở đây. Van-sale không đổi Product.stock (đã trừ lúc chất xe) → bỏ.
-        // Gộp delta theo sản phẩm rồi đọc tồn mới 1 lần; chỉ chạy khi có webhook active.
-        if (webhooksActive() && !isVanSale) {
-            try {
-                const deltaByProduct = new Map<string, { delta: number; sku?: string; name?: string }>()
-                for (const item of itemsWithConversion) {
-                    const cur = deltaByProduct.get(item.productId) || { delta: 0, sku: item.sku || item.productSku, name: item.productName }
-                    cur.delta += item.baseQuantity
-                    deltaByProduct.set(item.productId, cur)
-                }
-                const rows = await prisma.product.findMany({
-                    where: { id: { in: [...deltaByProduct.keys()] } },
-                    select: { id: true, stock: true, sku: true, name: true },
-                })
-                const byId = new Map(rows.map((r: any) => [r.id, r]))
-                for (const [pid, agg] of deltaByProduct) {
-                    const r: any = byId.get(pid)
-                    emitStockChanged(prisma, {
-                        productId: pid, sku: r?.sku ?? agg.sku, name: r?.name ?? agg.name,
-                        branchId: branchId ?? null, delta: -agg.delta, stock: r?.stock ?? 0, reason: 'sale',
-                    }, req.user?.storeSchema).catch(() => { })
-                }
-            } catch { /* webhook không được chặn nghiệp vụ bán */ }
-        }
-
+        // TRẢ KẾT QUẢ BÁN HÀNG TRƯỚC — webhook chạy sau, TUYỆT ĐỐI không chặn/chậm POS.
         res.status(201).json({
             success: true,
             data: {
@@ -838,6 +809,36 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
                 transactionDate: transaction.transactionDate?.toISOString() || transaction.createdAt.toISOString(),
             },
         })
+
+        // ── Webhook đầu ra (POST-RESPONSE, fire-and-forget) ───────────────────────
+        // Response đã gửi xong nên dù chậm cũng không ảnh hưởng người bán. Bọc try
+        // riêng để không bao giờ rơi vào catch phía dưới (tránh "headers already sent").
+        if (webhooksActive()) {
+            try {
+                emitEntityEvent(prisma, 'invoice.created', invoicePayload(transaction), req.user?.storeSchema).catch(() => { })
+                // stock.changed — van-sale không đổi Product.stock (đã trừ lúc chất xe) → bỏ.
+                if (!isVanSale) {
+                    const deltaByProduct = new Map<string, { delta: number; sku?: string; name?: string }>()
+                    for (const item of itemsWithConversion) {
+                        const cur = deltaByProduct.get(item.productId) || { delta: 0, sku: item.sku || item.productSku, name: item.productName }
+                        cur.delta += item.baseQuantity
+                        deltaByProduct.set(item.productId, cur)
+                    }
+                    const rows = await prisma.product.findMany({
+                        where: { id: { in: [...deltaByProduct.keys()] } },
+                        select: { id: true, stock: true, sku: true, name: true },
+                    })
+                    const byId = new Map(rows.map((r: any) => [r.id, r]))
+                    for (const [pid, agg] of deltaByProduct) {
+                        const r: any = byId.get(pid)
+                        emitStockChanged(prisma, {
+                            productId: pid, sku: r?.sku ?? agg.sku, name: r?.name ?? agg.name,
+                            branchId: branchId ?? null, delta: -agg.delta, stock: r?.stock ?? 0, reason: 'sale',
+                        }, req.user?.storeSchema).catch(() => { })
+                    }
+                }
+            } catch { /* webhook lỗi không ảnh hưởng đơn đã bán */ }
+        }
     } catch (err) {
         // Hết hàng khi trừ kho trong transaction → đã rollback toàn bộ, trả 409
         if (err instanceof StockConflictError) {

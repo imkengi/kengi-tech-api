@@ -7,6 +7,7 @@
 import { Router, Response } from 'express'
 import crypto from 'crypto'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
+import { registryPrisma } from '../lib/prisma'
 import {
     WEBHOOK_EVENTS,
     WEBHOOK_EVENT_TYPES,
@@ -15,6 +16,16 @@ import {
 } from '../lib/webhookDispatch'
 
 const router = Router()
+
+// Đồng bộ cờ Store.hasWebhooks ở registry — cron dựa vào cờ này để CHỈ chạm store
+// có webhook (không quét toàn bộ → không cạn kết nối). Gọi sau mọi create/update/delete.
+async function syncStoreWebhookFlag(prisma: any, schema?: string): Promise<void> {
+    if (!schema) return
+    try {
+        const n = await prisma.webhookEndpoint.count({ where: { isActive: true } })
+        await (registryPrisma as any).store.updateMany({ where: { schema }, data: { hasWebhooks: n > 0 } })
+    } catch { /* registry lỗi tạm — cron refresh sẽ tự đồng bộ sau */ }
+}
 
 function isAdminOrManager(req: AuthRequest): boolean {
     const r = req.user?.role
@@ -88,8 +99,9 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         const created = await prisma.webhookEndpoint.create({
             data: { url, secret, events: JSON.stringify(evs), description: description || null },
         })
-        // Bật fast-path ngay cho instance này (các instance khác converge trong 30s).
+        // Bật fast-path ngay cho instance này + cờ registry (instance khác converge sau).
         if (req.user?.storeSchema) markSchemaHasWebhooks(req.user.storeSchema)
+        await syncStoreWebhookFlag(prisma, req.user?.storeSchema)
 
         res.status(201).json({
             success: true,
@@ -132,6 +144,7 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
 
         const updated = await prisma.webhookEndpoint.update({ where: { id }, data })
         if (updated.isActive && req.user?.storeSchema) markSchemaHasWebhooks(req.user.storeSchema)
+        await syncStoreWebhookFlag(prisma, req.user?.storeSchema)
 
         res.json({
             success: true,
@@ -174,6 +187,7 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
         const existing = await prisma.webhookEndpoint.findFirst({ where: { id } })
         if (!existing) return res.status(404).json({ success: false, error: 'Không tìm thấy webhook' })
         await prisma.webhookEndpoint.delete({ where: { id } }) // cascade xóa deliveries
+        await syncStoreWebhookFlag(prisma, req.user?.storeSchema) // có thể còn 0 → tắt cờ
         res.json({ success: true })
     } catch (err) {
         console.error('Delete webhook endpoint error:', err)

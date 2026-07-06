@@ -152,31 +152,20 @@ export async function emitEntityEvent(
     await enqueue(client, eventType, data, schema)
 }
 
-// ─── Refresh cờ fast-path + dọn log cũ (chạy định kỳ bởi cron) ────────────────
+// ─── Refresh cờ fast-path (chạy định kỳ bởi cron) ────────────────────────────
+// AN TOÀN KẾT NỐI: chỉ 1 query trên registry client (đã sẵn), KHÔNG mở Prisma
+// client tới từng store schema. Bản cũ quét getStorePrisma cho MỌI store mỗi 30s
+// làm warm ~N client × 3 kết nối → cạn Cloud SQL (max_connections=50) → sập POS.
+// Danh sách store-có-webhook lấy từ cờ Store.hasWebhooks (route set khi tạo/xóa).
 export async function refreshWebhookRegistry(): Promise<void> {
     try {
-        const stores = await registryPrisma.store.findMany({ where: { status: 'active' }, select: { schema: true } })
-        let any = false
-        const live = new Set<string>()
-        await mapWithConcurrency(stores, async (s: any) => {
-            try {
-                const sp = getStorePrisma(s.schema)
-                const count = await sp.webhookEndpoint.count({ where: { isActive: true } })
-                if (count > 0) {
-                    any = true
-                    live.add(s.schema)
-                    // Dọn log giao đã kết thúc, cũ hơn RETENTION (best-effort)
-                    await sp.webhookDelivery.deleteMany({
-                        where: { status: { in: ['success', 'dead'] }, createdAt: { lt: new Date(Date.now() - RETENTION_MS) } },
-                    }).catch(() => { })
-                }
-            } catch {
-                // schema chưa có bảng webhook — bỏ qua
-            }
+        const stores = await registryPrisma.store.findMany({
+            where: { status: 'active', hasWebhooks: true } as any,
+            select: { schema: true },
         })
-        anyWebhooksExist = any
+        anyWebhooksExist = stores.length > 0
         schemasWithWebhooks.clear()
-        for (const s of live) schemasWithWebhooks.add(s)
+        for (const s of stores) schemasWithWebhooks.add(s.schema)
     } catch {
         // registry lỗi tạm — giữ nguyên cờ cũ
     }
@@ -210,8 +199,17 @@ export async function drainStoreBySchema(schema: string): Promise<void> {
     } catch { /* ignore */ }
 }
 
+let cleanupTick = 0
+
 async function drainStore(sp: AnyPrisma): Promise<void> {
     const now = new Date()
+    // Dọn log giao đã kết thúc cũ hơn RETENTION — thưa (mỗi ~30 lượt drain ≈ 6 phút),
+    // chỉ trên store có webhook nên không tốn kém.
+    if (++cleanupTick % 30 === 0) {
+        await sp.webhookDelivery.deleteMany({
+            where: { status: { in: ['success', 'dead'] }, createdAt: { lt: new Date(Date.now() - RETENTION_MS) } },
+        }).catch(() => { })
+    }
     // Lấy các delivery đến hạn (pending/failed và nextRetryAt <= now)
     const due = await sp.webhookDelivery.findMany({
         where: {

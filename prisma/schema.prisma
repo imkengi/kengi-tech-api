@@ -26,6 +26,7 @@ model Store {
   plan      String   @default("full")    // retail | wholesale | full
   addOns    String   @default("[]")      // JSON array of add-on IDs e.g. ["online","extra_branch"]
   extraBranches Int  @default(0)         // number of extra branches
+  hasWebhooks Boolean @default(false)    // có webhook đầu ra active — cron chỉ chạm store này (tránh quét toàn bộ)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
