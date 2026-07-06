@@ -104,6 +104,8 @@ function getStorePrisma(schemaName: string): StorePrisma {
         datasources: { db: { url } },
         log: process.env.NODE_ENV === 'production' ? ['error', 'warn'] : ['warn', 'error'],
     })
+    // Stash schema name để tiện tra ngược (vd webhook dispatch fast-path).
+    ;(client as any).__schema = schemaName
 
     branchClients.set(schemaName, { client, lastUsed: Date.now() })
     return client

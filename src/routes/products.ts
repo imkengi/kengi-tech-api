@@ -5,6 +5,7 @@ import { requirePermission } from '../middleware/permissionMiddleware'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { validate } from '../middleware/validate'
 import { CreateProductSchema, UpdateProductSchema } from '../schemas'
+import { emitProductEvent } from '../lib/webhookDispatch'
 
 const router = Router()
 
@@ -502,6 +503,7 @@ router.post('/', authMiddleware, requirePermission('products.create'), validate(
         // Invalidate products cache
         cacheDel(`products:${req.user?.storeSchema || 'default'}:*`).catch(() => { })
         cacheDel(`product-stats:${req.user?.storeSchema || 'default'}`).catch(() => { })
+        emitProductEvent(prisma, 'product.created', product, req.user?.storeSchema).catch(() => { })
     } catch (err) {
         console.error('Create product error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
@@ -555,6 +557,7 @@ router.put('/:id', authMiddleware, requirePermission('products.edit'), validate(
         })
         cacheDel(`products:${req.user?.storeSchema || 'default'}:*`).catch(() => { })
         cacheDel(`product-stats:${req.user?.storeSchema || 'default'}`).catch(() => { })
+        emitProductEvent(prisma, 'product.updated', product, req.user?.storeSchema).catch(() => { })
     } catch (err) {
         console.error('Update product error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
@@ -572,6 +575,7 @@ router.delete('/:id', authMiddleware, requirePermission('products.delete'), asyn
         res.json({ success: true })
         cacheDel(`products:${req.user?.storeSchema || 'default'}:*`).catch(() => { })
         cacheDel(`product-stats:${req.user?.storeSchema || 'default'}`).catch(() => { })
+        emitProductEvent(prisma, 'product.deleted', existing, req.user?.storeSchema).catch(() => { })
     } catch (err) {
         console.error('Delete product error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })

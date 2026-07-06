@@ -3,6 +3,8 @@
 // warehouse mirrors Product.stock; specialised warehouses (damaged/warranty/
 // mobile) are managed via stock transfers.
 
+import { emitStockChanged, webhooksActive } from './webhookDispatch'
+
 type AnyPrisma = any
 
 // Find (or lazily create) the branch's default "main" warehouse. Robust cho
@@ -105,12 +107,14 @@ export async function adjustSellableStock(
     productId: string,
     branchId: string | null | undefined,
     delta: number,
+    reason?: string,
 ): Promise<void> {
     if (!delta) return
-    // 1) Product.stock (tồn tổng bán được)
-    await client.product.update({
+    // 1) Product.stock (tồn tổng bán được) — bắt luôn tồn mới + sku/name để phát webhook
+    const updated = await client.product.update({
         where: { id: productId },
         data: { stock: { increment: delta } },
+        select: { stock: true, sku: true, name: true },
     })
     // 2) Mirror sang kho main của chi nhánh (best-effort — không chặn nghiệp vụ
     //    chính nếu bảng kho chưa migrate ở schema cũ)
@@ -118,6 +122,11 @@ export async function adjustSellableStock(
         const wh = await getOrCreateDefaultWarehouse(client, branchId ?? null)
         if (wh?.id) await updateWarehouseStock(client, wh.id, productId, delta)
     } catch { /* schema chưa có bảng Warehouse — Product.stock vẫn đúng */ }
+    // 3) Webhook đầu ra (đã chốt chặn nhanh bên trong; await để chạy trong tx nếu có)
+    await emitStockChanged(client, {
+        productId, sku: updated?.sku, name: updated?.name,
+        branchId: branchId ?? null, delta, stock: updated?.stock ?? 0, reason,
+    })
 }
 
 // Biến thể chống bán âm: chỉ trừ khi tồn đủ (updateMany có guard gte). Trả về
@@ -144,6 +153,17 @@ export async function decrementSellableStock(
         const wh = await getOrCreateDefaultWarehouse(client, branchId ?? null)
         if (wh?.id) await updateWarehouseStock(client, wh.id, productId, -qty)
     } catch { /* ignore */ }
+    // Webhook đầu ra: chỉ đọc lại tồn khi thật sự có store bật webhook (tránh
+    // query thừa trên hot-path bán hàng).
+    if (webhooksActive()) {
+        try {
+            const p = await client.product.findUnique({ where: { id: productId }, select: { stock: true, sku: true, name: true } })
+            if (p) await emitStockChanged(client, {
+                productId, sku: p.sku, name: p.name,
+                branchId: branchId ?? null, delta: -qty, stock: p.stock, reason: 'sale',
+            })
+        } catch { /* ignore */ }
+    }
     return true
 }
 

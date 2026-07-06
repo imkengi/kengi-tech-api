@@ -172,6 +172,35 @@ exports.Prisma.ApiKeyScalarFieldEnum = {
   createdAt: 'createdAt'
 };
 
+exports.Prisma.WebhookEndpointScalarFieldEnum = {
+  id: 'id',
+  url: 'url',
+  secret: 'secret',
+  events: 'events',
+  description: 'description',
+  isActive: 'isActive',
+  failureCount: 'failureCount',
+  lastStatus: 'lastStatus',
+  lastFiredAt: 'lastFiredAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.WebhookDeliveryScalarFieldEnum = {
+  id: 'id',
+  endpointId: 'endpointId',
+  eventType: 'eventType',
+  payload: 'payload',
+  status: 'status',
+  attempts: 'attempts',
+  maxAttempts: 'maxAttempts',
+  nextRetryAt: 'nextRetryAt',
+  responseCode: 'responseCode',
+  lastError: 'lastError',
+  createdAt: 'createdAt',
+  deliveredAt: 'deliveredAt'
+};
+
 exports.Prisma.SalesCheckinScalarFieldEnum = {
   id: 'id',
   userId: 'userId',
@@ -1911,6 +1940,8 @@ exports.Prisma.ModelName = {
   Branch: 'Branch',
   User: 'User',
   ApiKey: 'ApiKey',
+  WebhookEndpoint: 'WebhookEndpoint',
+  WebhookDelivery: 'WebhookDelivery',
   SalesCheckin: 'SalesCheckin',
   Category: 'Category',
   Brand: 'Brand',

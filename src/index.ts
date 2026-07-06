@@ -71,6 +71,8 @@ import fanpageRoutes from './routes/fanpage'
 import { cacheDisconnect, cacheHealth } from './lib/cache'
 import { startAutoSync, stopAutoSync } from './cron/autoSync'
 import { startFanpageCron, stopFanpageCron } from './cron/fanpageCron'
+import { startWebhookCron, stopWebhookCron } from './cron/webhookCron'
+import webhookEndpointRoutes from './routes/webhookEndpoints'
 import { setupWebSocket, getWebSocketStats } from './lib/websocket'
 import { pubsubDisconnect } from './lib/pubsub'
 import { createServer } from 'http'
@@ -249,6 +251,7 @@ app.use('/api/payroll', payrollRoutes)
 app.use('/api/online-orders', onlineOrderRoutes)
 app.use('/api/upgrade-requests', upgradeRequestRoutes)
 app.use('/api/webhooks', webhookRoutes)
+app.use('/api/webhook-endpoints', webhookEndpointRoutes)
 app.use('/api/warehouses', warehouseRoutes)
 app.use('/api/sales-trips', salesTripRoutes)
 app.use('/api/cash-receipts', cashReceiptRoutes)
@@ -1422,6 +1425,7 @@ if (!process.env.PASSENGER_BASE_URI) {
                 console.log(`🔌 WebSocket endpoint: ws://localhost:${PORT}/ws`)
                 startAutoSync()
                 startFanpageCron()
+                startWebhookCron()
             })
         })
 
@@ -1433,6 +1437,7 @@ if (!process.env.PASSENGER_BASE_URI) {
         await pubsubDisconnect()
         stopAutoSync()
         stopFanpageCron()
+        stopWebhookCron()
         process.exit(0)
     }
     process.on('SIGTERM', shutdown)

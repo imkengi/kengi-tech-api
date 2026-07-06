@@ -85,6 +85,46 @@ model ApiKey {
   createdAt  DateTime  @default(now())
 }
 
+// ─── Outbound Webhooks (đầu ra: đẩy sự kiện hàng hóa/tồn kho ra hệ thống ngoài) ──
+
+model WebhookEndpoint {
+  id           String   @id @default(cuid())
+  url          String
+  secret       String // dùng ký HMAC-SHA256 header X-Webhook-Signature
+  events       String   @default("[]") // JSON array: ["stock.changed","product.updated",...]
+  description  String?
+  isActive     Boolean  @default(true)
+  failureCount Int      @default(0) // số lần giao thất bại liên tiếp (auto-disable khi quá cao)
+  lastStatus   String? // tóm tắt lần giao gần nhất
+  lastFiredAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  deliveries WebhookDelivery[]
+
+  @@index([isActive])
+}
+
+model WebhookDelivery {
+  id           String    @id @default(cuid())
+  endpointId   String
+  endpoint     WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  eventType    String
+  payload      String // JSON body đã ký
+  status       String    @default("pending") // pending | sending | success | failed | dead
+  attempts     Int       @default(0)
+  maxAttempts  Int       @default(6)
+  nextRetryAt  DateTime?
+  responseCode Int?
+  lastError    String?
+  createdAt    DateTime  @default(now())
+  deliveredAt  DateTime?
+
+  @@index([status, nextRetryAt])
+  @@index([endpointId])
+  @@index([createdAt])
+}
+
 // ─── Sales Staff Tracking ───────────────────────────────────────────────────
 
 model SalesCheckin {

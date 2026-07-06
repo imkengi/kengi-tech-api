@@ -691,6 +691,47 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "TransactionItem" ADD COLUMN IF NOT EXISTS "baseQuantity" DOUBLE PRECISION NOT NULL DEFAULT 0`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineOrder" ADD COLUMN IF NOT EXISTS "stockDeducted" BOOLEAN NOT NULL DEFAULT false`)
 
+                // Webhook đầu ra — 2 bảng (2026-07-06). db push không chạy được trong
+                // prod nên CREATE TABLE trực tiếp, khớp schema-store.prisma.
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "WebhookEndpoint" (
+                        "id" TEXT NOT NULL,
+                        "url" TEXT NOT NULL,
+                        "secret" TEXT NOT NULL,
+                        "events" TEXT NOT NULL DEFAULT '[]',
+                        "description" TEXT,
+                        "isActive" BOOLEAN NOT NULL DEFAULT true,
+                        "failureCount" INTEGER NOT NULL DEFAULT 0,
+                        "lastStatus" TEXT,
+                        "lastFiredAt" TIMESTAMP(3),
+                        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "WebhookEndpoint_pkey" PRIMARY KEY ("id")
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "WebhookEndpoint_isActive_idx" ON "WebhookEndpoint"("isActive")`)
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "WebhookDelivery" (
+                        "id" TEXT NOT NULL,
+                        "endpointId" TEXT NOT NULL,
+                        "eventType" TEXT NOT NULL,
+                        "payload" TEXT NOT NULL,
+                        "status" TEXT NOT NULL DEFAULT 'pending',
+                        "attempts" INTEGER NOT NULL DEFAULT 0,
+                        "maxAttempts" INTEGER NOT NULL DEFAULT 6,
+                        "nextRetryAt" TIMESTAMP(3),
+                        "responseCode" INTEGER,
+                        "lastError" TEXT,
+                        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        "deliveredAt" TIMESTAMP(3),
+                        CONSTRAINT "WebhookDelivery_pkey" PRIMARY KEY ("id"),
+                        CONSTRAINT "WebhookDelivery_endpointId_fkey" FOREIGN KEY ("endpointId") REFERENCES "WebhookEndpoint"("id") ON DELETE CASCADE ON UPDATE CASCADE
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "WebhookDelivery_status_nextRetryAt_idx" ON "WebhookDelivery"("status", "nextRetryAt")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "WebhookDelivery_endpointId_idx" ON "WebhookDelivery"("endpointId")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "WebhookDelivery_createdAt_idx" ON "WebhookDelivery"("createdAt")`)
+
                 // Idempotency bút toán: unique trên JournalEntry.reference.
                 // Nếu dữ liệu cũ đã lỡ double-post thì index tạo fail — báo riêng để xử lý tay,
                 // KHÔNG tự xóa bút toán.
