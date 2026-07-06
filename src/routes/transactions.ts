@@ -28,6 +28,16 @@ const invoicePayload = (t: any) => ({
     channel: t?.channel ?? null,
     branchId: t?.branchId ?? null,
     itemCount: Array.isArray(t?.items) ? t.items.length : undefined,
+    // Chi tiết từng mặt hàng trong hóa đơn (nếu có include items)
+    items: Array.isArray(t?.items) ? t.items.map((it: any) => ({
+        productId: it.productId,
+        productName: it.productName,
+        sku: it.sku ?? null,
+        quantity: it.quantity,
+        unitPrice: it.unitPrice,
+        discount: it.discount ?? 0,
+        lineTotal: it.lineTotal,
+    })) : undefined,
     createdAt: t?.createdAt,
 })
 
