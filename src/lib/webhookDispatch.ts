@@ -22,6 +22,8 @@ export const WEBHOOK_EVENTS = [
     { type: 'product.created', label: 'Tạo sản phẩm' },
     { type: 'product.updated', label: 'Cập nhật sản phẩm' },
     { type: 'product.deleted', label: 'Xóa sản phẩm' },
+    { type: 'invoice.created', label: 'Tạo hóa đơn' },
+    { type: 'invoice.updated', label: 'Thay đổi hóa đơn' },
     { type: 'customer.created', label: 'Tạo khách hàng' },
     { type: 'customer.updated', label: 'Cập nhật khách hàng' },
     { type: 'customer.deleted', label: 'Xóa khách hàng' },

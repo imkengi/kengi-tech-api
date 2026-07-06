@@ -8,9 +8,28 @@ import { publishEvent } from '../lib/pubsub'
 import { createJournalEntriesForTransaction, postDebtCollectionJournal } from '../lib/autoJournal'
 import { nextCode } from '../lib/codeGenerator'
 import { getOrCreateDefaultWarehouse, updateWarehouseStock } from '../lib/warehouseHelper'
-import { emitStockChanged, webhooksActive } from '../lib/webhookDispatch'
+import { emitStockChanged, webhooksActive, emitEntityEvent } from '../lib/webhookDispatch'
 
 const router = Router()
+
+// Payload gọn cho webhook hóa đơn (Transaction = hóa đơn bán)
+const invoicePayload = (t: any) => ({
+    id: t?.id,
+    receiptNumber: t?.receiptNumber ?? null,
+    status: t?.status ?? null,
+    total: t?.total ?? null,
+    subtotal: t?.subtotal ?? null,
+    discount: t?.discount ?? null,
+    tax: t?.tax ?? null,
+    paymentMethod: t?.paymentMethod ?? null,
+    paymentStatus: t?.paymentStatus ?? null,
+    customerId: t?.customerId ?? null,
+    customerName: t?.customerName ?? null,
+    channel: t?.channel ?? null,
+    branchId: t?.branchId ?? null,
+    itemCount: Array.isArray(t?.items) ? t.items.length : undefined,
+    createdAt: t?.createdAt,
+})
 
 // Lỗi hết hàng khi trừ kho có guard chống âm — throw bên trong $transaction
 // để rollback toàn bộ đơn, handler bắt và trả 409.
@@ -781,6 +800,9 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
             createdAt: transaction.createdAt.toISOString(),
         }, branchId).catch(() => { })
 
+        // Webhook đầu ra: tạo hóa đơn
+        emitEntityEvent(prisma, 'invoice.created', invoicePayload(transaction), req.user?.storeSchema).catch(() => { })
+
         // ── Webhook đầu ra: stock.changed cho từng mặt hàng (post-commit) ──────────
         // POS trừ Product.stock trực tiếp trong tx (không qua adjustSellableStock) nên
         // phải tự phát ở đây. Van-sale không đổi Product.stock (đã trừ lúc chất xe) → bỏ.
@@ -960,6 +982,9 @@ router.put('/:id/void', authMiddleware, requirePermission('pos.create_order'), a
             receiptNumber: existing.receiptNumber,
             total: existing.total,
         }, branchId).catch(() => { })
+
+        // Webhook đầu ra: thay đổi hóa đơn (hủy)
+        emitEntityEvent(prisma, 'invoice.updated', { ...invoicePayload(transaction), changeType: 'void' }, req.user?.storeSchema).catch(() => { })
 
         res.json({
             success: true,
@@ -1339,6 +1364,9 @@ router.put('/:id/return', authMiddleware, requirePermission('pos.create_order'),
             totalRefund: returnTotal,
         }, branchId).catch(() => { })
 
+        // Webhook đầu ra: thay đổi hóa đơn (trả hàng)
+        emitEntityEvent(prisma, 'invoice.updated', { ...invoicePayload(transaction), changeType: 'return', returnCode, totalRefund: returnTotal }, req.user?.storeSchema).catch(() => { })
+
         res.json({
             success: true,
             data: {
@@ -1610,6 +1638,13 @@ router.post('/:id/revise', authMiddleware, requirePermission('pos.create_order')
             newId: newTransactionId,
             newReceipt: newReceiptNumber,
         }, branchId).catch(() => { })
+
+        // Webhook đầu ra: thay đổi hóa đơn (sửa → sinh phiếu mới)
+        emitEntityEvent(prisma, 'invoice.updated', {
+            id: newTransactionId, receiptNumber: newReceiptNumber,
+            previousReceiptNumber: existing.receiptNumber, status: 'revised',
+            changeType: 'revise', branchId: existing.branchId ?? null,
+        }, req.user?.storeSchema).catch(() => { })
 
         res.json({
             success: true,
