@@ -4,7 +4,22 @@ import { authMiddleware, getBranchFilter, AuthRequest, getBranchId, canAccessBra
 import { calculateCostPrice, getCostPriceMethod } from '../lib/costPrice'
 import { nextCode } from '../lib/codeGenerator'
 import { getOrCreateDefaultWarehouse, updateWarehouseStock, adjustSellableStock } from '../lib/warehouseHelper'
-import { emitStockChanged } from '../lib/webhookDispatch'
+import { emitStockChanged, emitEntityEvent, webhooksActive } from '../lib/webhookDispatch'
+
+// Payload phiếu nhập cho webhook (kèm thông tin NCC + chi tiết mặt hàng)
+const importPayload = (r: any) => ({
+    id: r?.id, code: r?.code,
+    supplierId: r?.supplierId ?? null,
+    supplierName: r?.supplierName ?? null,
+    totalCost: r?.totalCost, totalItems: r?.totalItems,
+    status: r?.status, paymentStatus: r?.paymentStatus, paidAmount: r?.paidAmount ?? null,
+    dueDate: r?.dueDate ?? null, paymentTerm: r?.paymentTerm ?? null,
+    branchId: r?.branchId ?? null, createdAt: r?.createdAt,
+    items: Array.isArray(r?.items) ? r.items.map((it: any) => ({
+        productId: it.productId, productName: it.productName, sku: it.productSku ?? null,
+        quantity: it.quantity, costPrice: it.costPrice, lineTotal: it.total,
+    })) : undefined,
+})
 
 const router = Router()
 
@@ -237,6 +252,18 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
                 updatedAt: receipt.updatedAt.toISOString(),
             },
         })
+
+        // Webhook đầu ra: nhập hàng (post-response, enrich thông tin NCC — gated)
+        if (webhooksActive()) {
+            try {
+                let payload: any = importPayload(receipt)
+                if (receipt.supplierId) {
+                    const sup = await prisma.supplier.findUnique({ where: { id: receipt.supplierId }, select: { code: true, phone: true, contactName: true } }).catch(() => null)
+                    if (sup) payload = { ...payload, supplierCode: sup.code, supplierPhone: sup.phone, supplierContact: sup.contactName }
+                }
+                emitEntityEvent(prisma, 'import.created', payload, req.user?.storeSchema).catch(() => { })
+            } catch { /* webhook không ảnh hưởng phiếu nhập */ }
+        }
     } catch (err) {
         console.error('Create import receipt error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })

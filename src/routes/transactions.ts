@@ -825,7 +825,12 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
         // riêng để không bao giờ rơi vào catch phía dưới (tránh "headers already sent").
         if (webhooksActive()) {
             try {
-                emitEntityEvent(prisma, 'invoice.created', invoicePayload(transaction), req.user?.storeSchema).catch(() => { })
+                let invPayload: any = invoicePayload(transaction)
+                if (transaction.customerId) {
+                    const cust = await prisma.customer.findUnique({ where: { id: transaction.customerId }, select: { code: true, phone: true, email: true } }).catch(() => null)
+                    if (cust) invPayload = { ...invPayload, customerCode: cust.code, customerPhone: cust.phone, customerEmail: cust.email }
+                }
+                emitEntityEvent(prisma, 'invoice.created', invPayload, req.user?.storeSchema).catch(() => { })
                 // stock.changed — van-sale không đổi Product.stock (đã trừ lúc chất xe) → bỏ.
                 if (!isVanSale) {
                     const deltaByProduct = new Map<string, { delta: number; sku?: string; name?: string }>()
