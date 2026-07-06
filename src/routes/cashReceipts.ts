@@ -2,7 +2,7 @@ import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest, getBranchFilter, getBranchId, canAccessBranch } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
 import { enforcePeriodLock } from '../lib/periodLock'
-import { postDebtCollectionJournal } from '../lib/autoJournal'
+import { postDebtCollectionJournal, reverseJournalByReference } from '../lib/autoJournal'
 import { emitEntityEvent } from '../lib/webhookDispatch'
 
 const router = Router()
@@ -78,6 +78,8 @@ async function revertDebtCollection(prisma: any, receipt: any): Promise<void> {
             where: { id: receipt.customerId },
             data: { debt: { increment: entry.amount } },
         })
+        // Đảo bút toán thu nợ đã post (Nợ 111/112 / Có 131) → post ngược để GL khớp sổ
+        await reverseJournalByReference(tx, `COLLECT-CR-${receipt.id}`, { branchId: receipt.branchId ?? null })
     })
 }
 

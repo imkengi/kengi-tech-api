@@ -5,7 +5,7 @@ import { validate } from '../middleware/validate'
 import { CreateTransactionSchema } from '../schemas'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { publishEvent } from '../lib/pubsub'
-import { createJournalEntriesForTransaction, postDebtCollectionJournal } from '../lib/autoJournal'
+import { createJournalEntriesForTransaction, postDebtCollectionJournal, reverseJournalEntriesForTransaction } from '../lib/autoJournal'
 import { nextCode } from '../lib/codeGenerator'
 import { getOrCreateDefaultWarehouse, updateWarehouseStock } from '../lib/warehouseHelper'
 import { emitStockChanged, webhooksActive, emitEntityEvent } from '../lib/webhookDispatch'
@@ -896,97 +896,73 @@ router.put('/:id/void', authMiddleware, requirePermission('pos.create_order'), a
         }
 
         const user = await prisma.user.findUnique({ where: { id: req.user!.userId } })
-
-        const transaction = await prisma.transaction.update({
-            where: { id: String(req.params.id) },
-            data: { status: 'voided' },
-            include: { 
-                items: {
-                    include: { product: { select: { costPrice: true } } }
-                }
-            },
-        })
-
-        // Restore stock for each item + create inventory records.
-        // Hoàn theo ĐƠN VỊ GỐC đã trừ lúc bán (baseQuantity); bản ghi cũ
-        // baseQuantity=0 → fallback quantity. Hoàn cả kho mặc định của chi nhánh
-        // (nơi bị trừ lock-step lúc bán).
         const voidWarehouse = await getOrCreateDefaultWarehouse(prisma as any, existing.branchId || null)
-        for (const item of transaction.items) {
-            const restoreQty = (item as any).baseQuantity > 0 ? (item as any).baseQuantity : item.quantity
-            const updatedProduct = await prisma.product.update({
-                where: { id: item.productId },
-                data: { stock: { increment: restoreQty } },
+        const stockEmits: any[] = []
+
+        // ATOMIC (#8): đổi status + hoàn kho + WarehouseStock + ledger + công nợ cùng
+        // sống chết trong 1 transaction — crash giữa chừng không để lệch tồn vs công nợ.
+        const transaction = await prisma.$transaction(async (tx: any) => {
+            const t = await tx.transaction.update({
+                where: { id: String(req.params.id) },
+                data: { status: 'voided' },
+                include: { items: { include: { product: { select: { costPrice: true } } } } },
             })
 
-            if (voidWarehouse?.id) {
-                await updateWarehouseStock(prisma as any, voidWarehouse.id, item.productId, restoreQty)
-                    .catch((err: any) => console.error(`[Void] WarehouseStock restore failed for product ${item.productId}:`, err))
-            }
-            // Webhook đầu ra: stock.changed do hoàn kho khi hủy đơn
-            emitStockChanged(prisma as any, { productId: item.productId, sku: (updatedProduct as any).sku, name: (updatedProduct as any).name, branchId: existing.branchId ?? null, delta: restoreQty, stock: (updatedProduct as any).stock, reason: 'void' }, req.user?.storeSchema).catch(() => { })
-
-            await prisma.inventoryTransaction.create({
-                data: {
-                    type: 'adjustment',
-                    productId: item.productId,
-                    productName: item.productName,
-                    productSku: item.sku,
-                    quantity: restoreQty,
-                    reason: `Hủy đơn - ${existing.receiptNumber}`,
-                    note: `Hoàn kho do hủy giao dịch ${existing.receiptNumber}`,
-                    referenceId: existing.receiptNumber,
-                    referenceType: 'void',
-                    unitPrice: item.unitPrice || 0,
-                    costPriceAfter: updatedProduct.costPrice,
-                    userId: req.user!.userId,
-                    userName: user?.name || 'Admin',
-                },
-            })
-        }
-
-        // Revert customer stats + outstanding debt of this sale
-        if (existing.customerId) {
-            const customerUpdate: any = {
-                totalPurchases: { decrement: existing.total },
-                totalOrders: { decrement: 1 },
-            }
-
-            // A 'partial' sale still carries unpaid credit — remove it from the
-            // customer's balance, clamped so the balance can never go negative.
-            const outstanding = existing.status === 'partial'
-                ? Math.max(0, existing.total - (existing.amountReceived ?? 0))
-                : 0
-            let voidDebtReduction = 0
-            let voidCustomer: any = null
-            if (outstanding > 0) {
-                voidCustomer = await prisma.customer.findUnique({
-                    where: { id: existing.customerId },
-                    select: { debt: true, name: true, phone: true },
+            // Hoàn kho theo ĐƠN VỊ GỐC (baseQuantity; cũ=0 → fallback quantity).
+            for (const item of t.items) {
+                const restoreQty = (item as any).baseQuantity > 0 ? (item as any).baseQuantity : item.quantity
+                const updatedProduct = await tx.product.update({
+                    where: { id: item.productId },
+                    data: { stock: { increment: restoreQty } },
                 })
-                voidDebtReduction = Math.min(outstanding, Math.max(0, voidCustomer?.debt ?? 0))
-                if (voidDebtReduction > 0) customerUpdate.debt = { decrement: voidDebtReduction }
-            }
-
-            await prisma.customer.update({
-                where: { id: existing.customerId },
-                data: customerUpdate,
-            })
-
-            // Ghi sổ chi tiết phần xóa nợ do hủy đơn (best-effort)
-            if (voidDebtReduction > 0) {
-                await prisma.debtEntry.create({
+                if (voidWarehouse?.id) await updateWarehouseStock(tx, voidWarehouse.id, item.productId, restoreQty)
+                stockEmits.push({ productId: item.productId, sku: (updatedProduct as any).sku, name: (updatedProduct as any).name, delta: restoreQty, stock: (updatedProduct as any).stock })
+                await tx.inventoryTransaction.create({
                     data: {
-                        customerId: existing.customerId,
-                        customerName: voidCustomer?.name || (existing as any).customerName || 'Khách hàng',
-                        phone: voidCustomer?.phone || null,
-                        type: 'return',
-                        amount: voidDebtReduction,
-                        description: `Hủy đơn ${existing.receiptNumber} - xóa nợ`,
-                        balance: Math.max(0, (voidCustomer?.debt ?? 0) - voidDebtReduction),
+                        type: 'adjustment', productId: item.productId, productName: item.productName,
+                        productSku: item.sku, quantity: restoreQty,
+                        reason: `Hủy đơn - ${existing.receiptNumber}`, note: `Hoàn kho do hủy giao dịch ${existing.receiptNumber}`,
+                        referenceId: existing.receiptNumber, referenceType: 'void',
+                        unitPrice: item.unitPrice || 0, costPriceAfter: updatedProduct.costPrice,
+                        userId: req.user!.userId, userName: user?.name || 'Admin',
                     },
-                }).catch((e: any) => console.error('DebtEntry create failed (non-fatal):', e.message))
+                })
             }
+
+            // Revert customer stats + outstanding debt of this sale
+            if (existing.customerId) {
+                const customerUpdate: any = { totalPurchases: { decrement: existing.total }, totalOrders: { decrement: 1 } }
+                const outstanding = existing.status === 'partial' ? Math.max(0, existing.total - (existing.amountReceived ?? 0)) : 0
+                let voidDebtReduction = 0, voidCustomer: any = null
+                if (outstanding > 0) {
+                    voidCustomer = await tx.customer.findUnique({
+                        where: { id: existing.customerId }, select: { debt: true, name: true, phone: true },
+                    })
+                    voidDebtReduction = Math.min(outstanding, Math.max(0, voidCustomer?.debt ?? 0))
+                    if (voidDebtReduction > 0) customerUpdate.debt = { decrement: voidDebtReduction }
+                }
+                await tx.customer.update({ where: { id: existing.customerId }, data: customerUpdate })
+                if (voidDebtReduction > 0) {
+                    await tx.debtEntry.create({
+                        data: {
+                            customerId: existing.customerId, customerName: voidCustomer?.name || (existing as any).customerName || 'Khách hàng',
+                            phone: voidCustomer?.phone || null, type: 'return', amount: voidDebtReduction,
+                            description: `Hủy đơn ${existing.receiptNumber} - xóa nợ`,
+                            balance: Math.max(0, (voidCustomer?.debt ?? 0) - voidDebtReduction),
+                        },
+                    })
+                }
+            }
+            return t
+        }, { timeout: 30000 })
+
+        // ĐẢO BÚT TOÁN doanh thu 511/VAT 3331/giảm giá 521/giá vốn 632/thu nợ đã post
+        // lúc bán (#4, #7) — post-commit, best-effort (GL tách khỏi tồn/công nợ).
+        await reverseJournalEntriesForTransaction(prisma, existing.receiptNumber, { branchId: existing.branchId ?? null, userId: req.user!.userId }).catch(() => { })
+
+        // Webhook stock.changed do hoàn kho (post-commit, không chặn)
+        for (const s of stockEmits) {
+            emitStockChanged(prisma as any, { ...s, branchId: existing.branchId ?? null, reason: 'void' }, req.user?.storeSchema).catch(() => { })
         }
 
         cacheDel(`${req.user?.storeSchema || 'default'}:*:transactions:*`).catch(() => { })
@@ -1646,6 +1622,10 @@ router.post('/:id/revise', authMiddleware, requirePermission('pos.create_order')
 
         cacheDel(`${req.user?.storeSchema || 'default'}:*:transactions:*`).catch(() => { })
         console.log(`📝 Transaction ${existing.receiptNumber} revised → ${newReceiptNumber} (${warrantyCount} warranties transferred)`)
+
+        // Đảo bút toán hóa đơn CŨ (#4): revise = hủy đơn cũ + tạo đơn mới. Đơn mới đã
+        // post bút toán riêng; đơn cũ phải đảo để GL không cộng dồn 2 lần.
+        await reverseJournalEntriesForTransaction(prisma, existing.receiptNumber, { branchId: existing.branchId ?? null, userId: req.user!.userId }).catch(() => { })
 
         // Publish realtime event
         publishEvent(req.user?.storeSchema, 'transaction:revised', {

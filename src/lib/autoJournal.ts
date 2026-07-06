@@ -227,7 +227,10 @@ export async function createJournalEntriesForTransaction(
     if (!existing.has(cogsRef)) {
         const cogsAmount = tx.items?.reduce((s, item) => {
             const cost = item.product?.costPrice || 0
-            return s + (cost * item.quantity)
+            // costPrice theo ĐƠN VỊ GỐC nên phải nhân baseQuantity (số đã trừ kho),
+            // KHÔNG phải item.quantity (đơn vị bán). Bản ghi cũ baseQuantity=0 → fallback.
+            const qty = (item as any).baseQuantity && (item as any).baseQuantity > 0 ? (item as any).baseQuantity : item.quantity
+            return s + (cost * qty)
         }, 0) || 0
         if (cogsAmount > 0) {
             try {
@@ -273,4 +276,57 @@ export async function createJournalEntriesForTransaction(
     }
 
     return result
+}
+
+// ─── Đảo bút toán (hủy/sửa hóa đơn, hủy phiếu thu) ──────────────────────────
+// Post bút toán NGƯỢC (swap Nợ↔Có) với reference `VOID-<ref gốc>` — idempotent
+// (reference unique, đảo lần 2 bị bỏ qua). Giữ dấu vết kiểm toán thay vì xóa.
+async function postReversal(prisma: any, e: any, date: string, opts: { branchId?: string | null; userId?: string | null }) {
+    const ref = String(e.reference || '')
+    if (!ref || ref.startsWith('VOID-')) return
+    try {
+        await prisma.journalEntry.create({
+            data: {
+                date,
+                description: `Đảo: ${e.description || ref}`,
+                debitAccount: e.creditAccount, debitAccountName: e.creditAccountName,
+                creditAccount: e.debitAccount, creditAccountName: e.debitAccountName,
+                amount: e.amount, reference: `VOID-${ref}`, referenceType: 'void',
+                branchId: opts.branchId ?? e.branchId ?? null, createdBy: opts.userId ?? null,
+            },
+        })
+    } catch (_) { /* đã đảo (unique) — idempotent */ }
+}
+
+// Đảo toàn bộ bút toán của 1 hóa đơn (SALE/VAT/DISC/COGS + mọi COLLECT-<receipt>*).
+// Dùng khi VOID/REVISE hóa đơn — cần chạy trong cùng $transaction với hoàn kho/công nợ.
+export async function reverseJournalEntriesForTransaction(
+    prisma: any, receiptNumber: string, opts: { branchId?: string | null; userId?: string | null } = {},
+): Promise<void> {
+    if (!receiptNumber) return
+    let entries: any[] = []
+    try {
+        entries = await prisma.journalEntry.findMany({
+            where: {
+                OR: [
+                    { reference: { in: [`SALE-${receiptNumber}`, `VAT-${receiptNumber}`, `DISC-${receiptNumber}`, `COGS-${receiptNumber}`] } },
+                    { reference: { startsWith: `COLLECT-${receiptNumber}` } },
+                ],
+            },
+        })
+    } catch { return }
+    const date = fmtDate(new Date())
+    for (const e of entries) await postReversal(prisma, e, date, opts)
+}
+
+// Đảo bút toán theo 1 reference chính xác (vd COLLECT-CR-<id> khi hủy phiếu thu nợ).
+export async function reverseJournalByReference(
+    prisma: any, reference: string, opts: { branchId?: string | null; userId?: string | null } = {},
+): Promise<void> {
+    if (!reference) return
+    try {
+        const entries = await prisma.journalEntry.findMany({ where: { reference } })
+        const date = fmtDate(new Date())
+        for (const e of entries) await postReversal(prisma, e, date, opts)
+    } catch { /* ignore */ }
 }
