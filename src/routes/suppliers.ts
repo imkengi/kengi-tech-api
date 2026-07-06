@@ -266,6 +266,7 @@ router.get('/:id/debt-history', authMiddleware, async (req: AuthRequest, res: Re
 
         // Process PurchaseOrders
         for (const po of purchaseOrders) {
+            if (po.status === 'cancelled') continue // khớp với list (PO hủy không tính nợ)
             if (po.totalAmount > 0) {
                 history.push({
                     id: po.id,

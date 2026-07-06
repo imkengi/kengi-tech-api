@@ -94,6 +94,8 @@ async function tryApiKeyAuth(req: AuthRequest): Promise<boolean> {
                     storeSchema: schema,  // alias
                 }
                 req.storePrisma = storePrisma
+                ;(req as any).viaApiKey = true
+                ;(req as any).apiKeyScopes = key.scopes || 'read'
                 storePrisma.apiKey.update({
                     where: { id: key.id },
                     data: { lastUsedAt: new Date() },
@@ -147,6 +149,15 @@ export const authMiddleware = async (req: AuthRequest, res: Response, next: Next
     // Fallback: X-API-Key
     const authenticated = await tryApiKeyAuth(req)
     if (authenticated) {
+        // Thực thi scope của API key: key chỉ-đọc (scope không chứa admin/write/*)
+        // KHÔNG được thực hiện thao tác ghi (POST/PUT/PATCH/DELETE).
+        const scopes = String((req as any).apiKeyScopes || 'read')
+        const writeAllowed = /admin|write|\*/i.test(scopes)
+        const isWrite = !['GET', 'HEAD', 'OPTIONS'].includes(req.method)
+        if (isWrite && !writeAllowed) {
+            res.status(403).json({ success: false, error: 'API key chỉ có quyền đọc — không thể ghi/sửa/xóa (scope=read)' })
+            return
+        }
         next()
         return
     }

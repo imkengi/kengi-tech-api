@@ -50,7 +50,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         const size = Math.max(1, Math.min(100, parseInt(String(pageSize))))
         const skip = (pageNum - 1) * size
 
-        const [total, receipts] = await Promise.all([
+        const [total, receipts, statusGroups, completedAgg, topSup] = await Promise.all([
             prisma.importReceipt.count({ where }),
             prisma.importReceipt.findMany({
                 where,
@@ -59,11 +59,32 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
                 skip,
                 take: size,
             }),
+            // Tổng hợp trên TOÀN BỘ filter (không chỉ trang) cho KPI/donut/top NCC
+            prisma.importReceipt.groupBy({ by: ['status'], where, _count: true }),
+            prisma.importReceipt.aggregate({ where: { ...where, status: 'completed' }, _sum: { totalCost: true }, _count: true }),
+            prisma.importReceipt.groupBy({
+                by: ['supplierName'], where: { ...where, status: 'completed' },
+                _sum: { totalCost: true }, orderBy: { _sum: { totalCost: 'desc' } }, take: 5,
+            }),
         ])
+
+        const byStatus: Record<string, number> = Object.fromEntries(statusGroups.map((g: any) => [g.status, g._count]))
+        const completedValue = completedAgg._sum.totalCost || 0
+        const summary = {
+            total,
+            draft: byStatus['draft'] || 0,
+            completed: byStatus['completed'] || 0,
+            cancelled: byStatus['cancelled'] || 0,
+            returned: (byStatus['returned'] || 0) + (byStatus['partial_return'] || 0),
+            totalValue: completedValue,
+            avgValue: completedAgg._count ? Math.round(completedValue / completedAgg._count) : 0,
+            topSuppliers: topSup.map((t: any) => ({ name: t.supplierName || 'Không có NCC', value: t._sum.totalCost || 0 })),
+        }
 
         res.json({
             success: true,
             data: {
+                summary,
                 items: receipts.map(r => ({
                     ...r,
                     createdAt: r.createdAt.toISOString(),

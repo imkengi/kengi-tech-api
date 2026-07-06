@@ -6,6 +6,7 @@ import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { validate } from '../middleware/validate'
 import { CreateProductSchema, UpdateProductSchema } from '../schemas'
 import { emitProductEvent } from '../lib/webhookDispatch'
+import { adjustSellableStock } from '../lib/warehouseHelper'
 
 const router = Router()
 
@@ -521,6 +522,14 @@ router.put('/:id', authMiddleware, requirePermission('products.edit'), validate(
         const { unitConversions, images, ...rawUpdates } = req.body
         const updates = pickProductFields(rawUpdates)
 
+        // BẤT BIẾN KHO: Product.stock phải đi qua adjustSellableStock để mirror
+        // WarehouseStock (POS check tồn theo kho). KHÔNG cho product.update ghi thẳng
+        // stock — nếu không kho lệch → POS 409 không bán được. Sửa tồn ở form SP giờ
+        // tính delta rồi áp qua helper (đồng thời phát webhook stock.changed).
+        const stockDelta = (updates.stock !== undefined && Number(updates.stock) !== existing.stock)
+            ? Number(updates.stock) - existing.stock : 0
+        delete updates.stock
+
         const cleanConversions = Array.isArray(unitConversions) ? sanitizeUnitConversions(unitConversions) : null
         const cleanImages = Array.isArray(images) ? sanitizeImages(images) : null
 
@@ -529,6 +538,10 @@ router.put('/:id', authMiddleware, requirePermission('products.edit'), validate(
         }
         if (cleanImages !== null) {
             await prisma.productImage.deleteMany({ where: { productId: String(req.params.id) } })
+        }
+
+        if (stockDelta !== 0) {
+            await adjustSellableStock(prisma, existing.id, getBranchId(req) ?? null, stockDelta, 'manual-edit')
         }
 
         const imagesToCreate = (images || []).filter((img: any) => img.url).map(({ id, ...rest }: any) => rest)

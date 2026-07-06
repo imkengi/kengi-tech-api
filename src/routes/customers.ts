@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import { errorDetail } from '../lib/errorResponse'
 import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
 import { requirePermission } from '../middleware/permissionMiddleware'
+import { requireRole } from '../middleware/roleMiddleware'
 import { validate } from '../middleware/validate'
 import { CreateCustomerSchema, UpdateCustomerSchema } from '../schemas'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
@@ -453,7 +454,7 @@ router.get('/:id/debt-history', authMiddleware, requirePermission('customers.vie
 //   - "<txId>-receipt" → sale-time receipt: drop non-credit payments, add credit, status=partial, debt+=amount
 //   - Payment.id ("Thanh toán nợ") → debt-payment receipt: delete payment, status=partial, debt+=amount
 //   - DebtEntry.id (type=payment) → manual payment: delete entry, debt+=amount
-router.post('/:id/cancel-receipt', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.post('/:id/cancel-receipt', authMiddleware, requireRole('admin', 'manager', 'superadmin', 'owner'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const customerId = String(req.params.id)
@@ -830,7 +831,7 @@ router.patch('/:id/geocode', authMiddleware, async (req: AuthRequest, res: Respo
 })
 
 // POST /api/customers/:id/pay-debt — Pay down customer debt
-router.post('/:id/pay-debt', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.post('/:id/pay-debt', authMiddleware, requireRole('admin', 'manager', 'superadmin', 'owner'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { amount, method, reference, note } = req.body
