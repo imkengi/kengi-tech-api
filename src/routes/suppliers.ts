@@ -5,8 +5,15 @@ import { validate } from '../middleware/validate'
 import { CreateSupplierSchema, UpdateSupplierSchema } from '../schemas'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { nextCode } from '../lib/codeGenerator'
+import { emitEntityEvent } from '../lib/webhookDispatch'
 
 const router = Router()
+
+// Payload gọn cho webhook nhà cung cấp
+const supplierPayload = (s: any) => ({
+    id: s?.id, code: s?.code, name: s?.name, contactName: s?.contactName ?? null,
+    phone: s?.phone ?? null, email: s?.email ?? null, payable: s?.payable ?? null, status: s?.status ?? null,
+})
 
 // GET /api/suppliers/stats
 router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -362,6 +369,7 @@ router.post('/', authMiddleware, requireRole('admin', 'manager'), validate(Creat
         })
         cacheDel(`${req.user?.storeSchema || 'default'}:suppliers:*`).catch(() => { })
         res.status(201).json({ success: true, data: supplier })
+        emitEntityEvent(prisma, 'supplier.created', supplierPayload(supplier), req.user?.storeSchema).catch(() => { })
     } catch (err) {
         console.error('Create supplier error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
@@ -378,6 +386,7 @@ router.put('/:id', authMiddleware, requireRole('admin', 'manager'), validate(Upd
             data: { name, contactName, phone, email, address, taxCode, status, notes, payable },
         })
         res.json({ success: true, data: supplier })
+        emitEntityEvent(prisma, 'supplier.updated', supplierPayload(supplier), req.user?.storeSchema).catch(() => { })
     } catch (err) {
         res.status(500).json({ success: false, error: 'Internal server error' })
     }
@@ -389,8 +398,10 @@ router.delete('/:id', authMiddleware, requireRole('admin', 'manager'), async (re
         const prisma = req.storePrisma!
         const poCount = await prisma.purchaseOrder.count({ where: { supplierId: String(req.params.id) } })
         if (poCount > 0) return res.status(400).json({ success: false, error: `Supplier has ${poCount} purchase orders` })
+        const toDelete = await prisma.supplier.findUnique({ where: { id: String(req.params.id) } })
         await prisma.supplier.delete({ where: { id: String(req.params.id) } })
         res.json({ success: true })
+        if (toDelete) emitEntityEvent(prisma, 'supplier.deleted', supplierPayload(toDelete), req.user?.storeSchema).catch(() => { })
     } catch (err) {
         res.status(500).json({ success: false, error: 'Internal server error' })
     }

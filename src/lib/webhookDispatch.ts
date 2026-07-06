@@ -22,6 +22,16 @@ export const WEBHOOK_EVENTS = [
     { type: 'product.created', label: 'Tạo sản phẩm' },
     { type: 'product.updated', label: 'Cập nhật sản phẩm' },
     { type: 'product.deleted', label: 'Xóa sản phẩm' },
+    { type: 'customer.created', label: 'Tạo khách hàng' },
+    { type: 'customer.updated', label: 'Cập nhật khách hàng' },
+    { type: 'customer.deleted', label: 'Xóa khách hàng' },
+    { type: 'supplier.created', label: 'Tạo nhà cung cấp' },
+    { type: 'supplier.updated', label: 'Cập nhật nhà cung cấp' },
+    { type: 'supplier.deleted', label: 'Xóa nhà cung cấp' },
+    { type: 'cash_receipt.created', label: 'Tạo phiếu thu' },
+    { type: 'cash_receipt.cancelled', label: 'Hủy phiếu thu' },
+    { type: 'expense.created', label: 'Tạo phiếu chi' },
+    { type: 'expense.cancelled', label: 'Hủy phiếu chi' },
 ] as const
 
 export const WEBHOOK_EVENT_TYPES = WEBHOOK_EVENTS.map((e) => e.type)
@@ -124,6 +134,19 @@ export async function emitProductEvent(
         barcode: product?.barcode ?? null,
         isActive: product?.isActive ?? null,
     }
+    await enqueue(client, eventType, data, schema)
+}
+
+// Generic: phát 1 sự kiện với payload tự xây ở call site (khách hàng, NCC, phiếu
+// thu/chi...). Guard nhanh + không throw. Fire-and-forget được (ngoài tx) hoặc
+// await (trong tx).
+export async function emitEntityEvent(
+    client: AnyPrisma,
+    eventType: string,
+    data: any,
+    schema?: string,
+): Promise<void> {
+    if (!anyWebhooksExist) return
     await enqueue(client, eventType, data, schema)
 }
 

@@ -3,8 +3,16 @@ import { authMiddleware, AuthRequest, getBranchFilter, getBranchId, canAccessBra
 import { requireRole } from '../middleware/roleMiddleware'
 import { enforcePeriodLock } from '../lib/periodLock'
 import { postDebtCollectionJournal } from '../lib/autoJournal'
+import { emitEntityEvent } from '../lib/webhookDispatch'
 
 const router = Router()
+
+// Payload gọn cho webhook phiếu thu
+const receiptPayload = (r: any) => ({
+    id: r?.id, amount: r?.amount, category: r?.category, description: r?.description,
+    receivedVia: r?.receivedVia ?? null, customerId: r?.customerId ?? null, customerName: r?.customerName ?? null,
+    reference: r?.reference ?? null, status: r?.status ?? null, date: r?.date, branchId: r?.branchId ?? null,
+})
 
 // ─── Cash Receipts (Phiếu thu) ─────────────────────────────────────────────
 
@@ -160,6 +168,7 @@ router.post('/', authMiddleware, requireRole('admin', 'manager'), enforcePeriodL
         }
 
         res.status(201).json({ success: true, data: receipt })
+        emitEntityEvent(prisma, 'cash_receipt.created', receiptPayload(receipt), req.user?.storeSchema).catch(() => { })
     } catch (err) {
         console.error('Create cash receipt error:', err)
         res.status(500).json({ success: false, error: 'Lỗi khi tạo phiếu thu' })
@@ -239,6 +248,7 @@ router.post('/:id/cancel', authMiddleware, requireRole('admin', 'manager'), asyn
         }
 
         res.json({ success: true, data: receipt })
+        emitEntityEvent(prisma, 'cash_receipt.cancelled', receiptPayload(receipt), req.user?.storeSchema).catch(() => { })
     } catch (err) {
         console.error('Cancel cash receipt error:', err)
         res.status(500).json({ success: false, error: 'Lỗi khi hủy phiếu thu' })

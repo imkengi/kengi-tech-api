@@ -7,8 +7,15 @@ import { CreateCustomerSchema, UpdateCustomerSchema } from '../schemas'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { nextCode } from '../lib/codeGenerator'
 import { postDebtCollectionJournal } from '../lib/autoJournal'
+import { emitEntityEvent } from '../lib/webhookDispatch'
 
 const router = Router()
+
+// Payload gọn cho webhook khách hàng
+const customerPayload = (c: any) => ({
+    id: c?.id, code: c?.code, name: c?.name, phone: c?.phone ?? null,
+    email: c?.email ?? null, address: c?.address ?? null, debt: c?.debt ?? null, groupId: c?.groupId ?? null,
+})
 
 // ─── Customers CRUD ─────────────────────────────────────────────────────────
 
@@ -728,6 +735,7 @@ router.post('/', authMiddleware, requirePermission('customers.create'), validate
             },
         })
         cacheDel(`${req.user?.storeSchema || 'default'}:customers:*`).catch(() => { })
+        emitEntityEvent(prisma, 'customer.created', customerPayload(customer), req.user?.storeSchema).catch(() => { })
     } catch (err) {
         console.error('Create customer error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
@@ -771,6 +779,7 @@ router.put('/:id', authMiddleware, requirePermission('customers.edit'), validate
             },
         })
         cacheDel(`${req.user?.storeSchema || 'default'}:customers:*`).catch(() => { })
+        emitEntityEvent(prisma, 'customer.updated', customerPayload(customer), req.user?.storeSchema).catch(() => { })
     } catch (err) {
         console.error('Update customer error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
@@ -786,6 +795,7 @@ router.delete('/:id', authMiddleware, requirePermission('customers.delete'), asy
         if (!toDelete) return res.status(404).json({ success: false, error: 'Customer not found' })
         await prisma.customer.delete({ where: { id: toDelete.id } })
         res.json({ success: true, message: 'Customer deleted' })
+        emitEntityEvent(prisma, 'customer.deleted', customerPayload(toDelete), req.user?.storeSchema).catch(() => { })
     } catch (err) {
         console.error('Delete customer error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })

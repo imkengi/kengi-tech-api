@@ -5,8 +5,15 @@ import { validate } from '../middleware/validate'
 import { CreateExpenseSchema, UpdateExpenseSchema } from '../schemas'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { enforcePeriodLock } from '../lib/periodLock'
+import { emitEntityEvent } from '../lib/webhookDispatch'
 
 const router = Router()
+
+// Payload gọn cho webhook phiếu chi
+const expensePayload = (e: any) => ({
+    id: e?.id, amount: e?.amount, category: e?.category, description: e?.description,
+    paidBy: e?.paidBy ?? null, status: e?.status ?? null, date: e?.date, branchId: e?.branchId ?? null,
+})
 
 // GET /api/expenses
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -92,6 +99,7 @@ router.post('/', authMiddleware, requireRole('admin', 'manager'), validate(Creat
 
         cacheDel(`${req.user?.storeSchema || 'default'}:expenses:*`).catch(() => {})
         res.status(201).json({ success: true, data: expense })
+        emitEntityEvent(prisma, 'expense.created', expensePayload(expense), req.user?.storeSchema).catch(() => { })
     } catch (err) {
         console.error('Create expense error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
@@ -164,6 +172,7 @@ router.post('/:id/cancel', authMiddleware, requireRole('admin', 'manager'), asyn
 
         cacheDel(`${req.user?.storeSchema || 'default'}:expenses:*`).catch(() => {})
         res.json({ success: true, data: expense })
+        emitEntityEvent(prisma, 'expense.cancelled', expensePayload(expense), req.user?.storeSchema).catch(() => { })
     } catch (err) {
         console.error('Cancel expense error:', err)
         res.status(500).json({ success: false, error: 'Lỗi khi hủy phiếu chi' })
