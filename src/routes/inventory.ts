@@ -5,6 +5,7 @@ import { requireRole } from '../middleware/roleMiddleware'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { nextCode } from '../lib/codeGenerator'
 import { getOrCreateDefaultWarehouse, updateWarehouseStock, adjustSellableStock } from '../lib/warehouseHelper'
+import { emitStockChanged } from '../lib/webhookDispatch'
 
 const router = Router()
 
@@ -458,7 +459,7 @@ router.post('/receipts', authMiddleware, async (req: AuthRequest, res: Response)
         }
 
         for (const item of items) {
-            await prisma.product.update({
+            const _u = await prisma.product.update({
                 where: { id: item.productId },
                 data: { stock: { increment: item.quantity } },
             })
@@ -466,6 +467,8 @@ router.post('/receipts', authMiddleware, async (req: AuthRequest, res: Response)
                 await updateWarehouseStock(prisma as any, defaultWarehouseId, item.productId, item.quantity)
                     .catch((err: any) => console.error(`[Import] WarehouseStock increment failed for product ${item.productId}:`, err))
             }
+            // Webhook đầu ra: stock.changed khi nhập kho (gated + fire-and-forget)
+            emitStockChanged(prisma as any, { productId: item.productId, sku: (_u as any).sku, name: (_u as any).name, branchId: getBranchId(req) ?? null, delta: item.quantity, stock: (_u as any).stock, reason: 'import' }, req.user?.storeSchema).catch(() => { })
             await prisma.inventoryTransaction.create({
                 data: {
                     type: 'import',

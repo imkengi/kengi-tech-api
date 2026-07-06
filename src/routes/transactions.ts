@@ -8,6 +8,7 @@ import { publishEvent } from '../lib/pubsub'
 import { createJournalEntriesForTransaction, postDebtCollectionJournal } from '../lib/autoJournal'
 import { nextCode } from '../lib/codeGenerator'
 import { getOrCreateDefaultWarehouse, updateWarehouseStock } from '../lib/warehouseHelper'
+import { emitStockChanged, webhooksActive } from '../lib/webhookDispatch'
 
 const router = Router()
 
@@ -780,6 +781,33 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
             createdAt: transaction.createdAt.toISOString(),
         }, branchId).catch(() => { })
 
+        // ── Webhook đầu ra: stock.changed cho từng mặt hàng (post-commit) ──────────
+        // POS trừ Product.stock trực tiếp trong tx (không qua adjustSellableStock) nên
+        // phải tự phát ở đây. Van-sale không đổi Product.stock (đã trừ lúc chất xe) → bỏ.
+        // Gộp delta theo sản phẩm rồi đọc tồn mới 1 lần; chỉ chạy khi có webhook active.
+        if (webhooksActive() && !isVanSale) {
+            try {
+                const deltaByProduct = new Map<string, { delta: number; sku?: string; name?: string }>()
+                for (const item of itemsWithConversion) {
+                    const cur = deltaByProduct.get(item.productId) || { delta: 0, sku: item.sku || item.productSku, name: item.productName }
+                    cur.delta += item.baseQuantity
+                    deltaByProduct.set(item.productId, cur)
+                }
+                const rows = await prisma.product.findMany({
+                    where: { id: { in: [...deltaByProduct.keys()] } },
+                    select: { id: true, stock: true, sku: true, name: true },
+                })
+                const byId = new Map(rows.map((r: any) => [r.id, r]))
+                for (const [pid, agg] of deltaByProduct) {
+                    const r: any = byId.get(pid)
+                    emitStockChanged(prisma, {
+                        productId: pid, sku: r?.sku ?? agg.sku, name: r?.name ?? agg.name,
+                        branchId: branchId ?? null, delta: -agg.delta, stock: r?.stock ?? 0, reason: 'sale',
+                    }, req.user?.storeSchema).catch(() => { })
+                }
+            } catch { /* webhook không được chặn nghiệp vụ bán */ }
+        }
+
         res.status(201).json({
             success: true,
             data: {
@@ -857,6 +885,8 @@ router.put('/:id/void', authMiddleware, requirePermission('pos.create_order'), a
                 await updateWarehouseStock(prisma as any, voidWarehouse.id, item.productId, restoreQty)
                     .catch((err: any) => console.error(`[Void] WarehouseStock restore failed for product ${item.productId}:`, err))
             }
+            // Webhook đầu ra: stock.changed do hoàn kho khi hủy đơn
+            emitStockChanged(prisma as any, { productId: item.productId, sku: (updatedProduct as any).sku, name: (updatedProduct as any).name, branchId: existing.branchId ?? null, delta: restoreQty, stock: (updatedProduct as any).stock, reason: 'void' }, req.user?.storeSchema).catch(() => { })
 
             await prisma.inventoryTransaction.create({
                 data: {
@@ -1224,6 +1254,9 @@ router.put('/:id/return', authMiddleware, requirePermission('pos.create_order'),
                 data: { stock: { increment: baseRestore } },
             })
 
+            // Webhook đầu ra: stock.changed do hoàn kho khi trả hàng
+            emitStockChanged(prisma as any, { productId: item.productId, sku: (updatedProduct as any).sku, name: (updatedProduct as any).name, branchId: existing.branchId ?? null, delta: baseRestore, stock: (updatedProduct as any).stock, reason: 'return' }, req.user?.storeSchema).catch(() => { })
+
             if (returnWarehouse?.id) {
                 await updateWarehouseStock(prisma as any, returnWarehouse.id, item.productId, baseRestore)
                     .catch((err: any) => console.error(`[Return] WarehouseStock restore failed for product ${item.productId}:`, err))
@@ -1474,6 +1507,8 @@ router.post('/:id/revise', authMiddleware, requirePermission('pos.create_order')
                 await updateWarehouseStock(prisma as any, reviseWarehouse.id, item.productId, restoreQty)
                     .catch((err: any) => console.error(`[Revision] WarehouseStock restore failed for product ${item.productId}:`, err))
             }
+            // Webhook đầu ra: stock.changed do hoàn kho khi sửa đơn (trước khi áp lại)
+            emitStockChanged(prisma as any, { productId: item.productId, sku: (updatedProduct as any).sku, name: (updatedProduct as any).name, branchId: existing.branchId ?? null, delta: restoreQty, stock: (updatedProduct as any).stock, reason: 'revise' }, req.user?.storeSchema).catch(() => { })
 
             await prisma.inventoryTransaction.create({
                 data: {
