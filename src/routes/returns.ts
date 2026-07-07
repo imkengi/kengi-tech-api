@@ -2,6 +2,7 @@ import { Router, Response } from 'express'
 import { errorDetail } from '../lib/errorResponse'
 import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
 import { validate } from '../middleware/validate'
+import { requirePermission } from '../middleware/permissionMiddleware'
 import { CreateReturnSchema, UpdateReturnSchema } from '../schemas'
 import { nextCode } from '../lib/codeGenerator'
 import { adjustSellableStock } from '../lib/warehouseHelper'
@@ -12,7 +13,7 @@ const router = Router()
 //  GET /api/returns
 // ═══════════════════════════════════════════════════════════════════════════════
 
-router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/', authMiddleware, requirePermission('returns.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { status, search, reason, startDate, endDate } = req.query
@@ -47,7 +48,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 //  GET /api/returns/stats
 // ═══════════════════════════════════════════════════════════════════════════════
 
-router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/stats', authMiddleware, requirePermission('returns.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const returns = await prisma.returnOrder.findMany({ where: getBranchFilter(req as any) })
@@ -99,7 +100,7 @@ router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => 
 //  GET /api/returns/analytics
 // ═══════════════════════════════════════════════════════════════════════════════
 
-router.get('/analytics', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/analytics', authMiddleware, requirePermission('returns.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { days = '30' } = req.query
@@ -158,7 +159,7 @@ router.get('/analytics', authMiddleware, async (req: AuthRequest, res: Response)
 //  POST /api/returns
 // ═══════════════════════════════════════════════════════════════════════════════
 
-router.post('/', authMiddleware, validate(CreateReturnSchema), async (req: AuthRequest, res: Response) => {
+router.post('/', authMiddleware, requirePermission('returns.create'), validate(CreateReturnSchema), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { code, originalInvoice, transactionId, originalTransactionId, customerName, customerPhone, reason, items, totalRefund, notes, refundMethod, staffName } = req.body
@@ -295,7 +296,7 @@ router.post('/', authMiddleware, validate(CreateReturnSchema), async (req: AuthR
 //  PUT /api/returns/:id
 // ═══════════════════════════════════════════════════════════════════════════════
 
-router.put('/:id', authMiddleware, validate(UpdateReturnSchema), async (req: AuthRequest, res: Response) => {
+router.put('/:id', authMiddleware, requirePermission('returns.edit', 'returns.create'), validate(UpdateReturnSchema), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const retId = String(req.params.id)
@@ -328,7 +329,7 @@ router.put('/:id', authMiddleware, validate(UpdateReturnSchema), async (req: Aut
 //  POST /api/returns/:id/process-refund
 // ═══════════════════════════════════════════════════════════════════════════════
 
-router.post('/:id/process-refund', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.post('/:id/process-refund', authMiddleware, requirePermission('returns.edit', 'returns.create'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const retId = String(req.params.id)
@@ -432,7 +433,7 @@ router.post('/:id/process-refund', authMiddleware, async (req: AuthRequest, res:
 //  POST /api/returns/:id/restock
 // ═══════════════════════════════════════════════════════════════════════════════
 
-router.post('/:id/restock', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.post('/:id/restock', authMiddleware, requirePermission('returns.edit', 'returns.create'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const retId = String(req.params.id)
@@ -498,7 +499,7 @@ router.post('/:id/restock', authMiddleware, async (req: AuthRequest, res: Respon
 //  DELETE /api/returns/:id
 // ═══════════════════════════════════════════════════════════════════════════════
 
-router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.delete('/:id', authMiddleware, requirePermission('returns.delete', 'returns.edit'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         await prisma.returnOrder.delete({ where: { id: String(req.params.id) } })

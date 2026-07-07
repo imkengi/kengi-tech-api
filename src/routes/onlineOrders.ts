@@ -1,6 +1,7 @@
 import { Router, Response } from 'express'
 import { errMsg } from '../lib/errorResponse'
 import { authMiddleware, AuthRequest, getBranchFilter } from '../middleware/auth'
+import { requirePermission } from '../middleware/permissionMiddleware'
 import { nextCode } from '../lib/codeGenerator'
 import { reverseOnlineOrderEffects, isReversalStatus } from '../services/onlineOrderReversal'
 import { adjustSellableStock } from '../lib/warehouseHelper'
@@ -18,7 +19,7 @@ function markHasOnlineChannels(schema?: string) {
 //  ONLINE ORDER STATS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/stats', authMiddleware, requirePermission('online_orders.view', 'orders.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { channelId, platform, startDate, endDate } = req.query
@@ -136,7 +137,7 @@ router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => 
 //  ANALYTICS (daily revenue + top products)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-router.get('/stats/analytics', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/stats/analytics', authMiddleware, requirePermission('online_orders.view', 'orders.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const days = parseInt(req.query.days as string) || 7
@@ -209,7 +210,7 @@ router.get('/stats/analytics', authMiddleware, async (req: AuthRequest, res: Res
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // GET /api/online-orders/channels
-router.get('/channels', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/channels', authMiddleware, requirePermission('online_orders.view', 'orders.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const channels = await prisma.onlineChannel.findMany({
@@ -224,7 +225,7 @@ router.get('/channels', authMiddleware, async (req: AuthRequest, res: Response) 
 })
 
 // POST /api/online-orders/channels
-router.post('/channels', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.post('/channels', authMiddleware, requirePermission('online_orders.manage', 'orders.edit'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { name, platform, shopUrl, apiKey, apiSecret, accessToken, syncEnabled } = req.body
@@ -247,7 +248,7 @@ router.post('/channels', authMiddleware, async (req: AuthRequest, res: Response)
 })
 
 // PUT /api/online-orders/channels/:id
-router.put('/channels/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.put('/channels/:id', authMiddleware, requirePermission('online_orders.manage', 'orders.edit'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { id } = req.params
@@ -276,7 +277,7 @@ router.put('/channels/:id', authMiddleware, async (req: AuthRequest, res: Respon
 })
 
 // DELETE /api/online-orders/channels/:id
-router.delete('/channels/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.delete('/channels/:id', authMiddleware, requirePermission('online_orders.manage', 'orders.edit'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { id } = req.params
@@ -300,7 +301,7 @@ router.delete('/channels/:id', authMiddleware, async (req: AuthRequest, res: Res
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // GET /api/online-orders
-router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/', authMiddleware, requirePermission('online_orders.view', 'orders.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const {
@@ -402,7 +403,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // GET /api/online-orders/products/stats
-router.get('/products/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/products/stats', authMiddleware, requirePermission('online_orders.view', 'orders.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { channelId } = req.query
@@ -423,7 +424,7 @@ router.get('/products/stats', authMiddleware, async (req: AuthRequest, res: Resp
 })
 
 // GET /api/online-orders/products
-router.get('/products', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/products', authMiddleware, requirePermission('online_orders.view', 'orders.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { search, channelId, platform, status, page = '1', pageSize = '50' } = req.query
@@ -505,7 +506,7 @@ router.get('/products', authMiddleware, async (req: AuthRequest, res: Response) 
 })
 
 // PUT /api/online-orders/products/:id/link — Link online product to local inventory product
-router.put('/products/:id/link', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.put('/products/:id/link', authMiddleware, requirePermission('online_orders.manage', 'orders.edit'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { localProductId } = req.body
@@ -541,14 +542,14 @@ router.put('/products/:id/link', authMiddleware, async (req: AuthRequest, res: R
 })
 
 // PUT /api/online-orders/products/:id — Update price/stock stub
-router.put('/products/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.put('/products/:id', authMiddleware, requirePermission('online_orders.manage', 'orders.edit'), async (req: AuthRequest, res: Response) => {
     res.json({ success: true, data: { id: req.params.id, ...req.body } })
 })
 
 
 
 // GET /api/online-orders/:id
-router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/:id', authMiddleware, requirePermission('online_orders.view', 'orders.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const order = await prisma.onlineOrder.findUnique({
@@ -569,7 +570,7 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
 })
 
 // POST /api/online-orders
-router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.post('/', authMiddleware, requirePermission('online_orders.manage', 'orders.edit'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { items, ...orderData } = req.body
@@ -654,7 +655,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 })
 
 // PUT /api/online-orders/:id
-router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.put('/:id', authMiddleware, requirePermission('online_orders.manage', 'orders.edit'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { id } = req.params
@@ -690,7 +691,7 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
 })
 
 // PUT /api/online-orders/:id/status
-router.put('/:id/status', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.put('/:id/status', authMiddleware, requirePermission('online_orders.update_status', 'orders.edit'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { id } = req.params
@@ -990,7 +991,7 @@ router.put('/:id/status', authMiddleware, async (req: AuthRequest, res: Response
 
 // POST /api/online-orders/:id/handle-cancellation — Shopee: chấp nhận/từ chối
 // yêu cầu hủy của NGƯỜI MUA (đơn đang IN_CANCEL). Body: { operation: 'ACCEPT' | 'REJECT' }
-router.post('/:id/handle-cancellation', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.post('/:id/handle-cancellation', authMiddleware, requirePermission('online_orders.update_status', 'orders.edit'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { id } = req.params
@@ -1077,7 +1078,7 @@ router.post('/:id/handle-cancellation', authMiddleware, async (req: AuthRequest,
 })
 
 // PATCH /api/online-orders/:id/notes
-router.patch('/:id/notes', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.patch('/:id/notes', authMiddleware, requirePermission('online_orders.manage', 'orders.edit'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { id } = req.params
@@ -1110,7 +1111,7 @@ router.patch('/:id/notes', authMiddleware, async (req: AuthRequest, res: Respons
 })
 
 // GET /api/online-orders/:id/activity
-router.get('/:id/activity', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/:id/activity', authMiddleware, requirePermission('online_orders.view', 'orders.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { id } = req.params
@@ -1129,7 +1130,7 @@ router.get('/:id/activity', authMiddleware, async (req: AuthRequest, res: Respon
 })
 
 // DELETE /api/online-orders/:id
-router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.delete('/:id', authMiddleware, requirePermission('online_orders.manage', 'orders.edit'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { id } = req.params
