@@ -1322,6 +1322,8 @@ exports.Prisma.OnlineProductScalarFieldEnum = {
   stock: 'stock',
   status: 'status',
   imageUrl: 'imageUrl',
+  categoryId: 'categoryId',
+  categoryName: 'categoryName',
   localProductId: 'localProductId',
   syncedAt: 'syncedAt',
   createdAt: 'createdAt',

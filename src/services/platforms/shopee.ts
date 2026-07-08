@@ -229,6 +229,8 @@ export class ShopeeService extends PlatformService {
                     stock,
                     status: d.item_status || 'NORMAL',
                     imageUrl,
+                    // get_item_base_info trả sẵn category_id — lưu để map hoa hồng theo ngành
+                    categoryId: d.category_id ? String(d.category_id) : undefined,
                 })
             }
 

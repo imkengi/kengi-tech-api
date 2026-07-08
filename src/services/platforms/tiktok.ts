@@ -352,6 +352,22 @@ export class TikTokService extends PlatformService {
     }
 
     /**
+     * Mã ngành hàng của 1 sản phẩm — products/search KHÔNG trả category nên phải
+     * đọc từ detail.category_chains. Trả về id ngành LÁ + chuỗi tên đầy đủ
+     * ("Đồ dùng nhà bếp > Dao kéo & Bộ đồ ăn > Dao"), null nếu không có.
+     */
+    async fetchProductCategory(productId: string): Promise<{ categoryId: string; categoryName: string } | null> {
+        const detail = await this.getProductDetail(productId)
+        const chains: any[] = detail?.category_chains || []
+        if (!chains.length) return null
+        const leaf = chains.find(c => c.is_leaf) || chains[chains.length - 1]
+        return {
+            categoryId: String(leaf.id),
+            categoryName: chains.map(c => c.local_name).filter(Boolean).join(' > '),
+        }
+    }
+
+    /**
      * Push inventory for one product — POST /product/202309/products/{id}/inventory/update.
      * TikTok needs the sku_id (not seller_sku); when the caller only knows the
      * seller_sku we resolve it via product detail first.

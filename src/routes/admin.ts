@@ -694,6 +694,10 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "TransactionItem" ADD COLUMN IF NOT EXISTS "baseQuantity" DOUBLE PRECISION NOT NULL DEFAULT 0`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineOrder" ADD COLUMN IF NOT EXISTS "stockDeducted" BOOLEAN NOT NULL DEFAULT false`)
 
+                // Mã ngành hàng sản phẩm sàn (2026-07-06) — TikTok category_chains / Shopee category_id
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineProduct" ADD COLUMN IF NOT EXISTS "categoryId" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineProduct" ADD COLUMN IF NOT EXISTS "categoryName" TEXT`)
+
                 // Webhook đầu ra — 2 bảng (2026-07-06). db push không chạy được trong
                 // prod nên CREATE TABLE trực tiếp, khớp schema-store.prisma.
                 await (sp as any).$executeRawUnsafe(`

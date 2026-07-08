@@ -56,6 +56,8 @@ export interface PlatformProduct {
     stock: number
     status: string
     imageUrl?: string
+    categoryId?: string   // mã ngành hàng trên sàn (nếu API trả sẵn trong list)
+    categoryName?: string // chuỗi tên ngành (nếu có)
 }
 
 export interface TokenResponse {

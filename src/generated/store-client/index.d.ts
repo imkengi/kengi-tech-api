@@ -96682,6 +96682,8 @@ export namespace Prisma {
     stock: number | null
     status: string | null
     imageUrl: string | null
+    categoryId: string | null
+    categoryName: string | null
     localProductId: string | null
     syncedAt: Date | null
     createdAt: Date | null
@@ -96699,6 +96701,8 @@ export namespace Prisma {
     stock: number | null
     status: string | null
     imageUrl: string | null
+    categoryId: string | null
+    categoryName: string | null
     localProductId: string | null
     syncedAt: Date | null
     createdAt: Date | null
@@ -96716,6 +96720,8 @@ export namespace Prisma {
     stock: number
     status: number
     imageUrl: number
+    categoryId: number
+    categoryName: number
     localProductId: number
     syncedAt: number
     createdAt: number
@@ -96745,6 +96751,8 @@ export namespace Prisma {
     stock?: true
     status?: true
     imageUrl?: true
+    categoryId?: true
+    categoryName?: true
     localProductId?: true
     syncedAt?: true
     createdAt?: true
@@ -96762,6 +96770,8 @@ export namespace Prisma {
     stock?: true
     status?: true
     imageUrl?: true
+    categoryId?: true
+    categoryName?: true
     localProductId?: true
     syncedAt?: true
     createdAt?: true
@@ -96779,6 +96789,8 @@ export namespace Prisma {
     stock?: true
     status?: true
     imageUrl?: true
+    categoryId?: true
+    categoryName?: true
     localProductId?: true
     syncedAt?: true
     createdAt?: true
@@ -96883,6 +96895,8 @@ export namespace Prisma {
     stock: number
     status: string
     imageUrl: string | null
+    categoryId: string | null
+    categoryName: string | null
     localProductId: string | null
     syncedAt: Date | null
     createdAt: Date
@@ -96919,6 +96933,8 @@ export namespace Prisma {
     stock?: boolean
     status?: boolean
     imageUrl?: boolean
+    categoryId?: boolean
+    categoryName?: boolean
     localProductId?: boolean
     syncedAt?: boolean
     createdAt?: boolean
@@ -96938,6 +96954,8 @@ export namespace Prisma {
     stock?: boolean
     status?: boolean
     imageUrl?: boolean
+    categoryId?: boolean
+    categoryName?: boolean
     localProductId?: boolean
     syncedAt?: boolean
     createdAt?: boolean
@@ -96957,6 +96975,8 @@ export namespace Prisma {
     stock?: boolean
     status?: boolean
     imageUrl?: boolean
+    categoryId?: boolean
+    categoryName?: boolean
     localProductId?: boolean
     syncedAt?: boolean
     createdAt?: boolean
@@ -96976,13 +96996,15 @@ export namespace Prisma {
     stock?: boolean
     status?: boolean
     imageUrl?: boolean
+    categoryId?: boolean
+    categoryName?: boolean
     localProductId?: boolean
     syncedAt?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type OnlineProductOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "channelId" | "platform" | "platformProductId" | "name" | "sku" | "price" | "stock" | "status" | "imageUrl" | "localProductId" | "syncedAt" | "createdAt" | "updatedAt", ExtArgs["result"]["onlineProduct"]>
+  export type OnlineProductOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "channelId" | "platform" | "platformProductId" | "name" | "sku" | "price" | "stock" | "status" | "imageUrl" | "categoryId" | "categoryName" | "localProductId" | "syncedAt" | "createdAt" | "updatedAt", ExtArgs["result"]["onlineProduct"]>
   export type OnlineProductInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     channel?: boolean | OnlineChannelDefaultArgs<ExtArgs>
     localProduct?: boolean | OnlineProduct$localProductArgs<ExtArgs>
@@ -97013,6 +97035,8 @@ export namespace Prisma {
       stock: number
       status: string
       imageUrl: string | null
+      categoryId: string | null
+      categoryName: string | null
       localProductId: string | null
       syncedAt: Date | null
       createdAt: Date
@@ -97452,6 +97476,8 @@ export namespace Prisma {
     readonly stock: FieldRef<"OnlineProduct", 'Int'>
     readonly status: FieldRef<"OnlineProduct", 'String'>
     readonly imageUrl: FieldRef<"OnlineProduct", 'String'>
+    readonly categoryId: FieldRef<"OnlineProduct", 'String'>
+    readonly categoryName: FieldRef<"OnlineProduct", 'String'>
     readonly localProductId: FieldRef<"OnlineProduct", 'String'>
     readonly syncedAt: FieldRef<"OnlineProduct", 'DateTime'>
     readonly createdAt: FieldRef<"OnlineProduct", 'DateTime'>
@@ -141162,6 +141188,8 @@ export namespace Prisma {
     stock: 'stock',
     status: 'status',
     imageUrl: 'imageUrl',
+    categoryId: 'categoryId',
+    categoryName: 'categoryName',
     localProductId: 'localProductId',
     syncedAt: 'syncedAt',
     createdAt: 'createdAt',
@@ -149126,6 +149154,8 @@ export namespace Prisma {
     stock?: IntFilter<"OnlineProduct"> | number
     status?: StringFilter<"OnlineProduct"> | string
     imageUrl?: StringNullableFilter<"OnlineProduct"> | string | null
+    categoryId?: StringNullableFilter<"OnlineProduct"> | string | null
+    categoryName?: StringNullableFilter<"OnlineProduct"> | string | null
     localProductId?: StringNullableFilter<"OnlineProduct"> | string | null
     syncedAt?: DateTimeNullableFilter<"OnlineProduct"> | Date | string | null
     createdAt?: DateTimeFilter<"OnlineProduct"> | Date | string
@@ -149145,6 +149175,8 @@ export namespace Prisma {
     stock?: SortOrder
     status?: SortOrder
     imageUrl?: SortOrderInput | SortOrder
+    categoryId?: SortOrderInput | SortOrder
+    categoryName?: SortOrderInput | SortOrder
     localProductId?: SortOrderInput | SortOrder
     syncedAt?: SortOrderInput | SortOrder
     createdAt?: SortOrder
@@ -149168,6 +149200,8 @@ export namespace Prisma {
     stock?: IntFilter<"OnlineProduct"> | number
     status?: StringFilter<"OnlineProduct"> | string
     imageUrl?: StringNullableFilter<"OnlineProduct"> | string | null
+    categoryId?: StringNullableFilter<"OnlineProduct"> | string | null
+    categoryName?: StringNullableFilter<"OnlineProduct"> | string | null
     localProductId?: StringNullableFilter<"OnlineProduct"> | string | null
     syncedAt?: DateTimeNullableFilter<"OnlineProduct"> | Date | string | null
     createdAt?: DateTimeFilter<"OnlineProduct"> | Date | string
@@ -149187,6 +149221,8 @@ export namespace Prisma {
     stock?: SortOrder
     status?: SortOrder
     imageUrl?: SortOrderInput | SortOrder
+    categoryId?: SortOrderInput | SortOrder
+    categoryName?: SortOrderInput | SortOrder
     localProductId?: SortOrderInput | SortOrder
     syncedAt?: SortOrderInput | SortOrder
     createdAt?: SortOrder
@@ -149212,6 +149248,8 @@ export namespace Prisma {
     stock?: IntWithAggregatesFilter<"OnlineProduct"> | number
     status?: StringWithAggregatesFilter<"OnlineProduct"> | string
     imageUrl?: StringNullableWithAggregatesFilter<"OnlineProduct"> | string | null
+    categoryId?: StringNullableWithAggregatesFilter<"OnlineProduct"> | string | null
+    categoryName?: StringNullableWithAggregatesFilter<"OnlineProduct"> | string | null
     localProductId?: StringNullableWithAggregatesFilter<"OnlineProduct"> | string | null
     syncedAt?: DateTimeNullableWithAggregatesFilter<"OnlineProduct"> | Date | string | null
     createdAt?: DateTimeWithAggregatesFilter<"OnlineProduct"> | Date | string
@@ -161231,6 +161269,8 @@ export namespace Prisma {
     stock?: number
     status?: string
     imageUrl?: string | null
+    categoryId?: string | null
+    categoryName?: string | null
     syncedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -161249,6 +161289,8 @@ export namespace Prisma {
     stock?: number
     status?: string
     imageUrl?: string | null
+    categoryId?: string | null
+    categoryName?: string | null
     localProductId?: string | null
     syncedAt?: Date | string | null
     createdAt?: Date | string
@@ -161265,6 +161307,8 @@ export namespace Prisma {
     stock?: IntFieldUpdateOperationsInput | number
     status?: StringFieldUpdateOperationsInput | string
     imageUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    categoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    categoryName?: NullableStringFieldUpdateOperationsInput | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -161283,6 +161327,8 @@ export namespace Prisma {
     stock?: IntFieldUpdateOperationsInput | number
     status?: StringFieldUpdateOperationsInput | string
     imageUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    categoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    categoryName?: NullableStringFieldUpdateOperationsInput | string | null
     localProductId?: NullableStringFieldUpdateOperationsInput | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -161300,6 +161346,8 @@ export namespace Prisma {
     stock?: number
     status?: string
     imageUrl?: string | null
+    categoryId?: string | null
+    categoryName?: string | null
     localProductId?: string | null
     syncedAt?: Date | string | null
     createdAt?: Date | string
@@ -161316,6 +161364,8 @@ export namespace Prisma {
     stock?: IntFieldUpdateOperationsInput | number
     status?: StringFieldUpdateOperationsInput | string
     imageUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    categoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    categoryName?: NullableStringFieldUpdateOperationsInput | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -161332,6 +161382,8 @@ export namespace Prisma {
     stock?: IntFieldUpdateOperationsInput | number
     status?: StringFieldUpdateOperationsInput | string
     imageUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    categoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    categoryName?: NullableStringFieldUpdateOperationsInput | string | null
     localProductId?: NullableStringFieldUpdateOperationsInput | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -170536,6 +170588,8 @@ export namespace Prisma {
     stock?: SortOrder
     status?: SortOrder
     imageUrl?: SortOrder
+    categoryId?: SortOrder
+    categoryName?: SortOrder
     localProductId?: SortOrder
     syncedAt?: SortOrder
     createdAt?: SortOrder
@@ -170558,6 +170612,8 @@ export namespace Prisma {
     stock?: SortOrder
     status?: SortOrder
     imageUrl?: SortOrder
+    categoryId?: SortOrder
+    categoryName?: SortOrder
     localProductId?: SortOrder
     syncedAt?: SortOrder
     createdAt?: SortOrder
@@ -170575,6 +170631,8 @@ export namespace Prisma {
     stock?: SortOrder
     status?: SortOrder
     imageUrl?: SortOrder
+    categoryId?: SortOrder
+    categoryName?: SortOrder
     localProductId?: SortOrder
     syncedAt?: SortOrder
     createdAt?: SortOrder
@@ -178300,6 +178358,8 @@ export namespace Prisma {
     stock?: number
     status?: string
     imageUrl?: string | null
+    categoryId?: string | null
+    categoryName?: string | null
     syncedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -178317,6 +178377,8 @@ export namespace Prisma {
     stock?: number
     status?: string
     imageUrl?: string | null
+    categoryId?: string | null
+    categoryName?: string | null
     syncedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -178646,6 +178708,8 @@ export namespace Prisma {
     stock?: IntFilter<"OnlineProduct"> | number
     status?: StringFilter<"OnlineProduct"> | string
     imageUrl?: StringNullableFilter<"OnlineProduct"> | string | null
+    categoryId?: StringNullableFilter<"OnlineProduct"> | string | null
+    categoryName?: StringNullableFilter<"OnlineProduct"> | string | null
     localProductId?: StringNullableFilter<"OnlineProduct"> | string | null
     syncedAt?: DateTimeNullableFilter<"OnlineProduct"> | Date | string | null
     createdAt?: DateTimeFilter<"OnlineProduct"> | Date | string
@@ -183042,6 +183106,8 @@ export namespace Prisma {
     stock?: number
     status?: string
     imageUrl?: string | null
+    categoryId?: string | null
+    categoryName?: string | null
     syncedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -183058,6 +183124,8 @@ export namespace Prisma {
     stock?: number
     status?: string
     imageUrl?: string | null
+    categoryId?: string | null
+    categoryName?: string | null
     localProductId?: string | null
     syncedAt?: Date | string | null
     createdAt?: Date | string
@@ -187693,6 +187761,8 @@ export namespace Prisma {
     stock?: number
     status?: string
     imageUrl?: string | null
+    categoryId?: string | null
+    categoryName?: string | null
     syncedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -187975,6 +188045,8 @@ export namespace Prisma {
     stock?: IntFieldUpdateOperationsInput | number
     status?: StringFieldUpdateOperationsInput | string
     imageUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    categoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    categoryName?: NullableStringFieldUpdateOperationsInput | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -187992,6 +188064,8 @@ export namespace Prisma {
     stock?: IntFieldUpdateOperationsInput | number
     status?: StringFieldUpdateOperationsInput | string
     imageUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    categoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    categoryName?: NullableStringFieldUpdateOperationsInput | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -188008,6 +188082,8 @@ export namespace Prisma {
     stock?: IntFieldUpdateOperationsInput | number
     status?: StringFieldUpdateOperationsInput | string
     imageUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    categoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    categoryName?: NullableStringFieldUpdateOperationsInput | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -189136,6 +189212,8 @@ export namespace Prisma {
     stock?: number
     status?: string
     imageUrl?: string | null
+    categoryId?: string | null
+    categoryName?: string | null
     localProductId?: string | null
     syncedAt?: Date | string | null
     createdAt?: Date | string
@@ -189259,6 +189337,8 @@ export namespace Prisma {
     stock?: IntFieldUpdateOperationsInput | number
     status?: StringFieldUpdateOperationsInput | string
     imageUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    categoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    categoryName?: NullableStringFieldUpdateOperationsInput | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -189275,6 +189355,8 @@ export namespace Prisma {
     stock?: IntFieldUpdateOperationsInput | number
     status?: StringFieldUpdateOperationsInput | string
     imageUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    categoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    categoryName?: NullableStringFieldUpdateOperationsInput | string | null
     localProductId?: NullableStringFieldUpdateOperationsInput | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -189291,6 +189373,8 @@ export namespace Prisma {
     stock?: IntFieldUpdateOperationsInput | number
     status?: StringFieldUpdateOperationsInput | string
     imageUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    categoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    categoryName?: NullableStringFieldUpdateOperationsInput | string | null
     localProductId?: NullableStringFieldUpdateOperationsInput | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string

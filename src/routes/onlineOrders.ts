@@ -483,6 +483,8 @@ router.get('/products', authMiddleware, requirePermission('online_orders.view', 
                 stock: p.stock,
                 status: p.status,
                 imageUrl: p.imageUrl,
+                categoryId: (p as any).categoryId || null,
+                categoryName: (p as any).categoryName || null,
                 createdAt: p.createdAt.toISOString(),
                 updatedAt: p.updatedAt?.toISOString() || null,
                 syncedAt: p.syncedAt?.toISOString() || null,
@@ -2238,6 +2240,8 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                         stock: p.stock,
                         status: p.status || 'NORMAL',
                         imageUrl: p.imageUrl || null,
+                        categoryId: p.categoryId || null,
+                        categoryName: p.categoryName || null,
                         syncedAt: new Date(),
                     },
                     update: {
@@ -2247,12 +2251,48 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                         stock: p.stock,
                         status: p.status || 'NORMAL',
                         imageUrl: p.imageUrl || null,
+                        // Chỉ ghi đè ngành khi list API có trả (Shopee) — TikTok search không
+                        // trả nên giữ nguyên giá trị đã enrich, tránh xóa mất.
+                        ...(p.categoryId ? { categoryId: p.categoryId, categoryName: p.categoryName || null } : {}),
                         syncedAt: new Date(),
                     },
                 })
                 productsSynced++
             }
             console.log(`[Sync] Product catalog: ${productsSynced} products synced`)
+
+            // ── TikTok: enrich mã ngành hàng (nền, sau khi trả response) ──────────
+            // products/search KHÔNG trả category → đọc từ product detail, CHỈ cho SP
+            // còn thiếu, throttle 250ms + cap 80 SP/lần sync để không đụng rate-limit.
+            if (channel.platform === 'tiktok' && service instanceof TikTokService) {
+                const tkService = service as TikTokService
+                ;(async () => {
+                    try {
+                        const missing = await prisma.onlineProduct.findMany({
+                            where: { channelId: channel.id, platform: 'tiktok', categoryId: null },
+                            select: { id: true, platformProductId: true },
+                            take: 80,
+                        })
+                        if (!missing.length) return
+                        let done = 0
+                        for (const m of missing) {
+                            try {
+                                const cat = await tkService.fetchProductCategory(m.platformProductId)
+                                if (cat) {
+                                    await prisma.onlineProduct.update({ where: { id: m.id }, data: cat })
+                                    done++
+                                }
+                            } catch {
+                                break // rate-limit/token lỗi → dừng, lần sync sau chạy tiếp
+                            }
+                            await new Promise(r => setTimeout(r, 250))
+                        }
+                        console.log(`[Sync] TikTok category enriched: ${done}/${missing.length}`)
+                    } catch (enrichErr: any) {
+                        console.error('[Sync] TikTok category enrich failed:', enrichErr.message)
+                    }
+                })()
+            }
         } catch (prodErr: any) {
             console.error('[Sync] Product catalog sync error:', prodErr.message)
             errors.push(`Product sync: ${prodErr.message}`)

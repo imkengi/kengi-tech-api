@@ -1608,6 +1608,8 @@ model OnlineProduct {
   stock             Int       @default(0)
   status            String    @default("NORMAL")
   imageUrl          String?
+  categoryId        String? // mã ngành hàng trên sàn (TikTok: leaf của category_chains; Shopee: category_id)
+  categoryName      String? // chuỗi ngành đầy đủ "Đồ dùng nhà bếp > Dao kéo > Dao" (TikTok; Shopee chưa có tên)
   localProductId    String? // ID của Product trong kho để map Giá vốn
   syncedAt          DateTime?
   createdAt         DateTime  @default(now())
