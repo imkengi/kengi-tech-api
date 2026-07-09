@@ -6,6 +6,15 @@ import { nextCode } from '../lib/codeGenerator'
 
 const router = Router()
 
+// items lưu dạng JSON string; row cũ có thể chứa text thường (app Android cũ
+// cho gõ tự do) — parse hỏng 1 row không được làm sập cả danh sách
+function safeParseItems(raw: string | null | undefined): any[] {
+    try {
+        const v = JSON.parse(raw || '[]')
+        return Array.isArray(v) ? v : []
+    } catch { return [] }
+}
+
 // Zero-touch migration for multi-tenant schemas
 async function ensureQuotationColumns(prisma: any) {
     try {
@@ -89,7 +98,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
             where.OR = [{ code: { contains: q } }, { customerName: { contains: q } }]
         }
         const data = await prisma.quotation.findMany({ where, orderBy: { createdAt: 'desc' } })
-        const parsed = data.map(q => ({ ...q, items: JSON.parse(q.items || '[]') }))
+        const parsed = data.map(q => ({ ...q, items: safeParseItems(q.items) }))
         res.json({ success: true, data: parsed })
     } catch (err) { res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
@@ -111,7 +120,7 @@ router.post('/', authMiddleware, validate(CreateQuotationSchema), async (req: Au
                 validUntil: validUntil ? new Date(validUntil) : null, notes,
             },
         })
-        res.status(201).json({ success: true, data: { ...data, items: JSON.parse(data.items) } })
+        res.status(201).json({ success: true, data: { ...data, items: safeParseItems(data.items) } })
     } catch (err) { res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
 
@@ -134,7 +143,7 @@ router.put('/:id', authMiddleware, validate(UpdateQuotationSchema), async (req: 
         else if (total !== undefined) d.totalAmount = Number(total)
         if (notes !== undefined) d.notes = notes
         const data = await prisma.quotation.update({ where: { id: qId }, data: d })
-        res.json({ success: true, data: { ...data, items: JSON.parse(data.items) } })
+        res.json({ success: true, data: { ...data, items: safeParseItems(data.items) } })
     } catch (err) { res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
 
