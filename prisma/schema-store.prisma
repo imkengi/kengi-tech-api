@@ -753,6 +753,8 @@ model Vehicle {
   updatedAt          DateTime  @updatedAt
 
   maintenanceLogs VehicleMaintenance[]
+  fuelLogs        VehicleFuelLog[]
+  documents       VehicleDocument[]
   warehouse       Warehouse?
   salesTrips      SalesTrip[]
 
@@ -778,6 +780,46 @@ model VehicleMaintenance {
 
   @@index([vehicleId])
   @@index([serviceDate])
+}
+
+model VehicleFuelLog {
+  id            String   @id @default(cuid())
+  vehicleId     String
+  fuelDate      DateTime @default(now())
+  liters        Float    @default(0)
+  pricePerLiter Float    @default(0)
+  cost          Float    @default(0)
+  kmAtFill      Float    @default(0)
+  fuelType      String? // gasoline | diesel | electric | gas
+  station       String?
+  isFullTank    Boolean  @default(true)
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId])
+  @@index([fuelDate])
+}
+
+model VehicleDocument {
+  id             String    @id @default(cuid())
+  vehicleId      String
+  type           String // registration | inspection | insurance | roadfee | other
+  name           String
+  documentNumber String?
+  fileUrl        String?
+  issuer         String?
+  issueDate      DateTime?
+  expiryDate     DateTime?
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId])
+  @@index([expiryDate])
 }
 
 // ─── Delivery Routes (driver multi-stop routes built by admin) ───────────────

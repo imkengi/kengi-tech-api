@@ -854,6 +854,49 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "FbAutoReplyLog_pageId_idx" ON "FbAutoReplyLog"("pageId")`)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "FbAutoReplyLog_createdAt_idx" ON "FbAutoReplyLog"("createdAt")`)
 
+                // Quản lý xe — nhật ký nhiên liệu + giấy tờ xe (2026-07-09).
+                // db push không chạy trong prod nên CREATE TABLE trực tiếp, khớp schema-store.prisma.
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "VehicleFuelLog" (
+                        "id" TEXT NOT NULL,
+                        "vehicleId" TEXT NOT NULL,
+                        "fuelDate" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        "liters" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "pricePerLiter" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "cost" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "kmAtFill" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "fuelType" TEXT,
+                        "station" TEXT,
+                        "isFullTank" BOOLEAN NOT NULL DEFAULT true,
+                        "notes" TEXT,
+                        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "VehicleFuelLog_pkey" PRIMARY KEY ("id"),
+                        CONSTRAINT "VehicleFuelLog_vehicleId_fkey" FOREIGN KEY ("vehicleId") REFERENCES "Vehicle"("id") ON DELETE CASCADE ON UPDATE CASCADE
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "VehicleFuelLog_vehicleId_idx" ON "VehicleFuelLog"("vehicleId")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "VehicleFuelLog_fuelDate_idx" ON "VehicleFuelLog"("fuelDate")`)
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "VehicleDocument" (
+                        "id" TEXT NOT NULL,
+                        "vehicleId" TEXT NOT NULL,
+                        "type" TEXT NOT NULL,
+                        "name" TEXT NOT NULL,
+                        "documentNumber" TEXT,
+                        "fileUrl" TEXT,
+                        "issuer" TEXT,
+                        "issueDate" TIMESTAMP(3),
+                        "expiryDate" TIMESTAMP(3),
+                        "notes" TEXT,
+                        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "VehicleDocument_pkey" PRIMARY KEY ("id"),
+                        CONSTRAINT "VehicleDocument_vehicleId_fkey" FOREIGN KEY ("vehicleId") REFERENCES "Vehicle"("id") ON DELETE CASCADE ON UPDATE CASCADE
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "VehicleDocument_vehicleId_idx" ON "VehicleDocument"("vehicleId")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "VehicleDocument_expiryDate_idx" ON "VehicleDocument"("expiryDate")`)
+
                 storeResults.push(`${store.name}: OK`)
             } catch (e: any) {
                 storeResults.push(`${store.name}: ${e.message}`)
