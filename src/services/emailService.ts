@@ -56,10 +56,21 @@ function getCustomTransporter(cfg: SmtpConfig): Transporter {
     return t
 }
 
+export interface SendOpts {
+    cc?: string[]
+    bcc?: string[]
+    replyTo?: string
+}
+
 /** Gửi email bằng SMTP của cửa hàng (email công ty). Ném lỗi nếu gửi thất bại. */
-export async function sendEmailWithSmtp(cfg: SmtpConfig, to: string, subject: string, html: string, text?: string) {
+export async function sendEmailWithSmtp(cfg: SmtpConfig, to: string, subject: string, html: string, text?: string, opts?: SendOpts) {
     const from = cfg.fromName ? `"${cfg.fromName.replace(/"/g, '')}" <${cfg.user}>` : cfg.user
-    const info = await getCustomTransporter(cfg).sendMail({ from, to, subject, html, text })
+    const info = await getCustomTransporter(cfg).sendMail({
+        from, to, subject, html, text,
+        cc: opts?.cc?.length ? opts.cc : undefined,
+        bcc: opts?.bcc?.length ? opts.bcc : undefined,
+        replyTo: opts?.replyTo || undefined,
+    })
     console.log(`📧 [EmailService:store] Sent ${info.messageId} → ${to} (từ ${cfg.user})`)
     return info
 }

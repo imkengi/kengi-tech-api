@@ -106,7 +106,16 @@ function wrapBrandedEmail(bodyHtml: string, storeName: string): string {
 router.post('/email-campaign', authMiddleware, requirePermission('customers.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        const { subject, html, customerIds, extraEmails, testTo } = req.body
+        const { subject, html, customerIds, extraEmails, testTo, cc, bcc, replyTo, fromName } = req.body
+
+        // Thông số gửi nâng cao: CC/BCC nhận bản sao của TỪNG email, Reply-To
+        // đổi địa chỉ nhận phản hồi, fromName đè tên hiển thị đã cấu hình
+        const isEmail = (e: any) => typeof e === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim())
+        const sendOpts = {
+            cc: (Array.isArray(cc) ? cc : []).filter(isEmail).map((e: string) => e.trim()).slice(0, 5),
+            bcc: (Array.isArray(bcc) ? bcc : []).filter(isEmail).map((e: string) => e.trim()).slice(0, 5),
+            replyTo: isEmail(replyTo) ? String(replyTo).trim() : undefined,
+        }
         const storeName = (req.body.storeName || 'Kengi Tech').toString().slice(0, 120)
 
         if (!subject?.trim() || !html?.trim()) {
@@ -114,15 +123,16 @@ router.post('/email-campaign', authMiddleware, requirePermission('customers.view
         }
 
         // Bắt buộc cấu hình email công ty trước khi gửi
-        const smtp = await loadSmtpConfig(prisma)
+        let smtp = await loadSmtpConfig(prisma)
         if (!smtp) {
             return res.status(400).json({ success: false, errorCode: 'SMTP_NOT_CONFIGURED', error: 'Chưa cấu hình email công ty. Vào "Cấu hình email" để kết nối email gửi đi trước.' })
         }
+        if (typeof fromName === 'string' && fromName.trim()) smtp = { ...smtp, fromName: fromName.trim().slice(0, 120) }
 
         // ── Gửi thử ──
         if (testTo) {
             const fake = { name: 'Khách hàng', code: 'TEST' }
-            await sendEmailWithSmtp(smtp, String(testTo), personalize(subject, fake), wrapBrandedEmail(personalize(html, fake), storeName))
+            await sendEmailWithSmtp(smtp, String(testTo), personalize(subject, fake), wrapBrandedEmail(personalize(html, fake), storeName), undefined, sendOpts)
             return res.json({ success: true, data: { test: true, to: testTo, from: smtp.user } })
         }
 
@@ -157,7 +167,7 @@ router.post('/email-campaign', authMiddleware, requirePermission('customers.view
                 continue
             }
             try {
-                const info: any = await sendEmailWithSmtp(smtp, c.email, personalize(subject, c), wrapBrandedEmail(personalize(html, c), storeName))
+                const info: any = await sendEmailWithSmtp(smtp, c.email, personalize(subject, c), wrapBrandedEmail(personalize(html, c), storeName), undefined, sendOpts)
                 // Lưu log để theo dõi phản hồi qua IMAP
                 try {
                     await prisma.crmEmailLog.create({
