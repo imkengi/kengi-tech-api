@@ -74,6 +74,7 @@ import { cacheDisconnect, cacheHealth } from './lib/cache'
 import { startAutoSync, stopAutoSync } from './cron/autoSync'
 import { startFanpageCron, stopFanpageCron } from './cron/fanpageCron'
 import { startWebhookCron, stopWebhookCron } from './cron/webhookCron'
+import { startEmailReplyCron, stopEmailReplyCron } from './cron/emailReplyCron'
 import webhookEndpointRoutes from './routes/webhookEndpoints'
 import { setupWebSocket, getWebSocketStats } from './lib/websocket'
 import { pubsubDisconnect } from './lib/pubsub'
@@ -1433,6 +1434,7 @@ if (!process.env.PASSENGER_BASE_URI) {
                 startAutoSync()
                 startFanpageCron()
                 startWebhookCron()
+                startEmailReplyCron()
             })
         })
 
@@ -1445,6 +1447,7 @@ if (!process.env.PASSENGER_BASE_URI) {
         stopAutoSync()
         stopFanpageCron()
         stopWebhookCron()
+        stopEmailReplyCron()
         process.exit(0)
     }
     process.on('SIGTERM', shutdown)

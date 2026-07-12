@@ -782,6 +782,23 @@ model VehicleMaintenance {
   @@index([serviceDate])
 }
 
+// Email chào hàng đã gửi từ CRM + theo dõi khách phản hồi (khớp qua IMAP)
+model CrmEmailLog {
+  id           String    @id @default(cuid())
+  customerId   String?
+  customerName String
+  email        String
+  subject      String
+  messageId    String? // Message-ID SMTP trả về — khớp In-Reply-To của thư trả lời
+  sentAt       DateTime  @default(now())
+  repliedAt    DateTime?
+  replySubject String?
+
+  @@index([email])
+  @@index([repliedAt])
+  @@index([sentAt])
+}
+
 model VehicleFuelLog {
   id            String   @id @default(cuid())
   vehicleId     String

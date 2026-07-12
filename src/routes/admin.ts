@@ -857,6 +857,25 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 // SMTP email công ty cho CRM (2026-07-12)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "smtpConfig" TEXT`)
 
+                // Log email chào hàng + theo dõi phản hồi (2026-07-12)
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "CrmEmailLog" (
+                        "id" TEXT NOT NULL,
+                        "customerId" TEXT,
+                        "customerName" TEXT NOT NULL,
+                        "email" TEXT NOT NULL,
+                        "subject" TEXT NOT NULL,
+                        "messageId" TEXT,
+                        "sentAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        "repliedAt" TIMESTAMP(3),
+                        "replySubject" TEXT,
+                        CONSTRAINT "CrmEmailLog_pkey" PRIMARY KEY ("id")
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CrmEmailLog_email_idx" ON "CrmEmailLog"("email")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CrmEmailLog_repliedAt_idx" ON "CrmEmailLog"("repliedAt")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CrmEmailLog_sentAt_idx" ON "CrmEmailLog"("sentAt")`)
+
                 // Quản lý xe — nhật ký nhiên liệu + giấy tờ xe (2026-07-09).
                 // db push không chạy trong prod nên CREATE TABLE trực tiếp, khớp schema-store.prisma.
                 await (sp as any).$executeRawUnsafe(`

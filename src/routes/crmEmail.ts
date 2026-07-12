@@ -2,6 +2,7 @@ import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { requirePermission } from '../middleware/permissionMiddleware'
 import { sendEmailWithSmtp, verifySmtp, SmtpConfig } from '../services/emailService'
+import { scanRepliesViaImap } from '../services/emailReplyService'
 import { errMsg } from '../lib/errorResponse'
 
 const router = Router()
@@ -143,7 +144,13 @@ router.post('/email-campaign', authMiddleware, requirePermission('customers.view
                 continue
             }
             try {
-                await sendEmailWithSmtp(smtp, c.email, personalize(subject, c), wrapBrandedEmail(personalize(html, c), storeName))
+                const info: any = await sendEmailWithSmtp(smtp, c.email, personalize(subject, c), wrapBrandedEmail(personalize(html, c), storeName))
+                // Lưu log để theo dõi phản hồi qua IMAP
+                try {
+                    await prisma.crmEmailLog.create({
+                        data: { customerId: c.id, customerName: c.name, email: c.email, subject: personalize(subject, c), messageId: info?.messageId || null },
+                    })
+                } catch { /* bảng chưa migrate — không chặn việc gửi */ }
                 results.push({ customerId: c.id, name: c.name, email: c.email, ok: true })
             } catch (e: any) {
                 results.push({ customerId: c.id, name: c.name, email: c.email, ok: false, error: errMsg(e, 'Gửi thất bại') })
@@ -157,6 +164,62 @@ router.post('/email-campaign', authMiddleware, requirePermission('customers.view
     } catch (err) {
         console.error('CRM email campaign error:', err)
         res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// Quét IMAP tìm phản hồi cho 1 store — dùng chung cho endpoint check-now và cron
+export async function checkRepliesForStore(prisma: any): Promise<{ checked: number; newReplies: any[] }> {
+    const smtp = await loadSmtpConfig(prisma)
+    if (!smtp) return { checked: 0, newReplies: [] }
+    // Chỉ dò các email gửi trong 14 ngày chưa có phản hồi
+    const pending = await prisma.crmEmailLog.findMany({
+        where: { repliedAt: null, sentAt: { gte: new Date(Date.now() - 14 * 86400_000) } },
+        select: { id: true, email: true, subject: true, messageId: true, sentAt: true },
+        take: 500,
+    })
+    if (pending.length === 0) return { checked: 0, newReplies: [] }
+    const hits = await scanRepliesViaImap(smtp as any, pending, 7)
+    const newReplies: any[] = []
+    for (const h of hits) {
+        const updated = await prisma.crmEmailLog.update({
+            where: { id: h.logId },
+            data: { repliedAt: h.replyDate, replySubject: h.replySubject },
+        })
+        newReplies.push(updated)
+    }
+    if (newReplies.length > 0) console.log(`[CRM Email] ${newReplies.length} khách phản hồi email`)
+    return { checked: pending.length, newReplies }
+}
+
+// GET /api/crm/email-replies — lịch sử gửi + phản hồi (server-side, thay localStorage)
+// ?repliedOnly=1 → chỉ các thư đã được trả lời; ?afterId= → phản hồi mới hơn mốc (FE poll)
+router.get('/email-replies', authMiddleware, requirePermission('customers.view'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const { repliedOnly, after } = req.query
+        const where: any = {}
+        if (repliedOnly === '1') where.repliedAt = { not: null }
+        if (after) where.repliedAt = { not: null, gt: new Date(String(after)) }
+        const items = await prisma.crmEmailLog.findMany({
+            where,
+            orderBy: [{ repliedAt: 'desc' }, { sentAt: 'desc' }],
+            take: 100,
+        })
+        const repliedCount = await prisma.crmEmailLog.count({ where: { repliedAt: { not: null } } })
+        res.json({ success: true, data: { items, repliedCount } })
+    } catch (err) { console.error('Email replies list error:', err); res.status(500).json({ success: false, error: errMsg(err) }) }
+})
+
+// POST /api/crm/email-replies/check — quét hộp thư ngay (nút "Kiểm tra phản hồi")
+router.post('/email-replies/check', authMiddleware, requirePermission('customers.view'), async (req: AuthRequest, res: Response) => {
+    try {
+        const smtp = await loadSmtpConfig(req.storePrisma!)
+        if (!smtp) return res.status(400).json({ success: false, errorCode: 'SMTP_NOT_CONFIGURED', error: 'Chưa cấu hình email công ty' })
+        const result = await checkRepliesForStore(req.storePrisma!)
+        res.json({ success: true, data: result })
+    } catch (err: any) {
+        console.error('Check replies error:', err)
+        res.status(500).json({ success: false, error: `Không quét được hộp thư: ${String(err?.message || '').slice(0, 160)}` })
     }
 })
 
