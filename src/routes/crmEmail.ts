@@ -1,0 +1,109 @@
+import { Router, Response } from 'express'
+import { authMiddleware, AuthRequest } from '../middleware/auth'
+import { requirePermission } from '../middleware/permissionMiddleware'
+import { sendEmail } from '../services/emailService'
+import { errMsg } from '../lib/errorResponse'
+
+const router = Router()
+
+// Giới hạn mỗi lần gửi để không vượt quota SMTP (Gmail ~500/ngày)
+const MAX_RECIPIENTS_PER_CALL = 100
+const DELAY_BETWEEN_SENDS_MS = 400
+
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+
+// Thay {{name}} {{code}} trong subject/nội dung bằng thông tin từng khách
+function personalize(tpl: string, c: { name: string; code: string }): string {
+    return tpl.replace(/\{\{\s*name\s*\}\}/gi, c.name).replace(/\{\{\s*code\s*\}\}/gi, c.code)
+}
+
+// Bọc nội dung vào layout email thương hiệu (cùng phong cách buildOtpEmail)
+function wrapBrandedEmail(bodyHtml: string, storeName: string): string {
+    const year = new Date().getFullYear()
+    return `<!DOCTYPE html>
+<html lang="vi">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background-color:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;color:#111827;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#f3f4f6;padding:32px 12px;">
+  <tr><td align="center">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:640px;background-color:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(76,29,149,0.10);">
+      <tr>
+        <td style="background:linear-gradient(135deg,#7c3aed 0%,#4f46e5 100%);background-color:#7c3aed;padding:28px 32px;text-align:center;">
+          <div style="color:#ffffff;font-size:20px;font-weight:700;">${storeName}</div>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:32px;font-size:15px;line-height:1.7;color:#374151;">
+          ${bodyHtml}
+        </td>
+      </tr>
+      <tr>
+        <td style="background-color:#f9fafb;padding:20px 32px;text-align:center;border-top:1px solid #e5e7eb;">
+          <div style="color:#374151;font-size:13px;font-weight:600;margin-bottom:4px;">${storeName}</div>
+          <div style="color:#9ca3af;font-size:12px;">© ${year} · Gửi từ Kengi CRM</div>
+        </td>
+      </tr>
+    </table>
+    <p style="color:#9ca3af;font-size:11px;margin:14px 0 0;text-align:center;">Nếu quý khách không muốn nhận email này, vui lòng phản hồi để chúng tôi ngừng gửi.</p>
+  </td></tr>
+</table>
+</body></html>`
+}
+
+// POST /api/crm/email-campaign — gửi email chào hàng cho danh sách khách
+// body: { subject, html, customerIds?: string[], testTo?: string, storeName?: string }
+// subject/html hỗ trợ {{name}}, {{code}}. testTo = gửi thử 1 email, không cần customerIds.
+router.post('/email-campaign', authMiddleware, requirePermission('customers.view'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const { subject, html, customerIds, testTo } = req.body
+        const storeName = (req.body.storeName || 'Kengi Tech').toString().slice(0, 120)
+
+        if (!subject?.trim() || !html?.trim()) {
+            return res.status(400).json({ success: false, error: 'Thiếu subject hoặc nội dung email' })
+        }
+
+        // ── Gửi thử ──
+        if (testTo) {
+            const fake = { name: 'Khách hàng', code: 'TEST' }
+            await sendEmail(String(testTo), personalize(subject, fake), wrapBrandedEmail(personalize(html, fake), storeName))
+            return res.json({ success: true, data: { test: true, to: testTo } })
+        }
+
+        if (!Array.isArray(customerIds) || customerIds.length === 0) {
+            return res.status(400).json({ success: false, error: 'Chưa chọn khách hàng nào' })
+        }
+        if (customerIds.length > MAX_RECIPIENTS_PER_CALL) {
+            return res.status(400).json({ success: false, error: `Tối đa ${MAX_RECIPIENTS_PER_CALL} khách mỗi lần gửi` })
+        }
+
+        const customers = await prisma.customer.findMany({
+            where: { id: { in: customerIds.map(String) } },
+            select: { id: true, code: true, name: true, email: true },
+        })
+
+        const results: { customerId: string; name: string; email: string | null; ok: boolean; error?: string }[] = []
+        for (const c of customers) {
+            if (!c.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c.email)) {
+                results.push({ customerId: c.id, name: c.name, email: c.email, ok: false, error: 'Không có email hợp lệ' })
+                continue
+            }
+            try {
+                await sendEmail(c.email, personalize(subject, c), wrapBrandedEmail(personalize(html, c), storeName))
+                results.push({ customerId: c.id, name: c.name, email: c.email, ok: true })
+            } catch (e: any) {
+                results.push({ customerId: c.id, name: c.name, email: c.email, ok: false, error: errMsg(e, 'Gửi thất bại') })
+            }
+            await sleep(DELAY_BETWEEN_SENDS_MS)
+        }
+
+        const succeeded = results.filter(r => r.ok).length
+        console.log(`[CRM Email] Campaign "${subject}" gửi ${succeeded}/${results.length} email`)
+        res.json({ success: true, data: { total: results.length, succeeded, failed: results.length - succeeded, results } })
+    } catch (err) {
+        console.error('CRM email campaign error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+export default router

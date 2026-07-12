@@ -10,6 +10,7 @@ import categoryRoutes from './routes/categories'
 import brandRoutes from './routes/brands'
 import customerRoutes from './routes/customers'
 import customerGroupRoutes from './routes/customerGroups'
+import crmEmailRoutes from './routes/crmEmail'
 import inventoryRoutes from './routes/inventory'
 import transactionRoutes from './routes/transactions'
 import promotionRoutes from './routes/promotions'
@@ -48,6 +49,7 @@ import priceListRoutes from './routes/priceLists'
 import adminRoutes from './routes/admin'
 import importDataRoutes from './routes/importData'
 import uploadRoutes from './routes/uploads'
+import livestreamRoutes from './routes/livestream'
 import syncRoutes from './routes/sync'
 import announcementRoutes from './routes/announcements'
 import attendanceRoutes from './routes/attendance'
@@ -97,6 +99,7 @@ const allowedOrigins = [
     'https://open-retail.tinohosting.vn',
     'http://localhost:3000',
     'http://localhost:3001',
+    'http://localhost:3100', // Kengi Stream studio dev
 ]
 app.use(cors({
     origin: (origin, callback) => {
@@ -202,6 +205,7 @@ app.use('/api/categories', categoryRoutes)
 app.use('/api/brands', brandRoutes)
 app.use('/api/customers', customerRoutes)
 app.use('/api/customer-groups', customerGroupRoutes)
+app.use('/api/crm', crmEmailRoutes)
 app.use('/api/inventory', inventoryRoutes)
 app.use('/api/transactions', transactionRoutes)
 app.use('/api/events', eventRoutes)
@@ -244,6 +248,7 @@ app.use('/api/price-lists', priceListRoutes)
 app.use('/api/admin', adminRoutes)
 app.use('/api/import-data', importDataRoutes)
 app.use('/api/uploads', uploadRoutes)
+app.use('/api/livestream', livestreamRoutes) // Kengi Stream studio (kengi.vn/ai-livestream)
 app.use('/api/internal', syncRoutes)
 app.use('/api/announcements', announcementRoutes)
 app.use('/api/attendance', attendanceRoutes)
