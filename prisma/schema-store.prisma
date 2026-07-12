@@ -1353,6 +1353,9 @@ model StoreSettings {
   website            String?
   notifyLowStock     Boolean @default(true)
 
+  // SMTP email công ty cho CRM gửi email chào hàng — JSON {host,port,user,pass,fromName,secure}
+  smtpConfig String?
+
   notifyNewOrder Boolean @default(true)
 
   notifyDailyReport Boolean @default(false)

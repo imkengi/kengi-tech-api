@@ -22,6 +22,53 @@ function getTransporter(): Transporter {
     return cached
 }
 
+// ─── SMTP tùy chỉnh theo cửa hàng (CRM email chào hàng) ─────────────────────
+
+export interface SmtpConfig {
+    host: string
+    port: number
+    user: string
+    pass: string
+    fromName?: string
+    secure?: boolean
+}
+
+// Cache transporter theo cấu hình để không tạo lại mỗi email
+const customCache = new Map<string, Transporter>()
+
+function getCustomTransporter(cfg: SmtpConfig): Transporter {
+    // Key gồm cả pass để đổi mật khẩu là tạo transporter mới (chỉ nằm trong RAM)
+    const key = `${cfg.host}:${cfg.port}:${cfg.user}:${cfg.pass}`
+    let t = customCache.get(key)
+    if (!t) {
+        t = nodemailer.createTransport({
+            host: cfg.host,
+            port: cfg.port,
+            secure: cfg.secure === true || cfg.port === 465,
+            auth: { user: cfg.user, pass: cfg.pass },
+        })
+        customCache.set(key, t)
+        if (customCache.size > 50) { // chặn phình cache khi nhiều store
+            const first = customCache.keys().next().value
+            if (first && first !== key) customCache.delete(first)
+        }
+    }
+    return t
+}
+
+/** Gửi email bằng SMTP của cửa hàng (email công ty). Ném lỗi nếu gửi thất bại. */
+export async function sendEmailWithSmtp(cfg: SmtpConfig, to: string, subject: string, html: string, text?: string) {
+    const from = cfg.fromName ? `"${cfg.fromName.replace(/"/g, '')}" <${cfg.user}>` : cfg.user
+    const info = await getCustomTransporter(cfg).sendMail({ from, to, subject, html, text })
+    console.log(`📧 [EmailService:store] Sent ${info.messageId} → ${to} (từ ${cfg.user})`)
+    return info
+}
+
+/** Xác thực đăng nhập SMTP mà không gửi email. */
+export async function verifySmtp(cfg: SmtpConfig): Promise<void> {
+    await getCustomTransporter(cfg).verify()
+}
+
 export async function sendEmail(to: string, subject: string, html: string, text?: string) {
     if (!SMTP_USER) {
         // Dev fallback: log instead of failing — lets the OTP show up in server logs

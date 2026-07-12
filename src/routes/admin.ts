@@ -854,6 +854,9 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "FbAutoReplyLog_pageId_idx" ON "FbAutoReplyLog"("pageId")`)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "FbAutoReplyLog_createdAt_idx" ON "FbAutoReplyLog"("createdAt")`)
 
+                // SMTP email công ty cho CRM (2026-07-12)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "smtpConfig" TEXT`)
+
                 // Quản lý xe — nhật ký nhiên liệu + giấy tờ xe (2026-07-09).
                 // db push không chạy trong prod nên CREATE TABLE trực tiếp, khớp schema-store.prisma.
                 await (sp as any).$executeRawUnsafe(`

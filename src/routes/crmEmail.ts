@@ -1,10 +1,58 @@
 import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { requirePermission } from '../middleware/permissionMiddleware'
-import { sendEmail } from '../services/emailService'
+import { sendEmailWithSmtp, verifySmtp, SmtpConfig } from '../services/emailService'
 import { errMsg } from '../lib/errorResponse'
 
 const router = Router()
+
+const PASS_MASK = '••••••••'
+
+// Đọc cấu hình SMTP công ty từ StoreSettings.smtpConfig (JSON)
+async function loadSmtpConfig(prisma: any): Promise<SmtpConfig | null> {
+    try {
+        const s = await prisma.storeSettings.findUnique({ where: { id: 'default' }, select: { smtpConfig: true } })
+        if (!s?.smtpConfig) return null
+        const cfg = JSON.parse(s.smtpConfig)
+        if (!cfg.host || !cfg.user || !cfg.pass) return null
+        return { host: cfg.host, port: Number(cfg.port) || 587, user: cfg.user, pass: cfg.pass, fromName: cfg.fromName || undefined, secure: !!cfg.secure }
+    } catch { return null }
+}
+
+// GET /api/crm/email-settings — trả cấu hình (che mật khẩu)
+router.get('/email-settings', authMiddleware, requirePermission('settings.view'), async (req: AuthRequest, res: Response) => {
+    try {
+        const cfg = await loadSmtpConfig(req.storePrisma!)
+        if (!cfg) return res.json({ success: true, data: { configured: false } })
+        res.json({ success: true, data: { configured: true, host: cfg.host, port: cfg.port, user: cfg.user, pass: PASS_MASK, fromName: cfg.fromName || '', secure: !!cfg.secure } })
+    } catch (err) { res.status(500).json({ success: false, error: errMsg(err) }) }
+})
+
+// PUT /api/crm/email-settings — lưu cấu hình. pass = mask thì giữ mật khẩu cũ.
+router.put('/email-settings', authMiddleware, requirePermission('settings.edit_store'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const { host, port, user, pass, fromName, secure } = req.body
+        if (!host?.trim() || !user?.trim()) return res.status(400).json({ success: false, error: 'Thiếu máy chủ SMTP hoặc email đăng nhập' })
+        let realPass = String(pass || '')
+        if (!realPass || realPass === PASS_MASK) {
+            const old = await loadSmtpConfig(prisma)
+            if (!old?.pass) return res.status(400).json({ success: false, error: 'Thiếu mật khẩu ứng dụng (App Password)' })
+            realPass = old.pass
+        }
+        const cfg: SmtpConfig = { host: host.trim(), port: Number(port) || 587, user: user.trim(), pass: realPass, fromName: (fromName || '').trim() || undefined, secure: !!secure }
+        // Xác thực đăng nhập SMTP trước khi lưu — sai pass là biết ngay
+        try { await verifySmtp(cfg) } catch (e: any) {
+            return res.status(400).json({ success: false, error: `Đăng nhập SMTP thất bại: ${String(e?.message || e).slice(0, 180)}` })
+        }
+        await prisma.storeSettings.upsert({
+            where: { id: 'default' },
+            update: { smtpConfig: JSON.stringify(cfg) },
+            create: { id: 'default', name: 'Cửa hàng', smtpConfig: JSON.stringify(cfg) },
+        })
+        res.json({ success: true, data: { configured: true, user: cfg.user } })
+    } catch (err) { console.error('Save SMTP config error:', err); res.status(500).json({ success: false, error: errMsg(err) }) }
+})
 
 // Giới hạn mỗi lần gửi để không vượt quota SMTP (Gmail ~500/ngày)
 const MAX_RECIPIENTS_PER_CALL = 100
@@ -63,11 +111,17 @@ router.post('/email-campaign', authMiddleware, requirePermission('customers.view
             return res.status(400).json({ success: false, error: 'Thiếu subject hoặc nội dung email' })
         }
 
+        // Bắt buộc cấu hình email công ty trước khi gửi
+        const smtp = await loadSmtpConfig(prisma)
+        if (!smtp) {
+            return res.status(400).json({ success: false, errorCode: 'SMTP_NOT_CONFIGURED', error: 'Chưa cấu hình email công ty. Vào "Cấu hình email" để kết nối email gửi đi trước.' })
+        }
+
         // ── Gửi thử ──
         if (testTo) {
             const fake = { name: 'Khách hàng', code: 'TEST' }
-            await sendEmail(String(testTo), personalize(subject, fake), wrapBrandedEmail(personalize(html, fake), storeName))
-            return res.json({ success: true, data: { test: true, to: testTo } })
+            await sendEmailWithSmtp(smtp, String(testTo), personalize(subject, fake), wrapBrandedEmail(personalize(html, fake), storeName))
+            return res.json({ success: true, data: { test: true, to: testTo, from: smtp.user } })
         }
 
         if (!Array.isArray(customerIds) || customerIds.length === 0) {
@@ -89,7 +143,7 @@ router.post('/email-campaign', authMiddleware, requirePermission('customers.view
                 continue
             }
             try {
-                await sendEmail(c.email, personalize(subject, c), wrapBrandedEmail(personalize(html, c), storeName))
+                await sendEmailWithSmtp(smtp, c.email, personalize(subject, c), wrapBrandedEmail(personalize(html, c), storeName))
                 results.push({ customerId: c.id, name: c.name, email: c.email, ok: true })
             } catch (e: any) {
                 results.push({ customerId: c.id, name: c.name, email: c.email, ok: false, error: errMsg(e, 'Gửi thất bại') })
