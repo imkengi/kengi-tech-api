@@ -100,12 +100,13 @@ function wrapBrandedEmail(bodyHtml: string, storeName: string): string {
 }
 
 // POST /api/crm/email-campaign — gửi email chào hàng cho danh sách khách
-// body: { subject, html, customerIds?: string[], testTo?: string, storeName?: string }
+// body: { subject, html, customerIds?: string[], extraEmails?: string[], testTo?: string, storeName?: string }
 // subject/html hỗ trợ {{name}}, {{code}}. testTo = gửi thử 1 email, không cần customerIds.
+// extraEmails = email nhập tay ngoài danh sách khách ({{name}} → "Quý khách").
 router.post('/email-campaign', authMiddleware, requirePermission('customers.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        const { subject, html, customerIds, testTo } = req.body
+        const { subject, html, customerIds, extraEmails, testTo } = req.body
         const storeName = (req.body.storeName || 'Kengi Tech').toString().slice(0, 120)
 
         if (!subject?.trim() || !html?.trim()) {
@@ -125,17 +126,29 @@ router.post('/email-campaign', authMiddleware, requirePermission('customers.view
             return res.json({ success: true, data: { test: true, to: testTo, from: smtp.user } })
         }
 
-        if (!Array.isArray(customerIds) || customerIds.length === 0) {
-            return res.status(400).json({ success: false, error: 'Chưa chọn khách hàng nào' })
+        const ids = Array.isArray(customerIds) ? customerIds : []
+        const manual = (Array.isArray(extraEmails) ? extraEmails : [])
+            .map((e: any) => String(e).trim())
+            .filter((e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))
+        if (ids.length === 0 && manual.length === 0) {
+            return res.status(400).json({ success: false, error: 'Chưa chọn khách hàng hoặc nhập email nào' })
         }
-        if (customerIds.length > MAX_RECIPIENTS_PER_CALL) {
-            return res.status(400).json({ success: false, error: `Tối đa ${MAX_RECIPIENTS_PER_CALL} khách mỗi lần gửi` })
+        if (ids.length + manual.length > MAX_RECIPIENTS_PER_CALL) {
+            return res.status(400).json({ success: false, error: `Tối đa ${MAX_RECIPIENTS_PER_CALL} người nhận mỗi lần gửi` })
         }
 
-        const customers = await prisma.customer.findMany({
-            where: { id: { in: customerIds.map(String) } },
+        const customers = ids.length > 0 ? await prisma.customer.findMany({
+            where: { id: { in: ids.map(String) } },
             select: { id: true, code: true, name: true, email: true },
-        })
+        }) : []
+
+        // Email nhập tay: {{name}} → "Quý khách"; bỏ email trùng với khách đã chọn
+        const customerEmails = new Set(customers.map((c: any) => (c.email || '').toLowerCase()).filter(Boolean))
+        for (const e of manual) {
+            if (customerEmails.has(e.toLowerCase())) continue
+            customerEmails.add(e.toLowerCase())
+            customers.push({ id: '', code: '', name: 'Quý khách', email: e } as any)
+        }
 
         const results: { customerId: string; name: string; email: string | null; ok: boolean; error?: string }[] = []
         for (const c of customers) {
@@ -148,7 +161,7 @@ router.post('/email-campaign', authMiddleware, requirePermission('customers.view
                 // Lưu log để theo dõi phản hồi qua IMAP
                 try {
                     await prisma.crmEmailLog.create({
-                        data: { customerId: c.id, customerName: c.name, email: c.email, subject: personalize(subject, c), messageId: info?.messageId || null },
+                        data: { customerId: c.id || null, customerName: c.name, email: c.email, subject: personalize(subject, c), messageId: info?.messageId || null },
                     })
                 } catch { /* bảng chưa migrate — không chặn việc gửi */ }
                 results.push({ customerId: c.id, name: c.name, email: c.email, ok: true })
