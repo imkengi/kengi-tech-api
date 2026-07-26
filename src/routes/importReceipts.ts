@@ -29,7 +29,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         const prisma = req.storePrisma!
         const branchId = getBranchId(req)
         const {
-            search, status,
+            search, status, dateFrom, dateTo, supplierId, payment, vat, amountMin, amountMax,
             page = '1', pageSize = '20',
         } = req.query
 
@@ -37,18 +37,67 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         const where: any = { ...getBranchFilter(req) }
 
         if (search) {
-            const s = String(search)
+            // Không phân biệt hoa/thường (Postgres mặc định phân biệt) + tìm được cả
+            // TÊN/SKU hàng hoá nằm trong phiếu, số hoá đơn VAT.
+            const s = String(search).trim()
+            const ci = { contains: s, mode: 'insensitive' as const }
             where.OR = [
-                { code: { contains: s } },
-                { supplierName: { contains: s } },
-                { note: { contains: s } },
+                { code: ci },
+                { supplierName: ci },
+                { note: ci },
+                { vatInvoiceNo: ci },
+                { items: { some: { productName: ci } } },
+                { items: { some: { productSku: ci } } },
             ]
         }
         if (status) where.status = String(status)
+        if (supplierId) where.supplierId = String(supplierId)
+        // Có/không hoá đơn VAT (tồn kho thuế)
+        if (vat === 'true') where.hasVatInvoice = true
+        if (vat === 'false') where.hasVatInvoice = { not: true }
+        // Công nợ NCC: phiếu legacy không có paymentStatus coi như đã trả đủ
+        if (payment === 'unpaid') where.paymentStatus = { in: ['unpaid', 'partial'] }
+        // paymentStatus là cột NOT NULL default 'paid' → KHÔNG được so với null
+        // (Prisma ném ValidationError, cả endpoint 500).
+        if (payment === 'paid') where.paymentStatus = 'paid'
+        // Khoảng tiền theo tổng phiếu — bỏ qua giá trị không phải số (NaN lọt vào
+        // filter Prisma làm nổ query → 500).
+        const numOrNull = (v: any) => {
+            const n = parseFloat(String(v))
+            return Number.isFinite(n) ? n : null
+        }
+        const minVal = amountMin ? numOrNull(amountMin) : null
+        const maxVal = amountMax ? numOrNull(amountMax) : null
+        if (minVal !== null || maxVal !== null) {
+            where.totalCost = {}
+            if (minVal !== null) where.totalCost.gte = minVal
+            if (maxVal !== null) where.totalCost.lte = maxVal
+        }
+        // Khoảng ngày: ưu tiên ngày nhập trên phiếu (transactionDate = ngày hoá đơn),
+        // phiếu cũ không có thì rơi về createdAt. FE gửi ISO datetime đã tính theo giờ VN.
+        if (dateFrom || dateTo) {
+            const range: any = {}
+            const dOrNull = (v: any) => { const d = new Date(String(v)); return isNaN(d.getTime()) ? null : d }
+            const gte = dateFrom ? dOrNull(dateFrom) : null
+            const lte = dateTo ? dOrNull(dateTo) : null
+            if (gte) range.gte = gte
+            if (lte) range.lte = lte
+            if (gte || lte) {
+                where.AND = [...(where.AND || []), {
+                    OR: [
+                        { transactionDate: range },
+                        { transactionDate: null, createdAt: range },
+                    ],
+                }]
+            }
+        }
 
-        const pageNum = Math.max(1, parseInt(String(page)))
-        const size = Math.max(1, Math.min(100, parseInt(String(pageSize))))
+        const pageNum = Math.max(1, parseInt(String(page)) || 1)
+        const size = Math.max(1, Math.min(100, parseInt(String(pageSize)) || 20))
         const skip = (pageNum - 1) * size
+
+        const whereNoStatus: any = { ...where }
+        delete whereNoStatus.status
 
         const [total, receipts, statusGroups, completedAgg, topSup] = await Promise.all([
             prisma.importReceipt.count({ where }),
@@ -60,7 +109,9 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
                 take: size,
             }),
             // Tổng hợp trên TOÀN BỘ filter (không chỉ trang) cho KPI/donut/top NCC
-            prisma.importReceipt.groupBy({ by: ['status'], where, _count: true }),
+            // Donut trạng thái phải bỏ chính filter status ra, nếu không chọn "Nháp"
+            // là 3 ô còn lại về 0 (nhìn như mất dữ liệu).
+            prisma.importReceipt.groupBy({ by: ['status'], where: whereNoStatus, _count: true }),
             prisma.importReceipt.aggregate({ where: { ...where, status: 'completed' }, _sum: { totalCost: true }, _count: true }),
             prisma.importReceipt.groupBy({
                 by: ['supplierName'], where: { ...where, status: 'completed' },
@@ -163,7 +214,26 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '')
         const code = await nextCode(prisma, 'importReceiptNHCodeSeq', `NH-${dateStr}`, 3, '-', 'ImportReceipt', 'code')
 
-        const totalCost = items.reduce((sum: number, item: any) => sum + (item.quantity * item.costPrice), 0)
+        // Ưu tiên item.total do client gửi (= cột "Thành tiền" trên hoá đơn đầu vào,
+        // đã làm tròn chuẩn) — tự nhân SL × đơn giá sẽ lệch vài đồng khi đơn giá lẻ.
+        const lineTotal = (item: any) => (Number(item.total) > 0 ? Number(item.total) : item.quantity * item.costPrice)
+        const totalCost = items.reduce((sum: number, item: any) => sum + lineTotal(item), 0)
+
+        // GIÁ VỐN = giá nhập + PHÂN BỔ chi phí cấp phiếu theo tỷ trọng thành tiền.
+        // VAT đầu vào: HKD/cá nhân (không khấu trừ) → tính vào giá vốn; CÔNG TY
+        // (kê khai khấu trừ) → KHÔNG — VAT tách riêng đi TK 1331 bù trừ 33311.
+        const _bt = (await prisma.storeSettings.findFirst({ select: { businessType: true } }).catch(() => null))?.businessType || 'company'
+        const _vatIntoCost = _bt === 'household' || _bt === 'individual'
+        const extraCosts = (_vatIntoCost ? (Number(receiptData.vatAmount) || 0) : 0)
+            + (Number(receiptData.shippingFee) || 0)
+            + (Number(receiptData.importTax) || 0) + (Number(receiptData.otherFees) || 0)
+            - (Number(receiptData.totalDiscount) || 0)
+        const landedUnitCost = (item: any) => {
+            const lt = lineTotal(item)
+            const allocated = totalCost > 0 ? extraCosts * (lt / totalCost) : 0
+            const qty = item.quantity || 1
+            return Math.round((lt + allocated) / qty)
+        }
         const totalItems = items.reduce((sum: number, item: any) => sum + item.quantity, 0)
 
         // Công nợ NCC: client gửi paidAmount (số đã trả NCC). Không gửi → coi như
@@ -184,6 +254,18 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
                 paymentStatus,
                 dueDate: receiptData.dueDate ? new Date(receiptData.dueDate) : null,
                 paymentTerm: receiptData.paymentTerm || null,
+                // Có hoá đơn VAT đầu vào → mới tính vào tồn kho thuế. Client gửi cờ;
+                // không gửi thì suy từ có tiền thuế GTGT (vatAmount > 0).
+                hasVatInvoice: receiptData.hasVatInvoice !== undefined
+                    ? Boolean(receiptData.hasVatInvoice)
+                    : Number(receiptData.vatAmount) > 0,
+                vatInvoiceNo: receiptData.vatInvoiceNo || null,
+                // Chi phí cấp phiếu — phân bổ vào GIÁ VỐN (không sửa giá nhập từng dòng)
+                vatAmount: Number(receiptData.vatAmount) || 0,
+                shippingFee: Number(receiptData.shippingFee) || 0,
+                importTax: Number(receiptData.importTax) || 0,
+                otherFees: Number(receiptData.otherFees) || 0,
+                totalDiscount: Number(receiptData.totalDiscount) || 0,
                 note: receiptData.note || null,
                 userId: user.userId || user.id,
                 userName,
@@ -195,7 +277,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
                         productSku: item.productSku,
                         quantity: item.quantity,
                         costPrice: item.costPrice,
-                        total: item.quantity * item.costPrice,
+                        total: lineTotal(item),
                     })),
                 },
             },
@@ -215,13 +297,14 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
                 const currentStock = productBefore?.stock ?? 0
                 const currentCostPrice = productBefore?.costPrice ?? 0
 
-                // Calculate new cost price based on chosen method
+                // Calculate new cost price based on chosen method — dùng GIÁ VỐN đã
+                // phân bổ chi phí (landed cost), không phải giá nhập trần trên dòng
                 const newCostPrice = calculateCostPrice(method, {
                     productId: item.productId,
                     currentStock,
                     currentCostPrice,
                     transactionQty: item.quantity,
-                    transactionUnitPrice: item.costPrice || 0,
+                    transactionUnitPrice: landedUnitCost(item),
                 })
 
                 // Update stock AND costPrice
@@ -322,6 +405,22 @@ router.put('/:id/complete', authMiddleware, async (req: AuthRequest, res: Respon
 
         // Update stock for each item + log inventory transactions
         const method = await getCostPriceMethod(prisma as any)
+        // GIÁ VỐN = giá nhập + phân bổ chi phí cấp phiếu theo tỷ trọng thành tiền —
+        // như đường tạo phiếu. VAT: chỉ HKD/cá nhân mới tính vào giá vốn; công ty
+        // kê khai khấu trừ thì VAT tách riêng (TK 1331), không vào giá vốn.
+        const rAny: any = receipt
+        const _bt2 = (await prisma.storeSettings.findFirst({ select: { businessType: true } }).catch(() => null))?.businessType || 'company'
+        const _vatIntoCost2 = _bt2 === 'household' || _bt2 === 'individual'
+        const cExtra = (_vatIntoCost2 ? (Number(rAny.vatAmount) || 0) : 0)
+            + (Number(rAny.shippingFee) || 0)
+            + (Number(rAny.importTax) || 0) + (Number(rAny.otherFees) || 0)
+            - (Number(rAny.totalDiscount) || 0)
+        const cTotal = receipt.items.reduce((s: number, it: any) => s + (Number(it.total) > 0 ? Number(it.total) : it.quantity * it.costPrice), 0)
+        const landedUnit = (it: any) => {
+            const lt = Number(it.total) > 0 ? Number(it.total) : it.quantity * it.costPrice
+            const alloc = cTotal > 0 ? cExtra * (lt / cTotal) : 0
+            return Math.round((lt + alloc) / (it.quantity || 1))
+        }
         // Đồng bộ WarehouseStock theo kho mặc định của chi nhánh phiếu —
         // POS check tồn theo WarehouseStock nên nhập hàng phải tăng cả kho này
         const defaultWarehouse = await getOrCreateDefaultWarehouse(prisma as any, receipt.branchId || null)
@@ -337,7 +436,7 @@ router.put('/:id/complete', authMiddleware, async (req: AuthRequest, res: Respon
                 currentStock,
                 currentCostPrice,
                 transactionQty: item.quantity,
-                transactionUnitPrice: item.costPrice || 0,
+                transactionUnitPrice: landedUnit(item),
             })
 
             const _u = await prisma.product.update({
@@ -411,6 +510,24 @@ router.put('/:id/cancel', authMiddleware, async (req: AuthRequest, res: Response
         })
     } catch (err) {
         console.error('Cancel import receipt error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// PUT /api/import-receipts/:id/vat-invoice — đánh dấu phiếu CÓ/KHÔNG hoá đơn VAT.
+// Body: { hasVatInvoice: boolean, vatInvoiceNo?: string }. Chỉ phiếu có hoá đơn
+// VAT mới tính vào TỒN KHO THUẾ (gate xuất hoá đơn bán).
+router.put('/:id/vat-invoice', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const has = Boolean(req.body?.hasVatInvoice)
+        const updated = await prisma.importReceipt.update({
+            where: { id: String(req.params.id) },
+            data: { hasVatInvoice: has, vatInvoiceNo: has ? (req.body?.vatInvoiceNo || null) : null },
+        })
+        res.json({ success: true, data: { id: updated.id, hasVatInvoice: updated.hasVatInvoice, vatInvoiceNo: updated.vatInvoiceNo } })
+    } catch (err) {
+        console.error('Set VAT invoice flag error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
     }
 })
@@ -812,7 +929,7 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
                 })
             }
             await tx.importReceipt.delete({ where: { id: String(req.params.id) } }) // cascade xóa items
-        })
+        }, { timeout: 60000 }) // mặc định 5s không đủ cho phiếu nhiều dòng (hoàn kho từng item) → "Transaction already closed"
         res.json({ success: true, message: 'Deleted' })
     } catch (err: any) {
         console.error('Delete import receipt error:', err?.message || err)

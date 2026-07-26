@@ -281,7 +281,22 @@ router.get('/transactions', authMiddleware, async (req: AuthRequest, res: Respon
         const { search, type, productId, startDate, endDate, page = '1', pageSize = '20' } = req.query
 
         const where: any = {}
-        if (productId) where.productId = productId as string
+        // Mã ĐÃ GỘP: giao dịch đã chuyển sang mã đích → thẻ kho của mã này sẽ TRỐNG
+        // TRƠN nếu không đi theo con trỏ. Lấy sổ của mã đích rồi quy đổi về đơn vị
+        // của mã đang xem (26 cái = 2,6 vỉ) để vẫn xem được lịch sử.
+        let mergedRate = 1
+        if (productId) {
+            const pr = await prisma.product.findUnique({
+                where: { id: productId as string },
+                select: { mergedIntoId: true, mergedRate: true },
+            }).catch(() => null)
+            if ((pr as any)?.mergedIntoId) {
+                mergedRate = Number((pr as any).mergedRate) || 1
+                where.productId = (pr as any).mergedIntoId
+            } else {
+                where.productId = productId as string
+            }
+        }
         if (search) {
             where.OR = [
                 { productName: { contains: search as string, mode: 'insensitive' } },
@@ -304,13 +319,85 @@ router.get('/transactions', authMiddleware, async (req: AuthRequest, res: Respon
             prisma.inventoryTransaction.findMany({ where, orderBy: { createdAt: 'desc' }, skip, take: size }),
         ])
 
+        const conv = (v: any) => mergedRate === 1 ? v
+            : (typeof v === 'number' ? Math.round((v / mergedRate) * 100) / 100 : v)
         res.json({
-            data: transactions.map(t => ({ ...t, createdAt: t.createdAt.toISOString() })),
+            data: transactions.map(t => ({
+                ...t,
+                createdAt: t.createdAt.toISOString(),
+                ...(mergedRate === 1 ? {} : {
+                    quantity: conv((t as any).quantity),
+                    stockBefore: conv((t as any).stockBefore),
+                    stockAfter: conv((t as any).stockAfter),
+                    // Đơn giá đi ngược chiều số lượng để thành tiền không đổi
+                    unitPrice: (t as any).unitPrice ? Math.round((t as any).unitPrice * mergedRate) : (t as any).unitPrice,
+                    quyDoiTu: mergedRate,
+                }),
+            })),
             total, page: pageNum, pageSize: size, totalPages: Math.ceil(total / size),
         })
     } catch (err) {
         console.error('Get inventory transactions error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// GET /api/inventory/overview
+// TỔNG QUAN KHO tính BẰNG SQL trên TOÀN BỘ kho. Trước đây màn Quản lý kho tải
+// danh sách với pageSize=9999 rồi tự cộng ở trình duyệt — backend chặn trần 1000
+// nên mọi chỉ số (giá trị kho, hết hàng, top 5…) chỉ tính trên 1000/3273 mã và
+// KHÔNG báo gì. Tính ở đây vừa đúng vừa nhẹ (trả vài chục số thay vì nghìn bản ghi).
+router.get('/overview', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const [tong, theoDanhMuc, top5, canNhap] = await Promise.all([
+            prisma.$queryRawUnsafe(`
+                SELECT COUNT(*)::int AS "soMaHang",
+                       COALESCE(SUM(p.stock),0)::float8 AS "tongTonKho",
+                       COALESCE(SUM(p.stock * p."costPrice"),0)::float8 AS "giaTriVon",
+                       COALESCE(SUM(p.stock * p."sellingPrice"),0)::float8 AS "giaTriBan",
+                       COUNT(*) FILTER (WHERE p.stock <= 0)::int AS "hetHang",
+                       COUNT(*) FILTER (WHERE p.stock > 0 AND p.stock <= p."minStock")::int AS "sapHet",
+                       COUNT(*) FILTER (WHERE p.stock > p."minStock")::int AS "duHang"
+                FROM "Product" p
+                WHERE COALESCE(p."productType",'goods') <> 'service'
+                  AND p."mergedIntoId" IS NULL`),
+            prisma.$queryRawUnsafe(`
+                SELECT COALESCE(c.name,'Chưa phân loại') AS "danhMuc",
+                       COALESCE(SUM(p.stock * p."costPrice"),0)::float8 AS "giaTri"
+                FROM "Product" p LEFT JOIN "Category" c ON c.id = p."categoryId"
+                WHERE COALESCE(p."productType",'goods') <> 'service' AND p."mergedIntoId" IS NULL
+                GROUP BY 1 ORDER BY 2 DESC LIMIT 8`),
+            prisma.$queryRawUnsafe(`
+                SELECT p.sku, p.name, p.stock::float8 AS stock, p."costPrice"::float8 AS "costPrice",
+                       (p.stock * p."costPrice")::float8 AS "giaTri"
+                FROM "Product" p
+                WHERE COALESCE(p."productType",'goods') <> 'service' AND p."mergedIntoId" IS NULL
+                ORDER BY (p.stock * p."costPrice") DESC LIMIT 5`),
+            prisma.$queryRawUnsafe(`
+                SELECT p.sku, p.name, p.stock::float8 AS stock, p."minStock"::float8 AS "minStock"
+                FROM "Product" p
+                WHERE COALESCE(p."productType",'goods') <> 'service' AND p."mergedIntoId" IS NULL
+                  AND p.stock <= p."minStock"
+                ORDER BY p.stock ASC LIMIT 20`),
+        ])
+        const t = (tong as any[])[0] || {}
+        const giaTriVon = Number(t.giaTriVon) || 0
+        const giaTriBan = Number(t.giaTriBan) || 0
+        const loiNhuan = giaTriBan - giaTriVon
+        res.json({
+            success: true,
+            data: {
+                ...t,
+                giaTriVon, giaTriBan, loiNhuanTiemNang: loiNhuan,
+                margin: giaTriBan > 0 ? Math.round((loiNhuan / giaTriBan) * 1000) / 10 : 0,
+                tbMoiSku: (t.soMaHang || 0) > 0 ? Math.round((Number(t.tongTonKho) || 0) / t.soMaHang) : 0,
+                theoDanhMuc, top5, canNhap,
+            },
+        })
+    } catch (err: any) {
+        console.error('Inventory overview error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
     }
 })
 

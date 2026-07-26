@@ -11,6 +11,7 @@ import brandRoutes from './routes/brands'
 import customerRoutes from './routes/customers'
 import customerGroupRoutes from './routes/customerGroups'
 import crmEmailRoutes from './routes/crmEmail'
+import crmRoutes from './routes/crm'
 import inventoryRoutes from './routes/inventory'
 import transactionRoutes from './routes/transactions'
 import promotionRoutes from './routes/promotions'
@@ -47,6 +48,9 @@ import settingsRoutes from './routes/settings'
 import branchRoutes from './routes/branches'
 import priceListRoutes from './routes/priceLists'
 import adminRoutes from './routes/admin'
+import mcpRoutes from './routes/mcp'
+import mcpAgentRoutes from './routes/mcpAgent'
+import flashSaleRoutes from './routes/flashSales'
 import importDataRoutes from './routes/importData'
 import uploadRoutes from './routes/uploads'
 import livestreamRoutes from './routes/livestream'
@@ -72,6 +76,8 @@ import taxDeclarationRoutes from './routes/taxDeclarations'
 import fanpageRoutes from './routes/fanpage'
 import { cacheDisconnect, cacheHealth } from './lib/cache'
 import { startAutoSync, stopAutoSync } from './cron/autoSync'
+import { startFlashSaleScheduler } from './cron/flashSaleScheduler'
+import { startEInvoiceQueueCron } from './cron/einvoiceQueue'
 import { startFanpageCron, stopFanpageCron } from './cron/fanpageCron'
 import { startWebhookCron, stopWebhookCron } from './cron/webhookCron'
 import { startEmailReplyCron, stopEmailReplyCron } from './cron/emailReplyCron'
@@ -207,6 +213,7 @@ app.use('/api/brands', brandRoutes)
 app.use('/api/customers', customerRoutes)
 app.use('/api/customer-groups', customerGroupRoutes)
 app.use('/api/crm', crmEmailRoutes)
+app.use('/api/crm', crmRoutes)
 app.use('/api/inventory', inventoryRoutes)
 app.use('/api/transactions', transactionRoutes)
 app.use('/api/events', eventRoutes)
@@ -250,6 +257,9 @@ app.use('/api/admin', adminRoutes)
 app.use('/api/import-data', importDataRoutes)
 app.use('/api/uploads', uploadRoutes)
 app.use('/api/livestream', livestreamRoutes) // Kengi Stream studio (kengi.vn/ai-livestream)
+app.use('/api/mcp', mcpRoutes) // MCP server cho AI agent (Streamable HTTP, X-API-Key + x-store-code)
+app.use('/api/mcp-agent', mcpAgentRoutes) // Trợ lý AI dashboard (Gemini + MCP tools)
+app.use('/api/flash-sales', flashSaleRoutes) // Flash sale hàng loạt Shopee (hàng đợi tuần tự)
 app.use('/api/internal', syncRoutes)
 app.use('/api/announcements', announcementRoutes)
 app.use('/api/attendance', attendanceRoutes)
@@ -1435,6 +1445,8 @@ if (!process.env.PASSENGER_BASE_URI) {
                 startFanpageCron()
                 startWebhookCron()
                 startEmailReplyCron()
+                startFlashSaleScheduler()
+                startEInvoiceQueueCron()
             })
         })
 

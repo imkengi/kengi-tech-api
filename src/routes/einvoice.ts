@@ -28,7 +28,7 @@
 //    POST   /test-connection, POST /cancel/:invoiceId
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { Router, Response } from 'express'
+import { Router, Response, NextFunction } from 'express'
 import { errMsg } from '../lib/errorResponse'
 import { authMiddleware, AuthRequest, getBranchFilter } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
@@ -37,6 +37,34 @@ import type { EInvoiceProviderConfig, EInvoiceData } from '../services/einvoice'
 
 const router = Router()
 
+// Vận hành nội bộ: x-admin-key + x-store-code (giống /api/mcp, /api/flash-sales)
+// để debug/xem hàng đợi. authMiddleware phía sau vẫn xử lý mọi request thường.
+router.use(async (req: AuthRequest, res: Response, next) => {
+    const adminKey = req.headers['x-admin-key'] as string
+    if (adminKey && process.env.ADMIN_KEY && adminKey === process.env.ADMIN_KEY) {
+        const code = String(req.headers['x-store-code'] || '').trim()
+        if (code) {
+            const { registryPrisma, getStorePrisma } = await import('../lib/prisma')
+            const store = await registryPrisma.store.findFirst({ where: { code: { equals: code, mode: 'insensitive' } } })
+            if (store) {
+                req.storePrisma = getStorePrisma(store.schema)
+                req.user = { role: 'admin', storeSchema: store.schema, branchSchema: store.schema } as any
+                ;(req as any).__viaAdminKey = true
+                next()
+                return
+            }
+        }
+        res.status(400).json({ success: false, error: 'x-admin-key cần kèm x-store-code hợp lệ' })
+        return
+    }
+    next()
+})
+
+// Auth cho route: đã qua admin-key shim thì cho thẳng, còn lại authMiddleware như cũ.
+const einvoiceAuth = (req: AuthRequest, res: Response, next: NextFunction) =>
+    (req as any).__viaAdminKey ? next() : authMiddleware(req, res, next)
+// requireRole đọc req.user.role='admin' do shim set nên pass tự nhiên.
+
 // ─── Table provisioning (per-schema, cached once per process) ────────────────
 // Boot migration handles existing schemas; this covers schemas provisioned at
 // runtime. All statements are idempotent.
@@ -44,6 +72,11 @@ const ensuredSchemas = new Set<string>()
 async function ensureTables(req: AuthRequest): Promise<void> {
     const prisma = req.storePrisma! as any
     const key = req.user?.branchSchema || req.user?.storeSchema || 'default'
+    return ensureEInvoiceTablesFor(prisma, key)
+}
+
+/** Bản không cần req — cron hàng đợi xuất HĐ gọi trực tiếp với store client. */
+export async function ensureEInvoiceTablesFor(prisma: any, key: string): Promise<void> {
     if (ensuredSchemas.has(key)) return
     try {
         await prisma.$executeRawUnsafe(`
@@ -209,28 +242,42 @@ function docTienBangChu(amount: number): string {
 // Merge config row (Phase-3 + legacy fields) into a normalized object.
 function normalizeConfig(c: any) {
     if (!c) return null
+    let ex: any = {}
+    try { ex = c.extra ? JSON.parse(c.extra) : {} } catch { /* extra hỏng */ }
+    const uname = c.apiUsername || c.apiKey || ''
+    const tmpl = c.invoicePattern || c.templateId || ''
+    const serial = c.invoiceSerial || c.serialNo || ''
     return {
         id: c.id,
         provider: c.provider || 'CUSTOM',
         apiUrl: c.apiUrl || '',
-        apiUsername: c.apiUsername || c.apiKey || '',
+        apiUsername: uname,
         // apiPassword/apiSecret masked by callers
         taxCode: c.taxCode || '',
         companyName: c.companyName || '',
         companyAddress: c.companyAddress || '',
-        invoicePattern: c.invoicePattern || c.templateId || '1',
-        invoiceSerial: c.invoiceSerial || c.serialNo || '',
+        invoicePattern: tmpl || '1',
+        invoiceSerial: serial,
         certificateSerial: c.certificateSerial || '',
         isActive: c.isActive ?? c.active ?? true,
         templateId: c.templateId || null,
         serialNo: c.serialNo || null,
         extra: c.extra || null,
+        // Alias theo TÊN TRƯỜNG form FE (EInvoiceConfigView) để form tự nạp lại
+        // đúng giá trị đã lưu sau khi reload.
+        username: uname,
+        templateCode: tmpl,
+        serial,
+        sellerName: c.companyName || '',
+        sellerAddress: c.companyAddress || '',
+        sellerEmail: ex.sellerEmail || '',
+        sellerPhone: ex.sellerPhone || '',
         createdAt: c.createdAt,
         updatedAt: c.updatedAt,
     }
 }
 
-async function getActiveConfig(prisma: any) {
+export async function getActiveConfig(prisma: any) {
     const active = await prisma.eInvoiceConfig.findFirst({ where: { active: true } }).catch(() => null)
     if (active) return active
     return prisma.eInvoiceConfig.findFirst().catch(() => null)
@@ -369,7 +416,7 @@ async function getInvoiceWithItems(prisma: any, id: string) {
 // ═════════════════════════════════════════════════════════════════════════════
 
 // GET /api/einvoice/config
-router.get('/config', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/config', einvoiceAuth, async (req: AuthRequest, res: Response) => {
     try {
         await ensureTables(req)
         const prisma = req.storePrisma! as any
@@ -382,37 +429,52 @@ router.get('/config', authMiddleware, async (req: AuthRequest, res: Response) =>
         res.json({ success: true, data: config })
     } catch (err: any) {
         console.error('GET /einvoice/config error:', err)
+        console.error('[EInvoiceQueue route]', err?.message || err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
 // PUT /api/einvoice/config
-router.put('/config', authMiddleware, requireRole('admin', 'manager', 'superadmin'), async (req: AuthRequest, res: Response) => {
+router.put('/config', einvoiceAuth, requireRole('admin', 'manager', 'superadmin'), async (req: AuthRequest, res: Response) => {
     try {
         await ensureTables(req)
         const prisma = req.storePrisma! as any
         const b = req.body || {}
         const provider = (b.provider || 'CUSTOM').toString().toUpperCase()
 
-        // Accept both new (apiUsername/apiPassword/companyName) and legacy (apiKey/apiSecret) shapes.
+        // Chấp nhận NHIỀU tên trường: form FE gửi username/password/templateCode/
+        // serial/sellerName…, script/legacy gửi apiUsername/apiKey/invoicePattern…
+        // — nếu chỉ nhận 1 bộ tên thì form UI lưu hụt (username/mật khẩu/mẫu số mất).
+        const existing = await prisma.eInvoiceConfig.findFirst({ where: { provider } }).catch(() => null)
+        const uname = b.apiUsername ?? b.apiKey ?? b.username ?? null
+        const tmpl = b.invoicePattern ?? b.templateId ?? b.templateCode ?? null
+        const serial = b.invoiceSerial ?? b.serialNo ?? b.serial ?? null
+
+        // Gộp email/SĐT bên bán vào extra để provider (VNPT biên lai) điền TCTPhi.
+        let extraObj: any = {}
+        try { extraObj = existing?.extra ? JSON.parse(existing.extra) : {} } catch { /* extra hỏng → bỏ */ }
+        if (b.extra) { try { extraObj = { ...extraObj, ...JSON.parse(b.extra) } } catch { /* ignore */ } }
+        if (b.sellerEmail) extraObj.sellerEmail = b.sellerEmail
+        if (b.sellerPhone) extraObj.sellerPhone = b.sellerPhone
+
         const data: any = {
             provider,
             apiUrl: b.apiUrl ?? null,
-            apiUsername: b.apiUsername ?? b.apiKey ?? null,
-            apiKey: b.apiUsername ?? b.apiKey ?? null, // keep legacy column in sync
+            apiUsername: uname,
+            apiKey: uname, // keep legacy column in sync
             taxCode: b.taxCode ?? null,
-            companyName: b.companyName ?? null,
-            companyAddress: b.companyAddress ?? null,
-            invoicePattern: b.invoicePattern ?? b.templateId ?? null,
-            invoiceSerial: b.invoiceSerial ?? b.serialNo ?? null,
-            templateId: b.invoicePattern ?? b.templateId ?? null,
-            serialNo: b.invoiceSerial ?? b.serialNo ?? null,
+            companyName: b.companyName ?? b.sellerName ?? null,
+            companyAddress: b.companyAddress ?? b.sellerAddress ?? null,
+            invoicePattern: tmpl,
+            invoiceSerial: serial,
+            templateId: tmpl,
+            serialNo: serial,
             certificateSerial: b.certificateSerial ?? null,
-            extra: b.extra ?? null,
+            extra: Object.keys(extraObj).length ? JSON.stringify(extraObj) : (b.extra ?? null),
             active: true, isActive: true,
         }
         // Only overwrite the password when a real (non-masked) value is supplied.
-        const pwd = b.apiPassword ?? b.apiSecret
+        const pwd = b.apiPassword ?? b.apiSecret ?? b.password
         if (pwd && pwd !== '********') {
             data.apiPassword = pwd
             data.apiSecret = pwd // keep legacy column in sync
@@ -420,7 +482,6 @@ router.put('/config', authMiddleware, requireRole('admin', 'manager', 'superadmi
 
         // Deactivate previous configs, then upsert the one for this provider.
         await prisma.eInvoiceConfig.updateMany({ where: {}, data: { active: false, isActive: false } }).catch(() => {})
-        const existing = await prisma.eInvoiceConfig.findFirst({ where: { provider } }).catch(() => null)
 
         let config
         if (existing) {
@@ -433,31 +494,42 @@ router.put('/config', authMiddleware, requireRole('admin', 'manager', 'superadmi
         res.json({ success: true, data: out })
     } catch (err: any) {
         console.error('PUT /einvoice/config error:', err)
+        console.error('[EInvoiceQueue route]', err?.message || err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
 // POST /api/einvoice/config/test — test connection (STUB)
-router.post('/config/test', authMiddleware, requireRole('admin', 'manager', 'superadmin'), async (req: AuthRequest, res: Response) => {
+router.post('/config/test', einvoiceAuth, requireRole('admin', 'manager', 'superadmin'), async (req: AuthRequest, res: Response) => {
     try {
         await ensureTables(req)
         const prisma = req.storePrisma! as any
         const raw = await getActiveConfig(prisma)
         if (!raw) return res.status(400).json({ success: false, error: 'Chưa cấu hình nhà cung cấp hóa đơn' })
 
-        // STUB: simulate a successful handshake with the provider.
-        console.log(`[einvoice][STUB] test-connection provider=${raw.provider} url=${raw.apiUrl || '(none)'}`)
+        // Gọi THẬT nếu NCC có service (vnpt/misa...); NCC chưa implement thì mô phỏng.
+        const provider = getProvider((raw.provider || '').toLowerCase())
+        if (!provider) {
+            console.log(`[einvoice][STUB] test-connection provider=${raw.provider} url=${raw.apiUrl || '(none)'}`)
+            return res.json({
+                success: true,
+                data: { connected: true, provider: raw.provider, message: `Kết nối tới ${raw.provider} thành công (mô phỏng)`, testedAt: new Date().toISOString() },
+            })
+        }
+        const result = await provider.testConnection(raw as EInvoiceProviderConfig)
         res.json({
-            success: true,
+            success: result.success,
             data: {
-                connected: true,
+                connected: result.success,
                 provider: raw.provider,
-                message: `Kết nối tới ${raw.provider} thành công (mô phỏng)`,
+                message: result.message,
+                providerInfo: result.providerInfo,
                 testedAt: new Date().toISOString(),
             },
         })
     } catch (err: any) {
         console.error('POST /einvoice/config/test error:', err)
+        console.error('[EInvoiceQueue route]', err?.message || err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
@@ -467,12 +539,12 @@ router.post('/config/test', authMiddleware, requireRole('admin', 'manager', 'sup
 // ═════════════════════════════════════════════════════════════════════════════
 
 // GET /api/einvoice/providers
-router.get('/providers', authMiddleware, (_req: AuthRequest, res: Response) => {
+router.get('/providers', einvoiceAuth, (_req: AuthRequest, res: Response) => {
     res.json({ success: true, data: PROVIDERS })
 })
 
 // POST /api/einvoice/test-connection (legacy)
-router.post('/test-connection', authMiddleware, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
+router.post('/test-connection', einvoiceAuth, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
     try {
         await ensureTables(req)
         const prisma = req.storePrisma! as any
@@ -486,12 +558,13 @@ router.post('/test-connection', authMiddleware, requireRole('admin', 'manager'),
         const result = await provider.testConnection(config as EInvoiceProviderConfig)
         res.json({ success: true, data: result })
     } catch (err: any) {
+        console.error('[EInvoiceQueue route]', err?.message || err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
 // GET /api/einvoice/history (legacy list — all statuses)
-router.get('/history', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/history', einvoiceAuth, async (req: AuthRequest, res: Response) => {
     try {
         await ensureTables(req)
         const prisma = req.storePrisma! as any
@@ -517,97 +590,878 @@ router.get('/history', authMiddleware, async (req: AuthRequest, res: Response) =
         res.json({ success: true, data })
     } catch (err: any) {
         console.error('GET /einvoice/history error:', err)
+        console.error('[EInvoiceQueue route]', err?.message || err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
 // POST /api/einvoice/issue/:transactionId (legacy — issue via provider service)
-router.post('/issue/:transactionId', authMiddleware, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
-    try {
-        await ensureTables(req)
-        const prisma = req.storePrisma! as any
-        const txId = String(req.params.transactionId)
+/**
+ * Core xuất hoá đơn cho 1 giao dịch — dùng chung bởi route /issue (tay) và cron
+ * hàng đợi xuất theo ngày (tự động khi khách NHẬN HÀNG thành công — yêu cầu CQT).
+ * Idempotent: đã có HĐ issued/SENT thì trả skipped.
+ */
+export async function issueInvoiceForTransaction(
+    prisma: any,
+    txId: string,
+    body: any = {}
+): Promise<{ success: boolean; skipped?: boolean; error?: string; invoiceNumber?: string; record?: any }> {
+    const config = await getActiveConfig(prisma)
+    if (!config) return { success: false, error: 'Chưa cấu hình NCC hóa đơn' }
+    const provider = getProvider((config.provider || '').toLowerCase())
+    if (!provider) return { success: false, error: `NCC ${config.provider} không hỗ trợ qua API trực tiếp` }
 
-        const config = await getActiveConfig(prisma)
-        if (!config) return res.status(400).json({ success: false, error: 'Chưa cấu hình NCC hóa đơn' })
-        const provider = getProvider((config.provider || '').toLowerCase())
-        if (!provider) return res.status(400).json({ success: false, error: `NCC ${config.provider} không hỗ trợ qua API trực tiếp` })
+    const existing = await prisma.eInvoice.findFirst({ where: { transactionId: txId, status: { in: ['ISSUING', 'issued', 'SENT'] } } }).catch(() => null)
+    if (existing) return { success: true, skipped: true, invoiceNumber: existing.invoiceNumber, error: `Đã xuất HĐ số ${existing.invoiceNumber}` }
 
-        const existing = await prisma.eInvoice.findFirst({ where: { transactionId: txId, status: { in: ['issued', 'SENT'] } } }).catch(() => null)
-        if (existing) return res.status(400).json({ success: false, error: `Giao dịch đã xuất HĐ số ${existing.invoiceNumber}` })
+    const tx = await prisma.transaction.findUnique({
+        where: { id: txId },
+        // unitConversions: cần để quy đổi ĐVT khi hoá đơn ghi theo vỉ/thùng
+        include: { items: { include: { product: { include: { unitConversions: true } } } }, customer: true },
+    })
+    if (!tx) return { success: false, error: 'Không tìm thấy giao dịch' }
 
-        const tx = await prisma.transaction.findUnique({
-            where: { id: txId },
-            include: { items: { include: { product: true } }, customer: true },
-        })
-        if (!tx) return res.status(404).json({ success: false, error: 'Không tìm thấy giao dịch' })
+    // ĐỦ TỒN KHO THUẾ mới được xuất hoá đơn (yêu cầu chủ shop 2026-07-23): hàng
+    // bán ra phải có đầu vào chứng từ (phiếu nhập) đủ số lượng — âm kho thuế là
+    // rủi ro CQT. Thiếu → KHÔNG tạo bản ghi lỗi, phiếu nằm lại hàng đợi; nhập
+    // chứng từ đầu vào xong xuất lại là qua. Bỏ qua chốt bằng body.ignoreTaxStock.
+    if (!body.ignoreTaxStock) {
+        const shortages = await taxStockShortages(prisma, tx.items || [])
+        if (shortages.length > 0) {
+            const detail = shortages.slice(0, 3).map(s => `${s.sku} thiếu ${s.thieu}`).join(', ')
+                + (shortages.length > 3 ? ` +${shortages.length - 3} mã khác` : '')
+            return { success: false, error: `Thiếu TỒN KHO THUẾ (${detail}) — nhập phiếu nhập/chứng từ đầu vào đủ số lượng rồi xuất lại` }
+        }
+    }
 
-        const invoiceData: EInvoiceData = {
+    // Thông tin người mua NHẬP TAY lúc xuất (body) ĐƯỢC ƯU TIÊN (override) — dùng
+    // cho nút "Cập nhật thông tin người mua". Không nhập gì + phiếu không gắn khách
+    // → mặc định "Người mua không lấy hóa đơn" (bán hàng cho người tiêu dùng, HĐ MTT).
+    const bStr = (v: any) => (v === undefined || v === null ? '' : String(v).trim())
+    // Tiền của 1 dòng = lineTotal (đã trừ chiết khấu dòng); bản ghi cũ thiếu
+    // lineTotal thì mới rơi về SL × đơn giá.
+    const _lineAmount = (i: any) => Math.round(
+        Number(i.lineTotal) > 0 ? Number(i.lineTotal) : (i.quantity || 1) * (i.unitPrice ?? i.price ?? 0))
+
+    // ─── ĐVT ghi trên HOÁ ĐƠN ──────────────────────────────────────────────
+    // Hàng nhập theo vỉ/thùng (chứng từ đầu vào ghi vỉ) thì HĐ đầu ra cũng phải
+    // ghi theo vỉ mới đối chiếu được với CQT, trong khi kho + sàn (Shopee/TikTok)
+    // vẫn chạy theo đơn vị gốc là cái. Product.invoiceUnit = ĐVT ghi trên HĐ,
+    // tỷ lệ lấy từ bảng đơn vị quy đổi của chính sản phẩm.
+    // TIỀN KHÔNG ĐỔI: chỉ đổi cách ghi số lượng; đơn giá suy NGƯỢC từ thành tiền
+    // để không lệch một đồng nào vì làm tròn.
+    const _invUnit = (item: any): { unit: string; qty: number; price: number } => {
+        const pr = item.product
+        const baseQty = Number(item.baseQuantity) > 0 ? Number(item.baseQuantity) : (item.quantity || 1)
+        const amount = _lineAmount(item)
+        const baseUnit = pr?.baseUnit || 'Cái'
+        const target = String(pr?.invoiceUnit || '').trim()
+        const asBase = () => ({ unit: baseUnit, qty: baseQty, price: baseQty > 0 ? amount / baseQty : amount })
+        if (!target || target.toLowerCase() === String(baseUnit).toLowerCase()) return asBase()
+        // rate = số đơn vị GỐC trong 1 đơn vị hoá đơn (1 vỉ = 10 cái)
+        const conv = (pr?.unitConversions || []).find((c: any) =>
+            String(c.toUnit || '').toLowerCase() === target.toLowerCase() ||
+            String(c.fromUnit || '').toLowerCase() === target.toLowerCase())
+        if (!conv || !Number(conv.conversionRate)) return asBase()
+        const rate = String(conv.toUnit || '').toLowerCase() === target.toLowerCase()
+            ? Number(conv.conversionRate) : 1 / Number(conv.conversionRate)
+        if (!Number.isFinite(rate) || rate <= 0) return asBase()
+        const qty = baseQty / rate                       // 3 cái → 0,3 vỉ
+        return { unit: target, qty, price: qty > 0 ? amount / qty : amount }
+    }
+    const _txItemsTotal = (tx.items || []).reduce((s: number, i: any) => s + _lineAmount(i), 0)
+    const _txTax = Number(tx.tax) || 0
+    const _txVatRate = _txTax > 0 && _txItemsTotal > 0
+        ? Math.round(_txTax * 100 / _txItemsTotal) : 0
+    const invoiceData: EInvoiceData = {
             sellerTaxCode: config.taxCode || '',
             sellerName: config.companyName || '',
-            buyerName: tx.customer?.name || tx.customerName || 'Khách lẻ',
-            buyerTaxCode: tx.customer?.taxCode || req.body.buyerTaxCode || '',
-            buyerAddress: tx.customer?.address || req.body.buyerAddress || '',
-            buyerPhone: tx.customer?.phone || '',
-            buyerEmail: tx.customer?.email || req.body.buyerEmail || '',
+            buyerName: bStr(body.buyerName) || tx.customer?.name || tx.customerName || 'Bán cho người tiêu dùng',
+            buyerTaxCode: bStr(body.buyerTaxCode) || tx.customer?.taxCode || '',
+            buyerAddress: bStr(body.buyerAddress) || tx.customer?.address || '',
+            buyerPhone: bStr(body.buyerPhone) || tx.customer?.phone || '',
+            buyerEmail: bStr(body.buyerEmail) || tx.customer?.email || '',
             templateId: config.templateId || undefined,
             serialNo: config.serialNo || undefined,
             paymentMethod: tx.paymentMethod || 'TM/CK',
             items: (tx.items || []).map((item: any) => ({
                 name: item.product?.name || item.productName || 'Sản phẩm',
-                unit: item.product?.baseUnit || item.unit || 'Cái',
-                quantity: item.quantity || 1,
-                unitPrice: item.unitPrice ?? item.price ?? 0,
-                amount: (item.quantity || 1) * (item.unitPrice ?? item.price ?? 0),
-                vatRate: 10,
-                vatAmount: Math.round(((item.quantity || 1) * (item.unitPrice ?? item.price ?? 0)) * 0.1),
+                unit: _invUnit(item).unit,
+                quantity: _invUnit(item).qty,
+                unitPrice: _invUnit(item).price,
+                // lineTotal = tiền dòng ĐÃ trừ chiết khấu. Dùng SL×đơn giá thì tổng
+                // các dòng gửi NCC > số tiền thanh toán của phiếu có giảm giá.
+                amount: _lineAmount(item),
+                // Thuế suất theo THUẾ THẬT của phiếu (đơn sàn thường 0), không cứng
+                // 10% — cứng 10% làm payload gửi CQT lệch hẳn tổng VAT của hoá đơn.
+                vatRate: _txVatRate,
+                vatAmount: _txTax > 0 && _txItemsTotal > 0
+                    ? Math.round(_txTax * _lineAmount(item) / _txItemsTotal) : 0,
                 discount: item.discount || 0,
             })),
             subtotal: tx.subtotal || tx.total || 0,
-            vatRate: 10,
+            vatRate: _txVatRate,
             vatAmount: tx.tax || 0,
             total: tx.total || 0,
             transactionId: tx.id,
             receiptNumber: tx.receiptNumber || '',
         }
 
-        const result = await provider.issueInvoice(config as EInvoiceProviderConfig, invoiceData)
-        const record = await prisma.eInvoice.create({
-            data: {
-                transactionId: txId,
-                provider: config.provider,
-                invoiceNumber: result.invoiceNumber || null,
-                lookupCode: result.lookupCode || null,
-                pdfUrl: result.pdfUrl || null,
-                xmlData: result.xmlData || null,
-                status: result.success ? 'SENT' : 'ERROR',
-                errorMessage: result.errorMessage || null,
-                issuedAt: result.success ? new Date() : null,
-                sentAt: result.success ? new Date() : null,
-                buyerName: invoiceData.buyerName,
-                buyerTaxCode: invoiceData.buyerTaxCode,
-                buyerAddress: invoiceData.buyerAddress,
-                totalAmount: invoiceData.total,
-                vatAmount: invoiceData.vatAmount,
-                totalBeforeVat: (invoiceData.total || 0) - (invoiceData.vatAmount || 0),
-                paymentMethod: invoiceData.paymentMethod,
-            },
-        })
-        if (result.success) {
-            await prisma.transaction.update({
-                where: { id: txId },
-                data: { vatStatus: 'issued', vatInvoiceNumber: result.invoiceNumber, vatIssuedAt: new Date() },
-            }).catch(() => {})
+    const result = await provider.issueInvoice(config as EInvoiceProviderConfig, invoiceData)
+    // Dòng hàng lưu kèm bản ghi HĐ — trước đây KHÔNG tạo EInvoiceItem nên màn chi
+    // tiết hiện "Không có dòng hàng". Thuế phân bổ theo tx.tax thật (đơn online
+    // thường 0), KHÔNG áp 10% cứng để tổng dòng khớp tổng HĐ.
+    const itemRows = (tx.items || []).map((item: any, idx: number) => {
+        const amount = _lineAmount(item)
+        return {
+            itemNumber: idx + 1,
+            itemName: item.product?.name || item.productName || 'Sản phẩm',
+            unitName: _invUnit(item).unit,
+            quantity: _invUnit(item).qty,
+            unitPrice: _invUnit(item).price,
+            vatRate: _txVatRate,
+            vatAmount: _txTax > 0 && _txItemsTotal > 0 ? Math.round(_txTax * amount / _txItemsTotal) : 0,
+            amount,
         }
-        res.json({ success: result.success, data: record })
+    })
+    const record = await prisma.eInvoice.create({
+        data: {
+            transactionId: txId,
+            // Thiếu 2 trường này thì HĐ xuất qua hàng đợi KHÔNG hiện ở màn Danh sách
+            // HĐĐT (lọc theo chi nhánh) và biến mất khi lọc theo khoảng ngày.
+            branchId: tx.branchId || null,
+            invoiceDate: new Date().toISOString().slice(0, 10),
+            provider: config.provider,
+            invoiceNumber: result.invoiceNumber || null,
+            // Ký hiệu/mẫu số theo cấu hình — trước đây bỏ trống nên chi tiết hiện "—"
+            invoiceSymbol: config.serialNo || config.invoiceSerial || null,
+            lookupCode: result.lookupCode || null,
+            pdfUrl: result.pdfUrl || null,
+            xmlData: result.xmlData || null,
+            status: result.success ? 'SENT' : 'ERROR',
+            errorMessage: result.errorMessage || null,
+            issuedAt: result.success ? new Date() : null,
+            sentAt: result.success ? new Date() : null,
+            buyerName: invoiceData.buyerName,
+            buyerTaxCode: invoiceData.buyerTaxCode,
+            buyerAddress: invoiceData.buyerAddress,
+            totalAmount: invoiceData.total,
+            vatAmount: invoiceData.vatAmount,
+            totalBeforeVat: (invoiceData.total || 0) - (invoiceData.vatAmount || 0),
+            paymentMethod: invoiceData.paymentMethod,
+            items: { create: itemRows },
+        },
+    })
+    if (result.success) {
+        await prisma.transaction.update({
+            where: { id: txId },
+            data: { vatStatus: 'issued', vatInvoiceNumber: result.invoiceNumber, vatIssuedAt: new Date() },
+        }).catch(() => { })
+    }
+    return { success: result.success, error: result.errorMessage || undefined, invoiceNumber: result.invoiceNumber, record }
+}
+
+router.post('/issue/:transactionId', einvoiceAuth, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
+    try {
+        await ensureTables(req)
+        const prisma = req.storePrisma! as any
+        const r = await issueInvoiceForTransaction(prisma, String(req.params.transactionId), req.body || {})
+        if (!r.success || r.skipped) {
+            if (r.skipped) return res.status(400).json({ success: false, error: r.error })
+            if (!r.record) return res.status(400).json({ success: false, error: r.error })
+        }
+        res.json({ success: r.success, data: r.record })
     } catch (err: any) {
         console.error('Issue e-invoice error:', err)
+        console.error('[EInvoiceQueue route]', err?.message || err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// ─── HÀNG ĐỢI XUẤT HOÁ ĐƠN THEO NGÀY ─────────────────────────────────────────
+// Yêu cầu CQT: chỉ xuất HĐ khi khách NHẬN HÀNG thành công. Đơn online chuyển
+// thành phiếu ngay lúc chốt/gửi hàng, nên KHÔNG xuất HĐ lúc đó — hàng đợi =
+// phiếu online mà đơn gốc đã giao xong (delivered/completed) và chưa có HĐ.
+// Cron einvoiceQueue chạy mỗi tối gom xuất; cờ bật/tắt lưu trong config.extra
+// (JSON — tránh thêm cột phải migration).
+
+export function parseConfigExtra(config: any): any {
+    try { return JSON.parse(config?.extra || '{}') || {} } catch { return {} }
+}
+
+const DELIVERED_STATUSES = ['delivered', 'DELIVERED', 'completed', 'COMPLETED']
+
+const RETURN_STATUSES = ['TO_RETURN', 'RETURN', 'returned', 'RETURNED', 'refunded', 'REFUNDED', 'refund', 'cancelled', 'CANCELLED']
+
+// Đơn có PHIẾU TRẢ ĐANG MỞ trên sàn (đã đồng bộ về bảng ReturnOrder). Shopee chỉ
+// đổi trạng thái đơn khi ĐÃ HOÀN TIỀN; phiếu mới ở mức "chờ duyệt/đã duyệt" thì
+// đơn vẫn 'completed' → trước đây lọt vào hàng đợi và bị auto-xuất HĐ dù khách
+// đang trả hàng. 'rejected' KHÔNG tính (sàn từ chối trả, đơn vẫn có hiệu lực).
+const OPEN_RETURN_EXISTS = `EXISTS (
+               SELECT 1 FROM "ReturnOrder" ro
+               WHERE ro."originalInvoice" = o."orderNumber"
+                 AND LOWER(ro.status) IN ('pending','approved','processing','refunded')
+           )`
+const HAS_RETURN_EXPR = `(o.status = ANY($4) OR t.status = 'returned' OR ${OPEN_RETURN_EXISTS})`
+
+// Điều kiện chung của hàng đợi (dùng cho cả list, stats, group theo ngày).
+// NGÀY dùng để lọc/gom = COALESCE(deliveredAt, createdAt) — deliveredAt (ngày giao
+// thật) nếu có, KHÔNG rơi về updatedAt. updatedAt bị mọi lần sync/backfill "chạm"
+// bump lên ngày sync → cả kho đơn cũ (chưa có deliveredAt) dồn hết vào 1 ngày sync
+// (vd 5903 đơn nhảy vào 15/07). createdAt = ngày ĐẶT trên sàn, ổn định, không bị
+// sync dịch, nên gom trải đúng theo ngày phát sinh + neo anchor cron mới vững.
+const QUEUE_FROM = `FROM "Transaction" t
+         JOIN "OnlineOrder" o ON ('ONLINE-' || o."orderNumber") = t."receiptNumber"
+         LEFT JOIN "Customer" c ON c.id = t."customerId"
+         WHERE t.channel = 'online' AND t.status IN ('completed', 'returned')
+           AND (o.status = ANY($1) OR o."deliveredAt" IS NOT NULL)
+           AND COALESCE(o."deliveredAt", o."createdAt") >= $2
+           AND COALESCE(o."deliveredAt", o."createdAt") <= $3
+           AND NOT EXISTS (
+               SELECT 1 FROM "EInvoice" e
+               WHERE e."transactionId" = t.id AND e.status IN ('issued', 'SENT')
+           )`
+
+/**
+ * TỒN KHO THUẾ theo từng SKU = tổng NHẬP có hoá đơn VAT (hasVatInvoice)
+ * − tổng ĐÃ XUẤT HOÁ ĐƠN (chỉ phiếu bán ĐÃ có EInvoice issued/SENT — bán chưa
+ * xuất HĐ thì CHƯA trừ, yêu cầu chủ shop 2026-07-24 "khi xuất hoá đơn mới trừ").
+ * Phiếu đang định xuất: cần tồn khả dụng ≥ số lượng của chính phiếu này.
+ */
+async function taxStockShortages(
+    prisma: any,
+    items: { sku?: string | null; productName?: string | null; quantity?: number | null }[]
+): Promise<{ sku: string; name: string; thieu: number }[]> {
+    const skus = [...new Set(items.map(i => String(i.sku || '').trim().toLowerCase()).filter(Boolean))]
+    if (skus.length === 0) return []
+    const [inRows, outRows] = await Promise.all([
+        prisma.$queryRawUnsafe(
+            // CHỈ tính phiếu nhập CÓ HOÁ ĐƠN VAT (hasVatInvoice=true) — nhập trôi
+            // nổi không hoá đơn KHÔNG được tính vào tồn kho thuế.
+            `SELECT LOWER(TRIM(ii."productSku")) AS k, COALESCE(SUM(ii.quantity - COALESCE(ii."returnedQuantity",0)),0)::float8 AS q
+             FROM "ImportReceiptItem" ii JOIN "ImportReceipt" r ON r.id = ii."receiptId"
+             WHERE r."hasVatInvoice" = true AND r.status = 'completed'
+               AND LOWER(TRIM(ii."productSku")) = ANY($1::text[]) GROUP BY 1`, skus),
+        prisma.$queryRawUnsafe(
+            // CHỈ trừ phần ĐÃ XUẤT HOÁ ĐƠN (EXISTS EInvoice issued/SENT — EXISTS để
+            // phiếu có nhiều bản ghi HĐ lỗi + 1 bản SENT không bị đếm trùng)
+            `SELECT LOWER(TRIM(i.sku)) AS k, COALESCE(SUM(COALESCE(NULLIF(i."baseQuantity",0), i.quantity)),0)::float8 AS q
+             FROM "TransactionItem" i JOIN "Transaction" t ON t.id = i."transactionId"
+             WHERE t.status IN ('completed','partial','returned')
+               AND EXISTS (SELECT 1 FROM "EInvoice" e WHERE e."transactionId" = t.id AND e.status IN ('issued','SENT'))
+               AND LOWER(TRIM(i.sku)) = ANY($1::text[]) GROUP BY 1`, skus),
+    ])
+    const imp: Record<string, number> = Object.fromEntries((inRows as any[]).map((r: any) => [r.k, Number(r.q)]))
+    const out: Record<string, number> = Object.fromEntries((outRows as any[]).map((r: any) => [r.k, Number(r.q)]))
+    // Nhu cầu của CHÍNH phiếu đang xuất (gộp theo mã)
+    const need: Record<string, { qty: number; sku: string; name: string }> = {}
+    for (const it of items) {
+        const k = String(it.sku || '').trim().toLowerCase()
+        if (!k) continue
+        if (!need[k]) need[k] = { qty: 0, sku: String(it.sku).trim(), name: it.productName || '' }
+        // baseQuantity = số lượng theo ĐƠN VỊ GỐC (bán 1 vỉ = 10 cái). Bản ghi cũ
+        // chưa có thì rơi về quantity.
+        need[k].qty += Number((it as any).baseQuantity) || Number(it.quantity) || 0
+    }
+    const shortages: { sku: string; name: string; thieu: number }[] = []
+    for (const [k, n] of Object.entries(need)) {
+        const conLai = (imp[k] || 0) - (out[k] || 0) // tồn kho thuế khả dụng
+        if (conLai < n.qty) shortages.push({ sku: n.sku, name: n.name, thieu: n.qty - conLai })
+    }
+    return shortages
+}
+
+// GET /einvoice/tax-stock?q=&limit= — bảng TỒN KHO THUẾ theo từng SKU, tính Y HỆT
+// công thức chặn xuất HĐ: nhập có hoá đơn VAT (hasVatInvoice) − đã bán (phiếu
+// completed/partial). ton < 0 = đang thiếu, mã đó không xuất được HĐ.
+router.get('/tax-stock', einvoiceAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const q = String(req.query.q || '').trim().toLowerCase()
+        const limit = Math.min(Math.max(1, Number(req.query.limit) || 300), 1000)
+        const qFilter = q ? `WHERE x.sku LIKE '%' || $1 || '%' OR LOWER(COALESCE(p.name,'')) LIKE '%' || $1 || '%'` : ''
+        const params: any[] = q ? [q] : []
+        const rows = await prisma.$queryRawUnsafe(`
+            SELECT x.sku, COALESCE(p.name, x.any_name, '') AS name,
+                   x.nhap::float8 AS "nhapVat", x.xuat::float8 AS xuat,
+                   (x.nhap - x.xuat)::float8 AS ton
+            FROM (
+                SELECT COALESCE(i.k, s.k) AS sku,
+                       COALESCE(i.q, 0) AS nhap, COALESCE(s.q, 0) AS xuat,
+                       COALESCE(i.any_name, s.any_name) AS any_name
+                FROM (
+                    SELECT LOWER(TRIM(ii."productSku")) AS k,
+                           SUM(ii.quantity - COALESCE(ii."returnedQuantity",0)) AS q, MIN(ii."productName") AS any_name
+                    FROM "ImportReceiptItem" ii JOIN "ImportReceipt" r ON r.id = ii."receiptId"
+                    WHERE r."hasVatInvoice" = true AND r.status = 'completed'
+                      AND NULLIF(TRIM(ii."productSku"),'') IS NOT NULL
+                    GROUP BY 1
+                ) i
+                FULL OUTER JOIN (
+                    -- CHỈ trừ phần ĐÃ XUẤT HOÁ ĐƠN (khớp công thức chặn — bán chưa
+                    -- xuất HĐ thì chưa trừ tồn kho thuế)
+                    SELECT LOWER(TRIM(ti.sku)) AS k, SUM(COALESCE(NULLIF(ti."baseQuantity",0), ti.quantity)) AS q, MIN(ti."productName") AS any_name
+                    FROM "TransactionItem" ti JOIN "Transaction" t ON t.id = ti."transactionId"
+                    WHERE t.status IN ('completed','partial','returned')
+                      AND EXISTS (SELECT 1 FROM "EInvoice" e WHERE e."transactionId" = t.id AND e.status IN ('issued','SENT'))
+                      AND NULLIF(TRIM(ti.sku),'') IS NOT NULL
+                    GROUP BY 1
+                ) s ON s.k = i.k
+            ) x
+            LEFT JOIN "Product" p ON LOWER(TRIM(p.sku)) = x.sku
+            ${qFilter}
+            ORDER BY (x.nhap - x.xuat) ASC, x.xuat DESC
+            LIMIT ${limit}
+        `, ...params)
+        const tongThieu = (rows as any[]).filter((r: any) => r.ton < 0).length
+        res.json({ success: true, data: { rows, tongThieu } })
+    } catch (err: any) {
+        console.error('[tax-stock]', err?.message || err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// GET /einvoice/tax-stock-gap?from=YYYY-MM-DD&to=&platform=&onlyShort=1
+// ĐỐI CHIẾU hàng đợi xuất HĐ ⇄ TỒN KHO THUẾ: gom nhu cầu theo SKU của toàn bộ phiếu
+// đang chờ xuất (từ MỐC NGÀY người dùng chọn), so với tồn kho thuế khả dụng
+// (nhập có HĐ VAT − đã xuất HĐ) → ra danh sách CẦN NHẬP THÊM bao nhiêu mỗi mã.
+// Đơn đã trả hàng/hoàn tiền bị loại (không xuất HĐ nữa nên không tính nhu cầu).
+router.get('/tax-stock-gap', einvoiceAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        // Ngày phải PARSE ĐƯỢC — ô ngày để trống ở FE gửi lên "T00:00:00" → Invalid
+        // Date → query nổ 500. Không hợp lệ thì rơi về mặc định thay vì lỗi.
+        const parseDate = (v: any, fallback: Date): Date => {
+            if (!v) return fallback
+            const d = new Date(String(v))
+            return isNaN(d.getTime()) ? fallback : d
+        }
+        let to = parseDate(req.query.to, new Date())
+        let from = parseDate(req.query.from, new Date(Date.now() - 30 * 86400_000))
+        if (from > to) [from, to] = [to, from]
+        const platform = req.query.platform ? String(req.query.platform).toLowerCase() : ''
+        const onlyShort = String(req.query.onlyShort || '') === '1'
+
+        const params: any[] = [DELIVERED_STATUSES, from, to, RETURN_STATUSES]
+        let platFilter = ''
+        if (platform) {
+            params.push(platform)
+            platFilter = ` AND LOWER(COALESCE(o.platform,'')) = $${params.length}`
+        }
+        // Phiếu chờ xuất trong khoảng, BỎ đơn trả hàng/hoàn tiền
+        const queueCte = `SELECT t.id ${QUEUE_FROM}
+             AND NOT ${HAS_RETURN_EXPR}${platFilter}`
+
+        const rows = await prisma.$queryRawUnsafe(`
+            WITH q AS (${queueCte}),
+            need AS (
+                SELECT LOWER(TRIM(ti.sku)) AS k, SUM(COALESCE(NULLIF(ti."baseQuantity",0), ti.quantity))::float8 AS q,
+                       MIN(ti."productName") AS any_name,
+                       COUNT(DISTINCT ti."transactionId")::int AS orders
+                FROM "TransactionItem" ti JOIN q ON q.id = ti."transactionId"
+                WHERE NULLIF(TRIM(ti.sku),'') IS NOT NULL
+                GROUP BY 1
+            ),
+            imp AS (
+                SELECT LOWER(TRIM(ii."productSku")) AS k,
+                       SUM(ii.quantity - COALESCE(ii."returnedQuantity",0))::float8 AS q
+                FROM "ImportReceiptItem" ii JOIN "ImportReceipt" r ON r.id = ii."receiptId"
+                WHERE r."hasVatInvoice" = true AND r.status = 'completed'
+                  AND NULLIF(TRIM(ii."productSku"),'') IS NOT NULL
+                GROUP BY 1
+            ),
+            sold AS (
+                SELECT LOWER(TRIM(ti.sku)) AS k, SUM(COALESCE(NULLIF(ti."baseQuantity",0), ti.quantity))::float8 AS q
+                FROM "TransactionItem" ti JOIN "Transaction" t ON t.id = ti."transactionId"
+                WHERE t.status IN ('completed','partial','returned')
+                  AND EXISTS (SELECT 1 FROM "EInvoice" e WHERE e."transactionId" = t.id AND e.status IN ('issued','SENT'))
+                  AND NULLIF(TRIM(ti.sku),'') IS NOT NULL
+                GROUP BY 1
+            )
+            SELECT n.k AS sku, COALESCE(p.name, n.any_name, '') AS name,
+                   n.q AS "canXuat", n.orders,
+                   COALESCE(i.q,0) AS "nhapVat", COALESCE(s.q,0) AS "daXuat",
+                   (COALESCE(i.q,0) - COALESCE(s.q,0)) AS ton,
+                   (n.q - (COALESCE(i.q,0) - COALESCE(s.q,0))) AS thieu,
+                   COALESCE(p."costPrice",0)::float8 AS "costPrice",
+                   COALESCE(p.stock,0)::int AS "tonThuc"
+            FROM need n
+            LEFT JOIN imp i ON i.k = n.k
+            LEFT JOIN sold s ON s.k = n.k
+            LEFT JOIN "Product" p ON LOWER(TRIM(p.sku)) = n.k
+            ${onlyShort ? 'WHERE (n.q - (COALESCE(i.q,0) - COALESCE(s.q,0))) > 0' : ''}
+            ORDER BY (n.q - (COALESCE(i.q,0) - COALESCE(s.q,0))) DESC, n.q DESC
+            LIMIT 2000
+        `, ...params)
+
+        // Hàng trong hàng đợi KHÔNG có SKU → không đối chiếu được tồn kho thuế
+        const noSkuRow = await prisma.$queryRawUnsafe(`
+            WITH q AS (${queueCte})
+            SELECT COALESCE(SUM(ti.quantity),0)::float8 AS qty,
+                   COUNT(DISTINCT ti."transactionId")::int AS orders
+            FROM "TransactionItem" ti JOIN q ON q.id = ti."transactionId"
+            WHERE NULLIF(TRIM(ti.sku),'') IS NULL
+        `, ...params)
+
+        let list = rows as any[]
+        let fullCount = list.length
+
+        // ── CHUẨN HOÁ VỀ MÃ KHO THẬT ───────────────────────────────────────
+        // (1) COMBO không có chứng từ đầu vào cho chính nó → bung thành THÀNH PHẦN.
+        // (2) Mã ĐÃ GỘP → dồn về mã đích, quy đổi số lượng theo hệ số.
+        // Không làm thì báo cáo đòi "nhập thêm combo" (vô nghĩa) và tách đôi nhu
+        // cầu của cùng một món thành 2 mã.
+        try {
+            const skus = list.map(r => String(r.sku))
+            const prods = skus.length ? await prisma.$queryRawUnsafe(
+                `SELECT LOWER(TRIM(sku)) AS k, id, "bundleId", "mergedIntoId", "mergedRate" FROM "Product"
+                 WHERE LOWER(TRIM(sku)) = ANY($1::text[])`, skus) : []
+            const meta = new Map((prods as any[]).map((p: any) => [p.k, p]))
+
+            // gom nhu cầu theo mã hiệu lực
+            const need = new Map<string, { canXuat: number; orders: number; name: string }>()
+            const addNeed = (sku: string, qty: number, orders: number, name: string) => {
+                const k = sku.toLowerCase().trim()
+                const cur = need.get(k) || { canXuat: 0, orders: 0, name }
+                cur.canXuat += qty; cur.orders = Math.max(cur.orders, orders)
+                if (!cur.name) cur.name = name
+                need.set(k, cur)
+            }
+            for (const r of list) {
+                const m: any = meta.get(String(r.sku))
+                if (m?.bundleId) {
+                    const b = await prisma.bundle.findUnique({ where: { id: m.bundleId } }).catch(() => null)
+                    let comps: any[] = []
+                    try { comps = JSON.parse((b as any)?.items || '[]') } catch { comps = [] }
+                    if (comps.length > 0) {
+                        for (const c of comps) {
+                            if (!c.sku) continue
+                            addNeed(String(c.sku), Number(r.canXuat) * (Number(c.quantity) || 1), r.orders, c.name || '')
+                        }
+                        continue
+                    }
+                }
+                if (m?.mergedIntoId) {
+                    const tgt = await prisma.product.findUnique({ where: { id: m.mergedIntoId }, select: { sku: true, name: true } }).catch(() => null)
+                    if (tgt?.sku) { addNeed(tgt.sku, Number(r.canXuat) * (Number(m.mergedRate) || 1), r.orders, tgt.name); continue }
+                }
+                addNeed(String(r.sku), Number(r.canXuat), r.orders, r.name)
+            }
+
+            // tính lại tồn kho thuế cho ĐÚNG tập mã hiệu lực
+            const keys = [...need.keys()]
+            const stockRows = keys.length ? await prisma.$queryRawUnsafe(`
+                SELECT k, COALESCE(i.q,0) - COALESCE(s.q,0) AS ton, COALESCE(i.q,0) AS nhap, COALESCE(s.q,0) AS xuat,
+                       COALESCE(p.name,'') AS name, COALESCE(p."costPrice",0)::float8 AS cost, COALESCE(p.stock,0)::int AS tonthuc
+                FROM unnest($1::text[]) AS k
+                LEFT JOIN (
+                    SELECT LOWER(TRIM(ii."productSku")) AS kk,
+                           SUM(ii.quantity - COALESCE(ii."returnedQuantity",0))::float8 AS q
+                    FROM "ImportReceiptItem" ii JOIN "ImportReceipt" r ON r.id = ii."receiptId"
+                    WHERE r."hasVatInvoice" = true AND r.status = 'completed' GROUP BY 1
+                ) i ON i.kk = k
+                LEFT JOIN (
+                    SELECT LOWER(TRIM(ti.sku)) AS kk,
+                           SUM(COALESCE(NULLIF(ti."baseQuantity",0), ti.quantity))::float8 AS q
+                    FROM "TransactionItem" ti JOIN "Transaction" t ON t.id = ti."transactionId"
+                    WHERE t.status IN ('completed','partial','returned')
+                      AND EXISTS (SELECT 1 FROM "EInvoice" e WHERE e."transactionId" = t.id AND e.status IN ('issued','SENT'))
+                    GROUP BY 1
+                ) s ON s.kk = k
+                LEFT JOIN "Product" p ON LOWER(TRIM(p.sku)) = k`, keys) : []
+            const stockMap = new Map((stockRows as any[]).map((r: any) => [r.k, r]))
+
+            list = keys.map(k => {
+                const n = need.get(k)!
+                const st: any = stockMap.get(k) || {}
+                const ton = Number(st.ton) || 0
+                return {
+                    sku: k, name: st.name || n.name || '',
+                    canXuat: n.canXuat, orders: n.orders,
+                    nhapVat: Number(st.nhap) || 0, daXuat: Number(st.xuat) || 0,
+                    ton, thieu: n.canXuat - ton,
+                    costPrice: Number(st.cost) || 0, tonThuc: Number(st.tonthuc) || 0,
+                }
+            }).sort((a, b) => b.thieu - a.thieu || b.canXuat - a.canXuat)
+
+            // ── QUY VỀ ĐVT CHÍNH (đơn vị kê thuế) ──────────────────────────
+            // Mua hàng theo VỈ thì bảng kê thiếu phải nói "thiếu 2 vỉ", không phải
+            // "20 cái" — người đi đặt hàng NCC đọc theo vỉ. invoiceUnit đặt lúc gộp.
+            const unitRows = keys.length ? await prisma.$queryRawUnsafe(`
+                SELECT LOWER(TRIM(p.sku)) AS k, p."invoiceUnit" AS dv, p."baseUnit" AS dvgoc,
+                       uc."conversionRate" AS rate
+                FROM "Product" p
+                LEFT JOIN "UnitConversion" uc
+                  ON uc."productId" = p.id AND LOWER(uc."toUnit") = LOWER(p."invoiceUnit")
+                WHERE LOWER(TRIM(p.sku)) = ANY($1::text[]) AND NULLIF(TRIM(p."invoiceUnit"),'') IS NOT NULL
+            `, keys) : []
+            const unitMap = new Map((unitRows as any[]).map((r: any) => [r.k, r]))
+
+            // Mã hiển thị phải là MÃ CỦA ĐƠN VỊ ĐANG GHI: kê "0,2 Vỉ" thì phải kèm
+            // mã vỉ (EDH-CBZ006-E2) chứ không phải mã cái (SP000195) — người đi đặt
+            // hàng NCC đọc theo mã vỉ. Lấy từ mã đã gộp có ĐVT gốc trùng ĐVT chính.
+            // Khớp theo HỆ SỐ, không khớp theo tên đơn vị: mã vỉ thường được tạo với
+            // ĐVT mặc định "Cái" nên so tên là trượt. Hệ số gộp = hệ số quy đổi của
+            // ĐVT chính thì đúng là mã của đơn vị đó.
+            const aliasRows = keys.length ? await prisma.$queryRawUnsafe(`
+                SELECT LOWER(TRIM(t.sku)) AS k, m.sku AS "maDonVi", m."mergedRate" AS rate
+                FROM "Product" m
+                JOIN "Product" t ON t.id = m."mergedIntoId"
+                WHERE LOWER(TRIM(t.sku)) = ANY($1::text[])
+                  AND NULLIF(TRIM(t."invoiceUnit"),'') IS NOT NULL`, keys) : []
+            const aliasByKey = new Map<string, any[]>()
+            for (const a of aliasRows as any[]) {
+                (aliasByKey.get(a.k) || aliasByKey.set(a.k, []).get(a.k)!).push(a)
+            }
+            list = list.map(r => {
+                const u: any = unitMap.get(r.sku)
+                const rt = Number(u?.rate) || 0
+                if (!u || rt <= 0) return { ...r, donVi: (u?.dvgoc || ''), heSo: 1 }
+                const q = (v: number) => Math.round((v / rt) * 100) / 100
+                return {
+                    ...r,
+                    // mã đặt hàng theo đơn vị chính; giữ mã kho để tra cứu
+                    sku: (aliasByKey.get(r.sku) || []).find((a: any) => Math.abs((Number(a.rate) || 0) - rt) < 0.001)?.maDonVi || r.sku,
+                    skuKho: r.sku,
+                    donVi: u.dv, heSo: rt, donViGoc: u.dvgoc,
+                    canXuat: q(r.canXuat), ton: q(r.ton), thieu: q(r.thieu),
+                    nhapVat: q(r.nhapVat), daXuat: q(r.daXuat),
+                    // giá vốn theo ĐVT chính để "ước tiền" vẫn đúng
+                    costPrice: Math.round((r.costPrice || 0) * rt),
+                }
+            })
+            // Giữ TOÀN BỘ danh sách để tính tổng; onlyShort chỉ cắt phần TRẢ VỀ,
+            // nếu không thẻ "mã hàng chờ xuất HĐ" sẽ hiện đúng bằng số mã thiếu.
+            fullCount = list.length
+            if (onlyShort) list = list.filter(r => r.thieu > 0)
+        } catch (e: any) {
+            console.warn('[tax-stock-gap] chuẩn hoá combo/gộp lỗi:', e?.message || e)
+        }
+
+        const short = list.filter(r => Number(r.thieu) > 0)
+        const summary = {
+            skus: fullCount,
+            canXuatQty: list.reduce((s, r) => s + Number(r.canXuat || 0), 0),
+            shortSkus: short.length,
+            shortQty: short.reduce((s, r) => s + Number(r.thieu), 0),
+            // Ước tính tiền hàng cần nhập thêm (theo giá vốn hiện tại)
+            estCost: short.reduce((s, r) => s + Number(r.thieu) * Number(r.costPrice || 0), 0),
+            noSku: (noSkuRow as any[])[0] || { qty: 0, orders: 0 },
+        }
+        res.json({
+            success: true,
+            data: { rows: list, summary, from: from.toISOString(), to: to.toISOString() },
+        })
+    } catch (err: any) {
+        console.error('[tax-stock-gap]', err?.message || err)
+        res.status(500).json({ success: false, error: errMsg(err) || 'Lỗi truy vấn đối chiếu tồn kho thuế' })
+    }
+})
+
+/** Phiếu online đủ điều kiện xuất HĐ (đã giao, chưa có HĐ) trong khoảng ngày giao. */
+export async function findInvoiceQueue(
+    prisma: any,
+    opts: { from?: Date; to?: Date; limit?: number; offset?: number; day?: string; platform?: string } = {}
+): Promise<any[]> {
+    const from = opts.from || new Date(Date.now() - 30 * 86400_000)
+    const to = opts.to || new Date()
+    const limit = Math.min(opts.limit ?? 300, 1000)
+    const offset = Math.max(0, opts.offset ?? 0)
+    // hasReturn: đơn ĐÃ giao nhưng sau đó trả hàng/hoàn tiền/hủy — vẫn hiện trong
+    // bảng (badge đỏ) nhưng KHÔNG auto-xuất (cron/lô lọc).
+    // Lọc NGÀY/SÀN chạy ở SQL (không lọc client trên trang hiện tại) — trước đây
+    // lọc client làm chọn TikTok chỉ ra 1 phiếu dù cả khoảng có hàng trăm.
+    // Chỉ số tham số tính theo params.length để không lệch $n.
+    const params: any[] = [DELIVERED_STATUSES, from, to, RETURN_STATUSES]
+    let dayFilter = ''
+    if (opts.day) {
+        params.push(opts.day)
+        dayFilter = `AND (COALESCE(o."deliveredAt", o."createdAt") AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Ho_Chi_Minh')::date = $${params.length}::date`
+    }
+    if (opts.platform) {
+        params.push(opts.platform.toLowerCase())
+        dayFilter += ` AND LOWER(COALESCE(o.platform,'')) = $${params.length}`
+    }
+    return prisma.$queryRawUnsafe(
+        `SELECT t.id, t."receiptNumber", t."customerName", t."customerPhone", t.total,
+                NULL::text AS "buyerTaxCode", c.address AS "buyerAddress",
+                o."createdAt" AS "orderDate",
+                COALESCE(o."deliveredAt", o."createdAt") AS "deliveredAt", o.status AS "orderStatus", o.platform,
+                ${HAS_RETURN_EXPR} AS "hasReturn"
+         ${QUEUE_FROM}
+         ${dayFilter}
+         ORDER BY COALESCE(o."deliveredAt", o."createdAt") ASC
+         LIMIT ${limit} OFFSET ${offset}`,
+        ...params
+    )
+}
+
+/** Thống kê hàng đợi: tổng, theo sàn, theo NGÀY giao (cho chế độ "Gom theo ngày"). */
+export async function invoiceQueueStats(prisma: any, from: Date, to: Date, platform?: string, day?: string) {
+    // totals + byDay theo BỘ LỌC SÀN (để tổng/phân trang khớp danh sách đang xem);
+    // byPlatform CỐ TÌNH không lọc sàn — thẻ "THEO SÀN" + dropdown vẫn liệt kê đủ sàn.
+    const params: any[] = [DELIVERED_STATUSES, from, to, RETURN_STATUSES]
+    let platFilter = ''
+    if (platform) {
+        params.push(platform.toLowerCase())
+        platFilter = ` AND LOWER(COALESCE(o.platform,'')) = $${params.length}`
+    }
+    // Lọc 1 NGÀY cũng phải áp vào thống kê, nếu không "tổng chờ xuất" là của cả
+    // khoảng → FE hiện thừa trang, trang 2 trở đi rỗng.
+    if (day) {
+        params.push(day)
+        platFilter += ` AND (COALESCE(o."deliveredAt", o."createdAt") AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Ho_Chi_Minh')::date = $${params.length}::date`
+    }
+    const [totals, byPlatform, byDay] = await Promise.all([
+        prisma.$queryRawUnsafe(
+            `SELECT COUNT(*)::int AS n, COALESCE(SUM(t.total),0)::float8 AS amount,
+                    COUNT(*) FILTER (WHERE ${HAS_RETURN_EXPR})::int AS returns
+             ${QUEUE_FROM}${platFilter}`, ...params),
+        // LƯU Ý: query này không dùng $4 — truyền thừa tham số là Postgres từ chối
+        prisma.$queryRawUnsafe(
+            `SELECT COALESCE(o.platform,'?') AS platform, COUNT(*)::int AS n, COALESCE(SUM(t.total),0)::float8 AS amount
+             ${QUEUE_FROM} GROUP BY 1 ORDER BY 2 DESC`, DELIVERED_STATUSES, from, to),
+        prisma.$queryRawUnsafe(
+            `SELECT to_char((COALESCE(o."deliveredAt", o."createdAt") AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Ho_Chi_Minh')::date, 'YYYY-MM-DD') AS day,
+                    COUNT(*)::int AS n, COALESCE(SUM(t.total),0)::float8 AS amount,
+                    COUNT(*) FILTER (WHERE ${HAS_RETURN_EXPR})::int AS returns
+             ${QUEUE_FROM}${platFilter} GROUP BY 1 ORDER BY 1 DESC`, ...params),
+    ])
+    return { totals: (totals as any[])[0] || { n: 0, amount: 0, returns: 0 }, byPlatform, byDay }
+}
+
+// GET /einvoice/queue — hàng đợi + thống kê (tổng/theo sàn/theo ngày) + phân trang.
+// ?days=30&page=1&pageSize=50&day=YYYY-MM-DD (lọc 1 ngày — chế độ Gom theo ngày)
+router.get('/queue', einvoiceAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        await ensureTables(req)
+        const prisma = req.storePrisma! as any
+        const days = Math.min(Number(req.query.days) || 30, 90)
+        const page = Math.max(1, Number(req.query.page) || 1)
+        const pageSize = Math.min(Math.max(1, Number(req.query.pageSize) || 50), 100)
+        const day = req.query.day ? String(req.query.day) : undefined
+        const month = req.query.month ? String(req.query.month) : undefined // "YYYY-MM"
+        const config = await getActiveConfig(prisma)
+        const extra = parseConfigExtra(config)
+        // Có mốc neo (thời điểm bật auto) → chỉ tính đơn giao TỪ mốc đó; hoá đơn
+        // quá khứ trước khi bật bị bỏ qua theo yêu cầu.
+        const anchor = extra.autoIssueSince ? new Date(extra.autoIssueSince) : null
+        let from: Date, to: Date
+        const monthOk = !!month && /^\d{4}-(0[1-9]|1[0-2])$/.test(month)
+        if (monthOk) {
+            // Lọc theo THÁNG (giờ VN): bỏ qua neo/days để soi/​xuất bù cả tháng.
+            const [y, m] = String(month).split('-').map(Number)
+            const nextM = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`
+            from = new Date(`${month}-01T00:00:00+07:00`)
+            to = new Date(new Date(`${nextM}-01T00:00:00+07:00`).getTime() - 1)
+        } else {
+            from = anchor || new Date(Date.now() - days * 86400_000)
+            to = new Date()
+        }
+        const platform = req.query.platform ? String(req.query.platform).toLowerCase() : undefined
+        const [rows, stats] = await Promise.all([
+            findInvoiceQueue(prisma, { from, to, limit: pageSize, offset: (page - 1) * pageSize, day, platform }),
+            invoiceQueueStats(prisma, from, to, platform, day),
+        ])
+        res.json({
+            success: true,
+            data: {
+                autoIssueOnDelivery: !!extra.autoIssueOnDelivery,
+                autoIssueSince: extra.autoIssueSince || null,
+                providerConfigured: !!config,
+                pending: stats.totals.n,
+                page, pageSize,
+                stats,
+                items: rows,
+            },
+        })
+    } catch (err: any) {
+        console.error('[EInvoiceQueue route]', err?.message || err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// GET /einvoice/queue/receipt/:txId — chi tiết phiếu trước khi xuất HĐ:
+// dòng hàng + thông tin người mua + CẢNH BÁO thiếu MST/địa chỉ.
+router.get('/queue/receipt/:txId', einvoiceAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        await ensureTables(req)
+        const prisma = req.storePrisma! as any
+        const tx = await prisma.transaction.findUnique({
+            where: { id: String(req.params.txId) },
+            include: { items: { include: { product: { select: { name: true, baseUnit: true } } } }, customer: true },
+        })
+        if (!tx) { res.status(404).json({ success: false, error: 'Không tìm thấy phiếu' }); return }
+        const warnings: string[] = []
+        if (!tx.customer?.taxCode) warnings.push('Người mua chưa có MÃ SỐ THUẾ — hoá đơn sẽ xuất dạng khách lẻ (không khấu trừ được)')
+        if (!tx.customer?.address && !tx.customerPhone) warnings.push('Thiếu địa chỉ & SĐT người mua')
+        else if (!tx.customer?.address) warnings.push('Thiếu địa chỉ người mua')
+        // Đủ tồn kho thuế mới xuất được HĐ — báo trước ngay trong drawer
+        try {
+            const shortages = await taxStockShortages(prisma, tx.items || [])
+            for (const s of shortages.slice(0, 5)) {
+                warnings.push(`THIẾU TỒN KHO THUẾ: ${s.sku} thiếu ${s.thieu} — nhập chứng từ đầu vào trước, nếu không sẽ KHÔNG xuất được HĐ`)
+            }
+        } catch { /* bảng chưa có ở schema cũ — bỏ qua cảnh báo */ }
+        res.json({
+            success: true,
+            data: {
+                receiptNumber: tx.receiptNumber,
+                customerName: tx.customer?.name || tx.customerName || 'Khách lẻ',
+                customerPhone: tx.customerPhone || tx.customer?.phone || '',
+                buyerTaxCode: tx.customer?.taxCode || '',
+                buyerAddress: tx.customer?.address || '',
+                total: tx.total, subtotal: tx.subtotal, discount: tx.discount,
+                transactionDate: tx.transactionDate || tx.createdAt,
+                items: (tx.items || []).map((i: any) => ({
+                    name: i.product?.name || i.productName, sku: i.sku,
+                    unit: i.product?.baseUnit || 'cái',
+                    quantity: i.quantity, unitPrice: i.unitPrice, lineTotal: i.lineTotal,
+                })),
+                warnings,
+            },
+        })
+    } catch (err: any) {
+        console.error('[EInvoiceQueue route]', err?.message || err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// GET /einvoice/queue/history — lịch sử xuất qua hàng đợi: SENT/ERROR + đếm.
+router.get('/queue/history', einvoiceAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        await ensureTables(req)
+        const prisma = req.storePrisma! as any
+        const days = Math.min(Number(req.query.days) || 30, 90)
+        const status = String(req.query.status || '') // '', 'SENT', 'ERROR'
+        const page = Math.max(1, Number(req.query.page) || 1)
+        const pageSize = Math.min(Math.max(1, Number(req.query.pageSize) || 50), 100)
+        const from = new Date(Date.now() - days * 86400_000)
+        const where: any = {
+            transactionId: { not: null },
+            createdAt: { gte: from },
+            ...(status ? { status } : { status: { in: ['SENT', 'ERROR'] } }),
+        }
+        const [items, total, sent, errors] = await Promise.all([
+            prisma.eInvoice.findMany({
+                where, orderBy: { createdAt: 'desc' },
+                skip: (page - 1) * pageSize, take: pageSize,
+                select: {
+                    id: true, transactionId: true, invoiceNumber: true, status: true,
+                    errorMessage: true, buyerName: true, totalAmount: true,
+                    issuedAt: true, createdAt: true, provider: true, lookupCode: true,
+                },
+            }),
+            prisma.eInvoice.count({ where }),
+            prisma.eInvoice.count({ where: { transactionId: { not: null }, createdAt: { gte: from }, status: 'SENT' } }),
+            prisma.eInvoice.count({ where: { transactionId: { not: null }, createdAt: { gte: from }, status: 'ERROR' } }),
+        ])
+        res.json({ success: true, data: { items, total, page, pageSize, counts: { sent, errors } } })
+    } catch (err: any) {
+        console.error('[EInvoiceQueue route]', err?.message || err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// PUT /einvoice/queue/auto {enabled} — bật/tắt tự động xuất mỗi tối
+router.put('/queue/auto', einvoiceAuth, requireRole('admin', 'manager', 'superadmin'), async (req: AuthRequest, res: Response) => {
+    try {
+        await ensureTables(req)
+        const prisma = req.storePrisma! as any
+        const config = await getActiveConfig(prisma)
+        if (!config) return res.status(400).json({ success: false, error: 'Chưa cấu hình NCC hóa đơn — vào Cài đặt hoá đơn điện tử trước' })
+        const extra = parseConfigExtra(config)
+        extra.autoIssueOnDelivery = !!req.body?.enabled
+        // Mốc neo: BỎ QUA hoá đơn quá khứ — chỉ đơn giao TỪ LÚC BẬT trở đi mới
+        // vào hàng đợi. Mỗi lần bật lại là neo lại từ thời điểm đó.
+        if (extra.autoIssueOnDelivery) extra.autoIssueSince = new Date().toISOString()
+        await prisma.eInvoiceConfig.update({ where: { id: config.id }, data: { extra: JSON.stringify(extra) } })
+        res.json({ success: true, data: { autoIssueOnDelivery: extra.autoIssueOnDelivery, autoIssueSince: extra.autoIssueSince || null } })
+    } catch (err: any) {
+        console.error('[EInvoiceQueue route]', err?.message || err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// POST /einvoice/queue/run {days?|from?,to?, limit?} — chạy xuất ngay (tay)
+router.post('/queue/run', einvoiceAuth, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
+    try {
+        await ensureTables(req)
+        const prisma = req.storePrisma! as any
+        const b = req.body || {}
+        let rows: any[]
+        let skippedReturns: string[] = []
+        if (Array.isArray(b.transactionIds) && b.transactionIds.length > 0) {
+            // Xuất theo TICK CHỌN — người dùng tự chỉ định từng phiếu (kể cả phiếu
+            // quá khứ). issueInvoiceForTransaction idempotent nên đã có HĐ sẽ skip.
+            const ids = b.transactionIds.slice(0, 100).map((x: any) => String(x))
+            rows = await prisma.transaction.findMany({
+                where: { id: { in: ids } },
+                select: { id: true, receiptNumber: true },
+            })
+            // Đơn ĐANG TRẢ HÀNG/HOÀN TIỀN bị loại kể cả khi người dùng tick chọn
+            // (nhánh chạy theo lô đã lọc, nhánh này trước đây thì không → "Chọn tất
+            // cả" là xuất HĐ cho cả đơn khách đang trả).
+            const blocked = await prisma.$queryRawUnsafe(
+                `SELECT t.id, t."receiptNumber"
+                 FROM "Transaction" t
+                 JOIN "OnlineOrder" o ON ('ONLINE-' || o."orderNumber") = t."receiptNumber"
+                 WHERE t.id = ANY($1::text[])
+                   AND (t.status = 'returned' OR ${OPEN_RETURN_EXISTS})`, ids)
+            const blockedIds = new Set((blocked as any[]).map((x: any) => x.id))
+            if (blockedIds.size > 0) {
+                rows = rows.filter((r: any) => !blockedIds.has(r.id))
+                skippedReturns = (blocked as any[]).map((x: any) => x.receiptNumber)
+            }
+        } else {
+            // Mặc định tôn trọng mốc neo (bỏ qua HĐ quá khứ trước khi bật). Truyền
+            // from/to tường minh = chủ ý backfill → cho phép vượt neo.
+            const extraCfg = parseConfigExtra(await getActiveConfig(prisma))
+            const anchor = extraCfg.autoIssueSince ? new Date(extraCfg.autoIssueSince) : null
+            const from = b.from
+                ? new Date(String(b.from) + 'T00:00:00')
+                : (anchor || new Date(Date.now() - (Number(b.days) || 30) * 86400_000))
+            const to = b.to ? new Date(String(b.to) + 'T23:59:59') : new Date()
+            const all = await findInvoiceQueue(prisma, { from, to, limit: Math.min(Number(b.limit) || 100, 300) })
+            rows = all.filter((r: any) => !r.hasReturn) // đơn hoàn không xuất theo lô
+        }
+        // Thông tin người mua nhập tay chỉ áp cho XUẤT LẺ 1 phiếu (không áp cho lô).
+        const buyerBody = (Array.isArray(b.transactionIds) && b.transactionIds.length === 1 && b.buyer)
+            ? b.buyer : {}
+        let issued = 0, failed = 0
+        const errors: string[] = []
+        for (const r of rows) {
+            try {
+                const rs = await issueInvoiceForTransaction(prisma, r.id, buyerBody)
+                if (rs.success && !rs.skipped) issued++
+                else if (!rs.success) {
+                    // THIẾU TỒN KHO THUẾ → DỪNG NGAY cả lô, báo lỗi liền (yêu cầu chủ
+                    // shop 2026-07-24) — không chạy tiếp các phiếu sau kẻo lỗi bị chôn
+                    // trong tổng kết cuối.
+                    if (String(rs.error || '').includes('TỒN KHO THUẾ')) {
+                        res.status(400).json({
+                            success: false,
+                            error: `DỪNG tại phiếu ${r.receiptNumber}: ${rs.error}`
+                                + (issued > 0 ? ` (đã xuất được ${issued} HĐ trước khi dừng)` : ''),
+                            data: { candidates: rows.length, issued, failed, stoppedAt: r.receiptNumber },
+                        })
+                        return
+                    }
+                    failed++; if (errors.length < 5) errors.push(`${r.receiptNumber}: ${rs.error}`)
+                }
+            } catch (e: any) {
+                failed++; if (errors.length < 5) errors.push(`${r.receiptNumber}: ${e?.message || e}`)
+            }
+        }
+        res.json({ success: true, data: { candidates: rows.length, issued, failed, errors } })
+    } catch (err: any) {
+        console.error('[EInvoiceQueue route]', err?.message || err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
 // POST /api/einvoice/cancel/:invoiceId (legacy cancel via provider service)
-router.post('/cancel/:invoiceId', authMiddleware, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
+router.post('/cancel/:invoiceId', einvoiceAuth, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
     try {
         await ensureTables(req)
         const prisma = req.storePrisma! as any
@@ -643,6 +1497,7 @@ router.post('/cancel/:invoiceId', authMiddleware, requireRole('admin', 'manager'
         }
         res.json({ success: ok, data: { id: invId, status: ok ? 'CANCELLED' : invoice.status } })
     } catch (err: any) {
+        console.error('[EInvoiceQueue route]', err?.message || err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
@@ -652,7 +1507,7 @@ router.post('/cancel/:invoiceId', authMiddleware, requireRole('admin', 'manager'
 // ═════════════════════════════════════════════════════════════════════════════
 
 // POST /api/einvoice/from-sale/:saleId — auto-create DRAFT from a Transaction
-router.post('/from-sale/:saleId', authMiddleware, requireRole('admin', 'manager', 'cashier'), async (req: AuthRequest, res: Response) => {
+router.post('/from-sale/:saleId', einvoiceAuth, requireRole('admin', 'manager', 'cashier'), async (req: AuthRequest, res: Response) => {
     try {
         await ensureTables(req)
         const prisma = req.storePrisma! as any
@@ -721,12 +1576,13 @@ router.post('/from-sale/:saleId', authMiddleware, requireRole('admin', 'manager'
         res.status(201).json({ success: true, data: invoice })
     } catch (err: any) {
         console.error('POST /einvoice/from-sale error:', err)
+        console.error('[EInvoiceQueue route]', err?.message || err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
 // GET /api/einvoice — list with filters + pagination
-router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/', einvoiceAuth, async (req: AuthRequest, res: Response) => {
     try {
         await ensureTables(req)
         const prisma = req.storePrisma! as any
@@ -756,12 +1612,13 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         res.json({ success: true, data, pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) } })
     } catch (err: any) {
         console.error('GET /einvoice error:', err)
+        console.error('[EInvoiceQueue route]', err?.message || err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
 // POST /api/einvoice — create DRAFT from transaction data
-router.post('/', authMiddleware, requireRole('admin', 'manager', 'cashier'), async (req: AuthRequest, res: Response) => {
+router.post('/', einvoiceAuth, requireRole('admin', 'manager', 'cashier'), async (req: AuthRequest, res: Response) => {
     try {
         await ensureTables(req)
         const prisma = req.storePrisma! as any
@@ -800,12 +1657,13 @@ router.post('/', authMiddleware, requireRole('admin', 'manager', 'cashier'), asy
         res.status(201).json({ success: true, data: invoice })
     } catch (err: any) {
         console.error('POST /einvoice error:', err)
+        console.error('[EInvoiceQueue route]', err?.message || err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
 // GET /api/einvoice/:id — single invoice + items
-router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/:id', einvoiceAuth, async (req: AuthRequest, res: Response) => {
     try {
         await ensureTables(req)
         const prisma = req.storePrisma! as any
@@ -814,12 +1672,13 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
         res.json({ success: true, data: inv })
     } catch (err: any) {
         console.error('GET /einvoice/:id error:', err)
+        console.error('[EInvoiceQueue route]', err?.message || err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
 // PUT /api/einvoice/:id — update DRAFT only
-router.put('/:id', authMiddleware, requireRole('admin', 'manager', 'cashier'), async (req: AuthRequest, res: Response) => {
+router.put('/:id', einvoiceAuth, requireRole('admin', 'manager', 'cashier'), async (req: AuthRequest, res: Response) => {
     try {
         await ensureTables(req)
         const prisma = req.storePrisma! as any
@@ -851,12 +1710,13 @@ router.put('/:id', authMiddleware, requireRole('admin', 'manager', 'cashier'), a
         res.json({ success: true, data: updated })
     } catch (err: any) {
         console.error('PUT /einvoice/:id error:', err)
+        console.error('[EInvoiceQueue route]', err?.message || err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
 // DELETE /api/einvoice/:id — delete DRAFT only
-router.delete('/:id', authMiddleware, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
+router.delete('/:id', einvoiceAuth, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
     try {
         await ensureTables(req)
         const prisma = req.storePrisma! as any
@@ -871,12 +1731,13 @@ router.delete('/:id', authMiddleware, requireRole('admin', 'manager'), async (re
         res.json({ success: true, data: { id, deleted: true } })
     } catch (err: any) {
         console.error('DELETE /einvoice/:id error:', err)
+        console.error('[EInvoiceQueue route]', err?.message || err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
 // POST /api/einvoice/:id/sign — sign → SIGNED, generate XML, assign number
-router.post('/:id/sign', authMiddleware, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
+router.post('/:id/sign', einvoiceAuth, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
     try {
         await ensureTables(req)
         const prisma = req.storePrisma! as any
@@ -912,12 +1773,13 @@ router.post('/:id/sign', authMiddleware, requireRole('admin', 'manager'), async 
         res.json({ success: true, data: updated })
     } catch (err: any) {
         console.error('POST /einvoice/:id/sign error:', err)
+        console.error('[EInvoiceQueue route]', err?.message || err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
 // POST /api/einvoice/:id/send — send to tax authority via provider (STUB) → SENT
-router.post('/:id/send', authMiddleware, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
+router.post('/:id/send', einvoiceAuth, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
     try {
         await ensureTables(req)
         const prisma = req.storePrisma! as any
@@ -961,12 +1823,13 @@ router.post('/:id/send', authMiddleware, requireRole('admin', 'manager'), async 
         res.json({ success: true, data: updated })
     } catch (err: any) {
         console.error('POST /einvoice/:id/send error:', err)
+        console.error('[EInvoiceQueue route]', err?.message || err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
 // POST /api/einvoice/:id/cancel — cancel a SENT invoice (requires reason) → CANCELLED
-router.post('/:id/cancel', authMiddleware, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
+router.post('/:id/cancel', einvoiceAuth, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
     try {
         await ensureTables(req)
         const prisma = req.storePrisma! as any
@@ -1000,12 +1863,13 @@ router.post('/:id/cancel', authMiddleware, requireRole('admin', 'manager'), asyn
         res.json({ success: true, data: updated })
     } catch (err: any) {
         console.error('POST /einvoice/:id/cancel error:', err)
+        console.error('[EInvoiceQueue route]', err?.message || err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
 // POST /api/einvoice/:id/replace — create replacement DRAFT, original → REPLACED
-router.post('/:id/replace', authMiddleware, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
+router.post('/:id/replace', einvoiceAuth, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
     try {
         await ensureTables(req)
         const prisma = req.storePrisma! as any
@@ -1065,12 +1929,13 @@ router.post('/:id/replace', authMiddleware, requireRole('admin', 'manager'), asy
         res.status(201).json({ success: true, data: { original: { id, status: 'REPLACED' }, replacement } })
     } catch (err: any) {
         console.error('POST /einvoice/:id/replace error:', err)
+        console.error('[EInvoiceQueue route]', err?.message || err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
 // GET /api/einvoice/:id/xml — return signed XML
-router.get('/:id/xml', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/:id/xml', einvoiceAuth, async (req: AuthRequest, res: Response) => {
     try {
         await ensureTables(req)
         const prisma = req.storePrisma! as any
@@ -1089,12 +1954,13 @@ router.get('/:id/xml', authMiddleware, async (req: AuthRequest, res: Response) =
         res.send(xml)
     } catch (err: any) {
         console.error('GET /einvoice/:id/xml error:', err)
+        console.error('[EInvoiceQueue route]', err?.message || err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
 // GET /api/einvoice/:id/pdf — HTML preview (or stored pdfUrl)
-router.get('/:id/pdf', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/:id/pdf', einvoiceAuth, async (req: AuthRequest, res: Response) => {
     try {
         await ensureTables(req)
         const prisma = req.storePrisma! as any
@@ -1162,6 +2028,7 @@ router.get('/:id/pdf', authMiddleware, async (req: AuthRequest, res: Response) =
         res.send(html)
     } catch (err: any) {
         console.error('GET /einvoice/:id/pdf error:', err)
+        console.error('[EInvoiceQueue route]', err?.message || err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }
 })

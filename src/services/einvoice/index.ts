@@ -23,7 +23,7 @@ export function getProvider(name: string): IEInvoiceProvider | null {
 export const PROVIDERS = [
     { id: 'misa', name: 'MISA meInvoice', status: 'ready', defaultUrl: 'https://api.meinvoice.vn/api/integration' },
     { id: 'viettel', name: 'Viettel S-Invoice', status: 'skeleton', defaultUrl: 'https://sinvoice.viettel.vn' },
-    { id: 'vnpt', name: 'VNPT Invoice', status: 'skeleton', defaultUrl: 'https://demo.vnpt-invoice.com.vn' },
+    { id: 'vnpt', name: 'VNPT Hoá đơn (máy tính tiền)', status: 'ready', defaultUrl: '', note: 'REST SaaS HĐĐT-MTT: apiUrl=base URL, apiKey=username, apiSecret=password, templateId=Mẫu số, serialNo=Ký hiệu' },
     { id: 'fpt', name: 'FPT eInvoice', status: 'skeleton', defaultUrl: 'https://fpt-einvoice.com' },
     { id: 'easyinvoice', name: 'EasyInvoice', status: 'skeleton', defaultUrl: 'http://localhost:8080' },
     { id: 'bkav', name: 'Bkav eHoacdon', status: 'skeleton', defaultUrl: 'https://ehoadon.bkav.com' },

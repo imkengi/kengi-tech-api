@@ -169,11 +169,18 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     } catch (err) { res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
 
+// Các route DELETE 1 đoạn có TÊN CỐ ĐỊNH khai báo ở dưới file — `/:id` đăng ký
+// trước nên trước đây NUỐT hết (xoá phí sàn/đối soát/bút toán tự động luôn trả 500
+// và không xoá gì). Gặp các tên này thì next() cho Express chạy tiếp xuống route thật.
+const TAX_LITERAL_DELETE = new Set(['platform-fee-invoice', 'platform-settlement', 'auto-journal'])
+
 // DELETE /api/tax/:id
-router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response, next) => {
+    const id0 = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
+    if (TAX_LITERAL_DELETE.has(String(id0))) return next()
     try {
         const prisma = req.storePrisma!
-        const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
+        const id = id0
         await prisma.taxConfig.delete({ where: { id } }); res.json({ success: true })
     } catch (err) { res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
@@ -3632,9 +3639,36 @@ router.get('/hkd/s1', authMiddleware, async (req: AuthRequest, res: Response) =>
             },
             orderBy: [{ transactionDate: 'desc' }, { createdAt: 'desc' }]
         })
+        // Phiếu nào ĐÃ XUẤT HOÁ ĐƠN ĐIỆN TỬ (issued/SENT) — để sổ doanh thu lọc được
+        // "chỉ báo cáo hoá đơn đã xuất". Bảng EInvoice có thể chưa tồn tại ở store
+        // chưa dùng HĐĐT → lỗi thì coi như chưa phiếu nào có hoá đơn.
+        const hdMap = new Map<string, string>()
+        try {
+            const ids = txs.map((t: any) => t.id)
+            // CHIA LÔ: Postgres chỉ nhận 65535 bind param — sổ cả năm vài chục nghìn
+            // phiếu thì query ném lỗi, catch nuốt mất và MỌI dòng thành "chưa xuất HĐ".
+            const CHUNK = 2000
+            for (let i = 0; i < ids.length; i += CHUNK) {
+                const invs = await p.eInvoice.findMany({
+                    where: { transactionId: { in: ids.slice(i, i + CHUNK) }, status: { in: ['issued', 'SENT'] } },
+                    select: { transactionId: true, invoiceNumber: true, invoiceSymbol: true, issuedAt: true },
+                    orderBy: { issuedAt: 'asc' },
+                })
+                for (const iv of invs) {
+                    if (iv.transactionId) hdMap.set(iv.transactionId, [iv.invoiceSymbol, iv.invoiceNumber].filter(Boolean).join(' '))
+                }
+            }
+        } catch (e: any) {
+            // Không im lặng: store chưa có bảng EInvoice là bình thường, còn lại phải thấy
+            console.warn('[hkd/s1] không đọc được EInvoice:', e?.message || e)
+        }
+
         const getDate = (t: any) => t.transactionDate || t.createdAt
         const rows = txs.map((t: any, i: number) => ({
             stt: i + 1,
+            id: t.id,
+            daXuatHD: hdMap.has(t.id),
+            soHoaDonDT: hdMap.get(t.id) || '',
             ngay: fmtDate(getDate(t)),
             soChungTu: t.receiptNumber || t.code || '',
             customerName: t.customerName || '',
@@ -3655,6 +3689,7 @@ router.get('/hkd/s1', authMiddleware, async (req: AuthRequest, res: Response) =>
             tongDoanhThuThuan: rows.reduce((s: number, r: any) => s + r.doanhThuThuan, 0),
             tongThu: rows.reduce((s: number, r: any) => s + r.tongThu, 0),
             soPhieu: rows.length,
+            soPhieuDaXuatHD: rows.filter((r: any) => r.daXuatHD).length,
         }
         res.json({ success: true, data: { rows, summary, year, month } })
     } catch (err) { console.error('GET /hkd/s1:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
@@ -3686,6 +3721,23 @@ router.get('/hkd/s2', authMiddleware, async (req: AuthRequest, res: Response) =>
                 orderBy: [{ transactionDate: 'asc' }, { createdAt: 'asc' }]
             }),
         ])
+        // Phiếu bán nào ĐÃ XUẤT HOÁ ĐƠN ĐIỆN TỬ → để sổ S2d lọc "chỉ dòng đã có
+        // hoá đơn" (đối chiếu với tồn kho thuế: chỉ chứng từ có hoá đơn mới tính).
+        const hdSet = new Set<string>()
+        try {
+            const ids = sales.map((t: any) => t.id)
+            const CHUNK = 2000
+            for (let i = 0; i < ids.length; i += CHUNK) {
+                const invs = await p.eInvoice.findMany({
+                    where: { transactionId: { in: ids.slice(i, i + CHUNK) }, status: { in: ['issued', 'SENT'] } },
+                    select: { transactionId: true },
+                })
+                for (const iv of invs) if (iv.transactionId) hdSet.add(iv.transactionId)
+            }
+        } catch (e: any) {
+            console.warn('[hkd/s2] không đọc được EInvoice:', e?.message || e)
+        }
+
         const rows: any[] = []
         let idx = 1
         for (const imp of imports) {
@@ -3703,6 +3755,9 @@ router.get('/hkd/s2', authMiddleware, async (req: AuthRequest, res: Response) =>
                     dvt: item.unit || item.product?.baseUnit || 'cái',
                     nhapSoLuong: qty, nhapDonGia: cp, nhapThanhTien: tt,
                     xuatSoLuong: 0, xuatDonGia: 0, xuatThanhTien: 0,
+                    // Nhập: có hoá đơn VAT đầu vào hay không (quyết định tồn kho thuế)
+                    coHoaDon: !!(imp as any).hasVatInvoice,
+                    soHoaDon: (imp as any).vatInvoiceNo || '',
                     dienGiai: `Nhập kho từ ${imp.supplierName || 'NCC'}`,
                 })
             }
@@ -3720,6 +3775,9 @@ router.get('/hkd/s2', authMiddleware, async (req: AuthRequest, res: Response) =>
                     dvt: item.product?.baseUnit || 'cái',
                     nhapSoLuong: 0, nhapDonGia: 0, nhapThanhTien: 0,
                     xuatSoLuong: qty, xuatDonGia: gv, xuatThanhTien: qty * gv,
+                    // Xuất: phiếu bán đã xuất hoá đơn điện tử hay chưa
+                    coHoaDon: hdSet.has(sale.id),
+                    soHoaDon: sale.vatInvoiceNumber || '',
                     dienGiai: `Xuất bán - ${sale.customerName || 'Khách lẻ'}`,
                 })
             }

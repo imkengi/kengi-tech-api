@@ -138,6 +138,19 @@ router.get('/', authMiddleware, requirePermission('products.view'), async (req: 
             }
         }
 
+        // MÃ ĐÃ GỘP: hàng nằm ở mã đích, nhưng mã này vẫn phải hiện TỒN QUY ĐỔI
+        // (26 cái = 2,6 vỉ) chứ không phải 0 kèm nhãn "Hết" — nếu không người dùng
+        // tưởng hết hàng và đi nhập thêm, hoặc sàn thấy 0 rồi tắt phân loại.
+        const mergedIds = [...new Set(filteredProducts
+            .map((p: any) => p.mergedIntoId).filter(Boolean))] as string[]
+        const mergedTargets = mergedIds.length > 0
+            ? await prisma.product.findMany({
+                where: { id: { in: mergedIds } },
+                select: { id: true, sku: true, name: true, stock: true, baseUnit: true },
+            })
+            : []
+        const targetMap = new Map(mergedTargets.map((t: any) => [t.id, t]))
+
         const data = filteredProducts.map((p: any) => ({
             id: p.id,
             name: p.name,
@@ -152,11 +165,26 @@ router.get('/', authMiddleware, requirePermission('products.view'), async (req: 
             costPrice: p.costPrice,
             sellingPrice: p.sellingPrice,
             taxInclusive: p.taxInclusive,
-            stock: warehouseStockMap ? (warehouseStockMap.get(p.id) ?? 0) : p.stock,
+            stock: p.mergedIntoId && targetMap.has(p.mergedIntoId)
+                // Tồn theo ĐƠN VỊ CỦA MÃ NÀY = tồn mã đích ÷ hệ số, giữ số lẻ
+                ? Math.round(((targetMap.get(p.mergedIntoId) as any).stock || 0) / (Number(p.mergedRate) || 1) * 100) / 100
+                : (warehouseStockMap ? (warehouseStockMap.get(p.id) ?? 0) : p.stock),
+            // Thông tin gộp để giao diện hiện nhãn + nhảy sang mã đích
+            mergedInto: p.mergedIntoId && targetMap.has(p.mergedIntoId)
+                ? {
+                    id: p.mergedIntoId,
+                    sku: (targetMap.get(p.mergedIntoId) as any).sku,
+                    name: (targetMap.get(p.mergedIntoId) as any).name,
+                    rate: Number(p.mergedRate) || 1,
+                    stockGoc: (targetMap.get(p.mergedIntoId) as any).stock || 0,
+                    donViGoc: (targetMap.get(p.mergedIntoId) as any).baseUnit || '',
+                }
+                : null,
             branchStock: branchStockMap ? (branchStockMap.get(p.id) ?? 0) : null,
             minStock: p.minStock,
             maxStock: p.maxStock,
             baseUnit: p.baseUnit,
+            invoiceUnit: (p as any).invoiceUnit ?? null,
             trackSerial: p.trackSerial,
             images: (p.images || []).map((img: any) => ({ id: img.id, url: img.url, isPrimary: img.isPrimary })),
             unitConversions: p.unitConversions || [],
@@ -342,10 +370,27 @@ router.get('/:id', authMiddleware, requirePermission('products.view'), async (re
             }))
         }
 
+        // Mã ĐÃ GỘP: tồn thật nằm ở mã đích → trả TỒN QUY ĐỔI (26 cái = 2,6 vỉ)
+        // để màn chi tiết/thẻ kho không hiện 0 như thể mất sạch dữ liệu.
+        let mergedInfo: any = null
+        let stockOut = product.stock
+        if ((product as any).mergedIntoId) {
+            const tgt = await prisma.product.findUnique({
+                where: { id: (product as any).mergedIntoId },
+                select: { id: true, sku: true, name: true, stock: true, baseUnit: true },
+            }).catch(() => null)
+            if (tgt) {
+                const rate = Number((product as any).mergedRate) || 1
+                stockOut = Math.round(((tgt.stock || 0) / rate) * 100) / 100
+                mergedInfo = { id: tgt.id, sku: tgt.sku, name: tgt.name, rate, stockGoc: tgt.stock || 0, donViGoc: tgt.baseUnit || '' }
+            }
+        }
         res.json({
             success: true,
             data: {
                 ...product,
+                stock: stockOut,
+                mergedInto: mergedInfo,
                 branchStock,
                 ...(allBranchStock ? { allBranchStock } : {}),
                 createdAt: product.createdAt.toISOString(),
@@ -437,7 +482,7 @@ router.get('/:productId/price-history', authMiddleware, requirePermission('produ
 const PRODUCT_ALLOWED_FIELDS = [
     'name', 'sku', 'barcode', 'description', 'categoryId', 'brandId',
     'costPrice', 'sellingPrice', 'taxInclusive', 'stock', 'minStock', 'maxStock',
-    'baseUnit', 'trackSerial', 'productType',
+    'baseUnit', 'invoiceUnit', 'trackSerial', 'productType',
 ] as const
 
 function sanitizeUnitConversions(arr: any[]): { fromUnit: string; toUnit: string; conversionRate: number }[] {
@@ -596,6 +641,102 @@ router.delete('/:id', authMiddleware, requirePermission('products.delete'), asyn
 })
 
 // POST /api/products/bulk-import
+// POST /api/products/:id/define-combo — ĐỊNH NGHĨA COMBO cho sản phẩm ĐÃ NHẬP.
+// Nhiều combo đã được nhập vào kho như một mã hàng bình thường; khai thành phần
+// ở đây thì từ đó mọi đơn bán mã này sẽ TỰ BUNG thành từng mặt hàng: kho trừ
+// đúng từng mã, tồn kho thuế đúng từng mã, HOÁ ĐƠN XUẤT TỪNG SẢN PHẨM.
+// Body: { items: [{ productId, quantity }], name? }. items rỗng = huỷ định nghĩa.
+router.post('/:id/define-combo', authMiddleware, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const id = String(req.params.id)
+        const product = await prisma.product.findUnique({ where: { id } })
+        if (!product) { res.status(404).json({ success: false, error: 'Không tìm thấy sản phẩm' }); return }
+
+        const raw = Array.isArray(req.body?.items) ? req.body.items : []
+        // Huỷ định nghĩa combo
+        if (raw.length === 0) {
+            await prisma.product.update({ where: { id }, data: { bundleId: null } })
+            res.json({ success: true, data: { bundleId: null } })
+            return
+        }
+
+        const comps: any[] = []
+        for (const it of raw) {
+            const cp = await prisma.product.findUnique({ where: { id: String(it.productId || '') } }).catch(() => null)
+            if (!cp) continue
+            if (cp.id === id) { res.status(400).json({ success: false, error: 'Combo không thể chứa chính nó' }); return }
+            comps.push({
+                productId: cp.id, sku: cp.sku, name: cp.name,
+                quantity: Math.max(1, Number(it.quantity) || 1),
+                originalPrice: cp.sellingPrice || 0,
+            })
+        }
+        if (comps.length === 0) { res.status(400).json({ success: false, error: 'Không có thành phần hợp lệ' }); return }
+
+        const originalTotal = comps.reduce((s: number, c: any) => s + c.originalPrice * c.quantity, 0)
+        const payload = {
+            name: String(req.body?.name || `Combo ${product.sku}`),
+            items: JSON.stringify(comps),
+            originalTotal,
+            bundlePrice: product.sellingPrice || 0,
+            discount: Math.max(0, originalTotal - (product.sellingPrice || 0)),
+            active: true,
+        }
+        // Sửa lại định nghĩa cũ nếu đã có, tránh đẻ combo rác mỗi lần lưu
+        const bundle = product.bundleId
+            ? await prisma.bundle.update({ where: { id: product.bundleId }, data: payload }).catch(() => null)
+            : null
+        const saved = bundle || await prisma.bundle.create({ data: payload })
+        await prisma.product.update({ where: { id }, data: { bundleId: saved.id } })
+        res.json({ success: true, data: { bundleId: saved.id, items: comps, originalTotal } })
+    } catch (err: any) {
+        console.error('Define combo error:', err)
+        res.status(400).json({ success: false, error: err?.message || 'Lỗi định nghĩa combo' })
+    }
+})
+
+// GET /api/products/:id/combo — đọc định nghĩa combo hiện tại (nếu có)
+router.get('/:id/combo', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const product = await prisma.product.findUnique({ where: { id: String(req.params.id) } })
+        if (!product?.bundleId) { res.json({ success: true, data: null }); return }
+        const bundle = await prisma.bundle.findUnique({ where: { id: product.bundleId } }).catch(() => null)
+        let items: any[] = []
+        try { items = JSON.parse(bundle?.items || '[]') } catch { items = [] }
+        res.json({ success: true, data: bundle ? { bundleId: bundle.id, name: bundle.name, items } : null })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err?.message || 'Lỗi đọc combo' })
+    }
+})
+
+// POST /api/products/merge — GỘP 2 mã hàng + đồng hoá số lượng theo hệ số.
+// Dùng cho hàng nhập theo vỉ/thùng nhưng bán theo cái (2 mã tách rời làm tồn kho
+// thuế không bao giờ khớp). dryRun=true chỉ xem trước, không ghi gì.
+router.post('/merge', authMiddleware, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
+    try {
+        const { mergeProduct } = await import('../lib/mergeProduct')
+        const b = req.body || {}
+        const fromSku = String(b.fromSku || '').trim()
+        const toSku = String(b.toSku || '').trim()
+        const rate = Number(b.rate) || 1
+        const dryRun = b.dryRun !== false && b.dryRun !== 'false'
+        if (!fromSku || !toSku) { res.status(400).json({ success: false, error: 'Thiếu mã nguồn / mã đích' }); return }
+        if (!(rate > 0)) { res.status(400).json({ success: false, error: 'Hệ số quy đổi phải lớn hơn 0' }); return }
+        const force = b.force === true || b.force === 'true'
+        const data = await mergeProduct(req.storePrisma as any, {
+            fromSku, toSku, rate, dryRun, force,
+            mainUnit: b.mainUnit === 'source' ? 'source' : 'target',
+            unitName: b.unitName ? String(b.unitName) : undefined,
+        })
+        res.json({ success: true, dryRun, data })
+    } catch (err: any) {
+        console.error('Merge product error:', err)
+        res.status(400).json({ success: false, error: err?.message || 'Lỗi gộp mã hàng' })
+    }
+})
+
 router.post('/bulk-import', authMiddleware, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!

@@ -189,6 +189,19 @@ model Product {
   minStock     Int      @default(0)
   maxStock     Int      @default(0)
   baseUnit     String   @default("cái")
+  // ĐVT ghi trên HOÁ ĐƠN ĐIỆN TỬ khi khác đơn vị gốc: nhập theo vỉ/thùng thì hoá
+  // đơn đầu ra cũng phải ghi theo vỉ/thùng cho khớp chứng từ đầu vào, trong khi
+  // kho và sàn (Shopee/TikTok) vẫn chạy theo đơn vị gốc là cái.
+  invoiceUnit  String?
+  // Sản phẩm này THỰC CHẤT LÀ COMBO: bán 1 cái = xuất N mặt hàng thành phần.
+  // Đơn về sẽ tự bung thành từng thành phần → kho trừ đúng từng mã, tồn kho thuế
+  // đúng từng mã, và HOÁ ĐƠN XUẤT TỪNG SẢN PHẨM thay vì 1 dòng combo.
+  bundleId     String?
+  // ĐÃ GỘP vào mã khác: giữ NGUYÊN mã cũ (đổi mã sẽ làm gãy đẩy tồn lên sàn vì
+  // sàn dò theo SKU), chỉ trỏ sang mã đích kèm hệ số quy đổi. Mọi đường (đơn về,
+  // đẩy tồn) đều đi theo con trỏ này.
+  mergedIntoId String?
+  mergedRate   Float    @default(1)
   trackSerial  Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -204,6 +217,7 @@ model Product {
   serials            ProductSerial[]
   onlineOrderItems   OnlineOrderItem[]
   onlineProducts     OnlineProduct[]
+  skuMappings        SkuMapping[]
 
   @@index([categoryId])
   @@index([brandId])
@@ -417,6 +431,17 @@ model ImportReceipt {
   paymentStatus   String    @default("paid") // "paid" | "partial" | "unpaid"
   dueDate         DateTime? // hạn trả nợ NCC (ngày cụ thể, tính từ điều khoản)
   paymentTerm     String? // điều khoản TT dạng nhãn (vd "Sau 30 ngày", "Cuối tháng sau")
+  // Có HOÁ ĐƠN GTGT (VAT) đầu vào hay không — CHỈ phiếu này mới tính vào TỒN KHO
+  // THUẾ (gate xuất HĐ). Nhập từ file HĐĐT (XML/PDF) tự bật; nhập tay có tick.
+  hasVatInvoice   Boolean   @default(false)
+  vatInvoiceNo    String?
+  // Chi phí cấp PHIẾU — phân bổ vào GIÁ VỐN theo tỷ trọng thành tiền từng dòng
+  // (giá vốn = giá nhập + phân bổ chi phí; giá nhập trên dòng giữ nguyên giá HĐ)
+  vatAmount       Float     @default(0)
+  shippingFee     Float     @default(0)
+  importTax       Float     @default(0)
+  otherFees       Float     @default(0)
+  totalDiscount   Float     @default(0)
   note            String?
   branchId        String?
   userId          String
@@ -753,6 +778,8 @@ model Vehicle {
   updatedAt          DateTime  @updatedAt
 
   maintenanceLogs VehicleMaintenance[]
+  fuelLogs        VehicleFuelLog[]
+  documents       VehicleDocument[]
   warehouse       Warehouse?
   salesTrips      SalesTrip[]
 
@@ -778,6 +805,63 @@ model VehicleMaintenance {
 
   @@index([vehicleId])
   @@index([serviceDate])
+}
+
+// Email chào hàng đã gửi từ CRM + theo dõi khách phản hồi (khớp qua IMAP)
+model CrmEmailLog {
+  id           String    @id @default(cuid())
+  customerId   String?
+  customerName String
+  email        String
+  subject      String
+  messageId    String? // Message-ID SMTP trả về — khớp In-Reply-To của thư trả lời
+  sentAt       DateTime  @default(now())
+  repliedAt    DateTime?
+  replySubject String?
+
+  @@index([email])
+  @@index([repliedAt])
+  @@index([sentAt])
+}
+
+model VehicleFuelLog {
+  id            String   @id @default(cuid())
+  vehicleId     String
+  fuelDate      DateTime @default(now())
+  liters        Float    @default(0)
+  pricePerLiter Float    @default(0)
+  cost          Float    @default(0)
+  kmAtFill      Float    @default(0)
+  fuelType      String? // gasoline | diesel | electric | gas
+  station       String?
+  isFullTank    Boolean  @default(true)
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId])
+  @@index([fuelDate])
+}
+
+model VehicleDocument {
+  id             String    @id @default(cuid())
+  vehicleId      String
+  type           String // registration | inspection | insurance | roadfee | other
+  name           String
+  documentNumber String?
+  fileUrl        String?
+  issuer         String?
+  issueDate      DateTime?
+  expiryDate     DateTime?
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId])
+  @@index([expiryDate])
 }
 
 // ─── Delivery Routes (driver multi-stop routes built by admin) ───────────────
@@ -1290,6 +1374,55 @@ model Review {
 
 // ─── Store Settings (replaces Store model for local config) ─────────────────
 
+/// Ánh xạ MÃ HÀNG TRÊN SÀN → sản phẩm trong kho. Đơn Shopee/TikTok hay dùng mã
+/// riêng (vd "Ct30plus", "cs24") không trùng SKU kho → orderSync bỏ qua, đơn
+/// không lên phiếu ⇒ không xuất được hoá đơn. Bảng này để map thủ công 1 lần.
+/// platform = null: áp cho mọi sàn. Khớp KHÔNG phân biệt hoa thường.
+model SkuMapping {
+  id             String   @id @default(cuid())
+  platformSku    String
+  productId      String
+  platform       String?
+  note           String?
+  // Hệ số quy đổi: 1 đơn vị ở NGUỒN (dòng hoá đơn / SKU sàn) = bao nhiêu đơn vị
+  // GỐC của sản phẩm kho. VD hoá đơn ghi "5 vỉ" mà kho đếm theo cái, vỉ 10 cái
+  // → rate = 10 → nhập vào kho 50 cái, đơn giá chia 10.
+  conversionRate Float    @default(1)
+  // Ánh xạ tới COMBO thay vì 1 sản phẩm: SKU sàn là combo N món → khi đơn về tự
+  // bung thành từng thành phần để trừ kho và tính tồn kho thuế cho đúng từng mã.
+  bundleId       String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([platformSku, platform])
+  @@index([productId])
+}
+
+// Doanh thu GHI CHÉP TAY của HKD (sổ S2b) — bán chợ/tiền mặt chưa lên hoá đơn.
+// Route /api/tax/hkd-revenue đã dùng model này từ lâu nhưng schema THIẾU → mọi
+// request 500 "Cannot read properties of undefined (reading 'findMany')".
+model HkdRevenueEntry {
+  id            String   @id @default(cuid())
+  date          DateTime @default(now())
+  soChungTu     String?
+  dienGiai      String
+  doanhThu      Float    @default(0)
+  chietKhau     Float    @default(0)
+  thueGTGT      Float    @default(0)
+  doanhThuThuan Float    @default(0)
+  tncnUocTinh   Float    @default(0)
+  phuongThucTT  String   @default("Tiền mặt")
+  ghiChu        String?
+  branchId      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([date])
+  @@index([branchId])
+}
+
 model StoreSettings {
   id                 String  @id @default("default")
   name               String
@@ -1310,6 +1443,12 @@ model StoreSettings {
   email              String?
   website            String?
   notifyLowStock     Boolean @default(true)
+
+  // SMTP email công ty cho CRM gửi email chào hàng — JSON {host,port,user,pass,fromName,secure}
+  smtpConfig String?
+
+  // Key Gemini riêng của cửa hàng cho Trợ lý AI (chỉ admin cấu hình; API che dạng ••••).
+  geminiApiKey String?
 
   notifyNewOrder Boolean @default(true)
 
@@ -2484,4 +2623,105 @@ model FbAutoReplyLog {
   @@unique([pageId, commentId]) // mỗi comment chỉ auto-reply 1 lần
   @@index([pageId])
   @@index([createdAt])
+}
+
+// ─── CRM: công việc, cơ hội bán hàng, nhật ký (kengi.vn/crm) ──────────────────
+// Trước đây các mảng này chỉ nằm ở localStorage trình duyệt nên mỗi máy một dữ
+// liệu. Đưa lên DB để cả đội dùng chung.
+
+model CrmTask {
+  id           String    @id @default(cuid())
+  title        String
+  description  String?
+  customerId   String?
+  customerName String?
+  status       String    @default("todo") // todo | doing | done
+  priority     String    @default("medium") // low | medium | high
+  type         String? // call | meeting | email | visit | other
+  dueDate      DateTime?
+  assignee     String?
+  createdBy    String?
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([status])
+  @@index([dueDate])
+  @@index([customerId])
+}
+
+model CrmDeal {
+  id                String    @id @default(cuid())
+  title             String
+  customerId        String?
+  customerName      String?
+  value             Float     @default(0)
+  stage             String    @default("lead") // lead | contact | demo | negotiate | won | lost
+  probability       Int       @default(0)
+  assignee          String?
+  note              String?
+  sortOrder         Int       @default(0)
+  expectedCloseDate DateTime?
+  closedAt          DateTime?
+  createdBy         String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([stage])
+  @@index([customerId])
+  @@index([expectedCloseDate])
+}
+
+model CrmActivity {
+  id          String   @id @default(cuid())
+  module      String // contacts | pipeline | tasks | campaigns | debt | team | zalo | groups | email
+  action      String
+  description String
+  userId      String?
+  userName    String?
+  entityId    String?
+  entityName  String?
+  metadata    String? // JSON tự do
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([module])
+  @@index([entityId])
+}
+
+// Nhật ký Zalo tay (nhân viên ghi lại nội dung đã trao đổi với khách)
+model CrmZaloLog {
+  id           String   @id @default(cuid())
+  customerId   String
+  customerName String?
+  direction    String   @default("out") // in | out
+  content      String
+  staffName    String?
+  starred      Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  @@index([customerId])
+  @@index([createdAt])
+}
+
+// Chiến dịch chăm sóc khách (email/zalo/sms)
+model CrmCampaign {
+  id           String    @id @default(cuid())
+  name         String
+  channel      String    @default("email") // email | zalo | sms
+  status       String    @default("draft") // draft | scheduled | sending | sent | completed
+  template     String    @default("")
+  targetTiers  String    @default("[]") // JSON mảng hạng KH
+  targetCount  Int       @default(0)
+  sentCount    Int       @default(0)
+  openRate     Float     @default(0)
+  responseRate Float     @default(0)
+  scheduledAt  DateTime?
+  sentAt       DateTime?
+  createdBy    String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([status])
+  @@index([channel])
 }

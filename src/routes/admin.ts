@@ -1,27 +1,73 @@
 import { Router, Request, Response, NextFunction } from 'express'
+import crypto from 'crypto'
+import jwt from 'jsonwebtoken'
 import { errMsg } from '../lib/errorResponse'
 import { registryPrisma, getStorePrisma, dropStoreSchema, mapWithConcurrency, syncBranchSchemaTables } from '../lib/prisma'
 import { invalidateStoreStatus } from '../lib/storeStatusCache'
 
 const router = Router()
 
-// ─── Admin Key Auth ─────────────────────────────────────────────────────────
+// ─── Admin Auth ─────────────────────────────────────────────────────────────
+// 2 lối vào:
+//  1. x-admin-key (script/cron/CLI — key ở Secret Manager open-retail-admin-key)
+//  2. Bearer JWT scope 'admin-panel' — cấp bởi POST /admin/login cho trang
+//     kengi.vn/admin. User/pass so SERVER-SIDE (env ADMIN_PANEL_*), KHÔNG còn
+//     bake NEXT_PUBLIC_ADMIN_* vào bundle FE công khai (lộ key).
 const ADMIN_KEY = process.env.ADMIN_KEY
 if (!ADMIN_KEY) {
     console.warn('⚠️ ADMIN_KEY not configured — admin routes will reject all requests')
 }
+const JWT_SECRET = process.env.JWT_SECRET || ''
+const PANEL_USER = process.env.ADMIN_PANEL_USER || 'superadmin'
+const PANEL_PASS = process.env.ADMIN_PANEL_PASS || ''
+const PANEL_SCOPE = 'admin-panel'
+
+function safeEqual(a: string, b: string): boolean {
+    const ab = Buffer.from(a)
+    const bb = Buffer.from(b)
+    if (ab.length !== bb.length) return false
+    return crypto.timingSafeEqual(ab, bb)
+}
+
+// POST /admin/login — PHẢI đứng trước router.use(adminKeyAuth)
+router.post('/login', async (req: Request, res: Response) => {
+    if (!PANEL_PASS || !JWT_SECRET) {
+        res.status(503).json({ success: false, error: 'Admin panel login chưa cấu hình (ADMIN_PANEL_PASS/JWT_SECRET)' })
+        return
+    }
+    const { username, password } = req.body || {}
+    if (
+        typeof username !== 'string' || typeof password !== 'string' ||
+        !safeEqual(username, PANEL_USER) || !safeEqual(password, PANEL_PASS)
+    ) {
+        // Fail chậm để hạn chế brute-force
+        await new Promise((r) => setTimeout(r, 800))
+        res.status(401).json({ success: false, error: 'Sai tài khoản hoặc mật khẩu' })
+        return
+    }
+    const token = jwt.sign({ scope: PANEL_SCOPE, username }, JWT_SECRET, { expiresIn: '12h' })
+    res.json({ success: true, data: { token, expiresInSeconds: 12 * 3600 } })
+})
 
 function adminKeyAuth(req: Request, res: Response, next: NextFunction): void {
-    if (!ADMIN_KEY) {
+    // Lối 1: static key
+    const key = req.headers['x-admin-key'] as string
+    if (ADMIN_KEY && key && safeEqual(key, ADMIN_KEY)) return next()
+
+    // Lối 2: JWT admin-panel từ /admin/login
+    const auth = req.headers.authorization
+    if (auth && auth.startsWith('Bearer ') && JWT_SECRET) {
+        try {
+            const payload = jwt.verify(auth.slice(7), JWT_SECRET, { algorithms: ['HS256'] }) as any
+            if (payload?.scope === PANEL_SCOPE) return next()
+        } catch { /* sai/hết hạn → 403 bên dưới */ }
+    }
+
+    if (!ADMIN_KEY && !JWT_SECRET) {
         res.status(503).json({ success: false, error: 'Admin API not configured' })
         return
     }
-    const key = req.headers['x-admin-key'] as string
-    if (!key || key !== ADMIN_KEY) {
-        res.status(403).json({ success: false, error: 'Unauthorized' })
-        return
-    }
-    next()
+    res.status(403).json({ success: false, error: 'Unauthorized' })
 }
 
 router.use(adminKeyAuth)
@@ -857,6 +903,104 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 // SMTP email công ty cho CRM (2026-07-12)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "smtpConfig" TEXT`)
 
+                // Key Gemini riêng cửa hàng cho Trợ lý AI (2026-07-19)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "geminiApiKey" TEXT`)
+
+                // Cờ hoá đơn VAT đầu vào cho phiếu nhập (2026-07-24) — chỉ phiếu có
+                // HĐ GTGT mới tính vào tồn kho thuế (gate xuất HĐ).
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "ImportReceipt" ADD COLUMN IF NOT EXISTS "hasVatInvoice" BOOLEAN NOT NULL DEFAULT false`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "ImportReceipt" ADD COLUMN IF NOT EXISTS "vatInvoiceNo" TEXT`)
+                // Chi phí cấp phiếu để phân bổ vào giá vốn (2026-07-24)
+                for (const c of ['vatAmount', 'shippingFee', 'importTax', 'otherFees', 'totalDiscount']) {
+                    await (sp as any).$executeRawUnsafe(`ALTER TABLE "ImportReceipt" ADD COLUMN IF NOT EXISTS "${c}" DOUBLE PRECISION NOT NULL DEFAULT 0`)
+                }
+
+                // Ánh xạ mã hàng trên SÀN → sản phẩm kho (2026-07-23) — đơn TikTok/
+                // Shopee dùng SKU riêng không khớp kho khiến đơn không lên phiếu.
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "SkuMapping" (
+                        "id" TEXT NOT NULL,
+                        "platformSku" TEXT NOT NULL,
+                        "productId" TEXT NOT NULL,
+                        "platform" TEXT,
+                        "note" TEXT,
+                        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "SkuMapping_pkey" PRIMARY KEY ("id"),
+                        CONSTRAINT "SkuMapping_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE CASCADE ON UPDATE CASCADE
+                    )
+                `)
+                // Con trỏ "đã gộp" (thay cho việc đổi mã — đổi mã làm gãy đẩy tồn lên sàn)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "mergedIntoId" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "mergedRate" DOUBLE PRECISION NOT NULL DEFAULT 1`)
+                // SỬA HẬU QUẢ bản gộp cũ: trả lại mã gốc cho sản phẩm bị đổi thành
+                // "<sku>__MERGED" (chỉ khi mã gốc chưa bị ai dùng lại)
+                await (sp as any).$executeRawUnsafe(`
+                    UPDATE "Product" p SET sku = left(p.sku, length(p.sku) - 8)
+                    WHERE p.sku LIKE '%\_\_MERGED'
+                      AND NOT EXISTS (SELECT 1 FROM "Product" q WHERE q.sku = left(p.sku, length(p.sku) - 8))`)
+                // …rồi gắn con trỏ gộp theo đúng ánh xạ mà bước gộp đã tạo
+                await (sp as any).$executeRawUnsafe(`
+                    UPDATE "Product" p
+                    SET "mergedIntoId" = m."productId", "mergedRate" = COALESCE(m."conversionRate", 1)
+                    FROM "SkuMapping" m
+                    WHERE m."platformSku" = p.sku AND m.platform IS NULL
+                      AND p.name LIKE '[ĐÃ GỘP%' AND p."mergedIntoId" IS NULL`)
+
+                // DỌN tên đã bị bản gộp cũ chèn tiền tố "[ĐÃ GỘP → X] " — tên là dữ
+                // liệu gốc (in hoá đơn/tem), không được sửa. Chạy SAU bước gắn con trỏ
+                // ở trên vì bước đó dò theo chính tiền tố này.
+                // KHÔNG dùng regex: chuỗi regex trong mã nguồn dễ mất dấu thoát
+                // (\s thành chữ "s") làm lệnh chạy nhưng không khớp gì. Cắt theo VỊ
+                // TRÍ dấu "]" cho chắc; lặp 5 lần vì có tên bị chèn tiền tố chồng
+                // nhau do gộp lặp nhiều lần.
+                for (let pass = 0; pass < 5; pass++) {
+                    await (sp as any).$executeRawUnsafe(
+                        `UPDATE "Product"
+                         SET name = btrim(substr(name, strpos(name, ']') + 1))
+                         WHERE name LIKE $1 AND strpos(name, ']') > 0`,
+                        '[ĐÃ GỘP →%')
+                }
+
+                // Sản phẩm đã nhập nhưng thực chất là COMBO
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "bundleId" TEXT`)
+
+                // Ánh xạ SKU → COMBO (SKU sàn là combo nhiều món)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "SkuMapping" ADD COLUMN IF NOT EXISTS "bundleId" TEXT`)
+
+                // Hệ số quy đổi cho ánh xạ SKU (hoá đơn ghi vỉ, kho đếm cái)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "SkuMapping" ADD COLUMN IF NOT EXISTS "conversionRate" DOUBLE PRECISION NOT NULL DEFAULT 1`)
+
+                // ĐVT xuất hoá đơn (nhập theo vỉ, bán theo cái, HĐ ghi theo vỉ)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "invoiceUnit" TEXT`)
+
+                // Doanh thu ghi chép tay của HKD (sổ S2b) — bảng CHƯA từng được tạo
+                // dù route /api/tax/hkd-revenue dùng nó → GET/POST đều 500 (2026-07-25)
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "HkdRevenueEntry" (
+                        "id" TEXT NOT NULL,
+                        "date" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        "soChungTu" TEXT,
+                        "dienGiai" TEXT NOT NULL,
+                        "doanhThu" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "chietKhau" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "thueGTGT" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "doanhThuThuan" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "tncnUocTinh" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "phuongThucTT" TEXT NOT NULL DEFAULT 'Tiền mặt',
+                        "ghiChu" TEXT,
+                        "branchId" TEXT,
+                        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "HkdRevenueEntry_pkey" PRIMARY KEY ("id")
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "HkdRevenueEntry_date_idx" ON "HkdRevenueEntry"("date")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "HkdRevenueEntry_branchId_idx" ON "HkdRevenueEntry"("branchId")`)
+
+                await (sp as any).$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "SkuMapping_platformSku_platform_key" ON "SkuMapping"("platformSku", "platform")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SkuMapping_productId_idx" ON "SkuMapping"("productId")`)
+
                 // Log email chào hàng + theo dõi phản hồi (2026-07-12)
                 await (sp as any).$executeRawUnsafe(`
                     CREATE TABLE IF NOT EXISTS "CrmEmailLog" (
@@ -875,6 +1019,114 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CrmEmailLog_email_idx" ON "CrmEmailLog"("email")`)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CrmEmailLog_repliedAt_idx" ON "CrmEmailLog"("repliedAt")`)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CrmEmailLog_sentAt_idx" ON "CrmEmailLog"("sentAt")`)
+
+                // CRM: công việc / cơ hội bán hàng / nhật ký (2026-07-26) — trước
+                // đây chỉ nằm ở localStorage nên mỗi máy một dữ liệu.
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "CrmTask" (
+                        "id" TEXT NOT NULL,
+                        "title" TEXT NOT NULL,
+                        "description" TEXT,
+                        "customerId" TEXT,
+                        "customerName" TEXT,
+                        "status" TEXT NOT NULL DEFAULT 'todo',
+                        "priority" TEXT NOT NULL DEFAULT 'medium',
+                        "type" TEXT,
+                        "dueDate" TIMESTAMP(3),
+                        "assignee" TEXT,
+                        "createdBy" TEXT,
+                        "completedAt" TIMESTAMP(3),
+                        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "CrmTask_pkey" PRIMARY KEY ("id")
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CrmTask_status_idx" ON "CrmTask"("status")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CrmTask_dueDate_idx" ON "CrmTask"("dueDate")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CrmTask_customerId_idx" ON "CrmTask"("customerId")`)
+
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "CrmDeal" (
+                        "id" TEXT NOT NULL,
+                        "title" TEXT NOT NULL,
+                        "customerId" TEXT,
+                        "customerName" TEXT,
+                        "value" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "stage" TEXT NOT NULL DEFAULT 'lead',
+                        "probability" INTEGER NOT NULL DEFAULT 0,
+                        "assignee" TEXT,
+                        "note" TEXT,
+                        "sortOrder" INTEGER NOT NULL DEFAULT 0,
+                        "expectedCloseDate" TIMESTAMP(3),
+                        "closedAt" TIMESTAMP(3),
+                        "createdBy" TEXT,
+                        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "CrmDeal_pkey" PRIMARY KEY ("id")
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CrmDeal_stage_idx" ON "CrmDeal"("stage")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CrmDeal_customerId_idx" ON "CrmDeal"("customerId")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CrmDeal_expectedCloseDate_idx" ON "CrmDeal"("expectedCloseDate")`)
+
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "CrmActivity" (
+                        "id" TEXT NOT NULL,
+                        "module" TEXT NOT NULL,
+                        "action" TEXT NOT NULL,
+                        "description" TEXT NOT NULL,
+                        "userId" TEXT,
+                        "userName" TEXT,
+                        "entityId" TEXT,
+                        "entityName" TEXT,
+                        "metadata" TEXT,
+                        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "CrmActivity_pkey" PRIMARY KEY ("id")
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CrmActivity_createdAt_idx" ON "CrmActivity"("createdAt")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CrmActivity_module_idx" ON "CrmActivity"("module")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CrmActivity_entityId_idx" ON "CrmActivity"("entityId")`)
+
+                // CRM đợt 2 (2026-07-26): nhật ký Zalo + chiến dịch chăm sóc
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "CrmZaloLog" (
+                        "id" TEXT NOT NULL,
+                        "customerId" TEXT NOT NULL,
+                        "customerName" TEXT,
+                        "direction" TEXT NOT NULL DEFAULT 'out',
+                        "content" TEXT NOT NULL,
+                        "staffName" TEXT,
+                        "starred" BOOLEAN NOT NULL DEFAULT false,
+                        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "CrmZaloLog_pkey" PRIMARY KEY ("id")
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CrmZaloLog_customerId_idx" ON "CrmZaloLog"("customerId")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CrmZaloLog_createdAt_idx" ON "CrmZaloLog"("createdAt")`)
+
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "CrmCampaign" (
+                        "id" TEXT NOT NULL,
+                        "name" TEXT NOT NULL,
+                        "channel" TEXT NOT NULL DEFAULT 'email',
+                        "status" TEXT NOT NULL DEFAULT 'draft',
+                        "template" TEXT NOT NULL DEFAULT '',
+                        "targetTiers" TEXT NOT NULL DEFAULT '[]',
+                        "targetCount" INTEGER NOT NULL DEFAULT 0,
+                        "sentCount" INTEGER NOT NULL DEFAULT 0,
+                        "openRate" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "responseRate" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "scheduledAt" TIMESTAMP(3),
+                        "sentAt" TIMESTAMP(3),
+                        "createdBy" TEXT,
+                        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "CrmCampaign_pkey" PRIMARY KEY ("id")
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CrmCampaign_status_idx" ON "CrmCampaign"("status")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "CrmCampaign_channel_idx" ON "CrmCampaign"("channel")`)
 
                 // Quản lý xe — nhật ký nhiên liệu + giấy tờ xe (2026-07-09).
                 // db push không chạy trong prod nên CREATE TABLE trực tiếp, khớp schema-store.prisma.
@@ -1547,6 +1799,331 @@ router.get('/cloud-metrics', async (_req: Request, res: Response) => {
     } catch (err) {
         console.error('Admin cloud-metrics error:', err)
         res.status(500).json({ success: false, error: 'Internal server error', detail: (err as any)?.message })
+    }
+})
+
+// ─── POST /admin/sync-returns ────────────────────────────────────────────────
+// CHẨN ĐOÁN + chạy tay đồng bộ TRẢ HÀNG/HOÀN TIỀN cho từng kênh sàn.
+// Phải chạy TỪ Cloud Run vì Shopee chặn theo IP đã khai báo (gọi từ máy local
+// sẽ dính source_ip_undeclared) → đây là cách duy nhất kiểm chứng thật.
+// Body/query: { storeCode?, days? } — mặc định mọi store, 7 ngày.
+router.post('/sync-returns', async (req: Request, res: Response) => {
+    try {
+        const { syncChannelReturns } = await import('../services/returnSync')
+        const storeCode = String(req.query.storeCode || req.body?.storeCode || '').trim()
+        const days = Math.min(Math.max(1, Number(req.query.days || req.body?.days) || 7), 90)
+        const since = new Date(Date.now() - days * 86400_000)
+
+        const stores = await prisma.store.findMany({
+            where: { status: 'active', ...(storeCode ? { code: storeCode } : {}) },
+            select: { code: true, name: true, schema: true },
+        })
+        const out: any[] = []
+        for (const store of stores) {
+            const sp = getStorePrisma(store.schema)
+            let channels: any[] = []
+            try {
+                channels = await sp.onlineChannel.findMany({
+                    where: { status: 'active', accessToken: { not: null }, platform: { in: ['shopee', 'tiktok'] } },
+                })
+            } catch { continue } // store chưa có bảng kênh
+            for (const ch of channels) {
+                const row: any = { store: store.code, channel: ch.name, platform: ch.platform }
+                const t0 = Date.now()
+                try {
+                    const r = await syncChannelReturns(sp, ch, since)
+                    Object.assign(row, { ok: true, total: r.total, synced: r.synced, skipped: r.skipped, errors: r.errors.slice(0, 3) })
+                } catch (e: any) {
+                    Object.assign(row, { ok: false, error: e?.message || String(e) })
+                }
+                row.ms = Date.now() - t0
+                out.push(row)
+            }
+        }
+        res.json({ success: true, data: { since: since.toISOString(), days, channels: out } })
+    } catch (err: any) {
+        console.error('Admin sync-returns error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// ─── GET /admin/returns-summary ──────────────────────────────────────────────
+// CHỈ ĐỌC: thống kê phiếu trả hàng theo nguồn (RTN-SH- Shopee / RTN-TT- TikTok /
+// khác = tạo tay) và theo trạng thái, để đối chiếu xem sàn đã đổ về những gì.
+router.get('/returns-summary', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || '').trim()
+        const stores = await prisma.store.findMany({
+            where: { status: 'active', ...(storeCode ? { code: storeCode } : {}) },
+            select: { code: true, schema: true },
+        })
+        const out: any[] = []
+        for (const store of stores) {
+            const sp = getStorePrisma(store.schema)
+            try {
+                const rows = await sp.$queryRawUnsafe(`
+                    SELECT CASE WHEN code LIKE 'RTN-SH-%' THEN 'shopee'
+                                WHEN code LIKE 'RTN-TT-%' THEN 'tiktok'
+                                ELSE 'khac' END AS nguon,
+                           status, COUNT(*)::int AS n,
+                           COALESCE(SUM("totalRefund"),0)::float8 AS tien,
+                           to_char(MIN("createdAt"),'YYYY-MM-DD') AS dau,
+                           to_char(MAX("createdAt"),'YYYY-MM-DD') AS cuoi
+                    FROM "ReturnOrder" GROUP BY 1,2 ORDER BY 1,3 DESC`)
+                out.push({ store: store.code, rows })
+            } catch (e: any) {
+                out.push({ store: store.code, error: e?.message })
+            }
+        }
+        res.json({ success: true, data: out })
+    } catch (err: any) {
+        console.error('Admin returns-summary error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// ─── GET /admin/store-health?storeCode=KENGISTORE ────────────────────────────
+// CHỈ ĐỌC: soi mắt xích sàn → đơn → phiếu bán → hoá đơn của 1 cửa hàng.
+//  (a) kênh sàn + lần đồng bộ cuối + hạn token
+//  (b) phiếu trả ĐÃ HOÀN TIỀN nhưng đơn chưa đảo về returned (sót đảo hiệu ứng)
+//  (c) đơn ĐÃ XUẤT HOÁ ĐƠN nhưng sau đó có phiếu trả đang mở (phải điều chỉnh HĐ)
+//  (d) đơn có phiếu trả đang mở mà vẫn nằm chờ xuất HĐ (đã chặn auto-xuất)
+router.get('/store-health', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { code: true, schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'Store not found' }); return }
+        const sp = getStorePrisma(store.schema)
+
+        const OPEN = `LOWER(ro.status) IN ('pending','approved','processing','refunded')`
+        const [channels, refundedNotReversed, invoicedButReturned, openInQueue] = await Promise.all([
+            sp.$queryRawUnsafe(`
+                SELECT name, platform, status,
+                       to_char("lastSyncAt",'YYYY-MM-DD HH24:MI') AS "lastSyncAt",
+                       to_char("tokenExpiresAt",'YYYY-MM-DD') AS "tokenExpiresAt"
+                FROM "OnlineChannel" ORDER BY platform, name`),
+            sp.$queryRawUnsafe(`
+                SELECT COUNT(*)::int AS n
+                FROM "ReturnOrder" ro JOIN "OnlineOrder" o ON o."orderNumber" = ro."originalInvoice"
+                WHERE LOWER(ro.status) = 'refunded' AND o.status NOT IN ('returned','cancelled','CANCELLED')`),
+            sp.$queryRawUnsafe(`
+                SELECT ro.code, ro.status, o."orderNumber", o.platform,
+                       ro."totalRefund"::float8 AS refund, e."invoiceNumber"
+                FROM "ReturnOrder" ro
+                JOIN "OnlineOrder" o ON o."orderNumber" = ro."originalInvoice"
+                JOIN "Transaction" t ON t."receiptNumber" = ('ONLINE-' || o."orderNumber")
+                JOIN "EInvoice" e ON e."transactionId" = t.id AND e.status IN ('issued','SENT')
+                WHERE ${OPEN} ORDER BY ro."createdAt" DESC LIMIT 50`),
+            sp.$queryRawUnsafe(`
+                SELECT COUNT(DISTINCT o.id)::int AS n
+                FROM "ReturnOrder" ro
+                JOIN "OnlineOrder" o ON o."orderNumber" = ro."originalInvoice"
+                JOIN "Transaction" t ON t."receiptNumber" = ('ONLINE-' || o."orderNumber")
+                WHERE ${OPEN} AND t.status IN ('completed','returned')
+                  AND NOT EXISTS (SELECT 1 FROM "EInvoice" e WHERE e."transactionId" = t.id AND e.status IN ('issued','SENT'))`),
+        ])
+        res.json({
+            success: true,
+            data: {
+                store: store.code,
+                channels,
+                refundedNotReversed: (refundedNotReversed as any[])[0]?.n ?? 0,
+                invoicedButReturned: invoicedButReturned,
+                openReturnStillInQueue: (openInQueue as any[])[0]?.n ?? 0,
+            },
+        })
+    } catch (err: any) {
+        console.error('Admin store-health error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// ─── POST /admin/merge-product ───────────────────────────────────────────────
+// Gộp 2 mã hàng kèm đồng hoá số lượng (xem src/lib/mergeProduct.ts).
+// Body: { storeCode, fromSku, toSku, rate, dryRun }
+router.post('/merge-product', async (req: Request, res: Response) => {
+    try {
+        const { mergeProduct } = await import('../lib/mergeProduct')
+        const b = req.body || {}
+        const storeCode = String(b.storeCode || '').trim()
+        const fromSku = String(b.fromSku || '').trim()
+        const toSku = String(b.toSku || '').trim()
+        const rate = Number(b.rate) || 1
+        const dryRun = b.dryRun !== false && b.dryRun !== 'false'
+        if (!storeCode || !fromSku || !toSku) { res.status(400).json({ success: false, error: 'Thiếu storeCode/fromSku/toSku' }); return }
+        if (!(rate > 0)) { res.status(400).json({ success: false, error: 'rate phải > 0' }); return }
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const data = await mergeProduct(getStorePrisma(store.schema), {
+            fromSku, toSku, rate, dryRun, force: b.force === true,
+            mainUnit: b.mainUnit === 'source' ? 'source' : 'target',
+            unitName: b.unitName ? String(b.unitName) : undefined,
+        })
+        res.json({ success: true, dryRun, data })
+    } catch (err: any) {
+        console.error('Admin merge-product error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// ─── POST /admin/clean-fake-fees ─────────────────────────────────────────────
+// DỌN PHÍ SÀN ẢO: bản sync cũ ghi platformFee = tổng × hoa hồng cấu hình rồi hiện
+// như phí thật. Phí thật của sàn (escrow/settlement) gần như không bao giờ ra
+// đúng một tỷ lệ phẳng, nên dấu hiệu nhận diện là:
+//   platformFeeRate > 0 VÀ platformFee = ROUND(total × platformFeeRate / 100)
+// Đơn đã đối soát thật thì sync-fees ghi đè platformFee (giữ nguyên rate) nên
+// đẳng thức vỡ → không bị đụng tới.
+// Body: { storeCode?, dryRun } — dryRun mặc định TRUE, chỉ đếm.
+router.post('/clean-fake-fees', async (req: Request, res: Response) => {
+    try {
+        const b = req.body || {}
+        const storeCode = String(b.storeCode || '').trim()
+        const dryRun = b.dryRun !== false && b.dryRun !== 'false'
+        const stores = await prisma.store.findMany({
+            where: { status: 'active', ...(storeCode ? { code: storeCode } : {}) },
+            select: { code: true, schema: true },
+        })
+        const COND = `"platformFeeRate" > 0
+                      AND "platformFee" > 0
+                      AND ROUND(("total" * "platformFeeRate" / 100)::numeric) = ROUND("platformFee"::numeric)`
+        const out: any[] = []
+        for (const store of stores) {
+            const sp = getStorePrisma(store.schema) as any
+            try {
+                const stat = await sp.$queryRawUnsafe(`
+                    SELECT COUNT(*)::int AS n,
+                           COALESCE(SUM("platformFee"),0)::float8 AS "tongPhiAo",
+                           COALESCE(SUM("total"),0)::float8 AS "tongDon",
+                           to_char(MIN("createdAt"),'YYYY-MM-DD') AS dau,
+                           to_char(MAX("createdAt"),'YYYY-MM-DD') AS cuoi
+                    FROM "OnlineOrder" WHERE ${COND}`)
+                const row = (stat as any[])[0] || {}
+                if ((row.n || 0) > 0 && !dryRun) {
+                    await sp.$executeRawUnsafe(
+                        `UPDATE "OnlineOrder"
+                         SET "platformFee" = 0, "platformFeeRate" = 0, "netRevenue" = 0
+                         WHERE ${COND}`)
+                }
+                out.push({ store: store.code, ...row })
+            } catch (e: any) {
+                out.push({ store: store.code, error: e?.message })
+            }
+        }
+        res.json({ success: true, dryRun, data: out })
+    } catch (err: any) {
+        console.error('Admin clean-fake-fees error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// ─── GET /admin/shopee-escrow ────────────────────────────────────────────────
+// CHỈ ĐỌC: gọi thẳng get_escrow_detail của Shopee cho 1 đơn và trả NGUYÊN VĂN
+// phần order_income, để xem sàn thực sự đưa những khoản phí nào ở từng trạng
+// thái đơn (đơn chưa hoàn tất vẫn có phí giao dịch — đừng đoán, phải nhìn).
+// ?storeCode=KENGISTORE&orderSn=xxx (bỏ tiền tố SPE-)
+router.get('/shopee-escrow', async (req: Request, res: Response) => {
+    try {
+        const { ShopeeService } = await import('../services/platforms')
+        const storeCode = String(req.query.storeCode || '').trim()
+        const orderSn = String(req.query.orderSn || '').replace(/^SPE-/i, '').trim()
+        if (!storeCode || !orderSn) { res.status(400).json({ success: false, error: 'Thiếu storeCode/orderSn' }); return }
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const sp = getStorePrisma(store.schema) as any
+
+        const order = await sp.onlineOrder.findFirst({
+            where: { OR: [{ externalOrderId: orderSn }, { externalOrderId: `SPE-${orderSn}` }, { orderNumber: { contains: orderSn } }] },
+            select: { channelId: true, status: true, total: true, platformFee: true, orderNumber: true },
+        })
+        const channel = await sp.onlineChannel.findFirst({
+            where: order?.channelId ? { id: order.channelId } : { platform: 'shopee', status: 'active' },
+        })
+        if (!channel) { res.status(404).json({ success: false, error: 'Không có kênh Shopee' }); return }
+
+        const svc = new ShopeeService({
+            apiKey: channel.apiKey || '', apiSecret: channel.apiSecret || '',
+            accessToken: channel.accessToken || undefined, refreshToken: channel.refreshToken || undefined,
+            shopId: channel.shopId || undefined,
+        })
+        const raw = await (svc as any).httpGet(
+            (svc as any).apiUrl('/api/v2/payment/get_escrow_detail') + `&order_sn=${orderSn}`)
+        res.json({
+            success: true,
+            data: {
+                donTrongHeThong: order || null,
+                kenh: channel.name,
+                shopeeError: raw?.error || null,
+                shopeeMessage: raw?.message || null,
+                orderIncome: raw?.response?.order_income ?? null,
+                buyerPaymentInfo: raw?.response?.buyer_payment_info ?? null,
+            },
+        })
+    } catch (err: any) {
+        console.error('Admin shopee-escrow error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// ─── POST /admin/clean-dup-mappings ──────────────────────────────────────────
+// DỌN ÁNH XẠ SKU TRÙNG. Ràng buộc duy nhất (platformSku, platform) KHÔNG chặn
+// được khi platform = NULL — Postgres coi mọi NULL là khác nhau — nên lệnh gộp
+// dùng ON CONFLICT không bao giờ trúng và mỗi lần chạy lại đẻ thêm một dòng.
+// Hậu quả: đơn về lấy nhằm dòng nào thì theo hệ số dòng đó → trừ kho sai ngẫu nhiên.
+// Giữ lại: dòng có hệ số KHỚP mergedRate của sản phẩm mang mã đó; không có thì
+// giữ hệ số lớn nhất; hoà thì giữ dòng mới nhất.
+// Body: { storeCode?, dryRun } — dryRun mặc định TRUE.
+router.post('/clean-dup-mappings', async (req: Request, res: Response) => {
+    try {
+        const b = req.body || {}
+        const storeCode = String(b.storeCode || '').trim()
+        const dryRun = b.dryRun !== false && b.dryRun !== 'false'
+        const stores = await prisma.store.findMany({
+            where: { status: 'active', ...(storeCode ? { code: storeCode } : {}) },
+            select: { code: true, schema: true },
+        })
+        const RANKED = `
+            SELECT m.id, LOWER(TRIM(m."platformSku")) AS k, m."conversionRate" AS rate,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY LOWER(TRIM(m."platformSku"))
+                       ORDER BY (CASE WHEN p."mergedRate" IS NOT NULL
+                                       AND ABS(COALESCE(m."conversionRate",1) - p."mergedRate") < 0.001
+                                      THEN 0 ELSE 1 END),
+                                COALESCE(m."conversionRate",1) DESC,
+                                m."createdAt" DESC
+                   ) AS rn
+            FROM "SkuMapping" m
+            LEFT JOIN "Product" p ON LOWER(TRIM(p.sku)) = LOWER(TRIM(m."platformSku"))
+            WHERE m.platform IS NULL`
+        const out: any[] = []
+        for (const store of stores) {
+            const sp = getStorePrisma(store.schema) as any
+            try {
+                const dups = await sp.$queryRawUnsafe(
+                    `SELECT k, COUNT(*)::int AS n, array_agg(rate ORDER BY rn) AS rates
+                     FROM (${RANKED}) x GROUP BY k HAVING COUNT(*) > 1 ORDER BY 2 DESC`)
+                const rows = dups as any[]
+                if (rows.length > 0 && !dryRun) {
+                    await sp.$executeRawUnsafe(
+                        `DELETE FROM "SkuMapping" WHERE id IN (SELECT id FROM (${RANKED}) x WHERE rn > 1)`)
+                    // Chặn tái diễn: chỉ mục duy nhất RIÊNG cho nhóm platform IS NULL
+                    await sp.$executeRawUnsafe(
+                        `CREATE UNIQUE INDEX IF NOT EXISTS "SkuMapping_sku_null_platform_key"
+                         ON "SkuMapping" (LOWER(TRIM("platformSku"))) WHERE platform IS NULL`)
+                }
+                out.push({
+                    store: store.code,
+                    maTrung: rows.length,
+                    dongSeXoa: rows.reduce((a: number, r: any) => a + (r.n - 1), 0),
+                    chiTiet: rows.slice(0, 10).map((r: any) => ({ ma: r.k, soDong: r.n, heSo: r.rates })),
+                })
+            } catch (e: any) {
+                out.push({ store: store.code, error: e?.message })
+            }
+        }
+        res.json({ success: true, dryRun, data: out })
+    } catch (err: any) {
+        console.error('Admin clean-dup-mappings error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
     }
 })
 

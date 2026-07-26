@@ -25,6 +25,41 @@ export class ShopeeService extends PlatformService {
         return this.hmacSha256(baseString, apiSecret)
     }
 
+    // ─── Egress qua proxy Tino (IP tĩnh đã whitelist) ─────────────────────────────
+    // Cloud Run có IP egress ĐỘNG → Shopee chặn source_ip_undeclared. Nếu có
+    // SHOPEE_FORWARD_PROXY thì mọi call Shopee đi qua proxy chuyển tiếp câm trên
+    // Tino (backend VẪN tự ký, proxy chỉ forward). Chưa cấu hình → gọi thẳng như
+    // cũ (fallback an toàn, không đổi hành vi). Chỉ override cho Shopee, các sàn
+    // khác (TikTok/Lazada) dùng httpGet/httpPost gốc ở base.
+    private async shopeeFetch(url: string, method: 'GET' | 'POST', body?: any): Promise<Response> {
+        const proxy = process.env.SHOPEE_FORWARD_PROXY
+        if (!proxy) {
+            return fetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: method === 'POST' ? JSON.stringify(body ?? {}) : undefined,
+            })
+        }
+        return fetch(proxy, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                secret: process.env.SHOPEE_FORWARD_SECRET || '',
+                url,
+                method,
+                body: method === 'POST' ? (body ?? {}) : undefined,
+            }),
+        })
+    }
+
+    protected async httpGet(url: string): Promise<any> {
+        return this.parseResponse(await this.shopeeFetch(url, 'GET'))
+    }
+
+    protected async httpPost(url: string, body: any): Promise<any> {
+        return this.parseResponse(await this.shopeeFetch(url, 'POST', body))
+    }
+
     generateAuthUrl(redirectUri: string, state: string): string {
         const timestamp = Math.floor(Date.now() / 1000)
         const path = '/api/v2/shop/auth_partner'
@@ -99,7 +134,7 @@ export class ShopeeService extends PlatformService {
         return `${SHOPEE_HOST}${path}?partner_id=${partnerId}&timestamp=${timestamp}&sign=${sign}&shop_id=${this.credentials.shopId}&access_token=${this.credentials.accessToken}`
     }
 
-    async fetchOrders(params: { since?: Date; until?: Date; page?: number; pageSize?: number; status?: string; pageToken?: string }) {
+    async fetchOrders(params: { since?: Date; until?: Date; page?: number; pageSize?: number; status?: string; pageToken?: string; timeRangeField?: 'update_time' | 'create_time' }) {
         const path = '/api/v2/order/get_order_list'
         const now = Math.floor(Date.now() / 1000)
         const timeFrom = params.since ? Math.floor(params.since.getTime() / 1000) : now - 14 * 86400
@@ -110,8 +145,11 @@ export class ShopeeService extends PlatformService {
         // truyền lại nguyên văn (không tự chế offset số, sẽ sót/trùng đơn).
         const cursor = params.pageToken || ''
 
+        // update_time cho sync gia số; create_time cho kéo lịch sử theo ngày đặt
+        const rangeField = params.timeRangeField || 'update_time'
+
         let url = this.apiUrl(path) +
-            `&time_range_field=update_time&time_from=${timeFrom}&time_to=${timeTo}` +
+            `&time_range_field=${rangeField}&time_from=${timeFrom}&time_to=${timeTo}` +
             `&page_size=${params.pageSize || 50}&cursor=${encodeURIComponent(cursor)}&response_optional_fields=order_status`
         if (params.status) url += `&order_status=${encodeURIComponent(params.status)}`
 
@@ -249,8 +287,11 @@ export class ShopeeService extends PlatformService {
         const addr = d.recipient_address || {}
         const items: PlatformOrderItem[] = (d.item_list || []).map((item: any) => ({
             externalItemId: String(item.item_id),
-            productName: item.item_name,
-            sku: item.item_sku,
+            // SP có PHÂN LOẠI: item_sku (cấp SP) thường RỖNG — mã thật nằm ở
+            // model_sku (cấp phân loại). Kèm model_name vào tên để phiếu đóng gói
+            // biết lấy đúng loại (10W vs 20W...), không gộp mù các phân loại.
+            productName: item.item_name + (item.model_name ? ` [${item.model_name}]` : ''),
+            sku: item.model_sku || item.item_sku,
             quantity: item.model_quantity_purchased || 1,
             unitPrice: item.model_discounted_price || item.model_original_price || 0,
             discount: (item.model_original_price || 0) - (item.model_discounted_price || item.model_original_price || 0),
@@ -445,13 +486,26 @@ export class ShopeeService extends PlatformService {
 
         const commissionFee = income.commission_fee || 0
         const serviceFee = income.service_fee || 0
-        const transactionFee = (income.transaction_fee || 0) + (income.credit_card_transaction_fee || 0)
+        // Shopee KHÔNG trả `transaction_fee` — trường thật là `seller_transaction_fee`
+        // (credit_card_transaction_fee là CÙNG khoản đó, cộng cả hai là đếm 2 lần).
+        const transactionFee = income.seller_transaction_fee
+            ?? income.credit_card_transaction_fee ?? income.transaction_fee ?? 0
         // Ads Smart Voucher: phần giảm giá do voucher quảng cáo (advertiser tài trợ).
         // Chỉ QUAN SÁT — chưa trừ vào netRevenue cho tới khi xác định seller có gánh hay không.
         const adsVoucherDiscount = data.response?.buyer_payment_info?.ads_voucher_discount || 0
+        // PHÍ SÀN = giá bán − thực nhận: gộp trọn mọi khấu trừ (kể cả khoản Shopee
+        // không đặt tên riêng), và bảo đảm tổng tiền − phí = thực nhận khớp tuyệt
+        // đối. Cộng tay từng khoản có tên thì luôn hụt (case 2026-07: cộng tay ra
+        // 239.150 nhưng khấu trừ thật là 255.575).
+        const sellingPrice = income.order_selling_price || 0
+        const escrowAmount = income.escrow_amount || 0
+        const namedFees = commissionFee + serviceFee + transactionFee
+        const totalFees = sellingPrice > 0 && escrowAmount > 0
+            ? Math.max(0, sellingPrice - escrowAmount)
+            : namedFees
         return {
-            escrowAmount: income.escrow_amount || 0,
-            totalFees: commissionFee + serviceFee + transactionFee,
+            escrowAmount,
+            totalFees,
             commissionFee,
             serviceFee,
             transactionFee,
@@ -660,21 +714,36 @@ export class ShopeeService extends PlatformService {
         const now = Math.floor(Date.now() / 1000)
         const timeFrom = params.since ? Math.floor(params.since.getTime() / 1000) : now - 15 * 86400
 
-        // Phân trang đầy đủ (trước đây cố định page 1 → quá 50 yêu cầu là sót)
+        // Shopee CHẶN cửa sổ > 15 ngày ("The period between create_time_from and
+        // created_time_of must not more than 15 days") → tự chia khung 14 ngày,
+        // nếu không mọi lần kéo quá 15 ngày đều ném lỗi và KHÔNG lấy được phiếu nào.
+        const WINDOW = 14 * 86400
         const all: any[] = []
-        for (let pageNo = 1; pageNo <= 10; pageNo++) {
-            const url = this.apiUrl(path) +
-                `&create_time_from=${timeFrom}&create_time_to=${now}` +
-                `&page_no=${pageNo}&page_size=50`
+        for (let winFrom = timeFrom; winFrom < now; winFrom += WINDOW) {
+            const winTo = Math.min(winFrom + WINDOW, now)
+            // Phân trang đầy đủ (trước đây cố định page 1 → quá 50 yêu cầu là sót)
+            for (let pageNo = 1; pageNo <= 10; pageNo++) {
+                const url = this.apiUrl(path) +
+                    `&create_time_from=${winFrom}&create_time_to=${winTo}` +
+                    `&page_no=${pageNo}&page_size=50`
 
-            const data = await this.httpGet(url)
-            if (data.error) throw new Error(`Shopee getReturns: ${data.error} - ${data.message}`)
+                const data = await this.httpGet(url)
+                if (data.error) throw new Error(`Shopee getReturns: ${data.error} - ${data.message}`)
 
-            const returnList = data.response?.return || []
-            all.push(...returnList)
-            if (returnList.length < 50 || !data.response?.more) break
+                const returnList = data.response?.return || []
+                all.push(...returnList)
+                if (returnList.length < 50 || !data.response?.more) break
+            }
         }
-        return all.map((r: any) => this.mapReturn(r))
+        // Cùng 1 phiếu có thể rơi vào 2 khung (biên) → khử trùng theo return_sn
+        const seen = new Set<string>()
+        return all
+            .filter((r: any) => {
+                const k = String(r.return_sn || r.returnsn || '')
+                if (!k || seen.has(k)) return false
+                seen.add(k); return true
+            })
+            .map((r: any) => this.mapReturn(r))
     }
 
     async getReturnDetail(returnSn: string) {
@@ -793,6 +862,16 @@ export class ShopeeService extends PlatformService {
         } while (true)
 
         console.log(`[Shopee Chat] Total conversations collected: ${allConvs.length} from ${pageCount} pages`)
+
+        // Khử trùng lặp: trang phân trang của Shopee chồng mép (item cuối trang N
+        // lặp lại ở trang N+1) → cùng conversation_id xuất hiện 2 lần trên UI.
+        const seen = new Set<string>()
+        allConvs = allConvs.filter((c: any) => {
+            const id = String(c.conversation_id || '')
+            if (!id || seen.has(id)) return false
+            seen.add(id)
+            return true
+        })
 
         // Sort conversations by last message timestamp (descending)
         allConvs.sort((a, b) => (b.last_message_timestamp || 0) - (a.last_message_timestamp || 0))
@@ -936,5 +1015,87 @@ export class ShopeeService extends PlatformService {
 
     private sleep(ms: number) {
         return new Promise(r => setTimeout(r, ms))
+    }
+
+    // ─── Flash Sale (v2.shop_flash_sale) ─────────────────────────────────────────
+    // Shop-type API — ký y hệt order (apiUrl). LƯU Ý nghiệp vụ: Shopee GIỮ TỒN
+    // campaign ngay khi thêm item vào flash sale → không được tạo trước hàng loạt;
+    // cron flashSaleScheduler chỉ đẩy sale kế tiếp lên Shopee sau khi sale trước
+    // kết thúc (yêu cầu "hết flash sale này mới tới flash sale sau").
+
+    /** Khung giờ flash sale còn đăng ký được trong [from, to] (unix seconds). */
+    async flashSaleGetTimeSlots(fromUnix: number, toUnix: number): Promise<{ timeslot_id: number; start_time: number; end_time: number }[]> {
+        const path = '/api/v2/shop_flash_sale/get_time_slot_id'
+        const url = `${this.apiUrl(path)}&start_time=${fromUnix}&end_time=${toUnix}`
+        const data = await this.httpGet(url)
+        if (data.error) throw new Error(`Shopee get_time_slot_id: ${data.error} - ${data.message}`)
+        return data.response || []
+    }
+
+    /** Tạo flash sale rỗng cho 1 khung giờ → flash_sale_id. */
+    async flashSaleCreate(timeslotId: number): Promise<number> {
+        const data = await this.httpPost(this.apiUrl('/api/v2/shop_flash_sale/create_shop_flash_sale'), {
+            timeslot_id: timeslotId,
+        })
+        if (data.error) throw new Error(`Shopee create_shop_flash_sale: ${data.error} - ${data.message}`)
+        return data.response?.flash_sale_id
+    }
+
+    /**
+     * Thêm items vào flash sale. items theo shape Shopee:
+     * [{ item_id, purchase_limit, models: [{ model_id, input_promo_price, stock }] }]
+     * Trả về danh sách bị Shopee từ chối (failed_items) để hiển thị lý do.
+     */
+    async flashSaleAddItems(flashSaleId: number, items: any[]): Promise<{ failedItems: any[] }> {
+        const data = await this.httpPost(this.apiUrl('/api/v2/shop_flash_sale/add_shop_flash_sale_items'), {
+            flash_sale_id: flashSaleId,
+            items,
+        })
+        if (data.error) throw new Error(`Shopee add_shop_flash_sale_items: ${data.error} - ${data.message}`)
+        return { failedItems: data.response?.failed_items || [] }
+    }
+
+    /** Bật (1) / tắt (2) flash sale. */
+    async flashSaleUpdateStatus(flashSaleId: number, status: 1 | 2): Promise<void> {
+        const data = await this.httpPost(this.apiUrl('/api/v2/shop_flash_sale/update_shop_flash_sale'), {
+            flash_sale_id: flashSaleId,
+            status,
+        })
+        if (data.error) throw new Error(`Shopee update_shop_flash_sale: ${data.error} - ${data.message}`)
+    }
+
+    /** Chi tiết 1 flash sale (status: 1 upcoming, 2 ongoing, 3 rejected, 4 ended...). */
+    async flashSaleGet(flashSaleId: number): Promise<any> {
+        const url = `${this.apiUrl('/api/v2/shop_flash_sale/get_shop_flash_sale')}&flash_sale_id=${flashSaleId}`
+        const data = await this.httpGet(url)
+        if (data.error) throw new Error(`Shopee get_shop_flash_sale: ${data.error} - ${data.message}`)
+        return data.response
+    }
+
+    /** Xoá flash sale (chỉ sale chưa diễn ra). */
+    async flashSaleDelete(flashSaleId: number): Promise<void> {
+        const data = await this.httpPost(this.apiUrl('/api/v2/shop_flash_sale/delete_shop_flash_sale'), {
+            flash_sale_id: flashSaleId,
+        })
+        if (data.error) throw new Error(`Shopee delete_shop_flash_sale: ${data.error} - ${data.message}`)
+    }
+
+    /**
+     * Model list của 1 item (để build models[] cho add items — mỗi model cần
+     * input_promo_price + stock riêng). Item không phân loại → mảng rỗng.
+     */
+    async getModelList(itemId: number): Promise<{ model_id: number; price: number; stock: number; name: string }[]> {
+        const url = `${this.apiUrl('/api/v2/product/get_model_list')}&item_id=${itemId}`
+        const data = await this.httpGet(url)
+        if (data.error) throw new Error(`Shopee get_model_list: ${data.error} - ${data.message}`)
+        const models = data.response?.model || []
+        return models.map((m: any) => ({
+            model_id: m.model_id,
+            name: m.model_name || '',
+            // GIÁ GỐC làm chuẩn tính % giảm flash sale (Shopee validate 5–90% so
+            // với original_price; current_price có thể đã dính KM khác → sai chuẩn).
+            price: m.price_info?.[0]?.original_price ?? m.price_info?.[0]?.current_price ?? 0,
+            stock: m.stock_info_v2?.seller_stock?.[0]?.stock ?? m.stock_info?.[0]?.current_stock ?? 0,
+        }))
     }
 }

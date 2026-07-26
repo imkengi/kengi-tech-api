@@ -21,9 +21,14 @@ export async function convertOnlineOrderToTransaction(prisma: StorePrisma, order
     // Only convert orders with statuses that indicate a sale
     const convertibleStatuses = [
         // lowercase (nội bộ, sau khi mapStatus)
-        'confirmed', 'processing', 'shipping', 'completed',
+        'confirmed', 'processing', 'shipping', 'completed', 'delivered',
         // Shopee UPPERCASE (đề phòng lưu thẳng từ API)
         'READY_TO_SHIP', 'PROCESSED', 'SHIPPED', 'COMPLETED',
+        // TikTok giữ nguyên trạng thái gốc (mapStatus từ 2026-06-11) — TRƯỚC ĐÂY
+        // THIẾU ở đây nên đơn TikTok kể cả DELIVERED bị chặn, không lên phiếu ⇒
+        // không vào hàng đợi xuất HĐ (tháng 7 chỉ 5/≥50 đơn đã giao vào được).
+        'AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'PARTIALLY_SHIPPING',
+        'IN_TRANSIT', 'DELIVERED',
     ]
     if (!convertibleStatuses.includes(order.status)) return false
 
@@ -47,8 +52,51 @@ export async function convertOnlineOrderToTransaction(prisma: StorePrisma, order
     const transactionItems: any[] = []
     const inventoryUpdates: { productId: string; productName: string; productSku: string; quantity: number }[] = []
 
+    // COMBO: 1 dòng đơn = nhiều mặt hàng. Bung thành từng thành phần → kho trừ
+    // đúng từng mã, tồn kho thuế đúng từng mã, và HOÁ ĐƠN XUẤT TỪNG SẢN PHẨM
+    // (hoá đơn lấy dòng hàng từ phiếu bán). Tiền combo chia theo tỷ trọng giá gốc,
+    // phần lẻ dồn vào dòng lớn nhất để tổng khớp tuyệt đối tiền khách trả.
+    const expandBundle = async (bundleId: string, item: any): Promise<boolean> => {
+        const bundle = await prisma.bundle.findUnique({ where: { id: bundleId } }).catch(() => null)
+        let comps: any[] = []
+        try { comps = JSON.parse((bundle as any)?.items || '[]') } catch { comps = [] }
+        const resolved: { p: any; qty: number; weight: number }[] = []
+        for (const c of comps) {
+            const cp = c.productId
+                ? await prisma.product.findUnique({ where: { id: c.productId } }).catch(() => null)
+                : (c.sku ? await prisma.product.findFirst({ where: { sku: c.sku } }).catch(() => null) : null)
+            if (!cp) { console.log(`[OrderSync] Combo ${bundle?.name}: thiếu thành phần ${c.sku || c.productId}`); continue }
+            const qty = (Number(c.quantity) || 1) * (item.quantity || 1)
+            resolved.push({ p: cp, qty, weight: (Number(c.originalPrice) || cp.sellingPrice || 1) * (Number(c.quantity) || 1) })
+        }
+        if (resolved.length === 0) return false
+        const total = Math.round(Number(item.lineTotal) || 0)
+        const sumW = resolved.reduce((a, r) => a + r.weight, 0) || 1
+        const parts = resolved.map(r => Math.round(total * r.weight / sumW))
+        const diff = total - parts.reduce((a, n) => a + n, 0)
+        if (diff !== 0) {
+            let bi = 0
+            parts.forEach((v, i) => { if ((v || 0) > (parts[bi] || 0)) bi = i })
+            parts[bi] = (parts[bi] || 0) + diff
+        }
+        resolved.forEach((r, i) => {
+            const lt = parts[i] || 0
+            transactionItems.push({
+                productId: r.p.id, productName: r.p.name, sku: r.p.sku,
+                quantity: r.qty, baseQuantity: r.qty,
+                unitPrice: r.qty > 0 ? Math.round(lt / r.qty) : lt,
+                discount: 0, lineTotal: lt,
+            })
+            inventoryUpdates.push({ productId: r.p.id, productName: r.p.name, productSku: r.p.sku, quantity: r.qty })
+        })
+        return true
+    }
+
     for (const item of order.items) {
         let product = null
+        // Hệ số quy đổi của ánh xạ SKU: phân loại trên sàn là VỈ nhưng kho đếm
+        // theo CÁI → 1 vỉ phải trừ 10 cái.
+        let mapRate = 1
 
         // Try matching by productId first (if already linked)
         if (item.productId) {
@@ -68,12 +116,86 @@ export async function convertOnlineOrderToTransaction(prisma: StorePrisma, order
             }
         }
 
+        // Bảng ÁNH XẠ SKU sàn → kho (user tự map ở màn "Ánh xạ SKU"). Đơn TikTok/
+        // Shopee hay dùng mã riêng ("Ct30plus", "cs24"…) không trùng SKU kho →
+        // trước đây đơn bị bỏ qua, không lên phiếu ⇒ không xuất được hoá đơn.
+        if (!product && item.sku) {
+            const map = await prisma.skuMapping.findFirst({
+                where: {
+                    platformSku: { equals: item.sku, mode: 'insensitive' },
+                    OR: [{ platform: null }, { platform: order.platform || undefined }],
+                },
+            }).catch(() => null)
+            if ((map as any)?.bundleId) {
+                if (await expandBundle(String((map as any).bundleId), item)) continue
+            }
+            if (map?.productId) {
+                product = await prisma.product.findUnique({ where: { id: map.productId } })
+                mapRate = Number((map as any).conversionRate) || 1
+                if (product) {
+                    await prisma.onlineOrderItem.update({
+                        where: { id: item.id },
+                        data: { productId: product.id },
+                    }).catch(() => { })
+                }
+            }
+        }
+
+        // Fallback: map qua OnlineProduct (link sàn ↔ kho user đã thiết lập ở màn
+        // "Sản phẩm online"). Đơn Shopee thường KHÔNG có SKU (item.sku = null),
+        // nhưng tên item trong đơn = tên listing trên sàn → tra OnlineProduct cùng
+        // kênh theo sku/tên, lấy localProductId. Chỉ nhận khi khớp DUY NHẤT 1
+        // listing (tên trùng nhau giữa 2 listing khác kho → bỏ qua cho an toàn).
+        if (!product && order.channelId) {
+            const candidates = await prisma.onlineProduct.findMany({
+                where: {
+                    channelId: order.channelId,
+                    localProductId: { not: null },
+                    OR: [
+                        ...(item.sku ? [{ sku: item.sku }] : []),
+                        { name: item.productName },
+                    ],
+                },
+                include: { localProduct: true },
+                take: 2,
+            })
+            if (candidates.length === 1 && candidates[0].localProduct) {
+                product = candidates[0].localProduct
+                await prisma.onlineOrderItem.update({
+                    where: { id: item.id },
+                    data: { productId: product.id },
+                }).catch(() => { })
+            }
+        }
+
+        // Mã ĐÃ GỘP sang mã khác: chuyển sang mã đích + nhân hệ số (mã cũ vẫn còn
+        // để sàn dò theo SKU, nhưng hàng thật nằm ở mã đích).
+        if (product && (product as any).mergedIntoId) {
+            const tgt = await prisma.product.findUnique({ where: { id: (product as any).mergedIntoId } }).catch(() => null)
+            if (tgt) {
+                mapRate *= Number((product as any).mergedRate) || 1
+                product = tgt
+            }
+        }
+
+        // Sản phẩm khớp được nhưng bản thân nó là COMBO đã định nghĩa → bung ra.
+        // Không có nhánh này thì combo đã nhập sẵn trong kho sẽ khớp thẳng và
+        // KHÔNG BAO GIỜ chạm tới ánh xạ combo.
+        if (product && (product as any).bundleId) {
+            if (await expandBundle(String((product as any).bundleId), item)) continue
+        }
+
         if (product) {
+            // quantity giữ nguyên số của SÀN (1 vỉ) để còn đối chiếu với đơn gốc;
+            // baseQuantity là số theo ĐƠN VỊ GỐC (10 cái) — kho trừ và tồn kho thuế
+            // đều đọc baseQuantity.
+            const baseQty = Math.round((item.quantity || 0) * mapRate)
             transactionItems.push({
                 productId: product.id,
                 productName: product.name,
                 sku: product.sku,
                 quantity: item.quantity,
+                baseQuantity: baseQty,
                 unitPrice: item.unitPrice,
                 discount: item.discount || 0,
                 lineTotal: item.lineTotal,
@@ -83,7 +205,7 @@ export async function convertOnlineOrderToTransaction(prisma: StorePrisma, order
                 productId: product.id,
                 productName: product.name,
                 productSku: product.sku,
-                quantity: item.quantity,
+                quantity: baseQty,
             })
         } else {
             // Product not found in system — still add to transaction without productId
@@ -185,10 +307,11 @@ export async function processNewOrders(prisma: StorePrisma, channelId: string): 
         where: {
             channelId,
             status: { in: [
-                'confirmed', 'processing', 'shipping', 'completed',
+                'confirmed', 'processing', 'shipping', 'completed', 'delivered',
                 'READY_TO_SHIP', 'PROCESSED', 'SHIPPED', 'COMPLETED',
                 // TikTok native (mapStatus giữ nguyên trạng thái gốc từ 2026-06-11)
                 'AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'PARTIALLY_SHIPPING', 'IN_TRANSIT',
+                'DELIVERED', // thiếu trước đây → đơn TikTok đã giao không bao giờ được chuyển
             ] },
         },
         select: { id: true, orderNumber: true },

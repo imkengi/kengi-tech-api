@@ -1,11 +1,12 @@
-import { Router, Response } from 'express'
+import { Router, Response, NextFunction } from 'express'
 import { errMsg } from '../lib/errorResponse'
 import { authMiddleware, AuthRequest, getBranchFilter } from '../middleware/auth'
 import { requirePermission } from '../middleware/permissionMiddleware'
 import { nextCode } from '../lib/codeGenerator'
 import { reverseOnlineOrderEffects, isReversalStatus } from '../services/onlineOrderReversal'
 import { adjustSellableStock } from '../lib/warehouseHelper'
-import { registryPrisma } from '../lib/prisma'
+import { registryPrisma, mapWithConcurrency } from '../lib/prisma'
+import { computeOrderProfits } from '../lib/onlineOrderProfit'
 
 const router = Router()
 
@@ -374,17 +375,39 @@ router.get('/', authMiddleware, requirePermission('online_orders.view', 'orders.
             prisma.onlineOrder.count({ where }),
             prisma.onlineOrder.findMany({
                 where,
-                include: { items: true, channel: true },
+                // items kèm SKU kho của SP đã link — packing list dùng làm fallback
+                // khi item.sku rỗng (SP Shopee nhiều phân loại có item_sku trống)
+                include: { items: { include: { product: { select: { sku: true } } } }, channel: true },
                 orderBy: { createdAt: 'desc' },
                 skip,
                 take: size,
             }),
         ])
 
+        // Lợi nhuận tạm tính — chỉ owner/admin thấy, cùng quy ước với phí sàn /
+        // thực nhận ở /stats. Tính sau khi lấy đơn để không đụng vào câu query lọc.
+        let items: any[] = orders
+        if (['owner', 'admin'].includes(req.user?.role || 'cashier')) {
+            const profits = await computeOrderProfits(prisma, orders).catch(err => {
+                console.error('Compute order profits error:', err)
+                return new Map()
+            })
+            items = orders.map(o => {
+                const p = profits.get(o.id)
+                return p ? {
+                    ...o,
+                    estimatedCost: p.cost,
+                    estimatedProfit: p.profit,
+                    profitIsEstimate: p.estimated,
+                    profitMissingCost: p.missingCost,
+                } : o
+            })
+        }
+
         res.json({
             success: true,
             data: {
-                items: orders,
+                items,
                 total,
                 page: pageNum,
                 pageSize: size,
@@ -551,6 +574,176 @@ router.put('/products/:id', authMiddleware, requirePermission('online_orders.man
 
 
 // GET /api/online-orders/:id
+// ═══════════════════════════════════════════════════════════════════════════════
+//  ÁNH XẠ SKU SÀN → SẢN PHẨM KHO
+//  Đơn TikTok/Shopee dùng mã riêng ("Ct30plus", "cs24"…) không trùng SKU kho →
+//  orderSync bỏ qua → đơn không lên phiếu ⇒ không xuất được hoá đơn. 4 API dưới
+//  cho phép: xem SKU nào đang treo, map sang hàng trong kho, rồi chạy lại.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Vận hành nội bộ: x-admin-key + x-store-code (giống /api/einvoice, /api/mcp) để
+// chẩn đoán SKU treo mà không cần đăng nhập. Request thường vẫn qua authMiddleware.
+const skuAuth = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    const adminKey = req.headers['x-admin-key'] as string
+    if (adminKey && process.env.ADMIN_KEY && adminKey === process.env.ADMIN_KEY) {
+        const code = String(req.headers['x-store-code'] || '').trim()
+        if (code) {
+            const { getStorePrisma } = await import('../lib/prisma')
+            const store = await registryPrisma.store.findFirst({ where: { code: { equals: code, mode: 'insensitive' } } })
+            if (store) {
+                req.storePrisma = getStorePrisma(store.schema)
+                req.user = { role: 'admin', storeSchema: store.schema, branchSchema: store.schema } as any
+                next()
+                return
+            }
+        }
+        res.status(400).json({ success: false, error: 'x-admin-key cần kèm x-store-code hợp lệ' })
+        return
+    }
+    authMiddleware(req, res, next)
+}
+
+// GET /sku-mappings — danh sách ánh xạ đã lưu
+router.get('/sku-mappings', skuAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const rows = await prisma.skuMapping.findMany({
+            include: { product: { select: { id: true, sku: true, name: true } } },
+            orderBy: { createdAt: 'desc' },
+            take: 500,
+        })
+        res.json({ success: true, data: rows })
+    } catch (err) {
+        console.error('list sku-mappings error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// POST /sku-mappings {platformSku, productId, platform?, note?} — tạo/cập nhật
+router.post('/sku-mappings', skuAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const platformSku = String(req.body?.platformSku || '').trim()
+        const productId = String(req.body?.productId || '').trim()
+        const platform = req.body?.platform ? String(req.body.platform).toLowerCase() : null
+        if (!platformSku || !productId) {
+            res.status(400).json({ success: false, error: 'Thiếu platformSku hoặc productId' }); return
+        }
+        const product = await prisma.product.findUnique({ where: { id: productId } })
+        if (!product) { res.status(404).json({ success: false, error: 'Sản phẩm kho không tồn tại' }); return }
+
+        const existing = await prisma.skuMapping.findFirst({ where: { platformSku, platform } })
+        const row = existing
+            ? await prisma.skuMapping.update({ where: { id: existing.id }, data: { productId, note: req.body?.note || null } })
+            : await prisma.skuMapping.create({ data: { platformSku, productId, platform, note: req.body?.note || null } })
+        res.json({ success: true, data: row })
+    } catch (err) {
+        console.error('save sku-mapping error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// DELETE /sku-mappings/:id
+router.delete('/sku-mappings/:id', skuAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        await prisma.skuMapping.delete({ where: { id: String(req.params.id) } })
+        res.json({ success: true })
+    } catch (err) {
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// GET /unmatched-skus?days=90 — SKU trên sàn CHƯA khớp hàng kho, gom theo mã +
+// đếm số đơn/dòng để biết cái nào đáng map trước. Chỉ tính đơn CHƯA lên phiếu.
+router.get('/unmatched-skus', skuAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const days = Math.min(365, Math.max(1, Number(req.query.days) || 90))
+        const from = new Date(Date.now() - days * 86400_000)
+        // CHỈ liệt kê mã THẬT SỰ không có trong kho. Mã đã tồn tại (vd SHD4030) mà
+        // chưa khớp là do đơn chưa được xử lý (kẹt cổng trạng thái) — map lại vô ích,
+        // chỉ cần bấm "Chạy lại chuyển phiếu". Hàng KHÔNG có mã cũng tách riêng vì
+        // không map bằng SKU được (phải link ở màn "Sản phẩm trên sàn").
+        const notConverted = `
+            AND o."createdAt" >= $1
+            AND i."productId" IS NULL
+            AND NOT EXISTS (
+                SELECT 1 FROM "Transaction" t WHERE t."receiptNumber" = 'ONLINE-' || o."orderNumber"
+            )`
+        const [list, noSkuRows] = await Promise.all([
+            prisma.$queryRawUnsafe(`
+                SELECT i.sku AS "platformSku",
+                       MIN(i."productName") AS "sampleName",
+                       COALESCE(o.platform,'?') AS platform,
+                       COUNT(DISTINCT o.id)::int AS "soDon",
+                       COALESCE(SUM(i."lineTotal"),0)::float8 AS "tongTien"
+                FROM "OnlineOrderItem" i
+                JOIN "OnlineOrder" o ON o.id = i."onlineOrderId"
+                WHERE NULLIF(TRIM(i.sku),'') IS NOT NULL
+                  ${notConverted}
+                  AND NOT EXISTS (
+                      SELECT 1 FROM "Product" p WHERE LOWER(TRIM(p.sku)) = LOWER(TRIM(i.sku))
+                  )
+                  AND NOT EXISTS (
+                      SELECT 1 FROM "SkuMapping" m WHERE LOWER(TRIM(m."platformSku")) = LOWER(TRIM(i.sku))
+                  )
+                GROUP BY 1, 3
+                ORDER BY 4 DESC
+                LIMIT 300
+            `, from),
+            prisma.$queryRawUnsafe(`
+                SELECT COUNT(DISTINCT o.id)::int AS "soDon",
+                       COALESCE(SUM(i."lineTotal"),0)::float8 AS "tongTien"
+                FROM "OnlineOrderItem" i
+                JOIN "OnlineOrder" o ON o.id = i."onlineOrderId"
+                WHERE NULLIF(TRIM(i.sku),'') IS NULL
+                  ${notConverted}
+            `, from),
+        ])
+        res.json({ success: true, data: { list, noSku: (noSkuRows as any[])[0] || { soDon: 0, tongTien: 0 } } })
+    } catch (err) {
+        console.error('unmatched-skus error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// POST /reconvert {days?} — chạy lại chuyển phiếu cho đơn đã đủ điều kiện nhưng
+// chưa có phiếu (sau khi vừa map SKU). Idempotent: đơn đã có phiếu sẽ bị bỏ qua.
+router.post('/reconvert', skuAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const days = Math.min(365, Math.max(1, Number(req.body?.days) || 90))
+        const orders = await prisma.onlineOrder.findMany({
+            where: {
+                createdAt: { gte: new Date(Date.now() - days * 86400_000) },
+                status: {
+                    in: [
+                        'confirmed', 'processing', 'shipping', 'completed', 'delivered',
+                        'READY_TO_SHIP', 'PROCESSED', 'SHIPPED', 'COMPLETED',
+                        'AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'PARTIALLY_SHIPPING',
+                        'IN_TRANSIT', 'DELIVERED',
+                    ],
+                },
+            },
+            select: { id: true, orderNumber: true },
+            orderBy: { createdAt: 'desc' },
+            take: 2000,
+        })
+        let converted = 0, skipped = 0, failed = 0
+        for (const o of orders) {
+            try {
+                const ok = await convertOnlineOrderToTransaction(prisma, o.id)
+                if (ok) converted++; else skipped++
+            } catch { failed++ }
+        }
+        res.json({ success: true, data: { scanned: orders.length, converted, skipped, failed } })
+    } catch (err) {
+        console.error('reconvert error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
 router.get('/:id', authMiddleware, requirePermission('online_orders.view', 'orders.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
@@ -1648,7 +1841,7 @@ router.post('/shipping-label-batch', authMiddleware, async (req: AuthRequest, re
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { getPlatformService, isSupportedPlatform, TikTokService, type PlatformOrder } from '../services/platforms'
-import { processNewOrders } from '../services/orderSync'
+import { processNewOrders, convertOnlineOrderToTransaction } from '../services/orderSync'
 import { syncChannelReturns } from '../services/returnSync'
 
 // GET /api/online-orders/channels/:id/auth-url
@@ -1909,23 +2102,49 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
             .split(',').map(s => s.trim()).filter(Boolean)
         const statusList: (string | undefined)[] = statusFilter.length ? statusFilter : [undefined]
 
-        const MAX_ORDERS = 5000 // chặn full-sync lịch sử chạy quá đà
+        // Kéo lịch sử (from/to hoặc lần đầu theo syncFromDate) phải theo NGÀY ĐẶT
+        // (create_time) — update_time làm đơn cũ rơi lệch khung, backfill lỗ chỗ
+        // (case KENGISTORE thiếu 10-14 & 24-30/06). Sync gia số giữ update_time để
+        // bắt cả thay đổi trạng thái.
+        const isBackfill = Boolean(bodyFrom || bodyTo || !channel.lastSyncAt)
+        const timeRangeField: 'create_time' | 'update_time' = isBackfill ? 'create_time' : 'update_time'
+        // Trần trang/khung: 20 (1000 đơn) quá thấp cho shop đơn nhiều → backfill 80.
+        const PAGE_CAP = isBackfill ? 80 : 20
+        const MAX_ORDERS = isBackfill ? 20000 : 5000
+        // HẠN GIỜ: Cloud Run cắt request ở 300s → khoảng dài (tối đa 2 năm = 52
+        // khung Shopee) chắc chắn 504 và người dùng thấy "lỗi" dù đơn đã kéo về.
+        // Dừng chủ động ở 230s, trả kết quả MỘT PHẦN kèm mốc đã kéo tới đâu để
+        // bấm chạy tiếp — thà đồng bộ dở mà biết, còn hơn 504 mù.
+        const DEADLINE_MS = 230_000
+        const startedAt = Date.now()
+        let stoppedAt: Date | null = null
         const fetchWithRetry = async () => {
             allOrders = []
+            stoppedAt = null
             for (const win of windows) {
+                if (Date.now() - startedAt > DEADLINE_MS) {
+                    stoppedAt = win.from
+                    console.warn(`[Sync] ${channel.name}: DỪNG vì quá ${DEADLINE_MS / 1000}s — mới kéo tới ${win.from.toISOString().slice(0, 10)}`)
+                    break
+                }
                 for (const st of statusList) {
                     let page = 1
                     let hasMore = true
                     // TikTok v202309 uses opaque page_token cursors; other platforms use
                     // numeric `page`. Thread both — each platform reads what it needs.
                     let pageToken: string | undefined = undefined
-                    while (hasMore && page <= 20 && allOrders.length < MAX_ORDERS) {
+                    while (hasMore && page <= PAGE_CAP && allOrders.length < MAX_ORDERS) {
                         const result: { orders: PlatformOrder[]; hasMore: boolean; total: number; nextPageToken?: string } =
-                            await service.fetchOrders({ since: win.from, until: win.to, page, pageSize: 50, status: st, pageToken })
+                            await service.fetchOrders({ since: win.from, until: win.to, page, pageSize: 50, status: st, pageToken, timeRangeField })
                         allOrders = allOrders.concat(result.orders)
                         pageToken = result.nextPageToken
                         hasMore = result.hasMore
                         page++
+                    }
+                    // KHÔNG cắt âm thầm: còn trang mà chạm trần thì phải thấy trong log
+                    if (hasMore) {
+                        console.warn(`[Sync] ${channel.name}: CHẠM TRẦN ở khung ${win.from.toISOString().slice(0, 10)}→${win.to.toISOString().slice(0, 10)}` +
+                            ` (page>${PAGE_CAP} hoặc >${MAX_ORDERS} đơn) — khung này có thể thiếu đơn, chạy lại với khoảng hẹp hơn`)
                     }
                 }
             }
@@ -2033,9 +2252,15 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                             deliveredAt: order.deliveredAt ? new Date(order.deliveredAt) : null,
                             syncedAt: new Date(),
                             createdAt: new Date(order.createdAt),
-                            platformFeeRate: channel.commissionRate || 0,
-                            platformFee: Math.round(order.total * (channel.commissionRate || 0) / 100),
-                            netRevenue: Math.round(order.total - order.total * (channel.commissionRate || 0) / 100 - order.shippingFee),
+                            // PHÍ SÀN KHÔNG TỰ TÍNH: trước đây ước bằng tổng tiền ×
+                            // hoa hồng cấu hình (6%) rồi hiện như phí thật — con số
+                            // bịa, lệch xa phí thực tế (Shopee còn phí thanh toán,
+                            // voucher, vận chuyển...). Chỉ /sync-fees lấy escrow THẬT
+                            // từ sàn mới được ghi vào đây. Chưa có thì để 0 = "chưa
+                            // đối soát", giao diện hiện "—".
+                            platformFeeRate: 0,
+                            platformFee: 0,
+                            netRevenue: 0,
                             items: {
                                 create: order.items.map(item => ({
                                     productName: item.productName,
@@ -2064,7 +2289,9 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
         await prisma.onlineChannel.update({
             where: { id: channel.id },
             data: {
-                lastSyncAt: new Date(),
+                // Dừng giữa chừng vì hết giờ → mốc đồng bộ CHỈ tới khung dở dang,
+                // không được nhảy lên "bây giờ" (làm mất hẳn khoảng chưa kéo).
+                lastSyncAt: stoppedAt || new Date(),
                 totalOrders: orderStats._count,
                 totalRevenue: orderStats._sum.total || 0,
             },
@@ -2300,7 +2527,16 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
 
         res.json({
             success: true,
-            data: { imported, updated, statusRefreshed, productsSynced, errors: errors.length, total: allOrders.length, converted },
+            data: {
+                imported, updated, statusRefreshed, productsSynced,
+                errors: errors.length, total: allOrders.length, converted,
+                // Dừng vì hết giờ → báo rõ để người dùng bấm đồng bộ tiếp
+                partial: !!stoppedAt,
+                ...(stoppedAt ? {
+                    stoppedAt: (stoppedAt as Date).toISOString(),
+                    message: `Đồng bộ một phần: mới kéo tới ${(stoppedAt as Date).toLocaleDateString('vi-VN')} (khoảng quá dài). Bấm Đồng bộ lần nữa để chạy tiếp.`,
+                } : {}),
+            },
         })
     } catch (err: any) {
         console.error('Sync orders error:', err)
@@ -3032,6 +3268,65 @@ router.post('/channels/:id/sync-returns', authMiddleware, async (req: AuthReques
 
 
 // POST /api/online-orders/channels/:id/sync-products
+// POST /channels/:id/refresh-items — kéo lại chi tiết dòng hàng (từng phân loại)
+// cho các đơn CHƯA GIAO XONG, cập nhật mã (model_sku) + tên [phân loại] để phiếu
+// đóng gói khớp đúng SKU phân loại. Chỉ đổi sku+productName, giữ nguyên SL/giá/
+// productId. KHÔNG đụng đơn đã giao (tránh ảnh hưởng phiếu bán/tồn kho).
+router.post('/channels/:id/refresh-items', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const channel = await prisma.onlineChannel.findUnique({ where: { id: req.params.id as string } })
+        if (!channel) { res.status(404).json({ success: false, error: 'Kênh không tồn tại' }); return }
+        if (channel.platform !== 'shopee') { res.status(400).json({ success: false, error: 'Hiện chỉ hỗ trợ Shopee' }); return }
+
+        const service = getPlatformService(channel.platform, {
+            apiKey: channel.apiKey || '', apiSecret: channel.apiSecret || '',
+            accessToken: channel.accessToken || undefined, refreshToken: channel.refreshToken || undefined,
+            shopId: channel.shopId || undefined,
+        })
+        if (!service) { res.status(400).json({ success: false, error: 'Nền tảng chưa hỗ trợ' }); return }
+
+        const NON_DELIVERED = [
+            'pending', 'confirmed', 'processing', 'shipping',
+            'UNPAID', 'READY_TO_SHIP', 'PROCESSED', 'SHIPPED', 'AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'IN_TRANSIT',
+        ]
+        const orders = await prisma.onlineOrder.findMany({
+            where: { channelId: channel.id, status: { in: NON_DELIVERED }, externalOrderId: { not: null } },
+            include: { items: { orderBy: { id: 'asc' } } },
+            orderBy: { createdAt: 'desc' },
+            take: 200,
+        })
+
+        let ordersUpdated = 0, itemsUpdated = 0
+        for (const o of orders) {
+            const eid = (o.externalOrderId || '').replace(/^(SPE-|TIK-|LAZ-)/i, '')
+            if (!eid) continue
+            try {
+                const detail = await service.getOrderDetail(eid)
+                const fresh = detail?.items || []
+                // Cập nhật theo THỨ TỰ khi số dòng khớp (Shopee trả item_list ổn định)
+                if (fresh.length === 0 || fresh.length !== o.items.length) continue
+                let touched = false
+                for (let i = 0; i < o.items.length; i++) {
+                    const old = o.items[i], nw = fresh[i]
+                    if ((nw.sku && nw.sku !== old.sku) || (nw.productName && nw.productName !== old.productName)) {
+                        await prisma.onlineOrderItem.update({
+                            where: { id: old.id },
+                            data: { sku: nw.sku || old.sku, productName: nw.productName || old.productName },
+                        })
+                        itemsUpdated++; touched = true
+                    }
+                }
+                if (touched) ordersUpdated++
+            } catch { /* đơn lỗi lẻ — bỏ qua, không phá vòng */ }
+        }
+        res.json({ success: true, data: { ordersScanned: orders.length, ordersUpdated, itemsUpdated } })
+    } catch (err) {
+        console.error('refresh-items error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
 router.post('/channels/:id/sync-products', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
@@ -3179,17 +3474,42 @@ router.post('/channels/:id/push-stock', authMiddleware, async (req: AuthRequest,
         const errors: string[] = []
 
         for (const p of onlineProducts) {
-            // Resolve the local product: explicit link first, then SKU match
-            let local = p.localProduct
+            // Resolve the local product: explicit link → SKU match → BẢNG ÁNH XẠ.
+            // Thiếu bước ánh xạ thì phân loại có mã riêng (combo/vỉ) không bao giờ
+            // đẩy được tồn, và im lặng bỏ qua nên rất khó phát hiện.
+            let local: any = p.localProduct
+            // rate = số ĐƠN VỊ GỐC trong 1 đơn vị bán trên sàn (1 vỉ = 10 cái)
+            let rate = 1
             if (!local && p.sku) {
                 local = await prisma.product.findFirst({
                     where: { sku: p.sku },
-                    select: { id: true, sku: true, stock: true },
+                    select: { id: true, sku: true, stock: true, mergedIntoId: true, mergedRate: true },
+                })
+            }
+            if (!local && p.sku) {
+                const m = await prisma.skuMapping.findFirst({
+                    where: { platformSku: { equals: p.sku, mode: 'insensitive' } },
+                }).catch(() => null)
+                if (m?.productId) {
+                    rate = Number((m as any).conversionRate) || 1
+                    local = await prisma.product.findUnique({
+                        where: { id: m.productId },
+                        select: { id: true, sku: true, stock: true, mergedIntoId: true, mergedRate: true },
+                    })
+                }
+            }
+            // Mã ĐÃ GỘP: tồn nằm ở mã đích, quy đổi theo hệ số đã ghi
+            if (local?.mergedIntoId) {
+                rate *= Number(local.mergedRate) || 1
+                local = await prisma.product.findUnique({
+                    where: { id: local.mergedIntoId },
+                    select: { id: true, sku: true, stock: true, mergedIntoId: true, mergedRate: true },
                 })
             }
             if (!local) { skipped++; continue }
 
-            const targetStock = Math.max(0, Math.floor(local.stock || 0))
+            // Tồn theo ĐƠN VỊ BÁN trên sàn: 26 cái = 2 vỉ (không phải 26 vỉ)
+            const targetStock = Math.max(0, Math.floor((local.stock || 0) / (rate > 0 ? rate : 1)))
             if (!force && p.stock === targetStock) { skipped++; continue }
 
             try {
@@ -3377,7 +3697,11 @@ router.post('/channels/:id/sync-fees', authMiddleware, async (req: AuthRequest, 
         const orders = await prisma.onlineOrder.findMany({
             where: {
                 channelId: channel.id,
-                status: { in: ['COMPLETED', 'completed', 'DELIVERED', 'TO_CONFIRM_RECEIVE', 'delivered'] },
+                // KHÔNG lọc trạng thái: Shopee đã có phí giao dịch NGAY khi đơn phát
+                // sinh (đơn READY_TO_SHIP vẫn trả đủ commission/service/transaction
+                // fee + escrow_amount). Lọc theo trạng thái làm đơn đang xử lý không
+                // bao giờ được đối soát, sổ ôm phí ước tính sai gấp ~4 lần.
+                status: { notIn: ['cancelled', 'CANCELLED', 'UNPAID'] },
                 createdAt: { gte: new Date(Date.now() - days * 86400_000) },
             },
             select: { id: true, externalOrderId: true, orderNumber: true, total: true, shippingFee: true },
@@ -3388,9 +3712,12 @@ router.post('/channels/:id/sync-fees', authMiddleware, async (req: AuthRequest, 
         let updated = 0, unsettled = 0, failed = 0
         const errors: string[] = []
 
-        for (const order of orders) {
+        // Chạy SONG SONG có giới hạn thay vì tuần tự + ngủ 250ms/đơn: bản cũ quét
+        // 200 đơn mất ~220s (sát trần 300s Cloud Run → hay treo/timeout ở client).
+        // 6 luồng đưa về ~30s mà vẫn nhẹ nhàng với rate-limit của sàn.
+        await mapWithConcurrency(orders, async (order) => {
             const eid = (order.externalOrderId || '').replace(/^(SPE-|TIK-|LAZ-)/i, '')
-            if (!eid) { unsettled++; continue }
+            if (!eid) { unsettled++; return }
             try {
                 let platformFee: number | null = null
                 let netRevenue: number | null = null
@@ -3398,7 +3725,8 @@ router.post('/channels/:id/sync-fees', authMiddleware, async (req: AuthRequest, 
 
                 if (channel.platform === 'shopee') {
                     const escrow = await service.getEscrowDetail(eid)
-                    if (escrow && escrow.escrowAmount > 0) {
+                    // Nhận khi CÓ dữ liệu phí, không đòi tiền đã về ví
+                    if (escrow && (escrow.escrowAmount > 0 || escrow.totalFees > 0)) {
                         platformFee = escrow.totalFees
                         netRevenue = escrow.escrowAmount
                         adsVoucherDiscount = escrow.adsVoucherDiscount || 0
@@ -3415,7 +3743,7 @@ router.post('/channels/:id/sync-fees', authMiddleware, async (req: AuthRequest, 
                     }
                 }
 
-                if (platformFee === null || netRevenue === null) { unsettled++; continue }
+                if (platformFee === null || netRevenue === null) { unsettled++; return }
 
                 // Chỉ cập nhật số liệu đối chiếu trên đơn (phí THẬT sàn trừ + tiền
                 // thực nhận). KHÔNG sinh/ghi đè bút toán — phí sàn ghi nhận theo
@@ -3431,10 +3759,7 @@ router.post('/channels/:id/sync-fees', authMiddleware, async (req: AuthRequest, 
                 errors.push(`${order.orderNumber}: ${e.message}`)
                 console.error(`[sync-fees] ${channel.name} ${order.orderNumber}:`, e.message)
             }
-
-            // Soft throttle để không vượt rate limit của sàn
-            await new Promise(r => setTimeout(r, 250))
-        }
+        }, 6)
 
         await prisma.syncLog.create({
             data: {

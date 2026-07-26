@@ -6,6 +6,31 @@ import { registryPrisma, getStorePrisma } from '../lib/prisma'
 
 const router = Router()
 
+// Vận hành nội bộ: x-admin-key + x-store-code (giống /api/mcp, /api/einvoice) —
+// dùng debug thứ tự hội thoại/timestamp mà không cần phiên đăng nhập.
+router.use(async (req: any, res: Response, next: any) => {
+    const adminKey = req.headers['x-admin-key'] as string
+    if (adminKey && process.env.ADMIN_KEY && adminKey === process.env.ADMIN_KEY) {
+        const code = String(req.headers['x-store-code'] || '').trim()
+        if (code) {
+            const { registryPrisma, getStorePrisma } = await import('../lib/prisma')
+            const store = await registryPrisma.store.findFirst({ where: { code: { equals: code, mode: 'insensitive' } } })
+            if (store) {
+                req.storePrisma = getStorePrisma(store.schema)
+                req.user = { role: 'admin', storeSchema: store.schema, branchSchema: store.schema }
+                req.__viaAdminKey = true
+                next()
+                return
+            }
+        }
+        res.status(400).json({ success: false, error: 'x-admin-key cần kèm x-store-code hợp lệ' })
+        return
+    }
+    next()
+})
+const chatAuth = (req: any, res: Response, next: any) =>
+    req.__viaAdminKey ? next() : authMiddleware(req, res, next)
+
 // ─── Public chat rate limiters (per-IP) ─────────────────────────────────────
 // Public chat endpoints accept no auth, so spam control is per-IP only.
 // Conversation creation is rarer and more expensive (DDL on cold schema),
@@ -105,7 +130,7 @@ function generateSessionToken() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // GET /conversations — list all conversations
-router.get('/conversations', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/conversations', chatAuth, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         console.log('[Chat Debug] GET /conversations - user schema:', req.user?.branchSchema || req.user?.storeSchema, 'storeId:', req.user?.storeId)
@@ -165,7 +190,7 @@ router.get('/conversations', authMiddleware, async (req: AuthRequest, res: Respo
 })
 
 // GET /conversations/:id/messages — messages in convo
-router.get('/conversations/:id/messages', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/conversations/:id/messages', chatAuth, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         await ensureChatTables(prisma)
@@ -184,7 +209,7 @@ router.get('/conversations/:id/messages', authMiddleware, async (req: AuthReques
 })
 
 // POST /conversations/:id/messages — staff sends message
-router.post('/conversations/:id/messages', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.post('/conversations/:id/messages', chatAuth, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         await ensureChatTables(prisma)
@@ -216,7 +241,7 @@ router.post('/conversations/:id/messages', authMiddleware, async (req: AuthReque
 })
 
 // PUT /conversations/:id/read — mark as read
-router.put('/conversations/:id/read', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.put('/conversations/:id/read', chatAuth, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         await ensureChatTables(prisma)
@@ -237,7 +262,7 @@ router.put('/conversations/:id/read', authMiddleware, async (req: AuthRequest, r
 })
 
 // PUT /conversations/:id/status — update status
-router.put('/conversations/:id/status', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.put('/conversations/:id/status', chatAuth, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         await ensureChatTables(prisma)
@@ -256,7 +281,7 @@ router.put('/conversations/:id/status', authMiddleware, async (req: AuthRequest,
 })
 
 // GET /unread-count
-router.get('/unread-count', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/unread-count', chatAuth, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         await ensureChatTables(prisma)
@@ -272,7 +297,7 @@ router.get('/unread-count', authMiddleware, async (req: AuthRequest, res: Respon
     }
 })
 // POST /backfill-channels — one-time: set channelId on conversations that don't have one
-router.post('/backfill-channels', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.post('/backfill-channels', chatAuth, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         await ensureChatTables(prisma)
@@ -380,11 +405,64 @@ async function withTokenRefresh(prisma: any, channel: any, shopee: ShopeeService
 // Helper: safe timestamp to ISO string
 function safeTimestampToISO(ts: number | undefined | null): string | null {
     if (!ts || ts <= 0) return null
-    try { return new Date(ts * 1000).toISOString() } catch { return null }
+    // Shopee chat trả last_message_timestamp bằng NANOSECOND (19 chữ số) — nhân
+    // 1000 như trước ra Invalid Date → lastMessageAt=null → FE sort loạn thứ tự.
+    // Chuẩn hoá theo bậc độ lớn: ns / µs / ms / s đều về ms.
+    let ms: number
+    if (ts > 1e17) ms = ts / 1e6        // nanoseconds
+    else if (ts > 1e14) ms = ts / 1e3   // microseconds
+    else if (ts > 1e11) ms = ts         // milliseconds
+    else ms = ts * 1000                 // seconds
+    try { return new Date(ms).toISOString() } catch { return null }
+}
+
+// Dịch lỗi từ sàn thành thông báo hành động được cho người dùng.
+// Chuỗi trả về là tự soạn (không lộ chi tiết nội bộ) nên an toàn ở production —
+// khác với errMsg() vốn che hết thành "Internal server error".
+function platformChatError(platform: 'shopee' | 'tiktok', err: any): { status: number; body: { success: false; error: string; errorCode: string } } {
+    const msg: string = err?.message || ''
+    if (platform === 'shopee') {
+        if (msg.includes('source_ip_undeclared')) {
+            const ip = msg.match(/\(([\d.]+)\)/)?.[1]
+            return {
+                status: 502,
+                body: { success: false, errorCode: 'SHOPEE_IP_NOT_WHITELISTED', error: `Shopee chặn IP máy chủ${ip ? ` ${ip}` : ''}. Vào Shopee Open Platform Console → App List → IP Address Whitelist và thêm IP này, chat sẽ hoạt động lại ngay.` },
+            }
+        }
+        if (msg.includes('error_sign')) {
+            return {
+                status: 502,
+                body: { success: false, errorCode: 'SHOPEE_WRONG_SIGN', error: 'Sai chữ ký API Shopee (Partner Key/Secret của kênh không đúng — thường do kênh trùng lặp hoặc cấu hình cũ). Vui lòng kết nối lại hoặc xóa kênh Shopee này.' },
+            }
+        }
+        if (msg.includes('error_auth') || /token|expired|invalid/i.test(msg)) {
+            return {
+                status: 502,
+                body: { success: false, errorCode: 'SHOPEE_TOKEN_EXPIRED', error: 'Token Shopee hết hạn hoặc không hợp lệ. Vui lòng kết nối lại kênh Shopee.' },
+            }
+        }
+    } else {
+        if (msg.includes('105005') || msg.includes('106011') || /scope/i.test(msg)) {
+            return {
+                status: 502,
+                body: { success: false, errorCode: 'TIKTOK_MISSING_SCOPE', error: 'Token TikTok thiếu quyền Tin nhắn (chat). Vui lòng ủy quyền lại (Kết nối lại) kênh TikTok Shop và chấp nhận đầy đủ quyền khi TikTok hỏi.' },
+            }
+        }
+        if (/token|expired|unauthorized|105002/i.test(msg)) {
+            return {
+                status: 502,
+                body: { success: false, errorCode: 'TIKTOK_TOKEN_EXPIRED', error: 'Token TikTok hết hạn. Vui lòng kết nối lại kênh TikTok Shop.' },
+            }
+        }
+    }
+    if (msg.includes('không tồn tại') || msg.includes('chưa kết nối')) {
+        return { status: 400, body: { success: false, errorCode: 'CHANNEL_NOT_CONNECTED', error: msg } }
+    }
+    return { status: 500, body: { success: false, errorCode: 'PLATFORM_ERROR', error: errMsg(err) } }
 }
 
 // GET /shopee/conversations — fetch conversations from Shopee seller chat
-router.get('/shopee/conversations', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/shopee/conversations', chatAuth, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { channelId, type, pageSize } = req.query
@@ -425,14 +503,8 @@ router.get('/shopee/conversations', authMiddleware, async (req: AuthRequest, res
             shopeePinned: c.pinned,
             shopeeLastReadMessageId: c.lastReadMessageId,
         }))
-        // Sort: unread/unreplied first, then by most recent message (newest first)
-        items.sort((a: any, b: any) => {
-            // Unread first
-            if (a.unreadCount > 0 && b.unreadCount === 0) return -1
-            if (a.unreadCount === 0 && b.unreadCount > 0) return 1
-            // Then by raw timestamp (newest first)
-            return (b._sortTimestamp || 0) - (a._sortTimestamp || 0)
-        })
+        // Sort thuần MỚI NHẤT TRƯỚC (không ghim chưa-đọc — badge đỏ đã đủ nhận biết)
+        items.sort((a: any, b: any) => (b._sortTimestamp || 0) - (a._sortTimestamp || 0))
 
         res.json({
             success: true,
@@ -446,12 +518,13 @@ router.get('/shopee/conversations', authMiddleware, async (req: AuthRequest, res
         })
     } catch (err: any) {
         console.error('Shopee get conversations error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        const { status, body } = platformChatError('shopee', err)
+        res.status(status).json(body)
     }
 })
 
 // GET /shopee/messages/:conversationId — fetch messages for a Shopee conversation
-router.get('/shopee/messages/:conversationId', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/shopee/messages/:conversationId', chatAuth, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { channelId, pageSize, offset } = req.query
@@ -502,12 +575,13 @@ router.get('/shopee/messages/:conversationId', authMiddleware, async (req: AuthR
         })
     } catch (err: any) {
         console.error('Shopee get messages error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        const { status, body } = platformChatError('shopee', err)
+        res.status(status).json(body)
     }
 })
 
 // POST /shopee/send — send a message via Shopee seller chat
-router.post('/shopee/send', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.post('/shopee/send', chatAuth, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { channelId, toId, content } = req.body
@@ -532,12 +606,13 @@ router.post('/shopee/send', authMiddleware, async (req: AuthRequest, res: Respon
         })
     } catch (err: any) {
         console.error('Shopee send message error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        const { status, body } = platformChatError('shopee', err)
+        res.status(status).json(body)
     }
 })
 
 // POST /shopee/read — mark conversation as read
-router.post('/shopee/read', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.post('/shopee/read', chatAuth, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { channelId, conversationId, lastReadMessageId } = req.body
@@ -556,7 +631,8 @@ router.post('/shopee/read', authMiddleware, async (req: AuthRequest, res: Respon
         res.json({ success: true })
     } catch (err: any) {
         console.error('Shopee read conversation error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        const { status, body } = platformChatError('shopee', err)
+        res.status(status).json(body)
     }
 })
 
@@ -601,7 +677,7 @@ async function getTikTokServiceForChannel(prisma: any, channelId: string): Promi
 }
 
 // GET /tiktok/conversations
-router.get('/tiktok/conversations', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/tiktok/conversations', chatAuth, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { channelId, pageSize } = req.query
@@ -623,21 +699,19 @@ router.get('/tiktok/conversations', authMiddleware, async (req: AuthRequest, res
             _sortTimestamp: c.lastMessageTimestamp || 0,
             unreadCount: c.unreadCount || 0,
         }))
-        items.sort((a: any, b: any) => {
-            if (a.unreadCount > 0 && b.unreadCount === 0) return -1
-            if (a.unreadCount === 0 && b.unreadCount > 0) return 1
-            return (b._sortTimestamp || 0) - (a._sortTimestamp || 0)
-        })
+        // Sort thuần MỚI NHẤT TRƯỚC — đồng bộ với Shopee/nội bộ
+        items.sort((a: any, b: any) => (b._sortTimestamp || 0) - (a._sortTimestamp || 0))
 
         res.json({ success: true, data: { items, total: items.length, hasMore: false, nextOffset: '', source: 'tiktok' } })
     } catch (err: any) {
         console.error('TikTok get conversations error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        const { status, body } = platformChatError('tiktok', err)
+        res.status(status).json(body)
     }
 })
 
 // GET /tiktok/messages/:conversationId
-router.get('/tiktok/messages/:conversationId', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.get('/tiktok/messages/:conversationId', chatAuth, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { channelId, pageSize, offset } = req.query
@@ -667,12 +741,13 @@ router.get('/tiktok/messages/:conversationId', authMiddleware, async (req: AuthR
         res.json({ success: true, data: { messages, hasMore: result.hasMore, nextOffset: result.nextOffset, source: 'tiktok' } })
     } catch (err: any) {
         console.error('TikTok get messages error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        const { status, body } = platformChatError('tiktok', err)
+        res.status(status).json(body)
     }
 })
 
 // POST /tiktok/send — body { channelId, conversationId, content }
-router.post('/tiktok/send', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.post('/tiktok/send', chatAuth, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { channelId, conversationId, content } = req.body
@@ -686,12 +761,13 @@ router.post('/tiktok/send', authMiddleware, async (req: AuthRequest, res: Respon
         res.json({ success: true, data: result })
     } catch (err: any) {
         console.error('TikTok send message error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        const { status, body } = platformChatError('tiktok', err)
+        res.status(status).json(body)
     }
 })
 
 // POST /tiktok/read — body { channelId, conversationId }
-router.post('/tiktok/read', authMiddleware, async (req: AuthRequest, res: Response) => {
+router.post('/tiktok/read', chatAuth, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const { channelId, conversationId } = req.body
@@ -705,7 +781,8 @@ router.post('/tiktok/read', authMiddleware, async (req: AuthRequest, res: Respon
         res.json({ success: true })
     } catch (err: any) {
         console.error('TikTok read conversation error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        const { status, body } = platformChatError('tiktok', err)
+        res.status(status).json(body)
     }
 })
 

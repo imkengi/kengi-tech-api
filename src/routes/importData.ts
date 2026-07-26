@@ -571,10 +571,18 @@ router.post('/import-receipts', authMiddleware, upload.single('file'), async (re
                 const totalCost = itemsData.reduce((s, i) => s + i.total, 0)
                 const totalItems = itemsData.reduce((s, i) => s + i.quantity, 0)
 
+                // TỒN KHO THUẾ chỉ tính phiếu CÓ hoá đơn VAT thật. Trước đây cứ mã
+                // nào không phải TXN-IMP- tự sinh là bật cờ → mã phiếu nội bộ trong
+                // file Excel ("PN001", "NH-2026-01") cũng bị tính là có hoá đơn VAT,
+                // thổi phồng tồn kho thuế và mở cổng xuất HĐ bán khống (rủi ro thuế).
+                // Nay PHẢI khai báo tường minh (?hasVatInvoice=1 hoặc cột trong file).
+                const hasVatInvoice = String(req.query.hasVatInvoice || req.body?.hasVatInvoice || '') === '1'
+                    || String(req.query.hasVatInvoice || req.body?.hasVatInvoice || '').toLowerCase() === 'true'
                 await getPrisma(req).importReceipt.create({
                     data: {
                         code, supplierName, totalCost, totalItems, branchId: branchId || null,
                         status: 'completed', note, userId, userName: 'Import',
+                        hasVatInvoice, vatInvoiceNo: hasVatInvoice ? String(code) : null,
                         createdAt,
                         items: { create: itemsData }
                     }
@@ -836,6 +844,301 @@ router.post('/suppliers', authMiddleware, upload.single('file'), async (req: Aut
         console.error('[ImportData] Suppliers error:', err)
         if (req.query.stream === 'true') sendError(res, err?.message || 'Import thất bại')
         else res.status(500).json({ success: false, error: errMsg(err, 'Import thất bại') })
+    }
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  NHẬP HÀNG TỪ HOÁ ĐƠN ĐIỆN TỬ (PDF / XML)
+//  - XML: chuẩn hoá đơn VN TT78 (HDon → NDHDon → DSHHDVu → HHDVu) — parse regex
+//    theo schema quốc gia cố định, không cần thêm dependency XML.
+//  - PDF: pdf-parse rút text + heuristic bảng (kém tin cậy hơn XML — trả gì
+//    được nấy, người dùng duyệt lại trước khi tạo phiếu).
+//  - Khớp SP theo tên/SKU; ?autoCreate=1 → SP chưa có thì TỰ TẠO MÃ HÀNG MỚI
+//    (yêu cầu chủ shop: "không có hàng hoá trong kho thì tự tạo mã hàng").
+// ═══════════════════════════════════════════════════════════════════════════
+
+type ParsedInvoiceItem = {
+    name: string; unit: string; quantity: number; unitPrice: number; amount: number
+    // Thuế GTGT theo TỪNG DÒNG — giá nhập kho tính GỒM VAT (HKD không khấu trừ đầu vào)
+    vatRate?: number; vatAmount?: number
+    productId?: string; productSku?: string; matched?: boolean; created?: boolean
+    // Hệ số đã quy đổi từ ĐVT hoá đơn sang ĐVT kho (vd 1 vỉ = 10 cái → 10)
+    convertedBy?: number
+}
+
+function xmlTag(block: string, tag: string): string {
+    const m = block.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, 'i'))
+    return m ? m[1].trim() : ''
+}
+function xmlNum(block: string, tag: string): number {
+    const raw = xmlTag(block, tag).replace(/,/g, '.')
+    const n = parseFloat(raw)
+    return Number.isFinite(n) ? n : 0
+}
+
+function parseVnEInvoiceXml(xml: string) {
+    const items: ParsedInvoiceItem[] = []
+    const rows = xml.match(/<HHDVu>[\s\S]*?<\/HHDVu>/gi) || []
+    for (const row of rows) {
+        const name = xmlTag(row, 'THHDVu')
+        if (!name) continue
+        const quantity = xmlNum(row, 'SLuong')
+        const unitPrice = xmlNum(row, 'DGia')
+        const amount = xmlNum(row, 'ThTien') || quantity * unitPrice
+        // TSuat dạng "8%"/"10%"/"KCT"; TThue = tiền thuế dòng (có thể thiếu → tự tính)
+        const vatRate = parseFloat(xmlTag(row, 'TSuat').replace('%', '')) || 0
+        const vatAmount = xmlNum(row, 'TThue') || (vatRate > 0 ? Math.round(amount * vatRate / 100) : 0)
+        items.push({ name, unit: xmlTag(row, 'DVTinh') || 'cái', quantity: quantity || 1, unitPrice, amount, vatRate, vatAmount })
+    }
+    const sellerBlock = (xml.match(/<NBan>[\s\S]*?<\/NBan>/i) || [''])[0]
+    return {
+        format: 'xml' as const,
+        invoiceNumber: xmlTag(xml, 'SHDon'),
+        invoiceDate: xmlTag(xml, 'NLap'),
+        sellerName: xmlTag(sellerBlock, 'Ten'),
+        sellerTaxCode: xmlTag(sellerBlock, 'MST'),
+        // Tổng CHUẨN in trên hoá đơn — FE dùng để cân phần lẻ làm tròn từng dòng
+        totals: {
+            subtotal: xmlNum(xml, 'TgTCThue'),
+            vatTotal: xmlNum(xml, 'TgTThue'),
+            grandTotal: xmlNum(xml, 'TgTTTBSo'),
+        },
+        items,
+    }
+}
+
+/** Số kiểu VN/US: "1.574.074", "78.703,70", "20,00", "1,234,567.89" → number. */
+function vnNum(s: string): number {
+    let t = String(s).trim()
+    if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(t)) t = t.replace(/\./g, '').replace(',', '.')      // 1.574.074 / 78.703,70
+    else if (/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(t)) t = t.replace(/,/g, '')                     // 1,574,074.50
+    else if (/,\d{1,2}$/.test(t)) t = t.replace(/\./g, '').replace(',', '.')                   // 20,00
+    else t = t.replace(/,/g, '')
+    const n = parseFloat(t)
+    return Number.isFinite(n) ? n : 0
+}
+
+/**
+ * Đọc bảng hàng hoá từ text PDF hoá đơn VN (đã test với mẫu MISA meInvoice).
+ * Tên hàng thường TRÀN nhiều dòng → gom từ dòng bắt đầu bằng STT tới khi gặp
+ * "đuôi số": <ĐVT> <SL> <đơn giá> <thành tiền> [<thuế%> <tiền thuế>].
+ * Chỉ nhận dòng có thành tiền ≈ SL × đơn giá (±2%) để lọc rác.
+ */
+function parseInvoicePdfText(text: string) {
+    const items: ParsedInvoiceItem[] = []
+    const lines = text.replace(/\t/g, ' ').split(/\r?\n/).map(l => l.trim())
+    const tailRe = /([A-Za-zÀ-ỹ]{1,12})\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)(?:\s+(\d{1,2})%\s*([\d.,]+)?)?\s*$/
+    const startRe = /^(\d{1,3})\s+\S/
+    const stopRe = /^(Tổng hợp|Tổng cộng|Cộng tiền|Số tiền viết|Thuế suất)/i
+
+    // Rác chân trang PDF ("2/3", "tiếp theo", "trang sau") dính vào ĐUÔI dòng hàng
+    // cuối trang → tailRe (neo cuối dòng) trượt → RƠI MẤT dòng đó (bug thật: mất
+    // dòng 87.037+6.963 = lệch đúng 94.000đ trên HĐ 2057).
+    const pageJunkRe = /^(trang\s+)?\d{1,2}\/\d{1,2}\b|^ti[eế]p\s*theo|^\(ti[eế]p|^trang\s+(sau|\d)|^-{2,}|^\d+\s+of\s+\d+/i
+    let buf = ''
+    const flush = () => {
+        if (!buf) return
+        // Fallback: cắt rác chân trang ("2/3", "tiếp theo"…) ở đuôi rồi thử khớp
+        // lại — tên phải slice trên ĐÚNG chuỗi đã dùng để match.
+        let work = buf
+        let m = work.match(tailRe)
+        if (!m) {
+            work = buf.replace(/\s+\d{1,2}\/\d{1,2}\b[\s\S]*$/, '')
+            m = work.match(tailRe)
+        }
+        if (!m) {
+            work = buf.replace(/\s+ti[eế]p\s*th[\s\S]*$/i, '')
+            m = work.match(tailRe)
+        }
+        if (!m) {
+            work = buf.replace(/\s+-{2,}[\s\S]*$/, '') // "-- 2 of 3 --" dính đuôi
+            m = work.match(tailRe)
+        }
+        if (!m) {
+            // Fallback TỔNG QUÁT cho mọi loại rác dính đuôi (header bảng lặp lại ở
+            // trang sau, chân trang lạ…): cắt dần từng token cuối tới khi khớp đuôi.
+            // An toàn vì tailRe + kiểm tra thành tiền ≈ SL×đơn giá (±2%) vẫn gác.
+            let w = buf
+            for (let k = 0; k < 40 && !m; k++) {
+                const w2 = w.replace(/\s+\S+$/, '')
+                if (w2 === w) break
+                w = w2
+                m = w.match(tailRe)
+            }
+            if (m) work = w
+        }
+        if (m) {
+            const stt = work.match(/^(\d{1,3})\s+/)
+            const name = work.slice(stt ? stt[0].length : 0, work.length - m[0].length).trim()
+            const quantity = vnNum(m[2])
+            const unitPrice = vnNum(m[3])
+            const amount = vnNum(m[4])
+            if (name && quantity > 0 && unitPrice > 0 && amount > 0) {
+                const calc = quantity * unitPrice
+                if (Math.abs(calc - amount) / amount <= 0.02) {
+                    const vatRate = m[5] ? parseInt(m[5], 10) : 0
+                    const vatAmount = m[6] ? vnNum(m[6]) : (vatRate > 0 ? Math.round(amount * vatRate / 100) : 0)
+                    items.push({ name, unit: m[1], quantity, unitPrice, amount, vatRate, vatAmount })
+                }
+            }
+        }
+        buf = ''
+    }
+
+    for (const line of lines) {
+        if (stopRe.test(line)) { flush(); break }
+        if (pageJunkRe.test(line)) continue // chân trang — không cho dính vào dòng hàng
+        if (startRe.test(line)) { flush(); buf = line; continue }
+        if (buf) {
+            buf += ' ' + line
+            if (tailRe.test(buf) && /[\d.,]+\s*$/.test(line)) flush()
+        }
+    }
+    flush()
+
+    const invNo = text.match(/Số:\s*(\d{1,10})/) || text.match(/(?:Số hóa đơn|SHDon)\s*[:#]?\s*(\d{1,10})/i)
+    const seller = lines.find(l => /^(CÔNG TY|CTY|DNTN|HỘ KINH DOANH|HTX)/i.test(l)) || ''
+    const mst = text.match(/Mã số thuế:\s*([\d-]{10,14})/)
+    // Ngày lập HĐ VN: "Ngày 21 tháng 01 năm 2026" (hoặc dd/MM/yyyy) → YYYY-MM-DD
+    let invoiceDate = ''
+    const dMy = text.match(/[Nn]gày\s+(\d{1,2})\s+tháng\s+(\d{1,2})\s+năm\s+(\d{4})/)
+    if (dMy) invoiceDate = `${dMy[3]}-${String(dMy[2]).padStart(2, '0')}-${String(dMy[1]).padStart(2, '0')}`
+    else {
+        const dmy2 = text.match(/[Nn]gày\s*(?:lập|ký)?\s*[:：]?\s*(\d{1,2})\/(\d{1,2})\/(\d{4})/)
+        if (dmy2) invoiceDate = `${dmy2[3]}-${String(dmy2[2]).padStart(2, '0')}-${String(dmy2[1]).padStart(2, '0')}`
+    }
+    // Tổng CHUẨN của hoá đơn: dòng có 3 SỐ CUỐI "trước thuế  thuế  thanh toán"
+    // (chấp nhận tiền tố chữ như "Tổng cộng:", "Thuế suất 8%:") với a + b ≈ c và
+    // a ≈ tổng thành tiền các dòng hàng (±2%) — tránh vớ nhầm dòng hàng (dòng hàng
+    // có "8%" chen giữa nên không khớp mẫu 3-số-liền).
+    const sumAmount = items.reduce((s, i) => s + i.amount, 0)
+    let totals = { subtotal: 0, vatTotal: 0, grandTotal: 0 }
+    for (const line of lines) {
+        const m3 = line.match(/(\d[\d.,]*)\s+(\d[\d.,]*)\s+(\d[\d.,]*)\s*$/)
+        if (!m3) continue
+        const a = vnNum(m3[1]), b = vnNum(m3[2]), c = vnNum(m3[3])
+        if (a > 0 && c > 0 && Math.abs(a + b - c) <= 2 && (sumAmount === 0 || Math.abs(a - sumAmount) / a <= 0.02)) {
+            totals = { subtotal: a, vatTotal: b, grandTotal: c }
+            break
+        }
+    }
+    return {
+        format: 'pdf' as const, invoiceNumber: invNo?.[1] || '', invoiceDate,
+        sellerName: seller, sellerTaxCode: mst?.[1] || '', totals, items,
+    }
+}
+
+router.post('/parse-invoice', authMiddleware, upload.single('file'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = getPrisma(req) as any
+        if (!req.file) { res.status(400).json({ success: false, error: 'Chưa chọn file hoá đơn (PDF hoặc XML)' }); return }
+        const fname = (req.file.originalname || '').toLowerCase()
+        const buf = req.file.buffer
+
+        let parsed: {
+            format: string; invoiceNumber: string; invoiceDate: string; sellerName: string; sellerTaxCode: string
+            totals?: { subtotal: number; vatTotal: number; grandTotal: number }
+            items: ParsedInvoiceItem[]
+        }
+        const head = buf.slice(0, 200).toString('utf8')
+        if (fname.endsWith('.xml') || head.includes('<?xml') || head.includes('<HDon')) {
+            parsed = parseVnEInvoiceXml(buf.toString('utf8'))
+            if (parsed.items.length === 0) { res.status(400).json({ success: false, error: 'XML không đúng chuẩn hoá đơn điện tử VN (không tìm thấy dòng hàng HHDVu)' }); return }
+        } else if (fname.endsWith('.pdf') || head.startsWith('%PDF')) {
+            // pdf-parse v2: API dạng class PDFParse (gọi kiểu hàm v1 → "pdfParse
+            // is not a function" — chính là lỗi làm mọi PDF fail trước đây)
+            const { PDFParse } = (await import('pdf-parse')) as any
+            const parser = new PDFParse({ data: new Uint8Array(buf) })
+            const out = await parser.getText()
+            parsed = parseInvoicePdfText(String(out?.text || ''))
+            if (parsed.items.length === 0) {
+                res.status(400).json({ success: false, error: 'Không đọc được bảng hàng hoá từ PDF này (PDF dạng ảnh/scan hoặc bố cục lạ). Dùng file XML của hoá đơn sẽ chính xác 100%.' })
+                return
+            }
+        } else {
+            res.status(400).json({ success: false, error: 'Chỉ nhận file .xml hoặc .pdf' }); return
+        }
+
+        // ── Khớp sản phẩm theo tên (chính xác, không phân biệt hoa thường) hoặc SKU ──
+        const autoCreate = String(req.query.autoCreate || req.body?.autoCreate || '') === '1'
+        let defaultCategory: any = null
+        for (const it of parsed.items) {
+            const found = await prisma.product.findFirst({
+                where: { OR: [{ name: { equals: it.name, mode: 'insensitive' } }, { sku: it.name }] },
+            })
+            if (found) {
+                it.productId = found.id; it.productSku = found.sku; it.matched = true
+                continue
+            }
+            // LIÊN KẾT ĐÃ NHỚ: người dùng từng link dòng hoá đơn cùng tên vào SP kho
+            // (SkuMapping platform='invoice', key = tên dòng) → hoá đơn sau TỰ khớp,
+            // không phải link lại từng lần.
+            const remembered = await prisma.skuMapping.findFirst({
+                where: { platform: 'invoice', platformSku: { equals: it.name, mode: 'insensitive' } },
+                include: { product: { select: { id: true, sku: true, baseUnit: true } } },
+            }).catch(() => null)
+            if (remembered?.product) {
+                it.productId = remembered.product.id; it.productSku = remembered.product.sku; it.matched = true
+                // HỆ SỐ QUY ĐỔI: hoá đơn ghi 5 vỉ, kho đếm cái, vỉ = 10 cái → 50 cái,
+                // đơn giá chia 10. THÀNH TIỀN GIỮ NGUYÊN (không đụng vào tiền của HĐ).
+                const rate = Number((remembered as any).conversionRate) || 1
+                if (rate > 0 && rate !== 1) {
+                    it.quantity = (Number(it.quantity) || 0) * rate
+                    it.unitPrice = it.quantity > 0 ? (Number(it.amount) || 0) / it.quantity : it.unitPrice
+                    it.convertedBy = rate
+                    it.unit = remembered.product.baseUnit || it.unit
+                }
+                continue
+            }
+            if (autoCreate) {
+                if (!defaultCategory) {
+                    defaultCategory = await prisma.category.findFirst({ where: { name: { equals: 'Chưa phân loại', mode: 'insensitive' } } })
+                        || await prisma.category.create({ data: { name: 'Chưa phân loại' } })
+                }
+                const sku = 'SP' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 5).toUpperCase()
+                const created = await prisma.product.create({
+                    data: {
+                        name: it.name, sku, categoryId: defaultCategory.id,
+                        costPrice: it.unitPrice, sellingPrice: it.unitPrice,
+                        baseUnit: it.unit || 'cái', stock: 0,
+                    },
+                })
+                it.productId = created.id; it.productSku = created.sku; it.created = true
+            }
+        }
+
+        res.json({ success: true, data: parsed })
+    } catch (err: any) {
+        console.error('parse-invoice error:', err?.message || err)
+        res.status(500).json({ success: false, error: errMsg(err, 'Không đọc được file hoá đơn') })
+    }
+})
+
+// Tạo nhanh 1 mã hàng từ dòng hoá đơn (khi người dùng chọn "Tạo mới" thay vì
+// liên kết SKU sẵn có) — SKU tự sinh, vào nhóm "Chưa phân loại".
+router.post('/quick-product', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = getPrisma(req) as any
+        const name = String(req.body?.name || '').trim()
+        if (!name) { res.status(400).json({ success: false, error: 'Thiếu tên hàng hoá' }); return }
+        const costPrice = Math.max(0, Number(req.body?.costPrice) || 0)
+
+        const dupe = await prisma.product.findFirst({ where: { name: { equals: name, mode: 'insensitive' } } })
+        if (dupe) { res.json({ success: true, data: dupe, existed: true }); return }
+
+        const category = await prisma.category.findFirst({ where: { name: { equals: 'Chưa phân loại', mode: 'insensitive' } } })
+            || await prisma.category.create({ data: { name: 'Chưa phân loại' } })
+        const sku = 'SP' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 5).toUpperCase()
+        const product = await prisma.product.create({
+            data: {
+                name, sku, categoryId: category.id,
+                costPrice, sellingPrice: costPrice,
+                baseUnit: String(req.body?.unit || 'cái'), stock: 0,
+            },
+        })
+        res.json({ success: true, data: product })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: errMsg(err, 'Không tạo được mã hàng') })
     }
 })
 

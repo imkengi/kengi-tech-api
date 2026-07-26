@@ -6,6 +6,17 @@ substitutions:
   _DB_USER: postgres
   _DB_PASSWORD: KengiTech2026%40
   _REDIS_URL: ""
+  # Token tĩnh cho Kengi Stream studio — CHỈ dành cho script/cron, KHÔNG đưa vào
+  # FE bundle (browser đăng nhập bằng tài khoản hệ thống, xem routes/livestream.ts).
+  # Token cũ ks_9a0b... đã bị bake vào bundle công khai nên phải xoay.
+  _LIVESTREAM_TOKEN: ks_e5fa256dd45dbdf7288514121fd976cafa57b856d7e4a982
+  # Proxy chuyển tiếp câm để egress Shopee đi qua IP tĩnh Tino (đã whitelist),
+  # né source_ip_undeclared của Cloud Run (IP động). Xem shopee-forward.php.
+  _SHOPEE_FORWARD_SECRET: eb15f8a9ec6e6d4b241f8f525fec29c5552c9a826e113952
+  # Đăng nhập Super Admin Panel (kengi.vn/admin) — so SERVER-SIDE ở POST /admin/login,
+  # KHÔNG bake vào bundle FE. Xem routes/admin.ts.
+  _ADMIN_PANEL_USER: superadmin
+  _ADMIN_PANEL_PASS: Kengi@2026
 
 steps:
   # Step 1: Build Docker image
@@ -51,7 +62,7 @@ steps:
       - '${_CLOUD_SQL_INSTANCE}'
       - '--set-env-vars'
       - >-
-        NODE_ENV=production,DATABASE_URL=postgresql://${_DB_USER}:${_DB_PASSWORD}@localhost/${_DB_NAME}?host=/cloudsql/${_CLOUD_SQL_INSTANCE},CORS_ORIGIN=*,APP_BASE_URL=https://kengi.vn,REDIS_URL=${_REDIS_URL}
+        NODE_ENV=production,DATABASE_URL=postgresql://${_DB_USER}:${_DB_PASSWORD}@localhost/${_DB_NAME}?host=/cloudsql/${_CLOUD_SQL_INSTANCE},CORS_ORIGIN=*,APP_BASE_URL=https://kengi.vn,REDIS_URL=${_REDIS_URL},LIVESTREAM_STUDIO_TOKEN=${_LIVESTREAM_TOKEN},SHOPEE_FORWARD_PROXY=https://kengi.vn/ai-livestream/shopee-forward.php,SHOPEE_FORWARD_SECRET=${_SHOPEE_FORWARD_SECRET},ADMIN_PANEL_USER=${_ADMIN_PANEL_USER},ADMIN_PANEL_PASS=${_ADMIN_PANEL_PASS},PRISMA_POOL_TIMEOUT=30
 
   # Step 4: Force 100% traffic onto the just-deployed revision.
   # When the service's traffic has ever been pinned to a *named* revision (rather

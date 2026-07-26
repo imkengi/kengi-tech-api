@@ -1,6 +1,7 @@
 import { registryPrisma, getStorePrisma } from '../lib/prisma'
 import { getPlatformService, TikTokService, type PlatformOrder } from '../services/platforms'
 import { processNewOrders } from '../services/orderSync'
+import { syncChannelReturns } from '../services/returnSync'
 
 const SYNC_INTERVAL    = 10 * 60 * 1000       // 10 phút
 const CLEANUP_INTERVAL = 24 * 60 * 60 * 1000  // 24 tiếng
@@ -72,25 +73,50 @@ async function syncChannel(storePrisma: any, channel: any): Promise<{ imported: 
         }
     }
 
-    // Gia số từ lastSyncAt (lùi 30' để không sót đơn ở biên). Đợt kéo lịch sử
-    // từ syncFromDate do route /sync đảm nhiệm (có chia khung 14 ngày cho Shopee).
+    // Gia số từ lastSyncAt (lùi 30' để không sót đơn ở biên). Kênh MỚI liên kết
+    // (chưa có lastSyncAt) → cron TỰ kéo lịch sử từ syncFromDate người dùng chọn
+    // lúc kết nối — không cần bấm sync tay nữa. Shopee chặn cửa sổ >15 ngày nên
+    // chia khung 14 ngày (giống route /sync).
+    const now = new Date()
+    const syncFromDate = (channel as any).syncFromDate ? new Date((channel as any).syncFromDate) : null
     const since = channel.lastSyncAt
         ? new Date(new Date(channel.lastSyncAt).getTime() - 30 * 60_000)
-        : new Date(Date.now() - 7 * 86400_000)
-    let allOrders: PlatformOrder[] = []
-    let page = 1
-    let hasMore = true
+        : (syncFromDate || new Date(Date.now() - 7 * 86400_000))
 
-    // TikTok v202309 paginates by opaque page_token cursor, not numeric page; thread
-    // both so each platform reads what it needs (otherwise TikTok re-fetches page 1).
-    let pageToken: string | undefined = undefined
-    while (hasMore && page <= 10) {
-        const result: { orders: PlatformOrder[]; hasMore: boolean; total: number; nextPageToken?: string } =
-            await service.fetchOrders({ since, page, pageSize: 50, pageToken })
-        allOrders = allOrders.concat(result.orders)
-        pageToken = result.nextPageToken
-        hasMore = result.hasMore
-        page++
+    const WINDOW_MS = 14 * 86400_000
+    const windows: { from: Date; to: Date }[] = []
+    if (channel.platform === 'shopee' && now.getTime() - since.getTime() > WINDOW_MS) {
+        for (let t = since.getTime(); t < now.getTime(); t += WINDOW_MS) {
+            windows.push({ from: new Date(t), to: new Date(Math.min(t + WINDOW_MS, now.getTime())) })
+        }
+    } else {
+        windows.push({ from: since, to: now })
+    }
+
+    let allOrders: PlatformOrder[] = []
+    // Kéo lịch sử lần đầu: theo NGÀY ĐẶT (create_time) — update_time làm đơn rơi
+    // lệch khung, backfill lỗ chỗ. Gia số: update_time để bắt cả đổi trạng thái.
+    const isInitialPull = !channel.lastSyncAt
+    const timeRangeField: 'create_time' | 'update_time' = isInitialPull ? 'create_time' : 'update_time'
+    const PAGE_CAP = isInitialPull ? 80 : 20
+    const MAX_ORDERS = isInitialPull ? 20000 : 5000
+    for (const win of windows) {
+        let page = 1
+        let hasMore = true
+        // TikTok v202309 paginates by opaque page_token cursor, not numeric page; thread
+        // both so each platform reads what it needs (otherwise TikTok re-fetches page 1).
+        let pageToken: string | undefined = undefined
+        while (hasMore && page <= PAGE_CAP && allOrders.length < MAX_ORDERS) {
+            const result: { orders: PlatformOrder[]; hasMore: boolean; total: number; nextPageToken?: string } =
+                await service.fetchOrders({ since: win.from, until: win.to, page, pageSize: 50, pageToken, timeRangeField })
+            allOrders = allOrders.concat(result.orders)
+            pageToken = result.nextPageToken
+            hasMore = result.hasMore
+            page++
+        }
+        if (hasMore) {
+            console.warn(`[AutoSync] ${channel.name}: CHẠM TRẦN khung ${win.from.toISOString().slice(0, 10)}→${win.to.toISOString().slice(0, 10)} — có thể thiếu đơn`)
+        }
     }
 
     let imported = 0, updated = 0
@@ -216,10 +242,9 @@ async function runAutoSync() {
 
                 for (const channel of channels) {
                     try {
-                        // Kênh vừa kết nối với mốc syncFromDate nhưng chưa chạy sync lần
-                        // đầu (lastSyncAt null): để route /sync kéo lịch sử trước — nếu
-                        // cron chạy trước nó sẽ set lastSyncAt và làm mất đợt kéo lịch sử.
-                        if (!channel.lastSyncAt && (channel as any).syncFromDate) continue
+                        // Kênh mới liên kết (lastSyncAt null): syncChannel tự kéo lịch sử
+                        // từ syncFromDate (chia khung 14 ngày cho Shopee) — người dùng
+                        // chỉ cần chọn ngày lúc kết nối, cron lo phần còn lại.
                         const result = await syncChannel(storePrisma, channel)
                         if (result.imported > 0 || result.updated > 0) {
                             console.log(`[AutoSync] ${store.name}/${channel.name}: +${result.imported} new, ${result.updated} updated`)
@@ -232,6 +257,33 @@ async function runAutoSync() {
                         }
                     } catch (err: any) {
                         console.error(`[AutoSync] Error syncing ${store.name}/${channel.name}:`, err.message)
+                    }
+
+                    // Đồng bộ TRẢ HÀNG/HOÀN TIỀN mỗi vòng cron (7 ngày gần nhất).
+                    // Shopee KHÔNG có webhook trả hàng → trước đây chỉ cập nhật khi
+                    // bấm tay nút trong modal kênh, nên tab Trả hàng đứng im.
+                    // TikTok có webhook nhưng chạy thêm ở đây vô hại (idempotent).
+                    // NẰM NGOÀI try của syncChannel: kênh lỗi kéo đơn (vd Shopee
+                    // "Wrong sign") trước đây bị nhảy cóc luôn phần trả hàng.
+                    if (['shopee', 'tiktok'].includes(channel.platform) && channel.accessToken) {
+                        try {
+                            // 30 NGÀY (không phải 7): Shopee lọc theo NGÀY TẠO phiếu trả,
+                            // mà tiền hoàn thường về sau đó cả tuần–nửa tháng. Cửa sổ 7 ngày
+                            // bỏ sót đúng lúc phiếu chuyển REFUND_PAID → đơn không bao giờ
+                            // được đảo về returned/refunded. An toàn từ khi fetchReturns tự
+                            // chia khung 14 ngày (Shopee chặn cửa sổ > 15 ngày).
+                            // Đọc LẠI kênh: syncChannel có thể vừa refresh token và ghi DB,
+                            // còn object `channel` trong bộ nhớ vẫn giữ token CŨ → trả hàng
+                            // gọi bằng token hết hạn rồi refresh lần 2 bằng refresh_token đã
+                            // tiêu thụ (hỏng luôn token vừa cấp).
+                            const freshCh = await storePrisma.onlineChannel.findUnique({ where: { id: channel.id } }).catch(() => null)
+                            const ret = await syncChannelReturns(storePrisma, freshCh || channel, new Date(Date.now() - 30 * 86400_000))
+                            if (ret.synced > 0) {
+                                console.log(`[AutoSync] ${store.name}/${channel.name}: 🔄 +${ret.synced} đơn trả hàng mới (tổng ${ret.total} phiếu từ sàn)`)
+                            }
+                        } catch (retErr: any) {
+                            console.error(`[AutoSync] Returns sync ${store.name}/${channel.name}:`, retErr.message)
+                        }
                     }
                 }
             } catch (err: any) {

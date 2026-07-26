@@ -72,6 +72,8 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
                 addOns,
                 extraBranches,
                 branchCount,
+                // Trợ lý AI: chỉ báo ĐÃ cấu hình hay chưa (không lộ key)
+                geminiConfigured: Boolean((store as any)?.geminiApiKey),
             },
         })
     } catch (err) {
@@ -157,6 +159,57 @@ router.put('/', authMiddleware, requireRole('admin'), async (req: AuthRequest, r
         res.json({ success: true, data: { ...updated, shiftConfig: parsedShift } })
     } catch (err) {
         console.error('Update store settings error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// ─── Trợ lý AI: key Gemini riêng cửa hàng (CHỈ ADMIN) ───────────────────────
+// GET  /api/store-settings/gemini  → { configured, mask } (không bao giờ trả full key)
+// PUT  /api/store-settings/gemini  → { apiKey } lưu key; chuỗi rỗng = xoá key
+router.get('/gemini', authMiddleware, requireRole('admin'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const s = await prisma.storeSettings.findFirst({ select: { geminiApiKey: true } as any }) as any
+        const key: string = s?.geminiApiKey || ''
+        res.json({
+            success: true,
+            data: {
+                configured: Boolean(key),
+                // che: chỉ lộ 4 ký tự cuối để admin nhận ra key nào đang dùng
+                mask: key ? `••••••••${key.slice(-4)}` : '',
+            },
+        })
+    } catch (err) {
+        console.error('Get gemini key error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+router.put('/gemini', authMiddleware, requireRole('admin'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const raw = req.body?.apiKey
+        if (raw !== undefined && typeof raw !== 'string') {
+            res.status(400).json({ success: false, error: 'apiKey phải là chuỗi' })
+            return
+        }
+        const apiKey = (raw ?? '').trim()
+        // Key Gemini hợp lệ bắt đầu bằng "AIza"; chấp nhận rỗng để xoá.
+        if (apiKey && !/^AIza[\w-]{20,}$/.test(apiKey)) {
+            res.status(400).json({ success: false, error: 'Key Gemini không hợp lệ (phải bắt đầu bằng "AIza")' })
+            return
+        }
+        const schema = req.user?.storeSchema || 'default'
+        await prisma.storeSettings.upsert({
+            where: { id: 'default' },
+            create: { id: 'default', name: 'My Store', updatedAt: new Date(), geminiApiKey: apiKey || null } as any,
+            update: { geminiApiKey: apiKey || null } as any,
+        })
+        // dọn cache store-settings để geminiConfigured cập nhật ngay
+        try { await cacheDel(`${schema}:storeSettings:*`) } catch { /* ignore */ }
+        res.json({ success: true, data: { configured: Boolean(apiKey), mask: apiKey ? `••••••••${apiKey.slice(-4)}` : '' } })
+    } catch (err) {
+        console.error('Set gemini key error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
     }
 })

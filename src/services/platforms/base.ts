@@ -119,6 +119,12 @@ export abstract class PlatformService {
         status?: string
         /** Opaque cursor for token-based pagination (TikTok v202309 page_token) */
         pageToken?: string
+        /**
+         * Shopee: trục thời gian của cửa sổ. Mặc định 'update_time' (đúng cho sync
+         * gia số — bắt cả đổi trạng thái). Kéo LỊCH SỬ theo ngày đặt phải dùng
+         * 'create_time' — nếu không đơn cũ rơi lệch khung, backfill bị lỗ chỗ.
+         */
+        timeRangeField?: 'update_time' | 'create_time'
     }): Promise<{ orders: PlatformOrder[]; hasMore: boolean; total: number; nextPageToken?: string }>
 
     /** Fetch product catalog from platform */
@@ -151,7 +157,7 @@ export abstract class PlatformService {
     }
 
     /** Parse a fetch Response as JSON, surfacing the HTTP status + raw body when it isn't valid JSON. */
-    private async parseResponse(res: Response): Promise<any> {
+    protected async parseResponse(res: Response): Promise<any> {
         const text = await res.text()
         try {
             return JSON.parse(text)

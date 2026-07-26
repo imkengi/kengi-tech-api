@@ -194,6 +194,21 @@ export type Vehicle = $Result.DefaultSelection<Prisma.$VehiclePayload>
  */
 export type VehicleMaintenance = $Result.DefaultSelection<Prisma.$VehicleMaintenancePayload>
 /**
+ * Model CrmEmailLog
+ * 
+ */
+export type CrmEmailLog = $Result.DefaultSelection<Prisma.$CrmEmailLogPayload>
+/**
+ * Model VehicleFuelLog
+ * 
+ */
+export type VehicleFuelLog = $Result.DefaultSelection<Prisma.$VehicleFuelLogPayload>
+/**
+ * Model VehicleDocument
+ * 
+ */
+export type VehicleDocument = $Result.DefaultSelection<Prisma.$VehicleDocumentPayload>
+/**
  * Model DeliveryRoute
  * 
  */
@@ -318,6 +333,19 @@ export type LoyaltyTransaction = $Result.DefaultSelection<Prisma.$LoyaltyTransac
  * 
  */
 export type Review = $Result.DefaultSelection<Prisma.$ReviewPayload>
+/**
+ * Model SkuMapping
+ * Ánh xạ MÃ HÀNG TRÊN SÀN → sản phẩm trong kho. Đơn Shopee/TikTok hay dùng mã
+ * riêng (vd "Ct30plus", "cs24") không trùng SKU kho → orderSync bỏ qua, đơn
+ * không lên phiếu ⇒ không xuất được hoá đơn. Bảng này để map thủ công 1 lần.
+ * platform = null: áp cho mọi sàn. Khớp KHÔNG phân biệt hoa thường.
+ */
+export type SkuMapping = $Result.DefaultSelection<Prisma.$SkuMappingPayload>
+/**
+ * Model HkdRevenueEntry
+ * 
+ */
+export type HkdRevenueEntry = $Result.DefaultSelection<Prisma.$HkdRevenueEntryPayload>
 /**
  * Model StoreSettings
  * 
@@ -548,6 +576,31 @@ export type FbCommentRule = $Result.DefaultSelection<Prisma.$FbCommentRulePayloa
  * 
  */
 export type FbAutoReplyLog = $Result.DefaultSelection<Prisma.$FbAutoReplyLogPayload>
+/**
+ * Model CrmTask
+ * 
+ */
+export type CrmTask = $Result.DefaultSelection<Prisma.$CrmTaskPayload>
+/**
+ * Model CrmDeal
+ * 
+ */
+export type CrmDeal = $Result.DefaultSelection<Prisma.$CrmDealPayload>
+/**
+ * Model CrmActivity
+ * 
+ */
+export type CrmActivity = $Result.DefaultSelection<Prisma.$CrmActivityPayload>
+/**
+ * Model CrmZaloLog
+ * 
+ */
+export type CrmZaloLog = $Result.DefaultSelection<Prisma.$CrmZaloLogPayload>
+/**
+ * Model CrmCampaign
+ * 
+ */
+export type CrmCampaign = $Result.DefaultSelection<Prisma.$CrmCampaignPayload>
 
 /**
  * ##  Prisma Client ʲˢ
@@ -1028,6 +1081,36 @@ export class PrismaClient<
   get vehicleMaintenance(): Prisma.VehicleMaintenanceDelegate<ExtArgs, ClientOptions>;
 
   /**
+   * `prisma.crmEmailLog`: Exposes CRUD operations for the **CrmEmailLog** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more CrmEmailLogs
+    * const crmEmailLogs = await prisma.crmEmailLog.findMany()
+    * ```
+    */
+  get crmEmailLog(): Prisma.CrmEmailLogDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.vehicleFuelLog`: Exposes CRUD operations for the **VehicleFuelLog** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more VehicleFuelLogs
+    * const vehicleFuelLogs = await prisma.vehicleFuelLog.findMany()
+    * ```
+    */
+  get vehicleFuelLog(): Prisma.VehicleFuelLogDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.vehicleDocument`: Exposes CRUD operations for the **VehicleDocument** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more VehicleDocuments
+    * const vehicleDocuments = await prisma.vehicleDocument.findMany()
+    * ```
+    */
+  get vehicleDocument(): Prisma.VehicleDocumentDelegate<ExtArgs, ClientOptions>;
+
+  /**
    * `prisma.deliveryRoute`: Exposes CRUD operations for the **DeliveryRoute** model.
     * Example usage:
     * ```ts
@@ -1276,6 +1359,26 @@ export class PrismaClient<
     * ```
     */
   get review(): Prisma.ReviewDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.skuMapping`: Exposes CRUD operations for the **SkuMapping** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more SkuMappings
+    * const skuMappings = await prisma.skuMapping.findMany()
+    * ```
+    */
+  get skuMapping(): Prisma.SkuMappingDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.hkdRevenueEntry`: Exposes CRUD operations for the **HkdRevenueEntry** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more HkdRevenueEntries
+    * const hkdRevenueEntries = await prisma.hkdRevenueEntry.findMany()
+    * ```
+    */
+  get hkdRevenueEntry(): Prisma.HkdRevenueEntryDelegate<ExtArgs, ClientOptions>;
 
   /**
    * `prisma.storeSettings`: Exposes CRUD operations for the **StoreSettings** model.
@@ -1736,6 +1839,56 @@ export class PrismaClient<
     * ```
     */
   get fbAutoReplyLog(): Prisma.FbAutoReplyLogDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.crmTask`: Exposes CRUD operations for the **CrmTask** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more CrmTasks
+    * const crmTasks = await prisma.crmTask.findMany()
+    * ```
+    */
+  get crmTask(): Prisma.CrmTaskDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.crmDeal`: Exposes CRUD operations for the **CrmDeal** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more CrmDeals
+    * const crmDeals = await prisma.crmDeal.findMany()
+    * ```
+    */
+  get crmDeal(): Prisma.CrmDealDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.crmActivity`: Exposes CRUD operations for the **CrmActivity** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more CrmActivities
+    * const crmActivities = await prisma.crmActivity.findMany()
+    * ```
+    */
+  get crmActivity(): Prisma.CrmActivityDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.crmZaloLog`: Exposes CRUD operations for the **CrmZaloLog** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more CrmZaloLogs
+    * const crmZaloLogs = await prisma.crmZaloLog.findMany()
+    * ```
+    */
+  get crmZaloLog(): Prisma.CrmZaloLogDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.crmCampaign`: Exposes CRUD operations for the **CrmCampaign** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more CrmCampaigns
+    * const crmCampaigns = await prisma.crmCampaign.findMany()
+    * ```
+    */
+  get crmCampaign(): Prisma.CrmCampaignDelegate<ExtArgs, ClientOptions>;
 }
 
 export namespace Prisma {
@@ -2213,6 +2366,9 @@ export namespace Prisma {
     Driver: 'Driver',
     Vehicle: 'Vehicle',
     VehicleMaintenance: 'VehicleMaintenance',
+    CrmEmailLog: 'CrmEmailLog',
+    VehicleFuelLog: 'VehicleFuelLog',
+    VehicleDocument: 'VehicleDocument',
     DeliveryRoute: 'DeliveryRoute',
     DeliveryStop: 'DeliveryStop',
     TaxConfig: 'TaxConfig',
@@ -2238,6 +2394,8 @@ export namespace Prisma {
     LoyaltyMember: 'LoyaltyMember',
     LoyaltyTransaction: 'LoyaltyTransaction',
     Review: 'Review',
+    SkuMapping: 'SkuMapping',
+    HkdRevenueEntry: 'HkdRevenueEntry',
     StoreSettings: 'StoreSettings',
     Store: 'Store',
     BranchRequest: 'BranchRequest',
@@ -2283,7 +2441,12 @@ export namespace Prisma {
     FbPage: 'FbPage',
     FbScheduledPost: 'FbScheduledPost',
     FbCommentRule: 'FbCommentRule',
-    FbAutoReplyLog: 'FbAutoReplyLog'
+    FbAutoReplyLog: 'FbAutoReplyLog',
+    CrmTask: 'CrmTask',
+    CrmDeal: 'CrmDeal',
+    CrmActivity: 'CrmActivity',
+    CrmZaloLog: 'CrmZaloLog',
+    CrmCampaign: 'CrmCampaign'
   };
 
   export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -2302,7 +2465,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "branch" | "user" | "apiKey" | "webhookEndpoint" | "webhookDelivery" | "salesCheckin" | "category" | "brand" | "product" | "productSerial" | "unitConversion" | "productImage" | "customerGroup" | "customer" | "transaction" | "transactionItem" | "payment" | "inventoryTransaction" | "importReceipt" | "importReceiptItem" | "promotion" | "supplier" | "purchaseOrder" | "purchaseOrderItem" | "expense" | "cashReceipt" | "notification" | "warranty" | "repair" | "quotation" | "auditLog" | "priceHistory" | "shippingOrder" | "driver" | "vehicle" | "vehicleMaintenance" | "deliveryRoute" | "deliveryStop" | "taxConfig" | "bankAccount" | "bankTransaction" | "bankConnectionConfig" | "taxDeclaration" | "customerSegment" | "currency" | "feedback" | "schedule" | "returnOrder" | "returnItem" | "debtEntry" | "bundle" | "salesOrder" | "salesOrderItem" | "priceList" | "priceListItem" | "priceRule" | "announcement" | "attendance" | "loyaltyMember" | "loyaltyTransaction" | "review" | "storeSettings" | "store" | "branchRequest" | "branchDeleteRequest" | "payrollRecord" | "employee" | "payrollPeriod" | "payrollEntry" | "onlineChannel" | "onlineOrder" | "onlineProduct" | "onlineOrderItem" | "syncLog" | "journalEntry" | "fixedAsset" | "depreciationEntry" | "cCDC" | "cCDCAllocation" | "eInvoiceConfig" | "eInvoice" | "eInvoiceItem" | "adjustmentInvoice" | "adjustmentInvoiceItem" | "hKDRevenueEntry" | "warehouse" | "warehouseStock" | "stockTransfer" | "stockTransferItem" | "salesTrip" | "salesTripItem" | "salesTripLog" | "inventoryCount" | "inventoryCountItem" | "zReport" | "storageFile" | "chartOfAccount" | "periodLock" | "exchangeRate" | "taxDeadline" | "taxAuditLog" | "taxBudget" | "fbUserToken" | "fbPage" | "fbScheduledPost" | "fbCommentRule" | "fbAutoReplyLog"
+      modelProps: "branch" | "user" | "apiKey" | "webhookEndpoint" | "webhookDelivery" | "salesCheckin" | "category" | "brand" | "product" | "productSerial" | "unitConversion" | "productImage" | "customerGroup" | "customer" | "transaction" | "transactionItem" | "payment" | "inventoryTransaction" | "importReceipt" | "importReceiptItem" | "promotion" | "supplier" | "purchaseOrder" | "purchaseOrderItem" | "expense" | "cashReceipt" | "notification" | "warranty" | "repair" | "quotation" | "auditLog" | "priceHistory" | "shippingOrder" | "driver" | "vehicle" | "vehicleMaintenance" | "crmEmailLog" | "vehicleFuelLog" | "vehicleDocument" | "deliveryRoute" | "deliveryStop" | "taxConfig" | "bankAccount" | "bankTransaction" | "bankConnectionConfig" | "taxDeclaration" | "customerSegment" | "currency" | "feedback" | "schedule" | "returnOrder" | "returnItem" | "debtEntry" | "bundle" | "salesOrder" | "salesOrderItem" | "priceList" | "priceListItem" | "priceRule" | "announcement" | "attendance" | "loyaltyMember" | "loyaltyTransaction" | "review" | "skuMapping" | "hkdRevenueEntry" | "storeSettings" | "store" | "branchRequest" | "branchDeleteRequest" | "payrollRecord" | "employee" | "payrollPeriod" | "payrollEntry" | "onlineChannel" | "onlineOrder" | "onlineProduct" | "onlineOrderItem" | "syncLog" | "journalEntry" | "fixedAsset" | "depreciationEntry" | "cCDC" | "cCDCAllocation" | "eInvoiceConfig" | "eInvoice" | "eInvoiceItem" | "adjustmentInvoice" | "adjustmentInvoiceItem" | "hKDRevenueEntry" | "warehouse" | "warehouseStock" | "stockTransfer" | "stockTransferItem" | "salesTrip" | "salesTripItem" | "salesTripLog" | "inventoryCount" | "inventoryCountItem" | "zReport" | "storageFile" | "chartOfAccount" | "periodLock" | "exchangeRate" | "taxDeadline" | "taxAuditLog" | "taxBudget" | "fbUserToken" | "fbPage" | "fbScheduledPost" | "fbCommentRule" | "fbAutoReplyLog" | "crmTask" | "crmDeal" | "crmActivity" | "crmZaloLog" | "crmCampaign"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -4970,6 +5133,228 @@ export namespace Prisma {
           }
         }
       }
+      CrmEmailLog: {
+        payload: Prisma.$CrmEmailLogPayload<ExtArgs>
+        fields: Prisma.CrmEmailLogFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.CrmEmailLogFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmEmailLogPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.CrmEmailLogFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmEmailLogPayload>
+          }
+          findFirst: {
+            args: Prisma.CrmEmailLogFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmEmailLogPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.CrmEmailLogFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmEmailLogPayload>
+          }
+          findMany: {
+            args: Prisma.CrmEmailLogFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmEmailLogPayload>[]
+          }
+          create: {
+            args: Prisma.CrmEmailLogCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmEmailLogPayload>
+          }
+          createMany: {
+            args: Prisma.CrmEmailLogCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.CrmEmailLogCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmEmailLogPayload>[]
+          }
+          delete: {
+            args: Prisma.CrmEmailLogDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmEmailLogPayload>
+          }
+          update: {
+            args: Prisma.CrmEmailLogUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmEmailLogPayload>
+          }
+          deleteMany: {
+            args: Prisma.CrmEmailLogDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.CrmEmailLogUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.CrmEmailLogUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmEmailLogPayload>[]
+          }
+          upsert: {
+            args: Prisma.CrmEmailLogUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmEmailLogPayload>
+          }
+          aggregate: {
+            args: Prisma.CrmEmailLogAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateCrmEmailLog>
+          }
+          groupBy: {
+            args: Prisma.CrmEmailLogGroupByArgs<ExtArgs>
+            result: $Utils.Optional<CrmEmailLogGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.CrmEmailLogCountArgs<ExtArgs>
+            result: $Utils.Optional<CrmEmailLogCountAggregateOutputType> | number
+          }
+        }
+      }
+      VehicleFuelLog: {
+        payload: Prisma.$VehicleFuelLogPayload<ExtArgs>
+        fields: Prisma.VehicleFuelLogFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.VehicleFuelLogFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$VehicleFuelLogPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.VehicleFuelLogFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$VehicleFuelLogPayload>
+          }
+          findFirst: {
+            args: Prisma.VehicleFuelLogFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$VehicleFuelLogPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.VehicleFuelLogFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$VehicleFuelLogPayload>
+          }
+          findMany: {
+            args: Prisma.VehicleFuelLogFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$VehicleFuelLogPayload>[]
+          }
+          create: {
+            args: Prisma.VehicleFuelLogCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$VehicleFuelLogPayload>
+          }
+          createMany: {
+            args: Prisma.VehicleFuelLogCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.VehicleFuelLogCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$VehicleFuelLogPayload>[]
+          }
+          delete: {
+            args: Prisma.VehicleFuelLogDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$VehicleFuelLogPayload>
+          }
+          update: {
+            args: Prisma.VehicleFuelLogUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$VehicleFuelLogPayload>
+          }
+          deleteMany: {
+            args: Prisma.VehicleFuelLogDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.VehicleFuelLogUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.VehicleFuelLogUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$VehicleFuelLogPayload>[]
+          }
+          upsert: {
+            args: Prisma.VehicleFuelLogUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$VehicleFuelLogPayload>
+          }
+          aggregate: {
+            args: Prisma.VehicleFuelLogAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateVehicleFuelLog>
+          }
+          groupBy: {
+            args: Prisma.VehicleFuelLogGroupByArgs<ExtArgs>
+            result: $Utils.Optional<VehicleFuelLogGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.VehicleFuelLogCountArgs<ExtArgs>
+            result: $Utils.Optional<VehicleFuelLogCountAggregateOutputType> | number
+          }
+        }
+      }
+      VehicleDocument: {
+        payload: Prisma.$VehicleDocumentPayload<ExtArgs>
+        fields: Prisma.VehicleDocumentFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.VehicleDocumentFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$VehicleDocumentPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.VehicleDocumentFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$VehicleDocumentPayload>
+          }
+          findFirst: {
+            args: Prisma.VehicleDocumentFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$VehicleDocumentPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.VehicleDocumentFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$VehicleDocumentPayload>
+          }
+          findMany: {
+            args: Prisma.VehicleDocumentFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$VehicleDocumentPayload>[]
+          }
+          create: {
+            args: Prisma.VehicleDocumentCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$VehicleDocumentPayload>
+          }
+          createMany: {
+            args: Prisma.VehicleDocumentCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.VehicleDocumentCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$VehicleDocumentPayload>[]
+          }
+          delete: {
+            args: Prisma.VehicleDocumentDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$VehicleDocumentPayload>
+          }
+          update: {
+            args: Prisma.VehicleDocumentUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$VehicleDocumentPayload>
+          }
+          deleteMany: {
+            args: Prisma.VehicleDocumentDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.VehicleDocumentUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.VehicleDocumentUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$VehicleDocumentPayload>[]
+          }
+          upsert: {
+            args: Prisma.VehicleDocumentUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$VehicleDocumentPayload>
+          }
+          aggregate: {
+            args: Prisma.VehicleDocumentAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateVehicleDocument>
+          }
+          groupBy: {
+            args: Prisma.VehicleDocumentGroupByArgs<ExtArgs>
+            result: $Utils.Optional<VehicleDocumentGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.VehicleDocumentCountArgs<ExtArgs>
+            result: $Utils.Optional<VehicleDocumentCountAggregateOutputType> | number
+          }
+        }
+      }
       DeliveryRoute: {
         payload: Prisma.$DeliveryRoutePayload<ExtArgs>
         fields: Prisma.DeliveryRouteFieldRefs
@@ -6817,6 +7202,154 @@ export namespace Prisma {
           count: {
             args: Prisma.ReviewCountArgs<ExtArgs>
             result: $Utils.Optional<ReviewCountAggregateOutputType> | number
+          }
+        }
+      }
+      SkuMapping: {
+        payload: Prisma.$SkuMappingPayload<ExtArgs>
+        fields: Prisma.SkuMappingFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.SkuMappingFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$SkuMappingPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.SkuMappingFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$SkuMappingPayload>
+          }
+          findFirst: {
+            args: Prisma.SkuMappingFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$SkuMappingPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.SkuMappingFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$SkuMappingPayload>
+          }
+          findMany: {
+            args: Prisma.SkuMappingFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$SkuMappingPayload>[]
+          }
+          create: {
+            args: Prisma.SkuMappingCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$SkuMappingPayload>
+          }
+          createMany: {
+            args: Prisma.SkuMappingCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.SkuMappingCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$SkuMappingPayload>[]
+          }
+          delete: {
+            args: Prisma.SkuMappingDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$SkuMappingPayload>
+          }
+          update: {
+            args: Prisma.SkuMappingUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$SkuMappingPayload>
+          }
+          deleteMany: {
+            args: Prisma.SkuMappingDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.SkuMappingUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.SkuMappingUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$SkuMappingPayload>[]
+          }
+          upsert: {
+            args: Prisma.SkuMappingUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$SkuMappingPayload>
+          }
+          aggregate: {
+            args: Prisma.SkuMappingAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateSkuMapping>
+          }
+          groupBy: {
+            args: Prisma.SkuMappingGroupByArgs<ExtArgs>
+            result: $Utils.Optional<SkuMappingGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.SkuMappingCountArgs<ExtArgs>
+            result: $Utils.Optional<SkuMappingCountAggregateOutputType> | number
+          }
+        }
+      }
+      HkdRevenueEntry: {
+        payload: Prisma.$HkdRevenueEntryPayload<ExtArgs>
+        fields: Prisma.HkdRevenueEntryFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.HkdRevenueEntryFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$HkdRevenueEntryPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.HkdRevenueEntryFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$HkdRevenueEntryPayload>
+          }
+          findFirst: {
+            args: Prisma.HkdRevenueEntryFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$HkdRevenueEntryPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.HkdRevenueEntryFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$HkdRevenueEntryPayload>
+          }
+          findMany: {
+            args: Prisma.HkdRevenueEntryFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$HkdRevenueEntryPayload>[]
+          }
+          create: {
+            args: Prisma.HkdRevenueEntryCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$HkdRevenueEntryPayload>
+          }
+          createMany: {
+            args: Prisma.HkdRevenueEntryCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.HkdRevenueEntryCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$HkdRevenueEntryPayload>[]
+          }
+          delete: {
+            args: Prisma.HkdRevenueEntryDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$HkdRevenueEntryPayload>
+          }
+          update: {
+            args: Prisma.HkdRevenueEntryUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$HkdRevenueEntryPayload>
+          }
+          deleteMany: {
+            args: Prisma.HkdRevenueEntryDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.HkdRevenueEntryUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.HkdRevenueEntryUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$HkdRevenueEntryPayload>[]
+          }
+          upsert: {
+            args: Prisma.HkdRevenueEntryUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$HkdRevenueEntryPayload>
+          }
+          aggregate: {
+            args: Prisma.HkdRevenueEntryAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateHkdRevenueEntry>
+          }
+          groupBy: {
+            args: Prisma.HkdRevenueEntryGroupByArgs<ExtArgs>
+            result: $Utils.Optional<HkdRevenueEntryGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.HkdRevenueEntryCountArgs<ExtArgs>
+            result: $Utils.Optional<HkdRevenueEntryCountAggregateOutputType> | number
           }
         }
       }
@@ -10224,6 +10757,376 @@ export namespace Prisma {
           }
         }
       }
+      CrmTask: {
+        payload: Prisma.$CrmTaskPayload<ExtArgs>
+        fields: Prisma.CrmTaskFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.CrmTaskFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmTaskPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.CrmTaskFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmTaskPayload>
+          }
+          findFirst: {
+            args: Prisma.CrmTaskFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmTaskPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.CrmTaskFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmTaskPayload>
+          }
+          findMany: {
+            args: Prisma.CrmTaskFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmTaskPayload>[]
+          }
+          create: {
+            args: Prisma.CrmTaskCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmTaskPayload>
+          }
+          createMany: {
+            args: Prisma.CrmTaskCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.CrmTaskCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmTaskPayload>[]
+          }
+          delete: {
+            args: Prisma.CrmTaskDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmTaskPayload>
+          }
+          update: {
+            args: Prisma.CrmTaskUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmTaskPayload>
+          }
+          deleteMany: {
+            args: Prisma.CrmTaskDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.CrmTaskUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.CrmTaskUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmTaskPayload>[]
+          }
+          upsert: {
+            args: Prisma.CrmTaskUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmTaskPayload>
+          }
+          aggregate: {
+            args: Prisma.CrmTaskAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateCrmTask>
+          }
+          groupBy: {
+            args: Prisma.CrmTaskGroupByArgs<ExtArgs>
+            result: $Utils.Optional<CrmTaskGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.CrmTaskCountArgs<ExtArgs>
+            result: $Utils.Optional<CrmTaskCountAggregateOutputType> | number
+          }
+        }
+      }
+      CrmDeal: {
+        payload: Prisma.$CrmDealPayload<ExtArgs>
+        fields: Prisma.CrmDealFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.CrmDealFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmDealPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.CrmDealFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmDealPayload>
+          }
+          findFirst: {
+            args: Prisma.CrmDealFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmDealPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.CrmDealFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmDealPayload>
+          }
+          findMany: {
+            args: Prisma.CrmDealFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmDealPayload>[]
+          }
+          create: {
+            args: Prisma.CrmDealCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmDealPayload>
+          }
+          createMany: {
+            args: Prisma.CrmDealCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.CrmDealCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmDealPayload>[]
+          }
+          delete: {
+            args: Prisma.CrmDealDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmDealPayload>
+          }
+          update: {
+            args: Prisma.CrmDealUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmDealPayload>
+          }
+          deleteMany: {
+            args: Prisma.CrmDealDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.CrmDealUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.CrmDealUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmDealPayload>[]
+          }
+          upsert: {
+            args: Prisma.CrmDealUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmDealPayload>
+          }
+          aggregate: {
+            args: Prisma.CrmDealAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateCrmDeal>
+          }
+          groupBy: {
+            args: Prisma.CrmDealGroupByArgs<ExtArgs>
+            result: $Utils.Optional<CrmDealGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.CrmDealCountArgs<ExtArgs>
+            result: $Utils.Optional<CrmDealCountAggregateOutputType> | number
+          }
+        }
+      }
+      CrmActivity: {
+        payload: Prisma.$CrmActivityPayload<ExtArgs>
+        fields: Prisma.CrmActivityFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.CrmActivityFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmActivityPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.CrmActivityFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmActivityPayload>
+          }
+          findFirst: {
+            args: Prisma.CrmActivityFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmActivityPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.CrmActivityFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmActivityPayload>
+          }
+          findMany: {
+            args: Prisma.CrmActivityFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmActivityPayload>[]
+          }
+          create: {
+            args: Prisma.CrmActivityCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmActivityPayload>
+          }
+          createMany: {
+            args: Prisma.CrmActivityCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.CrmActivityCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmActivityPayload>[]
+          }
+          delete: {
+            args: Prisma.CrmActivityDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmActivityPayload>
+          }
+          update: {
+            args: Prisma.CrmActivityUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmActivityPayload>
+          }
+          deleteMany: {
+            args: Prisma.CrmActivityDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.CrmActivityUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.CrmActivityUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmActivityPayload>[]
+          }
+          upsert: {
+            args: Prisma.CrmActivityUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmActivityPayload>
+          }
+          aggregate: {
+            args: Prisma.CrmActivityAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateCrmActivity>
+          }
+          groupBy: {
+            args: Prisma.CrmActivityGroupByArgs<ExtArgs>
+            result: $Utils.Optional<CrmActivityGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.CrmActivityCountArgs<ExtArgs>
+            result: $Utils.Optional<CrmActivityCountAggregateOutputType> | number
+          }
+        }
+      }
+      CrmZaloLog: {
+        payload: Prisma.$CrmZaloLogPayload<ExtArgs>
+        fields: Prisma.CrmZaloLogFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.CrmZaloLogFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmZaloLogPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.CrmZaloLogFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmZaloLogPayload>
+          }
+          findFirst: {
+            args: Prisma.CrmZaloLogFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmZaloLogPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.CrmZaloLogFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmZaloLogPayload>
+          }
+          findMany: {
+            args: Prisma.CrmZaloLogFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmZaloLogPayload>[]
+          }
+          create: {
+            args: Prisma.CrmZaloLogCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmZaloLogPayload>
+          }
+          createMany: {
+            args: Prisma.CrmZaloLogCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.CrmZaloLogCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmZaloLogPayload>[]
+          }
+          delete: {
+            args: Prisma.CrmZaloLogDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmZaloLogPayload>
+          }
+          update: {
+            args: Prisma.CrmZaloLogUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmZaloLogPayload>
+          }
+          deleteMany: {
+            args: Prisma.CrmZaloLogDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.CrmZaloLogUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.CrmZaloLogUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmZaloLogPayload>[]
+          }
+          upsert: {
+            args: Prisma.CrmZaloLogUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmZaloLogPayload>
+          }
+          aggregate: {
+            args: Prisma.CrmZaloLogAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateCrmZaloLog>
+          }
+          groupBy: {
+            args: Prisma.CrmZaloLogGroupByArgs<ExtArgs>
+            result: $Utils.Optional<CrmZaloLogGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.CrmZaloLogCountArgs<ExtArgs>
+            result: $Utils.Optional<CrmZaloLogCountAggregateOutputType> | number
+          }
+        }
+      }
+      CrmCampaign: {
+        payload: Prisma.$CrmCampaignPayload<ExtArgs>
+        fields: Prisma.CrmCampaignFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.CrmCampaignFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmCampaignPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.CrmCampaignFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmCampaignPayload>
+          }
+          findFirst: {
+            args: Prisma.CrmCampaignFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmCampaignPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.CrmCampaignFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmCampaignPayload>
+          }
+          findMany: {
+            args: Prisma.CrmCampaignFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmCampaignPayload>[]
+          }
+          create: {
+            args: Prisma.CrmCampaignCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmCampaignPayload>
+          }
+          createMany: {
+            args: Prisma.CrmCampaignCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.CrmCampaignCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmCampaignPayload>[]
+          }
+          delete: {
+            args: Prisma.CrmCampaignDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmCampaignPayload>
+          }
+          update: {
+            args: Prisma.CrmCampaignUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmCampaignPayload>
+          }
+          deleteMany: {
+            args: Prisma.CrmCampaignDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.CrmCampaignUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.CrmCampaignUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmCampaignPayload>[]
+          }
+          upsert: {
+            args: Prisma.CrmCampaignUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$CrmCampaignPayload>
+          }
+          aggregate: {
+            args: Prisma.CrmCampaignAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateCrmCampaign>
+          }
+          groupBy: {
+            args: Prisma.CrmCampaignGroupByArgs<ExtArgs>
+            result: $Utils.Optional<CrmCampaignGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.CrmCampaignCountArgs<ExtArgs>
+            result: $Utils.Optional<CrmCampaignCountAggregateOutputType> | number
+          }
+        }
+      }
     }
   } & {
     other: {
@@ -10356,6 +11259,9 @@ export namespace Prisma {
     driver?: DriverOmit
     vehicle?: VehicleOmit
     vehicleMaintenance?: VehicleMaintenanceOmit
+    crmEmailLog?: CrmEmailLogOmit
+    vehicleFuelLog?: VehicleFuelLogOmit
+    vehicleDocument?: VehicleDocumentOmit
     deliveryRoute?: DeliveryRouteOmit
     deliveryStop?: DeliveryStopOmit
     taxConfig?: TaxConfigOmit
@@ -10381,6 +11287,8 @@ export namespace Prisma {
     loyaltyMember?: LoyaltyMemberOmit
     loyaltyTransaction?: LoyaltyTransactionOmit
     review?: ReviewOmit
+    skuMapping?: SkuMappingOmit
+    hkdRevenueEntry?: HkdRevenueEntryOmit
     storeSettings?: StoreSettingsOmit
     store?: StoreOmit
     branchRequest?: BranchRequestOmit
@@ -10427,6 +11335,11 @@ export namespace Prisma {
     fbScheduledPost?: FbScheduledPostOmit
     fbCommentRule?: FbCommentRuleOmit
     fbAutoReplyLog?: FbAutoReplyLogOmit
+    crmTask?: CrmTaskOmit
+    crmDeal?: CrmDealOmit
+    crmActivity?: CrmActivityOmit
+    crmZaloLog?: CrmZaloLogOmit
+    crmCampaign?: CrmCampaignOmit
   }
 
   /* Types for Logging */
@@ -10725,6 +11638,7 @@ export namespace Prisma {
     serials: number
     onlineOrderItems: number
     onlineProducts: number
+    skuMappings: number
   }
 
   export type ProductCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -10737,6 +11651,7 @@ export namespace Prisma {
     serials?: boolean | ProductCountOutputTypeCountSerialsArgs
     onlineOrderItems?: boolean | ProductCountOutputTypeCountOnlineOrderItemsArgs
     onlineProducts?: boolean | ProductCountOutputTypeCountOnlineProductsArgs
+    skuMappings?: boolean | ProductCountOutputTypeCountSkuMappingsArgs
   }
 
   // Custom InputTypes
@@ -10811,6 +11726,13 @@ export namespace Prisma {
    */
   export type ProductCountOutputTypeCountOnlineProductsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: OnlineProductWhereInput
+  }
+
+  /**
+   * ProductCountOutputType without action
+   */
+  export type ProductCountOutputTypeCountSkuMappingsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: SkuMappingWhereInput
   }
 
 
@@ -11033,11 +11955,15 @@ export namespace Prisma {
 
   export type VehicleCountOutputType = {
     maintenanceLogs: number
+    fuelLogs: number
+    documents: number
     salesTrips: number
   }
 
   export type VehicleCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     maintenanceLogs?: boolean | VehicleCountOutputTypeCountMaintenanceLogsArgs
+    fuelLogs?: boolean | VehicleCountOutputTypeCountFuelLogsArgs
+    documents?: boolean | VehicleCountOutputTypeCountDocumentsArgs
     salesTrips?: boolean | VehicleCountOutputTypeCountSalesTripsArgs
   }
 
@@ -11057,6 +11983,20 @@ export namespace Prisma {
    */
   export type VehicleCountOutputTypeCountMaintenanceLogsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: VehicleMaintenanceWhereInput
+  }
+
+  /**
+   * VehicleCountOutputType without action
+   */
+  export type VehicleCountOutputTypeCountFuelLogsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: VehicleFuelLogWhereInput
+  }
+
+  /**
+   * VehicleCountOutputType without action
+   */
+  export type VehicleCountOutputTypeCountDocumentsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: VehicleDocumentWhereInput
   }
 
   /**
@@ -21295,6 +22235,7 @@ export namespace Prisma {
     stock: number | null
     minStock: number | null
     maxStock: number | null
+    mergedRate: number | null
   }
 
   export type ProductSumAggregateOutputType = {
@@ -21303,6 +22244,7 @@ export namespace Prisma {
     stock: number | null
     minStock: number | null
     maxStock: number | null
+    mergedRate: number | null
   }
 
   export type ProductMinAggregateOutputType = {
@@ -21321,6 +22263,10 @@ export namespace Prisma {
     minStock: number | null
     maxStock: number | null
     baseUnit: string | null
+    invoiceUnit: string | null
+    bundleId: string | null
+    mergedIntoId: string | null
+    mergedRate: number | null
     trackSerial: boolean | null
     createdAt: Date | null
     updatedAt: Date | null
@@ -21342,6 +22288,10 @@ export namespace Prisma {
     minStock: number | null
     maxStock: number | null
     baseUnit: string | null
+    invoiceUnit: string | null
+    bundleId: string | null
+    mergedIntoId: string | null
+    mergedRate: number | null
     trackSerial: boolean | null
     createdAt: Date | null
     updatedAt: Date | null
@@ -21363,6 +22313,10 @@ export namespace Prisma {
     minStock: number
     maxStock: number
     baseUnit: number
+    invoiceUnit: number
+    bundleId: number
+    mergedIntoId: number
+    mergedRate: number
     trackSerial: number
     createdAt: number
     updatedAt: number
@@ -21376,6 +22330,7 @@ export namespace Prisma {
     stock?: true
     minStock?: true
     maxStock?: true
+    mergedRate?: true
   }
 
   export type ProductSumAggregateInputType = {
@@ -21384,6 +22339,7 @@ export namespace Prisma {
     stock?: true
     minStock?: true
     maxStock?: true
+    mergedRate?: true
   }
 
   export type ProductMinAggregateInputType = {
@@ -21402,6 +22358,10 @@ export namespace Prisma {
     minStock?: true
     maxStock?: true
     baseUnit?: true
+    invoiceUnit?: true
+    bundleId?: true
+    mergedIntoId?: true
+    mergedRate?: true
     trackSerial?: true
     createdAt?: true
     updatedAt?: true
@@ -21423,6 +22383,10 @@ export namespace Prisma {
     minStock?: true
     maxStock?: true
     baseUnit?: true
+    invoiceUnit?: true
+    bundleId?: true
+    mergedIntoId?: true
+    mergedRate?: true
     trackSerial?: true
     createdAt?: true
     updatedAt?: true
@@ -21444,6 +22408,10 @@ export namespace Prisma {
     minStock?: true
     maxStock?: true
     baseUnit?: true
+    invoiceUnit?: true
+    bundleId?: true
+    mergedIntoId?: true
+    mergedRate?: true
     trackSerial?: true
     createdAt?: true
     updatedAt?: true
@@ -21552,6 +22520,10 @@ export namespace Prisma {
     minStock: number
     maxStock: number
     baseUnit: string
+    invoiceUnit: string | null
+    bundleId: string | null
+    mergedIntoId: string | null
+    mergedRate: number
     trackSerial: boolean
     createdAt: Date
     updatedAt: Date
@@ -21592,6 +22564,10 @@ export namespace Prisma {
     minStock?: boolean
     maxStock?: boolean
     baseUnit?: boolean
+    invoiceUnit?: boolean
+    bundleId?: boolean
+    mergedIntoId?: boolean
+    mergedRate?: boolean
     trackSerial?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -21606,6 +22582,7 @@ export namespace Prisma {
     serials?: boolean | Product$serialsArgs<ExtArgs>
     onlineOrderItems?: boolean | Product$onlineOrderItemsArgs<ExtArgs>
     onlineProducts?: boolean | Product$onlineProductsArgs<ExtArgs>
+    skuMappings?: boolean | Product$skuMappingsArgs<ExtArgs>
     _count?: boolean | ProductCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["product"]>
 
@@ -21625,6 +22602,10 @@ export namespace Prisma {
     minStock?: boolean
     maxStock?: boolean
     baseUnit?: boolean
+    invoiceUnit?: boolean
+    bundleId?: boolean
+    mergedIntoId?: boolean
+    mergedRate?: boolean
     trackSerial?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -21648,6 +22629,10 @@ export namespace Prisma {
     minStock?: boolean
     maxStock?: boolean
     baseUnit?: boolean
+    invoiceUnit?: boolean
+    bundleId?: boolean
+    mergedIntoId?: boolean
+    mergedRate?: boolean
     trackSerial?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -21671,12 +22656,16 @@ export namespace Prisma {
     minStock?: boolean
     maxStock?: boolean
     baseUnit?: boolean
+    invoiceUnit?: boolean
+    bundleId?: boolean
+    mergedIntoId?: boolean
+    mergedRate?: boolean
     trackSerial?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type ProductOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "sku" | "barcode" | "description" | "categoryId" | "brandId" | "productType" | "costPrice" | "sellingPrice" | "taxInclusive" | "stock" | "minStock" | "maxStock" | "baseUnit" | "trackSerial" | "createdAt" | "updatedAt", ExtArgs["result"]["product"]>
+  export type ProductOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "sku" | "barcode" | "description" | "categoryId" | "brandId" | "productType" | "costPrice" | "sellingPrice" | "taxInclusive" | "stock" | "minStock" | "maxStock" | "baseUnit" | "invoiceUnit" | "bundleId" | "mergedIntoId" | "mergedRate" | "trackSerial" | "createdAt" | "updatedAt", ExtArgs["result"]["product"]>
   export type ProductInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     category?: boolean | CategoryDefaultArgs<ExtArgs>
     brand?: boolean | Product$brandArgs<ExtArgs>
@@ -21689,6 +22678,7 @@ export namespace Prisma {
     serials?: boolean | Product$serialsArgs<ExtArgs>
     onlineOrderItems?: boolean | Product$onlineOrderItemsArgs<ExtArgs>
     onlineProducts?: boolean | Product$onlineProductsArgs<ExtArgs>
+    skuMappings?: boolean | Product$skuMappingsArgs<ExtArgs>
     _count?: boolean | ProductCountOutputTypeDefaultArgs<ExtArgs>
   }
   export type ProductIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -21714,6 +22704,7 @@ export namespace Prisma {
       serials: Prisma.$ProductSerialPayload<ExtArgs>[]
       onlineOrderItems: Prisma.$OnlineOrderItemPayload<ExtArgs>[]
       onlineProducts: Prisma.$OnlineProductPayload<ExtArgs>[]
+      skuMappings: Prisma.$SkuMappingPayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
@@ -21731,6 +22722,10 @@ export namespace Prisma {
       minStock: number
       maxStock: number
       baseUnit: string
+      invoiceUnit: string | null
+      bundleId: string | null
+      mergedIntoId: string | null
+      mergedRate: number
       trackSerial: boolean
       createdAt: Date
       updatedAt: Date
@@ -22139,6 +23134,7 @@ export namespace Prisma {
     serials<T extends Product$serialsArgs<ExtArgs> = {}>(args?: Subset<T, Product$serialsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$ProductSerialPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     onlineOrderItems<T extends Product$onlineOrderItemsArgs<ExtArgs> = {}>(args?: Subset<T, Product$onlineOrderItemsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$OnlineOrderItemPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     onlineProducts<T extends Product$onlineProductsArgs<ExtArgs> = {}>(args?: Subset<T, Product$onlineProductsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$OnlineProductPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    skuMappings<T extends Product$skuMappingsArgs<ExtArgs> = {}>(args?: Subset<T, Product$skuMappingsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$SkuMappingPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -22183,6 +23179,10 @@ export namespace Prisma {
     readonly minStock: FieldRef<"Product", 'Int'>
     readonly maxStock: FieldRef<"Product", 'Int'>
     readonly baseUnit: FieldRef<"Product", 'String'>
+    readonly invoiceUnit: FieldRef<"Product", 'String'>
+    readonly bundleId: FieldRef<"Product", 'String'>
+    readonly mergedIntoId: FieldRef<"Product", 'String'>
+    readonly mergedRate: FieldRef<"Product", 'Float'>
     readonly trackSerial: FieldRef<"Product", 'Boolean'>
     readonly createdAt: FieldRef<"Product", 'DateTime'>
     readonly updatedAt: FieldRef<"Product", 'DateTime'>
@@ -22814,6 +23814,30 @@ export namespace Prisma {
     take?: number
     skip?: number
     distinct?: OnlineProductScalarFieldEnum | OnlineProductScalarFieldEnum[]
+  }
+
+  /**
+   * Product.skuMappings
+   */
+  export type Product$skuMappingsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SkuMapping
+     */
+    select?: SkuMappingSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the SkuMapping
+     */
+    omit?: SkuMappingOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SkuMappingInclude<ExtArgs> | null
+    where?: SkuMappingWhereInput
+    orderBy?: SkuMappingOrderByWithRelationInput | SkuMappingOrderByWithRelationInput[]
+    cursor?: SkuMappingWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: SkuMappingScalarFieldEnum | SkuMappingScalarFieldEnum[]
   }
 
   /**
@@ -33679,12 +34703,22 @@ export namespace Prisma {
     totalCost: number | null
     totalItems: number | null
     paidAmount: number | null
+    vatAmount: number | null
+    shippingFee: number | null
+    importTax: number | null
+    otherFees: number | null
+    totalDiscount: number | null
   }
 
   export type ImportReceiptSumAggregateOutputType = {
     totalCost: number | null
     totalItems: number | null
     paidAmount: number | null
+    vatAmount: number | null
+    shippingFee: number | null
+    importTax: number | null
+    otherFees: number | null
+    totalDiscount: number | null
   }
 
   export type ImportReceiptMinAggregateOutputType = {
@@ -33699,6 +34733,13 @@ export namespace Prisma {
     paymentStatus: string | null
     dueDate: Date | null
     paymentTerm: string | null
+    hasVatInvoice: boolean | null
+    vatInvoiceNo: string | null
+    vatAmount: number | null
+    shippingFee: number | null
+    importTax: number | null
+    otherFees: number | null
+    totalDiscount: number | null
     note: string | null
     branchId: string | null
     userId: string | null
@@ -33720,6 +34761,13 @@ export namespace Prisma {
     paymentStatus: string | null
     dueDate: Date | null
     paymentTerm: string | null
+    hasVatInvoice: boolean | null
+    vatInvoiceNo: string | null
+    vatAmount: number | null
+    shippingFee: number | null
+    importTax: number | null
+    otherFees: number | null
+    totalDiscount: number | null
     note: string | null
     branchId: string | null
     userId: string | null
@@ -33741,6 +34789,13 @@ export namespace Prisma {
     paymentStatus: number
     dueDate: number
     paymentTerm: number
+    hasVatInvoice: number
+    vatInvoiceNo: number
+    vatAmount: number
+    shippingFee: number
+    importTax: number
+    otherFees: number
+    totalDiscount: number
     note: number
     branchId: number
     userId: number
@@ -33756,12 +34811,22 @@ export namespace Prisma {
     totalCost?: true
     totalItems?: true
     paidAmount?: true
+    vatAmount?: true
+    shippingFee?: true
+    importTax?: true
+    otherFees?: true
+    totalDiscount?: true
   }
 
   export type ImportReceiptSumAggregateInputType = {
     totalCost?: true
     totalItems?: true
     paidAmount?: true
+    vatAmount?: true
+    shippingFee?: true
+    importTax?: true
+    otherFees?: true
+    totalDiscount?: true
   }
 
   export type ImportReceiptMinAggregateInputType = {
@@ -33776,6 +34841,13 @@ export namespace Prisma {
     paymentStatus?: true
     dueDate?: true
     paymentTerm?: true
+    hasVatInvoice?: true
+    vatInvoiceNo?: true
+    vatAmount?: true
+    shippingFee?: true
+    importTax?: true
+    otherFees?: true
+    totalDiscount?: true
     note?: true
     branchId?: true
     userId?: true
@@ -33797,6 +34869,13 @@ export namespace Prisma {
     paymentStatus?: true
     dueDate?: true
     paymentTerm?: true
+    hasVatInvoice?: true
+    vatInvoiceNo?: true
+    vatAmount?: true
+    shippingFee?: true
+    importTax?: true
+    otherFees?: true
+    totalDiscount?: true
     note?: true
     branchId?: true
     userId?: true
@@ -33818,6 +34897,13 @@ export namespace Prisma {
     paymentStatus?: true
     dueDate?: true
     paymentTerm?: true
+    hasVatInvoice?: true
+    vatInvoiceNo?: true
+    vatAmount?: true
+    shippingFee?: true
+    importTax?: true
+    otherFees?: true
+    totalDiscount?: true
     note?: true
     branchId?: true
     userId?: true
@@ -33926,6 +35012,13 @@ export namespace Prisma {
     paymentStatus: string
     dueDate: Date | null
     paymentTerm: string | null
+    hasVatInvoice: boolean
+    vatInvoiceNo: string | null
+    vatAmount: number
+    shippingFee: number
+    importTax: number
+    otherFees: number
+    totalDiscount: number
     note: string | null
     branchId: string | null
     userId: string
@@ -33966,6 +35059,13 @@ export namespace Prisma {
     paymentStatus?: boolean
     dueDate?: boolean
     paymentTerm?: boolean
+    hasVatInvoice?: boolean
+    vatInvoiceNo?: boolean
+    vatAmount?: boolean
+    shippingFee?: boolean
+    importTax?: boolean
+    otherFees?: boolean
+    totalDiscount?: boolean
     note?: boolean
     branchId?: boolean
     userId?: boolean
@@ -33990,6 +35090,13 @@ export namespace Prisma {
     paymentStatus?: boolean
     dueDate?: boolean
     paymentTerm?: boolean
+    hasVatInvoice?: boolean
+    vatInvoiceNo?: boolean
+    vatAmount?: boolean
+    shippingFee?: boolean
+    importTax?: boolean
+    otherFees?: boolean
+    totalDiscount?: boolean
     note?: boolean
     branchId?: boolean
     userId?: boolean
@@ -34012,6 +35119,13 @@ export namespace Prisma {
     paymentStatus?: boolean
     dueDate?: boolean
     paymentTerm?: boolean
+    hasVatInvoice?: boolean
+    vatInvoiceNo?: boolean
+    vatAmount?: boolean
+    shippingFee?: boolean
+    importTax?: boolean
+    otherFees?: boolean
+    totalDiscount?: boolean
     note?: boolean
     branchId?: boolean
     userId?: boolean
@@ -34034,6 +35148,13 @@ export namespace Prisma {
     paymentStatus?: boolean
     dueDate?: boolean
     paymentTerm?: boolean
+    hasVatInvoice?: boolean
+    vatInvoiceNo?: boolean
+    vatAmount?: boolean
+    shippingFee?: boolean
+    importTax?: boolean
+    otherFees?: boolean
+    totalDiscount?: boolean
     note?: boolean
     branchId?: boolean
     userId?: boolean
@@ -34043,7 +35164,7 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type ImportReceiptOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "code" | "supplierId" | "supplierName" | "totalCost" | "totalItems" | "status" | "paidAmount" | "paymentStatus" | "dueDate" | "paymentTerm" | "note" | "branchId" | "userId" | "userName" | "transactionDate" | "createdAt" | "updatedAt", ExtArgs["result"]["importReceipt"]>
+  export type ImportReceiptOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "code" | "supplierId" | "supplierName" | "totalCost" | "totalItems" | "status" | "paidAmount" | "paymentStatus" | "dueDate" | "paymentTerm" | "hasVatInvoice" | "vatInvoiceNo" | "vatAmount" | "shippingFee" | "importTax" | "otherFees" | "totalDiscount" | "note" | "branchId" | "userId" | "userName" | "transactionDate" | "createdAt" | "updatedAt", ExtArgs["result"]["importReceipt"]>
   export type ImportReceiptInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     user?: boolean | UserDefaultArgs<ExtArgs>
     items?: boolean | ImportReceipt$itemsArgs<ExtArgs>
@@ -34074,6 +35195,13 @@ export namespace Prisma {
       paymentStatus: string
       dueDate: Date | null
       paymentTerm: string | null
+      hasVatInvoice: boolean
+      vatInvoiceNo: string | null
+      vatAmount: number
+      shippingFee: number
+      importTax: number
+      otherFees: number
+      totalDiscount: number
       note: string | null
       branchId: string | null
       userId: string
@@ -34517,6 +35645,13 @@ export namespace Prisma {
     readonly paymentStatus: FieldRef<"ImportReceipt", 'String'>
     readonly dueDate: FieldRef<"ImportReceipt", 'DateTime'>
     readonly paymentTerm: FieldRef<"ImportReceipt", 'String'>
+    readonly hasVatInvoice: FieldRef<"ImportReceipt", 'Boolean'>
+    readonly vatInvoiceNo: FieldRef<"ImportReceipt", 'String'>
+    readonly vatAmount: FieldRef<"ImportReceipt", 'Float'>
+    readonly shippingFee: FieldRef<"ImportReceipt", 'Float'>
+    readonly importTax: FieldRef<"ImportReceipt", 'Float'>
+    readonly otherFees: FieldRef<"ImportReceipt", 'Float'>
+    readonly totalDiscount: FieldRef<"ImportReceipt", 'Float'>
     readonly note: FieldRef<"ImportReceipt", 'String'>
     readonly branchId: FieldRef<"ImportReceipt", 'String'>
     readonly userId: FieldRef<"ImportReceipt", 'String'>
@@ -52523,6 +53658,8 @@ export namespace Prisma {
     createdAt?: boolean
     updatedAt?: boolean
     maintenanceLogs?: boolean | Vehicle$maintenanceLogsArgs<ExtArgs>
+    fuelLogs?: boolean | Vehicle$fuelLogsArgs<ExtArgs>
+    documents?: boolean | Vehicle$documentsArgs<ExtArgs>
     warehouse?: boolean | Vehicle$warehouseArgs<ExtArgs>
     salesTrips?: boolean | Vehicle$salesTripsArgs<ExtArgs>
     _count?: boolean | VehicleCountOutputTypeDefaultArgs<ExtArgs>
@@ -52603,6 +53740,8 @@ export namespace Prisma {
   export type VehicleOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "code" | "name" | "type" | "licensePlate" | "brand" | "model" | "year" | "color" | "currentKm" | "lastOilChangeKm" | "inspectionExpiry" | "insuranceExpiry" | "assignedDriverId" | "assignedDriverName" | "status" | "imageUrl" | "notes" | "branchId" | "createdAt" | "updatedAt", ExtArgs["result"]["vehicle"]>
   export type VehicleInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     maintenanceLogs?: boolean | Vehicle$maintenanceLogsArgs<ExtArgs>
+    fuelLogs?: boolean | Vehicle$fuelLogsArgs<ExtArgs>
+    documents?: boolean | Vehicle$documentsArgs<ExtArgs>
     warehouse?: boolean | Vehicle$warehouseArgs<ExtArgs>
     salesTrips?: boolean | Vehicle$salesTripsArgs<ExtArgs>
     _count?: boolean | VehicleCountOutputTypeDefaultArgs<ExtArgs>
@@ -52614,6 +53753,8 @@ export namespace Prisma {
     name: "Vehicle"
     objects: {
       maintenanceLogs: Prisma.$VehicleMaintenancePayload<ExtArgs>[]
+      fuelLogs: Prisma.$VehicleFuelLogPayload<ExtArgs>[]
+      documents: Prisma.$VehicleDocumentPayload<ExtArgs>[]
       warehouse: Prisma.$WarehousePayload<ExtArgs> | null
       salesTrips: Prisma.$SalesTripPayload<ExtArgs>[]
     }
@@ -53034,6 +54175,8 @@ export namespace Prisma {
   export interface Prisma__VehicleClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
     readonly [Symbol.toStringTag]: "PrismaPromise"
     maintenanceLogs<T extends Vehicle$maintenanceLogsArgs<ExtArgs> = {}>(args?: Subset<T, Vehicle$maintenanceLogsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$VehicleMaintenancePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    fuelLogs<T extends Vehicle$fuelLogsArgs<ExtArgs> = {}>(args?: Subset<T, Vehicle$fuelLogsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$VehicleFuelLogPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    documents<T extends Vehicle$documentsArgs<ExtArgs> = {}>(args?: Subset<T, Vehicle$documentsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$VehicleDocumentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     warehouse<T extends Vehicle$warehouseArgs<ExtArgs> = {}>(args?: Subset<T, Vehicle$warehouseArgs<ExtArgs>>): Prisma__WarehouseClient<$Result.GetResult<Prisma.$WarehousePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
     salesTrips<T extends Vehicle$salesTripsArgs<ExtArgs> = {}>(args?: Subset<T, Vehicle$salesTripsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$SalesTripPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
@@ -53495,6 +54638,54 @@ export namespace Prisma {
     take?: number
     skip?: number
     distinct?: VehicleMaintenanceScalarFieldEnum | VehicleMaintenanceScalarFieldEnum[]
+  }
+
+  /**
+   * Vehicle.fuelLogs
+   */
+  export type Vehicle$fuelLogsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the VehicleFuelLog
+     */
+    select?: VehicleFuelLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the VehicleFuelLog
+     */
+    omit?: VehicleFuelLogOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: VehicleFuelLogInclude<ExtArgs> | null
+    where?: VehicleFuelLogWhereInput
+    orderBy?: VehicleFuelLogOrderByWithRelationInput | VehicleFuelLogOrderByWithRelationInput[]
+    cursor?: VehicleFuelLogWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: VehicleFuelLogScalarFieldEnum | VehicleFuelLogScalarFieldEnum[]
+  }
+
+  /**
+   * Vehicle.documents
+   */
+  export type Vehicle$documentsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the VehicleDocument
+     */
+    select?: VehicleDocumentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the VehicleDocument
+     */
+    omit?: VehicleDocumentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: VehicleDocumentInclude<ExtArgs> | null
+    where?: VehicleDocumentWhereInput
+    orderBy?: VehicleDocumentOrderByWithRelationInput | VehicleDocumentOrderByWithRelationInput[]
+    cursor?: VehicleDocumentWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: VehicleDocumentScalarFieldEnum | VehicleDocumentScalarFieldEnum[]
   }
 
   /**
@@ -54730,6 +55921,3397 @@ export namespace Prisma {
      * Choose, which related nodes to fetch as well
      */
     include?: VehicleMaintenanceInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model CrmEmailLog
+   */
+
+  export type AggregateCrmEmailLog = {
+    _count: CrmEmailLogCountAggregateOutputType | null
+    _min: CrmEmailLogMinAggregateOutputType | null
+    _max: CrmEmailLogMaxAggregateOutputType | null
+  }
+
+  export type CrmEmailLogMinAggregateOutputType = {
+    id: string | null
+    customerId: string | null
+    customerName: string | null
+    email: string | null
+    subject: string | null
+    messageId: string | null
+    sentAt: Date | null
+    repliedAt: Date | null
+    replySubject: string | null
+  }
+
+  export type CrmEmailLogMaxAggregateOutputType = {
+    id: string | null
+    customerId: string | null
+    customerName: string | null
+    email: string | null
+    subject: string | null
+    messageId: string | null
+    sentAt: Date | null
+    repliedAt: Date | null
+    replySubject: string | null
+  }
+
+  export type CrmEmailLogCountAggregateOutputType = {
+    id: number
+    customerId: number
+    customerName: number
+    email: number
+    subject: number
+    messageId: number
+    sentAt: number
+    repliedAt: number
+    replySubject: number
+    _all: number
+  }
+
+
+  export type CrmEmailLogMinAggregateInputType = {
+    id?: true
+    customerId?: true
+    customerName?: true
+    email?: true
+    subject?: true
+    messageId?: true
+    sentAt?: true
+    repliedAt?: true
+    replySubject?: true
+  }
+
+  export type CrmEmailLogMaxAggregateInputType = {
+    id?: true
+    customerId?: true
+    customerName?: true
+    email?: true
+    subject?: true
+    messageId?: true
+    sentAt?: true
+    repliedAt?: true
+    replySubject?: true
+  }
+
+  export type CrmEmailLogCountAggregateInputType = {
+    id?: true
+    customerId?: true
+    customerName?: true
+    email?: true
+    subject?: true
+    messageId?: true
+    sentAt?: true
+    repliedAt?: true
+    replySubject?: true
+    _all?: true
+  }
+
+  export type CrmEmailLogAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which CrmEmailLog to aggregate.
+     */
+    where?: CrmEmailLogWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of CrmEmailLogs to fetch.
+     */
+    orderBy?: CrmEmailLogOrderByWithRelationInput | CrmEmailLogOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: CrmEmailLogWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` CrmEmailLogs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` CrmEmailLogs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned CrmEmailLogs
+    **/
+    _count?: true | CrmEmailLogCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: CrmEmailLogMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: CrmEmailLogMaxAggregateInputType
+  }
+
+  export type GetCrmEmailLogAggregateType<T extends CrmEmailLogAggregateArgs> = {
+        [P in keyof T & keyof AggregateCrmEmailLog]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateCrmEmailLog[P]>
+      : GetScalarType<T[P], AggregateCrmEmailLog[P]>
+  }
+
+
+
+
+  export type CrmEmailLogGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: CrmEmailLogWhereInput
+    orderBy?: CrmEmailLogOrderByWithAggregationInput | CrmEmailLogOrderByWithAggregationInput[]
+    by: CrmEmailLogScalarFieldEnum[] | CrmEmailLogScalarFieldEnum
+    having?: CrmEmailLogScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: CrmEmailLogCountAggregateInputType | true
+    _min?: CrmEmailLogMinAggregateInputType
+    _max?: CrmEmailLogMaxAggregateInputType
+  }
+
+  export type CrmEmailLogGroupByOutputType = {
+    id: string
+    customerId: string | null
+    customerName: string
+    email: string
+    subject: string
+    messageId: string | null
+    sentAt: Date
+    repliedAt: Date | null
+    replySubject: string | null
+    _count: CrmEmailLogCountAggregateOutputType | null
+    _min: CrmEmailLogMinAggregateOutputType | null
+    _max: CrmEmailLogMaxAggregateOutputType | null
+  }
+
+  type GetCrmEmailLogGroupByPayload<T extends CrmEmailLogGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<CrmEmailLogGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof CrmEmailLogGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], CrmEmailLogGroupByOutputType[P]>
+            : GetScalarType<T[P], CrmEmailLogGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type CrmEmailLogSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    customerId?: boolean
+    customerName?: boolean
+    email?: boolean
+    subject?: boolean
+    messageId?: boolean
+    sentAt?: boolean
+    repliedAt?: boolean
+    replySubject?: boolean
+  }, ExtArgs["result"]["crmEmailLog"]>
+
+  export type CrmEmailLogSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    customerId?: boolean
+    customerName?: boolean
+    email?: boolean
+    subject?: boolean
+    messageId?: boolean
+    sentAt?: boolean
+    repliedAt?: boolean
+    replySubject?: boolean
+  }, ExtArgs["result"]["crmEmailLog"]>
+
+  export type CrmEmailLogSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    customerId?: boolean
+    customerName?: boolean
+    email?: boolean
+    subject?: boolean
+    messageId?: boolean
+    sentAt?: boolean
+    repliedAt?: boolean
+    replySubject?: boolean
+  }, ExtArgs["result"]["crmEmailLog"]>
+
+  export type CrmEmailLogSelectScalar = {
+    id?: boolean
+    customerId?: boolean
+    customerName?: boolean
+    email?: boolean
+    subject?: boolean
+    messageId?: boolean
+    sentAt?: boolean
+    repliedAt?: boolean
+    replySubject?: boolean
+  }
+
+  export type CrmEmailLogOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "customerId" | "customerName" | "email" | "subject" | "messageId" | "sentAt" | "repliedAt" | "replySubject", ExtArgs["result"]["crmEmailLog"]>
+
+  export type $CrmEmailLogPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "CrmEmailLog"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      customerId: string | null
+      customerName: string
+      email: string
+      subject: string
+      messageId: string | null
+      sentAt: Date
+      repliedAt: Date | null
+      replySubject: string | null
+    }, ExtArgs["result"]["crmEmailLog"]>
+    composites: {}
+  }
+
+  type CrmEmailLogGetPayload<S extends boolean | null | undefined | CrmEmailLogDefaultArgs> = $Result.GetResult<Prisma.$CrmEmailLogPayload, S>
+
+  type CrmEmailLogCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<CrmEmailLogFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: CrmEmailLogCountAggregateInputType | true
+    }
+
+  export interface CrmEmailLogDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['CrmEmailLog'], meta: { name: 'CrmEmailLog' } }
+    /**
+     * Find zero or one CrmEmailLog that matches the filter.
+     * @param {CrmEmailLogFindUniqueArgs} args - Arguments to find a CrmEmailLog
+     * @example
+     * // Get one CrmEmailLog
+     * const crmEmailLog = await prisma.crmEmailLog.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends CrmEmailLogFindUniqueArgs>(args: SelectSubset<T, CrmEmailLogFindUniqueArgs<ExtArgs>>): Prisma__CrmEmailLogClient<$Result.GetResult<Prisma.$CrmEmailLogPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one CrmEmailLog that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {CrmEmailLogFindUniqueOrThrowArgs} args - Arguments to find a CrmEmailLog
+     * @example
+     * // Get one CrmEmailLog
+     * const crmEmailLog = await prisma.crmEmailLog.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends CrmEmailLogFindUniqueOrThrowArgs>(args: SelectSubset<T, CrmEmailLogFindUniqueOrThrowArgs<ExtArgs>>): Prisma__CrmEmailLogClient<$Result.GetResult<Prisma.$CrmEmailLogPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first CrmEmailLog that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmEmailLogFindFirstArgs} args - Arguments to find a CrmEmailLog
+     * @example
+     * // Get one CrmEmailLog
+     * const crmEmailLog = await prisma.crmEmailLog.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends CrmEmailLogFindFirstArgs>(args?: SelectSubset<T, CrmEmailLogFindFirstArgs<ExtArgs>>): Prisma__CrmEmailLogClient<$Result.GetResult<Prisma.$CrmEmailLogPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first CrmEmailLog that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmEmailLogFindFirstOrThrowArgs} args - Arguments to find a CrmEmailLog
+     * @example
+     * // Get one CrmEmailLog
+     * const crmEmailLog = await prisma.crmEmailLog.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends CrmEmailLogFindFirstOrThrowArgs>(args?: SelectSubset<T, CrmEmailLogFindFirstOrThrowArgs<ExtArgs>>): Prisma__CrmEmailLogClient<$Result.GetResult<Prisma.$CrmEmailLogPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more CrmEmailLogs that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmEmailLogFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all CrmEmailLogs
+     * const crmEmailLogs = await prisma.crmEmailLog.findMany()
+     * 
+     * // Get first 10 CrmEmailLogs
+     * const crmEmailLogs = await prisma.crmEmailLog.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const crmEmailLogWithIdOnly = await prisma.crmEmailLog.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends CrmEmailLogFindManyArgs>(args?: SelectSubset<T, CrmEmailLogFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$CrmEmailLogPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a CrmEmailLog.
+     * @param {CrmEmailLogCreateArgs} args - Arguments to create a CrmEmailLog.
+     * @example
+     * // Create one CrmEmailLog
+     * const CrmEmailLog = await prisma.crmEmailLog.create({
+     *   data: {
+     *     // ... data to create a CrmEmailLog
+     *   }
+     * })
+     * 
+     */
+    create<T extends CrmEmailLogCreateArgs>(args: SelectSubset<T, CrmEmailLogCreateArgs<ExtArgs>>): Prisma__CrmEmailLogClient<$Result.GetResult<Prisma.$CrmEmailLogPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many CrmEmailLogs.
+     * @param {CrmEmailLogCreateManyArgs} args - Arguments to create many CrmEmailLogs.
+     * @example
+     * // Create many CrmEmailLogs
+     * const crmEmailLog = await prisma.crmEmailLog.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends CrmEmailLogCreateManyArgs>(args?: SelectSubset<T, CrmEmailLogCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many CrmEmailLogs and returns the data saved in the database.
+     * @param {CrmEmailLogCreateManyAndReturnArgs} args - Arguments to create many CrmEmailLogs.
+     * @example
+     * // Create many CrmEmailLogs
+     * const crmEmailLog = await prisma.crmEmailLog.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many CrmEmailLogs and only return the `id`
+     * const crmEmailLogWithIdOnly = await prisma.crmEmailLog.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends CrmEmailLogCreateManyAndReturnArgs>(args?: SelectSubset<T, CrmEmailLogCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$CrmEmailLogPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a CrmEmailLog.
+     * @param {CrmEmailLogDeleteArgs} args - Arguments to delete one CrmEmailLog.
+     * @example
+     * // Delete one CrmEmailLog
+     * const CrmEmailLog = await prisma.crmEmailLog.delete({
+     *   where: {
+     *     // ... filter to delete one CrmEmailLog
+     *   }
+     * })
+     * 
+     */
+    delete<T extends CrmEmailLogDeleteArgs>(args: SelectSubset<T, CrmEmailLogDeleteArgs<ExtArgs>>): Prisma__CrmEmailLogClient<$Result.GetResult<Prisma.$CrmEmailLogPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one CrmEmailLog.
+     * @param {CrmEmailLogUpdateArgs} args - Arguments to update one CrmEmailLog.
+     * @example
+     * // Update one CrmEmailLog
+     * const crmEmailLog = await prisma.crmEmailLog.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends CrmEmailLogUpdateArgs>(args: SelectSubset<T, CrmEmailLogUpdateArgs<ExtArgs>>): Prisma__CrmEmailLogClient<$Result.GetResult<Prisma.$CrmEmailLogPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more CrmEmailLogs.
+     * @param {CrmEmailLogDeleteManyArgs} args - Arguments to filter CrmEmailLogs to delete.
+     * @example
+     * // Delete a few CrmEmailLogs
+     * const { count } = await prisma.crmEmailLog.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends CrmEmailLogDeleteManyArgs>(args?: SelectSubset<T, CrmEmailLogDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more CrmEmailLogs.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmEmailLogUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many CrmEmailLogs
+     * const crmEmailLog = await prisma.crmEmailLog.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends CrmEmailLogUpdateManyArgs>(args: SelectSubset<T, CrmEmailLogUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more CrmEmailLogs and returns the data updated in the database.
+     * @param {CrmEmailLogUpdateManyAndReturnArgs} args - Arguments to update many CrmEmailLogs.
+     * @example
+     * // Update many CrmEmailLogs
+     * const crmEmailLog = await prisma.crmEmailLog.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more CrmEmailLogs and only return the `id`
+     * const crmEmailLogWithIdOnly = await prisma.crmEmailLog.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends CrmEmailLogUpdateManyAndReturnArgs>(args: SelectSubset<T, CrmEmailLogUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$CrmEmailLogPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one CrmEmailLog.
+     * @param {CrmEmailLogUpsertArgs} args - Arguments to update or create a CrmEmailLog.
+     * @example
+     * // Update or create a CrmEmailLog
+     * const crmEmailLog = await prisma.crmEmailLog.upsert({
+     *   create: {
+     *     // ... data to create a CrmEmailLog
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the CrmEmailLog we want to update
+     *   }
+     * })
+     */
+    upsert<T extends CrmEmailLogUpsertArgs>(args: SelectSubset<T, CrmEmailLogUpsertArgs<ExtArgs>>): Prisma__CrmEmailLogClient<$Result.GetResult<Prisma.$CrmEmailLogPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of CrmEmailLogs.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmEmailLogCountArgs} args - Arguments to filter CrmEmailLogs to count.
+     * @example
+     * // Count the number of CrmEmailLogs
+     * const count = await prisma.crmEmailLog.count({
+     *   where: {
+     *     // ... the filter for the CrmEmailLogs we want to count
+     *   }
+     * })
+    **/
+    count<T extends CrmEmailLogCountArgs>(
+      args?: Subset<T, CrmEmailLogCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], CrmEmailLogCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a CrmEmailLog.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmEmailLogAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends CrmEmailLogAggregateArgs>(args: Subset<T, CrmEmailLogAggregateArgs>): Prisma.PrismaPromise<GetCrmEmailLogAggregateType<T>>
+
+    /**
+     * Group by CrmEmailLog.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmEmailLogGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends CrmEmailLogGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: CrmEmailLogGroupByArgs['orderBy'] }
+        : { orderBy?: CrmEmailLogGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, CrmEmailLogGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetCrmEmailLogGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the CrmEmailLog model
+   */
+  readonly fields: CrmEmailLogFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for CrmEmailLog.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__CrmEmailLogClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the CrmEmailLog model
+   */
+  interface CrmEmailLogFieldRefs {
+    readonly id: FieldRef<"CrmEmailLog", 'String'>
+    readonly customerId: FieldRef<"CrmEmailLog", 'String'>
+    readonly customerName: FieldRef<"CrmEmailLog", 'String'>
+    readonly email: FieldRef<"CrmEmailLog", 'String'>
+    readonly subject: FieldRef<"CrmEmailLog", 'String'>
+    readonly messageId: FieldRef<"CrmEmailLog", 'String'>
+    readonly sentAt: FieldRef<"CrmEmailLog", 'DateTime'>
+    readonly repliedAt: FieldRef<"CrmEmailLog", 'DateTime'>
+    readonly replySubject: FieldRef<"CrmEmailLog", 'String'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * CrmEmailLog findUnique
+   */
+  export type CrmEmailLogFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmEmailLog
+     */
+    select?: CrmEmailLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmEmailLog
+     */
+    omit?: CrmEmailLogOmit<ExtArgs> | null
+    /**
+     * Filter, which CrmEmailLog to fetch.
+     */
+    where: CrmEmailLogWhereUniqueInput
+  }
+
+  /**
+   * CrmEmailLog findUniqueOrThrow
+   */
+  export type CrmEmailLogFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmEmailLog
+     */
+    select?: CrmEmailLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmEmailLog
+     */
+    omit?: CrmEmailLogOmit<ExtArgs> | null
+    /**
+     * Filter, which CrmEmailLog to fetch.
+     */
+    where: CrmEmailLogWhereUniqueInput
+  }
+
+  /**
+   * CrmEmailLog findFirst
+   */
+  export type CrmEmailLogFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmEmailLog
+     */
+    select?: CrmEmailLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmEmailLog
+     */
+    omit?: CrmEmailLogOmit<ExtArgs> | null
+    /**
+     * Filter, which CrmEmailLog to fetch.
+     */
+    where?: CrmEmailLogWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of CrmEmailLogs to fetch.
+     */
+    orderBy?: CrmEmailLogOrderByWithRelationInput | CrmEmailLogOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for CrmEmailLogs.
+     */
+    cursor?: CrmEmailLogWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` CrmEmailLogs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` CrmEmailLogs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of CrmEmailLogs.
+     */
+    distinct?: CrmEmailLogScalarFieldEnum | CrmEmailLogScalarFieldEnum[]
+  }
+
+  /**
+   * CrmEmailLog findFirstOrThrow
+   */
+  export type CrmEmailLogFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmEmailLog
+     */
+    select?: CrmEmailLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmEmailLog
+     */
+    omit?: CrmEmailLogOmit<ExtArgs> | null
+    /**
+     * Filter, which CrmEmailLog to fetch.
+     */
+    where?: CrmEmailLogWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of CrmEmailLogs to fetch.
+     */
+    orderBy?: CrmEmailLogOrderByWithRelationInput | CrmEmailLogOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for CrmEmailLogs.
+     */
+    cursor?: CrmEmailLogWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` CrmEmailLogs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` CrmEmailLogs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of CrmEmailLogs.
+     */
+    distinct?: CrmEmailLogScalarFieldEnum | CrmEmailLogScalarFieldEnum[]
+  }
+
+  /**
+   * CrmEmailLog findMany
+   */
+  export type CrmEmailLogFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmEmailLog
+     */
+    select?: CrmEmailLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmEmailLog
+     */
+    omit?: CrmEmailLogOmit<ExtArgs> | null
+    /**
+     * Filter, which CrmEmailLogs to fetch.
+     */
+    where?: CrmEmailLogWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of CrmEmailLogs to fetch.
+     */
+    orderBy?: CrmEmailLogOrderByWithRelationInput | CrmEmailLogOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing CrmEmailLogs.
+     */
+    cursor?: CrmEmailLogWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` CrmEmailLogs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` CrmEmailLogs.
+     */
+    skip?: number
+    distinct?: CrmEmailLogScalarFieldEnum | CrmEmailLogScalarFieldEnum[]
+  }
+
+  /**
+   * CrmEmailLog create
+   */
+  export type CrmEmailLogCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmEmailLog
+     */
+    select?: CrmEmailLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmEmailLog
+     */
+    omit?: CrmEmailLogOmit<ExtArgs> | null
+    /**
+     * The data needed to create a CrmEmailLog.
+     */
+    data: XOR<CrmEmailLogCreateInput, CrmEmailLogUncheckedCreateInput>
+  }
+
+  /**
+   * CrmEmailLog createMany
+   */
+  export type CrmEmailLogCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many CrmEmailLogs.
+     */
+    data: CrmEmailLogCreateManyInput | CrmEmailLogCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * CrmEmailLog createManyAndReturn
+   */
+  export type CrmEmailLogCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmEmailLog
+     */
+    select?: CrmEmailLogSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmEmailLog
+     */
+    omit?: CrmEmailLogOmit<ExtArgs> | null
+    /**
+     * The data used to create many CrmEmailLogs.
+     */
+    data: CrmEmailLogCreateManyInput | CrmEmailLogCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * CrmEmailLog update
+   */
+  export type CrmEmailLogUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmEmailLog
+     */
+    select?: CrmEmailLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmEmailLog
+     */
+    omit?: CrmEmailLogOmit<ExtArgs> | null
+    /**
+     * The data needed to update a CrmEmailLog.
+     */
+    data: XOR<CrmEmailLogUpdateInput, CrmEmailLogUncheckedUpdateInput>
+    /**
+     * Choose, which CrmEmailLog to update.
+     */
+    where: CrmEmailLogWhereUniqueInput
+  }
+
+  /**
+   * CrmEmailLog updateMany
+   */
+  export type CrmEmailLogUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update CrmEmailLogs.
+     */
+    data: XOR<CrmEmailLogUpdateManyMutationInput, CrmEmailLogUncheckedUpdateManyInput>
+    /**
+     * Filter which CrmEmailLogs to update
+     */
+    where?: CrmEmailLogWhereInput
+    /**
+     * Limit how many CrmEmailLogs to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * CrmEmailLog updateManyAndReturn
+   */
+  export type CrmEmailLogUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmEmailLog
+     */
+    select?: CrmEmailLogSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmEmailLog
+     */
+    omit?: CrmEmailLogOmit<ExtArgs> | null
+    /**
+     * The data used to update CrmEmailLogs.
+     */
+    data: XOR<CrmEmailLogUpdateManyMutationInput, CrmEmailLogUncheckedUpdateManyInput>
+    /**
+     * Filter which CrmEmailLogs to update
+     */
+    where?: CrmEmailLogWhereInput
+    /**
+     * Limit how many CrmEmailLogs to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * CrmEmailLog upsert
+   */
+  export type CrmEmailLogUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmEmailLog
+     */
+    select?: CrmEmailLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmEmailLog
+     */
+    omit?: CrmEmailLogOmit<ExtArgs> | null
+    /**
+     * The filter to search for the CrmEmailLog to update in case it exists.
+     */
+    where: CrmEmailLogWhereUniqueInput
+    /**
+     * In case the CrmEmailLog found by the `where` argument doesn't exist, create a new CrmEmailLog with this data.
+     */
+    create: XOR<CrmEmailLogCreateInput, CrmEmailLogUncheckedCreateInput>
+    /**
+     * In case the CrmEmailLog was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<CrmEmailLogUpdateInput, CrmEmailLogUncheckedUpdateInput>
+  }
+
+  /**
+   * CrmEmailLog delete
+   */
+  export type CrmEmailLogDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmEmailLog
+     */
+    select?: CrmEmailLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmEmailLog
+     */
+    omit?: CrmEmailLogOmit<ExtArgs> | null
+    /**
+     * Filter which CrmEmailLog to delete.
+     */
+    where: CrmEmailLogWhereUniqueInput
+  }
+
+  /**
+   * CrmEmailLog deleteMany
+   */
+  export type CrmEmailLogDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which CrmEmailLogs to delete
+     */
+    where?: CrmEmailLogWhereInput
+    /**
+     * Limit how many CrmEmailLogs to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * CrmEmailLog without action
+   */
+  export type CrmEmailLogDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmEmailLog
+     */
+    select?: CrmEmailLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmEmailLog
+     */
+    omit?: CrmEmailLogOmit<ExtArgs> | null
+  }
+
+
+  /**
+   * Model VehicleFuelLog
+   */
+
+  export type AggregateVehicleFuelLog = {
+    _count: VehicleFuelLogCountAggregateOutputType | null
+    _avg: VehicleFuelLogAvgAggregateOutputType | null
+    _sum: VehicleFuelLogSumAggregateOutputType | null
+    _min: VehicleFuelLogMinAggregateOutputType | null
+    _max: VehicleFuelLogMaxAggregateOutputType | null
+  }
+
+  export type VehicleFuelLogAvgAggregateOutputType = {
+    liters: number | null
+    pricePerLiter: number | null
+    cost: number | null
+    kmAtFill: number | null
+  }
+
+  export type VehicleFuelLogSumAggregateOutputType = {
+    liters: number | null
+    pricePerLiter: number | null
+    cost: number | null
+    kmAtFill: number | null
+  }
+
+  export type VehicleFuelLogMinAggregateOutputType = {
+    id: string | null
+    vehicleId: string | null
+    fuelDate: Date | null
+    liters: number | null
+    pricePerLiter: number | null
+    cost: number | null
+    kmAtFill: number | null
+    fuelType: string | null
+    station: string | null
+    isFullTank: boolean | null
+    notes: string | null
+    createdAt: Date | null
+  }
+
+  export type VehicleFuelLogMaxAggregateOutputType = {
+    id: string | null
+    vehicleId: string | null
+    fuelDate: Date | null
+    liters: number | null
+    pricePerLiter: number | null
+    cost: number | null
+    kmAtFill: number | null
+    fuelType: string | null
+    station: string | null
+    isFullTank: boolean | null
+    notes: string | null
+    createdAt: Date | null
+  }
+
+  export type VehicleFuelLogCountAggregateOutputType = {
+    id: number
+    vehicleId: number
+    fuelDate: number
+    liters: number
+    pricePerLiter: number
+    cost: number
+    kmAtFill: number
+    fuelType: number
+    station: number
+    isFullTank: number
+    notes: number
+    createdAt: number
+    _all: number
+  }
+
+
+  export type VehicleFuelLogAvgAggregateInputType = {
+    liters?: true
+    pricePerLiter?: true
+    cost?: true
+    kmAtFill?: true
+  }
+
+  export type VehicleFuelLogSumAggregateInputType = {
+    liters?: true
+    pricePerLiter?: true
+    cost?: true
+    kmAtFill?: true
+  }
+
+  export type VehicleFuelLogMinAggregateInputType = {
+    id?: true
+    vehicleId?: true
+    fuelDate?: true
+    liters?: true
+    pricePerLiter?: true
+    cost?: true
+    kmAtFill?: true
+    fuelType?: true
+    station?: true
+    isFullTank?: true
+    notes?: true
+    createdAt?: true
+  }
+
+  export type VehicleFuelLogMaxAggregateInputType = {
+    id?: true
+    vehicleId?: true
+    fuelDate?: true
+    liters?: true
+    pricePerLiter?: true
+    cost?: true
+    kmAtFill?: true
+    fuelType?: true
+    station?: true
+    isFullTank?: true
+    notes?: true
+    createdAt?: true
+  }
+
+  export type VehicleFuelLogCountAggregateInputType = {
+    id?: true
+    vehicleId?: true
+    fuelDate?: true
+    liters?: true
+    pricePerLiter?: true
+    cost?: true
+    kmAtFill?: true
+    fuelType?: true
+    station?: true
+    isFullTank?: true
+    notes?: true
+    createdAt?: true
+    _all?: true
+  }
+
+  export type VehicleFuelLogAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which VehicleFuelLog to aggregate.
+     */
+    where?: VehicleFuelLogWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of VehicleFuelLogs to fetch.
+     */
+    orderBy?: VehicleFuelLogOrderByWithRelationInput | VehicleFuelLogOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: VehicleFuelLogWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` VehicleFuelLogs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` VehicleFuelLogs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned VehicleFuelLogs
+    **/
+    _count?: true | VehicleFuelLogCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: VehicleFuelLogAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: VehicleFuelLogSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: VehicleFuelLogMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: VehicleFuelLogMaxAggregateInputType
+  }
+
+  export type GetVehicleFuelLogAggregateType<T extends VehicleFuelLogAggregateArgs> = {
+        [P in keyof T & keyof AggregateVehicleFuelLog]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateVehicleFuelLog[P]>
+      : GetScalarType<T[P], AggregateVehicleFuelLog[P]>
+  }
+
+
+
+
+  export type VehicleFuelLogGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: VehicleFuelLogWhereInput
+    orderBy?: VehicleFuelLogOrderByWithAggregationInput | VehicleFuelLogOrderByWithAggregationInput[]
+    by: VehicleFuelLogScalarFieldEnum[] | VehicleFuelLogScalarFieldEnum
+    having?: VehicleFuelLogScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: VehicleFuelLogCountAggregateInputType | true
+    _avg?: VehicleFuelLogAvgAggregateInputType
+    _sum?: VehicleFuelLogSumAggregateInputType
+    _min?: VehicleFuelLogMinAggregateInputType
+    _max?: VehicleFuelLogMaxAggregateInputType
+  }
+
+  export type VehicleFuelLogGroupByOutputType = {
+    id: string
+    vehicleId: string
+    fuelDate: Date
+    liters: number
+    pricePerLiter: number
+    cost: number
+    kmAtFill: number
+    fuelType: string | null
+    station: string | null
+    isFullTank: boolean
+    notes: string | null
+    createdAt: Date
+    _count: VehicleFuelLogCountAggregateOutputType | null
+    _avg: VehicleFuelLogAvgAggregateOutputType | null
+    _sum: VehicleFuelLogSumAggregateOutputType | null
+    _min: VehicleFuelLogMinAggregateOutputType | null
+    _max: VehicleFuelLogMaxAggregateOutputType | null
+  }
+
+  type GetVehicleFuelLogGroupByPayload<T extends VehicleFuelLogGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<VehicleFuelLogGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof VehicleFuelLogGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], VehicleFuelLogGroupByOutputType[P]>
+            : GetScalarType<T[P], VehicleFuelLogGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type VehicleFuelLogSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    vehicleId?: boolean
+    fuelDate?: boolean
+    liters?: boolean
+    pricePerLiter?: boolean
+    cost?: boolean
+    kmAtFill?: boolean
+    fuelType?: boolean
+    station?: boolean
+    isFullTank?: boolean
+    notes?: boolean
+    createdAt?: boolean
+    vehicle?: boolean | VehicleDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["vehicleFuelLog"]>
+
+  export type VehicleFuelLogSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    vehicleId?: boolean
+    fuelDate?: boolean
+    liters?: boolean
+    pricePerLiter?: boolean
+    cost?: boolean
+    kmAtFill?: boolean
+    fuelType?: boolean
+    station?: boolean
+    isFullTank?: boolean
+    notes?: boolean
+    createdAt?: boolean
+    vehicle?: boolean | VehicleDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["vehicleFuelLog"]>
+
+  export type VehicleFuelLogSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    vehicleId?: boolean
+    fuelDate?: boolean
+    liters?: boolean
+    pricePerLiter?: boolean
+    cost?: boolean
+    kmAtFill?: boolean
+    fuelType?: boolean
+    station?: boolean
+    isFullTank?: boolean
+    notes?: boolean
+    createdAt?: boolean
+    vehicle?: boolean | VehicleDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["vehicleFuelLog"]>
+
+  export type VehicleFuelLogSelectScalar = {
+    id?: boolean
+    vehicleId?: boolean
+    fuelDate?: boolean
+    liters?: boolean
+    pricePerLiter?: boolean
+    cost?: boolean
+    kmAtFill?: boolean
+    fuelType?: boolean
+    station?: boolean
+    isFullTank?: boolean
+    notes?: boolean
+    createdAt?: boolean
+  }
+
+  export type VehicleFuelLogOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "vehicleId" | "fuelDate" | "liters" | "pricePerLiter" | "cost" | "kmAtFill" | "fuelType" | "station" | "isFullTank" | "notes" | "createdAt", ExtArgs["result"]["vehicleFuelLog"]>
+  export type VehicleFuelLogInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    vehicle?: boolean | VehicleDefaultArgs<ExtArgs>
+  }
+  export type VehicleFuelLogIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    vehicle?: boolean | VehicleDefaultArgs<ExtArgs>
+  }
+  export type VehicleFuelLogIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    vehicle?: boolean | VehicleDefaultArgs<ExtArgs>
+  }
+
+  export type $VehicleFuelLogPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "VehicleFuelLog"
+    objects: {
+      vehicle: Prisma.$VehiclePayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      vehicleId: string
+      fuelDate: Date
+      liters: number
+      pricePerLiter: number
+      cost: number
+      kmAtFill: number
+      fuelType: string | null
+      station: string | null
+      isFullTank: boolean
+      notes: string | null
+      createdAt: Date
+    }, ExtArgs["result"]["vehicleFuelLog"]>
+    composites: {}
+  }
+
+  type VehicleFuelLogGetPayload<S extends boolean | null | undefined | VehicleFuelLogDefaultArgs> = $Result.GetResult<Prisma.$VehicleFuelLogPayload, S>
+
+  type VehicleFuelLogCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<VehicleFuelLogFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: VehicleFuelLogCountAggregateInputType | true
+    }
+
+  export interface VehicleFuelLogDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['VehicleFuelLog'], meta: { name: 'VehicleFuelLog' } }
+    /**
+     * Find zero or one VehicleFuelLog that matches the filter.
+     * @param {VehicleFuelLogFindUniqueArgs} args - Arguments to find a VehicleFuelLog
+     * @example
+     * // Get one VehicleFuelLog
+     * const vehicleFuelLog = await prisma.vehicleFuelLog.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends VehicleFuelLogFindUniqueArgs>(args: SelectSubset<T, VehicleFuelLogFindUniqueArgs<ExtArgs>>): Prisma__VehicleFuelLogClient<$Result.GetResult<Prisma.$VehicleFuelLogPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one VehicleFuelLog that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {VehicleFuelLogFindUniqueOrThrowArgs} args - Arguments to find a VehicleFuelLog
+     * @example
+     * // Get one VehicleFuelLog
+     * const vehicleFuelLog = await prisma.vehicleFuelLog.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends VehicleFuelLogFindUniqueOrThrowArgs>(args: SelectSubset<T, VehicleFuelLogFindUniqueOrThrowArgs<ExtArgs>>): Prisma__VehicleFuelLogClient<$Result.GetResult<Prisma.$VehicleFuelLogPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first VehicleFuelLog that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {VehicleFuelLogFindFirstArgs} args - Arguments to find a VehicleFuelLog
+     * @example
+     * // Get one VehicleFuelLog
+     * const vehicleFuelLog = await prisma.vehicleFuelLog.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends VehicleFuelLogFindFirstArgs>(args?: SelectSubset<T, VehicleFuelLogFindFirstArgs<ExtArgs>>): Prisma__VehicleFuelLogClient<$Result.GetResult<Prisma.$VehicleFuelLogPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first VehicleFuelLog that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {VehicleFuelLogFindFirstOrThrowArgs} args - Arguments to find a VehicleFuelLog
+     * @example
+     * // Get one VehicleFuelLog
+     * const vehicleFuelLog = await prisma.vehicleFuelLog.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends VehicleFuelLogFindFirstOrThrowArgs>(args?: SelectSubset<T, VehicleFuelLogFindFirstOrThrowArgs<ExtArgs>>): Prisma__VehicleFuelLogClient<$Result.GetResult<Prisma.$VehicleFuelLogPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more VehicleFuelLogs that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {VehicleFuelLogFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all VehicleFuelLogs
+     * const vehicleFuelLogs = await prisma.vehicleFuelLog.findMany()
+     * 
+     * // Get first 10 VehicleFuelLogs
+     * const vehicleFuelLogs = await prisma.vehicleFuelLog.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const vehicleFuelLogWithIdOnly = await prisma.vehicleFuelLog.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends VehicleFuelLogFindManyArgs>(args?: SelectSubset<T, VehicleFuelLogFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$VehicleFuelLogPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a VehicleFuelLog.
+     * @param {VehicleFuelLogCreateArgs} args - Arguments to create a VehicleFuelLog.
+     * @example
+     * // Create one VehicleFuelLog
+     * const VehicleFuelLog = await prisma.vehicleFuelLog.create({
+     *   data: {
+     *     // ... data to create a VehicleFuelLog
+     *   }
+     * })
+     * 
+     */
+    create<T extends VehicleFuelLogCreateArgs>(args: SelectSubset<T, VehicleFuelLogCreateArgs<ExtArgs>>): Prisma__VehicleFuelLogClient<$Result.GetResult<Prisma.$VehicleFuelLogPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many VehicleFuelLogs.
+     * @param {VehicleFuelLogCreateManyArgs} args - Arguments to create many VehicleFuelLogs.
+     * @example
+     * // Create many VehicleFuelLogs
+     * const vehicleFuelLog = await prisma.vehicleFuelLog.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends VehicleFuelLogCreateManyArgs>(args?: SelectSubset<T, VehicleFuelLogCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many VehicleFuelLogs and returns the data saved in the database.
+     * @param {VehicleFuelLogCreateManyAndReturnArgs} args - Arguments to create many VehicleFuelLogs.
+     * @example
+     * // Create many VehicleFuelLogs
+     * const vehicleFuelLog = await prisma.vehicleFuelLog.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many VehicleFuelLogs and only return the `id`
+     * const vehicleFuelLogWithIdOnly = await prisma.vehicleFuelLog.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends VehicleFuelLogCreateManyAndReturnArgs>(args?: SelectSubset<T, VehicleFuelLogCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$VehicleFuelLogPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a VehicleFuelLog.
+     * @param {VehicleFuelLogDeleteArgs} args - Arguments to delete one VehicleFuelLog.
+     * @example
+     * // Delete one VehicleFuelLog
+     * const VehicleFuelLog = await prisma.vehicleFuelLog.delete({
+     *   where: {
+     *     // ... filter to delete one VehicleFuelLog
+     *   }
+     * })
+     * 
+     */
+    delete<T extends VehicleFuelLogDeleteArgs>(args: SelectSubset<T, VehicleFuelLogDeleteArgs<ExtArgs>>): Prisma__VehicleFuelLogClient<$Result.GetResult<Prisma.$VehicleFuelLogPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one VehicleFuelLog.
+     * @param {VehicleFuelLogUpdateArgs} args - Arguments to update one VehicleFuelLog.
+     * @example
+     * // Update one VehicleFuelLog
+     * const vehicleFuelLog = await prisma.vehicleFuelLog.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends VehicleFuelLogUpdateArgs>(args: SelectSubset<T, VehicleFuelLogUpdateArgs<ExtArgs>>): Prisma__VehicleFuelLogClient<$Result.GetResult<Prisma.$VehicleFuelLogPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more VehicleFuelLogs.
+     * @param {VehicleFuelLogDeleteManyArgs} args - Arguments to filter VehicleFuelLogs to delete.
+     * @example
+     * // Delete a few VehicleFuelLogs
+     * const { count } = await prisma.vehicleFuelLog.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends VehicleFuelLogDeleteManyArgs>(args?: SelectSubset<T, VehicleFuelLogDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more VehicleFuelLogs.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {VehicleFuelLogUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many VehicleFuelLogs
+     * const vehicleFuelLog = await prisma.vehicleFuelLog.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends VehicleFuelLogUpdateManyArgs>(args: SelectSubset<T, VehicleFuelLogUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more VehicleFuelLogs and returns the data updated in the database.
+     * @param {VehicleFuelLogUpdateManyAndReturnArgs} args - Arguments to update many VehicleFuelLogs.
+     * @example
+     * // Update many VehicleFuelLogs
+     * const vehicleFuelLog = await prisma.vehicleFuelLog.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more VehicleFuelLogs and only return the `id`
+     * const vehicleFuelLogWithIdOnly = await prisma.vehicleFuelLog.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends VehicleFuelLogUpdateManyAndReturnArgs>(args: SelectSubset<T, VehicleFuelLogUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$VehicleFuelLogPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one VehicleFuelLog.
+     * @param {VehicleFuelLogUpsertArgs} args - Arguments to update or create a VehicleFuelLog.
+     * @example
+     * // Update or create a VehicleFuelLog
+     * const vehicleFuelLog = await prisma.vehicleFuelLog.upsert({
+     *   create: {
+     *     // ... data to create a VehicleFuelLog
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the VehicleFuelLog we want to update
+     *   }
+     * })
+     */
+    upsert<T extends VehicleFuelLogUpsertArgs>(args: SelectSubset<T, VehicleFuelLogUpsertArgs<ExtArgs>>): Prisma__VehicleFuelLogClient<$Result.GetResult<Prisma.$VehicleFuelLogPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of VehicleFuelLogs.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {VehicleFuelLogCountArgs} args - Arguments to filter VehicleFuelLogs to count.
+     * @example
+     * // Count the number of VehicleFuelLogs
+     * const count = await prisma.vehicleFuelLog.count({
+     *   where: {
+     *     // ... the filter for the VehicleFuelLogs we want to count
+     *   }
+     * })
+    **/
+    count<T extends VehicleFuelLogCountArgs>(
+      args?: Subset<T, VehicleFuelLogCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], VehicleFuelLogCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a VehicleFuelLog.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {VehicleFuelLogAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends VehicleFuelLogAggregateArgs>(args: Subset<T, VehicleFuelLogAggregateArgs>): Prisma.PrismaPromise<GetVehicleFuelLogAggregateType<T>>
+
+    /**
+     * Group by VehicleFuelLog.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {VehicleFuelLogGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends VehicleFuelLogGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: VehicleFuelLogGroupByArgs['orderBy'] }
+        : { orderBy?: VehicleFuelLogGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, VehicleFuelLogGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetVehicleFuelLogGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the VehicleFuelLog model
+   */
+  readonly fields: VehicleFuelLogFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for VehicleFuelLog.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__VehicleFuelLogClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    vehicle<T extends VehicleDefaultArgs<ExtArgs> = {}>(args?: Subset<T, VehicleDefaultArgs<ExtArgs>>): Prisma__VehicleClient<$Result.GetResult<Prisma.$VehiclePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the VehicleFuelLog model
+   */
+  interface VehicleFuelLogFieldRefs {
+    readonly id: FieldRef<"VehicleFuelLog", 'String'>
+    readonly vehicleId: FieldRef<"VehicleFuelLog", 'String'>
+    readonly fuelDate: FieldRef<"VehicleFuelLog", 'DateTime'>
+    readonly liters: FieldRef<"VehicleFuelLog", 'Float'>
+    readonly pricePerLiter: FieldRef<"VehicleFuelLog", 'Float'>
+    readonly cost: FieldRef<"VehicleFuelLog", 'Float'>
+    readonly kmAtFill: FieldRef<"VehicleFuelLog", 'Float'>
+    readonly fuelType: FieldRef<"VehicleFuelLog", 'String'>
+    readonly station: FieldRef<"VehicleFuelLog", 'String'>
+    readonly isFullTank: FieldRef<"VehicleFuelLog", 'Boolean'>
+    readonly notes: FieldRef<"VehicleFuelLog", 'String'>
+    readonly createdAt: FieldRef<"VehicleFuelLog", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * VehicleFuelLog findUnique
+   */
+  export type VehicleFuelLogFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the VehicleFuelLog
+     */
+    select?: VehicleFuelLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the VehicleFuelLog
+     */
+    omit?: VehicleFuelLogOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: VehicleFuelLogInclude<ExtArgs> | null
+    /**
+     * Filter, which VehicleFuelLog to fetch.
+     */
+    where: VehicleFuelLogWhereUniqueInput
+  }
+
+  /**
+   * VehicleFuelLog findUniqueOrThrow
+   */
+  export type VehicleFuelLogFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the VehicleFuelLog
+     */
+    select?: VehicleFuelLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the VehicleFuelLog
+     */
+    omit?: VehicleFuelLogOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: VehicleFuelLogInclude<ExtArgs> | null
+    /**
+     * Filter, which VehicleFuelLog to fetch.
+     */
+    where: VehicleFuelLogWhereUniqueInput
+  }
+
+  /**
+   * VehicleFuelLog findFirst
+   */
+  export type VehicleFuelLogFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the VehicleFuelLog
+     */
+    select?: VehicleFuelLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the VehicleFuelLog
+     */
+    omit?: VehicleFuelLogOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: VehicleFuelLogInclude<ExtArgs> | null
+    /**
+     * Filter, which VehicleFuelLog to fetch.
+     */
+    where?: VehicleFuelLogWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of VehicleFuelLogs to fetch.
+     */
+    orderBy?: VehicleFuelLogOrderByWithRelationInput | VehicleFuelLogOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for VehicleFuelLogs.
+     */
+    cursor?: VehicleFuelLogWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` VehicleFuelLogs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` VehicleFuelLogs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of VehicleFuelLogs.
+     */
+    distinct?: VehicleFuelLogScalarFieldEnum | VehicleFuelLogScalarFieldEnum[]
+  }
+
+  /**
+   * VehicleFuelLog findFirstOrThrow
+   */
+  export type VehicleFuelLogFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the VehicleFuelLog
+     */
+    select?: VehicleFuelLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the VehicleFuelLog
+     */
+    omit?: VehicleFuelLogOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: VehicleFuelLogInclude<ExtArgs> | null
+    /**
+     * Filter, which VehicleFuelLog to fetch.
+     */
+    where?: VehicleFuelLogWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of VehicleFuelLogs to fetch.
+     */
+    orderBy?: VehicleFuelLogOrderByWithRelationInput | VehicleFuelLogOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for VehicleFuelLogs.
+     */
+    cursor?: VehicleFuelLogWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` VehicleFuelLogs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` VehicleFuelLogs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of VehicleFuelLogs.
+     */
+    distinct?: VehicleFuelLogScalarFieldEnum | VehicleFuelLogScalarFieldEnum[]
+  }
+
+  /**
+   * VehicleFuelLog findMany
+   */
+  export type VehicleFuelLogFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the VehicleFuelLog
+     */
+    select?: VehicleFuelLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the VehicleFuelLog
+     */
+    omit?: VehicleFuelLogOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: VehicleFuelLogInclude<ExtArgs> | null
+    /**
+     * Filter, which VehicleFuelLogs to fetch.
+     */
+    where?: VehicleFuelLogWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of VehicleFuelLogs to fetch.
+     */
+    orderBy?: VehicleFuelLogOrderByWithRelationInput | VehicleFuelLogOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing VehicleFuelLogs.
+     */
+    cursor?: VehicleFuelLogWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` VehicleFuelLogs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` VehicleFuelLogs.
+     */
+    skip?: number
+    distinct?: VehicleFuelLogScalarFieldEnum | VehicleFuelLogScalarFieldEnum[]
+  }
+
+  /**
+   * VehicleFuelLog create
+   */
+  export type VehicleFuelLogCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the VehicleFuelLog
+     */
+    select?: VehicleFuelLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the VehicleFuelLog
+     */
+    omit?: VehicleFuelLogOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: VehicleFuelLogInclude<ExtArgs> | null
+    /**
+     * The data needed to create a VehicleFuelLog.
+     */
+    data: XOR<VehicleFuelLogCreateInput, VehicleFuelLogUncheckedCreateInput>
+  }
+
+  /**
+   * VehicleFuelLog createMany
+   */
+  export type VehicleFuelLogCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many VehicleFuelLogs.
+     */
+    data: VehicleFuelLogCreateManyInput | VehicleFuelLogCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * VehicleFuelLog createManyAndReturn
+   */
+  export type VehicleFuelLogCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the VehicleFuelLog
+     */
+    select?: VehicleFuelLogSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the VehicleFuelLog
+     */
+    omit?: VehicleFuelLogOmit<ExtArgs> | null
+    /**
+     * The data used to create many VehicleFuelLogs.
+     */
+    data: VehicleFuelLogCreateManyInput | VehicleFuelLogCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: VehicleFuelLogIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * VehicleFuelLog update
+   */
+  export type VehicleFuelLogUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the VehicleFuelLog
+     */
+    select?: VehicleFuelLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the VehicleFuelLog
+     */
+    omit?: VehicleFuelLogOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: VehicleFuelLogInclude<ExtArgs> | null
+    /**
+     * The data needed to update a VehicleFuelLog.
+     */
+    data: XOR<VehicleFuelLogUpdateInput, VehicleFuelLogUncheckedUpdateInput>
+    /**
+     * Choose, which VehicleFuelLog to update.
+     */
+    where: VehicleFuelLogWhereUniqueInput
+  }
+
+  /**
+   * VehicleFuelLog updateMany
+   */
+  export type VehicleFuelLogUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update VehicleFuelLogs.
+     */
+    data: XOR<VehicleFuelLogUpdateManyMutationInput, VehicleFuelLogUncheckedUpdateManyInput>
+    /**
+     * Filter which VehicleFuelLogs to update
+     */
+    where?: VehicleFuelLogWhereInput
+    /**
+     * Limit how many VehicleFuelLogs to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * VehicleFuelLog updateManyAndReturn
+   */
+  export type VehicleFuelLogUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the VehicleFuelLog
+     */
+    select?: VehicleFuelLogSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the VehicleFuelLog
+     */
+    omit?: VehicleFuelLogOmit<ExtArgs> | null
+    /**
+     * The data used to update VehicleFuelLogs.
+     */
+    data: XOR<VehicleFuelLogUpdateManyMutationInput, VehicleFuelLogUncheckedUpdateManyInput>
+    /**
+     * Filter which VehicleFuelLogs to update
+     */
+    where?: VehicleFuelLogWhereInput
+    /**
+     * Limit how many VehicleFuelLogs to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: VehicleFuelLogIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * VehicleFuelLog upsert
+   */
+  export type VehicleFuelLogUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the VehicleFuelLog
+     */
+    select?: VehicleFuelLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the VehicleFuelLog
+     */
+    omit?: VehicleFuelLogOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: VehicleFuelLogInclude<ExtArgs> | null
+    /**
+     * The filter to search for the VehicleFuelLog to update in case it exists.
+     */
+    where: VehicleFuelLogWhereUniqueInput
+    /**
+     * In case the VehicleFuelLog found by the `where` argument doesn't exist, create a new VehicleFuelLog with this data.
+     */
+    create: XOR<VehicleFuelLogCreateInput, VehicleFuelLogUncheckedCreateInput>
+    /**
+     * In case the VehicleFuelLog was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<VehicleFuelLogUpdateInput, VehicleFuelLogUncheckedUpdateInput>
+  }
+
+  /**
+   * VehicleFuelLog delete
+   */
+  export type VehicleFuelLogDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the VehicleFuelLog
+     */
+    select?: VehicleFuelLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the VehicleFuelLog
+     */
+    omit?: VehicleFuelLogOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: VehicleFuelLogInclude<ExtArgs> | null
+    /**
+     * Filter which VehicleFuelLog to delete.
+     */
+    where: VehicleFuelLogWhereUniqueInput
+  }
+
+  /**
+   * VehicleFuelLog deleteMany
+   */
+  export type VehicleFuelLogDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which VehicleFuelLogs to delete
+     */
+    where?: VehicleFuelLogWhereInput
+    /**
+     * Limit how many VehicleFuelLogs to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * VehicleFuelLog without action
+   */
+  export type VehicleFuelLogDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the VehicleFuelLog
+     */
+    select?: VehicleFuelLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the VehicleFuelLog
+     */
+    omit?: VehicleFuelLogOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: VehicleFuelLogInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model VehicleDocument
+   */
+
+  export type AggregateVehicleDocument = {
+    _count: VehicleDocumentCountAggregateOutputType | null
+    _min: VehicleDocumentMinAggregateOutputType | null
+    _max: VehicleDocumentMaxAggregateOutputType | null
+  }
+
+  export type VehicleDocumentMinAggregateOutputType = {
+    id: string | null
+    vehicleId: string | null
+    type: string | null
+    name: string | null
+    documentNumber: string | null
+    fileUrl: string | null
+    issuer: string | null
+    issueDate: Date | null
+    expiryDate: Date | null
+    notes: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type VehicleDocumentMaxAggregateOutputType = {
+    id: string | null
+    vehicleId: string | null
+    type: string | null
+    name: string | null
+    documentNumber: string | null
+    fileUrl: string | null
+    issuer: string | null
+    issueDate: Date | null
+    expiryDate: Date | null
+    notes: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type VehicleDocumentCountAggregateOutputType = {
+    id: number
+    vehicleId: number
+    type: number
+    name: number
+    documentNumber: number
+    fileUrl: number
+    issuer: number
+    issueDate: number
+    expiryDate: number
+    notes: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type VehicleDocumentMinAggregateInputType = {
+    id?: true
+    vehicleId?: true
+    type?: true
+    name?: true
+    documentNumber?: true
+    fileUrl?: true
+    issuer?: true
+    issueDate?: true
+    expiryDate?: true
+    notes?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type VehicleDocumentMaxAggregateInputType = {
+    id?: true
+    vehicleId?: true
+    type?: true
+    name?: true
+    documentNumber?: true
+    fileUrl?: true
+    issuer?: true
+    issueDate?: true
+    expiryDate?: true
+    notes?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type VehicleDocumentCountAggregateInputType = {
+    id?: true
+    vehicleId?: true
+    type?: true
+    name?: true
+    documentNumber?: true
+    fileUrl?: true
+    issuer?: true
+    issueDate?: true
+    expiryDate?: true
+    notes?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type VehicleDocumentAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which VehicleDocument to aggregate.
+     */
+    where?: VehicleDocumentWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of VehicleDocuments to fetch.
+     */
+    orderBy?: VehicleDocumentOrderByWithRelationInput | VehicleDocumentOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: VehicleDocumentWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` VehicleDocuments from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` VehicleDocuments.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned VehicleDocuments
+    **/
+    _count?: true | VehicleDocumentCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: VehicleDocumentMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: VehicleDocumentMaxAggregateInputType
+  }
+
+  export type GetVehicleDocumentAggregateType<T extends VehicleDocumentAggregateArgs> = {
+        [P in keyof T & keyof AggregateVehicleDocument]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateVehicleDocument[P]>
+      : GetScalarType<T[P], AggregateVehicleDocument[P]>
+  }
+
+
+
+
+  export type VehicleDocumentGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: VehicleDocumentWhereInput
+    orderBy?: VehicleDocumentOrderByWithAggregationInput | VehicleDocumentOrderByWithAggregationInput[]
+    by: VehicleDocumentScalarFieldEnum[] | VehicleDocumentScalarFieldEnum
+    having?: VehicleDocumentScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: VehicleDocumentCountAggregateInputType | true
+    _min?: VehicleDocumentMinAggregateInputType
+    _max?: VehicleDocumentMaxAggregateInputType
+  }
+
+  export type VehicleDocumentGroupByOutputType = {
+    id: string
+    vehicleId: string
+    type: string
+    name: string
+    documentNumber: string | null
+    fileUrl: string | null
+    issuer: string | null
+    issueDate: Date | null
+    expiryDate: Date | null
+    notes: string | null
+    createdAt: Date
+    updatedAt: Date
+    _count: VehicleDocumentCountAggregateOutputType | null
+    _min: VehicleDocumentMinAggregateOutputType | null
+    _max: VehicleDocumentMaxAggregateOutputType | null
+  }
+
+  type GetVehicleDocumentGroupByPayload<T extends VehicleDocumentGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<VehicleDocumentGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof VehicleDocumentGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], VehicleDocumentGroupByOutputType[P]>
+            : GetScalarType<T[P], VehicleDocumentGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type VehicleDocumentSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    vehicleId?: boolean
+    type?: boolean
+    name?: boolean
+    documentNumber?: boolean
+    fileUrl?: boolean
+    issuer?: boolean
+    issueDate?: boolean
+    expiryDate?: boolean
+    notes?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    vehicle?: boolean | VehicleDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["vehicleDocument"]>
+
+  export type VehicleDocumentSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    vehicleId?: boolean
+    type?: boolean
+    name?: boolean
+    documentNumber?: boolean
+    fileUrl?: boolean
+    issuer?: boolean
+    issueDate?: boolean
+    expiryDate?: boolean
+    notes?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    vehicle?: boolean | VehicleDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["vehicleDocument"]>
+
+  export type VehicleDocumentSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    vehicleId?: boolean
+    type?: boolean
+    name?: boolean
+    documentNumber?: boolean
+    fileUrl?: boolean
+    issuer?: boolean
+    issueDate?: boolean
+    expiryDate?: boolean
+    notes?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    vehicle?: boolean | VehicleDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["vehicleDocument"]>
+
+  export type VehicleDocumentSelectScalar = {
+    id?: boolean
+    vehicleId?: boolean
+    type?: boolean
+    name?: boolean
+    documentNumber?: boolean
+    fileUrl?: boolean
+    issuer?: boolean
+    issueDate?: boolean
+    expiryDate?: boolean
+    notes?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type VehicleDocumentOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "vehicleId" | "type" | "name" | "documentNumber" | "fileUrl" | "issuer" | "issueDate" | "expiryDate" | "notes" | "createdAt" | "updatedAt", ExtArgs["result"]["vehicleDocument"]>
+  export type VehicleDocumentInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    vehicle?: boolean | VehicleDefaultArgs<ExtArgs>
+  }
+  export type VehicleDocumentIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    vehicle?: boolean | VehicleDefaultArgs<ExtArgs>
+  }
+  export type VehicleDocumentIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    vehicle?: boolean | VehicleDefaultArgs<ExtArgs>
+  }
+
+  export type $VehicleDocumentPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "VehicleDocument"
+    objects: {
+      vehicle: Prisma.$VehiclePayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      vehicleId: string
+      type: string
+      name: string
+      documentNumber: string | null
+      fileUrl: string | null
+      issuer: string | null
+      issueDate: Date | null
+      expiryDate: Date | null
+      notes: string | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["vehicleDocument"]>
+    composites: {}
+  }
+
+  type VehicleDocumentGetPayload<S extends boolean | null | undefined | VehicleDocumentDefaultArgs> = $Result.GetResult<Prisma.$VehicleDocumentPayload, S>
+
+  type VehicleDocumentCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<VehicleDocumentFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: VehicleDocumentCountAggregateInputType | true
+    }
+
+  export interface VehicleDocumentDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['VehicleDocument'], meta: { name: 'VehicleDocument' } }
+    /**
+     * Find zero or one VehicleDocument that matches the filter.
+     * @param {VehicleDocumentFindUniqueArgs} args - Arguments to find a VehicleDocument
+     * @example
+     * // Get one VehicleDocument
+     * const vehicleDocument = await prisma.vehicleDocument.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends VehicleDocumentFindUniqueArgs>(args: SelectSubset<T, VehicleDocumentFindUniqueArgs<ExtArgs>>): Prisma__VehicleDocumentClient<$Result.GetResult<Prisma.$VehicleDocumentPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one VehicleDocument that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {VehicleDocumentFindUniqueOrThrowArgs} args - Arguments to find a VehicleDocument
+     * @example
+     * // Get one VehicleDocument
+     * const vehicleDocument = await prisma.vehicleDocument.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends VehicleDocumentFindUniqueOrThrowArgs>(args: SelectSubset<T, VehicleDocumentFindUniqueOrThrowArgs<ExtArgs>>): Prisma__VehicleDocumentClient<$Result.GetResult<Prisma.$VehicleDocumentPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first VehicleDocument that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {VehicleDocumentFindFirstArgs} args - Arguments to find a VehicleDocument
+     * @example
+     * // Get one VehicleDocument
+     * const vehicleDocument = await prisma.vehicleDocument.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends VehicleDocumentFindFirstArgs>(args?: SelectSubset<T, VehicleDocumentFindFirstArgs<ExtArgs>>): Prisma__VehicleDocumentClient<$Result.GetResult<Prisma.$VehicleDocumentPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first VehicleDocument that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {VehicleDocumentFindFirstOrThrowArgs} args - Arguments to find a VehicleDocument
+     * @example
+     * // Get one VehicleDocument
+     * const vehicleDocument = await prisma.vehicleDocument.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends VehicleDocumentFindFirstOrThrowArgs>(args?: SelectSubset<T, VehicleDocumentFindFirstOrThrowArgs<ExtArgs>>): Prisma__VehicleDocumentClient<$Result.GetResult<Prisma.$VehicleDocumentPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more VehicleDocuments that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {VehicleDocumentFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all VehicleDocuments
+     * const vehicleDocuments = await prisma.vehicleDocument.findMany()
+     * 
+     * // Get first 10 VehicleDocuments
+     * const vehicleDocuments = await prisma.vehicleDocument.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const vehicleDocumentWithIdOnly = await prisma.vehicleDocument.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends VehicleDocumentFindManyArgs>(args?: SelectSubset<T, VehicleDocumentFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$VehicleDocumentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a VehicleDocument.
+     * @param {VehicleDocumentCreateArgs} args - Arguments to create a VehicleDocument.
+     * @example
+     * // Create one VehicleDocument
+     * const VehicleDocument = await prisma.vehicleDocument.create({
+     *   data: {
+     *     // ... data to create a VehicleDocument
+     *   }
+     * })
+     * 
+     */
+    create<T extends VehicleDocumentCreateArgs>(args: SelectSubset<T, VehicleDocumentCreateArgs<ExtArgs>>): Prisma__VehicleDocumentClient<$Result.GetResult<Prisma.$VehicleDocumentPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many VehicleDocuments.
+     * @param {VehicleDocumentCreateManyArgs} args - Arguments to create many VehicleDocuments.
+     * @example
+     * // Create many VehicleDocuments
+     * const vehicleDocument = await prisma.vehicleDocument.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends VehicleDocumentCreateManyArgs>(args?: SelectSubset<T, VehicleDocumentCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many VehicleDocuments and returns the data saved in the database.
+     * @param {VehicleDocumentCreateManyAndReturnArgs} args - Arguments to create many VehicleDocuments.
+     * @example
+     * // Create many VehicleDocuments
+     * const vehicleDocument = await prisma.vehicleDocument.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many VehicleDocuments and only return the `id`
+     * const vehicleDocumentWithIdOnly = await prisma.vehicleDocument.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends VehicleDocumentCreateManyAndReturnArgs>(args?: SelectSubset<T, VehicleDocumentCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$VehicleDocumentPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a VehicleDocument.
+     * @param {VehicleDocumentDeleteArgs} args - Arguments to delete one VehicleDocument.
+     * @example
+     * // Delete one VehicleDocument
+     * const VehicleDocument = await prisma.vehicleDocument.delete({
+     *   where: {
+     *     // ... filter to delete one VehicleDocument
+     *   }
+     * })
+     * 
+     */
+    delete<T extends VehicleDocumentDeleteArgs>(args: SelectSubset<T, VehicleDocumentDeleteArgs<ExtArgs>>): Prisma__VehicleDocumentClient<$Result.GetResult<Prisma.$VehicleDocumentPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one VehicleDocument.
+     * @param {VehicleDocumentUpdateArgs} args - Arguments to update one VehicleDocument.
+     * @example
+     * // Update one VehicleDocument
+     * const vehicleDocument = await prisma.vehicleDocument.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends VehicleDocumentUpdateArgs>(args: SelectSubset<T, VehicleDocumentUpdateArgs<ExtArgs>>): Prisma__VehicleDocumentClient<$Result.GetResult<Prisma.$VehicleDocumentPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more VehicleDocuments.
+     * @param {VehicleDocumentDeleteManyArgs} args - Arguments to filter VehicleDocuments to delete.
+     * @example
+     * // Delete a few VehicleDocuments
+     * const { count } = await prisma.vehicleDocument.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends VehicleDocumentDeleteManyArgs>(args?: SelectSubset<T, VehicleDocumentDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more VehicleDocuments.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {VehicleDocumentUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many VehicleDocuments
+     * const vehicleDocument = await prisma.vehicleDocument.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends VehicleDocumentUpdateManyArgs>(args: SelectSubset<T, VehicleDocumentUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more VehicleDocuments and returns the data updated in the database.
+     * @param {VehicleDocumentUpdateManyAndReturnArgs} args - Arguments to update many VehicleDocuments.
+     * @example
+     * // Update many VehicleDocuments
+     * const vehicleDocument = await prisma.vehicleDocument.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more VehicleDocuments and only return the `id`
+     * const vehicleDocumentWithIdOnly = await prisma.vehicleDocument.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends VehicleDocumentUpdateManyAndReturnArgs>(args: SelectSubset<T, VehicleDocumentUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$VehicleDocumentPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one VehicleDocument.
+     * @param {VehicleDocumentUpsertArgs} args - Arguments to update or create a VehicleDocument.
+     * @example
+     * // Update or create a VehicleDocument
+     * const vehicleDocument = await prisma.vehicleDocument.upsert({
+     *   create: {
+     *     // ... data to create a VehicleDocument
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the VehicleDocument we want to update
+     *   }
+     * })
+     */
+    upsert<T extends VehicleDocumentUpsertArgs>(args: SelectSubset<T, VehicleDocumentUpsertArgs<ExtArgs>>): Prisma__VehicleDocumentClient<$Result.GetResult<Prisma.$VehicleDocumentPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of VehicleDocuments.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {VehicleDocumentCountArgs} args - Arguments to filter VehicleDocuments to count.
+     * @example
+     * // Count the number of VehicleDocuments
+     * const count = await prisma.vehicleDocument.count({
+     *   where: {
+     *     // ... the filter for the VehicleDocuments we want to count
+     *   }
+     * })
+    **/
+    count<T extends VehicleDocumentCountArgs>(
+      args?: Subset<T, VehicleDocumentCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], VehicleDocumentCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a VehicleDocument.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {VehicleDocumentAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends VehicleDocumentAggregateArgs>(args: Subset<T, VehicleDocumentAggregateArgs>): Prisma.PrismaPromise<GetVehicleDocumentAggregateType<T>>
+
+    /**
+     * Group by VehicleDocument.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {VehicleDocumentGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends VehicleDocumentGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: VehicleDocumentGroupByArgs['orderBy'] }
+        : { orderBy?: VehicleDocumentGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, VehicleDocumentGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetVehicleDocumentGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the VehicleDocument model
+   */
+  readonly fields: VehicleDocumentFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for VehicleDocument.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__VehicleDocumentClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    vehicle<T extends VehicleDefaultArgs<ExtArgs> = {}>(args?: Subset<T, VehicleDefaultArgs<ExtArgs>>): Prisma__VehicleClient<$Result.GetResult<Prisma.$VehiclePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the VehicleDocument model
+   */
+  interface VehicleDocumentFieldRefs {
+    readonly id: FieldRef<"VehicleDocument", 'String'>
+    readonly vehicleId: FieldRef<"VehicleDocument", 'String'>
+    readonly type: FieldRef<"VehicleDocument", 'String'>
+    readonly name: FieldRef<"VehicleDocument", 'String'>
+    readonly documentNumber: FieldRef<"VehicleDocument", 'String'>
+    readonly fileUrl: FieldRef<"VehicleDocument", 'String'>
+    readonly issuer: FieldRef<"VehicleDocument", 'String'>
+    readonly issueDate: FieldRef<"VehicleDocument", 'DateTime'>
+    readonly expiryDate: FieldRef<"VehicleDocument", 'DateTime'>
+    readonly notes: FieldRef<"VehicleDocument", 'String'>
+    readonly createdAt: FieldRef<"VehicleDocument", 'DateTime'>
+    readonly updatedAt: FieldRef<"VehicleDocument", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * VehicleDocument findUnique
+   */
+  export type VehicleDocumentFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the VehicleDocument
+     */
+    select?: VehicleDocumentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the VehicleDocument
+     */
+    omit?: VehicleDocumentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: VehicleDocumentInclude<ExtArgs> | null
+    /**
+     * Filter, which VehicleDocument to fetch.
+     */
+    where: VehicleDocumentWhereUniqueInput
+  }
+
+  /**
+   * VehicleDocument findUniqueOrThrow
+   */
+  export type VehicleDocumentFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the VehicleDocument
+     */
+    select?: VehicleDocumentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the VehicleDocument
+     */
+    omit?: VehicleDocumentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: VehicleDocumentInclude<ExtArgs> | null
+    /**
+     * Filter, which VehicleDocument to fetch.
+     */
+    where: VehicleDocumentWhereUniqueInput
+  }
+
+  /**
+   * VehicleDocument findFirst
+   */
+  export type VehicleDocumentFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the VehicleDocument
+     */
+    select?: VehicleDocumentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the VehicleDocument
+     */
+    omit?: VehicleDocumentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: VehicleDocumentInclude<ExtArgs> | null
+    /**
+     * Filter, which VehicleDocument to fetch.
+     */
+    where?: VehicleDocumentWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of VehicleDocuments to fetch.
+     */
+    orderBy?: VehicleDocumentOrderByWithRelationInput | VehicleDocumentOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for VehicleDocuments.
+     */
+    cursor?: VehicleDocumentWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` VehicleDocuments from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` VehicleDocuments.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of VehicleDocuments.
+     */
+    distinct?: VehicleDocumentScalarFieldEnum | VehicleDocumentScalarFieldEnum[]
+  }
+
+  /**
+   * VehicleDocument findFirstOrThrow
+   */
+  export type VehicleDocumentFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the VehicleDocument
+     */
+    select?: VehicleDocumentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the VehicleDocument
+     */
+    omit?: VehicleDocumentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: VehicleDocumentInclude<ExtArgs> | null
+    /**
+     * Filter, which VehicleDocument to fetch.
+     */
+    where?: VehicleDocumentWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of VehicleDocuments to fetch.
+     */
+    orderBy?: VehicleDocumentOrderByWithRelationInput | VehicleDocumentOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for VehicleDocuments.
+     */
+    cursor?: VehicleDocumentWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` VehicleDocuments from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` VehicleDocuments.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of VehicleDocuments.
+     */
+    distinct?: VehicleDocumentScalarFieldEnum | VehicleDocumentScalarFieldEnum[]
+  }
+
+  /**
+   * VehicleDocument findMany
+   */
+  export type VehicleDocumentFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the VehicleDocument
+     */
+    select?: VehicleDocumentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the VehicleDocument
+     */
+    omit?: VehicleDocumentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: VehicleDocumentInclude<ExtArgs> | null
+    /**
+     * Filter, which VehicleDocuments to fetch.
+     */
+    where?: VehicleDocumentWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of VehicleDocuments to fetch.
+     */
+    orderBy?: VehicleDocumentOrderByWithRelationInput | VehicleDocumentOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing VehicleDocuments.
+     */
+    cursor?: VehicleDocumentWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` VehicleDocuments from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` VehicleDocuments.
+     */
+    skip?: number
+    distinct?: VehicleDocumentScalarFieldEnum | VehicleDocumentScalarFieldEnum[]
+  }
+
+  /**
+   * VehicleDocument create
+   */
+  export type VehicleDocumentCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the VehicleDocument
+     */
+    select?: VehicleDocumentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the VehicleDocument
+     */
+    omit?: VehicleDocumentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: VehicleDocumentInclude<ExtArgs> | null
+    /**
+     * The data needed to create a VehicleDocument.
+     */
+    data: XOR<VehicleDocumentCreateInput, VehicleDocumentUncheckedCreateInput>
+  }
+
+  /**
+   * VehicleDocument createMany
+   */
+  export type VehicleDocumentCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many VehicleDocuments.
+     */
+    data: VehicleDocumentCreateManyInput | VehicleDocumentCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * VehicleDocument createManyAndReturn
+   */
+  export type VehicleDocumentCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the VehicleDocument
+     */
+    select?: VehicleDocumentSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the VehicleDocument
+     */
+    omit?: VehicleDocumentOmit<ExtArgs> | null
+    /**
+     * The data used to create many VehicleDocuments.
+     */
+    data: VehicleDocumentCreateManyInput | VehicleDocumentCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: VehicleDocumentIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * VehicleDocument update
+   */
+  export type VehicleDocumentUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the VehicleDocument
+     */
+    select?: VehicleDocumentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the VehicleDocument
+     */
+    omit?: VehicleDocumentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: VehicleDocumentInclude<ExtArgs> | null
+    /**
+     * The data needed to update a VehicleDocument.
+     */
+    data: XOR<VehicleDocumentUpdateInput, VehicleDocumentUncheckedUpdateInput>
+    /**
+     * Choose, which VehicleDocument to update.
+     */
+    where: VehicleDocumentWhereUniqueInput
+  }
+
+  /**
+   * VehicleDocument updateMany
+   */
+  export type VehicleDocumentUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update VehicleDocuments.
+     */
+    data: XOR<VehicleDocumentUpdateManyMutationInput, VehicleDocumentUncheckedUpdateManyInput>
+    /**
+     * Filter which VehicleDocuments to update
+     */
+    where?: VehicleDocumentWhereInput
+    /**
+     * Limit how many VehicleDocuments to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * VehicleDocument updateManyAndReturn
+   */
+  export type VehicleDocumentUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the VehicleDocument
+     */
+    select?: VehicleDocumentSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the VehicleDocument
+     */
+    omit?: VehicleDocumentOmit<ExtArgs> | null
+    /**
+     * The data used to update VehicleDocuments.
+     */
+    data: XOR<VehicleDocumentUpdateManyMutationInput, VehicleDocumentUncheckedUpdateManyInput>
+    /**
+     * Filter which VehicleDocuments to update
+     */
+    where?: VehicleDocumentWhereInput
+    /**
+     * Limit how many VehicleDocuments to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: VehicleDocumentIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * VehicleDocument upsert
+   */
+  export type VehicleDocumentUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the VehicleDocument
+     */
+    select?: VehicleDocumentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the VehicleDocument
+     */
+    omit?: VehicleDocumentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: VehicleDocumentInclude<ExtArgs> | null
+    /**
+     * The filter to search for the VehicleDocument to update in case it exists.
+     */
+    where: VehicleDocumentWhereUniqueInput
+    /**
+     * In case the VehicleDocument found by the `where` argument doesn't exist, create a new VehicleDocument with this data.
+     */
+    create: XOR<VehicleDocumentCreateInput, VehicleDocumentUncheckedCreateInput>
+    /**
+     * In case the VehicleDocument was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<VehicleDocumentUpdateInput, VehicleDocumentUncheckedUpdateInput>
+  }
+
+  /**
+   * VehicleDocument delete
+   */
+  export type VehicleDocumentDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the VehicleDocument
+     */
+    select?: VehicleDocumentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the VehicleDocument
+     */
+    omit?: VehicleDocumentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: VehicleDocumentInclude<ExtArgs> | null
+    /**
+     * Filter which VehicleDocument to delete.
+     */
+    where: VehicleDocumentWhereUniqueInput
+  }
+
+  /**
+   * VehicleDocument deleteMany
+   */
+  export type VehicleDocumentDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which VehicleDocuments to delete
+     */
+    where?: VehicleDocumentWhereInput
+    /**
+     * Limit how many VehicleDocuments to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * VehicleDocument without action
+   */
+  export type VehicleDocumentDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the VehicleDocument
+     */
+    select?: VehicleDocumentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the VehicleDocument
+     */
+    omit?: VehicleDocumentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: VehicleDocumentInclude<ExtArgs> | null
   }
 
 
@@ -83856,6 +88438,2312 @@ export namespace Prisma {
 
 
   /**
+   * Model SkuMapping
+   */
+
+  export type AggregateSkuMapping = {
+    _count: SkuMappingCountAggregateOutputType | null
+    _avg: SkuMappingAvgAggregateOutputType | null
+    _sum: SkuMappingSumAggregateOutputType | null
+    _min: SkuMappingMinAggregateOutputType | null
+    _max: SkuMappingMaxAggregateOutputType | null
+  }
+
+  export type SkuMappingAvgAggregateOutputType = {
+    conversionRate: number | null
+  }
+
+  export type SkuMappingSumAggregateOutputType = {
+    conversionRate: number | null
+  }
+
+  export type SkuMappingMinAggregateOutputType = {
+    id: string | null
+    platformSku: string | null
+    productId: string | null
+    platform: string | null
+    note: string | null
+    conversionRate: number | null
+    bundleId: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type SkuMappingMaxAggregateOutputType = {
+    id: string | null
+    platformSku: string | null
+    productId: string | null
+    platform: string | null
+    note: string | null
+    conversionRate: number | null
+    bundleId: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type SkuMappingCountAggregateOutputType = {
+    id: number
+    platformSku: number
+    productId: number
+    platform: number
+    note: number
+    conversionRate: number
+    bundleId: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type SkuMappingAvgAggregateInputType = {
+    conversionRate?: true
+  }
+
+  export type SkuMappingSumAggregateInputType = {
+    conversionRate?: true
+  }
+
+  export type SkuMappingMinAggregateInputType = {
+    id?: true
+    platformSku?: true
+    productId?: true
+    platform?: true
+    note?: true
+    conversionRate?: true
+    bundleId?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type SkuMappingMaxAggregateInputType = {
+    id?: true
+    platformSku?: true
+    productId?: true
+    platform?: true
+    note?: true
+    conversionRate?: true
+    bundleId?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type SkuMappingCountAggregateInputType = {
+    id?: true
+    platformSku?: true
+    productId?: true
+    platform?: true
+    note?: true
+    conversionRate?: true
+    bundleId?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type SkuMappingAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which SkuMapping to aggregate.
+     */
+    where?: SkuMappingWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of SkuMappings to fetch.
+     */
+    orderBy?: SkuMappingOrderByWithRelationInput | SkuMappingOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: SkuMappingWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` SkuMappings from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` SkuMappings.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned SkuMappings
+    **/
+    _count?: true | SkuMappingCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: SkuMappingAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: SkuMappingSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: SkuMappingMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: SkuMappingMaxAggregateInputType
+  }
+
+  export type GetSkuMappingAggregateType<T extends SkuMappingAggregateArgs> = {
+        [P in keyof T & keyof AggregateSkuMapping]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateSkuMapping[P]>
+      : GetScalarType<T[P], AggregateSkuMapping[P]>
+  }
+
+
+
+
+  export type SkuMappingGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: SkuMappingWhereInput
+    orderBy?: SkuMappingOrderByWithAggregationInput | SkuMappingOrderByWithAggregationInput[]
+    by: SkuMappingScalarFieldEnum[] | SkuMappingScalarFieldEnum
+    having?: SkuMappingScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: SkuMappingCountAggregateInputType | true
+    _avg?: SkuMappingAvgAggregateInputType
+    _sum?: SkuMappingSumAggregateInputType
+    _min?: SkuMappingMinAggregateInputType
+    _max?: SkuMappingMaxAggregateInputType
+  }
+
+  export type SkuMappingGroupByOutputType = {
+    id: string
+    platformSku: string
+    productId: string
+    platform: string | null
+    note: string | null
+    conversionRate: number
+    bundleId: string | null
+    createdAt: Date
+    updatedAt: Date
+    _count: SkuMappingCountAggregateOutputType | null
+    _avg: SkuMappingAvgAggregateOutputType | null
+    _sum: SkuMappingSumAggregateOutputType | null
+    _min: SkuMappingMinAggregateOutputType | null
+    _max: SkuMappingMaxAggregateOutputType | null
+  }
+
+  type GetSkuMappingGroupByPayload<T extends SkuMappingGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<SkuMappingGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof SkuMappingGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], SkuMappingGroupByOutputType[P]>
+            : GetScalarType<T[P], SkuMappingGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type SkuMappingSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    platformSku?: boolean
+    productId?: boolean
+    platform?: boolean
+    note?: boolean
+    conversionRate?: boolean
+    bundleId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    product?: boolean | ProductDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["skuMapping"]>
+
+  export type SkuMappingSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    platformSku?: boolean
+    productId?: boolean
+    platform?: boolean
+    note?: boolean
+    conversionRate?: boolean
+    bundleId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    product?: boolean | ProductDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["skuMapping"]>
+
+  export type SkuMappingSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    platformSku?: boolean
+    productId?: boolean
+    platform?: boolean
+    note?: boolean
+    conversionRate?: boolean
+    bundleId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    product?: boolean | ProductDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["skuMapping"]>
+
+  export type SkuMappingSelectScalar = {
+    id?: boolean
+    platformSku?: boolean
+    productId?: boolean
+    platform?: boolean
+    note?: boolean
+    conversionRate?: boolean
+    bundleId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type SkuMappingOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "platformSku" | "productId" | "platform" | "note" | "conversionRate" | "bundleId" | "createdAt" | "updatedAt", ExtArgs["result"]["skuMapping"]>
+  export type SkuMappingInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    product?: boolean | ProductDefaultArgs<ExtArgs>
+  }
+  export type SkuMappingIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    product?: boolean | ProductDefaultArgs<ExtArgs>
+  }
+  export type SkuMappingIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    product?: boolean | ProductDefaultArgs<ExtArgs>
+  }
+
+  export type $SkuMappingPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "SkuMapping"
+    objects: {
+      product: Prisma.$ProductPayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      platformSku: string
+      productId: string
+      platform: string | null
+      note: string | null
+      conversionRate: number
+      bundleId: string | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["skuMapping"]>
+    composites: {}
+  }
+
+  type SkuMappingGetPayload<S extends boolean | null | undefined | SkuMappingDefaultArgs> = $Result.GetResult<Prisma.$SkuMappingPayload, S>
+
+  type SkuMappingCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<SkuMappingFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: SkuMappingCountAggregateInputType | true
+    }
+
+  export interface SkuMappingDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['SkuMapping'], meta: { name: 'SkuMapping' } }
+    /**
+     * Find zero or one SkuMapping that matches the filter.
+     * @param {SkuMappingFindUniqueArgs} args - Arguments to find a SkuMapping
+     * @example
+     * // Get one SkuMapping
+     * const skuMapping = await prisma.skuMapping.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends SkuMappingFindUniqueArgs>(args: SelectSubset<T, SkuMappingFindUniqueArgs<ExtArgs>>): Prisma__SkuMappingClient<$Result.GetResult<Prisma.$SkuMappingPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one SkuMapping that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {SkuMappingFindUniqueOrThrowArgs} args - Arguments to find a SkuMapping
+     * @example
+     * // Get one SkuMapping
+     * const skuMapping = await prisma.skuMapping.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends SkuMappingFindUniqueOrThrowArgs>(args: SelectSubset<T, SkuMappingFindUniqueOrThrowArgs<ExtArgs>>): Prisma__SkuMappingClient<$Result.GetResult<Prisma.$SkuMappingPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first SkuMapping that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {SkuMappingFindFirstArgs} args - Arguments to find a SkuMapping
+     * @example
+     * // Get one SkuMapping
+     * const skuMapping = await prisma.skuMapping.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends SkuMappingFindFirstArgs>(args?: SelectSubset<T, SkuMappingFindFirstArgs<ExtArgs>>): Prisma__SkuMappingClient<$Result.GetResult<Prisma.$SkuMappingPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first SkuMapping that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {SkuMappingFindFirstOrThrowArgs} args - Arguments to find a SkuMapping
+     * @example
+     * // Get one SkuMapping
+     * const skuMapping = await prisma.skuMapping.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends SkuMappingFindFirstOrThrowArgs>(args?: SelectSubset<T, SkuMappingFindFirstOrThrowArgs<ExtArgs>>): Prisma__SkuMappingClient<$Result.GetResult<Prisma.$SkuMappingPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more SkuMappings that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {SkuMappingFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all SkuMappings
+     * const skuMappings = await prisma.skuMapping.findMany()
+     * 
+     * // Get first 10 SkuMappings
+     * const skuMappings = await prisma.skuMapping.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const skuMappingWithIdOnly = await prisma.skuMapping.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends SkuMappingFindManyArgs>(args?: SelectSubset<T, SkuMappingFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$SkuMappingPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a SkuMapping.
+     * @param {SkuMappingCreateArgs} args - Arguments to create a SkuMapping.
+     * @example
+     * // Create one SkuMapping
+     * const SkuMapping = await prisma.skuMapping.create({
+     *   data: {
+     *     // ... data to create a SkuMapping
+     *   }
+     * })
+     * 
+     */
+    create<T extends SkuMappingCreateArgs>(args: SelectSubset<T, SkuMappingCreateArgs<ExtArgs>>): Prisma__SkuMappingClient<$Result.GetResult<Prisma.$SkuMappingPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many SkuMappings.
+     * @param {SkuMappingCreateManyArgs} args - Arguments to create many SkuMappings.
+     * @example
+     * // Create many SkuMappings
+     * const skuMapping = await prisma.skuMapping.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends SkuMappingCreateManyArgs>(args?: SelectSubset<T, SkuMappingCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many SkuMappings and returns the data saved in the database.
+     * @param {SkuMappingCreateManyAndReturnArgs} args - Arguments to create many SkuMappings.
+     * @example
+     * // Create many SkuMappings
+     * const skuMapping = await prisma.skuMapping.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many SkuMappings and only return the `id`
+     * const skuMappingWithIdOnly = await prisma.skuMapping.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends SkuMappingCreateManyAndReturnArgs>(args?: SelectSubset<T, SkuMappingCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$SkuMappingPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a SkuMapping.
+     * @param {SkuMappingDeleteArgs} args - Arguments to delete one SkuMapping.
+     * @example
+     * // Delete one SkuMapping
+     * const SkuMapping = await prisma.skuMapping.delete({
+     *   where: {
+     *     // ... filter to delete one SkuMapping
+     *   }
+     * })
+     * 
+     */
+    delete<T extends SkuMappingDeleteArgs>(args: SelectSubset<T, SkuMappingDeleteArgs<ExtArgs>>): Prisma__SkuMappingClient<$Result.GetResult<Prisma.$SkuMappingPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one SkuMapping.
+     * @param {SkuMappingUpdateArgs} args - Arguments to update one SkuMapping.
+     * @example
+     * // Update one SkuMapping
+     * const skuMapping = await prisma.skuMapping.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends SkuMappingUpdateArgs>(args: SelectSubset<T, SkuMappingUpdateArgs<ExtArgs>>): Prisma__SkuMappingClient<$Result.GetResult<Prisma.$SkuMappingPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more SkuMappings.
+     * @param {SkuMappingDeleteManyArgs} args - Arguments to filter SkuMappings to delete.
+     * @example
+     * // Delete a few SkuMappings
+     * const { count } = await prisma.skuMapping.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends SkuMappingDeleteManyArgs>(args?: SelectSubset<T, SkuMappingDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more SkuMappings.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {SkuMappingUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many SkuMappings
+     * const skuMapping = await prisma.skuMapping.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends SkuMappingUpdateManyArgs>(args: SelectSubset<T, SkuMappingUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more SkuMappings and returns the data updated in the database.
+     * @param {SkuMappingUpdateManyAndReturnArgs} args - Arguments to update many SkuMappings.
+     * @example
+     * // Update many SkuMappings
+     * const skuMapping = await prisma.skuMapping.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more SkuMappings and only return the `id`
+     * const skuMappingWithIdOnly = await prisma.skuMapping.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends SkuMappingUpdateManyAndReturnArgs>(args: SelectSubset<T, SkuMappingUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$SkuMappingPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one SkuMapping.
+     * @param {SkuMappingUpsertArgs} args - Arguments to update or create a SkuMapping.
+     * @example
+     * // Update or create a SkuMapping
+     * const skuMapping = await prisma.skuMapping.upsert({
+     *   create: {
+     *     // ... data to create a SkuMapping
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the SkuMapping we want to update
+     *   }
+     * })
+     */
+    upsert<T extends SkuMappingUpsertArgs>(args: SelectSubset<T, SkuMappingUpsertArgs<ExtArgs>>): Prisma__SkuMappingClient<$Result.GetResult<Prisma.$SkuMappingPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of SkuMappings.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {SkuMappingCountArgs} args - Arguments to filter SkuMappings to count.
+     * @example
+     * // Count the number of SkuMappings
+     * const count = await prisma.skuMapping.count({
+     *   where: {
+     *     // ... the filter for the SkuMappings we want to count
+     *   }
+     * })
+    **/
+    count<T extends SkuMappingCountArgs>(
+      args?: Subset<T, SkuMappingCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], SkuMappingCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a SkuMapping.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {SkuMappingAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends SkuMappingAggregateArgs>(args: Subset<T, SkuMappingAggregateArgs>): Prisma.PrismaPromise<GetSkuMappingAggregateType<T>>
+
+    /**
+     * Group by SkuMapping.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {SkuMappingGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends SkuMappingGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: SkuMappingGroupByArgs['orderBy'] }
+        : { orderBy?: SkuMappingGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, SkuMappingGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetSkuMappingGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the SkuMapping model
+   */
+  readonly fields: SkuMappingFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for SkuMapping.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__SkuMappingClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    product<T extends ProductDefaultArgs<ExtArgs> = {}>(args?: Subset<T, ProductDefaultArgs<ExtArgs>>): Prisma__ProductClient<$Result.GetResult<Prisma.$ProductPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the SkuMapping model
+   */
+  interface SkuMappingFieldRefs {
+    readonly id: FieldRef<"SkuMapping", 'String'>
+    readonly platformSku: FieldRef<"SkuMapping", 'String'>
+    readonly productId: FieldRef<"SkuMapping", 'String'>
+    readonly platform: FieldRef<"SkuMapping", 'String'>
+    readonly note: FieldRef<"SkuMapping", 'String'>
+    readonly conversionRate: FieldRef<"SkuMapping", 'Float'>
+    readonly bundleId: FieldRef<"SkuMapping", 'String'>
+    readonly createdAt: FieldRef<"SkuMapping", 'DateTime'>
+    readonly updatedAt: FieldRef<"SkuMapping", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * SkuMapping findUnique
+   */
+  export type SkuMappingFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SkuMapping
+     */
+    select?: SkuMappingSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the SkuMapping
+     */
+    omit?: SkuMappingOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SkuMappingInclude<ExtArgs> | null
+    /**
+     * Filter, which SkuMapping to fetch.
+     */
+    where: SkuMappingWhereUniqueInput
+  }
+
+  /**
+   * SkuMapping findUniqueOrThrow
+   */
+  export type SkuMappingFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SkuMapping
+     */
+    select?: SkuMappingSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the SkuMapping
+     */
+    omit?: SkuMappingOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SkuMappingInclude<ExtArgs> | null
+    /**
+     * Filter, which SkuMapping to fetch.
+     */
+    where: SkuMappingWhereUniqueInput
+  }
+
+  /**
+   * SkuMapping findFirst
+   */
+  export type SkuMappingFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SkuMapping
+     */
+    select?: SkuMappingSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the SkuMapping
+     */
+    omit?: SkuMappingOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SkuMappingInclude<ExtArgs> | null
+    /**
+     * Filter, which SkuMapping to fetch.
+     */
+    where?: SkuMappingWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of SkuMappings to fetch.
+     */
+    orderBy?: SkuMappingOrderByWithRelationInput | SkuMappingOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for SkuMappings.
+     */
+    cursor?: SkuMappingWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` SkuMappings from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` SkuMappings.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of SkuMappings.
+     */
+    distinct?: SkuMappingScalarFieldEnum | SkuMappingScalarFieldEnum[]
+  }
+
+  /**
+   * SkuMapping findFirstOrThrow
+   */
+  export type SkuMappingFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SkuMapping
+     */
+    select?: SkuMappingSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the SkuMapping
+     */
+    omit?: SkuMappingOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SkuMappingInclude<ExtArgs> | null
+    /**
+     * Filter, which SkuMapping to fetch.
+     */
+    where?: SkuMappingWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of SkuMappings to fetch.
+     */
+    orderBy?: SkuMappingOrderByWithRelationInput | SkuMappingOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for SkuMappings.
+     */
+    cursor?: SkuMappingWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` SkuMappings from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` SkuMappings.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of SkuMappings.
+     */
+    distinct?: SkuMappingScalarFieldEnum | SkuMappingScalarFieldEnum[]
+  }
+
+  /**
+   * SkuMapping findMany
+   */
+  export type SkuMappingFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SkuMapping
+     */
+    select?: SkuMappingSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the SkuMapping
+     */
+    omit?: SkuMappingOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SkuMappingInclude<ExtArgs> | null
+    /**
+     * Filter, which SkuMappings to fetch.
+     */
+    where?: SkuMappingWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of SkuMappings to fetch.
+     */
+    orderBy?: SkuMappingOrderByWithRelationInput | SkuMappingOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing SkuMappings.
+     */
+    cursor?: SkuMappingWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` SkuMappings from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` SkuMappings.
+     */
+    skip?: number
+    distinct?: SkuMappingScalarFieldEnum | SkuMappingScalarFieldEnum[]
+  }
+
+  /**
+   * SkuMapping create
+   */
+  export type SkuMappingCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SkuMapping
+     */
+    select?: SkuMappingSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the SkuMapping
+     */
+    omit?: SkuMappingOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SkuMappingInclude<ExtArgs> | null
+    /**
+     * The data needed to create a SkuMapping.
+     */
+    data: XOR<SkuMappingCreateInput, SkuMappingUncheckedCreateInput>
+  }
+
+  /**
+   * SkuMapping createMany
+   */
+  export type SkuMappingCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many SkuMappings.
+     */
+    data: SkuMappingCreateManyInput | SkuMappingCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * SkuMapping createManyAndReturn
+   */
+  export type SkuMappingCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SkuMapping
+     */
+    select?: SkuMappingSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the SkuMapping
+     */
+    omit?: SkuMappingOmit<ExtArgs> | null
+    /**
+     * The data used to create many SkuMappings.
+     */
+    data: SkuMappingCreateManyInput | SkuMappingCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SkuMappingIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * SkuMapping update
+   */
+  export type SkuMappingUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SkuMapping
+     */
+    select?: SkuMappingSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the SkuMapping
+     */
+    omit?: SkuMappingOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SkuMappingInclude<ExtArgs> | null
+    /**
+     * The data needed to update a SkuMapping.
+     */
+    data: XOR<SkuMappingUpdateInput, SkuMappingUncheckedUpdateInput>
+    /**
+     * Choose, which SkuMapping to update.
+     */
+    where: SkuMappingWhereUniqueInput
+  }
+
+  /**
+   * SkuMapping updateMany
+   */
+  export type SkuMappingUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update SkuMappings.
+     */
+    data: XOR<SkuMappingUpdateManyMutationInput, SkuMappingUncheckedUpdateManyInput>
+    /**
+     * Filter which SkuMappings to update
+     */
+    where?: SkuMappingWhereInput
+    /**
+     * Limit how many SkuMappings to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * SkuMapping updateManyAndReturn
+   */
+  export type SkuMappingUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SkuMapping
+     */
+    select?: SkuMappingSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the SkuMapping
+     */
+    omit?: SkuMappingOmit<ExtArgs> | null
+    /**
+     * The data used to update SkuMappings.
+     */
+    data: XOR<SkuMappingUpdateManyMutationInput, SkuMappingUncheckedUpdateManyInput>
+    /**
+     * Filter which SkuMappings to update
+     */
+    where?: SkuMappingWhereInput
+    /**
+     * Limit how many SkuMappings to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SkuMappingIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * SkuMapping upsert
+   */
+  export type SkuMappingUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SkuMapping
+     */
+    select?: SkuMappingSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the SkuMapping
+     */
+    omit?: SkuMappingOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SkuMappingInclude<ExtArgs> | null
+    /**
+     * The filter to search for the SkuMapping to update in case it exists.
+     */
+    where: SkuMappingWhereUniqueInput
+    /**
+     * In case the SkuMapping found by the `where` argument doesn't exist, create a new SkuMapping with this data.
+     */
+    create: XOR<SkuMappingCreateInput, SkuMappingUncheckedCreateInput>
+    /**
+     * In case the SkuMapping was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<SkuMappingUpdateInput, SkuMappingUncheckedUpdateInput>
+  }
+
+  /**
+   * SkuMapping delete
+   */
+  export type SkuMappingDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SkuMapping
+     */
+    select?: SkuMappingSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the SkuMapping
+     */
+    omit?: SkuMappingOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SkuMappingInclude<ExtArgs> | null
+    /**
+     * Filter which SkuMapping to delete.
+     */
+    where: SkuMappingWhereUniqueInput
+  }
+
+  /**
+   * SkuMapping deleteMany
+   */
+  export type SkuMappingDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which SkuMappings to delete
+     */
+    where?: SkuMappingWhereInput
+    /**
+     * Limit how many SkuMappings to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * SkuMapping without action
+   */
+  export type SkuMappingDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the SkuMapping
+     */
+    select?: SkuMappingSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the SkuMapping
+     */
+    omit?: SkuMappingOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: SkuMappingInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model HkdRevenueEntry
+   */
+
+  export type AggregateHkdRevenueEntry = {
+    _count: HkdRevenueEntryCountAggregateOutputType | null
+    _avg: HkdRevenueEntryAvgAggregateOutputType | null
+    _sum: HkdRevenueEntrySumAggregateOutputType | null
+    _min: HkdRevenueEntryMinAggregateOutputType | null
+    _max: HkdRevenueEntryMaxAggregateOutputType | null
+  }
+
+  export type HkdRevenueEntryAvgAggregateOutputType = {
+    doanhThu: number | null
+    chietKhau: number | null
+    thueGTGT: number | null
+    doanhThuThuan: number | null
+    tncnUocTinh: number | null
+  }
+
+  export type HkdRevenueEntrySumAggregateOutputType = {
+    doanhThu: number | null
+    chietKhau: number | null
+    thueGTGT: number | null
+    doanhThuThuan: number | null
+    tncnUocTinh: number | null
+  }
+
+  export type HkdRevenueEntryMinAggregateOutputType = {
+    id: string | null
+    date: Date | null
+    soChungTu: string | null
+    dienGiai: string | null
+    doanhThu: number | null
+    chietKhau: number | null
+    thueGTGT: number | null
+    doanhThuThuan: number | null
+    tncnUocTinh: number | null
+    phuongThucTT: string | null
+    ghiChu: string | null
+    branchId: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type HkdRevenueEntryMaxAggregateOutputType = {
+    id: string | null
+    date: Date | null
+    soChungTu: string | null
+    dienGiai: string | null
+    doanhThu: number | null
+    chietKhau: number | null
+    thueGTGT: number | null
+    doanhThuThuan: number | null
+    tncnUocTinh: number | null
+    phuongThucTT: string | null
+    ghiChu: string | null
+    branchId: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type HkdRevenueEntryCountAggregateOutputType = {
+    id: number
+    date: number
+    soChungTu: number
+    dienGiai: number
+    doanhThu: number
+    chietKhau: number
+    thueGTGT: number
+    doanhThuThuan: number
+    tncnUocTinh: number
+    phuongThucTT: number
+    ghiChu: number
+    branchId: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type HkdRevenueEntryAvgAggregateInputType = {
+    doanhThu?: true
+    chietKhau?: true
+    thueGTGT?: true
+    doanhThuThuan?: true
+    tncnUocTinh?: true
+  }
+
+  export type HkdRevenueEntrySumAggregateInputType = {
+    doanhThu?: true
+    chietKhau?: true
+    thueGTGT?: true
+    doanhThuThuan?: true
+    tncnUocTinh?: true
+  }
+
+  export type HkdRevenueEntryMinAggregateInputType = {
+    id?: true
+    date?: true
+    soChungTu?: true
+    dienGiai?: true
+    doanhThu?: true
+    chietKhau?: true
+    thueGTGT?: true
+    doanhThuThuan?: true
+    tncnUocTinh?: true
+    phuongThucTT?: true
+    ghiChu?: true
+    branchId?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type HkdRevenueEntryMaxAggregateInputType = {
+    id?: true
+    date?: true
+    soChungTu?: true
+    dienGiai?: true
+    doanhThu?: true
+    chietKhau?: true
+    thueGTGT?: true
+    doanhThuThuan?: true
+    tncnUocTinh?: true
+    phuongThucTT?: true
+    ghiChu?: true
+    branchId?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type HkdRevenueEntryCountAggregateInputType = {
+    id?: true
+    date?: true
+    soChungTu?: true
+    dienGiai?: true
+    doanhThu?: true
+    chietKhau?: true
+    thueGTGT?: true
+    doanhThuThuan?: true
+    tncnUocTinh?: true
+    phuongThucTT?: true
+    ghiChu?: true
+    branchId?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type HkdRevenueEntryAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which HkdRevenueEntry to aggregate.
+     */
+    where?: HkdRevenueEntryWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of HkdRevenueEntries to fetch.
+     */
+    orderBy?: HkdRevenueEntryOrderByWithRelationInput | HkdRevenueEntryOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: HkdRevenueEntryWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` HkdRevenueEntries from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` HkdRevenueEntries.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned HkdRevenueEntries
+    **/
+    _count?: true | HkdRevenueEntryCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: HkdRevenueEntryAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: HkdRevenueEntrySumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: HkdRevenueEntryMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: HkdRevenueEntryMaxAggregateInputType
+  }
+
+  export type GetHkdRevenueEntryAggregateType<T extends HkdRevenueEntryAggregateArgs> = {
+        [P in keyof T & keyof AggregateHkdRevenueEntry]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateHkdRevenueEntry[P]>
+      : GetScalarType<T[P], AggregateHkdRevenueEntry[P]>
+  }
+
+
+
+
+  export type HkdRevenueEntryGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: HkdRevenueEntryWhereInput
+    orderBy?: HkdRevenueEntryOrderByWithAggregationInput | HkdRevenueEntryOrderByWithAggregationInput[]
+    by: HkdRevenueEntryScalarFieldEnum[] | HkdRevenueEntryScalarFieldEnum
+    having?: HkdRevenueEntryScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: HkdRevenueEntryCountAggregateInputType | true
+    _avg?: HkdRevenueEntryAvgAggregateInputType
+    _sum?: HkdRevenueEntrySumAggregateInputType
+    _min?: HkdRevenueEntryMinAggregateInputType
+    _max?: HkdRevenueEntryMaxAggregateInputType
+  }
+
+  export type HkdRevenueEntryGroupByOutputType = {
+    id: string
+    date: Date
+    soChungTu: string | null
+    dienGiai: string
+    doanhThu: number
+    chietKhau: number
+    thueGTGT: number
+    doanhThuThuan: number
+    tncnUocTinh: number
+    phuongThucTT: string
+    ghiChu: string | null
+    branchId: string | null
+    createdAt: Date
+    updatedAt: Date
+    _count: HkdRevenueEntryCountAggregateOutputType | null
+    _avg: HkdRevenueEntryAvgAggregateOutputType | null
+    _sum: HkdRevenueEntrySumAggregateOutputType | null
+    _min: HkdRevenueEntryMinAggregateOutputType | null
+    _max: HkdRevenueEntryMaxAggregateOutputType | null
+  }
+
+  type GetHkdRevenueEntryGroupByPayload<T extends HkdRevenueEntryGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<HkdRevenueEntryGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof HkdRevenueEntryGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], HkdRevenueEntryGroupByOutputType[P]>
+            : GetScalarType<T[P], HkdRevenueEntryGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type HkdRevenueEntrySelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    date?: boolean
+    soChungTu?: boolean
+    dienGiai?: boolean
+    doanhThu?: boolean
+    chietKhau?: boolean
+    thueGTGT?: boolean
+    doanhThuThuan?: boolean
+    tncnUocTinh?: boolean
+    phuongThucTT?: boolean
+    ghiChu?: boolean
+    branchId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["hkdRevenueEntry"]>
+
+  export type HkdRevenueEntrySelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    date?: boolean
+    soChungTu?: boolean
+    dienGiai?: boolean
+    doanhThu?: boolean
+    chietKhau?: boolean
+    thueGTGT?: boolean
+    doanhThuThuan?: boolean
+    tncnUocTinh?: boolean
+    phuongThucTT?: boolean
+    ghiChu?: boolean
+    branchId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["hkdRevenueEntry"]>
+
+  export type HkdRevenueEntrySelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    date?: boolean
+    soChungTu?: boolean
+    dienGiai?: boolean
+    doanhThu?: boolean
+    chietKhau?: boolean
+    thueGTGT?: boolean
+    doanhThuThuan?: boolean
+    tncnUocTinh?: boolean
+    phuongThucTT?: boolean
+    ghiChu?: boolean
+    branchId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["hkdRevenueEntry"]>
+
+  export type HkdRevenueEntrySelectScalar = {
+    id?: boolean
+    date?: boolean
+    soChungTu?: boolean
+    dienGiai?: boolean
+    doanhThu?: boolean
+    chietKhau?: boolean
+    thueGTGT?: boolean
+    doanhThuThuan?: boolean
+    tncnUocTinh?: boolean
+    phuongThucTT?: boolean
+    ghiChu?: boolean
+    branchId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type HkdRevenueEntryOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "date" | "soChungTu" | "dienGiai" | "doanhThu" | "chietKhau" | "thueGTGT" | "doanhThuThuan" | "tncnUocTinh" | "phuongThucTT" | "ghiChu" | "branchId" | "createdAt" | "updatedAt", ExtArgs["result"]["hkdRevenueEntry"]>
+
+  export type $HkdRevenueEntryPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "HkdRevenueEntry"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      date: Date
+      soChungTu: string | null
+      dienGiai: string
+      doanhThu: number
+      chietKhau: number
+      thueGTGT: number
+      doanhThuThuan: number
+      tncnUocTinh: number
+      phuongThucTT: string
+      ghiChu: string | null
+      branchId: string | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["hkdRevenueEntry"]>
+    composites: {}
+  }
+
+  type HkdRevenueEntryGetPayload<S extends boolean | null | undefined | HkdRevenueEntryDefaultArgs> = $Result.GetResult<Prisma.$HkdRevenueEntryPayload, S>
+
+  type HkdRevenueEntryCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<HkdRevenueEntryFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: HkdRevenueEntryCountAggregateInputType | true
+    }
+
+  export interface HkdRevenueEntryDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['HkdRevenueEntry'], meta: { name: 'HkdRevenueEntry' } }
+    /**
+     * Find zero or one HkdRevenueEntry that matches the filter.
+     * @param {HkdRevenueEntryFindUniqueArgs} args - Arguments to find a HkdRevenueEntry
+     * @example
+     * // Get one HkdRevenueEntry
+     * const hkdRevenueEntry = await prisma.hkdRevenueEntry.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends HkdRevenueEntryFindUniqueArgs>(args: SelectSubset<T, HkdRevenueEntryFindUniqueArgs<ExtArgs>>): Prisma__HkdRevenueEntryClient<$Result.GetResult<Prisma.$HkdRevenueEntryPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one HkdRevenueEntry that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {HkdRevenueEntryFindUniqueOrThrowArgs} args - Arguments to find a HkdRevenueEntry
+     * @example
+     * // Get one HkdRevenueEntry
+     * const hkdRevenueEntry = await prisma.hkdRevenueEntry.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends HkdRevenueEntryFindUniqueOrThrowArgs>(args: SelectSubset<T, HkdRevenueEntryFindUniqueOrThrowArgs<ExtArgs>>): Prisma__HkdRevenueEntryClient<$Result.GetResult<Prisma.$HkdRevenueEntryPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first HkdRevenueEntry that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {HkdRevenueEntryFindFirstArgs} args - Arguments to find a HkdRevenueEntry
+     * @example
+     * // Get one HkdRevenueEntry
+     * const hkdRevenueEntry = await prisma.hkdRevenueEntry.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends HkdRevenueEntryFindFirstArgs>(args?: SelectSubset<T, HkdRevenueEntryFindFirstArgs<ExtArgs>>): Prisma__HkdRevenueEntryClient<$Result.GetResult<Prisma.$HkdRevenueEntryPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first HkdRevenueEntry that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {HkdRevenueEntryFindFirstOrThrowArgs} args - Arguments to find a HkdRevenueEntry
+     * @example
+     * // Get one HkdRevenueEntry
+     * const hkdRevenueEntry = await prisma.hkdRevenueEntry.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends HkdRevenueEntryFindFirstOrThrowArgs>(args?: SelectSubset<T, HkdRevenueEntryFindFirstOrThrowArgs<ExtArgs>>): Prisma__HkdRevenueEntryClient<$Result.GetResult<Prisma.$HkdRevenueEntryPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more HkdRevenueEntries that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {HkdRevenueEntryFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all HkdRevenueEntries
+     * const hkdRevenueEntries = await prisma.hkdRevenueEntry.findMany()
+     * 
+     * // Get first 10 HkdRevenueEntries
+     * const hkdRevenueEntries = await prisma.hkdRevenueEntry.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const hkdRevenueEntryWithIdOnly = await prisma.hkdRevenueEntry.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends HkdRevenueEntryFindManyArgs>(args?: SelectSubset<T, HkdRevenueEntryFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$HkdRevenueEntryPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a HkdRevenueEntry.
+     * @param {HkdRevenueEntryCreateArgs} args - Arguments to create a HkdRevenueEntry.
+     * @example
+     * // Create one HkdRevenueEntry
+     * const HkdRevenueEntry = await prisma.hkdRevenueEntry.create({
+     *   data: {
+     *     // ... data to create a HkdRevenueEntry
+     *   }
+     * })
+     * 
+     */
+    create<T extends HkdRevenueEntryCreateArgs>(args: SelectSubset<T, HkdRevenueEntryCreateArgs<ExtArgs>>): Prisma__HkdRevenueEntryClient<$Result.GetResult<Prisma.$HkdRevenueEntryPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many HkdRevenueEntries.
+     * @param {HkdRevenueEntryCreateManyArgs} args - Arguments to create many HkdRevenueEntries.
+     * @example
+     * // Create many HkdRevenueEntries
+     * const hkdRevenueEntry = await prisma.hkdRevenueEntry.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends HkdRevenueEntryCreateManyArgs>(args?: SelectSubset<T, HkdRevenueEntryCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many HkdRevenueEntries and returns the data saved in the database.
+     * @param {HkdRevenueEntryCreateManyAndReturnArgs} args - Arguments to create many HkdRevenueEntries.
+     * @example
+     * // Create many HkdRevenueEntries
+     * const hkdRevenueEntry = await prisma.hkdRevenueEntry.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many HkdRevenueEntries and only return the `id`
+     * const hkdRevenueEntryWithIdOnly = await prisma.hkdRevenueEntry.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends HkdRevenueEntryCreateManyAndReturnArgs>(args?: SelectSubset<T, HkdRevenueEntryCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$HkdRevenueEntryPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a HkdRevenueEntry.
+     * @param {HkdRevenueEntryDeleteArgs} args - Arguments to delete one HkdRevenueEntry.
+     * @example
+     * // Delete one HkdRevenueEntry
+     * const HkdRevenueEntry = await prisma.hkdRevenueEntry.delete({
+     *   where: {
+     *     // ... filter to delete one HkdRevenueEntry
+     *   }
+     * })
+     * 
+     */
+    delete<T extends HkdRevenueEntryDeleteArgs>(args: SelectSubset<T, HkdRevenueEntryDeleteArgs<ExtArgs>>): Prisma__HkdRevenueEntryClient<$Result.GetResult<Prisma.$HkdRevenueEntryPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one HkdRevenueEntry.
+     * @param {HkdRevenueEntryUpdateArgs} args - Arguments to update one HkdRevenueEntry.
+     * @example
+     * // Update one HkdRevenueEntry
+     * const hkdRevenueEntry = await prisma.hkdRevenueEntry.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends HkdRevenueEntryUpdateArgs>(args: SelectSubset<T, HkdRevenueEntryUpdateArgs<ExtArgs>>): Prisma__HkdRevenueEntryClient<$Result.GetResult<Prisma.$HkdRevenueEntryPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more HkdRevenueEntries.
+     * @param {HkdRevenueEntryDeleteManyArgs} args - Arguments to filter HkdRevenueEntries to delete.
+     * @example
+     * // Delete a few HkdRevenueEntries
+     * const { count } = await prisma.hkdRevenueEntry.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends HkdRevenueEntryDeleteManyArgs>(args?: SelectSubset<T, HkdRevenueEntryDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more HkdRevenueEntries.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {HkdRevenueEntryUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many HkdRevenueEntries
+     * const hkdRevenueEntry = await prisma.hkdRevenueEntry.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends HkdRevenueEntryUpdateManyArgs>(args: SelectSubset<T, HkdRevenueEntryUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more HkdRevenueEntries and returns the data updated in the database.
+     * @param {HkdRevenueEntryUpdateManyAndReturnArgs} args - Arguments to update many HkdRevenueEntries.
+     * @example
+     * // Update many HkdRevenueEntries
+     * const hkdRevenueEntry = await prisma.hkdRevenueEntry.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more HkdRevenueEntries and only return the `id`
+     * const hkdRevenueEntryWithIdOnly = await prisma.hkdRevenueEntry.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends HkdRevenueEntryUpdateManyAndReturnArgs>(args: SelectSubset<T, HkdRevenueEntryUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$HkdRevenueEntryPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one HkdRevenueEntry.
+     * @param {HkdRevenueEntryUpsertArgs} args - Arguments to update or create a HkdRevenueEntry.
+     * @example
+     * // Update or create a HkdRevenueEntry
+     * const hkdRevenueEntry = await prisma.hkdRevenueEntry.upsert({
+     *   create: {
+     *     // ... data to create a HkdRevenueEntry
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the HkdRevenueEntry we want to update
+     *   }
+     * })
+     */
+    upsert<T extends HkdRevenueEntryUpsertArgs>(args: SelectSubset<T, HkdRevenueEntryUpsertArgs<ExtArgs>>): Prisma__HkdRevenueEntryClient<$Result.GetResult<Prisma.$HkdRevenueEntryPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of HkdRevenueEntries.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {HkdRevenueEntryCountArgs} args - Arguments to filter HkdRevenueEntries to count.
+     * @example
+     * // Count the number of HkdRevenueEntries
+     * const count = await prisma.hkdRevenueEntry.count({
+     *   where: {
+     *     // ... the filter for the HkdRevenueEntries we want to count
+     *   }
+     * })
+    **/
+    count<T extends HkdRevenueEntryCountArgs>(
+      args?: Subset<T, HkdRevenueEntryCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], HkdRevenueEntryCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a HkdRevenueEntry.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {HkdRevenueEntryAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends HkdRevenueEntryAggregateArgs>(args: Subset<T, HkdRevenueEntryAggregateArgs>): Prisma.PrismaPromise<GetHkdRevenueEntryAggregateType<T>>
+
+    /**
+     * Group by HkdRevenueEntry.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {HkdRevenueEntryGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends HkdRevenueEntryGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: HkdRevenueEntryGroupByArgs['orderBy'] }
+        : { orderBy?: HkdRevenueEntryGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, HkdRevenueEntryGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetHkdRevenueEntryGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the HkdRevenueEntry model
+   */
+  readonly fields: HkdRevenueEntryFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for HkdRevenueEntry.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__HkdRevenueEntryClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the HkdRevenueEntry model
+   */
+  interface HkdRevenueEntryFieldRefs {
+    readonly id: FieldRef<"HkdRevenueEntry", 'String'>
+    readonly date: FieldRef<"HkdRevenueEntry", 'DateTime'>
+    readonly soChungTu: FieldRef<"HkdRevenueEntry", 'String'>
+    readonly dienGiai: FieldRef<"HkdRevenueEntry", 'String'>
+    readonly doanhThu: FieldRef<"HkdRevenueEntry", 'Float'>
+    readonly chietKhau: FieldRef<"HkdRevenueEntry", 'Float'>
+    readonly thueGTGT: FieldRef<"HkdRevenueEntry", 'Float'>
+    readonly doanhThuThuan: FieldRef<"HkdRevenueEntry", 'Float'>
+    readonly tncnUocTinh: FieldRef<"HkdRevenueEntry", 'Float'>
+    readonly phuongThucTT: FieldRef<"HkdRevenueEntry", 'String'>
+    readonly ghiChu: FieldRef<"HkdRevenueEntry", 'String'>
+    readonly branchId: FieldRef<"HkdRevenueEntry", 'String'>
+    readonly createdAt: FieldRef<"HkdRevenueEntry", 'DateTime'>
+    readonly updatedAt: FieldRef<"HkdRevenueEntry", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * HkdRevenueEntry findUnique
+   */
+  export type HkdRevenueEntryFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the HkdRevenueEntry
+     */
+    select?: HkdRevenueEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the HkdRevenueEntry
+     */
+    omit?: HkdRevenueEntryOmit<ExtArgs> | null
+    /**
+     * Filter, which HkdRevenueEntry to fetch.
+     */
+    where: HkdRevenueEntryWhereUniqueInput
+  }
+
+  /**
+   * HkdRevenueEntry findUniqueOrThrow
+   */
+  export type HkdRevenueEntryFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the HkdRevenueEntry
+     */
+    select?: HkdRevenueEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the HkdRevenueEntry
+     */
+    omit?: HkdRevenueEntryOmit<ExtArgs> | null
+    /**
+     * Filter, which HkdRevenueEntry to fetch.
+     */
+    where: HkdRevenueEntryWhereUniqueInput
+  }
+
+  /**
+   * HkdRevenueEntry findFirst
+   */
+  export type HkdRevenueEntryFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the HkdRevenueEntry
+     */
+    select?: HkdRevenueEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the HkdRevenueEntry
+     */
+    omit?: HkdRevenueEntryOmit<ExtArgs> | null
+    /**
+     * Filter, which HkdRevenueEntry to fetch.
+     */
+    where?: HkdRevenueEntryWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of HkdRevenueEntries to fetch.
+     */
+    orderBy?: HkdRevenueEntryOrderByWithRelationInput | HkdRevenueEntryOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for HkdRevenueEntries.
+     */
+    cursor?: HkdRevenueEntryWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` HkdRevenueEntries from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` HkdRevenueEntries.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of HkdRevenueEntries.
+     */
+    distinct?: HkdRevenueEntryScalarFieldEnum | HkdRevenueEntryScalarFieldEnum[]
+  }
+
+  /**
+   * HkdRevenueEntry findFirstOrThrow
+   */
+  export type HkdRevenueEntryFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the HkdRevenueEntry
+     */
+    select?: HkdRevenueEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the HkdRevenueEntry
+     */
+    omit?: HkdRevenueEntryOmit<ExtArgs> | null
+    /**
+     * Filter, which HkdRevenueEntry to fetch.
+     */
+    where?: HkdRevenueEntryWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of HkdRevenueEntries to fetch.
+     */
+    orderBy?: HkdRevenueEntryOrderByWithRelationInput | HkdRevenueEntryOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for HkdRevenueEntries.
+     */
+    cursor?: HkdRevenueEntryWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` HkdRevenueEntries from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` HkdRevenueEntries.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of HkdRevenueEntries.
+     */
+    distinct?: HkdRevenueEntryScalarFieldEnum | HkdRevenueEntryScalarFieldEnum[]
+  }
+
+  /**
+   * HkdRevenueEntry findMany
+   */
+  export type HkdRevenueEntryFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the HkdRevenueEntry
+     */
+    select?: HkdRevenueEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the HkdRevenueEntry
+     */
+    omit?: HkdRevenueEntryOmit<ExtArgs> | null
+    /**
+     * Filter, which HkdRevenueEntries to fetch.
+     */
+    where?: HkdRevenueEntryWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of HkdRevenueEntries to fetch.
+     */
+    orderBy?: HkdRevenueEntryOrderByWithRelationInput | HkdRevenueEntryOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing HkdRevenueEntries.
+     */
+    cursor?: HkdRevenueEntryWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` HkdRevenueEntries from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` HkdRevenueEntries.
+     */
+    skip?: number
+    distinct?: HkdRevenueEntryScalarFieldEnum | HkdRevenueEntryScalarFieldEnum[]
+  }
+
+  /**
+   * HkdRevenueEntry create
+   */
+  export type HkdRevenueEntryCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the HkdRevenueEntry
+     */
+    select?: HkdRevenueEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the HkdRevenueEntry
+     */
+    omit?: HkdRevenueEntryOmit<ExtArgs> | null
+    /**
+     * The data needed to create a HkdRevenueEntry.
+     */
+    data: XOR<HkdRevenueEntryCreateInput, HkdRevenueEntryUncheckedCreateInput>
+  }
+
+  /**
+   * HkdRevenueEntry createMany
+   */
+  export type HkdRevenueEntryCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many HkdRevenueEntries.
+     */
+    data: HkdRevenueEntryCreateManyInput | HkdRevenueEntryCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * HkdRevenueEntry createManyAndReturn
+   */
+  export type HkdRevenueEntryCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the HkdRevenueEntry
+     */
+    select?: HkdRevenueEntrySelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the HkdRevenueEntry
+     */
+    omit?: HkdRevenueEntryOmit<ExtArgs> | null
+    /**
+     * The data used to create many HkdRevenueEntries.
+     */
+    data: HkdRevenueEntryCreateManyInput | HkdRevenueEntryCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * HkdRevenueEntry update
+   */
+  export type HkdRevenueEntryUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the HkdRevenueEntry
+     */
+    select?: HkdRevenueEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the HkdRevenueEntry
+     */
+    omit?: HkdRevenueEntryOmit<ExtArgs> | null
+    /**
+     * The data needed to update a HkdRevenueEntry.
+     */
+    data: XOR<HkdRevenueEntryUpdateInput, HkdRevenueEntryUncheckedUpdateInput>
+    /**
+     * Choose, which HkdRevenueEntry to update.
+     */
+    where: HkdRevenueEntryWhereUniqueInput
+  }
+
+  /**
+   * HkdRevenueEntry updateMany
+   */
+  export type HkdRevenueEntryUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update HkdRevenueEntries.
+     */
+    data: XOR<HkdRevenueEntryUpdateManyMutationInput, HkdRevenueEntryUncheckedUpdateManyInput>
+    /**
+     * Filter which HkdRevenueEntries to update
+     */
+    where?: HkdRevenueEntryWhereInput
+    /**
+     * Limit how many HkdRevenueEntries to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * HkdRevenueEntry updateManyAndReturn
+   */
+  export type HkdRevenueEntryUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the HkdRevenueEntry
+     */
+    select?: HkdRevenueEntrySelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the HkdRevenueEntry
+     */
+    omit?: HkdRevenueEntryOmit<ExtArgs> | null
+    /**
+     * The data used to update HkdRevenueEntries.
+     */
+    data: XOR<HkdRevenueEntryUpdateManyMutationInput, HkdRevenueEntryUncheckedUpdateManyInput>
+    /**
+     * Filter which HkdRevenueEntries to update
+     */
+    where?: HkdRevenueEntryWhereInput
+    /**
+     * Limit how many HkdRevenueEntries to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * HkdRevenueEntry upsert
+   */
+  export type HkdRevenueEntryUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the HkdRevenueEntry
+     */
+    select?: HkdRevenueEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the HkdRevenueEntry
+     */
+    omit?: HkdRevenueEntryOmit<ExtArgs> | null
+    /**
+     * The filter to search for the HkdRevenueEntry to update in case it exists.
+     */
+    where: HkdRevenueEntryWhereUniqueInput
+    /**
+     * In case the HkdRevenueEntry found by the `where` argument doesn't exist, create a new HkdRevenueEntry with this data.
+     */
+    create: XOR<HkdRevenueEntryCreateInput, HkdRevenueEntryUncheckedCreateInput>
+    /**
+     * In case the HkdRevenueEntry was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<HkdRevenueEntryUpdateInput, HkdRevenueEntryUncheckedUpdateInput>
+  }
+
+  /**
+   * HkdRevenueEntry delete
+   */
+  export type HkdRevenueEntryDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the HkdRevenueEntry
+     */
+    select?: HkdRevenueEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the HkdRevenueEntry
+     */
+    omit?: HkdRevenueEntryOmit<ExtArgs> | null
+    /**
+     * Filter which HkdRevenueEntry to delete.
+     */
+    where: HkdRevenueEntryWhereUniqueInput
+  }
+
+  /**
+   * HkdRevenueEntry deleteMany
+   */
+  export type HkdRevenueEntryDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which HkdRevenueEntries to delete
+     */
+    where?: HkdRevenueEntryWhereInput
+    /**
+     * Limit how many HkdRevenueEntries to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * HkdRevenueEntry without action
+   */
+  export type HkdRevenueEntryDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the HkdRevenueEntry
+     */
+    select?: HkdRevenueEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the HkdRevenueEntry
+     */
+    omit?: HkdRevenueEntryOmit<ExtArgs> | null
+  }
+
+
+  /**
    * Model StoreSettings
    */
 
@@ -83899,6 +90787,8 @@ export namespace Prisma {
     email: string | null
     website: string | null
     notifyLowStock: boolean | null
+    smtpConfig: string | null
+    geminiApiKey: string | null
     notifyNewOrder: boolean | null
     notifyDailyReport: boolean | null
     notifyWeeklyReport: boolean | null
@@ -83933,6 +90823,8 @@ export namespace Prisma {
     email: string | null
     website: string | null
     notifyLowStock: boolean | null
+    smtpConfig: string | null
+    geminiApiKey: string | null
     notifyNewOrder: boolean | null
     notifyDailyReport: boolean | null
     notifyWeeklyReport: boolean | null
@@ -83967,6 +90859,8 @@ export namespace Prisma {
     email: number
     website: number
     notifyLowStock: number
+    smtpConfig: number
+    geminiApiKey: number
     notifyNewOrder: number
     notifyDailyReport: number
     notifyWeeklyReport: number
@@ -84015,6 +90909,8 @@ export namespace Prisma {
     email?: true
     website?: true
     notifyLowStock?: true
+    smtpConfig?: true
+    geminiApiKey?: true
     notifyNewOrder?: true
     notifyDailyReport?: true
     notifyWeeklyReport?: true
@@ -84049,6 +90945,8 @@ export namespace Prisma {
     email?: true
     website?: true
     notifyLowStock?: true
+    smtpConfig?: true
+    geminiApiKey?: true
     notifyNewOrder?: true
     notifyDailyReport?: true
     notifyWeeklyReport?: true
@@ -84083,6 +90981,8 @@ export namespace Prisma {
     email?: true
     website?: true
     notifyLowStock?: true
+    smtpConfig?: true
+    geminiApiKey?: true
     notifyNewOrder?: true
     notifyDailyReport?: true
     notifyWeeklyReport?: true
@@ -84204,6 +91104,8 @@ export namespace Prisma {
     email: string | null
     website: string | null
     notifyLowStock: boolean
+    smtpConfig: string | null
+    geminiApiKey: string | null
     notifyNewOrder: boolean
     notifyDailyReport: boolean
     notifyWeeklyReport: boolean
@@ -84257,6 +91159,8 @@ export namespace Prisma {
     email?: boolean
     website?: boolean
     notifyLowStock?: boolean
+    smtpConfig?: boolean
+    geminiApiKey?: boolean
     notifyNewOrder?: boolean
     notifyDailyReport?: boolean
     notifyWeeklyReport?: boolean
@@ -84291,6 +91195,8 @@ export namespace Prisma {
     email?: boolean
     website?: boolean
     notifyLowStock?: boolean
+    smtpConfig?: boolean
+    geminiApiKey?: boolean
     notifyNewOrder?: boolean
     notifyDailyReport?: boolean
     notifyWeeklyReport?: boolean
@@ -84325,6 +91231,8 @@ export namespace Prisma {
     email?: boolean
     website?: boolean
     notifyLowStock?: boolean
+    smtpConfig?: boolean
+    geminiApiKey?: boolean
     notifyNewOrder?: boolean
     notifyDailyReport?: boolean
     notifyWeeklyReport?: boolean
@@ -84359,6 +91267,8 @@ export namespace Prisma {
     email?: boolean
     website?: boolean
     notifyLowStock?: boolean
+    smtpConfig?: boolean
+    geminiApiKey?: boolean
     notifyNewOrder?: boolean
     notifyDailyReport?: boolean
     notifyWeeklyReport?: boolean
@@ -84373,7 +91283,7 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type StoreSettingsOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "address" | "phone" | "logo" | "description" | "costPriceMethod" | "trackSerial" | "trackBatch" | "allowNegativeStock" | "shiftConfig" | "businessType" | "taxCode" | "ownerName" | "ownerIdNumber" | "representativeName" | "email" | "website" | "notifyLowStock" | "notifyNewOrder" | "notifyDailyReport" | "notifyWeeklyReport" | "autoRestockOnReturn" | "autoCreateJournalEntries" | "salesCanCheckout" | "openTime" | "closeTime" | "dailyRevenueTarget" | "monthlyRevenueTarget" | "dailyOrderTarget" | "updatedAt", ExtArgs["result"]["storeSettings"]>
+  export type StoreSettingsOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "address" | "phone" | "logo" | "description" | "costPriceMethod" | "trackSerial" | "trackBatch" | "allowNegativeStock" | "shiftConfig" | "businessType" | "taxCode" | "ownerName" | "ownerIdNumber" | "representativeName" | "email" | "website" | "notifyLowStock" | "smtpConfig" | "geminiApiKey" | "notifyNewOrder" | "notifyDailyReport" | "notifyWeeklyReport" | "autoRestockOnReturn" | "autoCreateJournalEntries" | "salesCanCheckout" | "openTime" | "closeTime" | "dailyRevenueTarget" | "monthlyRevenueTarget" | "dailyOrderTarget" | "updatedAt", ExtArgs["result"]["storeSettings"]>
 
   export type $StoreSettingsPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     name: "StoreSettings"
@@ -84398,6 +91308,8 @@ export namespace Prisma {
       email: string | null
       website: string | null
       notifyLowStock: boolean
+      smtpConfig: string | null
+      geminiApiKey: string | null
       notifyNewOrder: boolean
       notifyDailyReport: boolean
       notifyWeeklyReport: boolean
@@ -84852,6 +91764,8 @@ export namespace Prisma {
     readonly email: FieldRef<"StoreSettings", 'String'>
     readonly website: FieldRef<"StoreSettings", 'String'>
     readonly notifyLowStock: FieldRef<"StoreSettings", 'Boolean'>
+    readonly smtpConfig: FieldRef<"StoreSettings", 'String'>
+    readonly geminiApiKey: FieldRef<"StoreSettings", 'String'>
     readonly notifyNewOrder: FieldRef<"StoreSettings", 'Boolean'>
     readonly notifyDailyReport: FieldRef<"StoreSettings", 'Boolean'>
     readonly notifyWeeklyReport: FieldRef<"StoreSettings", 'Boolean'>
@@ -139761,6 +146675,5550 @@ export namespace Prisma {
 
 
   /**
+   * Model CrmTask
+   */
+
+  export type AggregateCrmTask = {
+    _count: CrmTaskCountAggregateOutputType | null
+    _min: CrmTaskMinAggregateOutputType | null
+    _max: CrmTaskMaxAggregateOutputType | null
+  }
+
+  export type CrmTaskMinAggregateOutputType = {
+    id: string | null
+    title: string | null
+    description: string | null
+    customerId: string | null
+    customerName: string | null
+    status: string | null
+    priority: string | null
+    type: string | null
+    dueDate: Date | null
+    assignee: string | null
+    createdBy: string | null
+    completedAt: Date | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type CrmTaskMaxAggregateOutputType = {
+    id: string | null
+    title: string | null
+    description: string | null
+    customerId: string | null
+    customerName: string | null
+    status: string | null
+    priority: string | null
+    type: string | null
+    dueDate: Date | null
+    assignee: string | null
+    createdBy: string | null
+    completedAt: Date | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type CrmTaskCountAggregateOutputType = {
+    id: number
+    title: number
+    description: number
+    customerId: number
+    customerName: number
+    status: number
+    priority: number
+    type: number
+    dueDate: number
+    assignee: number
+    createdBy: number
+    completedAt: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type CrmTaskMinAggregateInputType = {
+    id?: true
+    title?: true
+    description?: true
+    customerId?: true
+    customerName?: true
+    status?: true
+    priority?: true
+    type?: true
+    dueDate?: true
+    assignee?: true
+    createdBy?: true
+    completedAt?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type CrmTaskMaxAggregateInputType = {
+    id?: true
+    title?: true
+    description?: true
+    customerId?: true
+    customerName?: true
+    status?: true
+    priority?: true
+    type?: true
+    dueDate?: true
+    assignee?: true
+    createdBy?: true
+    completedAt?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type CrmTaskCountAggregateInputType = {
+    id?: true
+    title?: true
+    description?: true
+    customerId?: true
+    customerName?: true
+    status?: true
+    priority?: true
+    type?: true
+    dueDate?: true
+    assignee?: true
+    createdBy?: true
+    completedAt?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type CrmTaskAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which CrmTask to aggregate.
+     */
+    where?: CrmTaskWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of CrmTasks to fetch.
+     */
+    orderBy?: CrmTaskOrderByWithRelationInput | CrmTaskOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: CrmTaskWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` CrmTasks from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` CrmTasks.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned CrmTasks
+    **/
+    _count?: true | CrmTaskCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: CrmTaskMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: CrmTaskMaxAggregateInputType
+  }
+
+  export type GetCrmTaskAggregateType<T extends CrmTaskAggregateArgs> = {
+        [P in keyof T & keyof AggregateCrmTask]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateCrmTask[P]>
+      : GetScalarType<T[P], AggregateCrmTask[P]>
+  }
+
+
+
+
+  export type CrmTaskGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: CrmTaskWhereInput
+    orderBy?: CrmTaskOrderByWithAggregationInput | CrmTaskOrderByWithAggregationInput[]
+    by: CrmTaskScalarFieldEnum[] | CrmTaskScalarFieldEnum
+    having?: CrmTaskScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: CrmTaskCountAggregateInputType | true
+    _min?: CrmTaskMinAggregateInputType
+    _max?: CrmTaskMaxAggregateInputType
+  }
+
+  export type CrmTaskGroupByOutputType = {
+    id: string
+    title: string
+    description: string | null
+    customerId: string | null
+    customerName: string | null
+    status: string
+    priority: string
+    type: string | null
+    dueDate: Date | null
+    assignee: string | null
+    createdBy: string | null
+    completedAt: Date | null
+    createdAt: Date
+    updatedAt: Date
+    _count: CrmTaskCountAggregateOutputType | null
+    _min: CrmTaskMinAggregateOutputType | null
+    _max: CrmTaskMaxAggregateOutputType | null
+  }
+
+  type GetCrmTaskGroupByPayload<T extends CrmTaskGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<CrmTaskGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof CrmTaskGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], CrmTaskGroupByOutputType[P]>
+            : GetScalarType<T[P], CrmTaskGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type CrmTaskSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    title?: boolean
+    description?: boolean
+    customerId?: boolean
+    customerName?: boolean
+    status?: boolean
+    priority?: boolean
+    type?: boolean
+    dueDate?: boolean
+    assignee?: boolean
+    createdBy?: boolean
+    completedAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["crmTask"]>
+
+  export type CrmTaskSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    title?: boolean
+    description?: boolean
+    customerId?: boolean
+    customerName?: boolean
+    status?: boolean
+    priority?: boolean
+    type?: boolean
+    dueDate?: boolean
+    assignee?: boolean
+    createdBy?: boolean
+    completedAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["crmTask"]>
+
+  export type CrmTaskSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    title?: boolean
+    description?: boolean
+    customerId?: boolean
+    customerName?: boolean
+    status?: boolean
+    priority?: boolean
+    type?: boolean
+    dueDate?: boolean
+    assignee?: boolean
+    createdBy?: boolean
+    completedAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["crmTask"]>
+
+  export type CrmTaskSelectScalar = {
+    id?: boolean
+    title?: boolean
+    description?: boolean
+    customerId?: boolean
+    customerName?: boolean
+    status?: boolean
+    priority?: boolean
+    type?: boolean
+    dueDate?: boolean
+    assignee?: boolean
+    createdBy?: boolean
+    completedAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type CrmTaskOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "title" | "description" | "customerId" | "customerName" | "status" | "priority" | "type" | "dueDate" | "assignee" | "createdBy" | "completedAt" | "createdAt" | "updatedAt", ExtArgs["result"]["crmTask"]>
+
+  export type $CrmTaskPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "CrmTask"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      title: string
+      description: string | null
+      customerId: string | null
+      customerName: string | null
+      status: string
+      priority: string
+      type: string | null
+      dueDate: Date | null
+      assignee: string | null
+      createdBy: string | null
+      completedAt: Date | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["crmTask"]>
+    composites: {}
+  }
+
+  type CrmTaskGetPayload<S extends boolean | null | undefined | CrmTaskDefaultArgs> = $Result.GetResult<Prisma.$CrmTaskPayload, S>
+
+  type CrmTaskCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<CrmTaskFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: CrmTaskCountAggregateInputType | true
+    }
+
+  export interface CrmTaskDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['CrmTask'], meta: { name: 'CrmTask' } }
+    /**
+     * Find zero or one CrmTask that matches the filter.
+     * @param {CrmTaskFindUniqueArgs} args - Arguments to find a CrmTask
+     * @example
+     * // Get one CrmTask
+     * const crmTask = await prisma.crmTask.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends CrmTaskFindUniqueArgs>(args: SelectSubset<T, CrmTaskFindUniqueArgs<ExtArgs>>): Prisma__CrmTaskClient<$Result.GetResult<Prisma.$CrmTaskPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one CrmTask that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {CrmTaskFindUniqueOrThrowArgs} args - Arguments to find a CrmTask
+     * @example
+     * // Get one CrmTask
+     * const crmTask = await prisma.crmTask.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends CrmTaskFindUniqueOrThrowArgs>(args: SelectSubset<T, CrmTaskFindUniqueOrThrowArgs<ExtArgs>>): Prisma__CrmTaskClient<$Result.GetResult<Prisma.$CrmTaskPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first CrmTask that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmTaskFindFirstArgs} args - Arguments to find a CrmTask
+     * @example
+     * // Get one CrmTask
+     * const crmTask = await prisma.crmTask.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends CrmTaskFindFirstArgs>(args?: SelectSubset<T, CrmTaskFindFirstArgs<ExtArgs>>): Prisma__CrmTaskClient<$Result.GetResult<Prisma.$CrmTaskPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first CrmTask that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmTaskFindFirstOrThrowArgs} args - Arguments to find a CrmTask
+     * @example
+     * // Get one CrmTask
+     * const crmTask = await prisma.crmTask.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends CrmTaskFindFirstOrThrowArgs>(args?: SelectSubset<T, CrmTaskFindFirstOrThrowArgs<ExtArgs>>): Prisma__CrmTaskClient<$Result.GetResult<Prisma.$CrmTaskPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more CrmTasks that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmTaskFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all CrmTasks
+     * const crmTasks = await prisma.crmTask.findMany()
+     * 
+     * // Get first 10 CrmTasks
+     * const crmTasks = await prisma.crmTask.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const crmTaskWithIdOnly = await prisma.crmTask.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends CrmTaskFindManyArgs>(args?: SelectSubset<T, CrmTaskFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$CrmTaskPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a CrmTask.
+     * @param {CrmTaskCreateArgs} args - Arguments to create a CrmTask.
+     * @example
+     * // Create one CrmTask
+     * const CrmTask = await prisma.crmTask.create({
+     *   data: {
+     *     // ... data to create a CrmTask
+     *   }
+     * })
+     * 
+     */
+    create<T extends CrmTaskCreateArgs>(args: SelectSubset<T, CrmTaskCreateArgs<ExtArgs>>): Prisma__CrmTaskClient<$Result.GetResult<Prisma.$CrmTaskPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many CrmTasks.
+     * @param {CrmTaskCreateManyArgs} args - Arguments to create many CrmTasks.
+     * @example
+     * // Create many CrmTasks
+     * const crmTask = await prisma.crmTask.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends CrmTaskCreateManyArgs>(args?: SelectSubset<T, CrmTaskCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many CrmTasks and returns the data saved in the database.
+     * @param {CrmTaskCreateManyAndReturnArgs} args - Arguments to create many CrmTasks.
+     * @example
+     * // Create many CrmTasks
+     * const crmTask = await prisma.crmTask.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many CrmTasks and only return the `id`
+     * const crmTaskWithIdOnly = await prisma.crmTask.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends CrmTaskCreateManyAndReturnArgs>(args?: SelectSubset<T, CrmTaskCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$CrmTaskPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a CrmTask.
+     * @param {CrmTaskDeleteArgs} args - Arguments to delete one CrmTask.
+     * @example
+     * // Delete one CrmTask
+     * const CrmTask = await prisma.crmTask.delete({
+     *   where: {
+     *     // ... filter to delete one CrmTask
+     *   }
+     * })
+     * 
+     */
+    delete<T extends CrmTaskDeleteArgs>(args: SelectSubset<T, CrmTaskDeleteArgs<ExtArgs>>): Prisma__CrmTaskClient<$Result.GetResult<Prisma.$CrmTaskPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one CrmTask.
+     * @param {CrmTaskUpdateArgs} args - Arguments to update one CrmTask.
+     * @example
+     * // Update one CrmTask
+     * const crmTask = await prisma.crmTask.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends CrmTaskUpdateArgs>(args: SelectSubset<T, CrmTaskUpdateArgs<ExtArgs>>): Prisma__CrmTaskClient<$Result.GetResult<Prisma.$CrmTaskPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more CrmTasks.
+     * @param {CrmTaskDeleteManyArgs} args - Arguments to filter CrmTasks to delete.
+     * @example
+     * // Delete a few CrmTasks
+     * const { count } = await prisma.crmTask.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends CrmTaskDeleteManyArgs>(args?: SelectSubset<T, CrmTaskDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more CrmTasks.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmTaskUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many CrmTasks
+     * const crmTask = await prisma.crmTask.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends CrmTaskUpdateManyArgs>(args: SelectSubset<T, CrmTaskUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more CrmTasks and returns the data updated in the database.
+     * @param {CrmTaskUpdateManyAndReturnArgs} args - Arguments to update many CrmTasks.
+     * @example
+     * // Update many CrmTasks
+     * const crmTask = await prisma.crmTask.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more CrmTasks and only return the `id`
+     * const crmTaskWithIdOnly = await prisma.crmTask.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends CrmTaskUpdateManyAndReturnArgs>(args: SelectSubset<T, CrmTaskUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$CrmTaskPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one CrmTask.
+     * @param {CrmTaskUpsertArgs} args - Arguments to update or create a CrmTask.
+     * @example
+     * // Update or create a CrmTask
+     * const crmTask = await prisma.crmTask.upsert({
+     *   create: {
+     *     // ... data to create a CrmTask
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the CrmTask we want to update
+     *   }
+     * })
+     */
+    upsert<T extends CrmTaskUpsertArgs>(args: SelectSubset<T, CrmTaskUpsertArgs<ExtArgs>>): Prisma__CrmTaskClient<$Result.GetResult<Prisma.$CrmTaskPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of CrmTasks.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmTaskCountArgs} args - Arguments to filter CrmTasks to count.
+     * @example
+     * // Count the number of CrmTasks
+     * const count = await prisma.crmTask.count({
+     *   where: {
+     *     // ... the filter for the CrmTasks we want to count
+     *   }
+     * })
+    **/
+    count<T extends CrmTaskCountArgs>(
+      args?: Subset<T, CrmTaskCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], CrmTaskCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a CrmTask.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmTaskAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends CrmTaskAggregateArgs>(args: Subset<T, CrmTaskAggregateArgs>): Prisma.PrismaPromise<GetCrmTaskAggregateType<T>>
+
+    /**
+     * Group by CrmTask.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmTaskGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends CrmTaskGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: CrmTaskGroupByArgs['orderBy'] }
+        : { orderBy?: CrmTaskGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, CrmTaskGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetCrmTaskGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the CrmTask model
+   */
+  readonly fields: CrmTaskFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for CrmTask.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__CrmTaskClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the CrmTask model
+   */
+  interface CrmTaskFieldRefs {
+    readonly id: FieldRef<"CrmTask", 'String'>
+    readonly title: FieldRef<"CrmTask", 'String'>
+    readonly description: FieldRef<"CrmTask", 'String'>
+    readonly customerId: FieldRef<"CrmTask", 'String'>
+    readonly customerName: FieldRef<"CrmTask", 'String'>
+    readonly status: FieldRef<"CrmTask", 'String'>
+    readonly priority: FieldRef<"CrmTask", 'String'>
+    readonly type: FieldRef<"CrmTask", 'String'>
+    readonly dueDate: FieldRef<"CrmTask", 'DateTime'>
+    readonly assignee: FieldRef<"CrmTask", 'String'>
+    readonly createdBy: FieldRef<"CrmTask", 'String'>
+    readonly completedAt: FieldRef<"CrmTask", 'DateTime'>
+    readonly createdAt: FieldRef<"CrmTask", 'DateTime'>
+    readonly updatedAt: FieldRef<"CrmTask", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * CrmTask findUnique
+   */
+  export type CrmTaskFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmTask
+     */
+    select?: CrmTaskSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmTask
+     */
+    omit?: CrmTaskOmit<ExtArgs> | null
+    /**
+     * Filter, which CrmTask to fetch.
+     */
+    where: CrmTaskWhereUniqueInput
+  }
+
+  /**
+   * CrmTask findUniqueOrThrow
+   */
+  export type CrmTaskFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmTask
+     */
+    select?: CrmTaskSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmTask
+     */
+    omit?: CrmTaskOmit<ExtArgs> | null
+    /**
+     * Filter, which CrmTask to fetch.
+     */
+    where: CrmTaskWhereUniqueInput
+  }
+
+  /**
+   * CrmTask findFirst
+   */
+  export type CrmTaskFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmTask
+     */
+    select?: CrmTaskSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmTask
+     */
+    omit?: CrmTaskOmit<ExtArgs> | null
+    /**
+     * Filter, which CrmTask to fetch.
+     */
+    where?: CrmTaskWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of CrmTasks to fetch.
+     */
+    orderBy?: CrmTaskOrderByWithRelationInput | CrmTaskOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for CrmTasks.
+     */
+    cursor?: CrmTaskWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` CrmTasks from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` CrmTasks.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of CrmTasks.
+     */
+    distinct?: CrmTaskScalarFieldEnum | CrmTaskScalarFieldEnum[]
+  }
+
+  /**
+   * CrmTask findFirstOrThrow
+   */
+  export type CrmTaskFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmTask
+     */
+    select?: CrmTaskSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmTask
+     */
+    omit?: CrmTaskOmit<ExtArgs> | null
+    /**
+     * Filter, which CrmTask to fetch.
+     */
+    where?: CrmTaskWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of CrmTasks to fetch.
+     */
+    orderBy?: CrmTaskOrderByWithRelationInput | CrmTaskOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for CrmTasks.
+     */
+    cursor?: CrmTaskWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` CrmTasks from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` CrmTasks.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of CrmTasks.
+     */
+    distinct?: CrmTaskScalarFieldEnum | CrmTaskScalarFieldEnum[]
+  }
+
+  /**
+   * CrmTask findMany
+   */
+  export type CrmTaskFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmTask
+     */
+    select?: CrmTaskSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmTask
+     */
+    omit?: CrmTaskOmit<ExtArgs> | null
+    /**
+     * Filter, which CrmTasks to fetch.
+     */
+    where?: CrmTaskWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of CrmTasks to fetch.
+     */
+    orderBy?: CrmTaskOrderByWithRelationInput | CrmTaskOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing CrmTasks.
+     */
+    cursor?: CrmTaskWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` CrmTasks from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` CrmTasks.
+     */
+    skip?: number
+    distinct?: CrmTaskScalarFieldEnum | CrmTaskScalarFieldEnum[]
+  }
+
+  /**
+   * CrmTask create
+   */
+  export type CrmTaskCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmTask
+     */
+    select?: CrmTaskSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmTask
+     */
+    omit?: CrmTaskOmit<ExtArgs> | null
+    /**
+     * The data needed to create a CrmTask.
+     */
+    data: XOR<CrmTaskCreateInput, CrmTaskUncheckedCreateInput>
+  }
+
+  /**
+   * CrmTask createMany
+   */
+  export type CrmTaskCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many CrmTasks.
+     */
+    data: CrmTaskCreateManyInput | CrmTaskCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * CrmTask createManyAndReturn
+   */
+  export type CrmTaskCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmTask
+     */
+    select?: CrmTaskSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmTask
+     */
+    omit?: CrmTaskOmit<ExtArgs> | null
+    /**
+     * The data used to create many CrmTasks.
+     */
+    data: CrmTaskCreateManyInput | CrmTaskCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * CrmTask update
+   */
+  export type CrmTaskUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmTask
+     */
+    select?: CrmTaskSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmTask
+     */
+    omit?: CrmTaskOmit<ExtArgs> | null
+    /**
+     * The data needed to update a CrmTask.
+     */
+    data: XOR<CrmTaskUpdateInput, CrmTaskUncheckedUpdateInput>
+    /**
+     * Choose, which CrmTask to update.
+     */
+    where: CrmTaskWhereUniqueInput
+  }
+
+  /**
+   * CrmTask updateMany
+   */
+  export type CrmTaskUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update CrmTasks.
+     */
+    data: XOR<CrmTaskUpdateManyMutationInput, CrmTaskUncheckedUpdateManyInput>
+    /**
+     * Filter which CrmTasks to update
+     */
+    where?: CrmTaskWhereInput
+    /**
+     * Limit how many CrmTasks to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * CrmTask updateManyAndReturn
+   */
+  export type CrmTaskUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmTask
+     */
+    select?: CrmTaskSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmTask
+     */
+    omit?: CrmTaskOmit<ExtArgs> | null
+    /**
+     * The data used to update CrmTasks.
+     */
+    data: XOR<CrmTaskUpdateManyMutationInput, CrmTaskUncheckedUpdateManyInput>
+    /**
+     * Filter which CrmTasks to update
+     */
+    where?: CrmTaskWhereInput
+    /**
+     * Limit how many CrmTasks to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * CrmTask upsert
+   */
+  export type CrmTaskUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmTask
+     */
+    select?: CrmTaskSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmTask
+     */
+    omit?: CrmTaskOmit<ExtArgs> | null
+    /**
+     * The filter to search for the CrmTask to update in case it exists.
+     */
+    where: CrmTaskWhereUniqueInput
+    /**
+     * In case the CrmTask found by the `where` argument doesn't exist, create a new CrmTask with this data.
+     */
+    create: XOR<CrmTaskCreateInput, CrmTaskUncheckedCreateInput>
+    /**
+     * In case the CrmTask was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<CrmTaskUpdateInput, CrmTaskUncheckedUpdateInput>
+  }
+
+  /**
+   * CrmTask delete
+   */
+  export type CrmTaskDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmTask
+     */
+    select?: CrmTaskSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmTask
+     */
+    omit?: CrmTaskOmit<ExtArgs> | null
+    /**
+     * Filter which CrmTask to delete.
+     */
+    where: CrmTaskWhereUniqueInput
+  }
+
+  /**
+   * CrmTask deleteMany
+   */
+  export type CrmTaskDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which CrmTasks to delete
+     */
+    where?: CrmTaskWhereInput
+    /**
+     * Limit how many CrmTasks to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * CrmTask without action
+   */
+  export type CrmTaskDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmTask
+     */
+    select?: CrmTaskSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmTask
+     */
+    omit?: CrmTaskOmit<ExtArgs> | null
+  }
+
+
+  /**
+   * Model CrmDeal
+   */
+
+  export type AggregateCrmDeal = {
+    _count: CrmDealCountAggregateOutputType | null
+    _avg: CrmDealAvgAggregateOutputType | null
+    _sum: CrmDealSumAggregateOutputType | null
+    _min: CrmDealMinAggregateOutputType | null
+    _max: CrmDealMaxAggregateOutputType | null
+  }
+
+  export type CrmDealAvgAggregateOutputType = {
+    value: number | null
+    probability: number | null
+    sortOrder: number | null
+  }
+
+  export type CrmDealSumAggregateOutputType = {
+    value: number | null
+    probability: number | null
+    sortOrder: number | null
+  }
+
+  export type CrmDealMinAggregateOutputType = {
+    id: string | null
+    title: string | null
+    customerId: string | null
+    customerName: string | null
+    value: number | null
+    stage: string | null
+    probability: number | null
+    assignee: string | null
+    note: string | null
+    sortOrder: number | null
+    expectedCloseDate: Date | null
+    closedAt: Date | null
+    createdBy: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type CrmDealMaxAggregateOutputType = {
+    id: string | null
+    title: string | null
+    customerId: string | null
+    customerName: string | null
+    value: number | null
+    stage: string | null
+    probability: number | null
+    assignee: string | null
+    note: string | null
+    sortOrder: number | null
+    expectedCloseDate: Date | null
+    closedAt: Date | null
+    createdBy: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type CrmDealCountAggregateOutputType = {
+    id: number
+    title: number
+    customerId: number
+    customerName: number
+    value: number
+    stage: number
+    probability: number
+    assignee: number
+    note: number
+    sortOrder: number
+    expectedCloseDate: number
+    closedAt: number
+    createdBy: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type CrmDealAvgAggregateInputType = {
+    value?: true
+    probability?: true
+    sortOrder?: true
+  }
+
+  export type CrmDealSumAggregateInputType = {
+    value?: true
+    probability?: true
+    sortOrder?: true
+  }
+
+  export type CrmDealMinAggregateInputType = {
+    id?: true
+    title?: true
+    customerId?: true
+    customerName?: true
+    value?: true
+    stage?: true
+    probability?: true
+    assignee?: true
+    note?: true
+    sortOrder?: true
+    expectedCloseDate?: true
+    closedAt?: true
+    createdBy?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type CrmDealMaxAggregateInputType = {
+    id?: true
+    title?: true
+    customerId?: true
+    customerName?: true
+    value?: true
+    stage?: true
+    probability?: true
+    assignee?: true
+    note?: true
+    sortOrder?: true
+    expectedCloseDate?: true
+    closedAt?: true
+    createdBy?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type CrmDealCountAggregateInputType = {
+    id?: true
+    title?: true
+    customerId?: true
+    customerName?: true
+    value?: true
+    stage?: true
+    probability?: true
+    assignee?: true
+    note?: true
+    sortOrder?: true
+    expectedCloseDate?: true
+    closedAt?: true
+    createdBy?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type CrmDealAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which CrmDeal to aggregate.
+     */
+    where?: CrmDealWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of CrmDeals to fetch.
+     */
+    orderBy?: CrmDealOrderByWithRelationInput | CrmDealOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: CrmDealWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` CrmDeals from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` CrmDeals.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned CrmDeals
+    **/
+    _count?: true | CrmDealCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: CrmDealAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: CrmDealSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: CrmDealMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: CrmDealMaxAggregateInputType
+  }
+
+  export type GetCrmDealAggregateType<T extends CrmDealAggregateArgs> = {
+        [P in keyof T & keyof AggregateCrmDeal]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateCrmDeal[P]>
+      : GetScalarType<T[P], AggregateCrmDeal[P]>
+  }
+
+
+
+
+  export type CrmDealGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: CrmDealWhereInput
+    orderBy?: CrmDealOrderByWithAggregationInput | CrmDealOrderByWithAggregationInput[]
+    by: CrmDealScalarFieldEnum[] | CrmDealScalarFieldEnum
+    having?: CrmDealScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: CrmDealCountAggregateInputType | true
+    _avg?: CrmDealAvgAggregateInputType
+    _sum?: CrmDealSumAggregateInputType
+    _min?: CrmDealMinAggregateInputType
+    _max?: CrmDealMaxAggregateInputType
+  }
+
+  export type CrmDealGroupByOutputType = {
+    id: string
+    title: string
+    customerId: string | null
+    customerName: string | null
+    value: number
+    stage: string
+    probability: number
+    assignee: string | null
+    note: string | null
+    sortOrder: number
+    expectedCloseDate: Date | null
+    closedAt: Date | null
+    createdBy: string | null
+    createdAt: Date
+    updatedAt: Date
+    _count: CrmDealCountAggregateOutputType | null
+    _avg: CrmDealAvgAggregateOutputType | null
+    _sum: CrmDealSumAggregateOutputType | null
+    _min: CrmDealMinAggregateOutputType | null
+    _max: CrmDealMaxAggregateOutputType | null
+  }
+
+  type GetCrmDealGroupByPayload<T extends CrmDealGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<CrmDealGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof CrmDealGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], CrmDealGroupByOutputType[P]>
+            : GetScalarType<T[P], CrmDealGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type CrmDealSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    title?: boolean
+    customerId?: boolean
+    customerName?: boolean
+    value?: boolean
+    stage?: boolean
+    probability?: boolean
+    assignee?: boolean
+    note?: boolean
+    sortOrder?: boolean
+    expectedCloseDate?: boolean
+    closedAt?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["crmDeal"]>
+
+  export type CrmDealSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    title?: boolean
+    customerId?: boolean
+    customerName?: boolean
+    value?: boolean
+    stage?: boolean
+    probability?: boolean
+    assignee?: boolean
+    note?: boolean
+    sortOrder?: boolean
+    expectedCloseDate?: boolean
+    closedAt?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["crmDeal"]>
+
+  export type CrmDealSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    title?: boolean
+    customerId?: boolean
+    customerName?: boolean
+    value?: boolean
+    stage?: boolean
+    probability?: boolean
+    assignee?: boolean
+    note?: boolean
+    sortOrder?: boolean
+    expectedCloseDate?: boolean
+    closedAt?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["crmDeal"]>
+
+  export type CrmDealSelectScalar = {
+    id?: boolean
+    title?: boolean
+    customerId?: boolean
+    customerName?: boolean
+    value?: boolean
+    stage?: boolean
+    probability?: boolean
+    assignee?: boolean
+    note?: boolean
+    sortOrder?: boolean
+    expectedCloseDate?: boolean
+    closedAt?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type CrmDealOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "title" | "customerId" | "customerName" | "value" | "stage" | "probability" | "assignee" | "note" | "sortOrder" | "expectedCloseDate" | "closedAt" | "createdBy" | "createdAt" | "updatedAt", ExtArgs["result"]["crmDeal"]>
+
+  export type $CrmDealPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "CrmDeal"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      title: string
+      customerId: string | null
+      customerName: string | null
+      value: number
+      stage: string
+      probability: number
+      assignee: string | null
+      note: string | null
+      sortOrder: number
+      expectedCloseDate: Date | null
+      closedAt: Date | null
+      createdBy: string | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["crmDeal"]>
+    composites: {}
+  }
+
+  type CrmDealGetPayload<S extends boolean | null | undefined | CrmDealDefaultArgs> = $Result.GetResult<Prisma.$CrmDealPayload, S>
+
+  type CrmDealCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<CrmDealFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: CrmDealCountAggregateInputType | true
+    }
+
+  export interface CrmDealDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['CrmDeal'], meta: { name: 'CrmDeal' } }
+    /**
+     * Find zero or one CrmDeal that matches the filter.
+     * @param {CrmDealFindUniqueArgs} args - Arguments to find a CrmDeal
+     * @example
+     * // Get one CrmDeal
+     * const crmDeal = await prisma.crmDeal.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends CrmDealFindUniqueArgs>(args: SelectSubset<T, CrmDealFindUniqueArgs<ExtArgs>>): Prisma__CrmDealClient<$Result.GetResult<Prisma.$CrmDealPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one CrmDeal that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {CrmDealFindUniqueOrThrowArgs} args - Arguments to find a CrmDeal
+     * @example
+     * // Get one CrmDeal
+     * const crmDeal = await prisma.crmDeal.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends CrmDealFindUniqueOrThrowArgs>(args: SelectSubset<T, CrmDealFindUniqueOrThrowArgs<ExtArgs>>): Prisma__CrmDealClient<$Result.GetResult<Prisma.$CrmDealPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first CrmDeal that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmDealFindFirstArgs} args - Arguments to find a CrmDeal
+     * @example
+     * // Get one CrmDeal
+     * const crmDeal = await prisma.crmDeal.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends CrmDealFindFirstArgs>(args?: SelectSubset<T, CrmDealFindFirstArgs<ExtArgs>>): Prisma__CrmDealClient<$Result.GetResult<Prisma.$CrmDealPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first CrmDeal that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmDealFindFirstOrThrowArgs} args - Arguments to find a CrmDeal
+     * @example
+     * // Get one CrmDeal
+     * const crmDeal = await prisma.crmDeal.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends CrmDealFindFirstOrThrowArgs>(args?: SelectSubset<T, CrmDealFindFirstOrThrowArgs<ExtArgs>>): Prisma__CrmDealClient<$Result.GetResult<Prisma.$CrmDealPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more CrmDeals that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmDealFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all CrmDeals
+     * const crmDeals = await prisma.crmDeal.findMany()
+     * 
+     * // Get first 10 CrmDeals
+     * const crmDeals = await prisma.crmDeal.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const crmDealWithIdOnly = await prisma.crmDeal.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends CrmDealFindManyArgs>(args?: SelectSubset<T, CrmDealFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$CrmDealPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a CrmDeal.
+     * @param {CrmDealCreateArgs} args - Arguments to create a CrmDeal.
+     * @example
+     * // Create one CrmDeal
+     * const CrmDeal = await prisma.crmDeal.create({
+     *   data: {
+     *     // ... data to create a CrmDeal
+     *   }
+     * })
+     * 
+     */
+    create<T extends CrmDealCreateArgs>(args: SelectSubset<T, CrmDealCreateArgs<ExtArgs>>): Prisma__CrmDealClient<$Result.GetResult<Prisma.$CrmDealPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many CrmDeals.
+     * @param {CrmDealCreateManyArgs} args - Arguments to create many CrmDeals.
+     * @example
+     * // Create many CrmDeals
+     * const crmDeal = await prisma.crmDeal.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends CrmDealCreateManyArgs>(args?: SelectSubset<T, CrmDealCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many CrmDeals and returns the data saved in the database.
+     * @param {CrmDealCreateManyAndReturnArgs} args - Arguments to create many CrmDeals.
+     * @example
+     * // Create many CrmDeals
+     * const crmDeal = await prisma.crmDeal.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many CrmDeals and only return the `id`
+     * const crmDealWithIdOnly = await prisma.crmDeal.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends CrmDealCreateManyAndReturnArgs>(args?: SelectSubset<T, CrmDealCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$CrmDealPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a CrmDeal.
+     * @param {CrmDealDeleteArgs} args - Arguments to delete one CrmDeal.
+     * @example
+     * // Delete one CrmDeal
+     * const CrmDeal = await prisma.crmDeal.delete({
+     *   where: {
+     *     // ... filter to delete one CrmDeal
+     *   }
+     * })
+     * 
+     */
+    delete<T extends CrmDealDeleteArgs>(args: SelectSubset<T, CrmDealDeleteArgs<ExtArgs>>): Prisma__CrmDealClient<$Result.GetResult<Prisma.$CrmDealPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one CrmDeal.
+     * @param {CrmDealUpdateArgs} args - Arguments to update one CrmDeal.
+     * @example
+     * // Update one CrmDeal
+     * const crmDeal = await prisma.crmDeal.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends CrmDealUpdateArgs>(args: SelectSubset<T, CrmDealUpdateArgs<ExtArgs>>): Prisma__CrmDealClient<$Result.GetResult<Prisma.$CrmDealPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more CrmDeals.
+     * @param {CrmDealDeleteManyArgs} args - Arguments to filter CrmDeals to delete.
+     * @example
+     * // Delete a few CrmDeals
+     * const { count } = await prisma.crmDeal.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends CrmDealDeleteManyArgs>(args?: SelectSubset<T, CrmDealDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more CrmDeals.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmDealUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many CrmDeals
+     * const crmDeal = await prisma.crmDeal.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends CrmDealUpdateManyArgs>(args: SelectSubset<T, CrmDealUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more CrmDeals and returns the data updated in the database.
+     * @param {CrmDealUpdateManyAndReturnArgs} args - Arguments to update many CrmDeals.
+     * @example
+     * // Update many CrmDeals
+     * const crmDeal = await prisma.crmDeal.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more CrmDeals and only return the `id`
+     * const crmDealWithIdOnly = await prisma.crmDeal.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends CrmDealUpdateManyAndReturnArgs>(args: SelectSubset<T, CrmDealUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$CrmDealPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one CrmDeal.
+     * @param {CrmDealUpsertArgs} args - Arguments to update or create a CrmDeal.
+     * @example
+     * // Update or create a CrmDeal
+     * const crmDeal = await prisma.crmDeal.upsert({
+     *   create: {
+     *     // ... data to create a CrmDeal
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the CrmDeal we want to update
+     *   }
+     * })
+     */
+    upsert<T extends CrmDealUpsertArgs>(args: SelectSubset<T, CrmDealUpsertArgs<ExtArgs>>): Prisma__CrmDealClient<$Result.GetResult<Prisma.$CrmDealPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of CrmDeals.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmDealCountArgs} args - Arguments to filter CrmDeals to count.
+     * @example
+     * // Count the number of CrmDeals
+     * const count = await prisma.crmDeal.count({
+     *   where: {
+     *     // ... the filter for the CrmDeals we want to count
+     *   }
+     * })
+    **/
+    count<T extends CrmDealCountArgs>(
+      args?: Subset<T, CrmDealCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], CrmDealCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a CrmDeal.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmDealAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends CrmDealAggregateArgs>(args: Subset<T, CrmDealAggregateArgs>): Prisma.PrismaPromise<GetCrmDealAggregateType<T>>
+
+    /**
+     * Group by CrmDeal.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmDealGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends CrmDealGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: CrmDealGroupByArgs['orderBy'] }
+        : { orderBy?: CrmDealGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, CrmDealGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetCrmDealGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the CrmDeal model
+   */
+  readonly fields: CrmDealFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for CrmDeal.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__CrmDealClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the CrmDeal model
+   */
+  interface CrmDealFieldRefs {
+    readonly id: FieldRef<"CrmDeal", 'String'>
+    readonly title: FieldRef<"CrmDeal", 'String'>
+    readonly customerId: FieldRef<"CrmDeal", 'String'>
+    readonly customerName: FieldRef<"CrmDeal", 'String'>
+    readonly value: FieldRef<"CrmDeal", 'Float'>
+    readonly stage: FieldRef<"CrmDeal", 'String'>
+    readonly probability: FieldRef<"CrmDeal", 'Int'>
+    readonly assignee: FieldRef<"CrmDeal", 'String'>
+    readonly note: FieldRef<"CrmDeal", 'String'>
+    readonly sortOrder: FieldRef<"CrmDeal", 'Int'>
+    readonly expectedCloseDate: FieldRef<"CrmDeal", 'DateTime'>
+    readonly closedAt: FieldRef<"CrmDeal", 'DateTime'>
+    readonly createdBy: FieldRef<"CrmDeal", 'String'>
+    readonly createdAt: FieldRef<"CrmDeal", 'DateTime'>
+    readonly updatedAt: FieldRef<"CrmDeal", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * CrmDeal findUnique
+   */
+  export type CrmDealFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmDeal
+     */
+    select?: CrmDealSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmDeal
+     */
+    omit?: CrmDealOmit<ExtArgs> | null
+    /**
+     * Filter, which CrmDeal to fetch.
+     */
+    where: CrmDealWhereUniqueInput
+  }
+
+  /**
+   * CrmDeal findUniqueOrThrow
+   */
+  export type CrmDealFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmDeal
+     */
+    select?: CrmDealSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmDeal
+     */
+    omit?: CrmDealOmit<ExtArgs> | null
+    /**
+     * Filter, which CrmDeal to fetch.
+     */
+    where: CrmDealWhereUniqueInput
+  }
+
+  /**
+   * CrmDeal findFirst
+   */
+  export type CrmDealFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmDeal
+     */
+    select?: CrmDealSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmDeal
+     */
+    omit?: CrmDealOmit<ExtArgs> | null
+    /**
+     * Filter, which CrmDeal to fetch.
+     */
+    where?: CrmDealWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of CrmDeals to fetch.
+     */
+    orderBy?: CrmDealOrderByWithRelationInput | CrmDealOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for CrmDeals.
+     */
+    cursor?: CrmDealWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` CrmDeals from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` CrmDeals.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of CrmDeals.
+     */
+    distinct?: CrmDealScalarFieldEnum | CrmDealScalarFieldEnum[]
+  }
+
+  /**
+   * CrmDeal findFirstOrThrow
+   */
+  export type CrmDealFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmDeal
+     */
+    select?: CrmDealSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmDeal
+     */
+    omit?: CrmDealOmit<ExtArgs> | null
+    /**
+     * Filter, which CrmDeal to fetch.
+     */
+    where?: CrmDealWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of CrmDeals to fetch.
+     */
+    orderBy?: CrmDealOrderByWithRelationInput | CrmDealOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for CrmDeals.
+     */
+    cursor?: CrmDealWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` CrmDeals from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` CrmDeals.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of CrmDeals.
+     */
+    distinct?: CrmDealScalarFieldEnum | CrmDealScalarFieldEnum[]
+  }
+
+  /**
+   * CrmDeal findMany
+   */
+  export type CrmDealFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmDeal
+     */
+    select?: CrmDealSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmDeal
+     */
+    omit?: CrmDealOmit<ExtArgs> | null
+    /**
+     * Filter, which CrmDeals to fetch.
+     */
+    where?: CrmDealWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of CrmDeals to fetch.
+     */
+    orderBy?: CrmDealOrderByWithRelationInput | CrmDealOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing CrmDeals.
+     */
+    cursor?: CrmDealWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` CrmDeals from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` CrmDeals.
+     */
+    skip?: number
+    distinct?: CrmDealScalarFieldEnum | CrmDealScalarFieldEnum[]
+  }
+
+  /**
+   * CrmDeal create
+   */
+  export type CrmDealCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmDeal
+     */
+    select?: CrmDealSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmDeal
+     */
+    omit?: CrmDealOmit<ExtArgs> | null
+    /**
+     * The data needed to create a CrmDeal.
+     */
+    data: XOR<CrmDealCreateInput, CrmDealUncheckedCreateInput>
+  }
+
+  /**
+   * CrmDeal createMany
+   */
+  export type CrmDealCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many CrmDeals.
+     */
+    data: CrmDealCreateManyInput | CrmDealCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * CrmDeal createManyAndReturn
+   */
+  export type CrmDealCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmDeal
+     */
+    select?: CrmDealSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmDeal
+     */
+    omit?: CrmDealOmit<ExtArgs> | null
+    /**
+     * The data used to create many CrmDeals.
+     */
+    data: CrmDealCreateManyInput | CrmDealCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * CrmDeal update
+   */
+  export type CrmDealUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmDeal
+     */
+    select?: CrmDealSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmDeal
+     */
+    omit?: CrmDealOmit<ExtArgs> | null
+    /**
+     * The data needed to update a CrmDeal.
+     */
+    data: XOR<CrmDealUpdateInput, CrmDealUncheckedUpdateInput>
+    /**
+     * Choose, which CrmDeal to update.
+     */
+    where: CrmDealWhereUniqueInput
+  }
+
+  /**
+   * CrmDeal updateMany
+   */
+  export type CrmDealUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update CrmDeals.
+     */
+    data: XOR<CrmDealUpdateManyMutationInput, CrmDealUncheckedUpdateManyInput>
+    /**
+     * Filter which CrmDeals to update
+     */
+    where?: CrmDealWhereInput
+    /**
+     * Limit how many CrmDeals to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * CrmDeal updateManyAndReturn
+   */
+  export type CrmDealUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmDeal
+     */
+    select?: CrmDealSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmDeal
+     */
+    omit?: CrmDealOmit<ExtArgs> | null
+    /**
+     * The data used to update CrmDeals.
+     */
+    data: XOR<CrmDealUpdateManyMutationInput, CrmDealUncheckedUpdateManyInput>
+    /**
+     * Filter which CrmDeals to update
+     */
+    where?: CrmDealWhereInput
+    /**
+     * Limit how many CrmDeals to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * CrmDeal upsert
+   */
+  export type CrmDealUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmDeal
+     */
+    select?: CrmDealSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmDeal
+     */
+    omit?: CrmDealOmit<ExtArgs> | null
+    /**
+     * The filter to search for the CrmDeal to update in case it exists.
+     */
+    where: CrmDealWhereUniqueInput
+    /**
+     * In case the CrmDeal found by the `where` argument doesn't exist, create a new CrmDeal with this data.
+     */
+    create: XOR<CrmDealCreateInput, CrmDealUncheckedCreateInput>
+    /**
+     * In case the CrmDeal was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<CrmDealUpdateInput, CrmDealUncheckedUpdateInput>
+  }
+
+  /**
+   * CrmDeal delete
+   */
+  export type CrmDealDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmDeal
+     */
+    select?: CrmDealSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmDeal
+     */
+    omit?: CrmDealOmit<ExtArgs> | null
+    /**
+     * Filter which CrmDeal to delete.
+     */
+    where: CrmDealWhereUniqueInput
+  }
+
+  /**
+   * CrmDeal deleteMany
+   */
+  export type CrmDealDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which CrmDeals to delete
+     */
+    where?: CrmDealWhereInput
+    /**
+     * Limit how many CrmDeals to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * CrmDeal without action
+   */
+  export type CrmDealDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmDeal
+     */
+    select?: CrmDealSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmDeal
+     */
+    omit?: CrmDealOmit<ExtArgs> | null
+  }
+
+
+  /**
+   * Model CrmActivity
+   */
+
+  export type AggregateCrmActivity = {
+    _count: CrmActivityCountAggregateOutputType | null
+    _min: CrmActivityMinAggregateOutputType | null
+    _max: CrmActivityMaxAggregateOutputType | null
+  }
+
+  export type CrmActivityMinAggregateOutputType = {
+    id: string | null
+    module: string | null
+    action: string | null
+    description: string | null
+    userId: string | null
+    userName: string | null
+    entityId: string | null
+    entityName: string | null
+    metadata: string | null
+    createdAt: Date | null
+  }
+
+  export type CrmActivityMaxAggregateOutputType = {
+    id: string | null
+    module: string | null
+    action: string | null
+    description: string | null
+    userId: string | null
+    userName: string | null
+    entityId: string | null
+    entityName: string | null
+    metadata: string | null
+    createdAt: Date | null
+  }
+
+  export type CrmActivityCountAggregateOutputType = {
+    id: number
+    module: number
+    action: number
+    description: number
+    userId: number
+    userName: number
+    entityId: number
+    entityName: number
+    metadata: number
+    createdAt: number
+    _all: number
+  }
+
+
+  export type CrmActivityMinAggregateInputType = {
+    id?: true
+    module?: true
+    action?: true
+    description?: true
+    userId?: true
+    userName?: true
+    entityId?: true
+    entityName?: true
+    metadata?: true
+    createdAt?: true
+  }
+
+  export type CrmActivityMaxAggregateInputType = {
+    id?: true
+    module?: true
+    action?: true
+    description?: true
+    userId?: true
+    userName?: true
+    entityId?: true
+    entityName?: true
+    metadata?: true
+    createdAt?: true
+  }
+
+  export type CrmActivityCountAggregateInputType = {
+    id?: true
+    module?: true
+    action?: true
+    description?: true
+    userId?: true
+    userName?: true
+    entityId?: true
+    entityName?: true
+    metadata?: true
+    createdAt?: true
+    _all?: true
+  }
+
+  export type CrmActivityAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which CrmActivity to aggregate.
+     */
+    where?: CrmActivityWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of CrmActivities to fetch.
+     */
+    orderBy?: CrmActivityOrderByWithRelationInput | CrmActivityOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: CrmActivityWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` CrmActivities from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` CrmActivities.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned CrmActivities
+    **/
+    _count?: true | CrmActivityCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: CrmActivityMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: CrmActivityMaxAggregateInputType
+  }
+
+  export type GetCrmActivityAggregateType<T extends CrmActivityAggregateArgs> = {
+        [P in keyof T & keyof AggregateCrmActivity]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateCrmActivity[P]>
+      : GetScalarType<T[P], AggregateCrmActivity[P]>
+  }
+
+
+
+
+  export type CrmActivityGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: CrmActivityWhereInput
+    orderBy?: CrmActivityOrderByWithAggregationInput | CrmActivityOrderByWithAggregationInput[]
+    by: CrmActivityScalarFieldEnum[] | CrmActivityScalarFieldEnum
+    having?: CrmActivityScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: CrmActivityCountAggregateInputType | true
+    _min?: CrmActivityMinAggregateInputType
+    _max?: CrmActivityMaxAggregateInputType
+  }
+
+  export type CrmActivityGroupByOutputType = {
+    id: string
+    module: string
+    action: string
+    description: string
+    userId: string | null
+    userName: string | null
+    entityId: string | null
+    entityName: string | null
+    metadata: string | null
+    createdAt: Date
+    _count: CrmActivityCountAggregateOutputType | null
+    _min: CrmActivityMinAggregateOutputType | null
+    _max: CrmActivityMaxAggregateOutputType | null
+  }
+
+  type GetCrmActivityGroupByPayload<T extends CrmActivityGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<CrmActivityGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof CrmActivityGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], CrmActivityGroupByOutputType[P]>
+            : GetScalarType<T[P], CrmActivityGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type CrmActivitySelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    module?: boolean
+    action?: boolean
+    description?: boolean
+    userId?: boolean
+    userName?: boolean
+    entityId?: boolean
+    entityName?: boolean
+    metadata?: boolean
+    createdAt?: boolean
+  }, ExtArgs["result"]["crmActivity"]>
+
+  export type CrmActivitySelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    module?: boolean
+    action?: boolean
+    description?: boolean
+    userId?: boolean
+    userName?: boolean
+    entityId?: boolean
+    entityName?: boolean
+    metadata?: boolean
+    createdAt?: boolean
+  }, ExtArgs["result"]["crmActivity"]>
+
+  export type CrmActivitySelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    module?: boolean
+    action?: boolean
+    description?: boolean
+    userId?: boolean
+    userName?: boolean
+    entityId?: boolean
+    entityName?: boolean
+    metadata?: boolean
+    createdAt?: boolean
+  }, ExtArgs["result"]["crmActivity"]>
+
+  export type CrmActivitySelectScalar = {
+    id?: boolean
+    module?: boolean
+    action?: boolean
+    description?: boolean
+    userId?: boolean
+    userName?: boolean
+    entityId?: boolean
+    entityName?: boolean
+    metadata?: boolean
+    createdAt?: boolean
+  }
+
+  export type CrmActivityOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "module" | "action" | "description" | "userId" | "userName" | "entityId" | "entityName" | "metadata" | "createdAt", ExtArgs["result"]["crmActivity"]>
+
+  export type $CrmActivityPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "CrmActivity"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      module: string
+      action: string
+      description: string
+      userId: string | null
+      userName: string | null
+      entityId: string | null
+      entityName: string | null
+      metadata: string | null
+      createdAt: Date
+    }, ExtArgs["result"]["crmActivity"]>
+    composites: {}
+  }
+
+  type CrmActivityGetPayload<S extends boolean | null | undefined | CrmActivityDefaultArgs> = $Result.GetResult<Prisma.$CrmActivityPayload, S>
+
+  type CrmActivityCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<CrmActivityFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: CrmActivityCountAggregateInputType | true
+    }
+
+  export interface CrmActivityDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['CrmActivity'], meta: { name: 'CrmActivity' } }
+    /**
+     * Find zero or one CrmActivity that matches the filter.
+     * @param {CrmActivityFindUniqueArgs} args - Arguments to find a CrmActivity
+     * @example
+     * // Get one CrmActivity
+     * const crmActivity = await prisma.crmActivity.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends CrmActivityFindUniqueArgs>(args: SelectSubset<T, CrmActivityFindUniqueArgs<ExtArgs>>): Prisma__CrmActivityClient<$Result.GetResult<Prisma.$CrmActivityPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one CrmActivity that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {CrmActivityFindUniqueOrThrowArgs} args - Arguments to find a CrmActivity
+     * @example
+     * // Get one CrmActivity
+     * const crmActivity = await prisma.crmActivity.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends CrmActivityFindUniqueOrThrowArgs>(args: SelectSubset<T, CrmActivityFindUniqueOrThrowArgs<ExtArgs>>): Prisma__CrmActivityClient<$Result.GetResult<Prisma.$CrmActivityPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first CrmActivity that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmActivityFindFirstArgs} args - Arguments to find a CrmActivity
+     * @example
+     * // Get one CrmActivity
+     * const crmActivity = await prisma.crmActivity.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends CrmActivityFindFirstArgs>(args?: SelectSubset<T, CrmActivityFindFirstArgs<ExtArgs>>): Prisma__CrmActivityClient<$Result.GetResult<Prisma.$CrmActivityPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first CrmActivity that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmActivityFindFirstOrThrowArgs} args - Arguments to find a CrmActivity
+     * @example
+     * // Get one CrmActivity
+     * const crmActivity = await prisma.crmActivity.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends CrmActivityFindFirstOrThrowArgs>(args?: SelectSubset<T, CrmActivityFindFirstOrThrowArgs<ExtArgs>>): Prisma__CrmActivityClient<$Result.GetResult<Prisma.$CrmActivityPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more CrmActivities that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmActivityFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all CrmActivities
+     * const crmActivities = await prisma.crmActivity.findMany()
+     * 
+     * // Get first 10 CrmActivities
+     * const crmActivities = await prisma.crmActivity.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const crmActivityWithIdOnly = await prisma.crmActivity.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends CrmActivityFindManyArgs>(args?: SelectSubset<T, CrmActivityFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$CrmActivityPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a CrmActivity.
+     * @param {CrmActivityCreateArgs} args - Arguments to create a CrmActivity.
+     * @example
+     * // Create one CrmActivity
+     * const CrmActivity = await prisma.crmActivity.create({
+     *   data: {
+     *     // ... data to create a CrmActivity
+     *   }
+     * })
+     * 
+     */
+    create<T extends CrmActivityCreateArgs>(args: SelectSubset<T, CrmActivityCreateArgs<ExtArgs>>): Prisma__CrmActivityClient<$Result.GetResult<Prisma.$CrmActivityPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many CrmActivities.
+     * @param {CrmActivityCreateManyArgs} args - Arguments to create many CrmActivities.
+     * @example
+     * // Create many CrmActivities
+     * const crmActivity = await prisma.crmActivity.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends CrmActivityCreateManyArgs>(args?: SelectSubset<T, CrmActivityCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many CrmActivities and returns the data saved in the database.
+     * @param {CrmActivityCreateManyAndReturnArgs} args - Arguments to create many CrmActivities.
+     * @example
+     * // Create many CrmActivities
+     * const crmActivity = await prisma.crmActivity.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many CrmActivities and only return the `id`
+     * const crmActivityWithIdOnly = await prisma.crmActivity.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends CrmActivityCreateManyAndReturnArgs>(args?: SelectSubset<T, CrmActivityCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$CrmActivityPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a CrmActivity.
+     * @param {CrmActivityDeleteArgs} args - Arguments to delete one CrmActivity.
+     * @example
+     * // Delete one CrmActivity
+     * const CrmActivity = await prisma.crmActivity.delete({
+     *   where: {
+     *     // ... filter to delete one CrmActivity
+     *   }
+     * })
+     * 
+     */
+    delete<T extends CrmActivityDeleteArgs>(args: SelectSubset<T, CrmActivityDeleteArgs<ExtArgs>>): Prisma__CrmActivityClient<$Result.GetResult<Prisma.$CrmActivityPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one CrmActivity.
+     * @param {CrmActivityUpdateArgs} args - Arguments to update one CrmActivity.
+     * @example
+     * // Update one CrmActivity
+     * const crmActivity = await prisma.crmActivity.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends CrmActivityUpdateArgs>(args: SelectSubset<T, CrmActivityUpdateArgs<ExtArgs>>): Prisma__CrmActivityClient<$Result.GetResult<Prisma.$CrmActivityPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more CrmActivities.
+     * @param {CrmActivityDeleteManyArgs} args - Arguments to filter CrmActivities to delete.
+     * @example
+     * // Delete a few CrmActivities
+     * const { count } = await prisma.crmActivity.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends CrmActivityDeleteManyArgs>(args?: SelectSubset<T, CrmActivityDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more CrmActivities.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmActivityUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many CrmActivities
+     * const crmActivity = await prisma.crmActivity.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends CrmActivityUpdateManyArgs>(args: SelectSubset<T, CrmActivityUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more CrmActivities and returns the data updated in the database.
+     * @param {CrmActivityUpdateManyAndReturnArgs} args - Arguments to update many CrmActivities.
+     * @example
+     * // Update many CrmActivities
+     * const crmActivity = await prisma.crmActivity.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more CrmActivities and only return the `id`
+     * const crmActivityWithIdOnly = await prisma.crmActivity.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends CrmActivityUpdateManyAndReturnArgs>(args: SelectSubset<T, CrmActivityUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$CrmActivityPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one CrmActivity.
+     * @param {CrmActivityUpsertArgs} args - Arguments to update or create a CrmActivity.
+     * @example
+     * // Update or create a CrmActivity
+     * const crmActivity = await prisma.crmActivity.upsert({
+     *   create: {
+     *     // ... data to create a CrmActivity
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the CrmActivity we want to update
+     *   }
+     * })
+     */
+    upsert<T extends CrmActivityUpsertArgs>(args: SelectSubset<T, CrmActivityUpsertArgs<ExtArgs>>): Prisma__CrmActivityClient<$Result.GetResult<Prisma.$CrmActivityPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of CrmActivities.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmActivityCountArgs} args - Arguments to filter CrmActivities to count.
+     * @example
+     * // Count the number of CrmActivities
+     * const count = await prisma.crmActivity.count({
+     *   where: {
+     *     // ... the filter for the CrmActivities we want to count
+     *   }
+     * })
+    **/
+    count<T extends CrmActivityCountArgs>(
+      args?: Subset<T, CrmActivityCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], CrmActivityCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a CrmActivity.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmActivityAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends CrmActivityAggregateArgs>(args: Subset<T, CrmActivityAggregateArgs>): Prisma.PrismaPromise<GetCrmActivityAggregateType<T>>
+
+    /**
+     * Group by CrmActivity.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmActivityGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends CrmActivityGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: CrmActivityGroupByArgs['orderBy'] }
+        : { orderBy?: CrmActivityGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, CrmActivityGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetCrmActivityGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the CrmActivity model
+   */
+  readonly fields: CrmActivityFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for CrmActivity.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__CrmActivityClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the CrmActivity model
+   */
+  interface CrmActivityFieldRefs {
+    readonly id: FieldRef<"CrmActivity", 'String'>
+    readonly module: FieldRef<"CrmActivity", 'String'>
+    readonly action: FieldRef<"CrmActivity", 'String'>
+    readonly description: FieldRef<"CrmActivity", 'String'>
+    readonly userId: FieldRef<"CrmActivity", 'String'>
+    readonly userName: FieldRef<"CrmActivity", 'String'>
+    readonly entityId: FieldRef<"CrmActivity", 'String'>
+    readonly entityName: FieldRef<"CrmActivity", 'String'>
+    readonly metadata: FieldRef<"CrmActivity", 'String'>
+    readonly createdAt: FieldRef<"CrmActivity", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * CrmActivity findUnique
+   */
+  export type CrmActivityFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmActivity
+     */
+    select?: CrmActivitySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmActivity
+     */
+    omit?: CrmActivityOmit<ExtArgs> | null
+    /**
+     * Filter, which CrmActivity to fetch.
+     */
+    where: CrmActivityWhereUniqueInput
+  }
+
+  /**
+   * CrmActivity findUniqueOrThrow
+   */
+  export type CrmActivityFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmActivity
+     */
+    select?: CrmActivitySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmActivity
+     */
+    omit?: CrmActivityOmit<ExtArgs> | null
+    /**
+     * Filter, which CrmActivity to fetch.
+     */
+    where: CrmActivityWhereUniqueInput
+  }
+
+  /**
+   * CrmActivity findFirst
+   */
+  export type CrmActivityFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmActivity
+     */
+    select?: CrmActivitySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmActivity
+     */
+    omit?: CrmActivityOmit<ExtArgs> | null
+    /**
+     * Filter, which CrmActivity to fetch.
+     */
+    where?: CrmActivityWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of CrmActivities to fetch.
+     */
+    orderBy?: CrmActivityOrderByWithRelationInput | CrmActivityOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for CrmActivities.
+     */
+    cursor?: CrmActivityWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` CrmActivities from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` CrmActivities.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of CrmActivities.
+     */
+    distinct?: CrmActivityScalarFieldEnum | CrmActivityScalarFieldEnum[]
+  }
+
+  /**
+   * CrmActivity findFirstOrThrow
+   */
+  export type CrmActivityFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmActivity
+     */
+    select?: CrmActivitySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmActivity
+     */
+    omit?: CrmActivityOmit<ExtArgs> | null
+    /**
+     * Filter, which CrmActivity to fetch.
+     */
+    where?: CrmActivityWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of CrmActivities to fetch.
+     */
+    orderBy?: CrmActivityOrderByWithRelationInput | CrmActivityOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for CrmActivities.
+     */
+    cursor?: CrmActivityWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` CrmActivities from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` CrmActivities.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of CrmActivities.
+     */
+    distinct?: CrmActivityScalarFieldEnum | CrmActivityScalarFieldEnum[]
+  }
+
+  /**
+   * CrmActivity findMany
+   */
+  export type CrmActivityFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmActivity
+     */
+    select?: CrmActivitySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmActivity
+     */
+    omit?: CrmActivityOmit<ExtArgs> | null
+    /**
+     * Filter, which CrmActivities to fetch.
+     */
+    where?: CrmActivityWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of CrmActivities to fetch.
+     */
+    orderBy?: CrmActivityOrderByWithRelationInput | CrmActivityOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing CrmActivities.
+     */
+    cursor?: CrmActivityWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` CrmActivities from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` CrmActivities.
+     */
+    skip?: number
+    distinct?: CrmActivityScalarFieldEnum | CrmActivityScalarFieldEnum[]
+  }
+
+  /**
+   * CrmActivity create
+   */
+  export type CrmActivityCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmActivity
+     */
+    select?: CrmActivitySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmActivity
+     */
+    omit?: CrmActivityOmit<ExtArgs> | null
+    /**
+     * The data needed to create a CrmActivity.
+     */
+    data: XOR<CrmActivityCreateInput, CrmActivityUncheckedCreateInput>
+  }
+
+  /**
+   * CrmActivity createMany
+   */
+  export type CrmActivityCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many CrmActivities.
+     */
+    data: CrmActivityCreateManyInput | CrmActivityCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * CrmActivity createManyAndReturn
+   */
+  export type CrmActivityCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmActivity
+     */
+    select?: CrmActivitySelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmActivity
+     */
+    omit?: CrmActivityOmit<ExtArgs> | null
+    /**
+     * The data used to create many CrmActivities.
+     */
+    data: CrmActivityCreateManyInput | CrmActivityCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * CrmActivity update
+   */
+  export type CrmActivityUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmActivity
+     */
+    select?: CrmActivitySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmActivity
+     */
+    omit?: CrmActivityOmit<ExtArgs> | null
+    /**
+     * The data needed to update a CrmActivity.
+     */
+    data: XOR<CrmActivityUpdateInput, CrmActivityUncheckedUpdateInput>
+    /**
+     * Choose, which CrmActivity to update.
+     */
+    where: CrmActivityWhereUniqueInput
+  }
+
+  /**
+   * CrmActivity updateMany
+   */
+  export type CrmActivityUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update CrmActivities.
+     */
+    data: XOR<CrmActivityUpdateManyMutationInput, CrmActivityUncheckedUpdateManyInput>
+    /**
+     * Filter which CrmActivities to update
+     */
+    where?: CrmActivityWhereInput
+    /**
+     * Limit how many CrmActivities to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * CrmActivity updateManyAndReturn
+   */
+  export type CrmActivityUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmActivity
+     */
+    select?: CrmActivitySelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmActivity
+     */
+    omit?: CrmActivityOmit<ExtArgs> | null
+    /**
+     * The data used to update CrmActivities.
+     */
+    data: XOR<CrmActivityUpdateManyMutationInput, CrmActivityUncheckedUpdateManyInput>
+    /**
+     * Filter which CrmActivities to update
+     */
+    where?: CrmActivityWhereInput
+    /**
+     * Limit how many CrmActivities to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * CrmActivity upsert
+   */
+  export type CrmActivityUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmActivity
+     */
+    select?: CrmActivitySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmActivity
+     */
+    omit?: CrmActivityOmit<ExtArgs> | null
+    /**
+     * The filter to search for the CrmActivity to update in case it exists.
+     */
+    where: CrmActivityWhereUniqueInput
+    /**
+     * In case the CrmActivity found by the `where` argument doesn't exist, create a new CrmActivity with this data.
+     */
+    create: XOR<CrmActivityCreateInput, CrmActivityUncheckedCreateInput>
+    /**
+     * In case the CrmActivity was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<CrmActivityUpdateInput, CrmActivityUncheckedUpdateInput>
+  }
+
+  /**
+   * CrmActivity delete
+   */
+  export type CrmActivityDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmActivity
+     */
+    select?: CrmActivitySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmActivity
+     */
+    omit?: CrmActivityOmit<ExtArgs> | null
+    /**
+     * Filter which CrmActivity to delete.
+     */
+    where: CrmActivityWhereUniqueInput
+  }
+
+  /**
+   * CrmActivity deleteMany
+   */
+  export type CrmActivityDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which CrmActivities to delete
+     */
+    where?: CrmActivityWhereInput
+    /**
+     * Limit how many CrmActivities to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * CrmActivity without action
+   */
+  export type CrmActivityDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmActivity
+     */
+    select?: CrmActivitySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmActivity
+     */
+    omit?: CrmActivityOmit<ExtArgs> | null
+  }
+
+
+  /**
+   * Model CrmZaloLog
+   */
+
+  export type AggregateCrmZaloLog = {
+    _count: CrmZaloLogCountAggregateOutputType | null
+    _min: CrmZaloLogMinAggregateOutputType | null
+    _max: CrmZaloLogMaxAggregateOutputType | null
+  }
+
+  export type CrmZaloLogMinAggregateOutputType = {
+    id: string | null
+    customerId: string | null
+    customerName: string | null
+    direction: string | null
+    content: string | null
+    staffName: string | null
+    starred: boolean | null
+    createdAt: Date | null
+  }
+
+  export type CrmZaloLogMaxAggregateOutputType = {
+    id: string | null
+    customerId: string | null
+    customerName: string | null
+    direction: string | null
+    content: string | null
+    staffName: string | null
+    starred: boolean | null
+    createdAt: Date | null
+  }
+
+  export type CrmZaloLogCountAggregateOutputType = {
+    id: number
+    customerId: number
+    customerName: number
+    direction: number
+    content: number
+    staffName: number
+    starred: number
+    createdAt: number
+    _all: number
+  }
+
+
+  export type CrmZaloLogMinAggregateInputType = {
+    id?: true
+    customerId?: true
+    customerName?: true
+    direction?: true
+    content?: true
+    staffName?: true
+    starred?: true
+    createdAt?: true
+  }
+
+  export type CrmZaloLogMaxAggregateInputType = {
+    id?: true
+    customerId?: true
+    customerName?: true
+    direction?: true
+    content?: true
+    staffName?: true
+    starred?: true
+    createdAt?: true
+  }
+
+  export type CrmZaloLogCountAggregateInputType = {
+    id?: true
+    customerId?: true
+    customerName?: true
+    direction?: true
+    content?: true
+    staffName?: true
+    starred?: true
+    createdAt?: true
+    _all?: true
+  }
+
+  export type CrmZaloLogAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which CrmZaloLog to aggregate.
+     */
+    where?: CrmZaloLogWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of CrmZaloLogs to fetch.
+     */
+    orderBy?: CrmZaloLogOrderByWithRelationInput | CrmZaloLogOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: CrmZaloLogWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` CrmZaloLogs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` CrmZaloLogs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned CrmZaloLogs
+    **/
+    _count?: true | CrmZaloLogCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: CrmZaloLogMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: CrmZaloLogMaxAggregateInputType
+  }
+
+  export type GetCrmZaloLogAggregateType<T extends CrmZaloLogAggregateArgs> = {
+        [P in keyof T & keyof AggregateCrmZaloLog]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateCrmZaloLog[P]>
+      : GetScalarType<T[P], AggregateCrmZaloLog[P]>
+  }
+
+
+
+
+  export type CrmZaloLogGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: CrmZaloLogWhereInput
+    orderBy?: CrmZaloLogOrderByWithAggregationInput | CrmZaloLogOrderByWithAggregationInput[]
+    by: CrmZaloLogScalarFieldEnum[] | CrmZaloLogScalarFieldEnum
+    having?: CrmZaloLogScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: CrmZaloLogCountAggregateInputType | true
+    _min?: CrmZaloLogMinAggregateInputType
+    _max?: CrmZaloLogMaxAggregateInputType
+  }
+
+  export type CrmZaloLogGroupByOutputType = {
+    id: string
+    customerId: string
+    customerName: string | null
+    direction: string
+    content: string
+    staffName: string | null
+    starred: boolean
+    createdAt: Date
+    _count: CrmZaloLogCountAggregateOutputType | null
+    _min: CrmZaloLogMinAggregateOutputType | null
+    _max: CrmZaloLogMaxAggregateOutputType | null
+  }
+
+  type GetCrmZaloLogGroupByPayload<T extends CrmZaloLogGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<CrmZaloLogGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof CrmZaloLogGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], CrmZaloLogGroupByOutputType[P]>
+            : GetScalarType<T[P], CrmZaloLogGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type CrmZaloLogSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    customerId?: boolean
+    customerName?: boolean
+    direction?: boolean
+    content?: boolean
+    staffName?: boolean
+    starred?: boolean
+    createdAt?: boolean
+  }, ExtArgs["result"]["crmZaloLog"]>
+
+  export type CrmZaloLogSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    customerId?: boolean
+    customerName?: boolean
+    direction?: boolean
+    content?: boolean
+    staffName?: boolean
+    starred?: boolean
+    createdAt?: boolean
+  }, ExtArgs["result"]["crmZaloLog"]>
+
+  export type CrmZaloLogSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    customerId?: boolean
+    customerName?: boolean
+    direction?: boolean
+    content?: boolean
+    staffName?: boolean
+    starred?: boolean
+    createdAt?: boolean
+  }, ExtArgs["result"]["crmZaloLog"]>
+
+  export type CrmZaloLogSelectScalar = {
+    id?: boolean
+    customerId?: boolean
+    customerName?: boolean
+    direction?: boolean
+    content?: boolean
+    staffName?: boolean
+    starred?: boolean
+    createdAt?: boolean
+  }
+
+  export type CrmZaloLogOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "customerId" | "customerName" | "direction" | "content" | "staffName" | "starred" | "createdAt", ExtArgs["result"]["crmZaloLog"]>
+
+  export type $CrmZaloLogPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "CrmZaloLog"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      customerId: string
+      customerName: string | null
+      direction: string
+      content: string
+      staffName: string | null
+      starred: boolean
+      createdAt: Date
+    }, ExtArgs["result"]["crmZaloLog"]>
+    composites: {}
+  }
+
+  type CrmZaloLogGetPayload<S extends boolean | null | undefined | CrmZaloLogDefaultArgs> = $Result.GetResult<Prisma.$CrmZaloLogPayload, S>
+
+  type CrmZaloLogCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<CrmZaloLogFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: CrmZaloLogCountAggregateInputType | true
+    }
+
+  export interface CrmZaloLogDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['CrmZaloLog'], meta: { name: 'CrmZaloLog' } }
+    /**
+     * Find zero or one CrmZaloLog that matches the filter.
+     * @param {CrmZaloLogFindUniqueArgs} args - Arguments to find a CrmZaloLog
+     * @example
+     * // Get one CrmZaloLog
+     * const crmZaloLog = await prisma.crmZaloLog.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends CrmZaloLogFindUniqueArgs>(args: SelectSubset<T, CrmZaloLogFindUniqueArgs<ExtArgs>>): Prisma__CrmZaloLogClient<$Result.GetResult<Prisma.$CrmZaloLogPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one CrmZaloLog that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {CrmZaloLogFindUniqueOrThrowArgs} args - Arguments to find a CrmZaloLog
+     * @example
+     * // Get one CrmZaloLog
+     * const crmZaloLog = await prisma.crmZaloLog.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends CrmZaloLogFindUniqueOrThrowArgs>(args: SelectSubset<T, CrmZaloLogFindUniqueOrThrowArgs<ExtArgs>>): Prisma__CrmZaloLogClient<$Result.GetResult<Prisma.$CrmZaloLogPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first CrmZaloLog that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmZaloLogFindFirstArgs} args - Arguments to find a CrmZaloLog
+     * @example
+     * // Get one CrmZaloLog
+     * const crmZaloLog = await prisma.crmZaloLog.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends CrmZaloLogFindFirstArgs>(args?: SelectSubset<T, CrmZaloLogFindFirstArgs<ExtArgs>>): Prisma__CrmZaloLogClient<$Result.GetResult<Prisma.$CrmZaloLogPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first CrmZaloLog that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmZaloLogFindFirstOrThrowArgs} args - Arguments to find a CrmZaloLog
+     * @example
+     * // Get one CrmZaloLog
+     * const crmZaloLog = await prisma.crmZaloLog.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends CrmZaloLogFindFirstOrThrowArgs>(args?: SelectSubset<T, CrmZaloLogFindFirstOrThrowArgs<ExtArgs>>): Prisma__CrmZaloLogClient<$Result.GetResult<Prisma.$CrmZaloLogPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more CrmZaloLogs that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmZaloLogFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all CrmZaloLogs
+     * const crmZaloLogs = await prisma.crmZaloLog.findMany()
+     * 
+     * // Get first 10 CrmZaloLogs
+     * const crmZaloLogs = await prisma.crmZaloLog.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const crmZaloLogWithIdOnly = await prisma.crmZaloLog.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends CrmZaloLogFindManyArgs>(args?: SelectSubset<T, CrmZaloLogFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$CrmZaloLogPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a CrmZaloLog.
+     * @param {CrmZaloLogCreateArgs} args - Arguments to create a CrmZaloLog.
+     * @example
+     * // Create one CrmZaloLog
+     * const CrmZaloLog = await prisma.crmZaloLog.create({
+     *   data: {
+     *     // ... data to create a CrmZaloLog
+     *   }
+     * })
+     * 
+     */
+    create<T extends CrmZaloLogCreateArgs>(args: SelectSubset<T, CrmZaloLogCreateArgs<ExtArgs>>): Prisma__CrmZaloLogClient<$Result.GetResult<Prisma.$CrmZaloLogPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many CrmZaloLogs.
+     * @param {CrmZaloLogCreateManyArgs} args - Arguments to create many CrmZaloLogs.
+     * @example
+     * // Create many CrmZaloLogs
+     * const crmZaloLog = await prisma.crmZaloLog.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends CrmZaloLogCreateManyArgs>(args?: SelectSubset<T, CrmZaloLogCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many CrmZaloLogs and returns the data saved in the database.
+     * @param {CrmZaloLogCreateManyAndReturnArgs} args - Arguments to create many CrmZaloLogs.
+     * @example
+     * // Create many CrmZaloLogs
+     * const crmZaloLog = await prisma.crmZaloLog.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many CrmZaloLogs and only return the `id`
+     * const crmZaloLogWithIdOnly = await prisma.crmZaloLog.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends CrmZaloLogCreateManyAndReturnArgs>(args?: SelectSubset<T, CrmZaloLogCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$CrmZaloLogPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a CrmZaloLog.
+     * @param {CrmZaloLogDeleteArgs} args - Arguments to delete one CrmZaloLog.
+     * @example
+     * // Delete one CrmZaloLog
+     * const CrmZaloLog = await prisma.crmZaloLog.delete({
+     *   where: {
+     *     // ... filter to delete one CrmZaloLog
+     *   }
+     * })
+     * 
+     */
+    delete<T extends CrmZaloLogDeleteArgs>(args: SelectSubset<T, CrmZaloLogDeleteArgs<ExtArgs>>): Prisma__CrmZaloLogClient<$Result.GetResult<Prisma.$CrmZaloLogPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one CrmZaloLog.
+     * @param {CrmZaloLogUpdateArgs} args - Arguments to update one CrmZaloLog.
+     * @example
+     * // Update one CrmZaloLog
+     * const crmZaloLog = await prisma.crmZaloLog.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends CrmZaloLogUpdateArgs>(args: SelectSubset<T, CrmZaloLogUpdateArgs<ExtArgs>>): Prisma__CrmZaloLogClient<$Result.GetResult<Prisma.$CrmZaloLogPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more CrmZaloLogs.
+     * @param {CrmZaloLogDeleteManyArgs} args - Arguments to filter CrmZaloLogs to delete.
+     * @example
+     * // Delete a few CrmZaloLogs
+     * const { count } = await prisma.crmZaloLog.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends CrmZaloLogDeleteManyArgs>(args?: SelectSubset<T, CrmZaloLogDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more CrmZaloLogs.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmZaloLogUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many CrmZaloLogs
+     * const crmZaloLog = await prisma.crmZaloLog.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends CrmZaloLogUpdateManyArgs>(args: SelectSubset<T, CrmZaloLogUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more CrmZaloLogs and returns the data updated in the database.
+     * @param {CrmZaloLogUpdateManyAndReturnArgs} args - Arguments to update many CrmZaloLogs.
+     * @example
+     * // Update many CrmZaloLogs
+     * const crmZaloLog = await prisma.crmZaloLog.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more CrmZaloLogs and only return the `id`
+     * const crmZaloLogWithIdOnly = await prisma.crmZaloLog.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends CrmZaloLogUpdateManyAndReturnArgs>(args: SelectSubset<T, CrmZaloLogUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$CrmZaloLogPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one CrmZaloLog.
+     * @param {CrmZaloLogUpsertArgs} args - Arguments to update or create a CrmZaloLog.
+     * @example
+     * // Update or create a CrmZaloLog
+     * const crmZaloLog = await prisma.crmZaloLog.upsert({
+     *   create: {
+     *     // ... data to create a CrmZaloLog
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the CrmZaloLog we want to update
+     *   }
+     * })
+     */
+    upsert<T extends CrmZaloLogUpsertArgs>(args: SelectSubset<T, CrmZaloLogUpsertArgs<ExtArgs>>): Prisma__CrmZaloLogClient<$Result.GetResult<Prisma.$CrmZaloLogPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of CrmZaloLogs.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmZaloLogCountArgs} args - Arguments to filter CrmZaloLogs to count.
+     * @example
+     * // Count the number of CrmZaloLogs
+     * const count = await prisma.crmZaloLog.count({
+     *   where: {
+     *     // ... the filter for the CrmZaloLogs we want to count
+     *   }
+     * })
+    **/
+    count<T extends CrmZaloLogCountArgs>(
+      args?: Subset<T, CrmZaloLogCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], CrmZaloLogCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a CrmZaloLog.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmZaloLogAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends CrmZaloLogAggregateArgs>(args: Subset<T, CrmZaloLogAggregateArgs>): Prisma.PrismaPromise<GetCrmZaloLogAggregateType<T>>
+
+    /**
+     * Group by CrmZaloLog.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmZaloLogGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends CrmZaloLogGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: CrmZaloLogGroupByArgs['orderBy'] }
+        : { orderBy?: CrmZaloLogGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, CrmZaloLogGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetCrmZaloLogGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the CrmZaloLog model
+   */
+  readonly fields: CrmZaloLogFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for CrmZaloLog.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__CrmZaloLogClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the CrmZaloLog model
+   */
+  interface CrmZaloLogFieldRefs {
+    readonly id: FieldRef<"CrmZaloLog", 'String'>
+    readonly customerId: FieldRef<"CrmZaloLog", 'String'>
+    readonly customerName: FieldRef<"CrmZaloLog", 'String'>
+    readonly direction: FieldRef<"CrmZaloLog", 'String'>
+    readonly content: FieldRef<"CrmZaloLog", 'String'>
+    readonly staffName: FieldRef<"CrmZaloLog", 'String'>
+    readonly starred: FieldRef<"CrmZaloLog", 'Boolean'>
+    readonly createdAt: FieldRef<"CrmZaloLog", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * CrmZaloLog findUnique
+   */
+  export type CrmZaloLogFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmZaloLog
+     */
+    select?: CrmZaloLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmZaloLog
+     */
+    omit?: CrmZaloLogOmit<ExtArgs> | null
+    /**
+     * Filter, which CrmZaloLog to fetch.
+     */
+    where: CrmZaloLogWhereUniqueInput
+  }
+
+  /**
+   * CrmZaloLog findUniqueOrThrow
+   */
+  export type CrmZaloLogFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmZaloLog
+     */
+    select?: CrmZaloLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmZaloLog
+     */
+    omit?: CrmZaloLogOmit<ExtArgs> | null
+    /**
+     * Filter, which CrmZaloLog to fetch.
+     */
+    where: CrmZaloLogWhereUniqueInput
+  }
+
+  /**
+   * CrmZaloLog findFirst
+   */
+  export type CrmZaloLogFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmZaloLog
+     */
+    select?: CrmZaloLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmZaloLog
+     */
+    omit?: CrmZaloLogOmit<ExtArgs> | null
+    /**
+     * Filter, which CrmZaloLog to fetch.
+     */
+    where?: CrmZaloLogWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of CrmZaloLogs to fetch.
+     */
+    orderBy?: CrmZaloLogOrderByWithRelationInput | CrmZaloLogOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for CrmZaloLogs.
+     */
+    cursor?: CrmZaloLogWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` CrmZaloLogs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` CrmZaloLogs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of CrmZaloLogs.
+     */
+    distinct?: CrmZaloLogScalarFieldEnum | CrmZaloLogScalarFieldEnum[]
+  }
+
+  /**
+   * CrmZaloLog findFirstOrThrow
+   */
+  export type CrmZaloLogFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmZaloLog
+     */
+    select?: CrmZaloLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmZaloLog
+     */
+    omit?: CrmZaloLogOmit<ExtArgs> | null
+    /**
+     * Filter, which CrmZaloLog to fetch.
+     */
+    where?: CrmZaloLogWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of CrmZaloLogs to fetch.
+     */
+    orderBy?: CrmZaloLogOrderByWithRelationInput | CrmZaloLogOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for CrmZaloLogs.
+     */
+    cursor?: CrmZaloLogWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` CrmZaloLogs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` CrmZaloLogs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of CrmZaloLogs.
+     */
+    distinct?: CrmZaloLogScalarFieldEnum | CrmZaloLogScalarFieldEnum[]
+  }
+
+  /**
+   * CrmZaloLog findMany
+   */
+  export type CrmZaloLogFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmZaloLog
+     */
+    select?: CrmZaloLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmZaloLog
+     */
+    omit?: CrmZaloLogOmit<ExtArgs> | null
+    /**
+     * Filter, which CrmZaloLogs to fetch.
+     */
+    where?: CrmZaloLogWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of CrmZaloLogs to fetch.
+     */
+    orderBy?: CrmZaloLogOrderByWithRelationInput | CrmZaloLogOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing CrmZaloLogs.
+     */
+    cursor?: CrmZaloLogWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` CrmZaloLogs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` CrmZaloLogs.
+     */
+    skip?: number
+    distinct?: CrmZaloLogScalarFieldEnum | CrmZaloLogScalarFieldEnum[]
+  }
+
+  /**
+   * CrmZaloLog create
+   */
+  export type CrmZaloLogCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmZaloLog
+     */
+    select?: CrmZaloLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmZaloLog
+     */
+    omit?: CrmZaloLogOmit<ExtArgs> | null
+    /**
+     * The data needed to create a CrmZaloLog.
+     */
+    data: XOR<CrmZaloLogCreateInput, CrmZaloLogUncheckedCreateInput>
+  }
+
+  /**
+   * CrmZaloLog createMany
+   */
+  export type CrmZaloLogCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many CrmZaloLogs.
+     */
+    data: CrmZaloLogCreateManyInput | CrmZaloLogCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * CrmZaloLog createManyAndReturn
+   */
+  export type CrmZaloLogCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmZaloLog
+     */
+    select?: CrmZaloLogSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmZaloLog
+     */
+    omit?: CrmZaloLogOmit<ExtArgs> | null
+    /**
+     * The data used to create many CrmZaloLogs.
+     */
+    data: CrmZaloLogCreateManyInput | CrmZaloLogCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * CrmZaloLog update
+   */
+  export type CrmZaloLogUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmZaloLog
+     */
+    select?: CrmZaloLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmZaloLog
+     */
+    omit?: CrmZaloLogOmit<ExtArgs> | null
+    /**
+     * The data needed to update a CrmZaloLog.
+     */
+    data: XOR<CrmZaloLogUpdateInput, CrmZaloLogUncheckedUpdateInput>
+    /**
+     * Choose, which CrmZaloLog to update.
+     */
+    where: CrmZaloLogWhereUniqueInput
+  }
+
+  /**
+   * CrmZaloLog updateMany
+   */
+  export type CrmZaloLogUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update CrmZaloLogs.
+     */
+    data: XOR<CrmZaloLogUpdateManyMutationInput, CrmZaloLogUncheckedUpdateManyInput>
+    /**
+     * Filter which CrmZaloLogs to update
+     */
+    where?: CrmZaloLogWhereInput
+    /**
+     * Limit how many CrmZaloLogs to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * CrmZaloLog updateManyAndReturn
+   */
+  export type CrmZaloLogUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmZaloLog
+     */
+    select?: CrmZaloLogSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmZaloLog
+     */
+    omit?: CrmZaloLogOmit<ExtArgs> | null
+    /**
+     * The data used to update CrmZaloLogs.
+     */
+    data: XOR<CrmZaloLogUpdateManyMutationInput, CrmZaloLogUncheckedUpdateManyInput>
+    /**
+     * Filter which CrmZaloLogs to update
+     */
+    where?: CrmZaloLogWhereInput
+    /**
+     * Limit how many CrmZaloLogs to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * CrmZaloLog upsert
+   */
+  export type CrmZaloLogUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmZaloLog
+     */
+    select?: CrmZaloLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmZaloLog
+     */
+    omit?: CrmZaloLogOmit<ExtArgs> | null
+    /**
+     * The filter to search for the CrmZaloLog to update in case it exists.
+     */
+    where: CrmZaloLogWhereUniqueInput
+    /**
+     * In case the CrmZaloLog found by the `where` argument doesn't exist, create a new CrmZaloLog with this data.
+     */
+    create: XOR<CrmZaloLogCreateInput, CrmZaloLogUncheckedCreateInput>
+    /**
+     * In case the CrmZaloLog was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<CrmZaloLogUpdateInput, CrmZaloLogUncheckedUpdateInput>
+  }
+
+  /**
+   * CrmZaloLog delete
+   */
+  export type CrmZaloLogDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmZaloLog
+     */
+    select?: CrmZaloLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmZaloLog
+     */
+    omit?: CrmZaloLogOmit<ExtArgs> | null
+    /**
+     * Filter which CrmZaloLog to delete.
+     */
+    where: CrmZaloLogWhereUniqueInput
+  }
+
+  /**
+   * CrmZaloLog deleteMany
+   */
+  export type CrmZaloLogDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which CrmZaloLogs to delete
+     */
+    where?: CrmZaloLogWhereInput
+    /**
+     * Limit how many CrmZaloLogs to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * CrmZaloLog without action
+   */
+  export type CrmZaloLogDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmZaloLog
+     */
+    select?: CrmZaloLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmZaloLog
+     */
+    omit?: CrmZaloLogOmit<ExtArgs> | null
+  }
+
+
+  /**
+   * Model CrmCampaign
+   */
+
+  export type AggregateCrmCampaign = {
+    _count: CrmCampaignCountAggregateOutputType | null
+    _avg: CrmCampaignAvgAggregateOutputType | null
+    _sum: CrmCampaignSumAggregateOutputType | null
+    _min: CrmCampaignMinAggregateOutputType | null
+    _max: CrmCampaignMaxAggregateOutputType | null
+  }
+
+  export type CrmCampaignAvgAggregateOutputType = {
+    targetCount: number | null
+    sentCount: number | null
+    openRate: number | null
+    responseRate: number | null
+  }
+
+  export type CrmCampaignSumAggregateOutputType = {
+    targetCount: number | null
+    sentCount: number | null
+    openRate: number | null
+    responseRate: number | null
+  }
+
+  export type CrmCampaignMinAggregateOutputType = {
+    id: string | null
+    name: string | null
+    channel: string | null
+    status: string | null
+    template: string | null
+    targetTiers: string | null
+    targetCount: number | null
+    sentCount: number | null
+    openRate: number | null
+    responseRate: number | null
+    scheduledAt: Date | null
+    sentAt: Date | null
+    createdBy: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type CrmCampaignMaxAggregateOutputType = {
+    id: string | null
+    name: string | null
+    channel: string | null
+    status: string | null
+    template: string | null
+    targetTiers: string | null
+    targetCount: number | null
+    sentCount: number | null
+    openRate: number | null
+    responseRate: number | null
+    scheduledAt: Date | null
+    sentAt: Date | null
+    createdBy: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type CrmCampaignCountAggregateOutputType = {
+    id: number
+    name: number
+    channel: number
+    status: number
+    template: number
+    targetTiers: number
+    targetCount: number
+    sentCount: number
+    openRate: number
+    responseRate: number
+    scheduledAt: number
+    sentAt: number
+    createdBy: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type CrmCampaignAvgAggregateInputType = {
+    targetCount?: true
+    sentCount?: true
+    openRate?: true
+    responseRate?: true
+  }
+
+  export type CrmCampaignSumAggregateInputType = {
+    targetCount?: true
+    sentCount?: true
+    openRate?: true
+    responseRate?: true
+  }
+
+  export type CrmCampaignMinAggregateInputType = {
+    id?: true
+    name?: true
+    channel?: true
+    status?: true
+    template?: true
+    targetTiers?: true
+    targetCount?: true
+    sentCount?: true
+    openRate?: true
+    responseRate?: true
+    scheduledAt?: true
+    sentAt?: true
+    createdBy?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type CrmCampaignMaxAggregateInputType = {
+    id?: true
+    name?: true
+    channel?: true
+    status?: true
+    template?: true
+    targetTiers?: true
+    targetCount?: true
+    sentCount?: true
+    openRate?: true
+    responseRate?: true
+    scheduledAt?: true
+    sentAt?: true
+    createdBy?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type CrmCampaignCountAggregateInputType = {
+    id?: true
+    name?: true
+    channel?: true
+    status?: true
+    template?: true
+    targetTiers?: true
+    targetCount?: true
+    sentCount?: true
+    openRate?: true
+    responseRate?: true
+    scheduledAt?: true
+    sentAt?: true
+    createdBy?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type CrmCampaignAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which CrmCampaign to aggregate.
+     */
+    where?: CrmCampaignWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of CrmCampaigns to fetch.
+     */
+    orderBy?: CrmCampaignOrderByWithRelationInput | CrmCampaignOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: CrmCampaignWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` CrmCampaigns from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` CrmCampaigns.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned CrmCampaigns
+    **/
+    _count?: true | CrmCampaignCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: CrmCampaignAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: CrmCampaignSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: CrmCampaignMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: CrmCampaignMaxAggregateInputType
+  }
+
+  export type GetCrmCampaignAggregateType<T extends CrmCampaignAggregateArgs> = {
+        [P in keyof T & keyof AggregateCrmCampaign]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateCrmCampaign[P]>
+      : GetScalarType<T[P], AggregateCrmCampaign[P]>
+  }
+
+
+
+
+  export type CrmCampaignGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: CrmCampaignWhereInput
+    orderBy?: CrmCampaignOrderByWithAggregationInput | CrmCampaignOrderByWithAggregationInput[]
+    by: CrmCampaignScalarFieldEnum[] | CrmCampaignScalarFieldEnum
+    having?: CrmCampaignScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: CrmCampaignCountAggregateInputType | true
+    _avg?: CrmCampaignAvgAggregateInputType
+    _sum?: CrmCampaignSumAggregateInputType
+    _min?: CrmCampaignMinAggregateInputType
+    _max?: CrmCampaignMaxAggregateInputType
+  }
+
+  export type CrmCampaignGroupByOutputType = {
+    id: string
+    name: string
+    channel: string
+    status: string
+    template: string
+    targetTiers: string
+    targetCount: number
+    sentCount: number
+    openRate: number
+    responseRate: number
+    scheduledAt: Date | null
+    sentAt: Date | null
+    createdBy: string | null
+    createdAt: Date
+    updatedAt: Date
+    _count: CrmCampaignCountAggregateOutputType | null
+    _avg: CrmCampaignAvgAggregateOutputType | null
+    _sum: CrmCampaignSumAggregateOutputType | null
+    _min: CrmCampaignMinAggregateOutputType | null
+    _max: CrmCampaignMaxAggregateOutputType | null
+  }
+
+  type GetCrmCampaignGroupByPayload<T extends CrmCampaignGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<CrmCampaignGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof CrmCampaignGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], CrmCampaignGroupByOutputType[P]>
+            : GetScalarType<T[P], CrmCampaignGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type CrmCampaignSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    name?: boolean
+    channel?: boolean
+    status?: boolean
+    template?: boolean
+    targetTiers?: boolean
+    targetCount?: boolean
+    sentCount?: boolean
+    openRate?: boolean
+    responseRate?: boolean
+    scheduledAt?: boolean
+    sentAt?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["crmCampaign"]>
+
+  export type CrmCampaignSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    name?: boolean
+    channel?: boolean
+    status?: boolean
+    template?: boolean
+    targetTiers?: boolean
+    targetCount?: boolean
+    sentCount?: boolean
+    openRate?: boolean
+    responseRate?: boolean
+    scheduledAt?: boolean
+    sentAt?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["crmCampaign"]>
+
+  export type CrmCampaignSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    name?: boolean
+    channel?: boolean
+    status?: boolean
+    template?: boolean
+    targetTiers?: boolean
+    targetCount?: boolean
+    sentCount?: boolean
+    openRate?: boolean
+    responseRate?: boolean
+    scheduledAt?: boolean
+    sentAt?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["crmCampaign"]>
+
+  export type CrmCampaignSelectScalar = {
+    id?: boolean
+    name?: boolean
+    channel?: boolean
+    status?: boolean
+    template?: boolean
+    targetTiers?: boolean
+    targetCount?: boolean
+    sentCount?: boolean
+    openRate?: boolean
+    responseRate?: boolean
+    scheduledAt?: boolean
+    sentAt?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type CrmCampaignOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "channel" | "status" | "template" | "targetTiers" | "targetCount" | "sentCount" | "openRate" | "responseRate" | "scheduledAt" | "sentAt" | "createdBy" | "createdAt" | "updatedAt", ExtArgs["result"]["crmCampaign"]>
+
+  export type $CrmCampaignPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "CrmCampaign"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      name: string
+      channel: string
+      status: string
+      template: string
+      targetTiers: string
+      targetCount: number
+      sentCount: number
+      openRate: number
+      responseRate: number
+      scheduledAt: Date | null
+      sentAt: Date | null
+      createdBy: string | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["crmCampaign"]>
+    composites: {}
+  }
+
+  type CrmCampaignGetPayload<S extends boolean | null | undefined | CrmCampaignDefaultArgs> = $Result.GetResult<Prisma.$CrmCampaignPayload, S>
+
+  type CrmCampaignCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<CrmCampaignFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: CrmCampaignCountAggregateInputType | true
+    }
+
+  export interface CrmCampaignDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['CrmCampaign'], meta: { name: 'CrmCampaign' } }
+    /**
+     * Find zero or one CrmCampaign that matches the filter.
+     * @param {CrmCampaignFindUniqueArgs} args - Arguments to find a CrmCampaign
+     * @example
+     * // Get one CrmCampaign
+     * const crmCampaign = await prisma.crmCampaign.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends CrmCampaignFindUniqueArgs>(args: SelectSubset<T, CrmCampaignFindUniqueArgs<ExtArgs>>): Prisma__CrmCampaignClient<$Result.GetResult<Prisma.$CrmCampaignPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one CrmCampaign that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {CrmCampaignFindUniqueOrThrowArgs} args - Arguments to find a CrmCampaign
+     * @example
+     * // Get one CrmCampaign
+     * const crmCampaign = await prisma.crmCampaign.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends CrmCampaignFindUniqueOrThrowArgs>(args: SelectSubset<T, CrmCampaignFindUniqueOrThrowArgs<ExtArgs>>): Prisma__CrmCampaignClient<$Result.GetResult<Prisma.$CrmCampaignPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first CrmCampaign that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmCampaignFindFirstArgs} args - Arguments to find a CrmCampaign
+     * @example
+     * // Get one CrmCampaign
+     * const crmCampaign = await prisma.crmCampaign.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends CrmCampaignFindFirstArgs>(args?: SelectSubset<T, CrmCampaignFindFirstArgs<ExtArgs>>): Prisma__CrmCampaignClient<$Result.GetResult<Prisma.$CrmCampaignPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first CrmCampaign that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmCampaignFindFirstOrThrowArgs} args - Arguments to find a CrmCampaign
+     * @example
+     * // Get one CrmCampaign
+     * const crmCampaign = await prisma.crmCampaign.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends CrmCampaignFindFirstOrThrowArgs>(args?: SelectSubset<T, CrmCampaignFindFirstOrThrowArgs<ExtArgs>>): Prisma__CrmCampaignClient<$Result.GetResult<Prisma.$CrmCampaignPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more CrmCampaigns that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmCampaignFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all CrmCampaigns
+     * const crmCampaigns = await prisma.crmCampaign.findMany()
+     * 
+     * // Get first 10 CrmCampaigns
+     * const crmCampaigns = await prisma.crmCampaign.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const crmCampaignWithIdOnly = await prisma.crmCampaign.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends CrmCampaignFindManyArgs>(args?: SelectSubset<T, CrmCampaignFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$CrmCampaignPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a CrmCampaign.
+     * @param {CrmCampaignCreateArgs} args - Arguments to create a CrmCampaign.
+     * @example
+     * // Create one CrmCampaign
+     * const CrmCampaign = await prisma.crmCampaign.create({
+     *   data: {
+     *     // ... data to create a CrmCampaign
+     *   }
+     * })
+     * 
+     */
+    create<T extends CrmCampaignCreateArgs>(args: SelectSubset<T, CrmCampaignCreateArgs<ExtArgs>>): Prisma__CrmCampaignClient<$Result.GetResult<Prisma.$CrmCampaignPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many CrmCampaigns.
+     * @param {CrmCampaignCreateManyArgs} args - Arguments to create many CrmCampaigns.
+     * @example
+     * // Create many CrmCampaigns
+     * const crmCampaign = await prisma.crmCampaign.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends CrmCampaignCreateManyArgs>(args?: SelectSubset<T, CrmCampaignCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many CrmCampaigns and returns the data saved in the database.
+     * @param {CrmCampaignCreateManyAndReturnArgs} args - Arguments to create many CrmCampaigns.
+     * @example
+     * // Create many CrmCampaigns
+     * const crmCampaign = await prisma.crmCampaign.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many CrmCampaigns and only return the `id`
+     * const crmCampaignWithIdOnly = await prisma.crmCampaign.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends CrmCampaignCreateManyAndReturnArgs>(args?: SelectSubset<T, CrmCampaignCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$CrmCampaignPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a CrmCampaign.
+     * @param {CrmCampaignDeleteArgs} args - Arguments to delete one CrmCampaign.
+     * @example
+     * // Delete one CrmCampaign
+     * const CrmCampaign = await prisma.crmCampaign.delete({
+     *   where: {
+     *     // ... filter to delete one CrmCampaign
+     *   }
+     * })
+     * 
+     */
+    delete<T extends CrmCampaignDeleteArgs>(args: SelectSubset<T, CrmCampaignDeleteArgs<ExtArgs>>): Prisma__CrmCampaignClient<$Result.GetResult<Prisma.$CrmCampaignPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one CrmCampaign.
+     * @param {CrmCampaignUpdateArgs} args - Arguments to update one CrmCampaign.
+     * @example
+     * // Update one CrmCampaign
+     * const crmCampaign = await prisma.crmCampaign.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends CrmCampaignUpdateArgs>(args: SelectSubset<T, CrmCampaignUpdateArgs<ExtArgs>>): Prisma__CrmCampaignClient<$Result.GetResult<Prisma.$CrmCampaignPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more CrmCampaigns.
+     * @param {CrmCampaignDeleteManyArgs} args - Arguments to filter CrmCampaigns to delete.
+     * @example
+     * // Delete a few CrmCampaigns
+     * const { count } = await prisma.crmCampaign.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends CrmCampaignDeleteManyArgs>(args?: SelectSubset<T, CrmCampaignDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more CrmCampaigns.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmCampaignUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many CrmCampaigns
+     * const crmCampaign = await prisma.crmCampaign.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends CrmCampaignUpdateManyArgs>(args: SelectSubset<T, CrmCampaignUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more CrmCampaigns and returns the data updated in the database.
+     * @param {CrmCampaignUpdateManyAndReturnArgs} args - Arguments to update many CrmCampaigns.
+     * @example
+     * // Update many CrmCampaigns
+     * const crmCampaign = await prisma.crmCampaign.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more CrmCampaigns and only return the `id`
+     * const crmCampaignWithIdOnly = await prisma.crmCampaign.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends CrmCampaignUpdateManyAndReturnArgs>(args: SelectSubset<T, CrmCampaignUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$CrmCampaignPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one CrmCampaign.
+     * @param {CrmCampaignUpsertArgs} args - Arguments to update or create a CrmCampaign.
+     * @example
+     * // Update or create a CrmCampaign
+     * const crmCampaign = await prisma.crmCampaign.upsert({
+     *   create: {
+     *     // ... data to create a CrmCampaign
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the CrmCampaign we want to update
+     *   }
+     * })
+     */
+    upsert<T extends CrmCampaignUpsertArgs>(args: SelectSubset<T, CrmCampaignUpsertArgs<ExtArgs>>): Prisma__CrmCampaignClient<$Result.GetResult<Prisma.$CrmCampaignPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of CrmCampaigns.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmCampaignCountArgs} args - Arguments to filter CrmCampaigns to count.
+     * @example
+     * // Count the number of CrmCampaigns
+     * const count = await prisma.crmCampaign.count({
+     *   where: {
+     *     // ... the filter for the CrmCampaigns we want to count
+     *   }
+     * })
+    **/
+    count<T extends CrmCampaignCountArgs>(
+      args?: Subset<T, CrmCampaignCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], CrmCampaignCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a CrmCampaign.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmCampaignAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends CrmCampaignAggregateArgs>(args: Subset<T, CrmCampaignAggregateArgs>): Prisma.PrismaPromise<GetCrmCampaignAggregateType<T>>
+
+    /**
+     * Group by CrmCampaign.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {CrmCampaignGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends CrmCampaignGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: CrmCampaignGroupByArgs['orderBy'] }
+        : { orderBy?: CrmCampaignGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, CrmCampaignGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetCrmCampaignGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the CrmCampaign model
+   */
+  readonly fields: CrmCampaignFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for CrmCampaign.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__CrmCampaignClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the CrmCampaign model
+   */
+  interface CrmCampaignFieldRefs {
+    readonly id: FieldRef<"CrmCampaign", 'String'>
+    readonly name: FieldRef<"CrmCampaign", 'String'>
+    readonly channel: FieldRef<"CrmCampaign", 'String'>
+    readonly status: FieldRef<"CrmCampaign", 'String'>
+    readonly template: FieldRef<"CrmCampaign", 'String'>
+    readonly targetTiers: FieldRef<"CrmCampaign", 'String'>
+    readonly targetCount: FieldRef<"CrmCampaign", 'Int'>
+    readonly sentCount: FieldRef<"CrmCampaign", 'Int'>
+    readonly openRate: FieldRef<"CrmCampaign", 'Float'>
+    readonly responseRate: FieldRef<"CrmCampaign", 'Float'>
+    readonly scheduledAt: FieldRef<"CrmCampaign", 'DateTime'>
+    readonly sentAt: FieldRef<"CrmCampaign", 'DateTime'>
+    readonly createdBy: FieldRef<"CrmCampaign", 'String'>
+    readonly createdAt: FieldRef<"CrmCampaign", 'DateTime'>
+    readonly updatedAt: FieldRef<"CrmCampaign", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * CrmCampaign findUnique
+   */
+  export type CrmCampaignFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmCampaign
+     */
+    select?: CrmCampaignSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmCampaign
+     */
+    omit?: CrmCampaignOmit<ExtArgs> | null
+    /**
+     * Filter, which CrmCampaign to fetch.
+     */
+    where: CrmCampaignWhereUniqueInput
+  }
+
+  /**
+   * CrmCampaign findUniqueOrThrow
+   */
+  export type CrmCampaignFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmCampaign
+     */
+    select?: CrmCampaignSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmCampaign
+     */
+    omit?: CrmCampaignOmit<ExtArgs> | null
+    /**
+     * Filter, which CrmCampaign to fetch.
+     */
+    where: CrmCampaignWhereUniqueInput
+  }
+
+  /**
+   * CrmCampaign findFirst
+   */
+  export type CrmCampaignFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmCampaign
+     */
+    select?: CrmCampaignSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmCampaign
+     */
+    omit?: CrmCampaignOmit<ExtArgs> | null
+    /**
+     * Filter, which CrmCampaign to fetch.
+     */
+    where?: CrmCampaignWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of CrmCampaigns to fetch.
+     */
+    orderBy?: CrmCampaignOrderByWithRelationInput | CrmCampaignOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for CrmCampaigns.
+     */
+    cursor?: CrmCampaignWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` CrmCampaigns from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` CrmCampaigns.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of CrmCampaigns.
+     */
+    distinct?: CrmCampaignScalarFieldEnum | CrmCampaignScalarFieldEnum[]
+  }
+
+  /**
+   * CrmCampaign findFirstOrThrow
+   */
+  export type CrmCampaignFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmCampaign
+     */
+    select?: CrmCampaignSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmCampaign
+     */
+    omit?: CrmCampaignOmit<ExtArgs> | null
+    /**
+     * Filter, which CrmCampaign to fetch.
+     */
+    where?: CrmCampaignWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of CrmCampaigns to fetch.
+     */
+    orderBy?: CrmCampaignOrderByWithRelationInput | CrmCampaignOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for CrmCampaigns.
+     */
+    cursor?: CrmCampaignWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` CrmCampaigns from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` CrmCampaigns.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of CrmCampaigns.
+     */
+    distinct?: CrmCampaignScalarFieldEnum | CrmCampaignScalarFieldEnum[]
+  }
+
+  /**
+   * CrmCampaign findMany
+   */
+  export type CrmCampaignFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmCampaign
+     */
+    select?: CrmCampaignSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmCampaign
+     */
+    omit?: CrmCampaignOmit<ExtArgs> | null
+    /**
+     * Filter, which CrmCampaigns to fetch.
+     */
+    where?: CrmCampaignWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of CrmCampaigns to fetch.
+     */
+    orderBy?: CrmCampaignOrderByWithRelationInput | CrmCampaignOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing CrmCampaigns.
+     */
+    cursor?: CrmCampaignWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` CrmCampaigns from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` CrmCampaigns.
+     */
+    skip?: number
+    distinct?: CrmCampaignScalarFieldEnum | CrmCampaignScalarFieldEnum[]
+  }
+
+  /**
+   * CrmCampaign create
+   */
+  export type CrmCampaignCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmCampaign
+     */
+    select?: CrmCampaignSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmCampaign
+     */
+    omit?: CrmCampaignOmit<ExtArgs> | null
+    /**
+     * The data needed to create a CrmCampaign.
+     */
+    data: XOR<CrmCampaignCreateInput, CrmCampaignUncheckedCreateInput>
+  }
+
+  /**
+   * CrmCampaign createMany
+   */
+  export type CrmCampaignCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many CrmCampaigns.
+     */
+    data: CrmCampaignCreateManyInput | CrmCampaignCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * CrmCampaign createManyAndReturn
+   */
+  export type CrmCampaignCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmCampaign
+     */
+    select?: CrmCampaignSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmCampaign
+     */
+    omit?: CrmCampaignOmit<ExtArgs> | null
+    /**
+     * The data used to create many CrmCampaigns.
+     */
+    data: CrmCampaignCreateManyInput | CrmCampaignCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * CrmCampaign update
+   */
+  export type CrmCampaignUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmCampaign
+     */
+    select?: CrmCampaignSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmCampaign
+     */
+    omit?: CrmCampaignOmit<ExtArgs> | null
+    /**
+     * The data needed to update a CrmCampaign.
+     */
+    data: XOR<CrmCampaignUpdateInput, CrmCampaignUncheckedUpdateInput>
+    /**
+     * Choose, which CrmCampaign to update.
+     */
+    where: CrmCampaignWhereUniqueInput
+  }
+
+  /**
+   * CrmCampaign updateMany
+   */
+  export type CrmCampaignUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update CrmCampaigns.
+     */
+    data: XOR<CrmCampaignUpdateManyMutationInput, CrmCampaignUncheckedUpdateManyInput>
+    /**
+     * Filter which CrmCampaigns to update
+     */
+    where?: CrmCampaignWhereInput
+    /**
+     * Limit how many CrmCampaigns to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * CrmCampaign updateManyAndReturn
+   */
+  export type CrmCampaignUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmCampaign
+     */
+    select?: CrmCampaignSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmCampaign
+     */
+    omit?: CrmCampaignOmit<ExtArgs> | null
+    /**
+     * The data used to update CrmCampaigns.
+     */
+    data: XOR<CrmCampaignUpdateManyMutationInput, CrmCampaignUncheckedUpdateManyInput>
+    /**
+     * Filter which CrmCampaigns to update
+     */
+    where?: CrmCampaignWhereInput
+    /**
+     * Limit how many CrmCampaigns to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * CrmCampaign upsert
+   */
+  export type CrmCampaignUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmCampaign
+     */
+    select?: CrmCampaignSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmCampaign
+     */
+    omit?: CrmCampaignOmit<ExtArgs> | null
+    /**
+     * The filter to search for the CrmCampaign to update in case it exists.
+     */
+    where: CrmCampaignWhereUniqueInput
+    /**
+     * In case the CrmCampaign found by the `where` argument doesn't exist, create a new CrmCampaign with this data.
+     */
+    create: XOR<CrmCampaignCreateInput, CrmCampaignUncheckedCreateInput>
+    /**
+     * In case the CrmCampaign was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<CrmCampaignUpdateInput, CrmCampaignUncheckedUpdateInput>
+  }
+
+  /**
+   * CrmCampaign delete
+   */
+  export type CrmCampaignDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmCampaign
+     */
+    select?: CrmCampaignSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmCampaign
+     */
+    omit?: CrmCampaignOmit<ExtArgs> | null
+    /**
+     * Filter which CrmCampaign to delete.
+     */
+    where: CrmCampaignWhereUniqueInput
+  }
+
+  /**
+   * CrmCampaign deleteMany
+   */
+  export type CrmCampaignDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which CrmCampaigns to delete
+     */
+    where?: CrmCampaignWhereInput
+    /**
+     * Limit how many CrmCampaigns to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * CrmCampaign without action
+   */
+  export type CrmCampaignDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the CrmCampaign
+     */
+    select?: CrmCampaignSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the CrmCampaign
+     */
+    omit?: CrmCampaignOmit<ExtArgs> | null
+  }
+
+
+  /**
    * Enums
    */
 
@@ -139926,6 +152384,10 @@ export namespace Prisma {
     minStock: 'minStock',
     maxStock: 'maxStock',
     baseUnit: 'baseUnit',
+    invoiceUnit: 'invoiceUnit',
+    bundleId: 'bundleId',
+    mergedIntoId: 'mergedIntoId',
+    mergedRate: 'mergedRate',
     trackSerial: 'trackSerial',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
@@ -140104,6 +152566,13 @@ export namespace Prisma {
     paymentStatus: 'paymentStatus',
     dueDate: 'dueDate',
     paymentTerm: 'paymentTerm',
+    hasVatInvoice: 'hasVatInvoice',
+    vatInvoiceNo: 'vatInvoiceNo',
+    vatAmount: 'vatAmount',
+    shippingFee: 'shippingFee',
+    importTax: 'importTax',
+    otherFees: 'otherFees',
+    totalDiscount: 'totalDiscount',
     note: 'note',
     branchId: 'branchId',
     userId: 'userId',
@@ -140439,6 +152908,57 @@ export namespace Prisma {
   };
 
   export type VehicleMaintenanceScalarFieldEnum = (typeof VehicleMaintenanceScalarFieldEnum)[keyof typeof VehicleMaintenanceScalarFieldEnum]
+
+
+  export const CrmEmailLogScalarFieldEnum: {
+    id: 'id',
+    customerId: 'customerId',
+    customerName: 'customerName',
+    email: 'email',
+    subject: 'subject',
+    messageId: 'messageId',
+    sentAt: 'sentAt',
+    repliedAt: 'repliedAt',
+    replySubject: 'replySubject'
+  };
+
+  export type CrmEmailLogScalarFieldEnum = (typeof CrmEmailLogScalarFieldEnum)[keyof typeof CrmEmailLogScalarFieldEnum]
+
+
+  export const VehicleFuelLogScalarFieldEnum: {
+    id: 'id',
+    vehicleId: 'vehicleId',
+    fuelDate: 'fuelDate',
+    liters: 'liters',
+    pricePerLiter: 'pricePerLiter',
+    cost: 'cost',
+    kmAtFill: 'kmAtFill',
+    fuelType: 'fuelType',
+    station: 'station',
+    isFullTank: 'isFullTank',
+    notes: 'notes',
+    createdAt: 'createdAt'
+  };
+
+  export type VehicleFuelLogScalarFieldEnum = (typeof VehicleFuelLogScalarFieldEnum)[keyof typeof VehicleFuelLogScalarFieldEnum]
+
+
+  export const VehicleDocumentScalarFieldEnum: {
+    id: 'id',
+    vehicleId: 'vehicleId',
+    type: 'type',
+    name: 'name',
+    documentNumber: 'documentNumber',
+    fileUrl: 'fileUrl',
+    issuer: 'issuer',
+    issueDate: 'issueDate',
+    expiryDate: 'expiryDate',
+    notes: 'notes',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type VehicleDocumentScalarFieldEnum = (typeof VehicleDocumentScalarFieldEnum)[keyof typeof VehicleDocumentScalarFieldEnum]
 
 
   export const DeliveryRouteScalarFieldEnum: {
@@ -140902,6 +153422,41 @@ export namespace Prisma {
   export type ReviewScalarFieldEnum = (typeof ReviewScalarFieldEnum)[keyof typeof ReviewScalarFieldEnum]
 
 
+  export const SkuMappingScalarFieldEnum: {
+    id: 'id',
+    platformSku: 'platformSku',
+    productId: 'productId',
+    platform: 'platform',
+    note: 'note',
+    conversionRate: 'conversionRate',
+    bundleId: 'bundleId',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type SkuMappingScalarFieldEnum = (typeof SkuMappingScalarFieldEnum)[keyof typeof SkuMappingScalarFieldEnum]
+
+
+  export const HkdRevenueEntryScalarFieldEnum: {
+    id: 'id',
+    date: 'date',
+    soChungTu: 'soChungTu',
+    dienGiai: 'dienGiai',
+    doanhThu: 'doanhThu',
+    chietKhau: 'chietKhau',
+    thueGTGT: 'thueGTGT',
+    doanhThuThuan: 'doanhThuThuan',
+    tncnUocTinh: 'tncnUocTinh',
+    phuongThucTT: 'phuongThucTT',
+    ghiChu: 'ghiChu',
+    branchId: 'branchId',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type HkdRevenueEntryScalarFieldEnum = (typeof HkdRevenueEntryScalarFieldEnum)[keyof typeof HkdRevenueEntryScalarFieldEnum]
+
+
   export const StoreSettingsScalarFieldEnum: {
     id: 'id',
     name: 'name',
@@ -140922,6 +153477,8 @@ export namespace Prisma {
     email: 'email',
     website: 'website',
     notifyLowStock: 'notifyLowStock',
+    smtpConfig: 'smtpConfig',
+    geminiApiKey: 'geminiApiKey',
     notifyNewOrder: 'notifyNewOrder',
     notifyDailyReport: 'notifyDailyReport',
     notifyWeeklyReport: 'notifyWeeklyReport',
@@ -141896,6 +154453,98 @@ export namespace Prisma {
   export type FbAutoReplyLogScalarFieldEnum = (typeof FbAutoReplyLogScalarFieldEnum)[keyof typeof FbAutoReplyLogScalarFieldEnum]
 
 
+  export const CrmTaskScalarFieldEnum: {
+    id: 'id',
+    title: 'title',
+    description: 'description',
+    customerId: 'customerId',
+    customerName: 'customerName',
+    status: 'status',
+    priority: 'priority',
+    type: 'type',
+    dueDate: 'dueDate',
+    assignee: 'assignee',
+    createdBy: 'createdBy',
+    completedAt: 'completedAt',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type CrmTaskScalarFieldEnum = (typeof CrmTaskScalarFieldEnum)[keyof typeof CrmTaskScalarFieldEnum]
+
+
+  export const CrmDealScalarFieldEnum: {
+    id: 'id',
+    title: 'title',
+    customerId: 'customerId',
+    customerName: 'customerName',
+    value: 'value',
+    stage: 'stage',
+    probability: 'probability',
+    assignee: 'assignee',
+    note: 'note',
+    sortOrder: 'sortOrder',
+    expectedCloseDate: 'expectedCloseDate',
+    closedAt: 'closedAt',
+    createdBy: 'createdBy',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type CrmDealScalarFieldEnum = (typeof CrmDealScalarFieldEnum)[keyof typeof CrmDealScalarFieldEnum]
+
+
+  export const CrmActivityScalarFieldEnum: {
+    id: 'id',
+    module: 'module',
+    action: 'action',
+    description: 'description',
+    userId: 'userId',
+    userName: 'userName',
+    entityId: 'entityId',
+    entityName: 'entityName',
+    metadata: 'metadata',
+    createdAt: 'createdAt'
+  };
+
+  export type CrmActivityScalarFieldEnum = (typeof CrmActivityScalarFieldEnum)[keyof typeof CrmActivityScalarFieldEnum]
+
+
+  export const CrmZaloLogScalarFieldEnum: {
+    id: 'id',
+    customerId: 'customerId',
+    customerName: 'customerName',
+    direction: 'direction',
+    content: 'content',
+    staffName: 'staffName',
+    starred: 'starred',
+    createdAt: 'createdAt'
+  };
+
+  export type CrmZaloLogScalarFieldEnum = (typeof CrmZaloLogScalarFieldEnum)[keyof typeof CrmZaloLogScalarFieldEnum]
+
+
+  export const CrmCampaignScalarFieldEnum: {
+    id: 'id',
+    name: 'name',
+    channel: 'channel',
+    status: 'status',
+    template: 'template',
+    targetTiers: 'targetTiers',
+    targetCount: 'targetCount',
+    sentCount: 'sentCount',
+    openRate: 'openRate',
+    responseRate: 'responseRate',
+    scheduledAt: 'scheduledAt',
+    sentAt: 'sentAt',
+    createdBy: 'createdBy',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type CrmCampaignScalarFieldEnum = (typeof CrmCampaignScalarFieldEnum)[keyof typeof CrmCampaignScalarFieldEnum]
+
+
   export const SortOrder: {
     asc: 'asc',
     desc: 'desc'
@@ -142727,6 +155376,10 @@ export namespace Prisma {
     minStock?: IntFilter<"Product"> | number
     maxStock?: IntFilter<"Product"> | number
     baseUnit?: StringFilter<"Product"> | string
+    invoiceUnit?: StringNullableFilter<"Product"> | string | null
+    bundleId?: StringNullableFilter<"Product"> | string | null
+    mergedIntoId?: StringNullableFilter<"Product"> | string | null
+    mergedRate?: FloatFilter<"Product"> | number
     trackSerial?: BoolFilter<"Product"> | boolean
     createdAt?: DateTimeFilter<"Product"> | Date | string
     updatedAt?: DateTimeFilter<"Product"> | Date | string
@@ -142741,6 +155394,7 @@ export namespace Prisma {
     serials?: ProductSerialListRelationFilter
     onlineOrderItems?: OnlineOrderItemListRelationFilter
     onlineProducts?: OnlineProductListRelationFilter
+    skuMappings?: SkuMappingListRelationFilter
   }
 
   export type ProductOrderByWithRelationInput = {
@@ -142759,6 +155413,10 @@ export namespace Prisma {
     minStock?: SortOrder
     maxStock?: SortOrder
     baseUnit?: SortOrder
+    invoiceUnit?: SortOrderInput | SortOrder
+    bundleId?: SortOrderInput | SortOrder
+    mergedIntoId?: SortOrderInput | SortOrder
+    mergedRate?: SortOrder
     trackSerial?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -142773,6 +155431,7 @@ export namespace Prisma {
     serials?: ProductSerialOrderByRelationAggregateInput
     onlineOrderItems?: OnlineOrderItemOrderByRelationAggregateInput
     onlineProducts?: OnlineProductOrderByRelationAggregateInput
+    skuMappings?: SkuMappingOrderByRelationAggregateInput
   }
 
   export type ProductWhereUniqueInput = Prisma.AtLeast<{
@@ -142794,6 +155453,10 @@ export namespace Prisma {
     minStock?: IntFilter<"Product"> | number
     maxStock?: IntFilter<"Product"> | number
     baseUnit?: StringFilter<"Product"> | string
+    invoiceUnit?: StringNullableFilter<"Product"> | string | null
+    bundleId?: StringNullableFilter<"Product"> | string | null
+    mergedIntoId?: StringNullableFilter<"Product"> | string | null
+    mergedRate?: FloatFilter<"Product"> | number
     trackSerial?: BoolFilter<"Product"> | boolean
     createdAt?: DateTimeFilter<"Product"> | Date | string
     updatedAt?: DateTimeFilter<"Product"> | Date | string
@@ -142808,6 +155471,7 @@ export namespace Prisma {
     serials?: ProductSerialListRelationFilter
     onlineOrderItems?: OnlineOrderItemListRelationFilter
     onlineProducts?: OnlineProductListRelationFilter
+    skuMappings?: SkuMappingListRelationFilter
   }, "id" | "sku">
 
   export type ProductOrderByWithAggregationInput = {
@@ -142826,6 +155490,10 @@ export namespace Prisma {
     minStock?: SortOrder
     maxStock?: SortOrder
     baseUnit?: SortOrder
+    invoiceUnit?: SortOrderInput | SortOrder
+    bundleId?: SortOrderInput | SortOrder
+    mergedIntoId?: SortOrderInput | SortOrder
+    mergedRate?: SortOrder
     trackSerial?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -142855,6 +155523,10 @@ export namespace Prisma {
     minStock?: IntWithAggregatesFilter<"Product"> | number
     maxStock?: IntWithAggregatesFilter<"Product"> | number
     baseUnit?: StringWithAggregatesFilter<"Product"> | string
+    invoiceUnit?: StringNullableWithAggregatesFilter<"Product"> | string | null
+    bundleId?: StringNullableWithAggregatesFilter<"Product"> | string | null
+    mergedIntoId?: StringNullableWithAggregatesFilter<"Product"> | string | null
+    mergedRate?: FloatWithAggregatesFilter<"Product"> | number
     trackSerial?: BoolWithAggregatesFilter<"Product"> | boolean
     createdAt?: DateTimeWithAggregatesFilter<"Product"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"Product"> | Date | string
@@ -143704,6 +156376,13 @@ export namespace Prisma {
     paymentStatus?: StringFilter<"ImportReceipt"> | string
     dueDate?: DateTimeNullableFilter<"ImportReceipt"> | Date | string | null
     paymentTerm?: StringNullableFilter<"ImportReceipt"> | string | null
+    hasVatInvoice?: BoolFilter<"ImportReceipt"> | boolean
+    vatInvoiceNo?: StringNullableFilter<"ImportReceipt"> | string | null
+    vatAmount?: FloatFilter<"ImportReceipt"> | number
+    shippingFee?: FloatFilter<"ImportReceipt"> | number
+    importTax?: FloatFilter<"ImportReceipt"> | number
+    otherFees?: FloatFilter<"ImportReceipt"> | number
+    totalDiscount?: FloatFilter<"ImportReceipt"> | number
     note?: StringNullableFilter<"ImportReceipt"> | string | null
     branchId?: StringNullableFilter<"ImportReceipt"> | string | null
     userId?: StringFilter<"ImportReceipt"> | string
@@ -143727,6 +156406,13 @@ export namespace Prisma {
     paymentStatus?: SortOrder
     dueDate?: SortOrderInput | SortOrder
     paymentTerm?: SortOrderInput | SortOrder
+    hasVatInvoice?: SortOrder
+    vatInvoiceNo?: SortOrderInput | SortOrder
+    vatAmount?: SortOrder
+    shippingFee?: SortOrder
+    importTax?: SortOrder
+    otherFees?: SortOrder
+    totalDiscount?: SortOrder
     note?: SortOrderInput | SortOrder
     branchId?: SortOrderInput | SortOrder
     userId?: SortOrder
@@ -143753,6 +156439,13 @@ export namespace Prisma {
     paymentStatus?: StringFilter<"ImportReceipt"> | string
     dueDate?: DateTimeNullableFilter<"ImportReceipt"> | Date | string | null
     paymentTerm?: StringNullableFilter<"ImportReceipt"> | string | null
+    hasVatInvoice?: BoolFilter<"ImportReceipt"> | boolean
+    vatInvoiceNo?: StringNullableFilter<"ImportReceipt"> | string | null
+    vatAmount?: FloatFilter<"ImportReceipt"> | number
+    shippingFee?: FloatFilter<"ImportReceipt"> | number
+    importTax?: FloatFilter<"ImportReceipt"> | number
+    otherFees?: FloatFilter<"ImportReceipt"> | number
+    totalDiscount?: FloatFilter<"ImportReceipt"> | number
     note?: StringNullableFilter<"ImportReceipt"> | string | null
     branchId?: StringNullableFilter<"ImportReceipt"> | string | null
     userId?: StringFilter<"ImportReceipt"> | string
@@ -143776,6 +156469,13 @@ export namespace Prisma {
     paymentStatus?: SortOrder
     dueDate?: SortOrderInput | SortOrder
     paymentTerm?: SortOrderInput | SortOrder
+    hasVatInvoice?: SortOrder
+    vatInvoiceNo?: SortOrderInput | SortOrder
+    vatAmount?: SortOrder
+    shippingFee?: SortOrder
+    importTax?: SortOrder
+    otherFees?: SortOrder
+    totalDiscount?: SortOrder
     note?: SortOrderInput | SortOrder
     branchId?: SortOrderInput | SortOrder
     userId?: SortOrder
@@ -143805,6 +156505,13 @@ export namespace Prisma {
     paymentStatus?: StringWithAggregatesFilter<"ImportReceipt"> | string
     dueDate?: DateTimeNullableWithAggregatesFilter<"ImportReceipt"> | Date | string | null
     paymentTerm?: StringNullableWithAggregatesFilter<"ImportReceipt"> | string | null
+    hasVatInvoice?: BoolWithAggregatesFilter<"ImportReceipt"> | boolean
+    vatInvoiceNo?: StringNullableWithAggregatesFilter<"ImportReceipt"> | string | null
+    vatAmount?: FloatWithAggregatesFilter<"ImportReceipt"> | number
+    shippingFee?: FloatWithAggregatesFilter<"ImportReceipt"> | number
+    importTax?: FloatWithAggregatesFilter<"ImportReceipt"> | number
+    otherFees?: FloatWithAggregatesFilter<"ImportReceipt"> | number
+    totalDiscount?: FloatWithAggregatesFilter<"ImportReceipt"> | number
     note?: StringNullableWithAggregatesFilter<"ImportReceipt"> | string | null
     branchId?: StringNullableWithAggregatesFilter<"ImportReceipt"> | string | null
     userId?: StringWithAggregatesFilter<"ImportReceipt"> | string
@@ -145242,6 +157949,8 @@ export namespace Prisma {
     createdAt?: DateTimeFilter<"Vehicle"> | Date | string
     updatedAt?: DateTimeFilter<"Vehicle"> | Date | string
     maintenanceLogs?: VehicleMaintenanceListRelationFilter
+    fuelLogs?: VehicleFuelLogListRelationFilter
+    documents?: VehicleDocumentListRelationFilter
     warehouse?: XOR<WarehouseNullableScalarRelationFilter, WarehouseWhereInput> | null
     salesTrips?: SalesTripListRelationFilter
   }
@@ -145269,6 +157978,8 @@ export namespace Prisma {
     createdAt?: SortOrder
     updatedAt?: SortOrder
     maintenanceLogs?: VehicleMaintenanceOrderByRelationAggregateInput
+    fuelLogs?: VehicleFuelLogOrderByRelationAggregateInput
+    documents?: VehicleDocumentOrderByRelationAggregateInput
     warehouse?: WarehouseOrderByWithRelationInput
     salesTrips?: SalesTripOrderByRelationAggregateInput
   }
@@ -145299,6 +158010,8 @@ export namespace Prisma {
     createdAt?: DateTimeFilter<"Vehicle"> | Date | string
     updatedAt?: DateTimeFilter<"Vehicle"> | Date | string
     maintenanceLogs?: VehicleMaintenanceListRelationFilter
+    fuelLogs?: VehicleFuelLogListRelationFilter
+    documents?: VehicleDocumentListRelationFilter
     warehouse?: XOR<WarehouseNullableScalarRelationFilter, WarehouseWhereInput> | null
     salesTrips?: SalesTripListRelationFilter
   }, "id" | "code">
@@ -145444,6 +158157,260 @@ export namespace Prisma {
     performedBy?: StringNullableWithAggregatesFilter<"VehicleMaintenance"> | string | null
     notes?: StringNullableWithAggregatesFilter<"VehicleMaintenance"> | string | null
     createdAt?: DateTimeWithAggregatesFilter<"VehicleMaintenance"> | Date | string
+  }
+
+  export type CrmEmailLogWhereInput = {
+    AND?: CrmEmailLogWhereInput | CrmEmailLogWhereInput[]
+    OR?: CrmEmailLogWhereInput[]
+    NOT?: CrmEmailLogWhereInput | CrmEmailLogWhereInput[]
+    id?: StringFilter<"CrmEmailLog"> | string
+    customerId?: StringNullableFilter<"CrmEmailLog"> | string | null
+    customerName?: StringFilter<"CrmEmailLog"> | string
+    email?: StringFilter<"CrmEmailLog"> | string
+    subject?: StringFilter<"CrmEmailLog"> | string
+    messageId?: StringNullableFilter<"CrmEmailLog"> | string | null
+    sentAt?: DateTimeFilter<"CrmEmailLog"> | Date | string
+    repliedAt?: DateTimeNullableFilter<"CrmEmailLog"> | Date | string | null
+    replySubject?: StringNullableFilter<"CrmEmailLog"> | string | null
+  }
+
+  export type CrmEmailLogOrderByWithRelationInput = {
+    id?: SortOrder
+    customerId?: SortOrderInput | SortOrder
+    customerName?: SortOrder
+    email?: SortOrder
+    subject?: SortOrder
+    messageId?: SortOrderInput | SortOrder
+    sentAt?: SortOrder
+    repliedAt?: SortOrderInput | SortOrder
+    replySubject?: SortOrderInput | SortOrder
+  }
+
+  export type CrmEmailLogWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: CrmEmailLogWhereInput | CrmEmailLogWhereInput[]
+    OR?: CrmEmailLogWhereInput[]
+    NOT?: CrmEmailLogWhereInput | CrmEmailLogWhereInput[]
+    customerId?: StringNullableFilter<"CrmEmailLog"> | string | null
+    customerName?: StringFilter<"CrmEmailLog"> | string
+    email?: StringFilter<"CrmEmailLog"> | string
+    subject?: StringFilter<"CrmEmailLog"> | string
+    messageId?: StringNullableFilter<"CrmEmailLog"> | string | null
+    sentAt?: DateTimeFilter<"CrmEmailLog"> | Date | string
+    repliedAt?: DateTimeNullableFilter<"CrmEmailLog"> | Date | string | null
+    replySubject?: StringNullableFilter<"CrmEmailLog"> | string | null
+  }, "id">
+
+  export type CrmEmailLogOrderByWithAggregationInput = {
+    id?: SortOrder
+    customerId?: SortOrderInput | SortOrder
+    customerName?: SortOrder
+    email?: SortOrder
+    subject?: SortOrder
+    messageId?: SortOrderInput | SortOrder
+    sentAt?: SortOrder
+    repliedAt?: SortOrderInput | SortOrder
+    replySubject?: SortOrderInput | SortOrder
+    _count?: CrmEmailLogCountOrderByAggregateInput
+    _max?: CrmEmailLogMaxOrderByAggregateInput
+    _min?: CrmEmailLogMinOrderByAggregateInput
+  }
+
+  export type CrmEmailLogScalarWhereWithAggregatesInput = {
+    AND?: CrmEmailLogScalarWhereWithAggregatesInput | CrmEmailLogScalarWhereWithAggregatesInput[]
+    OR?: CrmEmailLogScalarWhereWithAggregatesInput[]
+    NOT?: CrmEmailLogScalarWhereWithAggregatesInput | CrmEmailLogScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"CrmEmailLog"> | string
+    customerId?: StringNullableWithAggregatesFilter<"CrmEmailLog"> | string | null
+    customerName?: StringWithAggregatesFilter<"CrmEmailLog"> | string
+    email?: StringWithAggregatesFilter<"CrmEmailLog"> | string
+    subject?: StringWithAggregatesFilter<"CrmEmailLog"> | string
+    messageId?: StringNullableWithAggregatesFilter<"CrmEmailLog"> | string | null
+    sentAt?: DateTimeWithAggregatesFilter<"CrmEmailLog"> | Date | string
+    repliedAt?: DateTimeNullableWithAggregatesFilter<"CrmEmailLog"> | Date | string | null
+    replySubject?: StringNullableWithAggregatesFilter<"CrmEmailLog"> | string | null
+  }
+
+  export type VehicleFuelLogWhereInput = {
+    AND?: VehicleFuelLogWhereInput | VehicleFuelLogWhereInput[]
+    OR?: VehicleFuelLogWhereInput[]
+    NOT?: VehicleFuelLogWhereInput | VehicleFuelLogWhereInput[]
+    id?: StringFilter<"VehicleFuelLog"> | string
+    vehicleId?: StringFilter<"VehicleFuelLog"> | string
+    fuelDate?: DateTimeFilter<"VehicleFuelLog"> | Date | string
+    liters?: FloatFilter<"VehicleFuelLog"> | number
+    pricePerLiter?: FloatFilter<"VehicleFuelLog"> | number
+    cost?: FloatFilter<"VehicleFuelLog"> | number
+    kmAtFill?: FloatFilter<"VehicleFuelLog"> | number
+    fuelType?: StringNullableFilter<"VehicleFuelLog"> | string | null
+    station?: StringNullableFilter<"VehicleFuelLog"> | string | null
+    isFullTank?: BoolFilter<"VehicleFuelLog"> | boolean
+    notes?: StringNullableFilter<"VehicleFuelLog"> | string | null
+    createdAt?: DateTimeFilter<"VehicleFuelLog"> | Date | string
+    vehicle?: XOR<VehicleScalarRelationFilter, VehicleWhereInput>
+  }
+
+  export type VehicleFuelLogOrderByWithRelationInput = {
+    id?: SortOrder
+    vehicleId?: SortOrder
+    fuelDate?: SortOrder
+    liters?: SortOrder
+    pricePerLiter?: SortOrder
+    cost?: SortOrder
+    kmAtFill?: SortOrder
+    fuelType?: SortOrderInput | SortOrder
+    station?: SortOrderInput | SortOrder
+    isFullTank?: SortOrder
+    notes?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    vehicle?: VehicleOrderByWithRelationInput
+  }
+
+  export type VehicleFuelLogWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: VehicleFuelLogWhereInput | VehicleFuelLogWhereInput[]
+    OR?: VehicleFuelLogWhereInput[]
+    NOT?: VehicleFuelLogWhereInput | VehicleFuelLogWhereInput[]
+    vehicleId?: StringFilter<"VehicleFuelLog"> | string
+    fuelDate?: DateTimeFilter<"VehicleFuelLog"> | Date | string
+    liters?: FloatFilter<"VehicleFuelLog"> | number
+    pricePerLiter?: FloatFilter<"VehicleFuelLog"> | number
+    cost?: FloatFilter<"VehicleFuelLog"> | number
+    kmAtFill?: FloatFilter<"VehicleFuelLog"> | number
+    fuelType?: StringNullableFilter<"VehicleFuelLog"> | string | null
+    station?: StringNullableFilter<"VehicleFuelLog"> | string | null
+    isFullTank?: BoolFilter<"VehicleFuelLog"> | boolean
+    notes?: StringNullableFilter<"VehicleFuelLog"> | string | null
+    createdAt?: DateTimeFilter<"VehicleFuelLog"> | Date | string
+    vehicle?: XOR<VehicleScalarRelationFilter, VehicleWhereInput>
+  }, "id">
+
+  export type VehicleFuelLogOrderByWithAggregationInput = {
+    id?: SortOrder
+    vehicleId?: SortOrder
+    fuelDate?: SortOrder
+    liters?: SortOrder
+    pricePerLiter?: SortOrder
+    cost?: SortOrder
+    kmAtFill?: SortOrder
+    fuelType?: SortOrderInput | SortOrder
+    station?: SortOrderInput | SortOrder
+    isFullTank?: SortOrder
+    notes?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    _count?: VehicleFuelLogCountOrderByAggregateInput
+    _avg?: VehicleFuelLogAvgOrderByAggregateInput
+    _max?: VehicleFuelLogMaxOrderByAggregateInput
+    _min?: VehicleFuelLogMinOrderByAggregateInput
+    _sum?: VehicleFuelLogSumOrderByAggregateInput
+  }
+
+  export type VehicleFuelLogScalarWhereWithAggregatesInput = {
+    AND?: VehicleFuelLogScalarWhereWithAggregatesInput | VehicleFuelLogScalarWhereWithAggregatesInput[]
+    OR?: VehicleFuelLogScalarWhereWithAggregatesInput[]
+    NOT?: VehicleFuelLogScalarWhereWithAggregatesInput | VehicleFuelLogScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"VehicleFuelLog"> | string
+    vehicleId?: StringWithAggregatesFilter<"VehicleFuelLog"> | string
+    fuelDate?: DateTimeWithAggregatesFilter<"VehicleFuelLog"> | Date | string
+    liters?: FloatWithAggregatesFilter<"VehicleFuelLog"> | number
+    pricePerLiter?: FloatWithAggregatesFilter<"VehicleFuelLog"> | number
+    cost?: FloatWithAggregatesFilter<"VehicleFuelLog"> | number
+    kmAtFill?: FloatWithAggregatesFilter<"VehicleFuelLog"> | number
+    fuelType?: StringNullableWithAggregatesFilter<"VehicleFuelLog"> | string | null
+    station?: StringNullableWithAggregatesFilter<"VehicleFuelLog"> | string | null
+    isFullTank?: BoolWithAggregatesFilter<"VehicleFuelLog"> | boolean
+    notes?: StringNullableWithAggregatesFilter<"VehicleFuelLog"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"VehicleFuelLog"> | Date | string
+  }
+
+  export type VehicleDocumentWhereInput = {
+    AND?: VehicleDocumentWhereInput | VehicleDocumentWhereInput[]
+    OR?: VehicleDocumentWhereInput[]
+    NOT?: VehicleDocumentWhereInput | VehicleDocumentWhereInput[]
+    id?: StringFilter<"VehicleDocument"> | string
+    vehicleId?: StringFilter<"VehicleDocument"> | string
+    type?: StringFilter<"VehicleDocument"> | string
+    name?: StringFilter<"VehicleDocument"> | string
+    documentNumber?: StringNullableFilter<"VehicleDocument"> | string | null
+    fileUrl?: StringNullableFilter<"VehicleDocument"> | string | null
+    issuer?: StringNullableFilter<"VehicleDocument"> | string | null
+    issueDate?: DateTimeNullableFilter<"VehicleDocument"> | Date | string | null
+    expiryDate?: DateTimeNullableFilter<"VehicleDocument"> | Date | string | null
+    notes?: StringNullableFilter<"VehicleDocument"> | string | null
+    createdAt?: DateTimeFilter<"VehicleDocument"> | Date | string
+    updatedAt?: DateTimeFilter<"VehicleDocument"> | Date | string
+    vehicle?: XOR<VehicleScalarRelationFilter, VehicleWhereInput>
+  }
+
+  export type VehicleDocumentOrderByWithRelationInput = {
+    id?: SortOrder
+    vehicleId?: SortOrder
+    type?: SortOrder
+    name?: SortOrder
+    documentNumber?: SortOrderInput | SortOrder
+    fileUrl?: SortOrderInput | SortOrder
+    issuer?: SortOrderInput | SortOrder
+    issueDate?: SortOrderInput | SortOrder
+    expiryDate?: SortOrderInput | SortOrder
+    notes?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    vehicle?: VehicleOrderByWithRelationInput
+  }
+
+  export type VehicleDocumentWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: VehicleDocumentWhereInput | VehicleDocumentWhereInput[]
+    OR?: VehicleDocumentWhereInput[]
+    NOT?: VehicleDocumentWhereInput | VehicleDocumentWhereInput[]
+    vehicleId?: StringFilter<"VehicleDocument"> | string
+    type?: StringFilter<"VehicleDocument"> | string
+    name?: StringFilter<"VehicleDocument"> | string
+    documentNumber?: StringNullableFilter<"VehicleDocument"> | string | null
+    fileUrl?: StringNullableFilter<"VehicleDocument"> | string | null
+    issuer?: StringNullableFilter<"VehicleDocument"> | string | null
+    issueDate?: DateTimeNullableFilter<"VehicleDocument"> | Date | string | null
+    expiryDate?: DateTimeNullableFilter<"VehicleDocument"> | Date | string | null
+    notes?: StringNullableFilter<"VehicleDocument"> | string | null
+    createdAt?: DateTimeFilter<"VehicleDocument"> | Date | string
+    updatedAt?: DateTimeFilter<"VehicleDocument"> | Date | string
+    vehicle?: XOR<VehicleScalarRelationFilter, VehicleWhereInput>
+  }, "id">
+
+  export type VehicleDocumentOrderByWithAggregationInput = {
+    id?: SortOrder
+    vehicleId?: SortOrder
+    type?: SortOrder
+    name?: SortOrder
+    documentNumber?: SortOrderInput | SortOrder
+    fileUrl?: SortOrderInput | SortOrder
+    issuer?: SortOrderInput | SortOrder
+    issueDate?: SortOrderInput | SortOrder
+    expiryDate?: SortOrderInput | SortOrder
+    notes?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: VehicleDocumentCountOrderByAggregateInput
+    _max?: VehicleDocumentMaxOrderByAggregateInput
+    _min?: VehicleDocumentMinOrderByAggregateInput
+  }
+
+  export type VehicleDocumentScalarWhereWithAggregatesInput = {
+    AND?: VehicleDocumentScalarWhereWithAggregatesInput | VehicleDocumentScalarWhereWithAggregatesInput[]
+    OR?: VehicleDocumentScalarWhereWithAggregatesInput[]
+    NOT?: VehicleDocumentScalarWhereWithAggregatesInput | VehicleDocumentScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"VehicleDocument"> | string
+    vehicleId?: StringWithAggregatesFilter<"VehicleDocument"> | string
+    type?: StringWithAggregatesFilter<"VehicleDocument"> | string
+    name?: StringWithAggregatesFilter<"VehicleDocument"> | string
+    documentNumber?: StringNullableWithAggregatesFilter<"VehicleDocument"> | string | null
+    fileUrl?: StringNullableWithAggregatesFilter<"VehicleDocument"> | string | null
+    issuer?: StringNullableWithAggregatesFilter<"VehicleDocument"> | string | null
+    issueDate?: DateTimeNullableWithAggregatesFilter<"VehicleDocument"> | Date | string | null
+    expiryDate?: DateTimeNullableWithAggregatesFilter<"VehicleDocument"> | Date | string | null
+    notes?: StringNullableWithAggregatesFilter<"VehicleDocument"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"VehicleDocument"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"VehicleDocument"> | Date | string
   }
 
   export type DeliveryRouteWhereInput = {
@@ -147766,6 +160733,183 @@ export namespace Prisma {
     updatedAt?: DateTimeWithAggregatesFilter<"Review"> | Date | string
   }
 
+  export type SkuMappingWhereInput = {
+    AND?: SkuMappingWhereInput | SkuMappingWhereInput[]
+    OR?: SkuMappingWhereInput[]
+    NOT?: SkuMappingWhereInput | SkuMappingWhereInput[]
+    id?: StringFilter<"SkuMapping"> | string
+    platformSku?: StringFilter<"SkuMapping"> | string
+    productId?: StringFilter<"SkuMapping"> | string
+    platform?: StringNullableFilter<"SkuMapping"> | string | null
+    note?: StringNullableFilter<"SkuMapping"> | string | null
+    conversionRate?: FloatFilter<"SkuMapping"> | number
+    bundleId?: StringNullableFilter<"SkuMapping"> | string | null
+    createdAt?: DateTimeFilter<"SkuMapping"> | Date | string
+    updatedAt?: DateTimeFilter<"SkuMapping"> | Date | string
+    product?: XOR<ProductScalarRelationFilter, ProductWhereInput>
+  }
+
+  export type SkuMappingOrderByWithRelationInput = {
+    id?: SortOrder
+    platformSku?: SortOrder
+    productId?: SortOrder
+    platform?: SortOrderInput | SortOrder
+    note?: SortOrderInput | SortOrder
+    conversionRate?: SortOrder
+    bundleId?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    product?: ProductOrderByWithRelationInput
+  }
+
+  export type SkuMappingWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    platformSku_platform?: SkuMappingPlatformSkuPlatformCompoundUniqueInput
+    AND?: SkuMappingWhereInput | SkuMappingWhereInput[]
+    OR?: SkuMappingWhereInput[]
+    NOT?: SkuMappingWhereInput | SkuMappingWhereInput[]
+    platformSku?: StringFilter<"SkuMapping"> | string
+    productId?: StringFilter<"SkuMapping"> | string
+    platform?: StringNullableFilter<"SkuMapping"> | string | null
+    note?: StringNullableFilter<"SkuMapping"> | string | null
+    conversionRate?: FloatFilter<"SkuMapping"> | number
+    bundleId?: StringNullableFilter<"SkuMapping"> | string | null
+    createdAt?: DateTimeFilter<"SkuMapping"> | Date | string
+    updatedAt?: DateTimeFilter<"SkuMapping"> | Date | string
+    product?: XOR<ProductScalarRelationFilter, ProductWhereInput>
+  }, "id" | "platformSku_platform">
+
+  export type SkuMappingOrderByWithAggregationInput = {
+    id?: SortOrder
+    platformSku?: SortOrder
+    productId?: SortOrder
+    platform?: SortOrderInput | SortOrder
+    note?: SortOrderInput | SortOrder
+    conversionRate?: SortOrder
+    bundleId?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: SkuMappingCountOrderByAggregateInput
+    _avg?: SkuMappingAvgOrderByAggregateInput
+    _max?: SkuMappingMaxOrderByAggregateInput
+    _min?: SkuMappingMinOrderByAggregateInput
+    _sum?: SkuMappingSumOrderByAggregateInput
+  }
+
+  export type SkuMappingScalarWhereWithAggregatesInput = {
+    AND?: SkuMappingScalarWhereWithAggregatesInput | SkuMappingScalarWhereWithAggregatesInput[]
+    OR?: SkuMappingScalarWhereWithAggregatesInput[]
+    NOT?: SkuMappingScalarWhereWithAggregatesInput | SkuMappingScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"SkuMapping"> | string
+    platformSku?: StringWithAggregatesFilter<"SkuMapping"> | string
+    productId?: StringWithAggregatesFilter<"SkuMapping"> | string
+    platform?: StringNullableWithAggregatesFilter<"SkuMapping"> | string | null
+    note?: StringNullableWithAggregatesFilter<"SkuMapping"> | string | null
+    conversionRate?: FloatWithAggregatesFilter<"SkuMapping"> | number
+    bundleId?: StringNullableWithAggregatesFilter<"SkuMapping"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"SkuMapping"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"SkuMapping"> | Date | string
+  }
+
+  export type HkdRevenueEntryWhereInput = {
+    AND?: HkdRevenueEntryWhereInput | HkdRevenueEntryWhereInput[]
+    OR?: HkdRevenueEntryWhereInput[]
+    NOT?: HkdRevenueEntryWhereInput | HkdRevenueEntryWhereInput[]
+    id?: StringFilter<"HkdRevenueEntry"> | string
+    date?: DateTimeFilter<"HkdRevenueEntry"> | Date | string
+    soChungTu?: StringNullableFilter<"HkdRevenueEntry"> | string | null
+    dienGiai?: StringFilter<"HkdRevenueEntry"> | string
+    doanhThu?: FloatFilter<"HkdRevenueEntry"> | number
+    chietKhau?: FloatFilter<"HkdRevenueEntry"> | number
+    thueGTGT?: FloatFilter<"HkdRevenueEntry"> | number
+    doanhThuThuan?: FloatFilter<"HkdRevenueEntry"> | number
+    tncnUocTinh?: FloatFilter<"HkdRevenueEntry"> | number
+    phuongThucTT?: StringFilter<"HkdRevenueEntry"> | string
+    ghiChu?: StringNullableFilter<"HkdRevenueEntry"> | string | null
+    branchId?: StringNullableFilter<"HkdRevenueEntry"> | string | null
+    createdAt?: DateTimeFilter<"HkdRevenueEntry"> | Date | string
+    updatedAt?: DateTimeFilter<"HkdRevenueEntry"> | Date | string
+  }
+
+  export type HkdRevenueEntryOrderByWithRelationInput = {
+    id?: SortOrder
+    date?: SortOrder
+    soChungTu?: SortOrderInput | SortOrder
+    dienGiai?: SortOrder
+    doanhThu?: SortOrder
+    chietKhau?: SortOrder
+    thueGTGT?: SortOrder
+    doanhThuThuan?: SortOrder
+    tncnUocTinh?: SortOrder
+    phuongThucTT?: SortOrder
+    ghiChu?: SortOrderInput | SortOrder
+    branchId?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type HkdRevenueEntryWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: HkdRevenueEntryWhereInput | HkdRevenueEntryWhereInput[]
+    OR?: HkdRevenueEntryWhereInput[]
+    NOT?: HkdRevenueEntryWhereInput | HkdRevenueEntryWhereInput[]
+    date?: DateTimeFilter<"HkdRevenueEntry"> | Date | string
+    soChungTu?: StringNullableFilter<"HkdRevenueEntry"> | string | null
+    dienGiai?: StringFilter<"HkdRevenueEntry"> | string
+    doanhThu?: FloatFilter<"HkdRevenueEntry"> | number
+    chietKhau?: FloatFilter<"HkdRevenueEntry"> | number
+    thueGTGT?: FloatFilter<"HkdRevenueEntry"> | number
+    doanhThuThuan?: FloatFilter<"HkdRevenueEntry"> | number
+    tncnUocTinh?: FloatFilter<"HkdRevenueEntry"> | number
+    phuongThucTT?: StringFilter<"HkdRevenueEntry"> | string
+    ghiChu?: StringNullableFilter<"HkdRevenueEntry"> | string | null
+    branchId?: StringNullableFilter<"HkdRevenueEntry"> | string | null
+    createdAt?: DateTimeFilter<"HkdRevenueEntry"> | Date | string
+    updatedAt?: DateTimeFilter<"HkdRevenueEntry"> | Date | string
+  }, "id">
+
+  export type HkdRevenueEntryOrderByWithAggregationInput = {
+    id?: SortOrder
+    date?: SortOrder
+    soChungTu?: SortOrderInput | SortOrder
+    dienGiai?: SortOrder
+    doanhThu?: SortOrder
+    chietKhau?: SortOrder
+    thueGTGT?: SortOrder
+    doanhThuThuan?: SortOrder
+    tncnUocTinh?: SortOrder
+    phuongThucTT?: SortOrder
+    ghiChu?: SortOrderInput | SortOrder
+    branchId?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: HkdRevenueEntryCountOrderByAggregateInput
+    _avg?: HkdRevenueEntryAvgOrderByAggregateInput
+    _max?: HkdRevenueEntryMaxOrderByAggregateInput
+    _min?: HkdRevenueEntryMinOrderByAggregateInput
+    _sum?: HkdRevenueEntrySumOrderByAggregateInput
+  }
+
+  export type HkdRevenueEntryScalarWhereWithAggregatesInput = {
+    AND?: HkdRevenueEntryScalarWhereWithAggregatesInput | HkdRevenueEntryScalarWhereWithAggregatesInput[]
+    OR?: HkdRevenueEntryScalarWhereWithAggregatesInput[]
+    NOT?: HkdRevenueEntryScalarWhereWithAggregatesInput | HkdRevenueEntryScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"HkdRevenueEntry"> | string
+    date?: DateTimeWithAggregatesFilter<"HkdRevenueEntry"> | Date | string
+    soChungTu?: StringNullableWithAggregatesFilter<"HkdRevenueEntry"> | string | null
+    dienGiai?: StringWithAggregatesFilter<"HkdRevenueEntry"> | string
+    doanhThu?: FloatWithAggregatesFilter<"HkdRevenueEntry"> | number
+    chietKhau?: FloatWithAggregatesFilter<"HkdRevenueEntry"> | number
+    thueGTGT?: FloatWithAggregatesFilter<"HkdRevenueEntry"> | number
+    doanhThuThuan?: FloatWithAggregatesFilter<"HkdRevenueEntry"> | number
+    tncnUocTinh?: FloatWithAggregatesFilter<"HkdRevenueEntry"> | number
+    phuongThucTT?: StringWithAggregatesFilter<"HkdRevenueEntry"> | string
+    ghiChu?: StringNullableWithAggregatesFilter<"HkdRevenueEntry"> | string | null
+    branchId?: StringNullableWithAggregatesFilter<"HkdRevenueEntry"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"HkdRevenueEntry"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"HkdRevenueEntry"> | Date | string
+  }
+
   export type StoreSettingsWhereInput = {
     AND?: StoreSettingsWhereInput | StoreSettingsWhereInput[]
     OR?: StoreSettingsWhereInput[]
@@ -147789,6 +160933,8 @@ export namespace Prisma {
     email?: StringNullableFilter<"StoreSettings"> | string | null
     website?: StringNullableFilter<"StoreSettings"> | string | null
     notifyLowStock?: BoolFilter<"StoreSettings"> | boolean
+    smtpConfig?: StringNullableFilter<"StoreSettings"> | string | null
+    geminiApiKey?: StringNullableFilter<"StoreSettings"> | string | null
     notifyNewOrder?: BoolFilter<"StoreSettings"> | boolean
     notifyDailyReport?: BoolFilter<"StoreSettings"> | boolean
     notifyWeeklyReport?: BoolFilter<"StoreSettings"> | boolean
@@ -147823,6 +160969,8 @@ export namespace Prisma {
     email?: SortOrderInput | SortOrder
     website?: SortOrderInput | SortOrder
     notifyLowStock?: SortOrder
+    smtpConfig?: SortOrderInput | SortOrder
+    geminiApiKey?: SortOrderInput | SortOrder
     notifyNewOrder?: SortOrder
     notifyDailyReport?: SortOrder
     notifyWeeklyReport?: SortOrder
@@ -147860,6 +161008,8 @@ export namespace Prisma {
     email?: StringNullableFilter<"StoreSettings"> | string | null
     website?: StringNullableFilter<"StoreSettings"> | string | null
     notifyLowStock?: BoolFilter<"StoreSettings"> | boolean
+    smtpConfig?: StringNullableFilter<"StoreSettings"> | string | null
+    geminiApiKey?: StringNullableFilter<"StoreSettings"> | string | null
     notifyNewOrder?: BoolFilter<"StoreSettings"> | boolean
     notifyDailyReport?: BoolFilter<"StoreSettings"> | boolean
     notifyWeeklyReport?: BoolFilter<"StoreSettings"> | boolean
@@ -147894,6 +161044,8 @@ export namespace Prisma {
     email?: SortOrderInput | SortOrder
     website?: SortOrderInput | SortOrder
     notifyLowStock?: SortOrder
+    smtpConfig?: SortOrderInput | SortOrder
+    geminiApiKey?: SortOrderInput | SortOrder
     notifyNewOrder?: SortOrder
     notifyDailyReport?: SortOrder
     notifyWeeklyReport?: SortOrder
@@ -147936,6 +161088,8 @@ export namespace Prisma {
     email?: StringNullableWithAggregatesFilter<"StoreSettings"> | string | null
     website?: StringNullableWithAggregatesFilter<"StoreSettings"> | string | null
     notifyLowStock?: BoolWithAggregatesFilter<"StoreSettings"> | boolean
+    smtpConfig?: StringNullableWithAggregatesFilter<"StoreSettings"> | string | null
+    geminiApiKey?: StringNullableWithAggregatesFilter<"StoreSettings"> | string | null
     notifyNewOrder?: BoolWithAggregatesFilter<"StoreSettings"> | boolean
     notifyDailyReport?: BoolWithAggregatesFilter<"StoreSettings"> | boolean
     notifyWeeklyReport?: BoolWithAggregatesFilter<"StoreSettings"> | boolean
@@ -152797,6 +165951,455 @@ export namespace Prisma {
     createdAt?: DateTimeWithAggregatesFilter<"FbAutoReplyLog"> | Date | string
   }
 
+  export type CrmTaskWhereInput = {
+    AND?: CrmTaskWhereInput | CrmTaskWhereInput[]
+    OR?: CrmTaskWhereInput[]
+    NOT?: CrmTaskWhereInput | CrmTaskWhereInput[]
+    id?: StringFilter<"CrmTask"> | string
+    title?: StringFilter<"CrmTask"> | string
+    description?: StringNullableFilter<"CrmTask"> | string | null
+    customerId?: StringNullableFilter<"CrmTask"> | string | null
+    customerName?: StringNullableFilter<"CrmTask"> | string | null
+    status?: StringFilter<"CrmTask"> | string
+    priority?: StringFilter<"CrmTask"> | string
+    type?: StringNullableFilter<"CrmTask"> | string | null
+    dueDate?: DateTimeNullableFilter<"CrmTask"> | Date | string | null
+    assignee?: StringNullableFilter<"CrmTask"> | string | null
+    createdBy?: StringNullableFilter<"CrmTask"> | string | null
+    completedAt?: DateTimeNullableFilter<"CrmTask"> | Date | string | null
+    createdAt?: DateTimeFilter<"CrmTask"> | Date | string
+    updatedAt?: DateTimeFilter<"CrmTask"> | Date | string
+  }
+
+  export type CrmTaskOrderByWithRelationInput = {
+    id?: SortOrder
+    title?: SortOrder
+    description?: SortOrderInput | SortOrder
+    customerId?: SortOrderInput | SortOrder
+    customerName?: SortOrderInput | SortOrder
+    status?: SortOrder
+    priority?: SortOrder
+    type?: SortOrderInput | SortOrder
+    dueDate?: SortOrderInput | SortOrder
+    assignee?: SortOrderInput | SortOrder
+    createdBy?: SortOrderInput | SortOrder
+    completedAt?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type CrmTaskWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: CrmTaskWhereInput | CrmTaskWhereInput[]
+    OR?: CrmTaskWhereInput[]
+    NOT?: CrmTaskWhereInput | CrmTaskWhereInput[]
+    title?: StringFilter<"CrmTask"> | string
+    description?: StringNullableFilter<"CrmTask"> | string | null
+    customerId?: StringNullableFilter<"CrmTask"> | string | null
+    customerName?: StringNullableFilter<"CrmTask"> | string | null
+    status?: StringFilter<"CrmTask"> | string
+    priority?: StringFilter<"CrmTask"> | string
+    type?: StringNullableFilter<"CrmTask"> | string | null
+    dueDate?: DateTimeNullableFilter<"CrmTask"> | Date | string | null
+    assignee?: StringNullableFilter<"CrmTask"> | string | null
+    createdBy?: StringNullableFilter<"CrmTask"> | string | null
+    completedAt?: DateTimeNullableFilter<"CrmTask"> | Date | string | null
+    createdAt?: DateTimeFilter<"CrmTask"> | Date | string
+    updatedAt?: DateTimeFilter<"CrmTask"> | Date | string
+  }, "id">
+
+  export type CrmTaskOrderByWithAggregationInput = {
+    id?: SortOrder
+    title?: SortOrder
+    description?: SortOrderInput | SortOrder
+    customerId?: SortOrderInput | SortOrder
+    customerName?: SortOrderInput | SortOrder
+    status?: SortOrder
+    priority?: SortOrder
+    type?: SortOrderInput | SortOrder
+    dueDate?: SortOrderInput | SortOrder
+    assignee?: SortOrderInput | SortOrder
+    createdBy?: SortOrderInput | SortOrder
+    completedAt?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: CrmTaskCountOrderByAggregateInput
+    _max?: CrmTaskMaxOrderByAggregateInput
+    _min?: CrmTaskMinOrderByAggregateInput
+  }
+
+  export type CrmTaskScalarWhereWithAggregatesInput = {
+    AND?: CrmTaskScalarWhereWithAggregatesInput | CrmTaskScalarWhereWithAggregatesInput[]
+    OR?: CrmTaskScalarWhereWithAggregatesInput[]
+    NOT?: CrmTaskScalarWhereWithAggregatesInput | CrmTaskScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"CrmTask"> | string
+    title?: StringWithAggregatesFilter<"CrmTask"> | string
+    description?: StringNullableWithAggregatesFilter<"CrmTask"> | string | null
+    customerId?: StringNullableWithAggregatesFilter<"CrmTask"> | string | null
+    customerName?: StringNullableWithAggregatesFilter<"CrmTask"> | string | null
+    status?: StringWithAggregatesFilter<"CrmTask"> | string
+    priority?: StringWithAggregatesFilter<"CrmTask"> | string
+    type?: StringNullableWithAggregatesFilter<"CrmTask"> | string | null
+    dueDate?: DateTimeNullableWithAggregatesFilter<"CrmTask"> | Date | string | null
+    assignee?: StringNullableWithAggregatesFilter<"CrmTask"> | string | null
+    createdBy?: StringNullableWithAggregatesFilter<"CrmTask"> | string | null
+    completedAt?: DateTimeNullableWithAggregatesFilter<"CrmTask"> | Date | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"CrmTask"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"CrmTask"> | Date | string
+  }
+
+  export type CrmDealWhereInput = {
+    AND?: CrmDealWhereInput | CrmDealWhereInput[]
+    OR?: CrmDealWhereInput[]
+    NOT?: CrmDealWhereInput | CrmDealWhereInput[]
+    id?: StringFilter<"CrmDeal"> | string
+    title?: StringFilter<"CrmDeal"> | string
+    customerId?: StringNullableFilter<"CrmDeal"> | string | null
+    customerName?: StringNullableFilter<"CrmDeal"> | string | null
+    value?: FloatFilter<"CrmDeal"> | number
+    stage?: StringFilter<"CrmDeal"> | string
+    probability?: IntFilter<"CrmDeal"> | number
+    assignee?: StringNullableFilter<"CrmDeal"> | string | null
+    note?: StringNullableFilter<"CrmDeal"> | string | null
+    sortOrder?: IntFilter<"CrmDeal"> | number
+    expectedCloseDate?: DateTimeNullableFilter<"CrmDeal"> | Date | string | null
+    closedAt?: DateTimeNullableFilter<"CrmDeal"> | Date | string | null
+    createdBy?: StringNullableFilter<"CrmDeal"> | string | null
+    createdAt?: DateTimeFilter<"CrmDeal"> | Date | string
+    updatedAt?: DateTimeFilter<"CrmDeal"> | Date | string
+  }
+
+  export type CrmDealOrderByWithRelationInput = {
+    id?: SortOrder
+    title?: SortOrder
+    customerId?: SortOrderInput | SortOrder
+    customerName?: SortOrderInput | SortOrder
+    value?: SortOrder
+    stage?: SortOrder
+    probability?: SortOrder
+    assignee?: SortOrderInput | SortOrder
+    note?: SortOrderInput | SortOrder
+    sortOrder?: SortOrder
+    expectedCloseDate?: SortOrderInput | SortOrder
+    closedAt?: SortOrderInput | SortOrder
+    createdBy?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type CrmDealWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: CrmDealWhereInput | CrmDealWhereInput[]
+    OR?: CrmDealWhereInput[]
+    NOT?: CrmDealWhereInput | CrmDealWhereInput[]
+    title?: StringFilter<"CrmDeal"> | string
+    customerId?: StringNullableFilter<"CrmDeal"> | string | null
+    customerName?: StringNullableFilter<"CrmDeal"> | string | null
+    value?: FloatFilter<"CrmDeal"> | number
+    stage?: StringFilter<"CrmDeal"> | string
+    probability?: IntFilter<"CrmDeal"> | number
+    assignee?: StringNullableFilter<"CrmDeal"> | string | null
+    note?: StringNullableFilter<"CrmDeal"> | string | null
+    sortOrder?: IntFilter<"CrmDeal"> | number
+    expectedCloseDate?: DateTimeNullableFilter<"CrmDeal"> | Date | string | null
+    closedAt?: DateTimeNullableFilter<"CrmDeal"> | Date | string | null
+    createdBy?: StringNullableFilter<"CrmDeal"> | string | null
+    createdAt?: DateTimeFilter<"CrmDeal"> | Date | string
+    updatedAt?: DateTimeFilter<"CrmDeal"> | Date | string
+  }, "id">
+
+  export type CrmDealOrderByWithAggregationInput = {
+    id?: SortOrder
+    title?: SortOrder
+    customerId?: SortOrderInput | SortOrder
+    customerName?: SortOrderInput | SortOrder
+    value?: SortOrder
+    stage?: SortOrder
+    probability?: SortOrder
+    assignee?: SortOrderInput | SortOrder
+    note?: SortOrderInput | SortOrder
+    sortOrder?: SortOrder
+    expectedCloseDate?: SortOrderInput | SortOrder
+    closedAt?: SortOrderInput | SortOrder
+    createdBy?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: CrmDealCountOrderByAggregateInput
+    _avg?: CrmDealAvgOrderByAggregateInput
+    _max?: CrmDealMaxOrderByAggregateInput
+    _min?: CrmDealMinOrderByAggregateInput
+    _sum?: CrmDealSumOrderByAggregateInput
+  }
+
+  export type CrmDealScalarWhereWithAggregatesInput = {
+    AND?: CrmDealScalarWhereWithAggregatesInput | CrmDealScalarWhereWithAggregatesInput[]
+    OR?: CrmDealScalarWhereWithAggregatesInput[]
+    NOT?: CrmDealScalarWhereWithAggregatesInput | CrmDealScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"CrmDeal"> | string
+    title?: StringWithAggregatesFilter<"CrmDeal"> | string
+    customerId?: StringNullableWithAggregatesFilter<"CrmDeal"> | string | null
+    customerName?: StringNullableWithAggregatesFilter<"CrmDeal"> | string | null
+    value?: FloatWithAggregatesFilter<"CrmDeal"> | number
+    stage?: StringWithAggregatesFilter<"CrmDeal"> | string
+    probability?: IntWithAggregatesFilter<"CrmDeal"> | number
+    assignee?: StringNullableWithAggregatesFilter<"CrmDeal"> | string | null
+    note?: StringNullableWithAggregatesFilter<"CrmDeal"> | string | null
+    sortOrder?: IntWithAggregatesFilter<"CrmDeal"> | number
+    expectedCloseDate?: DateTimeNullableWithAggregatesFilter<"CrmDeal"> | Date | string | null
+    closedAt?: DateTimeNullableWithAggregatesFilter<"CrmDeal"> | Date | string | null
+    createdBy?: StringNullableWithAggregatesFilter<"CrmDeal"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"CrmDeal"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"CrmDeal"> | Date | string
+  }
+
+  export type CrmActivityWhereInput = {
+    AND?: CrmActivityWhereInput | CrmActivityWhereInput[]
+    OR?: CrmActivityWhereInput[]
+    NOT?: CrmActivityWhereInput | CrmActivityWhereInput[]
+    id?: StringFilter<"CrmActivity"> | string
+    module?: StringFilter<"CrmActivity"> | string
+    action?: StringFilter<"CrmActivity"> | string
+    description?: StringFilter<"CrmActivity"> | string
+    userId?: StringNullableFilter<"CrmActivity"> | string | null
+    userName?: StringNullableFilter<"CrmActivity"> | string | null
+    entityId?: StringNullableFilter<"CrmActivity"> | string | null
+    entityName?: StringNullableFilter<"CrmActivity"> | string | null
+    metadata?: StringNullableFilter<"CrmActivity"> | string | null
+    createdAt?: DateTimeFilter<"CrmActivity"> | Date | string
+  }
+
+  export type CrmActivityOrderByWithRelationInput = {
+    id?: SortOrder
+    module?: SortOrder
+    action?: SortOrder
+    description?: SortOrder
+    userId?: SortOrderInput | SortOrder
+    userName?: SortOrderInput | SortOrder
+    entityId?: SortOrderInput | SortOrder
+    entityName?: SortOrderInput | SortOrder
+    metadata?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type CrmActivityWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: CrmActivityWhereInput | CrmActivityWhereInput[]
+    OR?: CrmActivityWhereInput[]
+    NOT?: CrmActivityWhereInput | CrmActivityWhereInput[]
+    module?: StringFilter<"CrmActivity"> | string
+    action?: StringFilter<"CrmActivity"> | string
+    description?: StringFilter<"CrmActivity"> | string
+    userId?: StringNullableFilter<"CrmActivity"> | string | null
+    userName?: StringNullableFilter<"CrmActivity"> | string | null
+    entityId?: StringNullableFilter<"CrmActivity"> | string | null
+    entityName?: StringNullableFilter<"CrmActivity"> | string | null
+    metadata?: StringNullableFilter<"CrmActivity"> | string | null
+    createdAt?: DateTimeFilter<"CrmActivity"> | Date | string
+  }, "id">
+
+  export type CrmActivityOrderByWithAggregationInput = {
+    id?: SortOrder
+    module?: SortOrder
+    action?: SortOrder
+    description?: SortOrder
+    userId?: SortOrderInput | SortOrder
+    userName?: SortOrderInput | SortOrder
+    entityId?: SortOrderInput | SortOrder
+    entityName?: SortOrderInput | SortOrder
+    metadata?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    _count?: CrmActivityCountOrderByAggregateInput
+    _max?: CrmActivityMaxOrderByAggregateInput
+    _min?: CrmActivityMinOrderByAggregateInput
+  }
+
+  export type CrmActivityScalarWhereWithAggregatesInput = {
+    AND?: CrmActivityScalarWhereWithAggregatesInput | CrmActivityScalarWhereWithAggregatesInput[]
+    OR?: CrmActivityScalarWhereWithAggregatesInput[]
+    NOT?: CrmActivityScalarWhereWithAggregatesInput | CrmActivityScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"CrmActivity"> | string
+    module?: StringWithAggregatesFilter<"CrmActivity"> | string
+    action?: StringWithAggregatesFilter<"CrmActivity"> | string
+    description?: StringWithAggregatesFilter<"CrmActivity"> | string
+    userId?: StringNullableWithAggregatesFilter<"CrmActivity"> | string | null
+    userName?: StringNullableWithAggregatesFilter<"CrmActivity"> | string | null
+    entityId?: StringNullableWithAggregatesFilter<"CrmActivity"> | string | null
+    entityName?: StringNullableWithAggregatesFilter<"CrmActivity"> | string | null
+    metadata?: StringNullableWithAggregatesFilter<"CrmActivity"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"CrmActivity"> | Date | string
+  }
+
+  export type CrmZaloLogWhereInput = {
+    AND?: CrmZaloLogWhereInput | CrmZaloLogWhereInput[]
+    OR?: CrmZaloLogWhereInput[]
+    NOT?: CrmZaloLogWhereInput | CrmZaloLogWhereInput[]
+    id?: StringFilter<"CrmZaloLog"> | string
+    customerId?: StringFilter<"CrmZaloLog"> | string
+    customerName?: StringNullableFilter<"CrmZaloLog"> | string | null
+    direction?: StringFilter<"CrmZaloLog"> | string
+    content?: StringFilter<"CrmZaloLog"> | string
+    staffName?: StringNullableFilter<"CrmZaloLog"> | string | null
+    starred?: BoolFilter<"CrmZaloLog"> | boolean
+    createdAt?: DateTimeFilter<"CrmZaloLog"> | Date | string
+  }
+
+  export type CrmZaloLogOrderByWithRelationInput = {
+    id?: SortOrder
+    customerId?: SortOrder
+    customerName?: SortOrderInput | SortOrder
+    direction?: SortOrder
+    content?: SortOrder
+    staffName?: SortOrderInput | SortOrder
+    starred?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type CrmZaloLogWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: CrmZaloLogWhereInput | CrmZaloLogWhereInput[]
+    OR?: CrmZaloLogWhereInput[]
+    NOT?: CrmZaloLogWhereInput | CrmZaloLogWhereInput[]
+    customerId?: StringFilter<"CrmZaloLog"> | string
+    customerName?: StringNullableFilter<"CrmZaloLog"> | string | null
+    direction?: StringFilter<"CrmZaloLog"> | string
+    content?: StringFilter<"CrmZaloLog"> | string
+    staffName?: StringNullableFilter<"CrmZaloLog"> | string | null
+    starred?: BoolFilter<"CrmZaloLog"> | boolean
+    createdAt?: DateTimeFilter<"CrmZaloLog"> | Date | string
+  }, "id">
+
+  export type CrmZaloLogOrderByWithAggregationInput = {
+    id?: SortOrder
+    customerId?: SortOrder
+    customerName?: SortOrderInput | SortOrder
+    direction?: SortOrder
+    content?: SortOrder
+    staffName?: SortOrderInput | SortOrder
+    starred?: SortOrder
+    createdAt?: SortOrder
+    _count?: CrmZaloLogCountOrderByAggregateInput
+    _max?: CrmZaloLogMaxOrderByAggregateInput
+    _min?: CrmZaloLogMinOrderByAggregateInput
+  }
+
+  export type CrmZaloLogScalarWhereWithAggregatesInput = {
+    AND?: CrmZaloLogScalarWhereWithAggregatesInput | CrmZaloLogScalarWhereWithAggregatesInput[]
+    OR?: CrmZaloLogScalarWhereWithAggregatesInput[]
+    NOT?: CrmZaloLogScalarWhereWithAggregatesInput | CrmZaloLogScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"CrmZaloLog"> | string
+    customerId?: StringWithAggregatesFilter<"CrmZaloLog"> | string
+    customerName?: StringNullableWithAggregatesFilter<"CrmZaloLog"> | string | null
+    direction?: StringWithAggregatesFilter<"CrmZaloLog"> | string
+    content?: StringWithAggregatesFilter<"CrmZaloLog"> | string
+    staffName?: StringNullableWithAggregatesFilter<"CrmZaloLog"> | string | null
+    starred?: BoolWithAggregatesFilter<"CrmZaloLog"> | boolean
+    createdAt?: DateTimeWithAggregatesFilter<"CrmZaloLog"> | Date | string
+  }
+
+  export type CrmCampaignWhereInput = {
+    AND?: CrmCampaignWhereInput | CrmCampaignWhereInput[]
+    OR?: CrmCampaignWhereInput[]
+    NOT?: CrmCampaignWhereInput | CrmCampaignWhereInput[]
+    id?: StringFilter<"CrmCampaign"> | string
+    name?: StringFilter<"CrmCampaign"> | string
+    channel?: StringFilter<"CrmCampaign"> | string
+    status?: StringFilter<"CrmCampaign"> | string
+    template?: StringFilter<"CrmCampaign"> | string
+    targetTiers?: StringFilter<"CrmCampaign"> | string
+    targetCount?: IntFilter<"CrmCampaign"> | number
+    sentCount?: IntFilter<"CrmCampaign"> | number
+    openRate?: FloatFilter<"CrmCampaign"> | number
+    responseRate?: FloatFilter<"CrmCampaign"> | number
+    scheduledAt?: DateTimeNullableFilter<"CrmCampaign"> | Date | string | null
+    sentAt?: DateTimeNullableFilter<"CrmCampaign"> | Date | string | null
+    createdBy?: StringNullableFilter<"CrmCampaign"> | string | null
+    createdAt?: DateTimeFilter<"CrmCampaign"> | Date | string
+    updatedAt?: DateTimeFilter<"CrmCampaign"> | Date | string
+  }
+
+  export type CrmCampaignOrderByWithRelationInput = {
+    id?: SortOrder
+    name?: SortOrder
+    channel?: SortOrder
+    status?: SortOrder
+    template?: SortOrder
+    targetTiers?: SortOrder
+    targetCount?: SortOrder
+    sentCount?: SortOrder
+    openRate?: SortOrder
+    responseRate?: SortOrder
+    scheduledAt?: SortOrderInput | SortOrder
+    sentAt?: SortOrderInput | SortOrder
+    createdBy?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type CrmCampaignWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: CrmCampaignWhereInput | CrmCampaignWhereInput[]
+    OR?: CrmCampaignWhereInput[]
+    NOT?: CrmCampaignWhereInput | CrmCampaignWhereInput[]
+    name?: StringFilter<"CrmCampaign"> | string
+    channel?: StringFilter<"CrmCampaign"> | string
+    status?: StringFilter<"CrmCampaign"> | string
+    template?: StringFilter<"CrmCampaign"> | string
+    targetTiers?: StringFilter<"CrmCampaign"> | string
+    targetCount?: IntFilter<"CrmCampaign"> | number
+    sentCount?: IntFilter<"CrmCampaign"> | number
+    openRate?: FloatFilter<"CrmCampaign"> | number
+    responseRate?: FloatFilter<"CrmCampaign"> | number
+    scheduledAt?: DateTimeNullableFilter<"CrmCampaign"> | Date | string | null
+    sentAt?: DateTimeNullableFilter<"CrmCampaign"> | Date | string | null
+    createdBy?: StringNullableFilter<"CrmCampaign"> | string | null
+    createdAt?: DateTimeFilter<"CrmCampaign"> | Date | string
+    updatedAt?: DateTimeFilter<"CrmCampaign"> | Date | string
+  }, "id">
+
+  export type CrmCampaignOrderByWithAggregationInput = {
+    id?: SortOrder
+    name?: SortOrder
+    channel?: SortOrder
+    status?: SortOrder
+    template?: SortOrder
+    targetTiers?: SortOrder
+    targetCount?: SortOrder
+    sentCount?: SortOrder
+    openRate?: SortOrder
+    responseRate?: SortOrder
+    scheduledAt?: SortOrderInput | SortOrder
+    sentAt?: SortOrderInput | SortOrder
+    createdBy?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: CrmCampaignCountOrderByAggregateInput
+    _avg?: CrmCampaignAvgOrderByAggregateInput
+    _max?: CrmCampaignMaxOrderByAggregateInput
+    _min?: CrmCampaignMinOrderByAggregateInput
+    _sum?: CrmCampaignSumOrderByAggregateInput
+  }
+
+  export type CrmCampaignScalarWhereWithAggregatesInput = {
+    AND?: CrmCampaignScalarWhereWithAggregatesInput | CrmCampaignScalarWhereWithAggregatesInput[]
+    OR?: CrmCampaignScalarWhereWithAggregatesInput[]
+    NOT?: CrmCampaignScalarWhereWithAggregatesInput | CrmCampaignScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"CrmCampaign"> | string
+    name?: StringWithAggregatesFilter<"CrmCampaign"> | string
+    channel?: StringWithAggregatesFilter<"CrmCampaign"> | string
+    status?: StringWithAggregatesFilter<"CrmCampaign"> | string
+    template?: StringWithAggregatesFilter<"CrmCampaign"> | string
+    targetTiers?: StringWithAggregatesFilter<"CrmCampaign"> | string
+    targetCount?: IntWithAggregatesFilter<"CrmCampaign"> | number
+    sentCount?: IntWithAggregatesFilter<"CrmCampaign"> | number
+    openRate?: FloatWithAggregatesFilter<"CrmCampaign"> | number
+    responseRate?: FloatWithAggregatesFilter<"CrmCampaign"> | number
+    scheduledAt?: DateTimeNullableWithAggregatesFilter<"CrmCampaign"> | Date | string | null
+    sentAt?: DateTimeNullableWithAggregatesFilter<"CrmCampaign"> | Date | string | null
+    createdBy?: StringNullableWithAggregatesFilter<"CrmCampaign"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"CrmCampaign"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"CrmCampaign"> | Date | string
+  }
+
   export type BranchCreateInput = {
     id?: string
     name: string
@@ -153633,6 +167236,10 @@ export namespace Prisma {
     minStock?: number
     maxStock?: number
     baseUnit?: string
+    invoiceUnit?: string | null
+    bundleId?: string | null
+    mergedIntoId?: string | null
+    mergedRate?: number
     trackSerial?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -153647,6 +167254,7 @@ export namespace Prisma {
     serials?: ProductSerialCreateNestedManyWithoutProductInput
     onlineOrderItems?: OnlineOrderItemCreateNestedManyWithoutProductInput
     onlineProducts?: OnlineProductCreateNestedManyWithoutLocalProductInput
+    skuMappings?: SkuMappingCreateNestedManyWithoutProductInput
   }
 
   export type ProductUncheckedCreateInput = {
@@ -153665,6 +167273,10 @@ export namespace Prisma {
     minStock?: number
     maxStock?: number
     baseUnit?: string
+    invoiceUnit?: string | null
+    bundleId?: string | null
+    mergedIntoId?: string | null
+    mergedRate?: number
     trackSerial?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -153677,6 +167289,7 @@ export namespace Prisma {
     serials?: ProductSerialUncheckedCreateNestedManyWithoutProductInput
     onlineOrderItems?: OnlineOrderItemUncheckedCreateNestedManyWithoutProductInput
     onlineProducts?: OnlineProductUncheckedCreateNestedManyWithoutLocalProductInput
+    skuMappings?: SkuMappingUncheckedCreateNestedManyWithoutProductInput
   }
 
   export type ProductUpdateInput = {
@@ -153693,6 +167306,10 @@ export namespace Prisma {
     minStock?: IntFieldUpdateOperationsInput | number
     maxStock?: IntFieldUpdateOperationsInput | number
     baseUnit?: StringFieldUpdateOperationsInput | string
+    invoiceUnit?: NullableStringFieldUpdateOperationsInput | string | null
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedIntoId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedRate?: FloatFieldUpdateOperationsInput | number
     trackSerial?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -153707,6 +167324,7 @@ export namespace Prisma {
     serials?: ProductSerialUpdateManyWithoutProductNestedInput
     onlineOrderItems?: OnlineOrderItemUpdateManyWithoutProductNestedInput
     onlineProducts?: OnlineProductUpdateManyWithoutLocalProductNestedInput
+    skuMappings?: SkuMappingUpdateManyWithoutProductNestedInput
   }
 
   export type ProductUncheckedUpdateInput = {
@@ -153725,6 +167343,10 @@ export namespace Prisma {
     minStock?: IntFieldUpdateOperationsInput | number
     maxStock?: IntFieldUpdateOperationsInput | number
     baseUnit?: StringFieldUpdateOperationsInput | string
+    invoiceUnit?: NullableStringFieldUpdateOperationsInput | string | null
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedIntoId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedRate?: FloatFieldUpdateOperationsInput | number
     trackSerial?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -153737,6 +167359,7 @@ export namespace Prisma {
     serials?: ProductSerialUncheckedUpdateManyWithoutProductNestedInput
     onlineOrderItems?: OnlineOrderItemUncheckedUpdateManyWithoutProductNestedInput
     onlineProducts?: OnlineProductUncheckedUpdateManyWithoutLocalProductNestedInput
+    skuMappings?: SkuMappingUncheckedUpdateManyWithoutProductNestedInput
   }
 
   export type ProductCreateManyInput = {
@@ -153755,6 +167378,10 @@ export namespace Prisma {
     minStock?: number
     maxStock?: number
     baseUnit?: string
+    invoiceUnit?: string | null
+    bundleId?: string | null
+    mergedIntoId?: string | null
+    mergedRate?: number
     trackSerial?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -153774,6 +167401,10 @@ export namespace Prisma {
     minStock?: IntFieldUpdateOperationsInput | number
     maxStock?: IntFieldUpdateOperationsInput | number
     baseUnit?: StringFieldUpdateOperationsInput | string
+    invoiceUnit?: NullableStringFieldUpdateOperationsInput | string | null
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedIntoId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedRate?: FloatFieldUpdateOperationsInput | number
     trackSerial?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -153795,6 +167426,10 @@ export namespace Prisma {
     minStock?: IntFieldUpdateOperationsInput | number
     maxStock?: IntFieldUpdateOperationsInput | number
     baseUnit?: StringFieldUpdateOperationsInput | string
+    invoiceUnit?: NullableStringFieldUpdateOperationsInput | string | null
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedIntoId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedRate?: FloatFieldUpdateOperationsInput | number
     trackSerial?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -154742,6 +168377,13 @@ export namespace Prisma {
     paymentStatus?: string
     dueDate?: Date | string | null
     paymentTerm?: string | null
+    hasVatInvoice?: boolean
+    vatInvoiceNo?: string | null
+    vatAmount?: number
+    shippingFee?: number
+    importTax?: number
+    otherFees?: number
+    totalDiscount?: number
     note?: string | null
     branchId?: string | null
     userName: string
@@ -154764,6 +168406,13 @@ export namespace Prisma {
     paymentStatus?: string
     dueDate?: Date | string | null
     paymentTerm?: string | null
+    hasVatInvoice?: boolean
+    vatInvoiceNo?: string | null
+    vatAmount?: number
+    shippingFee?: number
+    importTax?: number
+    otherFees?: number
+    totalDiscount?: number
     note?: string | null
     branchId?: string | null
     userId: string
@@ -154786,6 +168435,13 @@ export namespace Prisma {
     paymentStatus?: StringFieldUpdateOperationsInput | string
     dueDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     paymentTerm?: NullableStringFieldUpdateOperationsInput | string | null
+    hasVatInvoice?: BoolFieldUpdateOperationsInput | boolean
+    vatInvoiceNo?: NullableStringFieldUpdateOperationsInput | string | null
+    vatAmount?: FloatFieldUpdateOperationsInput | number
+    shippingFee?: FloatFieldUpdateOperationsInput | number
+    importTax?: FloatFieldUpdateOperationsInput | number
+    otherFees?: FloatFieldUpdateOperationsInput | number
+    totalDiscount?: FloatFieldUpdateOperationsInput | number
     note?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     userName?: StringFieldUpdateOperationsInput | string
@@ -154808,6 +168464,13 @@ export namespace Prisma {
     paymentStatus?: StringFieldUpdateOperationsInput | string
     dueDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     paymentTerm?: NullableStringFieldUpdateOperationsInput | string | null
+    hasVatInvoice?: BoolFieldUpdateOperationsInput | boolean
+    vatInvoiceNo?: NullableStringFieldUpdateOperationsInput | string | null
+    vatAmount?: FloatFieldUpdateOperationsInput | number
+    shippingFee?: FloatFieldUpdateOperationsInput | number
+    importTax?: FloatFieldUpdateOperationsInput | number
+    otherFees?: FloatFieldUpdateOperationsInput | number
+    totalDiscount?: FloatFieldUpdateOperationsInput | number
     note?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     userId?: StringFieldUpdateOperationsInput | string
@@ -154830,6 +168493,13 @@ export namespace Prisma {
     paymentStatus?: string
     dueDate?: Date | string | null
     paymentTerm?: string | null
+    hasVatInvoice?: boolean
+    vatInvoiceNo?: string | null
+    vatAmount?: number
+    shippingFee?: number
+    importTax?: number
+    otherFees?: number
+    totalDiscount?: number
     note?: string | null
     branchId?: string | null
     userId: string
@@ -154851,6 +168521,13 @@ export namespace Prisma {
     paymentStatus?: StringFieldUpdateOperationsInput | string
     dueDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     paymentTerm?: NullableStringFieldUpdateOperationsInput | string | null
+    hasVatInvoice?: BoolFieldUpdateOperationsInput | boolean
+    vatInvoiceNo?: NullableStringFieldUpdateOperationsInput | string | null
+    vatAmount?: FloatFieldUpdateOperationsInput | number
+    shippingFee?: FloatFieldUpdateOperationsInput | number
+    importTax?: FloatFieldUpdateOperationsInput | number
+    otherFees?: FloatFieldUpdateOperationsInput | number
+    totalDiscount?: FloatFieldUpdateOperationsInput | number
     note?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     userName?: StringFieldUpdateOperationsInput | string
@@ -154871,6 +168548,13 @@ export namespace Prisma {
     paymentStatus?: StringFieldUpdateOperationsInput | string
     dueDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     paymentTerm?: NullableStringFieldUpdateOperationsInput | string | null
+    hasVatInvoice?: BoolFieldUpdateOperationsInput | boolean
+    vatInvoiceNo?: NullableStringFieldUpdateOperationsInput | string | null
+    vatAmount?: FloatFieldUpdateOperationsInput | number
+    shippingFee?: FloatFieldUpdateOperationsInput | number
+    importTax?: FloatFieldUpdateOperationsInput | number
+    otherFees?: FloatFieldUpdateOperationsInput | number
+    totalDiscount?: FloatFieldUpdateOperationsInput | number
     note?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     userId?: StringFieldUpdateOperationsInput | string
@@ -156559,6 +170243,8 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     maintenanceLogs?: VehicleMaintenanceCreateNestedManyWithoutVehicleInput
+    fuelLogs?: VehicleFuelLogCreateNestedManyWithoutVehicleInput
+    documents?: VehicleDocumentCreateNestedManyWithoutVehicleInput
     warehouse?: WarehouseCreateNestedOneWithoutVehicleInput
     salesTrips?: SalesTripCreateNestedManyWithoutVehicleInput
   }
@@ -156586,6 +170272,8 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     maintenanceLogs?: VehicleMaintenanceUncheckedCreateNestedManyWithoutVehicleInput
+    fuelLogs?: VehicleFuelLogUncheckedCreateNestedManyWithoutVehicleInput
+    documents?: VehicleDocumentUncheckedCreateNestedManyWithoutVehicleInput
     warehouse?: WarehouseUncheckedCreateNestedOneWithoutVehicleInput
     salesTrips?: SalesTripUncheckedCreateNestedManyWithoutVehicleInput
   }
@@ -156613,6 +170301,8 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     maintenanceLogs?: VehicleMaintenanceUpdateManyWithoutVehicleNestedInput
+    fuelLogs?: VehicleFuelLogUpdateManyWithoutVehicleNestedInput
+    documents?: VehicleDocumentUpdateManyWithoutVehicleNestedInput
     warehouse?: WarehouseUpdateOneWithoutVehicleNestedInput
     salesTrips?: SalesTripUpdateManyWithoutVehicleNestedInput
   }
@@ -156640,6 +170330,8 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     maintenanceLogs?: VehicleMaintenanceUncheckedUpdateManyWithoutVehicleNestedInput
+    fuelLogs?: VehicleFuelLogUncheckedUpdateManyWithoutVehicleNestedInput
+    documents?: VehicleDocumentUncheckedUpdateManyWithoutVehicleNestedInput
     warehouse?: WarehouseUncheckedUpdateOneWithoutVehicleNestedInput
     salesTrips?: SalesTripUncheckedUpdateManyWithoutVehicleNestedInput
   }
@@ -156811,6 +170503,298 @@ export namespace Prisma {
     performedBy?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type CrmEmailLogCreateInput = {
+    id?: string
+    customerId?: string | null
+    customerName: string
+    email: string
+    subject: string
+    messageId?: string | null
+    sentAt?: Date | string
+    repliedAt?: Date | string | null
+    replySubject?: string | null
+  }
+
+  export type CrmEmailLogUncheckedCreateInput = {
+    id?: string
+    customerId?: string | null
+    customerName: string
+    email: string
+    subject: string
+    messageId?: string | null
+    sentAt?: Date | string
+    repliedAt?: Date | string | null
+    replySubject?: string | null
+  }
+
+  export type CrmEmailLogUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    customerId?: NullableStringFieldUpdateOperationsInput | string | null
+    customerName?: StringFieldUpdateOperationsInput | string
+    email?: StringFieldUpdateOperationsInput | string
+    subject?: StringFieldUpdateOperationsInput | string
+    messageId?: NullableStringFieldUpdateOperationsInput | string | null
+    sentAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    repliedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    replySubject?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type CrmEmailLogUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    customerId?: NullableStringFieldUpdateOperationsInput | string | null
+    customerName?: StringFieldUpdateOperationsInput | string
+    email?: StringFieldUpdateOperationsInput | string
+    subject?: StringFieldUpdateOperationsInput | string
+    messageId?: NullableStringFieldUpdateOperationsInput | string | null
+    sentAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    repliedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    replySubject?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type CrmEmailLogCreateManyInput = {
+    id?: string
+    customerId?: string | null
+    customerName: string
+    email: string
+    subject: string
+    messageId?: string | null
+    sentAt?: Date | string
+    repliedAt?: Date | string | null
+    replySubject?: string | null
+  }
+
+  export type CrmEmailLogUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    customerId?: NullableStringFieldUpdateOperationsInput | string | null
+    customerName?: StringFieldUpdateOperationsInput | string
+    email?: StringFieldUpdateOperationsInput | string
+    subject?: StringFieldUpdateOperationsInput | string
+    messageId?: NullableStringFieldUpdateOperationsInput | string | null
+    sentAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    repliedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    replySubject?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type CrmEmailLogUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    customerId?: NullableStringFieldUpdateOperationsInput | string | null
+    customerName?: StringFieldUpdateOperationsInput | string
+    email?: StringFieldUpdateOperationsInput | string
+    subject?: StringFieldUpdateOperationsInput | string
+    messageId?: NullableStringFieldUpdateOperationsInput | string | null
+    sentAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    repliedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    replySubject?: NullableStringFieldUpdateOperationsInput | string | null
+  }
+
+  export type VehicleFuelLogCreateInput = {
+    id?: string
+    fuelDate?: Date | string
+    liters?: number
+    pricePerLiter?: number
+    cost?: number
+    kmAtFill?: number
+    fuelType?: string | null
+    station?: string | null
+    isFullTank?: boolean
+    notes?: string | null
+    createdAt?: Date | string
+    vehicle: VehicleCreateNestedOneWithoutFuelLogsInput
+  }
+
+  export type VehicleFuelLogUncheckedCreateInput = {
+    id?: string
+    vehicleId: string
+    fuelDate?: Date | string
+    liters?: number
+    pricePerLiter?: number
+    cost?: number
+    kmAtFill?: number
+    fuelType?: string | null
+    station?: string | null
+    isFullTank?: boolean
+    notes?: string | null
+    createdAt?: Date | string
+  }
+
+  export type VehicleFuelLogUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    fuelDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    liters?: FloatFieldUpdateOperationsInput | number
+    pricePerLiter?: FloatFieldUpdateOperationsInput | number
+    cost?: FloatFieldUpdateOperationsInput | number
+    kmAtFill?: FloatFieldUpdateOperationsInput | number
+    fuelType?: NullableStringFieldUpdateOperationsInput | string | null
+    station?: NullableStringFieldUpdateOperationsInput | string | null
+    isFullTank?: BoolFieldUpdateOperationsInput | boolean
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    vehicle?: VehicleUpdateOneRequiredWithoutFuelLogsNestedInput
+  }
+
+  export type VehicleFuelLogUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    vehicleId?: StringFieldUpdateOperationsInput | string
+    fuelDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    liters?: FloatFieldUpdateOperationsInput | number
+    pricePerLiter?: FloatFieldUpdateOperationsInput | number
+    cost?: FloatFieldUpdateOperationsInput | number
+    kmAtFill?: FloatFieldUpdateOperationsInput | number
+    fuelType?: NullableStringFieldUpdateOperationsInput | string | null
+    station?: NullableStringFieldUpdateOperationsInput | string | null
+    isFullTank?: BoolFieldUpdateOperationsInput | boolean
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type VehicleFuelLogCreateManyInput = {
+    id?: string
+    vehicleId: string
+    fuelDate?: Date | string
+    liters?: number
+    pricePerLiter?: number
+    cost?: number
+    kmAtFill?: number
+    fuelType?: string | null
+    station?: string | null
+    isFullTank?: boolean
+    notes?: string | null
+    createdAt?: Date | string
+  }
+
+  export type VehicleFuelLogUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    fuelDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    liters?: FloatFieldUpdateOperationsInput | number
+    pricePerLiter?: FloatFieldUpdateOperationsInput | number
+    cost?: FloatFieldUpdateOperationsInput | number
+    kmAtFill?: FloatFieldUpdateOperationsInput | number
+    fuelType?: NullableStringFieldUpdateOperationsInput | string | null
+    station?: NullableStringFieldUpdateOperationsInput | string | null
+    isFullTank?: BoolFieldUpdateOperationsInput | boolean
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type VehicleFuelLogUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    vehicleId?: StringFieldUpdateOperationsInput | string
+    fuelDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    liters?: FloatFieldUpdateOperationsInput | number
+    pricePerLiter?: FloatFieldUpdateOperationsInput | number
+    cost?: FloatFieldUpdateOperationsInput | number
+    kmAtFill?: FloatFieldUpdateOperationsInput | number
+    fuelType?: NullableStringFieldUpdateOperationsInput | string | null
+    station?: NullableStringFieldUpdateOperationsInput | string | null
+    isFullTank?: BoolFieldUpdateOperationsInput | boolean
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type VehicleDocumentCreateInput = {
+    id?: string
+    type: string
+    name: string
+    documentNumber?: string | null
+    fileUrl?: string | null
+    issuer?: string | null
+    issueDate?: Date | string | null
+    expiryDate?: Date | string | null
+    notes?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    vehicle: VehicleCreateNestedOneWithoutDocumentsInput
+  }
+
+  export type VehicleDocumentUncheckedCreateInput = {
+    id?: string
+    vehicleId: string
+    type: string
+    name: string
+    documentNumber?: string | null
+    fileUrl?: string | null
+    issuer?: string | null
+    issueDate?: Date | string | null
+    expiryDate?: Date | string | null
+    notes?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type VehicleDocumentUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    type?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    documentNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    fileUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    issuer?: NullableStringFieldUpdateOperationsInput | string | null
+    issueDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiryDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    vehicle?: VehicleUpdateOneRequiredWithoutDocumentsNestedInput
+  }
+
+  export type VehicleDocumentUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    vehicleId?: StringFieldUpdateOperationsInput | string
+    type?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    documentNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    fileUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    issuer?: NullableStringFieldUpdateOperationsInput | string | null
+    issueDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiryDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type VehicleDocumentCreateManyInput = {
+    id?: string
+    vehicleId: string
+    type: string
+    name: string
+    documentNumber?: string | null
+    fileUrl?: string | null
+    issuer?: string | null
+    issueDate?: Date | string | null
+    expiryDate?: Date | string | null
+    notes?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type VehicleDocumentUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    type?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    documentNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    fileUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    issuer?: NullableStringFieldUpdateOperationsInput | string | null
+    issueDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiryDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type VehicleDocumentUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    vehicleId?: StringFieldUpdateOperationsInput | string
+    type?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    documentNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    fileUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    issuer?: NullableStringFieldUpdateOperationsInput | string | null
+    issueDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiryDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type DeliveryRouteCreateInput = {
@@ -159533,6 +173517,208 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type SkuMappingCreateInput = {
+    id?: string
+    platformSku: string
+    platform?: string | null
+    note?: string | null
+    conversionRate?: number
+    bundleId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    product: ProductCreateNestedOneWithoutSkuMappingsInput
+  }
+
+  export type SkuMappingUncheckedCreateInput = {
+    id?: string
+    platformSku: string
+    productId: string
+    platform?: string | null
+    note?: string | null
+    conversionRate?: number
+    bundleId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type SkuMappingUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    platformSku?: StringFieldUpdateOperationsInput | string
+    platform?: NullableStringFieldUpdateOperationsInput | string | null
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    conversionRate?: FloatFieldUpdateOperationsInput | number
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    product?: ProductUpdateOneRequiredWithoutSkuMappingsNestedInput
+  }
+
+  export type SkuMappingUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    platformSku?: StringFieldUpdateOperationsInput | string
+    productId?: StringFieldUpdateOperationsInput | string
+    platform?: NullableStringFieldUpdateOperationsInput | string | null
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    conversionRate?: FloatFieldUpdateOperationsInput | number
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type SkuMappingCreateManyInput = {
+    id?: string
+    platformSku: string
+    productId: string
+    platform?: string | null
+    note?: string | null
+    conversionRate?: number
+    bundleId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type SkuMappingUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    platformSku?: StringFieldUpdateOperationsInput | string
+    platform?: NullableStringFieldUpdateOperationsInput | string | null
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    conversionRate?: FloatFieldUpdateOperationsInput | number
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type SkuMappingUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    platformSku?: StringFieldUpdateOperationsInput | string
+    productId?: StringFieldUpdateOperationsInput | string
+    platform?: NullableStringFieldUpdateOperationsInput | string | null
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    conversionRate?: FloatFieldUpdateOperationsInput | number
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type HkdRevenueEntryCreateInput = {
+    id?: string
+    date?: Date | string
+    soChungTu?: string | null
+    dienGiai: string
+    doanhThu?: number
+    chietKhau?: number
+    thueGTGT?: number
+    doanhThuThuan?: number
+    tncnUocTinh?: number
+    phuongThucTT?: string
+    ghiChu?: string | null
+    branchId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type HkdRevenueEntryUncheckedCreateInput = {
+    id?: string
+    date?: Date | string
+    soChungTu?: string | null
+    dienGiai: string
+    doanhThu?: number
+    chietKhau?: number
+    thueGTGT?: number
+    doanhThuThuan?: number
+    tncnUocTinh?: number
+    phuongThucTT?: string
+    ghiChu?: string | null
+    branchId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type HkdRevenueEntryUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    date?: DateTimeFieldUpdateOperationsInput | Date | string
+    soChungTu?: NullableStringFieldUpdateOperationsInput | string | null
+    dienGiai?: StringFieldUpdateOperationsInput | string
+    doanhThu?: FloatFieldUpdateOperationsInput | number
+    chietKhau?: FloatFieldUpdateOperationsInput | number
+    thueGTGT?: FloatFieldUpdateOperationsInput | number
+    doanhThuThuan?: FloatFieldUpdateOperationsInput | number
+    tncnUocTinh?: FloatFieldUpdateOperationsInput | number
+    phuongThucTT?: StringFieldUpdateOperationsInput | string
+    ghiChu?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type HkdRevenueEntryUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    date?: DateTimeFieldUpdateOperationsInput | Date | string
+    soChungTu?: NullableStringFieldUpdateOperationsInput | string | null
+    dienGiai?: StringFieldUpdateOperationsInput | string
+    doanhThu?: FloatFieldUpdateOperationsInput | number
+    chietKhau?: FloatFieldUpdateOperationsInput | number
+    thueGTGT?: FloatFieldUpdateOperationsInput | number
+    doanhThuThuan?: FloatFieldUpdateOperationsInput | number
+    tncnUocTinh?: FloatFieldUpdateOperationsInput | number
+    phuongThucTT?: StringFieldUpdateOperationsInput | string
+    ghiChu?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type HkdRevenueEntryCreateManyInput = {
+    id?: string
+    date?: Date | string
+    soChungTu?: string | null
+    dienGiai: string
+    doanhThu?: number
+    chietKhau?: number
+    thueGTGT?: number
+    doanhThuThuan?: number
+    tncnUocTinh?: number
+    phuongThucTT?: string
+    ghiChu?: string | null
+    branchId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type HkdRevenueEntryUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    date?: DateTimeFieldUpdateOperationsInput | Date | string
+    soChungTu?: NullableStringFieldUpdateOperationsInput | string | null
+    dienGiai?: StringFieldUpdateOperationsInput | string
+    doanhThu?: FloatFieldUpdateOperationsInput | number
+    chietKhau?: FloatFieldUpdateOperationsInput | number
+    thueGTGT?: FloatFieldUpdateOperationsInput | number
+    doanhThuThuan?: FloatFieldUpdateOperationsInput | number
+    tncnUocTinh?: FloatFieldUpdateOperationsInput | number
+    phuongThucTT?: StringFieldUpdateOperationsInput | string
+    ghiChu?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type HkdRevenueEntryUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    date?: DateTimeFieldUpdateOperationsInput | Date | string
+    soChungTu?: NullableStringFieldUpdateOperationsInput | string | null
+    dienGiai?: StringFieldUpdateOperationsInput | string
+    doanhThu?: FloatFieldUpdateOperationsInput | number
+    chietKhau?: FloatFieldUpdateOperationsInput | number
+    thueGTGT?: FloatFieldUpdateOperationsInput | number
+    doanhThuThuan?: FloatFieldUpdateOperationsInput | number
+    tncnUocTinh?: FloatFieldUpdateOperationsInput | number
+    phuongThucTT?: StringFieldUpdateOperationsInput | string
+    ghiChu?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type StoreSettingsCreateInput = {
     id?: string
     name: string
@@ -159553,6 +173739,8 @@ export namespace Prisma {
     email?: string | null
     website?: string | null
     notifyLowStock?: boolean
+    smtpConfig?: string | null
+    geminiApiKey?: string | null
     notifyNewOrder?: boolean
     notifyDailyReport?: boolean
     notifyWeeklyReport?: boolean
@@ -159587,6 +173775,8 @@ export namespace Prisma {
     email?: string | null
     website?: string | null
     notifyLowStock?: boolean
+    smtpConfig?: string | null
+    geminiApiKey?: string | null
     notifyNewOrder?: boolean
     notifyDailyReport?: boolean
     notifyWeeklyReport?: boolean
@@ -159621,6 +173811,8 @@ export namespace Prisma {
     email?: NullableStringFieldUpdateOperationsInput | string | null
     website?: NullableStringFieldUpdateOperationsInput | string | null
     notifyLowStock?: BoolFieldUpdateOperationsInput | boolean
+    smtpConfig?: NullableStringFieldUpdateOperationsInput | string | null
+    geminiApiKey?: NullableStringFieldUpdateOperationsInput | string | null
     notifyNewOrder?: BoolFieldUpdateOperationsInput | boolean
     notifyDailyReport?: BoolFieldUpdateOperationsInput | boolean
     notifyWeeklyReport?: BoolFieldUpdateOperationsInput | boolean
@@ -159655,6 +173847,8 @@ export namespace Prisma {
     email?: NullableStringFieldUpdateOperationsInput | string | null
     website?: NullableStringFieldUpdateOperationsInput | string | null
     notifyLowStock?: BoolFieldUpdateOperationsInput | boolean
+    smtpConfig?: NullableStringFieldUpdateOperationsInput | string | null
+    geminiApiKey?: NullableStringFieldUpdateOperationsInput | string | null
     notifyNewOrder?: BoolFieldUpdateOperationsInput | boolean
     notifyDailyReport?: BoolFieldUpdateOperationsInput | boolean
     notifyWeeklyReport?: BoolFieldUpdateOperationsInput | boolean
@@ -159689,6 +173883,8 @@ export namespace Prisma {
     email?: string | null
     website?: string | null
     notifyLowStock?: boolean
+    smtpConfig?: string | null
+    geminiApiKey?: string | null
     notifyNewOrder?: boolean
     notifyDailyReport?: boolean
     notifyWeeklyReport?: boolean
@@ -159723,6 +173919,8 @@ export namespace Prisma {
     email?: NullableStringFieldUpdateOperationsInput | string | null
     website?: NullableStringFieldUpdateOperationsInput | string | null
     notifyLowStock?: BoolFieldUpdateOperationsInput | boolean
+    smtpConfig?: NullableStringFieldUpdateOperationsInput | string | null
+    geminiApiKey?: NullableStringFieldUpdateOperationsInput | string | null
     notifyNewOrder?: BoolFieldUpdateOperationsInput | boolean
     notifyDailyReport?: BoolFieldUpdateOperationsInput | boolean
     notifyWeeklyReport?: BoolFieldUpdateOperationsInput | boolean
@@ -159757,6 +173955,8 @@ export namespace Prisma {
     email?: NullableStringFieldUpdateOperationsInput | string | null
     website?: NullableStringFieldUpdateOperationsInput | string | null
     notifyLowStock?: BoolFieldUpdateOperationsInput | boolean
+    smtpConfig?: NullableStringFieldUpdateOperationsInput | string | null
+    geminiApiKey?: NullableStringFieldUpdateOperationsInput | string | null
     notifyNewOrder?: BoolFieldUpdateOperationsInput | boolean
     notifyDailyReport?: BoolFieldUpdateOperationsInput | boolean
     notifyWeeklyReport?: BoolFieldUpdateOperationsInput | boolean
@@ -165575,6 +179775,545 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type CrmTaskCreateInput = {
+    id?: string
+    title: string
+    description?: string | null
+    customerId?: string | null
+    customerName?: string | null
+    status?: string
+    priority?: string
+    type?: string | null
+    dueDate?: Date | string | null
+    assignee?: string | null
+    createdBy?: string | null
+    completedAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type CrmTaskUncheckedCreateInput = {
+    id?: string
+    title: string
+    description?: string | null
+    customerId?: string | null
+    customerName?: string | null
+    status?: string
+    priority?: string
+    type?: string | null
+    dueDate?: Date | string | null
+    assignee?: string | null
+    createdBy?: string | null
+    completedAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type CrmTaskUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    customerId?: NullableStringFieldUpdateOperationsInput | string | null
+    customerName?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    priority?: StringFieldUpdateOperationsInput | string
+    type?: NullableStringFieldUpdateOperationsInput | string | null
+    dueDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    assignee?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type CrmTaskUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    customerId?: NullableStringFieldUpdateOperationsInput | string | null
+    customerName?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    priority?: StringFieldUpdateOperationsInput | string
+    type?: NullableStringFieldUpdateOperationsInput | string | null
+    dueDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    assignee?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type CrmTaskCreateManyInput = {
+    id?: string
+    title: string
+    description?: string | null
+    customerId?: string | null
+    customerName?: string | null
+    status?: string
+    priority?: string
+    type?: string | null
+    dueDate?: Date | string | null
+    assignee?: string | null
+    createdBy?: string | null
+    completedAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type CrmTaskUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    customerId?: NullableStringFieldUpdateOperationsInput | string | null
+    customerName?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    priority?: StringFieldUpdateOperationsInput | string
+    type?: NullableStringFieldUpdateOperationsInput | string | null
+    dueDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    assignee?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type CrmTaskUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    customerId?: NullableStringFieldUpdateOperationsInput | string | null
+    customerName?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    priority?: StringFieldUpdateOperationsInput | string
+    type?: NullableStringFieldUpdateOperationsInput | string | null
+    dueDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    assignee?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    completedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type CrmDealCreateInput = {
+    id?: string
+    title: string
+    customerId?: string | null
+    customerName?: string | null
+    value?: number
+    stage?: string
+    probability?: number
+    assignee?: string | null
+    note?: string | null
+    sortOrder?: number
+    expectedCloseDate?: Date | string | null
+    closedAt?: Date | string | null
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type CrmDealUncheckedCreateInput = {
+    id?: string
+    title: string
+    customerId?: string | null
+    customerName?: string | null
+    value?: number
+    stage?: string
+    probability?: number
+    assignee?: string | null
+    note?: string | null
+    sortOrder?: number
+    expectedCloseDate?: Date | string | null
+    closedAt?: Date | string | null
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type CrmDealUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    customerId?: NullableStringFieldUpdateOperationsInput | string | null
+    customerName?: NullableStringFieldUpdateOperationsInput | string | null
+    value?: FloatFieldUpdateOperationsInput | number
+    stage?: StringFieldUpdateOperationsInput | string
+    probability?: IntFieldUpdateOperationsInput | number
+    assignee?: NullableStringFieldUpdateOperationsInput | string | null
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    sortOrder?: IntFieldUpdateOperationsInput | number
+    expectedCloseDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    closedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type CrmDealUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    customerId?: NullableStringFieldUpdateOperationsInput | string | null
+    customerName?: NullableStringFieldUpdateOperationsInput | string | null
+    value?: FloatFieldUpdateOperationsInput | number
+    stage?: StringFieldUpdateOperationsInput | string
+    probability?: IntFieldUpdateOperationsInput | number
+    assignee?: NullableStringFieldUpdateOperationsInput | string | null
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    sortOrder?: IntFieldUpdateOperationsInput | number
+    expectedCloseDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    closedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type CrmDealCreateManyInput = {
+    id?: string
+    title: string
+    customerId?: string | null
+    customerName?: string | null
+    value?: number
+    stage?: string
+    probability?: number
+    assignee?: string | null
+    note?: string | null
+    sortOrder?: number
+    expectedCloseDate?: Date | string | null
+    closedAt?: Date | string | null
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type CrmDealUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    customerId?: NullableStringFieldUpdateOperationsInput | string | null
+    customerName?: NullableStringFieldUpdateOperationsInput | string | null
+    value?: FloatFieldUpdateOperationsInput | number
+    stage?: StringFieldUpdateOperationsInput | string
+    probability?: IntFieldUpdateOperationsInput | number
+    assignee?: NullableStringFieldUpdateOperationsInput | string | null
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    sortOrder?: IntFieldUpdateOperationsInput | number
+    expectedCloseDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    closedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type CrmDealUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    customerId?: NullableStringFieldUpdateOperationsInput | string | null
+    customerName?: NullableStringFieldUpdateOperationsInput | string | null
+    value?: FloatFieldUpdateOperationsInput | number
+    stage?: StringFieldUpdateOperationsInput | string
+    probability?: IntFieldUpdateOperationsInput | number
+    assignee?: NullableStringFieldUpdateOperationsInput | string | null
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    sortOrder?: IntFieldUpdateOperationsInput | number
+    expectedCloseDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    closedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type CrmActivityCreateInput = {
+    id?: string
+    module: string
+    action: string
+    description: string
+    userId?: string | null
+    userName?: string | null
+    entityId?: string | null
+    entityName?: string | null
+    metadata?: string | null
+    createdAt?: Date | string
+  }
+
+  export type CrmActivityUncheckedCreateInput = {
+    id?: string
+    module: string
+    action: string
+    description: string
+    userId?: string | null
+    userName?: string | null
+    entityId?: string | null
+    entityName?: string | null
+    metadata?: string | null
+    createdAt?: Date | string
+  }
+
+  export type CrmActivityUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    module?: StringFieldUpdateOperationsInput | string
+    action?: StringFieldUpdateOperationsInput | string
+    description?: StringFieldUpdateOperationsInput | string
+    userId?: NullableStringFieldUpdateOperationsInput | string | null
+    userName?: NullableStringFieldUpdateOperationsInput | string | null
+    entityId?: NullableStringFieldUpdateOperationsInput | string | null
+    entityName?: NullableStringFieldUpdateOperationsInput | string | null
+    metadata?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type CrmActivityUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    module?: StringFieldUpdateOperationsInput | string
+    action?: StringFieldUpdateOperationsInput | string
+    description?: StringFieldUpdateOperationsInput | string
+    userId?: NullableStringFieldUpdateOperationsInput | string | null
+    userName?: NullableStringFieldUpdateOperationsInput | string | null
+    entityId?: NullableStringFieldUpdateOperationsInput | string | null
+    entityName?: NullableStringFieldUpdateOperationsInput | string | null
+    metadata?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type CrmActivityCreateManyInput = {
+    id?: string
+    module: string
+    action: string
+    description: string
+    userId?: string | null
+    userName?: string | null
+    entityId?: string | null
+    entityName?: string | null
+    metadata?: string | null
+    createdAt?: Date | string
+  }
+
+  export type CrmActivityUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    module?: StringFieldUpdateOperationsInput | string
+    action?: StringFieldUpdateOperationsInput | string
+    description?: StringFieldUpdateOperationsInput | string
+    userId?: NullableStringFieldUpdateOperationsInput | string | null
+    userName?: NullableStringFieldUpdateOperationsInput | string | null
+    entityId?: NullableStringFieldUpdateOperationsInput | string | null
+    entityName?: NullableStringFieldUpdateOperationsInput | string | null
+    metadata?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type CrmActivityUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    module?: StringFieldUpdateOperationsInput | string
+    action?: StringFieldUpdateOperationsInput | string
+    description?: StringFieldUpdateOperationsInput | string
+    userId?: NullableStringFieldUpdateOperationsInput | string | null
+    userName?: NullableStringFieldUpdateOperationsInput | string | null
+    entityId?: NullableStringFieldUpdateOperationsInput | string | null
+    entityName?: NullableStringFieldUpdateOperationsInput | string | null
+    metadata?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type CrmZaloLogCreateInput = {
+    id?: string
+    customerId: string
+    customerName?: string | null
+    direction?: string
+    content: string
+    staffName?: string | null
+    starred?: boolean
+    createdAt?: Date | string
+  }
+
+  export type CrmZaloLogUncheckedCreateInput = {
+    id?: string
+    customerId: string
+    customerName?: string | null
+    direction?: string
+    content: string
+    staffName?: string | null
+    starred?: boolean
+    createdAt?: Date | string
+  }
+
+  export type CrmZaloLogUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    customerId?: StringFieldUpdateOperationsInput | string
+    customerName?: NullableStringFieldUpdateOperationsInput | string | null
+    direction?: StringFieldUpdateOperationsInput | string
+    content?: StringFieldUpdateOperationsInput | string
+    staffName?: NullableStringFieldUpdateOperationsInput | string | null
+    starred?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type CrmZaloLogUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    customerId?: StringFieldUpdateOperationsInput | string
+    customerName?: NullableStringFieldUpdateOperationsInput | string | null
+    direction?: StringFieldUpdateOperationsInput | string
+    content?: StringFieldUpdateOperationsInput | string
+    staffName?: NullableStringFieldUpdateOperationsInput | string | null
+    starred?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type CrmZaloLogCreateManyInput = {
+    id?: string
+    customerId: string
+    customerName?: string | null
+    direction?: string
+    content: string
+    staffName?: string | null
+    starred?: boolean
+    createdAt?: Date | string
+  }
+
+  export type CrmZaloLogUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    customerId?: StringFieldUpdateOperationsInput | string
+    customerName?: NullableStringFieldUpdateOperationsInput | string | null
+    direction?: StringFieldUpdateOperationsInput | string
+    content?: StringFieldUpdateOperationsInput | string
+    staffName?: NullableStringFieldUpdateOperationsInput | string | null
+    starred?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type CrmZaloLogUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    customerId?: StringFieldUpdateOperationsInput | string
+    customerName?: NullableStringFieldUpdateOperationsInput | string | null
+    direction?: StringFieldUpdateOperationsInput | string
+    content?: StringFieldUpdateOperationsInput | string
+    staffName?: NullableStringFieldUpdateOperationsInput | string | null
+    starred?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type CrmCampaignCreateInput = {
+    id?: string
+    name: string
+    channel?: string
+    status?: string
+    template?: string
+    targetTiers?: string
+    targetCount?: number
+    sentCount?: number
+    openRate?: number
+    responseRate?: number
+    scheduledAt?: Date | string | null
+    sentAt?: Date | string | null
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type CrmCampaignUncheckedCreateInput = {
+    id?: string
+    name: string
+    channel?: string
+    status?: string
+    template?: string
+    targetTiers?: string
+    targetCount?: number
+    sentCount?: number
+    openRate?: number
+    responseRate?: number
+    scheduledAt?: Date | string | null
+    sentAt?: Date | string | null
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type CrmCampaignUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    channel?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    template?: StringFieldUpdateOperationsInput | string
+    targetTiers?: StringFieldUpdateOperationsInput | string
+    targetCount?: IntFieldUpdateOperationsInput | number
+    sentCount?: IntFieldUpdateOperationsInput | number
+    openRate?: FloatFieldUpdateOperationsInput | number
+    responseRate?: FloatFieldUpdateOperationsInput | number
+    scheduledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    sentAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type CrmCampaignUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    channel?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    template?: StringFieldUpdateOperationsInput | string
+    targetTiers?: StringFieldUpdateOperationsInput | string
+    targetCount?: IntFieldUpdateOperationsInput | number
+    sentCount?: IntFieldUpdateOperationsInput | number
+    openRate?: FloatFieldUpdateOperationsInput | number
+    responseRate?: FloatFieldUpdateOperationsInput | number
+    scheduledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    sentAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type CrmCampaignCreateManyInput = {
+    id?: string
+    name: string
+    channel?: string
+    status?: string
+    template?: string
+    targetTiers?: string
+    targetCount?: number
+    sentCount?: number
+    openRate?: number
+    responseRate?: number
+    scheduledAt?: Date | string | null
+    sentAt?: Date | string | null
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type CrmCampaignUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    channel?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    template?: StringFieldUpdateOperationsInput | string
+    targetTiers?: StringFieldUpdateOperationsInput | string
+    targetCount?: IntFieldUpdateOperationsInput | number
+    sentCount?: IntFieldUpdateOperationsInput | number
+    openRate?: FloatFieldUpdateOperationsInput | number
+    responseRate?: FloatFieldUpdateOperationsInput | number
+    scheduledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    sentAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type CrmCampaignUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    channel?: StringFieldUpdateOperationsInput | string
+    status?: StringFieldUpdateOperationsInput | string
+    template?: StringFieldUpdateOperationsInput | string
+    targetTiers?: StringFieldUpdateOperationsInput | string
+    targetCount?: IntFieldUpdateOperationsInput | number
+    sentCount?: IntFieldUpdateOperationsInput | number
+    openRate?: FloatFieldUpdateOperationsInput | number
+    responseRate?: FloatFieldUpdateOperationsInput | number
+    scheduledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    sentAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type StringFilter<$PrismaModel = never> = {
     equals?: string | StringFieldRefInput<$PrismaModel>
     in?: string[] | ListStringFieldRefInput<$PrismaModel>
@@ -166386,6 +181125,12 @@ export namespace Prisma {
     none?: OnlineProductWhereInput
   }
 
+  export type SkuMappingListRelationFilter = {
+    every?: SkuMappingWhereInput
+    some?: SkuMappingWhereInput
+    none?: SkuMappingWhereInput
+  }
+
   export type UnitConversionOrderByRelationAggregateInput = {
     _count?: SortOrder
   }
@@ -166418,6 +181163,10 @@ export namespace Prisma {
     _count?: SortOrder
   }
 
+  export type SkuMappingOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
   export type ProductCountOrderByAggregateInput = {
     id?: SortOrder
     name?: SortOrder
@@ -166434,6 +181183,10 @@ export namespace Prisma {
     minStock?: SortOrder
     maxStock?: SortOrder
     baseUnit?: SortOrder
+    invoiceUnit?: SortOrder
+    bundleId?: SortOrder
+    mergedIntoId?: SortOrder
+    mergedRate?: SortOrder
     trackSerial?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -166445,6 +181198,7 @@ export namespace Prisma {
     stock?: SortOrder
     minStock?: SortOrder
     maxStock?: SortOrder
+    mergedRate?: SortOrder
   }
 
   export type ProductMaxOrderByAggregateInput = {
@@ -166463,6 +181217,10 @@ export namespace Prisma {
     minStock?: SortOrder
     maxStock?: SortOrder
     baseUnit?: SortOrder
+    invoiceUnit?: SortOrder
+    bundleId?: SortOrder
+    mergedIntoId?: SortOrder
+    mergedRate?: SortOrder
     trackSerial?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -166484,6 +181242,10 @@ export namespace Prisma {
     minStock?: SortOrder
     maxStock?: SortOrder
     baseUnit?: SortOrder
+    invoiceUnit?: SortOrder
+    bundleId?: SortOrder
+    mergedIntoId?: SortOrder
+    mergedRate?: SortOrder
     trackSerial?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -166495,6 +181257,7 @@ export namespace Prisma {
     stock?: SortOrder
     minStock?: SortOrder
     maxStock?: SortOrder
+    mergedRate?: SortOrder
   }
 
   export type ProductScalarRelationFilter = {
@@ -167035,6 +181798,13 @@ export namespace Prisma {
     paymentStatus?: SortOrder
     dueDate?: SortOrder
     paymentTerm?: SortOrder
+    hasVatInvoice?: SortOrder
+    vatInvoiceNo?: SortOrder
+    vatAmount?: SortOrder
+    shippingFee?: SortOrder
+    importTax?: SortOrder
+    otherFees?: SortOrder
+    totalDiscount?: SortOrder
     note?: SortOrder
     branchId?: SortOrder
     userId?: SortOrder
@@ -167048,6 +181818,11 @@ export namespace Prisma {
     totalCost?: SortOrder
     totalItems?: SortOrder
     paidAmount?: SortOrder
+    vatAmount?: SortOrder
+    shippingFee?: SortOrder
+    importTax?: SortOrder
+    otherFees?: SortOrder
+    totalDiscount?: SortOrder
   }
 
   export type ImportReceiptMaxOrderByAggregateInput = {
@@ -167062,6 +181837,13 @@ export namespace Prisma {
     paymentStatus?: SortOrder
     dueDate?: SortOrder
     paymentTerm?: SortOrder
+    hasVatInvoice?: SortOrder
+    vatInvoiceNo?: SortOrder
+    vatAmount?: SortOrder
+    shippingFee?: SortOrder
+    importTax?: SortOrder
+    otherFees?: SortOrder
+    totalDiscount?: SortOrder
     note?: SortOrder
     branchId?: SortOrder
     userId?: SortOrder
@@ -167083,6 +181865,13 @@ export namespace Prisma {
     paymentStatus?: SortOrder
     dueDate?: SortOrder
     paymentTerm?: SortOrder
+    hasVatInvoice?: SortOrder
+    vatInvoiceNo?: SortOrder
+    vatAmount?: SortOrder
+    shippingFee?: SortOrder
+    importTax?: SortOrder
+    otherFees?: SortOrder
+    totalDiscount?: SortOrder
     note?: SortOrder
     branchId?: SortOrder
     userId?: SortOrder
@@ -167096,6 +181885,11 @@ export namespace Prisma {
     totalCost?: SortOrder
     totalItems?: SortOrder
     paidAmount?: SortOrder
+    vatAmount?: SortOrder
+    shippingFee?: SortOrder
+    importTax?: SortOrder
+    otherFees?: SortOrder
+    totalDiscount?: SortOrder
   }
 
   export type ImportReceiptScalarRelationFilter = {
@@ -167975,6 +182769,18 @@ export namespace Prisma {
     none?: VehicleMaintenanceWhereInput
   }
 
+  export type VehicleFuelLogListRelationFilter = {
+    every?: VehicleFuelLogWhereInput
+    some?: VehicleFuelLogWhereInput
+    none?: VehicleFuelLogWhereInput
+  }
+
+  export type VehicleDocumentListRelationFilter = {
+    every?: VehicleDocumentWhereInput
+    some?: VehicleDocumentWhereInput
+    none?: VehicleDocumentWhereInput
+  }
+
   export type WarehouseNullableScalarRelationFilter = {
     is?: WarehouseWhereInput | null
     isNot?: WarehouseWhereInput | null
@@ -167987,6 +182793,14 @@ export namespace Prisma {
   }
 
   export type VehicleMaintenanceOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type VehicleFuelLogOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type VehicleDocumentOrderByRelationAggregateInput = {
     _count?: SortOrder
   }
 
@@ -168133,6 +182947,146 @@ export namespace Prisma {
   export type VehicleMaintenanceSumOrderByAggregateInput = {
     cost?: SortOrder
     kmAtService?: SortOrder
+  }
+
+  export type CrmEmailLogCountOrderByAggregateInput = {
+    id?: SortOrder
+    customerId?: SortOrder
+    customerName?: SortOrder
+    email?: SortOrder
+    subject?: SortOrder
+    messageId?: SortOrder
+    sentAt?: SortOrder
+    repliedAt?: SortOrder
+    replySubject?: SortOrder
+  }
+
+  export type CrmEmailLogMaxOrderByAggregateInput = {
+    id?: SortOrder
+    customerId?: SortOrder
+    customerName?: SortOrder
+    email?: SortOrder
+    subject?: SortOrder
+    messageId?: SortOrder
+    sentAt?: SortOrder
+    repliedAt?: SortOrder
+    replySubject?: SortOrder
+  }
+
+  export type CrmEmailLogMinOrderByAggregateInput = {
+    id?: SortOrder
+    customerId?: SortOrder
+    customerName?: SortOrder
+    email?: SortOrder
+    subject?: SortOrder
+    messageId?: SortOrder
+    sentAt?: SortOrder
+    repliedAt?: SortOrder
+    replySubject?: SortOrder
+  }
+
+  export type VehicleFuelLogCountOrderByAggregateInput = {
+    id?: SortOrder
+    vehicleId?: SortOrder
+    fuelDate?: SortOrder
+    liters?: SortOrder
+    pricePerLiter?: SortOrder
+    cost?: SortOrder
+    kmAtFill?: SortOrder
+    fuelType?: SortOrder
+    station?: SortOrder
+    isFullTank?: SortOrder
+    notes?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type VehicleFuelLogAvgOrderByAggregateInput = {
+    liters?: SortOrder
+    pricePerLiter?: SortOrder
+    cost?: SortOrder
+    kmAtFill?: SortOrder
+  }
+
+  export type VehicleFuelLogMaxOrderByAggregateInput = {
+    id?: SortOrder
+    vehicleId?: SortOrder
+    fuelDate?: SortOrder
+    liters?: SortOrder
+    pricePerLiter?: SortOrder
+    cost?: SortOrder
+    kmAtFill?: SortOrder
+    fuelType?: SortOrder
+    station?: SortOrder
+    isFullTank?: SortOrder
+    notes?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type VehicleFuelLogMinOrderByAggregateInput = {
+    id?: SortOrder
+    vehicleId?: SortOrder
+    fuelDate?: SortOrder
+    liters?: SortOrder
+    pricePerLiter?: SortOrder
+    cost?: SortOrder
+    kmAtFill?: SortOrder
+    fuelType?: SortOrder
+    station?: SortOrder
+    isFullTank?: SortOrder
+    notes?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type VehicleFuelLogSumOrderByAggregateInput = {
+    liters?: SortOrder
+    pricePerLiter?: SortOrder
+    cost?: SortOrder
+    kmAtFill?: SortOrder
+  }
+
+  export type VehicleDocumentCountOrderByAggregateInput = {
+    id?: SortOrder
+    vehicleId?: SortOrder
+    type?: SortOrder
+    name?: SortOrder
+    documentNumber?: SortOrder
+    fileUrl?: SortOrder
+    issuer?: SortOrder
+    issueDate?: SortOrder
+    expiryDate?: SortOrder
+    notes?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type VehicleDocumentMaxOrderByAggregateInput = {
+    id?: SortOrder
+    vehicleId?: SortOrder
+    type?: SortOrder
+    name?: SortOrder
+    documentNumber?: SortOrder
+    fileUrl?: SortOrder
+    issuer?: SortOrder
+    issueDate?: SortOrder
+    expiryDate?: SortOrder
+    notes?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type VehicleDocumentMinOrderByAggregateInput = {
+    id?: SortOrder
+    vehicleId?: SortOrder
+    type?: SortOrder
+    name?: SortOrder
+    documentNumber?: SortOrder
+    fileUrl?: SortOrder
+    issuer?: SortOrder
+    issueDate?: SortOrder
+    expiryDate?: SortOrder
+    notes?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
   }
 
   export type DeliveryStopListRelationFilter = {
@@ -169636,6 +184590,122 @@ export namespace Prisma {
     rating?: SortOrder
   }
 
+  export type SkuMappingPlatformSkuPlatformCompoundUniqueInput = {
+    platformSku: string
+    platform: string
+  }
+
+  export type SkuMappingCountOrderByAggregateInput = {
+    id?: SortOrder
+    platformSku?: SortOrder
+    productId?: SortOrder
+    platform?: SortOrder
+    note?: SortOrder
+    conversionRate?: SortOrder
+    bundleId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type SkuMappingAvgOrderByAggregateInput = {
+    conversionRate?: SortOrder
+  }
+
+  export type SkuMappingMaxOrderByAggregateInput = {
+    id?: SortOrder
+    platformSku?: SortOrder
+    productId?: SortOrder
+    platform?: SortOrder
+    note?: SortOrder
+    conversionRate?: SortOrder
+    bundleId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type SkuMappingMinOrderByAggregateInput = {
+    id?: SortOrder
+    platformSku?: SortOrder
+    productId?: SortOrder
+    platform?: SortOrder
+    note?: SortOrder
+    conversionRate?: SortOrder
+    bundleId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type SkuMappingSumOrderByAggregateInput = {
+    conversionRate?: SortOrder
+  }
+
+  export type HkdRevenueEntryCountOrderByAggregateInput = {
+    id?: SortOrder
+    date?: SortOrder
+    soChungTu?: SortOrder
+    dienGiai?: SortOrder
+    doanhThu?: SortOrder
+    chietKhau?: SortOrder
+    thueGTGT?: SortOrder
+    doanhThuThuan?: SortOrder
+    tncnUocTinh?: SortOrder
+    phuongThucTT?: SortOrder
+    ghiChu?: SortOrder
+    branchId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type HkdRevenueEntryAvgOrderByAggregateInput = {
+    doanhThu?: SortOrder
+    chietKhau?: SortOrder
+    thueGTGT?: SortOrder
+    doanhThuThuan?: SortOrder
+    tncnUocTinh?: SortOrder
+  }
+
+  export type HkdRevenueEntryMaxOrderByAggregateInput = {
+    id?: SortOrder
+    date?: SortOrder
+    soChungTu?: SortOrder
+    dienGiai?: SortOrder
+    doanhThu?: SortOrder
+    chietKhau?: SortOrder
+    thueGTGT?: SortOrder
+    doanhThuThuan?: SortOrder
+    tncnUocTinh?: SortOrder
+    phuongThucTT?: SortOrder
+    ghiChu?: SortOrder
+    branchId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type HkdRevenueEntryMinOrderByAggregateInput = {
+    id?: SortOrder
+    date?: SortOrder
+    soChungTu?: SortOrder
+    dienGiai?: SortOrder
+    doanhThu?: SortOrder
+    chietKhau?: SortOrder
+    thueGTGT?: SortOrder
+    doanhThuThuan?: SortOrder
+    tncnUocTinh?: SortOrder
+    phuongThucTT?: SortOrder
+    ghiChu?: SortOrder
+    branchId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type HkdRevenueEntrySumOrderByAggregateInput = {
+    doanhThu?: SortOrder
+    chietKhau?: SortOrder
+    thueGTGT?: SortOrder
+    doanhThuThuan?: SortOrder
+    tncnUocTinh?: SortOrder
+  }
+
   export type StoreSettingsCountOrderByAggregateInput = {
     id?: SortOrder
     name?: SortOrder
@@ -169656,6 +184726,8 @@ export namespace Prisma {
     email?: SortOrder
     website?: SortOrder
     notifyLowStock?: SortOrder
+    smtpConfig?: SortOrder
+    geminiApiKey?: SortOrder
     notifyNewOrder?: SortOrder
     notifyDailyReport?: SortOrder
     notifyWeeklyReport?: SortOrder
@@ -169696,6 +184768,8 @@ export namespace Prisma {
     email?: SortOrder
     website?: SortOrder
     notifyLowStock?: SortOrder
+    smtpConfig?: SortOrder
+    geminiApiKey?: SortOrder
     notifyNewOrder?: SortOrder
     notifyDailyReport?: SortOrder
     notifyWeeklyReport?: SortOrder
@@ -169730,6 +184804,8 @@ export namespace Prisma {
     email?: SortOrder
     website?: SortOrder
     notifyLowStock?: SortOrder
+    smtpConfig?: SortOrder
+    geminiApiKey?: SortOrder
     notifyNewOrder?: SortOrder
     notifyDailyReport?: SortOrder
     notifyWeeklyReport?: SortOrder
@@ -172982,6 +188058,263 @@ export namespace Prisma {
     createdAt?: SortOrder
   }
 
+  export type CrmTaskCountOrderByAggregateInput = {
+    id?: SortOrder
+    title?: SortOrder
+    description?: SortOrder
+    customerId?: SortOrder
+    customerName?: SortOrder
+    status?: SortOrder
+    priority?: SortOrder
+    type?: SortOrder
+    dueDate?: SortOrder
+    assignee?: SortOrder
+    createdBy?: SortOrder
+    completedAt?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type CrmTaskMaxOrderByAggregateInput = {
+    id?: SortOrder
+    title?: SortOrder
+    description?: SortOrder
+    customerId?: SortOrder
+    customerName?: SortOrder
+    status?: SortOrder
+    priority?: SortOrder
+    type?: SortOrder
+    dueDate?: SortOrder
+    assignee?: SortOrder
+    createdBy?: SortOrder
+    completedAt?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type CrmTaskMinOrderByAggregateInput = {
+    id?: SortOrder
+    title?: SortOrder
+    description?: SortOrder
+    customerId?: SortOrder
+    customerName?: SortOrder
+    status?: SortOrder
+    priority?: SortOrder
+    type?: SortOrder
+    dueDate?: SortOrder
+    assignee?: SortOrder
+    createdBy?: SortOrder
+    completedAt?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type CrmDealCountOrderByAggregateInput = {
+    id?: SortOrder
+    title?: SortOrder
+    customerId?: SortOrder
+    customerName?: SortOrder
+    value?: SortOrder
+    stage?: SortOrder
+    probability?: SortOrder
+    assignee?: SortOrder
+    note?: SortOrder
+    sortOrder?: SortOrder
+    expectedCloseDate?: SortOrder
+    closedAt?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type CrmDealAvgOrderByAggregateInput = {
+    value?: SortOrder
+    probability?: SortOrder
+    sortOrder?: SortOrder
+  }
+
+  export type CrmDealMaxOrderByAggregateInput = {
+    id?: SortOrder
+    title?: SortOrder
+    customerId?: SortOrder
+    customerName?: SortOrder
+    value?: SortOrder
+    stage?: SortOrder
+    probability?: SortOrder
+    assignee?: SortOrder
+    note?: SortOrder
+    sortOrder?: SortOrder
+    expectedCloseDate?: SortOrder
+    closedAt?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type CrmDealMinOrderByAggregateInput = {
+    id?: SortOrder
+    title?: SortOrder
+    customerId?: SortOrder
+    customerName?: SortOrder
+    value?: SortOrder
+    stage?: SortOrder
+    probability?: SortOrder
+    assignee?: SortOrder
+    note?: SortOrder
+    sortOrder?: SortOrder
+    expectedCloseDate?: SortOrder
+    closedAt?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type CrmDealSumOrderByAggregateInput = {
+    value?: SortOrder
+    probability?: SortOrder
+    sortOrder?: SortOrder
+  }
+
+  export type CrmActivityCountOrderByAggregateInput = {
+    id?: SortOrder
+    module?: SortOrder
+    action?: SortOrder
+    description?: SortOrder
+    userId?: SortOrder
+    userName?: SortOrder
+    entityId?: SortOrder
+    entityName?: SortOrder
+    metadata?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type CrmActivityMaxOrderByAggregateInput = {
+    id?: SortOrder
+    module?: SortOrder
+    action?: SortOrder
+    description?: SortOrder
+    userId?: SortOrder
+    userName?: SortOrder
+    entityId?: SortOrder
+    entityName?: SortOrder
+    metadata?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type CrmActivityMinOrderByAggregateInput = {
+    id?: SortOrder
+    module?: SortOrder
+    action?: SortOrder
+    description?: SortOrder
+    userId?: SortOrder
+    userName?: SortOrder
+    entityId?: SortOrder
+    entityName?: SortOrder
+    metadata?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type CrmZaloLogCountOrderByAggregateInput = {
+    id?: SortOrder
+    customerId?: SortOrder
+    customerName?: SortOrder
+    direction?: SortOrder
+    content?: SortOrder
+    staffName?: SortOrder
+    starred?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type CrmZaloLogMaxOrderByAggregateInput = {
+    id?: SortOrder
+    customerId?: SortOrder
+    customerName?: SortOrder
+    direction?: SortOrder
+    content?: SortOrder
+    staffName?: SortOrder
+    starred?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type CrmZaloLogMinOrderByAggregateInput = {
+    id?: SortOrder
+    customerId?: SortOrder
+    customerName?: SortOrder
+    direction?: SortOrder
+    content?: SortOrder
+    staffName?: SortOrder
+    starred?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type CrmCampaignCountOrderByAggregateInput = {
+    id?: SortOrder
+    name?: SortOrder
+    channel?: SortOrder
+    status?: SortOrder
+    template?: SortOrder
+    targetTiers?: SortOrder
+    targetCount?: SortOrder
+    sentCount?: SortOrder
+    openRate?: SortOrder
+    responseRate?: SortOrder
+    scheduledAt?: SortOrder
+    sentAt?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type CrmCampaignAvgOrderByAggregateInput = {
+    targetCount?: SortOrder
+    sentCount?: SortOrder
+    openRate?: SortOrder
+    responseRate?: SortOrder
+  }
+
+  export type CrmCampaignMaxOrderByAggregateInput = {
+    id?: SortOrder
+    name?: SortOrder
+    channel?: SortOrder
+    status?: SortOrder
+    template?: SortOrder
+    targetTiers?: SortOrder
+    targetCount?: SortOrder
+    sentCount?: SortOrder
+    openRate?: SortOrder
+    responseRate?: SortOrder
+    scheduledAt?: SortOrder
+    sentAt?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type CrmCampaignMinOrderByAggregateInput = {
+    id?: SortOrder
+    name?: SortOrder
+    channel?: SortOrder
+    status?: SortOrder
+    template?: SortOrder
+    targetTiers?: SortOrder
+    targetCount?: SortOrder
+    sentCount?: SortOrder
+    openRate?: SortOrder
+    responseRate?: SortOrder
+    scheduledAt?: SortOrder
+    sentAt?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type CrmCampaignSumOrderByAggregateInput = {
+    targetCount?: SortOrder
+    sentCount?: SortOrder
+    openRate?: SortOrder
+    responseRate?: SortOrder
+  }
+
   export type UserCreateNestedManyWithoutBranchInput = {
     create?: XOR<UserCreateWithoutBranchInput, UserUncheckedCreateWithoutBranchInput> | UserCreateWithoutBranchInput[] | UserUncheckedCreateWithoutBranchInput[]
     connectOrCreate?: UserCreateOrConnectWithoutBranchInput | UserCreateOrConnectWithoutBranchInput[]
@@ -173661,6 +188994,13 @@ export namespace Prisma {
     connect?: OnlineProductWhereUniqueInput | OnlineProductWhereUniqueInput[]
   }
 
+  export type SkuMappingCreateNestedManyWithoutProductInput = {
+    create?: XOR<SkuMappingCreateWithoutProductInput, SkuMappingUncheckedCreateWithoutProductInput> | SkuMappingCreateWithoutProductInput[] | SkuMappingUncheckedCreateWithoutProductInput[]
+    connectOrCreate?: SkuMappingCreateOrConnectWithoutProductInput | SkuMappingCreateOrConnectWithoutProductInput[]
+    createMany?: SkuMappingCreateManyProductInputEnvelope
+    connect?: SkuMappingWhereUniqueInput | SkuMappingWhereUniqueInput[]
+  }
+
   export type UnitConversionUncheckedCreateNestedManyWithoutProductInput = {
     create?: XOR<UnitConversionCreateWithoutProductInput, UnitConversionUncheckedCreateWithoutProductInput> | UnitConversionCreateWithoutProductInput[] | UnitConversionUncheckedCreateWithoutProductInput[]
     connectOrCreate?: UnitConversionCreateOrConnectWithoutProductInput | UnitConversionCreateOrConnectWithoutProductInput[]
@@ -173722,6 +189062,13 @@ export namespace Prisma {
     connectOrCreate?: OnlineProductCreateOrConnectWithoutLocalProductInput | OnlineProductCreateOrConnectWithoutLocalProductInput[]
     createMany?: OnlineProductCreateManyLocalProductInputEnvelope
     connect?: OnlineProductWhereUniqueInput | OnlineProductWhereUniqueInput[]
+  }
+
+  export type SkuMappingUncheckedCreateNestedManyWithoutProductInput = {
+    create?: XOR<SkuMappingCreateWithoutProductInput, SkuMappingUncheckedCreateWithoutProductInput> | SkuMappingCreateWithoutProductInput[] | SkuMappingUncheckedCreateWithoutProductInput[]
+    connectOrCreate?: SkuMappingCreateOrConnectWithoutProductInput | SkuMappingCreateOrConnectWithoutProductInput[]
+    createMany?: SkuMappingCreateManyProductInputEnvelope
+    connect?: SkuMappingWhereUniqueInput | SkuMappingWhereUniqueInput[]
   }
 
   export type CategoryUpdateOneRequiredWithoutProductsNestedInput = {
@@ -173868,6 +189215,20 @@ export namespace Prisma {
     deleteMany?: OnlineProductScalarWhereInput | OnlineProductScalarWhereInput[]
   }
 
+  export type SkuMappingUpdateManyWithoutProductNestedInput = {
+    create?: XOR<SkuMappingCreateWithoutProductInput, SkuMappingUncheckedCreateWithoutProductInput> | SkuMappingCreateWithoutProductInput[] | SkuMappingUncheckedCreateWithoutProductInput[]
+    connectOrCreate?: SkuMappingCreateOrConnectWithoutProductInput | SkuMappingCreateOrConnectWithoutProductInput[]
+    upsert?: SkuMappingUpsertWithWhereUniqueWithoutProductInput | SkuMappingUpsertWithWhereUniqueWithoutProductInput[]
+    createMany?: SkuMappingCreateManyProductInputEnvelope
+    set?: SkuMappingWhereUniqueInput | SkuMappingWhereUniqueInput[]
+    disconnect?: SkuMappingWhereUniqueInput | SkuMappingWhereUniqueInput[]
+    delete?: SkuMappingWhereUniqueInput | SkuMappingWhereUniqueInput[]
+    connect?: SkuMappingWhereUniqueInput | SkuMappingWhereUniqueInput[]
+    update?: SkuMappingUpdateWithWhereUniqueWithoutProductInput | SkuMappingUpdateWithWhereUniqueWithoutProductInput[]
+    updateMany?: SkuMappingUpdateManyWithWhereWithoutProductInput | SkuMappingUpdateManyWithWhereWithoutProductInput[]
+    deleteMany?: SkuMappingScalarWhereInput | SkuMappingScalarWhereInput[]
+  }
+
   export type UnitConversionUncheckedUpdateManyWithoutProductNestedInput = {
     create?: XOR<UnitConversionCreateWithoutProductInput, UnitConversionUncheckedCreateWithoutProductInput> | UnitConversionCreateWithoutProductInput[] | UnitConversionUncheckedCreateWithoutProductInput[]
     connectOrCreate?: UnitConversionCreateOrConnectWithoutProductInput | UnitConversionCreateOrConnectWithoutProductInput[]
@@ -173992,6 +189353,20 @@ export namespace Prisma {
     update?: OnlineProductUpdateWithWhereUniqueWithoutLocalProductInput | OnlineProductUpdateWithWhereUniqueWithoutLocalProductInput[]
     updateMany?: OnlineProductUpdateManyWithWhereWithoutLocalProductInput | OnlineProductUpdateManyWithWhereWithoutLocalProductInput[]
     deleteMany?: OnlineProductScalarWhereInput | OnlineProductScalarWhereInput[]
+  }
+
+  export type SkuMappingUncheckedUpdateManyWithoutProductNestedInput = {
+    create?: XOR<SkuMappingCreateWithoutProductInput, SkuMappingUncheckedCreateWithoutProductInput> | SkuMappingCreateWithoutProductInput[] | SkuMappingUncheckedCreateWithoutProductInput[]
+    connectOrCreate?: SkuMappingCreateOrConnectWithoutProductInput | SkuMappingCreateOrConnectWithoutProductInput[]
+    upsert?: SkuMappingUpsertWithWhereUniqueWithoutProductInput | SkuMappingUpsertWithWhereUniqueWithoutProductInput[]
+    createMany?: SkuMappingCreateManyProductInputEnvelope
+    set?: SkuMappingWhereUniqueInput | SkuMappingWhereUniqueInput[]
+    disconnect?: SkuMappingWhereUniqueInput | SkuMappingWhereUniqueInput[]
+    delete?: SkuMappingWhereUniqueInput | SkuMappingWhereUniqueInput[]
+    connect?: SkuMappingWhereUniqueInput | SkuMappingWhereUniqueInput[]
+    update?: SkuMappingUpdateWithWhereUniqueWithoutProductInput | SkuMappingUpdateWithWhereUniqueWithoutProductInput[]
+    updateMany?: SkuMappingUpdateManyWithWhereWithoutProductInput | SkuMappingUpdateManyWithWhereWithoutProductInput[]
+    deleteMany?: SkuMappingScalarWhereInput | SkuMappingScalarWhereInput[]
   }
 
   export type ProductCreateNestedOneWithoutSerialsInput = {
@@ -174611,6 +189986,20 @@ export namespace Prisma {
     connect?: VehicleMaintenanceWhereUniqueInput | VehicleMaintenanceWhereUniqueInput[]
   }
 
+  export type VehicleFuelLogCreateNestedManyWithoutVehicleInput = {
+    create?: XOR<VehicleFuelLogCreateWithoutVehicleInput, VehicleFuelLogUncheckedCreateWithoutVehicleInput> | VehicleFuelLogCreateWithoutVehicleInput[] | VehicleFuelLogUncheckedCreateWithoutVehicleInput[]
+    connectOrCreate?: VehicleFuelLogCreateOrConnectWithoutVehicleInput | VehicleFuelLogCreateOrConnectWithoutVehicleInput[]
+    createMany?: VehicleFuelLogCreateManyVehicleInputEnvelope
+    connect?: VehicleFuelLogWhereUniqueInput | VehicleFuelLogWhereUniqueInput[]
+  }
+
+  export type VehicleDocumentCreateNestedManyWithoutVehicleInput = {
+    create?: XOR<VehicleDocumentCreateWithoutVehicleInput, VehicleDocumentUncheckedCreateWithoutVehicleInput> | VehicleDocumentCreateWithoutVehicleInput[] | VehicleDocumentUncheckedCreateWithoutVehicleInput[]
+    connectOrCreate?: VehicleDocumentCreateOrConnectWithoutVehicleInput | VehicleDocumentCreateOrConnectWithoutVehicleInput[]
+    createMany?: VehicleDocumentCreateManyVehicleInputEnvelope
+    connect?: VehicleDocumentWhereUniqueInput | VehicleDocumentWhereUniqueInput[]
+  }
+
   export type WarehouseCreateNestedOneWithoutVehicleInput = {
     create?: XOR<WarehouseCreateWithoutVehicleInput, WarehouseUncheckedCreateWithoutVehicleInput>
     connectOrCreate?: WarehouseCreateOrConnectWithoutVehicleInput
@@ -174629,6 +190018,20 @@ export namespace Prisma {
     connectOrCreate?: VehicleMaintenanceCreateOrConnectWithoutVehicleInput | VehicleMaintenanceCreateOrConnectWithoutVehicleInput[]
     createMany?: VehicleMaintenanceCreateManyVehicleInputEnvelope
     connect?: VehicleMaintenanceWhereUniqueInput | VehicleMaintenanceWhereUniqueInput[]
+  }
+
+  export type VehicleFuelLogUncheckedCreateNestedManyWithoutVehicleInput = {
+    create?: XOR<VehicleFuelLogCreateWithoutVehicleInput, VehicleFuelLogUncheckedCreateWithoutVehicleInput> | VehicleFuelLogCreateWithoutVehicleInput[] | VehicleFuelLogUncheckedCreateWithoutVehicleInput[]
+    connectOrCreate?: VehicleFuelLogCreateOrConnectWithoutVehicleInput | VehicleFuelLogCreateOrConnectWithoutVehicleInput[]
+    createMany?: VehicleFuelLogCreateManyVehicleInputEnvelope
+    connect?: VehicleFuelLogWhereUniqueInput | VehicleFuelLogWhereUniqueInput[]
+  }
+
+  export type VehicleDocumentUncheckedCreateNestedManyWithoutVehicleInput = {
+    create?: XOR<VehicleDocumentCreateWithoutVehicleInput, VehicleDocumentUncheckedCreateWithoutVehicleInput> | VehicleDocumentCreateWithoutVehicleInput[] | VehicleDocumentUncheckedCreateWithoutVehicleInput[]
+    connectOrCreate?: VehicleDocumentCreateOrConnectWithoutVehicleInput | VehicleDocumentCreateOrConnectWithoutVehicleInput[]
+    createMany?: VehicleDocumentCreateManyVehicleInputEnvelope
+    connect?: VehicleDocumentWhereUniqueInput | VehicleDocumentWhereUniqueInput[]
   }
 
   export type WarehouseUncheckedCreateNestedOneWithoutVehicleInput = {
@@ -174656,6 +190059,34 @@ export namespace Prisma {
     update?: VehicleMaintenanceUpdateWithWhereUniqueWithoutVehicleInput | VehicleMaintenanceUpdateWithWhereUniqueWithoutVehicleInput[]
     updateMany?: VehicleMaintenanceUpdateManyWithWhereWithoutVehicleInput | VehicleMaintenanceUpdateManyWithWhereWithoutVehicleInput[]
     deleteMany?: VehicleMaintenanceScalarWhereInput | VehicleMaintenanceScalarWhereInput[]
+  }
+
+  export type VehicleFuelLogUpdateManyWithoutVehicleNestedInput = {
+    create?: XOR<VehicleFuelLogCreateWithoutVehicleInput, VehicleFuelLogUncheckedCreateWithoutVehicleInput> | VehicleFuelLogCreateWithoutVehicleInput[] | VehicleFuelLogUncheckedCreateWithoutVehicleInput[]
+    connectOrCreate?: VehicleFuelLogCreateOrConnectWithoutVehicleInput | VehicleFuelLogCreateOrConnectWithoutVehicleInput[]
+    upsert?: VehicleFuelLogUpsertWithWhereUniqueWithoutVehicleInput | VehicleFuelLogUpsertWithWhereUniqueWithoutVehicleInput[]
+    createMany?: VehicleFuelLogCreateManyVehicleInputEnvelope
+    set?: VehicleFuelLogWhereUniqueInput | VehicleFuelLogWhereUniqueInput[]
+    disconnect?: VehicleFuelLogWhereUniqueInput | VehicleFuelLogWhereUniqueInput[]
+    delete?: VehicleFuelLogWhereUniqueInput | VehicleFuelLogWhereUniqueInput[]
+    connect?: VehicleFuelLogWhereUniqueInput | VehicleFuelLogWhereUniqueInput[]
+    update?: VehicleFuelLogUpdateWithWhereUniqueWithoutVehicleInput | VehicleFuelLogUpdateWithWhereUniqueWithoutVehicleInput[]
+    updateMany?: VehicleFuelLogUpdateManyWithWhereWithoutVehicleInput | VehicleFuelLogUpdateManyWithWhereWithoutVehicleInput[]
+    deleteMany?: VehicleFuelLogScalarWhereInput | VehicleFuelLogScalarWhereInput[]
+  }
+
+  export type VehicleDocumentUpdateManyWithoutVehicleNestedInput = {
+    create?: XOR<VehicleDocumentCreateWithoutVehicleInput, VehicleDocumentUncheckedCreateWithoutVehicleInput> | VehicleDocumentCreateWithoutVehicleInput[] | VehicleDocumentUncheckedCreateWithoutVehicleInput[]
+    connectOrCreate?: VehicleDocumentCreateOrConnectWithoutVehicleInput | VehicleDocumentCreateOrConnectWithoutVehicleInput[]
+    upsert?: VehicleDocumentUpsertWithWhereUniqueWithoutVehicleInput | VehicleDocumentUpsertWithWhereUniqueWithoutVehicleInput[]
+    createMany?: VehicleDocumentCreateManyVehicleInputEnvelope
+    set?: VehicleDocumentWhereUniqueInput | VehicleDocumentWhereUniqueInput[]
+    disconnect?: VehicleDocumentWhereUniqueInput | VehicleDocumentWhereUniqueInput[]
+    delete?: VehicleDocumentWhereUniqueInput | VehicleDocumentWhereUniqueInput[]
+    connect?: VehicleDocumentWhereUniqueInput | VehicleDocumentWhereUniqueInput[]
+    update?: VehicleDocumentUpdateWithWhereUniqueWithoutVehicleInput | VehicleDocumentUpdateWithWhereUniqueWithoutVehicleInput[]
+    updateMany?: VehicleDocumentUpdateManyWithWhereWithoutVehicleInput | VehicleDocumentUpdateManyWithWhereWithoutVehicleInput[]
+    deleteMany?: VehicleDocumentScalarWhereInput | VehicleDocumentScalarWhereInput[]
   }
 
   export type WarehouseUpdateOneWithoutVehicleNestedInput = {
@@ -174696,6 +190127,34 @@ export namespace Prisma {
     deleteMany?: VehicleMaintenanceScalarWhereInput | VehicleMaintenanceScalarWhereInput[]
   }
 
+  export type VehicleFuelLogUncheckedUpdateManyWithoutVehicleNestedInput = {
+    create?: XOR<VehicleFuelLogCreateWithoutVehicleInput, VehicleFuelLogUncheckedCreateWithoutVehicleInput> | VehicleFuelLogCreateWithoutVehicleInput[] | VehicleFuelLogUncheckedCreateWithoutVehicleInput[]
+    connectOrCreate?: VehicleFuelLogCreateOrConnectWithoutVehicleInput | VehicleFuelLogCreateOrConnectWithoutVehicleInput[]
+    upsert?: VehicleFuelLogUpsertWithWhereUniqueWithoutVehicleInput | VehicleFuelLogUpsertWithWhereUniqueWithoutVehicleInput[]
+    createMany?: VehicleFuelLogCreateManyVehicleInputEnvelope
+    set?: VehicleFuelLogWhereUniqueInput | VehicleFuelLogWhereUniqueInput[]
+    disconnect?: VehicleFuelLogWhereUniqueInput | VehicleFuelLogWhereUniqueInput[]
+    delete?: VehicleFuelLogWhereUniqueInput | VehicleFuelLogWhereUniqueInput[]
+    connect?: VehicleFuelLogWhereUniqueInput | VehicleFuelLogWhereUniqueInput[]
+    update?: VehicleFuelLogUpdateWithWhereUniqueWithoutVehicleInput | VehicleFuelLogUpdateWithWhereUniqueWithoutVehicleInput[]
+    updateMany?: VehicleFuelLogUpdateManyWithWhereWithoutVehicleInput | VehicleFuelLogUpdateManyWithWhereWithoutVehicleInput[]
+    deleteMany?: VehicleFuelLogScalarWhereInput | VehicleFuelLogScalarWhereInput[]
+  }
+
+  export type VehicleDocumentUncheckedUpdateManyWithoutVehicleNestedInput = {
+    create?: XOR<VehicleDocumentCreateWithoutVehicleInput, VehicleDocumentUncheckedCreateWithoutVehicleInput> | VehicleDocumentCreateWithoutVehicleInput[] | VehicleDocumentUncheckedCreateWithoutVehicleInput[]
+    connectOrCreate?: VehicleDocumentCreateOrConnectWithoutVehicleInput | VehicleDocumentCreateOrConnectWithoutVehicleInput[]
+    upsert?: VehicleDocumentUpsertWithWhereUniqueWithoutVehicleInput | VehicleDocumentUpsertWithWhereUniqueWithoutVehicleInput[]
+    createMany?: VehicleDocumentCreateManyVehicleInputEnvelope
+    set?: VehicleDocumentWhereUniqueInput | VehicleDocumentWhereUniqueInput[]
+    disconnect?: VehicleDocumentWhereUniqueInput | VehicleDocumentWhereUniqueInput[]
+    delete?: VehicleDocumentWhereUniqueInput | VehicleDocumentWhereUniqueInput[]
+    connect?: VehicleDocumentWhereUniqueInput | VehicleDocumentWhereUniqueInput[]
+    update?: VehicleDocumentUpdateWithWhereUniqueWithoutVehicleInput | VehicleDocumentUpdateWithWhereUniqueWithoutVehicleInput[]
+    updateMany?: VehicleDocumentUpdateManyWithWhereWithoutVehicleInput | VehicleDocumentUpdateManyWithWhereWithoutVehicleInput[]
+    deleteMany?: VehicleDocumentScalarWhereInput | VehicleDocumentScalarWhereInput[]
+  }
+
   export type WarehouseUncheckedUpdateOneWithoutVehicleNestedInput = {
     create?: XOR<WarehouseCreateWithoutVehicleInput, WarehouseUncheckedCreateWithoutVehicleInput>
     connectOrCreate?: WarehouseCreateOrConnectWithoutVehicleInput
@@ -174732,6 +190191,34 @@ export namespace Prisma {
     upsert?: VehicleUpsertWithoutMaintenanceLogsInput
     connect?: VehicleWhereUniqueInput
     update?: XOR<XOR<VehicleUpdateToOneWithWhereWithoutMaintenanceLogsInput, VehicleUpdateWithoutMaintenanceLogsInput>, VehicleUncheckedUpdateWithoutMaintenanceLogsInput>
+  }
+
+  export type VehicleCreateNestedOneWithoutFuelLogsInput = {
+    create?: XOR<VehicleCreateWithoutFuelLogsInput, VehicleUncheckedCreateWithoutFuelLogsInput>
+    connectOrCreate?: VehicleCreateOrConnectWithoutFuelLogsInput
+    connect?: VehicleWhereUniqueInput
+  }
+
+  export type VehicleUpdateOneRequiredWithoutFuelLogsNestedInput = {
+    create?: XOR<VehicleCreateWithoutFuelLogsInput, VehicleUncheckedCreateWithoutFuelLogsInput>
+    connectOrCreate?: VehicleCreateOrConnectWithoutFuelLogsInput
+    upsert?: VehicleUpsertWithoutFuelLogsInput
+    connect?: VehicleWhereUniqueInput
+    update?: XOR<XOR<VehicleUpdateToOneWithWhereWithoutFuelLogsInput, VehicleUpdateWithoutFuelLogsInput>, VehicleUncheckedUpdateWithoutFuelLogsInput>
+  }
+
+  export type VehicleCreateNestedOneWithoutDocumentsInput = {
+    create?: XOR<VehicleCreateWithoutDocumentsInput, VehicleUncheckedCreateWithoutDocumentsInput>
+    connectOrCreate?: VehicleCreateOrConnectWithoutDocumentsInput
+    connect?: VehicleWhereUniqueInput
+  }
+
+  export type VehicleUpdateOneRequiredWithoutDocumentsNestedInput = {
+    create?: XOR<VehicleCreateWithoutDocumentsInput, VehicleUncheckedCreateWithoutDocumentsInput>
+    connectOrCreate?: VehicleCreateOrConnectWithoutDocumentsInput
+    upsert?: VehicleUpsertWithoutDocumentsInput
+    connect?: VehicleWhereUniqueInput
+    update?: XOR<XOR<VehicleUpdateToOneWithWhereWithoutDocumentsInput, VehicleUpdateWithoutDocumentsInput>, VehicleUncheckedUpdateWithoutDocumentsInput>
   }
 
   export type DeliveryStopCreateNestedManyWithoutRouteInput = {
@@ -175170,6 +190657,20 @@ export namespace Prisma {
     upsert?: LoyaltyMemberUpsertWithoutTransactionsInput
     connect?: LoyaltyMemberWhereUniqueInput
     update?: XOR<XOR<LoyaltyMemberUpdateToOneWithWhereWithoutTransactionsInput, LoyaltyMemberUpdateWithoutTransactionsInput>, LoyaltyMemberUncheckedUpdateWithoutTransactionsInput>
+  }
+
+  export type ProductCreateNestedOneWithoutSkuMappingsInput = {
+    create?: XOR<ProductCreateWithoutSkuMappingsInput, ProductUncheckedCreateWithoutSkuMappingsInput>
+    connectOrCreate?: ProductCreateOrConnectWithoutSkuMappingsInput
+    connect?: ProductWhereUniqueInput
+  }
+
+  export type ProductUpdateOneRequiredWithoutSkuMappingsNestedInput = {
+    create?: XOR<ProductCreateWithoutSkuMappingsInput, ProductUncheckedCreateWithoutSkuMappingsInput>
+    connectOrCreate?: ProductCreateOrConnectWithoutSkuMappingsInput
+    upsert?: ProductUpsertWithoutSkuMappingsInput
+    connect?: ProductWhereUniqueInput
+    update?: XOR<XOR<ProductUpdateToOneWithWhereWithoutSkuMappingsInput, ProductUpdateWithoutSkuMappingsInput>, ProductUncheckedUpdateWithoutSkuMappingsInput>
   }
 
   export type OnlineOrderCreateNestedManyWithoutChannelInput = {
@@ -176760,6 +192261,13 @@ export namespace Prisma {
     paymentStatus?: string
     dueDate?: Date | string | null
     paymentTerm?: string | null
+    hasVatInvoice?: boolean
+    vatInvoiceNo?: string | null
+    vatAmount?: number
+    shippingFee?: number
+    importTax?: number
+    otherFees?: number
+    totalDiscount?: number
     note?: string | null
     branchId?: string | null
     userName: string
@@ -176781,6 +192289,13 @@ export namespace Prisma {
     paymentStatus?: string
     dueDate?: Date | string | null
     paymentTerm?: string | null
+    hasVatInvoice?: boolean
+    vatInvoiceNo?: string | null
+    vatAmount?: number
+    shippingFee?: number
+    importTax?: number
+    otherFees?: number
+    totalDiscount?: number
     note?: string | null
     branchId?: string | null
     userName: string
@@ -177076,6 +192591,13 @@ export namespace Prisma {
     paymentStatus?: StringFilter<"ImportReceipt"> | string
     dueDate?: DateTimeNullableFilter<"ImportReceipt"> | Date | string | null
     paymentTerm?: StringNullableFilter<"ImportReceipt"> | string | null
+    hasVatInvoice?: BoolFilter<"ImportReceipt"> | boolean
+    vatInvoiceNo?: StringNullableFilter<"ImportReceipt"> | string | null
+    vatAmount?: FloatFilter<"ImportReceipt"> | number
+    shippingFee?: FloatFilter<"ImportReceipt"> | number
+    importTax?: FloatFilter<"ImportReceipt"> | number
+    otherFees?: FloatFilter<"ImportReceipt"> | number
+    totalDiscount?: FloatFilter<"ImportReceipt"> | number
     note?: StringNullableFilter<"ImportReceipt"> | string | null
     branchId?: StringNullableFilter<"ImportReceipt"> | string | null
     userId?: StringFilter<"ImportReceipt"> | string
@@ -177802,6 +193324,10 @@ export namespace Prisma {
     minStock?: number
     maxStock?: number
     baseUnit?: string
+    invoiceUnit?: string | null
+    bundleId?: string | null
+    mergedIntoId?: string | null
+    mergedRate?: number
     trackSerial?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -177815,6 +193341,7 @@ export namespace Prisma {
     serials?: ProductSerialCreateNestedManyWithoutProductInput
     onlineOrderItems?: OnlineOrderItemCreateNestedManyWithoutProductInput
     onlineProducts?: OnlineProductCreateNestedManyWithoutLocalProductInput
+    skuMappings?: SkuMappingCreateNestedManyWithoutProductInput
   }
 
   export type ProductUncheckedCreateWithoutCategoryInput = {
@@ -177832,6 +193359,10 @@ export namespace Prisma {
     minStock?: number
     maxStock?: number
     baseUnit?: string
+    invoiceUnit?: string | null
+    bundleId?: string | null
+    mergedIntoId?: string | null
+    mergedRate?: number
     trackSerial?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -177844,6 +193375,7 @@ export namespace Prisma {
     serials?: ProductSerialUncheckedCreateNestedManyWithoutProductInput
     onlineOrderItems?: OnlineOrderItemUncheckedCreateNestedManyWithoutProductInput
     onlineProducts?: OnlineProductUncheckedCreateNestedManyWithoutLocalProductInput
+    skuMappings?: SkuMappingUncheckedCreateNestedManyWithoutProductInput
   }
 
   export type ProductCreateOrConnectWithoutCategoryInput = {
@@ -177953,6 +193485,10 @@ export namespace Prisma {
     minStock?: IntFilter<"Product"> | number
     maxStock?: IntFilter<"Product"> | number
     baseUnit?: StringFilter<"Product"> | string
+    invoiceUnit?: StringNullableFilter<"Product"> | string | null
+    bundleId?: StringNullableFilter<"Product"> | string | null
+    mergedIntoId?: StringNullableFilter<"Product"> | string | null
+    mergedRate?: FloatFilter<"Product"> | number
     trackSerial?: BoolFilter<"Product"> | boolean
     createdAt?: DateTimeFilter<"Product"> | Date | string
     updatedAt?: DateTimeFilter<"Product"> | Date | string
@@ -177972,6 +193508,10 @@ export namespace Prisma {
     minStock?: number
     maxStock?: number
     baseUnit?: string
+    invoiceUnit?: string | null
+    bundleId?: string | null
+    mergedIntoId?: string | null
+    mergedRate?: number
     trackSerial?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -177985,6 +193525,7 @@ export namespace Prisma {
     serials?: ProductSerialCreateNestedManyWithoutProductInput
     onlineOrderItems?: OnlineOrderItemCreateNestedManyWithoutProductInput
     onlineProducts?: OnlineProductCreateNestedManyWithoutLocalProductInput
+    skuMappings?: SkuMappingCreateNestedManyWithoutProductInput
   }
 
   export type ProductUncheckedCreateWithoutBrandInput = {
@@ -178002,6 +193543,10 @@ export namespace Prisma {
     minStock?: number
     maxStock?: number
     baseUnit?: string
+    invoiceUnit?: string | null
+    bundleId?: string | null
+    mergedIntoId?: string | null
+    mergedRate?: number
     trackSerial?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -178014,6 +193559,7 @@ export namespace Prisma {
     serials?: ProductSerialUncheckedCreateNestedManyWithoutProductInput
     onlineOrderItems?: OnlineOrderItemUncheckedCreateNestedManyWithoutProductInput
     onlineProducts?: OnlineProductUncheckedCreateNestedManyWithoutLocalProductInput
+    skuMappings?: SkuMappingUncheckedCreateNestedManyWithoutProductInput
   }
 
   export type ProductCreateOrConnectWithoutBrandInput = {
@@ -178394,6 +193940,38 @@ export namespace Prisma {
     skipDuplicates?: boolean
   }
 
+  export type SkuMappingCreateWithoutProductInput = {
+    id?: string
+    platformSku: string
+    platform?: string | null
+    note?: string | null
+    conversionRate?: number
+    bundleId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type SkuMappingUncheckedCreateWithoutProductInput = {
+    id?: string
+    platformSku: string
+    platform?: string | null
+    note?: string | null
+    conversionRate?: number
+    bundleId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type SkuMappingCreateOrConnectWithoutProductInput = {
+    where: SkuMappingWhereUniqueInput
+    create: XOR<SkuMappingCreateWithoutProductInput, SkuMappingUncheckedCreateWithoutProductInput>
+  }
+
+  export type SkuMappingCreateManyProductInputEnvelope = {
+    data: SkuMappingCreateManyProductInput | SkuMappingCreateManyProductInput[]
+    skipDuplicates?: boolean
+  }
+
   export type CategoryUpsertWithoutProductsInput = {
     update: XOR<CategoryUpdateWithoutProductsInput, CategoryUncheckedUpdateWithoutProductsInput>
     create: XOR<CategoryCreateWithoutProductsInput, CategoryUncheckedCreateWithoutProductsInput>
@@ -178716,6 +194294,37 @@ export namespace Prisma {
     updatedAt?: DateTimeFilter<"OnlineProduct"> | Date | string
   }
 
+  export type SkuMappingUpsertWithWhereUniqueWithoutProductInput = {
+    where: SkuMappingWhereUniqueInput
+    update: XOR<SkuMappingUpdateWithoutProductInput, SkuMappingUncheckedUpdateWithoutProductInput>
+    create: XOR<SkuMappingCreateWithoutProductInput, SkuMappingUncheckedCreateWithoutProductInput>
+  }
+
+  export type SkuMappingUpdateWithWhereUniqueWithoutProductInput = {
+    where: SkuMappingWhereUniqueInput
+    data: XOR<SkuMappingUpdateWithoutProductInput, SkuMappingUncheckedUpdateWithoutProductInput>
+  }
+
+  export type SkuMappingUpdateManyWithWhereWithoutProductInput = {
+    where: SkuMappingScalarWhereInput
+    data: XOR<SkuMappingUpdateManyMutationInput, SkuMappingUncheckedUpdateManyWithoutProductInput>
+  }
+
+  export type SkuMappingScalarWhereInput = {
+    AND?: SkuMappingScalarWhereInput | SkuMappingScalarWhereInput[]
+    OR?: SkuMappingScalarWhereInput[]
+    NOT?: SkuMappingScalarWhereInput | SkuMappingScalarWhereInput[]
+    id?: StringFilter<"SkuMapping"> | string
+    platformSku?: StringFilter<"SkuMapping"> | string
+    productId?: StringFilter<"SkuMapping"> | string
+    platform?: StringNullableFilter<"SkuMapping"> | string | null
+    note?: StringNullableFilter<"SkuMapping"> | string | null
+    conversionRate?: FloatFilter<"SkuMapping"> | number
+    bundleId?: StringNullableFilter<"SkuMapping"> | string | null
+    createdAt?: DateTimeFilter<"SkuMapping"> | Date | string
+    updatedAt?: DateTimeFilter<"SkuMapping"> | Date | string
+  }
+
   export type ProductCreateWithoutSerialsInput = {
     id?: string
     name: string
@@ -178730,6 +194339,10 @@ export namespace Prisma {
     minStock?: number
     maxStock?: number
     baseUnit?: string
+    invoiceUnit?: string | null
+    bundleId?: string | null
+    mergedIntoId?: string | null
+    mergedRate?: number
     trackSerial?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -178743,6 +194356,7 @@ export namespace Prisma {
     salesOrderItems?: SalesOrderItemCreateNestedManyWithoutProductInput
     onlineOrderItems?: OnlineOrderItemCreateNestedManyWithoutProductInput
     onlineProducts?: OnlineProductCreateNestedManyWithoutLocalProductInput
+    skuMappings?: SkuMappingCreateNestedManyWithoutProductInput
   }
 
   export type ProductUncheckedCreateWithoutSerialsInput = {
@@ -178761,6 +194375,10 @@ export namespace Prisma {
     minStock?: number
     maxStock?: number
     baseUnit?: string
+    invoiceUnit?: string | null
+    bundleId?: string | null
+    mergedIntoId?: string | null
+    mergedRate?: number
     trackSerial?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -178772,6 +194390,7 @@ export namespace Prisma {
     salesOrderItems?: SalesOrderItemUncheckedCreateNestedManyWithoutProductInput
     onlineOrderItems?: OnlineOrderItemUncheckedCreateNestedManyWithoutProductInput
     onlineProducts?: OnlineProductUncheckedCreateNestedManyWithoutLocalProductInput
+    skuMappings?: SkuMappingUncheckedCreateNestedManyWithoutProductInput
   }
 
   export type ProductCreateOrConnectWithoutSerialsInput = {
@@ -178804,6 +194423,10 @@ export namespace Prisma {
     minStock?: IntFieldUpdateOperationsInput | number
     maxStock?: IntFieldUpdateOperationsInput | number
     baseUnit?: StringFieldUpdateOperationsInput | string
+    invoiceUnit?: NullableStringFieldUpdateOperationsInput | string | null
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedIntoId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedRate?: FloatFieldUpdateOperationsInput | number
     trackSerial?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -178817,6 +194440,7 @@ export namespace Prisma {
     salesOrderItems?: SalesOrderItemUpdateManyWithoutProductNestedInput
     onlineOrderItems?: OnlineOrderItemUpdateManyWithoutProductNestedInput
     onlineProducts?: OnlineProductUpdateManyWithoutLocalProductNestedInput
+    skuMappings?: SkuMappingUpdateManyWithoutProductNestedInput
   }
 
   export type ProductUncheckedUpdateWithoutSerialsInput = {
@@ -178835,6 +194459,10 @@ export namespace Prisma {
     minStock?: IntFieldUpdateOperationsInput | number
     maxStock?: IntFieldUpdateOperationsInput | number
     baseUnit?: StringFieldUpdateOperationsInput | string
+    invoiceUnit?: NullableStringFieldUpdateOperationsInput | string | null
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedIntoId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedRate?: FloatFieldUpdateOperationsInput | number
     trackSerial?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -178846,6 +194474,7 @@ export namespace Prisma {
     salesOrderItems?: SalesOrderItemUncheckedUpdateManyWithoutProductNestedInput
     onlineOrderItems?: OnlineOrderItemUncheckedUpdateManyWithoutProductNestedInput
     onlineProducts?: OnlineProductUncheckedUpdateManyWithoutLocalProductNestedInput
+    skuMappings?: SkuMappingUncheckedUpdateManyWithoutProductNestedInput
   }
 
   export type ProductCreateWithoutUnitConversionsInput = {
@@ -178862,6 +194491,10 @@ export namespace Prisma {
     minStock?: number
     maxStock?: number
     baseUnit?: string
+    invoiceUnit?: string | null
+    bundleId?: string | null
+    mergedIntoId?: string | null
+    mergedRate?: number
     trackSerial?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -178875,6 +194508,7 @@ export namespace Prisma {
     serials?: ProductSerialCreateNestedManyWithoutProductInput
     onlineOrderItems?: OnlineOrderItemCreateNestedManyWithoutProductInput
     onlineProducts?: OnlineProductCreateNestedManyWithoutLocalProductInput
+    skuMappings?: SkuMappingCreateNestedManyWithoutProductInput
   }
 
   export type ProductUncheckedCreateWithoutUnitConversionsInput = {
@@ -178893,6 +194527,10 @@ export namespace Prisma {
     minStock?: number
     maxStock?: number
     baseUnit?: string
+    invoiceUnit?: string | null
+    bundleId?: string | null
+    mergedIntoId?: string | null
+    mergedRate?: number
     trackSerial?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -178904,6 +194542,7 @@ export namespace Prisma {
     serials?: ProductSerialUncheckedCreateNestedManyWithoutProductInput
     onlineOrderItems?: OnlineOrderItemUncheckedCreateNestedManyWithoutProductInput
     onlineProducts?: OnlineProductUncheckedCreateNestedManyWithoutLocalProductInput
+    skuMappings?: SkuMappingUncheckedCreateNestedManyWithoutProductInput
   }
 
   export type ProductCreateOrConnectWithoutUnitConversionsInput = {
@@ -178936,6 +194575,10 @@ export namespace Prisma {
     minStock?: IntFieldUpdateOperationsInput | number
     maxStock?: IntFieldUpdateOperationsInput | number
     baseUnit?: StringFieldUpdateOperationsInput | string
+    invoiceUnit?: NullableStringFieldUpdateOperationsInput | string | null
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedIntoId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedRate?: FloatFieldUpdateOperationsInput | number
     trackSerial?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -178949,6 +194592,7 @@ export namespace Prisma {
     serials?: ProductSerialUpdateManyWithoutProductNestedInput
     onlineOrderItems?: OnlineOrderItemUpdateManyWithoutProductNestedInput
     onlineProducts?: OnlineProductUpdateManyWithoutLocalProductNestedInput
+    skuMappings?: SkuMappingUpdateManyWithoutProductNestedInput
   }
 
   export type ProductUncheckedUpdateWithoutUnitConversionsInput = {
@@ -178967,6 +194611,10 @@ export namespace Prisma {
     minStock?: IntFieldUpdateOperationsInput | number
     maxStock?: IntFieldUpdateOperationsInput | number
     baseUnit?: StringFieldUpdateOperationsInput | string
+    invoiceUnit?: NullableStringFieldUpdateOperationsInput | string | null
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedIntoId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedRate?: FloatFieldUpdateOperationsInput | number
     trackSerial?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -178978,6 +194626,7 @@ export namespace Prisma {
     serials?: ProductSerialUncheckedUpdateManyWithoutProductNestedInput
     onlineOrderItems?: OnlineOrderItemUncheckedUpdateManyWithoutProductNestedInput
     onlineProducts?: OnlineProductUncheckedUpdateManyWithoutLocalProductNestedInput
+    skuMappings?: SkuMappingUncheckedUpdateManyWithoutProductNestedInput
   }
 
   export type ProductCreateWithoutImagesInput = {
@@ -178994,6 +194643,10 @@ export namespace Prisma {
     minStock?: number
     maxStock?: number
     baseUnit?: string
+    invoiceUnit?: string | null
+    bundleId?: string | null
+    mergedIntoId?: string | null
+    mergedRate?: number
     trackSerial?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -179007,6 +194660,7 @@ export namespace Prisma {
     serials?: ProductSerialCreateNestedManyWithoutProductInput
     onlineOrderItems?: OnlineOrderItemCreateNestedManyWithoutProductInput
     onlineProducts?: OnlineProductCreateNestedManyWithoutLocalProductInput
+    skuMappings?: SkuMappingCreateNestedManyWithoutProductInput
   }
 
   export type ProductUncheckedCreateWithoutImagesInput = {
@@ -179025,6 +194679,10 @@ export namespace Prisma {
     minStock?: number
     maxStock?: number
     baseUnit?: string
+    invoiceUnit?: string | null
+    bundleId?: string | null
+    mergedIntoId?: string | null
+    mergedRate?: number
     trackSerial?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -179036,6 +194694,7 @@ export namespace Prisma {
     serials?: ProductSerialUncheckedCreateNestedManyWithoutProductInput
     onlineOrderItems?: OnlineOrderItemUncheckedCreateNestedManyWithoutProductInput
     onlineProducts?: OnlineProductUncheckedCreateNestedManyWithoutLocalProductInput
+    skuMappings?: SkuMappingUncheckedCreateNestedManyWithoutProductInput
   }
 
   export type ProductCreateOrConnectWithoutImagesInput = {
@@ -179068,6 +194727,10 @@ export namespace Prisma {
     minStock?: IntFieldUpdateOperationsInput | number
     maxStock?: IntFieldUpdateOperationsInput | number
     baseUnit?: StringFieldUpdateOperationsInput | string
+    invoiceUnit?: NullableStringFieldUpdateOperationsInput | string | null
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedIntoId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedRate?: FloatFieldUpdateOperationsInput | number
     trackSerial?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -179081,6 +194744,7 @@ export namespace Prisma {
     serials?: ProductSerialUpdateManyWithoutProductNestedInput
     onlineOrderItems?: OnlineOrderItemUpdateManyWithoutProductNestedInput
     onlineProducts?: OnlineProductUpdateManyWithoutLocalProductNestedInput
+    skuMappings?: SkuMappingUpdateManyWithoutProductNestedInput
   }
 
   export type ProductUncheckedUpdateWithoutImagesInput = {
@@ -179099,6 +194763,10 @@ export namespace Prisma {
     minStock?: IntFieldUpdateOperationsInput | number
     maxStock?: IntFieldUpdateOperationsInput | number
     baseUnit?: StringFieldUpdateOperationsInput | string
+    invoiceUnit?: NullableStringFieldUpdateOperationsInput | string | null
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedIntoId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedRate?: FloatFieldUpdateOperationsInput | number
     trackSerial?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -179110,6 +194778,7 @@ export namespace Prisma {
     serials?: ProductSerialUncheckedUpdateManyWithoutProductNestedInput
     onlineOrderItems?: OnlineOrderItemUncheckedUpdateManyWithoutProductNestedInput
     onlineProducts?: OnlineProductUncheckedUpdateManyWithoutLocalProductNestedInput
+    skuMappings?: SkuMappingUncheckedUpdateManyWithoutProductNestedInput
   }
 
   export type CustomerCreateWithoutGroupInput = {
@@ -179912,6 +195581,10 @@ export namespace Prisma {
     minStock?: number
     maxStock?: number
     baseUnit?: string
+    invoiceUnit?: string | null
+    bundleId?: string | null
+    mergedIntoId?: string | null
+    mergedRate?: number
     trackSerial?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -179925,6 +195598,7 @@ export namespace Prisma {
     serials?: ProductSerialCreateNestedManyWithoutProductInput
     onlineOrderItems?: OnlineOrderItemCreateNestedManyWithoutProductInput
     onlineProducts?: OnlineProductCreateNestedManyWithoutLocalProductInput
+    skuMappings?: SkuMappingCreateNestedManyWithoutProductInput
   }
 
   export type ProductUncheckedCreateWithoutTransactionItemsInput = {
@@ -179943,6 +195617,10 @@ export namespace Prisma {
     minStock?: number
     maxStock?: number
     baseUnit?: string
+    invoiceUnit?: string | null
+    bundleId?: string | null
+    mergedIntoId?: string | null
+    mergedRate?: number
     trackSerial?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -179954,6 +195632,7 @@ export namespace Prisma {
     serials?: ProductSerialUncheckedCreateNestedManyWithoutProductInput
     onlineOrderItems?: OnlineOrderItemUncheckedCreateNestedManyWithoutProductInput
     onlineProducts?: OnlineProductUncheckedCreateNestedManyWithoutLocalProductInput
+    skuMappings?: SkuMappingUncheckedCreateNestedManyWithoutProductInput
   }
 
   export type ProductCreateOrConnectWithoutTransactionItemsInput = {
@@ -180059,6 +195738,10 @@ export namespace Prisma {
     minStock?: IntFieldUpdateOperationsInput | number
     maxStock?: IntFieldUpdateOperationsInput | number
     baseUnit?: StringFieldUpdateOperationsInput | string
+    invoiceUnit?: NullableStringFieldUpdateOperationsInput | string | null
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedIntoId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedRate?: FloatFieldUpdateOperationsInput | number
     trackSerial?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -180072,6 +195755,7 @@ export namespace Prisma {
     serials?: ProductSerialUpdateManyWithoutProductNestedInput
     onlineOrderItems?: OnlineOrderItemUpdateManyWithoutProductNestedInput
     onlineProducts?: OnlineProductUpdateManyWithoutLocalProductNestedInput
+    skuMappings?: SkuMappingUpdateManyWithoutProductNestedInput
   }
 
   export type ProductUncheckedUpdateWithoutTransactionItemsInput = {
@@ -180090,6 +195774,10 @@ export namespace Prisma {
     minStock?: IntFieldUpdateOperationsInput | number
     maxStock?: IntFieldUpdateOperationsInput | number
     baseUnit?: StringFieldUpdateOperationsInput | string
+    invoiceUnit?: NullableStringFieldUpdateOperationsInput | string | null
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedIntoId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedRate?: FloatFieldUpdateOperationsInput | number
     trackSerial?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -180101,6 +195789,7 @@ export namespace Prisma {
     serials?: ProductSerialUncheckedUpdateManyWithoutProductNestedInput
     onlineOrderItems?: OnlineOrderItemUncheckedUpdateManyWithoutProductNestedInput
     onlineProducts?: OnlineProductUncheckedUpdateManyWithoutLocalProductNestedInput
+    skuMappings?: SkuMappingUncheckedUpdateManyWithoutProductNestedInput
   }
 
   export type TransactionCreateWithoutPaymentsInput = {
@@ -180257,6 +195946,10 @@ export namespace Prisma {
     minStock?: number
     maxStock?: number
     baseUnit?: string
+    invoiceUnit?: string | null
+    bundleId?: string | null
+    mergedIntoId?: string | null
+    mergedRate?: number
     trackSerial?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -180270,6 +195963,7 @@ export namespace Prisma {
     serials?: ProductSerialCreateNestedManyWithoutProductInput
     onlineOrderItems?: OnlineOrderItemCreateNestedManyWithoutProductInput
     onlineProducts?: OnlineProductCreateNestedManyWithoutLocalProductInput
+    skuMappings?: SkuMappingCreateNestedManyWithoutProductInput
   }
 
   export type ProductUncheckedCreateWithoutInventoryTxInput = {
@@ -180288,6 +195982,10 @@ export namespace Prisma {
     minStock?: number
     maxStock?: number
     baseUnit?: string
+    invoiceUnit?: string | null
+    bundleId?: string | null
+    mergedIntoId?: string | null
+    mergedRate?: number
     trackSerial?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -180299,6 +195997,7 @@ export namespace Prisma {
     serials?: ProductSerialUncheckedCreateNestedManyWithoutProductInput
     onlineOrderItems?: OnlineOrderItemUncheckedCreateNestedManyWithoutProductInput
     onlineProducts?: OnlineProductUncheckedCreateNestedManyWithoutLocalProductInput
+    skuMappings?: SkuMappingUncheckedCreateNestedManyWithoutProductInput
   }
 
   export type ProductCreateOrConnectWithoutInventoryTxInput = {
@@ -180396,6 +196095,10 @@ export namespace Prisma {
     minStock?: IntFieldUpdateOperationsInput | number
     maxStock?: IntFieldUpdateOperationsInput | number
     baseUnit?: StringFieldUpdateOperationsInput | string
+    invoiceUnit?: NullableStringFieldUpdateOperationsInput | string | null
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedIntoId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedRate?: FloatFieldUpdateOperationsInput | number
     trackSerial?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -180409,6 +196112,7 @@ export namespace Prisma {
     serials?: ProductSerialUpdateManyWithoutProductNestedInput
     onlineOrderItems?: OnlineOrderItemUpdateManyWithoutProductNestedInput
     onlineProducts?: OnlineProductUpdateManyWithoutLocalProductNestedInput
+    skuMappings?: SkuMappingUpdateManyWithoutProductNestedInput
   }
 
   export type ProductUncheckedUpdateWithoutInventoryTxInput = {
@@ -180427,6 +196131,10 @@ export namespace Prisma {
     minStock?: IntFieldUpdateOperationsInput | number
     maxStock?: IntFieldUpdateOperationsInput | number
     baseUnit?: StringFieldUpdateOperationsInput | string
+    invoiceUnit?: NullableStringFieldUpdateOperationsInput | string | null
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedIntoId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedRate?: FloatFieldUpdateOperationsInput | number
     trackSerial?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -180438,6 +196146,7 @@ export namespace Prisma {
     serials?: ProductSerialUncheckedUpdateManyWithoutProductNestedInput
     onlineOrderItems?: OnlineOrderItemUncheckedUpdateManyWithoutProductNestedInput
     onlineProducts?: OnlineProductUncheckedUpdateManyWithoutLocalProductNestedInput
+    skuMappings?: SkuMappingUncheckedUpdateManyWithoutProductNestedInput
   }
 
   export type UserUpsertWithoutInventoryTransactionsInput = {
@@ -180709,6 +196418,13 @@ export namespace Prisma {
     paymentStatus?: string
     dueDate?: Date | string | null
     paymentTerm?: string | null
+    hasVatInvoice?: boolean
+    vatInvoiceNo?: string | null
+    vatAmount?: number
+    shippingFee?: number
+    importTax?: number
+    otherFees?: number
+    totalDiscount?: number
     note?: string | null
     branchId?: string | null
     userName: string
@@ -180730,6 +196446,13 @@ export namespace Prisma {
     paymentStatus?: string
     dueDate?: Date | string | null
     paymentTerm?: string | null
+    hasVatInvoice?: boolean
+    vatInvoiceNo?: string | null
+    vatAmount?: number
+    shippingFee?: number
+    importTax?: number
+    otherFees?: number
+    totalDiscount?: number
     note?: string | null
     branchId?: string | null
     userId: string
@@ -180758,6 +196481,10 @@ export namespace Prisma {
     minStock?: number
     maxStock?: number
     baseUnit?: string
+    invoiceUnit?: string | null
+    bundleId?: string | null
+    mergedIntoId?: string | null
+    mergedRate?: number
     trackSerial?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -180771,6 +196498,7 @@ export namespace Prisma {
     serials?: ProductSerialCreateNestedManyWithoutProductInput
     onlineOrderItems?: OnlineOrderItemCreateNestedManyWithoutProductInput
     onlineProducts?: OnlineProductCreateNestedManyWithoutLocalProductInput
+    skuMappings?: SkuMappingCreateNestedManyWithoutProductInput
   }
 
   export type ProductUncheckedCreateWithoutImportReceiptItemsInput = {
@@ -180789,6 +196517,10 @@ export namespace Prisma {
     minStock?: number
     maxStock?: number
     baseUnit?: string
+    invoiceUnit?: string | null
+    bundleId?: string | null
+    mergedIntoId?: string | null
+    mergedRate?: number
     trackSerial?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -180800,6 +196532,7 @@ export namespace Prisma {
     serials?: ProductSerialUncheckedCreateNestedManyWithoutProductInput
     onlineOrderItems?: OnlineOrderItemUncheckedCreateNestedManyWithoutProductInput
     onlineProducts?: OnlineProductUncheckedCreateNestedManyWithoutLocalProductInput
+    skuMappings?: SkuMappingUncheckedCreateNestedManyWithoutProductInput
   }
 
   export type ProductCreateOrConnectWithoutImportReceiptItemsInput = {
@@ -180830,6 +196563,13 @@ export namespace Prisma {
     paymentStatus?: StringFieldUpdateOperationsInput | string
     dueDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     paymentTerm?: NullableStringFieldUpdateOperationsInput | string | null
+    hasVatInvoice?: BoolFieldUpdateOperationsInput | boolean
+    vatInvoiceNo?: NullableStringFieldUpdateOperationsInput | string | null
+    vatAmount?: FloatFieldUpdateOperationsInput | number
+    shippingFee?: FloatFieldUpdateOperationsInput | number
+    importTax?: FloatFieldUpdateOperationsInput | number
+    otherFees?: FloatFieldUpdateOperationsInput | number
+    totalDiscount?: FloatFieldUpdateOperationsInput | number
     note?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     userName?: StringFieldUpdateOperationsInput | string
@@ -180851,6 +196591,13 @@ export namespace Prisma {
     paymentStatus?: StringFieldUpdateOperationsInput | string
     dueDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     paymentTerm?: NullableStringFieldUpdateOperationsInput | string | null
+    hasVatInvoice?: BoolFieldUpdateOperationsInput | boolean
+    vatInvoiceNo?: NullableStringFieldUpdateOperationsInput | string | null
+    vatAmount?: FloatFieldUpdateOperationsInput | number
+    shippingFee?: FloatFieldUpdateOperationsInput | number
+    importTax?: FloatFieldUpdateOperationsInput | number
+    otherFees?: FloatFieldUpdateOperationsInput | number
+    totalDiscount?: FloatFieldUpdateOperationsInput | number
     note?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     userId?: StringFieldUpdateOperationsInput | string
@@ -180885,6 +196632,10 @@ export namespace Prisma {
     minStock?: IntFieldUpdateOperationsInput | number
     maxStock?: IntFieldUpdateOperationsInput | number
     baseUnit?: StringFieldUpdateOperationsInput | string
+    invoiceUnit?: NullableStringFieldUpdateOperationsInput | string | null
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedIntoId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedRate?: FloatFieldUpdateOperationsInput | number
     trackSerial?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -180898,6 +196649,7 @@ export namespace Prisma {
     serials?: ProductSerialUpdateManyWithoutProductNestedInput
     onlineOrderItems?: OnlineOrderItemUpdateManyWithoutProductNestedInput
     onlineProducts?: OnlineProductUpdateManyWithoutLocalProductNestedInput
+    skuMappings?: SkuMappingUpdateManyWithoutProductNestedInput
   }
 
   export type ProductUncheckedUpdateWithoutImportReceiptItemsInput = {
@@ -180916,6 +196668,10 @@ export namespace Prisma {
     minStock?: IntFieldUpdateOperationsInput | number
     maxStock?: IntFieldUpdateOperationsInput | number
     baseUnit?: StringFieldUpdateOperationsInput | string
+    invoiceUnit?: NullableStringFieldUpdateOperationsInput | string | null
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedIntoId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedRate?: FloatFieldUpdateOperationsInput | number
     trackSerial?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -180927,6 +196683,7 @@ export namespace Prisma {
     serials?: ProductSerialUncheckedUpdateManyWithoutProductNestedInput
     onlineOrderItems?: OnlineOrderItemUncheckedUpdateManyWithoutProductNestedInput
     onlineProducts?: OnlineProductUncheckedUpdateManyWithoutLocalProductNestedInput
+    skuMappings?: SkuMappingUncheckedUpdateManyWithoutProductNestedInput
   }
 
   export type PurchaseOrderCreateWithoutSupplierInput = {
@@ -181257,6 +197014,82 @@ export namespace Prisma {
     skipDuplicates?: boolean
   }
 
+  export type VehicleFuelLogCreateWithoutVehicleInput = {
+    id?: string
+    fuelDate?: Date | string
+    liters?: number
+    pricePerLiter?: number
+    cost?: number
+    kmAtFill?: number
+    fuelType?: string | null
+    station?: string | null
+    isFullTank?: boolean
+    notes?: string | null
+    createdAt?: Date | string
+  }
+
+  export type VehicleFuelLogUncheckedCreateWithoutVehicleInput = {
+    id?: string
+    fuelDate?: Date | string
+    liters?: number
+    pricePerLiter?: number
+    cost?: number
+    kmAtFill?: number
+    fuelType?: string | null
+    station?: string | null
+    isFullTank?: boolean
+    notes?: string | null
+    createdAt?: Date | string
+  }
+
+  export type VehicleFuelLogCreateOrConnectWithoutVehicleInput = {
+    where: VehicleFuelLogWhereUniqueInput
+    create: XOR<VehicleFuelLogCreateWithoutVehicleInput, VehicleFuelLogUncheckedCreateWithoutVehicleInput>
+  }
+
+  export type VehicleFuelLogCreateManyVehicleInputEnvelope = {
+    data: VehicleFuelLogCreateManyVehicleInput | VehicleFuelLogCreateManyVehicleInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type VehicleDocumentCreateWithoutVehicleInput = {
+    id?: string
+    type: string
+    name: string
+    documentNumber?: string | null
+    fileUrl?: string | null
+    issuer?: string | null
+    issueDate?: Date | string | null
+    expiryDate?: Date | string | null
+    notes?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type VehicleDocumentUncheckedCreateWithoutVehicleInput = {
+    id?: string
+    type: string
+    name: string
+    documentNumber?: string | null
+    fileUrl?: string | null
+    issuer?: string | null
+    issueDate?: Date | string | null
+    expiryDate?: Date | string | null
+    notes?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type VehicleDocumentCreateOrConnectWithoutVehicleInput = {
+    where: VehicleDocumentWhereUniqueInput
+    create: XOR<VehicleDocumentCreateWithoutVehicleInput, VehicleDocumentUncheckedCreateWithoutVehicleInput>
+  }
+
+  export type VehicleDocumentCreateManyVehicleInputEnvelope = {
+    data: VehicleDocumentCreateManyVehicleInput | VehicleDocumentCreateManyVehicleInput[]
+    skipDuplicates?: boolean
+  }
+
   export type WarehouseCreateWithoutVehicleInput = {
     id?: string
     code: string
@@ -181389,6 +197222,74 @@ export namespace Prisma {
     createdAt?: DateTimeFilter<"VehicleMaintenance"> | Date | string
   }
 
+  export type VehicleFuelLogUpsertWithWhereUniqueWithoutVehicleInput = {
+    where: VehicleFuelLogWhereUniqueInput
+    update: XOR<VehicleFuelLogUpdateWithoutVehicleInput, VehicleFuelLogUncheckedUpdateWithoutVehicleInput>
+    create: XOR<VehicleFuelLogCreateWithoutVehicleInput, VehicleFuelLogUncheckedCreateWithoutVehicleInput>
+  }
+
+  export type VehicleFuelLogUpdateWithWhereUniqueWithoutVehicleInput = {
+    where: VehicleFuelLogWhereUniqueInput
+    data: XOR<VehicleFuelLogUpdateWithoutVehicleInput, VehicleFuelLogUncheckedUpdateWithoutVehicleInput>
+  }
+
+  export type VehicleFuelLogUpdateManyWithWhereWithoutVehicleInput = {
+    where: VehicleFuelLogScalarWhereInput
+    data: XOR<VehicleFuelLogUpdateManyMutationInput, VehicleFuelLogUncheckedUpdateManyWithoutVehicleInput>
+  }
+
+  export type VehicleFuelLogScalarWhereInput = {
+    AND?: VehicleFuelLogScalarWhereInput | VehicleFuelLogScalarWhereInput[]
+    OR?: VehicleFuelLogScalarWhereInput[]
+    NOT?: VehicleFuelLogScalarWhereInput | VehicleFuelLogScalarWhereInput[]
+    id?: StringFilter<"VehicleFuelLog"> | string
+    vehicleId?: StringFilter<"VehicleFuelLog"> | string
+    fuelDate?: DateTimeFilter<"VehicleFuelLog"> | Date | string
+    liters?: FloatFilter<"VehicleFuelLog"> | number
+    pricePerLiter?: FloatFilter<"VehicleFuelLog"> | number
+    cost?: FloatFilter<"VehicleFuelLog"> | number
+    kmAtFill?: FloatFilter<"VehicleFuelLog"> | number
+    fuelType?: StringNullableFilter<"VehicleFuelLog"> | string | null
+    station?: StringNullableFilter<"VehicleFuelLog"> | string | null
+    isFullTank?: BoolFilter<"VehicleFuelLog"> | boolean
+    notes?: StringNullableFilter<"VehicleFuelLog"> | string | null
+    createdAt?: DateTimeFilter<"VehicleFuelLog"> | Date | string
+  }
+
+  export type VehicleDocumentUpsertWithWhereUniqueWithoutVehicleInput = {
+    where: VehicleDocumentWhereUniqueInput
+    update: XOR<VehicleDocumentUpdateWithoutVehicleInput, VehicleDocumentUncheckedUpdateWithoutVehicleInput>
+    create: XOR<VehicleDocumentCreateWithoutVehicleInput, VehicleDocumentUncheckedCreateWithoutVehicleInput>
+  }
+
+  export type VehicleDocumentUpdateWithWhereUniqueWithoutVehicleInput = {
+    where: VehicleDocumentWhereUniqueInput
+    data: XOR<VehicleDocumentUpdateWithoutVehicleInput, VehicleDocumentUncheckedUpdateWithoutVehicleInput>
+  }
+
+  export type VehicleDocumentUpdateManyWithWhereWithoutVehicleInput = {
+    where: VehicleDocumentScalarWhereInput
+    data: XOR<VehicleDocumentUpdateManyMutationInput, VehicleDocumentUncheckedUpdateManyWithoutVehicleInput>
+  }
+
+  export type VehicleDocumentScalarWhereInput = {
+    AND?: VehicleDocumentScalarWhereInput | VehicleDocumentScalarWhereInput[]
+    OR?: VehicleDocumentScalarWhereInput[]
+    NOT?: VehicleDocumentScalarWhereInput | VehicleDocumentScalarWhereInput[]
+    id?: StringFilter<"VehicleDocument"> | string
+    vehicleId?: StringFilter<"VehicleDocument"> | string
+    type?: StringFilter<"VehicleDocument"> | string
+    name?: StringFilter<"VehicleDocument"> | string
+    documentNumber?: StringNullableFilter<"VehicleDocument"> | string | null
+    fileUrl?: StringNullableFilter<"VehicleDocument"> | string | null
+    issuer?: StringNullableFilter<"VehicleDocument"> | string | null
+    issueDate?: DateTimeNullableFilter<"VehicleDocument"> | Date | string | null
+    expiryDate?: DateTimeNullableFilter<"VehicleDocument"> | Date | string | null
+    notes?: StringNullableFilter<"VehicleDocument"> | string | null
+    createdAt?: DateTimeFilter<"VehicleDocument"> | Date | string
+    updatedAt?: DateTimeFilter<"VehicleDocument"> | Date | string
+  }
+
   export type WarehouseUpsertWithoutVehicleInput = {
     update: XOR<WarehouseUpdateWithoutVehicleInput, WarehouseUncheckedUpdateWithoutVehicleInput>
     create: XOR<WarehouseCreateWithoutVehicleInput, WarehouseUncheckedCreateWithoutVehicleInput>
@@ -181499,6 +197400,8 @@ export namespace Prisma {
     branchId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
+    fuelLogs?: VehicleFuelLogCreateNestedManyWithoutVehicleInput
+    documents?: VehicleDocumentCreateNestedManyWithoutVehicleInput
     warehouse?: WarehouseCreateNestedOneWithoutVehicleInput
     salesTrips?: SalesTripCreateNestedManyWithoutVehicleInput
   }
@@ -181525,6 +197428,8 @@ export namespace Prisma {
     branchId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
+    fuelLogs?: VehicleFuelLogUncheckedCreateNestedManyWithoutVehicleInput
+    documents?: VehicleDocumentUncheckedCreateNestedManyWithoutVehicleInput
     warehouse?: WarehouseUncheckedCreateNestedOneWithoutVehicleInput
     salesTrips?: SalesTripUncheckedCreateNestedManyWithoutVehicleInput
   }
@@ -181567,6 +197472,8 @@ export namespace Prisma {
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    fuelLogs?: VehicleFuelLogUpdateManyWithoutVehicleNestedInput
+    documents?: VehicleDocumentUpdateManyWithoutVehicleNestedInput
     warehouse?: WarehouseUpdateOneWithoutVehicleNestedInput
     salesTrips?: SalesTripUpdateManyWithoutVehicleNestedInput
   }
@@ -181593,6 +197500,264 @@ export namespace Prisma {
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    fuelLogs?: VehicleFuelLogUncheckedUpdateManyWithoutVehicleNestedInput
+    documents?: VehicleDocumentUncheckedUpdateManyWithoutVehicleNestedInput
+    warehouse?: WarehouseUncheckedUpdateOneWithoutVehicleNestedInput
+    salesTrips?: SalesTripUncheckedUpdateManyWithoutVehicleNestedInput
+  }
+
+  export type VehicleCreateWithoutFuelLogsInput = {
+    id?: string
+    code: string
+    name: string
+    type?: string
+    licensePlate: string
+    brand?: string | null
+    model?: string | null
+    year?: number | null
+    color?: string | null
+    currentKm?: number
+    lastOilChangeKm?: number
+    inspectionExpiry?: Date | string | null
+    insuranceExpiry?: Date | string | null
+    assignedDriverId?: string | null
+    assignedDriverName?: string | null
+    status?: string
+    imageUrl?: string | null
+    notes?: string | null
+    branchId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    maintenanceLogs?: VehicleMaintenanceCreateNestedManyWithoutVehicleInput
+    documents?: VehicleDocumentCreateNestedManyWithoutVehicleInput
+    warehouse?: WarehouseCreateNestedOneWithoutVehicleInput
+    salesTrips?: SalesTripCreateNestedManyWithoutVehicleInput
+  }
+
+  export type VehicleUncheckedCreateWithoutFuelLogsInput = {
+    id?: string
+    code: string
+    name: string
+    type?: string
+    licensePlate: string
+    brand?: string | null
+    model?: string | null
+    year?: number | null
+    color?: string | null
+    currentKm?: number
+    lastOilChangeKm?: number
+    inspectionExpiry?: Date | string | null
+    insuranceExpiry?: Date | string | null
+    assignedDriverId?: string | null
+    assignedDriverName?: string | null
+    status?: string
+    imageUrl?: string | null
+    notes?: string | null
+    branchId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    maintenanceLogs?: VehicleMaintenanceUncheckedCreateNestedManyWithoutVehicleInput
+    documents?: VehicleDocumentUncheckedCreateNestedManyWithoutVehicleInput
+    warehouse?: WarehouseUncheckedCreateNestedOneWithoutVehicleInput
+    salesTrips?: SalesTripUncheckedCreateNestedManyWithoutVehicleInput
+  }
+
+  export type VehicleCreateOrConnectWithoutFuelLogsInput = {
+    where: VehicleWhereUniqueInput
+    create: XOR<VehicleCreateWithoutFuelLogsInput, VehicleUncheckedCreateWithoutFuelLogsInput>
+  }
+
+  export type VehicleUpsertWithoutFuelLogsInput = {
+    update: XOR<VehicleUpdateWithoutFuelLogsInput, VehicleUncheckedUpdateWithoutFuelLogsInput>
+    create: XOR<VehicleCreateWithoutFuelLogsInput, VehicleUncheckedCreateWithoutFuelLogsInput>
+    where?: VehicleWhereInput
+  }
+
+  export type VehicleUpdateToOneWithWhereWithoutFuelLogsInput = {
+    where?: VehicleWhereInput
+    data: XOR<VehicleUpdateWithoutFuelLogsInput, VehicleUncheckedUpdateWithoutFuelLogsInput>
+  }
+
+  export type VehicleUpdateWithoutFuelLogsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    code?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    type?: StringFieldUpdateOperationsInput | string
+    licensePlate?: StringFieldUpdateOperationsInput | string
+    brand?: NullableStringFieldUpdateOperationsInput | string | null
+    model?: NullableStringFieldUpdateOperationsInput | string | null
+    year?: NullableIntFieldUpdateOperationsInput | number | null
+    color?: NullableStringFieldUpdateOperationsInput | string | null
+    currentKm?: FloatFieldUpdateOperationsInput | number
+    lastOilChangeKm?: FloatFieldUpdateOperationsInput | number
+    inspectionExpiry?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    insuranceExpiry?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    assignedDriverId?: NullableStringFieldUpdateOperationsInput | string | null
+    assignedDriverName?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    imageUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    maintenanceLogs?: VehicleMaintenanceUpdateManyWithoutVehicleNestedInput
+    documents?: VehicleDocumentUpdateManyWithoutVehicleNestedInput
+    warehouse?: WarehouseUpdateOneWithoutVehicleNestedInput
+    salesTrips?: SalesTripUpdateManyWithoutVehicleNestedInput
+  }
+
+  export type VehicleUncheckedUpdateWithoutFuelLogsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    code?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    type?: StringFieldUpdateOperationsInput | string
+    licensePlate?: StringFieldUpdateOperationsInput | string
+    brand?: NullableStringFieldUpdateOperationsInput | string | null
+    model?: NullableStringFieldUpdateOperationsInput | string | null
+    year?: NullableIntFieldUpdateOperationsInput | number | null
+    color?: NullableStringFieldUpdateOperationsInput | string | null
+    currentKm?: FloatFieldUpdateOperationsInput | number
+    lastOilChangeKm?: FloatFieldUpdateOperationsInput | number
+    inspectionExpiry?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    insuranceExpiry?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    assignedDriverId?: NullableStringFieldUpdateOperationsInput | string | null
+    assignedDriverName?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    imageUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    maintenanceLogs?: VehicleMaintenanceUncheckedUpdateManyWithoutVehicleNestedInput
+    documents?: VehicleDocumentUncheckedUpdateManyWithoutVehicleNestedInput
+    warehouse?: WarehouseUncheckedUpdateOneWithoutVehicleNestedInput
+    salesTrips?: SalesTripUncheckedUpdateManyWithoutVehicleNestedInput
+  }
+
+  export type VehicleCreateWithoutDocumentsInput = {
+    id?: string
+    code: string
+    name: string
+    type?: string
+    licensePlate: string
+    brand?: string | null
+    model?: string | null
+    year?: number | null
+    color?: string | null
+    currentKm?: number
+    lastOilChangeKm?: number
+    inspectionExpiry?: Date | string | null
+    insuranceExpiry?: Date | string | null
+    assignedDriverId?: string | null
+    assignedDriverName?: string | null
+    status?: string
+    imageUrl?: string | null
+    notes?: string | null
+    branchId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    maintenanceLogs?: VehicleMaintenanceCreateNestedManyWithoutVehicleInput
+    fuelLogs?: VehicleFuelLogCreateNestedManyWithoutVehicleInput
+    warehouse?: WarehouseCreateNestedOneWithoutVehicleInput
+    salesTrips?: SalesTripCreateNestedManyWithoutVehicleInput
+  }
+
+  export type VehicleUncheckedCreateWithoutDocumentsInput = {
+    id?: string
+    code: string
+    name: string
+    type?: string
+    licensePlate: string
+    brand?: string | null
+    model?: string | null
+    year?: number | null
+    color?: string | null
+    currentKm?: number
+    lastOilChangeKm?: number
+    inspectionExpiry?: Date | string | null
+    insuranceExpiry?: Date | string | null
+    assignedDriverId?: string | null
+    assignedDriverName?: string | null
+    status?: string
+    imageUrl?: string | null
+    notes?: string | null
+    branchId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    maintenanceLogs?: VehicleMaintenanceUncheckedCreateNestedManyWithoutVehicleInput
+    fuelLogs?: VehicleFuelLogUncheckedCreateNestedManyWithoutVehicleInput
+    warehouse?: WarehouseUncheckedCreateNestedOneWithoutVehicleInput
+    salesTrips?: SalesTripUncheckedCreateNestedManyWithoutVehicleInput
+  }
+
+  export type VehicleCreateOrConnectWithoutDocumentsInput = {
+    where: VehicleWhereUniqueInput
+    create: XOR<VehicleCreateWithoutDocumentsInput, VehicleUncheckedCreateWithoutDocumentsInput>
+  }
+
+  export type VehicleUpsertWithoutDocumentsInput = {
+    update: XOR<VehicleUpdateWithoutDocumentsInput, VehicleUncheckedUpdateWithoutDocumentsInput>
+    create: XOR<VehicleCreateWithoutDocumentsInput, VehicleUncheckedCreateWithoutDocumentsInput>
+    where?: VehicleWhereInput
+  }
+
+  export type VehicleUpdateToOneWithWhereWithoutDocumentsInput = {
+    where?: VehicleWhereInput
+    data: XOR<VehicleUpdateWithoutDocumentsInput, VehicleUncheckedUpdateWithoutDocumentsInput>
+  }
+
+  export type VehicleUpdateWithoutDocumentsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    code?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    type?: StringFieldUpdateOperationsInput | string
+    licensePlate?: StringFieldUpdateOperationsInput | string
+    brand?: NullableStringFieldUpdateOperationsInput | string | null
+    model?: NullableStringFieldUpdateOperationsInput | string | null
+    year?: NullableIntFieldUpdateOperationsInput | number | null
+    color?: NullableStringFieldUpdateOperationsInput | string | null
+    currentKm?: FloatFieldUpdateOperationsInput | number
+    lastOilChangeKm?: FloatFieldUpdateOperationsInput | number
+    inspectionExpiry?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    insuranceExpiry?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    assignedDriverId?: NullableStringFieldUpdateOperationsInput | string | null
+    assignedDriverName?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    imageUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    maintenanceLogs?: VehicleMaintenanceUpdateManyWithoutVehicleNestedInput
+    fuelLogs?: VehicleFuelLogUpdateManyWithoutVehicleNestedInput
+    warehouse?: WarehouseUpdateOneWithoutVehicleNestedInput
+    salesTrips?: SalesTripUpdateManyWithoutVehicleNestedInput
+  }
+
+  export type VehicleUncheckedUpdateWithoutDocumentsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    code?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    type?: StringFieldUpdateOperationsInput | string
+    licensePlate?: StringFieldUpdateOperationsInput | string
+    brand?: NullableStringFieldUpdateOperationsInput | string | null
+    model?: NullableStringFieldUpdateOperationsInput | string | null
+    year?: NullableIntFieldUpdateOperationsInput | number | null
+    color?: NullableStringFieldUpdateOperationsInput | string | null
+    currentKm?: FloatFieldUpdateOperationsInput | number
+    lastOilChangeKm?: FloatFieldUpdateOperationsInput | number
+    inspectionExpiry?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    insuranceExpiry?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    assignedDriverId?: NullableStringFieldUpdateOperationsInput | string | null
+    assignedDriverName?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    imageUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    maintenanceLogs?: VehicleMaintenanceUncheckedUpdateManyWithoutVehicleNestedInput
+    fuelLogs?: VehicleFuelLogUncheckedUpdateManyWithoutVehicleNestedInput
     warehouse?: WarehouseUncheckedUpdateOneWithoutVehicleNestedInput
     salesTrips?: SalesTripUncheckedUpdateManyWithoutVehicleNestedInput
   }
@@ -182461,6 +198626,10 @@ export namespace Prisma {
     minStock?: number
     maxStock?: number
     baseUnit?: string
+    invoiceUnit?: string | null
+    bundleId?: string | null
+    mergedIntoId?: string | null
+    mergedRate?: number
     trackSerial?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -182474,6 +198643,7 @@ export namespace Prisma {
     serials?: ProductSerialCreateNestedManyWithoutProductInput
     onlineOrderItems?: OnlineOrderItemCreateNestedManyWithoutProductInput
     onlineProducts?: OnlineProductCreateNestedManyWithoutLocalProductInput
+    skuMappings?: SkuMappingCreateNestedManyWithoutProductInput
   }
 
   export type ProductUncheckedCreateWithoutSalesOrderItemsInput = {
@@ -182492,6 +198662,10 @@ export namespace Prisma {
     minStock?: number
     maxStock?: number
     baseUnit?: string
+    invoiceUnit?: string | null
+    bundleId?: string | null
+    mergedIntoId?: string | null
+    mergedRate?: number
     trackSerial?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -182503,6 +198677,7 @@ export namespace Prisma {
     serials?: ProductSerialUncheckedCreateNestedManyWithoutProductInput
     onlineOrderItems?: OnlineOrderItemUncheckedCreateNestedManyWithoutProductInput
     onlineProducts?: OnlineProductUncheckedCreateNestedManyWithoutLocalProductInput
+    skuMappings?: SkuMappingUncheckedCreateNestedManyWithoutProductInput
   }
 
   export type ProductCreateOrConnectWithoutSalesOrderItemsInput = {
@@ -182584,6 +198759,10 @@ export namespace Prisma {
     minStock?: IntFieldUpdateOperationsInput | number
     maxStock?: IntFieldUpdateOperationsInput | number
     baseUnit?: StringFieldUpdateOperationsInput | string
+    invoiceUnit?: NullableStringFieldUpdateOperationsInput | string | null
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedIntoId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedRate?: FloatFieldUpdateOperationsInput | number
     trackSerial?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -182597,6 +198776,7 @@ export namespace Prisma {
     serials?: ProductSerialUpdateManyWithoutProductNestedInput
     onlineOrderItems?: OnlineOrderItemUpdateManyWithoutProductNestedInput
     onlineProducts?: OnlineProductUpdateManyWithoutLocalProductNestedInput
+    skuMappings?: SkuMappingUpdateManyWithoutProductNestedInput
   }
 
   export type ProductUncheckedUpdateWithoutSalesOrderItemsInput = {
@@ -182615,6 +198795,10 @@ export namespace Prisma {
     minStock?: IntFieldUpdateOperationsInput | number
     maxStock?: IntFieldUpdateOperationsInput | number
     baseUnit?: StringFieldUpdateOperationsInput | string
+    invoiceUnit?: NullableStringFieldUpdateOperationsInput | string | null
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedIntoId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedRate?: FloatFieldUpdateOperationsInput | number
     trackSerial?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -182626,6 +198810,7 @@ export namespace Prisma {
     serials?: ProductSerialUncheckedUpdateManyWithoutProductNestedInput
     onlineOrderItems?: OnlineOrderItemUncheckedUpdateManyWithoutProductNestedInput
     onlineProducts?: OnlineProductUncheckedUpdateManyWithoutLocalProductNestedInput
+    skuMappings?: SkuMappingUncheckedUpdateManyWithoutProductNestedInput
   }
 
   export type PriceRuleCreateWithoutPriceListInput = {
@@ -183012,6 +199197,158 @@ export namespace Prisma {
     joinDate?: DateTimeFieldUpdateOperationsInput | Date | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type ProductCreateWithoutSkuMappingsInput = {
+    id?: string
+    name: string
+    sku: string
+    barcode?: string | null
+    description?: string | null
+    productType?: string
+    costPrice?: number
+    sellingPrice?: number
+    taxInclusive?: boolean
+    stock?: number
+    minStock?: number
+    maxStock?: number
+    baseUnit?: string
+    invoiceUnit?: string | null
+    bundleId?: string | null
+    mergedIntoId?: string | null
+    mergedRate?: number
+    trackSerial?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    category: CategoryCreateNestedOneWithoutProductsInput
+    brand?: BrandCreateNestedOneWithoutProductsInput
+    unitConversions?: UnitConversionCreateNestedManyWithoutProductInput
+    images?: ProductImageCreateNestedManyWithoutProductInput
+    transactionItems?: TransactionItemCreateNestedManyWithoutProductInput
+    inventoryTx?: InventoryTransactionCreateNestedManyWithoutProductInput
+    importReceiptItems?: ImportReceiptItemCreateNestedManyWithoutProductInput
+    salesOrderItems?: SalesOrderItemCreateNestedManyWithoutProductInput
+    serials?: ProductSerialCreateNestedManyWithoutProductInput
+    onlineOrderItems?: OnlineOrderItemCreateNestedManyWithoutProductInput
+    onlineProducts?: OnlineProductCreateNestedManyWithoutLocalProductInput
+  }
+
+  export type ProductUncheckedCreateWithoutSkuMappingsInput = {
+    id?: string
+    name: string
+    sku: string
+    barcode?: string | null
+    description?: string | null
+    categoryId: string
+    brandId?: string | null
+    productType?: string
+    costPrice?: number
+    sellingPrice?: number
+    taxInclusive?: boolean
+    stock?: number
+    minStock?: number
+    maxStock?: number
+    baseUnit?: string
+    invoiceUnit?: string | null
+    bundleId?: string | null
+    mergedIntoId?: string | null
+    mergedRate?: number
+    trackSerial?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    unitConversions?: UnitConversionUncheckedCreateNestedManyWithoutProductInput
+    images?: ProductImageUncheckedCreateNestedManyWithoutProductInput
+    transactionItems?: TransactionItemUncheckedCreateNestedManyWithoutProductInput
+    inventoryTx?: InventoryTransactionUncheckedCreateNestedManyWithoutProductInput
+    importReceiptItems?: ImportReceiptItemUncheckedCreateNestedManyWithoutProductInput
+    salesOrderItems?: SalesOrderItemUncheckedCreateNestedManyWithoutProductInput
+    serials?: ProductSerialUncheckedCreateNestedManyWithoutProductInput
+    onlineOrderItems?: OnlineOrderItemUncheckedCreateNestedManyWithoutProductInput
+    onlineProducts?: OnlineProductUncheckedCreateNestedManyWithoutLocalProductInput
+  }
+
+  export type ProductCreateOrConnectWithoutSkuMappingsInput = {
+    where: ProductWhereUniqueInput
+    create: XOR<ProductCreateWithoutSkuMappingsInput, ProductUncheckedCreateWithoutSkuMappingsInput>
+  }
+
+  export type ProductUpsertWithoutSkuMappingsInput = {
+    update: XOR<ProductUpdateWithoutSkuMappingsInput, ProductUncheckedUpdateWithoutSkuMappingsInput>
+    create: XOR<ProductCreateWithoutSkuMappingsInput, ProductUncheckedCreateWithoutSkuMappingsInput>
+    where?: ProductWhereInput
+  }
+
+  export type ProductUpdateToOneWithWhereWithoutSkuMappingsInput = {
+    where?: ProductWhereInput
+    data: XOR<ProductUpdateWithoutSkuMappingsInput, ProductUncheckedUpdateWithoutSkuMappingsInput>
+  }
+
+  export type ProductUpdateWithoutSkuMappingsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    sku?: StringFieldUpdateOperationsInput | string
+    barcode?: NullableStringFieldUpdateOperationsInput | string | null
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    productType?: StringFieldUpdateOperationsInput | string
+    costPrice?: FloatFieldUpdateOperationsInput | number
+    sellingPrice?: FloatFieldUpdateOperationsInput | number
+    taxInclusive?: BoolFieldUpdateOperationsInput | boolean
+    stock?: IntFieldUpdateOperationsInput | number
+    minStock?: IntFieldUpdateOperationsInput | number
+    maxStock?: IntFieldUpdateOperationsInput | number
+    baseUnit?: StringFieldUpdateOperationsInput | string
+    invoiceUnit?: NullableStringFieldUpdateOperationsInput | string | null
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedIntoId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedRate?: FloatFieldUpdateOperationsInput | number
+    trackSerial?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    category?: CategoryUpdateOneRequiredWithoutProductsNestedInput
+    brand?: BrandUpdateOneWithoutProductsNestedInput
+    unitConversions?: UnitConversionUpdateManyWithoutProductNestedInput
+    images?: ProductImageUpdateManyWithoutProductNestedInput
+    transactionItems?: TransactionItemUpdateManyWithoutProductNestedInput
+    inventoryTx?: InventoryTransactionUpdateManyWithoutProductNestedInput
+    importReceiptItems?: ImportReceiptItemUpdateManyWithoutProductNestedInput
+    salesOrderItems?: SalesOrderItemUpdateManyWithoutProductNestedInput
+    serials?: ProductSerialUpdateManyWithoutProductNestedInput
+    onlineOrderItems?: OnlineOrderItemUpdateManyWithoutProductNestedInput
+    onlineProducts?: OnlineProductUpdateManyWithoutLocalProductNestedInput
+  }
+
+  export type ProductUncheckedUpdateWithoutSkuMappingsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    sku?: StringFieldUpdateOperationsInput | string
+    barcode?: NullableStringFieldUpdateOperationsInput | string | null
+    description?: NullableStringFieldUpdateOperationsInput | string | null
+    categoryId?: StringFieldUpdateOperationsInput | string
+    brandId?: NullableStringFieldUpdateOperationsInput | string | null
+    productType?: StringFieldUpdateOperationsInput | string
+    costPrice?: FloatFieldUpdateOperationsInput | number
+    sellingPrice?: FloatFieldUpdateOperationsInput | number
+    taxInclusive?: BoolFieldUpdateOperationsInput | boolean
+    stock?: IntFieldUpdateOperationsInput | number
+    minStock?: IntFieldUpdateOperationsInput | number
+    maxStock?: IntFieldUpdateOperationsInput | number
+    baseUnit?: StringFieldUpdateOperationsInput | string
+    invoiceUnit?: NullableStringFieldUpdateOperationsInput | string | null
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedIntoId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedRate?: FloatFieldUpdateOperationsInput | number
+    trackSerial?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    unitConversions?: UnitConversionUncheckedUpdateManyWithoutProductNestedInput
+    images?: ProductImageUncheckedUpdateManyWithoutProductNestedInput
+    transactionItems?: TransactionItemUncheckedUpdateManyWithoutProductNestedInput
+    inventoryTx?: InventoryTransactionUncheckedUpdateManyWithoutProductNestedInput
+    importReceiptItems?: ImportReceiptItemUncheckedUpdateManyWithoutProductNestedInput
+    salesOrderItems?: SalesOrderItemUncheckedUpdateManyWithoutProductNestedInput
+    serials?: ProductSerialUncheckedUpdateManyWithoutProductNestedInput
+    onlineOrderItems?: OnlineOrderItemUncheckedUpdateManyWithoutProductNestedInput
+    onlineProducts?: OnlineProductUncheckedUpdateManyWithoutLocalProductNestedInput
   }
 
   export type OnlineOrderCreateWithoutChannelInput = {
@@ -183446,6 +199783,10 @@ export namespace Prisma {
     minStock?: number
     maxStock?: number
     baseUnit?: string
+    invoiceUnit?: string | null
+    bundleId?: string | null
+    mergedIntoId?: string | null
+    mergedRate?: number
     trackSerial?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -183459,6 +199800,7 @@ export namespace Prisma {
     salesOrderItems?: SalesOrderItemCreateNestedManyWithoutProductInput
     serials?: ProductSerialCreateNestedManyWithoutProductInput
     onlineOrderItems?: OnlineOrderItemCreateNestedManyWithoutProductInput
+    skuMappings?: SkuMappingCreateNestedManyWithoutProductInput
   }
 
   export type ProductUncheckedCreateWithoutOnlineProductsInput = {
@@ -183477,6 +199819,10 @@ export namespace Prisma {
     minStock?: number
     maxStock?: number
     baseUnit?: string
+    invoiceUnit?: string | null
+    bundleId?: string | null
+    mergedIntoId?: string | null
+    mergedRate?: number
     trackSerial?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -183488,6 +199834,7 @@ export namespace Prisma {
     salesOrderItems?: SalesOrderItemUncheckedCreateNestedManyWithoutProductInput
     serials?: ProductSerialUncheckedCreateNestedManyWithoutProductInput
     onlineOrderItems?: OnlineOrderItemUncheckedCreateNestedManyWithoutProductInput
+    skuMappings?: SkuMappingUncheckedCreateNestedManyWithoutProductInput
   }
 
   export type ProductCreateOrConnectWithoutOnlineProductsInput = {
@@ -183581,6 +199928,10 @@ export namespace Prisma {
     minStock?: IntFieldUpdateOperationsInput | number
     maxStock?: IntFieldUpdateOperationsInput | number
     baseUnit?: StringFieldUpdateOperationsInput | string
+    invoiceUnit?: NullableStringFieldUpdateOperationsInput | string | null
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedIntoId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedRate?: FloatFieldUpdateOperationsInput | number
     trackSerial?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -183594,6 +199945,7 @@ export namespace Prisma {
     salesOrderItems?: SalesOrderItemUpdateManyWithoutProductNestedInput
     serials?: ProductSerialUpdateManyWithoutProductNestedInput
     onlineOrderItems?: OnlineOrderItemUpdateManyWithoutProductNestedInput
+    skuMappings?: SkuMappingUpdateManyWithoutProductNestedInput
   }
 
   export type ProductUncheckedUpdateWithoutOnlineProductsInput = {
@@ -183612,6 +199964,10 @@ export namespace Prisma {
     minStock?: IntFieldUpdateOperationsInput | number
     maxStock?: IntFieldUpdateOperationsInput | number
     baseUnit?: StringFieldUpdateOperationsInput | string
+    invoiceUnit?: NullableStringFieldUpdateOperationsInput | string | null
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedIntoId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedRate?: FloatFieldUpdateOperationsInput | number
     trackSerial?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -183623,6 +199979,7 @@ export namespace Prisma {
     salesOrderItems?: SalesOrderItemUncheckedUpdateManyWithoutProductNestedInput
     serials?: ProductSerialUncheckedUpdateManyWithoutProductNestedInput
     onlineOrderItems?: OnlineOrderItemUncheckedUpdateManyWithoutProductNestedInput
+    skuMappings?: SkuMappingUncheckedUpdateManyWithoutProductNestedInput
   }
 
   export type OnlineOrderCreateWithoutItemsInput = {
@@ -183716,6 +200073,10 @@ export namespace Prisma {
     minStock?: number
     maxStock?: number
     baseUnit?: string
+    invoiceUnit?: string | null
+    bundleId?: string | null
+    mergedIntoId?: string | null
+    mergedRate?: number
     trackSerial?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -183729,6 +200090,7 @@ export namespace Prisma {
     salesOrderItems?: SalesOrderItemCreateNestedManyWithoutProductInput
     serials?: ProductSerialCreateNestedManyWithoutProductInput
     onlineProducts?: OnlineProductCreateNestedManyWithoutLocalProductInput
+    skuMappings?: SkuMappingCreateNestedManyWithoutProductInput
   }
 
   export type ProductUncheckedCreateWithoutOnlineOrderItemsInput = {
@@ -183747,6 +200109,10 @@ export namespace Prisma {
     minStock?: number
     maxStock?: number
     baseUnit?: string
+    invoiceUnit?: string | null
+    bundleId?: string | null
+    mergedIntoId?: string | null
+    mergedRate?: number
     trackSerial?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -183758,6 +200124,7 @@ export namespace Prisma {
     salesOrderItems?: SalesOrderItemUncheckedCreateNestedManyWithoutProductInput
     serials?: ProductSerialUncheckedCreateNestedManyWithoutProductInput
     onlineProducts?: OnlineProductUncheckedCreateNestedManyWithoutLocalProductInput
+    skuMappings?: SkuMappingUncheckedCreateNestedManyWithoutProductInput
   }
 
   export type ProductCreateOrConnectWithoutOnlineOrderItemsInput = {
@@ -183873,6 +200240,10 @@ export namespace Prisma {
     minStock?: IntFieldUpdateOperationsInput | number
     maxStock?: IntFieldUpdateOperationsInput | number
     baseUnit?: StringFieldUpdateOperationsInput | string
+    invoiceUnit?: NullableStringFieldUpdateOperationsInput | string | null
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedIntoId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedRate?: FloatFieldUpdateOperationsInput | number
     trackSerial?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -183886,6 +200257,7 @@ export namespace Prisma {
     salesOrderItems?: SalesOrderItemUpdateManyWithoutProductNestedInput
     serials?: ProductSerialUpdateManyWithoutProductNestedInput
     onlineProducts?: OnlineProductUpdateManyWithoutLocalProductNestedInput
+    skuMappings?: SkuMappingUpdateManyWithoutProductNestedInput
   }
 
   export type ProductUncheckedUpdateWithoutOnlineOrderItemsInput = {
@@ -183904,6 +200276,10 @@ export namespace Prisma {
     minStock?: IntFieldUpdateOperationsInput | number
     maxStock?: IntFieldUpdateOperationsInput | number
     baseUnit?: StringFieldUpdateOperationsInput | string
+    invoiceUnit?: NullableStringFieldUpdateOperationsInput | string | null
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedIntoId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedRate?: FloatFieldUpdateOperationsInput | number
     trackSerial?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -183915,6 +200291,7 @@ export namespace Prisma {
     salesOrderItems?: SalesOrderItemUncheckedUpdateManyWithoutProductNestedInput
     serials?: ProductSerialUncheckedUpdateManyWithoutProductNestedInput
     onlineProducts?: OnlineProductUncheckedUpdateManyWithoutLocalProductNestedInput
+    skuMappings?: SkuMappingUncheckedUpdateManyWithoutProductNestedInput
   }
 
   export type DepreciationEntryCreateWithoutAssetInput = {
@@ -184870,6 +201247,8 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     maintenanceLogs?: VehicleMaintenanceCreateNestedManyWithoutVehicleInput
+    fuelLogs?: VehicleFuelLogCreateNestedManyWithoutVehicleInput
+    documents?: VehicleDocumentCreateNestedManyWithoutVehicleInput
     salesTrips?: SalesTripCreateNestedManyWithoutVehicleInput
   }
 
@@ -184896,6 +201275,8 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     maintenanceLogs?: VehicleMaintenanceUncheckedCreateNestedManyWithoutVehicleInput
+    fuelLogs?: VehicleFuelLogUncheckedCreateNestedManyWithoutVehicleInput
+    documents?: VehicleDocumentUncheckedCreateNestedManyWithoutVehicleInput
     salesTrips?: SalesTripUncheckedCreateNestedManyWithoutVehicleInput
   }
 
@@ -185080,6 +201461,8 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     maintenanceLogs?: VehicleMaintenanceUpdateManyWithoutVehicleNestedInput
+    fuelLogs?: VehicleFuelLogUpdateManyWithoutVehicleNestedInput
+    documents?: VehicleDocumentUpdateManyWithoutVehicleNestedInput
     salesTrips?: SalesTripUpdateManyWithoutVehicleNestedInput
   }
 
@@ -185106,6 +201489,8 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     maintenanceLogs?: VehicleMaintenanceUncheckedUpdateManyWithoutVehicleNestedInput
+    fuelLogs?: VehicleFuelLogUncheckedUpdateManyWithoutVehicleNestedInput
+    documents?: VehicleDocumentUncheckedUpdateManyWithoutVehicleNestedInput
     salesTrips?: SalesTripUncheckedUpdateManyWithoutVehicleNestedInput
   }
 
@@ -185537,6 +201922,8 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     maintenanceLogs?: VehicleMaintenanceCreateNestedManyWithoutVehicleInput
+    fuelLogs?: VehicleFuelLogCreateNestedManyWithoutVehicleInput
+    documents?: VehicleDocumentCreateNestedManyWithoutVehicleInput
     warehouse?: WarehouseCreateNestedOneWithoutVehicleInput
   }
 
@@ -185563,6 +201950,8 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     maintenanceLogs?: VehicleMaintenanceUncheckedCreateNestedManyWithoutVehicleInput
+    fuelLogs?: VehicleFuelLogUncheckedCreateNestedManyWithoutVehicleInput
+    documents?: VehicleDocumentUncheckedCreateNestedManyWithoutVehicleInput
     warehouse?: WarehouseUncheckedCreateNestedOneWithoutVehicleInput
   }
 
@@ -185712,6 +202101,8 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     maintenanceLogs?: VehicleMaintenanceUpdateManyWithoutVehicleNestedInput
+    fuelLogs?: VehicleFuelLogUpdateManyWithoutVehicleNestedInput
+    documents?: VehicleDocumentUpdateManyWithoutVehicleNestedInput
     warehouse?: WarehouseUpdateOneWithoutVehicleNestedInput
   }
 
@@ -185738,6 +202129,8 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     maintenanceLogs?: VehicleMaintenanceUncheckedUpdateManyWithoutVehicleNestedInput
+    fuelLogs?: VehicleFuelLogUncheckedUpdateManyWithoutVehicleNestedInput
+    documents?: VehicleDocumentUncheckedUpdateManyWithoutVehicleNestedInput
     warehouse?: WarehouseUncheckedUpdateOneWithoutVehicleNestedInput
   }
 
@@ -186967,6 +203360,13 @@ export namespace Prisma {
     paymentStatus?: string
     dueDate?: Date | string | null
     paymentTerm?: string | null
+    hasVatInvoice?: boolean
+    vatInvoiceNo?: string | null
+    vatAmount?: number
+    shippingFee?: number
+    importTax?: number
+    otherFees?: number
+    totalDiscount?: number
     note?: string | null
     branchId?: string | null
     userName: string
@@ -187185,6 +203585,13 @@ export namespace Prisma {
     paymentStatus?: StringFieldUpdateOperationsInput | string
     dueDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     paymentTerm?: NullableStringFieldUpdateOperationsInput | string | null
+    hasVatInvoice?: BoolFieldUpdateOperationsInput | boolean
+    vatInvoiceNo?: NullableStringFieldUpdateOperationsInput | string | null
+    vatAmount?: FloatFieldUpdateOperationsInput | number
+    shippingFee?: FloatFieldUpdateOperationsInput | number
+    importTax?: FloatFieldUpdateOperationsInput | number
+    otherFees?: FloatFieldUpdateOperationsInput | number
+    totalDiscount?: FloatFieldUpdateOperationsInput | number
     note?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     userName?: StringFieldUpdateOperationsInput | string
@@ -187206,6 +203613,13 @@ export namespace Prisma {
     paymentStatus?: StringFieldUpdateOperationsInput | string
     dueDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     paymentTerm?: NullableStringFieldUpdateOperationsInput | string | null
+    hasVatInvoice?: BoolFieldUpdateOperationsInput | boolean
+    vatInvoiceNo?: NullableStringFieldUpdateOperationsInput | string | null
+    vatAmount?: FloatFieldUpdateOperationsInput | number
+    shippingFee?: FloatFieldUpdateOperationsInput | number
+    importTax?: FloatFieldUpdateOperationsInput | number
+    otherFees?: FloatFieldUpdateOperationsInput | number
+    totalDiscount?: FloatFieldUpdateOperationsInput | number
     note?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     userName?: StringFieldUpdateOperationsInput | string
@@ -187227,6 +203641,13 @@ export namespace Prisma {
     paymentStatus?: StringFieldUpdateOperationsInput | string
     dueDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     paymentTerm?: NullableStringFieldUpdateOperationsInput | string | null
+    hasVatInvoice?: BoolFieldUpdateOperationsInput | boolean
+    vatInvoiceNo?: NullableStringFieldUpdateOperationsInput | string | null
+    vatAmount?: FloatFieldUpdateOperationsInput | number
+    shippingFee?: FloatFieldUpdateOperationsInput | number
+    importTax?: FloatFieldUpdateOperationsInput | number
+    otherFees?: FloatFieldUpdateOperationsInput | number
+    totalDiscount?: FloatFieldUpdateOperationsInput | number
     note?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     userName?: StringFieldUpdateOperationsInput | string
@@ -187449,6 +203870,10 @@ export namespace Prisma {
     minStock?: number
     maxStock?: number
     baseUnit?: string
+    invoiceUnit?: string | null
+    bundleId?: string | null
+    mergedIntoId?: string | null
+    mergedRate?: number
     trackSerial?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -187499,6 +203924,10 @@ export namespace Prisma {
     minStock?: IntFieldUpdateOperationsInput | number
     maxStock?: IntFieldUpdateOperationsInput | number
     baseUnit?: StringFieldUpdateOperationsInput | string
+    invoiceUnit?: NullableStringFieldUpdateOperationsInput | string | null
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedIntoId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedRate?: FloatFieldUpdateOperationsInput | number
     trackSerial?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -187512,6 +203941,7 @@ export namespace Prisma {
     serials?: ProductSerialUpdateManyWithoutProductNestedInput
     onlineOrderItems?: OnlineOrderItemUpdateManyWithoutProductNestedInput
     onlineProducts?: OnlineProductUpdateManyWithoutLocalProductNestedInput
+    skuMappings?: SkuMappingUpdateManyWithoutProductNestedInput
   }
 
   export type ProductUncheckedUpdateWithoutCategoryInput = {
@@ -187529,6 +203959,10 @@ export namespace Prisma {
     minStock?: IntFieldUpdateOperationsInput | number
     maxStock?: IntFieldUpdateOperationsInput | number
     baseUnit?: StringFieldUpdateOperationsInput | string
+    invoiceUnit?: NullableStringFieldUpdateOperationsInput | string | null
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedIntoId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedRate?: FloatFieldUpdateOperationsInput | number
     trackSerial?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -187541,6 +203975,7 @@ export namespace Prisma {
     serials?: ProductSerialUncheckedUpdateManyWithoutProductNestedInput
     onlineOrderItems?: OnlineOrderItemUncheckedUpdateManyWithoutProductNestedInput
     onlineProducts?: OnlineProductUncheckedUpdateManyWithoutLocalProductNestedInput
+    skuMappings?: SkuMappingUncheckedUpdateManyWithoutProductNestedInput
   }
 
   export type ProductUncheckedUpdateManyWithoutCategoryInput = {
@@ -187558,6 +203993,10 @@ export namespace Prisma {
     minStock?: IntFieldUpdateOperationsInput | number
     maxStock?: IntFieldUpdateOperationsInput | number
     baseUnit?: StringFieldUpdateOperationsInput | string
+    invoiceUnit?: NullableStringFieldUpdateOperationsInput | string | null
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedIntoId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedRate?: FloatFieldUpdateOperationsInput | number
     trackSerial?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -187578,6 +204017,10 @@ export namespace Prisma {
     minStock?: number
     maxStock?: number
     baseUnit?: string
+    invoiceUnit?: string | null
+    bundleId?: string | null
+    mergedIntoId?: string | null
+    mergedRate?: number
     trackSerial?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -187597,6 +204040,10 @@ export namespace Prisma {
     minStock?: IntFieldUpdateOperationsInput | number
     maxStock?: IntFieldUpdateOperationsInput | number
     baseUnit?: StringFieldUpdateOperationsInput | string
+    invoiceUnit?: NullableStringFieldUpdateOperationsInput | string | null
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedIntoId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedRate?: FloatFieldUpdateOperationsInput | number
     trackSerial?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -187610,6 +204057,7 @@ export namespace Prisma {
     serials?: ProductSerialUpdateManyWithoutProductNestedInput
     onlineOrderItems?: OnlineOrderItemUpdateManyWithoutProductNestedInput
     onlineProducts?: OnlineProductUpdateManyWithoutLocalProductNestedInput
+    skuMappings?: SkuMappingUpdateManyWithoutProductNestedInput
   }
 
   export type ProductUncheckedUpdateWithoutBrandInput = {
@@ -187627,6 +204075,10 @@ export namespace Prisma {
     minStock?: IntFieldUpdateOperationsInput | number
     maxStock?: IntFieldUpdateOperationsInput | number
     baseUnit?: StringFieldUpdateOperationsInput | string
+    invoiceUnit?: NullableStringFieldUpdateOperationsInput | string | null
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedIntoId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedRate?: FloatFieldUpdateOperationsInput | number
     trackSerial?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -187639,6 +204091,7 @@ export namespace Prisma {
     serials?: ProductSerialUncheckedUpdateManyWithoutProductNestedInput
     onlineOrderItems?: OnlineOrderItemUncheckedUpdateManyWithoutProductNestedInput
     onlineProducts?: OnlineProductUncheckedUpdateManyWithoutLocalProductNestedInput
+    skuMappings?: SkuMappingUncheckedUpdateManyWithoutProductNestedInput
   }
 
   export type ProductUncheckedUpdateManyWithoutBrandInput = {
@@ -187656,6 +204109,10 @@ export namespace Prisma {
     minStock?: IntFieldUpdateOperationsInput | number
     maxStock?: IntFieldUpdateOperationsInput | number
     baseUnit?: StringFieldUpdateOperationsInput | string
+    invoiceUnit?: NullableStringFieldUpdateOperationsInput | string | null
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedIntoId?: NullableStringFieldUpdateOperationsInput | string | null
+    mergedRate?: FloatFieldUpdateOperationsInput | number
     trackSerial?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -187764,6 +204221,17 @@ export namespace Prisma {
     categoryId?: string | null
     categoryName?: string | null
     syncedAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type SkuMappingCreateManyProductInput = {
+    id?: string
+    platformSku: string
+    platform?: string | null
+    note?: string | null
+    conversionRate?: number
+    bundleId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -188085,6 +204553,39 @@ export namespace Prisma {
     categoryId?: NullableStringFieldUpdateOperationsInput | string | null
     categoryName?: NullableStringFieldUpdateOperationsInput | string | null
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type SkuMappingUpdateWithoutProductInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    platformSku?: StringFieldUpdateOperationsInput | string
+    platform?: NullableStringFieldUpdateOperationsInput | string | null
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    conversionRate?: FloatFieldUpdateOperationsInput | number
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type SkuMappingUncheckedUpdateWithoutProductInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    platformSku?: StringFieldUpdateOperationsInput | string
+    platform?: NullableStringFieldUpdateOperationsInput | string | null
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    conversionRate?: FloatFieldUpdateOperationsInput | number
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type SkuMappingUncheckedUpdateManyWithoutProductInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    platformSku?: StringFieldUpdateOperationsInput | string
+    platform?: NullableStringFieldUpdateOperationsInput | string | null
+    note?: NullableStringFieldUpdateOperationsInput | string | null
+    conversionRate?: FloatFieldUpdateOperationsInput | number
+    bundleId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -188668,6 +205169,34 @@ export namespace Prisma {
     createdAt?: Date | string
   }
 
+  export type VehicleFuelLogCreateManyVehicleInput = {
+    id?: string
+    fuelDate?: Date | string
+    liters?: number
+    pricePerLiter?: number
+    cost?: number
+    kmAtFill?: number
+    fuelType?: string | null
+    station?: string | null
+    isFullTank?: boolean
+    notes?: string | null
+    createdAt?: Date | string
+  }
+
+  export type VehicleDocumentCreateManyVehicleInput = {
+    id?: string
+    type: string
+    name: string
+    documentNumber?: string | null
+    fileUrl?: string | null
+    issuer?: string | null
+    issueDate?: Date | string | null
+    expiryDate?: Date | string | null
+    notes?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
   export type SalesTripCreateManyVehicleInput = {
     id?: string
     code: string
@@ -188728,6 +205257,90 @@ export namespace Prisma {
     performedBy?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type VehicleFuelLogUpdateWithoutVehicleInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    fuelDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    liters?: FloatFieldUpdateOperationsInput | number
+    pricePerLiter?: FloatFieldUpdateOperationsInput | number
+    cost?: FloatFieldUpdateOperationsInput | number
+    kmAtFill?: FloatFieldUpdateOperationsInput | number
+    fuelType?: NullableStringFieldUpdateOperationsInput | string | null
+    station?: NullableStringFieldUpdateOperationsInput | string | null
+    isFullTank?: BoolFieldUpdateOperationsInput | boolean
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type VehicleFuelLogUncheckedUpdateWithoutVehicleInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    fuelDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    liters?: FloatFieldUpdateOperationsInput | number
+    pricePerLiter?: FloatFieldUpdateOperationsInput | number
+    cost?: FloatFieldUpdateOperationsInput | number
+    kmAtFill?: FloatFieldUpdateOperationsInput | number
+    fuelType?: NullableStringFieldUpdateOperationsInput | string | null
+    station?: NullableStringFieldUpdateOperationsInput | string | null
+    isFullTank?: BoolFieldUpdateOperationsInput | boolean
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type VehicleFuelLogUncheckedUpdateManyWithoutVehicleInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    fuelDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    liters?: FloatFieldUpdateOperationsInput | number
+    pricePerLiter?: FloatFieldUpdateOperationsInput | number
+    cost?: FloatFieldUpdateOperationsInput | number
+    kmAtFill?: FloatFieldUpdateOperationsInput | number
+    fuelType?: NullableStringFieldUpdateOperationsInput | string | null
+    station?: NullableStringFieldUpdateOperationsInput | string | null
+    isFullTank?: BoolFieldUpdateOperationsInput | boolean
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type VehicleDocumentUpdateWithoutVehicleInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    type?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    documentNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    fileUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    issuer?: NullableStringFieldUpdateOperationsInput | string | null
+    issueDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiryDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type VehicleDocumentUncheckedUpdateWithoutVehicleInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    type?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    documentNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    fileUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    issuer?: NullableStringFieldUpdateOperationsInput | string | null
+    issueDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiryDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type VehicleDocumentUncheckedUpdateManyWithoutVehicleInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    type?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    documentNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    fileUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    issuer?: NullableStringFieldUpdateOperationsInput | string | null
+    issueDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiryDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    notes?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type SalesTripUpdateWithoutVehicleInput = {

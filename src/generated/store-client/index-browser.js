@@ -249,6 +249,10 @@ exports.Prisma.ProductScalarFieldEnum = {
   minStock: 'minStock',
   maxStock: 'maxStock',
   baseUnit: 'baseUnit',
+  invoiceUnit: 'invoiceUnit',
+  bundleId: 'bundleId',
+  mergedIntoId: 'mergedIntoId',
+  mergedRate: 'mergedRate',
   trackSerial: 'trackSerial',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
@@ -397,6 +401,13 @@ exports.Prisma.ImportReceiptScalarFieldEnum = {
   paymentStatus: 'paymentStatus',
   dueDate: 'dueDate',
   paymentTerm: 'paymentTerm',
+  hasVatInvoice: 'hasVatInvoice',
+  vatInvoiceNo: 'vatInvoiceNo',
+  vatAmount: 'vatAmount',
+  shippingFee: 'shippingFee',
+  importTax: 'importTax',
+  otherFees: 'otherFees',
+  totalDiscount: 'totalDiscount',
   note: 'note',
   branchId: 'branchId',
   userId: 'userId',
@@ -678,6 +689,48 @@ exports.Prisma.VehicleMaintenanceScalarFieldEnum = {
   performedBy: 'performedBy',
   notes: 'notes',
   createdAt: 'createdAt'
+};
+
+exports.Prisma.CrmEmailLogScalarFieldEnum = {
+  id: 'id',
+  customerId: 'customerId',
+  customerName: 'customerName',
+  email: 'email',
+  subject: 'subject',
+  messageId: 'messageId',
+  sentAt: 'sentAt',
+  repliedAt: 'repliedAt',
+  replySubject: 'replySubject'
+};
+
+exports.Prisma.VehicleFuelLogScalarFieldEnum = {
+  id: 'id',
+  vehicleId: 'vehicleId',
+  fuelDate: 'fuelDate',
+  liters: 'liters',
+  pricePerLiter: 'pricePerLiter',
+  cost: 'cost',
+  kmAtFill: 'kmAtFill',
+  fuelType: 'fuelType',
+  station: 'station',
+  isFullTank: 'isFullTank',
+  notes: 'notes',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.VehicleDocumentScalarFieldEnum = {
+  id: 'id',
+  vehicleId: 'vehicleId',
+  type: 'type',
+  name: 'name',
+  documentNumber: 'documentNumber',
+  fileUrl: 'fileUrl',
+  issuer: 'issuer',
+  issueDate: 'issueDate',
+  expiryDate: 'expiryDate',
+  notes: 'notes',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
 };
 
 exports.Prisma.DeliveryRouteScalarFieldEnum = {
@@ -1066,6 +1119,35 @@ exports.Prisma.ReviewScalarFieldEnum = {
   updatedAt: 'updatedAt'
 };
 
+exports.Prisma.SkuMappingScalarFieldEnum = {
+  id: 'id',
+  platformSku: 'platformSku',
+  productId: 'productId',
+  platform: 'platform',
+  note: 'note',
+  conversionRate: 'conversionRate',
+  bundleId: 'bundleId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.HkdRevenueEntryScalarFieldEnum = {
+  id: 'id',
+  date: 'date',
+  soChungTu: 'soChungTu',
+  dienGiai: 'dienGiai',
+  doanhThu: 'doanhThu',
+  chietKhau: 'chietKhau',
+  thueGTGT: 'thueGTGT',
+  doanhThuThuan: 'doanhThuThuan',
+  tncnUocTinh: 'tncnUocTinh',
+  phuongThucTT: 'phuongThucTT',
+  ghiChu: 'ghiChu',
+  branchId: 'branchId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
 exports.Prisma.StoreSettingsScalarFieldEnum = {
   id: 'id',
   name: 'name',
@@ -1086,6 +1168,8 @@ exports.Prisma.StoreSettingsScalarFieldEnum = {
   email: 'email',
   website: 'website',
   notifyLowStock: 'notifyLowStock',
+  smtpConfig: 'smtpConfig',
+  geminiApiKey: 'geminiApiKey',
   notifyNewOrder: 'notifyNewOrder',
   notifyDailyReport: 'notifyDailyReport',
   notifyWeeklyReport: 'notifyWeeklyReport',
@@ -1922,6 +2006,83 @@ exports.Prisma.FbAutoReplyLogScalarFieldEnum = {
   createdAt: 'createdAt'
 };
 
+exports.Prisma.CrmTaskScalarFieldEnum = {
+  id: 'id',
+  title: 'title',
+  description: 'description',
+  customerId: 'customerId',
+  customerName: 'customerName',
+  status: 'status',
+  priority: 'priority',
+  type: 'type',
+  dueDate: 'dueDate',
+  assignee: 'assignee',
+  createdBy: 'createdBy',
+  completedAt: 'completedAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.CrmDealScalarFieldEnum = {
+  id: 'id',
+  title: 'title',
+  customerId: 'customerId',
+  customerName: 'customerName',
+  value: 'value',
+  stage: 'stage',
+  probability: 'probability',
+  assignee: 'assignee',
+  note: 'note',
+  sortOrder: 'sortOrder',
+  expectedCloseDate: 'expectedCloseDate',
+  closedAt: 'closedAt',
+  createdBy: 'createdBy',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.CrmActivityScalarFieldEnum = {
+  id: 'id',
+  module: 'module',
+  action: 'action',
+  description: 'description',
+  userId: 'userId',
+  userName: 'userName',
+  entityId: 'entityId',
+  entityName: 'entityName',
+  metadata: 'metadata',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.CrmZaloLogScalarFieldEnum = {
+  id: 'id',
+  customerId: 'customerId',
+  customerName: 'customerName',
+  direction: 'direction',
+  content: 'content',
+  staffName: 'staffName',
+  starred: 'starred',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.CrmCampaignScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  channel: 'channel',
+  status: 'status',
+  template: 'template',
+  targetTiers: 'targetTiers',
+  targetCount: 'targetCount',
+  sentCount: 'sentCount',
+  openRate: 'openRate',
+  responseRate: 'responseRate',
+  scheduledAt: 'scheduledAt',
+  sentAt: 'sentAt',
+  createdBy: 'createdBy',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
 exports.Prisma.SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -1975,6 +2136,9 @@ exports.Prisma.ModelName = {
   Driver: 'Driver',
   Vehicle: 'Vehicle',
   VehicleMaintenance: 'VehicleMaintenance',
+  CrmEmailLog: 'CrmEmailLog',
+  VehicleFuelLog: 'VehicleFuelLog',
+  VehicleDocument: 'VehicleDocument',
   DeliveryRoute: 'DeliveryRoute',
   DeliveryStop: 'DeliveryStop',
   TaxConfig: 'TaxConfig',
@@ -2000,6 +2164,8 @@ exports.Prisma.ModelName = {
   LoyaltyMember: 'LoyaltyMember',
   LoyaltyTransaction: 'LoyaltyTransaction',
   Review: 'Review',
+  SkuMapping: 'SkuMapping',
+  HkdRevenueEntry: 'HkdRevenueEntry',
   StoreSettings: 'StoreSettings',
   Store: 'Store',
   BranchRequest: 'BranchRequest',
@@ -2045,7 +2211,12 @@ exports.Prisma.ModelName = {
   FbPage: 'FbPage',
   FbScheduledPost: 'FbScheduledPost',
   FbCommentRule: 'FbCommentRule',
-  FbAutoReplyLog: 'FbAutoReplyLog'
+  FbAutoReplyLog: 'FbAutoReplyLog',
+  CrmTask: 'CrmTask',
+  CrmDeal: 'CrmDeal',
+  CrmActivity: 'CrmActivity',
+  CrmZaloLog: 'CrmZaloLog',
+  CrmCampaign: 'CrmCampaign'
 };
 
 /**
