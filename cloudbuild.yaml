@@ -17,6 +17,15 @@ substitutions:
   # KHÔNG bake vào bundle FE. Xem routes/admin.ts.
   _ADMIN_PANEL_USER: superadmin
   _ADMIN_PANEL_PASS: Kengi@2026
+  # Facebook App cho kengi.vn/fanpage-manager (routes/fanpage.ts + webhooks/facebook).
+  # Lấy ở developers.facebook.com → App → Settings → Basic.
+  #  - _FB_APP_ID / _FB_APP_SECRET: thiếu thì POST /api/fanpage/connect trả 500,
+  #    KHÔNG đổi được short-lived token → long-lived (cả app tê liệt).
+  #  - _FB_WEBHOOK_VERIFY_TOKEN: chuỗi tự đặt, phải khớp ô "Verify token" khi
+  #    cấu hình Webhooks trong FB App (callback https://api.kengi.vn/api/webhooks/facebook).
+  _FB_APP_ID: ""
+  _FB_APP_SECRET: ""
+  _FB_WEBHOOK_VERIFY_TOKEN: 368333bd84ccb3dbde261bd50366490f56e63b13cfaaac20
 
 steps:
   # Step 1: Build Docker image
@@ -62,7 +71,7 @@ steps:
       - '${_CLOUD_SQL_INSTANCE}'
       - '--set-env-vars'
       - >-
-        NODE_ENV=production,DATABASE_URL=postgresql://${_DB_USER}:${_DB_PASSWORD}@localhost/${_DB_NAME}?host=/cloudsql/${_CLOUD_SQL_INSTANCE},CORS_ORIGIN=*,APP_BASE_URL=https://kengi.vn,REDIS_URL=${_REDIS_URL},LIVESTREAM_STUDIO_TOKEN=${_LIVESTREAM_TOKEN},SHOPEE_FORWARD_PROXY=https://kengi.vn/ai-livestream/shopee-forward.php,SHOPEE_FORWARD_SECRET=${_SHOPEE_FORWARD_SECRET},ADMIN_PANEL_USER=${_ADMIN_PANEL_USER},ADMIN_PANEL_PASS=${_ADMIN_PANEL_PASS},PRISMA_POOL_TIMEOUT=30
+        NODE_ENV=production,DATABASE_URL=postgresql://${_DB_USER}:${_DB_PASSWORD}@localhost/${_DB_NAME}?host=/cloudsql/${_CLOUD_SQL_INSTANCE},CORS_ORIGIN=*,APP_BASE_URL=https://kengi.vn,REDIS_URL=${_REDIS_URL},LIVESTREAM_STUDIO_TOKEN=${_LIVESTREAM_TOKEN},SHOPEE_FORWARD_PROXY=https://kengi.vn/ai-livestream/shopee-forward.php,SHOPEE_FORWARD_SECRET=${_SHOPEE_FORWARD_SECRET},ADMIN_PANEL_USER=${_ADMIN_PANEL_USER},ADMIN_PANEL_PASS=${_ADMIN_PANEL_PASS},PRISMA_POOL_TIMEOUT=30,FB_APP_ID=${_FB_APP_ID},FB_APP_SECRET=${_FB_APP_SECRET},FB_WEBHOOK_VERIFY_TOKEN=${_FB_WEBHOOK_VERIFY_TOKEN}
 
   # Step 4: Force 100% traffic onto the just-deployed revision.
   # When the service's traffic has ever been pinned to a *named* revision (rather

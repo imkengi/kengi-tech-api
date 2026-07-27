@@ -47,6 +47,46 @@ async function markTokenExpired(prisma: any, pageId: string) {
     await prisma.fbPage.update({ where: { pageId }, data: { status: 'token_expired' } }).catch(() => { })
 }
 
+/**
+ * Đăng ký webhook `feed` cho page (best-effort).
+ * Trả true/false để ghi cờ webhookSubscribed — KHÔNG ném lỗi ra ngoài vì
+ * luồng /connect không được chết chỉ vì app chưa được duyệt quyền webhook.
+ */
+async function trySubscribeWebhook(prisma: any, pageId: string, accessToken: string): Promise<boolean> {
+    try {
+        await new FacebookService(accessToken).subscribeWebhook(pageId)
+        await prisma.fbPage.update({ where: { pageId }, data: { webhookSubscribed: true } }).catch(() => { })
+        return true
+    } catch (e: any) {
+        console.warn(`[Fanpage] Subscribe webhook page ${pageId} thất bại:`, e?.message)
+        await prisma.fbPage.update({ where: { pageId }, data: { webhookSubscribed: false } }).catch(() => { })
+        return false
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  CẤU HÌNH (FE lấy App ID từ server, không bắt người dùng tự nhập)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// GET /api/fanpage/config — App ID công khai + trạng thái cấu hình server.
+// KHÔNG bao giờ trả app secret.
+router.get('/config', authMiddleware, async (_req: AuthRequest, res: Response) => {
+    res.json({
+        success: true,
+        data: {
+            appId: APP_ID || null,
+            configured: !!(APP_ID && APP_SECRET),
+            webhookConfigured: !!process.env.FB_WEBHOOK_VERIFY_TOKEN,
+            graphVersion: 'v21.0',
+            scopes: [
+                'pages_show_list', 'pages_read_engagement', 'pages_manage_posts',
+                'pages_manage_metadata', 'pages_manage_engagement', 'pages_read_user_content',
+                'pages_messaging', 'business_management', 'ads_management', 'ads_read',
+            ].join(','),
+        },
+    })
+})
+
 // ═══════════════════════════════════════════════════════════════════════════════
 //  KẾT NỐI / PAGES
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -101,6 +141,13 @@ router.post('/connect', authMiddleware, requireRole('admin', 'manager', 'superad
             ;(registryPrisma as any).store.updateMany({ where: { schema: req.user.storeSchema }, data: { hasFanpages: true } }).catch(() => { })
         }
 
+        // 3. Đăng ký webhook feed cho từng page — bắt buộc để auto-reply chạy
+        //    server-side (không có thì chỉ còn poll 5 phút/lần của cron).
+        //    Chỉ thử khi đã có verify token, và luôn best-effort.
+        if (process.env.FB_WEBHOOK_VERIFY_TOKEN) {
+            for (const p of pages) await trySubscribeWebhook(prisma, p.id, p.accessToken)
+        }
+
         const saved = await prisma.fbPage.findMany({
             where: { status: { not: 'disconnected' } },
             select: { pageId: true, name: true, category: true, avatar: true, fanCount: true, igUserId: true, status: true, autoReplyEnabled: true, adAccountId: true },
@@ -143,6 +190,63 @@ router.patch('/pages/:pageId', authMiddleware, requireRole('admin', 'manager', '
         if (adAccountId !== undefined) data.adAccountId = adAccountId
         const page = await prisma.fbPage.update({ where: { pageId: String(req.params.pageId) }, data })
         res.json({ success: true, data: page })
+    } catch { res.status(500).json({ success: false, error: 'Internal server error' }) }
+})
+
+// POST /api/fanpage/pages/:pageId/subscribe-webhook — đăng ký lại thủ công
+router.post('/pages/:pageId/subscribe-webhook', authMiddleware, requireRole('admin', 'manager', 'superadmin'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const pageId = String(req.params.pageId)
+        const ctx = await getPageService(prisma, pageId)
+        if (!ctx) return res.status(404).json({ success: false, error: 'Page chưa kết nối' })
+        if (!process.env.FB_WEBHOOK_VERIFY_TOKEN) {
+            return res.status(500).json({ success: false, error: 'FB_WEBHOOK_VERIFY_TOKEN chưa cấu hình trên server' })
+        }
+        try {
+            await ctx.svc.subscribeWebhook(pageId)
+        } catch (e: any) {
+            if ((e as FbGraphError)?.isTokenError) await markTokenExpired(prisma, pageId)
+            await prisma.fbPage.update({ where: { pageId }, data: { webhookSubscribed: false } }).catch(() => { })
+            return sendGraphError(res, e)
+        }
+        await prisma.fbPage.update({ where: { pageId }, data: { webhookSubscribed: true } })
+        res.json({ success: true, data: { webhookSubscribed: true } })
+    } catch { res.status(500).json({ success: false, error: 'Internal server error' }) }
+})
+
+// GET /api/fanpage/pages/:pageId/posts — bài ĐÃ ĐĂNG (chọn bài để Boost / xem tương tác)
+router.get('/pages/:pageId/posts', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const pageId = String(req.params.pageId)
+        const ctx = await getPageService(prisma, pageId)
+        if (!ctx) return res.status(404).json({ success: false, error: 'Page chưa kết nối' })
+        try {
+            const posts = await ctx.svc.listPublishedPosts(pageId, Math.min(Number(req.query.limit) || 25, 100))
+            res.json({ success: true, data: posts })
+        } catch (e: any) {
+            if ((e as FbGraphError)?.isTokenError) await markTokenExpired(prisma, pageId)
+            sendGraphError(res, e)
+        }
+    } catch { res.status(500).json({ success: false, error: 'Internal server error' }) }
+})
+
+// GET /api/fanpage/pages/:pageId/insights?days=7 — số liệu page (thay biểu đồ hardcode)
+router.get('/pages/:pageId/insights', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const pageId = String(req.params.pageId)
+        const ctx = await getPageService(prisma, pageId)
+        if (!ctx) return res.status(404).json({ success: false, error: 'Page chưa kết nối' })
+        try {
+            const days = Math.min(Math.max(Number(req.query.days) || 7, 1), 90)
+            const data = await ctx.svc.getPageInsights(pageId, undefined, days)
+            res.json({ success: true, data })
+        } catch (e: any) {
+            if ((e as FbGraphError)?.isTokenError) await markTokenExpired(prisma, pageId)
+            sendGraphError(res, e)
+        }
     } catch { res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
 

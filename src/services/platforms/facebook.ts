@@ -322,6 +322,29 @@ export class FacebookService {
         return { success: true }
     }
 
+    // ─── Webhook subscription ─────────────────────────────────────────────────
+
+    /**
+     * Đăng ký app nhận webhook `feed` của page (token instance phải là PAGE token).
+     * Không có bước này FB KHÔNG bắn event → auto-reply server-side im lặng,
+     * chỉ còn đường lùi poll mỗi 5 phút của fanpageCron.
+     */
+    async subscribeWebhook(pageId: string, fields = 'feed,messages,messaging_postbacks'): Promise<{ success: boolean }> {
+        await this.post(`${pageId}/subscribed_apps`, { subscribed_fields: fields })
+        return { success: true }
+    }
+
+    /** App nào đang nhận webhook của page (để hiển thị/đối soát trạng thái) */
+    async getSubscribedApps(pageId: string): Promise<any[]> {
+        const data = await this.get(`${pageId}/subscribed_apps`)
+        return data.data || []
+    }
+
+    async unsubscribeWebhook(pageId: string): Promise<{ success: boolean }> {
+        await this.del(`${pageId}/subscribed_apps`)
+        return { success: true }
+    }
+
     // ─── Insights (bài viết / page) ──────────────────────────────────────────
 
     async getPageInsights(pageId: string, metrics = 'page_impressions_unique,page_engaged_users', sinceDays = 7): Promise<any> {
