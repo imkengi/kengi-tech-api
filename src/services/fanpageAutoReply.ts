@@ -40,13 +40,15 @@ export async function processComment(
     storePrisma: any,
     page: any,
     comment: IncomingComment,
-): Promise<{ matched: boolean; action?: string; ruleId?: string; rateLimited?: boolean } | null> {
+): Promise<{ matched: boolean; action?: string; ruleId?: string; rateLimited?: boolean; thieuFrom?: boolean } | null> {
     if (!page?.autoReplyEnabled) return null
     // Bỏ qua comment do chính page trả lời (tránh vòng lặp)
     if (comment.fromId && comment.fromId === page.pageId) return null
     // FB không trả `from` (thiếu quyền) → không chứng minh được không phải bot.
     // Reply chứa keyword sẽ gây loop dây chuyền → bỏ qua luôn.
-    if (!comment.fromId) return null
+    // Trả cờ để caller đếm & cảnh báo: thiếu quyền thì auto-reply im hoàn toàn,
+    // chủ shop bật rule xong ngồi đợi mãi không hiểu vì sao không chạy.
+    if (!comment.fromId) return { matched: false, thieuFrom: true }
 
     const rules = await storePrisma.fbCommentRule.findMany({
         where: { pageId: page.pageId, enabled: true },
@@ -121,13 +123,17 @@ export async function pollAndAutoReply(storePrisma: any, page: any): Promise<num
     }
     const cutoff = Date.now() - POLL_LOOKBACK_MS
     let handled = 0
+    let trongCuaSo = 0
+    let thieuFrom = 0
     for (const c of comments) {
         // Chỉ xử lý comment mới trong khoảng lookback; comment cũ bỏ qua hẳn (không log)
         if (!c.createdTime || new Date(c.createdTime).getTime() < cutoff) continue
+        trongCuaSo++
         const r = await processComment(storePrisma, page, {
             commentId: c.id, postId: c.postId, message: c.message,
             fromId: c.from?.id, fromName: c.from?.name,
         })
+        if (r?.thieuFrom) thieuFrom++
         if (r?.rateLimited) {
             // Graph báo rate-limit → dừng ngay chu kỳ của page này
             console.warn(`[AutoReply] Rate-limit Graph (page ${page.name || page.pageId}) — dừng chu kỳ poll`)
@@ -137,6 +143,16 @@ export async function pollAndAutoReply(storePrisma: any, page: any): Promise<num
             handled++
             await sleep(GRAPH_THROTTLE_MS) // throttle giữa các call Graph liên tiếp
         }
+    }
+    // Có comment mới nhưng TẤT CẢ đều thiếu `from` → token thiếu quyền đọc người
+    // bình luận, engine sẽ im vĩnh viễn. Phải kêu lên, nếu không chủ shop bật rule
+    // rồi ngồi đợi mãi mà không hiểu tại sao không có gì xảy ra.
+    if (trongCuaSo > 0 && thieuFrom === trongCuaSo) {
+        console.warn(
+            `[AutoReply] ⚠️ ${page.name || page.pageId}: ${trongCuaSo} bình luận mới nhưng Facebook KHÔNG trả thông tin `
+            + 'người bình luận (thiếu quyền pages_read_user_content) → auto-reply bỏ qua hết. '
+            + 'Cần token có đủ quyền, dán lại ở kengi.vn/fanpage-manager.',
+        )
     }
     return handled
 }

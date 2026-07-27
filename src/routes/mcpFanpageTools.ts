@@ -55,6 +55,34 @@ async function wrapGraph<T>(prisma: any, pageId: string, fn: () => Promise<T>): 
 const num = (v: any, d: number) => (Number.isFinite(Number(v)) ? Number(v) : d)
 const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi)
 
+/**
+ * Đọc thời điểm hẹn đăng do agent gửi.
+ *
+ * CHUỖI KHÔNG KÈM MÚI GIỜ được hiểu là GIỜ VIỆT NAM (+07:00), không phải giờ máy
+ * chủ. Cloud Run chạy UTC nên `new Date('2026-08-01T09:00:00')` sẽ ra 09:00 UTC
+ * = 16:00 giờ VN — lệch 7 tiếng mà không báo lỗi gì. Agent hầu như luôn gửi giờ
+ * theo cách chủ shop nói ("9 giờ sáng mai"), nên mặc định +07:00 mới đúng ý.
+ * Chuỗi có sẵn offset (…Z hoặc …+07:00) thì tôn trọng nguyên văn.
+ */
+export function parseGioHen(raw: string): { ms: number; dienGiai: string } {
+    const s = String(raw || '').trim()
+    if (!s) throw new ToolError('Thiếu thời điểm hẹn đăng')
+    const coMuiGio = /(Z|[+-]\d{2}:?\d{2})$/i.test(s)
+    // "2026-08-01 09:00" → "2026-08-01T09:00" cho Date hiểu
+    const chuan = s.includes('T') ? s : s.replace(' ', 'T')
+    const dayDu = coMuiGio ? chuan : `${chuan}${chuan.length === 16 ? ':00' : ''}+07:00`
+    const ms = new Date(dayDu).getTime()
+    if (!Number.isFinite(ms)) {
+        throw new ToolError(`Không đọc được thời điểm "${raw}" — dùng dạng 2026-08-01T09:00:00 (mặc định giờ VN) hoặc kèm múi giờ 2026-08-01T09:00:00+07:00`)
+    }
+    return {
+        ms,
+        dienGiai: coMuiGio
+            ? new Date(ms).toISOString()
+            : `${chuan} giờ VN (đã hiểu là +07:00)`,
+    }
+}
+
 const PAGE_ID_PROP = {
     page_id: { type: 'string', description: 'Facebook Page ID. Bỏ trống nếu store chỉ có 1 fanpage.' },
 } as const
@@ -102,7 +130,7 @@ export const FANPAGE_TOOLS: Tool[] = [
                         trangThai: p.status === 'token_expired' ? 'TOKEN HẾT HẠN — cần kết nối lại' : 'đang hoạt động',
                         hanToken,
                         tuGiaHanDuoc: coUserToken,
-                        cangBaoChuShop: (!coUserToken && conLai !== null && conLai <= 7)
+                        canhBaoChuShop: (!coUserToken && conLai !== null && conLai <= 7)
                             ? 'Token dán tay sắp hết hạn và hệ thống KHÔNG tự gia hạn được. Nhắc chủ shop vào '
                               + 'kengi.vn/fanpage-manager → Cài đặt → Nhập token Fanpage để dán token mới.'
                             : null,
@@ -362,7 +390,7 @@ export const FANPAGE_TOOLS: Tool[] = [
             properties: {
                 message: { type: 'string', description: 'Nội dung bài viết' },
                 ...PAGE_ID_PROP,
-                scheduled_at: { type: 'string', description: 'Thời điểm hẹn đăng dạng ISO 8601 (VD 2026-08-01T09:00:00+07:00). Bỏ trống = ĐĂNG NGAY.' },
+                scheduled_at: { type: 'string', description: 'Thời điểm hẹn đăng, VD 2026-08-01T09:00:00. KHÔNG ghi múi giờ thì hiểu là GIỜ VIỆT NAM (+07:00). Bỏ trống = ĐĂNG NGAY. Phải cách hiện tại ít nhất 10 phút.' },
                 media_urls: { type: 'array', items: { type: 'string' }, description: 'Danh sách URL ảnh/video công khai (Facebook tự tải về). 1 ảnh → dùng luôn; nhiều ảnh → đặt media_type = multi_photo.' },
                 media_type: { type: 'string', enum: ['text', 'photo', 'video', 'multi_photo', 'link'], description: 'Loại nội dung. Mặc định tự suy ra từ media_urls / link_url.' },
                 link_url: { type: 'string', description: 'Link đính kèm bài viết' },
@@ -382,11 +410,14 @@ export const FANPAGE_TOOLS: Tool[] = [
             const mediaType: MediaType = MEDIA_TYPES.includes(a?.media_type) ? a.media_type : guessed
 
             let scheduledAtMs: number | null = null
+            let dienGiaiGio = 'đăng ngay'
             if (a?.scheduled_at) {
-                const t = new Date(a.scheduled_at).getTime()
-                if (!Number.isFinite(t)) throw new ToolError(`scheduled_at "${a.scheduled_at}" không đọc được — dùng ISO 8601, VD 2026-08-01T09:00:00+07:00`)
-                if (t < Date.now() + 10 * 60_000) throw new ToolError('Facebook yêu cầu thời điểm hẹn đăng cách hiện tại ít nhất 10 phút.')
-                scheduledAtMs = t
+                const g = parseGioHen(a.scheduled_at)
+                if (g.ms < Date.now() + 10 * 60_000) {
+                    throw new ToolError(`Facebook yêu cầu thời điểm hẹn cách hiện tại ít nhất 10 phút. Bạn đưa: ${g.dienGiai}.`)
+                }
+                scheduledAtMs = g.ms
+                dienGiaiGio = g.dienGiai
             }
 
             const fb = await wrapGraph(prisma, page.pageId, () =>
@@ -405,7 +436,10 @@ export const FANPAGE_TOOLS: Tool[] = [
             return {
                 ketQua: scheduledAtMs ? 'Đã lên lịch đăng bài' : 'Đã đăng bài lên fanpage',
                 fanpage: page.name, id: rec.id, fb_post_id: fb.id,
-                hendang: scheduledAtMs ? new Date(scheduledAtMs).toISOString() : 'đăng ngay',
+                // Trả lại cách hiểu để agent đọc ra và xác nhận với chủ shop —
+                // sai múi giờ là loại lỗi im lặng, phải cho nhìn thấy.
+                hendang: dienGiaiGio,
+                hendangUTC: scheduledAtMs ? new Date(scheduledAtMs).toISOString() : null,
             }
         },
     },
@@ -418,7 +452,7 @@ export const FANPAGE_TOOLS: Tool[] = [
             properties: {
                 id: { type: 'string', description: 'id bài đã lên lịch (từ fanpage_list_scheduled)' },
                 action: { type: 'string', enum: ['publish_now', 'reschedule', 'cancel'], description: 'publish_now = đăng ngay, reschedule = đổi giờ (cần scheduled_at), cancel = huỷ lịch' },
-                scheduled_at: { type: 'string', description: 'Giờ đăng mới dạng ISO 8601 — bắt buộc khi action = reschedule' },
+                scheduled_at: { type: 'string', description: 'Giờ đăng mới, VD 2026-08-01T09:00:00 (không ghi múi giờ = GIỜ VIỆT NAM). Bắt buộc khi action = reschedule.' },
             },
             required: ['id', 'action'],
             additionalProperties: false,
@@ -444,12 +478,14 @@ export const FANPAGE_TOOLS: Tool[] = [
                 return { ketQua: 'Đã huỷ lịch đăng', fanpage: page.name, id: rec.id }
             }
             if (action === 'reschedule') {
-                const t = new Date(a?.scheduled_at || '').getTime()
-                if (!Number.isFinite(t)) throw new ToolError('reschedule cần scheduled_at dạng ISO 8601, VD 2026-08-01T09:00:00+07:00')
-                if (t < Date.now() + 10 * 60_000) throw new ToolError('Facebook yêu cầu thời điểm hẹn đăng cách hiện tại ít nhất 10 phút.')
-                if (rec.fbPostId) await wrapGraph(prisma, page.pageId, () => svc.editScheduledPost(rec.fbPostId!, { scheduledAtMs: t }))
-                await prisma.fbScheduledPost.update({ where: { id: rec.id }, data: { scheduledAt: new Date(t) } })
-                return { ketQua: 'Đã đổi giờ đăng', fanpage: page.name, id: rec.id, hendangMoi: new Date(t).toISOString() }
+                if (!a?.scheduled_at) throw new ToolError('reschedule cần scheduled_at, VD 2026-08-01T09:00:00 (mặc định giờ VN)')
+                const g = parseGioHen(a.scheduled_at)
+                if (g.ms < Date.now() + 10 * 60_000) {
+                    throw new ToolError(`Facebook yêu cầu thời điểm hẹn cách hiện tại ít nhất 10 phút. Bạn đưa: ${g.dienGiai}.`)
+                }
+                if (rec.fbPostId) await wrapGraph(prisma, page.pageId, () => svc.editScheduledPost(rec.fbPostId!, { scheduledAtMs: g.ms }))
+                await prisma.fbScheduledPost.update({ where: { id: rec.id }, data: { scheduledAt: new Date(g.ms) } })
+                return { ketQua: 'Đã đổi giờ đăng', fanpage: page.name, id: rec.id, hendangMoi: g.dienGiai, hendangMoiUTC: new Date(g.ms).toISOString() }
             }
             throw new ToolError(`action "${action}" không hợp lệ — dùng publish_now / reschedule / cancel`)
         },
