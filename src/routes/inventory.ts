@@ -350,6 +350,22 @@ router.get('/transactions', authMiddleware, async (req: AuthRequest, res: Respon
 router.get('/overview', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma! as any
+        // THEO CHI NHÁNH: cộng theo tồn của kho chính thuộc chi nhánh (WarehouseStock)
+        // thay vì tồn tổng của sản phẩm. Không có thì tính toàn cửa hàng như cũ.
+        const branchId = String(req.query.branchId || '').trim()
+        let whId = ''
+        if (branchId) {
+            const w = await prisma.warehouse.findFirst({
+                where: { type: 'main', isDefault: true, branchId },
+                select: { id: true },
+            }).catch(() => null)
+            whId = w?.id || ''
+        }
+        // Biểu thức tồn dùng chung cho mọi truy vấn bên dưới
+        const ST = whId ? 'COALESCE(ws.quantity, 0)' : 'p.stock'
+        const JOIN = whId
+            ? `LEFT JOIN "WarehouseStock" ws ON ws."productId" = p.id AND ws."warehouseId" = '${whId}'`
+            : ''
         const [tong, theoDanhMuc, top5, canNhap] = await Promise.all([
             prisma.$queryRawUnsafe(`
                 SELECT COUNT(*)::int AS "soMaHang",
@@ -375,11 +391,11 @@ router.get('/overview', authMiddleware, async (req: AuthRequest, res: Response) 
                 WHERE COALESCE(p."productType",'goods') <> 'service' AND p."mergedIntoId" IS NULL
                 ORDER BY (p.stock * p."costPrice") DESC LIMIT 5`),
             prisma.$queryRawUnsafe(`
-                SELECT p.sku, p.name, p.stock::float8 AS stock, p."minStock"::float8 AS "minStock"
-                FROM "Product" p
+                SELECT p.sku, p.name, ${ST}::float8 AS stock, p."minStock"::float8 AS "minStock"
+                FROM "Product" p ${JOIN}
                 WHERE COALESCE(p."productType",'goods') <> 'service' AND p."mergedIntoId" IS NULL
-                  AND p.stock <= p."minStock"
-                ORDER BY p.stock ASC LIMIT 20`),
+                  AND ${ST} <= p."minStock"
+                ORDER BY ${ST} ASC LIMIT 20`),
         ])
         const t = (tong as any[])[0] || {}
         const giaTriVon = Number(t.giaTriVon) || 0

@@ -2127,4 +2127,68 @@ router.post('/clean-dup-mappings', async (req: Request, res: Response) => {
     }
 })
 
+// ─── POST /admin/sync-fees ───────────────────────────────────────────────────
+// ĐỐI SOÁT PHÍ SÀN thật (escrow Shopee) cho các đơn CHƯA có phí. Chạy theo LÔ
+// (limit) để không đụng trần 300s của Cloud Run — gọi lặp tới khi hết.
+// Body: { storeCode, limit? }
+router.post('/sync-fees', async (req: Request, res: Response) => {
+    try {
+        const { ShopeeService } = await import('../services/platforms')
+        const b = req.body || {}
+        const storeCode = String(b.storeCode || '').trim()
+        const limit = Math.min(Math.max(1, Number(b.limit) || 300), 800)
+        if (!storeCode) { res.status(400).json({ success: false, error: 'Thiếu storeCode' }); return }
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const sp = getStorePrisma(store.schema) as any
+
+        const channels = await sp.onlineChannel.findMany({
+            where: { platform: 'shopee', status: 'active', accessToken: { not: null } },
+        })
+        const out: any[] = []
+        const batDau = Date.now()
+        for (const ch of channels) {
+            const svc = new ShopeeService({
+                apiKey: ch.apiKey || '', apiSecret: ch.apiSecret || '',
+                accessToken: ch.accessToken || undefined, refreshToken: ch.refreshToken || undefined,
+                shopId: ch.shopId || undefined,
+            })
+            const orders = await sp.onlineOrder.findMany({
+                where: {
+                    channelId: ch.id, platformFee: 0,
+                    status: { notIn: ['cancelled', 'CANCELLED', 'UNPAID'] },
+                    externalOrderId: { not: null },
+                },
+                select: { id: true, externalOrderId: true },
+                orderBy: { createdAt: 'desc' },
+                take: limit,
+            })
+            let ok = 0, chuaCo = 0, loi = 0
+            // 6 LUỒNG song song: tuần tự thì mỗi đơn ~1 giây, 800 đơn không bao giờ
+            // quét hết trong 230s. Giữ ở 6 (đúng mức lệnh đối soát bên giao diện đã
+            // chạy ổn) — đẩy cao hơn có nguy cơ Shopee/CSF chặn IP như đợt livestream.
+            await mapWithConcurrency(orders, async (o: any) => {
+                if (Date.now() - batDau > 230_000) return   // chừa chỗ trả lời
+                const sn = (o.externalOrderId || '').replace(/^SPE-/i, '')
+                if (!sn) { chuaCo++; return }
+                try {
+                    const e = await (svc as any).getEscrowDetail(sn)
+                    if (e && (e.escrowAmount > 0 || e.totalFees > 0)) {
+                        await sp.onlineOrder.update({
+                            where: { id: o.id },
+                            data: { platformFee: e.totalFees, netRevenue: e.escrowAmount },
+                        })
+                        ok++
+                    } else chuaCo++
+                } catch { loi++ }
+            }, 6)
+            out.push({ kenh: ch.name, quet: orders.length, capNhat: ok, chuaCoDuLieu: chuaCo, loi })
+        }
+        res.json({ success: true, data: { kenh: out, giay: Math.round((Date.now() - batDau) / 1000) } })
+    } catch (err: any) {
+        console.error('Admin sync-fees error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
 export default router

@@ -7,8 +7,13 @@ const SYNC_INTERVAL    = 10 * 60 * 1000       // 10 phút
 const CLEANUP_INTERVAL = 24 * 60 * 60 * 1000  // 24 tiếng
 const CLEANUP_DAYS     = 18                    // Xóa đơn cũ hơn 18 ngày
 
+const FEE_INTERVAL      = 6 * 60 * 60 * 1000   // 6 tiếng
+const FEE_BATCH         = 400                  // đơn mỗi vòng, mỗi kênh
+const FEE_DEADLINE_MS   = 240_000              // tự dừng, vòng sau chạy tiếp
+
 let syncTimer:    NodeJS.Timeout | null = null
 let cleanupTimer: NodeJS.Timeout | null = null
+let feeTimer:     NodeJS.Timeout | null = null
 
 /**
  * Sync orders for a single channel
@@ -306,6 +311,83 @@ async function runAutoSync() {
 //  CLEANUP — Xóa đơn COMPLETED/CANCELLED cũ hơn 18 ngày
 // ═══════════════════════════════════════════════════════════
 
+/**
+ * ĐỐI SOÁT PHÍ SÀN tự động: lấy escrow THẬT của Shopee cho đơn CHƯA có phí.
+ * Vì sao phải chạy định kỳ: Shopee quyết toán rải rác NHIỀU NGÀY sau khi đơn phát
+ * sinh — đối soát một lần rồi thôi thì hôm sau lại có đơn thiếu phí. Trước đây
+ * phải bấm tay từng kênh nên sổ luôn thiếu, và phần code cũ còn tự tính phí =
+ * tổng × hoa hồng cấu hình (con số bịa, lệch ~4 lần so với phí thật).
+ * 6 luồng song song — mức đã chạy ổn; đẩy cao hơn có nguy cơ bị chặn IP.
+ */
+async function runFeeSync() {
+    const batDau = Date.now()
+    try {
+        const { ShopeeService } = await import('../services/platforms')
+        const { mapWithConcurrency } = await import('../lib/prisma')
+        const stores = await registryPrisma.store.findMany({
+            where: { status: 'active' }, select: { code: true, schema: true },
+        })
+        let tongCapNhat = 0
+        for (const store of stores) {
+            if (Date.now() - batDau > FEE_DEADLINE_MS) break
+            const sp = getStorePrisma(store.schema) as any
+            let channels: any[] = []
+            try {
+                channels = await sp.onlineChannel.findMany({
+                    where: { platform: 'shopee', status: 'active', accessToken: { not: null } },
+                })
+            } catch { continue }
+            for (const ch of channels) {
+                if (Date.now() - batDau > FEE_DEADLINE_MS) break
+                const svc = new ShopeeService({
+                    apiKey: ch.apiKey || '', apiSecret: ch.apiSecret || '',
+                    accessToken: ch.accessToken || undefined, refreshToken: ch.refreshToken || undefined,
+                    shopId: ch.shopId || undefined,
+                })
+                // Chỉ đơn 45 ngày gần nhất: đơn cũ hơn Shopee đã hết escrow, quét
+                // lại chỉ tốn lượt gọi mà không bao giờ ra dữ liệu.
+                const orders = await sp.onlineOrder.findMany({
+                    where: {
+                        channelId: ch.id, platformFee: 0,
+                        status: { notIn: ['cancelled', 'CANCELLED', 'UNPAID'] },
+                        externalOrderId: { not: null },
+                        createdAt: { gte: new Date(Date.now() - 45 * 86400_000) },
+                    },
+                    select: { id: true, externalOrderId: true },
+                    orderBy: { createdAt: 'desc' },
+                    take: FEE_BATCH,
+                }).catch(() => [])
+                if (orders.length === 0) continue
+                let ok = 0
+                await mapWithConcurrency(orders, async (o: any) => {
+                    if (Date.now() - batDau > FEE_DEADLINE_MS) return
+                    const sn = (o.externalOrderId || '').replace(/^SPE-/i, '')
+                    if (!sn) return
+                    try {
+                        const e = await (svc as any).getEscrowDetail(sn)
+                        if (e && (e.escrowAmount > 0 || e.totalFees > 0)) {
+                            await sp.onlineOrder.update({
+                                where: { id: o.id },
+                                data: { platformFee: e.totalFees, netRevenue: e.escrowAmount },
+                            })
+                            ok++
+                        }
+                    } catch { /* đơn lỗi → vòng sau thử lại */ }
+                }, 6)
+                if (ok > 0) {
+                    tongCapNhat += ok
+                    console.log(`[FeeSync] ${store.code}/${ch.name}: +${ok} đơn có phí thật (quét ${orders.length})`)
+                }
+            }
+        }
+        if (tongCapNhat > 0) {
+            console.log(`[FeeSync] Xong: ${tongCapNhat} đơn, ${Math.round((Date.now() - batDau) / 1000)}s`)
+        }
+    } catch (err: any) {
+        console.error('[FeeSync] Lỗi:', err?.message || err)
+    }
+}
+
 async function runCleanup() {
     const cutoff = new Date(Date.now() - CLEANUP_DAYS * 86400_000)
     const cleanStatuses = ['COMPLETED', 'completed', 'CANCELLED', 'cancelled', 'TO_RETURN', 'returned']
@@ -391,7 +473,14 @@ export function startAutoSync() {
         cleanupTimer = setInterval(runCleanup, CLEANUP_INTERVAL)
     }, 5 * 60_000)
 
+    // Đối soát phí sàn: lần đầu sau 10 phút, sau đó mỗi 6 tiếng
+    setTimeout(() => {
+        runFeeSync()
+        feeTimer = setInterval(runFeeSync, FEE_INTERVAL)
+    }, 10 * 60_000)
+
     console.log(`🧹 Auto-cleanup started (every 24h, orders >${CLEANUP_DAYS} days old)`)
+    console.log(`💰 Auto fee-sync started (every ${FEE_INTERVAL / 3600000}h, ${FEE_BATCH} orders/channel)`)
 }
 
 /**
@@ -402,6 +491,10 @@ export function stopAutoSync() {
         clearInterval(syncTimer)
         syncTimer = null
         console.log('⏰ Auto-sync stopped')
+    }
+    if (feeTimer) {
+        clearInterval(feeTimer)
+        feeTimer = null
     }
     if (cleanupTimer) {
         clearInterval(cleanupTimer)

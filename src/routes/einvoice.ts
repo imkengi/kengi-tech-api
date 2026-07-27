@@ -340,6 +340,17 @@ function computeItems(rawItems: any[]) {
 }
 
 // ─── TT78/2021 XML generation ────────────────────────────────────────────────
+// Tên khách do SÀN che ("T******g", "H*******h") KHÔNG phải tên người thật —
+// đưa vào hoá đơn thuế là vô nghĩa, CQT không chấp nhận. Coi như không có tên →
+// "Bán cho người tiêu dùng" (đúng nghiệp vụ khách không lấy hoá đơn).
+function tenNguoiMua(name: any, taxCode: any): string {
+    const t = String(name || '').trim()
+    const biChe = !t || t.includes('*') || /^kh[áa]ch\s/i.test(t)
+    // Có mã số thuế = khách LẤY hoá đơn → giữ nguyên tên dù trông lạ
+    if (String(taxCode || '').trim()) return t || 'Bán cho người tiêu dùng'
+    return biChe ? 'Bán cho người tiêu dùng' : t
+}
+
 function generateInvoiceXml(inv: any, items: any[]): string {
     const symbol = inv.invoiceSymbol || ''
     // KHMSHDon = mẫu số (1st char), KHHDon = phần ký hiệu còn lại
@@ -357,9 +368,18 @@ function generateInvoiceXml(inv: any, items: any[]): string {
           <TThue>${num(it.vatAmount)}</TThue>
         </HHDVu>`).join('\n')
 
+    // Id của DLHDon là ĐỊNH DANH DỮ LIỆU ĐỂ KÝ SỐ — phải có nghĩa với hoá đơn, không
+    // phải mã bản ghi nội bộ (cuid "cms2qm88…" vừa vô nghĩa với CQT vừa không tra
+    // được khi đối chiếu chữ ký). Ghép mẫu số + ký hiệu + số hoá đơn; chưa có số thì
+    // dùng số phiếu bán. Tiền tố "HD-" vì Id trong XML KHÔNG được bắt đầu bằng chữ số.
+    const dinhDanh = 'HD-' + String(
+        (symbol && inv.invoiceNumber) ? `${symbol}-${inv.invoiceNumber}`
+            : (inv.receiptNumber || inv.transactionId || inv.id)
+    ).replace(/[^A-Za-z0-9._-]/g, '')
+
     return `<?xml version="1.0" encoding="UTF-8"?>
 <HDon>
-  <DLHDon Id="${escXml(inv.id)}">
+  <DLHDon Id="${escXml(dinhDanh)}">
     <TTChung>
       <PBan>1.0</PBan>
       <KHMSHDon>${escXml(khmshdon)}</KHMSHDon>
@@ -372,12 +392,12 @@ function generateInvoiceXml(inv: any, items: any[]): string {
     </TTChung>
     <NDHDon>
       <NBan>
-        <Ten>${escXml(inv.sellerName)}</Ten>
-        <MST>${escXml(inv.sellerTaxCode)}</MST>
-        <DChi>${escXml(inv.sellerAddress)}</DChi>
+        <Ten>${escXml(inv.sellerName || inv._config?.companyName || '')}</Ten>
+        <MST>${escXml(inv.sellerTaxCode || inv._config?.taxCode || '')}</MST>
+        <DChi>${escXml(inv.sellerAddress || inv._config?.companyAddress || inv._config?.address || '')}</DChi>
       </NBan>
       <NMua>
-        <Ten>${escXml(inv.buyerName)}</Ten>
+        <Ten>${escXml(tenNguoiMua(inv.buyerName, inv.buyerTaxCode))}</Ten>
         <MST>${escXml(inv.buyerTaxCode)}</MST>
         <DChi>${escXml(inv.buyerAddress)}</DChi>
       </NMua>
@@ -405,10 +425,45 @@ function todayISO(): string {
 async function getInvoiceWithItems(prisma: any, id: string) {
     const inv = await prisma.eInvoice.findUnique({ where: { id } }).catch(() => null)
     if (!inv) return null
-    const items = await prisma.eInvoiceItem.findMany({
+    let items = await prisma.eInvoiceItem.findMany({
         where: { eInvoiceId: id }, orderBy: { itemNumber: 'asc' },
     }).catch(() => [])
-    return { ...inv, items }
+
+    // Bản ghi NHÁP / bản ghi cũ không có dòng hàng riêng → dựng từ phiếu bán.
+    // Thiếu bước này thì XML ra <DSHHDVu> RỖNG dù màn chi tiết vẫn hiện hàng —
+    // gửi đi là hoá đơn không có hàng hoá.
+    if (items.length === 0 && inv.transactionId) {
+        const tx = await prisma.transaction.findUnique({
+            where: { id: inv.transactionId },
+            include: { items: { include: { product: true } } },
+        }).catch(() => null)
+        const txItems = tx?.items || []
+        const lineAmt = (i: any) => Math.round(
+            Number(i.lineTotal) > 0 ? Number(i.lineTotal) : (i.quantity || 1) * (i.unitPrice ?? 0))
+        const tong = txItems.reduce((a: number, i: any) => a + lineAmt(i), 0)
+        const thue = Number(tx?.tax) || 0
+        items = txItems.map((i: any, idx: number) => {
+            const amount = lineAmt(i)
+            return {
+                itemNumber: idx + 1,
+                itemName: i.product?.name || i.productName || 'Sản phẩm',
+                unitName: i.product?.invoiceUnit || i.product?.baseUnit || 'Cái',
+                quantity: i.quantity || 1,
+                unitPrice: (i.quantity || 1) > 0 ? Math.round(amount / (i.quantity || 1)) : amount,
+                vatRate: thue > 0 && tong > 0 ? Math.round(thue * 100 / tong) : 0,
+                vatAmount: thue > 0 && tong > 0 ? Math.round(thue * amount / tong) : 0,
+                amount,
+            }
+        })
+    }
+
+    // Thông tin NGƯỜI BÁN: bản ghi cũ không lưu nên XML ra <NBan> rỗng cả MST.
+    // Lấy từ cấu hình HĐĐT đang hoạt động làm nguồn dự phòng.
+    let _config: any = null
+    if (!inv.sellerTaxCode || !inv.sellerName) {
+        _config = await getActiveConfig(prisma).catch(() => null)
+    }
+    return { ...inv, items, _config }
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
