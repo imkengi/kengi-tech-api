@@ -38,7 +38,9 @@ const SYSTEM_PROMPT =
 
 // JSON Schema (MCP inputSchema) → Gemini function-calling schema. Gemini không
 // nhận additionalProperties/'$schema'; type phải UPPERCASE.
-function toGeminiSchema(node: any): any {
+// export để kiểm thử được: một tool sinh schema hỏng là Gemini từ chối CẢ mảng
+// function declarations → chết toàn bộ trợ lý, không riêng tool đó.
+export function toGeminiSchema(node: any): any {
     if (!node || typeof node !== 'object') return { type: 'STRING' }
     const t = String(node.type || 'string').toUpperCase()
     if (t === 'OBJECT') {
