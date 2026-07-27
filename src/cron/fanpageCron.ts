@@ -78,7 +78,28 @@ async function healPageTokens(storePrisma: any, storeKey: string): Promise<void>
     if (!needsHeal) return
 
     const userTok = await storePrisma.fbUserToken.findFirst({ orderBy: { updatedAt: 'desc' } })
-    if (!userTok) return
+    if (!userTok) {
+        // Page kết nối bằng token DÁN TAY (POST /connect-page-token) không có user
+        // token đi kèm → KHÔNG tự gia hạn được. Trước đây hàm này lặng lẽ return,
+        // token chết ở ngày ~55 mà không ai biết. Giờ kêu to trong log.
+        const sapChet = await storePrisma.fbPage.findMany({
+            where: {
+                status: { not: 'disconnected' },
+                tokenExpiresAt: { lt: new Date(Date.now() + TOKEN_REFRESH_BUFFER) },
+            },
+            select: { name: true, pageId: true, tokenExpiresAt: true },
+        })
+        for (const p of sapChet) {
+            const conLai = Math.floor((new Date(p.tokenExpiresAt).getTime() - Date.now()) / 86400_000)
+            console.warn(
+                `[FanpageCron] ⚠️ ${storeKey}/${p.name || p.pageId}: token còn ${conLai} ngày và KHÔNG tự gia hạn được `
+                + '(kết nối bằng page token dán tay). Chủ shop cần dán token mới ở kengi.vn/fanpage-manager.',
+            )
+        }
+        // Vẫn giữ cooldown để không spam log mỗi 5 phút
+        if (sapChet.length) healFailedAt.set(storeKey, Date.now())
+        return
+    }
 
     try {
         const svc = new FacebookService(userTok.accessToken)

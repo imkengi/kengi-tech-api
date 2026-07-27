@@ -74,22 +74,44 @@ export const FANPAGE_TOOLS: Tool[] = [
                 select: {
                     pageId: true, name: true, category: true, fanCount: true, status: true,
                     webhookSubscribed: true, autoReplyEnabled: true, adAccountId: true, lastSyncAt: true,
+                    tokenExpiresAt: true,
                 },
             })
             if (!pages.length) return { soFanpage: 0, ghiChu: 'Chưa kết nối fanpage nào — vào kengi.vn/fanpage-manager để kết nối Facebook.' }
+
+            // Token dán tay không tự gia hạn được (không có FbUserToken) → phải báo
+            // SỚM số ngày còn lại để agent nhắc chủ shop trước khi mọi thứ gãy.
+            const coUserToken = (await prisma.fbUserToken.count()) > 0
             return {
                 soFanpage: pages.length,
-                fanpages: pages.map((p: any) => ({
-                    pageId: p.pageId,
-                    ten: p.name,
-                    chuyenMuc: p.category,
-                    soNguoiTheoDoi: p.fanCount,
-                    trangThai: p.status === 'token_expired' ? 'TOKEN HẾT HẠN — cần kết nối lại' : 'đang hoạt động',
-                    webhook: p.webhookSubscribed ? 'đã bật (nhận bình luận tức thì)' : 'chưa bật (chỉ quét lại mỗi 5 phút)',
-                    autoReply: p.autoReplyEnabled ? 'đang bật' : 'đang tắt',
-                    taiKhoanQuangCao: p.adAccountId || null,
-                    dongBoLanCuoi: p.lastSyncAt,
-                })),
+                fanpages: pages.map((p: any) => {
+                    const conLai = p.tokenExpiresAt
+                        ? Math.floor((new Date(p.tokenExpiresAt).getTime() - Date.now()) / 86400_000)
+                        : null
+                    let hanToken: string
+                    if (p.status === 'token_expired') hanToken = 'ĐÃ HẾT HẠN'
+                    else if (conLai === null) hanToken = 'không hết hạn'
+                    else if (conLai <= 0) hanToken = 'HẾT HẠN HÔM NAY'
+                    else if (conLai <= 7) hanToken = `SẮP HẾT — còn ${conLai} ngày`
+                    else hanToken = `còn ${conLai} ngày`
+                    return {
+                        pageId: p.pageId,
+                        ten: p.name,
+                        chuyenMuc: p.category,
+                        soNguoiTheoDoi: p.fanCount,
+                        trangThai: p.status === 'token_expired' ? 'TOKEN HẾT HẠN — cần kết nối lại' : 'đang hoạt động',
+                        hanToken,
+                        tuGiaHanDuoc: coUserToken,
+                        cangBaoChuShop: (!coUserToken && conLai !== null && conLai <= 7)
+                            ? 'Token dán tay sắp hết hạn và hệ thống KHÔNG tự gia hạn được. Nhắc chủ shop vào '
+                              + 'kengi.vn/fanpage-manager → Cài đặt → Nhập token Fanpage để dán token mới.'
+                            : null,
+                        webhook: p.webhookSubscribed ? 'đã bật (nhận bình luận tức thì)' : 'chưa bật (chỉ quét lại mỗi 5 phút)',
+                        autoReply: p.autoReplyEnabled ? 'đang bật' : 'đang tắt',
+                        taiKhoanQuangCao: p.adAccountId || null,
+                        dongBoLanCuoi: p.lastSyncAt,
+                    }
+                }),
             }
         },
     },

@@ -268,7 +268,9 @@ router.get('/pages', authMiddleware, async (req: AuthRequest, res: Response) => 
         const prisma = req.storePrisma!
         const pages = await prisma.fbPage.findMany({
             where: { status: { not: 'disconnected' } },
-            select: { pageId: true, name: true, category: true, avatar: true, fanCount: true, igUserId: true, status: true, autoReplyEnabled: true, adAccountId: true, webhookSubscribed: true },
+            // tokenExpiresAt: FE hiện số ngày còn lại — token dán tay không tự gia hạn
+            // được nên phải cảnh báo sớm, đừng đợi Graph trả lỗi mới báo.
+            select: { pageId: true, name: true, category: true, avatar: true, fanCount: true, igUserId: true, status: true, autoReplyEnabled: true, adAccountId: true, webhookSubscribed: true, tokenExpiresAt: true },
             orderBy: { createdAt: 'asc' },
         })
         res.json({ success: true, data: pages })
