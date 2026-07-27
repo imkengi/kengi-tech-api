@@ -148,6 +148,30 @@ export class FacebookService {
         return this.get('me', { fields: 'id,name' })
     }
 
+    /**
+     * Nhận diện token dán tay là PAGE token hay USER token, kèm thông tin page.
+     * `metadata=1` khiến Graph trả `metadata.type` = "page" | "user" — cách duy nhất
+     * chắc chắn mà KHÔNG cần app token (debug_token đòi app secret, ở đây không có).
+     * Nhầm user token thay page token là lỗi phổ biến nhất khi copy từ Graph Explorer:
+     * /me vẫn chạy nên tưởng đúng, tới lúc đăng bài/đọc inbox mới hỏng (code 190).
+     */
+    async identifyToken(): Promise<{
+        type: string; id: string; name?: string; category?: string; fanCount?: number; picture?: string
+    }> {
+        const d = await this.get('me', {
+            metadata: 1,
+            fields: 'id,name,category,fan_count,picture{url}',
+        })
+        return {
+            type: String(d?.metadata?.type || '').toLowerCase(),
+            id: String(d.id),
+            name: d.name,
+            category: d.category,
+            fanCount: d.fan_count || 0,
+            picture: d.picture?.data?.url,
+        }
+    }
+
     /** /me/accounts — danh sách page + PAGE access token (token instance phải là USER token) */
     async listPages(): Promise<FbPageInfo[]> {
         const out: FbPageInfo[] = []
