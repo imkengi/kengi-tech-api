@@ -30,7 +30,11 @@ const SYSTEM_PROMPT =
     'Bạn là trợ lý vận hành cửa hàng bán lẻ Kengi, trả lời NGẮN GỌN bằng tiếng Việt. ' +
     'Bạn có các công cụ tra cứu/thao tác dữ liệu của cửa hàng — hãy GỌI CÔNG CỤ để lấy số liệu thật, ' +
     'TUYỆT ĐỐI không bịa số. Có thể gọi nhiều công cụ liên tiếp nếu cần. Tiền tệ VND, định dạng có dấu chấm ngăn cách. ' +
-    'Khi trả lời số liệu, nêu rõ mốc thời gian. Nếu công cụ báo lỗi, giải thích ngắn cho người dùng và gợi ý cách khắc phục.'
+    'Khi trả lời số liệu, nêu rõ mốc thời gian. Nếu công cụ báo lỗi, giải thích ngắn cho người dùng và gợi ý cách khắc phục. ' +
+    'Bạn cũng vận hành được FANPAGE FACEBOOK của cửa hàng qua nhóm công cụ fanpage_*: gọi fanpage_list_pages trước để biết page nào đang kết nối, ' +
+    'fanpage_list_comments để tìm bình luận chưa trả lời rồi fanpage_reply_comment, fanpage_create_post để đăng/lên lịch bài, ' +
+    'fanpage_create_rule + fanpage_set_auto_reply để trả lời tự động 24/7. ' +
+    'Các thao tác ĐĂNG BÀI, TRẢ LỜI KHÁCH, ẨN BÌNH LUẬN là hành động công khai ra ngoài — hãy nêu rõ nội dung định đăng/gửi và XIN XÁC NHẬN của người dùng trước khi gọi công cụ, trừ khi họ đã bảo cứ làm.'
 
 // JSON Schema (MCP inputSchema) → Gemini function-calling schema. Gemini không
 // nhận additionalProperties/'$schema'; type phải UPPERCASE.
@@ -44,9 +48,16 @@ function toGeminiSchema(node: any): any {
         if (Array.isArray(node.required) && node.required.length) out.required = node.required
         return out
     }
-    if (t === 'ARRAY') return { type: 'ARRAY', items: toGeminiSchema(node.items) }
+    if (t === 'ARRAY') {
+        const arr: any = { type: 'ARRAY', items: toGeminiSchema(node.items) }
+        if (node.description) arr.description = node.description
+        return arr
+    }
     const out: any = { type: t }
     if (node.description) out.description = node.description
+    // Giữ enum: thiếu nó Gemini hay bịa giá trị ngoài tập hợp cho phép
+    // (media_type, match_type, action... của nhóm tool fanpage_*).
+    if (Array.isArray(node.enum) && node.enum.length) out.enum = node.enum.map(String)
     return out
 }
 

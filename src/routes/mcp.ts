@@ -3,6 +3,12 @@ import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { registryPrisma, getStorePrisma } from '../lib/prisma'
 import { decrementSellableStock, adjustSellableStock } from '../lib/warehouseHelper'
 import { createJournalEntriesForTransaction, postDebtCollectionJournal } from '../lib/autoJournal'
+import { Tool, ToolCtx, ToolError } from '../lib/mcpTypes'
+import { FANPAGE_TOOLS } from './mcpFanpageTools'
+
+// Re-export để mcpAgent.ts (và code cũ) vẫn `import { ToolError, ToolCtx } from './mcp'`
+export { ToolError }
+export type { Tool, ToolCtx }
 
 /**
  * MCP SERVER — Model Context Protocol (Streamable HTTP, stateless) cho AI agent.
@@ -34,7 +40,11 @@ const INSTRUCTIONS =
     'sales_report/revenue_by_day cho doanh thu, inventory_value cho giá trị tồn kho. ' +
     'LÊN ĐƠN BÁN HÀNG bằng create_sale (tra hàng bằng search_products lấy đúng SKU trước; bán chịu thì tạo/khớp khách bằng create_customer/search_customers). ' +
     'THU NỢ khách bằng record_debt_payment (tra dư nợ bằng search_customers trước). ' +
-    'Tool ghi (create_sale, record_debt_payment, create_product, update_product_price, create_customer, update_online_order_status) cần API key scope write.'
+    'Tool ghi (create_sale, record_debt_payment, create_product, update_product_price, create_customer, update_online_order_status) cần API key scope write. ' +
+    'FANPAGE FACEBOOK: nhóm tool fanpage_* vận hành fanpage của store — gọi fanpage_list_pages TRƯỚC để biết page nào đang kết nối và token còn hạn không. ' +
+    'Chăm bình luận: fanpage_list_comments (chỉ trả bình luận CHƯA được trả lời) → fanpage_reply_comment / fanpage_hide_comment. ' +
+    'Đăng bài: fanpage_create_post (bỏ scheduled_at = đăng ngay; có thì phải cách hiện tại ≥ 10 phút), quản lý bài đã hẹn bằng fanpage_manage_scheduled_post. ' +
+    'Trả lời tự động 24/7: fanpage_create_rule rồi fanpage_set_auto_reply để bật. Tool fanpage_* ghi cũng cần scope write.'
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
 // Lối 1: x-admin-key (+ x-store-code) — nội bộ. Lối 2: authMiddleware sẵn có
@@ -78,16 +88,8 @@ function errContent(message: string) {
 }
 
 // ─── Tools ───────────────────────────────────────────────────────────────────
-export type ToolCtx = {
-    prisma: any
-    scopes: string
-    storeCode: string
-    // Người thực hiện — bắt buộc cho tool GHI có FK createdBy (create_sale…).
-    // Thiếu (đường admin-key) → tool tự lấy user admin đầu tiên làm actor.
-    userId?: string
-    userName?: string
-    branchId?: string | null
-}
+// ToolCtx / Tool / ToolError nằm ở lib/mcpTypes (import ở đầu file) để file tool
+// tách riêng dùng chung mà không tạo vòng import.
 
 /** Lấy actor cho tool ghi: ưu tiên ctx.userId; thiếu thì chọn 1 user admin/owner
  * trong store (Transaction.createdBy là FK BẮT BUỘC tới User). */
@@ -101,14 +103,6 @@ async function resolveActor(ctx: ToolCtx): Promise<{ id: string; name: string; b
     if (!u) throw new ToolError('Store chưa có người dùng nào để ghi nhận người tạo đơn')
     return { id: u.id, name: u.name || 'AI Agent', branchId: (u as any).branchId ?? null }
 }
-export type Tool = {
-    name: string
-    description: string
-    inputSchema: Record<string, unknown>
-    write?: boolean
-    run: (args: any, ctx: ToolCtx) => Promise<unknown>
-}
-
 const num = (v: any, d: number) => (Number.isFinite(Number(v)) ? Number(v) : d)
 
 /** Tìm product theo sku (ưu tiên) hoặc id hoặc barcode. */
@@ -765,11 +759,11 @@ export const TOOLS: Tool[] = [
             return { soNhom: cats.length, nhomHang: cats.map((c: any) => ({ ten: c.name, soMatHang: c._count.products })) }
         },
     },
+    // Fanpage Manager (Facebook) — cùng dữ liệu với kengi.vn/fanpage-manager.
+    // Tách file riêng vì bộ tool này dài và gắn với Graph API, không phải bán lẻ.
+    ...FANPAGE_TOOLS,
 ]
 
-// Tool run() báo lỗi nghiệp vụ bằng exception có cờ riêng → tools/call trả isError
-// (đúng spec: lỗi nghiệp vụ nằm TRONG result, không phải JSON-RPC error).
-export class ToolError extends Error { }
 function errContentThrow(message: string): never { throw new ToolError(message) }
 
 // ─── HTTP handlers ───────────────────────────────────────────────────────────
