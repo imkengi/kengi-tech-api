@@ -668,6 +668,107 @@ router.post('/sync-schemas', async (req: Request, res: Response) => {
 })
 
 // ─── POST /admin/migrate — Add new columns to registry + store schemas ───────
+// ─── POST /admin/cleanup-orphan-warehouses ───────────────────────────────────
+// Dọn "kho chính mồ côi": kho type=main, isDefault=true, branchId=NULL do bước
+// boot-seed lúc tạo store sinh ra. Khi chi nhánh chính đã có kho main riêng thì
+// kho mồ côi này KHÔNG bao giờ được resolver chọn (xem getOrCreateDefaultWarehouse)
+// nên nằm im — nhưng là mìn: nếu kho thật bị xoá/bỏ cờ mặc định, chi nhánh chính
+// sẽ "nhận" kho rỗng này và tồn trông như bốc hơi.
+//
+// MẶC ĐỊNH CHỈ CHẠY THỬ (dry-run). Body:
+//   { storeCode?, apply?: true, hard?: true }
+//   - không có apply  → chỉ báo cáo, không đụng dữ liệu
+//   - apply           → BỎ CỜ mặc định + ngưng hoạt động (đảo ngược được)
+//   - apply + hard    → XOÁ HẲN, chỉ khi kho rỗng và không bị tham chiếu
+//
+// Ưu tiên vô hiệu hoá thay vì xoá: StockTransfer/SalesTrip trỏ tới Warehouse
+// KHÔNG có onDelete cascade → xoá cứng sẽ vỡ khoá ngoại nếu lỡ có tham chiếu.
+router.post('/cleanup-orphan-warehouses', async (req: Request, res: Response) => {
+    try {
+        const { storeCode, apply, hard } = req.body || {}
+        const stores = await prisma.store.findMany({
+            where: storeCode
+                ? { code: { equals: String(storeCode), mode: 'insensitive' } }
+                : { status: 'active' },
+        })
+        if (!stores.length) return res.status(404).json({ success: false, error: 'Không tìm thấy store' })
+
+        const ketQua: any[] = []
+        for (const store of stores) {
+            const sp: any = getStorePrisma(store.schema)
+            try {
+                const moCoi = await sp.warehouse.findMany({
+                    where: { type: 'main', branchId: null },
+                    select: { id: true, code: true, name: true, isDefault: true, isActive: true, vehicleId: true },
+                })
+                if (!moCoi.length) { ketQua.push({ store: store.code, moCoi: 0 }); continue }
+
+                const chiTiet: any[] = []
+                for (const w of moCoi) {
+                    // Đếm MỌI thứ đang trỏ tới kho này trước khi động vào
+                    const [soTon, tonKhac0, chuyenTu, chuyenDen, chuyenDi] = await Promise.all([
+                        sp.warehouseStock.count({ where: { warehouseId: w.id } }),
+                        sp.warehouseStock.count({ where: { warehouseId: w.id, quantity: { not: 0 } } }),
+                        sp.stockTransfer.count({ where: { fromWarehouseId: w.id } }).catch(() => 0),
+                        sp.stockTransfer.count({ where: { toWarehouseId: w.id } }).catch(() => 0),
+                        sp.salesTrip.count({ where: { warehouseId: w.id } }).catch(() => 0),
+                    ])
+                    // Chi nhánh chính đã có kho main riêng chưa? Chưa thì kho mồ côi
+                    // này ĐANG được dùng thật — tuyệt đối không đụng.
+                    const nhanhChinh = await sp.branch.findFirst({ where: { isMainBranch: true }, select: { id: true } }).catch(() => null)
+                    const khoThat = nhanhChinh?.id
+                        ? await sp.warehouse.findFirst({ where: { type: 'main', isDefault: true, branchId: nhanhChinh.id }, select: { id: true, code: true } })
+                        : null
+
+                    const canTro: string[] = []
+                    if (!khoThat) canTro.push('Chi nhánh chính CHƯA có kho main riêng — kho này đang là kho thật, không được dọn')
+                    if (tonKhac0 > 0) canTro.push(`Còn ${tonKhac0} mã hàng có tồn khác 0`)
+                    if (w.vehicleId) canTro.push('Đang gắn với một xe')
+                    if (hard && (chuyenTu + chuyenDen + chuyenDi) > 0) {
+                        canTro.push(`Bị tham chiếu bởi ${chuyenTu + chuyenDen} phiếu chuyển kho và ${chuyenDi} chuyến bán hàng — không xoá cứng được`)
+                    }
+
+                    const muc: any = {
+                        ma: w.code, ten: w.name, isDefault: w.isDefault, isActive: w.isActive,
+                        soDongTon: soTon, soDongTonKhac0: tonKhac0,
+                        phieuChuyenKho: chuyenTu + chuyenDen, chuyenBanHang: chuyenDi,
+                        khoThatCuaNhanhChinh: khoThat?.code || null,
+                        antoanDeDon: canTro.length === 0,
+                        canTro,
+                    }
+
+                    if (apply && !canTro.length) {
+                        if (hard) {
+                            await sp.warehouseStock.deleteMany({ where: { warehouseId: w.id } })
+                            await sp.warehouse.delete({ where: { id: w.id } })
+                            muc.daLam = 'ĐÃ XOÁ HẲN'
+                        } else {
+                            await sp.warehouse.update({ where: { id: w.id }, data: { isDefault: false, isActive: false } })
+                            muc.daLam = 'Đã bỏ cờ mặc định + ngưng hoạt động (bật lại được)'
+                        }
+                    } else if (apply) {
+                        muc.daLam = 'BỎ QUA — chưa an toàn'
+                    } else {
+                        muc.daLam = 'chạy thử, chưa đụng gì'
+                    }
+                    chiTiet.push(muc)
+                }
+                ketQua.push({ store: store.code, moCoi: moCoi.length, chiTiet })
+            } catch (e: any) {
+                ketQua.push({ store: store.code, loi: e?.message?.slice(0, 160) })
+            }
+        }
+        res.json({
+            success: true,
+            cheDo: apply ? (hard ? 'XOÁ HẲN' : 'vô hiệu hoá (đảo ngược được)') : 'CHẠY THỬ — không đụng dữ liệu',
+            ketQua,
+        })
+    } catch (err: any) {
+        console.error('[admin] cleanup-orphan-warehouses:', err?.message)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
 router.post('/migrate', async (_req: Request, res: Response) => {
     try {
         // Registry migrations
