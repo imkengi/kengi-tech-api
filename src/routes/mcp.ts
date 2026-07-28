@@ -5,6 +5,7 @@ import { decrementSellableStock, adjustSellableStock } from '../lib/warehouseHel
 import { createJournalEntriesForTransaction, postDebtCollectionJournal } from '../lib/autoJournal'
 import { Tool, ToolCtx, ToolError } from '../lib/mcpTypes'
 import { FANPAGE_TOOLS } from './mcpFanpageTools'
+import { FINANCE_TOOLS } from './mcpFinanceTools'
 
 // Re-export để mcpAgent.ts (và code cũ) vẫn `import { ToolError, ToolCtx } from './mcp'`
 export { ToolError }
@@ -44,7 +45,10 @@ const INSTRUCTIONS =
     'FANPAGE FACEBOOK: nhóm tool fanpage_* vận hành fanpage của store — gọi fanpage_list_pages TRƯỚC để biết page nào đang kết nối và token còn hạn không. ' +
     'Chăm bình luận: fanpage_list_comments (chỉ trả bình luận CHƯA được trả lời) → fanpage_reply_comment / fanpage_hide_comment. ' +
     'Đăng bài: fanpage_create_post (bỏ scheduled_at = đăng ngay; có thì phải cách hiện tại ≥ 10 phút), quản lý bài đã hẹn bằng fanpage_manage_scheduled_post. ' +
-    'Trả lời tự động 24/7: fanpage_create_rule rồi fanpage_set_auto_reply để bật. Tool fanpage_* ghi cũng cần scope write.'
+    'Trả lời tự động 24/7: fanpage_create_rule rồi fanpage_set_auto_reply để bật. Tool fanpage_* ghi cũng cần scope write. ' +
+    'TÀI CHÍNH: profit_report cho câu hỏi lãi/lỗ (doanh thu − giá vốn − chi phí; giá vốn là ƯỚC TÍNH theo giá vốn hiện tại, hãy nói rõ điều đó khi báo cáo), '+
+    'expense_report cho chi phí theo nhóm, supplier_debt cho công nợ phải trả nhà cung cấp, list_import_receipts cho lịch sử nhập hàng, '+
+    'stock_by_warehouse cho tồn theo từng kho/xe. Ngày truyền dạng 2026-07-01 và được hiểu theo GIỜ VN.'
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
 // Lối 1: x-admin-key (+ x-store-code) — nội bộ. Lối 2: authMiddleware sẵn có
@@ -762,6 +766,8 @@ export const TOOLS: Tool[] = [
     // Fanpage Manager (Facebook) — cùng dữ liệu với kengi.vn/fanpage-manager.
     // Tách file riêng vì bộ tool này dài và gắn với Graph API, không phải bán lẻ.
     ...FANPAGE_TOOLS,
+    // Tài chính & mua hàng — lãi lỗ, chi phí, công nợ NCC, nhập hàng, tồn theo kho
+    ...FINANCE_TOOLS,
 ]
 
 function errContentThrow(message: string): never { throw new ToolError(message) }

@@ -1,7 +1,7 @@
 import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
-import { TOOLS, ToolError, type ToolCtx } from './mcp'
-import { toGeminiSchema } from '../lib/geminiSchema'
+import { type ToolCtx } from '../lib/mcpTypes'
+import { chayAgent } from '../services/aiAgentRunner'
 
 /**
  * TRỢ LÝ AI trong dashboard — POST /api/mcp-agent/chat
@@ -21,10 +21,6 @@ import { toGeminiSchema } from '../lib/geminiSchema'
 const router = Router()
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || ''
-// gemini-2.0-flash bị Google gỡ (2026-07) → dùng 2.5-flash (nhanh, rẻ, ổn định)
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
-const GEMINI_URL = (model: string) =>
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
 const MAX_STEPS = 6
 
 const SYSTEM_PROMPT =
@@ -35,35 +31,9 @@ const SYSTEM_PROMPT =
     'Bạn cũng vận hành được FANPAGE FACEBOOK của cửa hàng qua nhóm công cụ fanpage_*: gọi fanpage_list_pages trước để biết page nào đang kết nối, ' +
     'fanpage_list_comments để tìm bình luận chưa trả lời rồi fanpage_reply_comment, fanpage_create_post để đăng/lên lịch bài, ' +
     'fanpage_create_rule + fanpage_set_auto_reply để trả lời tự động 24/7. ' +
-    'Các thao tác ĐĂNG BÀI, TRẢ LỜI KHÁCH, ẨN BÌNH LUẬN là hành động công khai ra ngoài — hãy nêu rõ nội dung định đăng/gửi và XIN XÁC NHẬN của người dùng trước khi gọi công cụ, trừ khi họ đã bảo cứ làm.'
-
-function geminiTools() {
-    return [{
-        functionDeclarations: TOOLS.map(t => ({
-            name: t.name,
-            description: t.description,
-            parameters: toGeminiSchema(t.inputSchema),
-        })),
-    }]
-}
-
-async function callGemini(contents: any[], apiKey: string): Promise<any> {
-    const res = await fetch(`${GEMINI_URL(GEMINI_MODEL)}?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-            contents,
-            tools: geminiTools(),
-            generationConfig: { temperature: 0.2 },
-        }),
-    })
-    const text = await res.text()
-    let data: any
-    try { data = JSON.parse(text) } catch { throw new Error(`Gemini trả về non-JSON (HTTP ${res.status}): ${text.slice(0, 300)}`) }
-    if (!res.ok) throw new Error(`Gemini lỗi HTTP ${res.status}: ${data?.error?.message || text.slice(0, 200)}`)
-    return data
-}
+    'Các thao tác ĐĂNG BÀI, TRẢ LỜI KHÁCH, ẨN BÌNH LUẬN là hành động công khai ra ngoài — hãy nêu rõ nội dung định đăng/gửi và XIN XÁC NHẬN của người dùng trước khi gọi công cụ, trừ khi họ đã bảo cứ làm. ' +
+    'Hỏi về LÃI/LỖ dùng profit_report, chi phí dùng expense_report, nợ nhà cung cấp dùng supplier_debt, tồn theo kho dùng stock_by_warehouse. '+
+    'profit_report tính giá vốn theo giá vốn HIỆN TẠI nên là ước tính — khi báo cáo phải nói rõ, và nếu có cảnh báo thiếu giá vốn thì nhắc chủ shop cập nhật.'
 
 const WRITE_ROLES = ['admin', 'manager', 'owner', 'superadmin']
 
@@ -106,48 +76,29 @@ router.post('/chat', authMiddleware, async (req: AuthRequest, res: Response) => 
             .slice(-12)
             .map((m: any) => ({ role: m.role, parts: [{ text: m.text }] }))
         : []
-    const contents: any[] = [...history, { role: 'user', parts: [{ text: message }] }]
-
-    const toolCalls: { name: string; args: any; ok: boolean }[] = []
 
     try {
-        for (let step = 0; step < MAX_STEPS; step++) {
-            const data = await callGemini(contents, apiKey)
-            const cand = data?.candidates?.[0]
-            const parts: any[] = cand?.content?.parts || []
-            const calls = parts.filter(p => p.functionCall).map(p => p.functionCall)
-
-            if (calls.length === 0) {
-                const reply = parts.filter(p => p.text).map(p => p.text).join('\n').trim()
-                res.json({ success: true, data: { reply: reply || '(không có nội dung trả lời)', toolCalls } })
-                return
-            }
-
-            // Ghi lại lượt model (kèm functionCall) rồi chạy từng tool
-            contents.push({ role: 'model', parts })
-            const responseParts: any[] = []
-            for (const fc of calls) {
-                const tool = TOOLS.find(t => t.name === fc.name)
-                let payload: any
-                let ok = true
-                if (!tool) {
-                    payload = { error: `Tool không tồn tại: ${fc.name}` }; ok = false
-                } else if (tool.write && !canWrite) {
-                    payload = { error: `Cần quyền quản lý để thực hiện "${fc.name}" (vai trò hiện tại: ${role || 'không rõ'})` }; ok = false
-                } else {
-                    try {
-                        payload = await tool.run(fc.args || {}, ctx)
-                    } catch (e: any) {
-                        payload = { error: e instanceof ToolError ? e.message : `Lỗi hệ thống: ${e?.message || e}` }
-                        ok = false
-                    }
-                }
-                toolCalls.push({ name: fc.name, args: fc.args || {}, ok })
-                responseParts.push({ functionResponse: { name: fc.name, response: { result: payload } } })
-            }
-            contents.push({ role: 'user', parts: responseParts })
-        }
-        res.json({ success: true, data: { reply: 'Đã đạt giới hạn số bước xử lý. Vui lòng hỏi cụ thể hơn.', toolCalls } })
+        // Dùng CHUNG vòng lặp với trợ lý tự động (services/aiAgentRunner) — trước
+        // đây hai nơi có hai bản sao, sửa một chỗ là lệch nhau.
+        // giamSat: true vì có người ngồi xem → tool nhạy cảm không cần khai trước;
+        // system prompt vẫn buộc agent xin xác nhận cho thao tác công khai.
+        const kq = await chayAgent({
+            apiKey,
+            systemPrompt: SYSTEM_PROMPT,
+            ctx,
+            message,
+            history,
+            maxSteps: MAX_STEPS,
+            allowWrite: canWrite,
+            giamSat: true,
+        })
+        res.json({
+            success: true,
+            data: {
+                reply: kq.chamTran ? 'Đã đạt giới hạn số bước xử lý. Vui lòng hỏi cụ thể hơn.' : kq.reply,
+                toolCalls: kq.toolCalls.map(t => ({ name: t.name, args: t.args, ok: t.ok })),
+            },
+        })
     } catch (e: any) {
         console.error('[mcp-agent] lỗi:', e?.message || e)
         res.status(502).json({ success: false, error: e?.message || 'Lỗi gọi trợ lý AI' })

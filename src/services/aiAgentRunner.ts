@@ -49,6 +49,12 @@ export type ThamSoChay = {
     allowWrite?: boolean
     /** Chỉ cho phép đúng các tool này (tên). Rỗng/không truyền = mọi tool hợp lệ. */
     allowedTools?: string[]
+    /**
+     * CÓ NGƯỜI ĐANG NGỒI XEM (luồng chat dashboard).
+     * Khi true, tool nhạy cảm không cần khai đích danh — người dùng thấy ngay
+     * agent định làm gì và chặn được. Job tự động PHẢI để false (mặc định).
+     */
+    giamSat?: boolean
     /** Ghi log từng bước (job tự động dùng để soi lại) */
     onStep?: (info: { step: number; calls: string[] }) => void
 }
@@ -72,13 +78,15 @@ async function callGemini(contents: any[], apiKey: string, systemPrompt: string,
 }
 
 /** Lọc bộ tool theo quyền + allowlist, rồi bọc thành function declarations Gemini. */
-export function chonTool(allowWrite: boolean, allowedTools?: string[]) {
+export function chonTool(allowWrite: boolean, allowedTools?: string[], giamSat = false) {
     const chiDinh = allowedTools && allowedTools.length ? new Set(allowedTools) : null
     const dung = TOOLS.filter(t => {
         if (chiDinh && !chiDinh.has(t.name)) return false
         if (t.write && !allowWrite) return false
-        // Tool nhạy cảm BẮT BUỘC được gọi tên trong allowlist, không nhận "cho hết"
-        if (TOOL_NHAY_CAM.has(t.name) && !chiDinh) return false
+        // Tool nhạy cảm BẮT BUỘC được gọi tên trong allowlist, không nhận "cho hết".
+        // Ngoại lệ: luồng CÓ NGƯỜI GIÁM SÁT (chat) — người dùng thấy agent định làm
+        // gì và chặn được ngay, nên không cần khai trước từng tool.
+        if (TOOL_NHAY_CAM.has(t.name) && !chiDinh && !giamSat) return false
         return true
     })
     return {
@@ -101,7 +109,7 @@ export function chonTool(allowWrite: boolean, allowedTools?: string[]) {
 export async function chayAgent(p: ThamSoChay): Promise<KetQuaChay> {
     const maxSteps = Math.min(Math.max(p.maxSteps ?? 8, 1), 20)
     const allowWrite = !!p.allowWrite
-    const { dung, declarations } = chonTool(allowWrite, p.allowedTools)
+    const { dung, declarations } = chonTool(allowWrite, p.allowedTools, !!p.giamSat)
     if (!dung.length) throw new Error('Không có tool nào khả dụng với cấu hình quyền hiện tại')
 
     const contents: any[] = [...(p.history || []), { role: 'user', parts: [{ text: p.message }] }]
