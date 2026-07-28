@@ -305,7 +305,11 @@ export const FINANCE_TOOLS: Tool[] = [
             const lechRows: any[] = await prisma.$queryRawUnsafe(
                 `WITH ton_main AS (
                      SELECT p.id, p.sku, p.name, p.stock,
-                            COALESCE(SUM(ws.quantity), 0) AS ton_kho
+                            -- ::float BẮT BUỘC: SUM(int) của Postgres ra bigint,
+                            -- Prisma trả về BigInt và JSON.stringify ném lỗi
+                            -- "Do not know how to serialize a BigInt" → tool chết
+                            -- ĐÚNG Ở STORE ĐANG CÓ LỆCH (store lệch 0 không lộ ra).
+                            COALESCE(SUM(ws.quantity), 0)::float AS ton_kho
                      FROM "Product" p
                      LEFT JOIN "WarehouseStock" ws ON ws."productId" = p.id
                           AND ws."warehouseId" IN (SELECT id FROM "Warehouse" WHERE type = 'main' AND "isActive" = true)
@@ -318,7 +322,11 @@ export const FINANCE_TOOLS: Tool[] = [
             const lechChiTiet: any[] = await prisma.$queryRawUnsafe(
                 `WITH ton_main AS (
                      SELECT p.id, p.sku, p.name, p.stock,
-                            COALESCE(SUM(ws.quantity), 0) AS ton_kho
+                            -- ::float BẮT BUỘC: SUM(int) của Postgres ra bigint,
+                            -- Prisma trả về BigInt và JSON.stringify ném lỗi
+                            -- "Do not know how to serialize a BigInt" → tool chết
+                            -- ĐÚNG Ở STORE ĐANG CÓ LỆCH (store lệch 0 không lộ ra).
+                            COALESCE(SUM(ws.quantity), 0)::float AS ton_kho
                      FROM "Product" p
                      LEFT JOIN "WarehouseStock" ws ON ws."productId" = p.id
                           AND ws."warehouseId" IN (SELECT id FROM "Warehouse" WHERE type = 'main' AND "isActive" = true)
@@ -342,7 +350,18 @@ export const FINANCE_TOOLS: Tool[] = [
                  GROUP BY w.id, w.code, w.name, w."branchId", w."isDefault"
                  ORDER BY so_ma_hang DESC`,
             )
-            const soMacDinh = khoChinh.filter(k => k.isDefault).length
+            // Trùng = NHIỀU kho mặc định TRONG CÙNG MỘT chi nhánh, hoặc kho mặc định
+            // mồ côi (branchId=null) tồn tại song song với kho của chi nhánh.
+            // KHÔNG phải cứ >1 kho mặc định là sai: store nhiều chi nhánh thì mỗi
+            // chi nhánh một kho main mặc định là ĐÚNG (resolver tra theo branchId).
+            const macDinh = khoChinh.filter(k => k.isDefault)
+            const theoChiNhanh = new Map<string, number>()
+            for (const k of macDinh) {
+                const key = k.branchId || '(không gắn chi nhánh)'
+                theoChiNhanh.set(key, (theoChiNhanh.get(key) || 0) + 1)
+            }
+            const chiNhanhTrung = [...theoChiNhanh.entries()].filter(([, n]) => n > 1)
+            const coMoCoi = macDinh.some(k => !k.branchId)
 
             const vanDe: string[] = []
             if (Number(amRows[0]?.so_mat_hang) > 0) {
@@ -351,8 +370,11 @@ export const FINANCE_TOOLS: Tool[] = [
             if (Number(lechRows[0]?.so_lech) > 0) {
                 vanDe.push(`${lechRows[0].so_lech} mặt hàng LỆCH giữa tồn tổng và tồn kho chính — POS kiểm tồn theo kho chính nên sẽ bán khống hoặc chặn bán nhầm.`)
             }
-            if (soMacDinh > 1) {
-                vanDe.push(`Có ${soMacDinh} kho chính cùng đánh dấu MẶC ĐỊNH — hàng nhập vào một kho nhưng POS/đẩy tồn có thể đọc kho kia.`)
+            if (chiNhanhTrung.length) {
+                vanDe.push(`${chiNhanhTrung.length} chi nhánh có NHIỀU HƠN MỘT kho chính mặc định (${chiNhanhTrung.map(([b, n]) => `${b}: ${n} kho`).join(', ')}) — hàng nhập vào một kho nhưng POS/đẩy tồn có thể đọc kho kia.`)
+            }
+            if (coMoCoi) {
+                vanDe.push('Có kho chính mặc định KHÔNG gắn chi nhánh (kho mồ côi từ lúc tạo store) — dọn bằng POST /api/admin/cleanup-orphan-warehouses.')
             }
 
             return {
