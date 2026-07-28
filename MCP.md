@@ -87,7 +87,7 @@ Tham số **in đậm** là bắt buộc.
 
 ## Trợ lý AI tự động (chạy theo lịch)
 
-Cùng bộ 35 tool, nhưng **không cần người hỏi**: chủ shop đặt tác vụ bằng tiếng Việt + lịch chạy, cron đánh thức agent làm rồi ghi báo cáo lại.
+Cùng bộ 40 tool, nhưng **không cần người hỏi**: chủ shop đặt tác vụ bằng tiếng Việt + lịch chạy, cron đánh thức agent làm rồi ghi báo cáo lại.
 
 `POST /api/ai-jobs` — tạo tác vụ:
 
