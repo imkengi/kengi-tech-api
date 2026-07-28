@@ -677,6 +677,7 @@ router.post('/migrate', async (_req: Request, res: Response) => {
         await (prisma as any).$executeRawUnsafe(`ALTER TABLE "Store" ADD COLUMN IF NOT EXISTS "hasWebhooks" BOOLEAN NOT NULL DEFAULT false`)
         await (prisma as any).$executeRawUnsafe(`ALTER TABLE "Store" ADD COLUMN IF NOT EXISTS "hasOnlineChannels" BOOLEAN NOT NULL DEFAULT false`)
         await (prisma as any).$executeRawUnsafe(`ALTER TABLE "Store" ADD COLUMN IF NOT EXISTS "hasFanpages" BOOLEAN NOT NULL DEFAULT false`)
+        await (prisma as any).$executeRawUnsafe(`ALTER TABLE "Store" ADD COLUMN IF NOT EXISTS "hasAiJobs" BOOLEAN NOT NULL DEFAULT false`)
 
         // Store schema migrations — platform fees + geocode
         const stores = await prisma.store.findMany({ select: { schema: true, name: true } }) as any[]
@@ -899,6 +900,50 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 await (sp as any).$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "FbAutoReplyLog_pageId_commentId_key" ON "FbAutoReplyLog"("pageId", "commentId")`)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "FbAutoReplyLog_pageId_idx" ON "FbAutoReplyLog"("pageId")`)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "FbAutoReplyLog_createdAt_idx" ON "FbAutoReplyLog"("createdAt")`)
+
+                // Trợ lý AI tự động theo lịch (2026-07-27). db push là no-op ở prod
+                // nên phải tạo bằng raw SQL như các bảng Fb* ở trên.
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "AiAgentJob" (
+                        "id" TEXT NOT NULL,
+                        "name" TEXT NOT NULL,
+                        "prompt" TEXT NOT NULL,
+                        "scheduleKind" TEXT NOT NULL DEFAULT 'daily',
+                        "atHour" INTEGER NOT NULL DEFAULT 8,
+                        "atMinute" INTEGER NOT NULL DEFAULT 0,
+                        "intervalMinutes" INTEGER NOT NULL DEFAULT 60,
+                        "enabled" BOOLEAN NOT NULL DEFAULT true,
+                        "allowWrite" BOOLEAN NOT NULL DEFAULT false,
+                        "allowedTools" TEXT NOT NULL DEFAULT '[]',
+                        "maxSteps" INTEGER NOT NULL DEFAULT 8,
+                        "lastRunAt" TIMESTAMP(3),
+                        "nextRunAt" TIMESTAMP(3),
+                        "createdBy" TEXT,
+                        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "AiAgentJob_pkey" PRIMARY KEY ("id")
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "AiAgentJob_enabled_nextRunAt_idx" ON "AiAgentJob"("enabled", "nextRunAt")`)
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "AiAgentRun" (
+                        "id" TEXT NOT NULL,
+                        "jobId" TEXT NOT NULL,
+                        "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        "finishedAt" TIMESTAMP(3),
+                        "status" TEXT NOT NULL DEFAULT 'running',
+                        "summary" TEXT,
+                        "toolCalls" TEXT NOT NULL DEFAULT '[]',
+                        "steps" INTEGER NOT NULL DEFAULT 0,
+                        "chamTran" BOOLEAN NOT NULL DEFAULT false,
+                        "errorMessage" TEXT,
+                        "trigger" TEXT NOT NULL DEFAULT 'cron',
+                        CONSTRAINT "AiAgentRun_pkey" PRIMARY KEY ("id"),
+                        CONSTRAINT "AiAgentRun_jobId_fkey" FOREIGN KEY ("jobId") REFERENCES "AiAgentJob"("id") ON DELETE CASCADE ON UPDATE CASCADE
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "AiAgentRun_jobId_idx" ON "AiAgentRun"("jobId")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "AiAgentRun_startedAt_idx" ON "AiAgentRun"("startedAt")`)
 
                 // SMTP email công ty cho CRM (2026-07-12)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "smtpConfig" TEXT`)

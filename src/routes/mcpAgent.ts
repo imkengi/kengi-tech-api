@@ -1,6 +1,7 @@
 import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { TOOLS, ToolError, type ToolCtx } from './mcp'
+import { toGeminiSchema } from '../lib/geminiSchema'
 
 /**
  * TRỢ LÝ AI trong dashboard — POST /api/mcp-agent/chat
@@ -35,33 +36,6 @@ const SYSTEM_PROMPT =
     'fanpage_list_comments để tìm bình luận chưa trả lời rồi fanpage_reply_comment, fanpage_create_post để đăng/lên lịch bài, ' +
     'fanpage_create_rule + fanpage_set_auto_reply để trả lời tự động 24/7. ' +
     'Các thao tác ĐĂNG BÀI, TRẢ LỜI KHÁCH, ẨN BÌNH LUẬN là hành động công khai ra ngoài — hãy nêu rõ nội dung định đăng/gửi và XIN XÁC NHẬN của người dùng trước khi gọi công cụ, trừ khi họ đã bảo cứ làm.'
-
-// JSON Schema (MCP inputSchema) → Gemini function-calling schema. Gemini không
-// nhận additionalProperties/'$schema'; type phải UPPERCASE.
-// export để kiểm thử được: một tool sinh schema hỏng là Gemini từ chối CẢ mảng
-// function declarations → chết toàn bộ trợ lý, không riêng tool đó.
-export function toGeminiSchema(node: any): any {
-    if (!node || typeof node !== 'object') return { type: 'STRING' }
-    const t = String(node.type || 'string').toUpperCase()
-    if (t === 'OBJECT') {
-        const props: any = {}
-        for (const [k, v] of Object.entries(node.properties || {})) props[k] = toGeminiSchema(v)
-        const out: any = { type: 'OBJECT', properties: props }
-        if (Array.isArray(node.required) && node.required.length) out.required = node.required
-        return out
-    }
-    if (t === 'ARRAY') {
-        const arr: any = { type: 'ARRAY', items: toGeminiSchema(node.items) }
-        if (node.description) arr.description = node.description
-        return arr
-    }
-    const out: any = { type: t }
-    if (node.description) out.description = node.description
-    // Giữ enum: thiếu nó Gemini hay bịa giá trị ngoài tập hợp cho phép
-    // (media_type, match_type, action... của nhóm tool fanpage_*).
-    if (Array.isArray(node.enum) && node.enum.length) out.enum = node.enum.map(String)
-    return out
-}
 
 function geminiTools() {
     return [{

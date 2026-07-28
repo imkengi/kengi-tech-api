@@ -13,7 +13,7 @@
  */
 
 import { TOOLS } from '../src/routes/mcp'
-import { toGeminiSchema } from '../src/routes/mcpAgent'
+import { toGeminiSchema } from '../src/lib/geminiSchema'
 
 const KIEU_HOP_LE = new Set(['STRING', 'NUMBER', 'INTEGER', 'BOOLEAN', 'ARRAY', 'OBJECT'])
 // Gemini không nhận các khoá JSON-Schema này; sót lại là bị từ chối

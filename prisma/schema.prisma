@@ -29,6 +29,7 @@ model Store {
   hasWebhooks Boolean @default(false)    // có webhook đầu ra active — cron chỉ chạm store này (tránh quét toàn bộ)
   hasOnlineChannels Boolean @default(false) // có kênh online (Shopee/TikTok...) — autoSync/cleanup chỉ chạm store này
   hasFanpages Boolean @default(false)    // có FB page — fanpageCron chỉ chạm store này (tránh quét toàn bộ → cạn kết nối)
+  hasAiJobs Boolean @default(false)      // có tác vụ AI tự động — aiAgentCron chỉ chạm store này
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

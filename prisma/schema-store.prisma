@@ -88,17 +88,17 @@ model ApiKey {
 // ─── Outbound Webhooks (đầu ra: đẩy sự kiện hàng hóa/tồn kho ra hệ thống ngoài) ──
 
 model WebhookEndpoint {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   url          String
   secret       String // dùng ký HMAC-SHA256 header X-Webhook-Signature
-  events       String   @default("[]") // JSON array: ["stock.changed","product.updated",...]
+  events       String    @default("[]") // JSON array: ["stock.changed","product.updated",...]
   description  String?
-  isActive     Boolean  @default(true)
-  failureCount Int      @default(0) // số lần giao thất bại liên tiếp (auto-disable khi quá cao)
+  isActive     Boolean   @default(true)
+  failureCount Int       @default(0) // số lần giao thất bại liên tiếp (auto-disable khi quá cao)
   lastStatus   String? // tóm tắt lần giao gần nhất
   lastFiredAt  DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   deliveries WebhookDelivery[]
 
@@ -106,18 +106,18 @@ model WebhookEndpoint {
 }
 
 model WebhookDelivery {
-  id           String    @id @default(cuid())
+  id           String          @id @default(cuid())
   endpointId   String
   endpoint     WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
   eventType    String
   payload      String // JSON body đã ký
-  status       String    @default("pending") // pending | sending | success | failed | dead
-  attempts     Int       @default(0)
-  maxAttempts  Int       @default(6)
+  status       String          @default("pending") // pending | sending | success | failed | dead
+  attempts     Int             @default(0)
+  maxAttempts  Int             @default(6)
   nextRetryAt  DateTime?
   responseCode Int?
   lastError    String?
-  createdAt    DateTime  @default(now())
+  createdAt    DateTime        @default(now())
   deliveredAt  DateTime?
 
   @@index([status, nextRetryAt])
@@ -351,19 +351,19 @@ model Transaction {
 }
 
 model TransactionItem {
-  id            String @id @default(cuid())
+  id            String  @id @default(cuid())
   transactionId String
   productId     String
   productName   String
   sku           String
   quantity      Int
   unitPrice     Float
-  discount      Float  @default(0)
+  discount      Float   @default(0)
   discountType  String? @default("fixed")
   lineTotal     Float
   // Số lượng đã trừ kho theo ĐƠN VỊ GỐC (quantity × conversionRate lúc bán).
   // 0 = bản ghi cũ chưa có dữ liệu → khi hoàn kho fallback về quantity.
-  baseQuantity  Float  @default(0)
+  baseQuantity  Float   @default(0)
 
   transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
   product     Product     @relation(fields: [productId], references: [id])
@@ -430,7 +430,7 @@ model ImportReceipt {
   paidAmount      Float     @default(0)
   paymentStatus   String    @default("paid") // "paid" | "partial" | "unpaid"
   dueDate         DateTime? // hạn trả nợ NCC (ngày cụ thể, tính từ điều khoản)
-  paymentTerm     String?   // điều khoản TT dạng nhãn (vd "Sau 30 ngày", "Cuối tháng sau")
+  paymentTerm     String? // điều khoản TT dạng nhãn (vd "Sau 30 ngày", "Cuối tháng sau")
   // Có HOÁ ĐƠN GTGT (VAT) đầu vào hay không — CHỈ phiếu này mới tính vào TỒN KHO
   // THUẾ (gate xuất HĐ). Nhập từ file HĐĐT (XML/PDF) tự bật; nhập tay có tick.
   hasVatInvoice   Boolean   @default(false)
@@ -924,20 +924,20 @@ model TaxConfig {
 // ─── Bank Accounts (S2e - Tiền gửi) ───────────────────────────────────────────
 
 model BankAccount {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   bankName      String
   accountNumber String
   accountName   String?
-  isDefault     Boolean  @default(false)
-  status        String   @default("active")
+  isDefault     Boolean   @default(false)
+  status        String    @default("active")
   // Phase 4 (E-Banking) — số dư + đồng bộ sao kê
   bankBranch    String?
-  currency      String   @default("VND")
-  balance       Float    @default(0)
+  currency      String    @default("VND")
+  balance       Float     @default(0)
   lastSyncAt    DateTime?
   branchId      String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   transactions BankTransaction[]
 
@@ -945,13 +945,13 @@ model BankAccount {
 }
 
 model BankTransaction {
-  id            String   @id @default(cuid())
-  bankAccountId String?
-  type          String // legacy: "deposit"|"withdraw"; Phase 4: "credit"|"debit"
-  amount        Float
-  description   String
-  reference     String?
-  date          DateTime @default(now())
+  id                  String    @id @default(cuid())
+  bankAccountId       String?
+  type                String // legacy: "deposit"|"withdraw"; Phase 4: "credit"|"debit"
+  amount              Float
+  description         String
+  reference           String?
+  date                DateTime  @default(now())
   // Phase 4 (E-Banking) — sao kê + đối soát
   transactionDate     DateTime?
   referenceNo         String?
@@ -964,8 +964,8 @@ model BankTransaction {
   matchedExpenseId    String?
   branchId            String?
   notes               String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   bankAccount BankAccount? @relation(fields: [bankAccountId], references: [id])
 
@@ -996,53 +996,53 @@ model BankConnectionConfig {
 // ─── Tax Declaration ───────────────────────────────────────────────────────────
 
 model TaxDeclaration {
-  id             String    @id @default(cuid())
-  formType       String    @default("01_GTGT")
-  period         String    @unique
-  periodType     String    @default("month")
-  year           Int
-  month          Int?
-  quarter        Int?
-  taxCode        String
-  companyName    String
-  companyAddress String?
-  businessType   String    @default("company")
-  ct21           Float     @default(0)
-  ct22           Float     @default(0)
-  ct23           Float     @default(0)
-  ct24           Float     @default(0)
-  ct25           Float     @default(0)
-  ct26           Float     @default(0)
-  ct27           Float     @default(0)
-  ct28           Float     @default(0)
-  ct29           Float     @default(0)
-  ct30           Float     @default(0)
-  ct31           Float     @default(0)
-  ct32           Float     @default(0)
-  ct33           Float     @default(0)
-  ct34           Float     @default(0)
-  ct35           Float     @default(0)
-  ct36           Float     @default(0)
-  ct37           Float     @default(0)
-  ct38           Float     @default(0)
-  ct39           Float     @default(0)
-  ct40a          Float     @default(0)
-  ct40b          Float     @default(0)
-  cnkdRevenue    Float     @default(0)
-  cnkdVatRate    Float     @default(1)
-  cnkdVatAmount  Float     @default(0)
-  cnkdPitRate    Float     @default(0.5)
-  cnkdPitAmount  Float     @default(0)
-  cnkdTotalTax   Float     @default(0)
-  cnkdThreshold  Float     @default(500000000)
-  status           String    @default("draft")
-  filedAt          DateTime?
-  notes            String?
-  originalId       String?
-  amendmentNumber  Int?
-  amendmentReason  String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  formType        String    @default("01_GTGT")
+  period          String    @unique
+  periodType      String    @default("month")
+  year            Int
+  month           Int?
+  quarter         Int?
+  taxCode         String
+  companyName     String
+  companyAddress  String?
+  businessType    String    @default("company")
+  ct21            Float     @default(0)
+  ct22            Float     @default(0)
+  ct23            Float     @default(0)
+  ct24            Float     @default(0)
+  ct25            Float     @default(0)
+  ct26            Float     @default(0)
+  ct27            Float     @default(0)
+  ct28            Float     @default(0)
+  ct29            Float     @default(0)
+  ct30            Float     @default(0)
+  ct31            Float     @default(0)
+  ct32            Float     @default(0)
+  ct33            Float     @default(0)
+  ct34            Float     @default(0)
+  ct35            Float     @default(0)
+  ct36            Float     @default(0)
+  ct37            Float     @default(0)
+  ct38            Float     @default(0)
+  ct39            Float     @default(0)
+  ct40a           Float     @default(0)
+  ct40b           Float     @default(0)
+  cnkdRevenue     Float     @default(0)
+  cnkdVatRate     Float     @default(1)
+  cnkdVatAmount   Float     @default(0)
+  cnkdPitRate     Float     @default(0.5)
+  cnkdPitAmount   Float     @default(0)
+  cnkdTotalTax    Float     @default(0)
+  cnkdThreshold   Float     @default(500000000)
+  status          String    @default("draft")
+  filedAt         DateTime?
+  notes           String?
+  originalId      String?
+  amendmentNumber Int?
+  amendmentReason String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   @@index([year])
   @@index([status])
@@ -1379,20 +1379,20 @@ model Review {
 /// không lên phiếu ⇒ không xuất được hoá đơn. Bảng này để map thủ công 1 lần.
 /// platform = null: áp cho mọi sàn. Khớp KHÔNG phân biệt hoa thường.
 model SkuMapping {
-  id          String   @id @default(cuid())
-  platformSku String
-  productId   String
-  platform    String?
-  note        String?
+  id             String   @id @default(cuid())
+  platformSku    String
+  productId      String
+  platform       String?
+  note           String?
   // Hệ số quy đổi: 1 đơn vị ở NGUỒN (dòng hoá đơn / SKU sàn) = bao nhiêu đơn vị
   // GỐC của sản phẩm kho. VD hoá đơn ghi "5 vỉ" mà kho đếm theo cái, vỉ 10 cái
   // → rate = 10 → nhập vào kho 50 cái, đơn giá chia 10.
-  conversionRate Float @default(1)
+  conversionRate Float    @default(1)
   // Ánh xạ tới COMBO thay vì 1 sản phẩm: SKU sàn là combo N món → khi đơn về tự
   // bung thành từng thành phần để trừ kho và tính tồn kho thuế cho đúng từng mã.
   bundleId       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
@@ -1404,20 +1404,20 @@ model SkuMapping {
 // Route /api/tax/hkd-revenue đã dùng model này từ lâu nhưng schema THIẾU → mọi
 // request 500 "Cannot read properties of undefined (reading 'findMany')".
 model HkdRevenueEntry {
-  id             String   @id @default(cuid())
-  date           DateTime @default(now())
-  soChungTu      String?
-  dienGiai       String
-  doanhThu       Float    @default(0)
-  chietKhau      Float    @default(0)
-  thueGTGT       Float    @default(0)
-  doanhThuThuan  Float    @default(0)
-  tncnUocTinh    Float    @default(0)
-  phuongThucTT   String   @default("Tiền mặt")
-  ghiChu         String?
-  branchId       String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id            String   @id @default(cuid())
+  date          DateTime @default(now())
+  soChungTu     String?
+  dienGiai      String
+  doanhThu      Float    @default(0)
+  chietKhau     Float    @default(0)
+  thueGTGT      Float    @default(0)
+  doanhThuThuan Float    @default(0)
+  tncnUocTinh   Float    @default(0)
+  phuongThucTT  String   @default("Tiền mặt")
+  ghiChu        String?
+  branchId      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([date])
   @@index([branchId])
@@ -1688,41 +1688,41 @@ model OnlineChannel {
 // ─── Online Orders ──────────────────────────────────────────────────────────
 
 model OnlineOrder {
-  id              String    @id @default(cuid())
-  orderNumber     String    @unique
-  channelId       String?
-  channelName     String?
-  platform        String?
-  customerName    String
-  customerPhone   String?
-  customerEmail   String?
-  shippingAddress String?
-  status          String    @default("pending") // pending, confirmed, processing, shipping, delivered, completed, cancelled, returned
-  subtotal        Float     @default(0)
-  discount        Float     @default(0)
-  shippingFee     Float     @default(0)
-  total           Float     @default(0)
-  paymentMethod   String?
-  paymentStatus   String    @default("unpaid") // unpaid, paid, refunded
-  paidAt          DateTime?
-  trackingNumber  String?
-  shippingCarrier String?
-  shippedAt       DateTime?
-  deliveredAt     DateTime?
-  note            String?
-  internalNote    String?
-  externalOrderId String?
-  externalStatus  String?
-  platformFee     Float     @default(0)
-  platformFeeRate Float     @default(0)
-  netRevenue      Float     @default(0)
-  adsVoucherDiscount Float  @default(0) // Shopee Ads Smart Voucher — chỉ quan sát, chưa trừ netRevenue
+  id                 String    @id @default(cuid())
+  orderNumber        String    @unique
+  channelId          String?
+  channelName        String?
+  platform           String?
+  customerName       String
+  customerPhone      String?
+  customerEmail      String?
+  shippingAddress    String?
+  status             String    @default("pending") // pending, confirmed, processing, shipping, delivered, completed, cancelled, returned
+  subtotal           Float     @default(0)
+  discount           Float     @default(0)
+  shippingFee        Float     @default(0)
+  total              Float     @default(0)
+  paymentMethod      String?
+  paymentStatus      String    @default("unpaid") // unpaid, paid, refunded
+  paidAt             DateTime?
+  trackingNumber     String?
+  shippingCarrier    String?
+  shippedAt          DateTime?
+  deliveredAt        DateTime?
+  note               String?
+  internalNote       String?
+  externalOrderId    String?
+  externalStatus     String?
+  platformFee        Float     @default(0)
+  platformFeeRate    Float     @default(0)
+  netRevenue         Float     @default(0)
+  adsVoucherDiscount Float     @default(0) // Shopee Ads Smart Voucher — chỉ quan sát, chưa trừ netRevenue
   // Cờ chống trừ kho 2 lần: true khi BẤT KỲ đường nào (đổi status tay / convert
   // sync / webhook) đã trừ kho cho đơn này; hoàn kho khi hủy phải reset false.
-  stockDeducted   Boolean   @default(false)
-  syncedAt        DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  stockDeducted      Boolean   @default(false)
+  syncedAt           DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   channel OnlineChannel?    @relation(fields: [channelId], references: [id])
   items   OnlineOrderItem[]
@@ -1845,14 +1845,14 @@ model FixedAsset {
   disposalDate            String?
   status                  String   @default("active")
   // Phase 4 (TSCĐ) — bút toán khấu hao + thanh lý theo TT99/2025
-  acquisitionCost    Float   @default(0)
-  depreciationMethod String  @default("straight_line") // straight_line | declining_balance
-  accountCode        String  @default("211") // 211 (hữu hình) | 213 (vô hình)
-  depAccAccountCode  String  @default("2141") // 2141 | 2143 (hao mòn TSCĐ)
-  expenseAccountCode String  @default("6424") // 627 | 641 | 642
-  disposalAmount     Float?
-  branchId           String?
-  notes              String?
+  acquisitionCost         Float    @default(0)
+  depreciationMethod      String   @default("straight_line") // straight_line | declining_balance
+  accountCode             String   @default("211") // 211 (hữu hình) | 213 (vô hình)
+  depAccAccountCode       String   @default("2141") // 2141 | 2143 (hao mòn TSCĐ)
+  expenseAccountCode      String   @default("6424") // 627 | 641 | 642
+  disposalAmount          Float?
+  branchId                String?
+  notes                   String?
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
@@ -1930,16 +1930,16 @@ model CCDCAllocation {
 // ─── E-Invoice (Hóa đơn Điện tử) ───────────────────────────────────────────
 
 model EInvoiceConfig {
-  id         String   @id @default(cuid())
-  provider   String // VNPT | VIETTEL | FPT | MISA | BKAV | EASYINVOICE | CUSTOM
-  apiUrl     String?
-  apiKey     String?
-  apiSecret  String?
-  taxCode    String?
-  templateId String?
-  serialNo   String?
-  active     Boolean  @default(true)
-  extra      String? // JSON for provider-specific config
+  id                String   @id @default(cuid())
+  provider          String // VNPT | VIETTEL | FPT | MISA | BKAV | EASYINVOICE | CUSTOM
+  apiUrl            String?
+  apiKey            String?
+  apiSecret         String?
+  taxCode           String?
+  templateId        String?
+  serialNo          String?
+  active            Boolean  @default(true)
+  extra             String? // JSON for provider-specific config
   // Phase 3 (TT78/2021) — credentials + company + numbering config
   apiUsername       String?
   apiPassword       String? // encrypted at rest
@@ -1948,9 +1948,9 @@ model EInvoiceConfig {
   invoicePattern    String? // mẫu số hóa đơn, e.g. "1"
   invoiceSerial     String? // ký hiệu, e.g. "C26TAA"
   certificateSerial String? // serial of the signing certificate
-  isActive          Boolean @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }
 
 // Hóa đơn điện tử (TT78/2021/TT-BTC). Phase-3 model: full lifecycle
@@ -1958,38 +1958,38 @@ model EInvoiceConfig {
 // fields (transactionId/provider/lookupCode/xmlData) are kept nullable for
 // backward compatibility with the earlier /issue flow.
 model EInvoice {
-  id            String    @id @default(cuid())
+  id                  String    @id @default(cuid())
   // Legacy provider-issuance fields (now optional)
-  transactionId String?
-  provider      String?
-  lookupCode    String?
-  xmlData       String?
-  errorMessage  String?
+  transactionId       String?
+  provider            String?
+  lookupCode          String?
+  xmlData             String?
+  errorMessage        String?
   // Numbering / classification
-  invoiceNumber String? // số hóa đơn (sequence, e.g. 00000001)
-  invoiceSymbol String? // ký hiệu mẫu, e.g. 1C26TAA
-  invoiceDate   String? // YYYY-MM-DD
-  invoiceType   String  @default("SALE") // SALE | RETURN | ADJUSTMENT
-  status        String  @default("DRAFT") // DRAFT|SIGNED|SENT|CANCELLED|REPLACED|ERROR
+  invoiceNumber       String? // số hóa đơn (sequence, e.g. 00000001)
+  invoiceSymbol       String? // ký hiệu mẫu, e.g. 1C26TAA
+  invoiceDate         String? // YYYY-MM-DD
+  invoiceType         String    @default("SALE") // SALE | RETURN | ADJUSTMENT
+  status              String    @default("DRAFT") // DRAFT|SIGNED|SENT|CANCELLED|REPLACED|ERROR
   // Seller (người bán) — auto-filled from EInvoiceConfig / StoreSettings
-  sellerName    String?
-  sellerTaxCode String?
-  sellerAddress String?
+  sellerName          String?
+  sellerTaxCode       String?
+  sellerAddress       String?
   // Buyer (người mua)
-  buyerName     String?
-  buyerTaxCode  String?
-  buyerAddress  String?
+  buyerName           String?
+  buyerTaxCode        String?
+  buyerAddress        String?
   // Totals
-  totalBeforeVat Float  @default(0)
-  vatAmount      Float  @default(0)
-  totalAmount    Float  @default(0)
-  currency       String @default("VND")
-  paymentMethod  String? // TM | CK | TM/CK
+  totalBeforeVat      Float     @default(0)
+  vatAmount           Float     @default(0)
+  totalAmount         Float     @default(0)
+  currency            String    @default("VND")
+  paymentMethod       String? // TM | CK | TM/CK
   // Artifacts + provider linkage
-  xmlContent        String? // signed XML (TT78 format)
-  pdfUrl            String?
-  providerInvoiceId String? // ID returned by the e-invoice provider
-  providerResponse  String? // JSON response from the provider
+  xmlContent          String? // signed XML (TT78 format)
+  pdfUrl              String?
+  providerInvoiceId   String? // ID returned by the e-invoice provider
+  providerResponse    String? // JSON response from the provider
   // Replace / cancel trail
   replacesInvoiceId   String? // original invoice this one replaces
   replacedByInvoiceId String? // replacement invoice that supersedes this one
@@ -1998,12 +1998,12 @@ model EInvoice {
   branchId            String?
   createdBy           String?
   createdByName       String?
-  issuedAt      DateTime?
-  signedAt      DateTime?
-  sentAt        DateTime?
-  cancelledAt   DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @default(now()) @updatedAt
+  issuedAt            DateTime?
+  signedAt            DateTime?
+  sentAt              DateTime?
+  cancelledAt         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @default(now()) @updatedAt
 
   items EInvoiceItem[]
 
@@ -2036,11 +2036,11 @@ model EInvoiceItem {
 // ─── Adjustment Invoice (Hóa đơn điều chỉnh — NĐ123/2020) ──────────────────
 
 model AdjustmentInvoice {
-  id                    String   @id @default(cuid())
-  code                  String   @unique // HDDC-YYYYMMDD-NNN
+  id                    String    @id @default(cuid())
+  code                  String    @unique // HDDC-YYYYMMDD-NNN
   adjustmentDate        String // ngày lập hóa đơn điều chỉnh (YYYY-MM-DD)
   type                  String // "increase" | "decrease" | "info_correction"
-  status                String   @default("draft") // draft | approved | cancelled
+  status                String    @default("draft") // draft | approved | cancelled
   // Original invoice reference (mandatory per NĐ123/2020 Điều 19)
   originalInvoiceId     String? // optional FK to EInvoice / Transaction if internal
   originalInvoiceNumber String
@@ -2055,18 +2055,18 @@ model AdjustmentInvoice {
   // info_correction: capture the corrected field(s) — JSON object
   correctionData        String? // JSON: { field: { old, new } }
   // Totals (signed: positive for increase, negative for decrease, zero for info_correction)
-  subtotal              Float    @default(0) // tổng tiền hàng (chưa VAT)
-  vatAmount             Float    @default(0) // tổng VAT điều chỉnh
-  totalAmount           Float    @default(0) // tổng cộng (đã VAT)
+  subtotal              Float     @default(0) // tổng tiền hàng (chưa VAT)
+  vatAmount             Float     @default(0) // tổng VAT điều chỉnh
+  totalAmount           Float     @default(0) // tổng cộng (đã VAT)
   notes                 String?
   // Approval/posting trail
   approvedAt            DateTime?
   approvedBy            String?
-  journalEntryIds       String?  // JSON array of JournalEntry ids generated on approve
+  journalEntryIds       String? // JSON array of JournalEntry ids generated on approve
   branchId              String?
   createdBy             String?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   items AdjustmentInvoiceItem[]
 
@@ -2412,19 +2412,19 @@ model ChartOfAccount {
 // created, edited or deleted. The current lock = the most recent active row.
 
 model PeriodLock {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   lockDate     String // YYYY-MM-DD — vouchers with date <= lockDate are frozen
-  periodType   String   @default("month") // month | quarter | year | custom
+  periodType   String    @default("month") // month | quarter | year | custom
   note         String?
-  isActive     Boolean  @default(true)
+  isActive     Boolean   @default(true)
   lockedBy     String?
   lockedByName String?
   unlockedAt   DateTime?
   unlockedBy   String?
   unlockReason String?
   branchId     String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   @@index([isActive])
   @@index([lockDate])
@@ -2434,15 +2434,15 @@ model PeriodLock {
 // --- Exchange Rates (Multi-currency + FX revaluation) ----------------------
 
 model ExchangeRate {
-  id            String   @id @default(cuid())
-  date          String
-  fromCurrency  String
-  toCurrency    String
-  rate          Float
-  source        String?
-  notes         String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String   @id @default(cuid())
+  date         String
+  fromCurrency String
+  toCurrency   String
+  rate         Float
+  source       String?
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@unique([date, fromCurrency, toCurrency])
   @@index([date])
@@ -2530,23 +2530,23 @@ model FbUserToken {
 // ─── Kết nối Fanpage ──────────────────────────────────────────────────────────
 
 model FbPage {
-  id             String    @id @default(cuid())
-  pageId         String    @unique // Facebook Page ID (số) — dùng khớp webhook
-  name           String
-  category       String?
-  avatar         String?
-  fanCount       Int       @default(0)
-  accessToken    String // long-lived page access token (đổi từ user token khi kết nối)
-  tokenExpiresAt DateTime? // hạn token; cron refresh trước khi hết
-  igUserId       String? // Instagram business account nối với page (nếu có)
-  adAccountId    String? // act_<id> ad account mặc định để chạy ads
-  webhookSubscribed Boolean @default(false) // đã subscribe app vào page feed chưa
-  autoReplyEnabled  Boolean @default(false) // bật engine auto-reply comment cho page này
-  status         String    @default("active") // active, disconnected, token_expired
-  connectedBy    String? // userId người kết nối
-  lastSyncAt     DateTime?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id                String    @id @default(cuid())
+  pageId            String    @unique // Facebook Page ID (số) — dùng khớp webhook
+  name              String
+  category          String?
+  avatar            String?
+  fanCount          Int       @default(0)
+  accessToken       String // long-lived page access token (đổi từ user token khi kết nối)
+  tokenExpiresAt    DateTime? // hạn token; cron refresh trước khi hết
+  igUserId          String? // Instagram business account nối với page (nếu có)
+  adAccountId       String? // act_<id> ad account mặc định để chạy ads
+  webhookSubscribed Boolean   @default(false) // đã subscribe app vào page feed chưa
+  autoReplyEnabled  Boolean   @default(false) // bật engine auto-reply comment cho page này
+  status            String    @default("active") // active, disconnected, token_expired
+  connectedBy       String? // userId người kết nối
+  lastSyncAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   scheduledPosts FbScheduledPost[]
   commentRules   FbCommentRule[]
@@ -2558,20 +2558,20 @@ model FbPage {
 // ─── Bài viết lên lịch (mirror trạng thái FB) ─────────────────────────────────
 
 model FbScheduledPost {
-  id              String    @id @default(cuid())
-  pageId          String // FbPage.pageId
-  fbPostId        String? // id post trên FB sau khi tạo (published=false)
-  message         String    @default("")
-  mediaType       String    @default("text") // text, photo, video, link, multi_photo
-  mediaUrls       String    @default("[]") // JSON array URL ảnh/video đã upload
-  linkUrl         String?
-  scheduledAt     DateTime // thời điểm hẹn đăng
-  status          String    @default("scheduled") // scheduled, published, failed, cancelled
-  errorMessage    String? // lý do nếu status=failed
-  publishedAt     DateTime? // thời điểm FB thực đăng (từ reconcile)
-  createdBy       String? // userId
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id           String    @id @default(cuid())
+  pageId       String // FbPage.pageId
+  fbPostId     String? // id post trên FB sau khi tạo (published=false)
+  message      String    @default("")
+  mediaType    String    @default("text") // text, photo, video, link, multi_photo
+  mediaUrls    String    @default("[]") // JSON array URL ảnh/video đã upload
+  linkUrl      String?
+  scheduledAt  DateTime // thời điểm hẹn đăng
+  status       String    @default("scheduled") // scheduled, published, failed, cancelled
+  errorMessage String? // lý do nếu status=failed
+  publishedAt  DateTime? // thời điểm FB thực đăng (từ reconcile)
+  createdBy    String? // userId
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   page FbPage @relation(fields: [pageId], references: [pageId], onDelete: Cascade)
 
@@ -2605,18 +2605,18 @@ model FbCommentRule {
 // ─── Log auto-reply (chống trùng + audit) ─────────────────────────────────────
 
 model FbAutoReplyLog {
-  id         String   @id @default(cuid())
-  pageId     String // FbPage.pageId
-  commentId  String // id comment đã xử lý (idempotency key)
-  ruleId     String? // rule đã khớp
-  postId     String?
-  fromName   String?
-  commentMsg String?
-  action     String   @default("reply") // reply, hide, reply_hide, skipped
-  replyText  String?
-  success    Boolean  @default(true)
+  id           String   @id @default(cuid())
+  pageId       String // FbPage.pageId
+  commentId    String // id comment đã xử lý (idempotency key)
+  ruleId       String? // rule đã khớp
+  postId       String?
+  fromName     String?
+  commentMsg   String?
+  action       String   @default("reply") // reply, hide, reply_hide, skipped
+  replyText    String?
+  success      Boolean  @default(true)
   errorMessage String?
-  createdAt  DateTime @default(now())
+  createdAt    DateTime @default(now())
 
   page FbPage @relation(fields: [pageId], references: [pageId], onDelete: Cascade)
 
@@ -2651,21 +2651,21 @@ model CrmTask {
 }
 
 model CrmDeal {
-  id           String    @id @default(cuid())
-  title        String
-  customerId   String?
-  customerName String?
-  value        Float     @default(0)
-  stage        String    @default("lead") // lead | contact | demo | negotiate | won | lost
-  probability  Int       @default(0)
-  assignee     String?
-  note         String?
-  sortOrder    Int       @default(0)
+  id                String    @id @default(cuid())
+  title             String
+  customerId        String?
+  customerName      String?
+  value             Float     @default(0)
+  stage             String    @default("lead") // lead | contact | demo | negotiate | won | lost
+  probability       Int       @default(0)
+  assignee          String?
+  note              String?
+  sortOrder         Int       @default(0)
   expectedCloseDate DateTime?
-  closedAt     DateTime?
-  createdBy    String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  closedAt          DateTime?
+  createdBy         String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   @@index([stage])
   @@index([customerId])
@@ -2724,4 +2724,53 @@ model CrmCampaign {
 
   @@index([status])
   @@index([channel])
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  TRỢ LÝ AI TỰ ĐỘNG — chạy theo lịch, không cần người ngồi bấm
+//  Chỉ thị viết bằng tiếng Việt; cron đánh thức Gemini kèm bộ MCP tool.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+model AiAgentJob {
+  id              String    @id @default(cuid())
+  name            String // tên gợi nhớ, VD "Chăm bình luận sáng"
+  prompt          String // chỉ thị bằng tiếng Việt cho agent
+  scheduleKind    String    @default("daily") // daily | interval
+  atHour          Int       @default(8) // GIỜ VIỆT NAM (không phải UTC) — cho daily
+  atMinute        Int       @default(0)
+  intervalMinutes Int       @default(60) // cho interval
+  enabled         Boolean   @default(true)
+  // An toàn: mặc định CHỈ ĐỌC. Tool ghi phải bật allowWrite, riêng tool nhạy cảm
+  // (đăng bài, trả lời khách, lên đơn, thu nợ) còn phải gọi ĐÍCH DANH ở allowedTools.
+  allowWrite      Boolean   @default(false)
+  allowedTools    String    @default("[]") // JSON array tên tool; rỗng = mọi tool đọc
+  maxSteps        Int       @default(8)
+  lastRunAt       DateTime?
+  nextRunAt       DateTime?
+  createdBy       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  runs AiAgentRun[]
+
+  @@index([enabled, nextRunAt])
+}
+
+model AiAgentRun {
+  id           String    @id @default(cuid())
+  jobId        String
+  startedAt    DateTime  @default(now())
+  finishedAt   DateTime?
+  status       String    @default("running") // running | ok | error
+  summary      String? // câu trả lời cuối của agent
+  toolCalls    String    @default("[]") // JSON: [{name,args,ok,error}]
+  steps        Int       @default(0)
+  chamTran     Boolean   @default(false) // hết số bước mà chưa xong
+  errorMessage String?
+  trigger      String    @default("cron") // cron | manual
+
+  job AiAgentJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+  @@index([startedAt])
 }

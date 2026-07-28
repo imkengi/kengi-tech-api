@@ -74,11 +74,13 @@ import accountingReportRoutes from './routes/accountingReports'
 import financialStatementRoutes from './routes/financialStatements'
 import taxDeclarationRoutes from './routes/taxDeclarations'
 import fanpageRoutes from './routes/fanpage'
+import aiJobRoutes from './routes/aiJobs'
 import { cacheDisconnect, cacheHealth } from './lib/cache'
 import { startAutoSync, stopAutoSync } from './cron/autoSync'
 import { startFlashSaleScheduler } from './cron/flashSaleScheduler'
 import { startEInvoiceQueueCron } from './cron/einvoiceQueue'
 import { startFanpageCron, stopFanpageCron } from './cron/fanpageCron'
+import { startAiAgentCron, stopAiAgentCron } from './cron/aiAgentCron'
 import { startWebhookCron, stopWebhookCron } from './cron/webhookCron'
 import { startEmailReplyCron, stopEmailReplyCron } from './cron/emailReplyCron'
 import webhookEndpointRoutes from './routes/webhookEndpoints'
@@ -303,6 +305,7 @@ app.use('/api/storage', storageRoutes)
 import chatRoutes from './routes/chat'
 app.use('/api/online-orders/chat', chatRoutes)
 app.use('/api/fanpage', fanpageRoutes)
+app.use('/api/ai-jobs', aiJobRoutes) // Tro ly AI tu dong theo lich
 
 // ─── Health check ───────────────────────────────────────────────────────────
 app.get('/api/health', async (_req, res) => {
@@ -1443,6 +1446,7 @@ if (!process.env.PASSENGER_BASE_URI) {
                 console.log(`🔌 WebSocket endpoint: ws://localhost:${PORT}/ws`)
                 startAutoSync()
                 startFanpageCron()
+                startAiAgentCron()
                 startWebhookCron()
                 startEmailReplyCron()
                 startFlashSaleScheduler()
@@ -1458,6 +1462,7 @@ if (!process.env.PASSENGER_BASE_URI) {
         await pubsubDisconnect()
         stopAutoSync()
         stopFanpageCron()
+        stopAiAgentCron()
         stopWebhookCron()
         stopEmailReplyCron()
         process.exit(0)

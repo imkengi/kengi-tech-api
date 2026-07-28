@@ -601,6 +601,16 @@ export type CrmZaloLog = $Result.DefaultSelection<Prisma.$CrmZaloLogPayload>
  * 
  */
 export type CrmCampaign = $Result.DefaultSelection<Prisma.$CrmCampaignPayload>
+/**
+ * Model AiAgentJob
+ * 
+ */
+export type AiAgentJob = $Result.DefaultSelection<Prisma.$AiAgentJobPayload>
+/**
+ * Model AiAgentRun
+ * 
+ */
+export type AiAgentRun = $Result.DefaultSelection<Prisma.$AiAgentRunPayload>
 
 /**
  * ##  Prisma Client ʲˢ
@@ -1889,6 +1899,26 @@ export class PrismaClient<
     * ```
     */
   get crmCampaign(): Prisma.CrmCampaignDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.aiAgentJob`: Exposes CRUD operations for the **AiAgentJob** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more AiAgentJobs
+    * const aiAgentJobs = await prisma.aiAgentJob.findMany()
+    * ```
+    */
+  get aiAgentJob(): Prisma.AiAgentJobDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.aiAgentRun`: Exposes CRUD operations for the **AiAgentRun** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more AiAgentRuns
+    * const aiAgentRuns = await prisma.aiAgentRun.findMany()
+    * ```
+    */
+  get aiAgentRun(): Prisma.AiAgentRunDelegate<ExtArgs, ClientOptions>;
 }
 
 export namespace Prisma {
@@ -2446,7 +2476,9 @@ export namespace Prisma {
     CrmDeal: 'CrmDeal',
     CrmActivity: 'CrmActivity',
     CrmZaloLog: 'CrmZaloLog',
-    CrmCampaign: 'CrmCampaign'
+    CrmCampaign: 'CrmCampaign',
+    AiAgentJob: 'AiAgentJob',
+    AiAgentRun: 'AiAgentRun'
   };
 
   export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -2465,7 +2497,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "branch" | "user" | "apiKey" | "webhookEndpoint" | "webhookDelivery" | "salesCheckin" | "category" | "brand" | "product" | "productSerial" | "unitConversion" | "productImage" | "customerGroup" | "customer" | "transaction" | "transactionItem" | "payment" | "inventoryTransaction" | "importReceipt" | "importReceiptItem" | "promotion" | "supplier" | "purchaseOrder" | "purchaseOrderItem" | "expense" | "cashReceipt" | "notification" | "warranty" | "repair" | "quotation" | "auditLog" | "priceHistory" | "shippingOrder" | "driver" | "vehicle" | "vehicleMaintenance" | "crmEmailLog" | "vehicleFuelLog" | "vehicleDocument" | "deliveryRoute" | "deliveryStop" | "taxConfig" | "bankAccount" | "bankTransaction" | "bankConnectionConfig" | "taxDeclaration" | "customerSegment" | "currency" | "feedback" | "schedule" | "returnOrder" | "returnItem" | "debtEntry" | "bundle" | "salesOrder" | "salesOrderItem" | "priceList" | "priceListItem" | "priceRule" | "announcement" | "attendance" | "loyaltyMember" | "loyaltyTransaction" | "review" | "skuMapping" | "hkdRevenueEntry" | "storeSettings" | "store" | "branchRequest" | "branchDeleteRequest" | "payrollRecord" | "employee" | "payrollPeriod" | "payrollEntry" | "onlineChannel" | "onlineOrder" | "onlineProduct" | "onlineOrderItem" | "syncLog" | "journalEntry" | "fixedAsset" | "depreciationEntry" | "cCDC" | "cCDCAllocation" | "eInvoiceConfig" | "eInvoice" | "eInvoiceItem" | "adjustmentInvoice" | "adjustmentInvoiceItem" | "hKDRevenueEntry" | "warehouse" | "warehouseStock" | "stockTransfer" | "stockTransferItem" | "salesTrip" | "salesTripItem" | "salesTripLog" | "inventoryCount" | "inventoryCountItem" | "zReport" | "storageFile" | "chartOfAccount" | "periodLock" | "exchangeRate" | "taxDeadline" | "taxAuditLog" | "taxBudget" | "fbUserToken" | "fbPage" | "fbScheduledPost" | "fbCommentRule" | "fbAutoReplyLog" | "crmTask" | "crmDeal" | "crmActivity" | "crmZaloLog" | "crmCampaign"
+      modelProps: "branch" | "user" | "apiKey" | "webhookEndpoint" | "webhookDelivery" | "salesCheckin" | "category" | "brand" | "product" | "productSerial" | "unitConversion" | "productImage" | "customerGroup" | "customer" | "transaction" | "transactionItem" | "payment" | "inventoryTransaction" | "importReceipt" | "importReceiptItem" | "promotion" | "supplier" | "purchaseOrder" | "purchaseOrderItem" | "expense" | "cashReceipt" | "notification" | "warranty" | "repair" | "quotation" | "auditLog" | "priceHistory" | "shippingOrder" | "driver" | "vehicle" | "vehicleMaintenance" | "crmEmailLog" | "vehicleFuelLog" | "vehicleDocument" | "deliveryRoute" | "deliveryStop" | "taxConfig" | "bankAccount" | "bankTransaction" | "bankConnectionConfig" | "taxDeclaration" | "customerSegment" | "currency" | "feedback" | "schedule" | "returnOrder" | "returnItem" | "debtEntry" | "bundle" | "salesOrder" | "salesOrderItem" | "priceList" | "priceListItem" | "priceRule" | "announcement" | "attendance" | "loyaltyMember" | "loyaltyTransaction" | "review" | "skuMapping" | "hkdRevenueEntry" | "storeSettings" | "store" | "branchRequest" | "branchDeleteRequest" | "payrollRecord" | "employee" | "payrollPeriod" | "payrollEntry" | "onlineChannel" | "onlineOrder" | "onlineProduct" | "onlineOrderItem" | "syncLog" | "journalEntry" | "fixedAsset" | "depreciationEntry" | "cCDC" | "cCDCAllocation" | "eInvoiceConfig" | "eInvoice" | "eInvoiceItem" | "adjustmentInvoice" | "adjustmentInvoiceItem" | "hKDRevenueEntry" | "warehouse" | "warehouseStock" | "stockTransfer" | "stockTransferItem" | "salesTrip" | "salesTripItem" | "salesTripLog" | "inventoryCount" | "inventoryCountItem" | "zReport" | "storageFile" | "chartOfAccount" | "periodLock" | "exchangeRate" | "taxDeadline" | "taxAuditLog" | "taxBudget" | "fbUserToken" | "fbPage" | "fbScheduledPost" | "fbCommentRule" | "fbAutoReplyLog" | "crmTask" | "crmDeal" | "crmActivity" | "crmZaloLog" | "crmCampaign" | "aiAgentJob" | "aiAgentRun"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -11127,6 +11159,154 @@ export namespace Prisma {
           }
         }
       }
+      AiAgentJob: {
+        payload: Prisma.$AiAgentJobPayload<ExtArgs>
+        fields: Prisma.AiAgentJobFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.AiAgentJobFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiAgentJobPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.AiAgentJobFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiAgentJobPayload>
+          }
+          findFirst: {
+            args: Prisma.AiAgentJobFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiAgentJobPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.AiAgentJobFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiAgentJobPayload>
+          }
+          findMany: {
+            args: Prisma.AiAgentJobFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiAgentJobPayload>[]
+          }
+          create: {
+            args: Prisma.AiAgentJobCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiAgentJobPayload>
+          }
+          createMany: {
+            args: Prisma.AiAgentJobCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.AiAgentJobCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiAgentJobPayload>[]
+          }
+          delete: {
+            args: Prisma.AiAgentJobDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiAgentJobPayload>
+          }
+          update: {
+            args: Prisma.AiAgentJobUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiAgentJobPayload>
+          }
+          deleteMany: {
+            args: Prisma.AiAgentJobDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.AiAgentJobUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.AiAgentJobUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiAgentJobPayload>[]
+          }
+          upsert: {
+            args: Prisma.AiAgentJobUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiAgentJobPayload>
+          }
+          aggregate: {
+            args: Prisma.AiAgentJobAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateAiAgentJob>
+          }
+          groupBy: {
+            args: Prisma.AiAgentJobGroupByArgs<ExtArgs>
+            result: $Utils.Optional<AiAgentJobGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.AiAgentJobCountArgs<ExtArgs>
+            result: $Utils.Optional<AiAgentJobCountAggregateOutputType> | number
+          }
+        }
+      }
+      AiAgentRun: {
+        payload: Prisma.$AiAgentRunPayload<ExtArgs>
+        fields: Prisma.AiAgentRunFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.AiAgentRunFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiAgentRunPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.AiAgentRunFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiAgentRunPayload>
+          }
+          findFirst: {
+            args: Prisma.AiAgentRunFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiAgentRunPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.AiAgentRunFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiAgentRunPayload>
+          }
+          findMany: {
+            args: Prisma.AiAgentRunFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiAgentRunPayload>[]
+          }
+          create: {
+            args: Prisma.AiAgentRunCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiAgentRunPayload>
+          }
+          createMany: {
+            args: Prisma.AiAgentRunCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.AiAgentRunCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiAgentRunPayload>[]
+          }
+          delete: {
+            args: Prisma.AiAgentRunDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiAgentRunPayload>
+          }
+          update: {
+            args: Prisma.AiAgentRunUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiAgentRunPayload>
+          }
+          deleteMany: {
+            args: Prisma.AiAgentRunDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.AiAgentRunUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.AiAgentRunUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiAgentRunPayload>[]
+          }
+          upsert: {
+            args: Prisma.AiAgentRunUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiAgentRunPayload>
+          }
+          aggregate: {
+            args: Prisma.AiAgentRunAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateAiAgentRun>
+          }
+          groupBy: {
+            args: Prisma.AiAgentRunGroupByArgs<ExtArgs>
+            result: $Utils.Optional<AiAgentRunGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.AiAgentRunCountArgs<ExtArgs>
+            result: $Utils.Optional<AiAgentRunCountAggregateOutputType> | number
+          }
+        }
+      }
     }
   } & {
     other: {
@@ -11340,6 +11520,8 @@ export namespace Prisma {
     crmActivity?: CrmActivityOmit
     crmZaloLog?: CrmZaloLogOmit
     crmCampaign?: CrmCampaignOmit
+    aiAgentJob?: AiAgentJobOmit
+    aiAgentRun?: AiAgentRunOmit
   }
 
   /* Types for Logging */
@@ -12603,6 +12785,37 @@ export namespace Prisma {
    */
   export type FbPageCountOutputTypeCountAutoReplyLogsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: FbAutoReplyLogWhereInput
+  }
+
+
+  /**
+   * Count Type AiAgentJobCountOutputType
+   */
+
+  export type AiAgentJobCountOutputType = {
+    runs: number
+  }
+
+  export type AiAgentJobCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    runs?: boolean | AiAgentJobCountOutputTypeCountRunsArgs
+  }
+
+  // Custom InputTypes
+  /**
+   * AiAgentJobCountOutputType without action
+   */
+  export type AiAgentJobCountOutputTypeDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiAgentJobCountOutputType
+     */
+    select?: AiAgentJobCountOutputTypeSelect<ExtArgs> | null
+  }
+
+  /**
+   * AiAgentJobCountOutputType without action
+   */
+  export type AiAgentJobCountOutputTypeCountRunsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: AiAgentRunWhereInput
   }
 
 
@@ -152219,6 +152432,2435 @@ export namespace Prisma {
 
 
   /**
+   * Model AiAgentJob
+   */
+
+  export type AggregateAiAgentJob = {
+    _count: AiAgentJobCountAggregateOutputType | null
+    _avg: AiAgentJobAvgAggregateOutputType | null
+    _sum: AiAgentJobSumAggregateOutputType | null
+    _min: AiAgentJobMinAggregateOutputType | null
+    _max: AiAgentJobMaxAggregateOutputType | null
+  }
+
+  export type AiAgentJobAvgAggregateOutputType = {
+    atHour: number | null
+    atMinute: number | null
+    intervalMinutes: number | null
+    maxSteps: number | null
+  }
+
+  export type AiAgentJobSumAggregateOutputType = {
+    atHour: number | null
+    atMinute: number | null
+    intervalMinutes: number | null
+    maxSteps: number | null
+  }
+
+  export type AiAgentJobMinAggregateOutputType = {
+    id: string | null
+    name: string | null
+    prompt: string | null
+    scheduleKind: string | null
+    atHour: number | null
+    atMinute: number | null
+    intervalMinutes: number | null
+    enabled: boolean | null
+    allowWrite: boolean | null
+    allowedTools: string | null
+    maxSteps: number | null
+    lastRunAt: Date | null
+    nextRunAt: Date | null
+    createdBy: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type AiAgentJobMaxAggregateOutputType = {
+    id: string | null
+    name: string | null
+    prompt: string | null
+    scheduleKind: string | null
+    atHour: number | null
+    atMinute: number | null
+    intervalMinutes: number | null
+    enabled: boolean | null
+    allowWrite: boolean | null
+    allowedTools: string | null
+    maxSteps: number | null
+    lastRunAt: Date | null
+    nextRunAt: Date | null
+    createdBy: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type AiAgentJobCountAggregateOutputType = {
+    id: number
+    name: number
+    prompt: number
+    scheduleKind: number
+    atHour: number
+    atMinute: number
+    intervalMinutes: number
+    enabled: number
+    allowWrite: number
+    allowedTools: number
+    maxSteps: number
+    lastRunAt: number
+    nextRunAt: number
+    createdBy: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type AiAgentJobAvgAggregateInputType = {
+    atHour?: true
+    atMinute?: true
+    intervalMinutes?: true
+    maxSteps?: true
+  }
+
+  export type AiAgentJobSumAggregateInputType = {
+    atHour?: true
+    atMinute?: true
+    intervalMinutes?: true
+    maxSteps?: true
+  }
+
+  export type AiAgentJobMinAggregateInputType = {
+    id?: true
+    name?: true
+    prompt?: true
+    scheduleKind?: true
+    atHour?: true
+    atMinute?: true
+    intervalMinutes?: true
+    enabled?: true
+    allowWrite?: true
+    allowedTools?: true
+    maxSteps?: true
+    lastRunAt?: true
+    nextRunAt?: true
+    createdBy?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type AiAgentJobMaxAggregateInputType = {
+    id?: true
+    name?: true
+    prompt?: true
+    scheduleKind?: true
+    atHour?: true
+    atMinute?: true
+    intervalMinutes?: true
+    enabled?: true
+    allowWrite?: true
+    allowedTools?: true
+    maxSteps?: true
+    lastRunAt?: true
+    nextRunAt?: true
+    createdBy?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type AiAgentJobCountAggregateInputType = {
+    id?: true
+    name?: true
+    prompt?: true
+    scheduleKind?: true
+    atHour?: true
+    atMinute?: true
+    intervalMinutes?: true
+    enabled?: true
+    allowWrite?: true
+    allowedTools?: true
+    maxSteps?: true
+    lastRunAt?: true
+    nextRunAt?: true
+    createdBy?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type AiAgentJobAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which AiAgentJob to aggregate.
+     */
+    where?: AiAgentJobWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of AiAgentJobs to fetch.
+     */
+    orderBy?: AiAgentJobOrderByWithRelationInput | AiAgentJobOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: AiAgentJobWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` AiAgentJobs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` AiAgentJobs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned AiAgentJobs
+    **/
+    _count?: true | AiAgentJobCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: AiAgentJobAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: AiAgentJobSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: AiAgentJobMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: AiAgentJobMaxAggregateInputType
+  }
+
+  export type GetAiAgentJobAggregateType<T extends AiAgentJobAggregateArgs> = {
+        [P in keyof T & keyof AggregateAiAgentJob]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateAiAgentJob[P]>
+      : GetScalarType<T[P], AggregateAiAgentJob[P]>
+  }
+
+
+
+
+  export type AiAgentJobGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: AiAgentJobWhereInput
+    orderBy?: AiAgentJobOrderByWithAggregationInput | AiAgentJobOrderByWithAggregationInput[]
+    by: AiAgentJobScalarFieldEnum[] | AiAgentJobScalarFieldEnum
+    having?: AiAgentJobScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: AiAgentJobCountAggregateInputType | true
+    _avg?: AiAgentJobAvgAggregateInputType
+    _sum?: AiAgentJobSumAggregateInputType
+    _min?: AiAgentJobMinAggregateInputType
+    _max?: AiAgentJobMaxAggregateInputType
+  }
+
+  export type AiAgentJobGroupByOutputType = {
+    id: string
+    name: string
+    prompt: string
+    scheduleKind: string
+    atHour: number
+    atMinute: number
+    intervalMinutes: number
+    enabled: boolean
+    allowWrite: boolean
+    allowedTools: string
+    maxSteps: number
+    lastRunAt: Date | null
+    nextRunAt: Date | null
+    createdBy: string | null
+    createdAt: Date
+    updatedAt: Date
+    _count: AiAgentJobCountAggregateOutputType | null
+    _avg: AiAgentJobAvgAggregateOutputType | null
+    _sum: AiAgentJobSumAggregateOutputType | null
+    _min: AiAgentJobMinAggregateOutputType | null
+    _max: AiAgentJobMaxAggregateOutputType | null
+  }
+
+  type GetAiAgentJobGroupByPayload<T extends AiAgentJobGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<AiAgentJobGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof AiAgentJobGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], AiAgentJobGroupByOutputType[P]>
+            : GetScalarType<T[P], AiAgentJobGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type AiAgentJobSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    name?: boolean
+    prompt?: boolean
+    scheduleKind?: boolean
+    atHour?: boolean
+    atMinute?: boolean
+    intervalMinutes?: boolean
+    enabled?: boolean
+    allowWrite?: boolean
+    allowedTools?: boolean
+    maxSteps?: boolean
+    lastRunAt?: boolean
+    nextRunAt?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    runs?: boolean | AiAgentJob$runsArgs<ExtArgs>
+    _count?: boolean | AiAgentJobCountOutputTypeDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["aiAgentJob"]>
+
+  export type AiAgentJobSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    name?: boolean
+    prompt?: boolean
+    scheduleKind?: boolean
+    atHour?: boolean
+    atMinute?: boolean
+    intervalMinutes?: boolean
+    enabled?: boolean
+    allowWrite?: boolean
+    allowedTools?: boolean
+    maxSteps?: boolean
+    lastRunAt?: boolean
+    nextRunAt?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["aiAgentJob"]>
+
+  export type AiAgentJobSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    name?: boolean
+    prompt?: boolean
+    scheduleKind?: boolean
+    atHour?: boolean
+    atMinute?: boolean
+    intervalMinutes?: boolean
+    enabled?: boolean
+    allowWrite?: boolean
+    allowedTools?: boolean
+    maxSteps?: boolean
+    lastRunAt?: boolean
+    nextRunAt?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["aiAgentJob"]>
+
+  export type AiAgentJobSelectScalar = {
+    id?: boolean
+    name?: boolean
+    prompt?: boolean
+    scheduleKind?: boolean
+    atHour?: boolean
+    atMinute?: boolean
+    intervalMinutes?: boolean
+    enabled?: boolean
+    allowWrite?: boolean
+    allowedTools?: boolean
+    maxSteps?: boolean
+    lastRunAt?: boolean
+    nextRunAt?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type AiAgentJobOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "prompt" | "scheduleKind" | "atHour" | "atMinute" | "intervalMinutes" | "enabled" | "allowWrite" | "allowedTools" | "maxSteps" | "lastRunAt" | "nextRunAt" | "createdBy" | "createdAt" | "updatedAt", ExtArgs["result"]["aiAgentJob"]>
+  export type AiAgentJobInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    runs?: boolean | AiAgentJob$runsArgs<ExtArgs>
+    _count?: boolean | AiAgentJobCountOutputTypeDefaultArgs<ExtArgs>
+  }
+  export type AiAgentJobIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {}
+  export type AiAgentJobIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {}
+
+  export type $AiAgentJobPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "AiAgentJob"
+    objects: {
+      runs: Prisma.$AiAgentRunPayload<ExtArgs>[]
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      name: string
+      prompt: string
+      scheduleKind: string
+      atHour: number
+      atMinute: number
+      intervalMinutes: number
+      enabled: boolean
+      allowWrite: boolean
+      allowedTools: string
+      maxSteps: number
+      lastRunAt: Date | null
+      nextRunAt: Date | null
+      createdBy: string | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["aiAgentJob"]>
+    composites: {}
+  }
+
+  type AiAgentJobGetPayload<S extends boolean | null | undefined | AiAgentJobDefaultArgs> = $Result.GetResult<Prisma.$AiAgentJobPayload, S>
+
+  type AiAgentJobCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<AiAgentJobFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: AiAgentJobCountAggregateInputType | true
+    }
+
+  export interface AiAgentJobDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['AiAgentJob'], meta: { name: 'AiAgentJob' } }
+    /**
+     * Find zero or one AiAgentJob that matches the filter.
+     * @param {AiAgentJobFindUniqueArgs} args - Arguments to find a AiAgentJob
+     * @example
+     * // Get one AiAgentJob
+     * const aiAgentJob = await prisma.aiAgentJob.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends AiAgentJobFindUniqueArgs>(args: SelectSubset<T, AiAgentJobFindUniqueArgs<ExtArgs>>): Prisma__AiAgentJobClient<$Result.GetResult<Prisma.$AiAgentJobPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one AiAgentJob that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {AiAgentJobFindUniqueOrThrowArgs} args - Arguments to find a AiAgentJob
+     * @example
+     * // Get one AiAgentJob
+     * const aiAgentJob = await prisma.aiAgentJob.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends AiAgentJobFindUniqueOrThrowArgs>(args: SelectSubset<T, AiAgentJobFindUniqueOrThrowArgs<ExtArgs>>): Prisma__AiAgentJobClient<$Result.GetResult<Prisma.$AiAgentJobPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first AiAgentJob that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AiAgentJobFindFirstArgs} args - Arguments to find a AiAgentJob
+     * @example
+     * // Get one AiAgentJob
+     * const aiAgentJob = await prisma.aiAgentJob.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends AiAgentJobFindFirstArgs>(args?: SelectSubset<T, AiAgentJobFindFirstArgs<ExtArgs>>): Prisma__AiAgentJobClient<$Result.GetResult<Prisma.$AiAgentJobPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first AiAgentJob that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AiAgentJobFindFirstOrThrowArgs} args - Arguments to find a AiAgentJob
+     * @example
+     * // Get one AiAgentJob
+     * const aiAgentJob = await prisma.aiAgentJob.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends AiAgentJobFindFirstOrThrowArgs>(args?: SelectSubset<T, AiAgentJobFindFirstOrThrowArgs<ExtArgs>>): Prisma__AiAgentJobClient<$Result.GetResult<Prisma.$AiAgentJobPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more AiAgentJobs that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AiAgentJobFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all AiAgentJobs
+     * const aiAgentJobs = await prisma.aiAgentJob.findMany()
+     * 
+     * // Get first 10 AiAgentJobs
+     * const aiAgentJobs = await prisma.aiAgentJob.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const aiAgentJobWithIdOnly = await prisma.aiAgentJob.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends AiAgentJobFindManyArgs>(args?: SelectSubset<T, AiAgentJobFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$AiAgentJobPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a AiAgentJob.
+     * @param {AiAgentJobCreateArgs} args - Arguments to create a AiAgentJob.
+     * @example
+     * // Create one AiAgentJob
+     * const AiAgentJob = await prisma.aiAgentJob.create({
+     *   data: {
+     *     // ... data to create a AiAgentJob
+     *   }
+     * })
+     * 
+     */
+    create<T extends AiAgentJobCreateArgs>(args: SelectSubset<T, AiAgentJobCreateArgs<ExtArgs>>): Prisma__AiAgentJobClient<$Result.GetResult<Prisma.$AiAgentJobPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many AiAgentJobs.
+     * @param {AiAgentJobCreateManyArgs} args - Arguments to create many AiAgentJobs.
+     * @example
+     * // Create many AiAgentJobs
+     * const aiAgentJob = await prisma.aiAgentJob.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends AiAgentJobCreateManyArgs>(args?: SelectSubset<T, AiAgentJobCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many AiAgentJobs and returns the data saved in the database.
+     * @param {AiAgentJobCreateManyAndReturnArgs} args - Arguments to create many AiAgentJobs.
+     * @example
+     * // Create many AiAgentJobs
+     * const aiAgentJob = await prisma.aiAgentJob.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many AiAgentJobs and only return the `id`
+     * const aiAgentJobWithIdOnly = await prisma.aiAgentJob.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends AiAgentJobCreateManyAndReturnArgs>(args?: SelectSubset<T, AiAgentJobCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$AiAgentJobPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a AiAgentJob.
+     * @param {AiAgentJobDeleteArgs} args - Arguments to delete one AiAgentJob.
+     * @example
+     * // Delete one AiAgentJob
+     * const AiAgentJob = await prisma.aiAgentJob.delete({
+     *   where: {
+     *     // ... filter to delete one AiAgentJob
+     *   }
+     * })
+     * 
+     */
+    delete<T extends AiAgentJobDeleteArgs>(args: SelectSubset<T, AiAgentJobDeleteArgs<ExtArgs>>): Prisma__AiAgentJobClient<$Result.GetResult<Prisma.$AiAgentJobPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one AiAgentJob.
+     * @param {AiAgentJobUpdateArgs} args - Arguments to update one AiAgentJob.
+     * @example
+     * // Update one AiAgentJob
+     * const aiAgentJob = await prisma.aiAgentJob.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends AiAgentJobUpdateArgs>(args: SelectSubset<T, AiAgentJobUpdateArgs<ExtArgs>>): Prisma__AiAgentJobClient<$Result.GetResult<Prisma.$AiAgentJobPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more AiAgentJobs.
+     * @param {AiAgentJobDeleteManyArgs} args - Arguments to filter AiAgentJobs to delete.
+     * @example
+     * // Delete a few AiAgentJobs
+     * const { count } = await prisma.aiAgentJob.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends AiAgentJobDeleteManyArgs>(args?: SelectSubset<T, AiAgentJobDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more AiAgentJobs.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AiAgentJobUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many AiAgentJobs
+     * const aiAgentJob = await prisma.aiAgentJob.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends AiAgentJobUpdateManyArgs>(args: SelectSubset<T, AiAgentJobUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more AiAgentJobs and returns the data updated in the database.
+     * @param {AiAgentJobUpdateManyAndReturnArgs} args - Arguments to update many AiAgentJobs.
+     * @example
+     * // Update many AiAgentJobs
+     * const aiAgentJob = await prisma.aiAgentJob.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more AiAgentJobs and only return the `id`
+     * const aiAgentJobWithIdOnly = await prisma.aiAgentJob.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends AiAgentJobUpdateManyAndReturnArgs>(args: SelectSubset<T, AiAgentJobUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$AiAgentJobPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one AiAgentJob.
+     * @param {AiAgentJobUpsertArgs} args - Arguments to update or create a AiAgentJob.
+     * @example
+     * // Update or create a AiAgentJob
+     * const aiAgentJob = await prisma.aiAgentJob.upsert({
+     *   create: {
+     *     // ... data to create a AiAgentJob
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the AiAgentJob we want to update
+     *   }
+     * })
+     */
+    upsert<T extends AiAgentJobUpsertArgs>(args: SelectSubset<T, AiAgentJobUpsertArgs<ExtArgs>>): Prisma__AiAgentJobClient<$Result.GetResult<Prisma.$AiAgentJobPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of AiAgentJobs.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AiAgentJobCountArgs} args - Arguments to filter AiAgentJobs to count.
+     * @example
+     * // Count the number of AiAgentJobs
+     * const count = await prisma.aiAgentJob.count({
+     *   where: {
+     *     // ... the filter for the AiAgentJobs we want to count
+     *   }
+     * })
+    **/
+    count<T extends AiAgentJobCountArgs>(
+      args?: Subset<T, AiAgentJobCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], AiAgentJobCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a AiAgentJob.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AiAgentJobAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends AiAgentJobAggregateArgs>(args: Subset<T, AiAgentJobAggregateArgs>): Prisma.PrismaPromise<GetAiAgentJobAggregateType<T>>
+
+    /**
+     * Group by AiAgentJob.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AiAgentJobGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends AiAgentJobGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: AiAgentJobGroupByArgs['orderBy'] }
+        : { orderBy?: AiAgentJobGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, AiAgentJobGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetAiAgentJobGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the AiAgentJob model
+   */
+  readonly fields: AiAgentJobFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for AiAgentJob.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__AiAgentJobClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    runs<T extends AiAgentJob$runsArgs<ExtArgs> = {}>(args?: Subset<T, AiAgentJob$runsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$AiAgentRunPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the AiAgentJob model
+   */
+  interface AiAgentJobFieldRefs {
+    readonly id: FieldRef<"AiAgentJob", 'String'>
+    readonly name: FieldRef<"AiAgentJob", 'String'>
+    readonly prompt: FieldRef<"AiAgentJob", 'String'>
+    readonly scheduleKind: FieldRef<"AiAgentJob", 'String'>
+    readonly atHour: FieldRef<"AiAgentJob", 'Int'>
+    readonly atMinute: FieldRef<"AiAgentJob", 'Int'>
+    readonly intervalMinutes: FieldRef<"AiAgentJob", 'Int'>
+    readonly enabled: FieldRef<"AiAgentJob", 'Boolean'>
+    readonly allowWrite: FieldRef<"AiAgentJob", 'Boolean'>
+    readonly allowedTools: FieldRef<"AiAgentJob", 'String'>
+    readonly maxSteps: FieldRef<"AiAgentJob", 'Int'>
+    readonly lastRunAt: FieldRef<"AiAgentJob", 'DateTime'>
+    readonly nextRunAt: FieldRef<"AiAgentJob", 'DateTime'>
+    readonly createdBy: FieldRef<"AiAgentJob", 'String'>
+    readonly createdAt: FieldRef<"AiAgentJob", 'DateTime'>
+    readonly updatedAt: FieldRef<"AiAgentJob", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * AiAgentJob findUnique
+   */
+  export type AiAgentJobFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiAgentJob
+     */
+    select?: AiAgentJobSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiAgentJob
+     */
+    omit?: AiAgentJobOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AiAgentJobInclude<ExtArgs> | null
+    /**
+     * Filter, which AiAgentJob to fetch.
+     */
+    where: AiAgentJobWhereUniqueInput
+  }
+
+  /**
+   * AiAgentJob findUniqueOrThrow
+   */
+  export type AiAgentJobFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiAgentJob
+     */
+    select?: AiAgentJobSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiAgentJob
+     */
+    omit?: AiAgentJobOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AiAgentJobInclude<ExtArgs> | null
+    /**
+     * Filter, which AiAgentJob to fetch.
+     */
+    where: AiAgentJobWhereUniqueInput
+  }
+
+  /**
+   * AiAgentJob findFirst
+   */
+  export type AiAgentJobFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiAgentJob
+     */
+    select?: AiAgentJobSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiAgentJob
+     */
+    omit?: AiAgentJobOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AiAgentJobInclude<ExtArgs> | null
+    /**
+     * Filter, which AiAgentJob to fetch.
+     */
+    where?: AiAgentJobWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of AiAgentJobs to fetch.
+     */
+    orderBy?: AiAgentJobOrderByWithRelationInput | AiAgentJobOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for AiAgentJobs.
+     */
+    cursor?: AiAgentJobWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` AiAgentJobs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` AiAgentJobs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of AiAgentJobs.
+     */
+    distinct?: AiAgentJobScalarFieldEnum | AiAgentJobScalarFieldEnum[]
+  }
+
+  /**
+   * AiAgentJob findFirstOrThrow
+   */
+  export type AiAgentJobFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiAgentJob
+     */
+    select?: AiAgentJobSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiAgentJob
+     */
+    omit?: AiAgentJobOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AiAgentJobInclude<ExtArgs> | null
+    /**
+     * Filter, which AiAgentJob to fetch.
+     */
+    where?: AiAgentJobWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of AiAgentJobs to fetch.
+     */
+    orderBy?: AiAgentJobOrderByWithRelationInput | AiAgentJobOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for AiAgentJobs.
+     */
+    cursor?: AiAgentJobWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` AiAgentJobs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` AiAgentJobs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of AiAgentJobs.
+     */
+    distinct?: AiAgentJobScalarFieldEnum | AiAgentJobScalarFieldEnum[]
+  }
+
+  /**
+   * AiAgentJob findMany
+   */
+  export type AiAgentJobFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiAgentJob
+     */
+    select?: AiAgentJobSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiAgentJob
+     */
+    omit?: AiAgentJobOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AiAgentJobInclude<ExtArgs> | null
+    /**
+     * Filter, which AiAgentJobs to fetch.
+     */
+    where?: AiAgentJobWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of AiAgentJobs to fetch.
+     */
+    orderBy?: AiAgentJobOrderByWithRelationInput | AiAgentJobOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing AiAgentJobs.
+     */
+    cursor?: AiAgentJobWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` AiAgentJobs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` AiAgentJobs.
+     */
+    skip?: number
+    distinct?: AiAgentJobScalarFieldEnum | AiAgentJobScalarFieldEnum[]
+  }
+
+  /**
+   * AiAgentJob create
+   */
+  export type AiAgentJobCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiAgentJob
+     */
+    select?: AiAgentJobSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiAgentJob
+     */
+    omit?: AiAgentJobOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AiAgentJobInclude<ExtArgs> | null
+    /**
+     * The data needed to create a AiAgentJob.
+     */
+    data: XOR<AiAgentJobCreateInput, AiAgentJobUncheckedCreateInput>
+  }
+
+  /**
+   * AiAgentJob createMany
+   */
+  export type AiAgentJobCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many AiAgentJobs.
+     */
+    data: AiAgentJobCreateManyInput | AiAgentJobCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * AiAgentJob createManyAndReturn
+   */
+  export type AiAgentJobCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiAgentJob
+     */
+    select?: AiAgentJobSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiAgentJob
+     */
+    omit?: AiAgentJobOmit<ExtArgs> | null
+    /**
+     * The data used to create many AiAgentJobs.
+     */
+    data: AiAgentJobCreateManyInput | AiAgentJobCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * AiAgentJob update
+   */
+  export type AiAgentJobUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiAgentJob
+     */
+    select?: AiAgentJobSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiAgentJob
+     */
+    omit?: AiAgentJobOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AiAgentJobInclude<ExtArgs> | null
+    /**
+     * The data needed to update a AiAgentJob.
+     */
+    data: XOR<AiAgentJobUpdateInput, AiAgentJobUncheckedUpdateInput>
+    /**
+     * Choose, which AiAgentJob to update.
+     */
+    where: AiAgentJobWhereUniqueInput
+  }
+
+  /**
+   * AiAgentJob updateMany
+   */
+  export type AiAgentJobUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update AiAgentJobs.
+     */
+    data: XOR<AiAgentJobUpdateManyMutationInput, AiAgentJobUncheckedUpdateManyInput>
+    /**
+     * Filter which AiAgentJobs to update
+     */
+    where?: AiAgentJobWhereInput
+    /**
+     * Limit how many AiAgentJobs to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * AiAgentJob updateManyAndReturn
+   */
+  export type AiAgentJobUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiAgentJob
+     */
+    select?: AiAgentJobSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiAgentJob
+     */
+    omit?: AiAgentJobOmit<ExtArgs> | null
+    /**
+     * The data used to update AiAgentJobs.
+     */
+    data: XOR<AiAgentJobUpdateManyMutationInput, AiAgentJobUncheckedUpdateManyInput>
+    /**
+     * Filter which AiAgentJobs to update
+     */
+    where?: AiAgentJobWhereInput
+    /**
+     * Limit how many AiAgentJobs to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * AiAgentJob upsert
+   */
+  export type AiAgentJobUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiAgentJob
+     */
+    select?: AiAgentJobSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiAgentJob
+     */
+    omit?: AiAgentJobOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AiAgentJobInclude<ExtArgs> | null
+    /**
+     * The filter to search for the AiAgentJob to update in case it exists.
+     */
+    where: AiAgentJobWhereUniqueInput
+    /**
+     * In case the AiAgentJob found by the `where` argument doesn't exist, create a new AiAgentJob with this data.
+     */
+    create: XOR<AiAgentJobCreateInput, AiAgentJobUncheckedCreateInput>
+    /**
+     * In case the AiAgentJob was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<AiAgentJobUpdateInput, AiAgentJobUncheckedUpdateInput>
+  }
+
+  /**
+   * AiAgentJob delete
+   */
+  export type AiAgentJobDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiAgentJob
+     */
+    select?: AiAgentJobSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiAgentJob
+     */
+    omit?: AiAgentJobOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AiAgentJobInclude<ExtArgs> | null
+    /**
+     * Filter which AiAgentJob to delete.
+     */
+    where: AiAgentJobWhereUniqueInput
+  }
+
+  /**
+   * AiAgentJob deleteMany
+   */
+  export type AiAgentJobDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which AiAgentJobs to delete
+     */
+    where?: AiAgentJobWhereInput
+    /**
+     * Limit how many AiAgentJobs to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * AiAgentJob.runs
+   */
+  export type AiAgentJob$runsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiAgentRun
+     */
+    select?: AiAgentRunSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiAgentRun
+     */
+    omit?: AiAgentRunOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AiAgentRunInclude<ExtArgs> | null
+    where?: AiAgentRunWhereInput
+    orderBy?: AiAgentRunOrderByWithRelationInput | AiAgentRunOrderByWithRelationInput[]
+    cursor?: AiAgentRunWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: AiAgentRunScalarFieldEnum | AiAgentRunScalarFieldEnum[]
+  }
+
+  /**
+   * AiAgentJob without action
+   */
+  export type AiAgentJobDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiAgentJob
+     */
+    select?: AiAgentJobSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiAgentJob
+     */
+    omit?: AiAgentJobOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AiAgentJobInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model AiAgentRun
+   */
+
+  export type AggregateAiAgentRun = {
+    _count: AiAgentRunCountAggregateOutputType | null
+    _avg: AiAgentRunAvgAggregateOutputType | null
+    _sum: AiAgentRunSumAggregateOutputType | null
+    _min: AiAgentRunMinAggregateOutputType | null
+    _max: AiAgentRunMaxAggregateOutputType | null
+  }
+
+  export type AiAgentRunAvgAggregateOutputType = {
+    steps: number | null
+  }
+
+  export type AiAgentRunSumAggregateOutputType = {
+    steps: number | null
+  }
+
+  export type AiAgentRunMinAggregateOutputType = {
+    id: string | null
+    jobId: string | null
+    startedAt: Date | null
+    finishedAt: Date | null
+    status: string | null
+    summary: string | null
+    toolCalls: string | null
+    steps: number | null
+    chamTran: boolean | null
+    errorMessage: string | null
+    trigger: string | null
+  }
+
+  export type AiAgentRunMaxAggregateOutputType = {
+    id: string | null
+    jobId: string | null
+    startedAt: Date | null
+    finishedAt: Date | null
+    status: string | null
+    summary: string | null
+    toolCalls: string | null
+    steps: number | null
+    chamTran: boolean | null
+    errorMessage: string | null
+    trigger: string | null
+  }
+
+  export type AiAgentRunCountAggregateOutputType = {
+    id: number
+    jobId: number
+    startedAt: number
+    finishedAt: number
+    status: number
+    summary: number
+    toolCalls: number
+    steps: number
+    chamTran: number
+    errorMessage: number
+    trigger: number
+    _all: number
+  }
+
+
+  export type AiAgentRunAvgAggregateInputType = {
+    steps?: true
+  }
+
+  export type AiAgentRunSumAggregateInputType = {
+    steps?: true
+  }
+
+  export type AiAgentRunMinAggregateInputType = {
+    id?: true
+    jobId?: true
+    startedAt?: true
+    finishedAt?: true
+    status?: true
+    summary?: true
+    toolCalls?: true
+    steps?: true
+    chamTran?: true
+    errorMessage?: true
+    trigger?: true
+  }
+
+  export type AiAgentRunMaxAggregateInputType = {
+    id?: true
+    jobId?: true
+    startedAt?: true
+    finishedAt?: true
+    status?: true
+    summary?: true
+    toolCalls?: true
+    steps?: true
+    chamTran?: true
+    errorMessage?: true
+    trigger?: true
+  }
+
+  export type AiAgentRunCountAggregateInputType = {
+    id?: true
+    jobId?: true
+    startedAt?: true
+    finishedAt?: true
+    status?: true
+    summary?: true
+    toolCalls?: true
+    steps?: true
+    chamTran?: true
+    errorMessage?: true
+    trigger?: true
+    _all?: true
+  }
+
+  export type AiAgentRunAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which AiAgentRun to aggregate.
+     */
+    where?: AiAgentRunWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of AiAgentRuns to fetch.
+     */
+    orderBy?: AiAgentRunOrderByWithRelationInput | AiAgentRunOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: AiAgentRunWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` AiAgentRuns from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` AiAgentRuns.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned AiAgentRuns
+    **/
+    _count?: true | AiAgentRunCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: AiAgentRunAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: AiAgentRunSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: AiAgentRunMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: AiAgentRunMaxAggregateInputType
+  }
+
+  export type GetAiAgentRunAggregateType<T extends AiAgentRunAggregateArgs> = {
+        [P in keyof T & keyof AggregateAiAgentRun]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateAiAgentRun[P]>
+      : GetScalarType<T[P], AggregateAiAgentRun[P]>
+  }
+
+
+
+
+  export type AiAgentRunGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: AiAgentRunWhereInput
+    orderBy?: AiAgentRunOrderByWithAggregationInput | AiAgentRunOrderByWithAggregationInput[]
+    by: AiAgentRunScalarFieldEnum[] | AiAgentRunScalarFieldEnum
+    having?: AiAgentRunScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: AiAgentRunCountAggregateInputType | true
+    _avg?: AiAgentRunAvgAggregateInputType
+    _sum?: AiAgentRunSumAggregateInputType
+    _min?: AiAgentRunMinAggregateInputType
+    _max?: AiAgentRunMaxAggregateInputType
+  }
+
+  export type AiAgentRunGroupByOutputType = {
+    id: string
+    jobId: string
+    startedAt: Date
+    finishedAt: Date | null
+    status: string
+    summary: string | null
+    toolCalls: string
+    steps: number
+    chamTran: boolean
+    errorMessage: string | null
+    trigger: string
+    _count: AiAgentRunCountAggregateOutputType | null
+    _avg: AiAgentRunAvgAggregateOutputType | null
+    _sum: AiAgentRunSumAggregateOutputType | null
+    _min: AiAgentRunMinAggregateOutputType | null
+    _max: AiAgentRunMaxAggregateOutputType | null
+  }
+
+  type GetAiAgentRunGroupByPayload<T extends AiAgentRunGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<AiAgentRunGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof AiAgentRunGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], AiAgentRunGroupByOutputType[P]>
+            : GetScalarType<T[P], AiAgentRunGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type AiAgentRunSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    jobId?: boolean
+    startedAt?: boolean
+    finishedAt?: boolean
+    status?: boolean
+    summary?: boolean
+    toolCalls?: boolean
+    steps?: boolean
+    chamTran?: boolean
+    errorMessage?: boolean
+    trigger?: boolean
+    job?: boolean | AiAgentJobDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["aiAgentRun"]>
+
+  export type AiAgentRunSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    jobId?: boolean
+    startedAt?: boolean
+    finishedAt?: boolean
+    status?: boolean
+    summary?: boolean
+    toolCalls?: boolean
+    steps?: boolean
+    chamTran?: boolean
+    errorMessage?: boolean
+    trigger?: boolean
+    job?: boolean | AiAgentJobDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["aiAgentRun"]>
+
+  export type AiAgentRunSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    jobId?: boolean
+    startedAt?: boolean
+    finishedAt?: boolean
+    status?: boolean
+    summary?: boolean
+    toolCalls?: boolean
+    steps?: boolean
+    chamTran?: boolean
+    errorMessage?: boolean
+    trigger?: boolean
+    job?: boolean | AiAgentJobDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["aiAgentRun"]>
+
+  export type AiAgentRunSelectScalar = {
+    id?: boolean
+    jobId?: boolean
+    startedAt?: boolean
+    finishedAt?: boolean
+    status?: boolean
+    summary?: boolean
+    toolCalls?: boolean
+    steps?: boolean
+    chamTran?: boolean
+    errorMessage?: boolean
+    trigger?: boolean
+  }
+
+  export type AiAgentRunOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "jobId" | "startedAt" | "finishedAt" | "status" | "summary" | "toolCalls" | "steps" | "chamTran" | "errorMessage" | "trigger", ExtArgs["result"]["aiAgentRun"]>
+  export type AiAgentRunInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    job?: boolean | AiAgentJobDefaultArgs<ExtArgs>
+  }
+  export type AiAgentRunIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    job?: boolean | AiAgentJobDefaultArgs<ExtArgs>
+  }
+  export type AiAgentRunIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    job?: boolean | AiAgentJobDefaultArgs<ExtArgs>
+  }
+
+  export type $AiAgentRunPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "AiAgentRun"
+    objects: {
+      job: Prisma.$AiAgentJobPayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      jobId: string
+      startedAt: Date
+      finishedAt: Date | null
+      status: string
+      summary: string | null
+      toolCalls: string
+      steps: number
+      chamTran: boolean
+      errorMessage: string | null
+      trigger: string
+    }, ExtArgs["result"]["aiAgentRun"]>
+    composites: {}
+  }
+
+  type AiAgentRunGetPayload<S extends boolean | null | undefined | AiAgentRunDefaultArgs> = $Result.GetResult<Prisma.$AiAgentRunPayload, S>
+
+  type AiAgentRunCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<AiAgentRunFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: AiAgentRunCountAggregateInputType | true
+    }
+
+  export interface AiAgentRunDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['AiAgentRun'], meta: { name: 'AiAgentRun' } }
+    /**
+     * Find zero or one AiAgentRun that matches the filter.
+     * @param {AiAgentRunFindUniqueArgs} args - Arguments to find a AiAgentRun
+     * @example
+     * // Get one AiAgentRun
+     * const aiAgentRun = await prisma.aiAgentRun.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends AiAgentRunFindUniqueArgs>(args: SelectSubset<T, AiAgentRunFindUniqueArgs<ExtArgs>>): Prisma__AiAgentRunClient<$Result.GetResult<Prisma.$AiAgentRunPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one AiAgentRun that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {AiAgentRunFindUniqueOrThrowArgs} args - Arguments to find a AiAgentRun
+     * @example
+     * // Get one AiAgentRun
+     * const aiAgentRun = await prisma.aiAgentRun.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends AiAgentRunFindUniqueOrThrowArgs>(args: SelectSubset<T, AiAgentRunFindUniqueOrThrowArgs<ExtArgs>>): Prisma__AiAgentRunClient<$Result.GetResult<Prisma.$AiAgentRunPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first AiAgentRun that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AiAgentRunFindFirstArgs} args - Arguments to find a AiAgentRun
+     * @example
+     * // Get one AiAgentRun
+     * const aiAgentRun = await prisma.aiAgentRun.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends AiAgentRunFindFirstArgs>(args?: SelectSubset<T, AiAgentRunFindFirstArgs<ExtArgs>>): Prisma__AiAgentRunClient<$Result.GetResult<Prisma.$AiAgentRunPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first AiAgentRun that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AiAgentRunFindFirstOrThrowArgs} args - Arguments to find a AiAgentRun
+     * @example
+     * // Get one AiAgentRun
+     * const aiAgentRun = await prisma.aiAgentRun.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends AiAgentRunFindFirstOrThrowArgs>(args?: SelectSubset<T, AiAgentRunFindFirstOrThrowArgs<ExtArgs>>): Prisma__AiAgentRunClient<$Result.GetResult<Prisma.$AiAgentRunPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more AiAgentRuns that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AiAgentRunFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all AiAgentRuns
+     * const aiAgentRuns = await prisma.aiAgentRun.findMany()
+     * 
+     * // Get first 10 AiAgentRuns
+     * const aiAgentRuns = await prisma.aiAgentRun.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const aiAgentRunWithIdOnly = await prisma.aiAgentRun.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends AiAgentRunFindManyArgs>(args?: SelectSubset<T, AiAgentRunFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$AiAgentRunPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a AiAgentRun.
+     * @param {AiAgentRunCreateArgs} args - Arguments to create a AiAgentRun.
+     * @example
+     * // Create one AiAgentRun
+     * const AiAgentRun = await prisma.aiAgentRun.create({
+     *   data: {
+     *     // ... data to create a AiAgentRun
+     *   }
+     * })
+     * 
+     */
+    create<T extends AiAgentRunCreateArgs>(args: SelectSubset<T, AiAgentRunCreateArgs<ExtArgs>>): Prisma__AiAgentRunClient<$Result.GetResult<Prisma.$AiAgentRunPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many AiAgentRuns.
+     * @param {AiAgentRunCreateManyArgs} args - Arguments to create many AiAgentRuns.
+     * @example
+     * // Create many AiAgentRuns
+     * const aiAgentRun = await prisma.aiAgentRun.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends AiAgentRunCreateManyArgs>(args?: SelectSubset<T, AiAgentRunCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many AiAgentRuns and returns the data saved in the database.
+     * @param {AiAgentRunCreateManyAndReturnArgs} args - Arguments to create many AiAgentRuns.
+     * @example
+     * // Create many AiAgentRuns
+     * const aiAgentRun = await prisma.aiAgentRun.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many AiAgentRuns and only return the `id`
+     * const aiAgentRunWithIdOnly = await prisma.aiAgentRun.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends AiAgentRunCreateManyAndReturnArgs>(args?: SelectSubset<T, AiAgentRunCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$AiAgentRunPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a AiAgentRun.
+     * @param {AiAgentRunDeleteArgs} args - Arguments to delete one AiAgentRun.
+     * @example
+     * // Delete one AiAgentRun
+     * const AiAgentRun = await prisma.aiAgentRun.delete({
+     *   where: {
+     *     // ... filter to delete one AiAgentRun
+     *   }
+     * })
+     * 
+     */
+    delete<T extends AiAgentRunDeleteArgs>(args: SelectSubset<T, AiAgentRunDeleteArgs<ExtArgs>>): Prisma__AiAgentRunClient<$Result.GetResult<Prisma.$AiAgentRunPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one AiAgentRun.
+     * @param {AiAgentRunUpdateArgs} args - Arguments to update one AiAgentRun.
+     * @example
+     * // Update one AiAgentRun
+     * const aiAgentRun = await prisma.aiAgentRun.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends AiAgentRunUpdateArgs>(args: SelectSubset<T, AiAgentRunUpdateArgs<ExtArgs>>): Prisma__AiAgentRunClient<$Result.GetResult<Prisma.$AiAgentRunPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more AiAgentRuns.
+     * @param {AiAgentRunDeleteManyArgs} args - Arguments to filter AiAgentRuns to delete.
+     * @example
+     * // Delete a few AiAgentRuns
+     * const { count } = await prisma.aiAgentRun.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends AiAgentRunDeleteManyArgs>(args?: SelectSubset<T, AiAgentRunDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more AiAgentRuns.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AiAgentRunUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many AiAgentRuns
+     * const aiAgentRun = await prisma.aiAgentRun.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends AiAgentRunUpdateManyArgs>(args: SelectSubset<T, AiAgentRunUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more AiAgentRuns and returns the data updated in the database.
+     * @param {AiAgentRunUpdateManyAndReturnArgs} args - Arguments to update many AiAgentRuns.
+     * @example
+     * // Update many AiAgentRuns
+     * const aiAgentRun = await prisma.aiAgentRun.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more AiAgentRuns and only return the `id`
+     * const aiAgentRunWithIdOnly = await prisma.aiAgentRun.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends AiAgentRunUpdateManyAndReturnArgs>(args: SelectSubset<T, AiAgentRunUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$AiAgentRunPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one AiAgentRun.
+     * @param {AiAgentRunUpsertArgs} args - Arguments to update or create a AiAgentRun.
+     * @example
+     * // Update or create a AiAgentRun
+     * const aiAgentRun = await prisma.aiAgentRun.upsert({
+     *   create: {
+     *     // ... data to create a AiAgentRun
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the AiAgentRun we want to update
+     *   }
+     * })
+     */
+    upsert<T extends AiAgentRunUpsertArgs>(args: SelectSubset<T, AiAgentRunUpsertArgs<ExtArgs>>): Prisma__AiAgentRunClient<$Result.GetResult<Prisma.$AiAgentRunPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of AiAgentRuns.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AiAgentRunCountArgs} args - Arguments to filter AiAgentRuns to count.
+     * @example
+     * // Count the number of AiAgentRuns
+     * const count = await prisma.aiAgentRun.count({
+     *   where: {
+     *     // ... the filter for the AiAgentRuns we want to count
+     *   }
+     * })
+    **/
+    count<T extends AiAgentRunCountArgs>(
+      args?: Subset<T, AiAgentRunCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], AiAgentRunCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a AiAgentRun.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AiAgentRunAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends AiAgentRunAggregateArgs>(args: Subset<T, AiAgentRunAggregateArgs>): Prisma.PrismaPromise<GetAiAgentRunAggregateType<T>>
+
+    /**
+     * Group by AiAgentRun.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AiAgentRunGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends AiAgentRunGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: AiAgentRunGroupByArgs['orderBy'] }
+        : { orderBy?: AiAgentRunGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, AiAgentRunGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetAiAgentRunGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the AiAgentRun model
+   */
+  readonly fields: AiAgentRunFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for AiAgentRun.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__AiAgentRunClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    job<T extends AiAgentJobDefaultArgs<ExtArgs> = {}>(args?: Subset<T, AiAgentJobDefaultArgs<ExtArgs>>): Prisma__AiAgentJobClient<$Result.GetResult<Prisma.$AiAgentJobPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the AiAgentRun model
+   */
+  interface AiAgentRunFieldRefs {
+    readonly id: FieldRef<"AiAgentRun", 'String'>
+    readonly jobId: FieldRef<"AiAgentRun", 'String'>
+    readonly startedAt: FieldRef<"AiAgentRun", 'DateTime'>
+    readonly finishedAt: FieldRef<"AiAgentRun", 'DateTime'>
+    readonly status: FieldRef<"AiAgentRun", 'String'>
+    readonly summary: FieldRef<"AiAgentRun", 'String'>
+    readonly toolCalls: FieldRef<"AiAgentRun", 'String'>
+    readonly steps: FieldRef<"AiAgentRun", 'Int'>
+    readonly chamTran: FieldRef<"AiAgentRun", 'Boolean'>
+    readonly errorMessage: FieldRef<"AiAgentRun", 'String'>
+    readonly trigger: FieldRef<"AiAgentRun", 'String'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * AiAgentRun findUnique
+   */
+  export type AiAgentRunFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiAgentRun
+     */
+    select?: AiAgentRunSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiAgentRun
+     */
+    omit?: AiAgentRunOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AiAgentRunInclude<ExtArgs> | null
+    /**
+     * Filter, which AiAgentRun to fetch.
+     */
+    where: AiAgentRunWhereUniqueInput
+  }
+
+  /**
+   * AiAgentRun findUniqueOrThrow
+   */
+  export type AiAgentRunFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiAgentRun
+     */
+    select?: AiAgentRunSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiAgentRun
+     */
+    omit?: AiAgentRunOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AiAgentRunInclude<ExtArgs> | null
+    /**
+     * Filter, which AiAgentRun to fetch.
+     */
+    where: AiAgentRunWhereUniqueInput
+  }
+
+  /**
+   * AiAgentRun findFirst
+   */
+  export type AiAgentRunFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiAgentRun
+     */
+    select?: AiAgentRunSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiAgentRun
+     */
+    omit?: AiAgentRunOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AiAgentRunInclude<ExtArgs> | null
+    /**
+     * Filter, which AiAgentRun to fetch.
+     */
+    where?: AiAgentRunWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of AiAgentRuns to fetch.
+     */
+    orderBy?: AiAgentRunOrderByWithRelationInput | AiAgentRunOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for AiAgentRuns.
+     */
+    cursor?: AiAgentRunWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` AiAgentRuns from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` AiAgentRuns.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of AiAgentRuns.
+     */
+    distinct?: AiAgentRunScalarFieldEnum | AiAgentRunScalarFieldEnum[]
+  }
+
+  /**
+   * AiAgentRun findFirstOrThrow
+   */
+  export type AiAgentRunFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiAgentRun
+     */
+    select?: AiAgentRunSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiAgentRun
+     */
+    omit?: AiAgentRunOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AiAgentRunInclude<ExtArgs> | null
+    /**
+     * Filter, which AiAgentRun to fetch.
+     */
+    where?: AiAgentRunWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of AiAgentRuns to fetch.
+     */
+    orderBy?: AiAgentRunOrderByWithRelationInput | AiAgentRunOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for AiAgentRuns.
+     */
+    cursor?: AiAgentRunWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` AiAgentRuns from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` AiAgentRuns.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of AiAgentRuns.
+     */
+    distinct?: AiAgentRunScalarFieldEnum | AiAgentRunScalarFieldEnum[]
+  }
+
+  /**
+   * AiAgentRun findMany
+   */
+  export type AiAgentRunFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiAgentRun
+     */
+    select?: AiAgentRunSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiAgentRun
+     */
+    omit?: AiAgentRunOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AiAgentRunInclude<ExtArgs> | null
+    /**
+     * Filter, which AiAgentRuns to fetch.
+     */
+    where?: AiAgentRunWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of AiAgentRuns to fetch.
+     */
+    orderBy?: AiAgentRunOrderByWithRelationInput | AiAgentRunOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing AiAgentRuns.
+     */
+    cursor?: AiAgentRunWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` AiAgentRuns from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` AiAgentRuns.
+     */
+    skip?: number
+    distinct?: AiAgentRunScalarFieldEnum | AiAgentRunScalarFieldEnum[]
+  }
+
+  /**
+   * AiAgentRun create
+   */
+  export type AiAgentRunCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiAgentRun
+     */
+    select?: AiAgentRunSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiAgentRun
+     */
+    omit?: AiAgentRunOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AiAgentRunInclude<ExtArgs> | null
+    /**
+     * The data needed to create a AiAgentRun.
+     */
+    data: XOR<AiAgentRunCreateInput, AiAgentRunUncheckedCreateInput>
+  }
+
+  /**
+   * AiAgentRun createMany
+   */
+  export type AiAgentRunCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many AiAgentRuns.
+     */
+    data: AiAgentRunCreateManyInput | AiAgentRunCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * AiAgentRun createManyAndReturn
+   */
+  export type AiAgentRunCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiAgentRun
+     */
+    select?: AiAgentRunSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiAgentRun
+     */
+    omit?: AiAgentRunOmit<ExtArgs> | null
+    /**
+     * The data used to create many AiAgentRuns.
+     */
+    data: AiAgentRunCreateManyInput | AiAgentRunCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AiAgentRunIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * AiAgentRun update
+   */
+  export type AiAgentRunUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiAgentRun
+     */
+    select?: AiAgentRunSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiAgentRun
+     */
+    omit?: AiAgentRunOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AiAgentRunInclude<ExtArgs> | null
+    /**
+     * The data needed to update a AiAgentRun.
+     */
+    data: XOR<AiAgentRunUpdateInput, AiAgentRunUncheckedUpdateInput>
+    /**
+     * Choose, which AiAgentRun to update.
+     */
+    where: AiAgentRunWhereUniqueInput
+  }
+
+  /**
+   * AiAgentRun updateMany
+   */
+  export type AiAgentRunUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update AiAgentRuns.
+     */
+    data: XOR<AiAgentRunUpdateManyMutationInput, AiAgentRunUncheckedUpdateManyInput>
+    /**
+     * Filter which AiAgentRuns to update
+     */
+    where?: AiAgentRunWhereInput
+    /**
+     * Limit how many AiAgentRuns to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * AiAgentRun updateManyAndReturn
+   */
+  export type AiAgentRunUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiAgentRun
+     */
+    select?: AiAgentRunSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiAgentRun
+     */
+    omit?: AiAgentRunOmit<ExtArgs> | null
+    /**
+     * The data used to update AiAgentRuns.
+     */
+    data: XOR<AiAgentRunUpdateManyMutationInput, AiAgentRunUncheckedUpdateManyInput>
+    /**
+     * Filter which AiAgentRuns to update
+     */
+    where?: AiAgentRunWhereInput
+    /**
+     * Limit how many AiAgentRuns to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AiAgentRunIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * AiAgentRun upsert
+   */
+  export type AiAgentRunUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiAgentRun
+     */
+    select?: AiAgentRunSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiAgentRun
+     */
+    omit?: AiAgentRunOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AiAgentRunInclude<ExtArgs> | null
+    /**
+     * The filter to search for the AiAgentRun to update in case it exists.
+     */
+    where: AiAgentRunWhereUniqueInput
+    /**
+     * In case the AiAgentRun found by the `where` argument doesn't exist, create a new AiAgentRun with this data.
+     */
+    create: XOR<AiAgentRunCreateInput, AiAgentRunUncheckedCreateInput>
+    /**
+     * In case the AiAgentRun was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<AiAgentRunUpdateInput, AiAgentRunUncheckedUpdateInput>
+  }
+
+  /**
+   * AiAgentRun delete
+   */
+  export type AiAgentRunDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiAgentRun
+     */
+    select?: AiAgentRunSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiAgentRun
+     */
+    omit?: AiAgentRunOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AiAgentRunInclude<ExtArgs> | null
+    /**
+     * Filter which AiAgentRun to delete.
+     */
+    where: AiAgentRunWhereUniqueInput
+  }
+
+  /**
+   * AiAgentRun deleteMany
+   */
+  export type AiAgentRunDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which AiAgentRuns to delete
+     */
+    where?: AiAgentRunWhereInput
+    /**
+     * Limit how many AiAgentRuns to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * AiAgentRun without action
+   */
+  export type AiAgentRunDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiAgentRun
+     */
+    select?: AiAgentRunSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiAgentRun
+     */
+    omit?: AiAgentRunOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: AiAgentRunInclude<ExtArgs> | null
+  }
+
+
+  /**
    * Enums
    */
 
@@ -154543,6 +157185,45 @@ export namespace Prisma {
   };
 
   export type CrmCampaignScalarFieldEnum = (typeof CrmCampaignScalarFieldEnum)[keyof typeof CrmCampaignScalarFieldEnum]
+
+
+  export const AiAgentJobScalarFieldEnum: {
+    id: 'id',
+    name: 'name',
+    prompt: 'prompt',
+    scheduleKind: 'scheduleKind',
+    atHour: 'atHour',
+    atMinute: 'atMinute',
+    intervalMinutes: 'intervalMinutes',
+    enabled: 'enabled',
+    allowWrite: 'allowWrite',
+    allowedTools: 'allowedTools',
+    maxSteps: 'maxSteps',
+    lastRunAt: 'lastRunAt',
+    nextRunAt: 'nextRunAt',
+    createdBy: 'createdBy',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type AiAgentJobScalarFieldEnum = (typeof AiAgentJobScalarFieldEnum)[keyof typeof AiAgentJobScalarFieldEnum]
+
+
+  export const AiAgentRunScalarFieldEnum: {
+    id: 'id',
+    jobId: 'jobId',
+    startedAt: 'startedAt',
+    finishedAt: 'finishedAt',
+    status: 'status',
+    summary: 'summary',
+    toolCalls: 'toolCalls',
+    steps: 'steps',
+    chamTran: 'chamTran',
+    errorMessage: 'errorMessage',
+    trigger: 'trigger'
+  };
+
+  export type AiAgentRunScalarFieldEnum = (typeof AiAgentRunScalarFieldEnum)[keyof typeof AiAgentRunScalarFieldEnum]
 
 
   export const SortOrder: {
@@ -166398,6 +169079,205 @@ export namespace Prisma {
     createdBy?: StringNullableWithAggregatesFilter<"CrmCampaign"> | string | null
     createdAt?: DateTimeWithAggregatesFilter<"CrmCampaign"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"CrmCampaign"> | Date | string
+  }
+
+  export type AiAgentJobWhereInput = {
+    AND?: AiAgentJobWhereInput | AiAgentJobWhereInput[]
+    OR?: AiAgentJobWhereInput[]
+    NOT?: AiAgentJobWhereInput | AiAgentJobWhereInput[]
+    id?: StringFilter<"AiAgentJob"> | string
+    name?: StringFilter<"AiAgentJob"> | string
+    prompt?: StringFilter<"AiAgentJob"> | string
+    scheduleKind?: StringFilter<"AiAgentJob"> | string
+    atHour?: IntFilter<"AiAgentJob"> | number
+    atMinute?: IntFilter<"AiAgentJob"> | number
+    intervalMinutes?: IntFilter<"AiAgentJob"> | number
+    enabled?: BoolFilter<"AiAgentJob"> | boolean
+    allowWrite?: BoolFilter<"AiAgentJob"> | boolean
+    allowedTools?: StringFilter<"AiAgentJob"> | string
+    maxSteps?: IntFilter<"AiAgentJob"> | number
+    lastRunAt?: DateTimeNullableFilter<"AiAgentJob"> | Date | string | null
+    nextRunAt?: DateTimeNullableFilter<"AiAgentJob"> | Date | string | null
+    createdBy?: StringNullableFilter<"AiAgentJob"> | string | null
+    createdAt?: DateTimeFilter<"AiAgentJob"> | Date | string
+    updatedAt?: DateTimeFilter<"AiAgentJob"> | Date | string
+    runs?: AiAgentRunListRelationFilter
+  }
+
+  export type AiAgentJobOrderByWithRelationInput = {
+    id?: SortOrder
+    name?: SortOrder
+    prompt?: SortOrder
+    scheduleKind?: SortOrder
+    atHour?: SortOrder
+    atMinute?: SortOrder
+    intervalMinutes?: SortOrder
+    enabled?: SortOrder
+    allowWrite?: SortOrder
+    allowedTools?: SortOrder
+    maxSteps?: SortOrder
+    lastRunAt?: SortOrderInput | SortOrder
+    nextRunAt?: SortOrderInput | SortOrder
+    createdBy?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    runs?: AiAgentRunOrderByRelationAggregateInput
+  }
+
+  export type AiAgentJobWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: AiAgentJobWhereInput | AiAgentJobWhereInput[]
+    OR?: AiAgentJobWhereInput[]
+    NOT?: AiAgentJobWhereInput | AiAgentJobWhereInput[]
+    name?: StringFilter<"AiAgentJob"> | string
+    prompt?: StringFilter<"AiAgentJob"> | string
+    scheduleKind?: StringFilter<"AiAgentJob"> | string
+    atHour?: IntFilter<"AiAgentJob"> | number
+    atMinute?: IntFilter<"AiAgentJob"> | number
+    intervalMinutes?: IntFilter<"AiAgentJob"> | number
+    enabled?: BoolFilter<"AiAgentJob"> | boolean
+    allowWrite?: BoolFilter<"AiAgentJob"> | boolean
+    allowedTools?: StringFilter<"AiAgentJob"> | string
+    maxSteps?: IntFilter<"AiAgentJob"> | number
+    lastRunAt?: DateTimeNullableFilter<"AiAgentJob"> | Date | string | null
+    nextRunAt?: DateTimeNullableFilter<"AiAgentJob"> | Date | string | null
+    createdBy?: StringNullableFilter<"AiAgentJob"> | string | null
+    createdAt?: DateTimeFilter<"AiAgentJob"> | Date | string
+    updatedAt?: DateTimeFilter<"AiAgentJob"> | Date | string
+    runs?: AiAgentRunListRelationFilter
+  }, "id">
+
+  export type AiAgentJobOrderByWithAggregationInput = {
+    id?: SortOrder
+    name?: SortOrder
+    prompt?: SortOrder
+    scheduleKind?: SortOrder
+    atHour?: SortOrder
+    atMinute?: SortOrder
+    intervalMinutes?: SortOrder
+    enabled?: SortOrder
+    allowWrite?: SortOrder
+    allowedTools?: SortOrder
+    maxSteps?: SortOrder
+    lastRunAt?: SortOrderInput | SortOrder
+    nextRunAt?: SortOrderInput | SortOrder
+    createdBy?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: AiAgentJobCountOrderByAggregateInput
+    _avg?: AiAgentJobAvgOrderByAggregateInput
+    _max?: AiAgentJobMaxOrderByAggregateInput
+    _min?: AiAgentJobMinOrderByAggregateInput
+    _sum?: AiAgentJobSumOrderByAggregateInput
+  }
+
+  export type AiAgentJobScalarWhereWithAggregatesInput = {
+    AND?: AiAgentJobScalarWhereWithAggregatesInput | AiAgentJobScalarWhereWithAggregatesInput[]
+    OR?: AiAgentJobScalarWhereWithAggregatesInput[]
+    NOT?: AiAgentJobScalarWhereWithAggregatesInput | AiAgentJobScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"AiAgentJob"> | string
+    name?: StringWithAggregatesFilter<"AiAgentJob"> | string
+    prompt?: StringWithAggregatesFilter<"AiAgentJob"> | string
+    scheduleKind?: StringWithAggregatesFilter<"AiAgentJob"> | string
+    atHour?: IntWithAggregatesFilter<"AiAgentJob"> | number
+    atMinute?: IntWithAggregatesFilter<"AiAgentJob"> | number
+    intervalMinutes?: IntWithAggregatesFilter<"AiAgentJob"> | number
+    enabled?: BoolWithAggregatesFilter<"AiAgentJob"> | boolean
+    allowWrite?: BoolWithAggregatesFilter<"AiAgentJob"> | boolean
+    allowedTools?: StringWithAggregatesFilter<"AiAgentJob"> | string
+    maxSteps?: IntWithAggregatesFilter<"AiAgentJob"> | number
+    lastRunAt?: DateTimeNullableWithAggregatesFilter<"AiAgentJob"> | Date | string | null
+    nextRunAt?: DateTimeNullableWithAggregatesFilter<"AiAgentJob"> | Date | string | null
+    createdBy?: StringNullableWithAggregatesFilter<"AiAgentJob"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"AiAgentJob"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"AiAgentJob"> | Date | string
+  }
+
+  export type AiAgentRunWhereInput = {
+    AND?: AiAgentRunWhereInput | AiAgentRunWhereInput[]
+    OR?: AiAgentRunWhereInput[]
+    NOT?: AiAgentRunWhereInput | AiAgentRunWhereInput[]
+    id?: StringFilter<"AiAgentRun"> | string
+    jobId?: StringFilter<"AiAgentRun"> | string
+    startedAt?: DateTimeFilter<"AiAgentRun"> | Date | string
+    finishedAt?: DateTimeNullableFilter<"AiAgentRun"> | Date | string | null
+    status?: StringFilter<"AiAgentRun"> | string
+    summary?: StringNullableFilter<"AiAgentRun"> | string | null
+    toolCalls?: StringFilter<"AiAgentRun"> | string
+    steps?: IntFilter<"AiAgentRun"> | number
+    chamTran?: BoolFilter<"AiAgentRun"> | boolean
+    errorMessage?: StringNullableFilter<"AiAgentRun"> | string | null
+    trigger?: StringFilter<"AiAgentRun"> | string
+    job?: XOR<AiAgentJobScalarRelationFilter, AiAgentJobWhereInput>
+  }
+
+  export type AiAgentRunOrderByWithRelationInput = {
+    id?: SortOrder
+    jobId?: SortOrder
+    startedAt?: SortOrder
+    finishedAt?: SortOrderInput | SortOrder
+    status?: SortOrder
+    summary?: SortOrderInput | SortOrder
+    toolCalls?: SortOrder
+    steps?: SortOrder
+    chamTran?: SortOrder
+    errorMessage?: SortOrderInput | SortOrder
+    trigger?: SortOrder
+    job?: AiAgentJobOrderByWithRelationInput
+  }
+
+  export type AiAgentRunWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: AiAgentRunWhereInput | AiAgentRunWhereInput[]
+    OR?: AiAgentRunWhereInput[]
+    NOT?: AiAgentRunWhereInput | AiAgentRunWhereInput[]
+    jobId?: StringFilter<"AiAgentRun"> | string
+    startedAt?: DateTimeFilter<"AiAgentRun"> | Date | string
+    finishedAt?: DateTimeNullableFilter<"AiAgentRun"> | Date | string | null
+    status?: StringFilter<"AiAgentRun"> | string
+    summary?: StringNullableFilter<"AiAgentRun"> | string | null
+    toolCalls?: StringFilter<"AiAgentRun"> | string
+    steps?: IntFilter<"AiAgentRun"> | number
+    chamTran?: BoolFilter<"AiAgentRun"> | boolean
+    errorMessage?: StringNullableFilter<"AiAgentRun"> | string | null
+    trigger?: StringFilter<"AiAgentRun"> | string
+    job?: XOR<AiAgentJobScalarRelationFilter, AiAgentJobWhereInput>
+  }, "id">
+
+  export type AiAgentRunOrderByWithAggregationInput = {
+    id?: SortOrder
+    jobId?: SortOrder
+    startedAt?: SortOrder
+    finishedAt?: SortOrderInput | SortOrder
+    status?: SortOrder
+    summary?: SortOrderInput | SortOrder
+    toolCalls?: SortOrder
+    steps?: SortOrder
+    chamTran?: SortOrder
+    errorMessage?: SortOrderInput | SortOrder
+    trigger?: SortOrder
+    _count?: AiAgentRunCountOrderByAggregateInput
+    _avg?: AiAgentRunAvgOrderByAggregateInput
+    _max?: AiAgentRunMaxOrderByAggregateInput
+    _min?: AiAgentRunMinOrderByAggregateInput
+    _sum?: AiAgentRunSumOrderByAggregateInput
+  }
+
+  export type AiAgentRunScalarWhereWithAggregatesInput = {
+    AND?: AiAgentRunScalarWhereWithAggregatesInput | AiAgentRunScalarWhereWithAggregatesInput[]
+    OR?: AiAgentRunScalarWhereWithAggregatesInput[]
+    NOT?: AiAgentRunScalarWhereWithAggregatesInput | AiAgentRunScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"AiAgentRun"> | string
+    jobId?: StringWithAggregatesFilter<"AiAgentRun"> | string
+    startedAt?: DateTimeWithAggregatesFilter<"AiAgentRun"> | Date | string
+    finishedAt?: DateTimeNullableWithAggregatesFilter<"AiAgentRun"> | Date | string | null
+    status?: StringWithAggregatesFilter<"AiAgentRun"> | string
+    summary?: StringNullableWithAggregatesFilter<"AiAgentRun"> | string | null
+    toolCalls?: StringWithAggregatesFilter<"AiAgentRun"> | string
+    steps?: IntWithAggregatesFilter<"AiAgentRun"> | number
+    chamTran?: BoolWithAggregatesFilter<"AiAgentRun"> | boolean
+    errorMessage?: StringNullableWithAggregatesFilter<"AiAgentRun"> | string | null
+    trigger?: StringWithAggregatesFilter<"AiAgentRun"> | string
   }
 
   export type BranchCreateInput = {
@@ -180314,6 +183194,240 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type AiAgentJobCreateInput = {
+    id?: string
+    name: string
+    prompt: string
+    scheduleKind?: string
+    atHour?: number
+    atMinute?: number
+    intervalMinutes?: number
+    enabled?: boolean
+    allowWrite?: boolean
+    allowedTools?: string
+    maxSteps?: number
+    lastRunAt?: Date | string | null
+    nextRunAt?: Date | string | null
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    runs?: AiAgentRunCreateNestedManyWithoutJobInput
+  }
+
+  export type AiAgentJobUncheckedCreateInput = {
+    id?: string
+    name: string
+    prompt: string
+    scheduleKind?: string
+    atHour?: number
+    atMinute?: number
+    intervalMinutes?: number
+    enabled?: boolean
+    allowWrite?: boolean
+    allowedTools?: string
+    maxSteps?: number
+    lastRunAt?: Date | string | null
+    nextRunAt?: Date | string | null
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    runs?: AiAgentRunUncheckedCreateNestedManyWithoutJobInput
+  }
+
+  export type AiAgentJobUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    prompt?: StringFieldUpdateOperationsInput | string
+    scheduleKind?: StringFieldUpdateOperationsInput | string
+    atHour?: IntFieldUpdateOperationsInput | number
+    atMinute?: IntFieldUpdateOperationsInput | number
+    intervalMinutes?: IntFieldUpdateOperationsInput | number
+    enabled?: BoolFieldUpdateOperationsInput | boolean
+    allowWrite?: BoolFieldUpdateOperationsInput | boolean
+    allowedTools?: StringFieldUpdateOperationsInput | string
+    maxSteps?: IntFieldUpdateOperationsInput | number
+    lastRunAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    nextRunAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    runs?: AiAgentRunUpdateManyWithoutJobNestedInput
+  }
+
+  export type AiAgentJobUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    prompt?: StringFieldUpdateOperationsInput | string
+    scheduleKind?: StringFieldUpdateOperationsInput | string
+    atHour?: IntFieldUpdateOperationsInput | number
+    atMinute?: IntFieldUpdateOperationsInput | number
+    intervalMinutes?: IntFieldUpdateOperationsInput | number
+    enabled?: BoolFieldUpdateOperationsInput | boolean
+    allowWrite?: BoolFieldUpdateOperationsInput | boolean
+    allowedTools?: StringFieldUpdateOperationsInput | string
+    maxSteps?: IntFieldUpdateOperationsInput | number
+    lastRunAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    nextRunAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    runs?: AiAgentRunUncheckedUpdateManyWithoutJobNestedInput
+  }
+
+  export type AiAgentJobCreateManyInput = {
+    id?: string
+    name: string
+    prompt: string
+    scheduleKind?: string
+    atHour?: number
+    atMinute?: number
+    intervalMinutes?: number
+    enabled?: boolean
+    allowWrite?: boolean
+    allowedTools?: string
+    maxSteps?: number
+    lastRunAt?: Date | string | null
+    nextRunAt?: Date | string | null
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type AiAgentJobUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    prompt?: StringFieldUpdateOperationsInput | string
+    scheduleKind?: StringFieldUpdateOperationsInput | string
+    atHour?: IntFieldUpdateOperationsInput | number
+    atMinute?: IntFieldUpdateOperationsInput | number
+    intervalMinutes?: IntFieldUpdateOperationsInput | number
+    enabled?: BoolFieldUpdateOperationsInput | boolean
+    allowWrite?: BoolFieldUpdateOperationsInput | boolean
+    allowedTools?: StringFieldUpdateOperationsInput | string
+    maxSteps?: IntFieldUpdateOperationsInput | number
+    lastRunAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    nextRunAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type AiAgentJobUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    prompt?: StringFieldUpdateOperationsInput | string
+    scheduleKind?: StringFieldUpdateOperationsInput | string
+    atHour?: IntFieldUpdateOperationsInput | number
+    atMinute?: IntFieldUpdateOperationsInput | number
+    intervalMinutes?: IntFieldUpdateOperationsInput | number
+    enabled?: BoolFieldUpdateOperationsInput | boolean
+    allowWrite?: BoolFieldUpdateOperationsInput | boolean
+    allowedTools?: StringFieldUpdateOperationsInput | string
+    maxSteps?: IntFieldUpdateOperationsInput | number
+    lastRunAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    nextRunAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type AiAgentRunCreateInput = {
+    id?: string
+    startedAt?: Date | string
+    finishedAt?: Date | string | null
+    status?: string
+    summary?: string | null
+    toolCalls?: string
+    steps?: number
+    chamTran?: boolean
+    errorMessage?: string | null
+    trigger?: string
+    job: AiAgentJobCreateNestedOneWithoutRunsInput
+  }
+
+  export type AiAgentRunUncheckedCreateInput = {
+    id?: string
+    jobId: string
+    startedAt?: Date | string
+    finishedAt?: Date | string | null
+    status?: string
+    summary?: string | null
+    toolCalls?: string
+    steps?: number
+    chamTran?: boolean
+    errorMessage?: string | null
+    trigger?: string
+  }
+
+  export type AiAgentRunUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    startedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    finishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    summary?: NullableStringFieldUpdateOperationsInput | string | null
+    toolCalls?: StringFieldUpdateOperationsInput | string
+    steps?: IntFieldUpdateOperationsInput | number
+    chamTran?: BoolFieldUpdateOperationsInput | boolean
+    errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    trigger?: StringFieldUpdateOperationsInput | string
+    job?: AiAgentJobUpdateOneRequiredWithoutRunsNestedInput
+  }
+
+  export type AiAgentRunUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    jobId?: StringFieldUpdateOperationsInput | string
+    startedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    finishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    summary?: NullableStringFieldUpdateOperationsInput | string | null
+    toolCalls?: StringFieldUpdateOperationsInput | string
+    steps?: IntFieldUpdateOperationsInput | number
+    chamTran?: BoolFieldUpdateOperationsInput | boolean
+    errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    trigger?: StringFieldUpdateOperationsInput | string
+  }
+
+  export type AiAgentRunCreateManyInput = {
+    id?: string
+    jobId: string
+    startedAt?: Date | string
+    finishedAt?: Date | string | null
+    status?: string
+    summary?: string | null
+    toolCalls?: string
+    steps?: number
+    chamTran?: boolean
+    errorMessage?: string | null
+    trigger?: string
+  }
+
+  export type AiAgentRunUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    startedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    finishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    summary?: NullableStringFieldUpdateOperationsInput | string | null
+    toolCalls?: StringFieldUpdateOperationsInput | string
+    steps?: IntFieldUpdateOperationsInput | number
+    chamTran?: BoolFieldUpdateOperationsInput | boolean
+    errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    trigger?: StringFieldUpdateOperationsInput | string
+  }
+
+  export type AiAgentRunUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    jobId?: StringFieldUpdateOperationsInput | string
+    startedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    finishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    summary?: NullableStringFieldUpdateOperationsInput | string | null
+    toolCalls?: StringFieldUpdateOperationsInput | string
+    steps?: IntFieldUpdateOperationsInput | number
+    chamTran?: BoolFieldUpdateOperationsInput | boolean
+    errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    trigger?: StringFieldUpdateOperationsInput | string
+  }
+
   export type StringFilter<$PrismaModel = never> = {
     equals?: string | StringFieldRefInput<$PrismaModel>
     in?: string[] | ListStringFieldRefInput<$PrismaModel>
@@ -188315,6 +191429,142 @@ export namespace Prisma {
     responseRate?: SortOrder
   }
 
+  export type AiAgentRunListRelationFilter = {
+    every?: AiAgentRunWhereInput
+    some?: AiAgentRunWhereInput
+    none?: AiAgentRunWhereInput
+  }
+
+  export type AiAgentRunOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type AiAgentJobCountOrderByAggregateInput = {
+    id?: SortOrder
+    name?: SortOrder
+    prompt?: SortOrder
+    scheduleKind?: SortOrder
+    atHour?: SortOrder
+    atMinute?: SortOrder
+    intervalMinutes?: SortOrder
+    enabled?: SortOrder
+    allowWrite?: SortOrder
+    allowedTools?: SortOrder
+    maxSteps?: SortOrder
+    lastRunAt?: SortOrder
+    nextRunAt?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type AiAgentJobAvgOrderByAggregateInput = {
+    atHour?: SortOrder
+    atMinute?: SortOrder
+    intervalMinutes?: SortOrder
+    maxSteps?: SortOrder
+  }
+
+  export type AiAgentJobMaxOrderByAggregateInput = {
+    id?: SortOrder
+    name?: SortOrder
+    prompt?: SortOrder
+    scheduleKind?: SortOrder
+    atHour?: SortOrder
+    atMinute?: SortOrder
+    intervalMinutes?: SortOrder
+    enabled?: SortOrder
+    allowWrite?: SortOrder
+    allowedTools?: SortOrder
+    maxSteps?: SortOrder
+    lastRunAt?: SortOrder
+    nextRunAt?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type AiAgentJobMinOrderByAggregateInput = {
+    id?: SortOrder
+    name?: SortOrder
+    prompt?: SortOrder
+    scheduleKind?: SortOrder
+    atHour?: SortOrder
+    atMinute?: SortOrder
+    intervalMinutes?: SortOrder
+    enabled?: SortOrder
+    allowWrite?: SortOrder
+    allowedTools?: SortOrder
+    maxSteps?: SortOrder
+    lastRunAt?: SortOrder
+    nextRunAt?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type AiAgentJobSumOrderByAggregateInput = {
+    atHour?: SortOrder
+    atMinute?: SortOrder
+    intervalMinutes?: SortOrder
+    maxSteps?: SortOrder
+  }
+
+  export type AiAgentJobScalarRelationFilter = {
+    is?: AiAgentJobWhereInput
+    isNot?: AiAgentJobWhereInput
+  }
+
+  export type AiAgentRunCountOrderByAggregateInput = {
+    id?: SortOrder
+    jobId?: SortOrder
+    startedAt?: SortOrder
+    finishedAt?: SortOrder
+    status?: SortOrder
+    summary?: SortOrder
+    toolCalls?: SortOrder
+    steps?: SortOrder
+    chamTran?: SortOrder
+    errorMessage?: SortOrder
+    trigger?: SortOrder
+  }
+
+  export type AiAgentRunAvgOrderByAggregateInput = {
+    steps?: SortOrder
+  }
+
+  export type AiAgentRunMaxOrderByAggregateInput = {
+    id?: SortOrder
+    jobId?: SortOrder
+    startedAt?: SortOrder
+    finishedAt?: SortOrder
+    status?: SortOrder
+    summary?: SortOrder
+    toolCalls?: SortOrder
+    steps?: SortOrder
+    chamTran?: SortOrder
+    errorMessage?: SortOrder
+    trigger?: SortOrder
+  }
+
+  export type AiAgentRunMinOrderByAggregateInput = {
+    id?: SortOrder
+    jobId?: SortOrder
+    startedAt?: SortOrder
+    finishedAt?: SortOrder
+    status?: SortOrder
+    summary?: SortOrder
+    toolCalls?: SortOrder
+    steps?: SortOrder
+    chamTran?: SortOrder
+    errorMessage?: SortOrder
+    trigger?: SortOrder
+  }
+
+  export type AiAgentRunSumOrderByAggregateInput = {
+    steps?: SortOrder
+  }
+
   export type UserCreateNestedManyWithoutBranchInput = {
     create?: XOR<UserCreateWithoutBranchInput, UserUncheckedCreateWithoutBranchInput> | UserCreateWithoutBranchInput[] | UserUncheckedCreateWithoutBranchInput[]
     connectOrCreate?: UserCreateOrConnectWithoutBranchInput | UserCreateOrConnectWithoutBranchInput[]
@@ -191747,6 +194997,62 @@ export namespace Prisma {
     upsert?: FbPageUpsertWithoutAutoReplyLogsInput
     connect?: FbPageWhereUniqueInput
     update?: XOR<XOR<FbPageUpdateToOneWithWhereWithoutAutoReplyLogsInput, FbPageUpdateWithoutAutoReplyLogsInput>, FbPageUncheckedUpdateWithoutAutoReplyLogsInput>
+  }
+
+  export type AiAgentRunCreateNestedManyWithoutJobInput = {
+    create?: XOR<AiAgentRunCreateWithoutJobInput, AiAgentRunUncheckedCreateWithoutJobInput> | AiAgentRunCreateWithoutJobInput[] | AiAgentRunUncheckedCreateWithoutJobInput[]
+    connectOrCreate?: AiAgentRunCreateOrConnectWithoutJobInput | AiAgentRunCreateOrConnectWithoutJobInput[]
+    createMany?: AiAgentRunCreateManyJobInputEnvelope
+    connect?: AiAgentRunWhereUniqueInput | AiAgentRunWhereUniqueInput[]
+  }
+
+  export type AiAgentRunUncheckedCreateNestedManyWithoutJobInput = {
+    create?: XOR<AiAgentRunCreateWithoutJobInput, AiAgentRunUncheckedCreateWithoutJobInput> | AiAgentRunCreateWithoutJobInput[] | AiAgentRunUncheckedCreateWithoutJobInput[]
+    connectOrCreate?: AiAgentRunCreateOrConnectWithoutJobInput | AiAgentRunCreateOrConnectWithoutJobInput[]
+    createMany?: AiAgentRunCreateManyJobInputEnvelope
+    connect?: AiAgentRunWhereUniqueInput | AiAgentRunWhereUniqueInput[]
+  }
+
+  export type AiAgentRunUpdateManyWithoutJobNestedInput = {
+    create?: XOR<AiAgentRunCreateWithoutJobInput, AiAgentRunUncheckedCreateWithoutJobInput> | AiAgentRunCreateWithoutJobInput[] | AiAgentRunUncheckedCreateWithoutJobInput[]
+    connectOrCreate?: AiAgentRunCreateOrConnectWithoutJobInput | AiAgentRunCreateOrConnectWithoutJobInput[]
+    upsert?: AiAgentRunUpsertWithWhereUniqueWithoutJobInput | AiAgentRunUpsertWithWhereUniqueWithoutJobInput[]
+    createMany?: AiAgentRunCreateManyJobInputEnvelope
+    set?: AiAgentRunWhereUniqueInput | AiAgentRunWhereUniqueInput[]
+    disconnect?: AiAgentRunWhereUniqueInput | AiAgentRunWhereUniqueInput[]
+    delete?: AiAgentRunWhereUniqueInput | AiAgentRunWhereUniqueInput[]
+    connect?: AiAgentRunWhereUniqueInput | AiAgentRunWhereUniqueInput[]
+    update?: AiAgentRunUpdateWithWhereUniqueWithoutJobInput | AiAgentRunUpdateWithWhereUniqueWithoutJobInput[]
+    updateMany?: AiAgentRunUpdateManyWithWhereWithoutJobInput | AiAgentRunUpdateManyWithWhereWithoutJobInput[]
+    deleteMany?: AiAgentRunScalarWhereInput | AiAgentRunScalarWhereInput[]
+  }
+
+  export type AiAgentRunUncheckedUpdateManyWithoutJobNestedInput = {
+    create?: XOR<AiAgentRunCreateWithoutJobInput, AiAgentRunUncheckedCreateWithoutJobInput> | AiAgentRunCreateWithoutJobInput[] | AiAgentRunUncheckedCreateWithoutJobInput[]
+    connectOrCreate?: AiAgentRunCreateOrConnectWithoutJobInput | AiAgentRunCreateOrConnectWithoutJobInput[]
+    upsert?: AiAgentRunUpsertWithWhereUniqueWithoutJobInput | AiAgentRunUpsertWithWhereUniqueWithoutJobInput[]
+    createMany?: AiAgentRunCreateManyJobInputEnvelope
+    set?: AiAgentRunWhereUniqueInput | AiAgentRunWhereUniqueInput[]
+    disconnect?: AiAgentRunWhereUniqueInput | AiAgentRunWhereUniqueInput[]
+    delete?: AiAgentRunWhereUniqueInput | AiAgentRunWhereUniqueInput[]
+    connect?: AiAgentRunWhereUniqueInput | AiAgentRunWhereUniqueInput[]
+    update?: AiAgentRunUpdateWithWhereUniqueWithoutJobInput | AiAgentRunUpdateWithWhereUniqueWithoutJobInput[]
+    updateMany?: AiAgentRunUpdateManyWithWhereWithoutJobInput | AiAgentRunUpdateManyWithWhereWithoutJobInput[]
+    deleteMany?: AiAgentRunScalarWhereInput | AiAgentRunScalarWhereInput[]
+  }
+
+  export type AiAgentJobCreateNestedOneWithoutRunsInput = {
+    create?: XOR<AiAgentJobCreateWithoutRunsInput, AiAgentJobUncheckedCreateWithoutRunsInput>
+    connectOrCreate?: AiAgentJobCreateOrConnectWithoutRunsInput
+    connect?: AiAgentJobWhereUniqueInput
+  }
+
+  export type AiAgentJobUpdateOneRequiredWithoutRunsNestedInput = {
+    create?: XOR<AiAgentJobCreateWithoutRunsInput, AiAgentJobUncheckedCreateWithoutRunsInput>
+    connectOrCreate?: AiAgentJobCreateOrConnectWithoutRunsInput
+    upsert?: AiAgentJobUpsertWithoutRunsInput
+    connect?: AiAgentJobWhereUniqueInput
+    update?: XOR<XOR<AiAgentJobUpdateToOneWithWhereWithoutRunsInput, AiAgentJobUpdateWithoutRunsInput>, AiAgentJobUncheckedUpdateWithoutRunsInput>
   }
 
   export type NestedStringFilter<$PrismaModel = never> = {
@@ -203190,6 +206496,167 @@ export namespace Prisma {
     commentRules?: FbCommentRuleUncheckedUpdateManyWithoutPageNestedInput
   }
 
+  export type AiAgentRunCreateWithoutJobInput = {
+    id?: string
+    startedAt?: Date | string
+    finishedAt?: Date | string | null
+    status?: string
+    summary?: string | null
+    toolCalls?: string
+    steps?: number
+    chamTran?: boolean
+    errorMessage?: string | null
+    trigger?: string
+  }
+
+  export type AiAgentRunUncheckedCreateWithoutJobInput = {
+    id?: string
+    startedAt?: Date | string
+    finishedAt?: Date | string | null
+    status?: string
+    summary?: string | null
+    toolCalls?: string
+    steps?: number
+    chamTran?: boolean
+    errorMessage?: string | null
+    trigger?: string
+  }
+
+  export type AiAgentRunCreateOrConnectWithoutJobInput = {
+    where: AiAgentRunWhereUniqueInput
+    create: XOR<AiAgentRunCreateWithoutJobInput, AiAgentRunUncheckedCreateWithoutJobInput>
+  }
+
+  export type AiAgentRunCreateManyJobInputEnvelope = {
+    data: AiAgentRunCreateManyJobInput | AiAgentRunCreateManyJobInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type AiAgentRunUpsertWithWhereUniqueWithoutJobInput = {
+    where: AiAgentRunWhereUniqueInput
+    update: XOR<AiAgentRunUpdateWithoutJobInput, AiAgentRunUncheckedUpdateWithoutJobInput>
+    create: XOR<AiAgentRunCreateWithoutJobInput, AiAgentRunUncheckedCreateWithoutJobInput>
+  }
+
+  export type AiAgentRunUpdateWithWhereUniqueWithoutJobInput = {
+    where: AiAgentRunWhereUniqueInput
+    data: XOR<AiAgentRunUpdateWithoutJobInput, AiAgentRunUncheckedUpdateWithoutJobInput>
+  }
+
+  export type AiAgentRunUpdateManyWithWhereWithoutJobInput = {
+    where: AiAgentRunScalarWhereInput
+    data: XOR<AiAgentRunUpdateManyMutationInput, AiAgentRunUncheckedUpdateManyWithoutJobInput>
+  }
+
+  export type AiAgentRunScalarWhereInput = {
+    AND?: AiAgentRunScalarWhereInput | AiAgentRunScalarWhereInput[]
+    OR?: AiAgentRunScalarWhereInput[]
+    NOT?: AiAgentRunScalarWhereInput | AiAgentRunScalarWhereInput[]
+    id?: StringFilter<"AiAgentRun"> | string
+    jobId?: StringFilter<"AiAgentRun"> | string
+    startedAt?: DateTimeFilter<"AiAgentRun"> | Date | string
+    finishedAt?: DateTimeNullableFilter<"AiAgentRun"> | Date | string | null
+    status?: StringFilter<"AiAgentRun"> | string
+    summary?: StringNullableFilter<"AiAgentRun"> | string | null
+    toolCalls?: StringFilter<"AiAgentRun"> | string
+    steps?: IntFilter<"AiAgentRun"> | number
+    chamTran?: BoolFilter<"AiAgentRun"> | boolean
+    errorMessage?: StringNullableFilter<"AiAgentRun"> | string | null
+    trigger?: StringFilter<"AiAgentRun"> | string
+  }
+
+  export type AiAgentJobCreateWithoutRunsInput = {
+    id?: string
+    name: string
+    prompt: string
+    scheduleKind?: string
+    atHour?: number
+    atMinute?: number
+    intervalMinutes?: number
+    enabled?: boolean
+    allowWrite?: boolean
+    allowedTools?: string
+    maxSteps?: number
+    lastRunAt?: Date | string | null
+    nextRunAt?: Date | string | null
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type AiAgentJobUncheckedCreateWithoutRunsInput = {
+    id?: string
+    name: string
+    prompt: string
+    scheduleKind?: string
+    atHour?: number
+    atMinute?: number
+    intervalMinutes?: number
+    enabled?: boolean
+    allowWrite?: boolean
+    allowedTools?: string
+    maxSteps?: number
+    lastRunAt?: Date | string | null
+    nextRunAt?: Date | string | null
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type AiAgentJobCreateOrConnectWithoutRunsInput = {
+    where: AiAgentJobWhereUniqueInput
+    create: XOR<AiAgentJobCreateWithoutRunsInput, AiAgentJobUncheckedCreateWithoutRunsInput>
+  }
+
+  export type AiAgentJobUpsertWithoutRunsInput = {
+    update: XOR<AiAgentJobUpdateWithoutRunsInput, AiAgentJobUncheckedUpdateWithoutRunsInput>
+    create: XOR<AiAgentJobCreateWithoutRunsInput, AiAgentJobUncheckedCreateWithoutRunsInput>
+    where?: AiAgentJobWhereInput
+  }
+
+  export type AiAgentJobUpdateToOneWithWhereWithoutRunsInput = {
+    where?: AiAgentJobWhereInput
+    data: XOR<AiAgentJobUpdateWithoutRunsInput, AiAgentJobUncheckedUpdateWithoutRunsInput>
+  }
+
+  export type AiAgentJobUpdateWithoutRunsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    prompt?: StringFieldUpdateOperationsInput | string
+    scheduleKind?: StringFieldUpdateOperationsInput | string
+    atHour?: IntFieldUpdateOperationsInput | number
+    atMinute?: IntFieldUpdateOperationsInput | number
+    intervalMinutes?: IntFieldUpdateOperationsInput | number
+    enabled?: BoolFieldUpdateOperationsInput | boolean
+    allowWrite?: BoolFieldUpdateOperationsInput | boolean
+    allowedTools?: StringFieldUpdateOperationsInput | string
+    maxSteps?: IntFieldUpdateOperationsInput | number
+    lastRunAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    nextRunAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type AiAgentJobUncheckedUpdateWithoutRunsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    prompt?: StringFieldUpdateOperationsInput | string
+    scheduleKind?: StringFieldUpdateOperationsInput | string
+    atHour?: IntFieldUpdateOperationsInput | number
+    atMinute?: IntFieldUpdateOperationsInput | number
+    intervalMinutes?: IntFieldUpdateOperationsInput | number
+    enabled?: BoolFieldUpdateOperationsInput | boolean
+    allowWrite?: BoolFieldUpdateOperationsInput | boolean
+    allowedTools?: StringFieldUpdateOperationsInput | string
+    maxSteps?: IntFieldUpdateOperationsInput | number
+    lastRunAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    nextRunAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type UserCreateManyBranchInput = {
     id?: string
     email: string
@@ -206876,6 +210343,58 @@ export namespace Prisma {
     success?: BoolFieldUpdateOperationsInput | boolean
     errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type AiAgentRunCreateManyJobInput = {
+    id?: string
+    startedAt?: Date | string
+    finishedAt?: Date | string | null
+    status?: string
+    summary?: string | null
+    toolCalls?: string
+    steps?: number
+    chamTran?: boolean
+    errorMessage?: string | null
+    trigger?: string
+  }
+
+  export type AiAgentRunUpdateWithoutJobInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    startedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    finishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    summary?: NullableStringFieldUpdateOperationsInput | string | null
+    toolCalls?: StringFieldUpdateOperationsInput | string
+    steps?: IntFieldUpdateOperationsInput | number
+    chamTran?: BoolFieldUpdateOperationsInput | boolean
+    errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    trigger?: StringFieldUpdateOperationsInput | string
+  }
+
+  export type AiAgentRunUncheckedUpdateWithoutJobInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    startedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    finishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    summary?: NullableStringFieldUpdateOperationsInput | string | null
+    toolCalls?: StringFieldUpdateOperationsInput | string
+    steps?: IntFieldUpdateOperationsInput | number
+    chamTran?: BoolFieldUpdateOperationsInput | boolean
+    errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    trigger?: StringFieldUpdateOperationsInput | string
+  }
+
+  export type AiAgentRunUncheckedUpdateManyWithoutJobInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    startedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    finishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    summary?: NullableStringFieldUpdateOperationsInput | string | null
+    toolCalls?: StringFieldUpdateOperationsInput | string
+    steps?: IntFieldUpdateOperationsInput | number
+    chamTran?: BoolFieldUpdateOperationsInput | boolean
+    errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
+    trigger?: StringFieldUpdateOperationsInput | string
   }
 
 

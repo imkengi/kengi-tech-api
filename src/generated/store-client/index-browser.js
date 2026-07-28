@@ -2083,6 +2083,39 @@ exports.Prisma.CrmCampaignScalarFieldEnum = {
   updatedAt: 'updatedAt'
 };
 
+exports.Prisma.AiAgentJobScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  prompt: 'prompt',
+  scheduleKind: 'scheduleKind',
+  atHour: 'atHour',
+  atMinute: 'atMinute',
+  intervalMinutes: 'intervalMinutes',
+  enabled: 'enabled',
+  allowWrite: 'allowWrite',
+  allowedTools: 'allowedTools',
+  maxSteps: 'maxSteps',
+  lastRunAt: 'lastRunAt',
+  nextRunAt: 'nextRunAt',
+  createdBy: 'createdBy',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.AiAgentRunScalarFieldEnum = {
+  id: 'id',
+  jobId: 'jobId',
+  startedAt: 'startedAt',
+  finishedAt: 'finishedAt',
+  status: 'status',
+  summary: 'summary',
+  toolCalls: 'toolCalls',
+  steps: 'steps',
+  chamTran: 'chamTran',
+  errorMessage: 'errorMessage',
+  trigger: 'trigger'
+};
+
 exports.Prisma.SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -2216,7 +2249,9 @@ exports.Prisma.ModelName = {
   CrmDeal: 'CrmDeal',
   CrmActivity: 'CrmActivity',
   CrmZaloLog: 'CrmZaloLog',
-  CrmCampaign: 'CrmCampaign'
+  CrmCampaign: 'CrmCampaign',
+  AiAgentJob: 'AiAgentJob',
+  AiAgentRun: 'AiAgentRun'
 };
 
 /**

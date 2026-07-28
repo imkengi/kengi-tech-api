@@ -2725,3 +2725,52 @@ model CrmCampaign {
   @@index([status])
   @@index([channel])
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  TRỢ LÝ AI TỰ ĐỘNG — chạy theo lịch, không cần người ngồi bấm
+//  Chỉ thị viết bằng tiếng Việt; cron đánh thức Gemini kèm bộ MCP tool.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+model AiAgentJob {
+  id              String    @id @default(cuid())
+  name            String // tên gợi nhớ, VD "Chăm bình luận sáng"
+  prompt          String // chỉ thị bằng tiếng Việt cho agent
+  scheduleKind    String    @default("daily") // daily | interval
+  atHour          Int       @default(8) // GIỜ VIỆT NAM (không phải UTC) — cho daily
+  atMinute        Int       @default(0)
+  intervalMinutes Int       @default(60) // cho interval
+  enabled         Boolean   @default(true)
+  // An toàn: mặc định CHỈ ĐỌC. Tool ghi phải bật allowWrite, riêng tool nhạy cảm
+  // (đăng bài, trả lời khách, lên đơn, thu nợ) còn phải gọi ĐÍCH DANH ở allowedTools.
+  allowWrite      Boolean   @default(false)
+  allowedTools    String    @default("[]") // JSON array tên tool; rỗng = mọi tool đọc
+  maxSteps        Int       @default(8)
+  lastRunAt       DateTime?
+  nextRunAt       DateTime?
+  createdBy       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  runs AiAgentRun[]
+
+  @@index([enabled, nextRunAt])
+}
+
+model AiAgentRun {
+  id           String    @id @default(cuid())
+  jobId        String
+  startedAt    DateTime  @default(now())
+  finishedAt   DateTime?
+  status       String    @default("running") // running | ok | error
+  summary      String? // câu trả lời cuối của agent
+  toolCalls    String    @default("[]") // JSON: [{name,args,ok,error}]
+  steps        Int       @default(0)
+  chamTran     Boolean   @default(false) // hết số bước mà chưa xong
+  errorMessage String?
+  trigger      String    @default("cron") // cron | manual
+
+  job AiAgentJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+  @@index([startedAt])
+}
