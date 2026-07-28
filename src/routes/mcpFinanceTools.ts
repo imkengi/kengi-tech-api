@@ -400,6 +400,85 @@ export const FINANCE_TOOLS: Tool[] = [
         },
     },
     {
+        name: 'trace_negative_stock',
+        description: 'TRUY NGUYÊN vì sao một mặt hàng bị tồn ÂM: đối chiếu số đã BÁN, số đã NHẬP (phiếu nhập) và thẻ kho, để biết là CHƯA NHẬP hàng vào hệ thống hay bị TRỪ KHO HAI LẦN. Dùng khi stock_health_check báo tồn âm.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                limit: { type: 'number', description: 'Số mặt hàng âm nặng nhất cần soi (mặc định 10, tối đa 30)' },
+                sku: { type: 'string', description: 'Soi đúng một mã cụ thể thay vì lấy các mã âm nặng nhất' },
+            },
+            additionalProperties: false,
+        },
+        run: async (a, { prisma }: ToolCtx) => {
+            const lim = Math.min(num(a?.limit, 10), 30)
+            const sku = String(a?.sku || '').trim()
+
+            const dong: any[] = await prisma.$queryRawUnsafe(
+                `WITH mh AS (
+                     SELECT id, sku, name, stock, "costPrice"
+                     FROM "Product"
+                     ${sku ? `WHERE sku = $1` : `WHERE stock < 0 ORDER BY stock ASC LIMIT ${lim}`}
+                 )
+                 SELECT mh.sku, mh.name, mh.stock,
+                        -- Đã bán: theo ĐƠN VỊ GỐC (baseQuantity), fallback quantity
+                        COALESCE((SELECT SUM(COALESCE(NULLIF(ti."baseQuantity",0), ti.quantity))
+                                  FROM "TransactionItem" ti
+                                  JOIN "Transaction" t ON t.id = ti."transactionId"
+                                  WHERE ti."productId" = mh.id AND t.status = 'completed'), 0)::float AS da_ban,
+                        -- Đã nhập qua PHIẾU NHẬP (trừ phần đã trả lại NCC)
+                        COALESCE((SELECT SUM(ri.quantity - ri."returnedQuantity")
+                                  FROM "ImportReceiptItem" ri
+                                  JOIN "ImportReceipt" r ON r.id = ri."receiptId"
+                                  WHERE ri."productId" = mh.id AND r.status <> 'cancelled'), 0)::float AS da_nhap_phieu,
+                        -- Tổng phát sinh trên THẺ KHO (gồm cả nhập liệu hàng loạt,
+                        -- điều chỉnh, tồn đầu kỳ...) — nguồn rộng hơn phiếu nhập
+                        COALESCE((SELECT SUM(it.quantity) FROM "InventoryTransaction" it
+                                  WHERE it."productId" = mh.id), 0)::float AS the_kho_tong,
+                        COALESCE((SELECT COUNT(*) FROM "InventoryTransaction" it
+                                  WHERE it."productId" = mh.id), 0)::int AS the_kho_so_dong
+                 FROM mh ORDER BY mh.stock ASC`,
+                ...(sku ? [sku] : []),
+            )
+            if (!dong.length) throw new ToolError(sku ? `Không tìm thấy mã "${sku}"` : 'Không có mặt hàng nào tồn âm')
+
+            const ket = dong.map(r => {
+                const daBan = Number(r.da_ban) || 0
+                const daNhap = Number(r.da_nhap_phieu) || 0
+                const ton = Number(r.stock) || 0
+                // Nếu CHỈ có bán và nhập qua phiếu thì tồn phải = nhập − bán.
+                // Lệch so với con số đó = phần hàng vào/ra bằng đường khác
+                // (nhập liệu hàng loạt, điều chỉnh tồn, trả hàng...).
+                const duKienNeuChiCoPhieu = daNhap - daBan
+                const chenh = ton - duKienNeuChiCoPhieu
+                let chanDoan: string
+                if (daBan > 0 && daNhap === 0 && Math.abs(chenh) < 1) {
+                    chanDoan = 'CHƯA NHẬP hàng này vào hệ thống — bán bao nhiêu âm bấy nhiêu'
+                } else if (daBan > 0 && ton <= -daBan * 1.8) {
+                    chanDoan = 'NGHI TRỪ KHO HAI LẦN — âm nhiều hơn cả số đã bán'
+                } else if (chenh > 0) {
+                    chanDoan = `Có ${Math.round(chenh)} đơn vị vào bằng đường khác phiếu nhập (nhập liệu hàng loạt / điều chỉnh) nhưng vẫn không đủ bán`
+                } else {
+                    chanDoan = 'Nhập ít hơn bán — thiếu tồn đầu kỳ hoặc quên ghi phiếu nhập'
+                }
+                return {
+                    sku: r.sku, ten: r.name, tonHienTai: ton,
+                    daBan, daNhapQuaPhieu: daNhap,
+                    tonNeuChiTinhPhieuNhap: duKienNeuChiCoPhieu,
+                    chenhLechDoDuongKhac: Math.round(chenh),
+                    theKhoSoDong: Number(r.the_kho_so_dong) || 0,
+                    theKhoTongPhatSinh: Number(r.the_kho_tong) || 0,
+                    chanDoan,
+                }
+            })
+            return {
+                soMatHang: ket.length,
+                matHang: ket,
+                cachDoc: 'tonNeuChiTinhPhieuNhap = đã nhập − đã bán. Nếu tồn thật CAO HƠN con số đó thì có hàng vào bằng đường khác (nhập liệu hàng loạt, điều chỉnh tồn). Nếu tồn thật ÂM SÂU HƠN cả số đã bán thì nghi bị trừ kho hai lần.',
+            }
+        },
+    },
+    {
         name: 'stock_by_warehouse',
         description: 'TỒN KHO THEO TỪNG KHO (kho chính, kho hàng lỗi, kho bảo hành, xe bán hàng lưu động...). Dùng khi hỏi "kho nào còn hàng", "xe nào còn bao nhiêu".',
         inputSchema: {
