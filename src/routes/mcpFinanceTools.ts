@@ -275,6 +275,109 @@ export const FINANCE_TOOLS: Tool[] = [
         },
     },
     {
+        name: 'stock_health_check',
+        description: 'KIỂM TRA SỨC KHOẺ DỮ LIỆU KHO: hàng bị tồn ÂM, lệch giữa tồn tổng và tồn kho chính, kho bị trùng/thiếu. Gọi khi báo cáo tồn kho ra số vô lý (âm, lệch) hoặc để soát định kỳ. Chỉ ĐỌC, không sửa gì.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                limit: { type: 'number', description: 'Số mặt hàng liệt kê mỗi mục (mặc định 10, tối đa 50)' },
+            },
+            additionalProperties: false,
+        },
+        run: async (a, { prisma }: ToolCtx) => {
+            const lim = Math.min(num(a?.limit, 10), 50)
+
+            // 1. Hàng tồn ÂM — bán quá số đã nhập, hoặc trừ kho hai lần
+            const amRows: any[] = await prisma.$queryRawUnsafe(
+                `SELECT COUNT(*)::int AS so_mat_hang, COALESCE(SUM(stock),0)::float AS tong_am,
+                        COALESCE(SUM(stock * "costPrice"),0)::float AS gia_tri_am
+                 FROM "Product" WHERE stock < 0`,
+            )
+            const amChiTiet: any[] = await prisma.$queryRawUnsafe(
+                `SELECT sku, name, stock, "costPrice" FROM "Product" WHERE stock < 0 ORDER BY stock ASC LIMIT ${lim}`,
+            )
+
+            // 2. Bất biến: tồn ở (các) kho CHÍNH phải BẰNG Product.stock.
+            //    Lệch = POS kiểm tồn theo kho chính sẽ bán khống hoặc chặn nhầm.
+            //    PHẢI gộp SUM qua MỌI kho main rồi mới so — join thẳng vào từng kho
+            //    sẽ sinh 1 dòng/kho, và khi store có 2 kho chính (trường hợp đang
+            //    gặp) thì dòng của kho rỗng luôn "lệch" → thổi phồng con số.
+            const lechRows: any[] = await prisma.$queryRawUnsafe(
+                `WITH ton_main AS (
+                     SELECT p.id, p.sku, p.name, p.stock,
+                            COALESCE(SUM(ws.quantity), 0) AS ton_kho
+                     FROM "Product" p
+                     LEFT JOIN "WarehouseStock" ws ON ws."productId" = p.id
+                          AND ws."warehouseId" IN (SELECT id FROM "Warehouse" WHERE type = 'main' AND "isActive" = true)
+                     WHERE p."productType" = 'goods'
+                     GROUP BY p.id, p.sku, p.name, p.stock
+                 )
+                 SELECT COUNT(*)::int AS so_lech, COALESCE(SUM(ABS(stock - ton_kho)),0)::float AS tong_lech
+                 FROM ton_main WHERE stock <> ton_kho`,
+            )
+            const lechChiTiet: any[] = await prisma.$queryRawUnsafe(
+                `WITH ton_main AS (
+                     SELECT p.id, p.sku, p.name, p.stock,
+                            COALESCE(SUM(ws.quantity), 0) AS ton_kho
+                     FROM "Product" p
+                     LEFT JOIN "WarehouseStock" ws ON ws."productId" = p.id
+                          AND ws."warehouseId" IN (SELECT id FROM "Warehouse" WHERE type = 'main' AND "isActive" = true)
+                     WHERE p."productType" = 'goods'
+                     GROUP BY p.id, p.sku, p.name, p.stock
+                 )
+                 SELECT sku, name, stock AS ton_tong, ton_kho AS ton_kho_chinh
+                 FROM ton_main WHERE stock <> ton_kho
+                 ORDER BY ABS(stock - ton_kho) DESC LIMIT ${lim}`,
+            )
+
+            // 3. Kho trùng: nhiều kho chính cùng đánh dấu mặc định → resolver kho
+            //    có thể trỏ nhầm, hàng nhập vào một kho mà POS đọc kho kia.
+            const khoChinh: any[] = await prisma.$queryRawUnsafe(
+                `SELECT w.id, w.code, w.name, w."branchId", w."isDefault",
+                        COUNT(ws.id)::int AS so_ma_hang,
+                        COALESCE(SUM(ws.quantity),0)::float AS tong_sl
+                 FROM "Warehouse" w
+                 LEFT JOIN "WarehouseStock" ws ON ws."warehouseId" = w.id
+                 WHERE w.type = 'main' AND w."isActive" = true
+                 GROUP BY w.id, w.code, w.name, w."branchId", w."isDefault"
+                 ORDER BY so_ma_hang DESC`,
+            )
+            const soMacDinh = khoChinh.filter(k => k.isDefault).length
+
+            const vanDe: string[] = []
+            if (Number(amRows[0]?.so_mat_hang) > 0) {
+                vanDe.push(`${amRows[0].so_mat_hang} mặt hàng đang TỒN ÂM (tổng ${amRows[0].tong_am}) — bán nhiều hơn số đã nhập vào hệ thống, hoặc bị trừ kho hai lần.`)
+            }
+            if (Number(lechRows[0]?.so_lech) > 0) {
+                vanDe.push(`${lechRows[0].so_lech} mặt hàng LỆCH giữa tồn tổng và tồn kho chính — POS kiểm tồn theo kho chính nên sẽ bán khống hoặc chặn bán nhầm.`)
+            }
+            if (soMacDinh > 1) {
+                vanDe.push(`Có ${soMacDinh} kho chính cùng đánh dấu MẶC ĐỊNH — hàng nhập vào một kho nhưng POS/đẩy tồn có thể đọc kho kia.`)
+            }
+
+            return {
+                ketLuan: vanDe.length ? 'CÓ VẤN ĐỀ' : 'Dữ liệu kho bình thường',
+                vanDe,
+                tonAm: {
+                    soMatHang: Number(amRows[0]?.so_mat_hang) || 0,
+                    tongSoLuongAm: Number(amRows[0]?.tong_am) || 0,
+                    giaTriAmTheoVon: Math.round(Number(amRows[0]?.gia_tri_am) || 0),
+                    viDu: amChiTiet.map(p => ({ sku: p.sku, ten: p.name, ton: p.stock })),
+                },
+                lechKhoChinh: {
+                    soMatHang: Number(lechRows[0]?.so_lech) || 0,
+                    tongDoLech: Number(lechRows[0]?.tong_lech) || 0,
+                    viDu: lechChiTiet.map(p => ({ sku: p.sku, ten: p.name, tonTong: p.ton_tong, tonKhoChinh: p.ton_kho_chinh })),
+                },
+                khoChinh: khoChinh.map(k => ({
+                    ma: k.code, ten: k.name, chiNhanh: k.branchId, macDinh: k.isDefault,
+                    soMaHang: k.so_ma_hang, tongSoLuong: k.tong_sl,
+                })),
+                canhBao: 'KHÔNG chạy /api/inventory/reindex để chữa: thẻ kho ở hệ này không đáng tin (import "Tồn đầu kỳ" ghi trùng, POS bán không ghi thẻ kho) — reindex sẽ thổi hoặc xoá sạch tồn. Phải rà nguyên nhân trước.',
+            }
+        },
+    },
+    {
         name: 'stock_by_warehouse',
         description: 'TỒN KHO THEO TỪNG KHO (kho chính, kho hàng lỗi, kho bảo hành, xe bán hàng lưu động...). Dùng khi hỏi "kho nào còn hàng", "xe nào còn bao nhiêu".',
         inputSchema: {
