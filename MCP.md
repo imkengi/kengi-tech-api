@@ -27,7 +27,7 @@ Tool có cột `ghi` đòi scope chứa `write`; key chỉ `read` gọi vào s�
 claude mcp add --transport http kengi-retail https://api.kengi.vn/api/mcp --header "X-API-Key: <secret>" --header "x-store-code: KENGISTORE"
 ```
 
-## Danh sách công cụ (35)
+## Danh sách công cụ (40)
 
 Tham số **in đậm** là bắt buộc.
 
@@ -52,6 +52,11 @@ Tham số **in đậm** là bắt buộc.
 | `top_customers` | đọc | Khách mua nhiều nhất, kèm công nợ. | limit |
 | `inventory_value` | đọc | Giá trị tồn kho theo giá vốn và giá bán. | — |
 | `list_categories` | đọc | Nhóm hàng + số mặt hàng mỗi nhóm. | — |
+| `profit_report` | đọc | Lãi/lỗ: doanh thu − giá vốn − chi phí, biên lãi gộp. | from, to |
+| `expense_report` | đọc | Chi phí theo nhóm + khoản lớn nhất. | from, to |
+| `supplier_debt` | đọc | Công nợ phải trả NCC, phiếu quá hạn. | only_overdue, limit |
+| `list_import_receipts` | đọc | Lịch sử nhập hàng, đã trả bao nhiêu, có HĐ VAT không. | from, to, limit |
+| `stock_by_warehouse` | đọc | Tồn theo từng kho / xe bán lưu động. | product_query, limit |
 | `fanpage_list_pages` | đọc | Fanpage đã kết nối + trạng thái token / webhook / auto-reply. | — |
 | `fanpage_list_comments` | đọc | Bình luận mới, mặc định **chỉ trả cái chưa được trả lời**. | page_id, post_limit, only_unanswered |
 | `fanpage_list_posts` | đọc | Bài đã đăng + lượt tương tác (lấy `post_id` để chạy ads). | page_id, limit |
@@ -74,6 +79,7 @@ Tham số **in đậm** là bắt buộc.
 - **Lỗi nghiệp vụ** (hết tồn, không tìm thấy khách, token FB hết hạn…) trả **trong** `result` dạng `{content, isError: true}`, **không** phải JSON-RPC error — đúng spec MCP. Agent đọc được và tự xử lý.
 - **`create_sale`** dùng chung helper với POS: `decrementSellableStock` (race-safe, giữ `Product.stock` ↔ `WarehouseStock`) + `createJournalEntriesForTransaction`, tất cả trong 1 transaction. Mặc định: đơn **có khách** → ghi nợ toàn bộ; khách **lẻ** → thu đủ. Ép mức thu bằng `amount_received`.
 - **Nhóm `fanpage_*`** bỏ trống `page_id` được **khi store chỉ có 1 fanpage**; nhiều page mà không nói rõ thì tool báo lỗi kèm danh sách để agent chọn lại. Token page nằm ở server (`FbPage.accessToken`), agent không bao giờ thấy.
+- **`profit_report` là ƯỚC TÍNH**: `TransactionItem` không chụp giá vốn lúc bán nên COGS dùng giá vốn **hiện tại** của hàng. Hàng chưa có giá vốn bị **đếm riêng**, không lặng lẽ tính bằng 0 — agent phải đọc `canhBaoThieuGiaVon` ra cho chủ shop. Ngày truyền vào nhóm tài chính hiểu theo **giờ VN**.
 - **Lên lịch bài** phải cách hiện tại **≥ 10 phút** (quy định Facebook). Chuỗi giờ **không kèm múi giờ được hiểu là giờ Việt Nam (+07:00)**, không phải giờ máy chủ — Cloud Run chạy UTC nên nếu không quy ước thì `2026-08-01T09:00:00` sẽ thành 16h giờ VN. Tool trả lại `hendang` (cách hiểu) và `hendangUTC` để agent đọc lại và xác nhận với chủ shop.
 - **Hạn token:** `fanpage_list_pages` trả `hanToken` + `tuGiaHanDuoc`. Page nối bằng page token dán tay **không tự gia hạn được** — khi còn ≤ 7 ngày, tool trả thêm `canhBaoChuShop` để agent chủ động nhắc dán token mới.
 - **Auto-reply** chỉ chạy khi bật `fanpage_set_auto_reply` **và** có quy tắc đang bật. Có webhook → phản hồi tức thì; chưa có → cron quét lại mỗi 5 phút.
@@ -117,4 +123,4 @@ Cùng bộ 35 tool, nhưng **không cần người hỏi**: chủ shop đặt t�
 curl -s https://api.kengi.vn/api/mcp -H "x-admin-key: <admin key>" -H "x-store-code: KENGISTORE" -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 
-Không gửi header → phải trả **401**. Gửi đúng → `tools/list` trả đủ 35 tool.
+Không gửi header → phải trả **401**. Gửi đúng → `tools/list` trả đủ 40 tool.
