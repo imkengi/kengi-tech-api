@@ -79,6 +79,38 @@ Tham số **in đậm** là bắt buộc.
 - **Auto-reply** chỉ chạy khi bật `fanpage_set_auto_reply` **và** có quy tắc đang bật. Có webhook → phản hồi tức thì; chưa có → cron quét lại mỗi 5 phút.
 - Trợ lý AI trong dashboard (`/api/mcp-agent`, Gemini) dùng **chung** danh sách tool này — thêm tool ở `TOOLS` là cả hai nơi có ngay.
 
+## Trợ lý AI tự động (chạy theo lịch)
+
+Cùng bộ 35 tool, nhưng **không cần người hỏi**: chủ shop đặt tác vụ bằng tiếng Việt + lịch chạy, cron đánh thức agent làm rồi ghi báo cáo lại.
+
+`POST /api/ai-jobs` — tạo tác vụ:
+
+```json
+{
+  "name": "Chăm bình luận sáng",
+  "prompt": "Xem các bình luận chưa trả lời trên fanpage. Ai hỏi giá hoặc còn hàng thì tra sản phẩm rồi trả lời lịch sự, kèm giá. Ai chê thì đừng trả lời, ghi vào báo cáo.",
+  "scheduleKind": "daily", "atHour": 8, "atMinute": 0,
+  "allowWrite": true,
+  "allowedTools": ["fanpage_list_comments", "fanpage_reply_comment", "search_products"],
+  "maxSteps": 10
+}
+```
+
+| Endpoint | Việc |
+|---|---|
+| `GET /api/ai-jobs` | danh sách tác vụ + lần chạy gần nhất |
+| `GET /api/ai-jobs/tools` | bảng chọn tool (kèm cờ `ghiDuLieu`, `nhayCam`) |
+| `POST /api/ai-jobs` · `PATCH /:id` · `DELETE /:id` | quản lý tác vụ |
+| `POST /api/ai-jobs/:id/run` | chạy thử ngay, không đợi lịch |
+| `GET /api/ai-jobs/:id/runs` | nhật ký: báo cáo, từng tool đã gọi, lỗi |
+
+**An toàn** — agent chạy khi không ai ngồi xem, nên mặc định bị bó chặt:
+- Không bật `allowWrite` → **0 tool ghi**, chỉ đọc.
+- Tool đẩy ra ngoài hoặc động vào tiền/kho (`create_sale`, `record_debt_payment`, `fanpage_create_post`, `fanpage_reply_comment`, `fanpage_hide_comment`, `fanpage_manage_scheduled_post`) phải được gọi **đích danh** trong `allowedTools`. Bật `allowWrite` chung chung là **chưa đủ** — một job "quét bình luận" hiểu sai chỉ thị cũng không thể tự lên đơn.
+- Trần số bước mỗi lượt; mọi tool đã gọi + báo cáo đều lưu vào `AiAgentRun`.
+
+`atHour`/`atMinute` là **giờ Việt Nam**. Cron quét mỗi 5 phút, chỉ chạm store có tác vụ (cờ `Store.hasAiJobs`).
+
 ## Kiểm chứng nhanh
 
 ```bash
