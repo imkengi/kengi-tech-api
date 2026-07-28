@@ -668,6 +668,123 @@ router.post('/sync-schemas', async (req: Request, res: Response) => {
 })
 
 // ─── POST /admin/migrate — Add new columns to registry + store schemas ───────
+// ─── POST /admin/adjust-stock ────────────────────────────────────────────────
+// Sửa tồn MỘT mã hàng về con số chỉ định — cho các ca dữ liệu hỏng đã điều tra
+// (vd CC095 = -300 ghi thẳng từ file import có số âm, chưa từng bán/nhập).
+//
+// Body: { storeCode, sku, setTo, reason, apply?: true }
+//   - không có apply → DRY-RUN: chỉ báo sẽ đổi gì
+//   - apply → đổi Product.stock VÀ WarehouseStock[kho main mặc định] CÙNG MỘT
+//     DELTA trong 1 transaction (giữ bất biến kho), ghi InventoryTransaction
+//     type 'adjustment' để có dấu vết trên thẻ kho.
+// KHÔNG nhận mảng — mỗi lần một mã, ép người gọi nhìn từng con số.
+router.post('/adjust-stock', async (req: Request, res: Response) => {
+    try {
+        const { storeCode, sku, setTo, reason, apply } = req.body || {}
+        const laSync = req.body?.mode === 'sync_main'
+        if (!storeCode || !sku || !reason || (!laSync && !Number.isFinite(Number(setTo)))) {
+            return res.status(400).json({ success: false, error: 'Cần storeCode, sku, reason (+ setTo là số, trừ mode sync_main)' })
+        }
+        const store = await prisma.store.findFirst({ where: { code: { equals: String(storeCode), mode: 'insensitive' } } })
+        if (!store) return res.status(404).json({ success: false, error: `Không tìm thấy store "${storeCode}"` })
+        const sp: any = getStorePrisma(store.schema)
+
+        const p = await sp.product.findFirst({ where: { sku: String(sku) } })
+        if (!p) return res.status(404).json({ success: false, error: `Không tìm thấy mã "${sku}" ở ${store.code}` })
+
+        // MODE sync_main: KHÔNG đổi tồn tổng — chỉnh kho main mặc định sao cho
+        // TỔNG các kho main == Product.stock (chữa lệch 1-2 đơn vị do race).
+        // Phải đọc stock BÊN TRONG transaction: store đang bán thật, truyền số
+        // cứng từ ngoài vào là tạo tồn ma (dry-run từng bắt được stock đổi từ
+        // -650 thành -655 chỉ trong vài giờ).
+        if (req.body?.mode === 'sync_main') {
+            const ketQua = await sp.$transaction(async (tx: any) => {
+                const now = await tx.product.findUnique({ where: { id: p.id }, select: { stock: true } })
+                const mains = await tx.warehouse.findMany({
+                    where: { type: 'main', isActive: true }, select: { id: true, code: true, isDefault: true, branchId: true },
+                })
+                const rows = await tx.warehouseStock.findMany({
+                    where: { productId: p.id, warehouseId: { in: mains.map((m: any) => m.id) } },
+                })
+                const tong = rows.reduce((s: number, r: any) => s + r.quantity, 0)
+                const lech = now.stock - tong
+                const nhanhChinh2 = await tx.branch.findFirst({ where: { isMainBranch: true }, select: { id: true } }).catch(() => null)
+                const dich = mains.find((m: any) => m.isDefault && (!nhanhChinh2?.id || m.branchId === nhanhChinh2.id)) || mains.find((m: any) => m.isDefault)
+                if (!dich) throw new Error('Không tìm thấy kho main mặc định')
+                const dong = rows.find((r: any) => r.warehouseId === dich.id)
+                const ke = {
+                    store: store.code, sku: p.sku, ten: p.name, mode: 'sync_main',
+                    tonTong: now.stock, tongCacKhoMain: tong, lech,
+                    khoChinh: dich.code, khoChinhTruoc: dong?.quantity ?? 0, khoChinhSau: (dong?.quantity ?? 0) + lech,
+                }
+                if (!apply || lech === 0) return { ...ke, daDoi: false }
+                await tx.warehouseStock.upsert({
+                    where: { warehouseId_productId: { warehouseId: dich.id, productId: p.id } },
+                    create: { warehouseId: dich.id, productId: p.id, productName: p.name, productSku: p.sku, quantity: (dong?.quantity ?? 0) + lech },
+                    update: { quantity: { increment: lech } },
+                })
+                await tx.inventoryTransaction.create({
+                    data: {
+                        type: 'adjustment', productId: p.id, productName: p.name, productSku: p.sku,
+                        quantity: 0, reason: `Admin sync_main: ${String(reason)}`,
+                        note: `kho ${dich.code} ${dong?.quantity ?? 0} → ${(dong?.quantity ?? 0) + lech} (tồn tổng ${now.stock} giữ nguyên)`,
+                        userName: 'Admin (adjust-stock)',
+                    },
+                })
+                return { ...ke, daDoi: true }
+            })
+            return res.json({ success: true, cheDo: apply ? (ketQua.daDoi ? 'ĐÃ ĐỒNG BỘ' : 'không lệch — không đổi gì') : 'DRY-RUN — chưa đổi gì', keHoach: ketQua })
+        }
+
+        // Kho main mặc định của CHI NHÁNH CHÍNH (đúng resolver POS dùng)
+        const nhanhChinh = await sp.branch.findFirst({ where: { isMainBranch: true }, select: { id: true } }).catch(() => null)
+        const kho = await sp.warehouse.findFirst({
+            where: { type: 'main', isDefault: true, isActive: true, ...(nhanhChinh?.id ? { branchId: nhanhChinh.id } : {}) },
+        })
+        if (!kho) return res.status(500).json({ success: false, error: 'Không tìm thấy kho main mặc định — không dám đổi tồn' })
+
+        const ws = await sp.warehouseStock.findUnique({
+            where: { warehouseId_productId: { warehouseId: kho.id, productId: p.id } },
+        }).catch(() => null)
+
+        const delta = Number(setTo) - p.stock
+        const keHoach = {
+            store: store.code, sku: p.sku, ten: p.name,
+            tonHienTai: p.stock, tonKhoChinh: ws?.quantity ?? '(chưa có dòng)',
+            setTo: Number(setTo), delta,
+            kho: kho.code,
+            canhBaoLech: ws && ws.quantity !== p.stock ? `Kho chính (${ws.quantity}) đang LỆCH tồn tổng (${p.stock}) — sau khi đổi cả hai đều = ${Number(setTo)}` : null,
+        }
+        if (!apply) return res.json({ success: true, cheDo: 'DRY-RUN — chưa đổi gì', keHoach })
+        if (delta === 0 && ws && ws.quantity === Number(setTo)) {
+            return res.json({ success: true, cheDo: 'không cần đổi', keHoach })
+        }
+
+        await sp.$transaction(async (tx: any) => {
+            await tx.product.update({ where: { id: p.id }, data: { stock: Number(setTo) } })
+            // Đặt THẲNG kho chính = setTo (không cộng delta): nếu đang lệch sẵn thì
+            // lần sửa này đồng thời chữa luôn độ lệch, sau đó bất biến khớp tuyệt đối.
+            await tx.warehouseStock.upsert({
+                where: { warehouseId_productId: { warehouseId: kho.id, productId: p.id } },
+                create: { warehouseId: kho.id, productId: p.id, productName: p.name, productSku: p.sku, quantity: Number(setTo) },
+                update: { quantity: Number(setTo) },
+            })
+            await tx.inventoryTransaction.create({
+                data: {
+                    type: 'adjustment', productId: p.id, productName: p.name, productSku: p.sku,
+                    quantity: delta, reason: `Admin điều chỉnh: ${String(reason)}`,
+                    note: `stock ${p.stock} → ${Number(setTo)} (kho ${kho.code} đặt = ${Number(setTo)})`,
+                    userName: 'Admin (adjust-stock)',
+                },
+            })
+        })
+        res.json({ success: true, cheDo: 'ĐÃ ÁP DỤNG', keHoach })
+    } catch (err: any) {
+        console.error('[admin] adjust-stock:', err?.message)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
 // ─── POST /admin/cleanup-orphan-warehouses ───────────────────────────────────
 // Dọn "kho chính mồ côi": kho type=main, isDefault=true, branchId=NULL do bước
 // boot-seed lúc tạo store sinh ra. Khi chi nhánh chính đã có kho main riêng thì
