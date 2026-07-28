@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Link hàng hoá MISA ↔ KiotViet (PRTCODE)</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --card:#fff; --txt:#1f2733; --mut:#6b7684; --line:#e3e8ef;
+    --blue:#2563eb; --blueh:#1d4ed8; --green:#16a34a; --amber:#d97706; --red:#dc2626;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.45 -apple-system,Segoe UI,Roboto,Arial,sans-serif}
+  header{position:sticky;top:0;z-index:20;background:var(--card);border-bottom:1px solid var(--line);padding:10px 16px}
+  h1{font-size:16px;margin:0 0 8px}
+  .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .btn{border:1px solid var(--line);background:#fff;color:var(--txt);border-radius:8px;padding:7px 12px;font-size:13px;cursor:pointer;white-space:nowrap}
+  .btn:hover{background:#f7f9fc}
+  .btn.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+  .btn.primary:hover{background:var(--blueh)}
+  .btn.warn{color:var(--red);border-color:#f0c8c8}
+  .btn.sm{padding:4px 9px;font-size:12px;border-radius:6px}
+  input.search{flex:1;min-width:200px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;font-size:13px}
+  .tabs{display:flex;gap:4px;flex-wrap:wrap}
+  .tabs button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:5px 12px;font-size:12.5px;cursor:pointer;color:var(--mut)}
+  .tabs button.on{background:var(--txt);color:#fff;border-color:var(--txt)}
+  .stats{color:var(--mut);font-size:13px;margin-left:auto;white-space:nowrap}
+  .stats b{color:var(--txt)}
+  .sync{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--mut);white-space:nowrap}
+  .sync .dot{width:9px;height:9px;border-radius:50%;background:#c3c9d0;flex:none}
+  .sync .dot.saving{background:var(--amber);animation:pulse 1s infinite}
+  .sync .dot.ok{background:var(--green)}
+  .sync .dot.err{background:var(--red)}
+  @keyframes pulse{50%{opacity:.35}}
+  main{padding:12px 16px 60px}
+  table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top;font-size:13px}
+  th{background:#fafbfc;color:var(--mut);font-weight:600}
+  tr:last-child td{border-bottom:none}
+  .code{font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
+  .muted{color:var(--mut)}
+  .prt{display:inline-flex;align-items:center;gap:6px;background:#eaf5ec;border:1px solid #cfe8d5;color:#14682f;border-radius:6px;padding:3px 8px;font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
+  .prt.manual{background:#eef2fb;border-color:#d3ddf5;color:#1e3a8a}
+  .prt.warnval{background:#fef3e6;border-color:#f6d9ab;color:#92590c}
+  .sugg{color:var(--mut);font-size:12.5px}
+  .sugg b{color:var(--txt);font-weight:600}
+  .pct{font-size:11px;color:var(--mut)}
+  .badge{display:inline-block;padding:1px 7px;border-radius:999px;font-size:11px;font-weight:600;margin-top:4px}
+  .b-none{background:#fdeaea;color:#b42318}
+  .b-ok{background:#e7f6ec;color:#137a37}
+  .row-actions{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+  .pager{display:flex;gap:8px;align-items:center;justify-content:center;margin:14px 0;color:var(--mut)}
+  .overlay{position:fixed;inset:0;background:rgba(20,25,35,.45);display:none;align-items:flex-start;justify-content:center;z-index:40;padding:40px 16px}
+  .overlay.open{display:flex}
+  .modal{background:#fff;border-radius:12px;max-width:640px;width:100%;max-height:82vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+  .mh{padding:14px 16px;border-bottom:1px solid var(--line);font-weight:600;display:flex;justify-content:space-between;gap:10px;align-items:center}
+  .mh .x{cursor:pointer;color:var(--mut);border:none;background:none;font-size:20px;line-height:1}
+  .mbody{padding:14px 16px;overflow:auto}
+  .mbody input{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:13px;margin-bottom:10px}
+  .mi{padding:9px 10px;border:1px solid var(--line);border-radius:8px;margin-bottom:7px;cursor:pointer;display:flex;justify-content:space-between;gap:10px}
+  .mi:hover{background:#f4f8ff;border-color:#bcd3f7}
+  .mi .r{text-align:right;color:var(--mut);font-size:12px;white-space:nowrap}
+  .mf{padding:12px 16px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;align-items:center}
+  label.f{display:block;font-size:12px;color:var(--mut);margin:8px 0 4px}
+  .hint{font-size:12px;color:var(--mut);line-height:1.5;background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-top:8px}
+  .hint code{background:#eef2f6;padding:1px 4px;border-radius:4px}
+  .center{min-height:60vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:var(--mut);text-align:center}
+  .spin{width:34px;height:34px;border:3px solid #dfe6ee;border-top-color:var(--blue);border-radius:50%;animation:sp 0.8s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1f2733;color:#fff;padding:9px 16px;border-radius:8px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:60}
+  .toast.show{opacity:1}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Link hàng hoá MISA ↔ KiotViet — điền cột <span class="code">PRTCODE</span></h1>
+  <div class="bar">
+    <input class="search" id="q" placeholder="Tìm mã / tên hàng MISA…">
+    <div class="tabs" id="tabs">
+      <button data-f="missing" class="on">Chưa có PRTCODE</button>
+      <button data-f="suggest">Gợi ý mã trùng</button>
+      <button data-f="linked">Đã có</button>
+      <button data-f="all">Tất cả</button>
+    </div>
+    <button class="btn" id="btnAuto">Điền mã trùng tự động</button>
+    <button class="btn" id="btnReload">Tải lại</button>
+    <button class="btn" id="btnCfg">⚙</button>
+    <span id="sync" class="sync"><span class="dot" id="syncDot"></span><span id="syncMsg">…</span></span>
+    <div class="stats" id="stats"></div>
+  </div>
+</header>
+
+<main>
+  <div id="loading" class="center"><div class="spin"></div><div id="loadMsg">Đang tải dữ liệu MISA + KiotViet từ Google Sheet…</div></div>
+  <div id="app" style="display:none">
+    <table>
+      <thead><tr>
+        <th style="width:150px">Mã MISA</th>
+        <th>Tên hàng (MISA)</th>
+        <th style="width:56px">ĐVT</th>
+        <th style="width:340px">PRTCODE (mã KiotViet)</th>
+      </tr></thead>
+      <tbody id="tb"></tbody>
+    </table>
+    <div class="pager">
+      <button class="btn sm" id="prev">‹ Trước</button>
+      <span id="pageInfo"></span>
+      <button class="btn sm" id="next">Sau ›</button>
+    </div>
+  </div>
+</main>
+
+<div class="overlay" id="ov">
+  <div class="modal">
+    <div class="mh"><span id="pkTitle">Chọn mã KiotViet</span><button class="x" id="pkClose">×</button></div>
+    <div class="mbody">
+      <input id="pkq" placeholder="Tìm mã / tên hàng KiotViet…">
+      <div id="pkList"></div>
+    </div>
+    <div class="mf">
+      <span class="muted" id="pkStat" style="margin-right:auto;font-size:12px"></span>
+      <button class="btn warn" id="pkClear">Bỏ liên kết (xoá PRTCODE)</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="ovCfg">
+  <div class="modal" style="max-width:560px">
+    <div class="mh"><span>Kết nối Google Sheet</span><button class="x" id="cfgClose2">×</button></div>
+    <div class="mbody">
+      <label class="f">URL Web App (/exec)</label>
+      <input id="cfgUrl">
+      <label class="f">Token</label>
+      <input id="cfgToken">
+      <div class="hint">Ghi thẳng vào cột <code>PRTCODE</code> của tab <b>Product n8n</b>, khớp theo <code>item id</code>. Deploy qua <code>apps-script-link-sync.gs</code>.</div>
+    </div>
+    <div class="mf">
+      <button class="btn" id="cfgTest">Kiểm tra</button>
+      <span class="muted" id="cfgStat" style="margin-right:auto;font-size:12px"></span>
+      <button class="btn" id="cfgCancel">Đóng</button>
+      <button class="btn primary" id="cfgSave">Lưu &amp; tải lại</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ================= cấu hình ================= */
+const LS='kv-misa-prtcode-v1';
+let cfg={url:'https://script.google.com/macros/s/AKfycbweSh_F9TDwXllQa4FhA7eJLZxvFmGvOroxS54TZhB64CSf8ak4eLuqtlvqfTc3mo1nlg/exec',token:'kv-misa-2026'};
+try{ cfg=Object.assign(cfg,JSON.parse(localStorage.getItem(LS+':cfg')||'{}')); }catch(e){}
+
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}
+
+/* ================= chuẩn hoá / khớp ================= */
+const deVN=s=>s.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/đ/g,'d').replace(/Đ/g,'D');
+const norm=s=>deVN(String(s||'').normalize('NFC').toLowerCase()).replace(/[^a-z0-9\s]+/g,' ').replace(/\s+/g,' ').trim();
+const codeKey=s=>deVN(String(s||'').normalize('NFC').toLowerCase()).replace(/[^a-z0-9]+/g,'');
+const toks=s=>norm(s).split(' ').filter(t=>t.length>1);
+const isModel=t=>t.length>=4&&/[a-z]/.test(t)&&/[0-9]/.test(t);
+
+/* ================= trạng thái ================= */
+let MISA=[], KV=[];
+let kvByCode=new Map(), kvToks=[], inv=new Map(), idf=t=>0, kvWeight=[];
+let SUG=[];
+let assign={};
+let synced={};
+let filter='missing', query='', page=0; const PS=50;
+
+/* ================= tải dữ liệu ================= */
+async function load(){
+  $('app').style.display='none'; $('loading').style.display='flex';
+  $('loadMsg').textContent='Đang tải dữ liệu MISA + KiotViet từ Google Sheet…';
+  setSync('saving','Đang tải…');
+  try{
+    const j=await fetch(cfg.url+'?action=data&token='+encodeURIComponent(cfg.token)).then(r=>r.json());
+    if(!j.ok) throw new Error(j.error||'lỗi máy chủ');
+    MISA=j.misa||[]; KV=j.kv||[];
+    buildIndex(); computeSuggest();
+    assign={}; synced={};
+    MISA.forEach(m=>{ const prt=(m.prt||'').trim(); if(prt){assign[m.code]={prt,method:'sheet'};} synced[m.code]=prt; });
+    page=0; render();
+    $('loading').style.display='none'; $('app').style.display='block';
+    setSync('ok','Đã tải xong');
+  }catch(e){
+    $('loadMsg').innerHTML='Không tải được dữ liệu: '+esc(e.message)+'<br><br><button class="btn primary" onclick="load()">Thử lại</button> &nbsp; <button class="btn" onclick="openCfg()">Kiểm tra kết nối</button>';
+    setSync('err','Lỗi tải');
+  }
+}
+
+function buildIndex(){
+  kvByCode=new Map();
+  KV.forEach((k,i)=>{ const c=codeKey(k.ma); if(c&&!kvByCode.has(c)) kvByCode.set(c,i); });
+  kvToks=KV.map(k=>new Set([...toks(k.ma),...toks(k.ten)]));
+  const df=new Map();
+  kvToks.forEach(s=>s.forEach(t=>df.set(t,(df.get(t)||0)+1)));
+  const N=KV.length||1;
+  idf=t=>Math.log(1+N/(df.get(t)||N));
+  inv=new Map();
+  kvToks.forEach((s,i)=>s.forEach(t=>{ if((df.get(t)||0)<=400){ if(!inv.has(t))inv.set(t,[]); inv.get(t).push(i);} }));
+  kvWeight=kvToks.map(s=>{let x=0;s.forEach(t=>x+=idf(t));return x;});
+}
+
+function suggestFor(m){
+  const ck=codeKey(m.code);
+  if(ck&&kvByCode.has(ck)) return {i:kvByCode.get(ck),score:1,method:'code'};
+  const ts=new Set(toks(m.code+' '+m.name));
+  if(!ts.size) return null;
+  let qw=0; ts.forEach(t=>qw+=idf(t));
+  const cand=new Map();
+  ts.forEach(t=>{ const l=inv.get(t); if(l) l.forEach(i=>cand.set(i,(cand.get(i)||0)+idf(t))); });
+  let best=null;
+  cand.forEach((sh,i)=>{
+    let sc=sh/(qw+kvWeight[i]-sh);
+    let bonus=0; ts.forEach(t=>{ if(isModel(t)&&kvToks[i].has(t)) bonus=0.25; });
+    sc=Math.min(sc+bonus,0.99);
+    if(!best||sc>best.score) best={i,score:sc,method:'auto'};
+  });
+  return best&&best.score>=0.25?best:null;
+}
+function computeSuggest(){ SUG=MISA.map(suggestFor); }
+
+/* ================= lọc / hiển thị ================= */
+function linked(code){ const a=assign[code]; return a&&a.prt; }
+function rowMatchesFilter(idx){
+  const m=MISA[idx];
+  if(filter==='all') return true;
+  if(filter==='missing') return !linked(m.code);
+  if(filter==='linked') return !!linked(m.code);
+  if(filter==='suggest') return !linked(m.code) && SUG[idx] && SUG[idx].method==='code';
+  return true;
+}
+function visible(){
+  const q=norm(query);
+  const out=[];
+  for(let i=0;i<MISA.length;i++){
+    if(!rowMatchesFilter(i)) continue;
+    if(q){ const m=MISA[i]; if(!norm(m.code+' '+m.name).includes(q) && !(assign[m.code]&&norm(assign[m.code].prt).includes(q))) continue; }
+    out.push(i);
+  }
+  return out;
+}
+function counts(){
+  let miss=0,link=0,sug=0;
+  for(let i=0;i<MISA.length;i++){ if(linked(MISA[i].code))link++; else {miss++; if(SUG[i]&&SUG[i].method==='code')sug++;} }
+  return {miss,link,sug,total:MISA.length};
+}
+
+function render(){
+  const vis=visible();
+  const pages=Math.max(1,Math.ceil(vis.length/PS));
+  if(page>=pages)page=pages-1; if(page<0)page=0;
+  const slice=vis.slice(page*PS,page*PS+PS);
+  const rows=slice.map(i=>{
+    const m=MISA[i], a=assign[m.code];
+    let cell;
+    if(a&&a.prt){
+      const isKv=kvByCode.has(codeKey(a.prt));
+      const cls=a.method==='manual'?' manual':'';
+      const warn=isKv?'':' warnval';
+      cell='<div class="row-actions"><span class="prt'+cls+warn+'" title="'+(isKv?'khớp 1 mã KiotViet':'không thấy trong danh mục KV')+'">'+esc(a.prt)+'</span>'
+        +'<button class="btn sm" data-a="pick" data-i="'+i+'">Đổi</button>'
+        +'<button class="btn sm warn" data-a="clear" data-i="'+i+'">Xoá</button></div>';
+    }else{
+      const s=SUG[i];
+      if(s){
+        const k=KV[s.i];
+        cell='<div class="sugg">&rarr; <b>'+esc(k.ma)+'</b> · '+esc(k.ten).slice(0,46)+' <span class="pct">'+(s.method==='code'?'mã trùng':Math.round(s.score*100)+'%')+'</span></div>'
+          +'<div class="row-actions" style="margin-top:5px"><button class="btn sm primary" data-a="ok" data-i="'+i+'">Gán '+esc(k.ma)+'</button>'
+          +'<button class="btn sm" data-a="pick" data-i="'+i+'">Chọn khác</button></div>';
+      }else{
+        cell='<div class="row-actions"><span class="muted">— chưa có gợi ý —</span><button class="btn sm" data-a="pick" data-i="'+i+'">Chọn KV</button></div>';
+      }
+    }
+    const badge=a&&a.prt?'<span class="badge b-ok">đã link</span>':'<span class="badge b-none">trống</span>';
+    return '<tr><td><div class="code">'+esc(m.code)+'</div>'+badge+'</td><td>'+esc(m.name)+'</td><td class="muted">'+esc(m.unit)+'</td><td>'+cell+'</td></tr>';
+  }).join('');
+  $('tb').innerHTML=rows||'<tr><td colspan="4" class="muted" style="padding:24px;text-align:center">Không có dòng nào.</td></tr>';
+  $('pageInfo').textContent='Trang '+(page+1)+'/'+pages+' · '+vis.length+' hàng';
+  const c=counts();
+  $('stats').innerHTML='Trống <b>'+c.miss+'</b> · Đã link <b>'+c.link+'</b>/'+c.total;
+  document.querySelectorAll('#tabs button').forEach(b=>{
+    const f=b.dataset.f;
+    b.textContent = f==='missing'?'Chưa có PRTCODE ('+c.miss+')' : f==='suggest'?'Gợi ý mã trùng ('+c.sug+')' : f==='linked'?'Đã có ('+c.link+')' : 'Tất cả ('+c.total+')';
+    b.classList.toggle('on',f===filter);
+  });
+}
+
+/* ================= gán / xoá ================= */
+function setPrt(i,prt,method){ const m=MISA[i]; if(prt){assign[m.code]={prt,method:method||'manual'};} else delete assign[m.code]; scheduleSync(); }
+
+/* ================= đồng bộ (ghi PRTCODE) ================= */
+function setSync(cls,msg){ const d=$('syncDot'); if(d)d.className='dot'+(cls?' '+cls:''); const m=$('syncMsg'); if(m)m.textContent=msg; }
+let syncT=null, syncing=false, pending=false;
+function scheduleSync(){ render(); clearTimeout(syncT); syncT=setTimeout(flush,700); }
+async function flush(){
+  if(!cfg.url) return;
+  if(syncing){ pending=true; return; }
+  const updates=[];
+  MISA.forEach(m=>{ const cur=(assign[m.code]&&assign[m.code].prt)||''; if((synced[m.code]||'')!==cur) updates.push({id:m.id,code:m.code,prt:cur}); });
+  if(!updates.length){ setSync('ok','Đã đồng bộ'); return; }
+  syncing=true; setSync('saving','Đang ghi '+updates.length+' PRTCODE…');
+  const commit=()=>{ updates.forEach(u=>synced[u.code]=u.prt); };
+  try{
+    const j=await fetch(cfg.url,{method:'POST',body:JSON.stringify({token:cfg.token,action:'prtcode',updates})}).then(r=>r.json());
+    if(!j.ok) throw new Error(j.error||'lỗi');
+    commit(); setSync('ok','Đã ghi '+j.updated+' mã lúc '+new Date().toLocaleTimeString('vi-VN')+(j.missing?' ('+j.missing+' không khớp id)':''));
+  }catch(err){
+    try{ await fetch(cfg.url,{method:'POST',mode:'no-cors',body:JSON.stringify({token:cfg.token,action:'prtcode',updates})}); commit(); setSync('ok','Đã ghi (không đọc được phản hồi)'); }
+    catch(e2){ setSync('err','Lỗi ghi: '+err.message+' — sẽ thử lại'); }
+  }finally{ syncing=false; if(pending){pending=false;scheduleSync();} }
+}
+
+/* ================= picker KV ================= */
+let pkIdx=-1;
+function openPick(i){ pkIdx=i; const m=MISA[i]; $('pkTitle').textContent='Chọn mã KV cho: '+m.code; $('pkq').value=m.code+' '+m.name; $('ov').classList.add('open'); pkSearch(); setTimeout(()=>$('pkq').focus(),30); }
+function pkSearch(){
+  const q=norm($('pkq').value); const ts=q.split(' ').filter(Boolean);
+  let list;
+  if(!ts.length){ list=KV.slice(0,40).map((k,i)=>({i,sc:0})); }
+  else{
+    const cand=new Map();
+    ts.forEach(t=>{ const l=inv.get(t); if(l)l.forEach(i=>cand.set(i,(cand.get(i)||0)+idf(t))); const ck=codeKey(t); if(ck&&kvByCode.has(ck)){const ki=kvByCode.get(ck);cand.set(ki,(cand.get(ki)||0)+100);} });
+    list=[...cand.entries()].map(([i,sc])=>({i,sc})).sort((a,b)=>b.sc-a.sc).slice(0,40);
+  }
+  $('pkList').innerHTML=list.map(function(o){var k=KV[o.i];return '<div class="mi" data-mi="'+o.i+'"><div><span class="code">'+esc(k.ma)+'</span> · '+esc(k.ten)+'</div><div class="r">'+esc(k.brand||'')+'<br>'+esc(k.dvt||'')+'</div></div>';}).join('')||'<div class="muted">Không tìm thấy.</div>';
+  $('pkStat').textContent=list.length+' kết quả';
+}
+
+/* ================= sự kiện ================= */
+$('tb').addEventListener('click',function(e){
+  const b=e.target.closest('button'); if(!b)return;
+  const i=+b.dataset.i, a=b.dataset.a;
+  if(a==='ok'){ const s=SUG[i]; setPrt(i,KV[s.i].ma,s.method); }
+  else if(a==='clear'){ setPrt(i,'',null); }
+  else if(a==='pick'){ openPick(i); }
+});
+$('pkList').addEventListener('click',function(e){ const d=e.target.closest('.mi'); if(!d||pkIdx<0)return; setPrt(pkIdx,KV[+d.dataset.mi].ma,'manual'); $('ov').classList.remove('open'); });
+$('pkq').addEventListener('input',pkSearch);
+$('pkClose').onclick=function(){$('ov').classList.remove('open');};
+$('pkClear').onclick=function(){ if(pkIdx>=0){ setPrt(pkIdx,'',null); $('ov').classList.remove('open'); } };
+$('ov').addEventListener('click',function(e){ if(e.target===$('ov'))$('ov').classList.remove('open'); });
+document.addEventListener('keydown',function(e){ if(e.key==='Escape'){$('ov').classList.remove('open');$('ovCfg').classList.remove('open');} });
+
+$('q').addEventListener('input',function(e){ query=e.target.value; page=0; render(); });
+$('tabs').addEventListener('click',function(e){ const b=e.target.closest('button'); if(!b)return; filter=b.dataset.f; page=0; render(); });
+$('prev').onclick=function(){page--;render();scrollTo(0,0);};
+$('next').onclick=function(){page++;render();scrollTo(0,0);};
+$('btnReload').onclick=load;
+$('btnAuto').onclick=function(){
+  let n=0;
+  MISA.forEach(function(m,i){ if(!linked(m.code)){ const s=SUG[i]; if(s&&s.method==='code'){ assign[m.code]={prt:KV[s.i].ma,method:'code'}; n++; } } });
+  scheduleSync(); toast('Đã gán '+n+' hàng theo mã trùng KiotViet');
+};
+
+/* config */
+function openCfg(){ $('cfgUrl').value=cfg.url; $('cfgToken').value=cfg.token; $('cfgStat').textContent=''; $('ovCfg').classList.add('open'); }
+$('btnCfg').onclick=openCfg;
+$('cfgClose2').onclick=$('cfgCancel').onclick=function(){$('ovCfg').classList.remove('open');};
+$('cfgSave').onclick=function(){ cfg.url=$('cfgUrl').value.trim(); cfg.token=$('cfgToken').value.trim(); localStorage.setItem(LS+':cfg',JSON.stringify(cfg)); $('ovCfg').classList.remove('open'); load(); };
+$('cfgTest').onclick=async function(){ $('cfgStat').textContent='Đang kiểm tra…'; try{ const j=await fetch($('cfgUrl').value.trim()+'?action=ping&token='+encodeURIComponent($('cfgToken').value.trim())).then(r=>r.json()); $('cfgStat').textContent=j.ok?'✓ OK':'✗ '+(j.error||'lỗi'); }catch(e){ $('cfgStat').textContent='✗ không kết nối được'; } };
+
+load();
+</script>
+</body>
+</html>

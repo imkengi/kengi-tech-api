@@ -1,0 +1,1543 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kengi — Dịch video & chèn phụ đề tự động</title>
+<style>
+  :root{
+    --bg:#0b1220; --panel:#131c2e; --panel2:#1a2540; --line:#26334f;
+    --text:#e6ecf7; --muted:#8fa0bd; --accent:#4f8cff; --accent2:#22c55e; --danger:#ef4444;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui,sans-serif; min-height:100vh;}
+  .wrap{max-width:1200px; margin:0 auto; padding:20px;}
+  header{display:flex; align-items:center; gap:12px; margin-bottom:18px;}
+  header h1{font-size:20px; font-weight:700;}
+  header .badge{font-size:11px; background:var(--accent); padding:3px 8px; border-radius:99px;}
+  .grid{display:grid; grid-template-columns:1fr 380px; gap:16px;}
+  @media(max-width:900px){.grid{grid-template-columns:1fr;}}
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px;}
+  .panel h2{font-size:14px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:12px;}
+  label{display:block; font-size:13px; color:var(--muted); margin:10px 0 4px;}
+  input[type=text], input[type=password], input[type=number], select, textarea{
+    width:100%; background:var(--panel2); border:1px solid var(--line); color:var(--text);
+    border-radius:8px; padding:8px 10px; font-size:14px; outline:none;
+  }
+  input:focus, select:focus, textarea:focus{border-color:var(--accent);}
+  input[type=range]{width:100%;}
+  .row{display:flex; gap:10px;}
+  .row > *{flex:1;}
+  button{
+    background:var(--accent); color:#fff; border:none; border-radius:8px; padding:10px 16px;
+    font-size:14px; font-weight:600; cursor:pointer; transition:opacity .15s;
+  }
+  button:hover{opacity:.88;}
+  button:disabled{opacity:.4; cursor:not-allowed;}
+  button.secondary{background:var(--panel2); border:1px solid var(--line);}
+  button.green{background:var(--accent2);}
+  button.small{padding:5px 10px; font-size:12px;}
+  .dropzone{
+    border:2px dashed var(--line); border-radius:12px; padding:36px 16px; text-align:center;
+    color:var(--muted); cursor:pointer; transition:border-color .15s, background .15s;
+  }
+  .dropzone.drag{border-color:var(--accent); background:rgba(79,140,255,.08);}
+  .dropzone strong{color:var(--text);}
+  #canvasBox{position:relative; background:#000; border-radius:12px; overflow:hidden; margin-top:12px; display:none;}
+  #cv{width:100%; display:block;}
+  .controls{display:flex; gap:8px; align-items:center; margin-top:10px; flex-wrap:wrap;}
+  .status{margin-top:10px; font-size:13px; color:var(--muted); min-height:18px; white-space:pre-wrap;}
+  .status.err{color:var(--danger);}
+  .status.ok{color:var(--accent2);}
+  .progress{height:8px; background:var(--panel2); border-radius:99px; overflow:hidden; margin-top:8px; display:none;}
+  .progress > div{height:100%; width:0%; background:var(--accent); transition:width .2s;}
+  #cueList{max-height:420px; overflow:auto; margin-top:8px; display:flex; flex-direction:column; gap:6px;}
+  .cue{display:grid; grid-template-columns:64px 64px 1fr 26px; gap:6px; align-items:start;}
+  .cue input[type=number]{padding:5px 6px; font-size:12px;}
+  .cue textarea{padding:5px 8px; font-size:13px; resize:vertical; min-height:32px; line-height:1.35;}
+  .cue .del{background:transparent; border:none; color:var(--muted); font-size:15px; cursor:pointer; padding:6px 0;}
+  .cue .del:hover{color:var(--danger);}
+  .cue.active textarea{border-color:var(--accent2);}
+  .hint{font-size:12px; color:var(--muted); margin-top:6px; line-height:1.5;}
+  .sliderRow{display:flex; align-items:center; gap:10px; margin-top:6px;}
+  .sliderRow label{margin:0; flex:0 0 110px;}
+  .sliderRow output{flex:0 0 44px; text-align:right; font-size:12px; color:var(--muted);}
+  fieldset{border:1px solid var(--line); border-radius:10px; padding:10px 12px 12px; margin-top:14px;}
+  legend{font-size:12px; color:var(--muted); padding:0 6px;}
+  a{color:var(--accent);}
+  svg.defs{position:absolute; width:0; height:0;}
+</style>
+</head>
+<body>
+<!-- SVG filter dùng cho hiệu ứng làm nét (unsharp qua convolution) -->
+<svg class="defs" xmlns="http://www.w3.org/2000/svg">
+  <filter id="sharpenF"><feConvolveMatrix id="sharpenM" order="3" preserveAlpha="true"
+    kernelMatrix="0 -0.5 0 -0.5 3 -0.5 0 -0.5 0"/></filter>
+</svg>
+
+<div class="wrap">
+  <header>
+    <h1>🎬 Dịch video &amp; chèn phụ đề tự động</h1>
+    <span class="badge">Gemini AI</span>
+  </header>
+
+  <div class="grid">
+    <!-- CỘT TRÁI: video -->
+    <div>
+      <div class="panel">
+        <div id="dropzone" class="dropzone">
+          <strong>Kéo thả video vào đây</strong> hoặc bấm để chọn file<br>
+          <span style="font-size:12px">MP4 / WebM / MOV — xử lý hoàn toàn trên máy bạn, không upload đi đâu ngoài âm thanh gửi Gemini</span>
+        </div>
+        <input type="file" id="fileInput" accept="video/*" hidden>
+        <video id="vid" hidden playsinline></video>
+        <div id="canvasBox"><canvas id="cv"></canvas></div>
+        <div class="controls" id="playControls" style="display:none">
+          <button class="secondary small" id="btnPlay">▶ Phát thử</button>
+          <button class="secondary small" id="btnPause">⏸ Dừng</button>
+          <span id="timeLabel" style="font-size:12px;color:var(--muted)">0:00 / 0:00</span>
+        </div>
+        <div class="progress" id="exportProgress"><div></div></div>
+        <div class="controls" id="exportControls" style="display:none">
+          <button class="green" id="btnExport">⬇ Xuất video (phụ đề + làm nét)</button>
+          <button class="green" id="btnExportClips">✂ Cắt thành clip</button>
+          <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:4px">≤<input type="number" id="clipLen" value="5" min="1" max="20" style="width:52px;padding:4px 6px"> phút/clip</label>
+          <button class="secondary" id="btnStopExport" style="display:none">✖ Huỷ xuất</button>
+        </div>
+        <div class="status" id="videoStatus"></div>
+        <div class="hint">Xuất video chạy theo thời gian thực (video 3 phút ≈ chờ 3 phút). Kết quả là file <b>.webm</b> — nếu cần .mp4 hãy convert lại bằng công cụ khác.</div>
+      </div>
+
+      <div class="panel" style="margin-top:16px">
+        <h2>3 · Chạy hàng loạt</h2>
+        <div class="controls" style="margin-top:0">
+          <button class="secondary small" id="btnBatchPick">📁 Chọn nhiều video</button>
+          <input type="file" id="batchInput" accept="video/*" multiple hidden>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text);cursor:pointer">
+            <input type="checkbox" id="batchDub" checked> Lồng tiếng từng video
+          </label>
+        </div>
+        <div id="batchList" style="margin-top:8px"></div>
+        <div class="controls">
+          <button class="green" id="btnBatch">▶ Chạy hàng loạt</button>
+          <button class="secondary" id="btnBatchStop" style="display:none">✖ Dừng</button>
+        </div>
+        <div class="status" id="batchStatus"></div>
+        <div class="hint">Mỗi video tự động: dịch phụ đề → lồng tiếng (nếu tích) → xuất webm tải về, dùng toàn bộ cấu hình phía trên (giọng, nhạc nền, làm nét…). Xuất chạy thời gian thực nên tổng thời gian ≈ tổng độ dài video — giữ tab ở foreground.</div>
+      </div>
+    </div>
+
+    <!-- CỘT PHẢI: cấu hình + phụ đề -->
+    <div>
+      <div class="panel">
+        <h2>1 · Cấu hình</h2>
+        <label>Gemini API Key <a href="https://aistudio.google.com/apikey" target="_blank" style="font-size:11px">(lấy key)</a></label>
+        <input type="password" id="apiKey" placeholder="AIza...">
+        <div class="row">
+          <div>
+            <label>Dịch sang</label>
+            <select id="targetLang">
+              <option value="Vietnamese" selected>Tiếng Việt</option>
+              <option value="English">English</option>
+              <option value="Chinese">中文</option>
+              <option value="Japanese">日本語</option>
+              <option value="Korean">한국어</option>
+              <option value="Thai">ไทย</option>
+              <option value="French">Français</option>
+              <option value="Spanish">Español</option>
+              <option value="__original__">Không dịch (giữ ngôn ngữ gốc)</option>
+            </select>
+          </div>
+          <div>
+            <label>Model</label>
+            <select id="model">
+              <option value="gemini-2.5-flash" selected>Gemini 2.5 Flash</option>
+              <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-top:14px">
+          <button id="btnTranscribe" disabled>🤖 Nhận dạng &amp; dịch phụ đề</button>
+        </div>
+        <div class="progress" id="aiProgress"><div></div></div>
+        <div class="status" id="aiStatus"></div>
+
+        <fieldset>
+          <legend>Kiểu phụ đề</legend>
+          <div class="sliderRow"><label>Cỡ chữ</label><input type="range" id="subSize" min="2" max="8" step="0.25" value="4.5"><output id="subSizeOut">4.5%</output></div>
+          <div class="sliderRow"><label>Cách đáy</label><input type="range" id="subBottom" min="2" max="30" step="1" value="6"><output id="subBottomOut">6%</output></div>
+          <div class="sliderRow"><label>Nền mờ</label><input type="range" id="subBg" min="0" max="100" step="5" value="55"><output id="subBgOut">55%</output></div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Làm nét video</legend>
+          <div class="sliderRow"><label>Độ nét</label><input type="range" id="sharpen" min="0" max="100" step="5" value="35"><output id="sharpenOut">35%</output></div>
+          <div class="hint" style="margin-top:4px">0% = tắt. Áp dụng cả khi xem thử lẫn khi xuất.</div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Lồng tiếng (AI đọc phụ đề)</legend>
+          <label>Bộ máy giọng đọc</label>
+          <select id="ttsEngine">
+            <option value="gcloud" selected>Google Cloud TTS — nhanh, ổn định, giọng cố định</option>
+            <option value="gemini">Gemini TTS — biểu cảm hơn nhưng chậm, hay đụng quota</option>
+          </select>
+          <div id="gcloudKeyBox">
+            <label>Google Cloud API key <a href="https://console.cloud.google.com/apis/library/texttospeech.googleapis.com" target="_blank" style="font-size:11px">(bật API Cloud Text-to-Speech)</a></label>
+            <input type="password" id="gcloudKey" placeholder="AIza... (key GCP của project đã bật Cloud Text-to-Speech)">
+          </div>
+          <div class="row">
+            <div>
+              <label>Giọng đọc</label>
+              <select id="voice"></select>
+            </div>
+            <div>
+              <label>&nbsp;</label>
+              <label style="display:flex;align-items:center;gap:6px;margin:0;color:var(--text);font-size:13px;cursor:pointer">
+                <input type="checkbox" id="dubOn"> Bật lồng tiếng
+              </label>
+            </div>
+          </div>
+          <label>Phong cách đọc (áp cho mọi đoạn để cùng một tông)</label>
+          <input type="text" id="ttsStyle" value="giọng thuyết minh phim, đều đặn, bình tĩnh">
+          <div class="sliderRow"><label>Tiếng gốc còn</label><input type="range" id="duck" min="0" max="100" step="5" value="15"><output id="duckOut">15%</output></div>
+          <div style="margin-top:10px"><button id="btnDub" class="secondary">🎙 Tạo giọng đọc cho phụ đề</button></div>
+          <div class="progress" id="dubProgress"><div></div></div>
+          <div class="status" id="dubStatus"></div>
+          <div class="hint">Google Cloud TTS: nhanh (~0.5s/đoạn), giọng cố định tuyệt đối, ~vài chục đồng/video — cần key GCP đã bật API Cloud Text-to-Speech. Gemini TTS: đọc biểu cảm theo "phong cách" nhưng chậm và hay đụng quota. Sửa phụ đề xong bấm tạo lại — chỉ tạo bù phần thay đổi.</div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Nhạc nền</legend>
+          <div class="controls" style="margin-top:0">
+            <button class="secondary small" id="btnMusic">🎵 Chọn file nhạc</button>
+            <input type="file" id="musicInput" accept="audio/*" hidden>
+            <button class="secondary small" id="btnMusicOff" style="display:none">✕ Bỏ nhạc</button>
+          </div>
+          <div class="sliderRow"><label>Âm lượng</label><input type="range" id="musicVol" min="0" max="100" step="5" value="20"><output id="musicVolOut">20%</output></div>
+          <div class="status" id="musicStatus"></div>
+          <div class="hint" style="margin-top:4px">Nhạc lặp vòng suốt video, được trộn vào cả bản xuất. MP3/WAV/M4A đều được.</div>
+        </fieldset>
+      </div>
+
+      <div class="panel" style="margin-top:16px">
+        <h2>2 · Phụ đề (sửa được)</h2>
+        <div class="controls" style="margin-top:0">
+          <button class="secondary small" id="btnAddCue">＋ Thêm dòng</button>
+          <button class="secondary small" id="btnImportSrt">📂 Nhập SRT</button>
+          <button class="secondary small" id="btnExportSrt">💾 Tải SRT</button>
+          <button class="secondary small" id="btnRefine">✨ Sửa theo ngữ cảnh</button>
+          <button class="secondary small" id="btnCoverage">🔍 Check dịch full</button>
+          <input type="file" id="srtInput" accept=".srt,.txt" hidden>
+        </div>
+        <div class="status" id="subStatus"></div>
+        <div id="cueList"></div>
+        <div class="hint">Thời gian tính bằng <b>giây</b>. Dòng đang hiển thị được viền xanh khi phát thử.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+// ===================== state =====================
+const $ = id => document.getElementById(id);
+const vid = $('vid'), cv = $('cv'), ctx = cv.getContext('2d');
+let cues = [];            // {start, end, text}
+let exporting = false, recorder = null, audioCtx = null, srcNode = null, streamDest = null, speakerGain = null;
+let duckGain = null, ttsSpkGain = null, dubSource = null, lastDubSeg = null, dubSegs = [];
+let musicBuffer = null, musicSource = null, musicGain = null, musicSpkGain = null;
+let exportResolve = null, exportFrom = 0, exportTo = 0, exportSuffix = '-sub', exportStopping = false, clipAbortAll = false;
+let ttsModel = 'gemini-2.5-flash-preview-tts';
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// ===================== API key =====================
+$('apiKey').value = localStorage.getItem('kengi_videosub_key') || '';
+$('apiKey').addEventListener('change', () => localStorage.setItem('kengi_videosub_key', $('apiKey').value.trim()));
+
+// ===================== nạp video =====================
+const dz = $('dropzone');
+dz.addEventListener('click', () => $('fileInput').click());
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('drag'); if (e.dataTransfer.files[0]) loadVideo(e.dataTransfer.files[0]); });
+$('fileInput').addEventListener('change', e => { if (e.target.files[0]) loadVideo(e.target.files[0]); });
+
+let videoFile = null, lastPcm = null;
+function loadVideo(file) {
+  return new Promise((resolve, reject) => {
+    videoFile = file;
+    if (vid.src) URL.revokeObjectURL(vid.src);
+    dubSegs = []; lastDubSeg = null; stopDubSource(); // giọng đọc cũ thuộc video cũ
+    lastPcm = null; // audio đã tách thuộc video cũ
+    vid.src = URL.createObjectURL(file);
+    vid.onerror = () => reject(new Error('Không đọc được video ' + file.name));
+    vid.addEventListener('loadedmetadata', () => {
+      cv.width = vid.videoWidth; cv.height = vid.videoHeight;
+      $('canvasBox').style.display = 'block';
+      $('playControls').style.display = 'flex';
+      $('exportControls').style.display = 'flex';
+      $('btnTranscribe').disabled = false;
+      setStatus('videoStatus', `Đã nạp: ${file.name} — ${vid.videoWidth}×${vid.videoHeight}, ${fmtTime(vid.duration)}`, 'ok');
+      vid.currentTime = 0.01; // vẽ frame đầu
+      resolve();
+    }, { once: true });
+  });
+}
+
+// ===================== vẽ preview =====================
+function currentKernel() {
+  const k = (+$('sharpen').value) / 100 * 1.2; // 0..1.2
+  return `0 ${-k} 0 ${-k} ${1 + 4 * k} ${-k} 0 ${-k} 0`;
+}
+$('sharpen').addEventListener('input', () => {
+  $('sharpenOut').textContent = $('sharpen').value + '%';
+  document.getElementById('sharpenM').setAttribute('kernelMatrix', currentKernel());
+});
+document.getElementById('sharpenM').setAttribute('kernelMatrix', currentKernel());
+['subSize','subBottom','subBg'].forEach(id => $(id).addEventListener('input', () => $(id+'Out').textContent = $(id).value + '%'));
+
+function wrapText(text, maxWidth) {
+  const words = text.split(/\s+/), lines = [];
+  let line = '';
+  for (const w of words) {
+    const t = line ? line + ' ' + w : w;
+    if (ctx.measureText(t).width > maxWidth && line) { lines.push(line); line = w; }
+    else line = t;
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+function drawFrame() {
+  if (!vid.videoWidth) return;
+  const sharpenOn = +$('sharpen').value > 0;
+  ctx.filter = sharpenOn ? 'url(#sharpenF)' : 'none';
+  ctx.drawImage(vid, 0, 0, cv.width, cv.height);
+  ctx.filter = 'none';
+
+  const t = vid.currentTime;
+  // nếu nhiều dòng chồng thời gian, ưu tiên dòng bắt đầu muộn nhất (dòng mới nhất)
+  let cue = null;
+  for (const c of cues) {
+    if (t >= c.start && t <= c.end) cue = c;
+    else if (c.start > t) break;
+  }
+  highlightCue(cue);
+  updateDub(t);
+  if (cue && cue.text) {
+    const fontPx = cv.height * (+$('subSize').value) / 100;
+    ctx.font = `600 ${fontPx}px "Segoe UI", Arial, sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    const maxW = cv.width * 0.86;
+    const lines = wrapText(cue.text, maxW);
+    const lineH = fontPx * 1.28;
+    const bottomY = cv.height * (1 - (+$('subBottom').value) / 100);
+    const bgA = (+$('subBg').value) / 100;
+    lines.forEach((ln, i) => {
+      const y = bottomY - (lines.length - 1 - i) * lineH;
+      const w = ctx.measureText(ln).width;
+      if (bgA > 0) {
+        ctx.fillStyle = `rgba(0,0,0,${bgA})`;
+        const pad = fontPx * 0.35;
+        roundRect(cv.width/2 - w/2 - pad, y - fontPx - pad*0.6, w + pad*2, fontPx + pad*1.2, fontPx*0.25);
+      }
+      ctx.lineWidth = Math.max(2, fontPx * 0.08);
+      ctx.strokeStyle = 'rgba(0,0,0,.9)';
+      ctx.strokeText(ln, cv.width/2, y);
+      ctx.fillStyle = '#fff';
+      ctx.fillText(ln, cv.width/2, y);
+    });
+  }
+  $('timeLabel').textContent = `${fmtTime(t)} / ${fmtTime(vid.duration || 0)}`;
+  if (exporting) {
+    const span = Math.max(0.1, exportTo - exportFrom);
+    $('exportProgress').firstElementChild.style.width = Math.min(100, (t - exportFrom) / span * 100) + '%';
+    if (t >= exportTo - 0.03) stopExport(false); // cắt đúng mốc khi xuất theo khoảng (clip)
+  }
+}
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.fill();
+}
+// Vòng vẽ chạy trên cửa sổ PiP khi có (tab ẩn thì rAF của tab bị đóng băng, của PiP thì không)
+let pipWin = null, pipKeep = false;
+let loopToken = 0;
+function renderLoop(tok) {
+  if (tok !== loopToken) return;
+  drawFrame();
+  const w = (pipWin && !pipWin.closed) ? pipWin : window;
+  w.requestAnimationFrame(() => renderLoop(tok));
+}
+function restartLoop() { loopToken++; renderLoop(loopToken); }
+restartLoop();
+
+// ===================== cửa sổ nổi (Document PiP) — xuất không cần giữ tab =====================
+async function openPip() {
+  if (pipWin || !('documentPictureInPicture' in window)) return;
+  try {
+    const pip = await documentPictureInPicture.requestWindow({
+      width: 340, height: Math.max(120, Math.round(340 * cv.height / Math.max(1, cv.width)))
+    });
+    const d = pip.document;
+    d.body.style.cssText = 'margin:0;background:#000;display:flex;align-items:center;justify-content:center;height:100vh;overflow:hidden';
+    const note = d.createElement('div');
+    note.textContent = 'Đang xuất — cứ chuyển tab thoải mái, đừng đóng cửa sổ này';
+    note.style.cssText = 'position:fixed;top:4px;left:0;right:0;text-align:center;color:#9ca3af;font:11px system-ui;z-index:2;text-shadow:0 1px 2px #000';
+    d.body.appendChild(note);
+    cv.style.maxWidth = '100%'; cv.style.maxHeight = '100%'; cv.style.width = 'auto';
+    d.body.appendChild(cv);
+    pip.addEventListener('pagehide', () => {
+      $('canvasBox').appendChild(cv);
+      cv.style.maxWidth = ''; cv.style.maxHeight = ''; cv.style.width = '';
+      pipWin = null;
+      restartLoop(); // rAF đang treo trên cửa sổ đã đóng — nối lại trên tab chính
+    });
+    pipWin = pip;
+    restartLoop(); // chuyển vòng vẽ sang cửa sổ PiP
+  } catch (e) { console.warn('Không mở được cửa sổ nổi:', e.message); }
+}
+function closePip() { if (pipWin) { try { pipWin.close(); } catch (_) {} } }
+
+$('btnPlay').addEventListener('click', () => { ensureAudioGraph(); speakerGain.gain.value = 1; ttsSpkGain.gain.value = 1; musicSpkGain.gain.value = 1; vid.play(); });
+$('btnPause').addEventListener('click', () => vid.pause());
+
+// ===================== audio graph (dùng chung preview & export) =====================
+function ensureAudioGraph() {
+  if (audioCtx) { audioCtx.resume(); return; }
+  audioCtx = new AudioContext();
+  srcNode = audioCtx.createMediaElementSource(vid);
+  speakerGain = audioCtx.createGain();
+  streamDest = audioCtx.createMediaStreamDestination();
+  duckGain = audioCtx.createGain();   // giảm nhỏ tiếng gốc khi bật lồng tiếng
+  ttsSpkGain = audioCtx.createGain(); // đường ra loa của giọng đọc
+  srcNode.connect(duckGain);
+  duckGain.connect(speakerGain).connect(audioCtx.destination);
+  duckGain.connect(streamDest);
+  ttsSpkGain.connect(audioCtx.destination);
+  musicGain = audioCtx.createGain();     // âm lượng nhạc nền
+  musicSpkGain = audioCtx.createGain();  // đường ra loa của nhạc
+  musicGain.gain.value = (+$('musicVol').value) / 100;
+  musicGain.connect(musicSpkGain).connect(audioCtx.destination);
+  musicGain.connect(streamDest);
+  applyDuck();
+}
+function applyDuck() {
+  if (duckGain) duckGain.gain.value = $('dubOn').checked ? (+$('duck').value) / 100 : 1;
+}
+$('dubOn').addEventListener('change', () => { applyDuck(); if (!$('dubOn').checked) { stopDubSource(); lastDubSeg = null; } });
+$('duck').addEventListener('input', () => { $('duckOut').textContent = $('duck').value + '%'; applyDuck(); });
+
+// ===================== lồng tiếng: phát đúng thời điểm =====================
+// Gộp các dòng phụ đề liền nhau thành câu/đoạn hoàn chỉnh để TTS đọc liền mạch
+// (đọc từng dòng cụt lủn thì mỗi dòng một ngữ điệu, nghe như nhiều người khác nhau)
+function buildDubSegments() {
+  // vòng 1: gộp các dòng liền nhau thành câu hoàn chỉnh
+  const sentences = [];
+  for (const c of cues) {
+    if (!c.text.trim()) continue;
+    const last = sentences[sentences.length - 1];
+    const gap = last ? c.start - last.end : 999;
+    const lastDone = last && /[.!?…。！？]\s*$/.test(last.text.trim());
+    if (last && gap < 0.6 && !lastDone && (last.text.length + c.text.length) < 220 && (c.end - last.start) < 16) {
+      last.text += ' ' + c.text;
+      last.end = c.end;
+    } else {
+      sentences.push({ start: c.start, end: c.end, text: c.text.trim() });
+    }
+  }
+  // vòng 2: gộp các câu gần nhau thành cả SCENE — mỗi scene 1 lượt TTS duy nhất
+  // → trong scene giọng liền mạch 100%, hết cảnh "mỗi câu một người đọc"
+  const segs = [];
+  for (const s of sentences) {
+    const last = segs[segs.length - 1];
+    const gap = last ? s.start - last.end : 999;
+    if (last && gap < 1.5 && (last.text.length + s.text.length) < 500 && (s.end - last.start) < 30) {
+      last.text += ' ' + s.text;
+      last.end = s.end;
+    } else {
+      segs.push({ start: s.start, end: s.end, text: s.text });
+    }
+  }
+  return segs;
+}
+
+function updateDub(t) {
+  if (!$('dubOn').checked || !audioCtx || vid.paused) return;
+  let seg = null, next = null;
+  for (let i = 0; i < dubSegs.length; i++) {
+    const s = dubSegs[i];
+    if (t >= s.start && t < s.end + 0.2) { seg = s; next = dubSegs[i + 1] || null; }
+    else if (s.start > t) break;
+  }
+  if (seg === lastDubSeg) return;
+  stopDubSource();
+  lastDubSeg = seg;
+  if (!seg || !seg.tts) return;
+  const src = audioCtx.createBufferSource();
+  src.buffer = seg.tts;
+  // được phép đọc lấn sang khoảng lặng tới đoạn kế; tua tối đa 1.15x —
+  // tua cao hơn làm CAO GIỌNG lên, nghe như người khác đọc (Cloud TTS đã tự fit tốc độ từ lúc tạo)
+  const avail = Math.max(0.5, (next ? next.start : seg.end + 2) - seg.start);
+  const rate = Math.min(1.15, Math.max(1, seg.tts.duration / avail));
+  src.playbackRate.value = rate;
+  src.connect(ttsSpkGain);
+  src.connect(streamDest);
+  const offset = Math.max(0, t - seg.start) * rate;
+  if (offset < seg.tts.duration) src.start(0, offset);
+  dubSource = src;
+}
+function stopDubSource() {
+  if (dubSource) { try { dubSource.stop(); } catch (_) {} dubSource = null; }
+}
+vid.addEventListener('pause', () => { stopDubSource(); lastDubSeg = null; });
+vid.addEventListener('seeking', () => { stopDubSource(); lastDubSeg = null; });
+
+// ===================== nhạc nền =====================
+function startMusic() {
+  if (!musicBuffer || !audioCtx || vid.paused) return;
+  stopMusic();
+  const src = audioCtx.createBufferSource();
+  src.buffer = musicBuffer;
+  src.loop = true;
+  src.connect(musicGain);
+  src.start(0, vid.currentTime % musicBuffer.duration);
+  musicSource = src;
+}
+function stopMusic() {
+  if (musicSource) { try { musicSource.stop(); } catch (_) {} musicSource = null; }
+}
+vid.addEventListener('playing', startMusic);
+vid.addEventListener('pause', stopMusic);
+vid.addEventListener('seeking', stopMusic);
+vid.addEventListener('seeked', () => { if (!vid.paused) startMusic(); });
+$('btnMusic').addEventListener('click', () => $('musicInput').click());
+$('musicInput').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  ensureAudioGraph();
+  try {
+    musicBuffer = await audioCtx.decodeAudioData(await f.arrayBuffer());
+    setStatus('musicStatus', `Đã nạp: ${f.name} (${fmtTime(musicBuffer.duration)}) — lặp vòng theo video.`, 'ok');
+    $('btnMusicOff').style.display = '';
+    if (!vid.paused) startMusic();
+  } catch (err) { setStatus('musicStatus', 'Không đọc được file nhạc: ' + err.message, 'err'); }
+  e.target.value = '';
+});
+$('btnMusicOff').addEventListener('click', () => { stopMusic(); musicBuffer = null; $('btnMusicOff').style.display = 'none'; setStatus('musicStatus', ''); });
+$('musicVol').addEventListener('input', () => { $('musicVolOut').textContent = $('musicVol').value + '%'; if (musicGain) musicGain.gain.value = (+$('musicVol').value) / 100; });
+
+// ===================== lồng tiếng: tạo giọng đọc =====================
+const TTS_VOICES = {
+  gcloud: [
+    ['vi-VN-Neural2-A', 'Neural2-A — nữ (khuyên dùng)'],
+    ['vi-VN-Neural2-D', 'Neural2-D — nam (khuyên dùng)'],
+    ['vi-VN-Wavenet-C', 'Wavenet-C — nữ'],
+    ['vi-VN-Wavenet-B', 'Wavenet-B — nam'],
+    ['vi-VN-Wavenet-A', 'Wavenet-A — nữ'],
+    ['vi-VN-Wavenet-D', 'Wavenet-D — nam']
+  ],
+  gemini: [
+    ['Kore', 'Kore — nữ, chắc chắn'], ['Aoede', 'Aoede — nữ, tươi sáng'],
+    ['Leda', 'Leda — nữ, trẻ trung'], ['Zephyr', 'Zephyr — nữ, nhẹ nhàng'],
+    ['Puck', 'Puck — nam, sôi nổi'], ['Charon', 'Charon — nam, trầm'],
+    ['Fenrir', 'Fenrir — nam, mạnh mẽ'], ['Orus', 'Orus — nam, dứt khoát']
+  ]
+};
+function fillVoices() {
+  const eng = $('ttsEngine').value;
+  $('voice').innerHTML = TTS_VOICES[eng].map(v => `<option value="${v[0]}">${v[1]}</option>`).join('');
+  $('gcloudKeyBox').style.display = eng === 'gcloud' ? '' : 'none';
+  $('ttsStyle').disabled = eng === 'gcloud'; // Cloud TTS không nhận chỉ dẫn phong cách
+}
+$('ttsEngine').addEventListener('change', fillVoices);
+fillVoices();
+$('gcloudKey').value = localStorage.getItem('kengi_videosub_gcloud_key') || '';
+$('gcloudKey').addEventListener('change', () => localStorage.setItem('kengi_videosub_gcloud_key', $('gcloudKey').value.trim()));
+
+async function gcloudTts(text, targetDur) {
+  // tổng hợp 1.0x trước; nếu đọc dài hơn khoảng trống thì tổng hợp LẠI với speakingRate cao hơn
+  // — chỉnh tốc độ phía TTS giữ nguyên cao độ, không bị "đổi giọng" như tua nhanh khi phát
+  let buf = await gcloudCall(text, 1.0);
+  if (targetDur && buf.duration > targetDur + 0.15) {
+    const rate = Math.min(2, Math.max(1, buf.duration / targetDur));
+    buf = await gcloudCall(text, +rate.toFixed(2));
+  }
+  return buf;
+}
+async function gcloudCall(text, speakingRate) {
+  const key = $('gcloudKey').value.trim();
+  const res = await fetch(`https://texttospeech.googleapis.com/v1/text:synthesize?key=${encodeURIComponent(key)}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      input: { text },
+      voice: { languageCode: 'vi-VN', name: $('voice').value },
+      audioConfig: { audioEncoding: 'MP3', speakingRate }
+    })
+  });
+  const raw = await res.text();
+  if (!res.ok) {
+    let msg = raw.slice(0, 200), reason = '';
+    try {
+      const e = JSON.parse(raw).error;
+      msg = e.message;
+      reason = (e.details || []).map(d => d.reason).find(Boolean) || '';
+    } catch (_) {}
+    if (reason === 'API_KEY_HTTP_REFERRER_BLOCKED' || /referr?er/i.test(msg))
+      msg = 'Key đang giới hạn theo WEBSITE và trang hiện tại không nằm trong danh sách cho phép. Sửa: GCP Console → Credentials → key này → Application restrictions → thêm https://kengi.vn/* (hoặc chọn None nếu chạy file trên máy) → Save, chờ 1-2 phút.';
+    else if (reason === 'API_KEY_SERVICE_BLOCKED' || /are blocked|SERVICE_BLOCKED/i.test(msg))
+      msg = 'Key này KHÔNG được phép gọi Cloud Text-to-Speech. Hay gặp nhất: dán nhầm key Gemini/AI Studio (key đó chỉ gọi được Generative Language API). Nếu đúng là key GCP: Credentials → key → API restrictions → tích "Cloud Text-to-Speech API" → Save, chờ 1-2 phút.';
+    else if (res.status === 403 && /has not been used|is disabled/i.test(msg))
+      msg = 'Project chưa bật Cloud Text-to-Speech — bấm link "(bật API)" phía trên, bật xong chờ 1-2 phút rồi thử lại.';
+    const err = new Error('Cloud TTS ' + res.status + ': ' + msg);
+    err.status = res.status;
+    throw err;
+  }
+  const b64 = JSON.parse(raw).audioContent;
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return await audioCtx.decodeAudioData(bytes.buffer);
+}
+
+$('btnDub').addEventListener('click', generateDub);
+async function generateDub() {
+  const engine = $('ttsEngine').value;
+  const key = $('apiKey').value.trim();
+  if (engine === 'gemini' && !key) return setStatus('dubStatus', 'Chưa nhập Gemini API key.', 'err');
+  if (engine === 'gcloud' && !$('gcloudKey').value.trim()) return setStatus('dubStatus', 'Chưa nhập Google Cloud API key (ô ngay dưới bộ máy giọng đọc).', 'err');
+  if (!cues.length) return setStatus('dubStatus', 'Chưa có phụ đề — chạy nhận dạng hoặc nhập SRT trước.', 'err');
+  ensureAudioGraph();
+  // gộp dòng thành đoạn; đoạn nào không đổi (cùng text, thời gian, giọng) thì giữ audio cũ
+  const voice = engine + '|' + $('voice').value + '|' + $('ttsStyle').value.trim(); // đổi bộ máy/giọng/phong cách → tạo lại
+  const prev = new Map(dubSegs.filter(s => s.tts).map(s => [s.voice + '|' + s.start.toFixed(2) + '|' + s.text, s.tts]));
+  dubSegs = buildDubSegments();
+  for (const s of dubSegs) { s.voice = voice; s.tts = prev.get(voice + '|' + s.start.toFixed(2) + '|' + s.text) || null; }
+  // thời gian tối đa mỗi đoạn được phép đọc (tới đoạn kế) — để TTS fit tốc độ ngay lúc tạo
+  dubSegs.forEach((s, i) => s.avail = Math.max(1, (dubSegs[i + 1] ? dubSegs[i + 1].start : s.end + 2) - s.start));
+  const pending = dubSegs.filter(s => !s.tts);
+  if (!pending.length) {
+    $('dubOn').checked = true; applyDuck();
+    return setStatus('dubStatus', 'Tất cả các đoạn đã có giọng đọc.', 'ok');
+  }
+  $('btnDub').disabled = true;
+  const total = pending.length;
+  let done = 0, failed = 0, lastErr = '';
+  setBar('dubProgress', 0);
+  setStatus('dubStatus', `Đang tạo giọng đọc 0/${total}…`);
+  // chạy TUẦN TỰ — TTS bị giới hạn lượt gọi/phút chặt, bắn song song chỉ tổ dính 429
+  for (const c of pending) {
+    let attempts = 0;
+    while (true) {
+      try { c.tts = await ttsOne(key, c.text, c.avail); break; }
+      catch (e) {
+        attempts++;
+        lastErr = e.message;
+        const isRate = e.status === 429 || /quota|RESOURCE_EXHAUSTED/i.test(e.message);
+        if (attempts >= (isRate ? 4 : 2)) {
+          failed++;
+          console.warn('TTS bỏ qua đoạn:', c.text.slice(0, 50), '—', e.message);
+          break;
+        }
+        // Google báo chờ bao lâu thì chờ đúng bấy nhiêu, không thì 15s (rate) / 3s (lỗi khác)
+        const wait = isRate ? (e.retrySec || 15) : 3;
+        for (let s = wait; s > 0; s--) {
+          setStatus('dubStatus', `Đoạn ${done + 1}/${total}: ${isRate ? 'đụng giới hạn lượt gọi' : 'lỗi, sẽ thử lại'} — chờ ${s}s (lần thử ${attempts + 1})…\n${e.message}`);
+          await sleep(1000);
+        }
+      }
+    }
+    done++;
+    setBar('dubProgress', done / total * 100);
+    setStatus('dubStatus', `Đang tạo giọng đọc ${done}/${total}…` + (failed ? ` (${failed} đoạn lỗi)` : ''));
+  }
+  $('btnDub').disabled = false;
+  $('dubOn').checked = true;
+  applyDuck();
+  const ok = dubSegs.filter(s => s.tts).length;
+  setStatus('dubStatus',
+    failed ? `Xong ${ok}/${dubSegs.length} đoạn — ${failed} đoạn lỗi, bấm nút lần nữa để tạo tiếp phần thiếu.\nLỗi gần nhất: ${lastErr}`
+           : `Xong — ${ok} đoạn giọng đọc (gộp từ ${cues.length} dòng phụ đề, một giọng liền mạch). Phát thử hoặc xuất là có lồng tiếng.`,
+    failed ? 'err' : 'ok');
+  setTimeout(() => { $('dubProgress').style.display = 'none'; }, 1500);
+}
+
+async function ttsOne(key, text, targetDur) {
+  if ($('ttsEngine').value === 'gcloud') return gcloudTts(text, targetDur);
+  // Gemini: cùng một câu chỉ dẫn phong cách cho MỌI đoạn + nhiệt độ thấp
+  // → các lượt gọi khác nhau ra cùng một tông giọng
+  const style = $('ttsStyle').value.trim();
+  const prompt = style ? `Đọc bằng ${style}: ${text}` : text;
+  const body = {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: {
+      responseModalities: ['AUDIO'],
+      temperature: 0.3,
+      speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: $('voice').value } } }
+    }
+  };
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${ttsModel}:generateContent?key=${encodeURIComponent(key)}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+  });
+  const raw = await res.text();
+  if (!res.ok) {
+    let msg = raw.slice(0, 200);
+    try { msg = JSON.parse(raw).error.message; } catch (_) {}
+    // model chính không tồn tại (Google đổi tên) → tự chuyển model dự phòng
+    if (res.status === 404 && ttsModel !== 'gemini-2.5-pro-preview-tts') {
+      ttsModel = 'gemini-2.5-pro-preview-tts';
+      return ttsOne(key, text);
+    }
+    const err = new Error('TTS ' + res.status + ': ' + msg);
+    err.status = res.status;
+    err.retrySec = +(raw.match(/"retryDelay"\s*:\s*"(\d+)/)?.[1] || 0); // Google báo phải chờ bao lâu
+    throw err;
+  }
+  const data = JSON.parse(raw);
+  const part = data.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+  if (!part) throw new Error('TTS không trả về audio.');
+  const rate = +(part.inlineData.mimeType?.match(/rate=(\d+)/)?.[1] || 24000);
+  const bin = atob(part.inlineData.data);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const i16 = new Int16Array(bytes.buffer, 0, Math.floor(bytes.length / 2));
+  const buf = audioCtx.createBuffer(1, i16.length, rate);
+  const ch = buf.getChannelData(0);
+  for (let i = 0; i < i16.length; i++) ch[i] = i16[i] / 32768;
+  return buf;
+}
+
+// ===================== Gemini: nhận dạng + dịch =====================
+$('btnTranscribe').addEventListener('click', transcribe);
+
+async function transcribe() {
+  const key = $('apiKey').value.trim();
+  if (!key) return setStatus('aiStatus', 'Chưa nhập Gemini API key.', 'err');
+  if (!videoFile) return setStatus('aiStatus', 'Chưa chọn video.', 'err');
+  const btn = $('btnTranscribe');
+  btn.disabled = true;
+  const bar = $('aiProgress'); bar.style.display = 'block';
+  let success = false;
+  try {
+    setStatus('aiStatus', 'Đang tách âm thanh từ video…');
+    setBar('aiProgress', 5);
+    const pcm = await extractAudioPCM(videoFile); // Int16Array mono 16k
+    lastPcm = pcm; // giữ lại cho bước "check dịch full" dịch bổ sung không phải tách lại
+    const SR = 16000, CHUNK_SEC = 180; // 3 phút / lần gọi — gói nhỏ, phản hồi nhanh, dễ thấy tiến độ
+    const totalSec = pcm.length / SR;
+    const nChunks = Math.max(1, Math.ceil(totalSec / CHUNK_SEC));
+    const target = $('targetLang').value;
+    const all = [];
+    for (let i = 0; i < nChunks; i++) {
+      const from = i * CHUNK_SEC * SR;
+      const to = Math.min(pcm.length, (i + 1) * CHUNK_SEC * SR);
+      const wavB64 = pcmToWavBase64(pcm.subarray(from, to), SR);
+      const sizeMB = ((to - from) * 2 / 1048576).toFixed(1);
+      const t0 = Date.now();
+      const baseP = 10 + 85 * (i / nChunks);
+      let upPct = 0; // 0..1, tiến độ upload thật từ XHR
+      const tick = () => {
+        const sec = Math.round((Date.now() - t0) / 1000);
+        if (upPct < 1) {
+          setStatus('aiStatus', `Đoạn ${i + 1}/${nChunks}: đang tải ${sizeMB}MB audio lên Gemini… ${Math.round(upPct * 100)}% (${sec}s)`);
+        } else {
+          setStatus('aiStatus', `Đoạn ${i + 1}/${nChunks}: upload xong, Gemini đang xử lý… đã chờ ${sec}s\nĐoạn 3 phút thường mất 15–60 giây.`);
+        }
+        // thanh tiến độ nhích dần trong lúc chờ để biết là chưa treo
+        setBar('aiProgress', Math.min(baseP + 80 / nChunks, baseP + (upPct * 0.4 + Math.min(sec / 90, 1) * 0.6) * (80 / nChunks)));
+      };
+      tick();
+      const timer = setInterval(tick, 1000);
+      let part;
+      try {
+        try {
+          part = await callGemini(key, wavB64, target, p => { upPct = p; });
+        } catch (err) {
+          // mỗi đoạn tự thử lại 1 lần trước khi bỏ cuộc
+          console.warn(`Đoạn ${i + 1} lỗi, thử lại lần 2:`, err.message);
+          upPct = 0;
+          part = await callGemini(key, wavB64, target, p => { upPct = p; });
+        }
+      } finally { clearInterval(timer); }
+      const offset = i * CHUNK_SEC;
+      for (const c of part) {
+        const s = +c.start, e = +c.end;
+        if (isFinite(s) && isFinite(e) && String(c.text || '').trim())
+          all.push({ start: +(s + offset).toFixed(2), end: +(e + offset).toFixed(2), text: String(c.text).trim() });
+      }
+    }
+    // ===== vá khúc thiếu: Gemini hay bỏ sót đoạn giữa khi audio dài =====
+    all.sort((a, b) => a.start - b.start);
+    const gaps = findGaps(all, totalSec);
+    let gi = 0;
+    for (const [gs, ge] of gaps.slice(0, 8)) {
+      gi++;
+      setStatus('aiStatus', `Phát hiện khúc thiếu ${fmtTime(gs)}–${fmtTime(ge)} — dịch bổ sung (${gi}/${Math.min(gaps.length, 8)})…`);
+      try {
+        const gFrom = Math.max(0, Math.floor((gs - 1) * SR));
+        const gTo = Math.min(pcm.length, Math.ceil((ge + 1) * SR));
+        const wavGap = pcmToWavBase64(pcm.subarray(gFrom, gTo), SR);
+        const partGap = await callGemini(key, wavGap, target);
+        const gOff = gFrom / SR;
+        for (const c of partGap) {
+          const s = +c.start, e2 = +c.end;
+          if (isFinite(s) && isFinite(e2) && String(c.text || '').trim())
+            all.push({ start: +(s + gOff).toFixed(2), end: +(e2 + gOff).toFixed(2), text: String(c.text).trim() });
+        }
+      } catch (e) { console.warn('Vá khúc thiếu lỗi:', e.message); }
+    }
+    cues = sanitizeCues(all);
+    renderCues();
+    // ===== đọc lại ngữ cảnh toàn video để sửa bản dịch cho mượt & nhất quán =====
+    setBar('aiProgress', 92);
+    setStatus('aiStatus', 'Đang cho AI đọc lại ngữ cảnh toàn video để sửa bản dịch…');
+    await refineCues(false);
+    setBar('aiProgress', 100);
+    setStatus('aiStatus', `Xong — ${cues.length} dòng phụ đề${gaps.length ? ` (đã vá ${Math.min(gaps.length, 8)} khúc thiếu)` : ''}, đã sửa theo ngữ cảnh. Kiểm tra/sửa rồi bấm Xuất video.`, 'ok');
+    success = true;
+  } catch (err) {
+    console.error(err);
+    setStatus('aiStatus', 'Lỗi: ' + err.message, 'err');
+  } finally {
+    btn.disabled = false;
+    setTimeout(() => { bar.style.display = 'none'; }, 1500);
+  }
+  return success;
+}
+
+// Dọn phụ đề từ AI: tách dòng-đoạn-văn thành từng câu, cắt chồng lấn, giới hạn thời lượng
+function sanitizeCues(list) {
+  const MAXD = 8; // 1 dòng phụ đề không nên đứng quá 8 giây
+  const sorted = list
+    .filter(c => isFinite(c.start) && isFinite(c.end) && String(c.text || '').trim())
+    .sort((a, b) => a.start - b.start);
+  // end không được vượt qua start của dòng kế (chồng lấn làm phụ đề "kẹt")
+  for (let i = 0; i < sorted.length - 1; i++)
+    sorted[i].end = Math.min(sorted[i].end, sorted[i + 1].start);
+  const out = [];
+  for (const c of sorted) {
+    const dur = c.end - c.start;
+    if (dur > MAXD + 2 || c.text.length > 140) {
+      // model gộp cả đoạn văn → tách theo câu, chia thời gian theo độ dài chữ
+      const parts = (c.text.match(/[^.!?…。！？]+[.!?…。！？]*/g) || [c.text]).map(s => s.trim()).filter(Boolean);
+      if (parts.length > 1) {
+        const totalChars = parts.reduce((s, p) => s + p.length, 0);
+        let t = c.start;
+        for (const p of parts) {
+          const d = dur * p.length / totalChars;
+          out.push({ start: +t.toFixed(2), end: +Math.min(t + d, t + MAXD).toFixed(2), text: p });
+          t += d;
+        }
+        continue;
+      }
+    }
+    out.push({ start: c.start, end: +Math.min(c.end, c.start + MAXD).toFixed(2), text: c.text });
+  }
+  return out.filter(c => c.end > c.start + 0.05);
+}
+
+// Tìm các khoảng trống >12s không có phụ đề
+function findGaps(list, totalSec) {
+  const gaps = [];
+  let prevEnd = 0;
+  const sorted = [...list].sort((a, b) => a.start - b.start);
+  for (const c of sorted) {
+    if (c.start - prevEnd > 12) gaps.push([prevEnd, c.start]);
+    prevEnd = Math.max(prevEnd, c.end);
+  }
+  if (totalSec - prevEnd > 12) gaps.push([prevEnd, totalSec]);
+  return gaps;
+}
+
+// Gọi Gemini text-only, trả JSON (object hoặc array)
+async function geminiJson(key, prompt) {
+  const body = {
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: { responseMimeType: 'application/json', temperature: 0.3, maxOutputTokens: 32768 }
+  };
+  const model = $('model').value;
+  if (model.includes('flash')) body.generationConfig.thinkingConfig = { thinkingBudget: 0 };
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+  });
+  const raw = await res.text();
+  if (!res.ok) {
+    let msg = raw.slice(0, 200);
+    try { msg = JSON.parse(raw).error.message; } catch (_) {}
+    throw new Error('Gemini ' + res.status + ': ' + msg);
+  }
+  const data = JSON.parse(raw);
+  let t = (data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '[]').trim()
+    .replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
+  try { return JSON.parse(t); }
+  catch (_) {
+    // bị cắt giữa chừng → giữ tới object hoàn chỉnh cuối
+    const i = t.indexOf('['), j = t.lastIndexOf('}');
+    if (i >= 0 && j > i) { try { return JSON.parse(t.slice(i, j + 1).replace(/,\s*$/, '') + ']'); } catch (_) {} }
+    throw new Error('Không đọc được JSON từ Gemini.');
+  }
+}
+async function geminiText(key, prompt) {
+  const a = await geminiJson(key, prompt);
+  return Array.isArray(a) ? a : [];
+}
+
+// AI đọc lại TOÀN BỘ phụ đề để sửa bản dịch theo ngữ cảnh: xưng hô nhất quán, mượt theo mạch truyện
+$('btnRefine').addEventListener('click', () => refineCues(true));
+async function refineCues(manual) {
+  const key = $('apiKey').value.trim();
+  if (!key || !cues.length) {
+    if (manual) setStatus('subStatus', !key ? 'Chưa nhập Gemini API key.' : 'Chưa có phụ đề.', 'err');
+    return false;
+  }
+  const target = $('targetLang').value;
+  const CH = 250; // dòng / lượt gọi
+  try {
+    // B1: đọc TOÀN BỘ truyện → tóm tắt + bảng tên riêng/xưng hô thống nhất
+    // (chặn lỗi kinh điển: tên nhân vật bị dịch nghĩa đen — "Ninh Mông" thành "quả chanh")
+    setStatus('subStatus', '✨ AI đang đọc toàn bộ nội dung để nắm bối cảnh, nhân vật, tên riêng…');
+    let glossStr = '';
+    try {
+      const g = await geminiJson(key, `Read this ENTIRE subtitle script (a video story) and return JSON:
+{"summary":"2-3 sentence story summary","characters":[{"name":"tên xuất hiện trong script","render":"cách viết/xưng hô THỐNG NHẤT nên dùng"}],"terms":[{"term":"thuật ngữ lặp lại","render":"bản dịch thống nhất"}],"suspects":["các dòng có vẻ dịch SAI LOGIC (tên riêng bị dịch nghĩa đen, đại từ sai vai vế, câu vô nghĩa)"]}
+CRITICAL: proper names must be TRANSLITERATED (Chinese → Hán-Việt: Níng Méng → "Ninh Mông"), NEVER translated by literal meaning ("quả chanh" is WRONG for a person's name).
+Script:
+${cues.map(c => c.text).join('\n').slice(0, 16000)}`);
+      glossStr = `Story summary: ${g.summary || ''}
+Characters — use EXACTLY these renderings: ${(g.characters || []).map(c => `${c.name} → ${c.render}`).join('; ') || '(none)'}
+Terms: ${(g.terms || []).map(t => `${t.term} → ${t.render}`).join('; ') || '(none)'}
+Known suspect lines to fix: ${(g.suspects || []).join(' | ') || '(none)'}
+`;
+    } catch (e) { console.warn('Bước lập bảng tên riêng lỗi (bỏ qua):', e.message); }
+    // B2: soát & sửa từng lô theo bảng trên
+    for (let i = 0; i < cues.length; i += CH) {
+      const part = cues.slice(i, i + CH);
+      setStatus('subStatus', `✨ AI đang soát logic & sửa bản dịch… (${Math.min(i + CH, cues.length)}/${cues.length} dòng)`);
+      const ctxPrev = i > 0 ? 'Earlier lines for context: ' + cues.slice(Math.max(0, i - 5), i).map(c => c.text).join(' / ') + '\n' : '';
+      const listStr = part.map((c, j) => JSON.stringify({ i: j, text: c.text })).join('\n');
+      const out = await geminiText(key, `You are revising video subtitles ${target === '__original__' ? 'in their original language' : 'translated into ' + target}.
+${glossStr}${ctxPrev}For EACH line, sanity-check its LOGIC against the story: fix mistranslations, names translated by literal meaning (→ use the character renderings above), wrong pronouns${target === 'Vietnamese' ? ' (xưng hô nhất quán đúng vai vế: ta/ngươi/tôi/anh/cô/bà/hắn/nàng...)' : ''}, and lines that contradict the context. Make wording natural and coherent.
+Rules: keep the SAME number of lines, do NOT merge/split lines, keep each line short (subtitle length), return a line unchanged if already good.
+Return JSON array [{"i":0,"text":"..."}] with exactly ${part.length} items, "i" matching input.
+Script:
+${listStr}`);
+      for (const o of out) {
+        const idx = i + (+o.i);
+        if (cues[idx] && typeof o.text === 'string' && o.text.trim()) cues[idx].text = o.text.trim();
+      }
+    }
+    renderCues();
+    setStatus('subStatus', '✨ Đã sửa bản dịch theo ngữ cảnh toàn video.', 'ok');
+    return true;
+  } catch (e) {
+    console.error(e);
+    setStatus('subStatus', 'Sửa ngữ cảnh lỗi: ' + e.message, 'err');
+    return false;
+  }
+}
+
+// Check đã dịch full chưa: báo % phủ + các khúc trống, rồi tự dịch bổ sung khúc trống
+$('btnCoverage').addEventListener('click', checkCoverage);
+async function checkCoverage() {
+  if (!cues.length) return setStatus('subStatus', 'Chưa có phụ đề.', 'err');
+  const total = vid.duration || Math.max(...cues.map(c => c.end));
+  const covered = cues.reduce((s, c) => s + Math.max(0, c.end - c.start), 0);
+  const pct = Math.round(covered / total * 100);
+  const gaps = findGaps(cues, total);
+  if (!gaps.length)
+    return setStatus('subStatus', `✓ Đã dịch full — phụ đề phủ ${pct}% thời lượng, không còn khúc trống >12 giây.`, 'ok');
+  const gapStr = gaps.map(g => fmtTime(g[0]) + '–' + fmtTime(g[1])).join(', ');
+  const key = $('apiKey').value.trim();
+  if (!key || !videoFile)
+    return setStatus('subStatus', `Phủ ${pct}% — còn ${gaps.length} khúc trống: ${gapStr}. (Cần video + Gemini key để dịch bổ sung.)`, 'err');
+  setStatus('subStatus', `Phủ ${pct}% — còn ${gaps.length} khúc trống: ${gapStr}. Đang dịch bổ sung…`);
+  try {
+    if (!lastPcm) {
+      setStatus('subStatus', 'Đang tách lại âm thanh để dịch bổ sung…');
+      lastPcm = await extractAudioPCM(videoFile);
+    }
+    const SR = 16000, added = [];
+    for (const [gs, ge] of gaps.slice(0, 8)) {
+      const from = Math.max(0, Math.floor((gs - 1) * SR)), to = Math.min(lastPcm.length, Math.ceil((ge + 1) * SR));
+      const part = await callGemini(key, pcmToWavBase64(lastPcm.subarray(from, to), SR), $('targetLang').value);
+      const off = from / SR;
+      for (const c of part) {
+        const s = +c.start, e = +c.end;
+        if (isFinite(s) && isFinite(e) && String(c.text || '').trim())
+          added.push({ start: +(s + off).toFixed(2), end: +(e + off).toFixed(2), text: String(c.text).trim() });
+      }
+    }
+    if (added.length) {
+      cues = sanitizeCues([...cues, ...added]);
+      renderCues();
+      setStatus('subStatus', `Đã bổ sung ${added.length} dòng cho các khúc trống — bấm 🔍 lần nữa để kiểm tra lại.`, 'ok');
+    } else {
+      setStatus('subStatus', `Các khúc trống (${gapStr}) không có lời thoại — chỉ là nhạc/im lặng, coi như đã dịch full.`, 'ok');
+    }
+  } catch (e) { setStatus('subStatus', 'Dịch bổ sung lỗi: ' + e.message, 'err'); }
+}
+
+async function extractAudioPCM(file) {
+  const isMp4Like = /\.(mp4|m4v|mov)$/i.test(file.name) || /(mp4|quicktime)/i.test(file.type || '');
+  const big = file.size > 150 * 1024 * 1024; // decodeAudioData nuốt CẢ FILE vào RAM — file to là sập
+  if (isMp4Like && big && 'AudioDecoder' in window) return await extractViaMp4Box(file);
+  try {
+    return await extractViaDecode(file);
+  } catch (e) {
+    console.warn('decodeAudioData lỗi:', e && e.message);
+    if (isMp4Like && 'AudioDecoder' in window) {
+      setStatus('aiStatus', 'Giải mã kiểu thường thất bại — chuyển sang bộ giải mã WebCodecs…');
+      return await extractViaMp4Box(file);
+    }
+    throw new Error('Không giải mã được âm thanh của video này (codec không hỗ trợ hoặc video không có tiếng). Thử convert sang MP4 (audio AAC) rồi nạp lại.');
+  }
+}
+
+// Đường cũ: nhanh, gọn — nhưng giải mã cả file một cục, chỉ hợp file nhỏ
+async function extractViaDecode(file) {
+  const buf = await file.arrayBuffer();
+  const tmp = new AudioContext();
+  const decoded = await tmp.decodeAudioData(buf);
+  tmp.close();
+  const SR = 16000;
+  const off = new OfflineAudioContext(1, Math.ceil(decoded.duration * SR), SR);
+  const s = off.createBufferSource();
+  s.buffer = decoded; s.connect(off.destination); s.start();
+  const rendered = await off.startRendering();
+  const f32 = rendered.getChannelData(0);
+  const i16 = new Int16Array(f32.length);
+  for (let i = 0; i < f32.length; i++) {
+    const v = Math.max(-1, Math.min(1, f32[i]));
+    i16[i] = v < 0 ? v * 0x8000 : v * 0x7FFF;
+  }
+  return i16;
+}
+
+// Đường mới cho file to / codec khó: MP4Box đọc file theo lát 8MB + WebCodecs giải mã dần,
+// hạ mẫu tại chỗ về 16kHz mono → video 2 tiếng chỉ tốn ~230MB RAM thay vì ~2.5GB
+const loadedScripts = {};
+function loadScript(src) {
+  if (!loadedScripts[src]) loadedScripts[src] = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = res;
+    s.onerror = () => rej(new Error('Không tải được ' + src));
+    document.head.appendChild(s);
+  });
+  return loadedScripts[src];
+}
+
+function makeResampler(srcRate, dstRate) {
+  const ratio = srcRate / dstRate;
+  let tail = new Float32Array(0), readPos = 0;
+  return mono => {
+    const joined = new Float32Array(tail.length + mono.length);
+    joined.set(tail); joined.set(mono, tail.length);
+    const n = Math.max(0, Math.floor((joined.length - 1 - readPos) / ratio) + 1);
+    const out = new Int16Array(n);
+    let i = readPos, k = 0;
+    while (i + 1 < joined.length && k < n) {
+      const i0 = Math.floor(i), frac = i - i0;
+      const v = Math.max(-1, Math.min(1, joined[i0] * (1 - frac) + joined[i0 + 1] * frac));
+      out[k++] = v < 0 ? v * 0x8000 : v * 0x7FFF;
+      i += ratio;
+    }
+    const keepFrom = Math.min(Math.floor(i), joined.length);
+    tail = joined.slice(keepFrom);
+    readPos = i - keepFrom;
+    return out.subarray(0, k);
+  };
+}
+
+async function extractViaMp4Box(file) {
+  await loadScript('https://cdn.jsdelivr.net/npm/mp4box@0.5.2/dist/mp4box.all.min.js');
+  return new Promise((resolve, reject) => {
+    const mp4 = MP4Box.createFile();
+    let decoder = null, resampler = null;
+    const chunks = [];
+    let finished = false;
+    const fail = e => { if (!finished) { finished = true; try { decoder && decoder.close(); } catch (_) {} reject(e instanceof Error ? e : new Error(String(e))); } };
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      const total = chunks.reduce((s, c) => s + c.length, 0);
+      if (!total) return reject(new Error('Không lấy được mẫu âm thanh nào từ video.'));
+      const out = new Int16Array(total);
+      let o = 0;
+      for (const c of chunks) { out.set(c, o); o += c.length; }
+      resolve(out);
+    };
+    mp4.onError = e => fail(new Error('Đọc MP4 lỗi: ' + e));
+    mp4.onReady = info => {
+      const track = info.audioTracks && info.audioTracks[0];
+      if (!track) return fail(new Error('Video này không có track âm thanh.'));
+      const srcRate = (track.audio && track.audio.sample_rate) || 44100;
+      const nCh = (track.audio && track.audio.channel_count) || 2;
+      resampler = makeResampler(srcRate, 16000);
+      // AudioSpecificConfig (esds tag 5) cho AAC
+      let desc;
+      try {
+        for (const entry of mp4.getTrackById(track.id).mdia.minf.stbl.stsd.entries) {
+          if (entry.esds) {
+            const dcd = entry.esds.esd.descs.find(d => d.tag === 4);
+            const dsi = dcd && dcd.descs.find(d => d.tag === 5);
+            if (dsi) desc = dsi.data;
+          }
+        }
+      } catch (_) {}
+      decoder = new AudioDecoder({
+        output: frame => {
+          try {
+            const n = frame.numberOfFrames, ch = frame.numberOfChannels;
+            const mono = new Float32Array(n), tmp = new Float32Array(n);
+            for (let c = 0; c < ch; c++) {
+              frame.copyTo(tmp, { planeIndex: c, format: 'f32-planar' });
+              for (let i = 0; i < n; i++) mono[i] += tmp[i] / ch;
+            }
+            frame.close();
+            const piece = resampler(mono);
+            if (piece.length) chunks.push(piece.slice());
+          } catch (e) { fail(e); }
+        },
+        error: e => fail(new Error('WebCodecs không giải mã được audio (' + track.codec + '): ' + e.message + ' — video dùng codec lạ (AC3?), convert sang AAC.'))
+      });
+      const cfg = { codec: track.codec, sampleRate: srcRate, numberOfChannels: nCh };
+      if (desc) cfg.description = desc;
+      try { decoder.configure(cfg); } catch (e) { return fail(new Error('Codec audio không hỗ trợ: ' + track.codec)); }
+      mp4.setExtractionOptions(track.id, null, { nbSamples: 500 });
+      mp4.start();
+    };
+    mp4.onSamples = (id, user, samples) => {
+      for (const s of samples) {
+        try {
+          decoder.decode(new EncodedAudioChunk({ type: 'key', timestamp: Math.round(s.cts * 1e6 / s.timescale), data: s.data }));
+        } catch (e) { return fail(e); }
+      }
+    };
+    // bơm file theo lát 8MB — không nuốt cả file vào RAM
+    const SLICE = 8 * 1024 * 1024;
+    let offset = 0;
+    const pump = () => {
+      if (finished) return;
+      if (offset >= file.size) {
+        mp4.flush();
+        (async () => { try { decoder && await decoder.flush(); } catch (_) {} finish(); })();
+        return;
+      }
+      setStatus('aiStatus', `Đang tách âm thanh (WebCodecs)… ${Math.round(offset / file.size * 100)}%`);
+      file.slice(offset, offset + SLICE).arrayBuffer().then(ab => {
+        ab.fileStart = offset;
+        const next = mp4.appendBuffer(ab);
+        offset = typeof next === 'number' ? next : offset + SLICE;
+        setTimeout(pump, 0);
+      }).catch(fail);
+    };
+    pump();
+  });
+}
+
+function pcmToWavBase64(i16, sr) {
+  const dataLen = i16.length * 2;
+  const buf = new ArrayBuffer(44 + dataLen);
+  const dv = new DataView(buf);
+  const wstr = (o, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
+  wstr(0, 'RIFF'); dv.setUint32(4, 36 + dataLen, true); wstr(8, 'WAVE');
+  wstr(12, 'fmt '); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
+  dv.setUint32(24, sr, true); dv.setUint32(28, sr * 2, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true);
+  wstr(36, 'data'); dv.setUint32(40, dataLen, true);
+  new Int16Array(buf, 44).set(i16);
+  // base64 theo khối để tránh tràn stack
+  const bytes = new Uint8Array(buf);
+  let bin = '';
+  const STEP = 0x8000;
+  for (let i = 0; i < bytes.length; i += STEP)
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + STEP));
+  return btoa(bin);
+}
+
+async function callGemini(key, wavB64, targetLang, onUpload) {
+  const translateInstr = targetLang === '__original__'
+    ? 'Keep the text in the ORIGINAL spoken language (verbatim transcription, cleaned up).'
+    : `Translate every subtitle text into ${targetLang}. Output ONLY the translated text (no original).`;
+  const body = {
+    contents: [{
+      role: 'user',
+      parts: [
+        { text: `You are a professional subtitler. Transcribe the speech in this audio and produce subtitles.
+${translateInstr}
+Rules:
+- Split into natural subtitle lines of at most ~12 words each.
+- "start" and "end" are SECONDS from the beginning of THIS audio (decimal numbers). Timestamps must match the actual speech timing.
+- Names of people/places/brands: TRANSLITERATE them (Chinese names → Hán-Việt, e.g. 柠檬/Níng Méng → "Ninh Mông"), NEVER translate their literal meaning (not "quả chanh").
+- Skip music/silence. If there is no speech at all, return [].
+Return a JSON array: [{"start": 0.0, "end": 2.5, "text": "..."}]` },
+        { inlineData: { mimeType: 'audio/wav', data: wavB64 } }
+      ]
+    }],
+    generationConfig: {
+      responseMimeType: 'application/json',
+      // ép Gemini trả đúng mảng {start,end,text} — giảm hẳn JSON hỏng
+      responseSchema: {
+        type: 'ARRAY',
+        items: {
+          type: 'OBJECT',
+          properties: { start: { type: 'NUMBER' }, end: { type: 'NUMBER' }, text: { type: 'STRING' } },
+          required: ['start', 'end', 'text'],
+          propertyOrdering: ['start', 'end', 'text']
+        }
+      },
+      temperature: 0.2,
+      maxOutputTokens: 32768
+    }
+  };
+  const model = $('model').value;
+  // flash: tắt thinking → trả lời nhanh hơn và không ăn bớt token output
+  if (model.includes('flash')) body.generationConfig.thinkingConfig = { thinkingBudget: 0 };
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
+  // dùng XHR thay vì fetch để có tiến độ upload thật
+  const res = await new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.timeout = 300000; // 5 phút — quá là báo lỗi thay vì chờ vô hạn
+    xhr.upload.onprogress = e => { if (e.lengthComputable && onUpload) onUpload(e.loaded / e.total); };
+    xhr.upload.onload = () => { if (onUpload) onUpload(1); };
+    xhr.onload = () => resolve({ status: xhr.status, text: xhr.responseText });
+    xhr.onerror = () => reject(new Error('Lỗi mạng khi gọi Gemini — kiểm tra kết nối internet.'));
+    xhr.ontimeout = () => reject(new Error('Gemini không phản hồi sau 5 phút — thử lại, hoặc kiểm tra key/quota.'));
+    xhr.send(JSON.stringify(body));
+  });
+  if (res.status < 200 || res.status >= 300) {
+    let msg = res.text.slice(0, 300);
+    try { msg = JSON.parse(res.text).error.message; } catch (_) {}
+    throw new Error('Gemini ' + res.status + ': ' + msg);
+  }
+  let data;
+  try { data = JSON.parse(res.text); }
+  catch (_) { throw new Error('Phản hồi Gemini không hợp lệ: ' + res.text.slice(0, 200)); }
+  if (data.promptFeedback?.blockReason)
+    throw new Error('Gemini từ chối xử lý audio này: ' + data.promptFeedback.blockReason);
+  const cand = data.candidates?.[0];
+  const txt = cand?.content?.parts?.map(p => p.text || '').join('') || '[]';
+  const arr = parseCueJson(txt);
+  if (cand?.finishReason === 'MAX_TOKENS')
+    console.warn('Gemini bị cắt vì quá dài (MAX_TOKENS) — đã cứu được', arr.length, 'dòng phụ đề của đoạn này.');
+  return arr;
+}
+
+// Parse JSON phụ đề "chịu đòn": chịu được code fence, JSON bị cắt, dấu nháy lỗi…
+function parseCueJson(raw) {
+  let t = String(raw).trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+  const tryParse = s => { try { const a = JSON.parse(s); return Array.isArray(a) ? a : null; } catch (_) { return null; } };
+  let arr = tryParse(t);
+  if (!arr) {
+    const i = t.indexOf('[');
+    if (i >= 0) {
+      const s = t.slice(i);
+      arr = tryParse(s)
+        || tryParse(s.replace(/,\s*([\]}])/g, '$1')) // dấu phẩy thừa
+        || null;
+      if (!arr) { // bị cắt giữa chừng → giữ tới object hoàn chỉnh cuối cùng
+        const j = s.lastIndexOf('}');
+        if (j > 0) arr = tryParse(s.slice(0, j + 1).replace(/,\s*$/, '') + ']');
+      }
+    }
+  }
+  if (!arr) { // vớt từng dòng bằng regex — dòng nào hỏng thì bỏ, không chết cả mẻ
+    arr = [];
+    const re = /"start"\s*:\s*([\d.]+)\s*,\s*"end"\s*:\s*([\d.]+)\s*,\s*"text"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
+    let m;
+    while ((m = re.exec(t))) {
+      try { arr.push({ start: +m[1], end: +m[2], text: JSON.parse('"' + m[3] + '"') }); } catch (_) {}
+    }
+    if (!arr.length && t !== '[]') {
+      console.error('Không parse được phụ đề từ Gemini, nội dung thô:', raw);
+      throw new Error('Không đọc được JSON phụ đề từ Gemini — bấm F12 xem Console để biết chi tiết, rồi thử lại.');
+    }
+  }
+  return arr;
+}
+
+// ===================== editor phụ đề =====================
+function renderCues() {
+  const list = $('cueList');
+  list.innerHTML = '';
+  cues.forEach((c, i) => {
+    const div = document.createElement('div');
+    div.className = 'cue'; div.dataset.i = i;
+    div.innerHTML = `
+      <input type="number" step="0.1" min="0" value="${c.start}" title="Bắt đầu (giây)">
+      <input type="number" step="0.1" min="0" value="${c.end}" title="Kết thúc (giây)">
+      <textarea rows="1"></textarea>
+      <button class="del" title="Xoá dòng">✕</button>`;
+    const [inS, inE] = div.querySelectorAll('input');
+    const ta = div.querySelector('textarea');
+    ta.value = c.text;
+    inS.addEventListener('input', () => c.start = +inS.value || 0);
+    inE.addEventListener('input', () => c.end = +inE.value || 0);
+    ta.addEventListener('input', () => c.text = ta.value);
+    ta.addEventListener('focus', () => { if (!exporting) { vid.currentTime = c.start + 0.05; } });
+    div.querySelector('.del').addEventListener('click', () => { cues.splice(i, 1); renderCues(); });
+    list.appendChild(div);
+  });
+}
+let lastActive = null;
+function highlightCue(cue) {
+  const i = cue ? cues.indexOf(cue) : -1;
+  if (i === lastActive) return;
+  lastActive = i;
+  document.querySelectorAll('.cue').forEach(el => el.classList.toggle('active', +el.dataset.i === i));
+}
+$('btnAddCue').addEventListener('click', () => {
+  const t = vid.currentTime || 0;
+  cues.push({ start: +t.toFixed(1), end: +(t + 3).toFixed(1), text: '' });
+  cues.sort((a, b) => a.start - b.start);
+  renderCues();
+});
+
+// ===================== SRT nhập / xuất =====================
+$('btnExportSrt').addEventListener('click', () => {
+  if (!cues.length) return;
+  const srt = cues.map((c, i) => `${i + 1}\n${srtTime(c.start)} --> ${srtTime(c.end)}\n${c.text}\n`).join('\n');
+  downloadBlob(new Blob([srt], { type: 'text/plain;charset=utf-8' }), baseName() + '.srt');
+});
+$('btnImportSrt').addEventListener('click', () => $('srtInput').click());
+$('srtInput').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  const text = await f.text();
+  const out = [];
+  const blocks = text.replace(/\r/g, '').split(/\n\n+/);
+  for (const b of blocks) {
+    const m = b.match(/(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})\s*-->\s*(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})/);
+    if (!m) continue;
+    const start = (+m[1]) * 3600 + (+m[2]) * 60 + (+m[3]) + (+m[4]) / 1000;
+    const end = (+m[5]) * 3600 + (+m[6]) * 60 + (+m[7]) + (+m[8]) / 1000;
+    const lines = b.split('\n');
+    const ti = lines.findIndex(l => l.includes('-->'));
+    const txt = lines.slice(ti + 1).join(' ').trim();
+    if (txt) out.push({ start: +start.toFixed(2), end: +end.toFixed(2), text: txt });
+  }
+  if (out.length) { cues = sanitizeCues(out); renderCues(); setStatus('aiStatus', `Đã nhập ${cues.length} dòng từ SRT.`, 'ok'); }
+  else setStatus('aiStatus', 'Không đọc được dòng nào từ file SRT.', 'err');
+  e.target.value = '';
+});
+function srtTime(s) {
+  const total = Math.max(0, Math.round(s * 1000)); // tính từ tổng ms để không bị tròn 999.6 → 1000
+  const h = Math.floor(total / 3600000), m = Math.floor(total % 3600000 / 60000),
+        sec = Math.floor(total % 60000 / 1000), ms = total % 1000;
+  const p = (n, l = 2) => String(n).padStart(l, '0');
+  return `${p(h)}:${p(m)}:${p(sec)},${p(ms, 3)}`;
+}
+
+// ===================== xuất video =====================
+$('btnExport').addEventListener('click', () => startExport());
+$('btnStopExport').addEventListener('click', () => { clipAbortAll = true; stopExport(true); });
+
+function startExport(from = 0, to = null, suffix = '-sub') {
+  if (exporting || !videoFile) return Promise.resolve();
+  return new Promise(resolveDone => {
+    exportResolve = resolveDone;
+    exportFrom = from;
+    exportTo = to == null ? (vid.duration || 0) : to;
+    exportSuffix = suffix;
+    exportStopping = false;
+    ensureAudioGraph();
+    speakerGain.gain.value = 0;   // xuất im lặng, audio vẫn ghi qua streamDest
+    ttsSpkGain.gain.value = 0;    // giọng đọc im lặng trên loa nhưng vẫn vào bản ghi
+    musicSpkGain.gain.value = 0;  // nhạc nền cũng vậy
+    stopDubSource(); lastDubSeg = null;
+    const fps = 30;
+    const canvasStream = cv.captureStream(fps);
+    const tracks = [canvasStream.getVideoTracks()[0], ...streamDest.stream.getAudioTracks()];
+    const stream = new MediaStream(tracks);
+    let mime = 'video/webm;codecs=vp9,opus';
+    if (!MediaRecorder.isTypeSupported(mime)) mime = 'video/webm;codecs=vp8,opus';
+    if (!MediaRecorder.isTypeSupported(mime)) mime = 'video/webm';
+    const chunks = [];
+    recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8_000_000 });
+    recorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+    recorder.onstop = () => {
+      speakerGain.gain.value = 1;
+      ttsSpkGain.gain.value = 1;
+      musicSpkGain.gain.value = 1;
+      if (chunks.length && !aborted) {
+        downloadBlob(new Blob(chunks, { type: 'video/webm' }), baseName() + exportSuffix + '.webm');
+        setStatus('videoStatus', 'Đã xuất xong — file đang tải về.', 'ok');
+      } else if (aborted) {
+        setStatus('videoStatus', 'Đã huỷ xuất.');
+      }
+      exporting = false; aborted = false;
+      $('btnExport').style.display = ''; $('btnStopExport').style.display = 'none';
+      $('exportProgress').style.display = 'none';
+      $('exportProgress').firstElementChild.style.width = '0%';
+      if (!pipKeep) closePip(); // đang cắt clip hàng loạt thì giữ cửa sổ nổi tới clip cuối
+      if (exportResolve) { exportResolve(); exportResolve = null; }
+    };
+    let aborted = false;
+    window._setAborted = v => aborted = v; // dùng bởi stopExport
+    exporting = true;
+    $('btnExport').style.display = 'none';
+    $('btnStopExport').style.display = '';
+    $('exportProgress').style.display = 'block';
+    setStatus('videoStatus', 'Đang xuất… (chạy thời gian thực — có cửa sổ nổi thì chuyển tab thoải mái)');
+    openPip(); // cửa sổ nổi giữ vòng vẽ sống khi người dùng chuyển tab
+    const begin = () => { recorder.start(1000); vid.play(); };
+    if (Math.abs(vid.currentTime - from) < 0.05) begin();
+    else {
+      vid.addEventListener('seeked', function go() {
+        vid.removeEventListener('seeked', go);
+        begin();
+      });
+      vid.currentTime = from;
+    }
+    vid.addEventListener('ended', onVideoEnded);
+  });
+}
+function onVideoEnded() {
+  if (exporting) stopExport(false);
+}
+function stopExport(cancel) {
+  if (exportStopping) return; // chặn gọi lặp (drawFrame + 'ended' cùng bắn)
+  exportStopping = true;
+  vid.removeEventListener('ended', onVideoEnded);
+  vid.pause();
+  if (window._setAborted) window._setAborted(cancel);
+  if (recorder && recorder.state !== 'inactive') recorder.stop();
+}
+
+// ===================== cắt video dài thành clip ngắn =====================
+// Chia video thành các khoảng ≤ N giây, ƯU TIÊN cắt tại điểm kết thúc câu thoại
+function buildClipPlan() {
+  const dur = vid.duration || 0;
+  const MAX = Math.max(1, Math.min(20, +$('clipLen').value || 5)) * 60 - 0.5; // phút → giây, trừ 0.5s cho chắc "dưới mức"
+  const ends = cues.map(c => c.end).sort((a, b) => a - b);
+  const plan = [];
+  let t0 = 0;
+  while (t0 < dur - 0.5) {
+    let cut = t0 + MAX;
+    if (dur - t0 <= MAX) cut = dur;
+    else {
+      // ranh giới câu muộn nhất trong (t0+5, t0+MAX] — không có thì đành cắt cứng
+      for (const e of ends) {
+        if (e > t0 + 5 && e <= t0 + MAX) cut = e;
+        else if (e > t0 + MAX) break;
+      }
+    }
+    plan.push([+t0.toFixed(2), +Math.min(cut, dur).toFixed(2)]);
+    t0 = cut;
+  }
+  return plan;
+}
+
+$('btnExportClips').addEventListener('click', exportClips);
+async function exportClips() {
+  if (exporting || !videoFile) return;
+  const plan = buildClipPlan();
+  if (!plan.length) return setStatus('videoStatus', 'Video chưa nạp xong.', 'err');
+  clipAbortAll = false;
+  $('btnExportClips').disabled = true;
+  pipKeep = true; // giữ cửa sổ nổi mở xuyên suốt các clip (mở lại giữa chừng cần user gesture)
+  let doneN = 0;
+  for (let k = 0; k < plan.length; k++) {
+    if (clipAbortAll) break;
+    setStatus('videoStatus', `Đang xuất clip ${k + 1}/${plan.length} — ${fmtTime(plan[k][0])}→${fmtTime(plan[k][1])} (chạy thời gian thực)…`);
+    await startExport(plan[k][0], plan[k][1], `-clip${String(k + 1).padStart(3, '0')}`);
+    if (!clipAbortAll) doneN++;
+  }
+  $('btnExportClips').disabled = false;
+  pipKeep = false;
+  closePip();
+  setStatus('videoStatus',
+    clipAbortAll ? `Đã dừng — xuất được ${doneN}/${plan.length} clip.`
+                 : `✓ Xong ${plan.length} clip (cắt tại ranh giới câu thoại). Trình duyệt có thể hỏi "cho phép tải nhiều file" — bấm Allow.`,
+    clipAbortAll ? '' : 'ok');
+}
+
+// ===================== chạy hàng loạt =====================
+let batchFiles = [], batchRunning = false, batchStop = false;
+$('btnBatchPick').addEventListener('click', () => $('batchInput').click());
+$('batchInput').addEventListener('change', e => {
+  batchFiles = [...e.target.files].map(f => ({ file: f, status: 'chờ' }));
+  renderBatch();
+  setStatus('batchStatus', `${batchFiles.length} video trong hàng đợi.`);
+  e.target.value = '';
+});
+function renderBatch() {
+  $('batchList').innerHTML = batchFiles.map(b =>
+    `<div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:4px 0;border-bottom:1px solid var(--line)">
+      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${b.file.name}</span>
+      <span style="color:var(--muted);flex-shrink:0">${b.status}</span>
+    </div>`).join('');
+}
+$('btnBatch').addEventListener('click', async () => {
+  if (batchRunning) return;
+  if (!batchFiles.length) return setStatus('batchStatus', 'Chưa chọn video nào.', 'err');
+  batchRunning = true; batchStop = false;
+  $('btnBatch').style.display = 'none';
+  $('btnBatchStop').style.display = '';
+  for (const item of batchFiles) {
+    if (batchStop) { if (item.status === 'chờ') item.status = 'bỏ qua'; renderBatch(); continue; }
+    try {
+      item.status = 'nạp video'; renderBatch();
+      await loadVideo(item.file);
+      cues = []; renderCues();
+      item.status = 'dịch phụ đề'; renderBatch();
+      const ok = await transcribe();
+      if (!ok) { item.status = '⚠ lỗi dịch'; renderBatch(); continue; }
+      if ($('batchDub').checked && cues.length) {
+        item.status = 'lồng tiếng'; renderBatch();
+        await generateDub();
+      }
+      item.status = 'đang xuất'; renderBatch();
+      await startExport();
+      item.status = '✓ xong'; renderBatch();
+    } catch (err) {
+      console.error('Batch lỗi:', item.file.name, err);
+      item.status = '⚠ ' + err.message.slice(0, 40); renderBatch();
+    }
+  }
+  batchRunning = false;
+  $('btnBatch').style.display = '';
+  $('btnBatchStop').style.display = 'none';
+  const done = batchFiles.filter(b => b.status === '✓ xong').length;
+  setStatus('batchStatus', `Hàng loạt kết thúc — ${done}/${batchFiles.length} video xong.`, done === batchFiles.length ? 'ok' : 'err');
+});
+$('btnBatchStop').addEventListener('click', () => {
+  batchStop = true;
+  if (exporting) stopExport(true); // huỷ luôn video đang xuất dở
+  setStatus('batchStatus', 'Sẽ dừng sau video hiện tại…');
+});
+
+// ===================== tiện ích =====================
+function baseName() {
+  return (videoFile?.name || 'video').replace(/\.[^.]+$/, '');
+}
+function downloadBlob(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 30000);
+}
+function fmtTime(s) {
+  if (!isFinite(s)) return '0:00';
+  const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+  return `${m}:${String(sec).padStart(2, '0')}`;
+}
+function setStatus(id, msg, cls) {
+  const el = $(id);
+  el.textContent = msg;
+  el.className = 'status' + (cls ? ' ' + cls : '');
+}
+function setBar(id, pct) {
+  const el = $(id);
+  el.style.display = 'block';
+  el.firstElementChild.style.width = pct + '%';
+}
+</script>
+</body>
+</html>
