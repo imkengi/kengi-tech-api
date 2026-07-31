@@ -2215,7 +2215,7 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                     // Fetch tracking number from logistics API if missing
                     let trackingNo = order.trackingNumber || existing.trackingNumber
                     let carrier = order.shippingCarrier || existing.shippingCarrier
-                    if (!trackingNo && channel.platform === 'shopee' && ['shipping', 'delivered', 'completed'].includes(order.status)) {
+                    if (!trackingNo && channel.platform === 'shopee' && ['shipping', 'delivered', 'completed', 'SHIPPED', 'COMPLETED', 'TO_CONFIRM_RECEIVE', 'PROCESSED'].includes(order.status)) {
                         try {
                             const shopeeService = new ShopeeService({
                                 apiKey: channel.apiKey || '', apiSecret: channel.apiSecret || '',
@@ -2244,6 +2244,20 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                     })
                     updated++
                 } else {
+                    // Fetch tracking for new Shopee orders that already shipped
+                    let newTrackingNo = order.trackingNumber || null
+                    if (!newTrackingNo && channel.platform === 'shopee' && ['shipping', 'delivered', 'completed', 'SHIPPED', 'COMPLETED', 'TO_CONFIRM_RECEIVE', 'PROCESSED'].includes(order.status)) {
+                        try {
+                            const shopeeService = new ShopeeService({
+                                apiKey: channel.apiKey || '', apiSecret: channel.apiSecret || '',
+                                accessToken: channel.accessToken || undefined,
+                                refreshToken: channel.refreshToken || undefined,
+                                shopId: channel.shopId || undefined,
+                            })
+                            newTrackingNo = await shopeeService.getTrackingNumber(order.externalOrderId) || null
+                        } catch { }
+                    }
+
                     // Create new order
                     await prisma.onlineOrder.create({
                         data: {
@@ -2264,7 +2278,7 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                             total: order.total,
                             paymentMethod: order.paymentMethod || null,
                             paymentStatus: order.paymentStatus,
-                            trackingNumber: order.trackingNumber || null,
+                            trackingNumber: newTrackingNo,
                             shippingCarrier: order.shippingCarrier || null,
                             paidAt: order.paidAt ? new Date(order.paidAt) : null,
                             shippedAt: order.shippedAt ? new Date(order.shippedAt) : null,
