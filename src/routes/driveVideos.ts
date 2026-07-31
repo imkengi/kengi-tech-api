@@ -15,7 +15,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { Router, Response } from 'express'
-import { google, drive_v3 } from 'googleapis'
+import type { drive_v3 } from 'googleapis'
 import { errMsg } from '../lib/errorResponse'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { requirePermission } from '../middleware/permissionMiddleware'
@@ -65,8 +65,14 @@ interface VideoWithOrder {
 
 let driveClient: drive_v3.Drive | null = null
 
+/**
+ * Nạp googleapis THEO YÊU CẦU chứ không import ở đầu file: require('googleapis')
+ * tốn ~1.1s và ~83MB heap, mà tuyệt đại đa số request của POS không đụng Drive —
+ * để ở top-level là bắt mọi cold start Cloud Run trả giá đó.
+ */
 function getDrive(): drive_v3.Drive {
     if (!driveClient) {
+        const { google } = require('googleapis') as typeof import('googleapis')
         const auth = new google.auth.GoogleAuth({ scopes: DRIVE_SCOPES })
         driveClient = google.drive({ version: 'v3', auth })
     }
@@ -116,14 +122,17 @@ async function fetchDriveVideos(): Promise<DriveVideoFile[]> {
 
 async function getDriveVideos(forceRefresh = false): Promise<DriveVideoFile[]> {
     if (!forceRefresh && cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.files
-    if (inFlight) return inFlight
 
-    inFlight = fetchDriveVideos()
-        .then(files => {
-            cache = { at: Date.now(), files }
-            return files
-        })
-        .finally(() => { inFlight = null })
+    // Chỉ request ĐẦU TIÊN gọi Drive; các request đến cùng lúc bám vào cùng promise.
+    // Mọi request đều đi qua try/catch bên dưới để cùng được hưởng fallback cache cũ.
+    if (!inFlight) {
+        inFlight = fetchDriveVideos()
+            .then(files => {
+                cache = { at: Date.now(), files }
+                return files
+            })
+            .finally(() => { inFlight = null })
+    }
 
     try {
         return await inFlight
