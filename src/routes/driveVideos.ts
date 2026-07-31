@@ -179,11 +179,6 @@ export function extractTrackingCandidates(filename: string): string[] {
     return out
 }
 
-/** Ứng viên tốt nhất — dùng để hiển thị khi không dò được đơn nào. */
-function primaryCandidate(filename: string): string | null {
-    return extractTrackingCandidates(filename)[0] || null
-}
-
 // ─── Ghép video ↔ đơn hàng ──────────────────────────────────────────────────────
 
 /**
