@@ -61,6 +61,7 @@ import loyaltyRoutes from './routes/loyalty'
 import reviewRoutes from './routes/reviews'
 import payrollRoutes from './routes/payroll'
 import onlineOrderRoutes from './routes/onlineOrders'
+import driveVideoRoutes from './routes/driveVideos'
 import upgradeRequestRoutes from './routes/upgradeRequests'
 import webhookRoutes from './routes/webhooks'
 import eventRoutes from './routes/events'
@@ -269,6 +270,7 @@ app.use('/api/loyalty', loyaltyRoutes)
 app.use('/api/reviews', reviewRoutes)
 app.use('/api/payroll', payrollRoutes)
 app.use('/api/online-orders', onlineOrderRoutes)
+app.use('/api/drive-videos', driveVideoRoutes) // Video đóng gói trên Google Drive ↔ đơn sàn (ghép theo mã vận đơn)
 app.use('/api/upgrade-requests', upgradeRequestRoutes)
 app.use('/api/webhooks', webhookRoutes)
 app.use('/api/webhook-endpoints', webhookEndpointRoutes)
