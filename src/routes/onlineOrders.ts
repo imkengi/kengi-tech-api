@@ -2755,6 +2755,196 @@ router.post('/channels/:id/sync-status', authMiddleware, async (req: AuthRequest
     }
 })
 
+// ═══════════════════════════════════════════════════════════════════════════════
+//  BACKFILL MÃ VẬN ĐƠN (Shopee)
+// ═══════════════════════════════════════════════════════════════════════════════
+// Bản vá lấy mã vận đơn khi đồng bộ chỉ áp cho đơn kéo về TỪ LÚC ĐÓ trở đi; đơn
+// đồng bộ trước đó vẫn trackingNumber rỗng vĩnh viễn. Endpoint này quét đơn
+// Shopee đã rời kho mà chưa có mã rồi gọi logistics/get_tracking_number vá lại.
+//
+// POST /api/online-orders/backfill-tracking
+// Body: { channelId?: string, limit?: number }
+//   - không truyền channelId → chạy cho MỌI kênh Shopee của cửa hàng
+//   - limit là trần đơn quét cho cả lượt gọi (mặc định 1000, tối đa 5000)
+router.post('/backfill-tracking', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+
+        // Trạng thái đã rời kho → sàn chắc chắn đã cấp mã vận đơn. Kèm cả dạng
+        // chữ thường của bản map cũ, vì đơn tồn đọng chính là đơn đồng bộ thời đó.
+        const TRACKABLE = ['SHIPPED', 'COMPLETED', 'TO_CONFIRM_RECEIVE', 'PROCESSED', 'shipping', 'delivered', 'completed']
+        // trackingNumber rỗng có 2 dạng trong dữ liệu cũ: NULL và chuỗi rỗng
+        const MISSING_TRACKING = [{ trackingNumber: null }, { trackingNumber: '' }]
+
+        const channelId = req.body?.channelId ? String(req.body.channelId) : null
+        let budget = Math.min(5000, Math.max(1, Number(req.body?.limit) || 1000))
+
+        const channels = await prisma.onlineChannel.findMany({
+            where: { platform: 'shopee', ...(channelId ? { id: channelId } : {}) },
+        })
+        if (channels.length === 0) {
+            res.status(404).json({
+                success: false,
+                error: channelId ? 'Kênh không tồn tại hoặc không phải Shopee' : 'Cửa hàng chưa có kênh Shopee nào',
+            })
+            return
+        }
+
+        // Cloud Run cắt request ở 300s: dừng chủ động ở 230s và trả kết quả MỘT
+        // PHẦN kèm số đơn còn lại để bấm chạy tiếp — thà vá dở mà biết còn hơn 504 mù.
+        const DEADLINE_MS = 230_000
+        const startedAt = Date.now()
+        const outOfTime = () => Date.now() - startedAt > DEADLINE_MS
+        const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+
+        let scanned = 0, filled = 0, notFound = 0, failed = 0, stopped = false
+        const perChannel: any[] = []
+        const errors: string[] = []
+
+        // Duyệt kênh TUẦN TỰ: pool Prisma mỗi cửa hàng rất nhỏ, chạy song song
+        // nhiều kênh dễ cạn kết nối khi cron cũng đang chạy.
+        for (const channel of channels) {
+            if (budget <= 0 || outOfTime()) { stopped = true; break }
+
+            if (!channel.accessToken) {
+                perChannel.push({ channelId: channel.id, channel: channel.name, error: 'Kênh chưa kết nối API (thiếu access token)' })
+                continue
+            }
+
+            const service = new ShopeeService({
+                apiKey: channel.apiKey || '', apiSecret: channel.apiSecret || '',
+                accessToken: channel.accessToken || undefined,
+                refreshToken: channel.refreshToken || undefined,
+                shopId: channel.shopId || undefined,
+            })
+
+            // Làm mới token nếu sắp hết hạn (đệm 5 phút) — lượt quét kéo dài vài
+            // phút, token chết giữa chừng thì cả nghìn đơn còn lại vá hụt.
+            if (channel.tokenExpiresAt && new Date(channel.tokenExpiresAt).getTime() < Date.now() + 5 * 60 * 1000) {
+                try {
+                    const tokens = await service.refreshAccessToken();
+                    (service as any).credentials.accessToken = tokens.accessToken;
+                    (service as any).credentials.refreshToken = tokens.refreshToken
+                    await prisma.onlineChannel.update({
+                        where: { id: channel.id },
+                        data: {
+                            accessToken: tokens.accessToken,
+                            refreshToken: tokens.refreshToken,
+                            tokenExpiresAt: new Date(Date.now() + tokens.expiresIn * 1000),
+                        },
+                    })
+                } catch (e: any) {
+                    console.warn(`[backfill-tracking] ${channel.name}: refresh token lỗi:`, e.message)
+                }
+            }
+
+            const orders = await prisma.onlineOrder.findMany({
+                where: {
+                    channelId: channel.id,
+                    status: { in: TRACKABLE },
+                    externalOrderId: { not: null },
+                    OR: MISSING_TRACKING,
+                },
+                select: { id: true, orderNumber: true, externalOrderId: true },
+                orderBy: { createdAt: 'desc' },
+                take: budget,
+            })
+            if (orders.length === 0) {
+                perChannel.push({ channelId: channel.id, channel: channel.name, scanned: 0, filled: 0, notFound: 0, failed: 0 })
+                continue
+            }
+            budget -= orders.length
+
+            const toSn = (eid: string | null) => (eid || '').replace(/^(SPE-|TIK-|LAZ-)/i, '')
+
+            // getTrackingNumber NUỐT mọi lỗi thành null → kênh hỏng token/IP sẽ
+            // báo "không có mã" cho cả nghìn đơn mà không ai biết vì sao. Thăm dò
+            // 1 đơn bằng call thô để lộ lỗi xác thực/IP trước khi đốt hạn mức.
+            try {
+                const probeSn = toSn(orders[0].externalOrderId)
+                const probeUrl = (service as any).apiUrl('/api/v2/logistics/get_tracking_number') + `&order_sn=${probeSn}`
+                const probe = await (service as any).httpGet(probeUrl)
+                const probeErr = String(probe?.error || '')
+                if (/error_auth|invalid_access_token|access_token|error_permission|source_ip_undeclared/i.test(probeErr)) {
+                    const msg = `${probeErr}${probe?.message ? ` - ${probe.message}` : ''}`
+                    perChannel.push({ channelId: channel.id, channel: channel.name, error: `Shopee từ chối: ${msg}` })
+                    errors.push(`${channel.name}: ${msg}`)
+                    console.error(`[backfill-tracking] ${channel.name}: bỏ qua kênh —`, msg)
+                    continue
+                }
+            } catch (e: any) {
+                console.warn(`[backfill-tracking] ${channel.name}: probe lỗi (vẫn chạy tiếp):`, e.message)
+            }
+
+            let cFilled = 0, cNotFound = 0, cFailed = 0
+            // 3 luồng, mỗi luồng nghỉ 250ms sau một call ≈ 12 req/s — dưới xa
+            // rate limit Shopee mà vẫn nhanh gấp 3 lần kiểu tuần tự.
+            await mapWithConcurrency(orders, async (order) => {
+                if (outOfTime()) { stopped = true; return }
+                const sn = toSn(order.externalOrderId)
+                if (!sn) { cNotFound++; return }
+                try {
+                    const tracking = await service.getTrackingNumber(sn)
+                    await sleep(250)
+                    if (!tracking) { cNotFound++; return }
+                    await prisma.onlineOrder.update({
+                        where: { id: order.id },
+                        data: { trackingNumber: tracking },
+                    })
+                    cFilled++
+                } catch (e: any) {
+                    cFailed++
+                    if (errors.length < 10) errors.push(`${order.orderNumber}: ${e.message}`)
+                    console.error(`[backfill-tracking] ${channel.name} ${order.orderNumber}:`, e.message)
+                }
+            }, 3)
+
+            scanned += orders.length
+            filled += cFilled
+            notFound += cNotFound
+            failed += cFailed
+            perChannel.push({ channelId: channel.id, channel: channel.name, scanned: orders.length, filled: cFilled, notFound: cNotFound, failed: cFailed })
+
+            await prisma.syncLog.create({
+                data: {
+                    channelId: channel.id,
+                    action: 'backfill_tracking',
+                    status: cFailed > 0 ? 'partial' : 'success',
+                    details: `Vá mã vận đơn: ${cFilled}/${orders.length} đơn (chưa có mã: ${cNotFound}, lỗi: ${cFailed})`,
+                    ordersCount: cFilled,
+                },
+            }).catch(() => { })
+        }
+
+        // Còn bao nhiêu đơn thiếu mã sau lượt này → biết có cần bấm chạy tiếp không
+        const remaining = await prisma.onlineOrder.count({
+            where: {
+                channelId: { in: channels.map(c => c.id) },
+                status: { in: TRACKABLE },
+                externalOrderId: { not: null },
+                OR: MISSING_TRACKING,
+            },
+        })
+
+        console.log(`[backfill-tracking] Xong: vá ${filled}/${scanned} đơn, còn thiếu ${remaining}${stopped ? ' (DỪNG vì hết giờ/hết hạn mức)' : ''}`)
+
+        res.json({
+            success: true,
+            data: {
+                scanned, filled, notFound, failed, remaining, stopped,
+                channels: perChannel,
+                errors,
+                message: stopped
+                    ? `Đã vá ${filled} đơn rồi dừng vì chạm hạn mức/thời gian — còn ${remaining} đơn thiếu mã, bấm chạy lại để tiếp tục.`
+                    : `Đã vá ${filled}/${scanned} đơn.${remaining > 0 ? ` Còn ${remaining} đơn sàn chưa cấp mã vận đơn.` : ''}`,
+            },
+        })
+    } catch (err: any) {
+        console.error('Backfill tracking error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
 
 
 // GET /api/online-orders/channels/:id/sync-logs

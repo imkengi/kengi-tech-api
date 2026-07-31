@@ -91026,6 +91026,7 @@ export namespace Prisma {
     dailyRevenueTarget: number | null
     monthlyRevenueTarget: number | null
     dailyOrderTarget: number | null
+    driveFolderId: string | null
     updatedAt: Date | null
   }
 
@@ -91062,6 +91063,7 @@ export namespace Prisma {
     dailyRevenueTarget: number | null
     monthlyRevenueTarget: number | null
     dailyOrderTarget: number | null
+    driveFolderId: string | null
     updatedAt: Date | null
   }
 
@@ -91098,6 +91100,7 @@ export namespace Prisma {
     dailyRevenueTarget: number
     monthlyRevenueTarget: number
     dailyOrderTarget: number
+    driveFolderId: number
     updatedAt: number
     _all: number
   }
@@ -91148,6 +91151,7 @@ export namespace Prisma {
     dailyRevenueTarget?: true
     monthlyRevenueTarget?: true
     dailyOrderTarget?: true
+    driveFolderId?: true
     updatedAt?: true
   }
 
@@ -91184,6 +91188,7 @@ export namespace Prisma {
     dailyRevenueTarget?: true
     monthlyRevenueTarget?: true
     dailyOrderTarget?: true
+    driveFolderId?: true
     updatedAt?: true
   }
 
@@ -91220,6 +91225,7 @@ export namespace Prisma {
     dailyRevenueTarget?: true
     monthlyRevenueTarget?: true
     dailyOrderTarget?: true
+    driveFolderId?: true
     updatedAt?: true
     _all?: true
   }
@@ -91343,6 +91349,7 @@ export namespace Prisma {
     dailyRevenueTarget: number | null
     monthlyRevenueTarget: number | null
     dailyOrderTarget: number | null
+    driveFolderId: string | null
     updatedAt: Date
     _count: StoreSettingsCountAggregateOutputType | null
     _avg: StoreSettingsAvgAggregateOutputType | null
@@ -91398,6 +91405,7 @@ export namespace Prisma {
     dailyRevenueTarget?: boolean
     monthlyRevenueTarget?: boolean
     dailyOrderTarget?: boolean
+    driveFolderId?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["storeSettings"]>
 
@@ -91434,6 +91442,7 @@ export namespace Prisma {
     dailyRevenueTarget?: boolean
     monthlyRevenueTarget?: boolean
     dailyOrderTarget?: boolean
+    driveFolderId?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["storeSettings"]>
 
@@ -91470,6 +91479,7 @@ export namespace Prisma {
     dailyRevenueTarget?: boolean
     monthlyRevenueTarget?: boolean
     dailyOrderTarget?: boolean
+    driveFolderId?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["storeSettings"]>
 
@@ -91506,10 +91516,11 @@ export namespace Prisma {
     dailyRevenueTarget?: boolean
     monthlyRevenueTarget?: boolean
     dailyOrderTarget?: boolean
+    driveFolderId?: boolean
     updatedAt?: boolean
   }
 
-  export type StoreSettingsOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "address" | "phone" | "logo" | "description" | "costPriceMethod" | "trackSerial" | "trackBatch" | "allowNegativeStock" | "shiftConfig" | "businessType" | "taxCode" | "ownerName" | "ownerIdNumber" | "representativeName" | "email" | "website" | "notifyLowStock" | "smtpConfig" | "geminiApiKey" | "notifyNewOrder" | "notifyDailyReport" | "notifyWeeklyReport" | "autoRestockOnReturn" | "autoCreateJournalEntries" | "salesCanCheckout" | "openTime" | "closeTime" | "dailyRevenueTarget" | "monthlyRevenueTarget" | "dailyOrderTarget" | "updatedAt", ExtArgs["result"]["storeSettings"]>
+  export type StoreSettingsOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "address" | "phone" | "logo" | "description" | "costPriceMethod" | "trackSerial" | "trackBatch" | "allowNegativeStock" | "shiftConfig" | "businessType" | "taxCode" | "ownerName" | "ownerIdNumber" | "representativeName" | "email" | "website" | "notifyLowStock" | "smtpConfig" | "geminiApiKey" | "notifyNewOrder" | "notifyDailyReport" | "notifyWeeklyReport" | "autoRestockOnReturn" | "autoCreateJournalEntries" | "salesCanCheckout" | "openTime" | "closeTime" | "dailyRevenueTarget" | "monthlyRevenueTarget" | "dailyOrderTarget" | "driveFolderId" | "updatedAt", ExtArgs["result"]["storeSettings"]>
 
   export type $StoreSettingsPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     name: "StoreSettings"
@@ -91547,6 +91558,7 @@ export namespace Prisma {
       dailyRevenueTarget: number | null
       monthlyRevenueTarget: number | null
       dailyOrderTarget: number | null
+      driveFolderId: string | null
       updatedAt: Date
     }, ExtArgs["result"]["storeSettings"]>
     composites: {}
@@ -92003,6 +92015,7 @@ export namespace Prisma {
     readonly dailyRevenueTarget: FieldRef<"StoreSettings", 'Float'>
     readonly monthlyRevenueTarget: FieldRef<"StoreSettings", 'Float'>
     readonly dailyOrderTarget: FieldRef<"StoreSettings", 'Int'>
+    readonly driveFolderId: FieldRef<"StoreSettings", 'String'>
     readonly updatedAt: FieldRef<"StoreSettings", 'DateTime'>
   }
     
@@ -156146,6 +156159,7 @@ export namespace Prisma {
     dailyRevenueTarget: 'dailyRevenueTarget',
     monthlyRevenueTarget: 'monthlyRevenueTarget',
     dailyOrderTarget: 'dailyOrderTarget',
+    driveFolderId: 'driveFolderId',
     updatedAt: 'updatedAt'
   };
 
@@ -163646,6 +163660,7 @@ export namespace Prisma {
     dailyRevenueTarget?: FloatNullableFilter<"StoreSettings"> | number | null
     monthlyRevenueTarget?: FloatNullableFilter<"StoreSettings"> | number | null
     dailyOrderTarget?: IntNullableFilter<"StoreSettings"> | number | null
+    driveFolderId?: StringNullableFilter<"StoreSettings"> | string | null
     updatedAt?: DateTimeFilter<"StoreSettings"> | Date | string
   }
 
@@ -163682,6 +163697,7 @@ export namespace Prisma {
     dailyRevenueTarget?: SortOrderInput | SortOrder
     monthlyRevenueTarget?: SortOrderInput | SortOrder
     dailyOrderTarget?: SortOrderInput | SortOrder
+    driveFolderId?: SortOrderInput | SortOrder
     updatedAt?: SortOrder
   }
 
@@ -163721,6 +163737,7 @@ export namespace Prisma {
     dailyRevenueTarget?: FloatNullableFilter<"StoreSettings"> | number | null
     monthlyRevenueTarget?: FloatNullableFilter<"StoreSettings"> | number | null
     dailyOrderTarget?: IntNullableFilter<"StoreSettings"> | number | null
+    driveFolderId?: StringNullableFilter<"StoreSettings"> | string | null
     updatedAt?: DateTimeFilter<"StoreSettings"> | Date | string
   }, "id">
 
@@ -163757,6 +163774,7 @@ export namespace Prisma {
     dailyRevenueTarget?: SortOrderInput | SortOrder
     monthlyRevenueTarget?: SortOrderInput | SortOrder
     dailyOrderTarget?: SortOrderInput | SortOrder
+    driveFolderId?: SortOrderInput | SortOrder
     updatedAt?: SortOrder
     _count?: StoreSettingsCountOrderByAggregateInput
     _avg?: StoreSettingsAvgOrderByAggregateInput
@@ -163801,6 +163819,7 @@ export namespace Prisma {
     dailyRevenueTarget?: FloatNullableWithAggregatesFilter<"StoreSettings"> | number | null
     monthlyRevenueTarget?: FloatNullableWithAggregatesFilter<"StoreSettings"> | number | null
     dailyOrderTarget?: IntNullableWithAggregatesFilter<"StoreSettings"> | number | null
+    driveFolderId?: StringNullableWithAggregatesFilter<"StoreSettings"> | string | null
     updatedAt?: DateTimeWithAggregatesFilter<"StoreSettings"> | Date | string
   }
 
@@ -176658,6 +176677,7 @@ export namespace Prisma {
     dailyRevenueTarget?: number | null
     monthlyRevenueTarget?: number | null
     dailyOrderTarget?: number | null
+    driveFolderId?: string | null
     updatedAt?: Date | string
   }
 
@@ -176694,6 +176714,7 @@ export namespace Prisma {
     dailyRevenueTarget?: number | null
     monthlyRevenueTarget?: number | null
     dailyOrderTarget?: number | null
+    driveFolderId?: string | null
     updatedAt?: Date | string
   }
 
@@ -176730,6 +176751,7 @@ export namespace Prisma {
     dailyRevenueTarget?: NullableFloatFieldUpdateOperationsInput | number | null
     monthlyRevenueTarget?: NullableFloatFieldUpdateOperationsInput | number | null
     dailyOrderTarget?: NullableIntFieldUpdateOperationsInput | number | null
+    driveFolderId?: NullableStringFieldUpdateOperationsInput | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -176766,6 +176788,7 @@ export namespace Prisma {
     dailyRevenueTarget?: NullableFloatFieldUpdateOperationsInput | number | null
     monthlyRevenueTarget?: NullableFloatFieldUpdateOperationsInput | number | null
     dailyOrderTarget?: NullableIntFieldUpdateOperationsInput | number | null
+    driveFolderId?: NullableStringFieldUpdateOperationsInput | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -176802,6 +176825,7 @@ export namespace Prisma {
     dailyRevenueTarget?: number | null
     monthlyRevenueTarget?: number | null
     dailyOrderTarget?: number | null
+    driveFolderId?: string | null
     updatedAt?: Date | string
   }
 
@@ -176838,6 +176862,7 @@ export namespace Prisma {
     dailyRevenueTarget?: NullableFloatFieldUpdateOperationsInput | number | null
     monthlyRevenueTarget?: NullableFloatFieldUpdateOperationsInput | number | null
     dailyOrderTarget?: NullableIntFieldUpdateOperationsInput | number | null
+    driveFolderId?: NullableStringFieldUpdateOperationsInput | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -176874,6 +176899,7 @@ export namespace Prisma {
     dailyRevenueTarget?: NullableFloatFieldUpdateOperationsInput | number | null
     monthlyRevenueTarget?: NullableFloatFieldUpdateOperationsInput | number | null
     dailyOrderTarget?: NullableIntFieldUpdateOperationsInput | number | null
+    driveFolderId?: NullableStringFieldUpdateOperationsInput | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -187882,6 +187908,7 @@ export namespace Prisma {
     dailyRevenueTarget?: SortOrder
     monthlyRevenueTarget?: SortOrder
     dailyOrderTarget?: SortOrder
+    driveFolderId?: SortOrder
     updatedAt?: SortOrder
   }
 
@@ -187924,6 +187951,7 @@ export namespace Prisma {
     dailyRevenueTarget?: SortOrder
     monthlyRevenueTarget?: SortOrder
     dailyOrderTarget?: SortOrder
+    driveFolderId?: SortOrder
     updatedAt?: SortOrder
   }
 
@@ -187960,6 +187988,7 @@ export namespace Prisma {
     dailyRevenueTarget?: SortOrder
     monthlyRevenueTarget?: SortOrder
     dailyOrderTarget?: SortOrder
+    driveFolderId?: SortOrder
     updatedAt?: SortOrder
   }
 

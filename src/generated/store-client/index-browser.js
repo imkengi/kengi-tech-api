@@ -1182,6 +1182,7 @@ exports.Prisma.StoreSettingsScalarFieldEnum = {
   dailyRevenueTarget: 'dailyRevenueTarget',
   monthlyRevenueTarget: 'monthlyRevenueTarget',
   dailyOrderTarget: 'dailyOrderTarget',
+  driveFolderId: 'driveFolderId',
   updatedAt: 'updatedAt'
 };
 
