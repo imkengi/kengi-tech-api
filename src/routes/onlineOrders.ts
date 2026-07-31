@@ -34,47 +34,77 @@ router.get('/stats', authMiddleware, requirePermission('online_orders.view', 'or
             return isNaN(d.getTime()) ? null : d
         }
 
-        const where: any = {}
+        // WHERE dựng bằng tham số $n — KHÔNG nội suy chuỗi vào SQL.
+        const conds: string[] = []
+        const params: any[] = []
+        const addCond = (sql: string, value: any) => {
+            params.push(value)
+            conds.push(sql.replace('?', `$${params.length}`))
+        }
         // Lọc theo kênh: ưu tiên channelId (1 shop cụ thể), hoặc platform (cả sàn)
-        if (channelId && channelId !== 'all') where.channelId = channelId as string
-        if (platform && platform !== 'all') where.platform = platform as string
+        if (channelId && channelId !== 'all') addCond('"channelId" = ?', channelId as string)
+        if (platform && platform !== 'all') addCond('"platform" = ?', platform as string)
         const gte = parseDate(startDate)
         const lte = parseDate(endDate)
-        if (gte || lte) {
-            where.createdAt = {}
-            if (gte) where.createdAt.gte = gte
-            if (lte) where.createdAt.lte = lte
-        }
+        if (gte) addCond('"createdAt" >= ?', gte)
+        if (lte) addCond('"createdAt" <= ?', lte)
+        const whereSql = conds.length ? `WHERE ${conds.join(' AND ')}` : ''
+
+        // MỘT câu GROUP BY (status, platform) thay cho 4 query Prisma song song.
+        // Lý do: pool per-store chỉ 3 kết nối (PRISMA_POOL_SIZE) — Promise.all 4 query
+        // vừa xếp hàng chờ pool vừa quét bảng OnlineOrder 4 lượt, khiến số đếm tab
+        // trạng thái tải rất chậm. Số nhóm = trạng thái × sàn (vài chục dòng), mọi
+        // con số phía dưới đều gộp lại được từ đây trong JS.
+        const rows: any[] = await (prisma as any).$queryRawUnsafe(
+            `SELECT "status", "platform",
+                    COUNT(*)::int                          AS cnt,
+                    COALESCE(SUM("total"), 0)::float8        AS total,
+                    COALESCE(SUM("shippingFee"), 0)::float8  AS shipping_fee,
+                    COALESCE(SUM("discount"), 0)::float8     AS discount,
+                    COALESCE(SUM("platformFee"), 0)::float8  AS platform_fee,
+                    COALESCE(SUM("netRevenue"), 0)::float8   AS net_revenue
+             FROM "OnlineOrder"
+             ${whereSql}
+             GROUP BY "status", "platform"`,
+            ...params
+        )
 
         // Trạng thái hủy/hoàn — LOẠI khỏi doanh thu và số đếm doanh thu (đơn hủy
         // không phải doanh thu). byStatus/byChannel bên dưới vẫn giữ đầy đủ.
-        const CANCELLED_STATUSES = ['CANCELLED', 'IN_CANCEL', 'TO_RETURN', 'cancelled', 'cancelling', 'returned']
-        const revenueWhere = { ...where, status: { notIn: CANCELLED_STATUSES } }
+        const CANCELLED_STATUSES = new Set(['CANCELLED', 'IN_CANCEL', 'TO_RETURN', 'cancelled', 'cancelling', 'returned'])
 
-        const [totalOrders, totals, byStatus, byChannel] = await Promise.all([
-            prisma.onlineOrder.count({ where }),
-            prisma.onlineOrder.aggregate({
-                where: revenueWhere,
-                _count: true,
-                _sum: { total: true, shippingFee: true, discount: true, platformFee: true, netRevenue: true },
-            }),
-            prisma.onlineOrder.groupBy({
-                by: ['status'] as const,
-                where,
-                _count: true,
-                _sum: { total: true },
-            }),
-            prisma.onlineOrder.groupBy({
-                by: ['platform'] as const,
-                where,
-                _count: true,
-                _sum: { total: true },
-            }),
-        ])
+        let totalOrders = 0
+        const totals = { count: 0, total: 0, shippingFee: 0, discount: 0, platformFee: 0, netRevenue: 0 }
+        const statusMap = new Map<string, { count: number; total: number }>()
+        const platformMap = new Map<string | null, { count: number; total: number }>()
+
+        for (const r of rows) {
+            const cnt = Number(r.cnt) || 0
+            const total = Number(r.total) || 0
+            totalOrders += cnt
+
+            if (!CANCELLED_STATUSES.has(r.status)) {
+                totals.count += cnt
+                totals.total += total
+                totals.shippingFee += Number(r.shipping_fee) || 0
+                totals.discount += Number(r.discount) || 0
+                totals.platformFee += Number(r.platform_fee) || 0
+                totals.netRevenue += Number(r.net_revenue) || 0
+            }
+
+            const s = statusMap.get(r.status)
+            if (s) { s.count += cnt; s.total += total } else { statusMap.set(r.status, { count: cnt, total }) }
+
+            const p = platformMap.get(r.platform)
+            if (p) { p.count += cnt; p.total += total } else { platformMap.set(r.platform, { count: cnt, total }) }
+        }
+
+        const byStatus = [...statusMap.entries()].map(([status, v]) => ({ status, _count: v.count, _sum: { total: v.total } }))
+        const byChannel = [...platformMap.entries()].map(([platform, v]) => ({ platform, _count: v.count, _sum: { total: v.total } }))
 
         // Helper: aggregate count for a status, covering both Shopee UPPERCASE and legacy lowercase
         const countFor = (...statuses: string[]) =>
-            statuses.reduce((sum, s) => sum + (byStatus.find(b => b.status === s)?._count ?? 0), 0)
+            statuses.reduce((sum, s) => sum + (statusMap.get(s)?.count ?? 0), 0)
 
         // Group synonym statuses into their primary key for the donut chart so that
         // e.g. READY_TO_SHIP/AWAITING_SHIPMENT/confirmed collapse into one slice.
@@ -109,12 +139,12 @@ router.get('/stats', authMiddleware, requirePermission('online_orders.view', 'or
             data: {
                 totalOrders,
                 // Số đơn tính doanh thu (đã loại hủy/hoàn) — totalOrders vẫn đếm mọi đơn
-                revenueOrders: totals._count ?? 0,
-                totalRevenue: totals._sum.total ?? 0,
-                totalShippingFee: totals._sum.shippingFee ?? 0,
-                totalDiscount: totals._sum.discount ?? 0,
-                totalPlatformFee: canSeeProfits ? (totals._sum.platformFee ?? 0) : undefined,
-                totalNetRevenue: canSeeProfits ? (totals._sum.netRevenue ?? 0) : undefined,
+                revenueOrders: totals.count,
+                totalRevenue: totals.total,
+                totalShippingFee: totals.shippingFee,
+                totalDiscount: totals.discount,
+                totalPlatformFee: canSeeProfits ? totals.platformFee : undefined,
+                totalNetRevenue: canSeeProfits ? totals.netRevenue : undefined,
                 // Completion rate: gom cả COMPLETED và completed
                 completionRate: totalOrders > 0 ? Math.round((countFor('COMPLETED', 'completed') / totalOrders) * 100) : 0,
                 // Pending count (Chờ xử lý): only orders ready to process/ship, NOT unpaid orders
