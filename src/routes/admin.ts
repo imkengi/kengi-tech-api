@@ -1169,6 +1169,11 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 // Key Gemini riêng cửa hàng cho Trợ lý AI (2026-07-19)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "geminiApiKey" TEXT`)
 
+                // Thư mục Drive riêng cửa hàng cho video đóng gói (2026-08-01) —
+                // thiếu cột này thì storeSettings.findFirst() (SELECT đủ cột theo
+                // schema) trả P2022 → GET /api/store-settings 500 cho MỌI cửa hàng.
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "driveFolderId" TEXT`)
+
                 // Cờ hoá đơn VAT đầu vào cho phiếu nhập (2026-07-24) — chỉ phiếu có
                 // HĐ GTGT mới tính vào tồn kho thuế (gate xuất HĐ).
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "ImportReceipt" ADD COLUMN IF NOT EXISTS "hasVatInvoice" BOOLEAN NOT NULL DEFAULT false`)
