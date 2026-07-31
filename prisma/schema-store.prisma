@@ -1475,6 +1475,9 @@ model StoreSettings {
   monthlyRevenueTarget Float?
   dailyOrderTarget     Int?
 
+  // Google Drive folder ID for packing/return-unbox videos
+  driveFolderId String?
+
   updatedAt DateTime @updatedAt
 }
 
