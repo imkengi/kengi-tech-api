@@ -709,9 +709,13 @@ export class ShopeeService extends PlatformService {
 
 
     // ── Returns / Refunds from Shopee ────────────────────────────────────
-    async fetchReturns(params: { since?: Date }) {
+    async fetchReturns(params: { since?: Date; until?: Date }) {
         const path = '/api/v2/returns/get_return_list'
-        const now = Math.floor(Date.now() / 1000)
+        // Mốc kết thúc chọn được (mặc định = bây giờ); không cho vượt hiện tại
+        const now = Math.min(
+            params.until ? Math.floor(params.until.getTime() / 1000) : Math.floor(Date.now() / 1000),
+            Math.floor(Date.now() / 1000),
+        )
         const timeFrom = params.since ? Math.floor(params.since.getTime() / 1000) : now - 15 * 86400
 
         // Shopee CHẶN cửa sổ > 15 ngày ("The period between create_time_from and
@@ -744,6 +748,189 @@ export class ShopeeService extends PlatformService {
                 seen.add(k); return true
             })
             .map((r: any) => this.mapReturn(r))
+    }
+
+    /** CHẨN ĐOÁN: gọi get_return_list và trả NGUYÊN response từng khung/trang
+     * (không map, không dedupe) — soi xem Shopee thật sự báo gì. */
+    async debugReturnList(since: Date, until?: Date, timeField: 'create_time' | 'update_time' = 'create_time') {
+        const path = '/api/v2/returns/get_return_list'
+        const now = Math.min(
+            until ? Math.floor(until.getTime() / 1000) : Math.floor(Date.now() / 1000),
+            Math.floor(Date.now() / 1000),
+        )
+        const timeFrom = Math.floor(since.getTime() / 1000)
+        const WINDOW = 14 * 86400
+        const out: any[] = []
+        for (let winFrom = timeFrom; winFrom < now; winFrom += WINDOW) {
+            const winTo = Math.min(winFrom + WINDOW, now)
+            for (let pageNo = 1; pageNo <= 3; pageNo++) {
+                const url = this.apiUrl(path) +
+                    `&${timeField}_from=${winFrom}&${timeField}_to=${winTo}` +
+                    `&page_no=${pageNo}&page_size=50`
+                const data = await this.httpGet(url)
+                const list = data.response?.return || []
+                out.push({
+                    truong: timeField,
+                    khung: `${new Date(winFrom * 1000).toISOString().slice(0, 10)}→${new Date(winTo * 1000).toISOString().slice(0, 10)}`,
+                    trang: pageNo,
+                    soPhieu: list.length,
+                    more: data.response?.more,
+                    loi: data.error || undefined,
+                    message: data.message || undefined,
+                    maDon: list.map((r: any) => r.order_sn),
+                })
+                if (list.length < 50 || !data.response?.more) break
+            }
+        }
+        return out
+    }
+
+    /** Lấy TỔNG TIỀN HIỆN TẠI của nhiều đơn (tối đa 50/lượt) — Shopee trừ thẳng
+     * khoản khách trả vào total_amount, nên so với tổng đã lưu là phát hiện được
+     * trả hàng/hoàn tiền kể cả khi get_return_list im lặng. */
+    async getOrderTotals(orderSns: string[]): Promise<Record<string, { total: number; status: string; updateTime?: Date }>> {
+        const out: Record<string, { total: number; status: string; updateTime?: Date }> = {}
+        for (let i = 0; i < orderSns.length; i += 50) {
+            const batch = orderSns.slice(i, i + 50)
+            const url = this.apiUrl('/api/v2/order/get_order_detail') +
+                `&order_sn_list=${batch.join(',')}` +
+                `&response_optional_fields=order_status,total_amount`
+            const d = await this.httpGet(url)
+            if (d.error) throw new Error(`Shopee getOrderTotals: ${d.error} - ${d.message}`)
+            for (const o of (d.response?.order_list || [])) {
+                out[String(o.order_sn)] = {
+                    total: Number(o.total_amount) || 0,
+                    status: String(o.order_status || ''),
+                    updateTime: o.update_time ? new Date(o.update_time * 1000) : undefined,
+                }
+            }
+        }
+        return out
+    }
+
+    /**
+     * NGÀY KHÁCH NHẬN HÀNG THẬT của đơn Shopee.
+     *
+     * Chi tiết đơn của Shopee KHÔNG có trường ngày giao (chỉ có create_time,
+     * pickup_done_time, ship_by_date, pay_time, update_time — đã dump kiểm chứng
+     * 31/07/2026). Mốc giao thành công nằm trong VẬN ĐƠN: sự kiện có
+     * logistics_status kiểu DELIVERED/DELIVERY_DONE.
+     *
+     * Trả null khi chưa giao xong hoặc sàn không có dữ liệu — KHÔNG đoán bừa,
+     * vì hàng đợi xuất hoá đơn gom theo ngày này (yêu cầu cơ quan thuế).
+     */
+    async getDeliveredTime(orderSn: string): Promise<Date | null> {
+        const url = this.apiUrl('/api/v2/logistics/get_tracking_info') + `&order_sn=${orderSn}`
+        const d = await this.httpGet(url)
+        if (d.error) throw new Error(`Shopee tracking: ${d.error} - ${d.message}`)
+        const events: any[] = d.response?.tracking_info || []
+        const isDone = (s: any) => /DELIVER(ED|Y_DONE)|DELIVERY_SUCCESS/i.test(String(s || ''))
+        // Ưu tiên sự kiện GIAO XONG; mảng của Shopee xếp mới→cũ nên lấy mốc SỚM
+        // NHẤT trong nhóm giao xong (lần giao thành công đầu tiên).
+        const done = events.filter(e => isDone(e.logistics_status) && e.update_time)
+        if (done.length > 0) {
+            const t = Math.min(...done.map(e => Number(e.update_time)))
+            return new Date(t * 1000)
+        }
+        // Đơn đã ở trạng thái giao xong nhưng sự kiện không ghi rõ → lấy mốc mới nhất
+        if (isDone(d.response?.logistics_status) && events.length > 0) {
+            const t = Math.max(...events.map(e => Number(e.update_time) || 0))
+            if (t > 0) return new Date(t * 1000)
+        }
+        return null
+    }
+
+    /** CHẨN ĐOÁN 3: dump THÔ chi tiết đơn + escrow của 1 mã đơn — soi xem Shopee
+     * báo trả hàng/hoàn tiền ở trường nào khi get_return_list im lặng. */
+    async debugOrderRaw(orderSn: string) {
+        const out: any = {}
+        try {
+            const url = this.apiUrl('/api/v2/order/get_order_detail') +
+                `&order_sn_list=${orderSn}` +
+                `&response_optional_fields=order_status,total_amount,buyer_user_id,item_list,payment_method,` +
+                `actual_shipping_fee,goods_to_declare,note,pay_time,dropshipper,credit_card_number,cancel_by,cancel_reason,` +
+                `fulfillment_flag,pickup_done_time,package_list,invoice_data,checkout_shipping_carrier,reverse_shipping_fee`
+            const d = await this.httpGet(url)
+            const o = d.response?.order_list?.[0] || {}
+            // Dump MỌI trường có dạng THỜI GIAN + liệt kê tất cả khoá — để biết
+            // Shopee thật sự cấp mốc "đã giao/hoàn tất" ở đâu, không đoán.
+            const times: Record<string, string> = {}
+            for (const [k, v] of Object.entries(o)) {
+                if (/time|date/i.test(k) && typeof v === 'number' && v > 1_000_000_000) {
+                    times[k] = new Date(v * 1000).toISOString()
+                } else if (/time|date/i.test(k) && v) {
+                    times[k] = String(v).slice(0, 40)
+                }
+            }
+            out.donHang = {
+                order_status: o.order_status, total_amount: o.total_amount,
+                cacMocThoiGian: times,
+                tatCaKhoa: Object.keys(o).sort().join(','),
+                loi: d.error || undefined, message: d.message || undefined,
+            }
+            // Vận đơn: mốc "đã giao" thật nằm ở đây nếu order detail không có
+            try {
+                const turl = this.apiUrl('/api/v2/logistics/get_tracking_info') + `&order_sn=${orderSn}`
+                const t = await this.httpGet(turl)
+                const info = t.response?.tracking_info || []
+                out.vanDon = {
+                    trangThai: t.response?.logistics_status,
+                    soMoc: info.length,
+                    mocCuoi: info.slice(-3).map((x: any) => ({
+                        thoiGian: x.update_time ? new Date(x.update_time * 1000).toISOString() : null,
+                        trangThai: x.logistics_status,
+                        moTa: String(x.description || '').slice(0, 60),
+                    })),
+                    loi: t.error || undefined, message: t.message || undefined,
+                }
+            } catch (e: any) { out.vanDon = { loi: e?.message } }
+        } catch (e: any) { out.donHang = { loi: e?.message } }
+        try {
+            const url = this.apiUrl('/api/v2/payment/get_escrow_detail') + `&order_sn=${orderSn}`
+            const d = await this.httpGet(url)
+            const r = d.response || {}
+            const inc = r.order_income || {}
+            // Dump TẤT CẢ trường khác 0 — để phân biệt GIẢM GIÁ (voucher/discount)
+            // với HOÀN TIỀN thật; nhìn nhầm là tạo hàng loạt phiếu trả khống.
+            out.escrow = {
+                khac0: Object.keys(inc).filter(k => inc[k] !== 0 && inc[k] !== '' && inc[k] != null)
+                    .map(k => `${k}=${JSON.stringify(inc[k])}`.slice(0, 90)),
+                loi: d.error || undefined, message: d.message || undefined,
+            }
+            out.itemList = (r.order_income?.items || []).map((i: any) =>
+                `${i.item_name?.slice(0, 25)}|sl=${i.quantity_purchased}|giaGoc=${i.original_price}|giaBan=${i.discounted_price}|khuyenMai=${i.seller_discount}`)
+        } catch (e: any) { out.escrow = { loi: e?.message } }
+        return out
+    }
+
+    /** CHẨN ĐOÁN 2: quét TỪNG TRẠNG THÁI trong 1 khung ngày — Shopee có thể ẩn
+     * phiếu chưa chốt khi không truyền status. */
+    async debugReturnByStatus(since: Date, until?: Date) {
+        const path = '/api/v2/returns/get_return_list'
+        const to = Math.min(
+            until ? Math.floor(until.getTime() / 1000) : Math.floor(Date.now() / 1000),
+            Math.floor(Date.now() / 1000),
+        )
+        const from = Math.max(Math.floor(since.getTime() / 1000), to - 14 * 86400)
+        const STATUSES = ['', 'REQUESTED', 'PROCESSING', 'ACCEPTED', 'JUDGING', 'CANCELLED', 'CLOSED', 'SELLER_DISPUTE']
+        const out: any[] = []
+        for (const st of STATUSES) {
+            const url = this.apiUrl(path) +
+                `&create_time_from=${from}&create_time_to=${to}&page_no=1&page_size=50` +
+                (st ? `&status=${st}` : '')
+            try {
+                const data = await this.httpGet(url)
+                const list = data.response?.return || []
+                out.push({
+                    status: st || '(khong truyen)',
+                    soPhieu: list.length,
+                    loi: data.error || undefined,
+                    message: data.message ? String(data.message).slice(0, 120) : undefined,
+                    maDon: list.slice(0, 8).map((r: any) => r.order_sn),
+                })
+            } catch (e: any) { out.push({ status: st || '(khong truyen)', loi: e?.message }) }
+        }
+        return { khung: `${new Date(from * 1000).toISOString().slice(0, 10)}→${new Date(to * 1000).toISOString().slice(0, 10)}`, ketQua: out }
     }
 
     async getReturnDetail(returnSn: string) {

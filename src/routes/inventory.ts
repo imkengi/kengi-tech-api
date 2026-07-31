@@ -366,8 +366,10 @@ router.get('/overview', authMiddleware, async (req: AuthRequest, res: Response) 
         const JOIN = whId
             ? `LEFT JOIN "WarehouseStock" ws ON ws."productId" = p.id AND ws."warehouseId" = '${whId}'`
             : ''
-        const [tong, theoDanhMuc, top5, canNhap] = await Promise.all([
-            prisma.$queryRawUnsafe(`
+        // TUẦN TỰ, không Promise.all: pool per-store nhỏ (PRISMA_POOL_SIZE=8),
+        // 4 truy vấn thô song song = 1 lượt tải trang ôm 4 kết nối; trùng giờ cron
+        // là cạn pool → 500 hàng loạt (đã sập thật 29/07). Chậm thêm ~200ms.
+        const tong = await prisma.$queryRawUnsafe(`
                 SELECT COUNT(*)::int AS "soMaHang",
                        COALESCE(SUM(p.stock),0)::float8 AS "tongTonKho",
                        COALESCE(SUM(p.stock * p."costPrice"),0)::float8 AS "giaTriVon",
@@ -377,26 +379,25 @@ router.get('/overview', authMiddleware, async (req: AuthRequest, res: Response) 
                        COUNT(*) FILTER (WHERE p.stock > p."minStock")::int AS "duHang"
                 FROM "Product" p
                 WHERE COALESCE(p."productType",'goods') <> 'service'
-                  AND p."mergedIntoId" IS NULL`),
-            prisma.$queryRawUnsafe(`
+                  AND p."mergedIntoId" IS NULL`)
+        const theoDanhMuc = await prisma.$queryRawUnsafe(`
                 SELECT COALESCE(c.name,'Chưa phân loại') AS "danhMuc",
                        COALESCE(SUM(p.stock * p."costPrice"),0)::float8 AS "giaTri"
                 FROM "Product" p LEFT JOIN "Category" c ON c.id = p."categoryId"
                 WHERE COALESCE(p."productType",'goods') <> 'service' AND p."mergedIntoId" IS NULL
-                GROUP BY 1 ORDER BY 2 DESC LIMIT 8`),
-            prisma.$queryRawUnsafe(`
+                GROUP BY 1 ORDER BY 2 DESC LIMIT 8`)
+        const top5 = await prisma.$queryRawUnsafe(`
                 SELECT p.sku, p.name, p.stock::float8 AS stock, p."costPrice"::float8 AS "costPrice",
                        (p.stock * p."costPrice")::float8 AS "giaTri"
                 FROM "Product" p
                 WHERE COALESCE(p."productType",'goods') <> 'service' AND p."mergedIntoId" IS NULL
-                ORDER BY (p.stock * p."costPrice") DESC LIMIT 5`),
-            prisma.$queryRawUnsafe(`
+                ORDER BY (p.stock * p."costPrice") DESC LIMIT 5`)
+        const canNhap = await prisma.$queryRawUnsafe(`
                 SELECT p.sku, p.name, ${ST}::float8 AS stock, p."minStock"::float8 AS "minStock"
                 FROM "Product" p ${JOIN}
                 WHERE COALESCE(p."productType",'goods') <> 'service' AND p."mergedIntoId" IS NULL
                   AND ${ST} <= p."minStock"
-                ORDER BY ${ST} ASC LIMIT 20`),
-        ])
+                ORDER BY ${ST} ASC LIMIT 20`)
         const t = (tong as any[])[0] || {}
         const giaTriVon = Number(t.giaTriVon) || 0
         const giaTriBan = Number(t.giaTriBan) || 0

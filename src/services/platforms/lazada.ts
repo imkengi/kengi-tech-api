@@ -11,6 +11,42 @@ const LAZADA_API = 'https://api.lazada.vn/rest'  // Vietnam region
 export class LazadaService extends PlatformService {
     get platformName() { return 'lazada' }
 
+    // ─── Egress qua proxy Tino (IP tĩnh đã whitelist) ────────────────────────────
+    // App Lazada bắt buộc khai IP whitelist (open.lazada.com → App → IP Whitelist);
+    // Cloud Run đi ra bằng IP ĐỘNG nên Lazada chặn với "The binding IP whitelist of
+    // the app does not contain the source IP of the current request". Dùng chung
+    // proxy chuyển tiếp câm với Shopee (IP tĩnh 103.130.216.108 đã khai trong
+    // whitelist) — backend VẪN tự ký, proxy chỉ forward URL y nguyên.
+    // Chưa cấu hình env → gọi thẳng như cũ (fallback an toàn).
+    private async lazadaFetch(url: string, method: 'GET' | 'POST', body?: any): Promise<Response> {
+        const proxy = process.env.PLATFORM_FORWARD_PROXY || process.env.SHOPEE_FORWARD_PROXY
+        if (!proxy) {
+            return fetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: method === 'POST' ? JSON.stringify(body ?? {}) : undefined,
+            })
+        }
+        return fetch(proxy, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                secret: process.env.PLATFORM_FORWARD_SECRET || process.env.SHOPEE_FORWARD_SECRET || '',
+                url,
+                method,
+                body: method === 'POST' ? (body ?? {}) : undefined,
+            }),
+        })
+    }
+
+    protected async httpGet(url: string): Promise<any> {
+        return this.parseResponse(await this.lazadaFetch(url, 'GET'))
+    }
+
+    protected async httpPost(url: string, body: any): Promise<any> {
+        return this.parseResponse(await this.lazadaFetch(url, 'POST', body))
+    }
+
     // ─── Auth ────────────────────────────────────────────────────────────────────
 
     private signRequest(apiPath: string, params: Record<string, string>): string {
@@ -35,10 +71,19 @@ export class LazadaService extends PlatformService {
     }
 
     generateAuthUrl(redirectUri: string, state: string): string {
+        // App Key rỗng vẫn sinh ra URL hợp lệ về mặt cú pháp (client_id=) nhưng Lazada
+        // sẽ trả trang lỗi "Thiếu Tham số" — chặn sớm để báo đúng nguyên nhân.
+        const appKey = (this.credentials.apiKey || '').trim()
+        if (!appKey) {
+            throw new Error('Chưa có App Key cho kênh Lazada. Vui lòng nhập App Key / App Secret (lấy trên open.lazada.com) trước khi kết nối.')
+        }
         const params = new URLSearchParams({
             response_type: 'code',
+            // Lazada yêu cầu force_auth=true trên endpoint authorize, thiếu thì trang
+            // uỷ quyền báo "Thiếu Tham số".
+            force_auth: 'true',
             redirect_uri: redirectUri,
-            client_id: this.credentials.apiKey,
+            client_id: appKey,
             state,
         })
         return `${LAZADA_AUTH}/oauth/authorize?${params}`

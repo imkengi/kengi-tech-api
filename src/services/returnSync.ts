@@ -19,7 +19,7 @@ export interface ReturnsSyncResult {
  * since the given date and upsert them as ReturnOrder records. Refunded returns
  * also flip the original online order to returned/refunded.
  */
-export async function syncChannelReturns(prisma: any, channel: any, since: Date): Promise<ReturnsSyncResult> {
+export async function syncChannelReturns(prisma: any, channel: any, since: Date, until?: Date): Promise<ReturnsSyncResult> {
     const isTikTok = channel.platform === 'tiktok'
     const platformLabel = isTikTok ? 'TikTok' : 'Shopee'
     // Mã phiếu trả khác prefix theo sàn để dedup không đụng nhau
@@ -53,7 +53,7 @@ export async function syncChannelReturns(prisma: any, channel: any, since: Date)
         }
     }
 
-    const platformReturns = await service.fetchReturns({ since })
+    const platformReturns = await service.fetchReturns({ since, until })
 
     let synced = 0, skipped = 0
     const errors: string[] = []
@@ -71,6 +71,17 @@ export async function syncChannelReturns(prisma: any, channel: any, since: Date)
                     await prisma.returnOrder.update({
                         where: { id: existingReturn.id },
                         data: { channelId: channel.id },
+                    }).catch(() => { })
+                }
+                // Backfill NGÀY PHIẾU: bản ghi cũ lưu createdAt = lúc sync (sai).
+                // Gặp lại phiếu thì nắn về ngày mở yêu cầu trên sàn — lệch >1 ngày
+                // mới sửa để tránh ghi đè vô ích.
+                const pCreated = ret.createTime instanceof Date && !isNaN(ret.createTime.getTime())
+                    ? ret.createTime : null
+                if (pCreated && Math.abs(new Date(existingReturn.createdAt).getTime() - pCreated.getTime()) > 86400_000) {
+                    await prisma.returnOrder.update({
+                        where: { id: existingReturn.id },
+                        data: { createdAt: pCreated },
                     }).catch(() => { })
                 }
                 // Update status if changed
@@ -141,10 +152,18 @@ export async function syncChannelReturns(prisma: any, channel: any, since: Date)
                 }
             })
 
+            // NGÀY PHIẾU = ngày khách mở yêu cầu trả TRÊN SÀN (ret.createTime),
+            // KHÔNG phải lúc chạy sync. Trước đây bỏ trống → createdAt = now()
+            // nên mọi phiếu (kể cả trả từ tháng 6) đều đội ngày sync → nhìn như
+            // "trước ngày sync đầu tiên không có phiếu nào".
+            const platformCreatedAt = ret.createTime instanceof Date && !isNaN(ret.createTime.getTime())
+                ? ret.createTime : undefined
+
             await prisma.returnOrder.create({
                 data: {
                     code: returnCode,
                     channelId: channel.id,
+                    ...(platformCreatedAt ? { createdAt: platformCreatedAt } : {}),
                     originalInvoice: order?.orderNumber || ret.orderSn,
                     customerName: order?.customerName || `Khách ${platformLabel}`,
                     customerPhone: order?.customerPhone || undefined,

@@ -1855,8 +1855,18 @@ router.get('/channels/:id/auth-url', authMiddleware, async (req: AuthRequest, re
             return
         }
 
+        // Thiếu App Key/Secret thì URL uỷ quyền vẫn sinh được nhưng sàn sẽ trả trang lỗi
+        // khó hiểu ("Thiếu Tham số" bên Lazada) — báo rõ ngay tại đây.
+        const apiKey = (channel.apiKey || '').trim()
+        const apiSecret = (channel.apiSecret || '').trim()
+        if (!apiKey || !apiSecret) {
+            const missing = [!apiKey && 'App Key', !apiSecret && 'App Secret'].filter(Boolean).join(' và ')
+            res.status(400).json({ success: false, error: `Kênh chưa có ${missing}. Vui lòng nhập thông tin ứng dụng của kênh rồi kết nối lại.` })
+            return
+        }
+
         const service = getPlatformService(channel.platform, {
-            apiKey: channel.apiKey || '', apiSecret: channel.apiSecret || '',
+            apiKey, apiSecret,
             shopId: channel.shopId || undefined,
         })
         if (!service) { res.status(400).json({ success: false, error: 'Nền tảng chưa được hỗ trợ' }); return }
@@ -1866,7 +1876,14 @@ router.get('/channels/:id/auth-url', authMiddleware, async (req: AuthRequest, re
             ? `${baseUrl}/api/online-orders/tiktok/callback`
             : `${baseUrl}/api/online-orders/channels/${channel.id}/callback`
         const state = Buffer.from(JSON.stringify({ channelId: channel.id })).toString('base64')
-        const authUrl = service.generateAuthUrl(redirectUri, state)
+        let authUrl: string
+        try {
+            authUrl = service.generateAuthUrl(redirectUri, state)
+        } catch (e: any) {
+            // Lỗi cấu hình (App Key rỗng, Partner ID không phải số…) là lỗi người dùng, không phải 500
+            res.status(400).json({ success: false, error: errMsg(e, 'Không tạo được liên kết uỷ quyền') })
+            return
+        }
 
         res.json({ success: true, data: { authUrl, redirectUri } })
     } catch (err: any) {
@@ -1963,7 +1980,9 @@ router.post('/channels/:id/exchange-token', authMiddleware, async (req: AuthRequ
             data: { channelId: channel.id, action: 'exchange_token', status: 'success', details: `Token obtained, shop: ${tokens.shopId || 'N/A'}` },
         })
 
-        res.json({ success: true, data: { shopId: tokens.shopId, expiresIn: tokens.expiresIn } })
+        // Trả kèm platform/tên kênh để FE báo đúng tên sàn vừa kết nối (trước đây
+        // toast hardcode "Shopee" nên kết nối Lazada vẫn báo Shopee).
+        res.json({ success: true, data: { shopId: tokens.shopId, expiresIn: tokens.expiresIn, platform: channel.platform, channelName: channel.name } })
     } catch (err: any) {
         console.error('Exchange token error:', err)
         res.status(500).json({ success: false, error: errMsg(err) })
@@ -3032,6 +3051,136 @@ router.get('/returns/stats', authMiddleware, async (req: AuthRequest, res: Respo
 })
 
 // PUT /api/online-orders/returns/:returnId/process — Approve or reject return
+// POST /api/online-orders/returns/manual — NHẬP TAY phiếu trả hàng/hoàn tiền
+// cho đơn sàn. Cần vì API phiếu trả của Shopee ngưng báo dữ liệu sau 14/07/2026
+// (xác minh 31/07: token mới vẫn đọc được dữ liệu cũ nhưng dữ liệu mới rỗng).
+// body: { orderNumber, refundAmount, reason?, status?, items?[{productName,sku,quantity,unitPrice}], returnDate? }
+router.post('/returns/manual', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const b = req.body || {}
+        const raw = String(b.orderNumber || '').trim()
+        if (!raw) { res.status(400).json({ success: false, error: 'Thiếu mã đơn' }); return }
+        const refundAmount = Number(b.refundAmount) || 0
+        if (refundAmount <= 0) { res.status(400).json({ success: false, error: 'Số tiền hoàn phải > 0' }); return }
+        const status = ['pending', 'approved', 'rejected', 'refunded'].includes(String(b.status))
+            ? String(b.status) : 'refunded'
+
+        // Tìm đơn: chấp nhận mã có/không tiền tố (ONLINE-/SPE-/TIK-)
+        const bare = raw.replace(/^ONLINE-/i, '')
+        const order = await prisma.onlineOrder.findFirst({
+            where: { OR: [{ orderNumber: bare }, { externalOrderId: bare.replace(/^(SPE|TIK)-/i, '') }] },
+            include: { items: true, channel: true },
+        })
+        if (!order) { res.status(404).json({ success: false, error: `Không tìm thấy đơn "${raw}"` }); return }
+        if (refundAmount > (order.total || 0) * 1.05) {
+            res.status(400).json({ success: false, error: `Tiền hoàn (${refundAmount.toLocaleString('vi-VN')}đ) lớn hơn giá trị đơn (${(order.total || 0).toLocaleString('vi-VN')}đ)` })
+            return
+        }
+
+        // Mã phiếu: prefix theo sàn + hậu tố M (manual) để phân biệt phiếu tự sync
+        const plat = String(order.platform || '').toLowerCase()
+        const prefix = plat === 'tiktok' ? 'RTN-TT-M' : plat === 'shopee' ? 'RTN-SH-M' : 'RTN-ON-M'
+        let code = `${prefix}${order.externalOrderId || bare}`
+        // Cùng 1 đơn có thể trả nhiều lần → thêm số thứ tự nếu trùng
+        for (let i = 2; await prisma.returnOrder.findFirst({ where: { code } }); i++) {
+            code = `${prefix}${order.externalOrderId || bare}-${i}`
+            if (i > 20) break
+        }
+
+        const items = Array.isArray(b.items) && b.items.length
+            ? b.items.map((it: any) => ({
+                productId: it.productId || undefined,
+                productName: String(it.productName || 'Hàng khách trả'),
+                sku: it.sku ? String(it.sku) : undefined,
+                quantity: Math.max(1, Number(it.quantity) || 1),
+                unitPrice: Number(it.unitPrice) || 0,
+                returnReason: String(b.reason || 'Khách trả hàng'),
+                condition: String(it.condition || 'used'),
+            }))
+            : [{
+                productName: 'Hàng khách trả (nhập tay)',
+                quantity: 1, unitPrice: refundAmount,
+                returnReason: String(b.reason || 'Khách trả hàng'), condition: 'used',
+            }]
+
+        const ngay = b.returnDate ? new Date(String(b.returnDate) + 'T00:00:00+07:00') : null
+        const created = await prisma.returnOrder.create({
+            data: {
+                code,
+                channelId: order.channelId || null,
+                originalInvoice: order.orderNumber,
+                customerName: order.customerName || 'Khách sàn',
+                customerPhone: order.customerPhone || undefined,
+                reason: String(b.reason || 'Khách trả hàng (nhập tay)'),
+                refundMethod: 'platform_refund',
+                refundAmount, totalRefund: refundAmount,
+                status,
+                staffName: req.user?.email || 'Nhập tay',
+                notes: `[NHẬP TAY] Ghi nhận bởi ${req.user?.email || 'người dùng'}`
+                    + `\nĐơn ${order.orderNumber} — tổng ${(order.total || 0).toLocaleString('vi-VN')}đ`
+                    + (b.note ? `\n${String(b.note).slice(0, 300)}` : ''),
+                ...(ngay && !isNaN(ngay.getTime()) ? { createdAt: ngay } : {}),
+                ...(status === 'refunded' ? { refundedAt: new Date(), processedAt: new Date() } : {}),
+                branchId: (order as any).branchId || req.user?.branchId || null,
+                items: { create: items },
+            },
+            include: { items: true },
+        })
+
+        // KHÔNG tự đảo kho/bút toán ở đây: trả một phần là chuyện thường, đảo
+        // toàn bộ đơn sẽ sai. Người dùng xử lý tiếp ở tab "Cần điều chỉnh" (HĐ)
+        // và phiếu nhập trả hàng nếu cần hoàn kho.
+        res.status(201).json({
+            success: true,
+            data: created,
+            message: `Đã ghi nhận phiếu trả ${code}. Nếu đơn này đã xuất hoá đơn, vào tab "Cần điều chỉnh" của Hoá đơn điện tử để lập HĐ thay thế/điều chỉnh.`,
+        })
+    } catch (err: any) {
+        console.error('Manual return error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// GET /api/online-orders/returns/find-order?code= — tra nhanh đơn để nhập tay
+router.get('/returns/find-order', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const raw = String(req.query.code || '').trim()
+        if (raw.length < 4) { res.json({ success: true, data: [] }); return }
+        const bare = raw.replace(/^ONLINE-/i, '')
+        const orders = await prisma.onlineOrder.findMany({
+            where: {
+                OR: [
+                    { orderNumber: { contains: bare, mode: 'insensitive' } },
+                    { externalOrderId: { contains: bare.replace(/^(SPE|TIK)-/i, ''), mode: 'insensitive' } },
+                ],
+            },
+            include: { items: true },
+            orderBy: { createdAt: 'desc' },
+            take: 8,
+        })
+        const codes = orders.map(o => o.orderNumber)
+        const daCo = codes.length
+            ? await prisma.returnOrder.findMany({ where: { originalInvoice: { in: codes } }, select: { originalInvoice: true, code: true } })
+            : []
+        res.json({
+            success: true,
+            data: orders.map(o => ({
+                orderNumber: o.orderNumber, externalOrderId: o.externalOrderId,
+                platform: o.platform, status: o.status, total: o.total,
+                customerName: o.customerName, createdAt: o.createdAt,
+                phieuTraDaCo: daCo.filter(r => r.originalInvoice === o.orderNumber).map(r => r.code),
+                items: (o.items || []).map((i: any) => ({
+                    productName: i.productName, sku: i.sku, quantity: i.quantity, unitPrice: i.unitPrice,
+                })),
+            })),
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
 router.put('/returns/:returnId/process', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
@@ -3232,8 +3381,21 @@ router.post('/channels/:id/sync-returns', authMiddleware, async (req: AuthReques
         }
 
         // Logic dùng chung với webhook TikTok type 2 (returns realtime) — see services/returnSync.ts
-        const since = new Date(Date.now() - 15 * 86400_000)
-        const result = await syncChannelReturns(prisma, channel, since)
+        // Khoảng ngày CHỌN ĐƯỢC: body {from,to} (YYYY-MM-DD) hoặc {days}; mặc
+        // định 15 ngày gần nhất như cũ. Sàn lọc theo NGÀY TẠO phiếu trả; Shopee
+        // tự chia khung 14 ngày nên khoảng dài bao nhiêu cũng chạy được.
+        const b = req.body || {}
+        const days = Math.min(Math.max(Number(b.days) || 15, 1), 365)
+        const since = b.from ? new Date(String(b.from) + 'T00:00:00+07:00')
+            : new Date(Date.now() - days * 86400_000)
+        const until = b.to ? new Date(String(b.to) + 'T23:59:59+07:00') : undefined
+        if (isNaN(since.getTime()) || (until && isNaN(until.getTime()))) {
+            res.status(400).json({ success: false, error: 'Ngày không hợp lệ' }); return
+        }
+        if (until && until < since) {
+            res.status(400).json({ success: false, error: 'Từ ngày phải trước Đến ngày' }); return
+        }
+        const result = await syncChannelReturns(prisma, channel, since, until)
 
         // Audit log
         try {

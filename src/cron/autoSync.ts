@@ -147,6 +147,20 @@ async function syncChannel(storePrisma: any, channel: any): Promise<{ imported: 
                         syncedAt: new Date(),
                     },
                 })
+                // SHOPEE: chi tiết đơn KHÔNG có ngày giao (đã kiểm chứng 31/07) →
+                // đơn vừa chuyển sang đã giao/hoàn tất mà chưa có ngày nhận thì
+                // hỏi VẬN ĐƠN đúng 1 lần. Hàng đợi xuất HĐ gom theo ngày này.
+                if (channel.platform === 'shopee' && !existing.deliveredAt && !order.deliveredAt
+                    && ['DELIVERED', 'COMPLETED', 'TO_CONFIRM_RECEIVE'].includes(String(order.status || '').toUpperCase())) {
+                    try {
+                        const dt = await (service as any).getDeliveredTime?.(order.externalOrderId)
+                        if (dt) {
+                            await storePrisma.onlineOrder.update({
+                                where: { id: existing.id }, data: { deliveredAt: dt },
+                            })
+                        }
+                    } catch { /* vận đơn lỗi/chưa có: để trống, lần sau vá tiếp */ }
+                }
                 updated++
             } else {
                 await storePrisma.onlineOrder.create({
@@ -255,6 +269,20 @@ async function runAutoSync() {
                             console.log(`[AutoSync] ${store.name}/${channel.name}: +${result.imported} new, ${result.updated} updated`)
                             totalSynced += result.imported + result.updated
                         }
+                        // ĐƠN MỚI → thông báo + push app (GỘP 1 tin/kênh/vòng cron,
+                        // không bắn từng đơn kẻo kéo lịch sử là dội bom hàng trăm tin).
+                        if (result.imported > 0) {
+                            const tieuDe = `🛒 ${result.imported} đơn hàng mới`
+                            const noiDung = `${channel.name} (${String(channel.platform).toUpperCase()})`
+                            await (storePrisma as any).notification.create({
+                                data: { type: 'new_order', title: tieuDe, message: noiDung },
+                            }).catch(() => { })
+                            try {
+                                const { sendNotification, sendPushToStore } = await import('../routes/notifications')
+                                sendNotification(store.schema, 'new_order', { title: tieuDe, message: noiDung })
+                                sendPushToStore(storePrisma, tieuDe, noiDung).catch(() => { })
+                            } catch { }
+                        }
                         // Convert eligible orders to transactions + inventory
                         const converted = await processNewOrders(storePrisma, channel.id)
                         if (converted > 0) {
@@ -262,6 +290,48 @@ async function runAutoSync() {
                         }
                     } catch (err: any) {
                         console.error(`[AutoSync] Error syncing ${store.name}/${channel.name}:`, err.message)
+                    }
+
+                    // ── VÁ DẦN NGÀY NHẬN HÀNG (Shopee) ──────────────────────
+                    // Shopee không trả ngày giao trong chi tiết đơn → phải hỏi VẬN
+                    // ĐƠN từng đơn. Vá một mạch bị chặn tốc độ ("fetch failed" sau
+                    // ~1.000 lượt, 31/07) nên rải mỗi vòng cron một ít: 30 đơn/kênh
+                    // × 6 vòng/giờ ≈ 540 đơn/giờ, dọn hết tồn trong ~1 ngày mà không
+                    // dội sàn. Hàng đợi xuất HĐ gom theo ngày này nên sai ngày =
+                    // xuất hoá đơn sai kỳ thuế.
+                    if (channel.platform === 'shopee' && channel.accessToken) {
+                        try {
+                            const canVa: any[] = await storePrisma.$queryRawUnsafe(
+                                `SELECT id, "externalOrderId" FROM "OnlineOrder"
+                                 WHERE "channelId" = $1 AND "deliveredAt" IS NULL
+                                   AND UPPER(status) IN ('DELIVERED','COMPLETED','TO_CONFIRM_RECEIVE')
+                                 ORDER BY "createdAt" DESC LIMIT 30`, channel.id)
+                            if (canVa.length) {
+                                const svc = getPlatformService('shopee', {
+                                    apiKey: channel.apiKey || '', apiSecret: channel.apiSecret || '',
+                                    accessToken: channel.accessToken || undefined,
+                                    refreshToken: channel.refreshToken || undefined,
+                                    shopId: channel.shopId || undefined,
+                                })
+                                let va = 0, loi = 0
+                                for (const o of canVa) {
+                                    try {
+                                        const dt = await (svc as any).getDeliveredTime?.(String(o.externalOrderId || ''))
+                                        if (dt) {
+                                            await storePrisma.onlineOrder.update({ where: { id: o.id }, data: { deliveredAt: dt } })
+                                            va++
+                                        }
+                                    } catch { 
+                                        loi++
+                                        // Lỗi mạng dồn = đang bị chặn tốc độ → NGHỈ ngay,
+                                        // vòng cron sau chạy tiếp (đừng cố đấm).
+                                        if (loi >= 3) break
+                                    }
+                                    await new Promise(r => setTimeout(r, 200))
+                                }
+                                if (va > 0) console.log(`[AutoSync] ${store.name}/${channel.name}: vá ngày nhận cho ${va} đơn`)
+                            }
+                        } catch { /* bỏ qua, vòng sau vá tiếp */ }
                     }
 
                     // Đồng bộ TRẢ HÀNG/HOÀN TIỀN mỗi vòng cron (7 ngày gần nhất).

@@ -821,7 +821,7 @@ export class TikTokService extends PlatformService {
      * Returns the same record shape as ShopeeService.fetchReturns so the
      * /channels/:id/sync-returns route can treat both platforms uniformly.
      */
-    async fetchReturns(params: { since?: Date }) {
+    async fetchReturns(params: { since?: Date; until?: Date }) {
         if (!this.credentials.shopId) {
             throw new Error('TikTok getReturns: thiếu shop_cipher — vui lòng kết nối lại (authorize) TikTok Shop')
         }
@@ -834,7 +834,11 @@ export class TikTokService extends PlatformService {
             const bodyObj: any = {}
             if (params.since) {
                 bodyObj.create_time_ge = Math.floor(params.since.getTime() / 1000)
-                bodyObj.create_time_le = Math.floor(Date.now() / 1000)
+                // Mốc kết thúc chọn được (mặc định = bây giờ)
+                bodyObj.create_time_le = Math.min(
+                    params.until ? Math.floor(params.until.getTime() / 1000) : Math.floor(Date.now() / 1000),
+                    Math.floor(Date.now() / 1000),
+                )
             }
             const bodyStr = JSON.stringify(bodyObj)
             const { url, headers } = this.buildUrl(path, query, bodyStr)

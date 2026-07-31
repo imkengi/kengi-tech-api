@@ -33,6 +33,7 @@ import { errMsg } from '../lib/errorResponse'
 import { authMiddleware, AuthRequest, getBranchFilter } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
 import { getProvider, PROVIDERS } from '../services/einvoice'
+import { sendNotification, sendPushToStore } from './notifications'
 import type { EInvoiceProviderConfig, EInvoiceData } from '../services/einvoice'
 
 const router = Router()
@@ -134,6 +135,9 @@ export async function ensureEInvoiceTablesFor(prisma: any, key: string): Promise
         await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "EInvoice_invoiceDate_idx" ON "EInvoice"("invoiceDate")`).catch(() => {})
         await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "EInvoice_buyerTaxCode_idx" ON "EInvoice"("buyerTaxCode")`).catch(() => {})
         await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "EInvoice_branchId_idx" ON "EInvoice"("branchId")`).catch(() => {})
+        // Thông tin xuất HĐ khách yêu cầu trên phiếu — tự vá ở đây để mọi đường
+        // (route + cron) chạy được ngay cả khi store chưa qua /admin/migrate.
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Transaction" ADD COLUMN IF NOT EXISTS "vatBuyerInfo" TEXT`).catch(() => {})
 
         await prisma.$executeRawUnsafe(`
             CREATE TABLE IF NOT EXISTS "EInvoiceItem" (
@@ -353,9 +357,16 @@ function tenNguoiMua(name: any, taxCode: any): string {
 
 function generateInvoiceXml(inv: any, items: any[]): string {
     const symbol = inv.invoiceSymbol || ''
-    // KHMSHDon = mẫu số (1st char), KHHDon = phần ký hiệu còn lại
-    const khmshdon = symbol.slice(0, 1)
-    const khhdon = symbol.slice(1)
+    // Mẫu số (KHMSHDon) là TRƯỜNG RIÊNG trong cấu hình — không được cắt ký tự đầu
+    // của ký hiệu ra làm mẫu số ("C26MNH" từng bị băm thành C + 26MNH, VNPT từ
+    // chối vì "C" không phải mẫu số). Chỉ khi ký hiệu bắt đầu bằng CHỮ SỐ (dạng
+    // gộp "1C26MNH") mới tách; còn lại giữ nguyên ký hiệu, mẫu số đọc từ config.
+    const tplRaw = String(inv._config?.templateId || inv._config?.templateCode || '').trim()
+    const batDauBangSo = /^[0-9]/.test(symbol)
+    // File mẫu MTT chính thức: <KHMSHDon>2</KHMSHDon> — chỉ phần TRƯỚC dấu "/"
+    // của mẫu tích hợp ("2/001" → "2")
+    const khmshdon = (tplRaw ? tplRaw.split('/')[0] : '') || (batDauBangSo ? symbol.slice(0, 1) : '')
+    const khhdon = batDauBangSo && !tplRaw ? symbol.slice(1) : symbol
     const itemsXml = items.map((it) => `        <HHDVu>
           <TChat>1</TChat>
           <STT>${num(it.itemNumber)}</STT>
@@ -377,36 +388,49 @@ function generateInvoiceXml(inv: any, items: any[]): string {
             : (inv.receiptNumber || inv.transactionId || inv.id)
     ).replace(/[^A-Za-z0-9._-]/g, '')
 
+    // Khung theo ĐÚNG file XML mẫu chính thức của hệ MTT (tải từ "Xem mẫu"):
+    // PBan 2.1.0, có THDon, NMua dùng HVTNMHang, dòng hàng dùng THHDVu +
+    // STCKhau/TLCKhau, TToan chỉ có tổng số + bằng chữ (HĐ bán hàng MTT không
+    // tách thuế). Đừng đổi tên thẻ nếu không đối chiếu lại file mẫu.
     return `<?xml version="1.0" encoding="UTF-8"?>
 <HDon>
   <DLHDon Id="${escXml(dinhDanh)}">
     <TTChung>
-      <PBan>1.0</PBan>
-      <KHMSHDon>${escXml(khmshdon)}</KHMSHDon>
-      <KHHDon>${escXml(khhdon)}</KHHDon>
-      <SHDon>${escXml(inv.invoiceNumber || '')}</SHDon>
-      <NLap>${escXml(inv.invoiceDate || '')}</NLap>
       <DVTTe>${escXml(inv.currency || 'VND')}</DVTTe>
       <TGia>1</TGia>
       <HTTToan>${escXml(inv.paymentMethod || 'TM/CK')}</HTTToan>
+      <PBan>2.1.0</PBan>
+      <THDon>Hóa đơn bán hàng</THDon>
+      <KHMSHDon>${escXml(khmshdon)}</KHMSHDon>
+      <KHHDon>${escXml(khhdon)}</KHHDon>
+      <SHDon>${escXml(inv.invoiceNumber || '0')}</SHDon>
+      <NLap>${escXml(inv.invoiceDate || '')}</NLap>
     </TTChung>
     <NDHDon>
       <NBan>
         <Ten>${escXml(inv.sellerName || inv._config?.companyName || '')}</Ten>
         <MST>${escXml(inv.sellerTaxCode || inv._config?.taxCode || '')}</MST>
-        <DChi>${escXml(inv.sellerAddress || inv._config?.companyAddress || inv._config?.address || '')}</DChi>
+        <DChi>${escXml(inv.sellerAddress || inv._config?.companyAddress || '')}</DChi>
+        <SDThoai>${escXml(inv._config?.sellerPhone || '')}</SDThoai>
       </NBan>
       <NMua>
-        <Ten>${escXml(tenNguoiMua(inv.buyerName, inv.buyerTaxCode))}</Ten>
-        <MST>${escXml(inv.buyerTaxCode)}</MST>
-        <DChi>${escXml(inv.buyerAddress)}</DChi>
+        <DChi>${escXml(inv.buyerAddress || '')}</DChi>
+        <HVTNMHang>${escXml(tenNguoiMua(inv.buyerName, inv.buyerTaxCode))}</HVTNMHang>
       </NMua>
       <DSHHDVu>
-${itemsXml}
+${items.map((it: any) => `        <HHDVu>
+          <TChat>1</TChat>
+          <STT>${num(it.itemNumber)}</STT>
+          <THHDVu>${escXml(it.itemName)}</THHDVu>
+          <DVTinh>${escXml(it.unitName || '')}</DVTinh>
+          <SLuong>${Number(it.quantity) || 0}</SLuong>
+          <DGia>${num(it.unitPrice)}</DGia>
+          <STCKhau>0</STCKhau>
+          <TLCKhau>0</TLCKhau>
+          <ThTien>${num(it.amount)}</ThTien>
+        </HHDVu>`).join('\n')}
       </DSHHDVu>
       <TToan>
-        <TgTCThue>${num(inv.totalBeforeVat)}</TgTCThue>
-        <TgTThue>${num(inv.vatAmount)}</TgTThue>
         <TgTTTBSo>${num(inv.totalAmount)}</TgTTTBSo>
         <TgTTTBChu>${escXml(docTienBangChu(num(inv.totalAmount)))}</TgTTTBChu>
       </TToan>
@@ -457,12 +481,19 @@ async function getInvoiceWithItems(prisma: any, id: string) {
         })
     }
 
+    // Số phiếu bán cho ĐỊNH DANH DLHDon: hoá đơn chưa có số (nháp/lỗi) thì Id
+    // rơi về receiptNumber — bản ghi HĐ không lưu sẵn nên phải hỏi phiếu bán.
+    if (!inv.receiptNumber && inv.transactionId) {
+        const tx0 = await prisma.transaction.findUnique({
+            where: { id: inv.transactionId }, select: { receiptNumber: true },
+        }).catch(() => null)
+        if (tx0?.receiptNumber) (inv as any).receiptNumber = tx0.receiptNumber
+    }
+
     // Thông tin NGƯỜI BÁN: bản ghi cũ không lưu nên XML ra <NBan> rỗng cả MST.
     // Lấy từ cấu hình HĐĐT đang hoạt động làm nguồn dự phòng.
-    let _config: any = null
-    if (!inv.sellerTaxCode || !inv.sellerName) {
-        _config = await getActiveConfig(prisma).catch(() => null)
-    }
+    // Luôn nạp config: cần cho người bán LẪN mẫu số (KHMSHDon) trong XML
+    const _config: any = await getActiveConfig(prisma).catch(() => null)
     return { ...inv, items, _config }
 }
 
@@ -659,8 +690,11 @@ router.get('/history', einvoiceAuth, async (req: AuthRequest, res: Response) => 
 export async function issueInvoiceForTransaction(
     prisma: any,
     txId: string,
-    body: any = {}
-): Promise<{ success: boolean; skipped?: boolean; error?: string; invoiceNumber?: string; record?: any }> {
+    body: any = {},
+    // Khoá SSE (storeSchema) — có là bắn sự kiện 'einvoice_issued' đẩy toast
+    // realtime cho web đang mở (kênh /notifications/stream).
+    sseKey?: string,
+): Promise<{ success: boolean; skipped?: boolean; stockShort?: boolean; error?: string; invoiceNumber?: string; record?: any }> {
     const config = await getActiveConfig(prisma)
     if (!config) return { success: false, error: 'Chưa cấu hình NCC hóa đơn' }
     const provider = getProvider((config.provider || '').toLowerCase())
@@ -676,16 +710,23 @@ export async function issueInvoiceForTransaction(
     })
     if (!tx) return { success: false, error: 'Không tìm thấy giao dịch' }
 
+    // BUNG COMBO TRƯỚC MỌI THỨ: hoá đơn phải ghi từng THÀNH PHẦN (mã combo là mã
+    // ảo, không có chứng từ đầu vào) và chốt tồn kho thuế cũng phải kiểm theo
+    // thành phần. Phiếu đồng bộ mới đã bung sẵn ở orderSync; đây là đường cứu
+    // cho phiếu CŨ tạo trước khi có tính năng combo.
+    const txItems = await expandComboItems(prisma, tx.items || [])
+
     // ĐỦ TỒN KHO THUẾ mới được xuất hoá đơn (yêu cầu chủ shop 2026-07-23): hàng
     // bán ra phải có đầu vào chứng từ (phiếu nhập) đủ số lượng — âm kho thuế là
     // rủi ro CQT. Thiếu → KHÔNG tạo bản ghi lỗi, phiếu nằm lại hàng đợi; nhập
     // chứng từ đầu vào xong xuất lại là qua. Bỏ qua chốt bằng body.ignoreTaxStock.
     if (!body.ignoreTaxStock) {
-        const shortages = await taxStockShortages(prisma, tx.items || [])
+        const shortages = await taxStockShortages(prisma, txItems)
         if (shortages.length > 0) {
             const detail = shortages.slice(0, 3).map(s => `${s.sku} thiếu ${s.thieu}`).join(', ')
                 + (shortages.length > 3 ? ` +${shortages.length - 3} mã khác` : '')
-            return { success: false, error: `Thiếu TỒN KHO THUẾ (${detail}) — nhập phiếu nhập/chứng từ đầu vào đủ số lượng rồi xuất lại` }
+            // stockShort: lô xuất đếm riêng nhóm này là "chừa lại", không phải lỗi
+            return { success: false, stockShort: true, error: `Thiếu TỒN KHO THUẾ (${detail}) — nhập phiếu nhập/chứng từ đầu vào đủ số lượng rồi xuất lại` }
         }
     }
 
@@ -724,22 +765,34 @@ export async function issueInvoiceForTransaction(
         const qty = baseQty / rate                       // 3 cái → 0,3 vỉ
         return { unit: target, qty, price: qty > 0 ? amount / qty : amount }
     }
-    const _txItemsTotal = (tx.items || []).reduce((s: number, i: any) => s + _lineAmount(i), 0)
+    const _txItemsTotal = txItems.reduce((s: number, i: any) => s + _lineAmount(i), 0)
     const _txTax = Number(tx.tax) || 0
     const _txVatRate = _txTax > 0 && _txItemsTotal > 0
         ? Math.round(_txTax * 100 / _txItemsTotal) : 0
+    // Thông tin xuất HĐ khách YÊU CẦU gắn trên phiếu (vatBuyerInfo JSON) — ưu
+    // tiên sau body (gọi tay) nhưng TRƯỚC dữ liệu customer của sàn (bị che dấu).
+    let _vbi: any = {}
+    try { _vbi = tx.vatBuyerInfo ? JSON.parse(tx.vatBuyerInfo) : {} } catch { }
+    // Tên/SĐT/địa chỉ khách đơn sàn bị che dấu * (vd "D******n") — truyền nguyên
+    // lên hoá đơn THẬT là sai (đã dính HĐ số 1). Khách che + không MST = bán lẻ
+    // cho người tiêu dùng; trường nào dính dấu * thì bỏ, không gửi nửa vời.
+    const _rawBuyerName = bStr(body.buyerName) || bStr(_vbi.name) || tx.customer?.name || tx.customerName || ''
+    const _rawBuyerTax = bStr(body.buyerTaxCode) || bStr(_vbi.taxCode) || tx.customer?.taxCode || ''
+    const _masked = (s: string) => s.includes('*')
+    const _clean = (s: string) => (_masked(s) ? '' : s)
     const invoiceData: EInvoiceData = {
             sellerTaxCode: config.taxCode || '',
             sellerName: config.companyName || '',
-            buyerName: bStr(body.buyerName) || tx.customer?.name || tx.customerName || 'Bán cho người tiêu dùng',
-            buyerTaxCode: bStr(body.buyerTaxCode) || tx.customer?.taxCode || '',
-            buyerAddress: bStr(body.buyerAddress) || tx.customer?.address || '',
-            buyerPhone: bStr(body.buyerPhone) || tx.customer?.phone || '',
-            buyerEmail: bStr(body.buyerEmail) || tx.customer?.email || '',
+            buyerName: (!_rawBuyerName || (_masked(_rawBuyerName) && !_rawBuyerTax))
+                ? 'Bán cho người tiêu dùng' : _rawBuyerName,
+            buyerTaxCode: _clean(_rawBuyerTax),
+            buyerAddress: _clean(bStr(body.buyerAddress) || bStr(_vbi.address) || tx.customer?.address || ''),
+            buyerPhone: _clean(bStr(body.buyerPhone) || tx.customer?.phone || ''),
+            buyerEmail: _clean(bStr(body.buyerEmail) || bStr(_vbi.email) || tx.customer?.email || ''),
             templateId: config.templateId || undefined,
             serialNo: config.serialNo || undefined,
             paymentMethod: tx.paymentMethod || 'TM/CK',
-            items: (tx.items || []).map((item: any) => ({
+            items: txItems.map((item: any) => ({
                 name: item.product?.name || item.productName || 'Sản phẩm',
                 unit: _invUnit(item).unit,
                 quantity: _invUnit(item).qty,
@@ -758,6 +811,8 @@ export async function issueInvoiceForTransaction(
             vatRate: _txVatRate,
             vatAmount: tx.tax || 0,
             total: tx.total || 0,
+            // VNPT BẮT BUỘC số tiền bằng chữ (VBChu) — để trống là err_code 2.
+            totalInWords: docTienBangChu(Math.round(tx.total || 0)),
             transactionId: tx.id,
             receiptNumber: tx.receiptNumber || '',
         }
@@ -766,7 +821,7 @@ export async function issueInvoiceForTransaction(
     // Dòng hàng lưu kèm bản ghi HĐ — trước đây KHÔNG tạo EInvoiceItem nên màn chi
     // tiết hiện "Không có dòng hàng". Thuế phân bổ theo tx.tax thật (đơn online
     // thường 0), KHÔNG áp 10% cứng để tổng dòng khớp tổng HĐ.
-    const itemRows = (tx.items || []).map((item: any, idx: number) => {
+    const itemRows = txItems.map((item: any, idx: number) => {
         const amount = _lineAmount(item)
         return {
             itemNumber: idx + 1,
@@ -812,6 +867,35 @@ export async function issueInvoiceForTransaction(
             where: { id: txId },
             data: { vatStatus: 'issued', vatInvoiceNumber: result.invoiceNumber, vatIssuedAt: new Date() },
         }).catch(() => { })
+        // Thông báo trong app (web + Android đọc chung GET /notifications)
+        const notifTitle = `🧾 Đã xuất hoá đơn số ${result.invoiceNumber || '?'}`
+        const notifMessage = `Phiếu ${tx.receiptNumber || txId} — ${invoiceData.buyerName} — ${Math.round(tx.total || 0).toLocaleString('vi-VN')}₫`
+            + (invoiceData.buyerEmail ? ` (gửi email tới ${invoiceData.buyerEmail})` : '')
+        await prisma.notification.create({
+            data: { type: 'einvoice', title: notifTitle, message: notifMessage },
+        }).catch(() => { })
+        // Đẩy realtime cho web đang mở (toast qua SSE)
+        if (sseKey) {
+            try { sendNotification(sseKey, 'einvoice_issued', { title: notifTitle, message: notifMessage }) } catch { }
+        }
+        // Push FCM tức thì tới app Android (kể cả khi app đóng) — fire & forget
+        sendPushToStore(prisma, notifTitle, notifMessage).catch(() => { })
+        // Khách có email → nhờ VNPT gửi hoá đơn. Lỗi email KHÔNG làm hỏng phát
+        // hành — chỉ ghi log + đánh dấu vào notes của bản ghi.
+        const emailTo = invoiceData.buyerEmail
+        if (emailTo && String(config.provider || '').toLowerCase() === 'vnpt') {
+            try {
+                const { VnptProvider, vnptFkey } = await import('../services/einvoice/vnpt')
+                const mail = await new VnptProvider().sendInvoiceEmail(config, vnptFkey(txId), emailTo)
+                await prisma.eInvoice.update({
+                    where: { id: record.id },
+                    data: { notes: mail.success ? `Đã gửi email HĐ tới ${emailTo}` : `Gửi email HĐ tới ${emailTo} LỖI: ${mail.errorMessage || ''}`.slice(0, 300) },
+                }).catch(() => { })
+                if (!mail.success) console.warn(`[einvoice] email HĐ ${result.invoiceNumber} → ${emailTo} lỗi: ${mail.errorMessage}`)
+            } catch (e: any) {
+                console.warn(`[einvoice] email HĐ lỗi: ${e?.message}`)
+            }
+        }
     }
     return { success: result.success, error: result.errorMessage || undefined, invoiceNumber: result.invoiceNumber, record }
 }
@@ -820,7 +904,8 @@ router.post('/issue/:transactionId', einvoiceAuth, requireRole('admin', 'manager
     try {
         await ensureTables(req)
         const prisma = req.storePrisma! as any
-        const r = await issueInvoiceForTransaction(prisma, String(req.params.transactionId), req.body || {})
+        const r = await issueInvoiceForTransaction(prisma, String(req.params.transactionId), req.body || {},
+            (req as any).storeId || req.user?.branchSchema || req.user?.storeSchema)
         if (!r.success || r.skipped) {
             if (r.skipped) return res.status(400).json({ success: false, error: r.error })
             if (!r.record) return res.status(400).json({ success: false, error: r.error })
@@ -883,6 +968,75 @@ const QUEUE_FROM = `FROM "Transaction" t
  * xuất HĐ thì CHƯA trừ, yêu cầu chủ shop 2026-07-24 "khi xuất hoá đơn mới trừ").
  * Phiếu đang định xuất: cần tồn khả dụng ≥ số lượng của chính phiếu này.
  */
+/**
+ * BUNG COMBO thành các thành phần cho khâu xuất hoá đơn.
+ *
+ * Đơn ĐỒNG BỘ MỚI đã được orderSync bung sẵn, nhưng phiếu CŨ (tạo trước khi có
+ * tính năng combo) vẫn giữ nguyên dòng combo — xuất thẳng thì hoá đơn ghi "Combo
+ * lỗi 1+2+3" (mã ảo, không có chứng từ đầu vào) và chốt tồn kho thuế luôn báo
+ * thiếu vì mã combo không bao giờ được nhập kho.
+ *
+ * Tiền được chia theo TRỌNG SỐ giá gốc từng thành phần, phần lẻ dồn vào dòng
+ * lớn nhất để TỔNG TIỀN KHÔNG ĐỔI dù chỉ một đồng.
+ */
+async function expandComboItems(prisma: any, items: any[]): Promise<any[]> {
+    const out: any[] = []
+    for (const it of items) {
+        const bundleId = it.product?.bundleId
+        if (!bundleId) { out.push(it); continue }
+        const bundle = await prisma.bundle.findUnique({ where: { id: String(bundleId) } }).catch(() => null)
+        let comps: any[] = []
+        try { comps = JSON.parse(bundle?.items || '[]') } catch { comps = [] }
+        const resolved: { p: any; qty: number; weight: number }[] = []
+        for (const c of comps) {
+            const cp = c.productId
+                ? await prisma.product.findUnique({
+                    where: { id: c.productId },
+                    include: { unitConversions: true },
+                }).catch(() => null)
+                : (c.sku ? await prisma.product.findFirst({
+                    where: { sku: c.sku },
+                    include: { unitConversions: true },
+                }).catch(() => null) : null)
+            if (!cp) continue
+            const qty = (Number(c.quantity) || 1) * (Number(it.quantity) || 1)
+            resolved.push({ p: cp, qty, weight: (Number(c.originalPrice) || cp.sellingPrice || 1) * (Number(c.quantity) || 1) })
+        }
+        // Không bung được (combo chưa định nghĩa/thiếu thành phần) → giữ nguyên
+        // dòng cũ, KHÔNG được im lặng làm mất dòng hàng.
+        if (resolved.length === 0) { out.push(it); continue }
+
+        const total = Math.round(Number(it.lineTotal) > 0
+            ? Number(it.lineTotal)
+            : (Number(it.quantity) || 1) * (Number(it.unitPrice) || 0))
+        const sumW = resolved.reduce((a, r) => a + r.weight, 0) || 1
+        const parts = resolved.map(r => Math.round(total * r.weight / sumW))
+        const diff = total - parts.reduce((a, n) => a + n, 0)
+        if (diff !== 0) {
+            let bi = 0
+            parts.forEach((v, i) => { if ((v || 0) > (parts[bi] || 0)) bi = i })
+            parts[bi] = (parts[bi] || 0) + diff
+        }
+        resolved.forEach((r, i) => {
+            const lt = parts[i] || 0
+            out.push({
+                ...it,
+                productId: r.p.id,
+                productName: r.p.name,
+                sku: r.p.sku,
+                quantity: r.qty,
+                baseQuantity: r.qty,
+                unitPrice: r.qty > 0 ? lt / r.qty : lt,
+                lineTotal: lt,
+                discount: 0,
+                product: r.p, // để _invUnit đọc invoiceUnit/unitConversions của thành phần
+                _tuCombo: it.product?.name || it.productName,
+            })
+        })
+    }
+    return out
+}
+
 async function taxStockShortages(
     prisma: any,
     items: { sku?: string | null; productName?: string | null; quantity?: number | null }[]
@@ -1242,7 +1396,8 @@ export async function findInvoiceQueue(
                 NULL::text AS "buyerTaxCode", c.address AS "buyerAddress",
                 o."createdAt" AS "orderDate",
                 COALESCE(o."deliveredAt", o."createdAt") AS "deliveredAt", o.status AS "orderStatus", o.platform,
-                ${HAS_RETURN_EXPR} AS "hasReturn"
+                ${HAS_RETURN_EXPR} AS "hasReturn",
+                (t."vatBuyerInfo" IS NOT NULL) AS "hasBuyerInfo"
          ${QUEUE_FROM}
          ${dayFilter}
          ORDER BY COALESCE(o."deliveredAt", o."createdAt") ASC
@@ -1267,21 +1422,22 @@ export async function invoiceQueueStats(prisma: any, from: Date, to: Date, platf
         params.push(day)
         platFilter += ` AND (COALESCE(o."deliveredAt", o."createdAt") AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Ho_Chi_Minh')::date = $${params.length}::date`
     }
-    const [totals, byPlatform, byDay] = await Promise.all([
-        prisma.$queryRawUnsafe(
-            `SELECT COUNT(*)::int AS n, COALESCE(SUM(t.total),0)::float8 AS amount,
-                    COUNT(*) FILTER (WHERE ${HAS_RETURN_EXPR})::int AS returns
-             ${QUEUE_FROM}${platFilter}`, ...params),
-        // LƯU Ý: query này không dùng $4 — truyền thừa tham số là Postgres từ chối
-        prisma.$queryRawUnsafe(
-            `SELECT COALESCE(o.platform,'?') AS platform, COUNT(*)::int AS n, COALESCE(SUM(t.total),0)::float8 AS amount
-             ${QUEUE_FROM} GROUP BY 1 ORDER BY 2 DESC`, DELIVERED_STATUSES, from, to),
-        prisma.$queryRawUnsafe(
-            `SELECT to_char((COALESCE(o."deliveredAt", o."createdAt") AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Ho_Chi_Minh')::date, 'YYYY-MM-DD') AS day,
-                    COUNT(*)::int AS n, COALESCE(SUM(t.total),0)::float8 AS amount,
-                    COUNT(*) FILTER (WHERE ${HAS_RETURN_EXPR})::int AS returns
-             ${QUEUE_FROM}${platFilter} GROUP BY 1 ORDER BY 1 DESC`, ...params),
-    ])
+    // TUẦN TỰ, không Promise.all: mỗi truy vấn ôm 1 kết nối, chạy song song là
+    // MỘT lần tải trang ngốn 3-4 kết nối — pool per-store nhỏ, đụng cron dọn dẹp
+    // là cạn pool → 500 (đã sập thật 29/07). Tuần tự chỉ chậm thêm ~200ms.
+    const totals = await prisma.$queryRawUnsafe(
+        `SELECT COUNT(*)::int AS n, COALESCE(SUM(t.total),0)::float8 AS amount,
+                COUNT(*) FILTER (WHERE ${HAS_RETURN_EXPR})::int AS returns
+         ${QUEUE_FROM}${platFilter}`, ...params)
+    // LƯU Ý: query này không dùng $4 — truyền thừa tham số là Postgres từ chối
+    const byPlatform = await prisma.$queryRawUnsafe(
+        `SELECT COALESCE(o.platform,'?') AS platform, COUNT(*)::int AS n, COALESCE(SUM(t.total),0)::float8 AS amount
+         ${QUEUE_FROM} GROUP BY 1 ORDER BY 2 DESC`, DELIVERED_STATUSES, from, to)
+    const byDay = await prisma.$queryRawUnsafe(
+        `SELECT to_char((COALESCE(o."deliveredAt", o."createdAt") AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Ho_Chi_Minh')::date, 'YYYY-MM-DD') AS day,
+                COUNT(*)::int AS n, COALESCE(SUM(t.total),0)::float8 AS amount,
+                COUNT(*) FILTER (WHERE ${HAS_RETURN_EXPR})::int AS returns
+         ${QUEUE_FROM}${platFilter} GROUP BY 1 ORDER BY 1 DESC`, ...params)
     return { totals: (totals as any[])[0] || { n: 0, amount: 0, returns: 0 }, byPlatform, byDay }
 }
 
@@ -1314,10 +1470,10 @@ router.get('/queue', einvoiceAuth, async (req: AuthRequest, res: Response) => {
             to = new Date()
         }
         const platform = req.query.platform ? String(req.query.platform).toLowerCase() : undefined
-        const [rows, stats] = await Promise.all([
-            findInvoiceQueue(prisma, { from, to, limit: pageSize, offset: (page - 1) * pageSize, day, platform }),
-            invoiceQueueStats(prisma, from, to, platform, day),
-        ])
+        // Tuần tự (xem ghi chú trong invoiceQueueStats): giảm số kết nối một trang
+        // ngốn từ ~4 xuống 1
+        const rows = await findInvoiceQueue(prisma, { from, to, limit: pageSize, offset: (page - 1) * pageSize, day, platform })
+        const stats = await invoiceQueueStats(prisma, from, to, platform, day)
         res.json({
             success: true,
             data: {
@@ -1344,20 +1500,27 @@ router.get('/queue/receipt/:txId', einvoiceAuth, async (req: AuthRequest, res: R
         const prisma = req.storePrisma! as any
         const tx = await prisma.transaction.findUnique({
             where: { id: String(req.params.txId) },
-            include: { items: { include: { product: { select: { name: true, baseUnit: true } } } }, customer: true },
+            // bundleId + unitConversions: cần để BUNG COMBO đúng như lúc xuất HĐ
+            include: { items: { include: { product: { include: { unitConversions: true } } } }, customer: true },
         })
         if (!tx) { res.status(404).json({ success: false, error: 'Không tìm thấy phiếu' }); return }
+        // Xem trước phải khớp HOÁ ĐƠN THẬT: bung combo rồi mới kiểm tồn kho thuế
+        // và liệt kê dòng hàng, nếu không drawer báo "thiếu CB3L" (mã combo ảo)
+        // trong khi thực tế cần kiểm các thành phần.
+        const items = await expandComboItems(prisma, tx.items || [])
         const warnings: string[] = []
         if (!tx.customer?.taxCode) warnings.push('Người mua chưa có MÃ SỐ THUẾ — hoá đơn sẽ xuất dạng khách lẻ (không khấu trừ được)')
         if (!tx.customer?.address && !tx.customerPhone) warnings.push('Thiếu địa chỉ & SĐT người mua')
         else if (!tx.customer?.address) warnings.push('Thiếu địa chỉ người mua')
         // Đủ tồn kho thuế mới xuất được HĐ — báo trước ngay trong drawer
         try {
-            const shortages = await taxStockShortages(prisma, tx.items || [])
+            const shortages = await taxStockShortages(prisma, items)
             for (const s of shortages.slice(0, 5)) {
                 warnings.push(`THIẾU TỒN KHO THUẾ: ${s.sku} thiếu ${s.thieu} — nhập chứng từ đầu vào trước, nếu không sẽ KHÔNG xuất được HĐ`)
             }
         } catch { /* bảng chưa có ở schema cũ — bỏ qua cảnh báo */ }
+        let vbi: any = null
+        try { vbi = tx.vatBuyerInfo ? JSON.parse(tx.vatBuyerInfo) : null } catch { }
         res.json({
             success: true,
             data: {
@@ -1368,16 +1531,132 @@ router.get('/queue/receipt/:txId', einvoiceAuth, async (req: AuthRequest, res: R
                 buyerAddress: tx.customer?.address || '',
                 total: tx.total, subtotal: tx.subtotal, discount: tx.discount,
                 transactionDate: tx.transactionDate || tx.createdAt,
-                items: (tx.items || []).map((i: any) => ({
+                vatBuyerInfo: vbi, // {name,taxCode,address,email} khách yêu cầu HĐ
+                vatStatus: tx.vatStatus, vatInvoiceNumber: tx.vatInvoiceNumber,
+                items: items.map((i: any) => ({
                     name: i.product?.name || i.productName, sku: i.sku,
                     unit: i.product?.baseUnit || 'cái',
                     quantity: i.quantity, unitPrice: i.unitPrice, lineTotal: i.lineTotal,
+                    tuCombo: i._tuCombo || null, // hiện "(từ combo X)" cho dễ hiểu
                 })),
                 warnings,
             },
         })
     } catch (err: any) {
         console.error('[EInvoiceQueue route]', err?.message || err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// PUT /einvoice/queue/receipt/:txId/buyer — gắn thông tin xuất HĐ khách yêu cầu
+// (MST/tên/địa chỉ/email). Có thông tin này thì cron 20:30 TỰ XUẤT khi đơn giao
+// xong (kể cả khi auto toàn cục tắt) + tự gửi email hoá đơn cho khách.
+// Gửi body toàn trường rỗng = gỡ yêu cầu.
+router.put('/queue/receipt/:txId/buyer', einvoiceAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        await ensureTables(req)
+        const prisma = req.storePrisma! as any
+        const txId = String(req.params.txId)
+        const b = req.body || {}
+        const s = (v: any) => (v === undefined || v === null ? '' : String(v).trim())
+        const info = { name: s(b.name), taxCode: s(b.taxCode), address: s(b.address), email: s(b.email) }
+        if (info.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(info.email)) {
+            res.status(400).json({ success: false, error: 'Email không hợp lệ' }); return
+        }
+        const has = info.name || info.taxCode || info.address || info.email
+        const tx = await prisma.transaction.update({
+            where: { id: txId },
+            data: { vatBuyerInfo: has ? JSON.stringify(info) : null },
+            select: { id: true, vatBuyerInfo: true },
+        })
+        res.json({ success: true, data: { id: tx.id, vatBuyerInfo: has ? info : null } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// GET /einvoice/needs-adjust — HOÁ ĐƠN ĐÃ PHÁT HÀNH nhưng đơn phát sinh TRẢ
+// HÀNG / HOÀN TIỀN → phải lập hoá đơn ĐIỀU CHỈNH (trả một phần) hoặc THAY THẾ /
+// huỷ (trả toàn bộ). Chưa xử lý = còn rủi ro kê khai thừa doanh thu với CQT.
+// Bỏ qua hoá đơn đã được thay thế rồi (replacedByInvoiceId) hoặc đã đánh dấu xử lý.
+router.get('/needs-adjust', einvoiceAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        await ensureTables(req)
+        const prisma = req.storePrisma! as any
+        const rows = await prisma.$queryRawUnsafe(`
+            SELECT e.id, e."invoiceNumber", e."invoiceSymbol", e."invoiceDate", e.status,
+                   e."totalAmount", e."buyerName", e."transactionId", e."replacedByInvoiceId",
+                   e.notes, e."createdAt" AS "issuedAt",
+                   t."receiptNumber", t.total AS "txTotal", t.status AS "txStatus",
+                   o.status AS "orderStatus", o.platform,
+                   ro.code AS "returnCode", ro.status AS "returnStatus",
+                   ro."refundAmount", ro."createdAt" AS "returnDate",
+                   (SELECT COUNT(*)::int FROM "ReturnItem" ri WHERE ri."returnOrderId" = ro.id) AS "returnItemCount"
+            FROM "EInvoice" e
+            JOIN "Transaction" t ON t.id = e."transactionId"
+            LEFT JOIN "OnlineOrder" o ON ('ONLINE-' || o."orderNumber") = t."receiptNumber"
+            -- Nối chịu cả 2 dạng originalInvoice: 'TIK-5852…' (tìm được đơn lúc
+            -- sync) LẪN '5852…' thô (không tìm được → lưu orderSn trần). Nếu chỉ
+            -- nối dạng có prefix thì 11 phiếu trả mồ côi thành ĐIỂM MÙ.
+            JOIN "ReturnOrder" ro ON (
+                    ro."originalInvoice" = o."orderNumber"
+                 OR o."orderNumber" LIKE '%-' || ro."originalInvoice"
+            )
+            WHERE e.status IN ('SENT','issued','SIGNED')
+              AND e."replacedByInvoiceId" IS NULL
+              AND LOWER(ro.status) IN ('approved','refunded','processing')
+            ORDER BY ro."createdAt" DESC
+            LIMIT 300`)
+        // ?debug=1 — soi từng mắt xích nối bảng để phân biệt "thật sự không có"
+        // với "nối sai nên luôn ra 0" (ReturnOrder.originalInvoice có thể là
+        // orderNumber CÓ prefix hoặc orderSn thô tuỳ lúc sync tìm được đơn hay không).
+        if (String(req.query.debug || '') === '1') {
+            const one = async (sql: string) => {
+                try { const r: any = await prisma.$queryRawUnsafe(sql); return r?.[0]?.n ?? r } catch (e: any) { return `LOI: ${e?.message}` }
+            }
+            res.json({
+                success: true,
+                data: {
+                    ketQua: (rows as any[]).length,
+                    hdDaPhatHanh: await one(`SELECT COUNT(*)::int AS n FROM "EInvoice" WHERE status IN ('SENT','issued','SIGNED')`),
+                    hdCoGiaoDich: await one(`SELECT COUNT(*)::int AS n FROM "EInvoice" e JOIN "Transaction" t ON t.id = e."transactionId" WHERE e.status IN ('SENT','issued','SIGNED')`),
+                    hdNoiDuocDonSan: await one(`SELECT COUNT(*)::int AS n FROM "EInvoice" e JOIN "Transaction" t ON t.id = e."transactionId" JOIN "OnlineOrder" o ON ('ONLINE-' || o."orderNumber") = t."receiptNumber" WHERE e.status IN ('SENT','issued','SIGNED')`),
+                    phieuTraTong: await one(`SELECT COUNT(*)::int AS n FROM "ReturnOrder"`),
+                    phieuTraNoiDuocDonSan: await one(`SELECT COUNT(*)::int AS n FROM "ReturnOrder" ro JOIN "OnlineOrder" o ON (ro."originalInvoice" = o."orderNumber" OR o."orderNumber" LIKE '%-' || ro."originalInvoice")`),
+                    phieuTraKhongNoiDuoc: await one(`SELECT COUNT(*)::int AS n FROM "ReturnOrder" ro WHERE NOT EXISTS (SELECT 1 FROM "OnlineOrder" o WHERE ro."originalInvoice" = o."orderNumber" OR o."orderNumber" LIKE '%-' || ro."originalInvoice")`),
+                    mauOriginalInvoice: await one(`SELECT "originalInvoice" AS n FROM "ReturnOrder" ORDER BY "createdAt" DESC LIMIT 5`),
+                    mauOrderNumber: await one(`SELECT "orderNumber" AS n FROM "OnlineOrder" ORDER BY "createdAt" DESC LIMIT 5`),
+                },
+            })
+            return
+        }
+        const list = (rows as any[]).map(r => {
+            const refund = Number(r.refundAmount) || 0
+            const total = Number(r.totalAmount) || Number(r.txTotal) || 0
+            // Hoàn ≥ 98% tổng tiền coi như trả TOÀN BỘ → thay thế/huỷ; còn lại là
+            // trả một phần → hoá đơn điều chỉnh giảm.
+            const fullReturn = total > 0 && refund >= total * 0.98
+            return {
+                ...r,
+                refundAmount: refund,
+                totalAmount: total,
+                suggestion: fullReturn ? 'replace' : 'adjust',
+                suggestionLabel: fullReturn
+                    ? 'Trả toàn bộ → nên THAY THẾ/huỷ hoá đơn'
+                    : `Trả một phần (${refund.toLocaleString('vi-VN')}đ/${total.toLocaleString('vi-VN')}đ) → nên lập HĐ ĐIỀU CHỈNH giảm`,
+            }
+        })
+        res.json({
+            success: true,
+            data: {
+                items: list,
+                total: list.length,
+                totalRefund: list.reduce((s, r) => s + r.refundAmount, 0),
+                fullReturns: list.filter(r => r.suggestion === 'replace').length,
+            },
+        })
+    } catch (err: any) {
+        console.error('[needs-adjust]', err?.message || err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
@@ -1397,20 +1676,20 @@ router.get('/queue/history', einvoiceAuth, async (req: AuthRequest, res: Respons
             createdAt: { gte: from },
             ...(status ? { status } : { status: { in: ['SENT', 'ERROR'] } }),
         }
-        const [items, total, sent, errors] = await Promise.all([
-            prisma.eInvoice.findMany({
-                where, orderBy: { createdAt: 'desc' },
-                skip: (page - 1) * pageSize, take: pageSize,
-                select: {
-                    id: true, transactionId: true, invoiceNumber: true, status: true,
-                    errorMessage: true, buyerName: true, totalAmount: true,
-                    issuedAt: true, createdAt: true, provider: true, lookupCode: true,
-                },
-            }),
-            prisma.eInvoice.count({ where }),
-            prisma.eInvoice.count({ where: { transactionId: { not: null }, createdAt: { gte: from }, status: 'SENT' } }),
-            prisma.eInvoice.count({ where: { transactionId: { not: null }, createdAt: { gte: from }, status: 'ERROR' } }),
-        ])
+        // TUẦN TỰ (xem ghi chú pool ở /einvoice/queue) — 4 truy vấn song song ôm
+        // 4 kết nối/lượt tải, trùng cron là cạn pool.
+        const items = await prisma.eInvoice.findMany({
+            where, orderBy: { createdAt: 'desc' },
+            skip: (page - 1) * pageSize, take: pageSize,
+            select: {
+                id: true, transactionId: true, invoiceNumber: true, status: true,
+                errorMessage: true, buyerName: true, totalAmount: true,
+                issuedAt: true, createdAt: true, provider: true, lookupCode: true,
+            },
+        })
+        const total = await prisma.eInvoice.count({ where })
+        const sent = await prisma.eInvoice.count({ where: { transactionId: { not: null }, createdAt: { gte: from }, status: 'SENT' } })
+        const errors = await prisma.eInvoice.count({ where: { transactionId: { not: null }, createdAt: { gte: from }, status: 'ERROR' } })
         res.json({ success: true, data: { items, total, page, pageSize, counts: { sent, errors } } })
     } catch (err: any) {
         console.error('[EInvoiceQueue route]', err?.message || err)
@@ -1483,32 +1762,31 @@ router.post('/queue/run', einvoiceAuth, requireRole('admin', 'manager'), async (
         // Thông tin người mua nhập tay chỉ áp cho XUẤT LẺ 1 phiếu (không áp cho lô).
         const buyerBody = (Array.isArray(b.transactionIds) && b.transactionIds.length === 1 && b.buyer)
             ? b.buyer : {}
-        let issued = 0, failed = 0
+        let issued = 0, failed = 0, stockSkipped = 0
         const errors: string[] = []
+        const stockDetails: string[] = []
         for (const r of rows) {
             try {
-                const rs = await issueInvoiceForTransaction(prisma, r.id, buyerBody)
+                const rs: any = await issueInvoiceForTransaction(prisma, r.id, buyerBody,
+                    (req as any).storeId || req.user?.branchSchema || req.user?.storeSchema)
                 if (rs.success && !rs.skipped) issued++
                 else if (!rs.success) {
-                    // THIẾU TỒN KHO THUẾ → DỪNG NGAY cả lô, báo lỗi liền (yêu cầu chủ
-                    // shop 2026-07-24) — không chạy tiếp các phiếu sau kẻo lỗi bị chôn
-                    // trong tổng kết cuối.
-                    if (String(rs.error || '').includes('TỒN KHO THUẾ')) {
-                        res.status(400).json({
-                            success: false,
-                            error: `DỪNG tại phiếu ${r.receiptNumber}: ${rs.error}`
-                                + (issued > 0 ? ` (đã xuất được ${issued} HĐ trước khi dừng)` : ''),
-                            data: { candidates: rows.length, issued, failed, stoppedAt: r.receiptNumber },
-                        })
-                        return
+                    // THIẾU TỒN KHO THUẾ → CHỪA phiếu đó lại (vẫn nằm trong hàng
+                    // đợi, không tạo bản ghi lỗi) và CHẠY TIẾP các phiếu sau —
+                    // trước đây dừng cả lô làm 1 phiếu thiếu chặn hàng trăm phiếu
+                    // đủ điều kiện (yêu cầu chủ shop 2026-07-30).
+                    if (rs.stockShort) {
+                        stockSkipped++
+                        if (stockDetails.length < 5) stockDetails.push(`${r.receiptNumber}: ${rs.error}`)
+                    } else {
+                        failed++; if (errors.length < 5) errors.push(`${r.receiptNumber}: ${rs.error}`)
                     }
-                    failed++; if (errors.length < 5) errors.push(`${r.receiptNumber}: ${rs.error}`)
                 }
             } catch (e: any) {
                 failed++; if (errors.length < 5) errors.push(`${r.receiptNumber}: ${e?.message || e}`)
             }
         }
-        res.json({ success: true, data: { candidates: rows.length, issued, failed, errors } })
+        res.json({ success: true, data: { candidates: rows.length, issued, failed, stockSkipped, stockDetails, errors } })
     } catch (err: any) {
         console.error('[EInvoiceQueue route]', err?.message || err)
         res.status(500).json({ success: false, error: errMsg(err) })
@@ -1949,6 +2227,91 @@ router.post('/:id/replace', einvoiceAuth, requireRole('admin', 'manager'), async
             }))
         const computed = computeItems(rawItems)
 
+        // Hoá đơn đã PHÁT HÀNH THẬT qua VNPT (status SENT + có transactionId):
+        // phải thay thế bên VNPT (invoice-adjustment, TCHDon=1) chứ không chỉ tạo
+        // nháp local — nếu không cổng thuế vẫn giữ hoá đơn sai.
+        const bStr = (v: any) => (v === undefined || v === null ? '' : String(v).trim())
+        const cfgRow: any = await getActiveConfig(prisma).catch(() => null)
+        const isVnptIssued = String(original.status).toUpperCase() === 'SENT'
+            && !!original.transactionId
+            && String(cfgRow?.provider || '').toLowerCase() === 'vnpt'
+        if (isVnptIssued) {
+            const { VnptProvider, vnptFkey } = await import('../services/einvoice/vnpt')
+            const vnpt = new VnptProvider()
+            const totalAmount = computed.totalAmount || original.totalAmount || 0
+            const vatAmount = computed.vatAmount || 0
+            const subtotal = computed.totalBeforeVat || totalAmount - vatAmount
+            const replData = {
+                sellerTaxCode: cfgRow.taxCode || original.sellerTaxCode || '',
+                sellerName: cfgRow.companyName || original.sellerName || '',
+                sellerAddress: cfgRow.companyAddress || original.sellerAddress || '',
+                // Nút "Thay thế" cũ ở modal chi tiết gửi body TRỐNG → từng rơi về
+                // nguyên tên che dấu sao của sàn và phát hành y chang bản sai (HĐ
+                // số 2). Tên dính '*' không kèm MST thì ép về người tiêu dùng.
+                buyerName: (() => {
+                    const n = bStr(b.buyerName) || original.buyerName || ''
+                    return (!n || (n.includes('*') && !bStr(b.buyerTaxCode))) ? 'Bán cho người tiêu dùng' : n
+                })(),
+                buyerTaxCode: bStr(b.buyerTaxCode) || '',
+                buyerAddress: (bStr(b.buyerAddress) || '').includes('*') ? '' : (bStr(b.buyerAddress) || ''),
+                buyerPhone: '', buyerEmail: '',
+                paymentMethod: b.paymentMethod || original.paymentMethod || 'TM/CK',
+                currencyCode: 'VND',
+                items: computed.items.map((it: any) => ({
+                    name: it.itemName, unit: it.unitName || 'Cái', quantity: it.quantity,
+                    unitPrice: it.unitPrice, amount: it.amount,
+                    vatRate: it.vatRate || 0, vatAmount: it.vatAmount || 0,
+                })),
+                subtotal,
+                vatRate: vatAmount > 0 && subtotal > 0 ? Math.round(vatAmount * 100 / subtotal) : 0,
+                vatAmount,
+                total: totalAmount,
+                totalInWords: docTienBangChu(Math.round(totalAmount)),
+                // Khoá MỚI cho hoá đơn thay thế — KHÔNG dùng transactionId gốc kẻo
+                // trùng Fkey với hoá đơn bị thay.
+                transactionId: `${original.id}R`,
+                receiptNumber: '',
+            }
+            // Thay thế MỘT HOÁ ĐƠN THAY THẾ: Fkey bên VNPT của nó là "<id gốc>R"
+            // (đặt lúc phát hành thay thế), không phải transactionId.
+            const originalFkey = original.invoiceType === 'REPLACEMENT' && original.replacesInvoiceId
+                ? vnptFkey(`${original.replacesInvoiceId}R`)
+                : vnptFkey(original.transactionId)
+            const result = await vnpt.replaceInvoice(cfgRow, originalFkey, replData as any)
+            if (!result.success) {
+                return res.status(502).json({ success: false, error: result.errorMessage || 'Thay thế bên VNPT thất bại' })
+            }
+            const replacement = await prisma.eInvoice.create({
+                data: {
+                    transactionId: original.transactionId,
+                    provider: cfgRow.provider,
+                    invoiceType: 'REPLACEMENT',
+                    status: 'SENT',
+                    invoiceDate: todayISO(),
+                    invoiceNumber: result.invoiceNumber || null,
+                    invoiceSymbol: original.invoiceSymbol,
+                    lookupCode: result.lookupCode || null,
+                    issuedAt: new Date(), sentAt: new Date(),
+                    sellerName: replData.sellerName, sellerTaxCode: replData.sellerTaxCode, sellerAddress: replData.sellerAddress,
+                    buyerName: replData.buyerName, buyerTaxCode: replData.buyerTaxCode, buyerAddress: replData.buyerAddress,
+                    totalBeforeVat: subtotal, vatAmount, totalAmount, currency: 'VND',
+                    paymentMethod: replData.paymentMethod,
+                    notes: `Thay thế HĐ ${original.invoiceSymbol || ''} số ${original.invoiceNumber || ''}${b.reason ? `: ${b.reason}` : ''}`,
+                    replacesInvoiceId: original.id,
+                    branchId: original.branchId || req.user?.branchId || null,
+                    createdBy: req.user?.userId || null,
+                    createdByName: (req.user as any)?.email || null,
+                    items: { create: computed.items },
+                },
+                include: { items: true },
+            })
+            await prisma.eInvoice.update({
+                where: { id },
+                data: { status: 'REPLACED', replacedByInvoiceId: replacement.id, cancelReason: bStr(b.reason) || null },
+            })
+            return res.status(201).json({ success: true, data: { original: { id, status: 'REPLACED' }, replacement, invoiceNumber: result.invoiceNumber } })
+        }
+
         const replacement = await prisma.eInvoice.create({
             data: {
                 transactionId: original.transactionId || null,
@@ -1989,6 +2352,47 @@ router.post('/:id/replace', einvoiceAuth, requireRole('admin', 'manager'), async
     }
 })
 
+// GET /api/einvoice/:id/vnpt-file — tải bản hoá đơn THẬT (có QR + chữ ký) từ
+// cổng VNPT theo Fkey. FE mở blob trong tab mới.
+router.get('/:id/vnpt-file', einvoiceAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        await ensureTables(req)
+        const prisma = req.storePrisma! as any
+        const record = await prisma.eInvoice.findUnique({ where: { id: String(req.params.id) } })
+        if (!record) return res.status(404).json({ success: false, error: 'Không tìm thấy hóa đơn' })
+        if (!record.transactionId) return res.status(400).json({ success: false, error: 'Hóa đơn không gắn giao dịch — không có Fkey bên VNPT' })
+        const cfgRow: any = await getActiveConfig(prisma).catch(() => null)
+        if (String(cfgRow?.provider || '').toLowerCase() !== 'vnpt') {
+            return res.status(400).json({ success: false, error: 'Chưa cấu hình VNPT' })
+        }
+        const { VnptProvider, vnptFkey } = await import('../services/einvoice/vnpt')
+        // Hoá đơn thay thế phát hành với Fkey "<id gốc>R" — xem bản thay thế thì
+        // phải tra bằng khoá đó, không phải transactionId.
+        const fkey = record.invoiceType === 'REPLACEMENT' && record.replacesInvoiceId
+            ? vnptFkey(`${record.replacesInvoiceId}R`)
+            : vnptFkey(record.transactionId)
+        const file = await new VnptProvider().downloadInvoice(cfgRow, fkey)
+        if (file.kind === 'pdf' && file.base64) {
+            res.set('Content-Type', 'application/pdf')
+            res.set('Content-Disposition', `inline; filename="HD-${record.invoiceNumber || record.id}.pdf"`)
+            return res.send(Buffer.from(file.base64, 'base64'))
+        }
+        if (file.kind === 'xml' && file.base64) {
+            res.set('Content-Type', 'application/xml; charset=utf-8')
+            return res.send(Buffer.from(file.base64, 'base64'))
+        }
+        if (file.kind === 'zip' && file.base64) {
+            res.set('Content-Type', 'application/zip')
+            res.set('Content-Disposition', `attachment; filename="HD-${record.invoiceNumber || record.id}.zip"`)
+            return res.send(Buffer.from(file.base64, 'base64'))
+        }
+        if (file.kind === 'url') return res.json({ success: true, url: file.raw })
+        res.status(502).json({ success: false, error: `VNPT không trả file nhận diện được: ${file.raw || ''}`.slice(0, 400) })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
 // GET /api/einvoice/:id/xml — return signed XML
 router.get('/:id/xml', einvoiceAuth, async (req: AuthRequest, res: Response) => {
     try {
@@ -1999,7 +2403,13 @@ router.get('/:id/xml', einvoiceAuth, async (req: AuthRequest, res: Response) => 
         if (!inv) return res.status(404).json({ success: false, error: 'Không tìm thấy hóa đơn' })
 
         // Use stored signed XML when present; otherwise render a live preview.
-        const xml = inv.xmlContent || inv.xmlData || generateInvoiceXml(inv, inv.items)
+        // Bản XML ĐÃ LƯU chỉ có giá trị với hoá đơn ĐÃ KÝ/PHÁT HÀNH (bản ký là bất
+        // biến). Tờ nháp/lỗi mà trả bản lưu thì người dùng thấy ảnh chụp của code
+        // cũ, tưởng bản vá không ăn — phải dựng lại từ dữ liệu hiện tại.
+        const daKy = ['issued', 'sent', 'signed'].includes(String(inv.status || '').toLowerCase())
+        const xml = daKy
+            ? (inv.xmlContent || inv.xmlData || generateInvoiceXml(inv, inv.items))
+            : generateInvoiceXml(inv, inv.items)
         if (req.query.download === 'true') {
             res.setHeader('Content-Type', 'application/xml; charset=utf-8')
             res.setHeader('Content-Disposition', `attachment; filename="HDon_${inv.invoiceSymbol || ''}${inv.invoiceNumber || inv.id}.xml"`)
@@ -2062,9 +2472,9 @@ router.get('/:id/pdf', einvoiceAuth, async (req: AuthRequest, res: Response) => 
   </div>
   <div class="meta"><div>Trạng thái: <span class="status">${escHtml(inv.status)}</span></div></div>
   <hr/>
-  <div class="party"><b>Người bán:</b> ${escHtml(inv.sellerName || '')}</div>
-  <div class="party">MST: ${escHtml(inv.sellerTaxCode || '')} &nbsp;|&nbsp; Địa chỉ: ${escHtml(inv.sellerAddress || '')}</div>
-  <div class="party" style="margin-top:8px"><b>Người mua:</b> ${escHtml(inv.buyerName || '')}</div>
+  <div class="party"><b>Người bán:</b> ${escHtml(inv.sellerName || inv._config?.companyName || '')}</div>
+  <div class="party">MST: ${escHtml(inv.sellerTaxCode || inv._config?.taxCode || '')} &nbsp;|&nbsp; Địa chỉ: ${escHtml(inv.sellerAddress || inv._config?.companyAddress || '')}</div>
+  <div class="party" style="margin-top:8px"><b>Người mua:</b> ${escHtml(tenNguoiMua(inv.buyerName, inv.buyerTaxCode))}</div>
   <div class="party">MST: ${escHtml(inv.buyerTaxCode || '')} &nbsp;|&nbsp; Địa chỉ: ${escHtml(inv.buyerAddress || '')}</div>
   <div class="party">Hình thức thanh toán: ${escHtml(inv.paymentMethod || 'TM/CK')}</div>
   <table>

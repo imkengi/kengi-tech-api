@@ -1237,6 +1237,23 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 // ĐVT xuất hoá đơn (nhập theo vỉ, bán theo cái, HĐ ghi theo vỉ)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Product" ADD COLUMN IF NOT EXISTS "invoiceUnit" TEXT`)
 
+                // Thông tin xuất HĐ khách yêu cầu (JSON {name,taxCode,address,email})
+                // — có là cron tự xuất khi giao xong + tự gửi email hoá đơn
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Transaction" ADD COLUMN IF NOT EXISTS "vatBuyerInfo" TEXT`)
+
+                // Bảng thông báo bền (xuất HĐ…) — schema cũ có thể chưa tạo
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "Notification" (
+                        "id" TEXT NOT NULL,
+                        "title" TEXT NOT NULL,
+                        "message" TEXT NOT NULL,
+                        "type" TEXT NOT NULL DEFAULT 'info',
+                        "read" BOOLEAN NOT NULL DEFAULT false,
+                        "userId" TEXT,
+                        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "Notification_pkey" PRIMARY KEY ("id")
+                    )`)
+
                 // Doanh thu ghi chép tay của HKD (sổ S2b) — bảng CHƯA từng được tạo
                 // dù route /api/tax/hkd-revenue dùng nó → GET/POST đều 500 (2026-07-25)
                 await (sp as any).$executeRawUnsafe(`
@@ -2451,6 +2468,573 @@ router.post('/sync-fees', async (req: Request, res: Response) => {
     } catch (err: any) {
         console.error('Admin sync-fees error:', err)
         res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// ─── GET /admin/order-trace?code=… ───────────────────────────────────────────
+// CHỈ ĐỌC: tra trọn vòng đời 1 đơn sàn — đơn gốc, phiếu bán, phiếu trả hàng,
+// hoá đơn điện tử. Nhận mã đơn sàn có/không prefix (260703PVMJ7K94 hoặc
+// SPE-260703PVMJ7K94) lẫn mã phiếu bán (ONLINE-SPE-…).
+router.get('/order-trace', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
+        const code = String(req.query.code || '').trim()
+        if (!code) { res.status(400).json({ success: false, error: 'thiếu ?code=' }); return }
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp = getStorePrisma(store.schema) as any
+        // Khớp lỏng: chứa mã (bỏ mọi prefix ONLINE-/SPE-/TIK-)
+        const bare = code.replace(/^ONLINE-/i, '').replace(/^(SPE|TIK)-/i, '')
+        const like = `%${bare}%`
+        const orders = await sp.$queryRawUnsafe(
+            `SELECT o.id, o."orderNumber", o."externalOrderId", o.platform, o.status, o."paymentStatus",
+                    o.total, o."createdAt", o."deliveredAt", o."channelId", c.name AS "channelName"
+             FROM "OnlineOrder" o LEFT JOIN "OnlineChannel" c ON c.id = o."channelId"
+             WHERE o."orderNumber" ILIKE $1 OR o."externalOrderId" ILIKE $1 LIMIT 5`, like)
+        const txs = await sp.$queryRawUnsafe(
+            `SELECT id, "receiptNumber", status, total, "vatStatus", "vatInvoiceNumber", "createdAt"
+             FROM "Transaction" WHERE "receiptNumber" ILIKE $1 LIMIT 5`, like)
+        const returns = await sp.$queryRawUnsafe(
+            `SELECT id, code, "originalInvoice", status, "refundAmount", "createdAt", "refundedAt"
+             FROM "ReturnOrder" WHERE "originalInvoice" ILIKE $1 OR code ILIKE $1 LIMIT 10`, like)
+        const invoices = await sp.$queryRawUnsafe(
+            `SELECT e.id, e."invoiceNumber", e."invoiceSymbol", e.status, e."totalAmount",
+                    e."invoiceDate", e."replacedByInvoiceId", e."transactionId"
+             FROM "EInvoice" e JOIN "Transaction" t ON t.id = e."transactionId"
+             WHERE t."receiptNumber" ILIKE $1 LIMIT 10`, like)
+        res.json({
+            success: true,
+            data: {
+                timKiem: bare,
+                donSan: orders, phieuBan: txs, phieuTra: returns, hoaDon: invoices,
+                ketLuan: {
+                    coDonSan: (orders as any[]).length > 0,
+                    coTraHang: (returns as any[]).length > 0,
+                    daXuatHoaDon: (invoices as any[]).some((i: any) => ['SENT', 'issued', 'SIGNED'].includes(i.status)),
+                },
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err?.message })
+    }
+})
+
+// ─── POST /admin/backfill-delivered ──────────────────────────────────────────
+// Vá NGÀY KHÁCH NHẬN HÀNG cho đơn SHOPEE (sàn không trả ngày giao trong chi tiết
+// đơn → phải lấy từ vận đơn). Hàng đợi xuất HĐ gom theo ngày này nên sai ngày =
+// xuất hoá đơn sai kỳ. MẶC ĐỊNH CHẠY THỬ, apply=1 mới ghi.
+router.post('/backfill-delivered', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || req.body?.storeCode || 'KENGISTORE').trim()
+        const days = Math.min(Math.max(1, Number(req.query.days || req.body?.days) || 60), 365)
+        const limit = Math.min(Math.max(1, Number(req.query.limit || req.body?.limit) || 200), 1000)
+        const apply = String(req.query.apply || req.body?.apply || '') === '1'
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp = getStorePrisma(store.schema) as any
+        const since = new Date(Date.now() - days * 86400_000)
+        const t0 = Date.now()
+        const DEADLINE = 240_000 // Cloud Run 300s — chừa chỗ trả response
+
+        const channels = await sp.onlineChannel.findMany({
+            where: { status: 'active', accessToken: { not: null }, platform: 'shopee' },
+        })
+        const { ShopeeService } = await import('../services/platforms/shopee')
+        const out: any[] = []
+        for (const ch of channels) {
+            const row: any = { channel: ch.name }
+            try {
+                // Đơn đã giao/hoàn tất mà CHƯA có ngày nhận
+                const orders: any[] = await sp.$queryRawUnsafe(
+                    `SELECT id, "orderNumber", "externalOrderId", "createdAt"
+                     FROM "OnlineOrder"
+                     WHERE "channelId" = $1 AND "deliveredAt" IS NULL
+                       AND "createdAt" >= $2
+                       AND UPPER(status) IN ('DELIVERED','COMPLETED','TO_CONFIRM_RECEIVE')
+                     ORDER BY "createdAt" DESC LIMIT ${limit}`, ch.id, since)
+                row.donThieuNgay = orders.length
+                // ?countOnly=1 — CHỈ ĐẾM, không gọi API sàn (tránh dội Shopee)
+                if (String(req.query.countOnly || '') === '1') {
+                    const tong: any[] = await sp.$queryRawUnsafe(
+                        `SELECT COUNT(*)::int AS n FROM "OnlineOrder"
+                         WHERE "channelId" = $1 AND "deliveredAt" IS NULL
+                           AND UPPER(status) IN ('DELIVERED','COMPLETED','TO_CONFIRM_RECEIVE')`, ch.id)
+                    const daCo: any[] = await sp.$queryRawUnsafe(
+                        `SELECT COUNT(*)::int AS n FROM "OnlineOrder"
+                         WHERE "channelId" = $1 AND "deliveredAt" IS NOT NULL`, ch.id)
+                    row.tongConThieu = tong[0]?.n ?? 0
+                    row.daCoNgayNhan = daCo[0]?.n ?? 0
+                    out.push(row); continue
+                }
+                if (!orders.length) { out.push(row); continue }
+
+                const svc = new ShopeeService({
+                    apiKey: ch.apiKey || '', apiSecret: ch.apiSecret || '',
+                    accessToken: ch.accessToken || undefined, refreshToken: ch.refreshToken || undefined,
+                    shopId: ch.shopId || undefined,
+                })
+                let lay = 0, khongCo = 0, loi = 0, ghi = 0, hetGio = false
+                const mau: any[] = []
+                // Tuần tự + nghỉ ngắn: API vận đơn gọi từng đơn, bắn ồ ạt dễ dính
+                // giới hạn tốc độ của Shopee (đã từng bị chặn IP vì flood).
+                for (const o of orders) {
+                    if (Date.now() - t0 > DEADLINE) { hetGio = true; break }
+                    try {
+                        const dt = await svc.getDeliveredTime(String(o.externalOrderId || ''))
+                        if (dt) {
+                            lay++
+                            if (mau.length < 5) mau.push({
+                                orderNumber: o.orderNumber,
+                                dat: String(o.createdAt).slice(0, 10),
+                                nhan: dt.toISOString().slice(0, 16).replace('T', ' '),
+                            })
+                            if (apply) {
+                                await sp.onlineOrder.update({ where: { id: o.id }, data: { deliveredAt: dt } })
+                                ghi++
+                            }
+                        } else khongCo++
+                    } catch (e: any) {
+                        loi++
+                        // Giữ lại lý do lỗi — nuốt im lặng thì không biết vì sao
+                        // dừng (hết hạn token? bị chặn tốc độ? đơn không có vận đơn?)
+                        if (!row.lyDoLoi) row.lyDoLoi = String(e?.message || e).slice(0, 200)
+                    }
+                    await new Promise(r => setTimeout(r, 120))
+                }
+                Object.assign(row, { layDuoc: lay, khongCoDuLieu: khongCo, loi, daGhi: ghi, hetGio, mau })
+            } catch (e: any) { row.loi = e?.message }
+            out.push(row)
+        }
+        res.json({ success: true, data: { chayThu: !apply, days, giay: Math.round((Date.now() - t0) / 1000), channels: out } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err?.message })
+    }
+})
+
+// ─── GET /admin/shopee-auth-urls ─────────────────────────────────────────────
+// Phát link KẾT NỐI LẠI (authorize) cho mọi kênh Shopee của store. Link Shopee
+// ký theo timestamp nên CHỈ SỐNG VÀI PHÚT — hết hạn thì gọi lại endpoint này.
+// Callback dùng đúng đường sẵn có nên token mới tự ghi đè vào kênh.
+router.get('/shopee-auth-urls', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp = getStorePrisma(store.schema) as any
+        const channels = await sp.onlineChannel.findMany({
+            where: { platform: 'shopee' },
+            select: { id: true, name: true, apiKey: true, apiSecret: true, shopId: true, status: true, tokenExpiresAt: true },
+        })
+        const { ShopeeService } = await import('../services/platforms/shopee')
+        const baseUrl = process.env.APP_BASE_URL || 'https://api.kengi.vn'
+        const out = channels.map((ch: any) => {
+            try {
+                const svc = new ShopeeService({ apiKey: ch.apiKey || '', apiSecret: ch.apiSecret || '', shopId: ch.shopId || undefined })
+                const redirectUri = `${baseUrl}/api/online-orders/channels/${ch.id}/callback`
+                const state = Buffer.from(JSON.stringify({ channelId: ch.id })).toString('base64')
+                return {
+                    channel: ch.name, channelId: ch.id, shopId: ch.shopId, status: ch.status,
+                    tokenHetHan: ch.tokenExpiresAt,
+                    authUrl: svc.generateAuthUrl(redirectUri, state),
+                }
+            } catch (e: any) {
+                return { channel: ch.name, channelId: ch.id, loi: e?.message }
+            }
+        })
+        res.json({ success: true, data: { luuY: 'Link ký theo thời gian, chỉ sống vài phút — bấm ngay sau khi lấy', channels: out } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err?.message })
+    }
+})
+
+// ─── GET /admin/channel-auth-urls ────────────────────────────────────────────
+// Soi cấu hình OAuth của MỌI kênh (hoặc lọc ?platform=lazada): App Key đã lưu
+// chưa, URL uỷ quyền sinh ra trông thế nào. Dựng để truy lỗi "Thiếu Tham số"
+// bên Lazada — lỗi đó chỉ xảy ra khi client_id rỗng.
+// KHÔNG trả App Secret; App Key chỉ trả 4 ký tự cuối (bản đầy đủ nằm trong
+// authUrl vì trình duyệt vốn nhìn thấy nó).
+router.get('/channel-auth-urls', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
+        const platform = String(req.query.platform || '').trim()
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp = getStorePrisma(store.schema) as any
+        const channels = await sp.onlineChannel.findMany({
+            where: platform ? { platform } : {},
+            select: { id: true, name: true, platform: true, apiKey: true, apiSecret: true, shopId: true, status: true, tokenExpiresAt: true },
+        })
+        const { getPlatformService } = await import('../services/platforms')
+        const baseUrl = process.env.APP_BASE_URL || 'https://api.kengi.vn'
+        const out = channels.map((ch: any) => {
+            const apiKey = (ch.apiKey || '').trim()
+            const apiSecret = (ch.apiSecret || '').trim()
+            const info: any = {
+                channel: ch.name, channelId: ch.id, platform: ch.platform, status: ch.status,
+                apiKeyDaiKyTu: apiKey.length,
+                apiKeyDuoi4: apiKey ? apiKey.slice(-4) : null,
+                apiSecretDaiKyTu: apiSecret.length,
+                tokenHetHan: ch.tokenExpiresAt,
+            }
+            if (!apiKey || !apiSecret) {
+                info.loi = `Thiếu ${[!apiKey && 'App Key', !apiSecret && 'App Secret'].filter(Boolean).join(' và ')} trong DB`
+                return info
+            }
+            try {
+                const svc = getPlatformService(ch.platform, { apiKey, apiSecret, shopId: ch.shopId || undefined })
+                if (!svc) { info.loi = 'Nền tảng không có tích hợp API'; return info }
+                const redirectUri = ch.platform === 'tiktok'
+                    ? `${baseUrl}/api/online-orders/tiktok/callback`
+                    : `${baseUrl}/api/online-orders/channels/${ch.id}/callback`
+                const state = Buffer.from(JSON.stringify({ channelId: ch.id })).toString('base64')
+                info.redirectUri = redirectUri
+                info.authUrl = svc.generateAuthUrl(redirectUri, state)
+            } catch (e: any) {
+                info.loi = e?.message
+            }
+            return info
+        })
+        res.json({ success: true, data: { channels: out } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err?.message })
+    }
+})
+
+// ─── POST /admin/reconcile-refunds ───────────────────────────────────────────
+// ĐỐI SOÁT HOÀN TIỀN THEO TỔNG TIỀN ĐƠN (đường vòng khi get_return_list của
+// Shopee im lặng — đã xác minh 31/07/2026: API phiếu trả không báo gì sau 14/07
+// nhưng get_order_detail vẫn trừ đúng khoản khách trả vào total_amount).
+// So tổng tiền Shopee hiện tại với tổng đã lưu; thiếu hụt = khách đã được hoàn.
+// MẶC ĐỊNH CHẠY THỬ (không ghi) — apply=1 mới tạo phiếu trả.
+router.post('/reconcile-refunds', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || req.body?.storeCode || 'KENGISTORE').trim()
+        const days = Math.min(Math.max(1, Number(req.query.days || req.body?.days) || 30), 180)
+        // ĐÃ CHỨNG MINH SAI (31/07/2026): total_amount của Shopee là số khách
+        // THỰC TRẢ (đã trừ voucher sàn + xu), còn tổng mình lưu là tiền hàng sau
+        // giảm giá shop → 82% đơn "chênh" chỉ vì voucher, KHÔNG phải hoàn tiền.
+        // Chạy thử để chẩn đoán thì được; GHI DỮ LIỆU thì cấm.
+        const apply = false
+        if (String(req.query.apply || req.body?.apply || '') === '1') {
+            res.status(400).json({
+                success: false,
+                error: 'Đã khoá: chênh lệch tổng tiền KHÔNG phải tín hiệu hoàn tiền (đa số là voucher sàn/xu). '
+                    + 'Ghi theo cách này sẽ tạo hàng loạt phiếu trả khống.',
+            })
+            return
+        }
+        const limit = Math.min(Math.max(1, Number(req.query.limit || req.body?.limit) || 500), 2000)
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp = getStorePrisma(store.schema) as any
+        const since = new Date(Date.now() - days * 86400_000)
+
+        const channels = await sp.onlineChannel.findMany({
+            where: { status: 'active', accessToken: { not: null }, platform: 'shopee' },
+        })
+        const { ShopeeService } = await import('../services/platforms/shopee')
+        const out: any[] = []
+        for (const ch of channels) {
+            const row: any = { channel: ch.name }
+            try {
+                // Đơn đã giao/hoàn tất, CHƯA có phiếu trả nào — chỉ những đơn này
+                // mới cần soi (đơn đã có phiếu trả thì đã xử lý rồi).
+                const orders: any[] = await sp.$queryRawUnsafe(
+                    `SELECT o.id, o."orderNumber", o."externalOrderId", o.total
+                     FROM "OnlineOrder" o
+                     WHERE o."channelId" = $1
+                       AND o."createdAt" >= $2
+                       AND UPPER(o.status) IN ('DELIVERED','COMPLETED')
+                       AND NOT EXISTS (
+                           SELECT 1 FROM "ReturnOrder" ro
+                           WHERE ro."originalInvoice" = o."orderNumber"
+                              OR o."orderNumber" LIKE '%-' || ro."originalInvoice")
+                     ORDER BY o."createdAt" DESC LIMIT ${limit}`, ch.id, since)
+                row.donKiemTra = orders.length
+                if (!orders.length) { out.push(row); continue }
+
+                const svc = new ShopeeService({
+                    apiKey: ch.apiKey || '', apiSecret: ch.apiSecret || '',
+                    accessToken: ch.accessToken || undefined, refreshToken: ch.refreshToken || undefined,
+                    shopId: ch.shopId || undefined,
+                })
+                const sns = orders.map(o => String(o.externalOrderId || '').trim()).filter(Boolean)
+                const totals = await svc.getOrderTotals(sns)
+                row.sanTraVe = Object.keys(totals).length
+
+                const lech: any[] = []
+                for (const o of orders) {
+                    const sn = String(o.externalOrderId || '')
+                    const t = totals[sn]
+                    if (!t) continue
+                    const daLuu = Number(o.total) || 0
+                    const hienTai = t.total
+                    // Chênh > 1.000đ mới tính (né lệch làm tròn/phí lặt vặt)
+                    if (hienTai > 0 && daLuu - hienTai > 1000) {
+                        lech.push({
+                            orderNumber: o.orderNumber, sn,
+                            daLuu, sanHienTai: hienTai, hoan: daLuu - hienTai,
+                            trangThaiSan: t.status,
+                            ngayCapNhat: t.updateTime?.toISOString().slice(0, 10),
+                        })
+                    }
+                }
+                row.soDonHoanTien = lech.length
+                row.tongTienHoan = lech.reduce((s, x) => s + x.hoan, 0)
+                row.mau = lech.slice(0, 10)
+
+                if (apply && lech.length) {
+                    let taoMoi = 0
+                    for (const x of lech) {
+                        const code = `RTN-SH-DIFF-${x.sn}`
+                        const da = await sp.returnOrder.findFirst({ where: { code } })
+                        if (da) continue
+                        await sp.returnOrder.create({
+                            data: {
+                                code,
+                                channelId: ch.id,
+                                originalInvoice: x.orderNumber,
+                                customerName: 'Khách Shopee',
+                                reason: 'Khách trả hàng/hoàn tiền (phát hiện qua chênh lệch tổng tiền đơn)',
+                                refundMethod: 'platform_refund',
+                                refundAmount: x.hoan,
+                                totalRefund: x.hoan,
+                                status: 'refunded',
+                                staffName: 'Đối soát tự động',
+                                notes: `[Shopee] Tổng đã lưu ${x.daLuu.toLocaleString('vi-VN')}đ → sàn hiện ${x.sanHienTai.toLocaleString('vi-VN')}đ`
+                                    + `\nPhát hiện qua get_order_detail (get_return_list không báo).`,
+                                ...(x.ngayCapNhat ? { createdAt: new Date(x.ngayCapNhat) } : {}),
+                                refundedAt: new Date(),
+                                items: {
+                                    create: [{
+                                        productName: 'Hàng khách trả (chưa rõ chi tiết)',
+                                        quantity: 1, unitPrice: x.hoan,
+                                        returnReason: 'Hoàn tiền Shopee', condition: 'used',
+                                    }],
+                                },
+                            },
+                        })
+                        taoMoi++
+                    }
+                    row.daTaoPhieu = taoMoi
+                }
+            } catch (e: any) { row.loi = e?.message }
+            out.push(row)
+        }
+        res.json({ success: true, data: { chayThu: !apply, days, channels: out } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err?.message })
+    }
+})
+
+// ─── GET /admin/returns-raw?from=&to=&find= ─────────────────────────────────
+// CHỈ ĐỌC: gọi thẳng API trả hàng của sàn, trả về DANH SÁCH THÔ (không ghi DB)
+// để đối chiếu "sàn có phiếu mà hệ thống không có". find= lọc theo mã đơn.
+router.get('/returns-raw', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp = getStorePrisma(store.schema) as any
+        const days = Math.min(Math.max(1, Number(req.query.days) || 45), 180)
+        const since = req.query.from ? new Date(String(req.query.from) + 'T00:00:00+07:00')
+            : new Date(Date.now() - days * 86400_000)
+        const until = req.query.to ? new Date(String(req.query.to) + 'T23:59:59+07:00') : undefined
+        const find = String(req.query.find || '').trim().toUpperCase()
+
+        const channels = await sp.onlineChannel.findMany({
+            where: { status: 'active', accessToken: { not: null }, platform: { in: ['shopee', 'tiktok'] } },
+        })
+        const { ShopeeService } = await import('../services/platforms/shopee')
+        const { TikTokService } = await import('../services/platforms/tiktok')
+        const out: any[] = []
+        for (const ch of channels) {
+            const creds = {
+                apiKey: ch.apiKey || '', apiSecret: ch.apiSecret || '',
+                accessToken: ch.accessToken || undefined, refreshToken: ch.refreshToken || undefined,
+                shopId: ch.shopId || undefined,
+            }
+            const svc: any = ch.platform === 'tiktok' ? new TikTokService(creds) : new ShopeeService(creds)
+            const row: any = { channel: ch.name, platform: ch.platform }
+            try {
+                const list: any[] = await svc.fetchReturns({ since, until })
+                row.tongSanTraVe = list.length
+                // Đối chiếu với DB: phiếu nào sàn có mà mình chưa lưu
+                const codes = list.map((r: any) => `${ch.platform === 'tiktok' ? 'RTN-TT-' : 'RTN-SH-'}${r.returnSn}`)
+                const co = codes.length ? await sp.$queryRawUnsafe(
+                    `SELECT code FROM "ReturnOrder" WHERE code = ANY($1::text[])`, codes) : []
+                const coSet = new Set((co as any[]).map((x: any) => x.code))
+                row.daCoTrongDB = coSet.size
+                row.thieuTrongDB = codes.length - coSet.size
+                row.mauThieu = list.filter((r: any, i: number) => !coSet.has(codes[i]))
+                    .slice(0, 5).map((r: any) => ({ returnSn: r.returnSn, orderSn: r.orderSn, status: r.status, createTime: r.createTime }))
+                if (find) {
+                    row.timThay = list.filter((r: any) =>
+                        String(r.orderSn || '').toUpperCase().includes(find) ||
+                        String(r.returnSn || '').toUpperCase().includes(find))
+                }
+                // ?dump=1 — in TOÀN BỘ mã đơn sàn trả về (soi xem sàn có báo đơn nào)
+                if (String(req.query.dump || '') === '1') {
+                    row.tatCa = list.map((r: any) => `${r.orderSn}|${r.returnSn}|${r.status}|${r.createTime instanceof Date ? r.createTime.toISOString().slice(0, 10) : ''}`)
+                }
+                // ?raw=1 — gọi thẳng get_return_list KHÔNG qua map, xem Shopee trả gì
+                if (String(req.query.raw || '') === '1' && ch.platform === 'shopee') {
+                    // Dò theo NGÀY TẠO và cả NGÀY CẬP NHẬT — phiếu tạo lâu rồi mà
+                    // mới đổi trạng thái sẽ lọt lưới nếu chỉ lọc theo ngày tạo.
+                    const field = (String(req.query.timeField || 'create_time') as any)
+                    row.thoShopee = await (svc as any).debugReturnList(since, until, field)
+                        .catch((e: any) => `LOI ${e?.message}`)
+                }
+                // ?byStatus=1 — quét từng trạng thái trong khung 14 ngày gần nhất
+                if (String(req.query.byStatus || '') === '1' && ch.platform === 'shopee') {
+                    row.theoTrangThai = await (svc as any).debugReturnByStatus(since, until)
+                        .catch((e: any) => `LOI ${e?.message}`)
+                }
+                // ?orderRaw=<mã đơn> — dump thô chi tiết đơn + escrow của 1 đơn
+                if (req.query.orderRaw && ch.platform === 'shopee') {
+                    row.donTho = await (svc as any).debugOrderRaw(String(req.query.orderRaw))
+                        .catch((e: any) => `LOI ${e?.message}`)
+                }
+            } catch (e: any) { row.loi = e?.message }
+            out.push(row)
+        }
+        res.json({ success: true, data: { since: since.toISOString(), until: until?.toISOString() || 'nay', channels: out } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err?.message })
+    }
+})
+
+// ─── GET /admin/notif-probe ──────────────────────────────────────────────────
+// Chẩn đoán thông báo: ?storeCode=… → 5 bản ghi Notification mới nhất + số
+// client SSE đang mở trên INSTANCE này; &emit=1 bắn thử 'einvoice_issued' vào
+// key schema của store để xem web có nhận không.
+router.get('/notif-probe', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp = getStorePrisma(store.schema) as any
+        const { sseStats, sendNotification, sendPushToStore, ensureDeviceTokenTable } = await import('./notifications')
+        const rows = await sp.notification.findMany({ orderBy: { createdAt: 'desc' }, take: 5 }).catch((e: any) => `LOI: ${e?.message}`)
+        const out: any = { schema: store.schema, sseClients: sseStats(), notifRows: rows }
+        // Thiết bị đã đăng ký nhận push FCM
+        await ensureDeviceTokenTable(sp)
+        out.devices = await sp.$queryRawUnsafe(
+            `SELECT LEFT(token, 16) AS token_dau, platform, "updatedAt" FROM "DeviceToken" ORDER BY "updatedAt" DESC LIMIT 10`
+        ).catch((e: any) => `LOI: ${e?.message}`)
+        // &push=1 → bắn push thật tới các thiết bị đã đăng ký
+        if (String(req.query.push || '') === '1') {
+            out.pushSent = await sendPushToStore(sp, '🔔 TEST push Kengi',
+                `Bắn thử lúc ${new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`)
+        }
+        if (String(req.query.emit || '') === '1') {
+            out.emitted = sendNotification(store.schema, 'einvoice_issued', {
+                title: '🧾 TEST đẩy thông báo', message: `Bắn thử lúc ${new Date().toISOString()}`,
+            })
+        }
+        res.json({ success: true, data: out })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err?.message })
+    }
+})
+
+// ─── GET /admin/vnpt-probe ───────────────────────────────────────────────────
+// CHỈ ĐỌC: đăng nhập VNPT bằng tài khoản tích hợp rồi dò các đường liệt kê DẢI
+// KÝ HIỆU bên hệ biên lai — trả nguyên văn để biết tài khoản có dải nào/tên gì.
+router.get('/vnpt-probe', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp = getStorePrisma(store.schema) as any
+        const cfg = await sp.eInvoiceConfig.findFirst({ where: { isActive: true } })
+        if (!cfg) { res.status(404).json({ success: false, error: 'chưa có cấu hình' }); return }
+        // Bộ SAAS mới: đăng nhập qua provider (tự dò gốc api-hst/gateway-hst)
+        // rồi tra dải ký hiệu MTT + danh sách hoá đơn gần đây bên pos-api.
+        let exx: any = {}; try { exx = JSON.parse(cfg.extra || '{}') } catch { }
+        const { VnptProvider } = await import('../services/einvoice/vnpt')
+        const pcfg = {
+            apiUrl: String(cfg.apiUrl || cfg.baseUrl || ''),
+            // ?u= thử biến thể username (vd bỏ hậu tố _admin) với password đã lưu.
+            // Cột thật của row là apiUsername/apiPassword (+ legacy apiKey/apiSecret);
+            // KHÔNG có cột username/password trần — map sai là gửi chuỗi rỗng đi.
+            apiKey: String(req.query.u || '') || cfg.apiUsername || cfg.apiKey || exx.username || '',
+            apiSecret: cfg.apiPassword || cfg.apiSecret || exx.password || '',
+            taxCode: cfg.taxCode || '',
+            templateId: cfg.templateId || '',
+            serialNo: cfg.serialNo || '',
+            extra: cfg.extra || '',
+        }
+        const provider = new VnptProvider()
+        let session: any
+        try {
+            session = await provider.login(pcfg)
+        } catch (e: any) {
+            res.json({ success: true, data: { loginLoi: e?.message } }); return
+        }
+        const out: any = { root: session.root, clientIdCo: !!session.clientId }
+        const hdrs = { 'Content-Type': 'application/json', Authorization: session.token, 'Client-Id': session.clientId }
+        // ?mode=tc: dò giá trị type_cert hợp lệ cho "không ký số" — gửi HDons RỖNG
+        // nên không thể phát hành thật; chỉ xem thông báo lỗi đổi thế nào.
+        // ?mode=dl&fkey=…: xem THÔ download-by-fkeys trả gì với từng typeDownload
+        // (để biết shape thật mà nhận diện file, không đoán mò).
+        if (String(req.query.mode || '') === 'dl') {
+            const fkey = String(req.query.fkey || '')
+            for (const t of [1, 2, 3]) {
+                try {
+                    const r = await fetch(`${session.root}/pos-api/api/v1/saas/portal/download-by-fkeys`, {
+                        method: 'POST', headers: hdrs, body: JSON.stringify({ typeDownload: t, lstFkey: [fkey] }),
+                    })
+                    out[`dl${t}`] = { status: r.status, body: (await r.text()).slice(0, 350) }
+                } catch (e: any) { out[`dl${t}`] = { loi: e?.message } }
+            }
+            try {
+                const r = await fetch(`${session.root}/pos-api/api/v1/saas/portal/get-pos-by-fkey`, {
+                    method: 'POST', headers: hdrs, body: JSON.stringify({ fkey }),
+                })
+                out.detail = { status: r.status, body: (await r.text()).slice(0, 500) }
+            } catch (e: any) { out.detail = { loi: e?.message } }
+            res.json({ success: true, data: out }); return
+        }
+        if (String(req.query.mode || '') === 'tc') {
+            const cands: (string | null)[] = [null, '', 'NONE', 'NOSIGN', 'KHONGKYSO', 'KCS', 'TOKEN', 'HSM', 'ESEAL', 'SMARTCA']
+            for (const tc of cands) {
+                const body: any = { KHMSHDon: 2, KHHDon: 'C26MNH', HDons: [] }
+                if (tc !== null) { body.type_cert = tc; body.serial_number = '' }
+                try {
+                    const r = await fetch(`${session.root}/pos-api/api/v1/saas/posinvoice/create-and-publish`, {
+                        method: 'POST', headers: hdrs, body: JSON.stringify(body),
+                    })
+                    out[`tc:${tc === null ? '(bo trong)' : tc || '(rong)'}`] = (await r.text()).slice(0, 160)
+                } catch (e: any) { out[`tc:${tc}`] = e?.message }
+            }
+            res.json({ success: true, data: out }); return
+        }
+        const probes: [string, string, any][] = [
+            // Chứng thư số của đơn vị — lấy serial cho type_cert HSM/ESEAL
+            ['caConfig', `${session.root}/admin-api/api/v1/saas/ca-config/findAll?page=0&size=10`, {}],
+            ['sysConfig', `${session.root}/admin-api/admin-api/api/v1/saas/orgs/get-system-config`, null],
+            ['sysConfig2', `${session.root}/admin-api/api/v1/saas/orgs/get-system-config`, null],
+            ['symbolGets', `${session.root}/pos-api/api/v1/saas/symbol/gets?page=0&size=20`, {}],
+            ['listByDate', `${session.root}/pos-api/api/v1/saas/portal/get-list-by-date?page=0&size=3`, {
+                startDate: new Date(Date.now() - 30 * 86400_000).toISOString(),
+                endDate: new Date().toISOString(),
+            }],
+            ['orgInfo', `${session.root}/admin-api/api/v1/saas/orgs/info`, null],
+        ]
+        for (const [name, url, body] of probes) {
+            try {
+                const r = await fetch(url, {
+                    method: body === null ? 'GET' : 'POST',
+                    headers: hdrs,
+                    body: body === null ? undefined : JSON.stringify(body),
+                })
+                out[name] = { status: r.status, body: (await r.text()).slice(0, 800) }
+            } catch (e: any) { out[name] = { loi: e?.message } }
+        }
+        res.json({ success: true, data: out })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err?.message })
     }
 })
 

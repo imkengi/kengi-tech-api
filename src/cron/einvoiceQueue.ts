@@ -34,27 +34,31 @@ async function runQueueForStore(schema: string, storeName: string): Promise<void
     const config = await getActiveConfig(prisma)
     if (!config) return
     const extra = parseConfigExtra(config)
-    if (!extra.autoIssueOnDelivery) return // store chưa bật tự động
 
-    // BỎ QUA hoá đơn quá khứ: chỉ đơn giao TỪ THỜI ĐIỂM BẬT (autoIssueSince).
-    // Lookback 7 ngày là lưới an toàn cho đơn lỗi thử lại — lấy mốc MUỘN hơn.
+    // Hai chế độ chạy song song:
+    // 1) auto TOÀN CỤC (autoIssueOnDelivery): xuất mọi đơn giao xong từ mốc bật.
+    // 2) đơn KHÁCH YÊU CẦU HĐ (vatBuyerInfo gắn trên phiếu): LUÔN tự xuất khi
+    //    giao xong + gửi email — kể cả khi auto toàn cục tắt.
     const lookback = new Date(Date.now() - LOOKBACK_DAYS * 86400_000)
     const anchor = extra.autoIssueSince ? new Date(extra.autoIssueSince) : null
-    const from = anchor && anchor > lookback ? anchor : (anchor ? lookback : null)
-    if (!from) return // bật kiểu cũ không có mốc neo → không tự xuất, tránh xả lô quá khứ
+    const autoFrom = extra.autoIssueOnDelivery && anchor
+        ? (anchor > lookback ? anchor : lookback)
+        : null // auto tắt / bật kiểu cũ không mốc neo → không xả lô toàn cục
 
-    const all = await findInvoiceQueue(prisma, { from, limit: PER_STORE_CAP })
+    const all = await findInvoiceQueue(prisma, { from: lookback, limit: PER_STORE_CAP })
     // Đơn có trả hàng/hoàn tiền KHÔNG auto-xuất — chỉ hiện trên UI để xử lý tay
-    const rows = all.filter((r: any) => !r.hasReturn)
-    const returns = all.length - rows.length
+    const clean = all.filter((r: any) => !r.hasReturn)
+    const returns = all.length - clean.length
     if (returns > 0) console.log(`[EInvoiceQueue] ${storeName}: bỏ qua ${returns} đơn có trả hàng/hoàn tiền`)
+    const rows = clean.filter((r: any) => r.hasBuyerInfo
+        || (autoFrom && new Date(r.deliveredAt || r.orderDate) >= autoFrom))
     if (rows.length === 0) return
 
     let issued = 0, failed = 0
     const errors: string[] = []
     for (const r of rows) {
         try {
-            const rs = await issueInvoiceForTransaction(prisma, r.id)
+            const rs = await issueInvoiceForTransaction(prisma, r.id, {}, schema)
             if (rs.success && !rs.skipped) issued++
             else if (!rs.success) {
                 failed++
@@ -69,6 +73,16 @@ async function runQueueForStore(schema: string, storeName: string): Promise<void
     }
     console.log(`[EInvoiceQueue] ${storeName}: ${rows.length} phiếu đủ điều kiện → xuất ${issued}, lỗi ${failed}` +
         (errors.length ? ` | ${errors.join('; ')}` : ''))
+    // Thông báo tổng kết đêm (web + app Android đọc chung GET /notifications)
+    if (issued > 0 || failed > 0) {
+        await (prisma as any).notification.create({
+            data: {
+                type: 'einvoice',
+                title: `🧾 Tự động xuất hoá đơn: ${issued} thành công${failed ? `, ${failed} lỗi` : ''}`,
+                message: `Cron 20:30 xử lý ${rows.length} phiếu đủ điều kiện.` + (errors.length ? ` Lỗi: ${errors.join('; ')}`.slice(0, 300) : ''),
+            },
+        }).catch(() => { })
+    }
     if (rows.length >= PER_STORE_CAP) {
         console.warn(`[EInvoiceQueue] ${storeName}: chạm trần ${PER_STORE_CAP} phiếu/đêm — phần còn lại xuất đêm sau`)
     }

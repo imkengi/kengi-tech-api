@@ -184,6 +184,9 @@ router.get('/', authMiddleware, requirePermission('pos.view'), async (req: AuthR
             branchId: t.branchId || null,
             branchName: t.branchId ? (branchMap[t.branchId] || null) : null,
             channel: (t as any).channel || 'direct',
+            // Tình trạng HĐĐT — FE lọc "Đã/Chưa xuất HĐ" + badge cần 2 trường này
+            vatStatus: (t as any).vatStatus || 'none',
+            vatInvoiceNumber: (t as any).vatInvoiceNumber || null,
         }))
 
         const response = {

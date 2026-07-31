@@ -29876,6 +29876,7 @@ export namespace Prisma {
     vatInvoiceNumber: string | null
     vatIssuedAt: Date | null
     vatStatus: string | null
+    vatBuyerInfo: string | null
     revisionOfId: string | null
     appliedPromotionIds: string | null
     channel: string | null
@@ -29906,6 +29907,7 @@ export namespace Prisma {
     vatInvoiceNumber: string | null
     vatIssuedAt: Date | null
     vatStatus: string | null
+    vatBuyerInfo: string | null
     revisionOfId: string | null
     appliedPromotionIds: string | null
     channel: string | null
@@ -29936,6 +29938,7 @@ export namespace Prisma {
     vatInvoiceNumber: number
     vatIssuedAt: number
     vatStatus: number
+    vatBuyerInfo: number
     revisionOfId: number
     appliedPromotionIds: number
     channel: number
@@ -29986,6 +29989,7 @@ export namespace Prisma {
     vatInvoiceNumber?: true
     vatIssuedAt?: true
     vatStatus?: true
+    vatBuyerInfo?: true
     revisionOfId?: true
     appliedPromotionIds?: true
     channel?: true
@@ -30016,6 +30020,7 @@ export namespace Prisma {
     vatInvoiceNumber?: true
     vatIssuedAt?: true
     vatStatus?: true
+    vatBuyerInfo?: true
     revisionOfId?: true
     appliedPromotionIds?: true
     channel?: true
@@ -30046,6 +30051,7 @@ export namespace Prisma {
     vatInvoiceNumber?: true
     vatIssuedAt?: true
     vatStatus?: true
+    vatBuyerInfo?: true
     revisionOfId?: true
     appliedPromotionIds?: true
     channel?: true
@@ -30163,6 +30169,7 @@ export namespace Prisma {
     vatInvoiceNumber: string | null
     vatIssuedAt: Date | null
     vatStatus: string
+    vatBuyerInfo: string | null
     revisionOfId: string | null
     appliedPromotionIds: string | null
     channel: string
@@ -30212,6 +30219,7 @@ export namespace Prisma {
     vatInvoiceNumber?: boolean
     vatIssuedAt?: boolean
     vatStatus?: boolean
+    vatBuyerInfo?: boolean
     revisionOfId?: boolean
     appliedPromotionIds?: boolean
     channel?: boolean
@@ -30247,6 +30255,7 @@ export namespace Prisma {
     vatInvoiceNumber?: boolean
     vatIssuedAt?: boolean
     vatStatus?: boolean
+    vatBuyerInfo?: boolean
     revisionOfId?: boolean
     appliedPromotionIds?: boolean
     channel?: boolean
@@ -30279,6 +30288,7 @@ export namespace Prisma {
     vatInvoiceNumber?: boolean
     vatIssuedAt?: boolean
     vatStatus?: boolean
+    vatBuyerInfo?: boolean
     revisionOfId?: boolean
     appliedPromotionIds?: boolean
     channel?: boolean
@@ -30311,13 +30321,14 @@ export namespace Prisma {
     vatInvoiceNumber?: boolean
     vatIssuedAt?: boolean
     vatStatus?: boolean
+    vatBuyerInfo?: boolean
     revisionOfId?: boolean
     appliedPromotionIds?: boolean
     channel?: boolean
     createdAt?: boolean
   }
 
-  export type TransactionOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "receiptNumber" | "customerId" | "customerName" | "customerPhone" | "branchId" | "subtotal" | "discount" | "discountType" | "tax" | "total" | "amountReceived" | "change" | "status" | "createdBy" | "createdByName" | "notes" | "returnedAt" | "returnReason" | "transactionDate" | "vatInvoiceNumber" | "vatIssuedAt" | "vatStatus" | "revisionOfId" | "appliedPromotionIds" | "channel" | "createdAt", ExtArgs["result"]["transaction"]>
+  export type TransactionOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "receiptNumber" | "customerId" | "customerName" | "customerPhone" | "branchId" | "subtotal" | "discount" | "discountType" | "tax" | "total" | "amountReceived" | "change" | "status" | "createdBy" | "createdByName" | "notes" | "returnedAt" | "returnReason" | "transactionDate" | "vatInvoiceNumber" | "vatIssuedAt" | "vatStatus" | "vatBuyerInfo" | "revisionOfId" | "appliedPromotionIds" | "channel" | "createdAt", ExtArgs["result"]["transaction"]>
   export type TransactionInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     creator?: boolean | UserDefaultArgs<ExtArgs>
     customer?: boolean | Transaction$customerArgs<ExtArgs>
@@ -30366,6 +30377,7 @@ export namespace Prisma {
       vatInvoiceNumber: string | null
       vatIssuedAt: Date | null
       vatStatus: string
+      vatBuyerInfo: string | null
       revisionOfId: string | null
       appliedPromotionIds: string | null
       channel: string
@@ -30820,6 +30832,7 @@ export namespace Prisma {
     readonly vatInvoiceNumber: FieldRef<"Transaction", 'String'>
     readonly vatIssuedAt: FieldRef<"Transaction", 'DateTime'>
     readonly vatStatus: FieldRef<"Transaction", 'String'>
+    readonly vatBuyerInfo: FieldRef<"Transaction", 'String'>
     readonly revisionOfId: FieldRef<"Transaction", 'String'>
     readonly appliedPromotionIds: FieldRef<"Transaction", 'String'>
     readonly channel: FieldRef<"Transaction", 'String'>
@@ -155134,6 +155147,7 @@ export namespace Prisma {
     vatInvoiceNumber: 'vatInvoiceNumber',
     vatIssuedAt: 'vatIssuedAt',
     vatStatus: 'vatStatus',
+    vatBuyerInfo: 'vatBuyerInfo',
     revisionOfId: 'revisionOfId',
     appliedPromotionIds: 'appliedPromotionIds',
     channel: 'channel',
@@ -158616,6 +158630,7 @@ export namespace Prisma {
     vatInvoiceNumber?: StringNullableFilter<"Transaction"> | string | null
     vatIssuedAt?: DateTimeNullableFilter<"Transaction"> | Date | string | null
     vatStatus?: StringFilter<"Transaction"> | string
+    vatBuyerInfo?: StringNullableFilter<"Transaction"> | string | null
     revisionOfId?: StringNullableFilter<"Transaction"> | string | null
     appliedPromotionIds?: StringNullableFilter<"Transaction"> | string | null
     channel?: StringFilter<"Transaction"> | string
@@ -158650,6 +158665,7 @@ export namespace Prisma {
     vatInvoiceNumber?: SortOrderInput | SortOrder
     vatIssuedAt?: SortOrderInput | SortOrder
     vatStatus?: SortOrder
+    vatBuyerInfo?: SortOrderInput | SortOrder
     revisionOfId?: SortOrderInput | SortOrder
     appliedPromotionIds?: SortOrderInput | SortOrder
     channel?: SortOrder
@@ -158687,6 +158703,7 @@ export namespace Prisma {
     vatInvoiceNumber?: StringNullableFilter<"Transaction"> | string | null
     vatIssuedAt?: DateTimeNullableFilter<"Transaction"> | Date | string | null
     vatStatus?: StringFilter<"Transaction"> | string
+    vatBuyerInfo?: StringNullableFilter<"Transaction"> | string | null
     revisionOfId?: StringNullableFilter<"Transaction"> | string | null
     appliedPromotionIds?: StringNullableFilter<"Transaction"> | string | null
     channel?: StringFilter<"Transaction"> | string
@@ -158721,6 +158738,7 @@ export namespace Prisma {
     vatInvoiceNumber?: SortOrderInput | SortOrder
     vatIssuedAt?: SortOrderInput | SortOrder
     vatStatus?: SortOrder
+    vatBuyerInfo?: SortOrderInput | SortOrder
     revisionOfId?: SortOrderInput | SortOrder
     appliedPromotionIds?: SortOrderInput | SortOrder
     channel?: SortOrder
@@ -158759,6 +158777,7 @@ export namespace Prisma {
     vatInvoiceNumber?: StringNullableWithAggregatesFilter<"Transaction"> | string | null
     vatIssuedAt?: DateTimeNullableWithAggregatesFilter<"Transaction"> | Date | string | null
     vatStatus?: StringWithAggregatesFilter<"Transaction"> | string
+    vatBuyerInfo?: StringNullableWithAggregatesFilter<"Transaction"> | string | null
     revisionOfId?: StringNullableWithAggregatesFilter<"Transaction"> | string | null
     appliedPromotionIds?: StringNullableWithAggregatesFilter<"Transaction"> | string | null
     channel?: StringWithAggregatesFilter<"Transaction"> | string
@@ -170748,6 +170767,7 @@ export namespace Prisma {
     vatInvoiceNumber?: string | null
     vatIssuedAt?: Date | string | null
     vatStatus?: string
+    vatBuyerInfo?: string | null
     revisionOfId?: string | null
     appliedPromotionIds?: string | null
     channel?: string
@@ -170782,6 +170802,7 @@ export namespace Prisma {
     vatInvoiceNumber?: string | null
     vatIssuedAt?: Date | string | null
     vatStatus?: string
+    vatBuyerInfo?: string | null
     revisionOfId?: string | null
     appliedPromotionIds?: string | null
     channel?: string
@@ -170812,6 +170833,7 @@ export namespace Prisma {
     vatInvoiceNumber?: NullableStringFieldUpdateOperationsInput | string | null
     vatIssuedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     vatStatus?: StringFieldUpdateOperationsInput | string
+    vatBuyerInfo?: NullableStringFieldUpdateOperationsInput | string | null
     revisionOfId?: NullableStringFieldUpdateOperationsInput | string | null
     appliedPromotionIds?: NullableStringFieldUpdateOperationsInput | string | null
     channel?: StringFieldUpdateOperationsInput | string
@@ -170846,6 +170868,7 @@ export namespace Prisma {
     vatInvoiceNumber?: NullableStringFieldUpdateOperationsInput | string | null
     vatIssuedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     vatStatus?: StringFieldUpdateOperationsInput | string
+    vatBuyerInfo?: NullableStringFieldUpdateOperationsInput | string | null
     revisionOfId?: NullableStringFieldUpdateOperationsInput | string | null
     appliedPromotionIds?: NullableStringFieldUpdateOperationsInput | string | null
     channel?: StringFieldUpdateOperationsInput | string
@@ -170878,6 +170901,7 @@ export namespace Prisma {
     vatInvoiceNumber?: string | null
     vatIssuedAt?: Date | string | null
     vatStatus?: string
+    vatBuyerInfo?: string | null
     revisionOfId?: string | null
     appliedPromotionIds?: string | null
     channel?: string
@@ -170906,6 +170930,7 @@ export namespace Prisma {
     vatInvoiceNumber?: NullableStringFieldUpdateOperationsInput | string | null
     vatIssuedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     vatStatus?: StringFieldUpdateOperationsInput | string
+    vatBuyerInfo?: NullableStringFieldUpdateOperationsInput | string | null
     revisionOfId?: NullableStringFieldUpdateOperationsInput | string | null
     appliedPromotionIds?: NullableStringFieldUpdateOperationsInput | string | null
     channel?: StringFieldUpdateOperationsInput | string
@@ -170936,6 +170961,7 @@ export namespace Prisma {
     vatInvoiceNumber?: NullableStringFieldUpdateOperationsInput | string | null
     vatIssuedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     vatStatus?: StringFieldUpdateOperationsInput | string
+    vatBuyerInfo?: NullableStringFieldUpdateOperationsInput | string | null
     revisionOfId?: NullableStringFieldUpdateOperationsInput | string | null
     appliedPromotionIds?: NullableStringFieldUpdateOperationsInput | string | null
     channel?: StringFieldUpdateOperationsInput | string
@@ -184638,6 +184664,7 @@ export namespace Prisma {
     vatInvoiceNumber?: SortOrder
     vatIssuedAt?: SortOrder
     vatStatus?: SortOrder
+    vatBuyerInfo?: SortOrder
     revisionOfId?: SortOrder
     appliedPromotionIds?: SortOrder
     channel?: SortOrder
@@ -184677,6 +184704,7 @@ export namespace Prisma {
     vatInvoiceNumber?: SortOrder
     vatIssuedAt?: SortOrder
     vatStatus?: SortOrder
+    vatBuyerInfo?: SortOrder
     revisionOfId?: SortOrder
     appliedPromotionIds?: SortOrder
     channel?: SortOrder
@@ -184707,6 +184735,7 @@ export namespace Prisma {
     vatInvoiceNumber?: SortOrder
     vatIssuedAt?: SortOrder
     vatStatus?: SortOrder
+    vatBuyerInfo?: SortOrder
     revisionOfId?: SortOrder
     appliedPromotionIds?: SortOrder
     channel?: SortOrder
@@ -195453,6 +195482,7 @@ export namespace Prisma {
     vatInvoiceNumber?: string | null
     vatIssuedAt?: Date | string | null
     vatStatus?: string
+    vatBuyerInfo?: string | null
     revisionOfId?: string | null
     appliedPromotionIds?: string | null
     channel?: string
@@ -195485,6 +195515,7 @@ export namespace Prisma {
     vatInvoiceNumber?: string | null
     vatIssuedAt?: Date | string | null
     vatStatus?: string
+    vatBuyerInfo?: string | null
     revisionOfId?: string | null
     appliedPromotionIds?: string | null
     channel?: string
@@ -195819,6 +195850,7 @@ export namespace Prisma {
     vatInvoiceNumber?: StringNullableFilter<"Transaction"> | string | null
     vatIssuedAt?: DateTimeNullableFilter<"Transaction"> | Date | string | null
     vatStatus?: StringFilter<"Transaction"> | string
+    vatBuyerInfo?: StringNullableFilter<"Transaction"> | string | null
     revisionOfId?: StringNullableFilter<"Transaction"> | string | null
     appliedPromotionIds?: StringNullableFilter<"Transaction"> | string | null
     channel?: StringFilter<"Transaction"> | string
@@ -198236,6 +198268,7 @@ export namespace Prisma {
     vatInvoiceNumber?: string | null
     vatIssuedAt?: Date | string | null
     vatStatus?: string
+    vatBuyerInfo?: string | null
     revisionOfId?: string | null
     appliedPromotionIds?: string | null
     channel?: string
@@ -198268,6 +198301,7 @@ export namespace Prisma {
     vatInvoiceNumber?: string | null
     vatIssuedAt?: Date | string | null
     vatStatus?: string
+    vatBuyerInfo?: string | null
     revisionOfId?: string | null
     appliedPromotionIds?: string | null
     channel?: string
@@ -198828,6 +198862,7 @@ export namespace Prisma {
     vatInvoiceNumber?: string | null
     vatIssuedAt?: Date | string | null
     vatStatus?: string
+    vatBuyerInfo?: string | null
     revisionOfId?: string | null
     appliedPromotionIds?: string | null
     channel?: string
@@ -198861,6 +198896,7 @@ export namespace Prisma {
     vatInvoiceNumber?: string | null
     vatIssuedAt?: Date | string | null
     vatStatus?: string
+    vatBuyerInfo?: string | null
     revisionOfId?: string | null
     appliedPromotionIds?: string | null
     channel?: string
@@ -198979,6 +199015,7 @@ export namespace Prisma {
     vatInvoiceNumber?: NullableStringFieldUpdateOperationsInput | string | null
     vatIssuedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     vatStatus?: StringFieldUpdateOperationsInput | string
+    vatBuyerInfo?: NullableStringFieldUpdateOperationsInput | string | null
     revisionOfId?: NullableStringFieldUpdateOperationsInput | string | null
     appliedPromotionIds?: NullableStringFieldUpdateOperationsInput | string | null
     channel?: StringFieldUpdateOperationsInput | string
@@ -199012,6 +199049,7 @@ export namespace Prisma {
     vatInvoiceNumber?: NullableStringFieldUpdateOperationsInput | string | null
     vatIssuedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     vatStatus?: StringFieldUpdateOperationsInput | string
+    vatBuyerInfo?: NullableStringFieldUpdateOperationsInput | string | null
     revisionOfId?: NullableStringFieldUpdateOperationsInput | string | null
     appliedPromotionIds?: NullableStringFieldUpdateOperationsInput | string | null
     channel?: StringFieldUpdateOperationsInput | string
@@ -199120,6 +199158,7 @@ export namespace Prisma {
     vatInvoiceNumber?: string | null
     vatIssuedAt?: Date | string | null
     vatStatus?: string
+    vatBuyerInfo?: string | null
     revisionOfId?: string | null
     appliedPromotionIds?: string | null
     channel?: string
@@ -199153,6 +199192,7 @@ export namespace Prisma {
     vatInvoiceNumber?: string | null
     vatIssuedAt?: Date | string | null
     vatStatus?: string
+    vatBuyerInfo?: string | null
     revisionOfId?: string | null
     appliedPromotionIds?: string | null
     channel?: string
@@ -199198,6 +199238,7 @@ export namespace Prisma {
     vatInvoiceNumber?: NullableStringFieldUpdateOperationsInput | string | null
     vatIssuedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     vatStatus?: StringFieldUpdateOperationsInput | string
+    vatBuyerInfo?: NullableStringFieldUpdateOperationsInput | string | null
     revisionOfId?: NullableStringFieldUpdateOperationsInput | string | null
     appliedPromotionIds?: NullableStringFieldUpdateOperationsInput | string | null
     channel?: StringFieldUpdateOperationsInput | string
@@ -199231,6 +199272,7 @@ export namespace Prisma {
     vatInvoiceNumber?: NullableStringFieldUpdateOperationsInput | string | null
     vatIssuedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     vatStatus?: StringFieldUpdateOperationsInput | string
+    vatBuyerInfo?: NullableStringFieldUpdateOperationsInput | string | null
     revisionOfId?: NullableStringFieldUpdateOperationsInput | string | null
     appliedPromotionIds?: NullableStringFieldUpdateOperationsInput | string | null
     channel?: StringFieldUpdateOperationsInput | string
@@ -206788,6 +206830,7 @@ export namespace Prisma {
     vatInvoiceNumber?: string | null
     vatIssuedAt?: Date | string | null
     vatStatus?: string
+    vatBuyerInfo?: string | null
     revisionOfId?: string | null
     appliedPromotionIds?: string | null
     channel?: string
@@ -206908,6 +206951,7 @@ export namespace Prisma {
     vatInvoiceNumber?: NullableStringFieldUpdateOperationsInput | string | null
     vatIssuedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     vatStatus?: StringFieldUpdateOperationsInput | string
+    vatBuyerInfo?: NullableStringFieldUpdateOperationsInput | string | null
     revisionOfId?: NullableStringFieldUpdateOperationsInput | string | null
     appliedPromotionIds?: NullableStringFieldUpdateOperationsInput | string | null
     channel?: StringFieldUpdateOperationsInput | string
@@ -206940,6 +206984,7 @@ export namespace Prisma {
     vatInvoiceNumber?: NullableStringFieldUpdateOperationsInput | string | null
     vatIssuedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     vatStatus?: StringFieldUpdateOperationsInput | string
+    vatBuyerInfo?: NullableStringFieldUpdateOperationsInput | string | null
     revisionOfId?: NullableStringFieldUpdateOperationsInput | string | null
     appliedPromotionIds?: NullableStringFieldUpdateOperationsInput | string | null
     channel?: StringFieldUpdateOperationsInput | string
@@ -206971,6 +207016,7 @@ export namespace Prisma {
     vatInvoiceNumber?: NullableStringFieldUpdateOperationsInput | string | null
     vatIssuedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     vatStatus?: StringFieldUpdateOperationsInput | string
+    vatBuyerInfo?: NullableStringFieldUpdateOperationsInput | string | null
     revisionOfId?: NullableStringFieldUpdateOperationsInput | string | null
     appliedPromotionIds?: NullableStringFieldUpdateOperationsInput | string | null
     channel?: StringFieldUpdateOperationsInput | string
@@ -208182,6 +208228,7 @@ export namespace Prisma {
     vatInvoiceNumber?: string | null
     vatIssuedAt?: Date | string | null
     vatStatus?: string
+    vatBuyerInfo?: string | null
     revisionOfId?: string | null
     appliedPromotionIds?: string | null
     channel?: string
@@ -208241,6 +208288,7 @@ export namespace Prisma {
     vatInvoiceNumber?: NullableStringFieldUpdateOperationsInput | string | null
     vatIssuedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     vatStatus?: StringFieldUpdateOperationsInput | string
+    vatBuyerInfo?: NullableStringFieldUpdateOperationsInput | string | null
     revisionOfId?: NullableStringFieldUpdateOperationsInput | string | null
     appliedPromotionIds?: NullableStringFieldUpdateOperationsInput | string | null
     channel?: StringFieldUpdateOperationsInput | string
@@ -208273,6 +208321,7 @@ export namespace Prisma {
     vatInvoiceNumber?: NullableStringFieldUpdateOperationsInput | string | null
     vatIssuedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     vatStatus?: StringFieldUpdateOperationsInput | string
+    vatBuyerInfo?: NullableStringFieldUpdateOperationsInput | string | null
     revisionOfId?: NullableStringFieldUpdateOperationsInput | string | null
     appliedPromotionIds?: NullableStringFieldUpdateOperationsInput | string | null
     channel?: StringFieldUpdateOperationsInput | string
@@ -208304,6 +208353,7 @@ export namespace Prisma {
     vatInvoiceNumber?: NullableStringFieldUpdateOperationsInput | string | null
     vatIssuedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     vatStatus?: StringFieldUpdateOperationsInput | string
+    vatBuyerInfo?: NullableStringFieldUpdateOperationsInput | string | null
     revisionOfId?: NullableStringFieldUpdateOperationsInput | string | null
     appliedPromotionIds?: NullableStringFieldUpdateOperationsInput | string | null
     channel?: StringFieldUpdateOperationsInput | string

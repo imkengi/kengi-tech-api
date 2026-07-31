@@ -339,6 +339,7 @@ exports.Prisma.TransactionScalarFieldEnum = {
   vatInvoiceNumber: 'vatInvoiceNumber',
   vatIssuedAt: 'vatIssuedAt',
   vatStatus: 'vatStatus',
+  vatBuyerInfo: 'vatBuyerInfo',
   revisionOfId: 'revisionOfId',
   appliedPromotionIds: 'appliedPromotionIds',
   channel: 'channel',

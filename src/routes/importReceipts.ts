@@ -99,25 +99,26 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         const whereNoStatus: any = { ...where }
         delete whereNoStatus.status
 
-        const [total, receipts, statusGroups, completedAgg, topSup] = await Promise.all([
-            prisma.importReceipt.count({ where }),
-            prisma.importReceipt.findMany({
-                where,
-                include: { items: true },
-                orderBy: { createdAt: 'desc' },
-                skip,
-                take: size,
-            }),
-            // Tổng hợp trên TOÀN BỘ filter (không chỉ trang) cho KPI/donut/top NCC
-            // Donut trạng thái phải bỏ chính filter status ra, nếu không chọn "Nháp"
-            // là 3 ô còn lại về 0 (nhìn như mất dữ liệu).
-            prisma.importReceipt.groupBy({ by: ['status'], where: whereNoStatus, _count: true }),
-            prisma.importReceipt.aggregate({ where: { ...where, status: 'completed' }, _sum: { totalCost: true }, _count: true }),
-            prisma.importReceipt.groupBy({
-                by: ['supplierName'], where: { ...where, status: 'completed' },
-                _sum: { totalCost: true }, orderBy: { _sum: { totalCost: 'desc' } }, take: 5,
-            }),
-        ])
+        // TUẦN TỰ, không Promise.all: 5 truy vấn song song = 1 lượt tải trang ôm 5
+        // kết nối trong pool per-store nhỏ (PRISMA_POOL_SIZE=8) → trùng cron là cạn
+        // pool, 500 hàng loạt (sự cố 29/07). Chậm thêm ~200ms, đổi lấy ổn định.
+        const total = await prisma.importReceipt.count({ where })
+        const receipts = await prisma.importReceipt.findMany({
+            where,
+            include: { items: true },
+            orderBy: { createdAt: 'desc' },
+            skip,
+            take: size,
+        })
+        // Tổng hợp trên TOÀN BỘ filter (không chỉ trang) cho KPI/donut/top NCC
+        // Donut trạng thái phải bỏ chính filter status ra, nếu không chọn "Nháp"
+        // là 3 ô còn lại về 0 (nhìn như mất dữ liệu).
+        const statusGroups = await prisma.importReceipt.groupBy({ by: ['status'], where: whereNoStatus, _count: true })
+        const completedAgg = await prisma.importReceipt.aggregate({ where: { ...where, status: 'completed' }, _sum: { totalCost: true }, _count: true })
+        const topSup = await prisma.importReceipt.groupBy({
+            by: ['supplierName'], where: { ...where, status: 'completed' },
+            _sum: { totalCost: true }, orderBy: { _sum: { totalCost: 'desc' } }, take: 5,
+        })
 
         const byStatus: Record<string, number> = Object.fromEntries(statusGroups.map((g: any) => [g.status, g._count]))
         const completedValue = completedAgg._sum.totalCost || 0

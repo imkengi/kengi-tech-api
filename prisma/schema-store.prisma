@@ -333,6 +333,7 @@ model Transaction {
   vatInvoiceNumber    String?
   vatIssuedAt         DateTime?
   vatStatus           String    @default("none")
+  vatBuyerInfo        String? // JSON {name,taxCode,address,email} khách yêu cầu xuất HĐ — có là cron tự xuất khi giao xong + gửi email
   revisionOfId        String? // If this is a revision, points to the original transaction
   appliedPromotionIds String? // JSON array of Promotion.id values applied at checkout
   channel             String    @default("direct") // direct | van | delivery | online
