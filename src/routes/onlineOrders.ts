@@ -2681,6 +2681,79 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
             } catch (refreshErr: any) {
                 console.error('[Sync] TikTok status refresh failed:', refreshErr.message)
             }
+        } else if (channel.platform === 'lazada') {
+            // TRƯỚC ĐÂY KHÔNG CÓ NHÁNH NÀY. Chỉ shopee và tiktok được làm mới trạng
+            // thái; đơn Lazada sau lần nhập đầu không bao giờ được hỏi lại. Kéo đơn
+            // theo khoảng ngày tạo nên đơn cũ nằm ngoài cửa sổ là đứng im vĩnh viễn.
+            try {
+                const NON_TERMINAL = [
+                    'pending', 'confirmed', 'processing', 'shipping', 'delivered',
+                    'unpaid', 'topack', 'toship', 'packed', 'repacked',
+                    'ready_to_ship', 'ready_to_ship_pending', 'shipped',
+                ]
+                const lzWhere = { channelId: channel.id, status: { in: NON_TERMINAL }, externalOrderId: { not: null } }
+                const LZ_CAP = 120
+                const lzTotal = await prisma.onlineOrder.count({ where: lzWhere })
+                // Xoay vòng theo lâu nhất chưa kiểm tra — cùng lý do như TikTok.
+                const lzPending = await prisma.onlineOrder.findMany({
+                    where: lzWhere,
+                    select: { id: true, externalOrderId: true, status: true, trackingNumber: true, shippingCarrier: true },
+                    orderBy: [{ syncedAt: { sort: 'asc', nulls: 'first' } }, { createdAt: 'asc' }],
+                    take: LZ_CAP,
+                })
+                if (lzPending.length > 0) {
+                    console.log(`[Sync] Refreshing status of ${lzPending.length} pending Lazada orders...`)
+                    let lzSkipped = 0
+                    const lzChecked: string[] = []
+                    for (const o of lzPending) {
+                        const eid = (o.externalOrderId || '').replace(/^(SPE-|TIK-|LAZ-)/i, '')
+                        if (!eid) continue
+                        try {
+                            const detail = await service.getOrderDetail(eid)
+                            if (!detail) { lzSkipped++; continue }
+                            lzChecked.push(o.id)
+                            if (canAdvance(o.status, detail.status)
+                                || (detail.trackingNumber && detail.trackingNumber !== o.trackingNumber)) {
+                                await prisma.onlineOrder.update({
+                                    where: { id: o.id },
+                                    data: {
+                                        status: detail.status,
+                                        externalStatus: detail.externalStatus,
+                                        paymentStatus: detail.paymentStatus,
+                                        trackingNumber: detail.trackingNumber || o.trackingNumber,
+                                        shippingCarrier: detail.shippingCarrier || o.shippingCarrier,
+                                        shippedAt: detail.shippedAt ? new Date(detail.shippedAt) : undefined,
+                                        deliveredAt: detail.deliveredAt ? new Date(detail.deliveredAt) : undefined,
+                                        syncedAt: new Date(),
+                                    },
+                                })
+                                statusRefreshed++
+                            }
+                        } catch (oneErr: any) {
+                            lzSkipped++
+                            console.error(`[Sync] Lazada status refresh error for ${eid}:`, oneErr?.message || oneErr)
+                        }
+                    }
+                    // Đóng dấu cả đơn không đổi, nếu không vòng xoay đứng tại chỗ
+                    if (lzChecked.length > 0) {
+                        await prisma.onlineOrder.updateMany({
+                            where: { id: { in: lzChecked } },
+                            data: { syncedAt: new Date() },
+                        })
+                    }
+                    console.log(`[Sync] Lazada status refreshed: ${statusRefreshed}/${lzPending.length} orders updated` +
+                        ` (tổng chưa kết thúc: ${lzTotal})${lzSkipped > 0 ? `, ${lzSkipped} đơn không hỏi được` : ''}`)
+                    if (lzSkipped >= lzPending.length) {
+                        errors.push(`Làm mới trạng thái Lazada: không hỏi được đơn nào (${lzSkipped}/${lzPending.length})`)
+                    }
+                    if (lzTotal > lzPending.length) {
+                        console.log(`[Sync] Lazada: còn ${lzTotal - lzPending.length} đơn chưa tới lượt — bấm Đồng bộ tiếp`)
+                    }
+                }
+            } catch (refreshErr: any) {
+                console.error('[Sync] Lazada status refresh failed:', refreshErr.message)
+                errors.push(`Làm mới trạng thái Lazada: ${refreshErr.message}`)
+            }
         }
 
         // ── PRODUCT SYNC ────────────────────────────────────────────────────────

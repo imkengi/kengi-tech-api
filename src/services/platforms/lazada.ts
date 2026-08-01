@@ -250,12 +250,27 @@ export class LazadaService extends PlatformService {
     protected mapStatus(s: string): string {
         const MAP: Record<string, string> = {
             pending: 'pending', unpaid: 'pending',
+            // topack/toship/repacked là trạng thái Lazada THẬT nhưng trước đây thiếu
+            // trong bảng → rơi vào nhánh mặc định 'pending' = "Chờ thanh toán".
+            topack: 'confirmed', toship: 'confirmed', repacked: 'confirmed',
             packed: 'confirmed', ready_to_ship: 'confirmed', ready_to_ship_pending: 'confirmed',
-            shipped: 'shipping', delivered: 'delivered',
-            completed: 'completed', returned: 'returned',
-            canceled: 'cancelled', failed: 'cancelled',
+            // THIẾU 'shipping' là lỗi nặng nhất: đơn ĐANG GIAO bị gắn nhãn "Chờ
+            // thanh toán". Lazada dùng cả `shipped` lẫn `shipping`.
+            shipped: 'shipping', shipping: 'shipping',
+            delivered: 'delivered',
+            completed: 'completed',
+            returned: 'returned', package_returned: 'returned',
+            canceled: 'cancelled', cancelled: 'cancelled', failed: 'cancelled',
         }
-        return MAP[s.toLowerCase()] || 'pending'
+        const key = s.toLowerCase().trim()
+        const mapped = MAP[key]
+        if (mapped) return mapped
+        // KHÔNG ép về 'pending' nữa. Trạng thái lạ (lost, damaged_by_3pl, hoặc mã
+        // mới Lazada thêm sau này) mà gắn "Chờ thanh toán" là bịa dữ liệu — đơn đã
+        // giao xong vẫn nằm ở tab chờ thu tiền. Giữ nguyên mã gốc để nhìn thấy được,
+        // giao diện đã có sẵn nhánh hiển thị thô khi không biết nhãn.
+        if (key) console.warn(`[Lazada] trạng thái chưa có trong bảng: "${key}" — giữ nguyên mã gốc`)
+        return key || 'pending'
     }
 
     protected mapPaymentStatus(s: string): string {
