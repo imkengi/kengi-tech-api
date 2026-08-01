@@ -3,6 +3,27 @@ import { getPlatformService, TikTokService, type PlatformOrder } from '../servic
 import { processNewOrders } from '../services/orderSync'
 import { syncChannelReturns } from '../services/returnSync'
 
+/**
+ * Diễn giải lỗi cho log. `err.message` rỗng là chuyện thường xuyên xảy ra: lỗi
+ * ném ra không phải Error, hoặc là AggregateError/undici bọc nguyên nhân thật
+ * trong `cause`. Khi đó dòng log chỉ còn "Error syncing X:" — không lần được gì,
+ * đúng cảnh gặp lúc 07:34–07:38 ngày 01/08.
+ */
+function fmtErr(err: any): string {
+    if (!err) return '(lỗi rỗng)'
+    if (typeof err === 'string') return err
+    const parts: string[] = []
+    if (err.message) parts.push(String(err.message))
+    if (err.name && !err.message) parts.push(String(err.name))
+    if (err.code) parts.push(`code=${err.code}`)
+    const cause = err.cause
+    if (cause) parts.push(`cause=${cause.message || cause.code || cause.name || String(cause)}`)
+    if (parts.length === 0) {
+        try { return JSON.stringify(err).slice(0, 300) } catch { return String(err) }
+    }
+    return parts.join(' | ')
+}
+
 const SYNC_INTERVAL    = 10 * 60 * 1000       // 10 phút
 const CLEANUP_INTERVAL = 24 * 60 * 60 * 1000  // 24 tiếng
 const CLEANUP_DAYS     = 18                    // Xóa đơn cũ hơn 18 ngày
@@ -289,7 +310,10 @@ async function runAutoSync() {
                             console.log(`[AutoSync] ${store.name}/${channel.name}: ${converted} orders → transactions`)
                         }
                     } catch (err: any) {
-                        console.error(`[AutoSync] Error syncing ${store.name}/${channel.name}:`, err.message)
+                        // err.message rỗng thì dòng log thành "Error syncing X:" cụt lủn,
+                        // không lần được gì. Rơi về name/code/chuỗi hoá + nguyên nhân gốc
+                        // (undici gói lỗi mạng thật vào `cause`).
+                        console.error(`[AutoSync] Error syncing ${store.name}/${channel.name}:`, fmtErr(err))
                     }
 
                     // ── VÁ DẦN NGÀY NHẬN HÀNG (Shopee) ──────────────────────
@@ -364,7 +388,7 @@ async function runAutoSync() {
             } catch (err: any) {
                 // Store might not have onlineChannel table yet — skip silently
                 if (!err.message?.includes('does not exist')) {
-                    console.error(`[AutoSync] Error processing store ${store.name}:`, err.message)
+                    console.error(`[AutoSync] Error processing store ${store.name}:`, fmtErr(err))
                 }
             }
         }
@@ -373,7 +397,7 @@ async function runAutoSync() {
             console.log(`[AutoSync] Completed: ${totalSynced} orders synced across ${stores.length} stores`)
         }
     } catch (err: any) {
-        console.error('[AutoSync] Fatal error:', err.message)
+        console.error("[AutoSync] Fatal error:", fmtErr(err))
     }
 }
 
@@ -511,7 +535,7 @@ async function runCleanup() {
                 }
             } catch (err: any) {
                 if (!err.message?.includes('does not exist')) {
-                    console.error(`[Cleanup] Error on store ${store.name}:`, err.message)
+                    console.error(`[Cleanup] Error on store ${store.name}:`, fmtErr(err))
                 }
             }
         }
@@ -520,7 +544,7 @@ async function runCleanup() {
             console.log(`[Cleanup] Hoàn thành: đã xóa ${totalDeleted} đơn cũ trên ${stores.length} cửa hàng`)
         }
     } catch (err: any) {
-        console.error('[Cleanup] Fatal error:', err.message)
+        console.error("[Cleanup] Fatal error:", fmtErr(err))
     }
 }
 
