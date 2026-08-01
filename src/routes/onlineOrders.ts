@@ -2549,12 +2549,16 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                 })
                 if (pendingOrders.length > 0) {
                     console.log(`[Sync] Refreshing status of ${pendingOrders.length} pending TikTok orders...`)
+                    // Đếm số đơn hỏi mà KHÔNG ra kết quả. Trước đây `if (!detail) continue`
+                    // im lặng nên "0/60 orders updated" trông y hệt "sàn không có gì mới".
+                    let tkSkipped = 0, tkDead = ''
                     for (const o of pendingOrders) {
+                        if (tkDead) break
                         const eid = (o.externalOrderId || '').replace(/^(SPE-|TIK-|LAZ-)/i, '')
                         if (!eid) continue
                         try {
                             const detail = await service.getOrderDetail(eid)
-                            if (!detail) continue
+                            if (!detail) { tkSkipped++; continue }
                             if (detail.status !== o.status || (detail.trackingNumber && detail.trackingNumber !== o.trackingNumber)) {
                                 await prisma.onlineOrder.update({
                                     where: { id: o.id },
@@ -2572,10 +2576,25 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                                 statusRefreshed++
                             }
                         } catch (oneErr: any) {
-                            console.error(`[Sync] TikTok status refresh error for ${eid}:`, oneErr.message)
+                            const msg = String(oneErr?.message || oneErr)
+                            // Lỗi cấp kênh (token/chữ ký) → hỏi nốt 59 đơn nữa cũng vậy
+                            if (/TikTok từ chối kênh/.test(msg)) {
+                                tkDead = msg
+                                console.error(`[Sync] ${channel.name}: dừng làm mới trạng thái TikTok —`, msg)
+                            } else {
+                                tkSkipped++
+                                console.error(`[Sync] TikTok status refresh error for ${eid}:`, msg)
+                            }
                         }
                     }
-                    console.log(`[Sync] TikTok status refreshed: ${statusRefreshed}/${pendingOrders.length} orders updated`)
+                    console.log(`[Sync] TikTok status refreshed: ${statusRefreshed}/${pendingOrders.length} orders updated` +
+                        `${tkSkipped > 0 ? `, ${tkSkipped} đơn không hỏi được` : ''}${tkDead ? ` — DỪNG: ${tkDead}` : ''}`)
+                    // Báo lên cho người bấm sync: "0/60" mà không kèm gì thì ai cũng
+                    // tưởng sàn không có gì mới, chứ không nghĩ là hỏi hụt sạch.
+                    if (tkDead) errors.push(`Làm mới trạng thái TikTok: ${tkDead}`)
+                    else if (tkSkipped >= pendingOrders.length && pendingOrders.length > 0) {
+                        errors.push(`Làm mới trạng thái TikTok: không hỏi được đơn nào (${tkSkipped}/${pendingOrders.length})`)
+                    }
                 }
             } catch (refreshErr: any) {
                 console.error('[Sync] TikTok status refresh failed:', refreshErr.message)

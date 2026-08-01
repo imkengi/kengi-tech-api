@@ -264,13 +264,31 @@ export class TikTokService extends PlatformService {
         }
     }
 
+    /** Lỗi CẤP KẾT NỐI của TikTok: token chết, chữ ký sai, thiếu quyền — hỏi tiếp
+     *  các đơn còn lại cũng hỏng y hệt. Ref: 105001/105002 token, 36004003 sign. */
+    static isChannelAuthError(code: number): boolean {
+        return [105001, 105002, 105004, 36004003, 36004004].includes(Number(code))
+    }
+
+    // TRƯỚC ĐÂY: `if (data.code !== 0) return null` — mọi lỗi TikTok biến thành null,
+    // mà chỗ gọi lại `if (!detail) continue`. Token chết thì cả 60 đơn bị bỏ qua im
+    // lặng và log ra "TikTok status refreshed: 0/60" — nhìn như sàn không có gì mới,
+    // trong khi thật ra không hỏi được câu nào. Đó là lý do đơn TikTok cũ nằm mãi.
     async getOrderDetail(externalOrderId: string): Promise<PlatformOrder | null> {
         const path = `/order/202309/orders`
         const { url, headers } = this.buildUrl(path, { ids: externalOrderId })
         const data = await this.httpGet(url, headers)
 
-        if (data.code !== 0) return null
+        if (data.code !== 0) {
+            const detail = `[${data.code}] ${data.message || 'không rõ'}`
+            if (TikTokService.isChannelAuthError(data.code)) {
+                throw new Error(`TikTok từ chối kênh: ${detail}`)
+            }
+            console.warn(`[TikTok] getOrderDetail ${externalOrderId}: ${detail}`)
+            return null
+        }
         const order = data.data?.orders?.[0]
+        if (!order) console.warn(`[TikTok] getOrderDetail ${externalOrderId}: sàn không trả đơn nào`)
         return order ? this.mapOrder(order) : null
     }
 
