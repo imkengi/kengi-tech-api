@@ -2235,6 +2235,33 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
         let imported = 0, updated = 0
         const errors: string[] = []
 
+        // ── Mã vận đơn Shopee ────────────────────────────────────────────────
+        // get_order_detail KHÔNG trả tracking_no (chỉ trả shipping_carrier, nên
+        // nhìn cột vận chuyển tưởng đủ) → phải hỏi logistics API cho từng đơn.
+        // BUG CŨ: chỗ này dựng ShopeeService MỚI từ `channel` — bản ghi đọc ở DB
+        // lúc đầu request. Nhưng token có thể vừa được làm mới ở trên, và refresh
+        // chỉ ghi vào DB + vào `service`, KHÔNG ghi ngược vào `channel`. Service
+        // mới vì thế cầm token đã chết: mọi call trả error_auth, bị getTrackingNumber
+        // nuốt thành null → đơn Shopee luôn trống mã trong khi sync vẫn báo ✅.
+        // Token Shopee sống 4 tiếng nên nhánh refresh chạy gần như mỗi lần sync.
+        // Dùng thẳng `service` để luôn đi bằng token đang sống.
+        const shopeeSvc = channel.platform === 'shopee' && service instanceof ShopeeService ? service : null
+        // Đã rời kho → sàn chắc chắn đã cấp mã. Kèm dạng chữ thường của bản map cũ.
+        const TRACKABLE_SYNC = ['shipping', 'delivered', 'completed', 'SHIPPED', 'COMPLETED', 'TO_CONFIRM_RECEIVE', 'PROCESSED']
+        // Lỗi cấp kênh (token/quyền/IP) thì hỏi tiếp hàng trăm đơn nữa cũng hỏng y
+        // hệt — ghi lại rồi thôi, và báo lên cho người bấm sync biết.
+        let trackingChannelDead = ''
+        const fetchTracking = async (o: PlatformOrder): Promise<string | null> => {
+            if (!shopeeSvc || trackingChannelDead || !TRACKABLE_SYNC.includes(o.status)) return null
+            try {
+                return (await shopeeSvc.getTrackingNumber(o.externalOrderId)) || null
+            } catch (e: any) {
+                trackingChannelDead = String(e?.message || e)
+                console.error(`[Sync] ${channel.name}: dừng lấy mã vận đơn —`, trackingChannelDead)
+                return null
+            }
+        }
+
         for (const order of allOrders) {
             try {
                 const existing = await prisma.onlineOrder.findFirst({
@@ -2245,17 +2272,7 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                     // Fetch tracking number from logistics API if missing
                     let trackingNo = order.trackingNumber || existing.trackingNumber
                     let carrier = order.shippingCarrier || existing.shippingCarrier
-                    if (!trackingNo && channel.platform === 'shopee' && ['shipping', 'delivered', 'completed', 'SHIPPED', 'COMPLETED', 'TO_CONFIRM_RECEIVE', 'PROCESSED'].includes(order.status)) {
-                        try {
-                            const shopeeService = new ShopeeService({
-                                apiKey: channel.apiKey || '', apiSecret: channel.apiSecret || '',
-                                accessToken: channel.accessToken || undefined,
-                                refreshToken: channel.refreshToken || undefined,
-                                shopId: channel.shopId || undefined,
-                            })
-                            trackingNo = await shopeeService.getTrackingNumber(order.externalOrderId) || null
-                        } catch { }
-                    }
+                    if (!trackingNo) trackingNo = await fetchTracking(order)
 
                     // Update existing order
                     await prisma.onlineOrder.update({
@@ -2276,17 +2293,7 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                 } else {
                     // Fetch tracking for new Shopee orders that already shipped
                     let newTrackingNo = order.trackingNumber || null
-                    if (!newTrackingNo && channel.platform === 'shopee' && ['shipping', 'delivered', 'completed', 'SHIPPED', 'COMPLETED', 'TO_CONFIRM_RECEIVE', 'PROCESSED'].includes(order.status)) {
-                        try {
-                            const shopeeService = new ShopeeService({
-                                apiKey: channel.apiKey || '', apiSecret: channel.apiSecret || '',
-                                accessToken: channel.accessToken || undefined,
-                                refreshToken: channel.refreshToken || undefined,
-                                shopId: channel.shopId || undefined,
-                            })
-                            newTrackingNo = await shopeeService.getTrackingNumber(order.externalOrderId) || null
-                        } catch { }
-                    }
+                    if (!newTrackingNo) newTrackingNo = await fetchTracking(order)
 
                     // Create new order
                     await prisma.onlineOrder.create({
@@ -2341,6 +2348,12 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
             } catch (e: any) {
                 errors.push(`Order ${order.orderNumber}: ${e.message}`)
             }
+        }
+
+        // Đơn vẫn về đủ (fetch dùng token sống) nhưng mã vận đơn thì không —
+        // phải nói ra, nếu không sync lại báo ✅ và không ai biết vì sao trống mã.
+        if (trackingChannelDead) {
+            errors.push(`Không lấy được mã vận đơn: ${trackingChannelDead}. Vui lòng kết nối lại gian hàng.`)
         }
 
         // Update channel stats

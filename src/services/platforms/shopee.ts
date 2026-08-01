@@ -322,32 +322,58 @@ export class ShopeeService extends PlatformService {
         }
     }
 
-    // Get tracking number via logistics API (more reliable than order detail)
+    /** Lỗi thuộc về KÊNH (token/quyền/IP) chứ không phải về một đơn cụ thể —
+     *  thử tiếp các đơn còn lại chỉ tổ đốt hạn mức, kết quả vẫn hỏng y hệt. */
+    static isChannelAuthError(err: string): boolean {
+        return /error_auth|invalid_access_token|access_token|error_permission|source_ip_undeclared/i.test(err)
+    }
+
+    // Get tracking number via logistics API.
+    // ĐÂY LÀ NGUỒN DUY NHẤT: get_order_detail của Shopee không trả tracking_no
+    // (trả shipping_carrier nên nhìn qua tưởng có đủ). Trước đây hàm nuốt sạch lỗi
+    // thành null → kênh hỏng token/IP báo "đơn không có mã" cho cả nghìn đơn mà
+    // sync vẫn ✅. Giờ: lỗi cấp kênh thì NÉM để người gọi dừng sớm và báo đúng
+    // bệnh; lỗi lẻ thì log rồi trả null; null "sạch" = sàn thật sự chưa cấp mã.
     async getTrackingNumber(orderSn: string): Promise<string | null> {
+        const url = this.apiUrl('/api/v2/logistics/get_tracking_number') + `&order_sn=${orderSn}`
+        let data: any
         try {
-            const path = '/api/v2/logistics/get_tracking_number'
-            const url = this.apiUrl(path) + `&order_sn=${orderSn}`
-            const data = await this.httpGet(url)
-            if (data.error) return null
-            return data.response?.tracking_number || data.response?.first_mile_tracking_number || null
-        } catch {
+            data = await this.httpGet(url)
+        } catch (e: any) {
+            const msg = String(e?.message || e)
+            if (ShopeeService.isChannelAuthError(msg)) throw e
+            console.warn(`[Shopee tracking] ${orderSn}: gọi API lỗi — ${msg}`)
             return null
         }
+        if (data?.error) {
+            const err = String(data.error)
+            const detail = data.message ? ` - ${data.message}` : ''
+            if (ShopeeService.isChannelAuthError(err)) {
+                throw new Error(`Shopee từ chối kênh: ${err}${detail}`)
+            }
+            // vd. đơn chưa tới bước được cấp mã → không phải lỗi, chỉ là chưa có
+            console.warn(`[Shopee tracking] ${orderSn}: ${err}${detail}`)
+            return null
+        }
+        return data.response?.tracking_number || data.response?.first_mile_tracking_number || null
     }
 
     // Get shipping info (logistics channel + tracking)
+    // Lấy mã MỘT lần ở ngoài: trước đây nó nằm trong try nên khi hỏng, nhánh catch
+    // gọi lại lần nữa — tốn 2 call cho cùng một đơn.
     async getShippingInfo(orderSn: string): Promise<{ trackingNumber: string | null; carrier: string | null }> {
+        const trackingNumber = await this.getTrackingNumber(orderSn)
         try {
             const path = '/api/v2/logistics/get_shipping_parameter'
             const url = this.apiUrl(path) + `&order_sn=${orderSn}`
             const data = await this.httpGet(url)
             const info = data.response?.info_needed || {}
             return {
-                trackingNumber: await this.getTrackingNumber(orderSn),
+                trackingNumber,
                 carrier: info.pickup?.address_list?.[0]?.logistics_channel_name || null,
             }
         } catch {
-            return { trackingNumber: await this.getTrackingNumber(orderSn), carrier: null }
+            return { trackingNumber, carrier: null }
         }
     }
 
