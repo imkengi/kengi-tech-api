@@ -2541,17 +2541,29 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                     'PARTIALLY_SHIPPING', 'IN_TRANSIT', 'DELIVERED',
                     'pending', 'confirmed', 'processing', 'shipping', 'delivered',
                 ]
+                // BUG CŨ: orderBy createdAt desc + take 60 → chỉ soi 60 đơn MỚI NHẤT.
+                // Đơn cũ hơn nằm ngoài cửa sổ đó KHÔNG BAO GIỜ được hỏi lại, bấm Sync
+                // bao nhiêu lần cũng vậy — đó là lý do đơn TikTok từ 18/07 nằm mãi ở
+                // "Đã xử lý". Log lúc nào cũng đúng 60 chính là dấu hiệu chạm trần.
+                // Nay xoay vòng theo LÂU NHẤT CHƯA KIỂM TRA để mọi đơn đều tới lượt.
+                const tkWhere = { channelId: channel.id, status: { in: NON_TERMINAL }, externalOrderId: { not: null } }
+                const TK_CAP = 120
+                const tkTotal = await prisma.onlineOrder.count({ where: tkWhere })
                 const pendingOrders = await prisma.onlineOrder.findMany({
-                    where: { channelId: channel.id, status: { in: NON_TERMINAL }, externalOrderId: { not: null } },
+                    where: tkWhere,
                     select: { id: true, externalOrderId: true, status: true, trackingNumber: true, shippingCarrier: true },
-                    orderBy: { createdAt: 'desc' },
-                    take: 60,
+                    orderBy: [{ syncedAt: { sort: 'asc', nulls: 'first' } }, { createdAt: 'asc' }],
+                    take: TK_CAP,
                 })
                 if (pendingOrders.length > 0) {
                     console.log(`[Sync] Refreshing status of ${pendingOrders.length} pending TikTok orders...`)
                     // Đếm số đơn hỏi mà KHÔNG ra kết quả. Trước đây `if (!detail) continue`
                     // im lặng nên "0/60 orders updated" trông y hệt "sàn không có gì mới".
                     let tkSkipped = 0, tkDead = ''
+                    // Đơn đã hỏi được — kể cả khi trạng thái KHÔNG đổi — phải đóng dấu
+                    // syncedAt, nếu không lần sync sau lại bốc đúng nhóm này (chúng vẫn
+                    // là "lâu nhất chưa kiểm tra") và vòng xoay đứng yên tại chỗ.
+                    const tkChecked: string[] = []
                     for (const o of pendingOrders) {
                         if (tkDead) break
                         const eid = (o.externalOrderId || '').replace(/^(SPE-|TIK-|LAZ-)/i, '')
@@ -2559,6 +2571,7 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                         try {
                             const detail = await service.getOrderDetail(eid)
                             if (!detail) { tkSkipped++; continue }
+                            tkChecked.push(o.id)
                             if (detail.status !== o.status || (detail.trackingNumber && detail.trackingNumber !== o.trackingNumber)) {
                                 await prisma.onlineOrder.update({
                                     where: { id: o.id },
@@ -2587,8 +2600,20 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                             }
                         }
                     }
+                    if (tkChecked.length > 0) {
+                        await prisma.onlineOrder.updateMany({
+                            where: { id: { in: tkChecked } },
+                            data: { syncedAt: new Date() },
+                        })
+                    }
                     console.log(`[Sync] TikTok status refreshed: ${statusRefreshed}/${pendingOrders.length} orders updated` +
+                        ` (tổng chưa kết thúc: ${tkTotal})` +
                         `${tkSkipped > 0 ? `, ${tkSkipped} đơn không hỏi được` : ''}${tkDead ? ` — DỪNG: ${tkDead}` : ''}`)
+                    // Nói thẳng khi còn đơn chưa tới lượt — im lặng cắt bớt thì màn hình
+                    // trông như "đã soi hết" trong khi thực ra mới soi một phần.
+                    if (tkTotal > pendingOrders.length) {
+                        console.log(`[Sync] TikTok: còn ${tkTotal - pendingOrders.length} đơn chưa tới lượt kiểm tra — bấm Đồng bộ tiếp để quét nốt`)
+                    }
                     // Báo lên cho người bấm sync: "0/60" mà không kèm gì thì ai cũng
                     // tưởng sàn không có gì mới, chứ không nghĩ là hỏi hụt sạch.
                     if (tkDead) errors.push(`Làm mới trạng thái TikTok: ${tkDead}`)
