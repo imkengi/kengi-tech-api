@@ -2474,9 +2474,20 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                         }
                         try {
                             const detailPath = '/api/v2/order/get_order_detail'
+                            // XIN order_status, KHÔNG xin tracking_no.
+                            // Cả khối này đọc d.order_status để quyết định cập nhật, nhưng
+                            // lại chỉ xin tracking_no + shipping_carrier. tracking_no KHÔNG
+                            // phải trường của get_order_detail (đó là lý do mã vận đơn xưa
+                            // nay luôn rỗng, phải lấy qua logistics API). Xin trường không
+                            // tồn tại thì Shopee trả error, order_list rỗng — và dòng dưới
+                            // nuốt luôn error → "Status refreshed: 0/323" lặp mãi, đơn đứng
+                            // im ở trạng thái lúc nhập lần đầu.
                             const detailUrl = (shopeeForRefresh as any).apiUrl(detailPath) +
-                                `&order_sn_list=${batch.join(',')}&response_optional_fields=tracking_no,shipping_carrier`
+                                `&order_sn_list=${batch.join(',')}&response_optional_fields=order_status,shipping_carrier`
                             const detailData: any = await (shopeeForRefresh as any).httpGet(detailUrl)
+                            if (detailData?.error) {
+                                throw new Error(`Shopee: ${detailData.error}${detailData.message ? ` - ${detailData.message}` : ''}`)
+                            }
                             const details: any[] = detailData.response?.order_list || []
 
                             for (const d of details) {
@@ -2486,7 +2497,9 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                                 const newStatus: string = (shopeeForRefresh as any).mapStatus(d.order_status)
                                 const newPayStatus: string = (shopeeForRefresh as any).mapPaymentStatus(d.order_status)
 
-                                const newTracking = d.tracking_no || snToOld[sn]?.trackingNumber || null
+                                // Giữ mã cũ: get_order_detail không cấp tracking_no, mã thật
+                                // do vòng lặp import lấy qua logistics/get_tracking_number.
+                                const newTracking = snToOld[sn]?.trackingNumber || null
                                 const newCarrier = d.shipping_carrier || snToOld[sn]?.shippingCarrier || null
                                 const oldStatus = snToOld[sn]?.status
 
