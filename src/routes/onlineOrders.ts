@@ -2715,8 +2715,12 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                         'ready_to_ship', 'ready_to_ship_pending', 'toship', 'shipped'])
                     const LZ_TRACK_CAP = 40
                     let lzTraceChecked = 0, lzByTracking = 0, lzVocabDumped = 0
+                    // Lỗi cấp kênh (token/IP whitelist) → 119 đơn còn lại cũng hỏng y hệt.
+                    // Dừng sớm như đã làm cho TikTok, thay vì đốt hạn mức rồi vẫn ra 0.
+                    let lzDead = ''
                     const lzChecked: string[] = []
                     for (const o of lzPending) {
+                        if (lzDead) break
                         const eid = (o.externalOrderId || '').replace(/^(SPE-|TIK-|LAZ-)/i, '')
                         if (!eid) continue
                         try {
@@ -2772,8 +2776,14 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                                 statusRefreshed++
                             }
                         } catch (oneErr: any) {
-                            lzSkipped++
-                            console.error(`[Sync] Lazada status refresh error for ${eid}:`, oneErr?.message || oneErr)
+                            const m = String(oneErr?.message || oneErr)
+                            if (/Lazada từ chối kênh/.test(m)) {
+                                lzDead = m
+                                console.error(`[Sync] ${channel.name}: dừng làm mới trạng thái Lazada —`, m)
+                            } else {
+                                lzSkipped++
+                                console.error(`[Sync] Lazada status refresh error for ${eid}:`, m)
+                            }
                         }
                     }
                     // Đóng dấu cả đơn không đổi, nếu không vòng xoay đứng tại chỗ
@@ -2788,7 +2798,8 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                         `${lzByTracking > 0 ? `, ${lzByTracking} đơn chốt ĐÃ GIAO theo vận đơn` : ''}` +
                         `${lzTraceChecked >= LZ_TRACK_CAP ? `, chạm trần ${LZ_TRACK_CAP} lượt tra vận đơn` : ''})` +
                         `${lzSkipped > 0 ? `, ${lzSkipped} đơn không hỏi được` : ''}`)
-                    if (lzSkipped >= lzPending.length) {
+                    if (lzDead) errors.push(`Làm mới trạng thái Lazada: ${lzDead}`)
+                    else if (lzSkipped >= lzPending.length) {
                         errors.push(`Làm mới trạng thái Lazada: không hỏi được đơn nào (${lzSkipped}/${lzPending.length})`)
                     }
                     if (lzTotal > lzPending.length) {
