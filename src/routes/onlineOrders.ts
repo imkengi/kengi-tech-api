@@ -2056,6 +2056,26 @@ router.post('/channels/:id/exchange-token', authMiddleware, async (req: AuthRequ
 })
 
 // POST /api/online-orders/channels/:id/sync
+// ── Thứ tự vòng đời đơn ──────────────────────────────────────────────────────
+// Ta suy ra "đã giao" từ VẬN ĐƠN, thường sớm hơn lúc sàn kịp đổi trạng thái ĐƠN.
+// Không có rào này thì lượt sync kế tiếp thấy sàn vẫn báo AWAITING_COLLECTION và
+// đẩy ngược đơn về lại — cứ thế giật qua giật lại mỗi lần đồng bộ.
+const LIFECYCLE_RANK: Record<string, number> = {
+    UNPAID: 0, ON_HOLD: 0, INVOICE_PENDING: 0, pending: 0,
+    READY_TO_SHIP: 1, AWAITING_SHIPMENT: 1, confirmed: 1,
+    PROCESSED: 2, AWAITING_COLLECTION: 2, processing: 2,
+    SHIPPED: 3, IN_TRANSIT: 3, PARTIALLY_SHIPPING: 3, RETRY_SHIP: 3, shipping: 3,
+    TO_CONFIRM_RECEIVE: 4, DELIVERED: 4, delivered: 4,
+    COMPLETED: 5, completed: 5,
+}
+// Huỷ / hoàn là phán quyết cuối của sàn — LUÔN được ghi đè, kể cả khi "lùi".
+const TERMINAL_BRANCH = new Set(['CANCELLED', 'cancelled', 'IN_CANCEL', 'cancelling', 'TO_RETURN', 'returned'])
+const canAdvance = (from: string, to: string): boolean => {
+    if (to === from) return false
+    if (TERMINAL_BRANCH.has(to)) return true
+    return (LIFECYCLE_RANK[to] ?? -1) >= (LIFECYCLE_RANK[from] ?? -1)
+}
+
 router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
@@ -2560,6 +2580,10 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                     // Đếm số đơn hỏi mà KHÔNG ra kết quả. Trước đây `if (!detail) continue`
                     // im lặng nên "0/60 orders updated" trông y hệt "sàn không có gì mới".
                     let tkSkipped = 0, tkDead = ''
+                    // Mỗi đơn cần thêm 1 call tracking → chặn trần để lượt sync không
+                    // phình ra gấp đôi và chạm giới hạn 300s của Cloud Run.
+                    const TK_TRACK_CAP = 40
+                    let tkTrackChecked = 0, tkByTracking = 0
                     // Đơn đã hỏi được — kể cả khi trạng thái KHÔNG đổi — phải đóng dấu
                     // syncedAt, nếu không lần sync sau lại bốc đúng nhóm này (chúng vẫn
                     // là "lâu nhất chưa kiểm tra") và vòng xoay đứng yên tại chỗ.
@@ -2572,7 +2596,38 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                             const detail = await service.getOrderDetail(eid)
                             if (!detail) { tkSkipped++; continue }
                             tkChecked.push(o.id)
-                            if (detail.status !== o.status || (detail.trackingNumber && detail.trackingNumber !== o.trackingNumber)) {
+                            // Sàn vẫn báo chưa xong → hỏi VẬN ĐƠN. Trạng thái đơn của
+                            // TikTok trễ hơn vận đơn, nên kiện giao xong rồi mà đơn còn
+                            // nằm ở "Chờ lấy hàng". Chỉ hỏi khi cần và trong hạn mức.
+                            const stillOpen = (LIFECYCLE_RANK[detail.status] ?? 0) < 4
+                            if (stillOpen && tkTrackChecked < TK_TRACK_CAP) {
+                                tkTrackChecked++
+                                try {
+                                    const deliveredAt = await service.getDeliveredTime(eid)
+                                    if (deliveredAt && canAdvance(o.status, 'DELIVERED')) {
+                                        await prisma.onlineOrder.update({
+                                            where: { id: o.id },
+                                            data: {
+                                                status: 'DELIVERED',
+                                                externalStatus: detail.externalStatus,
+                                                deliveredAt,
+                                                trackingNumber: detail.trackingNumber || o.trackingNumber,
+                                                shippingCarrier: detail.shippingCarrier || o.shippingCarrier,
+                                                syncedAt: new Date(),
+                                            },
+                                        })
+                                        statusRefreshed++
+                                        tkByTracking++
+                                        continue
+                                    }
+                                } catch (trkErr: any) {
+                                    const m = String(trkErr?.message || trkErr)
+                                    if (/TikTok từ chối kênh/.test(m)) { tkDead = m; break }
+                                    console.warn(`[Sync] TikTok tracking ${eid}: ${m}`)
+                                }
+                            }
+                            // Chỉ ghi khi TIẾN tới (hoặc là huỷ/hoàn) — xem canAdvance
+                            if (canAdvance(o.status, detail.status) || (detail.trackingNumber && detail.trackingNumber !== o.trackingNumber)) {
                                 await prisma.onlineOrder.update({
                                     where: { id: o.id },
                                     data: {
@@ -2607,7 +2662,9 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                         })
                     }
                     console.log(`[Sync] TikTok status refreshed: ${statusRefreshed}/${pendingOrders.length} orders updated` +
-                        ` (tổng chưa kết thúc: ${tkTotal})` +
+                        ` (tổng chưa kết thúc: ${tkTotal}` +
+                        `${tkByTracking > 0 ? `, ${tkByTracking} đơn chốt ĐÃ GIAO theo vận đơn` : ''}` +
+                        `${tkTrackChecked >= TK_TRACK_CAP ? `, chạm trần ${TK_TRACK_CAP} lượt tra vận đơn` : ''})` +
                         `${tkSkipped > 0 ? `, ${tkSkipped} đơn không hỏi được` : ''}${tkDead ? ` — DỪNG: ${tkDead}` : ''}`)
                     // Nói thẳng khi còn đơn chưa tới lượt — im lặng cắt bớt thì màn hình
                     // trông như "đã soi hết" trong khi thực ra mới soi một phần.

@@ -292,6 +292,43 @@ export class TikTokService extends PlatformService {
         return order ? this.mapOrder(order) : null
     }
 
+    /**
+     * NGÀY KHÁCH NHẬN HÀNG THẬT của đơn TikTok — đọc từ VẬN ĐƠN.
+     * GET /fulfillment/202309/orders/{order_id}/tracking — scope seller.logistics.
+     *
+     * Vì sao cần: trạng thái ĐƠN của TikTok trễ hơn vận đơn. Kiện đã giao xong
+     * nhưng order còn nằm ở AWAITING_COLLECTION/IN_TRANSIT — đó là đám đơn cũ
+     * đọng lại ở tab "Đã xử lý". Vận đơn mới là nguồn sát thực tế.
+     *
+     * Trả null khi CHƯA có sự kiện giao thành công — không đoán, vì mốc này dùng
+     * để chốt trạng thái đơn.
+     */
+    async getDeliveredTime(orderId: string): Promise<Date | null> {
+        const path = `/fulfillment/202309/orders/${encodeURIComponent(orderId)}/tracking`
+        const { url, headers } = this.buildUrl(path, {})
+        const data = await this.httpGet(url, headers)
+
+        if (data.code !== 0) {
+            const detail = `[${data.code}] ${data.message || 'không rõ'}`
+            if (TikTokService.isChannelAuthError(data.code)) throw new Error(`TikTok từ chối kênh: ${detail}`)
+            throw new Error(`TikTok tracking ${orderId}: ${detail}`)
+        }
+
+        // Doc chỉ ghi `data: object` chứ không mô tả sâu → nhận nhiều tên trường.
+        const events: any[] = data.data?.tracking || data.data?.tracking_list || data.data?.list || []
+        const isDone = (e: any) =>
+            /DELIVER(ED|Y_DONE)|DELIVERY_SUCCESS|SIGNED/i.test(String(e?.status ?? '')) ||
+            /delivered|giao thành công|đã giao/i.test(String(e?.description ?? ''))
+
+        const ms = events
+            .filter(isDone)
+            .map(e => Number(e.update_time_millis ?? (Number(e.update_time) || 0) * 1000))
+            .filter(n => n > 0)
+        if (ms.length === 0) return null
+        // Lần giao thành công ĐẦU TIÊN (mảng có thể xếp mới→cũ)
+        return new Date(Math.min(...ms))
+    }
+
     async testConnection(): Promise<{ success: boolean; shopName?: string; error?: string }> {
         const path = '/authorization/202309/shops'
         try {
