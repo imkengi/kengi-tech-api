@@ -372,6 +372,10 @@ export class LazadaService extends PlatformService {
             shipped: 'shipping', shipping: 'shipping',
             delivered: 'delivered',
             completed: 'completed',
+            // Đo từ log thật 01/08/2026: Lazada VN trả về 'confirmed' và
+            // 'shipped_back_success' — cả hai đều KHÔNG có trong tài liệu.
+            confirmed: 'confirmed',
+            shipped_back: 'returned', shipped_back_success: 'returned',
             returned: 'returned', package_returned: 'returned',
             canceled: 'cancelled', cancelled: 'cancelled', failed: 'cancelled',
         }

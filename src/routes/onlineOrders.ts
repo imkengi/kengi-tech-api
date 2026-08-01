@@ -2706,6 +2706,11 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                     let lzSkipped = 0
                     // GetOrderTrace chỉ dùng được "after ready to ship" (doc Lazada) →
                     // đơn còn ở pending/unpaid mà gọi là chắc chắn lỗi.
+                    // 'confirmed' PHẢI có trong đây. Log thật cho thấy Lazada VN trả
+                    // 'confirmed' cho phần lớn đơn (44/47 trong một lượt); thiếu nó thì
+                    // đám đó không bao giờ được tra vận đơn và nằm lì ở tab "Chờ xử lý".
+                    // Doc nói API chỉ dùng được sau ready_to_ship — nếu 'confirmed' chưa
+                    // tới mốc đó, Lazada sẽ trả lỗi và ta log lại, chứ không đoán mò.
                     const LZ_TRACEABLE = new Set(['confirmed', 'processing', 'shipping', 'packed', 'repacked',
                         'ready_to_ship', 'ready_to_ship_pending', 'toship', 'shipped'])
                     const LZ_TRACK_CAP = 40
