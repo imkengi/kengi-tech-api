@@ -31,25 +31,64 @@ export class ShopeeService extends PlatformService {
     // Tino (backend VẪN tự ký, proxy chỉ forward). Chưa cấu hình → gọi thẳng như
     // cũ (fallback an toàn, không đổi hành vi). Chỉ override cho Shopee, các sàn
     // khác (TikTok/Lazada) dùng httpGet/httpPost gốc ở base.
+    // Proxy Tino là hosting dùng chung: request lớn (batch 50 đơn, catalog sản
+    // phẩm) hay bị treo tới khi undici bỏ cuộc và ném "fetch failed" trần trụi —
+    // route sync bắt được thì đã 500, không bắt thì chạm trần 300s của Cloud Run.
+    // Nên phải TỰ đặt hạn giờ + thử lại, và nói rõ đã treo ở đâu.
+    private static readonly FETCH_TIMEOUT_MS = 30_000
+    private static readonly FETCH_RETRIES = 3
+
     private async shopeeFetch(url: string, method: 'GET' | 'POST', body?: any): Promise<Response> {
         const proxy = process.env.SHOPEE_FORWARD_PROXY
-        if (!proxy) {
-            return fetch(url, {
-                method,
-                headers: { 'Content-Type': 'application/json' },
-                body: method === 'POST' ? JSON.stringify(body ?? {}) : undefined,
-            })
+        const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+
+        const attempt = async (): Promise<Response> => {
+            const ac = new AbortController()
+            const timer = setTimeout(() => ac.abort(), ShopeeService.FETCH_TIMEOUT_MS)
+            try {
+                if (!proxy) {
+                    return await fetch(url, {
+                        method,
+                        headers: { 'Content-Type': 'application/json' },
+                        body: method === 'POST' ? JSON.stringify(body ?? {}) : undefined,
+                        signal: ac.signal,
+                    })
+                }
+                return await fetch(proxy, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        secret: process.env.SHOPEE_FORWARD_SECRET || '',
+                        url,
+                        method,
+                        body: method === 'POST' ? (body ?? {}) : undefined,
+                    }),
+                    signal: ac.signal,
+                })
+            } finally {
+                clearTimeout(timer)
+            }
         }
-        return fetch(proxy, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                secret: process.env.SHOPEE_FORWARD_SECRET || '',
-                url,
-                method,
-                body: method === 'POST' ? (body ?? {}) : undefined,
-            }),
-        })
+
+        let lastErr: any
+        for (let i = 0; i < ShopeeService.FETCH_RETRIES; i++) {
+            try {
+                return await attempt()
+            } catch (e: any) {
+                lastErr = e
+                const timedOut = e?.name === 'AbortError'
+                // Đợi tăng dần: proxy nghẽn vì bị bắn dồn thì thử lại ngay chỉ làm nghẽn thêm.
+                if (i < ShopeeService.FETCH_RETRIES - 1) {
+                    console.warn(`[Shopee fetch] lần ${i + 1} ${timedOut ? 'quá hạn' : 'lỗi'} (${e?.message}) — thử lại`)
+                    await sleep(1000 * 2 ** i)
+                }
+            }
+        }
+        const where = proxy ? `proxy ${proxy}` : 'Shopee trực tiếp'
+        throw new Error(
+            `Gọi ${where} thất bại sau ${ShopeeService.FETCH_RETRIES} lần` +
+            `${lastErr?.name === 'AbortError' ? ` (quá ${ShopeeService.FETCH_TIMEOUT_MS / 1000}s)` : ''}: ${lastErr?.message || lastErr}`
+        )
     }
 
     protected async httpGet(url: string): Promise<any> {

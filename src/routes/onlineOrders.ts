@@ -519,9 +519,40 @@ router.get('/products', authMiddleware, requirePermission('online_orders.view', 
             }),
         ])
 
+        // ── Phí sàn THẬT của đơn gần nhất ────────────────────────────────────
+        // commissionRate ở trên là tỉ lệ CẤU HÌNH (mặc định theo kênh) — mọi SP ra
+        // cùng một con số, không phản ánh sàn thu bao nhiêu. Lấy đơn gần nhất có
+        // chứa SKU này và tính tỉ lệ thực đã bị trừ. DISTINCT ON = mỗi SKU đúng 1
+        // dòng mới nhất, không phải kéo hết đơn về rồi lọc trong JS.
+        const skus = [...new Set(rawProducts.map(p => (p.sku || '').trim().toLowerCase()).filter(Boolean))]
+        const feeRows: any[] = skus.length > 0
+            ? await prisma.$queryRawUnsafe(`
+                SELECT DISTINCT ON (LOWER(TRIM(i.sku)))
+                       LOWER(TRIM(i.sku))            AS sku,
+                       COALESCE(o."platformFee",0)::float8     AS fee,
+                       COALESCE(o."platformFeeRate",0)::float8 AS rate,
+                       COALESCE(o.total,0)::float8            AS total,
+                       o."createdAt"                 AS "at"
+                FROM "OnlineOrderItem" i
+                JOIN "OnlineOrder" o ON o.id = i."onlineOrderId"
+                WHERE LOWER(TRIM(i.sku)) = ANY($1)
+                  AND COALESCE(o."platformFee",0) > 0
+                ORDER BY LOWER(TRIM(i.sku)), o."createdAt" DESC
+            `, skus)
+            : []
+        const feeMap = new Map<string, { rate: number; fee: number; at: Date }>()
+        for (const r of feeRows) {
+            // platformFeeRate có thể chưa được điền ở đơn cũ → suy ra từ phí/tổng tiền
+            const rate = r.rate > 0 ? r.rate : (r.total > 0 ? (r.fee / r.total) * 100 : 0)
+            if (rate > 0) feeMap.set(r.sku, { rate, fee: r.fee, at: r.at })
+        }
+
         const items = rawProducts.map(p => {
             const ch = channelMap.get(p.channelId)
-            const commissionRate = ch?.commissionRate ?? 6
+            const configRate = ch?.commissionRate ?? 6
+            // Có số thật thì dùng số thật; chưa bán được đơn nào thì rơi về cấu hình.
+            const actual = feeMap.get((p.sku || '').trim().toLowerCase())
+            const commissionRate = actual ? Math.round(actual.rate * 10) / 10 : configRate
             const platformFee = Math.round(p.price * commissionRate / 100)
             const costPrice = p.localProduct?.costPrice ?? undefined
             return {
@@ -542,6 +573,11 @@ router.get('/products', authMiddleware, requirePermission('online_orders.view', 
                 updatedAt: p.updatedAt?.toISOString() || null,
                 syncedAt: p.syncedAt?.toISOString() || null,
                 commissionRate,
+                // Để màn hình phân biệt "phí sàn thật của đơn gần nhất" với "tỉ lệ
+                // cấu hình đoán tạm" — hai thứ này lệch nhau thì người dùng phải biết.
+                commissionSource: (feeMap.has((p.sku || '').trim().toLowerCase()) ? 'last_order' : 'config') as 'last_order' | 'config',
+                commissionConfigRate: configRate,
+                commissionFromOrderAt: feeMap.get((p.sku || '').trim().toLowerCase())?.at?.toISOString() || null,
                 platformFee,
                 netPrice: p.price - platformFee,
                 costPrice: costPrice != null ? Number(costPrice) : undefined,
@@ -2415,16 +2451,27 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                     const orderSns = Object.keys(snToId)
                     console.log(`[Sync] Refreshing status of ${orderSns.length} pending orders...`)
 
-                    // Gọi Shopee get_order_detail theo batch 50
-                    const BATCH = 50
-                    const shopeeForRefresh = new ShopeeService({
+                    // Mẻ 20 chứ không phải 50: URL 50 mã đơn dài hơn 1KB, đi qua proxy
+                    // Tino thì mẻ nào cũng "fetch failed" — cả 7 mẻ hỏng sạch, đốt ~70s
+                    // của ngân sách 300s mà không cập nhật nổi một đơn.
+                    const BATCH = 20
+                    // Dùng lại `service` như vòng lặp import: dựng service mới từ `channel`
+                    // là cầm token đọc từ DB lúc đầu request, đã chết nếu vừa refresh.
+                    const shopeeForRefresh = shopeeSvc ?? new ShopeeService({
                         apiKey: channel.apiKey || '', apiSecret: channel.apiSecret || '',
                         accessToken: (channel as any).accessToken || '',
                         refreshToken: (channel as any).refreshToken || '',
                         shopId: channel.shopId || '',
                     })
+                    let batchFailed = 0
                     for (let i = 0; i < orderSns.length; i += BATCH) {
                         const batch = orderSns.slice(i, i + BATCH)
+                        // Mẻ nào cũng hỏng = proxy/kênh đang chết, chạy nốt 300 đơn nữa
+                        // chỉ để chạm trần 300s rồi trả 504. Bỏ sớm, báo lên errors.
+                        if (batchFailed >= 3) {
+                            errors.push(`Làm mới trạng thái: bỏ dở sau ${batchFailed} mẻ lỗi liên tiếp`)
+                            break
+                        }
                         try {
                             const detailPath = '/api/v2/order/get_order_detail'
                             const detailUrl = (shopeeForRefresh as any).apiUrl(detailPath) +
@@ -2459,7 +2506,9 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                                     statusRefreshed++
                                 }
                             }
+                            batchFailed = 0
                         } catch (batchErr: any) {
+                            batchFailed++
                             console.error(`[Sync] Batch status refresh error (i=${i}):`, batchErr.message)
                         }
                     }
@@ -3227,10 +3276,21 @@ router.get('/returns/list', authMiddleware, async (req: AuthRequest, res: Respon
             }
         }
 
+        // Mã vận đơn của CHÍNH chuyến hàng trả về: returnSync chỉ nhét nó vào chuỗi
+        // `notes` ("Tracking: XXX") vì bảng ReturnOrder không có cột riêng. Màn hình
+        // vì thế đang hiện order.trackingNumber — mã của đơn GỬI ĐI lúc đầu, không
+        // phải mã hàng khách trả về. Bóc ra đây để hai thứ đó không lẫn nhau.
+        const returnTrackingOf = (notes?: string | null) => {
+            const m = /(?:^|\n)\s*Tracking:\s*(.+?)\s*(?:\n|$)/i.exec(notes || '')
+            const v = m?.[1]?.trim()
+            return !v || v.toUpperCase() === 'N/A' ? null : v
+        }
+
         const enriched = returns.map(r => ({
             ...r,
             platform: codePlatform(r.code),
             returnSn: r.code.replace(/^RTN-(TT|SH)-/, '').replace(/^RTN-ON-?/, ''),
+            returnTracking: returnTrackingOf((r as any).notes),
             order: orderMap.get(r.originalInvoice) || null,
         }))
 
