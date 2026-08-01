@@ -335,6 +335,16 @@ export class LazadaService extends PlatformService {
 
         const addr = o.address_shipping || {}
 
+        // `statuses` của Lazada là MẢNG (trạng thái theo từng dòng hàng). Lấy phần
+        // tử đầu là võ đoán: đơn nhiều món có thể mỗi món một trạng thái, và [0]
+        // không đại diện cho cả đơn. Chưa đổi cách lấy vì chưa biết thực tế có xảy
+        // ra không — đo trước đã, thấy mới sửa. Chỉ log khi THẬT SỰ lệch nhau.
+        const allStatuses: string[] = Array.isArray(o.statuses) ? o.statuses.filter(Boolean) : []
+        if (new Set(allStatuses).size > 1) {
+            console.warn(`[Lazada] đơn ${o.order_id} có NHIỀU trạng thái khác nhau: ${JSON.stringify(allStatuses)}` +
+                ` — đang lấy "${allStatuses[0]}" làm trạng thái cả đơn`)
+        }
+
         return {
             externalOrderId: String(o.order_id),
             orderNumber: `LZD-${o.order_number || o.order_id}`,
