@@ -18,25 +18,60 @@ export class LazadaService extends PlatformService {
     // proxy chuyển tiếp câm với Shopee (IP tĩnh 103.130.216.108 đã khai trong
     // whitelist) — backend VẪN tự ký, proxy chỉ forward URL y nguyên.
     // Chưa cấu hình env → gọi thẳng như cũ (fallback an toàn).
+    // Cùng chuyện với Shopee: proxy Tino là hosting dùng chung, không đặt hạn giờ
+    // thì request treo tới khi undici bỏ cuộc và ném "fetch failed" trần trụi.
+    private static readonly FETCH_TIMEOUT_MS = 30_000
+    private static readonly FETCH_RETRIES = 3
+
     private async lazadaFetch(url: string, method: 'GET' | 'POST', body?: any): Promise<Response> {
         const proxy = process.env.PLATFORM_FORWARD_PROXY || process.env.SHOPEE_FORWARD_PROXY
-        if (!proxy) {
-            return fetch(url, {
-                method,
-                headers: { 'Content-Type': 'application/json' },
-                body: method === 'POST' ? JSON.stringify(body ?? {}) : undefined,
-            })
+        const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+
+        const attempt = async (): Promise<Response> => {
+            const ac = new AbortController()
+            const timer = setTimeout(() => ac.abort(), LazadaService.FETCH_TIMEOUT_MS)
+            try {
+                if (!proxy) {
+                    return await fetch(url, {
+                        method,
+                        headers: { 'Content-Type': 'application/json' },
+                        body: method === 'POST' ? JSON.stringify(body ?? {}) : undefined,
+                        signal: ac.signal,
+                    })
+                }
+                return await fetch(proxy, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        secret: process.env.PLATFORM_FORWARD_SECRET || process.env.SHOPEE_FORWARD_SECRET || '',
+                        url,
+                        method,
+                        body: method === 'POST' ? (body ?? {}) : undefined,
+                    }),
+                    signal: ac.signal,
+                })
+            } finally {
+                clearTimeout(timer)
+            }
         }
-        return fetch(proxy, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                secret: process.env.PLATFORM_FORWARD_SECRET || process.env.SHOPEE_FORWARD_SECRET || '',
-                url,
-                method,
-                body: method === 'POST' ? (body ?? {}) : undefined,
-            }),
-        })
+
+        let lastErr: any
+        for (let i = 0; i < LazadaService.FETCH_RETRIES; i++) {
+            try {
+                return await attempt()
+            } catch (e: any) {
+                lastErr = e
+                if (i < LazadaService.FETCH_RETRIES - 1) {
+                    console.warn(`[Lazada fetch] lần ${i + 1} lỗi (${e?.message}) — thử lại`)
+                    await sleep(1000 * 2 ** i)
+                }
+            }
+        }
+        const where = proxy ? `proxy ${proxy}` : 'Lazada trực tiếp'
+        throw new Error(
+            `Gọi ${where} thất bại sau ${LazadaService.FETCH_RETRIES} lần` +
+            `${lastErr?.name === 'AbortError' ? ` (quá ${LazadaService.FETCH_TIMEOUT_MS / 1000}s)` : ''}: ${lastErr?.message || lastErr}`
+        )
     }
 
     protected async httpGet(url: string): Promise<any> {
@@ -177,16 +212,94 @@ export class LazadaService extends PlatformService {
         }
     }
 
+    /** Lỗi thuộc về KÊNH (token/IP whitelist) chứ không phải về một đơn cụ thể. */
+    static isChannelAuthError(code: any, msg?: string): boolean {
+        const s = `${code ?? ''} ${msg ?? ''}`
+        return /IllegalAccessToken|InvalidToken|AccessTokenExpire|IP whitelist|MissingParameter:access_token/i.test(s)
+    }
+
+    // TRƯỚC ĐÂY: `if (code !== 0) return null` — nuốt sạch lỗi, chỗ gọi lại bỏ qua
+    // im lặng nên hỏng cả kênh vẫn báo "không có gì mới". Cùng kiểu lỗi đã sửa ở
+    // Shopee getTrackingNumber và TikTok getOrderDetail.
     async getOrderDetail(externalOrderId: string): Promise<PlatformOrder | null> {
         const url = this.buildUrl('/order/get', { order_id: externalOrderId })
         const data = await this.httpGet(url)
 
-        if (data.code !== '0' && data.code !== 0) return null
+        if (data.code !== '0' && data.code !== 0) {
+            const detail = `[${data.code}] ${data.message || data.error_message || 'không rõ'}`
+            if (LazadaService.isChannelAuthError(data.code, data.message)) {
+                throw new Error(`Lazada từ chối kênh: ${detail}`)
+            }
+            console.warn(`[Lazada] getOrderDetail ${externalOrderId}: ${detail}`)
+            return null
+        }
 
         const itemsUrl = this.buildUrl('/order/items/get', { order_id: externalOrderId })
         const itemsData = await this.httpGet(itemsUrl)
 
         return this.mapOrder(data.data, itemsData.data || [])
+    }
+
+    /**
+     * NGÀY KHÁCH NHẬN HÀNG THẬT của đơn Lazada — đọc từ VẬN ĐƠN.
+     * GET /logistic/order/trace (GetOrderTrace).
+     *
+     * Doc ghi rõ: "only available in the state after ready to ship" → đơn chưa
+     * đóng gói mà gọi là lỗi, chỗ gọi phải lọc trạng thái trước.
+     *
+     * Doc KHÔNG liệt kê bảng mã trạng thái (ví dụ duy nhất là status_code 1200 /
+     * detail_type "ready_to"). Nên nhận diện phải PHÒNG THỦ và phải LOẠI TRỪ mấy
+     * chuỗi dễ nhầm: "out for delivery" (đang đi giao) và "delivery failed" đều
+     * chứa chữ deliver — bắt nhầm là chốt "đã giao" cho đơn chưa tới tay khách,
+     * kéo theo hàng đợi xuất hoá đơn sai.
+     *
+     * `dumpVocab` = in ra từ vựng sự kiện thô để đối chiếu với dữ liệu thật rồi
+     * siết lại luật, thay vì đoán.
+     */
+    async getDeliveredTime(orderId: string, opts: { dumpVocab?: boolean } = {}): Promise<Date | null> {
+        const url = this.buildUrl('/logistic/order/trace', { order_id: orderId })
+        const data = await this.httpGet(url)
+
+        if (data.code !== '0' && data.code !== 0) {
+            const detail = `[${data.code}] ${data.message || data.error_message || 'không rõ'}`
+            if (LazadaService.isChannelAuthError(data.code, data.message)) {
+                throw new Error(`Lazada từ chối kênh: ${detail}`)
+            }
+            throw new Error(`Lazada trace ${orderId}: ${detail}`)
+        }
+
+        const modules: any[] = data.result?.module || data.data?.module || []
+        const events: any[] = []
+        for (const m of modules) {
+            for (const p of (m?.package_detail_info_list || [])) {
+                for (const e of (p?.logistic_detail_info_list || [])) events.push(e)
+            }
+        }
+        if (events.length === 0) return null
+
+        if (opts.dumpVocab) {
+            const vocab = events.map(e =>
+                `${e.status_code ?? '?'}|${e.detail_type ?? '?'}|${String(e.title ?? '').slice(0, 40)}`)
+            console.log(`[Lazada trace] ${orderId} từ vựng sự kiện: ${JSON.stringify([...new Set(vocab)])}`)
+        }
+
+        // Phải có dấu hiệu THÀNH CÔNG rõ ràng...
+        const SUCCESS = /\bdelivered\b|delivery[_\s-]?success|giao (hàng )?thành công|đã giao( hàng)? thành công/i
+        // ...và KHÔNG dính mấy chuỗi gây nhầm.
+        const NOT_YET = /fail|unsuccessful|attempt|out for delivery|đang giao|giao không thành công|returned|hoàn/i
+
+        const ms = events
+            .filter(e => {
+                const blob = `${e.status_code ?? ''} ${e.detail_type ?? ''} ${e.title ?? ''} ${e.description ?? ''}`
+                return SUCCESS.test(blob) && !NOT_YET.test(blob)
+            })
+            .map(e => Number(e.event_time ?? e.receive_time ?? 0))
+            .filter(n => n > 0)
+            // event_time là mili giây (ví dụ trong doc: 1625987646597)
+            .map(n => (n < 1e12 ? n * 1000 : n))
+
+        if (ms.length === 0) return null
+        return new Date(Math.min(...ms))   // lần giao thành công đầu tiên
     }
 
     async testConnection(): Promise<{ success: boolean; shopName?: string; error?: string }> {

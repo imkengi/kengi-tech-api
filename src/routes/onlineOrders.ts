@@ -1906,7 +1906,7 @@ router.post('/shipping-label-batch', authMiddleware, async (req: AuthRequest, re
 //  PLATFORM INTEGRATION — OAuth, Sync, Test Connection
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { getPlatformService, isSupportedPlatform, TikTokService, type PlatformOrder } from '../services/platforms'
+import { getPlatformService, isSupportedPlatform, TikTokService, LazadaService, type PlatformOrder } from '../services/platforms'
 import { processNewOrders, convertOnlineOrderToTransaction } from '../services/orderSync'
 import { syncChannelReturns } from '../services/returnSync'
 
@@ -2704,6 +2704,12 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                 if (lzPending.length > 0) {
                     console.log(`[Sync] Refreshing status of ${lzPending.length} pending Lazada orders...`)
                     let lzSkipped = 0
+                    // GetOrderTrace chỉ dùng được "after ready to ship" (doc Lazada) →
+                    // đơn còn ở pending/unpaid mà gọi là chắc chắn lỗi.
+                    const LZ_TRACEABLE = new Set(['confirmed', 'processing', 'shipping', 'packed', 'repacked',
+                        'ready_to_ship', 'ready_to_ship_pending', 'toship', 'shipped'])
+                    const LZ_TRACK_CAP = 40
+                    let lzTraceChecked = 0, lzByTracking = 0, lzVocabDumped = 0
                     const lzChecked: string[] = []
                     for (const o of lzPending) {
                         const eid = (o.externalOrderId || '').replace(/^(SPE-|TIK-|LAZ-)/i, '')
@@ -2712,6 +2718,37 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                             const detail = await service.getOrderDetail(eid)
                             if (!detail) { lzSkipped++; continue }
                             lzChecked.push(o.id)
+
+                            // Sàn báo chưa xong → hỏi VẬN ĐƠN, đúng khuôn đã làm cho TikTok
+                            const stillOpen = (LIFECYCLE_RANK[detail.status] ?? 0) < 4
+                            if (stillOpen && LZ_TRACEABLE.has(detail.status) && lzTraceChecked < LZ_TRACK_CAP
+                                && service instanceof LazadaService) {
+                                lzTraceChecked++
+                                try {
+                                    // Dump từ vựng 5 đơn đầu để đối chiếu mã thật của Lazada
+                                    const deliveredAt = await service.getDeliveredTime(eid, { dumpVocab: lzVocabDumped++ < 5 })
+                                    if (deliveredAt && canAdvance(o.status, 'delivered')) {
+                                        await prisma.onlineOrder.update({
+                                            where: { id: o.id },
+                                            data: {
+                                                status: 'delivered',
+                                                externalStatus: detail.externalStatus,
+                                                deliveredAt,
+                                                trackingNumber: detail.trackingNumber || o.trackingNumber,
+                                                shippingCarrier: detail.shippingCarrier || o.shippingCarrier,
+                                                syncedAt: new Date(),
+                                            },
+                                        })
+                                        statusRefreshed++
+                                        lzByTracking++
+                                        continue
+                                    }
+                                } catch (trkErr: any) {
+                                    const m = String(trkErr?.message || trkErr)
+                                    if (/Lazada từ chối kênh/.test(m)) throw trkErr
+                                    console.warn(`[Sync] Lazada trace ${eid}: ${m}`)
+                                }
+                            }
                             if (canAdvance(o.status, detail.status)
                                 || (detail.trackingNumber && detail.trackingNumber !== o.trackingNumber)) {
                                 await prisma.onlineOrder.update({
@@ -2742,7 +2779,10 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                         })
                     }
                     console.log(`[Sync] Lazada status refreshed: ${statusRefreshed}/${lzPending.length} orders updated` +
-                        ` (tổng chưa kết thúc: ${lzTotal})${lzSkipped > 0 ? `, ${lzSkipped} đơn không hỏi được` : ''}`)
+                        ` (tổng chưa kết thúc: ${lzTotal}` +
+                        `${lzByTracking > 0 ? `, ${lzByTracking} đơn chốt ĐÃ GIAO theo vận đơn` : ''}` +
+                        `${lzTraceChecked >= LZ_TRACK_CAP ? `, chạm trần ${LZ_TRACK_CAP} lượt tra vận đơn` : ''})` +
+                        `${lzSkipped > 0 ? `, ${lzSkipped} đơn không hỏi được` : ''}`)
                     if (lzSkipped >= lzPending.length) {
                         errors.push(`Làm mới trạng thái Lazada: không hỏi được đơn nào (${lzSkipped}/${lzPending.length})`)
                     }
