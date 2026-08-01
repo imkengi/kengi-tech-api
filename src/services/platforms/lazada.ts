@@ -1,4 +1,5 @@
 import { PlatformService, PlatformCredentials, PlatformOrder, PlatformOrderItem, PlatformProduct, TokenResponse } from './base'
+import { proxyCircuitOpen, proxyCircuitError, noteProxySuccess, noteProxyFailure } from '../../lib/proxyBreaker'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  LAZADA OPEN PLATFORM
@@ -26,6 +27,8 @@ export class LazadaService extends PlatformService {
     private async lazadaFetch(url: string, method: 'GET' | 'POST', body?: any): Promise<Response> {
         const proxy = process.env.PLATFORM_FORWARD_PROXY || process.env.SHOPEE_FORWARD_PROXY
         const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+        // Dùng CHUNG ngắt mạch với Shopee: cùng một proxy, chết là chết cả hai
+        if (proxy && proxyCircuitOpen()) throw proxyCircuitError()
 
         const attempt = async (): Promise<Response> => {
             const ac = new AbortController()
@@ -58,7 +61,9 @@ export class LazadaService extends PlatformService {
         let lastErr: any
         for (let i = 0; i < LazadaService.FETCH_RETRIES; i++) {
             try {
-                return await attempt()
+                const res = await attempt()
+                if (proxy) noteProxySuccess()
+                return res
             } catch (e: any) {
                 lastErr = e
                 if (i < LazadaService.FETCH_RETRIES - 1) {
@@ -67,6 +72,7 @@ export class LazadaService extends PlatformService {
                 }
             }
         }
+        if (proxy) noteProxyFailure()
         const where = proxy ? `proxy ${proxy}` : 'Lazada trực tiếp'
         throw new Error(
             `Gọi ${where} thất bại sau ${LazadaService.FETCH_RETRIES} lần` +

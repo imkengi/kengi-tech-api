@@ -1,4 +1,5 @@
 import { PlatformService, PlatformCredentials, PlatformOrder, PlatformOrderItem, PlatformProduct, TokenResponse } from './base'
+import { proxyCircuitOpen, proxyCircuitError, noteProxySuccess, noteProxyFailure } from '../../lib/proxyBreaker'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  SHOPEE OPEN PLATFORM v2.0
@@ -41,6 +42,8 @@ export class ShopeeService extends PlatformService {
     private async shopeeFetch(url: string, method: 'GET' | 'POST', body?: any): Promise<Response> {
         const proxy = process.env.SHOPEE_FORWARD_PROXY
         const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+        // Proxy đang chết → hỏng ngay, đừng để mỗi đơn treo 30s (xem proxyBreaker)
+        if (proxy && proxyCircuitOpen()) throw proxyCircuitError()
 
         const attempt = async (): Promise<Response> => {
             const ac = new AbortController()
@@ -73,7 +76,9 @@ export class ShopeeService extends PlatformService {
         let lastErr: any
         for (let i = 0; i < ShopeeService.FETCH_RETRIES; i++) {
             try {
-                return await attempt()
+                const res = await attempt()
+                if (proxy) noteProxySuccess()
+                return res
             } catch (e: any) {
                 lastErr = e
                 const timedOut = e?.name === 'AbortError'
@@ -84,6 +89,7 @@ export class ShopeeService extends PlatformService {
                 }
             }
         }
+        if (proxy) noteProxyFailure()
         const where = proxy ? `proxy ${proxy}` : 'Shopee trực tiếp'
         throw new Error(
             `Gọi ${where} thất bại sau ${ShopeeService.FETCH_RETRIES} lần` +
