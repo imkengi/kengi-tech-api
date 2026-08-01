@@ -303,7 +303,7 @@ export class TikTokService extends PlatformService {
      * Trả null khi CHƯA có sự kiện giao thành công — không đoán, vì mốc này dùng
      * để chốt trạng thái đơn.
      */
-    async getDeliveredTime(orderId: string): Promise<Date | null> {
+    async getDeliveredTime(orderId: string, opts: { dumpVocab?: boolean } = {}): Promise<Date | null> {
         const path = `/fulfillment/202309/orders/${encodeURIComponent(orderId)}/tracking`
         const { url, headers } = this.buildUrl(path, {})
         const data = await this.httpGet(url, headers)
@@ -316,9 +316,26 @@ export class TikTokService extends PlatformService {
 
         // Doc chỉ ghi `data: object` chứ không mô tả sâu → nhận nhiều tên trường.
         const events: any[] = data.data?.tracking || data.data?.tracking_list || data.data?.list || []
-        const isDone = (e: any) =>
-            /DELIVER(ED|Y_DONE)|DELIVERY_SUCCESS|SIGNED/i.test(String(e?.status ?? '')) ||
-            /delivered|giao thành công|đã giao/i.test(String(e?.description ?? ''))
+        if (events.length === 0) return null
+
+        if (opts.dumpVocab) {
+            const vocab = events.map(e => `${e.status ?? '?'}|${String(e.description ?? '').slice(0, 45)}`)
+            console.log(`[TikTok trace] ${orderId} từ vựng sự kiện: ${JSON.stringify([...new Set(vocab)])}`)
+        }
+
+        // BÀI HỌC TỪ LAZADA (01/08/2026): dò theo chuỗi mô tả là bẫy. Chuỗi
+        // "CHƯA giao thành công" CHỨA nguyên cụm "giao thành công" nhưng nghĩa
+        // ngược hẳn — bên Lazada đã chốt oan 40 đơn vì đúng lỗi này.
+        // Nên: ưu tiên mã trạng thái (chính xác), và nếu buộc phải đọc mô tả thì
+        // phải LOẠI TRỪ phủ định trước.
+        const NEGATION = /chưa|không|thất bại|fail|unsuccessful|attempt|hoãn|hoàn|out for delivery|đang giao/i
+        const isDone = (e: any) => {
+            const status = String(e?.status ?? '').trim()
+            if (/^(DELIVERED|DELIVERY_DONE|DELIVERY_SUCCESS|SIGNED)$/i.test(status)) return true
+            const desc = String(e?.description ?? '')
+            if (NEGATION.test(desc)) return false
+            return /\bdelivered\b|giao hàng thành công/i.test(desc)
+        }
 
         const ms = events
             .filter(isDone)

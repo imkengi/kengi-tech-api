@@ -2583,7 +2583,7 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                     // Mỗi đơn cần thêm 1 call tracking → chặn trần để lượt sync không
                     // phình ra gấp đôi và chạm giới hạn 300s của Cloud Run.
                     const TK_TRACK_CAP = 40
-                    let tkTrackChecked = 0, tkByTracking = 0
+                    let tkTrackChecked = 0, tkByTracking = 0, tkVocabDumped = 0
                     // Đơn đã hỏi được — kể cả khi trạng thái KHÔNG đổi — phải đóng dấu
                     // syncedAt, nếu không lần sync sau lại bốc đúng nhóm này (chúng vẫn
                     // là "lâu nhất chưa kiểm tra") và vòng xoay đứng yên tại chỗ.
@@ -2603,7 +2603,9 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                             if (stillOpen && tkTrackChecked < TK_TRACK_CAP) {
                                 tkTrackChecked++
                                 try {
-                                    const deliveredAt = await service.getDeliveredTime(eid)
+                                    // Dump từ vựng 5 đơn đầu — để siết luật theo mã thật
+                                    // của TikTok như đã làm với Lazada, thay vì đoán chữ.
+                                    const deliveredAt = await service.getDeliveredTime(eid, { dumpVocab: tkVocabDumped++ < 5 })
                                     if (deliveredAt && canAdvance(o.status, 'DELIVERED')) {
                                         await prisma.onlineOrder.update({
                                             where: { id: o.id },
