@@ -416,7 +416,7 @@ async function runAutoSync() {
 async function runFeeSync() {
     const batDau = Date.now()
     try {
-        const { ShopeeService } = await import('../services/platforms')
+        const { ShopeeService, TikTokService: TTS } = await import('../services/platforms')
         const { mapWithConcurrency } = await import('../lib/prisma')
         const stores = await registryPrisma.store.findMany({
             where: { status: 'active' }, select: { code: true, schema: true },
@@ -427,17 +427,21 @@ async function runFeeSync() {
             const sp = getStorePrisma(store.schema) as any
             let channels: any[] = []
             try {
+                // TRƯỚC ĐÂY lọc cứng platform:'shopee' → phí đơn TikTok KHÔNG BAO GIỜ
+                // được lấy tự động, bật scope seller.finance.info cũng vô ích. Route
+                // /sync-fees bấm tay thì có xử lý TikTok, còn cron thì không.
                 channels = await sp.onlineChannel.findMany({
-                    where: { platform: 'shopee', status: 'active', accessToken: { not: null } },
+                    where: { platform: { in: ['shopee', 'tiktok'] }, status: 'active', accessToken: { not: null } },
                 })
             } catch { continue }
             for (const ch of channels) {
                 if (Date.now() - batDau > FEE_DEADLINE_MS) break
-                const svc = new ShopeeService({
+                const creds = {
                     apiKey: ch.apiKey || '', apiSecret: ch.apiSecret || '',
                     accessToken: ch.accessToken || undefined, refreshToken: ch.refreshToken || undefined,
                     shopId: ch.shopId || undefined,
-                })
+                }
+                const svc: any = ch.platform === 'tiktok' ? new TTS(creds) : new ShopeeService(creds)
                 // Chỉ đơn 45 ngày gần nhất: đơn cũ hơn Shopee đã hết escrow, quét
                 // lại chỉ tốn lượt gọi mà không bao giờ ra dữ liệu.
                 const orders = await sp.onlineOrder.findMany({
@@ -452,25 +456,44 @@ async function runFeeSync() {
                     take: FEE_BATCH,
                 }).catch(() => [])
                 if (orders.length === 0) continue
-                let ok = 0
+                let ok = 0, loi = 0, chuaCo = 0
+                let loiDauTien = ''
                 await mapWithConcurrency(orders, async (o: any) => {
                     if (Date.now() - batDau > FEE_DEADLINE_MS) return
-                    const sn = (o.externalOrderId || '').replace(/^SPE-/i, '')
+                    const sn = (o.externalOrderId || '').replace(/^(SPE-|TIK-|LAZ-)/i, '')
                     if (!sn) return
                     try {
-                        const e = await (svc as any).getEscrowDetail(sn)
-                        if (e && (e.escrowAmount > 0 || e.totalFees > 0)) {
-                            await sp.onlineOrder.update({
-                                where: { id: o.id },
-                                data: { platformFee: e.totalFees, netRevenue: e.escrowAmount },
-                            })
-                            ok++
+                        let phi: number | null = null, thucNhan: number | null = null
+                        if (ch.platform === 'tiktok') {
+                            const s = await svc.getOrderSettlement(sn)
+                            if (s && (s.feeAmount > 0 || s.settlementAmount > 0)) {
+                                phi = s.feeAmount; thucNhan = s.settlementAmount
+                            }
+                        } else {
+                            const e = await svc.getEscrowDetail(sn)
+                            if (e && (e.escrowAmount > 0 || e.totalFees > 0)) {
+                                phi = e.totalFees; thucNhan = e.escrowAmount
+                            }
                         }
-                    } catch { /* đơn lỗi → vòng sau thử lại */ }
+                        if (phi === null) { chuaCo++; return }
+                        await sp.onlineOrder.update({
+                            where: { id: o.id },
+                            data: { platformFee: phi, netRevenue: thucNhan },
+                        })
+                        ok++
+                    } catch (e: any) {
+                        // `catch {}` trống trước đây giấu sạch lý do: sàn từ chối hay
+                        // sai chữ ký đều im như nhau, chỉ thấy con số thấp mà không
+                        // biết vì sao. Giữ lỗi ĐẦU TIÊN để báo một dòng, khỏi spam.
+                        loi++
+                        if (!loiDauTien) loiDauTien = fmtErr(e)
+                    }
                 }, 6)
-                if (ok > 0) {
+                if (ok > 0 || loi > 0) {
                     tongCapNhat += ok
-                    console.log(`[FeeSync] ${store.code}/${ch.name}: +${ok} đơn có phí thật (quét ${orders.length})`)
+                    console.log(`[FeeSync] ${store.code}/${ch.name} (${ch.platform}): +${ok} đơn có phí thật` +
+                        ` (quét ${orders.length}, sàn chưa có số: ${chuaCo}, lỗi: ${loi})` +
+                        `${loiDauTien ? ` — lỗi đầu: ${loiDauTien}` : ''}`)
                 }
             }
         }
