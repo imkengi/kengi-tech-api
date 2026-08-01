@@ -283,16 +283,24 @@ export class LazadaService extends PlatformService {
             console.log(`[Lazada trace] ${orderId} từ vựng sự kiện: ${JSON.stringify([...new Set(vocab)])}`)
         }
 
-        // Phải có dấu hiệu THÀNH CÔNG rõ ràng...
-        const SUCCESS = /\bdelivered\b|delivery[_\s-]?success|giao (hàng )?thành công|đã giao( hàng)? thành công/i
-        // ...và KHÔNG dính mấy chuỗi gây nhầm.
-        const NOT_YET = /fail|unsuccessful|attempt|out for delivery|đang giao|giao không thành công|returned|hoàn/i
+        // Bảng mã ĐO ĐƯỢC từ dữ liệu thật (01/08/2026, Lazada VN) — tài liệu không có:
+        //   1200   ready_to        Hoàn tất đóng gói
+        //   1210   shipped         Đã giao cho đơn vị vận chuyển
+        //   100013/100100/100102/100103  ship_info   các chặng trung chuyển
+        //   100018 ship_info       Đang giao hàng
+        //   100019 ship_info       Chưa giao thành công đến ...
+        //   100051 deliver_failed  Chưa nhận đơn hàng thành công
+        //   1400   delivered       Giao hàng thành công          ← DUY NHẤT nghĩa là đã giao
+        //
+        // Bản trước dò theo chuỗi mô tả và khớp nhầm "CHƯA giao thành công" — chuỗi
+        // đó CHỨA nguyên cụm "giao thành công" nhưng nghĩa ngược hẳn. Đã có đơn bị
+        // chốt ĐÃ GIAO oan vì luật đó. Nay so mã chính xác, không đoán chữ nữa.
+        const isDelivered = (e: any) =>
+            String(e?.status_code ?? '').trim() === '1400' ||
+            String(e?.detail_type ?? '').trim().toLowerCase() === 'delivered'
 
         const ms = events
-            .filter(e => {
-                const blob = `${e.status_code ?? ''} ${e.detail_type ?? ''} ${e.title ?? ''} ${e.description ?? ''}`
-                return SUCCESS.test(blob) && !NOT_YET.test(blob)
-            })
+            .filter(isDelivered)
             .map(e => Number(e.event_time ?? e.receive_time ?? 0))
             .filter(n => n > 0)
             // event_time là mili giây (ví dụ trong doc: 1625987646597)

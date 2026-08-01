@@ -2786,6 +2786,50 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                             }
                         }
                     }
+                    // ── SOÁT NGƯỢC ĐƠN ĐÃ CHỐT "ĐÃ GIAO" ────────────────────────
+                    // Bản nhận diện đầu dò theo chuỗi mô tả và khớp nhầm "CHƯA giao
+                    // thành công" (chuỗi này chứa nguyên cụm "giao thành công"), nên
+                    // một số đơn bị chốt ĐÃ GIAO oan. canAdvance chặn lùi nên chúng
+                    // KHÔNG tự sửa được — phải soát riêng bằng luật mã 1400 chính xác
+                    // và trả về đúng trạng thái sàn. Bỏ qua đơn đã đối soát xong
+                    // (COMPLETED) để không đụng vào sổ sách đã chốt.
+                    if (!lzDead && service instanceof LazadaService) {
+                        const suspect = await prisma.onlineOrder.findMany({
+                            where: { channelId: channel.id, status: 'delivered', externalOrderId: { not: null } },
+                            select: { id: true, orderNumber: true, externalOrderId: true, status: true },
+                            orderBy: { updatedAt: 'desc' },
+                            take: 60,
+                        })
+                        let reverted = 0
+                        for (const s of suspect) {
+                            const sid = (s.externalOrderId || '').replace(/^(SPE-|TIK-|LAZ-)/i, '')
+                            if (!sid) continue
+                            try {
+                                const realDelivered = await service.getDeliveredTime(sid)
+                                if (realDelivered) continue          // đúng là đã giao — giữ nguyên
+                                const truth = await service.getOrderDetail(sid)
+                                if (!truth || truth.status === 'delivered') continue
+                                await prisma.onlineOrder.update({
+                                    where: { id: s.id },
+                                    data: {
+                                        status: truth.status,        // CỐ Ý bỏ qua canAdvance: đây là sửa sai
+                                        externalStatus: truth.externalStatus,
+                                        deliveredAt: null,
+                                        syncedAt: new Date(),
+                                    },
+                                })
+                                reverted++
+                                console.warn(`[Sync] Lazada ${s.orderNumber}: chốt ĐÃ GIAO oan → trả về "${truth.status}"`)
+                            } catch (vErr: any) {
+                                console.warn(`[Sync] Lazada soát lại ${sid}: ${vErr?.message || vErr}`)
+                            }
+                        }
+                        if (reverted > 0) {
+                            console.log(`[Sync] Lazada: đã sửa ${reverted} đơn bị chốt ĐÃ GIAO oan`)
+                            errors.push(`Đã sửa ${reverted} đơn Lazada bị chốt "đã giao" nhầm (luật nhận diện cũ)`)
+                        }
+                    }
+
                     // Đóng dấu cả đơn không đổi, nếu không vòng xoay đứng tại chỗ
                     if (lzChecked.length > 0) {
                         await prisma.onlineOrder.updateMany({
