@@ -84,13 +84,30 @@ export async function syncChannelReturns(prisma: any, channel: any, since: Date,
                         data: { createdAt: pCreated },
                     }).catch(() => { })
                 }
+                // Mã vận đơn TRẢ thường được sàn cấp SAU khi phiếu đã tạo (khách mở
+                // yêu cầu → notes ghi "Tracking: N/A" → vài ngày sau mới có mã khi
+                // khách gửi hàng). Nhánh update cũ chỉ nối thêm dòng trạng thái,
+                // không bao giờ làm tươi dòng Tracking → phiếu giữ N/A vĩnh viễn và
+                // màn hình "Vận đơn trả" trống. Gặp lại phiếu mà sàn đã có mã thì
+                // thay dòng Tracking cũ (parser /returns/list đọc dòng đầu tiên).
+                // Gom MỌI thay đổi notes vào một biến rồi ghi MỘT lần — hai lệnh
+                // update nối tiếp cùng đọc existingReturn.notes (bản cũ trong bộ
+                // nhớ) sẽ ghi đè lẫn nhau.
+                let notesMoi = existingReturn.notes || ''
+                let notesDoi = false
+                if (ret.trackingNumber && !notesMoi.includes(`Tracking: ${ret.trackingNumber}`)) {
+                    notesMoi = /Tracking:\s*[^\n]*/.test(notesMoi)
+                        ? notesMoi.replace(/Tracking:\s*[^\n]*/, `Tracking: ${ret.trackingNumber}`)
+                        : `${notesMoi}\nTracking: ${ret.trackingNumber}`
+                    notesDoi = true
+                }
                 // Update status if changed
                 if (existingReturn.status !== ret.status) {
                     await prisma.returnOrder.update({
                         where: { id: existingReturn.id },
                         data: {
                             status: ret.status,
-                            notes: `${existingReturn.notes || ''}\n[${platformLabel}] ${nativeStatus} (${new Date().toLocaleString('vi-VN')})`,
+                            notes: `${notesMoi}\n[${platformLabel}] ${nativeStatus} (${new Date().toLocaleString('vi-VN')})`,
                             ...(ret.status === 'refunded' ? { refundedAt: new Date(), processedAt: new Date() } : {}),
                         },
                     })
@@ -113,6 +130,13 @@ export async function syncChannelReturns(prisma: any, channel: any, since: Date,
                             }
                         }
                     }
+                } else if (notesDoi) {
+                    // Trạng thái không đổi nhưng sàn vừa cấp mã vận đơn trả → vẫn
+                    // phải ghi, không thì dòng Tracking mới chỉ nằm trong bộ nhớ.
+                    await prisma.returnOrder.update({
+                        where: { id: existingReturn.id },
+                        data: { notes: notesMoi },
+                    }).catch(() => { })
                 }
                 skipped++
                 continue
