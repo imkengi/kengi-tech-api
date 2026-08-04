@@ -89,7 +89,9 @@ export async function runDriveVideoCleanup(): Promise<void> {
     try {
         stores = await registryPrisma.store.findMany({ where: { status: 'active' }, select: { name: true, schema: true } }) as any[]
     } catch (e: any) {
-        console.error('[VideoCleanup] không đọc được danh sách store:', e?.message || e)
+        // message rỗng khi DB chưa sẵn sàng lúc boot — in cả code/cause cho lần được
+        console.error('[VideoCleanup] không đọc được danh sách store:',
+            e?.message || e?.code || e?.cause?.message || String(e))
         return
     }
 
@@ -104,7 +106,7 @@ export async function runDriveVideoCleanup(): Promise<void> {
             const folders = [folderId, ...await listSubfolderIds(drive, folderId)]
             const keep = await openDisputeTrackings(sp)
 
-            let trashed = 0, kept = 0, failed = 0
+            let trashed = 0, kept = 0, failed = 0, consecPerm = 0
             let firstErr = ''
             outer:
             for (const fid of folders) {
@@ -123,9 +125,19 @@ export async function runDriveVideoCleanup(): Promise<void> {
                         try {
                             await drive.files.update({ fileId: f.id!, requestBody: { trashed: true } })
                             trashed++
+                            consecPerm = 0
                         } catch (e: any) {
                             failed++
                             if (!firstErr) firstErr = e?.message || String(e)
+                            // GIỚI HẠN CỦA DRIVE (đo 04/08: 300/300 lỗi): file trong
+                            // My Drive chỉ CHỦ SỞ HỮU xoá được — SA có Editor vẫn bị
+                            // "insufficient permissions". Gặp chuỗi lỗi quyền là dừng
+                            // sớm, đường xoá thật là Apps Script chạy trong tài khoản
+                            // chủ shop (scripts/drive-video-cleanup.gs).
+                            if (/insufficient permissions|does not have sufficient/i.test(firstErr) && ++consecPerm >= 5) {
+                                console.warn(`[VideoCleanup] ${store.name}: file thuộc sở hữu người dùng — SA không xoá được (giới hạn My Drive). Dùng scripts/drive-video-cleanup.gs chạy trong tài khoản chủ shop.`)
+                                break outer
+                            }
                         }
                     }
                     pageToken = resp.data.nextPageToken || undefined
