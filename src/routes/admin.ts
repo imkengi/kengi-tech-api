@@ -2900,6 +2900,34 @@ router.get('/returns-raw', async (req: Request, res: Response) => {
                     row.donTho = await (svc as any).debugOrderRaw(String(req.query.orderRaw))
                         .catch((e: any) => `LOI ${e?.message}`)
                 }
+                // ?returnSn=<mã phiếu> — hỏi thẳng get_return_detail 1 phiếu. Dùng khi
+                // Seller Center CÓ phiếu mà get_return_list KHÔNG trả (nghi Shopee đổi
+                // hệ case giữa 07/2026): detail ra dữ liệu = list lọc sót; detail báo
+                // not-found = case nằm ngoài tầm API v2 cũ.
+                if (req.query.returnSn && ch.platform === 'shopee') {
+                    row.phieuTho = await (svc as any).getReturnDetail(String(req.query.returnSn))
+                        .catch((e: any) => `LOI ${e?.message}`)
+                }
+                // MÂU THUẪN ĐƠN↔PHIẾU: đơn (sync vẫn chạy) nhảy TO_RETURN sau mốc nghi
+                // câm mà list phiếu không có case tương ứng → chứng minh sàn còn case
+                // mà API returns không nhả, không cần chờ đối chiếu tay Seller Center.
+                if (String(req.query.viTri || '') === '1' && ch.platform === 'shopee') {
+                    const cutoff = new Date(String(req.query.cutoff || '2026-07-13') + 'T00:00:00+07:00')
+                    const donTra = await sp.onlineOrder.findMany({
+                        where: {
+                            channelId: ch.id,
+                            status: { in: ['TO_RETURN', 'returned', 'IN_CANCEL', 'cancelling'] },
+                            updatedAt: { gte: cutoff },
+                        },
+                        select: { orderNumber: true, externalOrderId: true, status: true, updatedAt: true },
+                        orderBy: { updatedAt: 'desc' },
+                        take: 30,
+                    }).catch(() => [])
+                    const sanCo = new Set((row.tatCa || []).map((x: string) => x.split('|')[0]))
+                    row.donTraThieuPhieu = donTra
+                        .filter((o: any) => !sanCo.has((o.externalOrderId || '').replace(/^SPE-/i, '')))
+                        .map((o: any) => `${o.orderNumber}|${o.status}|${new Date(o.updatedAt).toISOString().slice(0, 10)}`)
+                }
             } catch (e: any) { row.loi = e?.message }
             out.push(row)
         }
