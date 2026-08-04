@@ -592,8 +592,16 @@ export function startAutoSync() {
 
     // Cleanup chạy lần đầu sau 5 phút (tránh xung đột lúc khởi động), sau đó mỗi 24h
     setTimeout(() => {
-        runCleanup()
-        cleanupTimer = setInterval(runCleanup, CLEANUP_INTERVAL)
+        // Dọn đơn cũ + dọn video đóng hàng quá 45 ngày chung nhịp 24h.
+        // Video cleanup tự bọc lỗi từng store — không cho nó làm đổ cleanup đơn.
+        const runAllCleanup = () => {
+            runCleanup()
+            import('./driveVideoCleanup')
+                .then(m => m.runDriveVideoCleanup())
+                .catch(e => console.error('[VideoCleanup] không chạy được:', e?.message || e))
+        }
+        runAllCleanup()
+        cleanupTimer = setInterval(runAllCleanup, CLEANUP_INTERVAL)
     }, 5 * 60_000)
 
     // Đối soát phí sàn: lần đầu sau 10 phút, sau đó mỗi 6 tiếng
