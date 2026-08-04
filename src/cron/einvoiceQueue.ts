@@ -41,11 +41,17 @@ async function runQueueForStore(schema: string, storeName: string): Promise<void
     //    giao xong + gửi email — kể cả khi auto toàn cục tắt.
     const lookback = new Date(Date.now() - LOOKBACK_DAYS * 86400_000)
     const anchor = extra.autoIssueSince ? new Date(extra.autoIssueSince) : null
-    const autoFrom = extra.autoIssueOnDelivery && anchor
-        ? (anchor > lookback ? anchor : lookback)
-        : null // auto tắt / bật kiểu cũ không mốc neo → không xả lô toàn cục
+    // Mốc đủ điều kiện = ĐÚNG lúc bật nút, KHÔNG kẹp về 7 ngày. Bản cũ kẹp
+    // `anchor > lookback ? anchor : lookback` rồi quét từ lookback → đơn giao
+    // xong muộn (trạng thái sàn về trễ), đêm cron lỗi, hay chạm trần vài đêm
+    // liền là rơi khỏi cửa sổ 7 ngày VĨNH VIỄN — sót hoá đơn với CQT.
+    const autoFrom = extra.autoIssueOnDelivery && anchor ? anchor : null
 
-    const all = await findInvoiceQueue(prisma, { from: lookback, limit: PER_STORE_CAP })
+    // Quét từ mốc bật nút để gom hết tồn đọng. findInvoiceQueue xếp ASC (cũ
+    // trước) + trần 300/đêm nên tồn nhiều thì rút dần qua các đêm, không phình
+    // một lượt chạy. Auto tắt thì giữ cửa sổ 7 ngày cho nhánh khách-yêu-cầu-HĐ.
+    const sweepFrom = autoFrom && autoFrom < lookback ? autoFrom : lookback
+    const all = await findInvoiceQueue(prisma, { from: sweepFrom, limit: PER_STORE_CAP })
     // Đơn có trả hàng/hoàn tiền KHÔNG auto-xuất — chỉ hiện trên UI để xử lý tay
     const clean = all.filter((r: any) => !r.hasReturn)
     const returns = all.length - clean.length
