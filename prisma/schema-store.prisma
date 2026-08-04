@@ -533,6 +533,12 @@ model PurchaseOrder {
   notes        String?
   expectedDate DateTime?
   receivedDate DateTime?
+  // Cổng kiểm hàng (2026-08-04): hàng về ở trạng thái "checking", NGƯỜI KIỂM
+  // chấp nhận phiếu (→received) thì kho mới được ghi. Ai duyệt phải để lại tên.
+  checkedBy     String?
+  checkedByName String?
+  checkedAt     DateTime?
+  rejectReason  String?
   branchId     String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -2627,6 +2633,87 @@ model FbAutoReplyLog {
   @@unique([pageId, commentId]) // mỗi comment chỉ auto-reply 1 lần
   @@index([pageId])
   @@index([createdAt])
+}
+
+// ─── AI MARKETING: hồ sơ thương hiệu · kế hoạch nội dung · bài nháp chờ duyệt ──
+// Agent tự lên content được là nhờ 3 bảng này. Không có hồ sơ thương hiệu thì
+// agent chỉ viết được văn mẫu chung chung — đó là khác biệt giữa "có AI" và
+// "AI viết đúng giọng shop".
+
+model FbBrandProfile {
+  id           String   @id @default(cuid())
+  // MỘT hồ sơ cho cả cửa hàng (shop = thương hiệu). Code luôn dùng findFirst,
+  // không tạo bản thứ hai — xem layHoSo() ở mcpMarketingTools.
+  brandName    String   @default("")
+  industry     String   @default("") // ngành hàng, VD "mỹ phẩm", "phụ tùng xe máy"
+  audience     String   @default("") // chân dung khách: tuổi, giới, khu vực, nỗi đau
+  toneOfVoice  String   @default("than-thien") // than-thien | chuyen-nghiep | hai-huoc | sang-trong
+  usp          String   @default("") // vì sao khách chọn shop này chứ không phải shop khác
+  cta          String   @default("") // lời kêu gọi mặc định, VD "Inbox để được tư vấn"
+  hashtags     String   @default("[]") // JSON array hashtag thương hiệu
+  bannedWords  String   @default("[]") // JSON array từ CẤM dùng (cam kết sai luật quảng cáo, từ nhạy cảm)
+  emojiLevel   String   @default("vua") // khong | vua | nhieu
+  postsPerWeek Int      @default(5)
+  bestHours    String   @default("[]") // JSON array giờ VN đăng tốt, VD [8,12,20]
+  pillarMix    String   @default("{}") // JSON {pillar: số bài/tuần} — giữ tỉ lệ 80/20 giá trị/bán hàng
+  notes        String   @default("") // dặn dò thêm cho agent
+  createdBy    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model FbContentPlan {
+  id        String   @id @default(cuid())
+  pageId    String // FbPage.pageId — KHÔNG đặt FK để kế hoạch còn nguyên khi gỡ/nối lại page
+  title     String
+  goal      String   @default("") // mục tiêu chiến dịch, VD "đẩy hàng tồn mùa hè"
+  fromDate  DateTime
+  toDate    DateTime
+  status    String   @default("active") // active | done | cancelled
+  summary   String? // báo cáo agent viết lại sau khi lên xong kế hoạch
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  drafts FbContentDraft[]
+
+  @@index([pageId, status])
+}
+
+model FbContentDraft {
+  id     String  @id @default(cuid())
+  planId String?
+  pageId String // FbPage.pageId
+  pillar String  @default("khac") // trụ nội dung: giao-duc | san-pham | khuyen-mai | chung-thuc | hau-truong | tuong-tac | xu-huong | khac
+
+  title      String  @default("") // nhãn nội bộ cho chủ shop lướt nhanh
+  hook       String  @default("") // 1-2 dòng đầu — thứ quyết định khách có bấm "xem thêm" không
+  message    String // TOÀN VĂN bài đăng (đã gồm hook + hashtag khi đăng)
+  hashtags   String  @default("[]") // JSON array
+  mediaIdea  String  @default("") // gợi ý ảnh/video cho chủ shop tự chụp nếu không dùng ảnh sẵn
+  mediaUrls  String  @default("[]") // JSON array URL ảnh THẬT (lấy từ ProductImage)
+  linkUrl    String?
+  productIds String  @default("[]") // JSON array Product.id được nhắc tới — để truy vết bài nào đẩy hàng nào
+
+  suggestedAt DateTime? // giờ đăng agent đề xuất (giờ VN đã quy đổi sang UTC)
+
+  // pending = CHỜ DUYỆT (agent chỉ được dừng ở đây), scheduled = đã duyệt và lên
+  // lịch thật trên Facebook, published = đã đăng, rejected = chủ shop bỏ.
+  status          String  @default("pending")
+  rejectReason    String?
+  scheduledPostId String? // FbScheduledPost.id sau khi duyệt
+  fbPostId        String?
+
+  source    String   @default("ai") // ai | manual
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  plan FbContentPlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
+
+  @@index([pageId, status])
+  @@index([suggestedAt])
+  @@index([planId])
 }
 
 // ─── CRM: công việc, cơ hội bán hàng, nhật ký (kengi.vn/crm) ──────────────────

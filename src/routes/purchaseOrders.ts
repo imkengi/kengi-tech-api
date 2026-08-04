@@ -7,11 +7,20 @@ import { adjustSellableStock } from '../lib/warehouseHelper'
 const router = Router()
 
 // Allowed status transitions
+// CỔNG KIỂM HÀNG (2026-08-04): hàng về KHÔNG ghi kho ngay. Phiếu vào "checking"
+// (chờ kiểm), người kiểm CHẤP NHẬN (→received) thì kho mới được ghi; sai lệch
+// thì TỪ CHỐI (→rejected, kèm lý do) — không đụng tồn kho. Đường tắt
+// shipping→received cũ đã bỏ: mọi phiếu đều phải qua tay người kiểm.
 const STATUS_TRANSITIONS: Record<string, string[]> = {
     draft: ['pending', 'cancelled'],
     pending: ['confirmed', 'cancelled'],
-    confirmed: ['shipping', 'cancelled'],
-    shipping: ['received', 'cancelled'],
+    // Hàng có thể về khi phiếu còn ở "confirmed" (NCC giao không báo) → cho vào
+    // thẳng bàn kiểm, khỏi phải bấm shipping giả.
+    confirmed: ['shipping', 'checking', 'cancelled'],
+    shipping: ['checking', 'cancelled'],
+    checking: ['received', 'rejected'],
+    // NCC xử lý xong (giao bù, đổi hàng...) → kiểm lại; hoặc huỷ hẳn phiếu
+    rejected: ['checking', 'cancelled'],
     received: [],
     cancelled: [],
 }
@@ -181,7 +190,7 @@ router.put('/:id/status', authMiddleware, requireRole('admin', 'manager'), async
     try {
         const prisma = req.storePrisma!
         const { status } = req.body
-        const validStatuses = ['draft', 'pending', 'confirmed', 'shipping', 'received', 'cancelled']
+        const validStatuses = ['draft', 'pending', 'confirmed', 'shipping', 'checking', 'received', 'rejected', 'cancelled']
         if (!validStatuses.includes(status)) return res.status(400).json({ success: false, error: 'Invalid status' })
 
         // Fetch full PO before update (to check previous status and items)
@@ -227,7 +236,24 @@ router.put('/:id/status', authMiddleware, requireRole('admin', 'manager'), async
         }
 
         const data: any = { status }
-        if (status === 'received') data.receivedDate = new Date()
+        if (status === 'received') {
+            data.receivedDate = new Date()
+            // Ghi dấu NGƯỜI KIỂM chấp nhận phiếu — received giờ chỉ tới được từ
+            // "checking" nên đây chính là chữ ký của người duyệt ghi kho.
+            data.checkedBy = req.user?.userId || null
+            data.checkedByName = (req.user as any)?.email || (req.user as any)?.name || null
+            data.checkedAt = new Date()
+        }
+        if (status === 'rejected') {
+            data.rejectReason = String(req.body?.rejectReason || '').trim() || 'Không đạt kiểm hàng'
+            data.checkedBy = req.user?.userId || null
+            data.checkedByName = (req.user as any)?.email || (req.user as any)?.name || null
+            data.checkedAt = new Date()
+        }
+        // Kiểm lại sau từ chối → xoá dấu vết lượt kiểm cũ
+        if (status === 'checking') {
+            data.rejectReason = null
+        }
 
         // ─── Atomic update: PO status + all stock increments in one transaction ─
         const po: any = await prisma.$transaction(async (tx: any) => {

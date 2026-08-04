@@ -1182,6 +1182,12 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 for (const c of ['vatAmount', 'shippingFee', 'importTax', 'otherFees', 'totalDiscount']) {
                     await (sp as any).$executeRawUnsafe(`ALTER TABLE "ImportReceipt" ADD COLUMN IF NOT EXISTS "${c}" DOUBLE PRECISION NOT NULL DEFAULT 0`)
                 }
+                // Cổng kiểm hàng cho đặt hàng nhập (2026-08-04): chấp nhận phiếu
+                // mới ghi kho — lưu ai kiểm, lúc nào, và lý do khi từ chối.
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "PurchaseOrder" ADD COLUMN IF NOT EXISTS "checkedBy" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "PurchaseOrder" ADD COLUMN IF NOT EXISTS "checkedByName" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "PurchaseOrder" ADD COLUMN IF NOT EXISTS "checkedAt" TIMESTAMP(3)`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "PurchaseOrder" ADD COLUMN IF NOT EXISTS "rejectReason" TEXT`)
 
                 // Ánh xạ mã hàng trên SÀN → sản phẩm kho (2026-07-23) — đơn TikTok/
                 // Shopee dùng SKU riêng không khớp kho khiến đơn không lên phiếu.
