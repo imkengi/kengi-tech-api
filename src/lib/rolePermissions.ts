@@ -30,6 +30,7 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
         // driver lại có online_orders.view), thuế, lương, xe, giám sát sales.
         'online_orders', 'online_products', 'online_chat',
         'tax', 'payroll', 'vehicles', 'employees_sales',
+        'mailbox',
     ],
     cashier: [
         'dashboard.view',

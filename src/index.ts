@@ -11,6 +11,7 @@ import brandRoutes from './routes/brands'
 import customerRoutes from './routes/customers'
 import customerGroupRoutes from './routes/customerGroups'
 import crmEmailRoutes from './routes/crmEmail'
+import mailboxRoutes from './routes/mailbox'
 import crmRoutes from './routes/crm'
 import inventoryRoutes from './routes/inventory'
 import transactionRoutes from './routes/transactions'
@@ -216,6 +217,7 @@ app.use('/api/brands', brandRoutes)
 app.use('/api/customers', customerRoutes)
 app.use('/api/customer-groups', customerGroupRoutes)
 app.use('/api/crm', crmEmailRoutes)
+app.use('/api/mailbox', mailboxRoutes)
 app.use('/api/crm', crmRoutes)
 app.use('/api/inventory', inventoryRoutes)
 app.use('/api/transactions', transactionRoutes)
@@ -308,6 +310,9 @@ import chatRoutes from './routes/chat'
 app.use('/api/online-orders/chat', chatRoutes)
 app.use('/api/fanpage', fanpageRoutes)
 app.use('/api/ai-jobs', aiJobRoutes) // Tro ly AI tu dong theo lich
+
+import marketingRoutes from './routes/marketing'
+app.use('/api/marketing', marketingRoutes) // AI len content fanpage (hang doi cho duyet)
 
 // ─── Health check ───────────────────────────────────────────────────────────
 app.get('/api/health', async (_req, res) => {
