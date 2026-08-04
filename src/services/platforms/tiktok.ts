@@ -321,6 +321,11 @@ export class TikTokService extends PlatformService {
         if (opts.dumpVocab) {
             const vocab = events.map(e => `${e.status ?? '?'}|${String(e.description ?? '').slice(0, 45)}`)
             console.log(`[TikTok trace] ${orderId} từ vựng sự kiện: ${JSON.stringify([...new Set(vocab)])}`)
+            // Dump 03/08 cho thấy `status` toàn '?' → tên trường tôi đoán không tồn
+            // tại. In tên trường THẬT + một sự kiện mẫu để chốt schema (nhất là
+            // trường thời gian — đoán sai là mốc giao bị lọc mất im lặng vì ms=0).
+            console.log(`[TikTok trace] ${orderId} khoá sự kiện: ${JSON.stringify(Object.keys(events[0] || {}))}` +
+                ` | mẫu: ${JSON.stringify(events[0] || {}).slice(0, 220)}`)
         }
 
         // BÀI HỌC TỪ LAZADA (01/08/2026): dò theo chuỗi mô tả là bẫy. Chuỗi
@@ -328,7 +333,11 @@ export class TikTokService extends PlatformService {
         // ngược hẳn — bên Lazada đã chốt oan 40 đơn vì đúng lỗi này.
         // Nên: ưu tiên mã trạng thái (chính xác), và nếu buộc phải đọc mô tả thì
         // phải LOẠI TRỪ phủ định trước.
-        const NEGATION = /chưa|không|thất bại|fail|unsuccessful|attempt|hoãn|hoàn|out for delivery|đang giao/i
+        // Đo từ dữ liệu thật 03/08: sự kiện TikTok chỉ có description TIẾNG ANH
+        // (trường status không tồn tại), và có chuỗi "Sorry, this package can NO
+        // LONGER be delivered" — chứa 'delivered' nhưng nghĩa là HẾT ĐƯỜNG GIAO.
+        // Bộ loại trừ cũ chỉ chặn phủ định tiếng Việt + fail/attempt nên lọt.
+        const NEGATION = /chưa|không|thất bại|fail|unsuccessful|attempt|hoãn|hoàn|out for delivery|đang giao|no longer|cannot|can'?t|unable|undeliver|return/i
         const isDone = (e: any) => {
             const status = String(e?.status ?? '').trim()
             if (/^(DELIVERED|DELIVERY_DONE|DELIVERY_SUCCESS|SIGNED)$/i.test(status)) return true
@@ -339,7 +348,13 @@ export class TikTokService extends PlatformService {
 
         const ms = events
             .filter(isDone)
-            .map(e => Number(e.update_time_millis ?? (Number(e.update_time) || 0) * 1000))
+            .map(e => {
+                // Nhận nhiều tên trường thời gian — schema thật đang chờ dump khoá
+                // xác nhận; giây (10 chữ số) thì quy về mili giây.
+                const raw = Number(e.update_time_millis ?? e.create_time_millis ?? e.event_time
+                    ?? e.update_time ?? e.create_time ?? 0)
+                return raw > 0 && raw < 1e12 ? raw * 1000 : raw
+            })
             .filter(n => n > 0)
         if (ms.length === 0) return null
         // Lần giao thành công ĐẦU TIÊN (mảng có thể xếp mới→cũ)
