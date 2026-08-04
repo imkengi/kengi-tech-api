@@ -792,37 +792,38 @@ export class ShopeeService extends PlatformService {
         // Shopee CHẶN cửa sổ > 15 ngày ("The period between create_time_from and
         // created_time_of must not more than 15 days") → tự chia khung 14 ngày,
         // nếu không mọi lần kéo quá 15 ngày đều ném lỗi và KHÔNG lấy được phiếu nào.
-        const WINDOW = 14 * 86400
-        // Trần 20 trang/khung (1000 phiếu). Trần cũ 10 trang VỨT LẶNG LẼ phần dư —
-        // "sync đủ" và "sync thiếu" nhìn y hệt nhau. Giờ chạm trần là gắn cờ để
-        // returnSync báo lên kết quả cho người bấm thấy.
-        const PAGE_CAP = 20
+        // ── KHÔNG DÙNG LỌC THỜI GIAN CỦA SHOPEE NỮA ─────────────────────────────
+        // Đo trực tiếp 04/08/2026 trên 2 gian thật:
+        //   • lọc create_time/update_time: MÙ với mọi case sau ~12/07 (0 phiếu,
+        //     không lỗi); gian Kengi Tools mù TOÀN PHẦN (lọc = 0, thực có 44)
+        //   • get_return_detail vẫn thấy từng case → dữ liệu còn đó, filter hỏng
+        //   • bản KHÔNG lọc: sống, xếp CŨ→MỚI, có cờ `more`
+        // → quét không lọc rồi tự cắt theo khoảng ở client. Tốn trang hơn (phải
+        // lướt qua case cũ) nhưng ĐỦ; trần 40 trang (2000 case) + cờ truncated.
+        const PAGE_CAP = 40
         const all: any[] = []
         let truncated = false
-        for (let winFrom = timeFrom; winFrom < now; winFrom += WINDOW) {
-            const winTo = Math.min(winFrom + WINDOW, now)
-            // Phân trang đầy đủ (trước đây cố định page 1 → quá 50 yêu cầu là sót)
-            for (let pageNo = 1; pageNo <= PAGE_CAP; pageNo++) {
-                const url = this.apiUrl(path) +
-                    `&create_time_from=${winFrom}&create_time_to=${winTo}` +
-                    `&page_no=${pageNo}&page_size=50`
+        for (let pageNo = 1; pageNo <= PAGE_CAP; pageNo++) {
+            const url = this.apiUrl(path) + `&page_no=${pageNo}&page_size=50`
+            const data = await this.httpGet(url)
+            if (data.error) throw new Error(`Shopee getReturns: ${data.error} - ${data.message}`)
 
-                const data = await this.httpGet(url)
-                if (data.error) throw new Error(`Shopee getReturns: ${data.error} - ${data.message}`)
-
-                const returnList = data.response?.return || []
-                all.push(...returnList)
-                if (returnList.length < 50 || !data.response?.more) break
-                if (pageNo === PAGE_CAP) {
-                    truncated = true
-                    console.warn(`[Shopee Returns] CHẠM TRẦN ${PAGE_CAP} trang ở khung ` +
-                        `${new Date(winFrom * 1000).toISOString().slice(0, 10)}→${new Date(winTo * 1000).toISOString().slice(0, 10)} — có phiếu bị sót, kéo lại khoảng hẹp hơn`)
-                }
+            const returnList = data.response?.return || []
+            all.push(...returnList)
+            if (returnList.length < 50 || !data.response?.more) break
+            if (pageNo === PAGE_CAP) {
+                truncated = true
+                console.warn(`[Shopee Returns] CHẠM TRẦN ${PAGE_CAP} trang quét không-lọc (${all.length} case) — gian quá nhiều lịch sử, phần MỚI NHẤT bị thiếu vì sàn xếp cũ→mới`)
             }
         }
-        // Cùng 1 phiếu có thể rơi vào 2 khung (biên) → khử trùng theo return_sn
+        // Cắt theo khoảng Ở CLIENT (điều mà filter của sàn lẽ ra phải làm)
+        const inRange = all.filter((r: any) => {
+            const t = Number(r.create_time || 0)
+            return t >= timeFrom && t <= now
+        })
+        // Khử trùng theo return_sn (phòng trang lặp khi sàn ghi thêm giữa 2 lượt gọi)
         const seen = new Set<string>()
-        const out: any = all
+        const out: any = inRange
             .filter((r: any) => {
                 const k = String(r.return_sn || r.returnsn || '')
                 if (!k || seen.has(k)) return false
