@@ -262,6 +262,34 @@ async function matchVideosWithOrders(
         }
     }
 
+    // Match theo MÃ VẬN ĐƠN TRẢ — video mở hàng hoàn đặt tên theo mã của CHUYẾN
+    // HÀNG KHÁCH GỬI VỀ, không phải mã gửi đi, nên dò OnlineOrder.trackingNumber
+    // không bao giờ trúng → cả đám nằm ở "Chưa match". Mã trả nằm trong notes
+    // phiếu trả dạng "Tracking: X" (returnSync ghi/làm tươi).
+    const returnByTracking = new Map<string, MatchedReturn>()
+    if (allCandidates.size > 0) {
+        try {
+            const rets = await prisma.returnOrder.findMany({
+                where: { notes: { contains: 'Tracking: ' } },
+                select: {
+                    id: true, code: true, customerName: true,
+                    status: true, refundAmount: true, reason: true, notes: true,
+                },
+                orderBy: { createdAt: 'desc' },
+                take: 1500,
+            })
+            for (const r of rets) {
+                const m = /(?:^|\n)\s*Tracking:\s*(.+?)\s*(?:\n|$)/i.exec(r.notes || '')
+                const trk = m?.[1]?.trim().toUpperCase()
+                if (!trk || trk === 'N/A' || returnByTracking.has(trk)) continue
+                returnByTracking.set(trk, {
+                    id: r.id, code: r.code, customerName: r.customerName,
+                    status: r.status, refundAmount: r.refundAmount, reason: r.reason,
+                })
+            }
+        } catch { /* ReturnOrder table might not exist */ }
+    }
+
     // Match hoàn hàng — dò ReturnOrder theo originalInvoice (= orderNumber) của đơn đã match
     const returnByOrderNumber = new Map<string, MatchedReturn>()
     const matchedOrderNumbers = [...orderByTracking.values()].map(o => o.orderNumber)
@@ -290,8 +318,13 @@ async function matchVideosWithOrders(
         const cands = candidatesByFile.get(f.id) || []
         const hit = cands.find(c => orderByTracking.has(c))
         const matchedOrder = hit ? orderByTracking.get(hit)! : null
-        const matchedReturn = matchedOrder ? returnByOrderNumber.get(matchedOrder.orderNumber) || null : null
-        const videoType = isReturnVideo(f.name) ? 'return' as const : 'packing' as const
+        // Không trúng đơn gửi đi → thử mã vận đơn TRẢ. Trúng thì đây chắc chắn
+        // là video mở hàng hoàn, bất kể tên file có đánh dấu hay không.
+        const retHit = !matchedOrder ? cands.find(c => returnByTracking.has(c.toUpperCase())) : undefined
+        const matchedByReturnTracking = retHit ? returnByTracking.get(retHit.toUpperCase())! : null
+        const matchedReturn = matchedByReturnTracking
+            || (matchedOrder ? returnByOrderNumber.get(matchedOrder.orderNumber) || null : null)
+        const videoType = (matchedByReturnTracking || isReturnVideo(f.name)) ? 'return' as const : 'packing' as const
 
         // dateGroup = YYYY-MM-DD from createdTime
         let dateGroup = 'unknown'
@@ -304,7 +337,7 @@ async function matchVideosWithOrders(
             videoName: f.name,
             videoUrl: f.webViewLink,
             thumbnailUrl: f.thumbnailLink,
-            trackingNumber: hit || cands[0] || null,
+            trackingNumber: hit || retHit || cands[0] || null,
             matchedOrder,
             matchedReturn: videoType === 'return' ? matchedReturn : null,
             createdTime: f.createdTime,
@@ -348,8 +381,10 @@ router.get('/videos', authMiddleware, requirePermission('online_orders.view'), a
         let items = await matchVideosWithOrders(prisma, files)
 
         // Filters
-        if (matchedFilter === 'matched') items = items.filter(v => v.matchedOrder !== null)
-        else if (matchedFilter === 'unmatched') items = items.filter(v => v.matchedOrder === null)
+        // "Đã match" gồm cả video trúng PHIẾU TRẢ (matchedOrder=null nhưng
+        // matchedReturn có) — video mở hàng hoàn khớp mã vận đơn trả là match thật.
+        if (matchedFilter === 'matched') items = items.filter(v => v.matchedOrder !== null || v.matchedReturn !== null)
+        else if (matchedFilter === 'unmatched') items = items.filter(v => v.matchedOrder === null && v.matchedReturn === null)
 
         if (typeFilter === 'packing') items = items.filter(v => v.videoType === 'packing')
         else if (typeFilter === 'return') items = items.filter(v => v.videoType === 'return')
@@ -458,7 +493,7 @@ router.get('/stats', authMiddleware, requirePermission('online_orders.view'), as
 
         const files = await getDriveVideos(folderId)
         const items = await matchVideosWithOrders(prisma, files)
-        const matched = items.filter(v => v.matchedOrder !== null).length
+        const matched = items.filter(v => v.matchedOrder !== null || v.matchedReturn !== null).length
         const packingVideos = items.filter(v => v.videoType === 'packing').length
         const returnVideos = items.filter(v => v.videoType === 'return').length
 
