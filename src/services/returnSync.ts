@@ -58,6 +58,32 @@ export async function syncChannelReturns(prisma: any, channel: any, since: Date,
     let synced = 0, skipped = 0
     const errors: string[] = []
 
+    // ── Vá mã vận đơn TRẢ cho Shopee ─────────────────────────────────────────
+    // get_return_list không trả tracking_number (cùng bệnh với get_order_detail
+    // không trả tracking_no) → ret.trackingNumber luôn rỗng, dòng "Tracking:" ở
+    // notes mãi là N/A dù nhánh làm tươi đã có. Mã thật nằm ở get_return_detail.
+    // Chỉ hỏi phiếu KHÁCH PHẢI GỬI HÀNG LẠI (needReturn) và chưa có mã; chặn trần
+    // để lượt sync không phình — phiếu chưa tới lượt thì lượt sau hỏi tiếp.
+    if (!isTikTok && service instanceof ShopeeService) {
+        const DETAIL_CAP = 15
+        let asked = 0
+        for (const ret of platformReturns) {
+            if (asked >= DETAIL_CAP) break
+            if (ret.trackingNumber || !ret.needReturn) continue
+            asked++
+            try {
+                const detail = await (service as ShopeeService).getReturnDetail(ret.returnSn)
+                if (detail?.trackingNumber) ret.trackingNumber = detail.trackingNumber
+            } catch (dErr: any) {
+                const m = String(dErr?.message || dErr)
+                // Kênh chết (token/proxy) thì các phiếu còn lại cũng vậy — thôi hỏi
+                if (/từ chối kênh|error_auth|access_token|thất bại sau/i.test(m)) break
+                console.warn(`[Sync Returns] chi tiết phiếu ${ret.returnSn}: ${m}`)
+            }
+        }
+        if (asked > 0) console.log(`[Sync Returns] ${channel.name}: hỏi chi tiết ${asked} phiếu để lấy mã vận đơn trả`)
+    }
+
     for (const ret of platformReturns) {
         try {
             const nativeStatus = (ret as any).platformStatus || (ret as any).shopeeStatus || ''
