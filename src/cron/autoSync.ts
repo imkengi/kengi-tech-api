@@ -488,7 +488,13 @@ async function runFeeSync() {
                         loi++
                         if (!loiDauTien) loiDauTien = fmtErr(e)
                     }
-                }, 6)
+                    // API tài chính TikTok bóp rate gắt hơn Shopee escrow: 6 luồng
+                    // bắn liền tay là dính 36009002 "Too many requests" gần cả mẻ
+                    // (đo 04/08 08:11). Nghỉ ngắn giữa các call TikTok.
+                    if (ch.platform === 'tiktok') await new Promise(r => setTimeout(r, 350))
+                // TikTok chạy 2 luồng thay vì 6 — chậm hơn nhưng ăn được cả mẻ;
+                // 36009002 trả về null → đơn được vòng sau quét lại, không mất.
+                }, ch.platform === 'tiktok' ? 2 : 6)
                 if (ok > 0 || loi > 0) {
                     tongCapNhat += ok
                     console.log(`[FeeSync] ${store.code}/${ch.name} (${ch.platform}): +${ok} đơn có phí thật` +
