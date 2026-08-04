@@ -200,7 +200,11 @@ export class VnptProvider implements IEInvoiceProvider {
             Fkey: vnptFkey(data.transactionId),
             NMua: {
                 HVTNMHang: data.buyerName || '',
-                Ten: '',
+                // Có MST = mua theo DANH NGHĨA CÔNG TY → VNPT bắt buộc "Tên đơn vị"
+                // (Ten); để trống là ValidationException "Tên đơn vị mua hàng không
+                // được bỏ trống" dù HVTNMHang đã có tên. Không MST thì giữ rỗng như
+                // cũ — khách lẻ chỉ cần họ tên người mua.
+                Ten: String(data.buyerTaxCode || '').trim() ? (data.buyerName || '') : '',
                 // MST người mua: chỉ gửi khi có; TUYỆT ĐỐI không cắt gọt cho vừa khuôn
                 MST: String(data.buyerTaxCode || '').trim(),
                 MDVQHNSach: null,
