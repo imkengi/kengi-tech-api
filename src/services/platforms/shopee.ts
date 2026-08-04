@@ -793,11 +793,16 @@ export class ShopeeService extends PlatformService {
         // created_time_of must not more than 15 days") → tự chia khung 14 ngày,
         // nếu không mọi lần kéo quá 15 ngày đều ném lỗi và KHÔNG lấy được phiếu nào.
         const WINDOW = 14 * 86400
+        // Trần 20 trang/khung (1000 phiếu). Trần cũ 10 trang VỨT LẶNG LẼ phần dư —
+        // "sync đủ" và "sync thiếu" nhìn y hệt nhau. Giờ chạm trần là gắn cờ để
+        // returnSync báo lên kết quả cho người bấm thấy.
+        const PAGE_CAP = 20
         const all: any[] = []
+        let truncated = false
         for (let winFrom = timeFrom; winFrom < now; winFrom += WINDOW) {
             const winTo = Math.min(winFrom + WINDOW, now)
             // Phân trang đầy đủ (trước đây cố định page 1 → quá 50 yêu cầu là sót)
-            for (let pageNo = 1; pageNo <= 10; pageNo++) {
+            for (let pageNo = 1; pageNo <= PAGE_CAP; pageNo++) {
                 const url = this.apiUrl(path) +
                     `&create_time_from=${winFrom}&create_time_to=${winTo}` +
                     `&page_no=${pageNo}&page_size=50`
@@ -808,17 +813,26 @@ export class ShopeeService extends PlatformService {
                 const returnList = data.response?.return || []
                 all.push(...returnList)
                 if (returnList.length < 50 || !data.response?.more) break
+                if (pageNo === PAGE_CAP) {
+                    truncated = true
+                    console.warn(`[Shopee Returns] CHẠM TRẦN ${PAGE_CAP} trang ở khung ` +
+                        `${new Date(winFrom * 1000).toISOString().slice(0, 10)}→${new Date(winTo * 1000).toISOString().slice(0, 10)} — có phiếu bị sót, kéo lại khoảng hẹp hơn`)
+                }
             }
         }
         // Cùng 1 phiếu có thể rơi vào 2 khung (biên) → khử trùng theo return_sn
         const seen = new Set<string>()
-        return all
+        const out: any = all
             .filter((r: any) => {
                 const k = String(r.return_sn || r.returnsn || '')
                 if (!k || seen.has(k)) return false
                 seen.add(k); return true
             })
             .map((r: any) => this.mapReturn(r))
+        // Gắn cờ lên mảng (mảng là object) để returnSync báo lên UI mà không phải
+        // đổi chữ ký hàm ở base class
+        if (truncated) out.truncated = true
+        return out
     }
 
     /** CHẨN ĐOÁN: gọi get_return_list và trả NGUYÊN response từng khung/trang

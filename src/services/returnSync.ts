@@ -58,6 +58,13 @@ export async function syncChannelReturns(prisma: any, channel: any, since: Date,
     let synced = 0, skipped = 0
     const errors: string[] = []
 
+    // Sàn còn phiếu mà đã chạm trần phân trang → phải NÓI RA. Trước đây phần dư
+    // bị vứt lặng lẽ, "sync đủ" và "sync thiếu" nhìn y hệt nhau — đúng cảm giác
+    // "sao thiếu đơn" mà không ai chứng minh được.
+    if ((platformReturns as any).truncated) {
+        errors.push(`Chạm trần phân trang ${platformLabel} — CÓ PHIẾU BỊ SÓT trong khoảng này, bấm "Kéo từ ngày" với khoảng hẹp hơn để lấy đủ`)
+    }
+
     // ── Vá mã vận đơn TRẢ cho Shopee ─────────────────────────────────────────
     // get_return_list không trả tracking_number (cùng bệnh với get_order_detail
     // không trả tracking_no) → ret.trackingNumber luôn rỗng, dòng "Tracking:" ở

@@ -927,7 +927,10 @@ export class TikTokService extends PlatformService {
         const path = '/return_refund/202309/returns/search'
         const all: any[] = []
         let pageToken: string | undefined
-        for (let i = 0; i < 10; i++) {
+        // Trần cũ 10 trang (500 phiếu) VỨT LẶNG LẼ phần dư khi còn next_page_token.
+        // Nâng 40 trang (2000) + gắn cờ truncated khi vẫn còn — cùng bệnh với Shopee.
+        const PAGE_CAP = 40
+        for (let i = 0; i < PAGE_CAP; i++) {
             const query: Record<string, string> = { page_size: '50' }
             if (pageToken) query.page_token = pageToken
             const bodyObj: any = {}
@@ -949,7 +952,12 @@ export class TikTokService extends PlatformService {
             pageToken = data.data?.next_page_token || undefined
             if (!pageToken) break
         }
-        return all.map(r => this.mapReturn(r))
+        const out: any = all.map(r => this.mapReturn(r))
+        if (pageToken) {
+            out.truncated = true
+            console.warn(`[TikTok Returns] CHẠM TRẦN ${PAGE_CAP} trang (${all.length} phiếu) mà sàn vẫn còn — có phiếu bị sót, kéo lại khoảng hẹp hơn`)
+        }
+        return out
     }
 
     private mapReturn(r: any) {
