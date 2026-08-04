@@ -2908,6 +2908,23 @@ router.get('/returns-raw', async (req: Request, res: Response) => {
                     row.phieuTho = await (svc as any).getReturnDetail(String(req.query.returnSn))
                         .catch((e: any) => `LOI ${e?.message}`)
                 }
+                // ?noFilter=1 — gọi get_return_list KHÔNG kèm lọc thời gian. Đo 04/08:
+                // lọc create_time/update_time đều mù với case sau ~12/07 dù
+                // get_return_detail vẫn thấy case → nghi filter hỏng phía Shopee;
+                // nếu bản không-lọc ra case mới thì fix = bỏ lọc server, cắt client.
+                if (String(req.query.noFilter || '') === '1' && ch.platform === 'shopee') {
+                    try {
+                        const url = (svc as any).apiUrl('/api/v2/returns/get_return_list') + `&page_no=1&page_size=50`
+                        const data = await (svc as any).httpGet(url)
+                        const list = (data.response?.return || []) as any[]
+                        row.khongLoc = {
+                            soPhieu: list.length, more: data.response?.more,
+                            loi: data.error || undefined, message: data.message || undefined,
+                            maDon: list.map((r: any) =>
+                                `${r.order_sn}|${r.return_sn}|${r.status}|${r.create_time ? new Date(r.create_time * 1000).toISOString().slice(0, 10) : ''}`),
+                        }
+                    } catch (e: any) { row.khongLoc = `LOI ${e?.message}` }
+                }
                 // MÂU THUẪN ĐƠN↔PHIẾU: đơn (sync vẫn chạy) nhảy TO_RETURN sau mốc nghi
                 // câm mà list phiếu không có case tương ứng → chứng minh sàn còn case
                 // mà API returns không nhả, không cần chờ đối chiếu tay Seller Center.
