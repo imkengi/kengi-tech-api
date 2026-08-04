@@ -337,13 +337,25 @@ export class TikTokService extends PlatformService {
         // (trường status không tồn tại), và có chuỗi "Sorry, this package can NO
         // LONGER be delivered" — chứa 'delivered' nhưng nghĩa là HẾT ĐƯỜNG GIAO.
         // Bộ loại trừ cũ chỉ chặn phủ định tiếng Việt + fail/attempt nên lọt.
+        // Schema THẬT (đo 04/08/2026): sự kiện chỉ có {action_code, description,
+        // update_time_millis} — không có trường status. Mã đã quan sát:
+        //   41001 đang đi giao · 31301 tới trung tâm phân loại
+        //   40601 giao thất bại · 41801 hết đường giao (trả về người bán)
+        // Mã "ĐÃ GIAO" CHƯA gặp trong dữ liệu (chưa đơn nào dump trúng lúc giao
+        // xong) nên chưa ghim số được — tạm nhận diện qua description có chặn phủ
+        // định, và LOG action_code khi khớp để ghim số ở lần chỉnh sau.
         const NEGATION = /chưa|không|thất bại|fail|unsuccessful|attempt|hoãn|hoàn|out for delivery|đang giao|no longer|cannot|can'?t|unable|undeliver|return/i
+        const KNOWN_NOT_DONE = new Set([41001, 31301, 40601, 41801])
         const isDone = (e: any) => {
-            const status = String(e?.status ?? '').trim()
-            if (/^(DELIVERED|DELIVERY_DONE|DELIVERY_SUCCESS|SIGNED)$/i.test(status)) return true
+            const code = Number(e?.action_code ?? 0)
+            if (KNOWN_NOT_DONE.has(code)) return false
             const desc = String(e?.description ?? '')
             if (NEGATION.test(desc)) return false
-            return /\bdelivered\b|giao hàng thành công/i.test(desc)
+            const done = /\bdelivered\b|giao hàng thành công/i.test(desc)
+            if (done) {
+                console.log(`[TikTok trace] HỌC MÃ ĐÃ GIAO: action_code=${code} — "${desc.slice(0, 80)}"`)
+            }
+            return done
         }
 
         const ms = events
