@@ -3539,16 +3539,25 @@ router.get('/returns/list', authMiddleware, async (req: AuthRequest, res: Respon
         // Enrich: platform từ prefix mã phiếu + thông tin đơn gốc (kênh, trạng thái,
         // tracking) để màn hình hiển thị chi tiết mà không phải tự parse notes.
         const invoiceNos = [...new Set(returns.map(r => r.originalInvoice).filter(Boolean))]
+        // originalInvoice có 2 dạng: 'SPE-xxx' (đơn đã có lúc sync phiếu) hoặc mã
+        // THÔ 'xxx' (phiếu sync TRƯỚC khi đơn về DB). Chỉ so orderNumber là đám
+        // dạng thô mồ côi vĩnh viễn dù đơn đã về sau đó — needs-adjust từng vá
+        // đúng bệnh này ("11 phiếu mồ côi = điểm mù"), đây là chỗ thứ hai.
+        // Mã thô nằm ở externalOrderId nên dò thêm cột đó.
         const orders = invoiceNos.length > 0
             ? await prisma.onlineOrder.findMany({
-                where: { orderNumber: { in: invoiceNos } },
+                where: { OR: [{ orderNumber: { in: invoiceNos } }, { externalOrderId: { in: invoiceNos } }] },
                 select: {
-                    id: true, orderNumber: true, channelId: true, channelName: true, platform: true,
+                    id: true, orderNumber: true, externalOrderId: true, channelId: true, channelName: true, platform: true,
                     status: true, externalStatus: true, trackingNumber: true, total: true,
                 },
             })
             : []
-        const orderMap = new Map(orders.map(o => [o.orderNumber, o]))
+        const orderMap = new Map<string, any>()
+        for (const o of orders) {
+            orderMap.set(o.orderNumber, o)
+            if (o.externalOrderId) orderMap.set(o.externalOrderId, o)
+        }
         const codePlatform = (code: string) =>
             code.startsWith('RTN-TT-') ? 'tiktok' : code.startsWith('RTN-SH-') ? 'shopee' : 'online'
 
@@ -3562,6 +3571,16 @@ router.get('/returns/list', authMiddleware, async (req: AuthRequest, res: Respon
                     where: { id: r.id },
                     data: { channelId: o.channelId } as any,
                 }).catch(() => { })
+            }
+            // Tự vá dạng THÔ → dạng chuẩn 'SPE-xxx' khi đã tìm được đơn: các join
+            // khác (needs-adjust, hoá đơn) so theo orderNumber nên vá một lần là
+            // mọi nơi cùng khớp, không phải dò hai cột mãi.
+            if (o && r.originalInvoice !== o.orderNumber) {
+                prisma.returnOrder.update({
+                    where: { id: r.id },
+                    data: { originalInvoice: o.orderNumber },
+                }).catch(() => { })
+                ;(r as any).originalInvoice = o.orderNumber
             }
         }
 
