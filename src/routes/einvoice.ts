@@ -118,6 +118,9 @@ export async function ensureEInvoiceTablesFor(prisma: any, key: string): Promise
             ['currency', `TEXT NOT NULL DEFAULT 'VND'`], ['paymentMethod', 'TEXT'],
             ['xmlContent', 'TEXT'], ['pdfUrl', 'TEXT'], ['providerInvoiceId', 'TEXT'],
             ['providerResponse', 'TEXT'], ['replacesInvoiceId', 'TEXT'], ['replacedByInvoiceId', 'TEXT'],
+            // Điều chỉnh ≠ thay thế: HĐ gốc vẫn hiệu lực nên KHÔNG dùng chung
+            // replacedByInvoiceId (cờ đó nghĩa là "gốc đã bị vô hiệu").
+            ['adjustsInvoiceId', 'TEXT'], ['adjustedByInvoiceId', 'TEXT'],
             ['cancelReason', 'TEXT'], ['notes', 'TEXT'], ['branchId', 'TEXT'],
             ['createdBy', 'TEXT'], ['createdByName', 'TEXT'],
             ['issuedAt', 'TIMESTAMP(3)'], ['signedAt', 'TIMESTAMP(3)'], ['sentAt', 'TIMESTAMP(3)'],
@@ -1604,6 +1607,7 @@ router.get('/needs-adjust', einvoiceAuth, async (req: AuthRequest, res: Response
             )
             WHERE e.status IN ('SENT','issued','SIGNED')
               AND e."replacedByInvoiceId" IS NULL
+              AND e."adjustedByInvoiceId" IS NULL
               AND LOWER(ro.status) IN ('approved','refunded','processing')
             ORDER BY ro."createdAt" DESC
             LIMIT 300`)
@@ -2348,6 +2352,149 @@ router.post('/:id/replace', einvoiceAuth, requireRole('admin', 'manager'), async
     } catch (err: any) {
         console.error('POST /einvoice/:id/replace error:', err)
         console.error('[EInvoiceQueue route]', err?.message || err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// POST /api/einvoice/:id/adjust — hoá đơn ĐIỀU CHỈNH (giảm) cho trả hàng MỘT PHẦN.
+// Khác /replace: HĐ gốc VẪN HIỆU LỰC (không đổi status), bản điều chỉnh chỉ ghi
+// phần chênh. Quy định hiện hành không cho huỷ HĐ đã phát hành — chỉ điều chỉnh
+// hoặc thay thế; trả một phần mà dùng thay thế là sai nghiệp vụ.
+// Body: { items: [dòng điều chỉnh], reason? } — items BẮT BUỘC vì phần chênh
+// không suy ra được từ HĐ gốc.
+router.post('/:id/adjust', einvoiceAuth, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
+    try {
+        await ensureTables(req)
+        const prisma = req.storePrisma! as any
+        const id = String(req.params.id)
+        const original = await getInvoiceWithItems(prisma, id)
+        if (!original) return res.status(404).json({ success: false, error: 'Không tìm thấy hóa đơn' })
+        if (!['SIGNED', 'SENT'].includes(original.status)) {
+            return res.status(400).json({ success: false, error: `Chỉ điều chỉnh hóa đơn đã ký/phát hành. Trạng thái hiện tại: ${original.status}` })
+        }
+        if (original.replacedByInvoiceId) {
+            return res.status(400).json({ success: false, error: 'Hóa đơn đã bị thay thế — điều chỉnh bản thay thế thay vì bản này' })
+        }
+
+        const b = req.body || {}
+        const bStr = (v: any) => (v === undefined || v === null ? '' : String(v).trim())
+        // Dòng điều chỉnh: FE truyền thẳng items, HOẶC truyền returnCode để dựng
+        // từ phiếu trả (màn needs-adjust chỉ có mã phiếu, không có dòng hàng).
+        let rawItems: any[] | null = Array.isArray(b.items) && b.items.length ? b.items : null
+        if (!rawItems && bStr(b.returnCode)) {
+            const ro = await prisma.returnOrder.findFirst({
+                where: { code: bStr(b.returnCode) },
+                include: { items: true },
+            })
+            if (!ro) return res.status(404).json({ success: false, error: `Không tìm thấy phiếu trả ${bStr(b.returnCode)}` })
+            // Thuế suất kế thừa từ HĐ gốc (điều chỉnh giảm phải cùng thuế suất
+            // với phần doanh thu bị giảm, không được mặc định 0)
+            const goc = Number(original.totalBeforeVat || 0)
+            const rate = Number(original.vatAmount || 0) > 0 && goc > 0
+                ? Math.round(Number(original.vatAmount) * 100 / goc) : 0
+            const lam = (n: number) => Math.round(n)
+            rawItems = (ro.items?.length ? ro.items : null)?.map((it: any) => {
+                const amount = lam((it.quantity || 1) * (it.unitPrice || 0))
+                return {
+                    itemName: `Điều chỉnh giảm: ${it.productName}`,
+                    unitName: 'Cái', quantity: it.quantity || 1, unitPrice: it.unitPrice || 0,
+                    amount, vatRate: rate, vatAmount: lam(amount * rate / 100),
+                }
+            }) || [{
+                itemName: `Điều chỉnh giảm theo phiếu trả ${ro.code}`,
+                unitName: 'Lần', quantity: 1,
+                unitPrice: lam(Number(ro.totalRefund || ro.refundAmount || 0)),
+                amount: lam(Number(ro.totalRefund || ro.refundAmount || 0)),
+                vatRate: rate, vatAmount: lam(Number(ro.totalRefund || ro.refundAmount || 0) * rate / 100),
+            }]
+        }
+        if (!rawItems || rawItems.length === 0) {
+            return res.status(400).json({ success: false, error: 'Thiếu dòng điều chỉnh — truyền items hoặc returnCode của phiếu trả' })
+        }
+        const computed = computeItems(rawItems)
+
+        const cfgRow: any = await getActiveConfig(prisma).catch(() => null)
+        const isVnptIssued = String(original.status).toUpperCase() === 'SENT'
+            && !!original.transactionId
+            && String(cfgRow?.provider || '').toLowerCase() === 'vnpt'
+        if (!isVnptIssued) {
+            return res.status(400).json({ success: false, error: 'Hoá đơn chưa phát hành qua VNPT — dùng sửa nháp/thay thế thay vì điều chỉnh' })
+        }
+
+        const { VnptProvider, vnptFkey } = await import('../services/einvoice/vnpt')
+        const vnpt = new VnptProvider()
+        const totalAmount = computed.totalAmount || 0
+        const vatAmount = computed.vatAmount || 0
+        const subtotal = computed.totalBeforeVat || totalAmount - vatAmount
+        const adjData = {
+            sellerTaxCode: cfgRow.taxCode || original.sellerTaxCode || '',
+            sellerName: cfgRow.companyName || original.sellerName || '',
+            sellerAddress: cfgRow.companyAddress || original.sellerAddress || '',
+            buyerName: (() => {
+                const n = bStr(b.buyerName) || original.buyerName || ''
+                return (!n || (n.includes('*') && !bStr(b.buyerTaxCode) && !bStr(original.buyerTaxCode))) ? 'Bán cho người tiêu dùng' : n
+            })(),
+            buyerTaxCode: bStr(b.buyerTaxCode) || bStr(original.buyerTaxCode) || '',
+            buyerAddress: (bStr(b.buyerAddress) || bStr(original.buyerAddress) || '').includes('*') ? '' : (bStr(b.buyerAddress) || bStr(original.buyerAddress) || ''),
+            buyerPhone: '', buyerEmail: '',
+            paymentMethod: b.paymentMethod || original.paymentMethod || 'TM/CK',
+            currencyCode: 'VND',
+            items: computed.items.map((it: any) => ({
+                name: it.itemName, unit: it.unitName || 'Cái', quantity: it.quantity,
+                unitPrice: it.unitPrice, amount: it.amount,
+                vatRate: it.vatRate || 0, vatAmount: it.vatAmount || 0,
+            })),
+            subtotal,
+            vatRate: vatAmount > 0 && subtotal > 0 ? Math.round(vatAmount * 100 / subtotal) : 0,
+            vatAmount,
+            total: totalAmount,
+            totalInWords: docTienBangChu(Math.round(totalAmount)),
+            // Khoá MỚI — 'A' (adjust) để không đụng Fkey gốc lẫn Fkey thay thế '<id>R'
+            transactionId: `${original.id}A`,
+            receiptNumber: '',
+        }
+        // Điều chỉnh một HĐ thay thế: Fkey bên VNPT của nó là '<id gốc>R'
+        const originalFkey = original.invoiceType === 'REPLACEMENT' && original.replacesInvoiceId
+            ? vnptFkey(`${original.replacesInvoiceId}R`)
+            : vnptFkey(original.transactionId)
+        const result = await vnpt.adjustInvoice(cfgRow, originalFkey, adjData as any)
+        if (!result.success) {
+            return res.status(502).json({ success: false, error: result.errorMessage || 'Điều chỉnh bên VNPT thất bại' })
+        }
+
+        const adjustment = await prisma.eInvoice.create({
+            data: {
+                transactionId: original.transactionId,
+                provider: cfgRow.provider,
+                invoiceType: 'ADJUSTMENT',
+                status: 'SENT',
+                invoiceDate: todayISO(),
+                invoiceNumber: result.invoiceNumber || null,
+                invoiceSymbol: original.invoiceSymbol,
+                lookupCode: result.lookupCode || null,
+                issuedAt: new Date(), sentAt: new Date(),
+                sellerName: adjData.sellerName, sellerTaxCode: adjData.sellerTaxCode, sellerAddress: adjData.sellerAddress,
+                buyerName: adjData.buyerName, buyerTaxCode: adjData.buyerTaxCode, buyerAddress: adjData.buyerAddress,
+                totalBeforeVat: subtotal, vatAmount, totalAmount, currency: 'VND',
+                paymentMethod: adjData.paymentMethod,
+                notes: `Điều chỉnh giảm HĐ ${original.invoiceSymbol || ''} số ${original.invoiceNumber || ''}${b.reason ? `: ${b.reason}` : ''}`,
+                adjustsInvoiceId: original.id,
+                branchId: original.branchId || req.user?.branchId || null,
+                createdBy: req.user?.userId || null,
+                createdByName: (req.user as any)?.email || null,
+                items: { create: computed.items },
+            },
+            include: { items: true },
+        })
+        // HĐ gốc GIỮ NGUYÊN status (vẫn hiệu lực) — chỉ ghi liên kết để
+        // needs-adjust thôi liệt kê nó.
+        await prisma.eInvoice.update({
+            where: { id },
+            data: { adjustedByInvoiceId: adjustment.id },
+        })
+        return res.status(201).json({ success: true, data: { original: { id, status: original.status }, adjustment, invoiceNumber: result.invoiceNumber } })
+    } catch (err: any) {
+        console.error('POST /einvoice/:id/adjust error:', err?.message || err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }
 })

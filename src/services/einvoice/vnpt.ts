@@ -337,6 +337,18 @@ export class VnptProvider implements IEInvoiceProvider {
      * save-and-publish, TCHDon=1) — ký HSM y như phát hành. data.transactionId
      * phải là khoá MỚI (khác giao dịch gốc) để Fkey hoá đơn thay thế không trùng. */
     async replaceInvoice(config: EInvoiceProviderConfig, originalFkey: string, data: EInvoiceData): Promise<IssueResult> {
+        return this.adjustmentPublish(config, originalFkey, data, 1)
+    }
+
+    /** Hoá đơn ĐIỀU CHỈNH (TCHDon=2): hoá đơn gốc VẪN CÓ HIỆU LỰC, bản điều chỉnh
+     * ghi phần chênh (điều chỉnh giảm cho trả hàng một phần). Khác thay thế
+     * (TCHDon=1) — thay thế vô hiệu hoá đơn gốc. */
+    async adjustInvoice(config: EInvoiceProviderConfig, originalFkey: string, data: EInvoiceData): Promise<IssueResult> {
+        return this.adjustmentPublish(config, originalFkey, data, 2)
+    }
+
+    private async adjustmentPublish(config: EInvoiceProviderConfig, originalFkey: string, data: EInvoiceData, tchd: 1 | 2): Promise<IssueResult> {
+        const nhan = tchd === 1 ? 'Thay thế' : 'Điều chỉnh'
         try {
             const s = await this.login(config)
             const ex = parseExtra(config.extra)
@@ -347,12 +359,12 @@ export class VnptProvider implements IEInvoiceProvider {
                 if (cert) { typeCert = cert.type; serialNumber = cert.serial }
             }
             if (!typeCert || !serialNumber) {
-                return { success: false, errorMessage: 'Đơn vị chưa có chứng thư số bên VNPT — không thay thế được.' }
+                return { success: false, errorMessage: `Đơn vị chưa có chứng thư số bên VNPT — không ${nhan.toLowerCase()} được.` }
             }
             const body: any = {
                 type_cert: typeCert,
                 serial_number: serialNumber,
-                TCHDon: 1, // 1 = thay thế, 2 = điều chỉnh
+                TCHDon: tchd, // 1 = thay thế, 2 = điều chỉnh
                 Fkey: originalFkey,
                 KHMSHDon: Number(String(config.templateId || '').split('/')[0]) || 2,
                 KHHDon: String(config.serialNo || '').trim(),
@@ -362,7 +374,7 @@ export class VnptProvider implements IEInvoiceProvider {
             const ok = r.status < 300 && String(r.json?.err_code ?? '1') === '0'
             if (!ok) {
                 const msg = r.json?.message || r.json?.data?.message || r.raw.slice(0, 250)
-                return { success: false, errorMessage: `Thay thế HĐ lỗi (HTTP ${r.status}): ${String(msg).slice(0, 300)}` }
+                return { success: false, errorMessage: `${nhan} HĐ lỗi (HTTP ${r.status}): ${String(msg).slice(0, 300)}` }
             }
             const d = r.json?.data
             const first = Array.isArray(d) ? d[0] : (Array.isArray(d?.content) ? d.content[0] : d) || {}
@@ -372,7 +384,7 @@ export class VnptProvider implements IEInvoiceProvider {
                 lookupCode: String(first?.MCCQT ?? first?.mccqt ?? first?.Fkey ?? first?.fkey ?? ''),
             }
         } catch (err: any) {
-            return { success: false, errorMessage: `VNPT thay thế lỗi: ${err.message}` }
+            return { success: false, errorMessage: `VNPT ${nhan.toLowerCase()} lỗi: ${err.message}` }
         }
     }
 
