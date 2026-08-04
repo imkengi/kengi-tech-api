@@ -1453,6 +1453,9 @@ model StoreSettings {
 
   // SMTP email công ty cho CRM gửi email chào hàng — JSON {host,port,user,pass,fromName,secure}
   smtpConfig String?
+  // Hộp thư Gmail RIÊNG để check trong app (04/08/2026) — TÁCH khỏi smtpConfig
+  // (mail gửi CRM là tài khoản khác). JSON {user, pass, host?}
+  mailboxConfig String?
 
   // Key Gemini riêng của cửa hàng cho Trợ lý AI (chỉ admin cấu hình; API che dạng ••••).
   geminiApiKey String?

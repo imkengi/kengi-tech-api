@@ -1,34 +1,44 @@
 import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { requirePermission } from '../middleware/permissionMiddleware'
-import { deriveImapHost } from '../services/emailReplyService'
-import type { SmtpConfig } from '../services/emailService'
+
+
 import { errMsg } from '../lib/errorResponse'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  HỘP THƯ CỬA HÀNG (2026-08-04) — check mail ngay trong dashboard.
 //
-//  KHÔNG cấu hình riêng: dùng lại StoreSettings.smtpConfig (email + app password
-//  đã khai ở màn cài đặt email cho CRM). SMTP gửi được thì IMAP đọc được cùng
-//  tài khoản — Gmail cần App Password (2FA), đã là điều kiện của màn cài đặt cũ.
+//  Cấu hình RIÊNG (StoreSettings.mailboxConfig): Gmail check thư là tài khoản
+//  KHÁC với mail gửi CRM (smtpConfig) — gắn ngay trên trang Hộp Thư bằng
+//  email + App Password (Gmail: bật 2FA rồi tạo ở myaccount.google.com/apppasswords).
 //  Đọc CHỈ-XEM (mailbox mở readOnly) — không đánh dấu đã đọc, không xoá thư.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const router = Router()
 
-async function loadSmtp(prisma: any): Promise<(SmtpConfig & { imapHost?: string }) | null> {
+// Cấu hình RIÊNG (StoreSettings.mailboxConfig) — Gmail check thư là tài khoản
+// KHÁC với mail gửi CRM (smtpConfig), không dùng chung, không fallback.
+interface MailboxCfg { user: string; pass: string; host?: string }
+
+async function loadMailboxCfg(prisma: any): Promise<MailboxCfg | null> {
     try {
-        const s = await prisma.storeSettings.findUnique({ where: { id: 'default' }, select: { smtpConfig: true } })
-        if (!s?.smtpConfig) return null
-        const cfg = JSON.parse(s.smtpConfig)
-        return cfg?.host && cfg?.user && cfg?.pass ? cfg : null
+        const s = await prisma.storeSettings.findUnique({ where: { id: 'default' }, select: { mailboxConfig: true } })
+        if (!s?.mailboxConfig) return null
+        const cfg = JSON.parse(s.mailboxConfig)
+        return cfg?.user && cfg?.pass ? cfg : null
     } catch { return null }
 }
 
-async function withImap<T>(cfg: SmtpConfig & { imapHost?: string }, fn: (client: any) => Promise<T>): Promise<T> {
+function imapHostOf(cfg: MailboxCfg): string {
+    const h = (cfg.host || '').trim()
+    if (!h) return 'imap.gmail.com'                    // mặc định Gmail
+    return h.startsWith('smtp.') ? h.replace(/^smtp\./i, 'imap.') : h
+}
+
+async function withImap<T>(cfg: MailboxCfg, fn: (client: any) => Promise<T>): Promise<T> {
     const { ImapFlow } = require('imapflow') as typeof import('imapflow')
     const client = new ImapFlow({
-        host: deriveImapHost(cfg),
+        host: imapHostOf(cfg),
         port: 993,
         secure: true,
         auth: { user: cfg.user, pass: cfg.pass },
@@ -46,15 +56,57 @@ async function withImap<T>(cfg: SmtpConfig & { imapHost?: string }, fn: (client:
 
 // GET /api/mailbox/status — đã gắn mail chưa, là địa chỉ nào
 router.get('/status', authMiddleware, requirePermission('mailbox.view'), async (req: AuthRequest, res: Response) => {
-    const cfg = await loadSmtp(req.storePrisma!)
-    res.json({ success: true, data: { configured: !!cfg, email: cfg?.user || null, imapHost: cfg ? deriveImapHost(cfg) : null } })
+    const cfg = await loadMailboxCfg(req.storePrisma!)
+    res.json({ success: true, data: { configured: !!cfg, email: cfg?.user || null, imapHost: cfg ? imapHostOf(cfg) : null } })
+})
+
+// POST /api/mailbox/connect {email, appPassword, host?} — THỬ ĐĂNG NHẬP THẬT
+// trước khi lưu: sai App Password thì báo ngay tại chỗ, không lưu cấu hình hỏng.
+router.post('/connect', authMiddleware, requirePermission('mailbox.manage'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const email = String(req.body?.email || '').trim()
+        const pass = String(req.body?.appPassword || '').replace(/\s+/g, '') // App Password Google hay dán kèm khoảng trắng
+        const host = String(req.body?.host || '').trim() || undefined
+        if (!email || !pass) return res.status(400).json({ success: false, error: 'Cần email và App Password' })
+
+        const cfg: MailboxCfg = { user: email, pass, host }
+        await withImap(cfg, async (client) => {
+            const lock = await client.getMailboxLock('INBOX', { readOnly: true })
+            lock.release()
+        })
+
+        await prisma.storeSettings.upsert({
+            where: { id: 'default' },
+            update: { mailboxConfig: JSON.stringify(cfg) } as any,
+            create: { id: 'default', name: 'Cửa hàng', mailboxConfig: JSON.stringify(cfg) } as any,
+        })
+        res.json({ success: true, data: { email, imapHost: imapHostOf(cfg) } })
+    } catch (err: any) {
+        const m = String(err?.message || err)
+        res.status(400).json({
+            success: false,
+            error: /auth|credential|password|application-specific/i.test(m)
+                ? 'Gmail từ chối đăng nhập — kiểm tra lại App Password (phải tạo ở myaccount.google.com/apppasswords, KHÔNG phải mật khẩu thường)'
+                : `Không kết nối được hộp thư: ${m.slice(0, 160)}`,
+        })
+    }
+})
+
+// DELETE /api/mailbox — gỡ hộp thư
+router.delete('/', authMiddleware, requirePermission('mailbox.manage'), async (req: AuthRequest, res: Response) => {
+    await req.storePrisma!.storeSettings.update({
+        where: { id: 'default' },
+        data: { mailboxConfig: null } as any,
+    }).catch(() => { })
+    res.json({ success: true })
 })
 
 // GET /api/mailbox/messages?limit=30 — thư mới nhất trong INBOX (mới → cũ)
 router.get('/messages', authMiddleware, requirePermission('mailbox.view'), async (req: AuthRequest, res: Response) => {
     try {
-        const cfg = await loadSmtp(req.storePrisma!)
-        if (!cfg) return res.status(400).json({ success: false, error: 'Chưa cấu hình email — vào Cài đặt → Email (SMTP) khai email + App Password trước' })
+        const cfg = await loadMailboxCfg(req.storePrisma!)
+        if (!cfg) return res.status(400).json({ success: false, error: 'Chưa gắn hộp thư — dùng thẻ Kết nối Gmail ngay trên trang Hộp Thư' })
         const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 30))
 
         const rows = await withImap(cfg, async (client) => {
@@ -91,7 +143,7 @@ router.get('/messages', authMiddleware, requirePermission('mailbox.view'), async
         res.status(auth ? 400 : 500).json({
             success: false,
             error: auth
-                ? `Đăng nhập hộp thư bị từ chối — kiểm tra App Password ở Cài đặt → Email. (${m.slice(0, 120)})`
+                ? `Đăng nhập hộp thư bị từ chối — bấm "Đổi tài khoản" nhập lại App Password. (${m.slice(0, 120)})`
                 : errMsg(err),
         })
     }
@@ -100,7 +152,7 @@ router.get('/messages', authMiddleware, requirePermission('mailbox.view'), async
 // GET /api/mailbox/messages/:uid — nội dung đầy đủ một thư
 router.get('/messages/:uid', authMiddleware, requirePermission('mailbox.view'), async (req: AuthRequest, res: Response) => {
     try {
-        const cfg = await loadSmtp(req.storePrisma!)
+        const cfg = await loadMailboxCfg(req.storePrisma!)
         if (!cfg) return res.status(400).json({ success: false, error: 'Chưa cấu hình email' })
         const uid = Number(req.params.uid)
         if (!uid) return res.status(400).json({ success: false, error: 'uid không hợp lệ' })
