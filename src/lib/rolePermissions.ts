@@ -25,6 +25,11 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
         'activity_log.view', 'notifications.view',
         // Alias module đơn số của route backend (orders/repairs dùng orders.*)
         'orders',
+        // Map bổ sung 04/08/2026 — các module có menu/route từ trước nhưng CHƯA
+        // vào ma trận: manager từng bị khoá cả mảng bán hàng online (trong khi
+        // driver lại có online_orders.view), thuế, lương, xe, giám sát sales.
+        'online_orders', 'online_products', 'online_chat',
+        'tax', 'payroll', 'vehicles', 'employees_sales',
     ],
     cashier: [
         'dashboard.view',
@@ -46,6 +51,9 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
         'customers.view_list', 'customers.view_detail', 'customers.create',
         'quotations.view', 'quotations.create', 'quotations.edit', 'quotations.print',
         'loyalty.view', 'loyalty.add_points', 'loyalty.redeem',
+        // 04/08/2026: nhân viên bán hàng phải xem được giá niêm yết, khuyến mãi,
+        // combo đang chạy — không thì tư vấn khách bằng trí nhớ.
+        'price_list.view', 'promotions.view', 'bundles.view',
     ],
     warranty: [
         'dashboard.view',
