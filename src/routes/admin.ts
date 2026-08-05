@@ -2865,7 +2865,9 @@ router.get('/mailbox-debug', async (req: Request, res: Response) => {
 
         const { ImapFlow } = require('imapflow') as typeof import('imapflow')
         const { simpleParser } = require('mailparser') as typeof import('mailparser')
-        const { htmlToText, parseBankEmail } = await import('../services/bankEmailParser')
+        const { htmlToText, parseBankEmail, toFieldMap } = await import('../services/bankEmailParser')
+        // Dump dài để nếu vẫn trượt thì có đủ dữ liệu, khỏi deploy thêm vòng nữa
+        const dumpLen = Math.min(6000, Math.max(300, Number(req.query.chars) || 700))
 
         const host = (cfg.host || '').trim() || 'imap.gmail.com'
         const client = new ImapFlow({ host, port: 993, secure: true, auth: { user: cfg.user, pass: cfg.pass }, logger: false })
@@ -2890,13 +2892,9 @@ router.get('/mailbox-debug', async (req: Request, res: Response) => {
                         coHtml: (typeof mail.html === 'string' ? mail.html.length : 0),
                         // 700 ký tự đầu của bản ĐANG DÙNG — nhìn là biết nhãn/giá trị
                         // có nằm cùng dòng không
-                        banDangDung: used.slice(0, 700),
-                        kiemTra: {
-                            khopTinhTrang: /Tình trạng[^\n]*Giao dịch thành công|Tinh trang[^\n]*Giao dich thanh cong/i.test(used),
-                            coChuGiaoDichThanhCong: /Giao dịch thành công|Giao dich thanh cong/i.test(used),
-                            coSoThamChieu: /Số tham chiếu|So tham chieu/i.test(used),
-                            coSoTien: /Số tiền giao dịch|So tien giao dich/i.test(used),
-                        },
+                        banDangDung: used.slice(0, dumpLen),
+                        // Bản đồ nhãn→giá trị mà bộ bóc thực sự nhìn thấy
+                        banDoNhan: toFieldMap((mail.subject || '') + '\n' + used),
                         ketQuaBoc: parseBankEmail({
                             subject: mail.subject || '', from: mail.from?.text || '',
                             text: mail.text || '', html: typeof mail.html === 'string' ? mail.html : null,

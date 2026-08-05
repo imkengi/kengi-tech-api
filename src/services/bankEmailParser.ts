@@ -45,24 +45,78 @@ function parseVndAmount(raw: string): number {
     return isFinite(n) ? Math.abs(n) : 0
 }
 
-/** "04-08-2026 16:00:02" | "04/08/2026" — MB dùng dd-mm-yyyy */
+/**
+ * "04-08-2026 16:00:02" | "04/08/2026" — MB dùng dd-mm-yyyy.
+ * Giờ trong thư là GIỜ VIỆT NAM (+07). Dựng bằng `new Date(y, m, d, h…)` là lấy
+ * múi giờ MÁY CHỦ — Cloud Run chạy UTC nên mọi giao dịch sẽ lệch 7 tiếng, đối
+ * soát với sao kê lệch ngày. Ép +07 tường minh.
+ */
 function parseVnDate(raw: string): Date | null {
     const m = /(\d{1,2})[-/](\d{1,2})[-/](\d{4})(?:[\sT]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/.exec(String(raw))
     if (!m) return null
     const [, d, mo, y, h = '0', mi = '0', se = '0'] = m
-    const dt = new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(se))
+    const dt = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(h) - 7, Number(mi), Number(se)))
     return isNaN(dt.getTime()) ? null : dt
 }
 
-/** Lấy giá trị theo nhãn trong bảng thư (HTML đã rút thẻ hoặc text thuần). */
-function pick(text: string, labels: string[]): string {
-    for (const label of labels) {
-        const re = new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*[:：]?\\s*([^\\n\\r]{1,160})', 'i')
-        const m = re.exec(text)
-        if (m?.[1]) {
-            const v = m[1].trim().replace(/\s{2,}/g, ' ')
-            if (v) return v
-        }
+/**
+ * Giải mã thực thể HTML. THƯ THẬT CỦA MB mã hoá TOÀN BỘ tiếng Việt thành thực
+ * thể số: "S&#7889; tham chi&#7871;u" = "Số tham chiếu". Không giải mã thì mọi
+ * nhãn tiếng Việt đều không khớp — đó là lý do 75/75 thư bị loại (đo 05/08).
+ */
+export function decodeEntities(s: string): string {
+    return String(s)
+        .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+        .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
+        .replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&')
+        .replace(/&lt;/gi, '<').replace(/&gt;/gi, '>')
+        .replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'")
+}
+
+/** MỌI nhãn của bảng giao dịch — dùng để cắt chuỗi thành cặp nhãn→giá trị. */
+const MB_LABELS = [
+    'Ngày, giờ giao dịch', 'Loại giao dịch', 'Số tham chiếu',
+    'Tài khoản trích nợ', 'Tài khoản ghi có', 'Tài khoản thụ hưởng',
+    'Người thụ hưởng', 'Người chuyển', 'Số tiền giao dịch', 'Số tiền',
+    'Phí giao dịch', 'Nội dung chuyển tiền', 'Nội dung', 'Cách thức lệnh',
+    'Ngày nhập lệnh', 'Thời gian', 'Tình trạng', 'Ngân hàng thụ hưởng',
+]
+
+/**
+ * Cắt văn bản thành map nhãn→giá trị.
+ * Bảng HTML thật xuống dòng LOẠN XẠ ngay giữa nhãn ("Ngày,\n giờ giao dịch")
+ * và giá trị nằm cách nhãn nhiều dòng trắng — nên cách cũ (đòi nhãn và giá trị
+ * cùng một dòng) không bao giờ khớp. Nay gom hết về một dòng rồi cắt theo vị
+ * trí các nhãn: giá trị = phần nằm giữa nhãn này và nhãn kế tiếp.
+ */
+export function toFieldMap(text: string): Record<string, string> {
+    const flat = decodeEntities(text).replace(/\s+/g, ' ').trim()
+    const alts = MB_LABELS
+        .map(l => l.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s*'))
+        .join('|')
+    const re = new RegExp(`(${alts})\\s*[:：]?\\s*`, 'gi')
+    const hits: { label: string; start: number; end: number }[] = []
+    for (const m of flat.matchAll(re)) {
+        hits.push({
+            label: m[1].replace(/\s+/g, ' ').toLowerCase(),
+            start: m.index!,
+            end: m.index! + m[0].length,
+        })
+    }
+    const out: Record<string, string> = {}
+    for (let i = 0; i < hits.length; i++) {
+        const stop = i + 1 < hits.length ? hits[i + 1].start : flat.length
+        const val = flat.slice(hits[i].end, Math.max(hits[i].end, stop)).trim()
+        // Nhãn lặp lại (bảng có dòng tóm tắt) → giữ lần đầu có giá trị
+        if (val && !out[hits[i].label]) out[hits[i].label] = val
+    }
+    return out
+}
+
+function pick(fields: Record<string, string>, labels: string[]): string {
+    for (const l of labels) {
+        const v = fields[l.toLowerCase()]
+        if (v) return v
     }
     return ''
 }
@@ -77,8 +131,8 @@ export function htmlToText(html: string): string {
         .replace(/<\s*(br|\/tr|\/p|\/div|\/h\d)\s*\/?>/gi, '\n')
         .replace(/<\/?t[dh][^>]*>/gi, '\t')
         .replace(/<[^>]+>/g, ' ')
-        .replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&')
-        .replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&quot;/gi, '"')
+        // Giải mã SAU khi bỏ thẻ, để &lt;div&gt; không biến thành thẻ thật
+        .replace(/&#x[0-9a-f]+;|&#\d+;|&\w+;/gi, m => decodeEntities(m))
         .replace(/[ \t]{2,}/g, ' ')
         .replace(/\n{2,}/g, '\n')
         .trim()
@@ -106,26 +160,27 @@ export function parseBankEmail(input: {
     const isMB = /mbbank\.com\.vn|\bMB eBanking\b|mbebanking/i.test(from + ' ' + body)
     if (!isMB) return null
 
-    const blob = subject + '\n' + body
+    const blob = decodeEntities(subject + '\n' + body).replace(/\s+/g, ' ')
+    const fields = toFieldMap(subject + '\n' + body)
 
-    // CHỈ nhận giao dịch đã thành công. "Giao dich cho phe duyet" (chờ duyệt),
-    // "Thong bao dang nhap" (đăng nhập) không phải biến động tiền.
-    const okStatus = /Tình trạng[^\n]*Giao dịch thành công|Tinh trang[^\n]*Giao dich thanh cong/i.test(blob)
+    // CHỈ nhận giao dịch đã thành công. Trạng thái đọc từ Ô "Tình trạng" chứ
+    // không dò cả thư — thư chờ duyệt cũng chứa chữ "giao dịch thành công" ở
+    // câu chào, dò cả thư là nhận nhầm.
+    const statusCell = pick(fields, ['Tình trạng'])
+    const okStatus = /Giao dịch thành công|Giao dich thanh cong|Thành công/i.test(statusCell)
     const loginNotice = /đăng nhập|dang nhap/i.test(subject)
-    const pendingApproval = /chờ phê duyệt|cho phe duyet|pending approval/i.test(blob)
+    const pendingApproval = /chờ phê duyệt|cho phe duyet|chờ duyệt|cho duyet|pending approval/i.test(subject + ' ' + statusCell)
     if (!okStatus || loginNotice || pendingApproval) return null
 
-    const referenceNo = pick(blob, ['Số tham chiếu', 'So tham chieu', 'Reference'])
-        .replace(/[^\w-]/g, '')
-    const amountRaw = pick(blob, ['Số tiền giao dịch', 'So tien giao dich', 'Số tiền', 'So tien'])
-    const amount = parseVndAmount(amountRaw)
+    const referenceNo = pick(fields, ['Số tham chiếu', 'Reference']).replace(/[^\w-]/g, '')
+    const amount = parseVndAmount(pick(fields, ['Số tiền giao dịch', 'Số tiền']))
     if (!referenceNo || !amount) return null
 
-    const debitAcc = pick(blob, ['Tài khoản trích nợ', 'Tai khoan trich no'])
-    const creditAcc = pick(blob, ['Tài khoản ghi có', 'Tai khoan ghi co', 'Tài khoản thụ hưởng'])
-    const beneficiary = pick(blob, ['Người thụ hưởng', 'Nguoi thu huong'])
-    const content = pick(blob, ['Nội dung chuyển tiền', 'Noi dung chuyen tien', 'Nội dung', 'Noi dung'])
-    const kind = pick(blob, ['Loại giao dịch', 'Loai giao dich'])
+    const debitAcc = pick(fields, ['Tài khoản trích nợ'])
+    const creditAcc = pick(fields, ['Tài khoản ghi có', 'Tài khoản thụ hưởng'])
+    const beneficiary = pick(fields, ['Người thụ hưởng'])
+    const content = pick(fields, ['Nội dung chuyển tiền', 'Nội dung'])
+    const kind = pick(fields, ['Loại giao dịch'])
 
     // CHIỀU TIỀN: có "tài khoản trích nợ" = tiền RA (debit). Có "ghi có" mà
     // không có trích nợ = tiền VÀO. Không suy được thì BỎ QUA (xem đầu file).
@@ -137,7 +192,7 @@ export function parseBankEmail(input: {
     if (!type) return null
 
     const transactionDate =
-        parseVnDate(pick(blob, ['Ngày, giờ giao dịch', 'Ngay, gio giao dich', 'Thời gian', 'Thoi gian', 'Ngày nhập lệnh']))
+        parseVnDate(pick(fields, ['Ngày, giờ giao dịch', 'Thời gian', 'Ngày nhập lệnh']))
         || input.receivedAt || new Date()
 
     const description = [kind || 'Giao dịch ngân hàng', content].filter(Boolean).join(' — ').slice(0, 300)
