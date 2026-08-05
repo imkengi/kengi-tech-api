@@ -271,6 +271,100 @@ router.post('/scan-transactions', authMiddleware, requirePermission('mailbox.man
     }
 })
 
+// POST /api/mailbox/scan-invoices {days?} — bóc HOÁ ĐƠN ĐẦU VÀO từ thư thông
+// báo phát hành HĐĐT của nhà cung cấp → phiếu chi CHỜ DUYỆT (status 'pending',
+// không lọt vào thống kê cho tới khi người dùng duyệt).
+router.post('/scan-invoices', authMiddleware, requirePermission('mailbox.manage'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const cfg = await loadMailboxCfg(prisma)
+        if (!cfg) return res.status(400).json({ success: false, error: 'Chưa gắn hộp thư' })
+
+        const days = Math.min(365, Math.max(1, Number(req.body?.days) || 90))
+        const since = new Date(Date.now() - days * 86400_000)
+        const CAP = 300
+
+        // MST của chính cửa hàng — để không nhận nhầm mình làm nhà cung cấp
+        const ownTaxCode = await prisma.eInvoiceConfig.findFirst({ select: { taxCode: true } })
+            .then((c: any) => c?.taxCode || '').catch(() => '')
+
+        const { parseEInvoiceEmail } = await import('../services/einvoiceEmailParser')
+        const { simpleParser } = require('mailparser') as typeof import('mailparser')
+
+        const found: any[] = []
+        let scanned = 0
+        await withImap(cfg, async (client) => {
+            const lock = await client.getMailboxLock('INBOX', { readOnly: true })
+            try {
+                // Quét theo TIÊU ĐỀ chứ không theo người gửi: mỗi NCC dùng một
+                // nhà cung cấp phần mềm HĐĐT khác nhau (softdreams, vnpt, viettel,
+                // misa…), lọc theo địa chỉ gửi sẽ sót hàng loạt.
+                const uids = await client.search({ since, or: [{ subject: 'hóa đơn điện tử' }, { subject: 'hoá đơn điện tử' }, { subject: 'Hoa don dien tu' }] }, { uid: true }) as number[]
+                if (!uids?.length) return
+                for (const uid of uids.slice(-CAP)) {
+                    const msg = await client.fetchOne(String(uid), { source: true }, { uid: true })
+                    if (!msg?.source) continue
+                    scanned++
+                    const mail = await simpleParser(msg.source)
+                    const inv = parseEInvoiceEmail({
+                        subject: mail.subject || '',
+                        from: mail.from?.text || '',
+                        text: mail.text || '',
+                        html: typeof mail.html === 'string' ? mail.html : null,
+                        ownTaxCode,
+                    })
+                    if (inv) found.push(inv)
+                }
+            } finally { lock.release() }
+        })
+
+        const keys = found.map(f => f.dedupKey)
+        const existing = keys.length
+            ? await prisma.expense.findMany({ where: { sourceRef: { in: keys } }, select: { sourceRef: true } })
+            : []
+        const seen = new Set(existing.map((e: any) => e.sourceRef))
+
+        let created = 0, duplicate = 0
+        const samples: any[] = []
+        for (const inv of found) {
+            if (seen.has(inv.dedupKey)) { duplicate++; continue }
+            seen.add(inv.dedupKey)
+            await prisma.expense.create({
+                data: {
+                    description: `HĐ ${inv.invoiceSymbol || ''} số ${inv.invoiceNo} — ${inv.sellerName || 'NCC'}`.slice(0, 300),
+                    amount: inv.totalAmount,
+                    category: 'Hoá đơn đầu vào',
+                    date: inv.invoiceDate || new Date(),
+                    status: 'pending',           // CHỜ DUYỆT — chưa vào thống kê
+                    vatAmount: inv.vatAmount || 0,
+                    supplierName: inv.sellerName || null,
+                    supplierTaxCode: inv.sellerTaxCode || null,
+                    invoiceNo: inv.invoiceNo,
+                    invoiceSymbol: inv.invoiceSymbol || null,
+                    invoiceDate: inv.invoiceDate || null,
+                    lookupCode: inv.lookupCode || null,
+                    taxAuthorityCode: inv.taxAuthorityCode || null,
+                    sourceRef: inv.dedupKey,
+                    branchId: (req.user as any)?.branchId || null,
+                },
+            })
+            created++
+            if (samples.length < 5) samples.push({ no: inv.invoiceNo, seller: inv.sellerName, total: inv.totalAmount, vat: inv.vatAmount })
+        }
+
+        res.json({
+            success: true,
+            data: {
+                scanned, parsed: found.length, created, duplicate, samples,
+                message: `Quét ${scanned} thư hoá đơn: thêm ${created} phiếu chi CHỜ DUYỆT` +
+                    `${duplicate ? `, bỏ qua ${duplicate} đã có` : ''}. Vào Chi phí để soát rồi duyệt — phiếu chờ chưa tính vào sổ.`,
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
 // GET /api/mailbox/messages/:uid — nội dung đầy đủ một thư
 router.get('/messages/:uid', authMiddleware, requirePermission('mailbox.view'), async (req: AuthRequest, res: Response) => {
     try {

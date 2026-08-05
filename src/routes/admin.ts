@@ -1190,6 +1190,14 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "PurchaseOrder" ADD COLUMN IF NOT EXISTS "rejectReason" TEXT`)
                 // Hộp thư Gmail riêng để check trong app (04/08/2026)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "mailboxConfig" TEXT`)
+                // Hoá đơn đầu vào bóc từ email HĐĐT (05/08/2026) — giữ đủ dữ liệu
+                // khấu trừ VAT trên phiếu chi
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Expense" ADD COLUMN IF NOT EXISTS "vatAmount" DOUBLE PRECISION`)
+                for (const c of ['supplierName', 'supplierTaxCode', 'invoiceNo', 'invoiceSymbol', 'lookupCode', 'taxAuthorityCode', 'sourceRef']) {
+                    await (sp as any).$executeRawUnsafe(`ALTER TABLE "Expense" ADD COLUMN IF NOT EXISTS "${c}" TEXT`)
+                }
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Expense" ADD COLUMN IF NOT EXISTS "invoiceDate" TIMESTAMP(3)`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Expense_sourceRef_idx" ON "Expense"("sourceRef")`)
 
                 // Ánh xạ mã hàng trên SÀN → sản phẩm kho (2026-07-23) — đơn TikTok/
                 // Shopee dùng SKU riêng không khớp kho khiến đơn không lên phiếu.

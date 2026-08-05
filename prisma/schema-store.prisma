@@ -571,7 +571,21 @@ model Expense {
   paidBy        String?
   recurring     Boolean   @default(false)
   bankAccountId String?
-  status        String    @default("active") // "active" | "cancelled"
+  // "pending" = bóc tự động từ email HĐĐT, CHỜ DUYỆT — thống kê chỉ tính
+  // "active" nên phiếu chờ không lọt vào sổ trước khi người dùng xem (2026-08-05)
+  status        String    @default("active") // "active" | "pending" | "cancelled"
+  // ─── Hoá đơn đầu vào (VAT khấu trừ) ───────────────────────────────────────
+  // Mất số hoá đơn / MST người bán là mất quyền khấu trừ, nên giữ đủ ngay từ
+  // lúc bóc thư, không để người dùng nhập lại tay.
+  vatAmount        Float?
+  supplierName     String?
+  supplierTaxCode  String?
+  invoiceNo        String?
+  invoiceSymbol    String?
+  invoiceDate      DateTime?
+  lookupCode       String? // mã tra cứu trên cổng HĐĐT của NCC
+  taxAuthorityCode String? // mã của cơ quan thuế
+  sourceRef        String? // khoá chống trùng: MST bán|ký hiệu|số HĐ
   cancelledAt   DateTime?
   cancelReason  String?
   branchId      String?
