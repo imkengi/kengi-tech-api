@@ -311,8 +311,12 @@ app.use('/api/online-orders/chat', chatRoutes)
 app.use('/api/fanpage', fanpageRoutes)
 app.use('/api/ai-jobs', aiJobRoutes) // Tro ly AI tu dong theo lich
 
-import marketingRoutes from './routes/marketing'
-app.use('/api/marketing', marketingRoutes) // AI len content fanpage (hang doi cho duyet)
+// TẠM NGẮT (04/08/2026): src/routes/marketing.ts đang code dở trên máy, CHƯA
+// commit — 2 dòng wiring này lọt vào commit 04ea539 (stage cả file index.ts cho
+// mailbox) làm Cloud Build fail 2 lượt liên tiếp: "Could not resolve
+// ./routes/marketing". Commit file route xong thì mở lại 2 dòng dưới.
+// import marketingRoutes from './routes/marketing'
+// app.use('/api/marketing', marketingRoutes) // AI len content fanpage (hang doi cho duyet)
 
 // ─── Health check ───────────────────────────────────────────────────────────
 app.get('/api/health', async (_req, res) => {
