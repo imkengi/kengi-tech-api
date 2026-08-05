@@ -2876,8 +2876,9 @@ router.get('/mailbox-debug', async (req: Request, res: Response) => {
             try {
                 const uids = await client.search({ from: 'mbbank.com.vn' }, { uid: true }) as number[]
                 for (const uid of (uids || []).slice(-n)) {
-                    const msg = await client.fetchOne(String(uid), { source: true }, { uid: true })
-                    if (!msg?.source) continue
+                    // fetchOne trả `false` khi không có thư — ép kiểu để TS thôi kêu
+                    const msg = await client.fetchOne(String(uid), { source: true }, { uid: true }) as any
+                    if (!msg || !msg.source) continue
                     const mail = await simpleParser(msg.source)
                     const rawText = mail.text || ''
                     const fromHtml = htmlToText(typeof mail.html === 'string' ? mail.html : '')
