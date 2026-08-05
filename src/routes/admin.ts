@@ -2857,7 +2857,7 @@ router.get('/mailbox-debug', async (req: Request, res: Response) => {
         const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true } })
         if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
         const sp = getStorePrisma(store.schema) as any
-        const n = Math.min(5, Math.max(1, Number(req.query.n) || 3))
+        const n = Math.min(30, Math.max(1, Number(req.query.n) || 3))
 
         const s = await sp.storeSettings.findUnique({ where: { id: 'default' }, select: { mailboxConfig: true } })
         if (!s?.mailboxConfig) { res.json({ success: false, error: 'chua gan hop thu' }); return }

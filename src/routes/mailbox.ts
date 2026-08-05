@@ -326,9 +326,11 @@ router.post('/scan-invoices', authMiddleware, requirePermission('mailbox.manage'
 
         let created = 0, duplicate = 0
         const samples: any[] = []
+        const errors: string[] = []
         for (const inv of found) {
             if (seen.has(inv.dedupKey)) { duplicate++; continue }
             seen.add(inv.dedupKey)
+            try {
             await prisma.expense.create({
                 data: {
                     description: `HĐ ${inv.invoiceSymbol || ''} số ${inv.invoiceNo} — ${inv.sellerName || 'NCC'}`.slice(0, 300),
@@ -350,14 +352,21 @@ router.post('/scan-invoices', authMiddleware, requirePermission('mailbox.manage'
             })
             created++
             if (samples.length < 5) samples.push({ no: inv.invoiceNo, seller: inv.sellerName, total: inv.totalAmount, vat: inv.vatAmount })
+            } catch (e: any) {
+                // MỘT phiếu ghi lỗi (thiếu cột, dữ liệu lạ…) không được giết cả
+                // mẻ quét — báo rõ hoá đơn nào lỗi gì để còn biết đường sửa.
+                errors.push(`HĐ ${inv.invoiceNo}: ${e?.message?.slice(0, 150) || 'lỗi ghi DB'}`)
+            }
         }
 
         res.json({
             success: true,
             data: {
-                scanned, parsed: found.length, created, duplicate, samples,
+                scanned, parsed: found.length, created, duplicate, samples, errors,
                 message: `Quét ${scanned} thư hoá đơn: thêm ${created} phiếu chi CHỜ DUYỆT` +
-                    `${duplicate ? `, bỏ qua ${duplicate} đã có` : ''}. Vào Chi phí để soát rồi duyệt — phiếu chờ chưa tính vào sổ.`,
+                    `${duplicate ? `, bỏ qua ${duplicate} đã có` : ''}` +
+                    `${errors.length ? `, ${errors.length} phiếu LỖI GHI: ${errors[0]}` : ''}` +
+                    `. Vào Chi phí để soát rồi duyệt — phiếu chờ chưa tính vào sổ.`,
             },
         })
     } catch (err: any) {

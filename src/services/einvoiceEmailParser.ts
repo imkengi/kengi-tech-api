@@ -94,7 +94,20 @@ export function parseEInvoiceEmail(input: {
     if (!looksLikeInvoice) return null
 
     const invoiceNo = pick(blob, ['Số hóa đơn', 'Số hoá đơn', 'So hoa don']).replace(/[^\w]/g, '')
-    const totalAmount = parseMoney(pick(blob, ['Tổng tiền thanh toán', 'Tong tien thanh toan', 'Tổng cộng tiền thanh toán', 'Tổng tiền']))
+    // Nhãn tiền: thử NHIỀU nhãn và bỏ qua nhãn vớ phải chuỗi không có số.
+    // Bẫy Shopee: nhãn của họ là "Tổng tiền giá trị hóa đơn sau thuế" — nhãn
+    // ngắn "Tổng tiền" khớp giữa cụm, vớ được "giá trị hóa đơn sau thuế:" (không
+    // số) → tiền 0 → loại oan cả thư. Nhãn DÀI phải đứng trước, và giá trị
+    // không ra số thì thử tiếp nhãn sau chứ không dừng.
+    const moneyLabels = [
+        'Tổng tiền giá trị hóa đơn sau thuế', 'Tổng tiền thanh toán',
+        'Tổng cộng tiền thanh toán', 'Tong tien thanh toan', 'Tổng tiền',
+    ]
+    let totalAmount = 0
+    for (const l of moneyLabels) {
+        totalAmount = parseMoney(pick(blob, [l]))
+        if (totalAmount) break
+    }
     if (!invoiceNo || !totalAmount) return null
 
     // NGƯỜI BÁN vs NGƯỜI MUA: thư chứa CẢ HAI mã số thuế. Tín hiệu chắc nhất là
@@ -105,12 +118,20 @@ export function parseEInvoiceEmail(input: {
     // Nhánh DÀI đứng trước: MST cá nhân/hộ KD có 12 số, doanh nghiệp 10 số (có
     // thể kèm -XXX chi nhánh). Để \d{10} trước là cắt cụt 052200014638 thành
     // 0522000146 → so sánh với MST cửa hàng không khớp, lọc người mua hụt.
-    const nameRe = /([A-ZÀ-Ỹ][^\n,]{5,120}?)\s*,?\s*Mã số thuế\s*:?\s*(\d{10}-\d{3}|\d{13}|\d{12}|\d{10})/gi
+    // Nhận cả "MST" — tiêu đề Shopee viết "CÔNG TY TNHH SHOPEE - MST: 0106773786"
+    const nameRe = /([A-ZÀ-Ỹ][^\n,]{5,120}?)\s*[-,]?\s*(?:Mã số thuế|MST)\s*:?\s*(\d{10}-\d{3}|\d{13}|\d{12}|\d{10})/gi
     for (const m of blob.matchAll(nameRe)) pairs.push({ name: m[1].trim(), tax: m[2] })
 
-    const sellerPair = pairs.find(p => !own || p.tax !== own) || pairs[0]
+    // KHÔNG rơi về pairs[0] khi mọi cặp đều là MST của mình — thư Shopee chỉ có
+    // cặp "Tên đơn vị, MST" của NGƯỜI MUA trong thân thư; rơi về pairs[0] là ghi
+    // nhà cung cấp = chính cửa hàng. Không có cặp hợp lệ thì để fallback allTax lo.
+    const sellerPair = pairs.find(p => !own || p.tax !== own) || (own ? undefined : pairs[0])
     let sellerTaxCode = sellerPair?.tax || ''
     let sellerName = sellerPair?.name || ''
+    // Cặp bắt trong TIÊU ĐỀ hay dính cả cụm dẫn ("Hóa đơn điện tử số X được gửi
+    // từ CÔNG TY…") — có chữ mở đầu pháp nhân thì cắt từ đó
+    const legal = /((?:CÔNG TY|CTY|DOANH NGHIỆP|HỘ KINH DOANH|HKD|TỔNG CÔNG TY)[^\n]*)/i.exec(sellerName)
+    if (legal) sellerName = legal[1].trim()
     const buyerTaxCode = (own && pairs.some(p => p.tax === own))
         ? own
         : pairs.find(p => p.tax !== sellerTaxCode)?.tax
@@ -122,7 +143,9 @@ export function parseEInvoiceEmail(input: {
     }
     if (!sellerName) {
         // Tiêu đề dạng "Hóa đơn điện tử số: 21100 - CÔNG TY ... kính gửi khách hàng X"
-        const s = /-\s*(CÔNG TY[^\n]*?)\s+kính gửi/i.exec(subject) || /^(CÔNG TY[^\n,]{5,120})/im.exec(body)
+        const s = /-\s*(CÔNG TY[^\n]*?)\s+kính gửi/i.exec(subject)
+            || /gửi từ\s+(CÔNG TY[^\n-]{3,120}?)\s*-/i.exec(subject)
+            || /^\s*(CÔNG TY[^\n,]{5,120})/im.exec(body)
         sellerName = s?.[1]?.trim() || ''
     }
     if (!sellerTaxCode && !sellerName) return null
@@ -131,8 +154,11 @@ export function parseEInvoiceEmail(input: {
     const invoiceDate = parseDmy(pick(blob, ['Ngày hóa đơn', 'Ngày hoá đơn', 'Ngay hoa don'])) || undefined
     // Thiếu thì để 0 — xem ghi chú đầu file, KHÔNG suy từ tổng tiền
     const vatAmount = parseMoney(pick(blob, ['Tiền thuế', 'Tien thue', 'Thuế GTGT', 'Tiền thuế GTGT']))
-    const lookupCode = pick(blob, ['Mã tra cứu', 'Ma tra cuu']).replace(/[^\w]/g, '') || undefined
-    const taxAuthorityCode = pick(blob, ['Mã của cơ quan thuế', 'Ma cua co quan thue', 'Mã CQT']).replace(/[^\w-]/g, '') || undefined
+    const lookupCode = pick(blob, ['Mã tra cứu', 'Mã nhận hóa đơn', 'Mã nhận hoá đơn', 'Ma tra cuu']).replace(/[^\w]/g, '') || undefined
+    // Mã CQT phải là MỘT token mã (chữ+số). "mã của cơ quan thuế" còn xuất hiện
+    // giữa câu giải thích Thông tư 78 ở chân thư Shopee — vớ câu đó là ra rác.
+    const cqtTok = (pick(blob, ['Mã của cơ quan thuế', 'Ma cua co quan thue', 'Mã CQT']).split(/\s+/)[0] || '').replace(/[^\w-]/g, '')
+    const taxAuthorityCode = /^[A-Za-z0-9-]{6,40}$/.test(cqtTok) ? cqtTok : undefined
 
     return {
         invoiceNo,
