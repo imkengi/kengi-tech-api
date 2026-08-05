@@ -154,7 +154,9 @@ export async function runDriveVideoCleanup(): Promise<void> {
                         type: 'system',
                         title: `🎬 Dọn video đóng hàng: ${trashed} video quá ${RETENTION_DAYS} ngày vào thùng rác Drive`,
                         message: `${kept > 0 ? `Giữ lại ${kept} video thuộc khiếu nại đang mở. ` : ''}` +
-                            `${failed > 0 ? `${failed} video xoá lỗi (kiểm tra service account có quyền Editor trên thư mục): ${firstErr.slice(0, 150)}` : 'Video trong thùng rác còn khôi phục được 30 ngày.'}`,
+                            // KHÔNG khuyên "kiểm tra quyền Editor" — file My Drive chỉ CHỦ SỞ HỮU
+                            // xoá được, Editor cũng bị Google chặn (đo 04/08: 300/300 lỗi).
+                            `${failed > 0 ? `${failed} video xoá lỗi — file My Drive chỉ chủ sở hữu xoá được. Cài script dọn tự động vào tài khoản Google của bạn (hỏi Kengi lấy file drive-video-cleanup.gs). Lỗi gốc: ${firstErr.slice(0, 120)}` : 'Video trong thùng rác còn khôi phục được 30 ngày.'}`,
                     },
                 }).catch(() => { })
             }
