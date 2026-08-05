@@ -179,6 +179,27 @@ router.post('/:id/cancel', authMiddleware, requireRole('admin', 'manager'), asyn
     }
 })
 
+// POST /api/expenses/:id/approve — duyệt phiếu CHỜ (quét từ hộp thư tạo ra
+// status 'pending', chưa tính vào thống kê). Duyệt xong mới thành 'active'.
+router.post('/:id/approve', authMiddleware, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const id = String(req.params.id)
+        const existing = await prisma.expense.findUnique({ where: { id } })
+        if (!existing) return res.status(404).json({ success: false, error: 'Không tìm thấy phiếu chi' })
+        if (!canAccessBranch(req, existing.branchId)) return res.status(404).json({ success: false, error: 'Không tìm thấy phiếu chi' })
+        if (existing.status !== 'pending') return res.status(400).json({ success: false, error: 'Phiếu không ở trạng thái chờ duyệt' })
+
+        const expense = await prisma.expense.update({ where: { id }, data: { status: 'active' } })
+        cacheDel(`${req.user?.storeSchema || 'default'}:expenses:*`).catch(() => {})
+        res.json({ success: true, data: expense })
+        emitEntityEvent(prisma, 'expense.approved', expensePayload(expense), req.user?.storeSchema).catch(() => { })
+    } catch (err) {
+        console.error('Approve expense error:', err)
+        res.status(500).json({ success: false, error: 'Lỗi khi duyệt phiếu chi' })
+    }
+})
+
 // DELETE /api/expenses/:id
 router.delete('/:id', authMiddleware, requireRole('admin', 'manager'), async (req: AuthRequest, res: Response) => {
     try {
