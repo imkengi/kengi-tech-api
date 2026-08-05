@@ -2848,6 +2848,69 @@ router.post('/reconcile-refunds', async (req: Request, res: Response) => {
     }
 })
 
+// ─── GET /admin/mailbox-debug?storeCode=&n= ──────────────────────────────────
+// CHẨN ĐOÁN: dump nội dung THẬT của thư ngân hàng sau khi chuẩn hoá, kèm kết
+// quả từng bước kiểm tra — để biết bộ bóc trượt ở đâu thay vì đoán.
+router.get('/mailbox-debug', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
+        const sp = getStorePrisma(store.schema) as any
+        const n = Math.min(5, Math.max(1, Number(req.query.n) || 3))
+
+        const s = await sp.storeSettings.findUnique({ where: { id: 'default' }, select: { mailboxConfig: true } })
+        if (!s?.mailboxConfig) { res.json({ success: false, error: 'chua gan hop thu' }); return }
+        const cfg = JSON.parse(s.mailboxConfig)
+
+        const { ImapFlow } = require('imapflow') as typeof import('imapflow')
+        const { simpleParser } = require('mailparser') as typeof import('mailparser')
+        const { htmlToText, parseBankEmail } = await import('../services/bankEmailParser')
+
+        const host = (cfg.host || '').trim() || 'imap.gmail.com'
+        const client = new ImapFlow({ host, port: 993, secure: true, auth: { user: cfg.user, pass: cfg.pass }, logger: false })
+        await client.connect()
+        const out: any[] = []
+        try {
+            const lock = await client.getMailboxLock('INBOX', { readOnly: true })
+            try {
+                const uids = await client.search({ from: 'mbbank.com.vn' }, { uid: true }) as number[]
+                for (const uid of (uids || []).slice(-n)) {
+                    const msg = await client.fetchOne(String(uid), { source: true }, { uid: true })
+                    if (!msg?.source) continue
+                    const mail = await simpleParser(msg.source)
+                    const rawText = mail.text || ''
+                    const fromHtml = htmlToText(typeof mail.html === 'string' ? mail.html : '')
+                    // Bộ bóc ưu tiên `text` khi dài > 40 ký tự — dump CẢ HAI để so
+                    const used = rawText.trim().length > 40 ? rawText : fromHtml
+                    out.push({
+                        subject: mail.subject,
+                        coTextThuan: rawText.trim().length,
+                        coHtml: (typeof mail.html === 'string' ? mail.html.length : 0),
+                        // 700 ký tự đầu của bản ĐANG DÙNG — nhìn là biết nhãn/giá trị
+                        // có nằm cùng dòng không
+                        banDangDung: used.slice(0, 700),
+                        kiemTra: {
+                            khopTinhTrang: /Tình trạng[^\n]*Giao dịch thành công|Tinh trang[^\n]*Giao dich thanh cong/i.test(used),
+                            coChuGiaoDichThanhCong: /Giao dịch thành công|Giao dich thanh cong/i.test(used),
+                            coSoThamChieu: /Số tham chiếu|So tham chieu/i.test(used),
+                            coSoTien: /Số tiền giao dịch|So tien giao dich/i.test(used),
+                        },
+                        ketQuaBoc: parseBankEmail({
+                            subject: mail.subject || '', from: mail.from?.text || '',
+                            text: mail.text || '', html: typeof mail.html === 'string' ? mail.html : null,
+                            receivedAt: mail.date || undefined,
+                        }),
+                    })
+                }
+            } finally { lock.release() }
+        } finally { await client.logout().catch(() => { }) }
+        res.json({ success: true, data: out })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err?.message || String(err) })
+    }
+})
+
 // ─── GET /admin/returns-raw?from=&to=&find= ─────────────────────────────────
 // CHỈ ĐỌC: gọi thẳng API trả hàng của sàn, trả về DANH SÁCH THÔ (không ghi DB)
 // để đối chiếu "sàn có phiếu mà hệ thống không có". find= lọc theo mã đơn.
