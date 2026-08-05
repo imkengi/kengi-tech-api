@@ -122,13 +122,18 @@ router.get('/messages', authMiddleware, requirePermission('mailbox.view'), async
                 // 40 thư đã tải — gõ tên shop/mã đơn là moi được thư cũ nhiều
                 // tháng. Không có từ khoá thì lấy N thư mới nhất như cũ.
                 let range: string | number[]
+                let matched: number | null = null
                 if (q || unreadOnly) {
                     const criteria: any = q
                         ? { or: [{ subject: q }, { from: q }, { body: q }] }
                         : {}
                     if (unreadOnly) criteria.seen = false
                     const uids = await client.search(criteria, { uid: true }) as number[]
-                    if (!uids || uids.length === 0) return { total, unseen: Number(status?.unseen || 0), messages: [] as any[] }
+                    matched = uids?.length || 0
+                    // `searched: true` để FE BIẾT CHẮC server đã lọc thật. Thiếu cờ này
+                    // thì bản server cũ (chưa có tìm kiếm) lặng lẽ trả 40 thư mới nhất
+                    // và màn hình vẫn ghi "40 kết quả" — đúng cảnh vừa gặp.
+                    if (matched === 0) return { total, unseen: Number(status?.unseen || 0), matched: 0, searched: true, messages: [] as any[] }
                     range = uids.slice(-limit)   // mảng UID → fetch đúng những thư khớp
                 } else {
                     range = `${Math.max(1, total - limit + 1)}:*`
@@ -152,7 +157,7 @@ router.get('/messages', authMiddleware, requirePermission('mailbox.view'), async
                     })
                 }
                 out.sort((a, b) => (a.date < b.date ? 1 : -1))
-                return { total, unseen: Number(status?.unseen || 0), messages: out }
+                return { total, unseen: Number(status?.unseen || 0), matched, searched: matched !== null, messages: out }
             } finally {
                 lock.release()
             }
