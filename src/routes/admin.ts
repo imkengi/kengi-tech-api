@@ -2866,8 +2866,23 @@ router.get('/mailbox-debug', async (req: Request, res: Response) => {
         const { ImapFlow } = require('imapflow') as typeof import('imapflow')
         const { simpleParser } = require('mailparser') as typeof import('mailparser')
         const { htmlToText, parseBankEmail, toFieldMap } = await import('../services/bankEmailParser')
+        const { parseEInvoiceEmail } = await import('../services/einvoiceEmailParser')
         // Dump dài để nếu vẫn trượt thì có đủ dữ liệu, khỏi deploy thêm vòng nữa
         const dumpLen = Math.min(6000, Math.max(300, Number(req.query.chars) || 700))
+        // ?mode=invoice → soi thư HOÁ ĐƠN (cùng tiêu chí tìm với scan-invoices)
+        // thay vì thư ngân hàng, kèm số phiếu pending đang nằm trong DB
+        const invoiceMode = String(req.query.mode || '') === 'invoice'
+        const ownTaxCode = invoiceMode
+            ? await sp.eInvoiceConfig.findFirst({ select: { taxCode: true } })
+                .then((c: any) => c?.taxCode || '').catch(() => '')
+            : ''
+        const pendingInDb = invoiceMode
+            ? await sp.expense.findMany({
+                where: { status: 'pending' },
+                select: { description: true, amount: true, date: true, sourceRef: true, createdAt: true },
+                orderBy: { createdAt: 'desc' }, take: 25,
+            })
+            : undefined
 
         const host = (cfg.host || '').trim() || 'imap.gmail.com'
         const client = new ImapFlow({ host, port: 993, secure: true, auth: { user: cfg.user, pass: cfg.pass }, logger: false })
@@ -2876,7 +2891,13 @@ router.get('/mailbox-debug', async (req: Request, res: Response) => {
         try {
             const lock = await client.getMailboxLock('INBOX', { readOnly: true })
             try {
-                const uids = await client.search({ from: 'mbbank.com.vn' }, { uid: true }) as number[]
+                const uids = invoiceMode
+                    // ĐÚNG tiêu chí của scan-invoices — lệch tiêu chí là chẩn sai bệnh
+                    ? await client.search({
+                        since: new Date(Date.now() - 90 * 86400_000),
+                        or: [{ subject: 'hóa đơn điện tử' }, { subject: 'hoá đơn điện tử' }, { subject: 'Hoa don dien tu' }],
+                    }, { uid: true }) as number[]
+                    : await client.search({ from: 'mbbank.com.vn' }, { uid: true }) as number[]
                 for (const uid of (uids || []).slice(-n)) {
                     // fetchOne trả `false` khi không có thư — ép kiểu để TS thôi kêu
                     const msg = await client.fetchOne(String(uid), { source: true }, { uid: true }) as any
@@ -2884,27 +2905,34 @@ router.get('/mailbox-debug', async (req: Request, res: Response) => {
                     const mail = await simpleParser(msg.source)
                     const rawText = mail.text || ''
                     const fromHtml = htmlToText(typeof mail.html === 'string' ? mail.html : '')
-                    // Bộ bóc ưu tiên `text` khi dài > 40 ký tự — dump CẢ HAI để so
-                    const used = rawText.trim().length > 40 ? rawText : fromHtml
+                    // Bộ bóc ưu tiên `text` khi dài đủ — dump CẢ HAI để so
+                    const used = rawText.trim().length > (invoiceMode ? 60 : 40) ? rawText : fromHtml
                     out.push({
                         subject: mail.subject,
+                        from: mail.from?.text,
                         coTextThuan: rawText.trim().length,
                         coHtml: (typeof mail.html === 'string' ? mail.html.length : 0),
-                        // 700 ký tự đầu của bản ĐANG DÙNG — nhìn là biết nhãn/giá trị
+                        // Đoạn đầu của bản ĐANG DÙNG — nhìn là biết nhãn/giá trị
                         // có nằm cùng dòng không
                         banDangDung: used.slice(0, dumpLen),
-                        // Bản đồ nhãn→giá trị mà bộ bóc thực sự nhìn thấy
-                        banDoNhan: toFieldMap((mail.subject || '') + '\n' + used),
-                        ketQuaBoc: parseBankEmail({
-                            subject: mail.subject || '', from: mail.from?.text || '',
-                            text: mail.text || '', html: typeof mail.html === 'string' ? mail.html : null,
-                            receivedAt: mail.date || undefined,
-                        }),
+                        // Bản đồ nhãn→giá trị mà bộ bóc ngân hàng thực sự nhìn thấy
+                        ...(invoiceMode ? {} : { banDoNhan: toFieldMap((mail.subject || '') + '\n' + used) }),
+                        ketQuaBoc: invoiceMode
+                            ? parseEInvoiceEmail({
+                                subject: mail.subject || '', from: mail.from?.text || '',
+                                text: mail.text || '', html: typeof mail.html === 'string' ? mail.html : null,
+                                ownTaxCode,
+                            })
+                            : parseBankEmail({
+                                subject: mail.subject || '', from: mail.from?.text || '',
+                                text: mail.text || '', html: typeof mail.html === 'string' ? mail.html : null,
+                                receivedAt: mail.date || undefined,
+                            }),
                     })
                 }
             } finally { lock.release() }
         } finally { await client.logout().catch(() => { }) }
-        res.json({ success: true, data: out })
+        res.json({ success: true, data: out, pendingInDb })
     } catch (err: any) {
         res.status(500).json({ success: false, error: err?.message || String(err) })
     }
