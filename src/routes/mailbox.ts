@@ -108,6 +108,8 @@ router.get('/messages', authMiddleware, requirePermission('mailbox.view'), async
         const cfg = await loadMailboxCfg(req.storePrisma!)
         if (!cfg) return res.status(400).json({ success: false, error: 'Chưa gắn hộp thư — dùng thẻ Kết nối Gmail ngay trên trang Hộp Thư' })
         const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 30))
+        const q = String(req.query.search || '').trim()
+        const unreadOnly = String(req.query.unread || '') === '1'
 
         const rows = await withImap(cfg, async (client) => {
             const lock = await client.getMailboxLock('INBOX', { readOnly: true })
@@ -115,9 +117,29 @@ router.get('/messages', authMiddleware, requirePermission('mailbox.view'), async
                 const total = Number(client.mailbox?.exists || 0)
                 if (total === 0) return { total: 0, unseen: 0, messages: [] as any[] }
                 const status = await client.status('INBOX', { unseen: true })
-                const from = Math.max(1, total - limit + 1)
+
+                // Tìm kiếm chạy TRÊN SÀN GMAIL (IMAP SEARCH) chứ không lọc mảng
+                // 40 thư đã tải — gõ tên shop/mã đơn là moi được thư cũ nhiều
+                // tháng. Không có từ khoá thì lấy N thư mới nhất như cũ.
+                let range: string | number[]
+                if (q || unreadOnly) {
+                    const criteria: any = q
+                        ? { or: [{ subject: q }, { from: q }, { body: q }] }
+                        : {}
+                    if (unreadOnly) criteria.seen = false
+                    const uids = await client.search(criteria, { uid: true }) as number[]
+                    if (!uids || uids.length === 0) return { total, unseen: Number(status?.unseen || 0), messages: [] as any[] }
+                    range = uids.slice(-limit)   // mảng UID → fetch đúng những thư khớp
+                } else {
+                    range = `${Math.max(1, total - limit + 1)}:*`
+                }
+
                 const out: any[] = []
-                for await (const msg of client.fetch(`${from}:*`, { uid: true, envelope: true, flags: true, internalDate: true })) {
+                const fetchOpts = { uid: true, envelope: true, flags: true, internalDate: true }
+                const iter = Array.isArray(range)
+                    ? client.fetch(range as any, fetchOpts, { uid: true })
+                    : client.fetch(range, fetchOpts)
+                for await (const msg of iter) {
                     const env = msg.envelope || {}
                     const sender = (env.from && env.from[0]) || {}
                     out.push({
