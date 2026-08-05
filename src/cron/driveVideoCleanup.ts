@@ -102,6 +102,20 @@ export async function runDriveVideoCleanup(): Promise<void> {
             const folderId = settings?.driveFolderId
             if (!folderId) continue
 
+            // CHỐT CHỐNG SPAM: lịch "24h/lần" nhưng lần đầu chạy 5' sau khi server
+            // khởi động — mà Cloud Run khởi động lại theo MỖI deploy/scale, nên
+            // ngày deploy nhiều là mỗi lần một thông báo lỗi y hệt (đo 05/08:
+            // 5 thông báo trong một buổi sáng). Dấu vết = thông báo gần nhất
+            // trong DB; đã dọn trong 20h qua thì bỏ qua store này.
+            const daChayGanDay = await sp.notification.findFirst({
+                where: {
+                    title: { startsWith: '🎬 Dọn video' },
+                    createdAt: { gte: new Date(Date.now() - 20 * 3600_000) },
+                },
+                select: { id: true },
+            }).catch(() => null)
+            if (daChayGanDay) continue
+
             const drive = getDriveWrite()
             const folders = [folderId, ...await listSubfolderIds(drive, folderId)]
             const keep = await openDisputeTrackings(sp)
