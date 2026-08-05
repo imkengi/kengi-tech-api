@@ -2883,6 +2883,15 @@ router.get('/mailbox-debug', async (req: Request, res: Response) => {
                 orderBy: { createdAt: 'desc' }, take: 25,
             })
             : undefined
+        // MỌI phiếu sinh từ quét hoá đơn, bất kể trạng thái — để phân biệt
+        // "không tạo được" với "tạo rồi nhưng bị huỷ/xoá/duyệt mất"
+        const invoiceExpensesAll = invoiceMode
+            ? await sp.expense.findMany({
+                where: { OR: [{ category: 'Hoá đơn đầu vào' }, { sourceRef: { not: null } }] },
+                select: { description: true, amount: true, status: true, sourceRef: true, branchId: true, createdAt: true, cancelledAt: true },
+                orderBy: { createdAt: 'desc' }, take: 50,
+            }).catch((e: any) => [{ loi: e?.message?.slice(0, 200) }])
+            : undefined
 
         const host = (cfg.host || '').trim() || 'imap.gmail.com'
         const client = new ImapFlow({ host, port: 993, secure: true, auth: { user: cfg.user, pass: cfg.pass }, logger: false })
@@ -2932,7 +2941,7 @@ router.get('/mailbox-debug', async (req: Request, res: Response) => {
                 }
             } finally { lock.release() }
         } finally { await client.logout().catch(() => { }) }
-        res.json({ success: true, data: out, pendingInDb })
+        res.json({ success: true, data: out, pendingInDb, invoiceExpensesAll })
     } catch (err: any) {
         res.status(500).json({ success: false, error: err?.message || String(err) })
     }
