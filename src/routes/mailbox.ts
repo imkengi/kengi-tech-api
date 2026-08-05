@@ -176,6 +176,101 @@ router.get('/messages', authMiddleware, requirePermission('mailbox.view'), async
     }
 })
 
+// POST /api/mailbox/scan-transactions {bankAccountId, days?}
+// Quét thư báo giao dịch ngân hàng → tạo BankTransaction CHƯA đối soát, chảy
+// vào đúng màn E-Banking sẵn có (đối soát, gắn phiếu thu/chi).
+router.post('/scan-transactions', authMiddleware, requirePermission('mailbox.manage'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const cfg = await loadMailboxCfg(prisma)
+        if (!cfg) return res.status(400).json({ success: false, error: 'Chưa gắn hộp thư' })
+
+        const bankAccountId = String(req.body?.bankAccountId || '').trim()
+        if (!bankAccountId) return res.status(400).json({ success: false, error: 'Chọn tài khoản ngân hàng để ghi giao dịch vào' })
+        const acc = await prisma.bankAccount.findUnique({ where: { id: bankAccountId } }).catch(() => null)
+        if (!acc) return res.status(404).json({ success: false, error: 'Không tìm thấy tài khoản ngân hàng' })
+
+        const days = Math.min(180, Math.max(1, Number(req.body?.days) || 30))
+        const since = new Date(Date.now() - days * 86400_000)
+        const CAP = 200
+
+        const { parseBankEmail } = await import('../services/bankEmailParser')
+        const { simpleParser } = require('mailparser') as typeof import('mailparser')
+
+        const parsed: any[] = []
+        let scanned = 0
+        await withImap(cfg, async (client) => {
+            const lock = await client.getMailboxLock('INBOX', { readOnly: true })
+            try {
+                const uids = await client.search({ since, from: 'mbbank.com.vn' }, { uid: true }) as number[]
+                if (!uids?.length) return
+                for (const uid of uids.slice(-CAP)) {
+                    const msg = await client.fetchOne(String(uid), { source: true, envelope: true }, { uid: true })
+                    if (!msg?.source) continue
+                    scanned++
+                    const mail = await simpleParser(msg.source)
+                    const tx = parseBankEmail({
+                        subject: mail.subject || '',
+                        from: mail.from?.text || '',
+                        text: mail.text || '',
+                        html: typeof mail.html === 'string' ? mail.html : null,
+                        receivedAt: mail.date || undefined,
+                    })
+                    if (tx) parsed.push(tx)
+                }
+            } finally { lock.release() }
+        })
+
+        // Chống trùng theo SỐ THAM CHIẾU — quét lại nhiều lần vẫn không nhân đôi
+        const refs = parsed.map(p => p.referenceNo)
+        const existing = refs.length
+            ? await prisma.bankTransaction.findMany({ where: { referenceNo: { in: refs } }, select: { referenceNo: true } })
+            : []
+        const seen = new Set(existing.map((e: any) => e.referenceNo))
+
+        let created = 0, duplicate = 0
+        const samples: any[] = []
+        for (const p of parsed) {
+            if (seen.has(p.referenceNo)) { duplicate++; continue }
+            seen.add(p.referenceNo)
+            await prisma.bankTransaction.create({
+                data: {
+                    bankAccountId, type: p.type, amount: p.amount,
+                    description: p.description,
+                    transactionDate: p.transactionDate, date: p.transactionDate,
+                    reference: p.referenceNo, referenceNo: p.referenceNo,
+                    counterpartyName: p.counterpartyName || null,
+                    counterpartyAccount: p.counterpartyAccount || null,
+                    isReconciled: false,
+                    notes: 'Bóc tự động từ email ngân hàng',
+                    branchId: acc.branchId || null,
+                },
+            })
+            created++
+            if (samples.length < 5) samples.push({ ref: p.referenceNo, type: p.type, amount: p.amount, desc: p.description.slice(0, 60) })
+        }
+
+        // CỐ Ý KHÔNG cộng/trừ số dư tài khoản: email chỉ là lát cắt (có thư bị
+        // xoá, lọc vào thư mục khác, ngân hàng khác chưa hỗ trợ). Lấy số dư từ
+        // nguồn không đầy đủ sẽ làm lệch sổ mà không ai biết. Số dư vẫn do sao
+        // kê CSV / nhập tay quyết định.
+        res.json({
+            success: true,
+            data: {
+                scanned, parsed: parsed.length, created, duplicate,
+                skipped: scanned - parsed.length,
+                samples,
+                message: `Quét ${scanned} thư ngân hàng: thêm ${created} giao dịch mới` +
+                    `${duplicate ? `, bỏ qua ${duplicate} đã có` : ''}` +
+                    `${scanned - parsed.length ? `, ${scanned - parsed.length} thư không phải giao dịch thành công` : ''}. ` +
+                    `Vào E-Banking để đối soát và lên phiếu thu/chi.`,
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
 // GET /api/mailbox/messages/:uid — nội dung đầy đủ một thư
 router.get('/messages/:uid', authMiddleware, requirePermission('mailbox.view'), async (req: AuthRequest, res: Response) => {
     try {
