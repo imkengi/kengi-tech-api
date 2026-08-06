@@ -89,9 +89,22 @@ export async function resumeStalledSyncs(): Promise<void> {
                 data: { attempts: attempts + 1, heartbeatAt: new Date() },
             })
 
+            // `entity` bị ghi đè liên tục kèm tiến độ ("… · đang tải invoices 500/24462")
+            // nên phải cắt ở dấu · trước khi tách danh sách loại.
             const entities = String(log.entity || '').split('·')[0].split(',').map(s => s.trim()).filter(Boolean)
             const valid = SYNC_ENTITIES.filter(e => entities.includes(e))
-            if (!valid.length) continue
+            if (!valid.length) {
+                // Không đọc được loại nào thì chạy tiếp cũng vô nghĩa — đóng luôn
+                // kèm lý do, đừng để nó đốt hết 5 lượt rồi mới chịu dừng.
+                await sp.kiotVietSyncLog.update({
+                    where: { id: log.id },
+                    data: {
+                        status: 'failed', finishedAt: new Date(),
+                        errors: `Đợt đứt giữa chừng và không đọc được danh sách loại dữ liệu từ "${String(log.entity || '').slice(0, 120)}" — hãy bấm chạy lại.`,
+                    },
+                }).catch(() => { })
+                continue
+            }
 
             console.log(`[KiotViet] ${store.name}: đợt ${log.id} mất nhịp, chạy tiếp (lần ${attempts + 1}/${MAX_ATTEMPTS})`)
             void runSync(sp, cfg, valid as string[], log.fromDate, log.toDate, !log.dryRun, log.id)
@@ -193,6 +206,25 @@ export async function runSync(
         },
     }
 
+    // NHỊP TIM TRONG LÚC TẢI. Bước tải một loại có thể là 245 trang liên tiếp
+    // (24k hoá đơn) — suốt thời gian đó vòng lặp xử lý chưa chạy nên không có
+    // nhịp nào được đập, watchdog tưởng chết rồi khởi động lại → quay vòng mãi
+    // không qua nổi bước tải (đo 06/08/2026). Đập theo TỪNG TRANG tải về.
+    const pageOpts = {
+        onPage: async (_items: any[], fetched: number, total: number) => {
+            const now = Date.now()
+            if (now - lastBeat < 3000) return
+            lastBeat = now
+            await sp.kiotVietSyncLog.update({
+                where: { id: logId },
+                data: {
+                    heartbeatAt: new Date(),
+                    entity: `${entities.join(',')} · đang tải ${beating} ${fetched}/${total}`,
+                },
+            }).catch(() => { })
+        },
+    }
+
     // KiotViet lọc theo THỜI ĐIỂM CẬP NHẬT (lastModifiedFrom), không có tham số
     // "đến ngày" cho hàng hoá/khách/NCC → cận trên phải tự cắt phía mình.
     const lastModifiedFrom = kvDate(fromDate)
@@ -208,17 +240,17 @@ export async function runSync(
         }).catch(() => { })
         try {
             if (entity === 'products') {
-                const { items, truncated } = await KV.products(creds, { lastModifiedFrom, isActive: true })
+                const { items, truncated } = await KV.products(creds, { lastModifiedFrom, isActive: true }, pageOpts)
                 const filtered = cutByDate(items, toDate, 'modifiedDate', 'createdDate')
                 if (truncated) c.errors.push('Chạm trần 500 trang — thu hẹp khoảng ngày rồi chạy tiếp')
                 await syncProducts(sp, filtered, opts, c)
             } else if (entity === 'customers') {
-                const { items, truncated } = await KV.customers(creds, { lastModifiedFrom })
+                const { items, truncated } = await KV.customers(creds, { lastModifiedFrom }, pageOpts)
                 const filtered = cutByDate(items, toDate, 'modifiedDate', 'createdDate')
                 if (truncated) c.errors.push('Chạm trần 500 trang — thu hẹp khoảng ngày rồi chạy tiếp')
                 await syncCustomers(sp, filtered, opts, c)
             } else if (entity === 'suppliers') {
-                const { items, truncated } = await KV.suppliers(creds, { lastModifiedFrom })
+                const { items, truncated } = await KV.suppliers(creds, { lastModifiedFrom }, pageOpts)
                 const filtered = cutByDate(items, toDate, 'modifiedDate', 'createdDate')
                 if (truncated) c.errors.push('Chạm trần 500 trang — thu hẹp khoảng ngày rồi chạy tiếp')
                 await syncSuppliers(sp, filtered, opts, c)
@@ -228,7 +260,7 @@ export async function runSync(
                 const { items, truncated } = await KV.invoices(creds, {
                     fromPurchaseDate: kvDate(fromDate),
                     toPurchaseDate: kvDate(toDate),
-                })
+                }, pageOpts)
                 const filtered = cutByDate(items, toDate, 'purchaseDate')
                 if (truncated) c.errors.push('Chạm trần 500 trang — thu hẹp khoảng ngày rồi chạy tiếp')
                 await syncInvoices(sp, filtered, opts, c)
@@ -237,7 +269,7 @@ export async function runSync(
                     fromPurchaseDate: kvDate(fromDate),
                     toPurchaseDate: kvDate(toDate),
                     lastModifiedFrom,
-                })
+                }, pageOpts)
                 const filtered = cutByDate(items, toDate, 'purchaseDate', 'modifiedDate')
                 if (truncated) c.errors.push('Chạm trần 500 trang — thu hẹp khoảng ngày rồi chạy tiếp')
                 await syncPurchaseOrders(sp, filtered, opts, c)
@@ -246,7 +278,7 @@ export async function runSync(
                     startDate: kvDate(fromDate),
                     endDate: kvDate(toDate),
                     lastModifiedFrom,
-                })
+                }, pageOpts)
                 const filtered = cutByDate(items, toDate, 'transDate', 'modifiedDate')
                 if (truncated) c.errors.push('Chạm trần 500 trang — thu hẹp khoảng ngày rồi chạy tiếp')
                 await syncCashflow(sp, filtered, opts, c)
