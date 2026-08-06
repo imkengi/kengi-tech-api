@@ -165,6 +165,10 @@ async function syncChannel(storePrisma: any, channel: any): Promise<{ imported: 
                         shippedAt: order.shippedAt ? new Date(order.shippedAt) : existing.shippedAt,
                         deliveredAt: order.deliveredAt ? new Date(order.deliveredAt) : existing.deliveredAt,
                         paidAt: order.paidAt ? new Date(order.paidAt) : existing.paidAt,
+                        shipByDate: order.shipByDate ? new Date(order.shipByDate) : (existing as any).shipByDate,
+                        // Chỉ NÂNG cờ hỏa tốc, không hạ: get_channel_list lỗi thì
+                        // isInstant về false giả — đừng để lượt sync sau xóa cờ thật.
+                        ...(order.isInstant ? { isInstant: true } : {}),
                         syncedAt: new Date(),
                     },
                 })
@@ -208,6 +212,8 @@ async function syncChannel(storePrisma: any, channel: any): Promise<{ imported: 
                         paidAt: order.paidAt ? new Date(order.paidAt) : null,
                         shippedAt: order.shippedAt ? new Date(order.shippedAt) : null,
                         deliveredAt: order.deliveredAt ? new Date(order.deliveredAt) : null,
+                        shipByDate: order.shipByDate ? new Date(order.shipByDate) : null,
+                        isInstant: order.isInstant || false,
                         syncedAt: new Date(),
                         createdAt: new Date(order.createdAt),
                         items: {
@@ -589,6 +595,20 @@ export function startAutoSync() {
         runAutoSync()
         syncTimer = setInterval(runAutoSync, SYNC_INTERVAL)
     }, 30_000)
+
+    // WATCHDOG KIOTVIET: mỗi 90 giây dò đợt đồng bộ mất nhịp tim rồi CHẠY TIẾP
+    // phần còn dở. Cloud Run thay máy mỗi lần deploy nên việc chạy nền hay đứt
+    // giữa chừng — không có cái này thì người dùng phải tự bấm lại (2026-08-06).
+    // Đợi 45 giây cho máy khởi động xong rồi mới bắt đầu dò.
+    setTimeout(() => {
+        const tick = () => {
+            import('../services/kiotvietRunner')
+                .then(m => m.resumeStalledSyncs())
+                .catch(e => console.error('[KiotViet watchdog]', e?.message || e))
+        }
+        tick()
+        setInterval(tick, 90_000)
+    }, 45_000)
 
     // Cleanup chạy lần đầu sau 5 phút (tránh xung đột lúc khởi động), sau đó mỗi 24h
     setTimeout(() => {

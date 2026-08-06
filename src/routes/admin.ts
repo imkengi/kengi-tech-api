@@ -1546,6 +1546,7 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 `)
                 // Bảng đã tạo từ đợt trước thì thêm cột nhịp tim vào
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "KiotVietSyncLog" ADD COLUMN IF NOT EXISTS "heartbeatAt" TIMESTAMP(3)`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "KiotVietSyncLog" ADD COLUMN IF NOT EXISTS "attempts" INTEGER NOT NULL DEFAULT 0`)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "KiotVietSyncLog_mode_idx" ON "KiotVietSyncLog"("mode")`)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "KiotVietSyncLog_status_idx" ON "KiotVietSyncLog"("status")`)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "KiotVietSyncLog_startedAt_idx" ON "KiotVietSyncLog"("startedAt")`)

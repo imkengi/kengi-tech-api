@@ -21,12 +21,12 @@ import crypto from 'crypto'
 import jwt from 'jsonwebtoken'
 import { registryPrisma, getStorePrisma } from '../lib/prisma'
 import { errMsg } from '../lib/errorResponse'
-import { KV, kvDate, testConnection, clearTokenCache, type KiotVietCreds } from '../services/kiotviet'
+import { KV, testConnection, clearTokenCache, type KiotVietCreds } from '../services/kiotviet'
 import {
     newCounters, syncProducts, syncCustomers, syncSuppliers, syncInvoices,
-    syncPurchaseOrders, syncCashflow,
-    parseWebhookPayload, verifyWebhookSignature, type SyncOptions, type SyncCounters,
+    parseWebhookPayload, verifyWebhookSignature,
 } from '../services/kiotvietSync'
+import { buildOptions, runSync, STALE_MS, SYNC_ENTITIES } from '../services/kiotvietRunner'
 
 const router = Router()
 
@@ -368,43 +368,6 @@ router.post('/test-connection', async (req: Request, res: Response) => {
     }
 })
 
-// ─── Tuỳ chọn đồng bộ dùng chung cho cả chạy tay lẫn webhook ────────────────
-async function buildOptions(sp: any, cfg: any, apply: boolean): Promise<SyncOptions> {
-    // Kho đích: ưu tiên kho đã chọn, không có thì lấy kho main mặc định
-    let warehouseId: string | null = cfg?.defaultWarehouseId || null
-    if (!warehouseId) {
-        const wh = await sp.warehouse.findFirst({
-            where: { type: 'main', isActive: true },
-            orderBy: { isDefault: 'desc' }, select: { id: true },
-        }).catch(() => null)
-        warehouseId = wh?.id || null
-    }
-    // Nhóm hàng mặc định cho sản phẩm mới
-    let categoryId: string | null = cfg?.defaultCategoryId || null
-    if (!categoryId) {
-        const cat = await sp.category.findFirst({ select: { id: true }, orderBy: { createdAt: 'asc' } }).catch(() => null)
-        categoryId = cat?.id || null
-    }
-    // Transaction.createdBy là khoá ngoại bắt buộc → phải có một user thật
-    const user = await sp.user.findFirst({
-        where: { role: { in: ['admin', 'owner', 'manager'] } }, select: { id: true },
-        orderBy: { createdAt: 'asc' },
-    }).catch(() => null)
-
-    let branchIds: number[] | undefined
-    try { branchIds = cfg?.branchIds ? JSON.parse(cfg.branchIds) : undefined } catch { branchIds = undefined }
-
-    return {
-        apply,
-        overwriteNames: !!cfg?.overwriteNames,
-        overwritePrices: !!cfg?.overwritePrices,
-        overwriteStock: !!cfg?.overwriteStock,
-        defaultCategoryId: categoryId,
-        defaultWarehouseId: warehouseId,
-        branchIds,
-        systemUserId: user?.id || null,
-    }
-}
 
 // ─── POST /api/kiotviet/sync ────────────────────────────────────────────────
 // Body: {storeCode, entities: ['products','customers','suppliers','invoices'],
@@ -424,9 +387,8 @@ router.post('/sync', async (req: Request, res: Response) => {
         // THỨ TỰ CÓ Ý NGHĨA: hoá đơn tra sản phẩm theo SKU, phiếu nhập tra nhà
         // cung cấp. Chạy sai thứ tự trong cùng một đợt là tra vào chỗ chưa có.
         // Sắp lại theo phụ thuộc thay vì tin thứ tự người dùng bấm nút.
-        const allowed = ['products', 'customers', 'suppliers', 'invoices', 'purchaseOrders', 'cashflow']
         const entities: string[] = Array.isArray(b.entities)
-            ? allowed.filter(a => b.entities.map(String).includes(a))
+            ? SYNC_ENTITIES.filter(a => b.entities.map(String).includes(a))
             : []
         if (!entities.length) {
             res.status(400).json({ success: false, error: 'Chọn ít nhất một loại dữ liệu để đồng bộ' }); return
@@ -451,7 +413,7 @@ router.post('/sync', async (req: Request, res: Response) => {
         }).catch(() => null)
         if (running) {
             const lastBeat = running.heartbeatAt || running.startedAt
-            const stale = Date.now() - new Date(lastBeat).getTime() > 2 * 60_000
+            const stale = Date.now() - new Date(lastBeat).getTime() > STALE_MS
             if (stale) {
                 // Mất tín hiệu quá 2 phút = coi như chết, đóng lại để đi tiếp
                 await store.sp.kiotVietSyncLog.update({
@@ -497,163 +459,7 @@ router.post('/sync', async (req: Request, res: Response) => {
     }
 })
 
-/** Thân đợt đồng bộ. Chạy nền, cập nhật tiến độ vào KiotVietSyncLog. */
-async function runSync(
-    sp: any, cfg: any, entities: string[],
-    fromDate: Date | null, toDate: Date | null, apply: boolean, logId: string,
-): Promise<void> {
-    const baseOpts = await buildOptions(sp, cfg, apply)
-    const creds = credsOf(cfg)
-    const totals = newCounters()
-    const perEntity: Record<string, any> = {}
 
-    // NHỊP TIM: đóng dấu "còn sống" tối đa 3 giây một lần. Không có nó thì một
-    // đợt chết giữa chừng vẫn hiện "đang chạy" vĩnh viễn.
-    let lastBeat = 0
-    let beating: string | null = null
-    const opts: SyncOptions = {
-        ...baseOpts,
-        onProgress: (c) => {
-            const now = Date.now()
-            if (now - lastBeat < 3000) return
-            lastBeat = now
-            const snapshot = {
-                fetched: totals.fetched + c.fetched, created: totals.created + c.created,
-                updated: totals.updated + c.updated, skipped: totals.skipped + c.skipped,
-                failed: totals.failed + c.failed,
-            }
-            void sp.kiotVietSyncLog.update({
-                where: { id: logId },
-                data: { ...snapshot, heartbeatAt: new Date(), entity: beating ? `${entities.join(',')} · đang xử lý ${beating}` : undefined },
-            }).catch(() => { })
-        },
-    }
-
-    // KiotViet lọc theo THỜI ĐIỂM CẬP NHẬT (lastModifiedFrom), không có tham số
-    // "đến ngày" cho hàng hoá/khách/NCC → cận trên phải tự cắt phía mình.
-    const lastModifiedFrom = kvDate(fromDate)
-
-    for (const entity of entities) {
-        const c = newCounters()
-        beating = entity
-        // Đập một nhịp NGAY khi bắt đầu loại mới: bước tải dữ liệu về có thể mất
-        // vài phút mà chưa có bản ghi nào chạy qua vòng lặp để đập nhịp.
-        await sp.kiotVietSyncLog.update({
-            where: { id: logId },
-            data: { heartbeatAt: new Date(), entity: `${entities.join(',')} · đang tải ${entity}` },
-        }).catch(() => { })
-        try {
-            if (entity === 'products') {
-                const { items, truncated } = await KV.products(creds, { lastModifiedFrom, isActive: true })
-                const filtered = cutByDate(items, toDate, 'modifiedDate', 'createdDate')
-                if (truncated) c.errors.push('Chạm trần 500 trang — thu hẹp khoảng ngày rồi chạy tiếp')
-                await syncProducts(sp, filtered, opts, c)
-            } else if (entity === 'customers') {
-                const { items, truncated } = await KV.customers(creds, { lastModifiedFrom })
-                const filtered = cutByDate(items, toDate, 'modifiedDate', 'createdDate')
-                if (truncated) c.errors.push('Chạm trần 500 trang — thu hẹp khoảng ngày rồi chạy tiếp')
-                await syncCustomers(sp, filtered, opts, c)
-            } else if (entity === 'suppliers') {
-                const { items, truncated } = await KV.suppliers(creds, { lastModifiedFrom })
-                const filtered = cutByDate(items, toDate, 'modifiedDate', 'createdDate')
-                if (truncated) c.errors.push('Chạm trần 500 trang — thu hẹp khoảng ngày rồi chạy tiếp')
-                await syncSuppliers(sp, filtered, opts, c)
-            } else if (entity === 'invoices') {
-                // Hoá đơn CÓ tham số ngày chứng từ ở phía KiotViet → lọc tại nguồn,
-                // nhẹ hơn nhiều so với kéo hết về rồi cắt.
-                const { items, truncated } = await KV.invoices(creds, {
-                    fromPurchaseDate: kvDate(fromDate),
-                    toPurchaseDate: kvDate(toDate),
-                })
-                const filtered = cutByDate(items, toDate, 'purchaseDate')
-                if (truncated) c.errors.push('Chạm trần 500 trang — thu hẹp khoảng ngày rồi chạy tiếp')
-                await syncInvoices(sp, filtered, opts, c)
-            } else if (entity === 'purchaseOrders') {
-                const { items, truncated } = await KV.purchaseOrders(creds, {
-                    fromPurchaseDate: kvDate(fromDate),
-                    toPurchaseDate: kvDate(toDate),
-                    lastModifiedFrom,
-                })
-                const filtered = cutByDate(items, toDate, 'purchaseDate', 'modifiedDate')
-                if (truncated) c.errors.push('Chạm trần 500 trang — thu hẹp khoảng ngày rồi chạy tiếp')
-                await syncPurchaseOrders(sp, filtered, opts, c)
-            } else if (entity === 'cashflow') {
-                const { items, truncated } = await KV.cashflow(creds, {
-                    startDate: kvDate(fromDate),
-                    endDate: kvDate(toDate),
-                    lastModifiedFrom,
-                })
-                const filtered = cutByDate(items, toDate, 'transDate', 'modifiedDate')
-                if (truncated) c.errors.push('Chạm trần 500 trang — thu hẹp khoảng ngày rồi chạy tiếp')
-                await syncCashflow(sp, filtered, opts, c)
-            }
-        } catch (e: any) {
-            c.failed++
-            c.errors.push(`${entity}: ${errMsg(e)}`.slice(0, 300))
-        }
-
-        perEntity[entity] = {
-            layVe: c.fetched, taoMoi: c.created, capNhat: c.updated,
-            boQua: c.skipped, loi: c.failed, mau: c.samples,
-            // Lỗi phải nằm NGAY trong khối của từng loại. Trước đây chỉ gom vào
-            // trường errors ghi ở CUỐI đợt, nên đợt chạy dở hiện "lỗi 2183" mà
-            // không có lấy một dòng giải thích (dính 06/08/2026).
-            loiChiTiet: c.errors.slice(0, 10),
-        }
-        totals.fetched += c.fetched; totals.created += c.created; totals.updated += c.updated
-        totals.skipped += c.skipped; totals.failed += c.failed
-        totals.errors.push(...c.errors.map(x => `[${entity}] ${x}`))
-
-        // Cập nhật tiến độ sau mỗi loại để trang admin thấy chạy tới đâu
-        await sp.kiotVietSyncLog.update({
-            where: { id: logId },
-            data: {
-                fetched: totals.fetched, created: totals.created, updated: totals.updated,
-                skipped: totals.skipped, failed: totals.failed,
-                details: JSON.stringify(perEntity).slice(0, 60000),
-                errors: totals.errors.join('\n').slice(0, 4000) || null,
-                heartbeatAt: new Date(),
-            },
-        }).catch(() => { })
-    }
-
-    await sp.kiotVietSyncLog.update({
-        where: { id: logId },
-        data: {
-            status: totals.failed ? 'partial' : 'success',
-            fetched: totals.fetched, created: totals.created, updated: totals.updated,
-            skipped: totals.skipped, failed: totals.failed,
-            errors: totals.errors.join('\n').slice(0, 4000) || null,
-            details: JSON.stringify(perEntity).slice(0, 60000),
-            entity: entities.join(','),
-            heartbeatAt: new Date(),
-            finishedAt: new Date(),
-        },
-    }).catch(() => { })
-
-    if (apply) {
-        await sp.kiotVietConfig.update({ where: { id: 'default' }, data: { lastSyncAt: new Date() } }).catch(() => { })
-    }
-}
-
-/**
- * Cắt cận trên theo ngày. KiotViet chỉ có "từ ngày" cho hàng hoá/khách/NCC nên
- * "đến ngày" người dùng chọn phải được tôn trọng ở phía mình — bỏ qua bước này
- * là đổ cả dữ liệu ngoài khoảng đã chọn, sai ý người dùng.
- */
-function cutByDate(items: any[], toDate: Date | null, ...dateFields: string[]): any[] {
-    if (!toDate) return items
-    const limit = toDate.getTime()
-    return items.filter(it => {
-        for (const f of dateFields) {
-            const v = it?.[f]
-            if (!v) continue
-            const t = new Date(v).getTime()
-            if (!isNaN(t)) return t <= limit
-        }
-        return true   // không có trường ngày nào → giữ lại, thà thừa còn hơn mất
-    })
-}
 
 // ─── GET /api/kiotviet/peek?storeCode=&path=/cashflow&n=5 ───────────────────
 // CHỈ ĐỌC: trả về bản ghi THÔ từ KiotViet để đối chiếu khi số liệu trông sai.

@@ -2974,6 +2974,9 @@ model KiotVietSyncLog {
   // Dấu "còn sống" đóng liên tục trong lúc chạy. Thiếu nó thì đợt chạy nền chết
   // giữa chừng vẫn hiện "đang chạy" mãi mãi, không ai biết nên chờ hay bấm lại.
   heartbeatAt DateTime?
+  // Số lần watchdog đã tự chạy tiếp sau khi đứt (Cloud Run thay máy mỗi lần
+  // deploy). Chạm trần thì dừng, đừng quay vòng ăn hết hạn mức API.
+  attempts    Int       @default(0)
   finishedAt DateTime?
 
   @@index([mode])
