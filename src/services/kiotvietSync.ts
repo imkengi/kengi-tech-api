@@ -457,6 +457,17 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                     lineTotal: Number(d?.subTotal ?? (qty * unitPrice - disc)) || 0,
                 })
             }
+            // CHẠY THỬ: hàng hoá chưa được tạo (chạy thử không ghi gì) nên mọi
+            // dòng đều "không tìm thấy". Báo lỗi ở đây là báo oan — chạy thật
+            // đồng bộ hàng hoá trước thì có đủ (dính 06/08/2026: 24462 lỗi ảo).
+            if (!opts.apply) {
+                if (missing.length && c.errors.length < 3) {
+                    c.errors.push(`Chạy thử: ${missing.length} mã hàng của HĐ ${code} chưa có bên Kengi — chạy thật sẽ có sau khi đồng bộ hàng hoá`)
+                }
+                c.created++
+                noteSample(c, { code, tong: Number(kv?.total) || 0, soDong: details.length, hanhDong: 'sẽ tạo' })
+                continue
+            }
             if (missing.length) {
                 noteError(c, `HĐ ${code}: ${missing.length} mã hàng chưa có bên Kengi (${missing.slice(0, 3).join(', ')}) — đồng bộ hàng hoá trước`)
             }

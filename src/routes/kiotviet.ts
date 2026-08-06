@@ -421,9 +421,12 @@ router.post('/sync', async (req: Request, res: Response) => {
         const cfg = await loadConfig(store.sp)
         if (!cfg) { res.status(400).json({ success: false, error: 'Chưa cấu hình KiotViet' }); return }
 
+        // THỨ TỰ CÓ Ý NGHĨA: hoá đơn tra sản phẩm theo SKU, phiếu nhập tra nhà
+        // cung cấp. Chạy sai thứ tự trong cùng một đợt là tra vào chỗ chưa có.
+        // Sắp lại theo phụ thuộc thay vì tin thứ tự người dùng bấm nút.
         const allowed = ['products', 'customers', 'suppliers', 'invoices', 'purchaseOrders', 'cashflow']
         const entities: string[] = Array.isArray(b.entities)
-            ? b.entities.filter((e: any) => allowed.includes(String(e)))
+            ? allowed.filter(a => b.entities.map(String).includes(a))
             : []
         if (!entities.length) {
             res.status(400).json({ success: false, error: 'Chọn ít nhất một loại dữ liệu để đồng bộ' }); return
@@ -651,6 +654,42 @@ function cutByDate(items: any[], toDate: Date | null, ...dateFields: string[]): 
         return true   // không có trường ngày nào → giữ lại, thà thừa còn hơn mất
     })
 }
+
+// ─── GET /api/kiotviet/peek?storeCode=&path=/cashflow&n=5 ───────────────────
+// CHỈ ĐỌC: trả về bản ghi THÔ từ KiotViet để đối chiếu khi số liệu trông sai.
+// Tài liệu công khai của họ thiếu nhiều trường, nên phải nhìn dữ liệu thật mới
+// biết trường nào mang ý nghĩa gì — đoán mò đã trả giá một lần với sổ quỹ.
+router.get('/peek', async (req: Request, res: Response) => {
+    try {
+        const store = await resolveStore(String(req.query.storeCode || ''))
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const cfg = await loadConfig(store.sp)
+        if (!cfg) { res.status(400).json({ success: false, error: 'Chưa cấu hình KiotViet' }); return }
+
+        const path = String(req.query.path || '/cashflow')
+        if (!/^\/[a-z0-9/_-]+$/i.test(path)) { res.status(400).json({ success: false, error: 'Đường dẫn không hợp lệ' }); return }
+        const n = Math.min(20, Math.max(1, Number(req.query.n) || 5))
+
+        const params: Record<string, any> = { pageSize: n, currentItem: 0 }
+        for (const [k, v] of Object.entries(req.query)) {
+            if (['storeCode', 'path', 'n'].includes(k)) continue
+            params[k] = v
+        }
+        const raw = await KV.raw(credsOf(cfg), path, params)
+        res.json({
+            success: true,
+            data: {
+                total: raw?.total,
+                soBanGhi: Array.isArray(raw?.data) ? raw.data.length : 0,
+                // Tên trường của bản ghi đầu — nhìn phát biết ngay có gì
+                cacTruong: Array.isArray(raw?.data) && raw.data[0] ? Object.keys(raw.data[0]) : [],
+                banGhi: Array.isArray(raw?.data) ? raw.data.slice(0, n) : raw,
+            },
+        })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
 
 // ─── GET /api/kiotviet/logs?storeCode=&limit= ───────────────────────────────
 router.get('/logs', async (req: Request, res: Response) => {
