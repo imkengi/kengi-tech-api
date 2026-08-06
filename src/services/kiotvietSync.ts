@@ -561,14 +561,20 @@ export async function syncPurchaseOrders(sp: any, items: any[], opts: SyncOption
                 continue
             }
 
-            // NHÀ CUNG CẤP: /purchaseorders của KiotViet KHÔNG trả trường nào về
-            // NCC — cả bản danh sách lẫn bản chi tiết (đã kiểm 06/08/2026;
-            // `purchaseName` là NGƯỜI TẠO PHIẾU, không phải NCC). Ghi đại một cái
-            // tên vào đây là bịa dữ liệu, nên nói thẳng là không rõ.
+            // PHIẾU ĐÃ XOÁ: KiotViet vẫn trả về nhưng gắn hậu tố {DEL} vào mã.
+            // Đo trên dữ liệu thật (HUTI 06/08/2026): 10/10 phiếu {DEL} đều
+            // status 4, tổng tiền tới hàng trăm triệu. Nuốt vào là thổi phồng
+            // lịch sử mua hàng.
+            if (/\{DEL\}/i.test(code)) { c.skipped++; continue }
+
+            // NHÀ CUNG CẤP: KiotViet LƯỢC BỎ trường khi phiếu không gắn NCC, nên
+            // có phiếu thấy supplierName/supplierCode, có phiếu không. Đừng kết
+            // luận "API không trả NCC" chỉ vì xem trúng một phiếu cũ không gắn.
+            // (`purchaseName` là NGƯỜI TẠO PHIẾU — không phải nhà cung cấp.)
             let supplierId: string | null = null
             if (kv?.supplierId) supplierId = await findMap(sp, 'supplier', kv.supplierId)
             const supplierName = String(
-                kv?.supplierName || kv?.supplierCode || 'Không rõ (KiotViet không trả NCC)'
+                kv?.supplierName || kv?.supplierCode || 'Không rõ (phiếu không gắn NCC)'
             ).slice(0, 200)
 
             const details: any[] = Array.isArray(kv?.purchaseOrderDetails) ? kv.purchaseOrderDetails
@@ -587,11 +593,13 @@ export async function syncPurchaseOrders(sp: any, items: any[], opts: SyncOption
                 const created = await sp.purchaseOrder.create({
                     data: {
                         code, supplierId, supplierName,
-                        status: 'received',
+                        // CHỈ status 3 mới coi là đã nhập hàng. Trên dữ liệu thật
+                        // chỉ có 3 và 4; 4 là nhóm gắn với phiếu bị xoá nên KHÔNG
+                        // được tính là mua thật — cho vào 'cancelled' để không
+                        // cộng vào lịch sử mua. KiotViet không kèm nhãn chữ để
+                        // giải nghĩa, nên mã gốc giữ lại trong ghi chú.
+                        status: Number(kv?.status) === 3 ? 'received' : 'cancelled',
                         totalAmount: total,
-                        // Giữ nguyên mã trạng thái gốc: chỉ quan sát được 3 và 4,
-                        // KiotViet không kèm nhãn chữ nên chưa rõ nghĩa. Không đoán,
-                        // ghi lại để còn đối chiếu khi cần.
                         notes: `Nhập từ KiotViet (mã trạng thái gốc: ${kv?.status ?? '?'})`,
                         receivedDate: when && !isNaN(when.getTime()) ? when : null,
                         ...(lines.length ? { items: { create: lines } } : {}),
