@@ -25,7 +25,12 @@ import {
 
 /** Mất nhịp quá ngần này = coi như đợt chạy đã chết. */
 export const STALE_MS = 2 * 60_000
-/** Chạy tiếp tối đa ngần này lần rồi bỏ cuộc, tránh quay vòng vô tận. */
+/**
+ * Số lần chạy tiếp LIÊN TIẾP MÀ KHÔNG TIẾN TRIỂN thì bỏ cuộc.
+ * Đếm "liên tiếp không tiến triển" chứ không phải tổng số lần: một đợt 6 loại
+ * dữ liệu có thể bị thay máy vài lần mà vẫn đang đi tới: hết lượt trong khi
+ * vẫn đang chạy tốt là bỏ cuộc oan. Xong được một loại là bộ đếm về 0.
+ */
 export const MAX_ATTEMPTS = 5
 
 export const SYNC_ENTITIES = ['products', 'customers', 'suppliers', 'invoices', 'purchaseOrders', 'cashflow'] as const
@@ -311,6 +316,10 @@ export async function runSync(
                 details: JSON.stringify(perEntity).slice(0, 60000),
                 errors: totals.errors.join('\n').slice(0, 4000) || null,
                 heartbeatAt: new Date(),
+                // XONG MỘT LOẠI = CÓ TIẾN TRIỂN → trả bộ đếm bỏ cuộc về 0.
+                // Trần 5 lượt là để chặn quay vòng tại chỗ, không phải để chặn
+                // một đợt dài đang đi tới bị thay máy vài lần.
+                attempts: 0,
             },
         }).catch(() => { })
     }
