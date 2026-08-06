@@ -73,6 +73,28 @@ function beat(opts: SyncOptions, c: SyncCounters) {
     if (opts.onProgress && c.fetched % 25 === 0) opts.onProgress(c)
 }
 
+/**
+ * Lấy MỘT số điện thoại dùng được từ ô liên hệ của KiotViet.
+ *
+ * Ô đó là văn bản tự do, khách hay nhập 2 số: "02563 847 745 - 0903 596 729".
+ * Bóc thô kiểu bỏ hết ký tự không phải số sẽ dán chúng lại thành chuỗi 21 chữ
+ * số vô nghĩa, gọi không được mà đối chiếu trùng khách cũng hỏng (đo 06/08/2026).
+ * Ở đây tách theo dấu phân cách rồi lấy số ĐẦU TIÊN có độ dài hợp lệ.
+ */
+export function firstPhone(raw: any): string {
+    const s = String(raw || '').trim()
+    if (!s) return ''
+    const parts = s.split(/[^\d+]{2,}|[,;/|]|\s-\s|–|—/).map(p => p.replace(/[^\d+]/g, '')).filter(Boolean)
+    for (const p of parts) {
+        const digits = p.replace(/\D/g, '')
+        if (digits.length >= 8 && digits.length <= 12) return p
+    }
+    // Không tách được: chỉ nhận khi cả chuỗi đã là một số hợp lệ, còn lại bỏ
+    const all = s.replace(/[^\d+]/g, '')
+    const d = all.replace(/\D/g, '')
+    return d.length >= 8 && d.length <= 12 ? all : ''
+}
+
 // ─── Bản đồ id KiotViet ↔ id Kengi ──────────────────────────────────────────
 
 async function findMap(sp: any, entity: string, kvId: string | number): Promise<string | null> {
@@ -289,7 +311,7 @@ export async function syncCustomers(sp: any, items: any[], opts: SyncOptions, c:
             const name = String(kv?.name || '').trim()
             if (!kvId || !name) { c.skipped++; continue }
 
-            const phone = String(kv?.contactNumber || '').replace(/[^\d+]/g, '')
+            const phone = firstPhone(kv?.contactNumber)
 
             let localId = await findMap(sp, 'customer', kvId)
             let existing = localId
@@ -370,7 +392,7 @@ export async function syncSuppliers(sp: any, items: any[], opts: SyncOptions, c:
             if (existing) {
                 const data: any = {}
                 if (opts.overwriteNames && name !== existing.name) data.name = name
-                if (!existing.phone && kv?.contactNumber) data.phone = String(kv.contactNumber)
+                if (!existing.phone && firstPhone(kv?.contactNumber)) data.phone = firstPhone(kv.contactNumber)
                 if (!existing.address && kv?.address) data.address = String(kv.address).slice(0, 500)
                 if (!existing.taxCode && kv?.taxCode) data.taxCode = String(kv.taxCode)
                 if (!existing.email && kv?.email) data.email = String(kv.email)
@@ -392,7 +414,7 @@ export async function syncSuppliers(sp: any, items: any[], opts: SyncOptions, c:
                     const created = await sp.supplier.create({
                         data: {
                             code: finalCode, name,
-                            phone: kv?.contactNumber ? String(kv.contactNumber) : null,
+                            phone: firstPhone(kv?.contactNumber) || null,
                             email: kv?.email ? String(kv.email) : null,
                             address: kv?.address ? String(kv.address).slice(0, 500) : null,
                             taxCode: kv?.taxCode ? String(kv.taxCode) : null,
@@ -539,10 +561,15 @@ export async function syncPurchaseOrders(sp: any, items: any[], opts: SyncOption
                 continue
             }
 
-            // NCC: chỉ GẮN nếu đã đồng bộ, không tự đẻ NCC từ phiếu nhập
+            // NHÀ CUNG CẤP: /purchaseorders của KiotViet KHÔNG trả trường nào về
+            // NCC — cả bản danh sách lẫn bản chi tiết (đã kiểm 06/08/2026;
+            // `purchaseName` là NGƯỜI TẠO PHIẾU, không phải NCC). Ghi đại một cái
+            // tên vào đây là bịa dữ liệu, nên nói thẳng là không rõ.
             let supplierId: string | null = null
             if (kv?.supplierId) supplierId = await findMap(sp, 'supplier', kv.supplierId)
-            const supplierName = String(kv?.supplierName || kv?.supplierCode || 'Nhà cung cấp').slice(0, 200)
+            const supplierName = String(
+                kv?.supplierName || kv?.supplierCode || 'Không rõ (KiotViet không trả NCC)'
+            ).slice(0, 200)
 
             const details: any[] = Array.isArray(kv?.purchaseOrderDetails) ? kv.purchaseOrderDetails
                 : Array.isArray(kv?.details) ? kv.details : []
@@ -562,7 +589,10 @@ export async function syncPurchaseOrders(sp: any, items: any[], opts: SyncOption
                         code, supplierId, supplierName,
                         status: 'received',
                         totalAmount: total,
-                        notes: 'Nhập từ KiotViet',
+                        // Giữ nguyên mã trạng thái gốc: chỉ quan sát được 3 và 4,
+                        // KiotViet không kèm nhãn chữ nên chưa rõ nghĩa. Không đoán,
+                        // ghi lại để còn đối chiếu khi cần.
+                        notes: `Nhập từ KiotViet (mã trạng thái gốc: ${kv?.status ?? '?'})`,
                         receivedDate: when && !isNaN(when.getTime()) ? when : null,
                         ...(lines.length ? { items: { create: lines } } : {}),
                     },
