@@ -1199,6 +1199,11 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Expense" ADD COLUMN IF NOT EXISTS "invoiceDate" TIMESTAMP(3)`)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Expense_sourceRef_idx" ON "Expense"("sourceRef")`)
 
+                // Đơn hỏa tốc Shopee — Instant Delivery (05/08/2026): cờ instant +
+                // hạn bàn giao ĐVVC riêng (trước đây ship_by_date bị map nhầm vào shippedAt)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineOrder" ADD COLUMN IF NOT EXISTS "isInstant" BOOLEAN NOT NULL DEFAULT false`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineOrder" ADD COLUMN IF NOT EXISTS "shipByDate" TIMESTAMP(3)`)
+
                 // Ánh xạ mã hàng trên SÀN → sản phẩm kho (2026-07-23) — đơn TikTok/
                 // Shopee dùng SKU riêng không khớp kho khiến đơn không lên phiếu.
                 await (sp as any).$executeRawUnsafe(`
@@ -1471,6 +1476,76 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 `)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "VehicleDocument_vehicleId_idx" ON "VehicleDocument"("vehicleId")`)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "VehicleDocument_expiryDate_idx" ON "VehicleDocument"("expiryDate")`)
+
+                // ─── Cổng đồng bộ KiotViet ─────────────────────────────────
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "KiotVietConfig" (
+                        "id" TEXT NOT NULL DEFAULT 'default',
+                        "clientId" TEXT NOT NULL,
+                        "clientSecret" TEXT NOT NULL,
+                        "retailer" TEXT NOT NULL,
+                        "webhookToken" TEXT NOT NULL,
+                        "webhookSecret" TEXT,
+                        "strictSignature" BOOLEAN NOT NULL DEFAULT false,
+                        "enabled" BOOLEAN NOT NULL DEFAULT false,
+                        "syncProducts" BOOLEAN NOT NULL DEFAULT true,
+                        "syncCustomers" BOOLEAN NOT NULL DEFAULT true,
+                        "syncSuppliers" BOOLEAN NOT NULL DEFAULT true,
+                        "syncInvoices" BOOLEAN NOT NULL DEFAULT false,
+                        "overwriteNames" BOOLEAN NOT NULL DEFAULT false,
+                        "overwritePrices" BOOLEAN NOT NULL DEFAULT false,
+                        "overwriteStock" BOOLEAN NOT NULL DEFAULT false,
+                        "defaultCategoryId" TEXT,
+                        "defaultWarehouseId" TEXT,
+                        "branchIds" TEXT,
+                        "lastSyncAt" TIMESTAMP(3),
+                        "lastWebhookAt" TIMESTAMP(3),
+                        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "KiotVietConfig_pkey" PRIMARY KEY ("id")
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "KiotVietConfig_webhookToken_key" ON "KiotVietConfig"("webhookToken")`)
+
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "KiotVietMap" (
+                        "id" TEXT NOT NULL,
+                        "entity" TEXT NOT NULL,
+                        "kvId" TEXT NOT NULL,
+                        "kvCode" TEXT,
+                        "localId" TEXT NOT NULL,
+                        "syncedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "KiotVietMap_pkey" PRIMARY KEY ("id")
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "KiotVietMap_entity_kvId_key" ON "KiotVietMap"("entity", "kvId")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "KiotVietMap_entity_localId_idx" ON "KiotVietMap"("entity", "localId")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "KiotVietMap_kvCode_idx" ON "KiotVietMap"("kvCode")`)
+
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "KiotVietSyncLog" (
+                        "id" TEXT NOT NULL,
+                        "entity" TEXT NOT NULL,
+                        "mode" TEXT NOT NULL DEFAULT 'manual',
+                        "dryRun" BOOLEAN NOT NULL DEFAULT false,
+                        "fromDate" TIMESTAMP(3),
+                        "toDate" TIMESTAMP(3),
+                        "fetched" INTEGER NOT NULL DEFAULT 0,
+                        "created" INTEGER NOT NULL DEFAULT 0,
+                        "updated" INTEGER NOT NULL DEFAULT 0,
+                        "skipped" INTEGER NOT NULL DEFAULT 0,
+                        "failed" INTEGER NOT NULL DEFAULT 0,
+                        "status" TEXT NOT NULL DEFAULT 'running',
+                        "errors" TEXT,
+                        "details" TEXT,
+                        "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        "finishedAt" TIMESTAMP(3),
+                        CONSTRAINT "KiotVietSyncLog_pkey" PRIMARY KEY ("id")
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "KiotVietSyncLog_mode_idx" ON "KiotVietSyncLog"("mode")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "KiotVietSyncLog_status_idx" ON "KiotVietSyncLog"("status")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "KiotVietSyncLog_startedAt_idx" ON "KiotVietSyncLog"("startedAt")`)
 
                 storeResults.push(`${store.name}: OK`)
             } catch (e: any) {
@@ -3098,6 +3173,59 @@ router.get('/notif-probe', async (req: Request, res: Response) => {
             })
         }
         res.json({ success: true, data: out })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err?.message })
+    }
+})
+
+// ─── POST /admin/dedupe-device-tokens ────────────────────────────────────────
+// Dọn token FCM rơi rớt chéo cửa hàng: một máy đăng nhập lần lượt nhiều store
+// để lại token ở mọi schema từng vào → nhận push của cả cửa hàng không còn dùng.
+// Luật: MỘT token chỉ ở lại store có "updatedAt" MỚI NHẤT (store đăng nhập gần
+// nhất), xoá khỏi các store còn lại. Không mất mát thật: app mở lên là tự đăng
+// ký lại vào đúng store đang đăng nhập.
+// ?dryRun=1 → chỉ liệt kê, không xoá.
+router.post('/dedupe-device-tokens', async (req: Request, res: Response) => {
+    try {
+        const dryRun = String(req.query.dryRun || '') === '1'
+        const { ensureDeviceTokenTable } = await import('./notifications')
+        const stores = await prisma.store.findMany({ select: { code: true, schema: true } })
+
+        // Gom (token → danh sách store kèm updatedAt). Tuần tự từng schema: pool
+        // Prisma mỗi store rất nhỏ, quét song song là cạn kết nối.
+        const map = new Map<string, { code: string; schema: string; updatedAt: Date }[]>()
+        for (const s of stores) {
+            if (!s.schema) continue
+            try {
+                const sp = getStorePrisma(s.schema) as any
+                await ensureDeviceTokenTable(sp)
+                const rows: any[] = await sp.$queryRawUnsafe(`SELECT token, "updatedAt" FROM "DeviceToken"`)
+                for (const r of rows) {
+                    const list = map.get(r.token) || []
+                    list.push({ code: s.code, schema: s.schema, updatedAt: new Date(r.updatedAt) })
+                    map.set(r.token, list)
+                }
+            } catch { /* store chưa có bảng — bỏ qua */ }
+        }
+
+        const ketQua: any[] = []
+        let daXoa = 0
+        for (const [token, list] of map.entries()) {
+            if (list.length <= 1) continue
+            const giu = list.reduce((a, b) => (b.updatedAt > a.updatedAt ? b : a))
+            const xoa = list.filter(x => x.schema !== giu.schema)
+            ketQua.push({ token: token.slice(0, 16), giuLai: giu.code, goKhoi: xoa.map(x => x.code) })
+            if (!dryRun) {
+                for (const x of xoa) {
+                    try {
+                        const sp = getStorePrisma(x.schema) as any
+                        await sp.$executeRawUnsafe(`DELETE FROM "DeviceToken" WHERE token = $1`, token)
+                        daXoa++
+                    } catch { /* bỏ qua lỗi lẻ */ }
+                }
+            }
+        }
+        res.json({ success: true, data: { dryRun, tokenTrungLap: ketQua.length, daXoa, chiTiet: ketQua } })
     } catch (err: any) {
         res.status(500).json({ success: false, error: err?.message })
     }

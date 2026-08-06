@@ -480,6 +480,10 @@ exports.Prisma.PurchaseOrderScalarFieldEnum = {
   notes: 'notes',
   expectedDate: 'expectedDate',
   receivedDate: 'receivedDate',
+  checkedBy: 'checkedBy',
+  checkedByName: 'checkedByName',
+  checkedAt: 'checkedAt',
+  rejectReason: 'rejectReason',
   branchId: 'branchId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
@@ -504,6 +508,15 @@ exports.Prisma.ExpenseScalarFieldEnum = {
   recurring: 'recurring',
   bankAccountId: 'bankAccountId',
   status: 'status',
+  vatAmount: 'vatAmount',
+  supplierName: 'supplierName',
+  supplierTaxCode: 'supplierTaxCode',
+  invoiceNo: 'invoiceNo',
+  invoiceSymbol: 'invoiceSymbol',
+  invoiceDate: 'invoiceDate',
+  lookupCode: 'lookupCode',
+  taxAuthorityCode: 'taxAuthorityCode',
+  sourceRef: 'sourceRef',
   cancelledAt: 'cancelledAt',
   cancelReason: 'cancelReason',
   branchId: 'branchId',
@@ -1170,6 +1183,7 @@ exports.Prisma.StoreSettingsScalarFieldEnum = {
   website: 'website',
   notifyLowStock: 'notifyLowStock',
   smtpConfig: 'smtpConfig',
+  mailboxConfig: 'mailboxConfig',
   geminiApiKey: 'geminiApiKey',
   notifyNewOrder: 'notifyNewOrder',
   notifyDailyReport: 'notifyDailyReport',
@@ -1183,6 +1197,9 @@ exports.Prisma.StoreSettingsScalarFieldEnum = {
   monthlyRevenueTarget: 'monthlyRevenueTarget',
   dailyOrderTarget: 'dailyOrderTarget',
   driveFolderId: 'driveFolderId',
+  driveOauthToken: 'driveOauthToken',
+  driveOauthEmail: 'driveOauthEmail',
+  driveOauthAt: 'driveOauthAt',
   updatedAt: 'updatedAt'
 };
 
@@ -1391,6 +1408,8 @@ exports.Prisma.OnlineOrderScalarFieldEnum = {
   platformFeeRate: 'platformFeeRate',
   netRevenue: 'netRevenue',
   adsVoucherDiscount: 'adsVoucherDiscount',
+  isInstant: 'isInstant',
+  shipByDate: 'shipByDate',
   stockDeducted: 'stockDeducted',
   syncedAt: 'syncedAt',
   createdAt: 'createdAt',
@@ -1583,6 +1602,9 @@ exports.Prisma.EInvoiceScalarFieldEnum = {
   providerResponse: 'providerResponse',
   replacesInvoiceId: 'replacesInvoiceId',
   replacedByInvoiceId: 'replacedByInvoiceId',
+  adjustsInvoiceId: 'adjustsInvoiceId',
+  adjustedByInvoiceId: 'adjustedByInvoiceId',
+  adjustReturnCode: 'adjustReturnCode',
   cancelReason: 'cancelReason',
   notes: 'notes',
   branchId: 'branchId',
@@ -2008,6 +2030,64 @@ exports.Prisma.FbAutoReplyLogScalarFieldEnum = {
   createdAt: 'createdAt'
 };
 
+exports.Prisma.FbBrandProfileScalarFieldEnum = {
+  id: 'id',
+  brandName: 'brandName',
+  industry: 'industry',
+  audience: 'audience',
+  toneOfVoice: 'toneOfVoice',
+  usp: 'usp',
+  cta: 'cta',
+  hashtags: 'hashtags',
+  bannedWords: 'bannedWords',
+  emojiLevel: 'emojiLevel',
+  postsPerWeek: 'postsPerWeek',
+  bestHours: 'bestHours',
+  pillarMix: 'pillarMix',
+  notes: 'notes',
+  createdBy: 'createdBy',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.FbContentPlanScalarFieldEnum = {
+  id: 'id',
+  pageId: 'pageId',
+  title: 'title',
+  goal: 'goal',
+  fromDate: 'fromDate',
+  toDate: 'toDate',
+  status: 'status',
+  summary: 'summary',
+  createdBy: 'createdBy',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.FbContentDraftScalarFieldEnum = {
+  id: 'id',
+  planId: 'planId',
+  pageId: 'pageId',
+  pillar: 'pillar',
+  title: 'title',
+  hook: 'hook',
+  message: 'message',
+  hashtags: 'hashtags',
+  mediaIdea: 'mediaIdea',
+  mediaUrls: 'mediaUrls',
+  linkUrl: 'linkUrl',
+  productIds: 'productIds',
+  suggestedAt: 'suggestedAt',
+  status: 'status',
+  rejectReason: 'rejectReason',
+  scheduledPostId: 'scheduledPostId',
+  fbPostId: 'fbPostId',
+  source: 'source',
+  createdBy: 'createdBy',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
 exports.Prisma.CrmTaskScalarFieldEnum = {
   id: 'id',
   title: 'title',
@@ -2116,6 +2196,59 @@ exports.Prisma.AiAgentRunScalarFieldEnum = {
   chamTran: 'chamTran',
   errorMessage: 'errorMessage',
   trigger: 'trigger'
+};
+
+exports.Prisma.KiotVietConfigScalarFieldEnum = {
+  id: 'id',
+  clientId: 'clientId',
+  clientSecret: 'clientSecret',
+  retailer: 'retailer',
+  webhookToken: 'webhookToken',
+  webhookSecret: 'webhookSecret',
+  strictSignature: 'strictSignature',
+  enabled: 'enabled',
+  syncProducts: 'syncProducts',
+  syncCustomers: 'syncCustomers',
+  syncSuppliers: 'syncSuppliers',
+  syncInvoices: 'syncInvoices',
+  overwriteNames: 'overwriteNames',
+  overwritePrices: 'overwritePrices',
+  overwriteStock: 'overwriteStock',
+  defaultCategoryId: 'defaultCategoryId',
+  defaultWarehouseId: 'defaultWarehouseId',
+  branchIds: 'branchIds',
+  lastSyncAt: 'lastSyncAt',
+  lastWebhookAt: 'lastWebhookAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.KiotVietMapScalarFieldEnum = {
+  id: 'id',
+  entity: 'entity',
+  kvId: 'kvId',
+  kvCode: 'kvCode',
+  localId: 'localId',
+  syncedAt: 'syncedAt'
+};
+
+exports.Prisma.KiotVietSyncLogScalarFieldEnum = {
+  id: 'id',
+  entity: 'entity',
+  mode: 'mode',
+  dryRun: 'dryRun',
+  fromDate: 'fromDate',
+  toDate: 'toDate',
+  fetched: 'fetched',
+  created: 'created',
+  updated: 'updated',
+  skipped: 'skipped',
+  failed: 'failed',
+  status: 'status',
+  errors: 'errors',
+  details: 'details',
+  startedAt: 'startedAt',
+  finishedAt: 'finishedAt'
 };
 
 exports.Prisma.SortOrder = {
@@ -2247,13 +2380,19 @@ exports.Prisma.ModelName = {
   FbScheduledPost: 'FbScheduledPost',
   FbCommentRule: 'FbCommentRule',
   FbAutoReplyLog: 'FbAutoReplyLog',
+  FbBrandProfile: 'FbBrandProfile',
+  FbContentPlan: 'FbContentPlan',
+  FbContentDraft: 'FbContentDraft',
   CrmTask: 'CrmTask',
   CrmDeal: 'CrmDeal',
   CrmActivity: 'CrmActivity',
   CrmZaloLog: 'CrmZaloLog',
   CrmCampaign: 'CrmCampaign',
   AiAgentJob: 'AiAgentJob',
-  AiAgentRun: 'AiAgentRun'
+  AiAgentRun: 'AiAgentRun',
+  KiotVietConfig: 'KiotVietConfig',
+  KiotVietMap: 'KiotVietMap',
+  KiotVietSyncLog: 'KiotVietSyncLog'
 };
 
 /**

@@ -1,0 +1,613 @@
+/**
+ * CỔNG ĐỒNG BỘ KIOTVIET ↔ KENGI (2026-08-05)
+ *
+ * Gắn tại /api/kiotviet. Hai vùng tách bạch:
+ *
+ *  A. WEBHOOK — CÔNG KHAI, đứng TRƯỚC middleware xác thực admin.
+ *     POST /api/kiotviet/webhook/:storeCode/:token
+ *     Bảo vệ bằng token 32 byte ngẫu nhiên nằm trong đường dẫn (+ chữ ký nếu
+ *     đã cấu hình). KHÔNG đặt sau adminAuth — KiotViet không có admin key.
+ *
+ *  B. QUẢN TRỊ — sau adminAuth (x-admin-key hoặc JWT scope admin-panel), phục
+ *     vụ trang kengi.vn/admin.
+ *
+ * Đợt đồng bộ chạy NỀN: endpoint tạo một dòng KiotVietSyncLog rồi trả ngay
+ * logId, công việc chạy tiếp phía sau. Quét vài chục nghìn bản ghi vượt xa
+ * timeout HTTP; bắt người dùng ngồi chờ một request treo là hỏng.
+ */
+
+import { Router, Request, Response, NextFunction } from 'express'
+import crypto from 'crypto'
+import jwt from 'jsonwebtoken'
+import { registryPrisma, getStorePrisma } from '../lib/prisma'
+import { errMsg } from '../lib/errorResponse'
+import { KV, kvDate, testConnection, clearTokenCache, type KiotVietCreds } from '../services/kiotviet'
+import {
+    newCounters, syncProducts, syncCustomers, syncSuppliers, syncInvoices,
+    parseWebhookPayload, verifyWebhookSignature, type SyncOptions, type SyncCounters,
+} from '../services/kiotvietSync'
+
+const router = Router()
+
+const ADMIN_KEY = process.env.ADMIN_KEY
+const JWT_SECRET = process.env.JWT_SECRET || ''
+const PANEL_SCOPE = 'admin-panel'
+
+function safeEqual(a: string, b: string): boolean {
+    const ab = Buffer.from(a), bb = Buffer.from(b)
+    if (ab.length !== bb.length) return false
+    return crypto.timingSafeEqual(ab, bb)
+}
+
+/** Tìm store theo mã, trả kèm prisma của schema riêng. */
+async function resolveStore(storeCode: string): Promise<{ schema: string; name: string; sp: any } | null> {
+    const store = await registryPrisma.store.findFirst({
+        where: { code: { equals: String(storeCode).trim(), mode: 'insensitive' } },
+        select: { schema: true, name: true },
+    }).catch(() => null)
+    if (!store) return null
+    return { schema: store.schema, name: store.name, sp: getStorePrisma(store.schema) as any }
+}
+
+async function loadConfig(sp: any): Promise<any | null> {
+    return sp.kiotVietConfig.findUnique({ where: { id: 'default' } }).catch(() => null)
+}
+
+function credsOf(cfg: any): KiotVietCreds {
+    return {
+        clientId: String(cfg.clientId || '').trim(),
+        clientSecret: String(cfg.clientSecret || '').trim(),
+        retailer: String(cfg.retailer || '').trim(),
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// A. WEBHOOK CÔNG KHAI — phải đứng trước router.use(adminAuth)
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * KiotViet đẩy biến động về đây. Nguyên tắc:
+ *  - Trả 200 NHANH rồi mới xử lý. Webhook chậm sẽ bị KiotViet thử lại, sinh
+ *    xử lý trùng; và họ tính đó là endpoint hỏng.
+ *  - Mọi lỗi xử lý đều nuốt + ghi log, KHÔNG trả 5xx (trả 5xx là bị gửi lại
+ *    vòng lặp vô tận).
+ */
+router.post('/webhook/:storeCode/:token', async (req: Request, res: Response) => {
+    const storeCode = String(req.params.storeCode || '')
+    const token = String(req.params.token || '')
+    try {
+        const store = await resolveStore(storeCode)
+        if (!store) { res.status(404).json({ success: false }); return }
+
+        const cfg = await loadConfig(store.sp)
+        if (!cfg?.webhookToken || !safeEqual(String(token), String(cfg.webhookToken))) {
+            res.status(403).json({ success: false }); return
+        }
+        if (!cfg.enabled) { res.json({ success: true, skipped: 'cong dang tat' }); return }
+
+        const rawBody = (req as any).rawBody?.toString('utf8') || JSON.stringify(req.body || {})
+        const sig = String(req.headers['x-signature'] || '')
+        const ts = String(req.headers['x-timestamp'] || '')
+        let sigOk = true
+        if (cfg.webhookSecret) {
+            sigOk = verifyWebhookSignature(rawBody, sig, ts, String(cfg.retailer || ''), String(cfg.webhookSecret))
+            if (!sigOk && cfg.strictSignature) {
+                await logWebhook(store.sp, 'signature', 'failed', 0,
+                    `Chữ ký sai (strict đang bật). x-signature=${sig.slice(0, 60)} x-timestamp=${ts}`)
+                res.status(401).json({ success: false }); return
+            }
+        }
+
+        // Chốt cửa xong thì trả 200 ngay, xử lý phía sau
+        res.json({ success: true })
+
+        const notis = parseWebhookPayload(req.body)
+        if (!notis.length) {
+            await logWebhook(store.sp, 'unknown', 'skipped', 0,
+                `Payload không có Notifications. Khoá nhận được: ${Object.keys(req.body || {}).join(', ').slice(0, 200)}`)
+            return
+        }
+
+        void handleWebhook(store.sp, cfg, notis, sigOk).catch(async (e: any) => {
+            await logWebhook(store.sp, 'error', 'failed', 0, errMsg(e).slice(0, 300))
+        })
+    } catch (e: any) {
+        // Đã trả 200 ở trên thì thôi; chưa trả thì trả 200 để KiotViet không dội lại
+        if (!res.headersSent) res.json({ success: true })
+        console.error('[KiotViet webhook]', storeCode, errMsg(e))
+    }
+})
+
+async function logWebhook(sp: any, entity: string, status: string, count: number, note: string) {
+    await sp.kiotVietSyncLog.create({
+        data: {
+            entity, mode: 'webhook', status,
+            fetched: count, created: 0, updated: 0, skipped: 0, failed: status === 'failed' ? 1 : 0,
+            errors: note ? note.slice(0, 2000) : null,
+            startedAt: new Date(), finishedAt: new Date(),
+        },
+    }).catch(() => { })
+}
+
+/**
+ * Xử lý các sự kiện webhook. KiotViet gửi bản ghi ĐÃ ĐẦY ĐỦ trong `Data` nên
+ * phần lớn trường hợp không cần gọi ngược API — nhưng sự kiện tồn kho
+ * (stock.update) chỉ có số lượng nên vẫn phải nạp lại sản phẩm cho đủ trường.
+ */
+async function handleWebhook(sp: any, cfg: any, notis: { action: string; data: any[] }[], sigOk: boolean): Promise<void> {
+    const opts = await buildOptions(sp, cfg, true)
+    const creds = credsOf(cfg)
+
+    for (const n of notis) {
+        const c = newCounters()
+        const started = new Date()
+        try {
+            if (n.action.startsWith('product') || n.action.startsWith('stock')) {
+                if (!cfg.syncProducts) continue
+                let items = n.data
+                // stock.update chỉ có {productId, productCode, onHand...} → nạp lại
+                // bản ghi đầy đủ, nếu không sẽ ghi đè tên/giá bằng dữ liệu rỗng.
+                if (n.action.startsWith('stock')) {
+                    items = await reloadProducts(creds, n.data)
+                }
+                await syncProducts(sp, items, opts, c)
+            } else if (n.action.startsWith('customer')) {
+                if (!cfg.syncCustomers) continue
+                await syncCustomers(sp, n.data, opts, c)
+            } else if (n.action.startsWith('supplier')) {
+                if (!cfg.syncSuppliers) continue
+                await syncSuppliers(sp, n.data, opts, c)
+            } else if (n.action.startsWith('invoice')) {
+                if (!cfg.syncInvoices) continue
+                await syncInvoices(sp, n.data, opts, c)
+            } else {
+                continue
+            }
+
+            await sp.kiotVietSyncLog.create({
+                data: {
+                    entity: n.action, mode: 'webhook',
+                    status: c.failed ? 'partial' : 'success',
+                    fetched: c.fetched, created: c.created, updated: c.updated,
+                    skipped: c.skipped, failed: c.failed,
+                    errors: [...(sigOk ? [] : ['⚠ chữ ký không khớp — đang chạy chế độ nới lỏng']), ...c.errors]
+                        .join('\n').slice(0, 2000) || null,
+                    startedAt: started, finishedAt: new Date(),
+                },
+            }).catch(() => { })
+        } catch (e: any) {
+            await logWebhook(sp, n.action, 'failed', 0, errMsg(e).slice(0, 300))
+        }
+    }
+    await sp.kiotVietConfig.update({ where: { id: 'default' }, data: { lastWebhookAt: new Date() } }).catch(() => { })
+}
+
+/** Nạp lại bản ghi sản phẩm đầy đủ từ danh sách id/mã rút gọn của webhook tồn kho. */
+async function reloadProducts(creds: KiotVietCreds, data: any[]): Promise<any[]> {
+    const out: any[] = []
+    for (const d of data.slice(0, 50)) {
+        const id = d?.ProductId ?? d?.productId ?? d?.Id ?? d?.id
+        if (!id) continue
+        try {
+            const full = await KV.raw(creds, `/products/${id}`, { includeInventory: true })
+            if (full?.id) out.push(full)
+        } catch { /* mất một mã không được giết cả lô */ }
+    }
+    return out
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// B. VÙNG QUẢN TRỊ
+// ════════════════════════════════════════════════════════════════════════════
+
+function adminAuth(req: Request, res: Response, next: NextFunction): void {
+    const key = req.headers['x-admin-key'] as string
+    if (ADMIN_KEY && key && safeEqual(key, ADMIN_KEY)) return next()
+
+    const auth = req.headers.authorization
+    if (auth?.startsWith('Bearer ') && JWT_SECRET) {
+        try {
+            const payload = jwt.verify(auth.slice(7), JWT_SECRET, { algorithms: ['HS256'] }) as any
+            if (payload?.scope === PANEL_SCOPE) return next()
+        } catch { /* rơi xuống 403 */ }
+    }
+    if (!ADMIN_KEY && !JWT_SECRET) {
+        res.status(503).json({ success: false, error: 'Admin API chưa cấu hình' }); return
+    }
+    res.status(403).json({ success: false, error: 'Unauthorized' })
+}
+
+router.use(adminAuth)
+
+/** Ẩn bí mật trước khi trả về trình duyệt — chỉ cho biết ĐÃ đặt hay chưa. */
+function publicConfig(cfg: any, storeCode: string, baseUrl: string) {
+    if (!cfg) return null
+    return {
+        retailer: cfg.retailer,
+        clientId: cfg.clientId ? `${String(cfg.clientId).slice(0, 6)}…` : '',
+        daDatClientSecret: !!cfg.clientSecret,
+        daDatWebhookSecret: !!cfg.webhookSecret,
+        strictSignature: !!cfg.strictSignature,
+        enabled: !!cfg.enabled,
+        syncProducts: !!cfg.syncProducts,
+        syncCustomers: !!cfg.syncCustomers,
+        syncSuppliers: !!cfg.syncSuppliers,
+        syncInvoices: !!cfg.syncInvoices,
+        overwriteNames: !!cfg.overwriteNames,
+        overwritePrices: !!cfg.overwritePrices,
+        overwriteStock: !!cfg.overwriteStock,
+        defaultCategoryId: cfg.defaultCategoryId,
+        defaultWarehouseId: cfg.defaultWarehouseId,
+        branchIds: cfg.branchIds,
+        lastSyncAt: cfg.lastSyncAt,
+        lastWebhookAt: cfg.lastWebhookAt,
+        webhookUrl: cfg.webhookToken
+            ? `${baseUrl}/api/kiotviet/webhook/${encodeURIComponent(storeCode)}/${cfg.webhookToken}`
+            : null,
+    }
+}
+
+function baseUrlOf(req: Request): string {
+    return process.env.PUBLIC_API_BASE_URL
+        || `${req.protocol}://${req.get('host')}`
+}
+
+// ─── GET /api/kiotviet/config?storeCode= ────────────────────────────────────
+router.get('/config', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || '').trim()
+        const store = await resolveStore(storeCode)
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+
+        const cfg = await loadConfig(store.sp)
+        // Kho + nhóm hàng để người dùng chọn đích đổ dữ liệu
+        const [warehouses, categories] = await Promise.all([
+            store.sp.warehouse.findMany({
+                where: { isActive: true }, select: { id: true, code: true, name: true, type: true, isDefault: true },
+                orderBy: { isDefault: 'desc' }, take: 50,
+            }).catch(() => []),
+            store.sp.category.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' }, take: 200 }).catch(() => []),
+        ])
+
+        res.json({
+            success: true,
+            data: {
+                storeName: store.name,
+                config: publicConfig(cfg, storeCode, baseUrlOf(req)),
+                warehouses, categories,
+            },
+        })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// ─── PUT /api/kiotviet/config ───────────────────────────────────────────────
+// Body: {storeCode, clientId?, clientSecret?, retailer?, enabled?, sync*?,
+//        overwrite*?, defaultWarehouseId?, defaultCategoryId?, branchIds?,
+//        webhookSecret?, strictSignature?}
+// Bí mật để TRỐNG = giữ nguyên giá trị cũ (trang admin không hiển thị lại bí mật).
+router.put('/config', async (req: Request, res: Response) => {
+    try {
+        const b = req.body || {}
+        const store = await resolveStore(String(b.storeCode || ''))
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+
+        const existing = await loadConfig(store.sp)
+        const data: any = {}
+
+        const setStr = (k: string, v: any) => { if (typeof v === 'string' && v.trim()) data[k] = v.trim() }
+        setStr('clientId', b.clientId)
+        setStr('clientSecret', b.clientSecret)
+        setStr('retailer', b.retailer)
+        setStr('webhookSecret', b.webhookSecret)
+
+        for (const k of ['enabled', 'syncProducts', 'syncCustomers', 'syncSuppliers', 'syncInvoices',
+            'overwriteNames', 'overwritePrices', 'overwriteStock', 'strictSignature']) {
+            if (typeof b[k] === 'boolean') data[k] = b[k]
+        }
+        if (b.defaultWarehouseId !== undefined) data.defaultWarehouseId = b.defaultWarehouseId || null
+        if (b.defaultCategoryId !== undefined) data.defaultCategoryId = b.defaultCategoryId || null
+        if (Array.isArray(b.branchIds)) data.branchIds = JSON.stringify(b.branchIds.map(Number).filter(Number.isFinite))
+
+        // Đổi secret thì token cũ trong bộ nhớ đệm phải bỏ, không thì vẫn ký bằng cái cũ
+        if (data.clientSecret || data.clientId) clearTokenCache(existing?.clientId || data.clientId)
+
+        let cfg
+        if (existing) {
+            cfg = await store.sp.kiotVietConfig.update({ where: { id: 'default' }, data })
+        } else {
+            if (!data.clientId || !data.clientSecret || !data.retailer) {
+                res.status(400).json({ success: false, error: 'Lần đầu phải nhập đủ Client ID, Client Secret và Tên gian hàng (Retailer)' })
+                return
+            }
+            cfg = await store.sp.kiotVietConfig.create({
+                data: {
+                    id: 'default',
+                    ...data,
+                    // Token webhook sinh MỘT LẦN, là lớp bảo vệ chính của cổng nhận
+                    webhookToken: crypto.randomBytes(24).toString('hex'),
+                },
+            })
+        }
+        res.json({ success: true, data: publicConfig(cfg, String(b.storeCode), baseUrlOf(req)) })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// ─── POST /api/kiotviet/rotate-webhook-token {storeCode} ────────────────────
+router.post('/rotate-webhook-token', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.body?.storeCode || '')
+        const store = await resolveStore(storeCode)
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const cfg = await store.sp.kiotVietConfig.update({
+            where: { id: 'default' },
+            data: { webhookToken: crypto.randomBytes(24).toString('hex') },
+        })
+        res.json({ success: true, data: publicConfig(cfg, storeCode, baseUrlOf(req)) })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// ─── POST /api/kiotviet/test-connection {storeCode} ─────────────────────────
+router.post('/test-connection', async (req: Request, res: Response) => {
+    try {
+        const store = await resolveStore(String(req.body?.storeCode || ''))
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const cfg = await loadConfig(store.sp)
+        if (!cfg) { res.status(400).json({ success: false, error: 'Chưa cấu hình KiotViet cho cửa hàng này' }); return }
+
+        const result = await testConnection(credsOf(cfg))
+        res.json({ success: result.ok, data: result, error: result.ok ? undefined : result.error })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// ─── Tuỳ chọn đồng bộ dùng chung cho cả chạy tay lẫn webhook ────────────────
+async function buildOptions(sp: any, cfg: any, apply: boolean): Promise<SyncOptions> {
+    // Kho đích: ưu tiên kho đã chọn, không có thì lấy kho main mặc định
+    let warehouseId: string | null = cfg?.defaultWarehouseId || null
+    if (!warehouseId) {
+        const wh = await sp.warehouse.findFirst({
+            where: { type: 'main', isActive: true },
+            orderBy: { isDefault: 'desc' }, select: { id: true },
+        }).catch(() => null)
+        warehouseId = wh?.id || null
+    }
+    // Nhóm hàng mặc định cho sản phẩm mới
+    let categoryId: string | null = cfg?.defaultCategoryId || null
+    if (!categoryId) {
+        const cat = await sp.category.findFirst({ select: { id: true }, orderBy: { createdAt: 'asc' } }).catch(() => null)
+        categoryId = cat?.id || null
+    }
+    // Transaction.createdBy là khoá ngoại bắt buộc → phải có một user thật
+    const user = await sp.user.findFirst({
+        where: { role: { in: ['admin', 'owner', 'manager'] } }, select: { id: true },
+        orderBy: { createdAt: 'asc' },
+    }).catch(() => null)
+
+    let branchIds: number[] | undefined
+    try { branchIds = cfg?.branchIds ? JSON.parse(cfg.branchIds) : undefined } catch { branchIds = undefined }
+
+    return {
+        apply,
+        overwriteNames: !!cfg?.overwriteNames,
+        overwritePrices: !!cfg?.overwritePrices,
+        overwriteStock: !!cfg?.overwriteStock,
+        defaultCategoryId: categoryId,
+        defaultWarehouseId: warehouseId,
+        branchIds,
+        systemUserId: user?.id || null,
+    }
+}
+
+// ─── POST /api/kiotviet/sync ────────────────────────────────────────────────
+// Body: {storeCode, entities: ['products','customers','suppliers','invoices'],
+//        fromDate: 'YYYY-MM-DD', toDate: 'YYYY-MM-DD', apply?: boolean}
+//
+// MẶC ĐỊNH CHẠY THỬ (apply=false): chỉ đếm và trả mẫu, không ghi gì.
+router.post('/sync', async (req: Request, res: Response) => {
+    try {
+        const b = req.body || {}
+        const storeCode = String(b.storeCode || '')
+        const store = await resolveStore(storeCode)
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+
+        const cfg = await loadConfig(store.sp)
+        if (!cfg) { res.status(400).json({ success: false, error: 'Chưa cấu hình KiotViet' }); return }
+
+        const allowed = ['products', 'customers', 'suppliers', 'invoices']
+        const entities: string[] = Array.isArray(b.entities)
+            ? b.entities.filter((e: any) => allowed.includes(String(e)))
+            : []
+        if (!entities.length) {
+            res.status(400).json({ success: false, error: 'Chọn ít nhất một loại dữ liệu để đồng bộ' }); return
+        }
+
+        const fromDate = b.fromDate ? new Date(`${b.fromDate}T00:00:00+07:00`) : null
+        const toDate = b.toDate ? new Date(`${b.toDate}T23:59:59+07:00`) : null
+        if (fromDate && isNaN(fromDate.getTime())) { res.status(400).json({ success: false, error: 'Ngày bắt đầu không hợp lệ' }); return }
+        if (toDate && isNaN(toDate.getTime())) { res.status(400).json({ success: false, error: 'Ngày kết thúc không hợp lệ' }); return }
+        if (fromDate && toDate && fromDate > toDate) { res.status(400).json({ success: false, error: 'Ngày bắt đầu phải trước ngày kết thúc' }); return }
+
+        const apply = b.apply === true
+
+        // Một đợt đang chạy thì không cho bấm chồng — hai đợt song song sẽ đua
+        // nhau tạo cùng một bản ghi và đẻ trùng.
+        const running = await store.sp.kiotVietSyncLog.findFirst({
+            where: { mode: 'manual', status: 'running', startedAt: { gte: new Date(Date.now() - 30 * 60_000) } },
+            select: { id: true },
+        }).catch(() => null)
+        if (running) {
+            res.status(409).json({ success: false, error: 'Đang có một đợt đồng bộ chạy dở. Chờ xong rồi bấm lại.' })
+            return
+        }
+
+        const log = await store.sp.kiotVietSyncLog.create({
+            data: {
+                entity: entities.join(','), mode: 'manual', dryRun: !apply,
+                fromDate, toDate, status: 'running', startedAt: new Date(),
+            },
+        })
+
+        // Trả ngay, chạy nền — quét vài chục nghìn bản ghi vượt xa timeout HTTP
+        res.json({
+            success: true,
+            data: {
+                logId: log.id,
+                cheDo: apply ? 'GHI THẬT' : 'CHẠY THỬ (không ghi gì)',
+                entities, fromDate, toDate,
+                message: 'Đợt đồng bộ đã bắt đầu. Theo dõi tiến độ ở bảng lịch sử bên dưới.',
+            },
+        })
+
+        void runSync(store.sp, cfg, entities, fromDate, toDate, apply, log.id)
+            .catch(async (e: any) => {
+                await store.sp.kiotVietSyncLog.update({
+                    where: { id: log.id },
+                    data: { status: 'failed', errors: errMsg(e).slice(0, 2000), finishedAt: new Date() },
+                }).catch(() => { })
+            })
+    } catch (e: any) {
+        if (!res.headersSent) res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+/** Thân đợt đồng bộ. Chạy nền, cập nhật tiến độ vào KiotVietSyncLog. */
+async function runSync(
+    sp: any, cfg: any, entities: string[],
+    fromDate: Date | null, toDate: Date | null, apply: boolean, logId: string,
+): Promise<void> {
+    const opts = await buildOptions(sp, cfg, apply)
+    const creds = credsOf(cfg)
+    const totals = newCounters()
+    const perEntity: Record<string, any> = {}
+
+    // KiotViet lọc theo THỜI ĐIỂM CẬP NHẬT (lastModifiedFrom), không có tham số
+    // "đến ngày" cho hàng hoá/khách/NCC → cận trên phải tự cắt phía mình.
+    const lastModifiedFrom = kvDate(fromDate)
+
+    for (const entity of entities) {
+        const c = newCounters()
+        try {
+            if (entity === 'products') {
+                const { items, truncated } = await KV.products(creds, { lastModifiedFrom, isActive: true })
+                const filtered = cutByDate(items, toDate, 'modifiedDate', 'createdDate')
+                if (truncated) c.errors.push('Chạm trần 500 trang — thu hẹp khoảng ngày rồi chạy tiếp')
+                await syncProducts(sp, filtered, opts, c)
+            } else if (entity === 'customers') {
+                const { items, truncated } = await KV.customers(creds, { lastModifiedFrom })
+                const filtered = cutByDate(items, toDate, 'modifiedDate', 'createdDate')
+                if (truncated) c.errors.push('Chạm trần 500 trang — thu hẹp khoảng ngày rồi chạy tiếp')
+                await syncCustomers(sp, filtered, opts, c)
+            } else if (entity === 'suppliers') {
+                const { items, truncated } = await KV.suppliers(creds, { lastModifiedFrom })
+                const filtered = cutByDate(items, toDate, 'modifiedDate', 'createdDate')
+                if (truncated) c.errors.push('Chạm trần 500 trang — thu hẹp khoảng ngày rồi chạy tiếp')
+                await syncSuppliers(sp, filtered, opts, c)
+            } else if (entity === 'invoices') {
+                // Hoá đơn CÓ tham số ngày chứng từ ở phía KiotViet → lọc tại nguồn,
+                // nhẹ hơn nhiều so với kéo hết về rồi cắt.
+                const { items, truncated } = await KV.invoices(creds, {
+                    fromPurchaseDate: kvDate(fromDate),
+                    toPurchaseDate: kvDate(toDate),
+                })
+                const filtered = cutByDate(items, toDate, 'purchaseDate')
+                if (truncated) c.errors.push('Chạm trần 500 trang — thu hẹp khoảng ngày rồi chạy tiếp')
+                await syncInvoices(sp, filtered, opts, c)
+            }
+        } catch (e: any) {
+            c.failed++
+            c.errors.push(`${entity}: ${errMsg(e)}`.slice(0, 300))
+        }
+
+        perEntity[entity] = {
+            layVe: c.fetched, taoMoi: c.created, capNhat: c.updated,
+            boQua: c.skipped, loi: c.failed, mau: c.samples,
+        }
+        totals.fetched += c.fetched; totals.created += c.created; totals.updated += c.updated
+        totals.skipped += c.skipped; totals.failed += c.failed
+        totals.errors.push(...c.errors.map(x => `[${entity}] ${x}`))
+
+        // Cập nhật tiến độ sau mỗi loại để trang admin thấy chạy tới đâu
+        await sp.kiotVietSyncLog.update({
+            where: { id: logId },
+            data: {
+                fetched: totals.fetched, created: totals.created, updated: totals.updated,
+                skipped: totals.skipped, failed: totals.failed,
+                details: JSON.stringify(perEntity).slice(0, 60000),
+            },
+        }).catch(() => { })
+    }
+
+    await sp.kiotVietSyncLog.update({
+        where: { id: logId },
+        data: {
+            status: totals.failed ? 'partial' : 'success',
+            fetched: totals.fetched, created: totals.created, updated: totals.updated,
+            skipped: totals.skipped, failed: totals.failed,
+            errors: totals.errors.join('\n').slice(0, 4000) || null,
+            details: JSON.stringify(perEntity).slice(0, 60000),
+            finishedAt: new Date(),
+        },
+    }).catch(() => { })
+
+    if (apply) {
+        await sp.kiotVietConfig.update({ where: { id: 'default' }, data: { lastSyncAt: new Date() } }).catch(() => { })
+    }
+}
+
+/**
+ * Cắt cận trên theo ngày. KiotViet chỉ có "từ ngày" cho hàng hoá/khách/NCC nên
+ * "đến ngày" người dùng chọn phải được tôn trọng ở phía mình — bỏ qua bước này
+ * là đổ cả dữ liệu ngoài khoảng đã chọn, sai ý người dùng.
+ */
+function cutByDate(items: any[], toDate: Date | null, ...dateFields: string[]): any[] {
+    if (!toDate) return items
+    const limit = toDate.getTime()
+    return items.filter(it => {
+        for (const f of dateFields) {
+            const v = it?.[f]
+            if (!v) continue
+            const t = new Date(v).getTime()
+            if (!isNaN(t)) return t <= limit
+        }
+        return true   // không có trường ngày nào → giữ lại, thà thừa còn hơn mất
+    })
+}
+
+// ─── GET /api/kiotviet/logs?storeCode=&limit= ───────────────────────────────
+router.get('/logs', async (req: Request, res: Response) => {
+    try {
+        const store = await resolveStore(String(req.query.storeCode || ''))
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20))
+        const logs = await store.sp.kiotVietSyncLog.findMany({
+            orderBy: { startedAt: 'desc' }, take: limit,
+        }).catch(() => [])
+        res.json({ success: true, data: logs })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// ─── GET /api/kiotviet/logs/:id?storeCode= ──────────────────────────────────
+router.get('/logs/:id', async (req: Request, res: Response) => {
+    try {
+        const store = await resolveStore(String(req.query.storeCode || ''))
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const log = await store.sp.kiotVietSyncLog.findUnique({ where: { id: String(req.params.id) } }).catch(() => null)
+        if (!log) { res.status(404).json({ success: false, error: 'Không tìm thấy bản ghi' }); return }
+        let details: any = null
+        try { details = log.details ? JSON.parse(log.details) : null } catch { /* để nguyên null */ }
+        res.json({ success: true, data: { ...log, details } })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+export default router

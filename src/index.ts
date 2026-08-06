@@ -62,6 +62,7 @@ import loyaltyRoutes from './routes/loyalty'
 import reviewRoutes from './routes/reviews'
 import payrollRoutes from './routes/payroll'
 import onlineOrderRoutes from './routes/onlineOrders'
+import kiotvietRoutes from './routes/kiotviet'
 import driveVideoRoutes from './routes/driveVideos'
 import upgradeRequestRoutes from './routes/upgradeRequests'
 import webhookRoutes from './routes/webhooks'
@@ -259,6 +260,10 @@ app.use('/api/settings', settingsRoutes)
 app.use('/api/branches', branchRoutes)
 app.use('/api/price-lists', priceListRoutes)
 app.use('/api/admin', adminRoutes)
+// Cổng đồng bộ KiotViet. Webhook /api/kiotviet/webhook/:storeCode/:token là
+// CÔNG KHAI (KiotViet không gửi được admin key) — bảo vệ bằng token trong URL;
+// phần quản trị còn lại nằm sau adminAuth ngay trong file route.
+app.use('/api/kiotviet', kiotvietRoutes)
 app.use('/api/import-data', importDataRoutes)
 app.use('/api/uploads', uploadRoutes)
 app.use('/api/livestream', livestreamRoutes) // Kengi Stream studio (kengi.vn/ai-livestream)

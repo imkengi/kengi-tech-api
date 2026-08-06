@@ -577,6 +577,21 @@ export type FbCommentRule = $Result.DefaultSelection<Prisma.$FbCommentRulePayloa
  */
 export type FbAutoReplyLog = $Result.DefaultSelection<Prisma.$FbAutoReplyLogPayload>
 /**
+ * Model FbBrandProfile
+ * 
+ */
+export type FbBrandProfile = $Result.DefaultSelection<Prisma.$FbBrandProfilePayload>
+/**
+ * Model FbContentPlan
+ * 
+ */
+export type FbContentPlan = $Result.DefaultSelection<Prisma.$FbContentPlanPayload>
+/**
+ * Model FbContentDraft
+ * 
+ */
+export type FbContentDraft = $Result.DefaultSelection<Prisma.$FbContentDraftPayload>
+/**
  * Model CrmTask
  * 
  */
@@ -611,6 +626,21 @@ export type AiAgentJob = $Result.DefaultSelection<Prisma.$AiAgentJobPayload>
  * 
  */
 export type AiAgentRun = $Result.DefaultSelection<Prisma.$AiAgentRunPayload>
+/**
+ * Model KiotVietConfig
+ * 
+ */
+export type KiotVietConfig = $Result.DefaultSelection<Prisma.$KiotVietConfigPayload>
+/**
+ * Model KiotVietMap
+ * 
+ */
+export type KiotVietMap = $Result.DefaultSelection<Prisma.$KiotVietMapPayload>
+/**
+ * Model KiotVietSyncLog
+ * 
+ */
+export type KiotVietSyncLog = $Result.DefaultSelection<Prisma.$KiotVietSyncLogPayload>
 
 /**
  * ##  Prisma Client ʲˢ
@@ -1851,6 +1881,36 @@ export class PrismaClient<
   get fbAutoReplyLog(): Prisma.FbAutoReplyLogDelegate<ExtArgs, ClientOptions>;
 
   /**
+   * `prisma.fbBrandProfile`: Exposes CRUD operations for the **FbBrandProfile** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more FbBrandProfiles
+    * const fbBrandProfiles = await prisma.fbBrandProfile.findMany()
+    * ```
+    */
+  get fbBrandProfile(): Prisma.FbBrandProfileDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.fbContentPlan`: Exposes CRUD operations for the **FbContentPlan** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more FbContentPlans
+    * const fbContentPlans = await prisma.fbContentPlan.findMany()
+    * ```
+    */
+  get fbContentPlan(): Prisma.FbContentPlanDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.fbContentDraft`: Exposes CRUD operations for the **FbContentDraft** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more FbContentDrafts
+    * const fbContentDrafts = await prisma.fbContentDraft.findMany()
+    * ```
+    */
+  get fbContentDraft(): Prisma.FbContentDraftDelegate<ExtArgs, ClientOptions>;
+
+  /**
    * `prisma.crmTask`: Exposes CRUD operations for the **CrmTask** model.
     * Example usage:
     * ```ts
@@ -1919,6 +1979,36 @@ export class PrismaClient<
     * ```
     */
   get aiAgentRun(): Prisma.AiAgentRunDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.kiotVietConfig`: Exposes CRUD operations for the **KiotVietConfig** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more KiotVietConfigs
+    * const kiotVietConfigs = await prisma.kiotVietConfig.findMany()
+    * ```
+    */
+  get kiotVietConfig(): Prisma.KiotVietConfigDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.kiotVietMap`: Exposes CRUD operations for the **KiotVietMap** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more KiotVietMaps
+    * const kiotVietMaps = await prisma.kiotVietMap.findMany()
+    * ```
+    */
+  get kiotVietMap(): Prisma.KiotVietMapDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.kiotVietSyncLog`: Exposes CRUD operations for the **KiotVietSyncLog** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more KiotVietSyncLogs
+    * const kiotVietSyncLogs = await prisma.kiotVietSyncLog.findMany()
+    * ```
+    */
+  get kiotVietSyncLog(): Prisma.KiotVietSyncLogDelegate<ExtArgs, ClientOptions>;
 }
 
 export namespace Prisma {
@@ -2472,13 +2562,19 @@ export namespace Prisma {
     FbScheduledPost: 'FbScheduledPost',
     FbCommentRule: 'FbCommentRule',
     FbAutoReplyLog: 'FbAutoReplyLog',
+    FbBrandProfile: 'FbBrandProfile',
+    FbContentPlan: 'FbContentPlan',
+    FbContentDraft: 'FbContentDraft',
     CrmTask: 'CrmTask',
     CrmDeal: 'CrmDeal',
     CrmActivity: 'CrmActivity',
     CrmZaloLog: 'CrmZaloLog',
     CrmCampaign: 'CrmCampaign',
     AiAgentJob: 'AiAgentJob',
-    AiAgentRun: 'AiAgentRun'
+    AiAgentRun: 'AiAgentRun',
+    KiotVietConfig: 'KiotVietConfig',
+    KiotVietMap: 'KiotVietMap',
+    KiotVietSyncLog: 'KiotVietSyncLog'
   };
 
   export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -2497,7 +2593,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "branch" | "user" | "apiKey" | "webhookEndpoint" | "webhookDelivery" | "salesCheckin" | "category" | "brand" | "product" | "productSerial" | "unitConversion" | "productImage" | "customerGroup" | "customer" | "transaction" | "transactionItem" | "payment" | "inventoryTransaction" | "importReceipt" | "importReceiptItem" | "promotion" | "supplier" | "purchaseOrder" | "purchaseOrderItem" | "expense" | "cashReceipt" | "notification" | "warranty" | "repair" | "quotation" | "auditLog" | "priceHistory" | "shippingOrder" | "driver" | "vehicle" | "vehicleMaintenance" | "crmEmailLog" | "vehicleFuelLog" | "vehicleDocument" | "deliveryRoute" | "deliveryStop" | "taxConfig" | "bankAccount" | "bankTransaction" | "bankConnectionConfig" | "taxDeclaration" | "customerSegment" | "currency" | "feedback" | "schedule" | "returnOrder" | "returnItem" | "debtEntry" | "bundle" | "salesOrder" | "salesOrderItem" | "priceList" | "priceListItem" | "priceRule" | "announcement" | "attendance" | "loyaltyMember" | "loyaltyTransaction" | "review" | "skuMapping" | "hkdRevenueEntry" | "storeSettings" | "store" | "branchRequest" | "branchDeleteRequest" | "payrollRecord" | "employee" | "payrollPeriod" | "payrollEntry" | "onlineChannel" | "onlineOrder" | "onlineProduct" | "onlineOrderItem" | "syncLog" | "journalEntry" | "fixedAsset" | "depreciationEntry" | "cCDC" | "cCDCAllocation" | "eInvoiceConfig" | "eInvoice" | "eInvoiceItem" | "adjustmentInvoice" | "adjustmentInvoiceItem" | "hKDRevenueEntry" | "warehouse" | "warehouseStock" | "stockTransfer" | "stockTransferItem" | "salesTrip" | "salesTripItem" | "salesTripLog" | "inventoryCount" | "inventoryCountItem" | "zReport" | "storageFile" | "chartOfAccount" | "periodLock" | "exchangeRate" | "taxDeadline" | "taxAuditLog" | "taxBudget" | "fbUserToken" | "fbPage" | "fbScheduledPost" | "fbCommentRule" | "fbAutoReplyLog" | "crmTask" | "crmDeal" | "crmActivity" | "crmZaloLog" | "crmCampaign" | "aiAgentJob" | "aiAgentRun"
+      modelProps: "branch" | "user" | "apiKey" | "webhookEndpoint" | "webhookDelivery" | "salesCheckin" | "category" | "brand" | "product" | "productSerial" | "unitConversion" | "productImage" | "customerGroup" | "customer" | "transaction" | "transactionItem" | "payment" | "inventoryTransaction" | "importReceipt" | "importReceiptItem" | "promotion" | "supplier" | "purchaseOrder" | "purchaseOrderItem" | "expense" | "cashReceipt" | "notification" | "warranty" | "repair" | "quotation" | "auditLog" | "priceHistory" | "shippingOrder" | "driver" | "vehicle" | "vehicleMaintenance" | "crmEmailLog" | "vehicleFuelLog" | "vehicleDocument" | "deliveryRoute" | "deliveryStop" | "taxConfig" | "bankAccount" | "bankTransaction" | "bankConnectionConfig" | "taxDeclaration" | "customerSegment" | "currency" | "feedback" | "schedule" | "returnOrder" | "returnItem" | "debtEntry" | "bundle" | "salesOrder" | "salesOrderItem" | "priceList" | "priceListItem" | "priceRule" | "announcement" | "attendance" | "loyaltyMember" | "loyaltyTransaction" | "review" | "skuMapping" | "hkdRevenueEntry" | "storeSettings" | "store" | "branchRequest" | "branchDeleteRequest" | "payrollRecord" | "employee" | "payrollPeriod" | "payrollEntry" | "onlineChannel" | "onlineOrder" | "onlineProduct" | "onlineOrderItem" | "syncLog" | "journalEntry" | "fixedAsset" | "depreciationEntry" | "cCDC" | "cCDCAllocation" | "eInvoiceConfig" | "eInvoice" | "eInvoiceItem" | "adjustmentInvoice" | "adjustmentInvoiceItem" | "hKDRevenueEntry" | "warehouse" | "warehouseStock" | "stockTransfer" | "stockTransferItem" | "salesTrip" | "salesTripItem" | "salesTripLog" | "inventoryCount" | "inventoryCountItem" | "zReport" | "storageFile" | "chartOfAccount" | "periodLock" | "exchangeRate" | "taxDeadline" | "taxAuditLog" | "taxBudget" | "fbUserToken" | "fbPage" | "fbScheduledPost" | "fbCommentRule" | "fbAutoReplyLog" | "fbBrandProfile" | "fbContentPlan" | "fbContentDraft" | "crmTask" | "crmDeal" | "crmActivity" | "crmZaloLog" | "crmCampaign" | "aiAgentJob" | "aiAgentRun" | "kiotVietConfig" | "kiotVietMap" | "kiotVietSyncLog"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -10789,6 +10885,228 @@ export namespace Prisma {
           }
         }
       }
+      FbBrandProfile: {
+        payload: Prisma.$FbBrandProfilePayload<ExtArgs>
+        fields: Prisma.FbBrandProfileFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.FbBrandProfileFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbBrandProfilePayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.FbBrandProfileFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbBrandProfilePayload>
+          }
+          findFirst: {
+            args: Prisma.FbBrandProfileFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbBrandProfilePayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.FbBrandProfileFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbBrandProfilePayload>
+          }
+          findMany: {
+            args: Prisma.FbBrandProfileFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbBrandProfilePayload>[]
+          }
+          create: {
+            args: Prisma.FbBrandProfileCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbBrandProfilePayload>
+          }
+          createMany: {
+            args: Prisma.FbBrandProfileCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.FbBrandProfileCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbBrandProfilePayload>[]
+          }
+          delete: {
+            args: Prisma.FbBrandProfileDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbBrandProfilePayload>
+          }
+          update: {
+            args: Prisma.FbBrandProfileUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbBrandProfilePayload>
+          }
+          deleteMany: {
+            args: Prisma.FbBrandProfileDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.FbBrandProfileUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.FbBrandProfileUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbBrandProfilePayload>[]
+          }
+          upsert: {
+            args: Prisma.FbBrandProfileUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbBrandProfilePayload>
+          }
+          aggregate: {
+            args: Prisma.FbBrandProfileAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateFbBrandProfile>
+          }
+          groupBy: {
+            args: Prisma.FbBrandProfileGroupByArgs<ExtArgs>
+            result: $Utils.Optional<FbBrandProfileGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.FbBrandProfileCountArgs<ExtArgs>
+            result: $Utils.Optional<FbBrandProfileCountAggregateOutputType> | number
+          }
+        }
+      }
+      FbContentPlan: {
+        payload: Prisma.$FbContentPlanPayload<ExtArgs>
+        fields: Prisma.FbContentPlanFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.FbContentPlanFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbContentPlanPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.FbContentPlanFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbContentPlanPayload>
+          }
+          findFirst: {
+            args: Prisma.FbContentPlanFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbContentPlanPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.FbContentPlanFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbContentPlanPayload>
+          }
+          findMany: {
+            args: Prisma.FbContentPlanFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbContentPlanPayload>[]
+          }
+          create: {
+            args: Prisma.FbContentPlanCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbContentPlanPayload>
+          }
+          createMany: {
+            args: Prisma.FbContentPlanCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.FbContentPlanCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbContentPlanPayload>[]
+          }
+          delete: {
+            args: Prisma.FbContentPlanDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbContentPlanPayload>
+          }
+          update: {
+            args: Prisma.FbContentPlanUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbContentPlanPayload>
+          }
+          deleteMany: {
+            args: Prisma.FbContentPlanDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.FbContentPlanUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.FbContentPlanUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbContentPlanPayload>[]
+          }
+          upsert: {
+            args: Prisma.FbContentPlanUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbContentPlanPayload>
+          }
+          aggregate: {
+            args: Prisma.FbContentPlanAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateFbContentPlan>
+          }
+          groupBy: {
+            args: Prisma.FbContentPlanGroupByArgs<ExtArgs>
+            result: $Utils.Optional<FbContentPlanGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.FbContentPlanCountArgs<ExtArgs>
+            result: $Utils.Optional<FbContentPlanCountAggregateOutputType> | number
+          }
+        }
+      }
+      FbContentDraft: {
+        payload: Prisma.$FbContentDraftPayload<ExtArgs>
+        fields: Prisma.FbContentDraftFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.FbContentDraftFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbContentDraftPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.FbContentDraftFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbContentDraftPayload>
+          }
+          findFirst: {
+            args: Prisma.FbContentDraftFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbContentDraftPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.FbContentDraftFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbContentDraftPayload>
+          }
+          findMany: {
+            args: Prisma.FbContentDraftFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbContentDraftPayload>[]
+          }
+          create: {
+            args: Prisma.FbContentDraftCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbContentDraftPayload>
+          }
+          createMany: {
+            args: Prisma.FbContentDraftCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.FbContentDraftCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbContentDraftPayload>[]
+          }
+          delete: {
+            args: Prisma.FbContentDraftDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbContentDraftPayload>
+          }
+          update: {
+            args: Prisma.FbContentDraftUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbContentDraftPayload>
+          }
+          deleteMany: {
+            args: Prisma.FbContentDraftDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.FbContentDraftUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.FbContentDraftUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbContentDraftPayload>[]
+          }
+          upsert: {
+            args: Prisma.FbContentDraftUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$FbContentDraftPayload>
+          }
+          aggregate: {
+            args: Prisma.FbContentDraftAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateFbContentDraft>
+          }
+          groupBy: {
+            args: Prisma.FbContentDraftGroupByArgs<ExtArgs>
+            result: $Utils.Optional<FbContentDraftGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.FbContentDraftCountArgs<ExtArgs>
+            result: $Utils.Optional<FbContentDraftCountAggregateOutputType> | number
+          }
+        }
+      }
       CrmTask: {
         payload: Prisma.$CrmTaskPayload<ExtArgs>
         fields: Prisma.CrmTaskFieldRefs
@@ -11307,6 +11625,228 @@ export namespace Prisma {
           }
         }
       }
+      KiotVietConfig: {
+        payload: Prisma.$KiotVietConfigPayload<ExtArgs>
+        fields: Prisma.KiotVietConfigFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.KiotVietConfigFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$KiotVietConfigPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.KiotVietConfigFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$KiotVietConfigPayload>
+          }
+          findFirst: {
+            args: Prisma.KiotVietConfigFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$KiotVietConfigPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.KiotVietConfigFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$KiotVietConfigPayload>
+          }
+          findMany: {
+            args: Prisma.KiotVietConfigFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$KiotVietConfigPayload>[]
+          }
+          create: {
+            args: Prisma.KiotVietConfigCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$KiotVietConfigPayload>
+          }
+          createMany: {
+            args: Prisma.KiotVietConfigCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.KiotVietConfigCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$KiotVietConfigPayload>[]
+          }
+          delete: {
+            args: Prisma.KiotVietConfigDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$KiotVietConfigPayload>
+          }
+          update: {
+            args: Prisma.KiotVietConfigUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$KiotVietConfigPayload>
+          }
+          deleteMany: {
+            args: Prisma.KiotVietConfigDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.KiotVietConfigUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.KiotVietConfigUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$KiotVietConfigPayload>[]
+          }
+          upsert: {
+            args: Prisma.KiotVietConfigUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$KiotVietConfigPayload>
+          }
+          aggregate: {
+            args: Prisma.KiotVietConfigAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateKiotVietConfig>
+          }
+          groupBy: {
+            args: Prisma.KiotVietConfigGroupByArgs<ExtArgs>
+            result: $Utils.Optional<KiotVietConfigGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.KiotVietConfigCountArgs<ExtArgs>
+            result: $Utils.Optional<KiotVietConfigCountAggregateOutputType> | number
+          }
+        }
+      }
+      KiotVietMap: {
+        payload: Prisma.$KiotVietMapPayload<ExtArgs>
+        fields: Prisma.KiotVietMapFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.KiotVietMapFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$KiotVietMapPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.KiotVietMapFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$KiotVietMapPayload>
+          }
+          findFirst: {
+            args: Prisma.KiotVietMapFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$KiotVietMapPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.KiotVietMapFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$KiotVietMapPayload>
+          }
+          findMany: {
+            args: Prisma.KiotVietMapFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$KiotVietMapPayload>[]
+          }
+          create: {
+            args: Prisma.KiotVietMapCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$KiotVietMapPayload>
+          }
+          createMany: {
+            args: Prisma.KiotVietMapCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.KiotVietMapCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$KiotVietMapPayload>[]
+          }
+          delete: {
+            args: Prisma.KiotVietMapDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$KiotVietMapPayload>
+          }
+          update: {
+            args: Prisma.KiotVietMapUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$KiotVietMapPayload>
+          }
+          deleteMany: {
+            args: Prisma.KiotVietMapDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.KiotVietMapUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.KiotVietMapUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$KiotVietMapPayload>[]
+          }
+          upsert: {
+            args: Prisma.KiotVietMapUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$KiotVietMapPayload>
+          }
+          aggregate: {
+            args: Prisma.KiotVietMapAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateKiotVietMap>
+          }
+          groupBy: {
+            args: Prisma.KiotVietMapGroupByArgs<ExtArgs>
+            result: $Utils.Optional<KiotVietMapGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.KiotVietMapCountArgs<ExtArgs>
+            result: $Utils.Optional<KiotVietMapCountAggregateOutputType> | number
+          }
+        }
+      }
+      KiotVietSyncLog: {
+        payload: Prisma.$KiotVietSyncLogPayload<ExtArgs>
+        fields: Prisma.KiotVietSyncLogFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.KiotVietSyncLogFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$KiotVietSyncLogPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.KiotVietSyncLogFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$KiotVietSyncLogPayload>
+          }
+          findFirst: {
+            args: Prisma.KiotVietSyncLogFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$KiotVietSyncLogPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.KiotVietSyncLogFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$KiotVietSyncLogPayload>
+          }
+          findMany: {
+            args: Prisma.KiotVietSyncLogFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$KiotVietSyncLogPayload>[]
+          }
+          create: {
+            args: Prisma.KiotVietSyncLogCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$KiotVietSyncLogPayload>
+          }
+          createMany: {
+            args: Prisma.KiotVietSyncLogCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.KiotVietSyncLogCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$KiotVietSyncLogPayload>[]
+          }
+          delete: {
+            args: Prisma.KiotVietSyncLogDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$KiotVietSyncLogPayload>
+          }
+          update: {
+            args: Prisma.KiotVietSyncLogUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$KiotVietSyncLogPayload>
+          }
+          deleteMany: {
+            args: Prisma.KiotVietSyncLogDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.KiotVietSyncLogUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.KiotVietSyncLogUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$KiotVietSyncLogPayload>[]
+          }
+          upsert: {
+            args: Prisma.KiotVietSyncLogUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$KiotVietSyncLogPayload>
+          }
+          aggregate: {
+            args: Prisma.KiotVietSyncLogAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateKiotVietSyncLog>
+          }
+          groupBy: {
+            args: Prisma.KiotVietSyncLogGroupByArgs<ExtArgs>
+            result: $Utils.Optional<KiotVietSyncLogGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.KiotVietSyncLogCountArgs<ExtArgs>
+            result: $Utils.Optional<KiotVietSyncLogCountAggregateOutputType> | number
+          }
+        }
+      }
     }
   } & {
     other: {
@@ -11515,6 +12055,9 @@ export namespace Prisma {
     fbScheduledPost?: FbScheduledPostOmit
     fbCommentRule?: FbCommentRuleOmit
     fbAutoReplyLog?: FbAutoReplyLogOmit
+    fbBrandProfile?: FbBrandProfileOmit
+    fbContentPlan?: FbContentPlanOmit
+    fbContentDraft?: FbContentDraftOmit
     crmTask?: CrmTaskOmit
     crmDeal?: CrmDealOmit
     crmActivity?: CrmActivityOmit
@@ -11522,6 +12065,9 @@ export namespace Prisma {
     crmCampaign?: CrmCampaignOmit
     aiAgentJob?: AiAgentJobOmit
     aiAgentRun?: AiAgentRunOmit
+    kiotVietConfig?: KiotVietConfigOmit
+    kiotVietMap?: KiotVietMapOmit
+    kiotVietSyncLog?: KiotVietSyncLogOmit
   }
 
   /* Types for Logging */
@@ -12785,6 +13331,37 @@ export namespace Prisma {
    */
   export type FbPageCountOutputTypeCountAutoReplyLogsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: FbAutoReplyLogWhereInput
+  }
+
+
+  /**
+   * Count Type FbContentPlanCountOutputType
+   */
+
+  export type FbContentPlanCountOutputType = {
+    drafts: number
+  }
+
+  export type FbContentPlanCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    drafts?: boolean | FbContentPlanCountOutputTypeCountDraftsArgs
+  }
+
+  // Custom InputTypes
+  /**
+   * FbContentPlanCountOutputType without action
+   */
+  export type FbContentPlanCountOutputTypeDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbContentPlanCountOutputType
+     */
+    select?: FbContentPlanCountOutputTypeSelect<ExtArgs> | null
+  }
+
+  /**
+   * FbContentPlanCountOutputType without action
+   */
+  export type FbContentPlanCountOutputTypeCountDraftsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: FbContentDraftWhereInput
   }
 
 
@@ -39990,6 +40567,10 @@ export namespace Prisma {
     notes: string | null
     expectedDate: Date | null
     receivedDate: Date | null
+    checkedBy: string | null
+    checkedByName: string | null
+    checkedAt: Date | null
+    rejectReason: string | null
     branchId: string | null
     createdAt: Date | null
     updatedAt: Date | null
@@ -40005,6 +40586,10 @@ export namespace Prisma {
     notes: string | null
     expectedDate: Date | null
     receivedDate: Date | null
+    checkedBy: string | null
+    checkedByName: string | null
+    checkedAt: Date | null
+    rejectReason: string | null
     branchId: string | null
     createdAt: Date | null
     updatedAt: Date | null
@@ -40020,6 +40605,10 @@ export namespace Prisma {
     notes: number
     expectedDate: number
     receivedDate: number
+    checkedBy: number
+    checkedByName: number
+    checkedAt: number
+    rejectReason: number
     branchId: number
     createdAt: number
     updatedAt: number
@@ -40045,6 +40634,10 @@ export namespace Prisma {
     notes?: true
     expectedDate?: true
     receivedDate?: true
+    checkedBy?: true
+    checkedByName?: true
+    checkedAt?: true
+    rejectReason?: true
     branchId?: true
     createdAt?: true
     updatedAt?: true
@@ -40060,6 +40653,10 @@ export namespace Prisma {
     notes?: true
     expectedDate?: true
     receivedDate?: true
+    checkedBy?: true
+    checkedByName?: true
+    checkedAt?: true
+    rejectReason?: true
     branchId?: true
     createdAt?: true
     updatedAt?: true
@@ -40075,6 +40672,10 @@ export namespace Prisma {
     notes?: true
     expectedDate?: true
     receivedDate?: true
+    checkedBy?: true
+    checkedByName?: true
+    checkedAt?: true
+    rejectReason?: true
     branchId?: true
     createdAt?: true
     updatedAt?: true
@@ -40177,6 +40778,10 @@ export namespace Prisma {
     notes: string | null
     expectedDate: Date | null
     receivedDate: Date | null
+    checkedBy: string | null
+    checkedByName: string | null
+    checkedAt: Date | null
+    rejectReason: string | null
     branchId: string | null
     createdAt: Date
     updatedAt: Date
@@ -40211,6 +40816,10 @@ export namespace Prisma {
     notes?: boolean
     expectedDate?: boolean
     receivedDate?: boolean
+    checkedBy?: boolean
+    checkedByName?: boolean
+    checkedAt?: boolean
+    rejectReason?: boolean
     branchId?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -40229,6 +40838,10 @@ export namespace Prisma {
     notes?: boolean
     expectedDate?: boolean
     receivedDate?: boolean
+    checkedBy?: boolean
+    checkedByName?: boolean
+    checkedAt?: boolean
+    rejectReason?: boolean
     branchId?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -40245,6 +40858,10 @@ export namespace Prisma {
     notes?: boolean
     expectedDate?: boolean
     receivedDate?: boolean
+    checkedBy?: boolean
+    checkedByName?: boolean
+    checkedAt?: boolean
+    rejectReason?: boolean
     branchId?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -40261,12 +40878,16 @@ export namespace Prisma {
     notes?: boolean
     expectedDate?: boolean
     receivedDate?: boolean
+    checkedBy?: boolean
+    checkedByName?: boolean
+    checkedAt?: boolean
+    rejectReason?: boolean
     branchId?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type PurchaseOrderOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "code" | "supplierId" | "supplierName" | "status" | "totalAmount" | "notes" | "expectedDate" | "receivedDate" | "branchId" | "createdAt" | "updatedAt", ExtArgs["result"]["purchaseOrder"]>
+  export type PurchaseOrderOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "code" | "supplierId" | "supplierName" | "status" | "totalAmount" | "notes" | "expectedDate" | "receivedDate" | "checkedBy" | "checkedByName" | "checkedAt" | "rejectReason" | "branchId" | "createdAt" | "updatedAt", ExtArgs["result"]["purchaseOrder"]>
   export type PurchaseOrderInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     supplier?: boolean | PurchaseOrder$supplierArgs<ExtArgs>
     items?: boolean | PurchaseOrder$itemsArgs<ExtArgs>
@@ -40295,6 +40916,10 @@ export namespace Prisma {
       notes: string | null
       expectedDate: Date | null
       receivedDate: Date | null
+      checkedBy: string | null
+      checkedByName: string | null
+      checkedAt: Date | null
+      rejectReason: string | null
       branchId: string | null
       createdAt: Date
       updatedAt: Date
@@ -40732,6 +41357,10 @@ export namespace Prisma {
     readonly notes: FieldRef<"PurchaseOrder", 'String'>
     readonly expectedDate: FieldRef<"PurchaseOrder", 'DateTime'>
     readonly receivedDate: FieldRef<"PurchaseOrder", 'DateTime'>
+    readonly checkedBy: FieldRef<"PurchaseOrder", 'String'>
+    readonly checkedByName: FieldRef<"PurchaseOrder", 'String'>
+    readonly checkedAt: FieldRef<"PurchaseOrder", 'DateTime'>
+    readonly rejectReason: FieldRef<"PurchaseOrder", 'String'>
     readonly branchId: FieldRef<"PurchaseOrder", 'String'>
     readonly createdAt: FieldRef<"PurchaseOrder", 'DateTime'>
     readonly updatedAt: FieldRef<"PurchaseOrder", 'DateTime'>
@@ -42315,10 +42944,12 @@ export namespace Prisma {
 
   export type ExpenseAvgAggregateOutputType = {
     amount: number | null
+    vatAmount: number | null
   }
 
   export type ExpenseSumAggregateOutputType = {
     amount: number | null
+    vatAmount: number | null
   }
 
   export type ExpenseMinAggregateOutputType = {
@@ -42331,6 +42962,15 @@ export namespace Prisma {
     recurring: boolean | null
     bankAccountId: string | null
     status: string | null
+    vatAmount: number | null
+    supplierName: string | null
+    supplierTaxCode: string | null
+    invoiceNo: string | null
+    invoiceSymbol: string | null
+    invoiceDate: Date | null
+    lookupCode: string | null
+    taxAuthorityCode: string | null
+    sourceRef: string | null
     cancelledAt: Date | null
     cancelReason: string | null
     branchId: string | null
@@ -42348,6 +42988,15 @@ export namespace Prisma {
     recurring: boolean | null
     bankAccountId: string | null
     status: string | null
+    vatAmount: number | null
+    supplierName: string | null
+    supplierTaxCode: string | null
+    invoiceNo: string | null
+    invoiceSymbol: string | null
+    invoiceDate: Date | null
+    lookupCode: string | null
+    taxAuthorityCode: string | null
+    sourceRef: string | null
     cancelledAt: Date | null
     cancelReason: string | null
     branchId: string | null
@@ -42365,6 +43014,15 @@ export namespace Prisma {
     recurring: number
     bankAccountId: number
     status: number
+    vatAmount: number
+    supplierName: number
+    supplierTaxCode: number
+    invoiceNo: number
+    invoiceSymbol: number
+    invoiceDate: number
+    lookupCode: number
+    taxAuthorityCode: number
+    sourceRef: number
     cancelledAt: number
     cancelReason: number
     branchId: number
@@ -42376,10 +43034,12 @@ export namespace Prisma {
 
   export type ExpenseAvgAggregateInputType = {
     amount?: true
+    vatAmount?: true
   }
 
   export type ExpenseSumAggregateInputType = {
     amount?: true
+    vatAmount?: true
   }
 
   export type ExpenseMinAggregateInputType = {
@@ -42392,6 +43052,15 @@ export namespace Prisma {
     recurring?: true
     bankAccountId?: true
     status?: true
+    vatAmount?: true
+    supplierName?: true
+    supplierTaxCode?: true
+    invoiceNo?: true
+    invoiceSymbol?: true
+    invoiceDate?: true
+    lookupCode?: true
+    taxAuthorityCode?: true
+    sourceRef?: true
     cancelledAt?: true
     cancelReason?: true
     branchId?: true
@@ -42409,6 +43078,15 @@ export namespace Prisma {
     recurring?: true
     bankAccountId?: true
     status?: true
+    vatAmount?: true
+    supplierName?: true
+    supplierTaxCode?: true
+    invoiceNo?: true
+    invoiceSymbol?: true
+    invoiceDate?: true
+    lookupCode?: true
+    taxAuthorityCode?: true
+    sourceRef?: true
     cancelledAt?: true
     cancelReason?: true
     branchId?: true
@@ -42426,6 +43104,15 @@ export namespace Prisma {
     recurring?: true
     bankAccountId?: true
     status?: true
+    vatAmount?: true
+    supplierName?: true
+    supplierTaxCode?: true
+    invoiceNo?: true
+    invoiceSymbol?: true
+    invoiceDate?: true
+    lookupCode?: true
+    taxAuthorityCode?: true
+    sourceRef?: true
     cancelledAt?: true
     cancelReason?: true
     branchId?: true
@@ -42530,6 +43217,15 @@ export namespace Prisma {
     recurring: boolean
     bankAccountId: string | null
     status: string
+    vatAmount: number | null
+    supplierName: string | null
+    supplierTaxCode: string | null
+    invoiceNo: string | null
+    invoiceSymbol: string | null
+    invoiceDate: Date | null
+    lookupCode: string | null
+    taxAuthorityCode: string | null
+    sourceRef: string | null
     cancelledAt: Date | null
     cancelReason: string | null
     branchId: string | null
@@ -42566,6 +43262,15 @@ export namespace Prisma {
     recurring?: boolean
     bankAccountId?: boolean
     status?: boolean
+    vatAmount?: boolean
+    supplierName?: boolean
+    supplierTaxCode?: boolean
+    invoiceNo?: boolean
+    invoiceSymbol?: boolean
+    invoiceDate?: boolean
+    lookupCode?: boolean
+    taxAuthorityCode?: boolean
+    sourceRef?: boolean
     cancelledAt?: boolean
     cancelReason?: boolean
     branchId?: boolean
@@ -42583,6 +43288,15 @@ export namespace Prisma {
     recurring?: boolean
     bankAccountId?: boolean
     status?: boolean
+    vatAmount?: boolean
+    supplierName?: boolean
+    supplierTaxCode?: boolean
+    invoiceNo?: boolean
+    invoiceSymbol?: boolean
+    invoiceDate?: boolean
+    lookupCode?: boolean
+    taxAuthorityCode?: boolean
+    sourceRef?: boolean
     cancelledAt?: boolean
     cancelReason?: boolean
     branchId?: boolean
@@ -42600,6 +43314,15 @@ export namespace Prisma {
     recurring?: boolean
     bankAccountId?: boolean
     status?: boolean
+    vatAmount?: boolean
+    supplierName?: boolean
+    supplierTaxCode?: boolean
+    invoiceNo?: boolean
+    invoiceSymbol?: boolean
+    invoiceDate?: boolean
+    lookupCode?: boolean
+    taxAuthorityCode?: boolean
+    sourceRef?: boolean
     cancelledAt?: boolean
     cancelReason?: boolean
     branchId?: boolean
@@ -42617,6 +43340,15 @@ export namespace Prisma {
     recurring?: boolean
     bankAccountId?: boolean
     status?: boolean
+    vatAmount?: boolean
+    supplierName?: boolean
+    supplierTaxCode?: boolean
+    invoiceNo?: boolean
+    invoiceSymbol?: boolean
+    invoiceDate?: boolean
+    lookupCode?: boolean
+    taxAuthorityCode?: boolean
+    sourceRef?: boolean
     cancelledAt?: boolean
     cancelReason?: boolean
     branchId?: boolean
@@ -42624,7 +43356,7 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type ExpenseOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "description" | "amount" | "category" | "date" | "paidBy" | "recurring" | "bankAccountId" | "status" | "cancelledAt" | "cancelReason" | "branchId" | "createdAt" | "updatedAt", ExtArgs["result"]["expense"]>
+  export type ExpenseOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "description" | "amount" | "category" | "date" | "paidBy" | "recurring" | "bankAccountId" | "status" | "vatAmount" | "supplierName" | "supplierTaxCode" | "invoiceNo" | "invoiceSymbol" | "invoiceDate" | "lookupCode" | "taxAuthorityCode" | "sourceRef" | "cancelledAt" | "cancelReason" | "branchId" | "createdAt" | "updatedAt", ExtArgs["result"]["expense"]>
 
   export type $ExpensePayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     name: "Expense"
@@ -42639,6 +43371,15 @@ export namespace Prisma {
       recurring: boolean
       bankAccountId: string | null
       status: string
+      vatAmount: number | null
+      supplierName: string | null
+      supplierTaxCode: string | null
+      invoiceNo: string | null
+      invoiceSymbol: string | null
+      invoiceDate: Date | null
+      lookupCode: string | null
+      taxAuthorityCode: string | null
+      sourceRef: string | null
       cancelledAt: Date | null
       cancelReason: string | null
       branchId: string | null
@@ -43076,6 +43817,15 @@ export namespace Prisma {
     readonly recurring: FieldRef<"Expense", 'Boolean'>
     readonly bankAccountId: FieldRef<"Expense", 'String'>
     readonly status: FieldRef<"Expense", 'String'>
+    readonly vatAmount: FieldRef<"Expense", 'Float'>
+    readonly supplierName: FieldRef<"Expense", 'String'>
+    readonly supplierTaxCode: FieldRef<"Expense", 'String'>
+    readonly invoiceNo: FieldRef<"Expense", 'String'>
+    readonly invoiceSymbol: FieldRef<"Expense", 'String'>
+    readonly invoiceDate: FieldRef<"Expense", 'DateTime'>
+    readonly lookupCode: FieldRef<"Expense", 'String'>
+    readonly taxAuthorityCode: FieldRef<"Expense", 'String'>
+    readonly sourceRef: FieldRef<"Expense", 'String'>
     readonly cancelledAt: FieldRef<"Expense", 'DateTime'>
     readonly cancelReason: FieldRef<"Expense", 'String'>
     readonly branchId: FieldRef<"Expense", 'String'>
@@ -91014,6 +91764,7 @@ export namespace Prisma {
     website: string | null
     notifyLowStock: boolean | null
     smtpConfig: string | null
+    mailboxConfig: string | null
     geminiApiKey: string | null
     notifyNewOrder: boolean | null
     notifyDailyReport: boolean | null
@@ -91027,6 +91778,9 @@ export namespace Prisma {
     monthlyRevenueTarget: number | null
     dailyOrderTarget: number | null
     driveFolderId: string | null
+    driveOauthToken: string | null
+    driveOauthEmail: string | null
+    driveOauthAt: Date | null
     updatedAt: Date | null
   }
 
@@ -91051,6 +91805,7 @@ export namespace Prisma {
     website: string | null
     notifyLowStock: boolean | null
     smtpConfig: string | null
+    mailboxConfig: string | null
     geminiApiKey: string | null
     notifyNewOrder: boolean | null
     notifyDailyReport: boolean | null
@@ -91064,6 +91819,9 @@ export namespace Prisma {
     monthlyRevenueTarget: number | null
     dailyOrderTarget: number | null
     driveFolderId: string | null
+    driveOauthToken: string | null
+    driveOauthEmail: string | null
+    driveOauthAt: Date | null
     updatedAt: Date | null
   }
 
@@ -91088,6 +91846,7 @@ export namespace Prisma {
     website: number
     notifyLowStock: number
     smtpConfig: number
+    mailboxConfig: number
     geminiApiKey: number
     notifyNewOrder: number
     notifyDailyReport: number
@@ -91101,6 +91860,9 @@ export namespace Prisma {
     monthlyRevenueTarget: number
     dailyOrderTarget: number
     driveFolderId: number
+    driveOauthToken: number
+    driveOauthEmail: number
+    driveOauthAt: number
     updatedAt: number
     _all: number
   }
@@ -91139,6 +91901,7 @@ export namespace Prisma {
     website?: true
     notifyLowStock?: true
     smtpConfig?: true
+    mailboxConfig?: true
     geminiApiKey?: true
     notifyNewOrder?: true
     notifyDailyReport?: true
@@ -91152,6 +91915,9 @@ export namespace Prisma {
     monthlyRevenueTarget?: true
     dailyOrderTarget?: true
     driveFolderId?: true
+    driveOauthToken?: true
+    driveOauthEmail?: true
+    driveOauthAt?: true
     updatedAt?: true
   }
 
@@ -91176,6 +91942,7 @@ export namespace Prisma {
     website?: true
     notifyLowStock?: true
     smtpConfig?: true
+    mailboxConfig?: true
     geminiApiKey?: true
     notifyNewOrder?: true
     notifyDailyReport?: true
@@ -91189,6 +91956,9 @@ export namespace Prisma {
     monthlyRevenueTarget?: true
     dailyOrderTarget?: true
     driveFolderId?: true
+    driveOauthToken?: true
+    driveOauthEmail?: true
+    driveOauthAt?: true
     updatedAt?: true
   }
 
@@ -91213,6 +91983,7 @@ export namespace Prisma {
     website?: true
     notifyLowStock?: true
     smtpConfig?: true
+    mailboxConfig?: true
     geminiApiKey?: true
     notifyNewOrder?: true
     notifyDailyReport?: true
@@ -91226,6 +91997,9 @@ export namespace Prisma {
     monthlyRevenueTarget?: true
     dailyOrderTarget?: true
     driveFolderId?: true
+    driveOauthToken?: true
+    driveOauthEmail?: true
+    driveOauthAt?: true
     updatedAt?: true
     _all?: true
   }
@@ -91337,6 +92111,7 @@ export namespace Prisma {
     website: string | null
     notifyLowStock: boolean
     smtpConfig: string | null
+    mailboxConfig: string | null
     geminiApiKey: string | null
     notifyNewOrder: boolean
     notifyDailyReport: boolean
@@ -91350,6 +92125,9 @@ export namespace Prisma {
     monthlyRevenueTarget: number | null
     dailyOrderTarget: number | null
     driveFolderId: string | null
+    driveOauthToken: string | null
+    driveOauthEmail: string | null
+    driveOauthAt: Date | null
     updatedAt: Date
     _count: StoreSettingsCountAggregateOutputType | null
     _avg: StoreSettingsAvgAggregateOutputType | null
@@ -91393,6 +92171,7 @@ export namespace Prisma {
     website?: boolean
     notifyLowStock?: boolean
     smtpConfig?: boolean
+    mailboxConfig?: boolean
     geminiApiKey?: boolean
     notifyNewOrder?: boolean
     notifyDailyReport?: boolean
@@ -91406,6 +92185,9 @@ export namespace Prisma {
     monthlyRevenueTarget?: boolean
     dailyOrderTarget?: boolean
     driveFolderId?: boolean
+    driveOauthToken?: boolean
+    driveOauthEmail?: boolean
+    driveOauthAt?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["storeSettings"]>
 
@@ -91430,6 +92212,7 @@ export namespace Prisma {
     website?: boolean
     notifyLowStock?: boolean
     smtpConfig?: boolean
+    mailboxConfig?: boolean
     geminiApiKey?: boolean
     notifyNewOrder?: boolean
     notifyDailyReport?: boolean
@@ -91443,6 +92226,9 @@ export namespace Prisma {
     monthlyRevenueTarget?: boolean
     dailyOrderTarget?: boolean
     driveFolderId?: boolean
+    driveOauthToken?: boolean
+    driveOauthEmail?: boolean
+    driveOauthAt?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["storeSettings"]>
 
@@ -91467,6 +92253,7 @@ export namespace Prisma {
     website?: boolean
     notifyLowStock?: boolean
     smtpConfig?: boolean
+    mailboxConfig?: boolean
     geminiApiKey?: boolean
     notifyNewOrder?: boolean
     notifyDailyReport?: boolean
@@ -91480,6 +92267,9 @@ export namespace Prisma {
     monthlyRevenueTarget?: boolean
     dailyOrderTarget?: boolean
     driveFolderId?: boolean
+    driveOauthToken?: boolean
+    driveOauthEmail?: boolean
+    driveOauthAt?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["storeSettings"]>
 
@@ -91504,6 +92294,7 @@ export namespace Prisma {
     website?: boolean
     notifyLowStock?: boolean
     smtpConfig?: boolean
+    mailboxConfig?: boolean
     geminiApiKey?: boolean
     notifyNewOrder?: boolean
     notifyDailyReport?: boolean
@@ -91517,10 +92308,13 @@ export namespace Prisma {
     monthlyRevenueTarget?: boolean
     dailyOrderTarget?: boolean
     driveFolderId?: boolean
+    driveOauthToken?: boolean
+    driveOauthEmail?: boolean
+    driveOauthAt?: boolean
     updatedAt?: boolean
   }
 
-  export type StoreSettingsOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "address" | "phone" | "logo" | "description" | "costPriceMethod" | "trackSerial" | "trackBatch" | "allowNegativeStock" | "shiftConfig" | "businessType" | "taxCode" | "ownerName" | "ownerIdNumber" | "representativeName" | "email" | "website" | "notifyLowStock" | "smtpConfig" | "geminiApiKey" | "notifyNewOrder" | "notifyDailyReport" | "notifyWeeklyReport" | "autoRestockOnReturn" | "autoCreateJournalEntries" | "salesCanCheckout" | "openTime" | "closeTime" | "dailyRevenueTarget" | "monthlyRevenueTarget" | "dailyOrderTarget" | "driveFolderId" | "updatedAt", ExtArgs["result"]["storeSettings"]>
+  export type StoreSettingsOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "address" | "phone" | "logo" | "description" | "costPriceMethod" | "trackSerial" | "trackBatch" | "allowNegativeStock" | "shiftConfig" | "businessType" | "taxCode" | "ownerName" | "ownerIdNumber" | "representativeName" | "email" | "website" | "notifyLowStock" | "smtpConfig" | "mailboxConfig" | "geminiApiKey" | "notifyNewOrder" | "notifyDailyReport" | "notifyWeeklyReport" | "autoRestockOnReturn" | "autoCreateJournalEntries" | "salesCanCheckout" | "openTime" | "closeTime" | "dailyRevenueTarget" | "monthlyRevenueTarget" | "dailyOrderTarget" | "driveFolderId" | "driveOauthToken" | "driveOauthEmail" | "driveOauthAt" | "updatedAt", ExtArgs["result"]["storeSettings"]>
 
   export type $StoreSettingsPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     name: "StoreSettings"
@@ -91546,6 +92340,7 @@ export namespace Prisma {
       website: string | null
       notifyLowStock: boolean
       smtpConfig: string | null
+      mailboxConfig: string | null
       geminiApiKey: string | null
       notifyNewOrder: boolean
       notifyDailyReport: boolean
@@ -91559,6 +92354,9 @@ export namespace Prisma {
       monthlyRevenueTarget: number | null
       dailyOrderTarget: number | null
       driveFolderId: string | null
+      driveOauthToken: string | null
+      driveOauthEmail: string | null
+      driveOauthAt: Date | null
       updatedAt: Date
     }, ExtArgs["result"]["storeSettings"]>
     composites: {}
@@ -92003,6 +92801,7 @@ export namespace Prisma {
     readonly website: FieldRef<"StoreSettings", 'String'>
     readonly notifyLowStock: FieldRef<"StoreSettings", 'Boolean'>
     readonly smtpConfig: FieldRef<"StoreSettings", 'String'>
+    readonly mailboxConfig: FieldRef<"StoreSettings", 'String'>
     readonly geminiApiKey: FieldRef<"StoreSettings", 'String'>
     readonly notifyNewOrder: FieldRef<"StoreSettings", 'Boolean'>
     readonly notifyDailyReport: FieldRef<"StoreSettings", 'Boolean'>
@@ -92016,6 +92815,9 @@ export namespace Prisma {
     readonly monthlyRevenueTarget: FieldRef<"StoreSettings", 'Float'>
     readonly dailyOrderTarget: FieldRef<"StoreSettings", 'Int'>
     readonly driveFolderId: FieldRef<"StoreSettings", 'String'>
+    readonly driveOauthToken: FieldRef<"StoreSettings", 'String'>
+    readonly driveOauthEmail: FieldRef<"StoreSettings", 'String'>
+    readonly driveOauthAt: FieldRef<"StoreSettings", 'DateTime'>
     readonly updatedAt: FieldRef<"StoreSettings", 'DateTime'>
   }
     
@@ -102333,6 +103135,8 @@ export namespace Prisma {
     platformFeeRate: number | null
     netRevenue: number | null
     adsVoucherDiscount: number | null
+    isInstant: boolean | null
+    shipByDate: Date | null
     stockDeducted: boolean | null
     syncedAt: Date | null
     createdAt: Date | null
@@ -102369,6 +103173,8 @@ export namespace Prisma {
     platformFeeRate: number | null
     netRevenue: number | null
     adsVoucherDiscount: number | null
+    isInstant: boolean | null
+    shipByDate: Date | null
     stockDeducted: boolean | null
     syncedAt: Date | null
     createdAt: Date | null
@@ -102405,6 +103211,8 @@ export namespace Prisma {
     platformFeeRate: number
     netRevenue: number
     adsVoucherDiscount: number
+    isInstant: number
+    shipByDate: number
     stockDeducted: number
     syncedAt: number
     createdAt: number
@@ -102465,6 +103273,8 @@ export namespace Prisma {
     platformFeeRate?: true
     netRevenue?: true
     adsVoucherDiscount?: true
+    isInstant?: true
+    shipByDate?: true
     stockDeducted?: true
     syncedAt?: true
     createdAt?: true
@@ -102501,6 +103311,8 @@ export namespace Prisma {
     platformFeeRate?: true
     netRevenue?: true
     adsVoucherDiscount?: true
+    isInstant?: true
+    shipByDate?: true
     stockDeducted?: true
     syncedAt?: true
     createdAt?: true
@@ -102537,6 +103349,8 @@ export namespace Prisma {
     platformFeeRate?: true
     netRevenue?: true
     adsVoucherDiscount?: true
+    isInstant?: true
+    shipByDate?: true
     stockDeducted?: true
     syncedAt?: true
     createdAt?: true
@@ -102660,6 +103474,8 @@ export namespace Prisma {
     platformFeeRate: number
     netRevenue: number
     adsVoucherDiscount: number
+    isInstant: boolean
+    shipByDate: Date | null
     stockDeducted: boolean
     syncedAt: Date | null
     createdAt: Date
@@ -102715,6 +103531,8 @@ export namespace Prisma {
     platformFeeRate?: boolean
     netRevenue?: boolean
     adsVoucherDiscount?: boolean
+    isInstant?: boolean
+    shipByDate?: boolean
     stockDeducted?: boolean
     syncedAt?: boolean
     createdAt?: boolean
@@ -102754,6 +103572,8 @@ export namespace Prisma {
     platformFeeRate?: boolean
     netRevenue?: boolean
     adsVoucherDiscount?: boolean
+    isInstant?: boolean
+    shipByDate?: boolean
     stockDeducted?: boolean
     syncedAt?: boolean
     createdAt?: boolean
@@ -102791,6 +103611,8 @@ export namespace Prisma {
     platformFeeRate?: boolean
     netRevenue?: boolean
     adsVoucherDiscount?: boolean
+    isInstant?: boolean
+    shipByDate?: boolean
     stockDeducted?: boolean
     syncedAt?: boolean
     createdAt?: boolean
@@ -102828,13 +103650,15 @@ export namespace Prisma {
     platformFeeRate?: boolean
     netRevenue?: boolean
     adsVoucherDiscount?: boolean
+    isInstant?: boolean
+    shipByDate?: boolean
     stockDeducted?: boolean
     syncedAt?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type OnlineOrderOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "orderNumber" | "channelId" | "channelName" | "platform" | "customerName" | "customerPhone" | "customerEmail" | "shippingAddress" | "status" | "subtotal" | "discount" | "shippingFee" | "total" | "paymentMethod" | "paymentStatus" | "paidAt" | "trackingNumber" | "shippingCarrier" | "shippedAt" | "deliveredAt" | "note" | "internalNote" | "externalOrderId" | "externalStatus" | "platformFee" | "platformFeeRate" | "netRevenue" | "adsVoucherDiscount" | "stockDeducted" | "syncedAt" | "createdAt" | "updatedAt", ExtArgs["result"]["onlineOrder"]>
+  export type OnlineOrderOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "orderNumber" | "channelId" | "channelName" | "platform" | "customerName" | "customerPhone" | "customerEmail" | "shippingAddress" | "status" | "subtotal" | "discount" | "shippingFee" | "total" | "paymentMethod" | "paymentStatus" | "paidAt" | "trackingNumber" | "shippingCarrier" | "shippedAt" | "deliveredAt" | "note" | "internalNote" | "externalOrderId" | "externalStatus" | "platformFee" | "platformFeeRate" | "netRevenue" | "adsVoucherDiscount" | "isInstant" | "shipByDate" | "stockDeducted" | "syncedAt" | "createdAt" | "updatedAt", ExtArgs["result"]["onlineOrder"]>
   export type OnlineOrderInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     channel?: boolean | OnlineOrder$channelArgs<ExtArgs>
     items?: boolean | OnlineOrder$itemsArgs<ExtArgs>
@@ -102883,6 +103707,8 @@ export namespace Prisma {
       platformFeeRate: number
       netRevenue: number
       adsVoucherDiscount: number
+      isInstant: boolean
+      shipByDate: Date | null
       stockDeducted: boolean
       syncedAt: Date | null
       createdAt: Date
@@ -103341,6 +104167,8 @@ export namespace Prisma {
     readonly platformFeeRate: FieldRef<"OnlineOrder", 'Float'>
     readonly netRevenue: FieldRef<"OnlineOrder", 'Float'>
     readonly adsVoucherDiscount: FieldRef<"OnlineOrder", 'Float'>
+    readonly isInstant: FieldRef<"OnlineOrder", 'Boolean'>
+    readonly shipByDate: FieldRef<"OnlineOrder", 'DateTime'>
     readonly stockDeducted: FieldRef<"OnlineOrder", 'Boolean'>
     readonly syncedAt: FieldRef<"OnlineOrder", 'DateTime'>
     readonly createdAt: FieldRef<"OnlineOrder", 'DateTime'>
@@ -114731,6 +115559,9 @@ export namespace Prisma {
     providerResponse: string | null
     replacesInvoiceId: string | null
     replacedByInvoiceId: string | null
+    adjustsInvoiceId: string | null
+    adjustedByInvoiceId: string | null
+    adjustReturnCode: string | null
     cancelReason: string | null
     notes: string | null
     branchId: string | null
@@ -114773,6 +115604,9 @@ export namespace Prisma {
     providerResponse: string | null
     replacesInvoiceId: string | null
     replacedByInvoiceId: string | null
+    adjustsInvoiceId: string | null
+    adjustedByInvoiceId: string | null
+    adjustReturnCode: string | null
     cancelReason: string | null
     notes: string | null
     branchId: string | null
@@ -114815,6 +115649,9 @@ export namespace Prisma {
     providerResponse: number
     replacesInvoiceId: number
     replacedByInvoiceId: number
+    adjustsInvoiceId: number
+    adjustedByInvoiceId: number
+    adjustReturnCode: number
     cancelReason: number
     notes: number
     branchId: number
@@ -114871,6 +115708,9 @@ export namespace Prisma {
     providerResponse?: true
     replacesInvoiceId?: true
     replacedByInvoiceId?: true
+    adjustsInvoiceId?: true
+    adjustedByInvoiceId?: true
+    adjustReturnCode?: true
     cancelReason?: true
     notes?: true
     branchId?: true
@@ -114913,6 +115753,9 @@ export namespace Prisma {
     providerResponse?: true
     replacesInvoiceId?: true
     replacedByInvoiceId?: true
+    adjustsInvoiceId?: true
+    adjustedByInvoiceId?: true
+    adjustReturnCode?: true
     cancelReason?: true
     notes?: true
     branchId?: true
@@ -114955,6 +115798,9 @@ export namespace Prisma {
     providerResponse?: true
     replacesInvoiceId?: true
     replacedByInvoiceId?: true
+    adjustsInvoiceId?: true
+    adjustedByInvoiceId?: true
+    adjustReturnCode?: true
     cancelReason?: true
     notes?: true
     branchId?: true
@@ -115084,6 +115930,9 @@ export namespace Prisma {
     providerResponse: string | null
     replacesInvoiceId: string | null
     replacedByInvoiceId: string | null
+    adjustsInvoiceId: string | null
+    adjustedByInvoiceId: string | null
+    adjustReturnCode: string | null
     cancelReason: string | null
     notes: string | null
     branchId: string | null
@@ -115145,6 +115994,9 @@ export namespace Prisma {
     providerResponse?: boolean
     replacesInvoiceId?: boolean
     replacedByInvoiceId?: boolean
+    adjustsInvoiceId?: boolean
+    adjustedByInvoiceId?: boolean
+    adjustReturnCode?: boolean
     cancelReason?: boolean
     notes?: boolean
     branchId?: boolean
@@ -115189,6 +116041,9 @@ export namespace Prisma {
     providerResponse?: boolean
     replacesInvoiceId?: boolean
     replacedByInvoiceId?: boolean
+    adjustsInvoiceId?: boolean
+    adjustedByInvoiceId?: boolean
+    adjustReturnCode?: boolean
     cancelReason?: boolean
     notes?: boolean
     branchId?: boolean
@@ -115231,6 +116086,9 @@ export namespace Prisma {
     providerResponse?: boolean
     replacesInvoiceId?: boolean
     replacedByInvoiceId?: boolean
+    adjustsInvoiceId?: boolean
+    adjustedByInvoiceId?: boolean
+    adjustReturnCode?: boolean
     cancelReason?: boolean
     notes?: boolean
     branchId?: boolean
@@ -115273,6 +116131,9 @@ export namespace Prisma {
     providerResponse?: boolean
     replacesInvoiceId?: boolean
     replacedByInvoiceId?: boolean
+    adjustsInvoiceId?: boolean
+    adjustedByInvoiceId?: boolean
+    adjustReturnCode?: boolean
     cancelReason?: boolean
     notes?: boolean
     branchId?: boolean
@@ -115286,7 +116147,7 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type EInvoiceOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "transactionId" | "provider" | "lookupCode" | "xmlData" | "errorMessage" | "invoiceNumber" | "invoiceSymbol" | "invoiceDate" | "invoiceType" | "status" | "sellerName" | "sellerTaxCode" | "sellerAddress" | "buyerName" | "buyerTaxCode" | "buyerAddress" | "totalBeforeVat" | "vatAmount" | "totalAmount" | "currency" | "paymentMethod" | "xmlContent" | "pdfUrl" | "providerInvoiceId" | "providerResponse" | "replacesInvoiceId" | "replacedByInvoiceId" | "cancelReason" | "notes" | "branchId" | "createdBy" | "createdByName" | "issuedAt" | "signedAt" | "sentAt" | "cancelledAt" | "createdAt" | "updatedAt", ExtArgs["result"]["eInvoice"]>
+  export type EInvoiceOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "transactionId" | "provider" | "lookupCode" | "xmlData" | "errorMessage" | "invoiceNumber" | "invoiceSymbol" | "invoiceDate" | "invoiceType" | "status" | "sellerName" | "sellerTaxCode" | "sellerAddress" | "buyerName" | "buyerTaxCode" | "buyerAddress" | "totalBeforeVat" | "vatAmount" | "totalAmount" | "currency" | "paymentMethod" | "xmlContent" | "pdfUrl" | "providerInvoiceId" | "providerResponse" | "replacesInvoiceId" | "replacedByInvoiceId" | "adjustsInvoiceId" | "adjustedByInvoiceId" | "adjustReturnCode" | "cancelReason" | "notes" | "branchId" | "createdBy" | "createdByName" | "issuedAt" | "signedAt" | "sentAt" | "cancelledAt" | "createdAt" | "updatedAt", ExtArgs["result"]["eInvoice"]>
   export type EInvoiceInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     items?: boolean | EInvoice$itemsArgs<ExtArgs>
     _count?: boolean | EInvoiceCountOutputTypeDefaultArgs<ExtArgs>
@@ -115328,6 +116189,9 @@ export namespace Prisma {
       providerResponse: string | null
       replacesInvoiceId: string | null
       replacedByInvoiceId: string | null
+      adjustsInvoiceId: string | null
+      adjustedByInvoiceId: string | null
+      adjustReturnCode: string | null
       cancelReason: string | null
       notes: string | null
       branchId: string | null
@@ -115791,6 +116655,9 @@ export namespace Prisma {
     readonly providerResponse: FieldRef<"EInvoice", 'String'>
     readonly replacesInvoiceId: FieldRef<"EInvoice", 'String'>
     readonly replacedByInvoiceId: FieldRef<"EInvoice", 'String'>
+    readonly adjustsInvoiceId: FieldRef<"EInvoice", 'String'>
+    readonly adjustedByInvoiceId: FieldRef<"EInvoice", 'String'>
+    readonly adjustReturnCode: FieldRef<"EInvoice", 'String'>
     readonly cancelReason: FieldRef<"EInvoice", 'String'>
     readonly notes: FieldRef<"EInvoice", 'String'>
     readonly branchId: FieldRef<"EInvoice", 'String'>
@@ -146914,6 +147781,3624 @@ export namespace Prisma {
 
 
   /**
+   * Model FbBrandProfile
+   */
+
+  export type AggregateFbBrandProfile = {
+    _count: FbBrandProfileCountAggregateOutputType | null
+    _avg: FbBrandProfileAvgAggregateOutputType | null
+    _sum: FbBrandProfileSumAggregateOutputType | null
+    _min: FbBrandProfileMinAggregateOutputType | null
+    _max: FbBrandProfileMaxAggregateOutputType | null
+  }
+
+  export type FbBrandProfileAvgAggregateOutputType = {
+    postsPerWeek: number | null
+  }
+
+  export type FbBrandProfileSumAggregateOutputType = {
+    postsPerWeek: number | null
+  }
+
+  export type FbBrandProfileMinAggregateOutputType = {
+    id: string | null
+    brandName: string | null
+    industry: string | null
+    audience: string | null
+    toneOfVoice: string | null
+    usp: string | null
+    cta: string | null
+    hashtags: string | null
+    bannedWords: string | null
+    emojiLevel: string | null
+    postsPerWeek: number | null
+    bestHours: string | null
+    pillarMix: string | null
+    notes: string | null
+    createdBy: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type FbBrandProfileMaxAggregateOutputType = {
+    id: string | null
+    brandName: string | null
+    industry: string | null
+    audience: string | null
+    toneOfVoice: string | null
+    usp: string | null
+    cta: string | null
+    hashtags: string | null
+    bannedWords: string | null
+    emojiLevel: string | null
+    postsPerWeek: number | null
+    bestHours: string | null
+    pillarMix: string | null
+    notes: string | null
+    createdBy: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type FbBrandProfileCountAggregateOutputType = {
+    id: number
+    brandName: number
+    industry: number
+    audience: number
+    toneOfVoice: number
+    usp: number
+    cta: number
+    hashtags: number
+    bannedWords: number
+    emojiLevel: number
+    postsPerWeek: number
+    bestHours: number
+    pillarMix: number
+    notes: number
+    createdBy: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type FbBrandProfileAvgAggregateInputType = {
+    postsPerWeek?: true
+  }
+
+  export type FbBrandProfileSumAggregateInputType = {
+    postsPerWeek?: true
+  }
+
+  export type FbBrandProfileMinAggregateInputType = {
+    id?: true
+    brandName?: true
+    industry?: true
+    audience?: true
+    toneOfVoice?: true
+    usp?: true
+    cta?: true
+    hashtags?: true
+    bannedWords?: true
+    emojiLevel?: true
+    postsPerWeek?: true
+    bestHours?: true
+    pillarMix?: true
+    notes?: true
+    createdBy?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type FbBrandProfileMaxAggregateInputType = {
+    id?: true
+    brandName?: true
+    industry?: true
+    audience?: true
+    toneOfVoice?: true
+    usp?: true
+    cta?: true
+    hashtags?: true
+    bannedWords?: true
+    emojiLevel?: true
+    postsPerWeek?: true
+    bestHours?: true
+    pillarMix?: true
+    notes?: true
+    createdBy?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type FbBrandProfileCountAggregateInputType = {
+    id?: true
+    brandName?: true
+    industry?: true
+    audience?: true
+    toneOfVoice?: true
+    usp?: true
+    cta?: true
+    hashtags?: true
+    bannedWords?: true
+    emojiLevel?: true
+    postsPerWeek?: true
+    bestHours?: true
+    pillarMix?: true
+    notes?: true
+    createdBy?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type FbBrandProfileAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which FbBrandProfile to aggregate.
+     */
+    where?: FbBrandProfileWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FbBrandProfiles to fetch.
+     */
+    orderBy?: FbBrandProfileOrderByWithRelationInput | FbBrandProfileOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: FbBrandProfileWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FbBrandProfiles from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FbBrandProfiles.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned FbBrandProfiles
+    **/
+    _count?: true | FbBrandProfileCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: FbBrandProfileAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: FbBrandProfileSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: FbBrandProfileMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: FbBrandProfileMaxAggregateInputType
+  }
+
+  export type GetFbBrandProfileAggregateType<T extends FbBrandProfileAggregateArgs> = {
+        [P in keyof T & keyof AggregateFbBrandProfile]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateFbBrandProfile[P]>
+      : GetScalarType<T[P], AggregateFbBrandProfile[P]>
+  }
+
+
+
+
+  export type FbBrandProfileGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: FbBrandProfileWhereInput
+    orderBy?: FbBrandProfileOrderByWithAggregationInput | FbBrandProfileOrderByWithAggregationInput[]
+    by: FbBrandProfileScalarFieldEnum[] | FbBrandProfileScalarFieldEnum
+    having?: FbBrandProfileScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: FbBrandProfileCountAggregateInputType | true
+    _avg?: FbBrandProfileAvgAggregateInputType
+    _sum?: FbBrandProfileSumAggregateInputType
+    _min?: FbBrandProfileMinAggregateInputType
+    _max?: FbBrandProfileMaxAggregateInputType
+  }
+
+  export type FbBrandProfileGroupByOutputType = {
+    id: string
+    brandName: string
+    industry: string
+    audience: string
+    toneOfVoice: string
+    usp: string
+    cta: string
+    hashtags: string
+    bannedWords: string
+    emojiLevel: string
+    postsPerWeek: number
+    bestHours: string
+    pillarMix: string
+    notes: string
+    createdBy: string | null
+    createdAt: Date
+    updatedAt: Date
+    _count: FbBrandProfileCountAggregateOutputType | null
+    _avg: FbBrandProfileAvgAggregateOutputType | null
+    _sum: FbBrandProfileSumAggregateOutputType | null
+    _min: FbBrandProfileMinAggregateOutputType | null
+    _max: FbBrandProfileMaxAggregateOutputType | null
+  }
+
+  type GetFbBrandProfileGroupByPayload<T extends FbBrandProfileGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<FbBrandProfileGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof FbBrandProfileGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], FbBrandProfileGroupByOutputType[P]>
+            : GetScalarType<T[P], FbBrandProfileGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type FbBrandProfileSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    brandName?: boolean
+    industry?: boolean
+    audience?: boolean
+    toneOfVoice?: boolean
+    usp?: boolean
+    cta?: boolean
+    hashtags?: boolean
+    bannedWords?: boolean
+    emojiLevel?: boolean
+    postsPerWeek?: boolean
+    bestHours?: boolean
+    pillarMix?: boolean
+    notes?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["fbBrandProfile"]>
+
+  export type FbBrandProfileSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    brandName?: boolean
+    industry?: boolean
+    audience?: boolean
+    toneOfVoice?: boolean
+    usp?: boolean
+    cta?: boolean
+    hashtags?: boolean
+    bannedWords?: boolean
+    emojiLevel?: boolean
+    postsPerWeek?: boolean
+    bestHours?: boolean
+    pillarMix?: boolean
+    notes?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["fbBrandProfile"]>
+
+  export type FbBrandProfileSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    brandName?: boolean
+    industry?: boolean
+    audience?: boolean
+    toneOfVoice?: boolean
+    usp?: boolean
+    cta?: boolean
+    hashtags?: boolean
+    bannedWords?: boolean
+    emojiLevel?: boolean
+    postsPerWeek?: boolean
+    bestHours?: boolean
+    pillarMix?: boolean
+    notes?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["fbBrandProfile"]>
+
+  export type FbBrandProfileSelectScalar = {
+    id?: boolean
+    brandName?: boolean
+    industry?: boolean
+    audience?: boolean
+    toneOfVoice?: boolean
+    usp?: boolean
+    cta?: boolean
+    hashtags?: boolean
+    bannedWords?: boolean
+    emojiLevel?: boolean
+    postsPerWeek?: boolean
+    bestHours?: boolean
+    pillarMix?: boolean
+    notes?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type FbBrandProfileOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "brandName" | "industry" | "audience" | "toneOfVoice" | "usp" | "cta" | "hashtags" | "bannedWords" | "emojiLevel" | "postsPerWeek" | "bestHours" | "pillarMix" | "notes" | "createdBy" | "createdAt" | "updatedAt", ExtArgs["result"]["fbBrandProfile"]>
+
+  export type $FbBrandProfilePayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "FbBrandProfile"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      brandName: string
+      industry: string
+      audience: string
+      toneOfVoice: string
+      usp: string
+      cta: string
+      hashtags: string
+      bannedWords: string
+      emojiLevel: string
+      postsPerWeek: number
+      bestHours: string
+      pillarMix: string
+      notes: string
+      createdBy: string | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["fbBrandProfile"]>
+    composites: {}
+  }
+
+  type FbBrandProfileGetPayload<S extends boolean | null | undefined | FbBrandProfileDefaultArgs> = $Result.GetResult<Prisma.$FbBrandProfilePayload, S>
+
+  type FbBrandProfileCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<FbBrandProfileFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: FbBrandProfileCountAggregateInputType | true
+    }
+
+  export interface FbBrandProfileDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['FbBrandProfile'], meta: { name: 'FbBrandProfile' } }
+    /**
+     * Find zero or one FbBrandProfile that matches the filter.
+     * @param {FbBrandProfileFindUniqueArgs} args - Arguments to find a FbBrandProfile
+     * @example
+     * // Get one FbBrandProfile
+     * const fbBrandProfile = await prisma.fbBrandProfile.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends FbBrandProfileFindUniqueArgs>(args: SelectSubset<T, FbBrandProfileFindUniqueArgs<ExtArgs>>): Prisma__FbBrandProfileClient<$Result.GetResult<Prisma.$FbBrandProfilePayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one FbBrandProfile that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {FbBrandProfileFindUniqueOrThrowArgs} args - Arguments to find a FbBrandProfile
+     * @example
+     * // Get one FbBrandProfile
+     * const fbBrandProfile = await prisma.fbBrandProfile.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends FbBrandProfileFindUniqueOrThrowArgs>(args: SelectSubset<T, FbBrandProfileFindUniqueOrThrowArgs<ExtArgs>>): Prisma__FbBrandProfileClient<$Result.GetResult<Prisma.$FbBrandProfilePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first FbBrandProfile that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbBrandProfileFindFirstArgs} args - Arguments to find a FbBrandProfile
+     * @example
+     * // Get one FbBrandProfile
+     * const fbBrandProfile = await prisma.fbBrandProfile.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends FbBrandProfileFindFirstArgs>(args?: SelectSubset<T, FbBrandProfileFindFirstArgs<ExtArgs>>): Prisma__FbBrandProfileClient<$Result.GetResult<Prisma.$FbBrandProfilePayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first FbBrandProfile that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbBrandProfileFindFirstOrThrowArgs} args - Arguments to find a FbBrandProfile
+     * @example
+     * // Get one FbBrandProfile
+     * const fbBrandProfile = await prisma.fbBrandProfile.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends FbBrandProfileFindFirstOrThrowArgs>(args?: SelectSubset<T, FbBrandProfileFindFirstOrThrowArgs<ExtArgs>>): Prisma__FbBrandProfileClient<$Result.GetResult<Prisma.$FbBrandProfilePayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more FbBrandProfiles that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbBrandProfileFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all FbBrandProfiles
+     * const fbBrandProfiles = await prisma.fbBrandProfile.findMany()
+     * 
+     * // Get first 10 FbBrandProfiles
+     * const fbBrandProfiles = await prisma.fbBrandProfile.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const fbBrandProfileWithIdOnly = await prisma.fbBrandProfile.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends FbBrandProfileFindManyArgs>(args?: SelectSubset<T, FbBrandProfileFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FbBrandProfilePayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a FbBrandProfile.
+     * @param {FbBrandProfileCreateArgs} args - Arguments to create a FbBrandProfile.
+     * @example
+     * // Create one FbBrandProfile
+     * const FbBrandProfile = await prisma.fbBrandProfile.create({
+     *   data: {
+     *     // ... data to create a FbBrandProfile
+     *   }
+     * })
+     * 
+     */
+    create<T extends FbBrandProfileCreateArgs>(args: SelectSubset<T, FbBrandProfileCreateArgs<ExtArgs>>): Prisma__FbBrandProfileClient<$Result.GetResult<Prisma.$FbBrandProfilePayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many FbBrandProfiles.
+     * @param {FbBrandProfileCreateManyArgs} args - Arguments to create many FbBrandProfiles.
+     * @example
+     * // Create many FbBrandProfiles
+     * const fbBrandProfile = await prisma.fbBrandProfile.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends FbBrandProfileCreateManyArgs>(args?: SelectSubset<T, FbBrandProfileCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many FbBrandProfiles and returns the data saved in the database.
+     * @param {FbBrandProfileCreateManyAndReturnArgs} args - Arguments to create many FbBrandProfiles.
+     * @example
+     * // Create many FbBrandProfiles
+     * const fbBrandProfile = await prisma.fbBrandProfile.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many FbBrandProfiles and only return the `id`
+     * const fbBrandProfileWithIdOnly = await prisma.fbBrandProfile.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends FbBrandProfileCreateManyAndReturnArgs>(args?: SelectSubset<T, FbBrandProfileCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FbBrandProfilePayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a FbBrandProfile.
+     * @param {FbBrandProfileDeleteArgs} args - Arguments to delete one FbBrandProfile.
+     * @example
+     * // Delete one FbBrandProfile
+     * const FbBrandProfile = await prisma.fbBrandProfile.delete({
+     *   where: {
+     *     // ... filter to delete one FbBrandProfile
+     *   }
+     * })
+     * 
+     */
+    delete<T extends FbBrandProfileDeleteArgs>(args: SelectSubset<T, FbBrandProfileDeleteArgs<ExtArgs>>): Prisma__FbBrandProfileClient<$Result.GetResult<Prisma.$FbBrandProfilePayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one FbBrandProfile.
+     * @param {FbBrandProfileUpdateArgs} args - Arguments to update one FbBrandProfile.
+     * @example
+     * // Update one FbBrandProfile
+     * const fbBrandProfile = await prisma.fbBrandProfile.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends FbBrandProfileUpdateArgs>(args: SelectSubset<T, FbBrandProfileUpdateArgs<ExtArgs>>): Prisma__FbBrandProfileClient<$Result.GetResult<Prisma.$FbBrandProfilePayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more FbBrandProfiles.
+     * @param {FbBrandProfileDeleteManyArgs} args - Arguments to filter FbBrandProfiles to delete.
+     * @example
+     * // Delete a few FbBrandProfiles
+     * const { count } = await prisma.fbBrandProfile.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends FbBrandProfileDeleteManyArgs>(args?: SelectSubset<T, FbBrandProfileDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more FbBrandProfiles.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbBrandProfileUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many FbBrandProfiles
+     * const fbBrandProfile = await prisma.fbBrandProfile.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends FbBrandProfileUpdateManyArgs>(args: SelectSubset<T, FbBrandProfileUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more FbBrandProfiles and returns the data updated in the database.
+     * @param {FbBrandProfileUpdateManyAndReturnArgs} args - Arguments to update many FbBrandProfiles.
+     * @example
+     * // Update many FbBrandProfiles
+     * const fbBrandProfile = await prisma.fbBrandProfile.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more FbBrandProfiles and only return the `id`
+     * const fbBrandProfileWithIdOnly = await prisma.fbBrandProfile.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends FbBrandProfileUpdateManyAndReturnArgs>(args: SelectSubset<T, FbBrandProfileUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FbBrandProfilePayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one FbBrandProfile.
+     * @param {FbBrandProfileUpsertArgs} args - Arguments to update or create a FbBrandProfile.
+     * @example
+     * // Update or create a FbBrandProfile
+     * const fbBrandProfile = await prisma.fbBrandProfile.upsert({
+     *   create: {
+     *     // ... data to create a FbBrandProfile
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the FbBrandProfile we want to update
+     *   }
+     * })
+     */
+    upsert<T extends FbBrandProfileUpsertArgs>(args: SelectSubset<T, FbBrandProfileUpsertArgs<ExtArgs>>): Prisma__FbBrandProfileClient<$Result.GetResult<Prisma.$FbBrandProfilePayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of FbBrandProfiles.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbBrandProfileCountArgs} args - Arguments to filter FbBrandProfiles to count.
+     * @example
+     * // Count the number of FbBrandProfiles
+     * const count = await prisma.fbBrandProfile.count({
+     *   where: {
+     *     // ... the filter for the FbBrandProfiles we want to count
+     *   }
+     * })
+    **/
+    count<T extends FbBrandProfileCountArgs>(
+      args?: Subset<T, FbBrandProfileCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], FbBrandProfileCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a FbBrandProfile.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbBrandProfileAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends FbBrandProfileAggregateArgs>(args: Subset<T, FbBrandProfileAggregateArgs>): Prisma.PrismaPromise<GetFbBrandProfileAggregateType<T>>
+
+    /**
+     * Group by FbBrandProfile.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbBrandProfileGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends FbBrandProfileGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: FbBrandProfileGroupByArgs['orderBy'] }
+        : { orderBy?: FbBrandProfileGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, FbBrandProfileGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetFbBrandProfileGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the FbBrandProfile model
+   */
+  readonly fields: FbBrandProfileFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for FbBrandProfile.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__FbBrandProfileClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the FbBrandProfile model
+   */
+  interface FbBrandProfileFieldRefs {
+    readonly id: FieldRef<"FbBrandProfile", 'String'>
+    readonly brandName: FieldRef<"FbBrandProfile", 'String'>
+    readonly industry: FieldRef<"FbBrandProfile", 'String'>
+    readonly audience: FieldRef<"FbBrandProfile", 'String'>
+    readonly toneOfVoice: FieldRef<"FbBrandProfile", 'String'>
+    readonly usp: FieldRef<"FbBrandProfile", 'String'>
+    readonly cta: FieldRef<"FbBrandProfile", 'String'>
+    readonly hashtags: FieldRef<"FbBrandProfile", 'String'>
+    readonly bannedWords: FieldRef<"FbBrandProfile", 'String'>
+    readonly emojiLevel: FieldRef<"FbBrandProfile", 'String'>
+    readonly postsPerWeek: FieldRef<"FbBrandProfile", 'Int'>
+    readonly bestHours: FieldRef<"FbBrandProfile", 'String'>
+    readonly pillarMix: FieldRef<"FbBrandProfile", 'String'>
+    readonly notes: FieldRef<"FbBrandProfile", 'String'>
+    readonly createdBy: FieldRef<"FbBrandProfile", 'String'>
+    readonly createdAt: FieldRef<"FbBrandProfile", 'DateTime'>
+    readonly updatedAt: FieldRef<"FbBrandProfile", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * FbBrandProfile findUnique
+   */
+  export type FbBrandProfileFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbBrandProfile
+     */
+    select?: FbBrandProfileSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbBrandProfile
+     */
+    omit?: FbBrandProfileOmit<ExtArgs> | null
+    /**
+     * Filter, which FbBrandProfile to fetch.
+     */
+    where: FbBrandProfileWhereUniqueInput
+  }
+
+  /**
+   * FbBrandProfile findUniqueOrThrow
+   */
+  export type FbBrandProfileFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbBrandProfile
+     */
+    select?: FbBrandProfileSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbBrandProfile
+     */
+    omit?: FbBrandProfileOmit<ExtArgs> | null
+    /**
+     * Filter, which FbBrandProfile to fetch.
+     */
+    where: FbBrandProfileWhereUniqueInput
+  }
+
+  /**
+   * FbBrandProfile findFirst
+   */
+  export type FbBrandProfileFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbBrandProfile
+     */
+    select?: FbBrandProfileSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbBrandProfile
+     */
+    omit?: FbBrandProfileOmit<ExtArgs> | null
+    /**
+     * Filter, which FbBrandProfile to fetch.
+     */
+    where?: FbBrandProfileWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FbBrandProfiles to fetch.
+     */
+    orderBy?: FbBrandProfileOrderByWithRelationInput | FbBrandProfileOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for FbBrandProfiles.
+     */
+    cursor?: FbBrandProfileWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FbBrandProfiles from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FbBrandProfiles.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of FbBrandProfiles.
+     */
+    distinct?: FbBrandProfileScalarFieldEnum | FbBrandProfileScalarFieldEnum[]
+  }
+
+  /**
+   * FbBrandProfile findFirstOrThrow
+   */
+  export type FbBrandProfileFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbBrandProfile
+     */
+    select?: FbBrandProfileSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbBrandProfile
+     */
+    omit?: FbBrandProfileOmit<ExtArgs> | null
+    /**
+     * Filter, which FbBrandProfile to fetch.
+     */
+    where?: FbBrandProfileWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FbBrandProfiles to fetch.
+     */
+    orderBy?: FbBrandProfileOrderByWithRelationInput | FbBrandProfileOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for FbBrandProfiles.
+     */
+    cursor?: FbBrandProfileWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FbBrandProfiles from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FbBrandProfiles.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of FbBrandProfiles.
+     */
+    distinct?: FbBrandProfileScalarFieldEnum | FbBrandProfileScalarFieldEnum[]
+  }
+
+  /**
+   * FbBrandProfile findMany
+   */
+  export type FbBrandProfileFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbBrandProfile
+     */
+    select?: FbBrandProfileSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbBrandProfile
+     */
+    omit?: FbBrandProfileOmit<ExtArgs> | null
+    /**
+     * Filter, which FbBrandProfiles to fetch.
+     */
+    where?: FbBrandProfileWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FbBrandProfiles to fetch.
+     */
+    orderBy?: FbBrandProfileOrderByWithRelationInput | FbBrandProfileOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing FbBrandProfiles.
+     */
+    cursor?: FbBrandProfileWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FbBrandProfiles from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FbBrandProfiles.
+     */
+    skip?: number
+    distinct?: FbBrandProfileScalarFieldEnum | FbBrandProfileScalarFieldEnum[]
+  }
+
+  /**
+   * FbBrandProfile create
+   */
+  export type FbBrandProfileCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbBrandProfile
+     */
+    select?: FbBrandProfileSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbBrandProfile
+     */
+    omit?: FbBrandProfileOmit<ExtArgs> | null
+    /**
+     * The data needed to create a FbBrandProfile.
+     */
+    data: XOR<FbBrandProfileCreateInput, FbBrandProfileUncheckedCreateInput>
+  }
+
+  /**
+   * FbBrandProfile createMany
+   */
+  export type FbBrandProfileCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many FbBrandProfiles.
+     */
+    data: FbBrandProfileCreateManyInput | FbBrandProfileCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * FbBrandProfile createManyAndReturn
+   */
+  export type FbBrandProfileCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbBrandProfile
+     */
+    select?: FbBrandProfileSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbBrandProfile
+     */
+    omit?: FbBrandProfileOmit<ExtArgs> | null
+    /**
+     * The data used to create many FbBrandProfiles.
+     */
+    data: FbBrandProfileCreateManyInput | FbBrandProfileCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * FbBrandProfile update
+   */
+  export type FbBrandProfileUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbBrandProfile
+     */
+    select?: FbBrandProfileSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbBrandProfile
+     */
+    omit?: FbBrandProfileOmit<ExtArgs> | null
+    /**
+     * The data needed to update a FbBrandProfile.
+     */
+    data: XOR<FbBrandProfileUpdateInput, FbBrandProfileUncheckedUpdateInput>
+    /**
+     * Choose, which FbBrandProfile to update.
+     */
+    where: FbBrandProfileWhereUniqueInput
+  }
+
+  /**
+   * FbBrandProfile updateMany
+   */
+  export type FbBrandProfileUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update FbBrandProfiles.
+     */
+    data: XOR<FbBrandProfileUpdateManyMutationInput, FbBrandProfileUncheckedUpdateManyInput>
+    /**
+     * Filter which FbBrandProfiles to update
+     */
+    where?: FbBrandProfileWhereInput
+    /**
+     * Limit how many FbBrandProfiles to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * FbBrandProfile updateManyAndReturn
+   */
+  export type FbBrandProfileUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbBrandProfile
+     */
+    select?: FbBrandProfileSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbBrandProfile
+     */
+    omit?: FbBrandProfileOmit<ExtArgs> | null
+    /**
+     * The data used to update FbBrandProfiles.
+     */
+    data: XOR<FbBrandProfileUpdateManyMutationInput, FbBrandProfileUncheckedUpdateManyInput>
+    /**
+     * Filter which FbBrandProfiles to update
+     */
+    where?: FbBrandProfileWhereInput
+    /**
+     * Limit how many FbBrandProfiles to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * FbBrandProfile upsert
+   */
+  export type FbBrandProfileUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbBrandProfile
+     */
+    select?: FbBrandProfileSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbBrandProfile
+     */
+    omit?: FbBrandProfileOmit<ExtArgs> | null
+    /**
+     * The filter to search for the FbBrandProfile to update in case it exists.
+     */
+    where: FbBrandProfileWhereUniqueInput
+    /**
+     * In case the FbBrandProfile found by the `where` argument doesn't exist, create a new FbBrandProfile with this data.
+     */
+    create: XOR<FbBrandProfileCreateInput, FbBrandProfileUncheckedCreateInput>
+    /**
+     * In case the FbBrandProfile was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<FbBrandProfileUpdateInput, FbBrandProfileUncheckedUpdateInput>
+  }
+
+  /**
+   * FbBrandProfile delete
+   */
+  export type FbBrandProfileDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbBrandProfile
+     */
+    select?: FbBrandProfileSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbBrandProfile
+     */
+    omit?: FbBrandProfileOmit<ExtArgs> | null
+    /**
+     * Filter which FbBrandProfile to delete.
+     */
+    where: FbBrandProfileWhereUniqueInput
+  }
+
+  /**
+   * FbBrandProfile deleteMany
+   */
+  export type FbBrandProfileDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which FbBrandProfiles to delete
+     */
+    where?: FbBrandProfileWhereInput
+    /**
+     * Limit how many FbBrandProfiles to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * FbBrandProfile without action
+   */
+  export type FbBrandProfileDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbBrandProfile
+     */
+    select?: FbBrandProfileSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbBrandProfile
+     */
+    omit?: FbBrandProfileOmit<ExtArgs> | null
+  }
+
+
+  /**
+   * Model FbContentPlan
+   */
+
+  export type AggregateFbContentPlan = {
+    _count: FbContentPlanCountAggregateOutputType | null
+    _min: FbContentPlanMinAggregateOutputType | null
+    _max: FbContentPlanMaxAggregateOutputType | null
+  }
+
+  export type FbContentPlanMinAggregateOutputType = {
+    id: string | null
+    pageId: string | null
+    title: string | null
+    goal: string | null
+    fromDate: Date | null
+    toDate: Date | null
+    status: string | null
+    summary: string | null
+    createdBy: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type FbContentPlanMaxAggregateOutputType = {
+    id: string | null
+    pageId: string | null
+    title: string | null
+    goal: string | null
+    fromDate: Date | null
+    toDate: Date | null
+    status: string | null
+    summary: string | null
+    createdBy: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type FbContentPlanCountAggregateOutputType = {
+    id: number
+    pageId: number
+    title: number
+    goal: number
+    fromDate: number
+    toDate: number
+    status: number
+    summary: number
+    createdBy: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type FbContentPlanMinAggregateInputType = {
+    id?: true
+    pageId?: true
+    title?: true
+    goal?: true
+    fromDate?: true
+    toDate?: true
+    status?: true
+    summary?: true
+    createdBy?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type FbContentPlanMaxAggregateInputType = {
+    id?: true
+    pageId?: true
+    title?: true
+    goal?: true
+    fromDate?: true
+    toDate?: true
+    status?: true
+    summary?: true
+    createdBy?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type FbContentPlanCountAggregateInputType = {
+    id?: true
+    pageId?: true
+    title?: true
+    goal?: true
+    fromDate?: true
+    toDate?: true
+    status?: true
+    summary?: true
+    createdBy?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type FbContentPlanAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which FbContentPlan to aggregate.
+     */
+    where?: FbContentPlanWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FbContentPlans to fetch.
+     */
+    orderBy?: FbContentPlanOrderByWithRelationInput | FbContentPlanOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: FbContentPlanWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FbContentPlans from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FbContentPlans.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned FbContentPlans
+    **/
+    _count?: true | FbContentPlanCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: FbContentPlanMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: FbContentPlanMaxAggregateInputType
+  }
+
+  export type GetFbContentPlanAggregateType<T extends FbContentPlanAggregateArgs> = {
+        [P in keyof T & keyof AggregateFbContentPlan]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateFbContentPlan[P]>
+      : GetScalarType<T[P], AggregateFbContentPlan[P]>
+  }
+
+
+
+
+  export type FbContentPlanGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: FbContentPlanWhereInput
+    orderBy?: FbContentPlanOrderByWithAggregationInput | FbContentPlanOrderByWithAggregationInput[]
+    by: FbContentPlanScalarFieldEnum[] | FbContentPlanScalarFieldEnum
+    having?: FbContentPlanScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: FbContentPlanCountAggregateInputType | true
+    _min?: FbContentPlanMinAggregateInputType
+    _max?: FbContentPlanMaxAggregateInputType
+  }
+
+  export type FbContentPlanGroupByOutputType = {
+    id: string
+    pageId: string
+    title: string
+    goal: string
+    fromDate: Date
+    toDate: Date
+    status: string
+    summary: string | null
+    createdBy: string | null
+    createdAt: Date
+    updatedAt: Date
+    _count: FbContentPlanCountAggregateOutputType | null
+    _min: FbContentPlanMinAggregateOutputType | null
+    _max: FbContentPlanMaxAggregateOutputType | null
+  }
+
+  type GetFbContentPlanGroupByPayload<T extends FbContentPlanGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<FbContentPlanGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof FbContentPlanGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], FbContentPlanGroupByOutputType[P]>
+            : GetScalarType<T[P], FbContentPlanGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type FbContentPlanSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    pageId?: boolean
+    title?: boolean
+    goal?: boolean
+    fromDate?: boolean
+    toDate?: boolean
+    status?: boolean
+    summary?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    drafts?: boolean | FbContentPlan$draftsArgs<ExtArgs>
+    _count?: boolean | FbContentPlanCountOutputTypeDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["fbContentPlan"]>
+
+  export type FbContentPlanSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    pageId?: boolean
+    title?: boolean
+    goal?: boolean
+    fromDate?: boolean
+    toDate?: boolean
+    status?: boolean
+    summary?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["fbContentPlan"]>
+
+  export type FbContentPlanSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    pageId?: boolean
+    title?: boolean
+    goal?: boolean
+    fromDate?: boolean
+    toDate?: boolean
+    status?: boolean
+    summary?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["fbContentPlan"]>
+
+  export type FbContentPlanSelectScalar = {
+    id?: boolean
+    pageId?: boolean
+    title?: boolean
+    goal?: boolean
+    fromDate?: boolean
+    toDate?: boolean
+    status?: boolean
+    summary?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type FbContentPlanOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "pageId" | "title" | "goal" | "fromDate" | "toDate" | "status" | "summary" | "createdBy" | "createdAt" | "updatedAt", ExtArgs["result"]["fbContentPlan"]>
+  export type FbContentPlanInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    drafts?: boolean | FbContentPlan$draftsArgs<ExtArgs>
+    _count?: boolean | FbContentPlanCountOutputTypeDefaultArgs<ExtArgs>
+  }
+  export type FbContentPlanIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {}
+  export type FbContentPlanIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {}
+
+  export type $FbContentPlanPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "FbContentPlan"
+    objects: {
+      drafts: Prisma.$FbContentDraftPayload<ExtArgs>[]
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      pageId: string
+      title: string
+      goal: string
+      fromDate: Date
+      toDate: Date
+      status: string
+      summary: string | null
+      createdBy: string | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["fbContentPlan"]>
+    composites: {}
+  }
+
+  type FbContentPlanGetPayload<S extends boolean | null | undefined | FbContentPlanDefaultArgs> = $Result.GetResult<Prisma.$FbContentPlanPayload, S>
+
+  type FbContentPlanCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<FbContentPlanFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: FbContentPlanCountAggregateInputType | true
+    }
+
+  export interface FbContentPlanDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['FbContentPlan'], meta: { name: 'FbContentPlan' } }
+    /**
+     * Find zero or one FbContentPlan that matches the filter.
+     * @param {FbContentPlanFindUniqueArgs} args - Arguments to find a FbContentPlan
+     * @example
+     * // Get one FbContentPlan
+     * const fbContentPlan = await prisma.fbContentPlan.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends FbContentPlanFindUniqueArgs>(args: SelectSubset<T, FbContentPlanFindUniqueArgs<ExtArgs>>): Prisma__FbContentPlanClient<$Result.GetResult<Prisma.$FbContentPlanPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one FbContentPlan that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {FbContentPlanFindUniqueOrThrowArgs} args - Arguments to find a FbContentPlan
+     * @example
+     * // Get one FbContentPlan
+     * const fbContentPlan = await prisma.fbContentPlan.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends FbContentPlanFindUniqueOrThrowArgs>(args: SelectSubset<T, FbContentPlanFindUniqueOrThrowArgs<ExtArgs>>): Prisma__FbContentPlanClient<$Result.GetResult<Prisma.$FbContentPlanPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first FbContentPlan that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbContentPlanFindFirstArgs} args - Arguments to find a FbContentPlan
+     * @example
+     * // Get one FbContentPlan
+     * const fbContentPlan = await prisma.fbContentPlan.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends FbContentPlanFindFirstArgs>(args?: SelectSubset<T, FbContentPlanFindFirstArgs<ExtArgs>>): Prisma__FbContentPlanClient<$Result.GetResult<Prisma.$FbContentPlanPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first FbContentPlan that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbContentPlanFindFirstOrThrowArgs} args - Arguments to find a FbContentPlan
+     * @example
+     * // Get one FbContentPlan
+     * const fbContentPlan = await prisma.fbContentPlan.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends FbContentPlanFindFirstOrThrowArgs>(args?: SelectSubset<T, FbContentPlanFindFirstOrThrowArgs<ExtArgs>>): Prisma__FbContentPlanClient<$Result.GetResult<Prisma.$FbContentPlanPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more FbContentPlans that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbContentPlanFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all FbContentPlans
+     * const fbContentPlans = await prisma.fbContentPlan.findMany()
+     * 
+     * // Get first 10 FbContentPlans
+     * const fbContentPlans = await prisma.fbContentPlan.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const fbContentPlanWithIdOnly = await prisma.fbContentPlan.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends FbContentPlanFindManyArgs>(args?: SelectSubset<T, FbContentPlanFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FbContentPlanPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a FbContentPlan.
+     * @param {FbContentPlanCreateArgs} args - Arguments to create a FbContentPlan.
+     * @example
+     * // Create one FbContentPlan
+     * const FbContentPlan = await prisma.fbContentPlan.create({
+     *   data: {
+     *     // ... data to create a FbContentPlan
+     *   }
+     * })
+     * 
+     */
+    create<T extends FbContentPlanCreateArgs>(args: SelectSubset<T, FbContentPlanCreateArgs<ExtArgs>>): Prisma__FbContentPlanClient<$Result.GetResult<Prisma.$FbContentPlanPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many FbContentPlans.
+     * @param {FbContentPlanCreateManyArgs} args - Arguments to create many FbContentPlans.
+     * @example
+     * // Create many FbContentPlans
+     * const fbContentPlan = await prisma.fbContentPlan.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends FbContentPlanCreateManyArgs>(args?: SelectSubset<T, FbContentPlanCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many FbContentPlans and returns the data saved in the database.
+     * @param {FbContentPlanCreateManyAndReturnArgs} args - Arguments to create many FbContentPlans.
+     * @example
+     * // Create many FbContentPlans
+     * const fbContentPlan = await prisma.fbContentPlan.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many FbContentPlans and only return the `id`
+     * const fbContentPlanWithIdOnly = await prisma.fbContentPlan.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends FbContentPlanCreateManyAndReturnArgs>(args?: SelectSubset<T, FbContentPlanCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FbContentPlanPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a FbContentPlan.
+     * @param {FbContentPlanDeleteArgs} args - Arguments to delete one FbContentPlan.
+     * @example
+     * // Delete one FbContentPlan
+     * const FbContentPlan = await prisma.fbContentPlan.delete({
+     *   where: {
+     *     // ... filter to delete one FbContentPlan
+     *   }
+     * })
+     * 
+     */
+    delete<T extends FbContentPlanDeleteArgs>(args: SelectSubset<T, FbContentPlanDeleteArgs<ExtArgs>>): Prisma__FbContentPlanClient<$Result.GetResult<Prisma.$FbContentPlanPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one FbContentPlan.
+     * @param {FbContentPlanUpdateArgs} args - Arguments to update one FbContentPlan.
+     * @example
+     * // Update one FbContentPlan
+     * const fbContentPlan = await prisma.fbContentPlan.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends FbContentPlanUpdateArgs>(args: SelectSubset<T, FbContentPlanUpdateArgs<ExtArgs>>): Prisma__FbContentPlanClient<$Result.GetResult<Prisma.$FbContentPlanPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more FbContentPlans.
+     * @param {FbContentPlanDeleteManyArgs} args - Arguments to filter FbContentPlans to delete.
+     * @example
+     * // Delete a few FbContentPlans
+     * const { count } = await prisma.fbContentPlan.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends FbContentPlanDeleteManyArgs>(args?: SelectSubset<T, FbContentPlanDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more FbContentPlans.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbContentPlanUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many FbContentPlans
+     * const fbContentPlan = await prisma.fbContentPlan.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends FbContentPlanUpdateManyArgs>(args: SelectSubset<T, FbContentPlanUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more FbContentPlans and returns the data updated in the database.
+     * @param {FbContentPlanUpdateManyAndReturnArgs} args - Arguments to update many FbContentPlans.
+     * @example
+     * // Update many FbContentPlans
+     * const fbContentPlan = await prisma.fbContentPlan.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more FbContentPlans and only return the `id`
+     * const fbContentPlanWithIdOnly = await prisma.fbContentPlan.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends FbContentPlanUpdateManyAndReturnArgs>(args: SelectSubset<T, FbContentPlanUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FbContentPlanPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one FbContentPlan.
+     * @param {FbContentPlanUpsertArgs} args - Arguments to update or create a FbContentPlan.
+     * @example
+     * // Update or create a FbContentPlan
+     * const fbContentPlan = await prisma.fbContentPlan.upsert({
+     *   create: {
+     *     // ... data to create a FbContentPlan
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the FbContentPlan we want to update
+     *   }
+     * })
+     */
+    upsert<T extends FbContentPlanUpsertArgs>(args: SelectSubset<T, FbContentPlanUpsertArgs<ExtArgs>>): Prisma__FbContentPlanClient<$Result.GetResult<Prisma.$FbContentPlanPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of FbContentPlans.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbContentPlanCountArgs} args - Arguments to filter FbContentPlans to count.
+     * @example
+     * // Count the number of FbContentPlans
+     * const count = await prisma.fbContentPlan.count({
+     *   where: {
+     *     // ... the filter for the FbContentPlans we want to count
+     *   }
+     * })
+    **/
+    count<T extends FbContentPlanCountArgs>(
+      args?: Subset<T, FbContentPlanCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], FbContentPlanCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a FbContentPlan.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbContentPlanAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends FbContentPlanAggregateArgs>(args: Subset<T, FbContentPlanAggregateArgs>): Prisma.PrismaPromise<GetFbContentPlanAggregateType<T>>
+
+    /**
+     * Group by FbContentPlan.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbContentPlanGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends FbContentPlanGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: FbContentPlanGroupByArgs['orderBy'] }
+        : { orderBy?: FbContentPlanGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, FbContentPlanGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetFbContentPlanGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the FbContentPlan model
+   */
+  readonly fields: FbContentPlanFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for FbContentPlan.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__FbContentPlanClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    drafts<T extends FbContentPlan$draftsArgs<ExtArgs> = {}>(args?: Subset<T, FbContentPlan$draftsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FbContentDraftPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the FbContentPlan model
+   */
+  interface FbContentPlanFieldRefs {
+    readonly id: FieldRef<"FbContentPlan", 'String'>
+    readonly pageId: FieldRef<"FbContentPlan", 'String'>
+    readonly title: FieldRef<"FbContentPlan", 'String'>
+    readonly goal: FieldRef<"FbContentPlan", 'String'>
+    readonly fromDate: FieldRef<"FbContentPlan", 'DateTime'>
+    readonly toDate: FieldRef<"FbContentPlan", 'DateTime'>
+    readonly status: FieldRef<"FbContentPlan", 'String'>
+    readonly summary: FieldRef<"FbContentPlan", 'String'>
+    readonly createdBy: FieldRef<"FbContentPlan", 'String'>
+    readonly createdAt: FieldRef<"FbContentPlan", 'DateTime'>
+    readonly updatedAt: FieldRef<"FbContentPlan", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * FbContentPlan findUnique
+   */
+  export type FbContentPlanFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbContentPlan
+     */
+    select?: FbContentPlanSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbContentPlan
+     */
+    omit?: FbContentPlanOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbContentPlanInclude<ExtArgs> | null
+    /**
+     * Filter, which FbContentPlan to fetch.
+     */
+    where: FbContentPlanWhereUniqueInput
+  }
+
+  /**
+   * FbContentPlan findUniqueOrThrow
+   */
+  export type FbContentPlanFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbContentPlan
+     */
+    select?: FbContentPlanSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbContentPlan
+     */
+    omit?: FbContentPlanOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbContentPlanInclude<ExtArgs> | null
+    /**
+     * Filter, which FbContentPlan to fetch.
+     */
+    where: FbContentPlanWhereUniqueInput
+  }
+
+  /**
+   * FbContentPlan findFirst
+   */
+  export type FbContentPlanFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbContentPlan
+     */
+    select?: FbContentPlanSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbContentPlan
+     */
+    omit?: FbContentPlanOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbContentPlanInclude<ExtArgs> | null
+    /**
+     * Filter, which FbContentPlan to fetch.
+     */
+    where?: FbContentPlanWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FbContentPlans to fetch.
+     */
+    orderBy?: FbContentPlanOrderByWithRelationInput | FbContentPlanOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for FbContentPlans.
+     */
+    cursor?: FbContentPlanWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FbContentPlans from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FbContentPlans.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of FbContentPlans.
+     */
+    distinct?: FbContentPlanScalarFieldEnum | FbContentPlanScalarFieldEnum[]
+  }
+
+  /**
+   * FbContentPlan findFirstOrThrow
+   */
+  export type FbContentPlanFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbContentPlan
+     */
+    select?: FbContentPlanSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbContentPlan
+     */
+    omit?: FbContentPlanOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbContentPlanInclude<ExtArgs> | null
+    /**
+     * Filter, which FbContentPlan to fetch.
+     */
+    where?: FbContentPlanWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FbContentPlans to fetch.
+     */
+    orderBy?: FbContentPlanOrderByWithRelationInput | FbContentPlanOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for FbContentPlans.
+     */
+    cursor?: FbContentPlanWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FbContentPlans from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FbContentPlans.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of FbContentPlans.
+     */
+    distinct?: FbContentPlanScalarFieldEnum | FbContentPlanScalarFieldEnum[]
+  }
+
+  /**
+   * FbContentPlan findMany
+   */
+  export type FbContentPlanFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbContentPlan
+     */
+    select?: FbContentPlanSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbContentPlan
+     */
+    omit?: FbContentPlanOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbContentPlanInclude<ExtArgs> | null
+    /**
+     * Filter, which FbContentPlans to fetch.
+     */
+    where?: FbContentPlanWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FbContentPlans to fetch.
+     */
+    orderBy?: FbContentPlanOrderByWithRelationInput | FbContentPlanOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing FbContentPlans.
+     */
+    cursor?: FbContentPlanWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FbContentPlans from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FbContentPlans.
+     */
+    skip?: number
+    distinct?: FbContentPlanScalarFieldEnum | FbContentPlanScalarFieldEnum[]
+  }
+
+  /**
+   * FbContentPlan create
+   */
+  export type FbContentPlanCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbContentPlan
+     */
+    select?: FbContentPlanSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbContentPlan
+     */
+    omit?: FbContentPlanOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbContentPlanInclude<ExtArgs> | null
+    /**
+     * The data needed to create a FbContentPlan.
+     */
+    data: XOR<FbContentPlanCreateInput, FbContentPlanUncheckedCreateInput>
+  }
+
+  /**
+   * FbContentPlan createMany
+   */
+  export type FbContentPlanCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many FbContentPlans.
+     */
+    data: FbContentPlanCreateManyInput | FbContentPlanCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * FbContentPlan createManyAndReturn
+   */
+  export type FbContentPlanCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbContentPlan
+     */
+    select?: FbContentPlanSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbContentPlan
+     */
+    omit?: FbContentPlanOmit<ExtArgs> | null
+    /**
+     * The data used to create many FbContentPlans.
+     */
+    data: FbContentPlanCreateManyInput | FbContentPlanCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * FbContentPlan update
+   */
+  export type FbContentPlanUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbContentPlan
+     */
+    select?: FbContentPlanSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbContentPlan
+     */
+    omit?: FbContentPlanOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbContentPlanInclude<ExtArgs> | null
+    /**
+     * The data needed to update a FbContentPlan.
+     */
+    data: XOR<FbContentPlanUpdateInput, FbContentPlanUncheckedUpdateInput>
+    /**
+     * Choose, which FbContentPlan to update.
+     */
+    where: FbContentPlanWhereUniqueInput
+  }
+
+  /**
+   * FbContentPlan updateMany
+   */
+  export type FbContentPlanUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update FbContentPlans.
+     */
+    data: XOR<FbContentPlanUpdateManyMutationInput, FbContentPlanUncheckedUpdateManyInput>
+    /**
+     * Filter which FbContentPlans to update
+     */
+    where?: FbContentPlanWhereInput
+    /**
+     * Limit how many FbContentPlans to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * FbContentPlan updateManyAndReturn
+   */
+  export type FbContentPlanUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbContentPlan
+     */
+    select?: FbContentPlanSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbContentPlan
+     */
+    omit?: FbContentPlanOmit<ExtArgs> | null
+    /**
+     * The data used to update FbContentPlans.
+     */
+    data: XOR<FbContentPlanUpdateManyMutationInput, FbContentPlanUncheckedUpdateManyInput>
+    /**
+     * Filter which FbContentPlans to update
+     */
+    where?: FbContentPlanWhereInput
+    /**
+     * Limit how many FbContentPlans to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * FbContentPlan upsert
+   */
+  export type FbContentPlanUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbContentPlan
+     */
+    select?: FbContentPlanSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbContentPlan
+     */
+    omit?: FbContentPlanOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbContentPlanInclude<ExtArgs> | null
+    /**
+     * The filter to search for the FbContentPlan to update in case it exists.
+     */
+    where: FbContentPlanWhereUniqueInput
+    /**
+     * In case the FbContentPlan found by the `where` argument doesn't exist, create a new FbContentPlan with this data.
+     */
+    create: XOR<FbContentPlanCreateInput, FbContentPlanUncheckedCreateInput>
+    /**
+     * In case the FbContentPlan was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<FbContentPlanUpdateInput, FbContentPlanUncheckedUpdateInput>
+  }
+
+  /**
+   * FbContentPlan delete
+   */
+  export type FbContentPlanDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbContentPlan
+     */
+    select?: FbContentPlanSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbContentPlan
+     */
+    omit?: FbContentPlanOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbContentPlanInclude<ExtArgs> | null
+    /**
+     * Filter which FbContentPlan to delete.
+     */
+    where: FbContentPlanWhereUniqueInput
+  }
+
+  /**
+   * FbContentPlan deleteMany
+   */
+  export type FbContentPlanDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which FbContentPlans to delete
+     */
+    where?: FbContentPlanWhereInput
+    /**
+     * Limit how many FbContentPlans to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * FbContentPlan.drafts
+   */
+  export type FbContentPlan$draftsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbContentDraft
+     */
+    select?: FbContentDraftSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbContentDraft
+     */
+    omit?: FbContentDraftOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbContentDraftInclude<ExtArgs> | null
+    where?: FbContentDraftWhereInput
+    orderBy?: FbContentDraftOrderByWithRelationInput | FbContentDraftOrderByWithRelationInput[]
+    cursor?: FbContentDraftWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: FbContentDraftScalarFieldEnum | FbContentDraftScalarFieldEnum[]
+  }
+
+  /**
+   * FbContentPlan without action
+   */
+  export type FbContentPlanDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbContentPlan
+     */
+    select?: FbContentPlanSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbContentPlan
+     */
+    omit?: FbContentPlanOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbContentPlanInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model FbContentDraft
+   */
+
+  export type AggregateFbContentDraft = {
+    _count: FbContentDraftCountAggregateOutputType | null
+    _min: FbContentDraftMinAggregateOutputType | null
+    _max: FbContentDraftMaxAggregateOutputType | null
+  }
+
+  export type FbContentDraftMinAggregateOutputType = {
+    id: string | null
+    planId: string | null
+    pageId: string | null
+    pillar: string | null
+    title: string | null
+    hook: string | null
+    message: string | null
+    hashtags: string | null
+    mediaIdea: string | null
+    mediaUrls: string | null
+    linkUrl: string | null
+    productIds: string | null
+    suggestedAt: Date | null
+    status: string | null
+    rejectReason: string | null
+    scheduledPostId: string | null
+    fbPostId: string | null
+    source: string | null
+    createdBy: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type FbContentDraftMaxAggregateOutputType = {
+    id: string | null
+    planId: string | null
+    pageId: string | null
+    pillar: string | null
+    title: string | null
+    hook: string | null
+    message: string | null
+    hashtags: string | null
+    mediaIdea: string | null
+    mediaUrls: string | null
+    linkUrl: string | null
+    productIds: string | null
+    suggestedAt: Date | null
+    status: string | null
+    rejectReason: string | null
+    scheduledPostId: string | null
+    fbPostId: string | null
+    source: string | null
+    createdBy: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type FbContentDraftCountAggregateOutputType = {
+    id: number
+    planId: number
+    pageId: number
+    pillar: number
+    title: number
+    hook: number
+    message: number
+    hashtags: number
+    mediaIdea: number
+    mediaUrls: number
+    linkUrl: number
+    productIds: number
+    suggestedAt: number
+    status: number
+    rejectReason: number
+    scheduledPostId: number
+    fbPostId: number
+    source: number
+    createdBy: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type FbContentDraftMinAggregateInputType = {
+    id?: true
+    planId?: true
+    pageId?: true
+    pillar?: true
+    title?: true
+    hook?: true
+    message?: true
+    hashtags?: true
+    mediaIdea?: true
+    mediaUrls?: true
+    linkUrl?: true
+    productIds?: true
+    suggestedAt?: true
+    status?: true
+    rejectReason?: true
+    scheduledPostId?: true
+    fbPostId?: true
+    source?: true
+    createdBy?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type FbContentDraftMaxAggregateInputType = {
+    id?: true
+    planId?: true
+    pageId?: true
+    pillar?: true
+    title?: true
+    hook?: true
+    message?: true
+    hashtags?: true
+    mediaIdea?: true
+    mediaUrls?: true
+    linkUrl?: true
+    productIds?: true
+    suggestedAt?: true
+    status?: true
+    rejectReason?: true
+    scheduledPostId?: true
+    fbPostId?: true
+    source?: true
+    createdBy?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type FbContentDraftCountAggregateInputType = {
+    id?: true
+    planId?: true
+    pageId?: true
+    pillar?: true
+    title?: true
+    hook?: true
+    message?: true
+    hashtags?: true
+    mediaIdea?: true
+    mediaUrls?: true
+    linkUrl?: true
+    productIds?: true
+    suggestedAt?: true
+    status?: true
+    rejectReason?: true
+    scheduledPostId?: true
+    fbPostId?: true
+    source?: true
+    createdBy?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type FbContentDraftAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which FbContentDraft to aggregate.
+     */
+    where?: FbContentDraftWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FbContentDrafts to fetch.
+     */
+    orderBy?: FbContentDraftOrderByWithRelationInput | FbContentDraftOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: FbContentDraftWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FbContentDrafts from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FbContentDrafts.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned FbContentDrafts
+    **/
+    _count?: true | FbContentDraftCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: FbContentDraftMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: FbContentDraftMaxAggregateInputType
+  }
+
+  export type GetFbContentDraftAggregateType<T extends FbContentDraftAggregateArgs> = {
+        [P in keyof T & keyof AggregateFbContentDraft]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateFbContentDraft[P]>
+      : GetScalarType<T[P], AggregateFbContentDraft[P]>
+  }
+
+
+
+
+  export type FbContentDraftGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: FbContentDraftWhereInput
+    orderBy?: FbContentDraftOrderByWithAggregationInput | FbContentDraftOrderByWithAggregationInput[]
+    by: FbContentDraftScalarFieldEnum[] | FbContentDraftScalarFieldEnum
+    having?: FbContentDraftScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: FbContentDraftCountAggregateInputType | true
+    _min?: FbContentDraftMinAggregateInputType
+    _max?: FbContentDraftMaxAggregateInputType
+  }
+
+  export type FbContentDraftGroupByOutputType = {
+    id: string
+    planId: string | null
+    pageId: string
+    pillar: string
+    title: string
+    hook: string
+    message: string
+    hashtags: string
+    mediaIdea: string
+    mediaUrls: string
+    linkUrl: string | null
+    productIds: string
+    suggestedAt: Date | null
+    status: string
+    rejectReason: string | null
+    scheduledPostId: string | null
+    fbPostId: string | null
+    source: string
+    createdBy: string | null
+    createdAt: Date
+    updatedAt: Date
+    _count: FbContentDraftCountAggregateOutputType | null
+    _min: FbContentDraftMinAggregateOutputType | null
+    _max: FbContentDraftMaxAggregateOutputType | null
+  }
+
+  type GetFbContentDraftGroupByPayload<T extends FbContentDraftGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<FbContentDraftGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof FbContentDraftGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], FbContentDraftGroupByOutputType[P]>
+            : GetScalarType<T[P], FbContentDraftGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type FbContentDraftSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    planId?: boolean
+    pageId?: boolean
+    pillar?: boolean
+    title?: boolean
+    hook?: boolean
+    message?: boolean
+    hashtags?: boolean
+    mediaIdea?: boolean
+    mediaUrls?: boolean
+    linkUrl?: boolean
+    productIds?: boolean
+    suggestedAt?: boolean
+    status?: boolean
+    rejectReason?: boolean
+    scheduledPostId?: boolean
+    fbPostId?: boolean
+    source?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    plan?: boolean | FbContentDraft$planArgs<ExtArgs>
+  }, ExtArgs["result"]["fbContentDraft"]>
+
+  export type FbContentDraftSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    planId?: boolean
+    pageId?: boolean
+    pillar?: boolean
+    title?: boolean
+    hook?: boolean
+    message?: boolean
+    hashtags?: boolean
+    mediaIdea?: boolean
+    mediaUrls?: boolean
+    linkUrl?: boolean
+    productIds?: boolean
+    suggestedAt?: boolean
+    status?: boolean
+    rejectReason?: boolean
+    scheduledPostId?: boolean
+    fbPostId?: boolean
+    source?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    plan?: boolean | FbContentDraft$planArgs<ExtArgs>
+  }, ExtArgs["result"]["fbContentDraft"]>
+
+  export type FbContentDraftSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    planId?: boolean
+    pageId?: boolean
+    pillar?: boolean
+    title?: boolean
+    hook?: boolean
+    message?: boolean
+    hashtags?: boolean
+    mediaIdea?: boolean
+    mediaUrls?: boolean
+    linkUrl?: boolean
+    productIds?: boolean
+    suggestedAt?: boolean
+    status?: boolean
+    rejectReason?: boolean
+    scheduledPostId?: boolean
+    fbPostId?: boolean
+    source?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    plan?: boolean | FbContentDraft$planArgs<ExtArgs>
+  }, ExtArgs["result"]["fbContentDraft"]>
+
+  export type FbContentDraftSelectScalar = {
+    id?: boolean
+    planId?: boolean
+    pageId?: boolean
+    pillar?: boolean
+    title?: boolean
+    hook?: boolean
+    message?: boolean
+    hashtags?: boolean
+    mediaIdea?: boolean
+    mediaUrls?: boolean
+    linkUrl?: boolean
+    productIds?: boolean
+    suggestedAt?: boolean
+    status?: boolean
+    rejectReason?: boolean
+    scheduledPostId?: boolean
+    fbPostId?: boolean
+    source?: boolean
+    createdBy?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type FbContentDraftOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "planId" | "pageId" | "pillar" | "title" | "hook" | "message" | "hashtags" | "mediaIdea" | "mediaUrls" | "linkUrl" | "productIds" | "suggestedAt" | "status" | "rejectReason" | "scheduledPostId" | "fbPostId" | "source" | "createdBy" | "createdAt" | "updatedAt", ExtArgs["result"]["fbContentDraft"]>
+  export type FbContentDraftInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    plan?: boolean | FbContentDraft$planArgs<ExtArgs>
+  }
+  export type FbContentDraftIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    plan?: boolean | FbContentDraft$planArgs<ExtArgs>
+  }
+  export type FbContentDraftIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    plan?: boolean | FbContentDraft$planArgs<ExtArgs>
+  }
+
+  export type $FbContentDraftPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "FbContentDraft"
+    objects: {
+      plan: Prisma.$FbContentPlanPayload<ExtArgs> | null
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      planId: string | null
+      pageId: string
+      pillar: string
+      title: string
+      hook: string
+      message: string
+      hashtags: string
+      mediaIdea: string
+      mediaUrls: string
+      linkUrl: string | null
+      productIds: string
+      suggestedAt: Date | null
+      status: string
+      rejectReason: string | null
+      scheduledPostId: string | null
+      fbPostId: string | null
+      source: string
+      createdBy: string | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["fbContentDraft"]>
+    composites: {}
+  }
+
+  type FbContentDraftGetPayload<S extends boolean | null | undefined | FbContentDraftDefaultArgs> = $Result.GetResult<Prisma.$FbContentDraftPayload, S>
+
+  type FbContentDraftCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<FbContentDraftFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: FbContentDraftCountAggregateInputType | true
+    }
+
+  export interface FbContentDraftDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['FbContentDraft'], meta: { name: 'FbContentDraft' } }
+    /**
+     * Find zero or one FbContentDraft that matches the filter.
+     * @param {FbContentDraftFindUniqueArgs} args - Arguments to find a FbContentDraft
+     * @example
+     * // Get one FbContentDraft
+     * const fbContentDraft = await prisma.fbContentDraft.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends FbContentDraftFindUniqueArgs>(args: SelectSubset<T, FbContentDraftFindUniqueArgs<ExtArgs>>): Prisma__FbContentDraftClient<$Result.GetResult<Prisma.$FbContentDraftPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one FbContentDraft that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {FbContentDraftFindUniqueOrThrowArgs} args - Arguments to find a FbContentDraft
+     * @example
+     * // Get one FbContentDraft
+     * const fbContentDraft = await prisma.fbContentDraft.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends FbContentDraftFindUniqueOrThrowArgs>(args: SelectSubset<T, FbContentDraftFindUniqueOrThrowArgs<ExtArgs>>): Prisma__FbContentDraftClient<$Result.GetResult<Prisma.$FbContentDraftPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first FbContentDraft that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbContentDraftFindFirstArgs} args - Arguments to find a FbContentDraft
+     * @example
+     * // Get one FbContentDraft
+     * const fbContentDraft = await prisma.fbContentDraft.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends FbContentDraftFindFirstArgs>(args?: SelectSubset<T, FbContentDraftFindFirstArgs<ExtArgs>>): Prisma__FbContentDraftClient<$Result.GetResult<Prisma.$FbContentDraftPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first FbContentDraft that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbContentDraftFindFirstOrThrowArgs} args - Arguments to find a FbContentDraft
+     * @example
+     * // Get one FbContentDraft
+     * const fbContentDraft = await prisma.fbContentDraft.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends FbContentDraftFindFirstOrThrowArgs>(args?: SelectSubset<T, FbContentDraftFindFirstOrThrowArgs<ExtArgs>>): Prisma__FbContentDraftClient<$Result.GetResult<Prisma.$FbContentDraftPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more FbContentDrafts that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbContentDraftFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all FbContentDrafts
+     * const fbContentDrafts = await prisma.fbContentDraft.findMany()
+     * 
+     * // Get first 10 FbContentDrafts
+     * const fbContentDrafts = await prisma.fbContentDraft.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const fbContentDraftWithIdOnly = await prisma.fbContentDraft.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends FbContentDraftFindManyArgs>(args?: SelectSubset<T, FbContentDraftFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FbContentDraftPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a FbContentDraft.
+     * @param {FbContentDraftCreateArgs} args - Arguments to create a FbContentDraft.
+     * @example
+     * // Create one FbContentDraft
+     * const FbContentDraft = await prisma.fbContentDraft.create({
+     *   data: {
+     *     // ... data to create a FbContentDraft
+     *   }
+     * })
+     * 
+     */
+    create<T extends FbContentDraftCreateArgs>(args: SelectSubset<T, FbContentDraftCreateArgs<ExtArgs>>): Prisma__FbContentDraftClient<$Result.GetResult<Prisma.$FbContentDraftPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many FbContentDrafts.
+     * @param {FbContentDraftCreateManyArgs} args - Arguments to create many FbContentDrafts.
+     * @example
+     * // Create many FbContentDrafts
+     * const fbContentDraft = await prisma.fbContentDraft.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends FbContentDraftCreateManyArgs>(args?: SelectSubset<T, FbContentDraftCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many FbContentDrafts and returns the data saved in the database.
+     * @param {FbContentDraftCreateManyAndReturnArgs} args - Arguments to create many FbContentDrafts.
+     * @example
+     * // Create many FbContentDrafts
+     * const fbContentDraft = await prisma.fbContentDraft.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many FbContentDrafts and only return the `id`
+     * const fbContentDraftWithIdOnly = await prisma.fbContentDraft.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends FbContentDraftCreateManyAndReturnArgs>(args?: SelectSubset<T, FbContentDraftCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FbContentDraftPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a FbContentDraft.
+     * @param {FbContentDraftDeleteArgs} args - Arguments to delete one FbContentDraft.
+     * @example
+     * // Delete one FbContentDraft
+     * const FbContentDraft = await prisma.fbContentDraft.delete({
+     *   where: {
+     *     // ... filter to delete one FbContentDraft
+     *   }
+     * })
+     * 
+     */
+    delete<T extends FbContentDraftDeleteArgs>(args: SelectSubset<T, FbContentDraftDeleteArgs<ExtArgs>>): Prisma__FbContentDraftClient<$Result.GetResult<Prisma.$FbContentDraftPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one FbContentDraft.
+     * @param {FbContentDraftUpdateArgs} args - Arguments to update one FbContentDraft.
+     * @example
+     * // Update one FbContentDraft
+     * const fbContentDraft = await prisma.fbContentDraft.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends FbContentDraftUpdateArgs>(args: SelectSubset<T, FbContentDraftUpdateArgs<ExtArgs>>): Prisma__FbContentDraftClient<$Result.GetResult<Prisma.$FbContentDraftPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more FbContentDrafts.
+     * @param {FbContentDraftDeleteManyArgs} args - Arguments to filter FbContentDrafts to delete.
+     * @example
+     * // Delete a few FbContentDrafts
+     * const { count } = await prisma.fbContentDraft.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends FbContentDraftDeleteManyArgs>(args?: SelectSubset<T, FbContentDraftDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more FbContentDrafts.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbContentDraftUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many FbContentDrafts
+     * const fbContentDraft = await prisma.fbContentDraft.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends FbContentDraftUpdateManyArgs>(args: SelectSubset<T, FbContentDraftUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more FbContentDrafts and returns the data updated in the database.
+     * @param {FbContentDraftUpdateManyAndReturnArgs} args - Arguments to update many FbContentDrafts.
+     * @example
+     * // Update many FbContentDrafts
+     * const fbContentDraft = await prisma.fbContentDraft.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more FbContentDrafts and only return the `id`
+     * const fbContentDraftWithIdOnly = await prisma.fbContentDraft.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends FbContentDraftUpdateManyAndReturnArgs>(args: SelectSubset<T, FbContentDraftUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FbContentDraftPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one FbContentDraft.
+     * @param {FbContentDraftUpsertArgs} args - Arguments to update or create a FbContentDraft.
+     * @example
+     * // Update or create a FbContentDraft
+     * const fbContentDraft = await prisma.fbContentDraft.upsert({
+     *   create: {
+     *     // ... data to create a FbContentDraft
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the FbContentDraft we want to update
+     *   }
+     * })
+     */
+    upsert<T extends FbContentDraftUpsertArgs>(args: SelectSubset<T, FbContentDraftUpsertArgs<ExtArgs>>): Prisma__FbContentDraftClient<$Result.GetResult<Prisma.$FbContentDraftPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of FbContentDrafts.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbContentDraftCountArgs} args - Arguments to filter FbContentDrafts to count.
+     * @example
+     * // Count the number of FbContentDrafts
+     * const count = await prisma.fbContentDraft.count({
+     *   where: {
+     *     // ... the filter for the FbContentDrafts we want to count
+     *   }
+     * })
+    **/
+    count<T extends FbContentDraftCountArgs>(
+      args?: Subset<T, FbContentDraftCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], FbContentDraftCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a FbContentDraft.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbContentDraftAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends FbContentDraftAggregateArgs>(args: Subset<T, FbContentDraftAggregateArgs>): Prisma.PrismaPromise<GetFbContentDraftAggregateType<T>>
+
+    /**
+     * Group by FbContentDraft.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {FbContentDraftGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends FbContentDraftGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: FbContentDraftGroupByArgs['orderBy'] }
+        : { orderBy?: FbContentDraftGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, FbContentDraftGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetFbContentDraftGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the FbContentDraft model
+   */
+  readonly fields: FbContentDraftFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for FbContentDraft.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__FbContentDraftClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    plan<T extends FbContentDraft$planArgs<ExtArgs> = {}>(args?: Subset<T, FbContentDraft$planArgs<ExtArgs>>): Prisma__FbContentPlanClient<$Result.GetResult<Prisma.$FbContentPlanPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the FbContentDraft model
+   */
+  interface FbContentDraftFieldRefs {
+    readonly id: FieldRef<"FbContentDraft", 'String'>
+    readonly planId: FieldRef<"FbContentDraft", 'String'>
+    readonly pageId: FieldRef<"FbContentDraft", 'String'>
+    readonly pillar: FieldRef<"FbContentDraft", 'String'>
+    readonly title: FieldRef<"FbContentDraft", 'String'>
+    readonly hook: FieldRef<"FbContentDraft", 'String'>
+    readonly message: FieldRef<"FbContentDraft", 'String'>
+    readonly hashtags: FieldRef<"FbContentDraft", 'String'>
+    readonly mediaIdea: FieldRef<"FbContentDraft", 'String'>
+    readonly mediaUrls: FieldRef<"FbContentDraft", 'String'>
+    readonly linkUrl: FieldRef<"FbContentDraft", 'String'>
+    readonly productIds: FieldRef<"FbContentDraft", 'String'>
+    readonly suggestedAt: FieldRef<"FbContentDraft", 'DateTime'>
+    readonly status: FieldRef<"FbContentDraft", 'String'>
+    readonly rejectReason: FieldRef<"FbContentDraft", 'String'>
+    readonly scheduledPostId: FieldRef<"FbContentDraft", 'String'>
+    readonly fbPostId: FieldRef<"FbContentDraft", 'String'>
+    readonly source: FieldRef<"FbContentDraft", 'String'>
+    readonly createdBy: FieldRef<"FbContentDraft", 'String'>
+    readonly createdAt: FieldRef<"FbContentDraft", 'DateTime'>
+    readonly updatedAt: FieldRef<"FbContentDraft", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * FbContentDraft findUnique
+   */
+  export type FbContentDraftFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbContentDraft
+     */
+    select?: FbContentDraftSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbContentDraft
+     */
+    omit?: FbContentDraftOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbContentDraftInclude<ExtArgs> | null
+    /**
+     * Filter, which FbContentDraft to fetch.
+     */
+    where: FbContentDraftWhereUniqueInput
+  }
+
+  /**
+   * FbContentDraft findUniqueOrThrow
+   */
+  export type FbContentDraftFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbContentDraft
+     */
+    select?: FbContentDraftSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbContentDraft
+     */
+    omit?: FbContentDraftOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbContentDraftInclude<ExtArgs> | null
+    /**
+     * Filter, which FbContentDraft to fetch.
+     */
+    where: FbContentDraftWhereUniqueInput
+  }
+
+  /**
+   * FbContentDraft findFirst
+   */
+  export type FbContentDraftFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbContentDraft
+     */
+    select?: FbContentDraftSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbContentDraft
+     */
+    omit?: FbContentDraftOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbContentDraftInclude<ExtArgs> | null
+    /**
+     * Filter, which FbContentDraft to fetch.
+     */
+    where?: FbContentDraftWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FbContentDrafts to fetch.
+     */
+    orderBy?: FbContentDraftOrderByWithRelationInput | FbContentDraftOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for FbContentDrafts.
+     */
+    cursor?: FbContentDraftWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FbContentDrafts from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FbContentDrafts.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of FbContentDrafts.
+     */
+    distinct?: FbContentDraftScalarFieldEnum | FbContentDraftScalarFieldEnum[]
+  }
+
+  /**
+   * FbContentDraft findFirstOrThrow
+   */
+  export type FbContentDraftFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbContentDraft
+     */
+    select?: FbContentDraftSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbContentDraft
+     */
+    omit?: FbContentDraftOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbContentDraftInclude<ExtArgs> | null
+    /**
+     * Filter, which FbContentDraft to fetch.
+     */
+    where?: FbContentDraftWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FbContentDrafts to fetch.
+     */
+    orderBy?: FbContentDraftOrderByWithRelationInput | FbContentDraftOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for FbContentDrafts.
+     */
+    cursor?: FbContentDraftWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FbContentDrafts from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FbContentDrafts.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of FbContentDrafts.
+     */
+    distinct?: FbContentDraftScalarFieldEnum | FbContentDraftScalarFieldEnum[]
+  }
+
+  /**
+   * FbContentDraft findMany
+   */
+  export type FbContentDraftFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbContentDraft
+     */
+    select?: FbContentDraftSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbContentDraft
+     */
+    omit?: FbContentDraftOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbContentDraftInclude<ExtArgs> | null
+    /**
+     * Filter, which FbContentDrafts to fetch.
+     */
+    where?: FbContentDraftWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of FbContentDrafts to fetch.
+     */
+    orderBy?: FbContentDraftOrderByWithRelationInput | FbContentDraftOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing FbContentDrafts.
+     */
+    cursor?: FbContentDraftWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` FbContentDrafts from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` FbContentDrafts.
+     */
+    skip?: number
+    distinct?: FbContentDraftScalarFieldEnum | FbContentDraftScalarFieldEnum[]
+  }
+
+  /**
+   * FbContentDraft create
+   */
+  export type FbContentDraftCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbContentDraft
+     */
+    select?: FbContentDraftSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbContentDraft
+     */
+    omit?: FbContentDraftOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbContentDraftInclude<ExtArgs> | null
+    /**
+     * The data needed to create a FbContentDraft.
+     */
+    data: XOR<FbContentDraftCreateInput, FbContentDraftUncheckedCreateInput>
+  }
+
+  /**
+   * FbContentDraft createMany
+   */
+  export type FbContentDraftCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many FbContentDrafts.
+     */
+    data: FbContentDraftCreateManyInput | FbContentDraftCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * FbContentDraft createManyAndReturn
+   */
+  export type FbContentDraftCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbContentDraft
+     */
+    select?: FbContentDraftSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbContentDraft
+     */
+    omit?: FbContentDraftOmit<ExtArgs> | null
+    /**
+     * The data used to create many FbContentDrafts.
+     */
+    data: FbContentDraftCreateManyInput | FbContentDraftCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbContentDraftIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * FbContentDraft update
+   */
+  export type FbContentDraftUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbContentDraft
+     */
+    select?: FbContentDraftSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbContentDraft
+     */
+    omit?: FbContentDraftOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbContentDraftInclude<ExtArgs> | null
+    /**
+     * The data needed to update a FbContentDraft.
+     */
+    data: XOR<FbContentDraftUpdateInput, FbContentDraftUncheckedUpdateInput>
+    /**
+     * Choose, which FbContentDraft to update.
+     */
+    where: FbContentDraftWhereUniqueInput
+  }
+
+  /**
+   * FbContentDraft updateMany
+   */
+  export type FbContentDraftUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update FbContentDrafts.
+     */
+    data: XOR<FbContentDraftUpdateManyMutationInput, FbContentDraftUncheckedUpdateManyInput>
+    /**
+     * Filter which FbContentDrafts to update
+     */
+    where?: FbContentDraftWhereInput
+    /**
+     * Limit how many FbContentDrafts to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * FbContentDraft updateManyAndReturn
+   */
+  export type FbContentDraftUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbContentDraft
+     */
+    select?: FbContentDraftSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbContentDraft
+     */
+    omit?: FbContentDraftOmit<ExtArgs> | null
+    /**
+     * The data used to update FbContentDrafts.
+     */
+    data: XOR<FbContentDraftUpdateManyMutationInput, FbContentDraftUncheckedUpdateManyInput>
+    /**
+     * Filter which FbContentDrafts to update
+     */
+    where?: FbContentDraftWhereInput
+    /**
+     * Limit how many FbContentDrafts to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbContentDraftIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * FbContentDraft upsert
+   */
+  export type FbContentDraftUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbContentDraft
+     */
+    select?: FbContentDraftSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbContentDraft
+     */
+    omit?: FbContentDraftOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbContentDraftInclude<ExtArgs> | null
+    /**
+     * The filter to search for the FbContentDraft to update in case it exists.
+     */
+    where: FbContentDraftWhereUniqueInput
+    /**
+     * In case the FbContentDraft found by the `where` argument doesn't exist, create a new FbContentDraft with this data.
+     */
+    create: XOR<FbContentDraftCreateInput, FbContentDraftUncheckedCreateInput>
+    /**
+     * In case the FbContentDraft was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<FbContentDraftUpdateInput, FbContentDraftUncheckedUpdateInput>
+  }
+
+  /**
+   * FbContentDraft delete
+   */
+  export type FbContentDraftDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbContentDraft
+     */
+    select?: FbContentDraftSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbContentDraft
+     */
+    omit?: FbContentDraftOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbContentDraftInclude<ExtArgs> | null
+    /**
+     * Filter which FbContentDraft to delete.
+     */
+    where: FbContentDraftWhereUniqueInput
+  }
+
+  /**
+   * FbContentDraft deleteMany
+   */
+  export type FbContentDraftDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which FbContentDrafts to delete
+     */
+    where?: FbContentDraftWhereInput
+    /**
+     * Limit how many FbContentDrafts to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * FbContentDraft.plan
+   */
+  export type FbContentDraft$planArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbContentPlan
+     */
+    select?: FbContentPlanSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbContentPlan
+     */
+    omit?: FbContentPlanOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbContentPlanInclude<ExtArgs> | null
+    where?: FbContentPlanWhereInput
+  }
+
+  /**
+   * FbContentDraft without action
+   */
+  export type FbContentDraftDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the FbContentDraft
+     */
+    select?: FbContentDraftSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the FbContentDraft
+     */
+    omit?: FbContentDraftOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: FbContentDraftInclude<ExtArgs> | null
+  }
+
+
+  /**
    * Model CrmTask
    */
 
@@ -154887,6 +159372,3418 @@ export namespace Prisma {
 
 
   /**
+   * Model KiotVietConfig
+   */
+
+  export type AggregateKiotVietConfig = {
+    _count: KiotVietConfigCountAggregateOutputType | null
+    _min: KiotVietConfigMinAggregateOutputType | null
+    _max: KiotVietConfigMaxAggregateOutputType | null
+  }
+
+  export type KiotVietConfigMinAggregateOutputType = {
+    id: string | null
+    clientId: string | null
+    clientSecret: string | null
+    retailer: string | null
+    webhookToken: string | null
+    webhookSecret: string | null
+    strictSignature: boolean | null
+    enabled: boolean | null
+    syncProducts: boolean | null
+    syncCustomers: boolean | null
+    syncSuppliers: boolean | null
+    syncInvoices: boolean | null
+    overwriteNames: boolean | null
+    overwritePrices: boolean | null
+    overwriteStock: boolean | null
+    defaultCategoryId: string | null
+    defaultWarehouseId: string | null
+    branchIds: string | null
+    lastSyncAt: Date | null
+    lastWebhookAt: Date | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type KiotVietConfigMaxAggregateOutputType = {
+    id: string | null
+    clientId: string | null
+    clientSecret: string | null
+    retailer: string | null
+    webhookToken: string | null
+    webhookSecret: string | null
+    strictSignature: boolean | null
+    enabled: boolean | null
+    syncProducts: boolean | null
+    syncCustomers: boolean | null
+    syncSuppliers: boolean | null
+    syncInvoices: boolean | null
+    overwriteNames: boolean | null
+    overwritePrices: boolean | null
+    overwriteStock: boolean | null
+    defaultCategoryId: string | null
+    defaultWarehouseId: string | null
+    branchIds: string | null
+    lastSyncAt: Date | null
+    lastWebhookAt: Date | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type KiotVietConfigCountAggregateOutputType = {
+    id: number
+    clientId: number
+    clientSecret: number
+    retailer: number
+    webhookToken: number
+    webhookSecret: number
+    strictSignature: number
+    enabled: number
+    syncProducts: number
+    syncCustomers: number
+    syncSuppliers: number
+    syncInvoices: number
+    overwriteNames: number
+    overwritePrices: number
+    overwriteStock: number
+    defaultCategoryId: number
+    defaultWarehouseId: number
+    branchIds: number
+    lastSyncAt: number
+    lastWebhookAt: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type KiotVietConfigMinAggregateInputType = {
+    id?: true
+    clientId?: true
+    clientSecret?: true
+    retailer?: true
+    webhookToken?: true
+    webhookSecret?: true
+    strictSignature?: true
+    enabled?: true
+    syncProducts?: true
+    syncCustomers?: true
+    syncSuppliers?: true
+    syncInvoices?: true
+    overwriteNames?: true
+    overwritePrices?: true
+    overwriteStock?: true
+    defaultCategoryId?: true
+    defaultWarehouseId?: true
+    branchIds?: true
+    lastSyncAt?: true
+    lastWebhookAt?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type KiotVietConfigMaxAggregateInputType = {
+    id?: true
+    clientId?: true
+    clientSecret?: true
+    retailer?: true
+    webhookToken?: true
+    webhookSecret?: true
+    strictSignature?: true
+    enabled?: true
+    syncProducts?: true
+    syncCustomers?: true
+    syncSuppliers?: true
+    syncInvoices?: true
+    overwriteNames?: true
+    overwritePrices?: true
+    overwriteStock?: true
+    defaultCategoryId?: true
+    defaultWarehouseId?: true
+    branchIds?: true
+    lastSyncAt?: true
+    lastWebhookAt?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type KiotVietConfigCountAggregateInputType = {
+    id?: true
+    clientId?: true
+    clientSecret?: true
+    retailer?: true
+    webhookToken?: true
+    webhookSecret?: true
+    strictSignature?: true
+    enabled?: true
+    syncProducts?: true
+    syncCustomers?: true
+    syncSuppliers?: true
+    syncInvoices?: true
+    overwriteNames?: true
+    overwritePrices?: true
+    overwriteStock?: true
+    defaultCategoryId?: true
+    defaultWarehouseId?: true
+    branchIds?: true
+    lastSyncAt?: true
+    lastWebhookAt?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type KiotVietConfigAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which KiotVietConfig to aggregate.
+     */
+    where?: KiotVietConfigWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of KiotVietConfigs to fetch.
+     */
+    orderBy?: KiotVietConfigOrderByWithRelationInput | KiotVietConfigOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: KiotVietConfigWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` KiotVietConfigs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` KiotVietConfigs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned KiotVietConfigs
+    **/
+    _count?: true | KiotVietConfigCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: KiotVietConfigMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: KiotVietConfigMaxAggregateInputType
+  }
+
+  export type GetKiotVietConfigAggregateType<T extends KiotVietConfigAggregateArgs> = {
+        [P in keyof T & keyof AggregateKiotVietConfig]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateKiotVietConfig[P]>
+      : GetScalarType<T[P], AggregateKiotVietConfig[P]>
+  }
+
+
+
+
+  export type KiotVietConfigGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: KiotVietConfigWhereInput
+    orderBy?: KiotVietConfigOrderByWithAggregationInput | KiotVietConfigOrderByWithAggregationInput[]
+    by: KiotVietConfigScalarFieldEnum[] | KiotVietConfigScalarFieldEnum
+    having?: KiotVietConfigScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: KiotVietConfigCountAggregateInputType | true
+    _min?: KiotVietConfigMinAggregateInputType
+    _max?: KiotVietConfigMaxAggregateInputType
+  }
+
+  export type KiotVietConfigGroupByOutputType = {
+    id: string
+    clientId: string
+    clientSecret: string
+    retailer: string
+    webhookToken: string
+    webhookSecret: string | null
+    strictSignature: boolean
+    enabled: boolean
+    syncProducts: boolean
+    syncCustomers: boolean
+    syncSuppliers: boolean
+    syncInvoices: boolean
+    overwriteNames: boolean
+    overwritePrices: boolean
+    overwriteStock: boolean
+    defaultCategoryId: string | null
+    defaultWarehouseId: string | null
+    branchIds: string | null
+    lastSyncAt: Date | null
+    lastWebhookAt: Date | null
+    createdAt: Date
+    updatedAt: Date
+    _count: KiotVietConfigCountAggregateOutputType | null
+    _min: KiotVietConfigMinAggregateOutputType | null
+    _max: KiotVietConfigMaxAggregateOutputType | null
+  }
+
+  type GetKiotVietConfigGroupByPayload<T extends KiotVietConfigGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<KiotVietConfigGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof KiotVietConfigGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], KiotVietConfigGroupByOutputType[P]>
+            : GetScalarType<T[P], KiotVietConfigGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type KiotVietConfigSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    clientId?: boolean
+    clientSecret?: boolean
+    retailer?: boolean
+    webhookToken?: boolean
+    webhookSecret?: boolean
+    strictSignature?: boolean
+    enabled?: boolean
+    syncProducts?: boolean
+    syncCustomers?: boolean
+    syncSuppliers?: boolean
+    syncInvoices?: boolean
+    overwriteNames?: boolean
+    overwritePrices?: boolean
+    overwriteStock?: boolean
+    defaultCategoryId?: boolean
+    defaultWarehouseId?: boolean
+    branchIds?: boolean
+    lastSyncAt?: boolean
+    lastWebhookAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["kiotVietConfig"]>
+
+  export type KiotVietConfigSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    clientId?: boolean
+    clientSecret?: boolean
+    retailer?: boolean
+    webhookToken?: boolean
+    webhookSecret?: boolean
+    strictSignature?: boolean
+    enabled?: boolean
+    syncProducts?: boolean
+    syncCustomers?: boolean
+    syncSuppliers?: boolean
+    syncInvoices?: boolean
+    overwriteNames?: boolean
+    overwritePrices?: boolean
+    overwriteStock?: boolean
+    defaultCategoryId?: boolean
+    defaultWarehouseId?: boolean
+    branchIds?: boolean
+    lastSyncAt?: boolean
+    lastWebhookAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["kiotVietConfig"]>
+
+  export type KiotVietConfigSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    clientId?: boolean
+    clientSecret?: boolean
+    retailer?: boolean
+    webhookToken?: boolean
+    webhookSecret?: boolean
+    strictSignature?: boolean
+    enabled?: boolean
+    syncProducts?: boolean
+    syncCustomers?: boolean
+    syncSuppliers?: boolean
+    syncInvoices?: boolean
+    overwriteNames?: boolean
+    overwritePrices?: boolean
+    overwriteStock?: boolean
+    defaultCategoryId?: boolean
+    defaultWarehouseId?: boolean
+    branchIds?: boolean
+    lastSyncAt?: boolean
+    lastWebhookAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["kiotVietConfig"]>
+
+  export type KiotVietConfigSelectScalar = {
+    id?: boolean
+    clientId?: boolean
+    clientSecret?: boolean
+    retailer?: boolean
+    webhookToken?: boolean
+    webhookSecret?: boolean
+    strictSignature?: boolean
+    enabled?: boolean
+    syncProducts?: boolean
+    syncCustomers?: boolean
+    syncSuppliers?: boolean
+    syncInvoices?: boolean
+    overwriteNames?: boolean
+    overwritePrices?: boolean
+    overwriteStock?: boolean
+    defaultCategoryId?: boolean
+    defaultWarehouseId?: boolean
+    branchIds?: boolean
+    lastSyncAt?: boolean
+    lastWebhookAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type KiotVietConfigOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "clientId" | "clientSecret" | "retailer" | "webhookToken" | "webhookSecret" | "strictSignature" | "enabled" | "syncProducts" | "syncCustomers" | "syncSuppliers" | "syncInvoices" | "overwriteNames" | "overwritePrices" | "overwriteStock" | "defaultCategoryId" | "defaultWarehouseId" | "branchIds" | "lastSyncAt" | "lastWebhookAt" | "createdAt" | "updatedAt", ExtArgs["result"]["kiotVietConfig"]>
+
+  export type $KiotVietConfigPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "KiotVietConfig"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      clientId: string
+      clientSecret: string
+      retailer: string
+      webhookToken: string
+      webhookSecret: string | null
+      strictSignature: boolean
+      enabled: boolean
+      syncProducts: boolean
+      syncCustomers: boolean
+      syncSuppliers: boolean
+      syncInvoices: boolean
+      overwriteNames: boolean
+      overwritePrices: boolean
+      overwriteStock: boolean
+      defaultCategoryId: string | null
+      defaultWarehouseId: string | null
+      branchIds: string | null
+      lastSyncAt: Date | null
+      lastWebhookAt: Date | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["kiotVietConfig"]>
+    composites: {}
+  }
+
+  type KiotVietConfigGetPayload<S extends boolean | null | undefined | KiotVietConfigDefaultArgs> = $Result.GetResult<Prisma.$KiotVietConfigPayload, S>
+
+  type KiotVietConfigCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<KiotVietConfigFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: KiotVietConfigCountAggregateInputType | true
+    }
+
+  export interface KiotVietConfigDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['KiotVietConfig'], meta: { name: 'KiotVietConfig' } }
+    /**
+     * Find zero or one KiotVietConfig that matches the filter.
+     * @param {KiotVietConfigFindUniqueArgs} args - Arguments to find a KiotVietConfig
+     * @example
+     * // Get one KiotVietConfig
+     * const kiotVietConfig = await prisma.kiotVietConfig.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends KiotVietConfigFindUniqueArgs>(args: SelectSubset<T, KiotVietConfigFindUniqueArgs<ExtArgs>>): Prisma__KiotVietConfigClient<$Result.GetResult<Prisma.$KiotVietConfigPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one KiotVietConfig that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {KiotVietConfigFindUniqueOrThrowArgs} args - Arguments to find a KiotVietConfig
+     * @example
+     * // Get one KiotVietConfig
+     * const kiotVietConfig = await prisma.kiotVietConfig.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends KiotVietConfigFindUniqueOrThrowArgs>(args: SelectSubset<T, KiotVietConfigFindUniqueOrThrowArgs<ExtArgs>>): Prisma__KiotVietConfigClient<$Result.GetResult<Prisma.$KiotVietConfigPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first KiotVietConfig that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {KiotVietConfigFindFirstArgs} args - Arguments to find a KiotVietConfig
+     * @example
+     * // Get one KiotVietConfig
+     * const kiotVietConfig = await prisma.kiotVietConfig.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends KiotVietConfigFindFirstArgs>(args?: SelectSubset<T, KiotVietConfigFindFirstArgs<ExtArgs>>): Prisma__KiotVietConfigClient<$Result.GetResult<Prisma.$KiotVietConfigPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first KiotVietConfig that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {KiotVietConfigFindFirstOrThrowArgs} args - Arguments to find a KiotVietConfig
+     * @example
+     * // Get one KiotVietConfig
+     * const kiotVietConfig = await prisma.kiotVietConfig.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends KiotVietConfigFindFirstOrThrowArgs>(args?: SelectSubset<T, KiotVietConfigFindFirstOrThrowArgs<ExtArgs>>): Prisma__KiotVietConfigClient<$Result.GetResult<Prisma.$KiotVietConfigPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more KiotVietConfigs that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {KiotVietConfigFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all KiotVietConfigs
+     * const kiotVietConfigs = await prisma.kiotVietConfig.findMany()
+     * 
+     * // Get first 10 KiotVietConfigs
+     * const kiotVietConfigs = await prisma.kiotVietConfig.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const kiotVietConfigWithIdOnly = await prisma.kiotVietConfig.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends KiotVietConfigFindManyArgs>(args?: SelectSubset<T, KiotVietConfigFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$KiotVietConfigPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a KiotVietConfig.
+     * @param {KiotVietConfigCreateArgs} args - Arguments to create a KiotVietConfig.
+     * @example
+     * // Create one KiotVietConfig
+     * const KiotVietConfig = await prisma.kiotVietConfig.create({
+     *   data: {
+     *     // ... data to create a KiotVietConfig
+     *   }
+     * })
+     * 
+     */
+    create<T extends KiotVietConfigCreateArgs>(args: SelectSubset<T, KiotVietConfigCreateArgs<ExtArgs>>): Prisma__KiotVietConfigClient<$Result.GetResult<Prisma.$KiotVietConfigPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many KiotVietConfigs.
+     * @param {KiotVietConfigCreateManyArgs} args - Arguments to create many KiotVietConfigs.
+     * @example
+     * // Create many KiotVietConfigs
+     * const kiotVietConfig = await prisma.kiotVietConfig.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends KiotVietConfigCreateManyArgs>(args?: SelectSubset<T, KiotVietConfigCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many KiotVietConfigs and returns the data saved in the database.
+     * @param {KiotVietConfigCreateManyAndReturnArgs} args - Arguments to create many KiotVietConfigs.
+     * @example
+     * // Create many KiotVietConfigs
+     * const kiotVietConfig = await prisma.kiotVietConfig.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many KiotVietConfigs and only return the `id`
+     * const kiotVietConfigWithIdOnly = await prisma.kiotVietConfig.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends KiotVietConfigCreateManyAndReturnArgs>(args?: SelectSubset<T, KiotVietConfigCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$KiotVietConfigPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a KiotVietConfig.
+     * @param {KiotVietConfigDeleteArgs} args - Arguments to delete one KiotVietConfig.
+     * @example
+     * // Delete one KiotVietConfig
+     * const KiotVietConfig = await prisma.kiotVietConfig.delete({
+     *   where: {
+     *     // ... filter to delete one KiotVietConfig
+     *   }
+     * })
+     * 
+     */
+    delete<T extends KiotVietConfigDeleteArgs>(args: SelectSubset<T, KiotVietConfigDeleteArgs<ExtArgs>>): Prisma__KiotVietConfigClient<$Result.GetResult<Prisma.$KiotVietConfigPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one KiotVietConfig.
+     * @param {KiotVietConfigUpdateArgs} args - Arguments to update one KiotVietConfig.
+     * @example
+     * // Update one KiotVietConfig
+     * const kiotVietConfig = await prisma.kiotVietConfig.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends KiotVietConfigUpdateArgs>(args: SelectSubset<T, KiotVietConfigUpdateArgs<ExtArgs>>): Prisma__KiotVietConfigClient<$Result.GetResult<Prisma.$KiotVietConfigPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more KiotVietConfigs.
+     * @param {KiotVietConfigDeleteManyArgs} args - Arguments to filter KiotVietConfigs to delete.
+     * @example
+     * // Delete a few KiotVietConfigs
+     * const { count } = await prisma.kiotVietConfig.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends KiotVietConfigDeleteManyArgs>(args?: SelectSubset<T, KiotVietConfigDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more KiotVietConfigs.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {KiotVietConfigUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many KiotVietConfigs
+     * const kiotVietConfig = await prisma.kiotVietConfig.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends KiotVietConfigUpdateManyArgs>(args: SelectSubset<T, KiotVietConfigUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more KiotVietConfigs and returns the data updated in the database.
+     * @param {KiotVietConfigUpdateManyAndReturnArgs} args - Arguments to update many KiotVietConfigs.
+     * @example
+     * // Update many KiotVietConfigs
+     * const kiotVietConfig = await prisma.kiotVietConfig.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more KiotVietConfigs and only return the `id`
+     * const kiotVietConfigWithIdOnly = await prisma.kiotVietConfig.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends KiotVietConfigUpdateManyAndReturnArgs>(args: SelectSubset<T, KiotVietConfigUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$KiotVietConfigPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one KiotVietConfig.
+     * @param {KiotVietConfigUpsertArgs} args - Arguments to update or create a KiotVietConfig.
+     * @example
+     * // Update or create a KiotVietConfig
+     * const kiotVietConfig = await prisma.kiotVietConfig.upsert({
+     *   create: {
+     *     // ... data to create a KiotVietConfig
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the KiotVietConfig we want to update
+     *   }
+     * })
+     */
+    upsert<T extends KiotVietConfigUpsertArgs>(args: SelectSubset<T, KiotVietConfigUpsertArgs<ExtArgs>>): Prisma__KiotVietConfigClient<$Result.GetResult<Prisma.$KiotVietConfigPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of KiotVietConfigs.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {KiotVietConfigCountArgs} args - Arguments to filter KiotVietConfigs to count.
+     * @example
+     * // Count the number of KiotVietConfigs
+     * const count = await prisma.kiotVietConfig.count({
+     *   where: {
+     *     // ... the filter for the KiotVietConfigs we want to count
+     *   }
+     * })
+    **/
+    count<T extends KiotVietConfigCountArgs>(
+      args?: Subset<T, KiotVietConfigCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], KiotVietConfigCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a KiotVietConfig.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {KiotVietConfigAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends KiotVietConfigAggregateArgs>(args: Subset<T, KiotVietConfigAggregateArgs>): Prisma.PrismaPromise<GetKiotVietConfigAggregateType<T>>
+
+    /**
+     * Group by KiotVietConfig.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {KiotVietConfigGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends KiotVietConfigGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: KiotVietConfigGroupByArgs['orderBy'] }
+        : { orderBy?: KiotVietConfigGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, KiotVietConfigGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetKiotVietConfigGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the KiotVietConfig model
+   */
+  readonly fields: KiotVietConfigFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for KiotVietConfig.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__KiotVietConfigClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the KiotVietConfig model
+   */
+  interface KiotVietConfigFieldRefs {
+    readonly id: FieldRef<"KiotVietConfig", 'String'>
+    readonly clientId: FieldRef<"KiotVietConfig", 'String'>
+    readonly clientSecret: FieldRef<"KiotVietConfig", 'String'>
+    readonly retailer: FieldRef<"KiotVietConfig", 'String'>
+    readonly webhookToken: FieldRef<"KiotVietConfig", 'String'>
+    readonly webhookSecret: FieldRef<"KiotVietConfig", 'String'>
+    readonly strictSignature: FieldRef<"KiotVietConfig", 'Boolean'>
+    readonly enabled: FieldRef<"KiotVietConfig", 'Boolean'>
+    readonly syncProducts: FieldRef<"KiotVietConfig", 'Boolean'>
+    readonly syncCustomers: FieldRef<"KiotVietConfig", 'Boolean'>
+    readonly syncSuppliers: FieldRef<"KiotVietConfig", 'Boolean'>
+    readonly syncInvoices: FieldRef<"KiotVietConfig", 'Boolean'>
+    readonly overwriteNames: FieldRef<"KiotVietConfig", 'Boolean'>
+    readonly overwritePrices: FieldRef<"KiotVietConfig", 'Boolean'>
+    readonly overwriteStock: FieldRef<"KiotVietConfig", 'Boolean'>
+    readonly defaultCategoryId: FieldRef<"KiotVietConfig", 'String'>
+    readonly defaultWarehouseId: FieldRef<"KiotVietConfig", 'String'>
+    readonly branchIds: FieldRef<"KiotVietConfig", 'String'>
+    readonly lastSyncAt: FieldRef<"KiotVietConfig", 'DateTime'>
+    readonly lastWebhookAt: FieldRef<"KiotVietConfig", 'DateTime'>
+    readonly createdAt: FieldRef<"KiotVietConfig", 'DateTime'>
+    readonly updatedAt: FieldRef<"KiotVietConfig", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * KiotVietConfig findUnique
+   */
+  export type KiotVietConfigFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietConfig
+     */
+    select?: KiotVietConfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietConfig
+     */
+    omit?: KiotVietConfigOmit<ExtArgs> | null
+    /**
+     * Filter, which KiotVietConfig to fetch.
+     */
+    where: KiotVietConfigWhereUniqueInput
+  }
+
+  /**
+   * KiotVietConfig findUniqueOrThrow
+   */
+  export type KiotVietConfigFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietConfig
+     */
+    select?: KiotVietConfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietConfig
+     */
+    omit?: KiotVietConfigOmit<ExtArgs> | null
+    /**
+     * Filter, which KiotVietConfig to fetch.
+     */
+    where: KiotVietConfigWhereUniqueInput
+  }
+
+  /**
+   * KiotVietConfig findFirst
+   */
+  export type KiotVietConfigFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietConfig
+     */
+    select?: KiotVietConfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietConfig
+     */
+    omit?: KiotVietConfigOmit<ExtArgs> | null
+    /**
+     * Filter, which KiotVietConfig to fetch.
+     */
+    where?: KiotVietConfigWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of KiotVietConfigs to fetch.
+     */
+    orderBy?: KiotVietConfigOrderByWithRelationInput | KiotVietConfigOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for KiotVietConfigs.
+     */
+    cursor?: KiotVietConfigWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` KiotVietConfigs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` KiotVietConfigs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of KiotVietConfigs.
+     */
+    distinct?: KiotVietConfigScalarFieldEnum | KiotVietConfigScalarFieldEnum[]
+  }
+
+  /**
+   * KiotVietConfig findFirstOrThrow
+   */
+  export type KiotVietConfigFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietConfig
+     */
+    select?: KiotVietConfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietConfig
+     */
+    omit?: KiotVietConfigOmit<ExtArgs> | null
+    /**
+     * Filter, which KiotVietConfig to fetch.
+     */
+    where?: KiotVietConfigWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of KiotVietConfigs to fetch.
+     */
+    orderBy?: KiotVietConfigOrderByWithRelationInput | KiotVietConfigOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for KiotVietConfigs.
+     */
+    cursor?: KiotVietConfigWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` KiotVietConfigs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` KiotVietConfigs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of KiotVietConfigs.
+     */
+    distinct?: KiotVietConfigScalarFieldEnum | KiotVietConfigScalarFieldEnum[]
+  }
+
+  /**
+   * KiotVietConfig findMany
+   */
+  export type KiotVietConfigFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietConfig
+     */
+    select?: KiotVietConfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietConfig
+     */
+    omit?: KiotVietConfigOmit<ExtArgs> | null
+    /**
+     * Filter, which KiotVietConfigs to fetch.
+     */
+    where?: KiotVietConfigWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of KiotVietConfigs to fetch.
+     */
+    orderBy?: KiotVietConfigOrderByWithRelationInput | KiotVietConfigOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing KiotVietConfigs.
+     */
+    cursor?: KiotVietConfigWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` KiotVietConfigs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` KiotVietConfigs.
+     */
+    skip?: number
+    distinct?: KiotVietConfigScalarFieldEnum | KiotVietConfigScalarFieldEnum[]
+  }
+
+  /**
+   * KiotVietConfig create
+   */
+  export type KiotVietConfigCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietConfig
+     */
+    select?: KiotVietConfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietConfig
+     */
+    omit?: KiotVietConfigOmit<ExtArgs> | null
+    /**
+     * The data needed to create a KiotVietConfig.
+     */
+    data: XOR<KiotVietConfigCreateInput, KiotVietConfigUncheckedCreateInput>
+  }
+
+  /**
+   * KiotVietConfig createMany
+   */
+  export type KiotVietConfigCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many KiotVietConfigs.
+     */
+    data: KiotVietConfigCreateManyInput | KiotVietConfigCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * KiotVietConfig createManyAndReturn
+   */
+  export type KiotVietConfigCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietConfig
+     */
+    select?: KiotVietConfigSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietConfig
+     */
+    omit?: KiotVietConfigOmit<ExtArgs> | null
+    /**
+     * The data used to create many KiotVietConfigs.
+     */
+    data: KiotVietConfigCreateManyInput | KiotVietConfigCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * KiotVietConfig update
+   */
+  export type KiotVietConfigUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietConfig
+     */
+    select?: KiotVietConfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietConfig
+     */
+    omit?: KiotVietConfigOmit<ExtArgs> | null
+    /**
+     * The data needed to update a KiotVietConfig.
+     */
+    data: XOR<KiotVietConfigUpdateInput, KiotVietConfigUncheckedUpdateInput>
+    /**
+     * Choose, which KiotVietConfig to update.
+     */
+    where: KiotVietConfigWhereUniqueInput
+  }
+
+  /**
+   * KiotVietConfig updateMany
+   */
+  export type KiotVietConfigUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update KiotVietConfigs.
+     */
+    data: XOR<KiotVietConfigUpdateManyMutationInput, KiotVietConfigUncheckedUpdateManyInput>
+    /**
+     * Filter which KiotVietConfigs to update
+     */
+    where?: KiotVietConfigWhereInput
+    /**
+     * Limit how many KiotVietConfigs to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * KiotVietConfig updateManyAndReturn
+   */
+  export type KiotVietConfigUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietConfig
+     */
+    select?: KiotVietConfigSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietConfig
+     */
+    omit?: KiotVietConfigOmit<ExtArgs> | null
+    /**
+     * The data used to update KiotVietConfigs.
+     */
+    data: XOR<KiotVietConfigUpdateManyMutationInput, KiotVietConfigUncheckedUpdateManyInput>
+    /**
+     * Filter which KiotVietConfigs to update
+     */
+    where?: KiotVietConfigWhereInput
+    /**
+     * Limit how many KiotVietConfigs to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * KiotVietConfig upsert
+   */
+  export type KiotVietConfigUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietConfig
+     */
+    select?: KiotVietConfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietConfig
+     */
+    omit?: KiotVietConfigOmit<ExtArgs> | null
+    /**
+     * The filter to search for the KiotVietConfig to update in case it exists.
+     */
+    where: KiotVietConfigWhereUniqueInput
+    /**
+     * In case the KiotVietConfig found by the `where` argument doesn't exist, create a new KiotVietConfig with this data.
+     */
+    create: XOR<KiotVietConfigCreateInput, KiotVietConfigUncheckedCreateInput>
+    /**
+     * In case the KiotVietConfig was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<KiotVietConfigUpdateInput, KiotVietConfigUncheckedUpdateInput>
+  }
+
+  /**
+   * KiotVietConfig delete
+   */
+  export type KiotVietConfigDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietConfig
+     */
+    select?: KiotVietConfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietConfig
+     */
+    omit?: KiotVietConfigOmit<ExtArgs> | null
+    /**
+     * Filter which KiotVietConfig to delete.
+     */
+    where: KiotVietConfigWhereUniqueInput
+  }
+
+  /**
+   * KiotVietConfig deleteMany
+   */
+  export type KiotVietConfigDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which KiotVietConfigs to delete
+     */
+    where?: KiotVietConfigWhereInput
+    /**
+     * Limit how many KiotVietConfigs to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * KiotVietConfig without action
+   */
+  export type KiotVietConfigDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietConfig
+     */
+    select?: KiotVietConfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietConfig
+     */
+    omit?: KiotVietConfigOmit<ExtArgs> | null
+  }
+
+
+  /**
+   * Model KiotVietMap
+   */
+
+  export type AggregateKiotVietMap = {
+    _count: KiotVietMapCountAggregateOutputType | null
+    _min: KiotVietMapMinAggregateOutputType | null
+    _max: KiotVietMapMaxAggregateOutputType | null
+  }
+
+  export type KiotVietMapMinAggregateOutputType = {
+    id: string | null
+    entity: string | null
+    kvId: string | null
+    kvCode: string | null
+    localId: string | null
+    syncedAt: Date | null
+  }
+
+  export type KiotVietMapMaxAggregateOutputType = {
+    id: string | null
+    entity: string | null
+    kvId: string | null
+    kvCode: string | null
+    localId: string | null
+    syncedAt: Date | null
+  }
+
+  export type KiotVietMapCountAggregateOutputType = {
+    id: number
+    entity: number
+    kvId: number
+    kvCode: number
+    localId: number
+    syncedAt: number
+    _all: number
+  }
+
+
+  export type KiotVietMapMinAggregateInputType = {
+    id?: true
+    entity?: true
+    kvId?: true
+    kvCode?: true
+    localId?: true
+    syncedAt?: true
+  }
+
+  export type KiotVietMapMaxAggregateInputType = {
+    id?: true
+    entity?: true
+    kvId?: true
+    kvCode?: true
+    localId?: true
+    syncedAt?: true
+  }
+
+  export type KiotVietMapCountAggregateInputType = {
+    id?: true
+    entity?: true
+    kvId?: true
+    kvCode?: true
+    localId?: true
+    syncedAt?: true
+    _all?: true
+  }
+
+  export type KiotVietMapAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which KiotVietMap to aggregate.
+     */
+    where?: KiotVietMapWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of KiotVietMaps to fetch.
+     */
+    orderBy?: KiotVietMapOrderByWithRelationInput | KiotVietMapOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: KiotVietMapWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` KiotVietMaps from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` KiotVietMaps.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned KiotVietMaps
+    **/
+    _count?: true | KiotVietMapCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: KiotVietMapMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: KiotVietMapMaxAggregateInputType
+  }
+
+  export type GetKiotVietMapAggregateType<T extends KiotVietMapAggregateArgs> = {
+        [P in keyof T & keyof AggregateKiotVietMap]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateKiotVietMap[P]>
+      : GetScalarType<T[P], AggregateKiotVietMap[P]>
+  }
+
+
+
+
+  export type KiotVietMapGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: KiotVietMapWhereInput
+    orderBy?: KiotVietMapOrderByWithAggregationInput | KiotVietMapOrderByWithAggregationInput[]
+    by: KiotVietMapScalarFieldEnum[] | KiotVietMapScalarFieldEnum
+    having?: KiotVietMapScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: KiotVietMapCountAggregateInputType | true
+    _min?: KiotVietMapMinAggregateInputType
+    _max?: KiotVietMapMaxAggregateInputType
+  }
+
+  export type KiotVietMapGroupByOutputType = {
+    id: string
+    entity: string
+    kvId: string
+    kvCode: string | null
+    localId: string
+    syncedAt: Date
+    _count: KiotVietMapCountAggregateOutputType | null
+    _min: KiotVietMapMinAggregateOutputType | null
+    _max: KiotVietMapMaxAggregateOutputType | null
+  }
+
+  type GetKiotVietMapGroupByPayload<T extends KiotVietMapGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<KiotVietMapGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof KiotVietMapGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], KiotVietMapGroupByOutputType[P]>
+            : GetScalarType<T[P], KiotVietMapGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type KiotVietMapSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    entity?: boolean
+    kvId?: boolean
+    kvCode?: boolean
+    localId?: boolean
+    syncedAt?: boolean
+  }, ExtArgs["result"]["kiotVietMap"]>
+
+  export type KiotVietMapSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    entity?: boolean
+    kvId?: boolean
+    kvCode?: boolean
+    localId?: boolean
+    syncedAt?: boolean
+  }, ExtArgs["result"]["kiotVietMap"]>
+
+  export type KiotVietMapSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    entity?: boolean
+    kvId?: boolean
+    kvCode?: boolean
+    localId?: boolean
+    syncedAt?: boolean
+  }, ExtArgs["result"]["kiotVietMap"]>
+
+  export type KiotVietMapSelectScalar = {
+    id?: boolean
+    entity?: boolean
+    kvId?: boolean
+    kvCode?: boolean
+    localId?: boolean
+    syncedAt?: boolean
+  }
+
+  export type KiotVietMapOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "entity" | "kvId" | "kvCode" | "localId" | "syncedAt", ExtArgs["result"]["kiotVietMap"]>
+
+  export type $KiotVietMapPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "KiotVietMap"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      entity: string
+      kvId: string
+      kvCode: string | null
+      localId: string
+      syncedAt: Date
+    }, ExtArgs["result"]["kiotVietMap"]>
+    composites: {}
+  }
+
+  type KiotVietMapGetPayload<S extends boolean | null | undefined | KiotVietMapDefaultArgs> = $Result.GetResult<Prisma.$KiotVietMapPayload, S>
+
+  type KiotVietMapCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<KiotVietMapFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: KiotVietMapCountAggregateInputType | true
+    }
+
+  export interface KiotVietMapDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['KiotVietMap'], meta: { name: 'KiotVietMap' } }
+    /**
+     * Find zero or one KiotVietMap that matches the filter.
+     * @param {KiotVietMapFindUniqueArgs} args - Arguments to find a KiotVietMap
+     * @example
+     * // Get one KiotVietMap
+     * const kiotVietMap = await prisma.kiotVietMap.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends KiotVietMapFindUniqueArgs>(args: SelectSubset<T, KiotVietMapFindUniqueArgs<ExtArgs>>): Prisma__KiotVietMapClient<$Result.GetResult<Prisma.$KiotVietMapPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one KiotVietMap that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {KiotVietMapFindUniqueOrThrowArgs} args - Arguments to find a KiotVietMap
+     * @example
+     * // Get one KiotVietMap
+     * const kiotVietMap = await prisma.kiotVietMap.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends KiotVietMapFindUniqueOrThrowArgs>(args: SelectSubset<T, KiotVietMapFindUniqueOrThrowArgs<ExtArgs>>): Prisma__KiotVietMapClient<$Result.GetResult<Prisma.$KiotVietMapPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first KiotVietMap that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {KiotVietMapFindFirstArgs} args - Arguments to find a KiotVietMap
+     * @example
+     * // Get one KiotVietMap
+     * const kiotVietMap = await prisma.kiotVietMap.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends KiotVietMapFindFirstArgs>(args?: SelectSubset<T, KiotVietMapFindFirstArgs<ExtArgs>>): Prisma__KiotVietMapClient<$Result.GetResult<Prisma.$KiotVietMapPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first KiotVietMap that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {KiotVietMapFindFirstOrThrowArgs} args - Arguments to find a KiotVietMap
+     * @example
+     * // Get one KiotVietMap
+     * const kiotVietMap = await prisma.kiotVietMap.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends KiotVietMapFindFirstOrThrowArgs>(args?: SelectSubset<T, KiotVietMapFindFirstOrThrowArgs<ExtArgs>>): Prisma__KiotVietMapClient<$Result.GetResult<Prisma.$KiotVietMapPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more KiotVietMaps that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {KiotVietMapFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all KiotVietMaps
+     * const kiotVietMaps = await prisma.kiotVietMap.findMany()
+     * 
+     * // Get first 10 KiotVietMaps
+     * const kiotVietMaps = await prisma.kiotVietMap.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const kiotVietMapWithIdOnly = await prisma.kiotVietMap.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends KiotVietMapFindManyArgs>(args?: SelectSubset<T, KiotVietMapFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$KiotVietMapPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a KiotVietMap.
+     * @param {KiotVietMapCreateArgs} args - Arguments to create a KiotVietMap.
+     * @example
+     * // Create one KiotVietMap
+     * const KiotVietMap = await prisma.kiotVietMap.create({
+     *   data: {
+     *     // ... data to create a KiotVietMap
+     *   }
+     * })
+     * 
+     */
+    create<T extends KiotVietMapCreateArgs>(args: SelectSubset<T, KiotVietMapCreateArgs<ExtArgs>>): Prisma__KiotVietMapClient<$Result.GetResult<Prisma.$KiotVietMapPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many KiotVietMaps.
+     * @param {KiotVietMapCreateManyArgs} args - Arguments to create many KiotVietMaps.
+     * @example
+     * // Create many KiotVietMaps
+     * const kiotVietMap = await prisma.kiotVietMap.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends KiotVietMapCreateManyArgs>(args?: SelectSubset<T, KiotVietMapCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many KiotVietMaps and returns the data saved in the database.
+     * @param {KiotVietMapCreateManyAndReturnArgs} args - Arguments to create many KiotVietMaps.
+     * @example
+     * // Create many KiotVietMaps
+     * const kiotVietMap = await prisma.kiotVietMap.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many KiotVietMaps and only return the `id`
+     * const kiotVietMapWithIdOnly = await prisma.kiotVietMap.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends KiotVietMapCreateManyAndReturnArgs>(args?: SelectSubset<T, KiotVietMapCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$KiotVietMapPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a KiotVietMap.
+     * @param {KiotVietMapDeleteArgs} args - Arguments to delete one KiotVietMap.
+     * @example
+     * // Delete one KiotVietMap
+     * const KiotVietMap = await prisma.kiotVietMap.delete({
+     *   where: {
+     *     // ... filter to delete one KiotVietMap
+     *   }
+     * })
+     * 
+     */
+    delete<T extends KiotVietMapDeleteArgs>(args: SelectSubset<T, KiotVietMapDeleteArgs<ExtArgs>>): Prisma__KiotVietMapClient<$Result.GetResult<Prisma.$KiotVietMapPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one KiotVietMap.
+     * @param {KiotVietMapUpdateArgs} args - Arguments to update one KiotVietMap.
+     * @example
+     * // Update one KiotVietMap
+     * const kiotVietMap = await prisma.kiotVietMap.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends KiotVietMapUpdateArgs>(args: SelectSubset<T, KiotVietMapUpdateArgs<ExtArgs>>): Prisma__KiotVietMapClient<$Result.GetResult<Prisma.$KiotVietMapPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more KiotVietMaps.
+     * @param {KiotVietMapDeleteManyArgs} args - Arguments to filter KiotVietMaps to delete.
+     * @example
+     * // Delete a few KiotVietMaps
+     * const { count } = await prisma.kiotVietMap.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends KiotVietMapDeleteManyArgs>(args?: SelectSubset<T, KiotVietMapDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more KiotVietMaps.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {KiotVietMapUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many KiotVietMaps
+     * const kiotVietMap = await prisma.kiotVietMap.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends KiotVietMapUpdateManyArgs>(args: SelectSubset<T, KiotVietMapUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more KiotVietMaps and returns the data updated in the database.
+     * @param {KiotVietMapUpdateManyAndReturnArgs} args - Arguments to update many KiotVietMaps.
+     * @example
+     * // Update many KiotVietMaps
+     * const kiotVietMap = await prisma.kiotVietMap.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more KiotVietMaps and only return the `id`
+     * const kiotVietMapWithIdOnly = await prisma.kiotVietMap.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends KiotVietMapUpdateManyAndReturnArgs>(args: SelectSubset<T, KiotVietMapUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$KiotVietMapPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one KiotVietMap.
+     * @param {KiotVietMapUpsertArgs} args - Arguments to update or create a KiotVietMap.
+     * @example
+     * // Update or create a KiotVietMap
+     * const kiotVietMap = await prisma.kiotVietMap.upsert({
+     *   create: {
+     *     // ... data to create a KiotVietMap
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the KiotVietMap we want to update
+     *   }
+     * })
+     */
+    upsert<T extends KiotVietMapUpsertArgs>(args: SelectSubset<T, KiotVietMapUpsertArgs<ExtArgs>>): Prisma__KiotVietMapClient<$Result.GetResult<Prisma.$KiotVietMapPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of KiotVietMaps.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {KiotVietMapCountArgs} args - Arguments to filter KiotVietMaps to count.
+     * @example
+     * // Count the number of KiotVietMaps
+     * const count = await prisma.kiotVietMap.count({
+     *   where: {
+     *     // ... the filter for the KiotVietMaps we want to count
+     *   }
+     * })
+    **/
+    count<T extends KiotVietMapCountArgs>(
+      args?: Subset<T, KiotVietMapCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], KiotVietMapCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a KiotVietMap.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {KiotVietMapAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends KiotVietMapAggregateArgs>(args: Subset<T, KiotVietMapAggregateArgs>): Prisma.PrismaPromise<GetKiotVietMapAggregateType<T>>
+
+    /**
+     * Group by KiotVietMap.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {KiotVietMapGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends KiotVietMapGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: KiotVietMapGroupByArgs['orderBy'] }
+        : { orderBy?: KiotVietMapGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, KiotVietMapGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetKiotVietMapGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the KiotVietMap model
+   */
+  readonly fields: KiotVietMapFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for KiotVietMap.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__KiotVietMapClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the KiotVietMap model
+   */
+  interface KiotVietMapFieldRefs {
+    readonly id: FieldRef<"KiotVietMap", 'String'>
+    readonly entity: FieldRef<"KiotVietMap", 'String'>
+    readonly kvId: FieldRef<"KiotVietMap", 'String'>
+    readonly kvCode: FieldRef<"KiotVietMap", 'String'>
+    readonly localId: FieldRef<"KiotVietMap", 'String'>
+    readonly syncedAt: FieldRef<"KiotVietMap", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * KiotVietMap findUnique
+   */
+  export type KiotVietMapFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietMap
+     */
+    select?: KiotVietMapSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietMap
+     */
+    omit?: KiotVietMapOmit<ExtArgs> | null
+    /**
+     * Filter, which KiotVietMap to fetch.
+     */
+    where: KiotVietMapWhereUniqueInput
+  }
+
+  /**
+   * KiotVietMap findUniqueOrThrow
+   */
+  export type KiotVietMapFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietMap
+     */
+    select?: KiotVietMapSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietMap
+     */
+    omit?: KiotVietMapOmit<ExtArgs> | null
+    /**
+     * Filter, which KiotVietMap to fetch.
+     */
+    where: KiotVietMapWhereUniqueInput
+  }
+
+  /**
+   * KiotVietMap findFirst
+   */
+  export type KiotVietMapFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietMap
+     */
+    select?: KiotVietMapSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietMap
+     */
+    omit?: KiotVietMapOmit<ExtArgs> | null
+    /**
+     * Filter, which KiotVietMap to fetch.
+     */
+    where?: KiotVietMapWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of KiotVietMaps to fetch.
+     */
+    orderBy?: KiotVietMapOrderByWithRelationInput | KiotVietMapOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for KiotVietMaps.
+     */
+    cursor?: KiotVietMapWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` KiotVietMaps from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` KiotVietMaps.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of KiotVietMaps.
+     */
+    distinct?: KiotVietMapScalarFieldEnum | KiotVietMapScalarFieldEnum[]
+  }
+
+  /**
+   * KiotVietMap findFirstOrThrow
+   */
+  export type KiotVietMapFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietMap
+     */
+    select?: KiotVietMapSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietMap
+     */
+    omit?: KiotVietMapOmit<ExtArgs> | null
+    /**
+     * Filter, which KiotVietMap to fetch.
+     */
+    where?: KiotVietMapWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of KiotVietMaps to fetch.
+     */
+    orderBy?: KiotVietMapOrderByWithRelationInput | KiotVietMapOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for KiotVietMaps.
+     */
+    cursor?: KiotVietMapWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` KiotVietMaps from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` KiotVietMaps.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of KiotVietMaps.
+     */
+    distinct?: KiotVietMapScalarFieldEnum | KiotVietMapScalarFieldEnum[]
+  }
+
+  /**
+   * KiotVietMap findMany
+   */
+  export type KiotVietMapFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietMap
+     */
+    select?: KiotVietMapSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietMap
+     */
+    omit?: KiotVietMapOmit<ExtArgs> | null
+    /**
+     * Filter, which KiotVietMaps to fetch.
+     */
+    where?: KiotVietMapWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of KiotVietMaps to fetch.
+     */
+    orderBy?: KiotVietMapOrderByWithRelationInput | KiotVietMapOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing KiotVietMaps.
+     */
+    cursor?: KiotVietMapWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` KiotVietMaps from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` KiotVietMaps.
+     */
+    skip?: number
+    distinct?: KiotVietMapScalarFieldEnum | KiotVietMapScalarFieldEnum[]
+  }
+
+  /**
+   * KiotVietMap create
+   */
+  export type KiotVietMapCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietMap
+     */
+    select?: KiotVietMapSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietMap
+     */
+    omit?: KiotVietMapOmit<ExtArgs> | null
+    /**
+     * The data needed to create a KiotVietMap.
+     */
+    data: XOR<KiotVietMapCreateInput, KiotVietMapUncheckedCreateInput>
+  }
+
+  /**
+   * KiotVietMap createMany
+   */
+  export type KiotVietMapCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many KiotVietMaps.
+     */
+    data: KiotVietMapCreateManyInput | KiotVietMapCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * KiotVietMap createManyAndReturn
+   */
+  export type KiotVietMapCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietMap
+     */
+    select?: KiotVietMapSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietMap
+     */
+    omit?: KiotVietMapOmit<ExtArgs> | null
+    /**
+     * The data used to create many KiotVietMaps.
+     */
+    data: KiotVietMapCreateManyInput | KiotVietMapCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * KiotVietMap update
+   */
+  export type KiotVietMapUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietMap
+     */
+    select?: KiotVietMapSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietMap
+     */
+    omit?: KiotVietMapOmit<ExtArgs> | null
+    /**
+     * The data needed to update a KiotVietMap.
+     */
+    data: XOR<KiotVietMapUpdateInput, KiotVietMapUncheckedUpdateInput>
+    /**
+     * Choose, which KiotVietMap to update.
+     */
+    where: KiotVietMapWhereUniqueInput
+  }
+
+  /**
+   * KiotVietMap updateMany
+   */
+  export type KiotVietMapUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update KiotVietMaps.
+     */
+    data: XOR<KiotVietMapUpdateManyMutationInput, KiotVietMapUncheckedUpdateManyInput>
+    /**
+     * Filter which KiotVietMaps to update
+     */
+    where?: KiotVietMapWhereInput
+    /**
+     * Limit how many KiotVietMaps to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * KiotVietMap updateManyAndReturn
+   */
+  export type KiotVietMapUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietMap
+     */
+    select?: KiotVietMapSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietMap
+     */
+    omit?: KiotVietMapOmit<ExtArgs> | null
+    /**
+     * The data used to update KiotVietMaps.
+     */
+    data: XOR<KiotVietMapUpdateManyMutationInput, KiotVietMapUncheckedUpdateManyInput>
+    /**
+     * Filter which KiotVietMaps to update
+     */
+    where?: KiotVietMapWhereInput
+    /**
+     * Limit how many KiotVietMaps to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * KiotVietMap upsert
+   */
+  export type KiotVietMapUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietMap
+     */
+    select?: KiotVietMapSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietMap
+     */
+    omit?: KiotVietMapOmit<ExtArgs> | null
+    /**
+     * The filter to search for the KiotVietMap to update in case it exists.
+     */
+    where: KiotVietMapWhereUniqueInput
+    /**
+     * In case the KiotVietMap found by the `where` argument doesn't exist, create a new KiotVietMap with this data.
+     */
+    create: XOR<KiotVietMapCreateInput, KiotVietMapUncheckedCreateInput>
+    /**
+     * In case the KiotVietMap was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<KiotVietMapUpdateInput, KiotVietMapUncheckedUpdateInput>
+  }
+
+  /**
+   * KiotVietMap delete
+   */
+  export type KiotVietMapDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietMap
+     */
+    select?: KiotVietMapSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietMap
+     */
+    omit?: KiotVietMapOmit<ExtArgs> | null
+    /**
+     * Filter which KiotVietMap to delete.
+     */
+    where: KiotVietMapWhereUniqueInput
+  }
+
+  /**
+   * KiotVietMap deleteMany
+   */
+  export type KiotVietMapDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which KiotVietMaps to delete
+     */
+    where?: KiotVietMapWhereInput
+    /**
+     * Limit how many KiotVietMaps to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * KiotVietMap without action
+   */
+  export type KiotVietMapDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietMap
+     */
+    select?: KiotVietMapSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietMap
+     */
+    omit?: KiotVietMapOmit<ExtArgs> | null
+  }
+
+
+  /**
+   * Model KiotVietSyncLog
+   */
+
+  export type AggregateKiotVietSyncLog = {
+    _count: KiotVietSyncLogCountAggregateOutputType | null
+    _avg: KiotVietSyncLogAvgAggregateOutputType | null
+    _sum: KiotVietSyncLogSumAggregateOutputType | null
+    _min: KiotVietSyncLogMinAggregateOutputType | null
+    _max: KiotVietSyncLogMaxAggregateOutputType | null
+  }
+
+  export type KiotVietSyncLogAvgAggregateOutputType = {
+    fetched: number | null
+    created: number | null
+    updated: number | null
+    skipped: number | null
+    failed: number | null
+  }
+
+  export type KiotVietSyncLogSumAggregateOutputType = {
+    fetched: number | null
+    created: number | null
+    updated: number | null
+    skipped: number | null
+    failed: number | null
+  }
+
+  export type KiotVietSyncLogMinAggregateOutputType = {
+    id: string | null
+    entity: string | null
+    mode: string | null
+    dryRun: boolean | null
+    fromDate: Date | null
+    toDate: Date | null
+    fetched: number | null
+    created: number | null
+    updated: number | null
+    skipped: number | null
+    failed: number | null
+    status: string | null
+    errors: string | null
+    details: string | null
+    startedAt: Date | null
+    finishedAt: Date | null
+  }
+
+  export type KiotVietSyncLogMaxAggregateOutputType = {
+    id: string | null
+    entity: string | null
+    mode: string | null
+    dryRun: boolean | null
+    fromDate: Date | null
+    toDate: Date | null
+    fetched: number | null
+    created: number | null
+    updated: number | null
+    skipped: number | null
+    failed: number | null
+    status: string | null
+    errors: string | null
+    details: string | null
+    startedAt: Date | null
+    finishedAt: Date | null
+  }
+
+  export type KiotVietSyncLogCountAggregateOutputType = {
+    id: number
+    entity: number
+    mode: number
+    dryRun: number
+    fromDate: number
+    toDate: number
+    fetched: number
+    created: number
+    updated: number
+    skipped: number
+    failed: number
+    status: number
+    errors: number
+    details: number
+    startedAt: number
+    finishedAt: number
+    _all: number
+  }
+
+
+  export type KiotVietSyncLogAvgAggregateInputType = {
+    fetched?: true
+    created?: true
+    updated?: true
+    skipped?: true
+    failed?: true
+  }
+
+  export type KiotVietSyncLogSumAggregateInputType = {
+    fetched?: true
+    created?: true
+    updated?: true
+    skipped?: true
+    failed?: true
+  }
+
+  export type KiotVietSyncLogMinAggregateInputType = {
+    id?: true
+    entity?: true
+    mode?: true
+    dryRun?: true
+    fromDate?: true
+    toDate?: true
+    fetched?: true
+    created?: true
+    updated?: true
+    skipped?: true
+    failed?: true
+    status?: true
+    errors?: true
+    details?: true
+    startedAt?: true
+    finishedAt?: true
+  }
+
+  export type KiotVietSyncLogMaxAggregateInputType = {
+    id?: true
+    entity?: true
+    mode?: true
+    dryRun?: true
+    fromDate?: true
+    toDate?: true
+    fetched?: true
+    created?: true
+    updated?: true
+    skipped?: true
+    failed?: true
+    status?: true
+    errors?: true
+    details?: true
+    startedAt?: true
+    finishedAt?: true
+  }
+
+  export type KiotVietSyncLogCountAggregateInputType = {
+    id?: true
+    entity?: true
+    mode?: true
+    dryRun?: true
+    fromDate?: true
+    toDate?: true
+    fetched?: true
+    created?: true
+    updated?: true
+    skipped?: true
+    failed?: true
+    status?: true
+    errors?: true
+    details?: true
+    startedAt?: true
+    finishedAt?: true
+    _all?: true
+  }
+
+  export type KiotVietSyncLogAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which KiotVietSyncLog to aggregate.
+     */
+    where?: KiotVietSyncLogWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of KiotVietSyncLogs to fetch.
+     */
+    orderBy?: KiotVietSyncLogOrderByWithRelationInput | KiotVietSyncLogOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: KiotVietSyncLogWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` KiotVietSyncLogs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` KiotVietSyncLogs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned KiotVietSyncLogs
+    **/
+    _count?: true | KiotVietSyncLogCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: KiotVietSyncLogAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: KiotVietSyncLogSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: KiotVietSyncLogMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: KiotVietSyncLogMaxAggregateInputType
+  }
+
+  export type GetKiotVietSyncLogAggregateType<T extends KiotVietSyncLogAggregateArgs> = {
+        [P in keyof T & keyof AggregateKiotVietSyncLog]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateKiotVietSyncLog[P]>
+      : GetScalarType<T[P], AggregateKiotVietSyncLog[P]>
+  }
+
+
+
+
+  export type KiotVietSyncLogGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: KiotVietSyncLogWhereInput
+    orderBy?: KiotVietSyncLogOrderByWithAggregationInput | KiotVietSyncLogOrderByWithAggregationInput[]
+    by: KiotVietSyncLogScalarFieldEnum[] | KiotVietSyncLogScalarFieldEnum
+    having?: KiotVietSyncLogScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: KiotVietSyncLogCountAggregateInputType | true
+    _avg?: KiotVietSyncLogAvgAggregateInputType
+    _sum?: KiotVietSyncLogSumAggregateInputType
+    _min?: KiotVietSyncLogMinAggregateInputType
+    _max?: KiotVietSyncLogMaxAggregateInputType
+  }
+
+  export type KiotVietSyncLogGroupByOutputType = {
+    id: string
+    entity: string
+    mode: string
+    dryRun: boolean
+    fromDate: Date | null
+    toDate: Date | null
+    fetched: number
+    created: number
+    updated: number
+    skipped: number
+    failed: number
+    status: string
+    errors: string | null
+    details: string | null
+    startedAt: Date
+    finishedAt: Date | null
+    _count: KiotVietSyncLogCountAggregateOutputType | null
+    _avg: KiotVietSyncLogAvgAggregateOutputType | null
+    _sum: KiotVietSyncLogSumAggregateOutputType | null
+    _min: KiotVietSyncLogMinAggregateOutputType | null
+    _max: KiotVietSyncLogMaxAggregateOutputType | null
+  }
+
+  type GetKiotVietSyncLogGroupByPayload<T extends KiotVietSyncLogGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<KiotVietSyncLogGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof KiotVietSyncLogGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], KiotVietSyncLogGroupByOutputType[P]>
+            : GetScalarType<T[P], KiotVietSyncLogGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type KiotVietSyncLogSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    entity?: boolean
+    mode?: boolean
+    dryRun?: boolean
+    fromDate?: boolean
+    toDate?: boolean
+    fetched?: boolean
+    created?: boolean
+    updated?: boolean
+    skipped?: boolean
+    failed?: boolean
+    status?: boolean
+    errors?: boolean
+    details?: boolean
+    startedAt?: boolean
+    finishedAt?: boolean
+  }, ExtArgs["result"]["kiotVietSyncLog"]>
+
+  export type KiotVietSyncLogSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    entity?: boolean
+    mode?: boolean
+    dryRun?: boolean
+    fromDate?: boolean
+    toDate?: boolean
+    fetched?: boolean
+    created?: boolean
+    updated?: boolean
+    skipped?: boolean
+    failed?: boolean
+    status?: boolean
+    errors?: boolean
+    details?: boolean
+    startedAt?: boolean
+    finishedAt?: boolean
+  }, ExtArgs["result"]["kiotVietSyncLog"]>
+
+  export type KiotVietSyncLogSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    entity?: boolean
+    mode?: boolean
+    dryRun?: boolean
+    fromDate?: boolean
+    toDate?: boolean
+    fetched?: boolean
+    created?: boolean
+    updated?: boolean
+    skipped?: boolean
+    failed?: boolean
+    status?: boolean
+    errors?: boolean
+    details?: boolean
+    startedAt?: boolean
+    finishedAt?: boolean
+  }, ExtArgs["result"]["kiotVietSyncLog"]>
+
+  export type KiotVietSyncLogSelectScalar = {
+    id?: boolean
+    entity?: boolean
+    mode?: boolean
+    dryRun?: boolean
+    fromDate?: boolean
+    toDate?: boolean
+    fetched?: boolean
+    created?: boolean
+    updated?: boolean
+    skipped?: boolean
+    failed?: boolean
+    status?: boolean
+    errors?: boolean
+    details?: boolean
+    startedAt?: boolean
+    finishedAt?: boolean
+  }
+
+  export type KiotVietSyncLogOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "entity" | "mode" | "dryRun" | "fromDate" | "toDate" | "fetched" | "created" | "updated" | "skipped" | "failed" | "status" | "errors" | "details" | "startedAt" | "finishedAt", ExtArgs["result"]["kiotVietSyncLog"]>
+
+  export type $KiotVietSyncLogPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "KiotVietSyncLog"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      entity: string
+      mode: string
+      dryRun: boolean
+      fromDate: Date | null
+      toDate: Date | null
+      fetched: number
+      created: number
+      updated: number
+      skipped: number
+      failed: number
+      status: string
+      errors: string | null
+      details: string | null
+      startedAt: Date
+      finishedAt: Date | null
+    }, ExtArgs["result"]["kiotVietSyncLog"]>
+    composites: {}
+  }
+
+  type KiotVietSyncLogGetPayload<S extends boolean | null | undefined | KiotVietSyncLogDefaultArgs> = $Result.GetResult<Prisma.$KiotVietSyncLogPayload, S>
+
+  type KiotVietSyncLogCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<KiotVietSyncLogFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: KiotVietSyncLogCountAggregateInputType | true
+    }
+
+  export interface KiotVietSyncLogDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['KiotVietSyncLog'], meta: { name: 'KiotVietSyncLog' } }
+    /**
+     * Find zero or one KiotVietSyncLog that matches the filter.
+     * @param {KiotVietSyncLogFindUniqueArgs} args - Arguments to find a KiotVietSyncLog
+     * @example
+     * // Get one KiotVietSyncLog
+     * const kiotVietSyncLog = await prisma.kiotVietSyncLog.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends KiotVietSyncLogFindUniqueArgs>(args: SelectSubset<T, KiotVietSyncLogFindUniqueArgs<ExtArgs>>): Prisma__KiotVietSyncLogClient<$Result.GetResult<Prisma.$KiotVietSyncLogPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one KiotVietSyncLog that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {KiotVietSyncLogFindUniqueOrThrowArgs} args - Arguments to find a KiotVietSyncLog
+     * @example
+     * // Get one KiotVietSyncLog
+     * const kiotVietSyncLog = await prisma.kiotVietSyncLog.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends KiotVietSyncLogFindUniqueOrThrowArgs>(args: SelectSubset<T, KiotVietSyncLogFindUniqueOrThrowArgs<ExtArgs>>): Prisma__KiotVietSyncLogClient<$Result.GetResult<Prisma.$KiotVietSyncLogPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first KiotVietSyncLog that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {KiotVietSyncLogFindFirstArgs} args - Arguments to find a KiotVietSyncLog
+     * @example
+     * // Get one KiotVietSyncLog
+     * const kiotVietSyncLog = await prisma.kiotVietSyncLog.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends KiotVietSyncLogFindFirstArgs>(args?: SelectSubset<T, KiotVietSyncLogFindFirstArgs<ExtArgs>>): Prisma__KiotVietSyncLogClient<$Result.GetResult<Prisma.$KiotVietSyncLogPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first KiotVietSyncLog that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {KiotVietSyncLogFindFirstOrThrowArgs} args - Arguments to find a KiotVietSyncLog
+     * @example
+     * // Get one KiotVietSyncLog
+     * const kiotVietSyncLog = await prisma.kiotVietSyncLog.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends KiotVietSyncLogFindFirstOrThrowArgs>(args?: SelectSubset<T, KiotVietSyncLogFindFirstOrThrowArgs<ExtArgs>>): Prisma__KiotVietSyncLogClient<$Result.GetResult<Prisma.$KiotVietSyncLogPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more KiotVietSyncLogs that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {KiotVietSyncLogFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all KiotVietSyncLogs
+     * const kiotVietSyncLogs = await prisma.kiotVietSyncLog.findMany()
+     * 
+     * // Get first 10 KiotVietSyncLogs
+     * const kiotVietSyncLogs = await prisma.kiotVietSyncLog.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const kiotVietSyncLogWithIdOnly = await prisma.kiotVietSyncLog.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends KiotVietSyncLogFindManyArgs>(args?: SelectSubset<T, KiotVietSyncLogFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$KiotVietSyncLogPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a KiotVietSyncLog.
+     * @param {KiotVietSyncLogCreateArgs} args - Arguments to create a KiotVietSyncLog.
+     * @example
+     * // Create one KiotVietSyncLog
+     * const KiotVietSyncLog = await prisma.kiotVietSyncLog.create({
+     *   data: {
+     *     // ... data to create a KiotVietSyncLog
+     *   }
+     * })
+     * 
+     */
+    create<T extends KiotVietSyncLogCreateArgs>(args: SelectSubset<T, KiotVietSyncLogCreateArgs<ExtArgs>>): Prisma__KiotVietSyncLogClient<$Result.GetResult<Prisma.$KiotVietSyncLogPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many KiotVietSyncLogs.
+     * @param {KiotVietSyncLogCreateManyArgs} args - Arguments to create many KiotVietSyncLogs.
+     * @example
+     * // Create many KiotVietSyncLogs
+     * const kiotVietSyncLog = await prisma.kiotVietSyncLog.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends KiotVietSyncLogCreateManyArgs>(args?: SelectSubset<T, KiotVietSyncLogCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many KiotVietSyncLogs and returns the data saved in the database.
+     * @param {KiotVietSyncLogCreateManyAndReturnArgs} args - Arguments to create many KiotVietSyncLogs.
+     * @example
+     * // Create many KiotVietSyncLogs
+     * const kiotVietSyncLog = await prisma.kiotVietSyncLog.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many KiotVietSyncLogs and only return the `id`
+     * const kiotVietSyncLogWithIdOnly = await prisma.kiotVietSyncLog.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends KiotVietSyncLogCreateManyAndReturnArgs>(args?: SelectSubset<T, KiotVietSyncLogCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$KiotVietSyncLogPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a KiotVietSyncLog.
+     * @param {KiotVietSyncLogDeleteArgs} args - Arguments to delete one KiotVietSyncLog.
+     * @example
+     * // Delete one KiotVietSyncLog
+     * const KiotVietSyncLog = await prisma.kiotVietSyncLog.delete({
+     *   where: {
+     *     // ... filter to delete one KiotVietSyncLog
+     *   }
+     * })
+     * 
+     */
+    delete<T extends KiotVietSyncLogDeleteArgs>(args: SelectSubset<T, KiotVietSyncLogDeleteArgs<ExtArgs>>): Prisma__KiotVietSyncLogClient<$Result.GetResult<Prisma.$KiotVietSyncLogPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one KiotVietSyncLog.
+     * @param {KiotVietSyncLogUpdateArgs} args - Arguments to update one KiotVietSyncLog.
+     * @example
+     * // Update one KiotVietSyncLog
+     * const kiotVietSyncLog = await prisma.kiotVietSyncLog.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends KiotVietSyncLogUpdateArgs>(args: SelectSubset<T, KiotVietSyncLogUpdateArgs<ExtArgs>>): Prisma__KiotVietSyncLogClient<$Result.GetResult<Prisma.$KiotVietSyncLogPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more KiotVietSyncLogs.
+     * @param {KiotVietSyncLogDeleteManyArgs} args - Arguments to filter KiotVietSyncLogs to delete.
+     * @example
+     * // Delete a few KiotVietSyncLogs
+     * const { count } = await prisma.kiotVietSyncLog.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends KiotVietSyncLogDeleteManyArgs>(args?: SelectSubset<T, KiotVietSyncLogDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more KiotVietSyncLogs.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {KiotVietSyncLogUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many KiotVietSyncLogs
+     * const kiotVietSyncLog = await prisma.kiotVietSyncLog.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends KiotVietSyncLogUpdateManyArgs>(args: SelectSubset<T, KiotVietSyncLogUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more KiotVietSyncLogs and returns the data updated in the database.
+     * @param {KiotVietSyncLogUpdateManyAndReturnArgs} args - Arguments to update many KiotVietSyncLogs.
+     * @example
+     * // Update many KiotVietSyncLogs
+     * const kiotVietSyncLog = await prisma.kiotVietSyncLog.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more KiotVietSyncLogs and only return the `id`
+     * const kiotVietSyncLogWithIdOnly = await prisma.kiotVietSyncLog.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends KiotVietSyncLogUpdateManyAndReturnArgs>(args: SelectSubset<T, KiotVietSyncLogUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$KiotVietSyncLogPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one KiotVietSyncLog.
+     * @param {KiotVietSyncLogUpsertArgs} args - Arguments to update or create a KiotVietSyncLog.
+     * @example
+     * // Update or create a KiotVietSyncLog
+     * const kiotVietSyncLog = await prisma.kiotVietSyncLog.upsert({
+     *   create: {
+     *     // ... data to create a KiotVietSyncLog
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the KiotVietSyncLog we want to update
+     *   }
+     * })
+     */
+    upsert<T extends KiotVietSyncLogUpsertArgs>(args: SelectSubset<T, KiotVietSyncLogUpsertArgs<ExtArgs>>): Prisma__KiotVietSyncLogClient<$Result.GetResult<Prisma.$KiotVietSyncLogPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of KiotVietSyncLogs.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {KiotVietSyncLogCountArgs} args - Arguments to filter KiotVietSyncLogs to count.
+     * @example
+     * // Count the number of KiotVietSyncLogs
+     * const count = await prisma.kiotVietSyncLog.count({
+     *   where: {
+     *     // ... the filter for the KiotVietSyncLogs we want to count
+     *   }
+     * })
+    **/
+    count<T extends KiotVietSyncLogCountArgs>(
+      args?: Subset<T, KiotVietSyncLogCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], KiotVietSyncLogCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a KiotVietSyncLog.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {KiotVietSyncLogAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends KiotVietSyncLogAggregateArgs>(args: Subset<T, KiotVietSyncLogAggregateArgs>): Prisma.PrismaPromise<GetKiotVietSyncLogAggregateType<T>>
+
+    /**
+     * Group by KiotVietSyncLog.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {KiotVietSyncLogGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends KiotVietSyncLogGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: KiotVietSyncLogGroupByArgs['orderBy'] }
+        : { orderBy?: KiotVietSyncLogGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, KiotVietSyncLogGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetKiotVietSyncLogGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the KiotVietSyncLog model
+   */
+  readonly fields: KiotVietSyncLogFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for KiotVietSyncLog.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__KiotVietSyncLogClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the KiotVietSyncLog model
+   */
+  interface KiotVietSyncLogFieldRefs {
+    readonly id: FieldRef<"KiotVietSyncLog", 'String'>
+    readonly entity: FieldRef<"KiotVietSyncLog", 'String'>
+    readonly mode: FieldRef<"KiotVietSyncLog", 'String'>
+    readonly dryRun: FieldRef<"KiotVietSyncLog", 'Boolean'>
+    readonly fromDate: FieldRef<"KiotVietSyncLog", 'DateTime'>
+    readonly toDate: FieldRef<"KiotVietSyncLog", 'DateTime'>
+    readonly fetched: FieldRef<"KiotVietSyncLog", 'Int'>
+    readonly created: FieldRef<"KiotVietSyncLog", 'Int'>
+    readonly updated: FieldRef<"KiotVietSyncLog", 'Int'>
+    readonly skipped: FieldRef<"KiotVietSyncLog", 'Int'>
+    readonly failed: FieldRef<"KiotVietSyncLog", 'Int'>
+    readonly status: FieldRef<"KiotVietSyncLog", 'String'>
+    readonly errors: FieldRef<"KiotVietSyncLog", 'String'>
+    readonly details: FieldRef<"KiotVietSyncLog", 'String'>
+    readonly startedAt: FieldRef<"KiotVietSyncLog", 'DateTime'>
+    readonly finishedAt: FieldRef<"KiotVietSyncLog", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * KiotVietSyncLog findUnique
+   */
+  export type KiotVietSyncLogFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietSyncLog
+     */
+    select?: KiotVietSyncLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietSyncLog
+     */
+    omit?: KiotVietSyncLogOmit<ExtArgs> | null
+    /**
+     * Filter, which KiotVietSyncLog to fetch.
+     */
+    where: KiotVietSyncLogWhereUniqueInput
+  }
+
+  /**
+   * KiotVietSyncLog findUniqueOrThrow
+   */
+  export type KiotVietSyncLogFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietSyncLog
+     */
+    select?: KiotVietSyncLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietSyncLog
+     */
+    omit?: KiotVietSyncLogOmit<ExtArgs> | null
+    /**
+     * Filter, which KiotVietSyncLog to fetch.
+     */
+    where: KiotVietSyncLogWhereUniqueInput
+  }
+
+  /**
+   * KiotVietSyncLog findFirst
+   */
+  export type KiotVietSyncLogFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietSyncLog
+     */
+    select?: KiotVietSyncLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietSyncLog
+     */
+    omit?: KiotVietSyncLogOmit<ExtArgs> | null
+    /**
+     * Filter, which KiotVietSyncLog to fetch.
+     */
+    where?: KiotVietSyncLogWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of KiotVietSyncLogs to fetch.
+     */
+    orderBy?: KiotVietSyncLogOrderByWithRelationInput | KiotVietSyncLogOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for KiotVietSyncLogs.
+     */
+    cursor?: KiotVietSyncLogWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` KiotVietSyncLogs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` KiotVietSyncLogs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of KiotVietSyncLogs.
+     */
+    distinct?: KiotVietSyncLogScalarFieldEnum | KiotVietSyncLogScalarFieldEnum[]
+  }
+
+  /**
+   * KiotVietSyncLog findFirstOrThrow
+   */
+  export type KiotVietSyncLogFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietSyncLog
+     */
+    select?: KiotVietSyncLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietSyncLog
+     */
+    omit?: KiotVietSyncLogOmit<ExtArgs> | null
+    /**
+     * Filter, which KiotVietSyncLog to fetch.
+     */
+    where?: KiotVietSyncLogWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of KiotVietSyncLogs to fetch.
+     */
+    orderBy?: KiotVietSyncLogOrderByWithRelationInput | KiotVietSyncLogOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for KiotVietSyncLogs.
+     */
+    cursor?: KiotVietSyncLogWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` KiotVietSyncLogs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` KiotVietSyncLogs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of KiotVietSyncLogs.
+     */
+    distinct?: KiotVietSyncLogScalarFieldEnum | KiotVietSyncLogScalarFieldEnum[]
+  }
+
+  /**
+   * KiotVietSyncLog findMany
+   */
+  export type KiotVietSyncLogFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietSyncLog
+     */
+    select?: KiotVietSyncLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietSyncLog
+     */
+    omit?: KiotVietSyncLogOmit<ExtArgs> | null
+    /**
+     * Filter, which KiotVietSyncLogs to fetch.
+     */
+    where?: KiotVietSyncLogWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of KiotVietSyncLogs to fetch.
+     */
+    orderBy?: KiotVietSyncLogOrderByWithRelationInput | KiotVietSyncLogOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing KiotVietSyncLogs.
+     */
+    cursor?: KiotVietSyncLogWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` KiotVietSyncLogs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` KiotVietSyncLogs.
+     */
+    skip?: number
+    distinct?: KiotVietSyncLogScalarFieldEnum | KiotVietSyncLogScalarFieldEnum[]
+  }
+
+  /**
+   * KiotVietSyncLog create
+   */
+  export type KiotVietSyncLogCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietSyncLog
+     */
+    select?: KiotVietSyncLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietSyncLog
+     */
+    omit?: KiotVietSyncLogOmit<ExtArgs> | null
+    /**
+     * The data needed to create a KiotVietSyncLog.
+     */
+    data: XOR<KiotVietSyncLogCreateInput, KiotVietSyncLogUncheckedCreateInput>
+  }
+
+  /**
+   * KiotVietSyncLog createMany
+   */
+  export type KiotVietSyncLogCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many KiotVietSyncLogs.
+     */
+    data: KiotVietSyncLogCreateManyInput | KiotVietSyncLogCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * KiotVietSyncLog createManyAndReturn
+   */
+  export type KiotVietSyncLogCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietSyncLog
+     */
+    select?: KiotVietSyncLogSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietSyncLog
+     */
+    omit?: KiotVietSyncLogOmit<ExtArgs> | null
+    /**
+     * The data used to create many KiotVietSyncLogs.
+     */
+    data: KiotVietSyncLogCreateManyInput | KiotVietSyncLogCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * KiotVietSyncLog update
+   */
+  export type KiotVietSyncLogUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietSyncLog
+     */
+    select?: KiotVietSyncLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietSyncLog
+     */
+    omit?: KiotVietSyncLogOmit<ExtArgs> | null
+    /**
+     * The data needed to update a KiotVietSyncLog.
+     */
+    data: XOR<KiotVietSyncLogUpdateInput, KiotVietSyncLogUncheckedUpdateInput>
+    /**
+     * Choose, which KiotVietSyncLog to update.
+     */
+    where: KiotVietSyncLogWhereUniqueInput
+  }
+
+  /**
+   * KiotVietSyncLog updateMany
+   */
+  export type KiotVietSyncLogUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update KiotVietSyncLogs.
+     */
+    data: XOR<KiotVietSyncLogUpdateManyMutationInput, KiotVietSyncLogUncheckedUpdateManyInput>
+    /**
+     * Filter which KiotVietSyncLogs to update
+     */
+    where?: KiotVietSyncLogWhereInput
+    /**
+     * Limit how many KiotVietSyncLogs to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * KiotVietSyncLog updateManyAndReturn
+   */
+  export type KiotVietSyncLogUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietSyncLog
+     */
+    select?: KiotVietSyncLogSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietSyncLog
+     */
+    omit?: KiotVietSyncLogOmit<ExtArgs> | null
+    /**
+     * The data used to update KiotVietSyncLogs.
+     */
+    data: XOR<KiotVietSyncLogUpdateManyMutationInput, KiotVietSyncLogUncheckedUpdateManyInput>
+    /**
+     * Filter which KiotVietSyncLogs to update
+     */
+    where?: KiotVietSyncLogWhereInput
+    /**
+     * Limit how many KiotVietSyncLogs to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * KiotVietSyncLog upsert
+   */
+  export type KiotVietSyncLogUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietSyncLog
+     */
+    select?: KiotVietSyncLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietSyncLog
+     */
+    omit?: KiotVietSyncLogOmit<ExtArgs> | null
+    /**
+     * The filter to search for the KiotVietSyncLog to update in case it exists.
+     */
+    where: KiotVietSyncLogWhereUniqueInput
+    /**
+     * In case the KiotVietSyncLog found by the `where` argument doesn't exist, create a new KiotVietSyncLog with this data.
+     */
+    create: XOR<KiotVietSyncLogCreateInput, KiotVietSyncLogUncheckedCreateInput>
+    /**
+     * In case the KiotVietSyncLog was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<KiotVietSyncLogUpdateInput, KiotVietSyncLogUncheckedUpdateInput>
+  }
+
+  /**
+   * KiotVietSyncLog delete
+   */
+  export type KiotVietSyncLogDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietSyncLog
+     */
+    select?: KiotVietSyncLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietSyncLog
+     */
+    omit?: KiotVietSyncLogOmit<ExtArgs> | null
+    /**
+     * Filter which KiotVietSyncLog to delete.
+     */
+    where: KiotVietSyncLogWhereUniqueInput
+  }
+
+  /**
+   * KiotVietSyncLog deleteMany
+   */
+  export type KiotVietSyncLogDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which KiotVietSyncLogs to delete
+     */
+    where?: KiotVietSyncLogWhereInput
+    /**
+     * Limit how many KiotVietSyncLogs to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * KiotVietSyncLog without action
+   */
+  export type KiotVietSyncLogDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the KiotVietSyncLog
+     */
+    select?: KiotVietSyncLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the KiotVietSyncLog
+     */
+    omit?: KiotVietSyncLogOmit<ExtArgs> | null
+  }
+
+
+  /**
    * Enums
    */
 
@@ -155325,6 +163222,10 @@ export namespace Prisma {
     notes: 'notes',
     expectedDate: 'expectedDate',
     receivedDate: 'receivedDate',
+    checkedBy: 'checkedBy',
+    checkedByName: 'checkedByName',
+    checkedAt: 'checkedAt',
+    rejectReason: 'rejectReason',
     branchId: 'branchId',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
@@ -155355,6 +163256,15 @@ export namespace Prisma {
     recurring: 'recurring',
     bankAccountId: 'bankAccountId',
     status: 'status',
+    vatAmount: 'vatAmount',
+    supplierName: 'supplierName',
+    supplierTaxCode: 'supplierTaxCode',
+    invoiceNo: 'invoiceNo',
+    invoiceSymbol: 'invoiceSymbol',
+    invoiceDate: 'invoiceDate',
+    lookupCode: 'lookupCode',
+    taxAuthorityCode: 'taxAuthorityCode',
+    sourceRef: 'sourceRef',
     cancelledAt: 'cancelledAt',
     cancelReason: 'cancelReason',
     branchId: 'branchId',
@@ -156147,6 +164057,7 @@ export namespace Prisma {
     website: 'website',
     notifyLowStock: 'notifyLowStock',
     smtpConfig: 'smtpConfig',
+    mailboxConfig: 'mailboxConfig',
     geminiApiKey: 'geminiApiKey',
     notifyNewOrder: 'notifyNewOrder',
     notifyDailyReport: 'notifyDailyReport',
@@ -156160,6 +164071,9 @@ export namespace Prisma {
     monthlyRevenueTarget: 'monthlyRevenueTarget',
     dailyOrderTarget: 'dailyOrderTarget',
     driveFolderId: 'driveFolderId',
+    driveOauthToken: 'driveOauthToken',
+    driveOauthEmail: 'driveOauthEmail',
+    driveOauthAt: 'driveOauthAt',
     updatedAt: 'updatedAt'
   };
 
@@ -156395,6 +164309,8 @@ export namespace Prisma {
     platformFeeRate: 'platformFeeRate',
     netRevenue: 'netRevenue',
     adsVoucherDiscount: 'adsVoucherDiscount',
+    isInstant: 'isInstant',
+    shipByDate: 'shipByDate',
     stockDeducted: 'stockDeducted',
     syncedAt: 'syncedAt',
     createdAt: 'createdAt',
@@ -156617,6 +164533,9 @@ export namespace Prisma {
     providerResponse: 'providerResponse',
     replacesInvoiceId: 'replacesInvoiceId',
     replacedByInvoiceId: 'replacedByInvoiceId',
+    adjustsInvoiceId: 'adjustsInvoiceId',
+    adjustedByInvoiceId: 'adjustedByInvoiceId',
+    adjustReturnCode: 'adjustReturnCode',
     cancelReason: 'cancelReason',
     notes: 'notes',
     branchId: 'branchId',
@@ -157123,6 +165042,73 @@ export namespace Prisma {
   export type FbAutoReplyLogScalarFieldEnum = (typeof FbAutoReplyLogScalarFieldEnum)[keyof typeof FbAutoReplyLogScalarFieldEnum]
 
 
+  export const FbBrandProfileScalarFieldEnum: {
+    id: 'id',
+    brandName: 'brandName',
+    industry: 'industry',
+    audience: 'audience',
+    toneOfVoice: 'toneOfVoice',
+    usp: 'usp',
+    cta: 'cta',
+    hashtags: 'hashtags',
+    bannedWords: 'bannedWords',
+    emojiLevel: 'emojiLevel',
+    postsPerWeek: 'postsPerWeek',
+    bestHours: 'bestHours',
+    pillarMix: 'pillarMix',
+    notes: 'notes',
+    createdBy: 'createdBy',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type FbBrandProfileScalarFieldEnum = (typeof FbBrandProfileScalarFieldEnum)[keyof typeof FbBrandProfileScalarFieldEnum]
+
+
+  export const FbContentPlanScalarFieldEnum: {
+    id: 'id',
+    pageId: 'pageId',
+    title: 'title',
+    goal: 'goal',
+    fromDate: 'fromDate',
+    toDate: 'toDate',
+    status: 'status',
+    summary: 'summary',
+    createdBy: 'createdBy',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type FbContentPlanScalarFieldEnum = (typeof FbContentPlanScalarFieldEnum)[keyof typeof FbContentPlanScalarFieldEnum]
+
+
+  export const FbContentDraftScalarFieldEnum: {
+    id: 'id',
+    planId: 'planId',
+    pageId: 'pageId',
+    pillar: 'pillar',
+    title: 'title',
+    hook: 'hook',
+    message: 'message',
+    hashtags: 'hashtags',
+    mediaIdea: 'mediaIdea',
+    mediaUrls: 'mediaUrls',
+    linkUrl: 'linkUrl',
+    productIds: 'productIds',
+    suggestedAt: 'suggestedAt',
+    status: 'status',
+    rejectReason: 'rejectReason',
+    scheduledPostId: 'scheduledPostId',
+    fbPostId: 'fbPostId',
+    source: 'source',
+    createdBy: 'createdBy',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type FbContentDraftScalarFieldEnum = (typeof FbContentDraftScalarFieldEnum)[keyof typeof FbContentDraftScalarFieldEnum]
+
+
   export const CrmTaskScalarFieldEnum: {
     id: 'id',
     title: 'title',
@@ -157252,6 +165238,68 @@ export namespace Prisma {
   };
 
   export type AiAgentRunScalarFieldEnum = (typeof AiAgentRunScalarFieldEnum)[keyof typeof AiAgentRunScalarFieldEnum]
+
+
+  export const KiotVietConfigScalarFieldEnum: {
+    id: 'id',
+    clientId: 'clientId',
+    clientSecret: 'clientSecret',
+    retailer: 'retailer',
+    webhookToken: 'webhookToken',
+    webhookSecret: 'webhookSecret',
+    strictSignature: 'strictSignature',
+    enabled: 'enabled',
+    syncProducts: 'syncProducts',
+    syncCustomers: 'syncCustomers',
+    syncSuppliers: 'syncSuppliers',
+    syncInvoices: 'syncInvoices',
+    overwriteNames: 'overwriteNames',
+    overwritePrices: 'overwritePrices',
+    overwriteStock: 'overwriteStock',
+    defaultCategoryId: 'defaultCategoryId',
+    defaultWarehouseId: 'defaultWarehouseId',
+    branchIds: 'branchIds',
+    lastSyncAt: 'lastSyncAt',
+    lastWebhookAt: 'lastWebhookAt',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type KiotVietConfigScalarFieldEnum = (typeof KiotVietConfigScalarFieldEnum)[keyof typeof KiotVietConfigScalarFieldEnum]
+
+
+  export const KiotVietMapScalarFieldEnum: {
+    id: 'id',
+    entity: 'entity',
+    kvId: 'kvId',
+    kvCode: 'kvCode',
+    localId: 'localId',
+    syncedAt: 'syncedAt'
+  };
+
+  export type KiotVietMapScalarFieldEnum = (typeof KiotVietMapScalarFieldEnum)[keyof typeof KiotVietMapScalarFieldEnum]
+
+
+  export const KiotVietSyncLogScalarFieldEnum: {
+    id: 'id',
+    entity: 'entity',
+    mode: 'mode',
+    dryRun: 'dryRun',
+    fromDate: 'fromDate',
+    toDate: 'toDate',
+    fetched: 'fetched',
+    created: 'created',
+    updated: 'updated',
+    skipped: 'skipped',
+    failed: 'failed',
+    status: 'status',
+    errors: 'errors',
+    details: 'details',
+    startedAt: 'startedAt',
+    finishedAt: 'finishedAt'
+  };
+
+  export type KiotVietSyncLogScalarFieldEnum = (typeof KiotVietSyncLogScalarFieldEnum)[keyof typeof KiotVietSyncLogScalarFieldEnum]
 
 
   export const SortOrder: {
@@ -159559,6 +167607,10 @@ export namespace Prisma {
     notes?: StringNullableFilter<"PurchaseOrder"> | string | null
     expectedDate?: DateTimeNullableFilter<"PurchaseOrder"> | Date | string | null
     receivedDate?: DateTimeNullableFilter<"PurchaseOrder"> | Date | string | null
+    checkedBy?: StringNullableFilter<"PurchaseOrder"> | string | null
+    checkedByName?: StringNullableFilter<"PurchaseOrder"> | string | null
+    checkedAt?: DateTimeNullableFilter<"PurchaseOrder"> | Date | string | null
+    rejectReason?: StringNullableFilter<"PurchaseOrder"> | string | null
     branchId?: StringNullableFilter<"PurchaseOrder"> | string | null
     createdAt?: DateTimeFilter<"PurchaseOrder"> | Date | string
     updatedAt?: DateTimeFilter<"PurchaseOrder"> | Date | string
@@ -159576,6 +167628,10 @@ export namespace Prisma {
     notes?: SortOrderInput | SortOrder
     expectedDate?: SortOrderInput | SortOrder
     receivedDate?: SortOrderInput | SortOrder
+    checkedBy?: SortOrderInput | SortOrder
+    checkedByName?: SortOrderInput | SortOrder
+    checkedAt?: SortOrderInput | SortOrder
+    rejectReason?: SortOrderInput | SortOrder
     branchId?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -159596,6 +167652,10 @@ export namespace Prisma {
     notes?: StringNullableFilter<"PurchaseOrder"> | string | null
     expectedDate?: DateTimeNullableFilter<"PurchaseOrder"> | Date | string | null
     receivedDate?: DateTimeNullableFilter<"PurchaseOrder"> | Date | string | null
+    checkedBy?: StringNullableFilter<"PurchaseOrder"> | string | null
+    checkedByName?: StringNullableFilter<"PurchaseOrder"> | string | null
+    checkedAt?: DateTimeNullableFilter<"PurchaseOrder"> | Date | string | null
+    rejectReason?: StringNullableFilter<"PurchaseOrder"> | string | null
     branchId?: StringNullableFilter<"PurchaseOrder"> | string | null
     createdAt?: DateTimeFilter<"PurchaseOrder"> | Date | string
     updatedAt?: DateTimeFilter<"PurchaseOrder"> | Date | string
@@ -159613,6 +167673,10 @@ export namespace Prisma {
     notes?: SortOrderInput | SortOrder
     expectedDate?: SortOrderInput | SortOrder
     receivedDate?: SortOrderInput | SortOrder
+    checkedBy?: SortOrderInput | SortOrder
+    checkedByName?: SortOrderInput | SortOrder
+    checkedAt?: SortOrderInput | SortOrder
+    rejectReason?: SortOrderInput | SortOrder
     branchId?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -159636,6 +167700,10 @@ export namespace Prisma {
     notes?: StringNullableWithAggregatesFilter<"PurchaseOrder"> | string | null
     expectedDate?: DateTimeNullableWithAggregatesFilter<"PurchaseOrder"> | Date | string | null
     receivedDate?: DateTimeNullableWithAggregatesFilter<"PurchaseOrder"> | Date | string | null
+    checkedBy?: StringNullableWithAggregatesFilter<"PurchaseOrder"> | string | null
+    checkedByName?: StringNullableWithAggregatesFilter<"PurchaseOrder"> | string | null
+    checkedAt?: DateTimeNullableWithAggregatesFilter<"PurchaseOrder"> | Date | string | null
+    rejectReason?: StringNullableWithAggregatesFilter<"PurchaseOrder"> | string | null
     branchId?: StringNullableWithAggregatesFilter<"PurchaseOrder"> | string | null
     createdAt?: DateTimeWithAggregatesFilter<"PurchaseOrder"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"PurchaseOrder"> | Date | string
@@ -159716,6 +167784,15 @@ export namespace Prisma {
     recurring?: BoolFilter<"Expense"> | boolean
     bankAccountId?: StringNullableFilter<"Expense"> | string | null
     status?: StringFilter<"Expense"> | string
+    vatAmount?: FloatNullableFilter<"Expense"> | number | null
+    supplierName?: StringNullableFilter<"Expense"> | string | null
+    supplierTaxCode?: StringNullableFilter<"Expense"> | string | null
+    invoiceNo?: StringNullableFilter<"Expense"> | string | null
+    invoiceSymbol?: StringNullableFilter<"Expense"> | string | null
+    invoiceDate?: DateTimeNullableFilter<"Expense"> | Date | string | null
+    lookupCode?: StringNullableFilter<"Expense"> | string | null
+    taxAuthorityCode?: StringNullableFilter<"Expense"> | string | null
+    sourceRef?: StringNullableFilter<"Expense"> | string | null
     cancelledAt?: DateTimeNullableFilter<"Expense"> | Date | string | null
     cancelReason?: StringNullableFilter<"Expense"> | string | null
     branchId?: StringNullableFilter<"Expense"> | string | null
@@ -159733,6 +167810,15 @@ export namespace Prisma {
     recurring?: SortOrder
     bankAccountId?: SortOrderInput | SortOrder
     status?: SortOrder
+    vatAmount?: SortOrderInput | SortOrder
+    supplierName?: SortOrderInput | SortOrder
+    supplierTaxCode?: SortOrderInput | SortOrder
+    invoiceNo?: SortOrderInput | SortOrder
+    invoiceSymbol?: SortOrderInput | SortOrder
+    invoiceDate?: SortOrderInput | SortOrder
+    lookupCode?: SortOrderInput | SortOrder
+    taxAuthorityCode?: SortOrderInput | SortOrder
+    sourceRef?: SortOrderInput | SortOrder
     cancelledAt?: SortOrderInput | SortOrder
     cancelReason?: SortOrderInput | SortOrder
     branchId?: SortOrderInput | SortOrder
@@ -159753,6 +167839,15 @@ export namespace Prisma {
     recurring?: BoolFilter<"Expense"> | boolean
     bankAccountId?: StringNullableFilter<"Expense"> | string | null
     status?: StringFilter<"Expense"> | string
+    vatAmount?: FloatNullableFilter<"Expense"> | number | null
+    supplierName?: StringNullableFilter<"Expense"> | string | null
+    supplierTaxCode?: StringNullableFilter<"Expense"> | string | null
+    invoiceNo?: StringNullableFilter<"Expense"> | string | null
+    invoiceSymbol?: StringNullableFilter<"Expense"> | string | null
+    invoiceDate?: DateTimeNullableFilter<"Expense"> | Date | string | null
+    lookupCode?: StringNullableFilter<"Expense"> | string | null
+    taxAuthorityCode?: StringNullableFilter<"Expense"> | string | null
+    sourceRef?: StringNullableFilter<"Expense"> | string | null
     cancelledAt?: DateTimeNullableFilter<"Expense"> | Date | string | null
     cancelReason?: StringNullableFilter<"Expense"> | string | null
     branchId?: StringNullableFilter<"Expense"> | string | null
@@ -159770,6 +167865,15 @@ export namespace Prisma {
     recurring?: SortOrder
     bankAccountId?: SortOrderInput | SortOrder
     status?: SortOrder
+    vatAmount?: SortOrderInput | SortOrder
+    supplierName?: SortOrderInput | SortOrder
+    supplierTaxCode?: SortOrderInput | SortOrder
+    invoiceNo?: SortOrderInput | SortOrder
+    invoiceSymbol?: SortOrderInput | SortOrder
+    invoiceDate?: SortOrderInput | SortOrder
+    lookupCode?: SortOrderInput | SortOrder
+    taxAuthorityCode?: SortOrderInput | SortOrder
+    sourceRef?: SortOrderInput | SortOrder
     cancelledAt?: SortOrderInput | SortOrder
     cancelReason?: SortOrderInput | SortOrder
     branchId?: SortOrderInput | SortOrder
@@ -159795,6 +167899,15 @@ export namespace Prisma {
     recurring?: BoolWithAggregatesFilter<"Expense"> | boolean
     bankAccountId?: StringNullableWithAggregatesFilter<"Expense"> | string | null
     status?: StringWithAggregatesFilter<"Expense"> | string
+    vatAmount?: FloatNullableWithAggregatesFilter<"Expense"> | number | null
+    supplierName?: StringNullableWithAggregatesFilter<"Expense"> | string | null
+    supplierTaxCode?: StringNullableWithAggregatesFilter<"Expense"> | string | null
+    invoiceNo?: StringNullableWithAggregatesFilter<"Expense"> | string | null
+    invoiceSymbol?: StringNullableWithAggregatesFilter<"Expense"> | string | null
+    invoiceDate?: DateTimeNullableWithAggregatesFilter<"Expense"> | Date | string | null
+    lookupCode?: StringNullableWithAggregatesFilter<"Expense"> | string | null
+    taxAuthorityCode?: StringNullableWithAggregatesFilter<"Expense"> | string | null
+    sourceRef?: StringNullableWithAggregatesFilter<"Expense"> | string | null
     cancelledAt?: DateTimeNullableWithAggregatesFilter<"Expense"> | Date | string | null
     cancelReason?: StringNullableWithAggregatesFilter<"Expense"> | string | null
     branchId?: StringNullableWithAggregatesFilter<"Expense"> | string | null
@@ -163648,6 +171761,7 @@ export namespace Prisma {
     website?: StringNullableFilter<"StoreSettings"> | string | null
     notifyLowStock?: BoolFilter<"StoreSettings"> | boolean
     smtpConfig?: StringNullableFilter<"StoreSettings"> | string | null
+    mailboxConfig?: StringNullableFilter<"StoreSettings"> | string | null
     geminiApiKey?: StringNullableFilter<"StoreSettings"> | string | null
     notifyNewOrder?: BoolFilter<"StoreSettings"> | boolean
     notifyDailyReport?: BoolFilter<"StoreSettings"> | boolean
@@ -163661,6 +171775,9 @@ export namespace Prisma {
     monthlyRevenueTarget?: FloatNullableFilter<"StoreSettings"> | number | null
     dailyOrderTarget?: IntNullableFilter<"StoreSettings"> | number | null
     driveFolderId?: StringNullableFilter<"StoreSettings"> | string | null
+    driveOauthToken?: StringNullableFilter<"StoreSettings"> | string | null
+    driveOauthEmail?: StringNullableFilter<"StoreSettings"> | string | null
+    driveOauthAt?: DateTimeNullableFilter<"StoreSettings"> | Date | string | null
     updatedAt?: DateTimeFilter<"StoreSettings"> | Date | string
   }
 
@@ -163685,6 +171802,7 @@ export namespace Prisma {
     website?: SortOrderInput | SortOrder
     notifyLowStock?: SortOrder
     smtpConfig?: SortOrderInput | SortOrder
+    mailboxConfig?: SortOrderInput | SortOrder
     geminiApiKey?: SortOrderInput | SortOrder
     notifyNewOrder?: SortOrder
     notifyDailyReport?: SortOrder
@@ -163698,6 +171816,9 @@ export namespace Prisma {
     monthlyRevenueTarget?: SortOrderInput | SortOrder
     dailyOrderTarget?: SortOrderInput | SortOrder
     driveFolderId?: SortOrderInput | SortOrder
+    driveOauthToken?: SortOrderInput | SortOrder
+    driveOauthEmail?: SortOrderInput | SortOrder
+    driveOauthAt?: SortOrderInput | SortOrder
     updatedAt?: SortOrder
   }
 
@@ -163725,6 +171846,7 @@ export namespace Prisma {
     website?: StringNullableFilter<"StoreSettings"> | string | null
     notifyLowStock?: BoolFilter<"StoreSettings"> | boolean
     smtpConfig?: StringNullableFilter<"StoreSettings"> | string | null
+    mailboxConfig?: StringNullableFilter<"StoreSettings"> | string | null
     geminiApiKey?: StringNullableFilter<"StoreSettings"> | string | null
     notifyNewOrder?: BoolFilter<"StoreSettings"> | boolean
     notifyDailyReport?: BoolFilter<"StoreSettings"> | boolean
@@ -163738,6 +171860,9 @@ export namespace Prisma {
     monthlyRevenueTarget?: FloatNullableFilter<"StoreSettings"> | number | null
     dailyOrderTarget?: IntNullableFilter<"StoreSettings"> | number | null
     driveFolderId?: StringNullableFilter<"StoreSettings"> | string | null
+    driveOauthToken?: StringNullableFilter<"StoreSettings"> | string | null
+    driveOauthEmail?: StringNullableFilter<"StoreSettings"> | string | null
+    driveOauthAt?: DateTimeNullableFilter<"StoreSettings"> | Date | string | null
     updatedAt?: DateTimeFilter<"StoreSettings"> | Date | string
   }, "id">
 
@@ -163762,6 +171887,7 @@ export namespace Prisma {
     website?: SortOrderInput | SortOrder
     notifyLowStock?: SortOrder
     smtpConfig?: SortOrderInput | SortOrder
+    mailboxConfig?: SortOrderInput | SortOrder
     geminiApiKey?: SortOrderInput | SortOrder
     notifyNewOrder?: SortOrder
     notifyDailyReport?: SortOrder
@@ -163775,6 +171901,9 @@ export namespace Prisma {
     monthlyRevenueTarget?: SortOrderInput | SortOrder
     dailyOrderTarget?: SortOrderInput | SortOrder
     driveFolderId?: SortOrderInput | SortOrder
+    driveOauthToken?: SortOrderInput | SortOrder
+    driveOauthEmail?: SortOrderInput | SortOrder
+    driveOauthAt?: SortOrderInput | SortOrder
     updatedAt?: SortOrder
     _count?: StoreSettingsCountOrderByAggregateInput
     _avg?: StoreSettingsAvgOrderByAggregateInput
@@ -163807,6 +171936,7 @@ export namespace Prisma {
     website?: StringNullableWithAggregatesFilter<"StoreSettings"> | string | null
     notifyLowStock?: BoolWithAggregatesFilter<"StoreSettings"> | boolean
     smtpConfig?: StringNullableWithAggregatesFilter<"StoreSettings"> | string | null
+    mailboxConfig?: StringNullableWithAggregatesFilter<"StoreSettings"> | string | null
     geminiApiKey?: StringNullableWithAggregatesFilter<"StoreSettings"> | string | null
     notifyNewOrder?: BoolWithAggregatesFilter<"StoreSettings"> | boolean
     notifyDailyReport?: BoolWithAggregatesFilter<"StoreSettings"> | boolean
@@ -163820,6 +171950,9 @@ export namespace Prisma {
     monthlyRevenueTarget?: FloatNullableWithAggregatesFilter<"StoreSettings"> | number | null
     dailyOrderTarget?: IntNullableWithAggregatesFilter<"StoreSettings"> | number | null
     driveFolderId?: StringNullableWithAggregatesFilter<"StoreSettings"> | string | null
+    driveOauthToken?: StringNullableWithAggregatesFilter<"StoreSettings"> | string | null
+    driveOauthEmail?: StringNullableWithAggregatesFilter<"StoreSettings"> | string | null
+    driveOauthAt?: DateTimeNullableWithAggregatesFilter<"StoreSettings"> | Date | string | null
     updatedAt?: DateTimeWithAggregatesFilter<"StoreSettings"> | Date | string
   }
 
@@ -164846,6 +172979,8 @@ export namespace Prisma {
     platformFeeRate?: FloatFilter<"OnlineOrder"> | number
     netRevenue?: FloatFilter<"OnlineOrder"> | number
     adsVoucherDiscount?: FloatFilter<"OnlineOrder"> | number
+    isInstant?: BoolFilter<"OnlineOrder"> | boolean
+    shipByDate?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     stockDeducted?: BoolFilter<"OnlineOrder"> | boolean
     syncedAt?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     createdAt?: DateTimeFilter<"OnlineOrder"> | Date | string
@@ -164884,6 +173019,8 @@ export namespace Prisma {
     platformFeeRate?: SortOrder
     netRevenue?: SortOrder
     adsVoucherDiscount?: SortOrder
+    isInstant?: SortOrder
+    shipByDate?: SortOrderInput | SortOrder
     stockDeducted?: SortOrder
     syncedAt?: SortOrderInput | SortOrder
     createdAt?: SortOrder
@@ -164925,6 +173062,8 @@ export namespace Prisma {
     platformFeeRate?: FloatFilter<"OnlineOrder"> | number
     netRevenue?: FloatFilter<"OnlineOrder"> | number
     adsVoucherDiscount?: FloatFilter<"OnlineOrder"> | number
+    isInstant?: BoolFilter<"OnlineOrder"> | boolean
+    shipByDate?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     stockDeducted?: BoolFilter<"OnlineOrder"> | boolean
     syncedAt?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     createdAt?: DateTimeFilter<"OnlineOrder"> | Date | string
@@ -164963,6 +173102,8 @@ export namespace Prisma {
     platformFeeRate?: SortOrder
     netRevenue?: SortOrder
     adsVoucherDiscount?: SortOrder
+    isInstant?: SortOrder
+    shipByDate?: SortOrderInput | SortOrder
     stockDeducted?: SortOrder
     syncedAt?: SortOrderInput | SortOrder
     createdAt?: SortOrder
@@ -165007,6 +173148,8 @@ export namespace Prisma {
     platformFeeRate?: FloatWithAggregatesFilter<"OnlineOrder"> | number
     netRevenue?: FloatWithAggregatesFilter<"OnlineOrder"> | number
     adsVoucherDiscount?: FloatWithAggregatesFilter<"OnlineOrder"> | number
+    isInstant?: BoolWithAggregatesFilter<"OnlineOrder"> | boolean
+    shipByDate?: DateTimeNullableWithAggregatesFilter<"OnlineOrder"> | Date | string | null
     stockDeducted?: BoolWithAggregatesFilter<"OnlineOrder"> | boolean
     syncedAt?: DateTimeNullableWithAggregatesFilter<"OnlineOrder"> | Date | string | null
     createdAt?: DateTimeWithAggregatesFilter<"OnlineOrder"> | Date | string
@@ -165979,6 +174122,9 @@ export namespace Prisma {
     providerResponse?: StringNullableFilter<"EInvoice"> | string | null
     replacesInvoiceId?: StringNullableFilter<"EInvoice"> | string | null
     replacedByInvoiceId?: StringNullableFilter<"EInvoice"> | string | null
+    adjustsInvoiceId?: StringNullableFilter<"EInvoice"> | string | null
+    adjustedByInvoiceId?: StringNullableFilter<"EInvoice"> | string | null
+    adjustReturnCode?: StringNullableFilter<"EInvoice"> | string | null
     cancelReason?: StringNullableFilter<"EInvoice"> | string | null
     notes?: StringNullableFilter<"EInvoice"> | string | null
     branchId?: StringNullableFilter<"EInvoice"> | string | null
@@ -166022,6 +174168,9 @@ export namespace Prisma {
     providerResponse?: SortOrderInput | SortOrder
     replacesInvoiceId?: SortOrderInput | SortOrder
     replacedByInvoiceId?: SortOrderInput | SortOrder
+    adjustsInvoiceId?: SortOrderInput | SortOrder
+    adjustedByInvoiceId?: SortOrderInput | SortOrder
+    adjustReturnCode?: SortOrderInput | SortOrder
     cancelReason?: SortOrderInput | SortOrder
     notes?: SortOrderInput | SortOrder
     branchId?: SortOrderInput | SortOrder
@@ -166068,6 +174217,9 @@ export namespace Prisma {
     providerResponse?: StringNullableFilter<"EInvoice"> | string | null
     replacesInvoiceId?: StringNullableFilter<"EInvoice"> | string | null
     replacedByInvoiceId?: StringNullableFilter<"EInvoice"> | string | null
+    adjustsInvoiceId?: StringNullableFilter<"EInvoice"> | string | null
+    adjustedByInvoiceId?: StringNullableFilter<"EInvoice"> | string | null
+    adjustReturnCode?: StringNullableFilter<"EInvoice"> | string | null
     cancelReason?: StringNullableFilter<"EInvoice"> | string | null
     notes?: StringNullableFilter<"EInvoice"> | string | null
     branchId?: StringNullableFilter<"EInvoice"> | string | null
@@ -166111,6 +174263,9 @@ export namespace Prisma {
     providerResponse?: SortOrderInput | SortOrder
     replacesInvoiceId?: SortOrderInput | SortOrder
     replacedByInvoiceId?: SortOrderInput | SortOrder
+    adjustsInvoiceId?: SortOrderInput | SortOrder
+    adjustedByInvoiceId?: SortOrderInput | SortOrder
+    adjustReturnCode?: SortOrderInput | SortOrder
     cancelReason?: SortOrderInput | SortOrder
     notes?: SortOrderInput | SortOrder
     branchId?: SortOrderInput | SortOrder
@@ -166161,6 +174316,9 @@ export namespace Prisma {
     providerResponse?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
     replacesInvoiceId?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
     replacedByInvoiceId?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
+    adjustsInvoiceId?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
+    adjustedByInvoiceId?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
+    adjustReturnCode?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
     cancelReason?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
     notes?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
     branchId?: StringNullableWithAggregatesFilter<"EInvoice"> | string | null
@@ -168670,6 +176828,340 @@ export namespace Prisma {
     createdAt?: DateTimeWithAggregatesFilter<"FbAutoReplyLog"> | Date | string
   }
 
+  export type FbBrandProfileWhereInput = {
+    AND?: FbBrandProfileWhereInput | FbBrandProfileWhereInput[]
+    OR?: FbBrandProfileWhereInput[]
+    NOT?: FbBrandProfileWhereInput | FbBrandProfileWhereInput[]
+    id?: StringFilter<"FbBrandProfile"> | string
+    brandName?: StringFilter<"FbBrandProfile"> | string
+    industry?: StringFilter<"FbBrandProfile"> | string
+    audience?: StringFilter<"FbBrandProfile"> | string
+    toneOfVoice?: StringFilter<"FbBrandProfile"> | string
+    usp?: StringFilter<"FbBrandProfile"> | string
+    cta?: StringFilter<"FbBrandProfile"> | string
+    hashtags?: StringFilter<"FbBrandProfile"> | string
+    bannedWords?: StringFilter<"FbBrandProfile"> | string
+    emojiLevel?: StringFilter<"FbBrandProfile"> | string
+    postsPerWeek?: IntFilter<"FbBrandProfile"> | number
+    bestHours?: StringFilter<"FbBrandProfile"> | string
+    pillarMix?: StringFilter<"FbBrandProfile"> | string
+    notes?: StringFilter<"FbBrandProfile"> | string
+    createdBy?: StringNullableFilter<"FbBrandProfile"> | string | null
+    createdAt?: DateTimeFilter<"FbBrandProfile"> | Date | string
+    updatedAt?: DateTimeFilter<"FbBrandProfile"> | Date | string
+  }
+
+  export type FbBrandProfileOrderByWithRelationInput = {
+    id?: SortOrder
+    brandName?: SortOrder
+    industry?: SortOrder
+    audience?: SortOrder
+    toneOfVoice?: SortOrder
+    usp?: SortOrder
+    cta?: SortOrder
+    hashtags?: SortOrder
+    bannedWords?: SortOrder
+    emojiLevel?: SortOrder
+    postsPerWeek?: SortOrder
+    bestHours?: SortOrder
+    pillarMix?: SortOrder
+    notes?: SortOrder
+    createdBy?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type FbBrandProfileWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: FbBrandProfileWhereInput | FbBrandProfileWhereInput[]
+    OR?: FbBrandProfileWhereInput[]
+    NOT?: FbBrandProfileWhereInput | FbBrandProfileWhereInput[]
+    brandName?: StringFilter<"FbBrandProfile"> | string
+    industry?: StringFilter<"FbBrandProfile"> | string
+    audience?: StringFilter<"FbBrandProfile"> | string
+    toneOfVoice?: StringFilter<"FbBrandProfile"> | string
+    usp?: StringFilter<"FbBrandProfile"> | string
+    cta?: StringFilter<"FbBrandProfile"> | string
+    hashtags?: StringFilter<"FbBrandProfile"> | string
+    bannedWords?: StringFilter<"FbBrandProfile"> | string
+    emojiLevel?: StringFilter<"FbBrandProfile"> | string
+    postsPerWeek?: IntFilter<"FbBrandProfile"> | number
+    bestHours?: StringFilter<"FbBrandProfile"> | string
+    pillarMix?: StringFilter<"FbBrandProfile"> | string
+    notes?: StringFilter<"FbBrandProfile"> | string
+    createdBy?: StringNullableFilter<"FbBrandProfile"> | string | null
+    createdAt?: DateTimeFilter<"FbBrandProfile"> | Date | string
+    updatedAt?: DateTimeFilter<"FbBrandProfile"> | Date | string
+  }, "id">
+
+  export type FbBrandProfileOrderByWithAggregationInput = {
+    id?: SortOrder
+    brandName?: SortOrder
+    industry?: SortOrder
+    audience?: SortOrder
+    toneOfVoice?: SortOrder
+    usp?: SortOrder
+    cta?: SortOrder
+    hashtags?: SortOrder
+    bannedWords?: SortOrder
+    emojiLevel?: SortOrder
+    postsPerWeek?: SortOrder
+    bestHours?: SortOrder
+    pillarMix?: SortOrder
+    notes?: SortOrder
+    createdBy?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: FbBrandProfileCountOrderByAggregateInput
+    _avg?: FbBrandProfileAvgOrderByAggregateInput
+    _max?: FbBrandProfileMaxOrderByAggregateInput
+    _min?: FbBrandProfileMinOrderByAggregateInput
+    _sum?: FbBrandProfileSumOrderByAggregateInput
+  }
+
+  export type FbBrandProfileScalarWhereWithAggregatesInput = {
+    AND?: FbBrandProfileScalarWhereWithAggregatesInput | FbBrandProfileScalarWhereWithAggregatesInput[]
+    OR?: FbBrandProfileScalarWhereWithAggregatesInput[]
+    NOT?: FbBrandProfileScalarWhereWithAggregatesInput | FbBrandProfileScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"FbBrandProfile"> | string
+    brandName?: StringWithAggregatesFilter<"FbBrandProfile"> | string
+    industry?: StringWithAggregatesFilter<"FbBrandProfile"> | string
+    audience?: StringWithAggregatesFilter<"FbBrandProfile"> | string
+    toneOfVoice?: StringWithAggregatesFilter<"FbBrandProfile"> | string
+    usp?: StringWithAggregatesFilter<"FbBrandProfile"> | string
+    cta?: StringWithAggregatesFilter<"FbBrandProfile"> | string
+    hashtags?: StringWithAggregatesFilter<"FbBrandProfile"> | string
+    bannedWords?: StringWithAggregatesFilter<"FbBrandProfile"> | string
+    emojiLevel?: StringWithAggregatesFilter<"FbBrandProfile"> | string
+    postsPerWeek?: IntWithAggregatesFilter<"FbBrandProfile"> | number
+    bestHours?: StringWithAggregatesFilter<"FbBrandProfile"> | string
+    pillarMix?: StringWithAggregatesFilter<"FbBrandProfile"> | string
+    notes?: StringWithAggregatesFilter<"FbBrandProfile"> | string
+    createdBy?: StringNullableWithAggregatesFilter<"FbBrandProfile"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"FbBrandProfile"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"FbBrandProfile"> | Date | string
+  }
+
+  export type FbContentPlanWhereInput = {
+    AND?: FbContentPlanWhereInput | FbContentPlanWhereInput[]
+    OR?: FbContentPlanWhereInput[]
+    NOT?: FbContentPlanWhereInput | FbContentPlanWhereInput[]
+    id?: StringFilter<"FbContentPlan"> | string
+    pageId?: StringFilter<"FbContentPlan"> | string
+    title?: StringFilter<"FbContentPlan"> | string
+    goal?: StringFilter<"FbContentPlan"> | string
+    fromDate?: DateTimeFilter<"FbContentPlan"> | Date | string
+    toDate?: DateTimeFilter<"FbContentPlan"> | Date | string
+    status?: StringFilter<"FbContentPlan"> | string
+    summary?: StringNullableFilter<"FbContentPlan"> | string | null
+    createdBy?: StringNullableFilter<"FbContentPlan"> | string | null
+    createdAt?: DateTimeFilter<"FbContentPlan"> | Date | string
+    updatedAt?: DateTimeFilter<"FbContentPlan"> | Date | string
+    drafts?: FbContentDraftListRelationFilter
+  }
+
+  export type FbContentPlanOrderByWithRelationInput = {
+    id?: SortOrder
+    pageId?: SortOrder
+    title?: SortOrder
+    goal?: SortOrder
+    fromDate?: SortOrder
+    toDate?: SortOrder
+    status?: SortOrder
+    summary?: SortOrderInput | SortOrder
+    createdBy?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    drafts?: FbContentDraftOrderByRelationAggregateInput
+  }
+
+  export type FbContentPlanWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: FbContentPlanWhereInput | FbContentPlanWhereInput[]
+    OR?: FbContentPlanWhereInput[]
+    NOT?: FbContentPlanWhereInput | FbContentPlanWhereInput[]
+    pageId?: StringFilter<"FbContentPlan"> | string
+    title?: StringFilter<"FbContentPlan"> | string
+    goal?: StringFilter<"FbContentPlan"> | string
+    fromDate?: DateTimeFilter<"FbContentPlan"> | Date | string
+    toDate?: DateTimeFilter<"FbContentPlan"> | Date | string
+    status?: StringFilter<"FbContentPlan"> | string
+    summary?: StringNullableFilter<"FbContentPlan"> | string | null
+    createdBy?: StringNullableFilter<"FbContentPlan"> | string | null
+    createdAt?: DateTimeFilter<"FbContentPlan"> | Date | string
+    updatedAt?: DateTimeFilter<"FbContentPlan"> | Date | string
+    drafts?: FbContentDraftListRelationFilter
+  }, "id">
+
+  export type FbContentPlanOrderByWithAggregationInput = {
+    id?: SortOrder
+    pageId?: SortOrder
+    title?: SortOrder
+    goal?: SortOrder
+    fromDate?: SortOrder
+    toDate?: SortOrder
+    status?: SortOrder
+    summary?: SortOrderInput | SortOrder
+    createdBy?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: FbContentPlanCountOrderByAggregateInput
+    _max?: FbContentPlanMaxOrderByAggregateInput
+    _min?: FbContentPlanMinOrderByAggregateInput
+  }
+
+  export type FbContentPlanScalarWhereWithAggregatesInput = {
+    AND?: FbContentPlanScalarWhereWithAggregatesInput | FbContentPlanScalarWhereWithAggregatesInput[]
+    OR?: FbContentPlanScalarWhereWithAggregatesInput[]
+    NOT?: FbContentPlanScalarWhereWithAggregatesInput | FbContentPlanScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"FbContentPlan"> | string
+    pageId?: StringWithAggregatesFilter<"FbContentPlan"> | string
+    title?: StringWithAggregatesFilter<"FbContentPlan"> | string
+    goal?: StringWithAggregatesFilter<"FbContentPlan"> | string
+    fromDate?: DateTimeWithAggregatesFilter<"FbContentPlan"> | Date | string
+    toDate?: DateTimeWithAggregatesFilter<"FbContentPlan"> | Date | string
+    status?: StringWithAggregatesFilter<"FbContentPlan"> | string
+    summary?: StringNullableWithAggregatesFilter<"FbContentPlan"> | string | null
+    createdBy?: StringNullableWithAggregatesFilter<"FbContentPlan"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"FbContentPlan"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"FbContentPlan"> | Date | string
+  }
+
+  export type FbContentDraftWhereInput = {
+    AND?: FbContentDraftWhereInput | FbContentDraftWhereInput[]
+    OR?: FbContentDraftWhereInput[]
+    NOT?: FbContentDraftWhereInput | FbContentDraftWhereInput[]
+    id?: StringFilter<"FbContentDraft"> | string
+    planId?: StringNullableFilter<"FbContentDraft"> | string | null
+    pageId?: StringFilter<"FbContentDraft"> | string
+    pillar?: StringFilter<"FbContentDraft"> | string
+    title?: StringFilter<"FbContentDraft"> | string
+    hook?: StringFilter<"FbContentDraft"> | string
+    message?: StringFilter<"FbContentDraft"> | string
+    hashtags?: StringFilter<"FbContentDraft"> | string
+    mediaIdea?: StringFilter<"FbContentDraft"> | string
+    mediaUrls?: StringFilter<"FbContentDraft"> | string
+    linkUrl?: StringNullableFilter<"FbContentDraft"> | string | null
+    productIds?: StringFilter<"FbContentDraft"> | string
+    suggestedAt?: DateTimeNullableFilter<"FbContentDraft"> | Date | string | null
+    status?: StringFilter<"FbContentDraft"> | string
+    rejectReason?: StringNullableFilter<"FbContentDraft"> | string | null
+    scheduledPostId?: StringNullableFilter<"FbContentDraft"> | string | null
+    fbPostId?: StringNullableFilter<"FbContentDraft"> | string | null
+    source?: StringFilter<"FbContentDraft"> | string
+    createdBy?: StringNullableFilter<"FbContentDraft"> | string | null
+    createdAt?: DateTimeFilter<"FbContentDraft"> | Date | string
+    updatedAt?: DateTimeFilter<"FbContentDraft"> | Date | string
+    plan?: XOR<FbContentPlanNullableScalarRelationFilter, FbContentPlanWhereInput> | null
+  }
+
+  export type FbContentDraftOrderByWithRelationInput = {
+    id?: SortOrder
+    planId?: SortOrderInput | SortOrder
+    pageId?: SortOrder
+    pillar?: SortOrder
+    title?: SortOrder
+    hook?: SortOrder
+    message?: SortOrder
+    hashtags?: SortOrder
+    mediaIdea?: SortOrder
+    mediaUrls?: SortOrder
+    linkUrl?: SortOrderInput | SortOrder
+    productIds?: SortOrder
+    suggestedAt?: SortOrderInput | SortOrder
+    status?: SortOrder
+    rejectReason?: SortOrderInput | SortOrder
+    scheduledPostId?: SortOrderInput | SortOrder
+    fbPostId?: SortOrderInput | SortOrder
+    source?: SortOrder
+    createdBy?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    plan?: FbContentPlanOrderByWithRelationInput
+  }
+
+  export type FbContentDraftWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: FbContentDraftWhereInput | FbContentDraftWhereInput[]
+    OR?: FbContentDraftWhereInput[]
+    NOT?: FbContentDraftWhereInput | FbContentDraftWhereInput[]
+    planId?: StringNullableFilter<"FbContentDraft"> | string | null
+    pageId?: StringFilter<"FbContentDraft"> | string
+    pillar?: StringFilter<"FbContentDraft"> | string
+    title?: StringFilter<"FbContentDraft"> | string
+    hook?: StringFilter<"FbContentDraft"> | string
+    message?: StringFilter<"FbContentDraft"> | string
+    hashtags?: StringFilter<"FbContentDraft"> | string
+    mediaIdea?: StringFilter<"FbContentDraft"> | string
+    mediaUrls?: StringFilter<"FbContentDraft"> | string
+    linkUrl?: StringNullableFilter<"FbContentDraft"> | string | null
+    productIds?: StringFilter<"FbContentDraft"> | string
+    suggestedAt?: DateTimeNullableFilter<"FbContentDraft"> | Date | string | null
+    status?: StringFilter<"FbContentDraft"> | string
+    rejectReason?: StringNullableFilter<"FbContentDraft"> | string | null
+    scheduledPostId?: StringNullableFilter<"FbContentDraft"> | string | null
+    fbPostId?: StringNullableFilter<"FbContentDraft"> | string | null
+    source?: StringFilter<"FbContentDraft"> | string
+    createdBy?: StringNullableFilter<"FbContentDraft"> | string | null
+    createdAt?: DateTimeFilter<"FbContentDraft"> | Date | string
+    updatedAt?: DateTimeFilter<"FbContentDraft"> | Date | string
+    plan?: XOR<FbContentPlanNullableScalarRelationFilter, FbContentPlanWhereInput> | null
+  }, "id">
+
+  export type FbContentDraftOrderByWithAggregationInput = {
+    id?: SortOrder
+    planId?: SortOrderInput | SortOrder
+    pageId?: SortOrder
+    pillar?: SortOrder
+    title?: SortOrder
+    hook?: SortOrder
+    message?: SortOrder
+    hashtags?: SortOrder
+    mediaIdea?: SortOrder
+    mediaUrls?: SortOrder
+    linkUrl?: SortOrderInput | SortOrder
+    productIds?: SortOrder
+    suggestedAt?: SortOrderInput | SortOrder
+    status?: SortOrder
+    rejectReason?: SortOrderInput | SortOrder
+    scheduledPostId?: SortOrderInput | SortOrder
+    fbPostId?: SortOrderInput | SortOrder
+    source?: SortOrder
+    createdBy?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: FbContentDraftCountOrderByAggregateInput
+    _max?: FbContentDraftMaxOrderByAggregateInput
+    _min?: FbContentDraftMinOrderByAggregateInput
+  }
+
+  export type FbContentDraftScalarWhereWithAggregatesInput = {
+    AND?: FbContentDraftScalarWhereWithAggregatesInput | FbContentDraftScalarWhereWithAggregatesInput[]
+    OR?: FbContentDraftScalarWhereWithAggregatesInput[]
+    NOT?: FbContentDraftScalarWhereWithAggregatesInput | FbContentDraftScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"FbContentDraft"> | string
+    planId?: StringNullableWithAggregatesFilter<"FbContentDraft"> | string | null
+    pageId?: StringWithAggregatesFilter<"FbContentDraft"> | string
+    pillar?: StringWithAggregatesFilter<"FbContentDraft"> | string
+    title?: StringWithAggregatesFilter<"FbContentDraft"> | string
+    hook?: StringWithAggregatesFilter<"FbContentDraft"> | string
+    message?: StringWithAggregatesFilter<"FbContentDraft"> | string
+    hashtags?: StringWithAggregatesFilter<"FbContentDraft"> | string
+    mediaIdea?: StringWithAggregatesFilter<"FbContentDraft"> | string
+    mediaUrls?: StringWithAggregatesFilter<"FbContentDraft"> | string
+    linkUrl?: StringNullableWithAggregatesFilter<"FbContentDraft"> | string | null
+    productIds?: StringWithAggregatesFilter<"FbContentDraft"> | string
+    suggestedAt?: DateTimeNullableWithAggregatesFilter<"FbContentDraft"> | Date | string | null
+    status?: StringWithAggregatesFilter<"FbContentDraft"> | string
+    rejectReason?: StringNullableWithAggregatesFilter<"FbContentDraft"> | string | null
+    scheduledPostId?: StringNullableWithAggregatesFilter<"FbContentDraft"> | string | null
+    fbPostId?: StringNullableWithAggregatesFilter<"FbContentDraft"> | string | null
+    source?: StringWithAggregatesFilter<"FbContentDraft"> | string
+    createdBy?: StringNullableWithAggregatesFilter<"FbContentDraft"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"FbContentDraft"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"FbContentDraft"> | Date | string
+  }
+
   export type CrmTaskWhereInput = {
     AND?: CrmTaskWhereInput | CrmTaskWhereInput[]
     OR?: CrmTaskWhereInput[]
@@ -169316,6 +177808,310 @@ export namespace Prisma {
     chamTran?: BoolWithAggregatesFilter<"AiAgentRun"> | boolean
     errorMessage?: StringNullableWithAggregatesFilter<"AiAgentRun"> | string | null
     trigger?: StringWithAggregatesFilter<"AiAgentRun"> | string
+  }
+
+  export type KiotVietConfigWhereInput = {
+    AND?: KiotVietConfigWhereInput | KiotVietConfigWhereInput[]
+    OR?: KiotVietConfigWhereInput[]
+    NOT?: KiotVietConfigWhereInput | KiotVietConfigWhereInput[]
+    id?: StringFilter<"KiotVietConfig"> | string
+    clientId?: StringFilter<"KiotVietConfig"> | string
+    clientSecret?: StringFilter<"KiotVietConfig"> | string
+    retailer?: StringFilter<"KiotVietConfig"> | string
+    webhookToken?: StringFilter<"KiotVietConfig"> | string
+    webhookSecret?: StringNullableFilter<"KiotVietConfig"> | string | null
+    strictSignature?: BoolFilter<"KiotVietConfig"> | boolean
+    enabled?: BoolFilter<"KiotVietConfig"> | boolean
+    syncProducts?: BoolFilter<"KiotVietConfig"> | boolean
+    syncCustomers?: BoolFilter<"KiotVietConfig"> | boolean
+    syncSuppliers?: BoolFilter<"KiotVietConfig"> | boolean
+    syncInvoices?: BoolFilter<"KiotVietConfig"> | boolean
+    overwriteNames?: BoolFilter<"KiotVietConfig"> | boolean
+    overwritePrices?: BoolFilter<"KiotVietConfig"> | boolean
+    overwriteStock?: BoolFilter<"KiotVietConfig"> | boolean
+    defaultCategoryId?: StringNullableFilter<"KiotVietConfig"> | string | null
+    defaultWarehouseId?: StringNullableFilter<"KiotVietConfig"> | string | null
+    branchIds?: StringNullableFilter<"KiotVietConfig"> | string | null
+    lastSyncAt?: DateTimeNullableFilter<"KiotVietConfig"> | Date | string | null
+    lastWebhookAt?: DateTimeNullableFilter<"KiotVietConfig"> | Date | string | null
+    createdAt?: DateTimeFilter<"KiotVietConfig"> | Date | string
+    updatedAt?: DateTimeFilter<"KiotVietConfig"> | Date | string
+  }
+
+  export type KiotVietConfigOrderByWithRelationInput = {
+    id?: SortOrder
+    clientId?: SortOrder
+    clientSecret?: SortOrder
+    retailer?: SortOrder
+    webhookToken?: SortOrder
+    webhookSecret?: SortOrderInput | SortOrder
+    strictSignature?: SortOrder
+    enabled?: SortOrder
+    syncProducts?: SortOrder
+    syncCustomers?: SortOrder
+    syncSuppliers?: SortOrder
+    syncInvoices?: SortOrder
+    overwriteNames?: SortOrder
+    overwritePrices?: SortOrder
+    overwriteStock?: SortOrder
+    defaultCategoryId?: SortOrderInput | SortOrder
+    defaultWarehouseId?: SortOrderInput | SortOrder
+    branchIds?: SortOrderInput | SortOrder
+    lastSyncAt?: SortOrderInput | SortOrder
+    lastWebhookAt?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type KiotVietConfigWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    webhookToken?: string
+    AND?: KiotVietConfigWhereInput | KiotVietConfigWhereInput[]
+    OR?: KiotVietConfigWhereInput[]
+    NOT?: KiotVietConfigWhereInput | KiotVietConfigWhereInput[]
+    clientId?: StringFilter<"KiotVietConfig"> | string
+    clientSecret?: StringFilter<"KiotVietConfig"> | string
+    retailer?: StringFilter<"KiotVietConfig"> | string
+    webhookSecret?: StringNullableFilter<"KiotVietConfig"> | string | null
+    strictSignature?: BoolFilter<"KiotVietConfig"> | boolean
+    enabled?: BoolFilter<"KiotVietConfig"> | boolean
+    syncProducts?: BoolFilter<"KiotVietConfig"> | boolean
+    syncCustomers?: BoolFilter<"KiotVietConfig"> | boolean
+    syncSuppliers?: BoolFilter<"KiotVietConfig"> | boolean
+    syncInvoices?: BoolFilter<"KiotVietConfig"> | boolean
+    overwriteNames?: BoolFilter<"KiotVietConfig"> | boolean
+    overwritePrices?: BoolFilter<"KiotVietConfig"> | boolean
+    overwriteStock?: BoolFilter<"KiotVietConfig"> | boolean
+    defaultCategoryId?: StringNullableFilter<"KiotVietConfig"> | string | null
+    defaultWarehouseId?: StringNullableFilter<"KiotVietConfig"> | string | null
+    branchIds?: StringNullableFilter<"KiotVietConfig"> | string | null
+    lastSyncAt?: DateTimeNullableFilter<"KiotVietConfig"> | Date | string | null
+    lastWebhookAt?: DateTimeNullableFilter<"KiotVietConfig"> | Date | string | null
+    createdAt?: DateTimeFilter<"KiotVietConfig"> | Date | string
+    updatedAt?: DateTimeFilter<"KiotVietConfig"> | Date | string
+  }, "id" | "webhookToken">
+
+  export type KiotVietConfigOrderByWithAggregationInput = {
+    id?: SortOrder
+    clientId?: SortOrder
+    clientSecret?: SortOrder
+    retailer?: SortOrder
+    webhookToken?: SortOrder
+    webhookSecret?: SortOrderInput | SortOrder
+    strictSignature?: SortOrder
+    enabled?: SortOrder
+    syncProducts?: SortOrder
+    syncCustomers?: SortOrder
+    syncSuppliers?: SortOrder
+    syncInvoices?: SortOrder
+    overwriteNames?: SortOrder
+    overwritePrices?: SortOrder
+    overwriteStock?: SortOrder
+    defaultCategoryId?: SortOrderInput | SortOrder
+    defaultWarehouseId?: SortOrderInput | SortOrder
+    branchIds?: SortOrderInput | SortOrder
+    lastSyncAt?: SortOrderInput | SortOrder
+    lastWebhookAt?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: KiotVietConfigCountOrderByAggregateInput
+    _max?: KiotVietConfigMaxOrderByAggregateInput
+    _min?: KiotVietConfigMinOrderByAggregateInput
+  }
+
+  export type KiotVietConfigScalarWhereWithAggregatesInput = {
+    AND?: KiotVietConfigScalarWhereWithAggregatesInput | KiotVietConfigScalarWhereWithAggregatesInput[]
+    OR?: KiotVietConfigScalarWhereWithAggregatesInput[]
+    NOT?: KiotVietConfigScalarWhereWithAggregatesInput | KiotVietConfigScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"KiotVietConfig"> | string
+    clientId?: StringWithAggregatesFilter<"KiotVietConfig"> | string
+    clientSecret?: StringWithAggregatesFilter<"KiotVietConfig"> | string
+    retailer?: StringWithAggregatesFilter<"KiotVietConfig"> | string
+    webhookToken?: StringWithAggregatesFilter<"KiotVietConfig"> | string
+    webhookSecret?: StringNullableWithAggregatesFilter<"KiotVietConfig"> | string | null
+    strictSignature?: BoolWithAggregatesFilter<"KiotVietConfig"> | boolean
+    enabled?: BoolWithAggregatesFilter<"KiotVietConfig"> | boolean
+    syncProducts?: BoolWithAggregatesFilter<"KiotVietConfig"> | boolean
+    syncCustomers?: BoolWithAggregatesFilter<"KiotVietConfig"> | boolean
+    syncSuppliers?: BoolWithAggregatesFilter<"KiotVietConfig"> | boolean
+    syncInvoices?: BoolWithAggregatesFilter<"KiotVietConfig"> | boolean
+    overwriteNames?: BoolWithAggregatesFilter<"KiotVietConfig"> | boolean
+    overwritePrices?: BoolWithAggregatesFilter<"KiotVietConfig"> | boolean
+    overwriteStock?: BoolWithAggregatesFilter<"KiotVietConfig"> | boolean
+    defaultCategoryId?: StringNullableWithAggregatesFilter<"KiotVietConfig"> | string | null
+    defaultWarehouseId?: StringNullableWithAggregatesFilter<"KiotVietConfig"> | string | null
+    branchIds?: StringNullableWithAggregatesFilter<"KiotVietConfig"> | string | null
+    lastSyncAt?: DateTimeNullableWithAggregatesFilter<"KiotVietConfig"> | Date | string | null
+    lastWebhookAt?: DateTimeNullableWithAggregatesFilter<"KiotVietConfig"> | Date | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"KiotVietConfig"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"KiotVietConfig"> | Date | string
+  }
+
+  export type KiotVietMapWhereInput = {
+    AND?: KiotVietMapWhereInput | KiotVietMapWhereInput[]
+    OR?: KiotVietMapWhereInput[]
+    NOT?: KiotVietMapWhereInput | KiotVietMapWhereInput[]
+    id?: StringFilter<"KiotVietMap"> | string
+    entity?: StringFilter<"KiotVietMap"> | string
+    kvId?: StringFilter<"KiotVietMap"> | string
+    kvCode?: StringNullableFilter<"KiotVietMap"> | string | null
+    localId?: StringFilter<"KiotVietMap"> | string
+    syncedAt?: DateTimeFilter<"KiotVietMap"> | Date | string
+  }
+
+  export type KiotVietMapOrderByWithRelationInput = {
+    id?: SortOrder
+    entity?: SortOrder
+    kvId?: SortOrder
+    kvCode?: SortOrderInput | SortOrder
+    localId?: SortOrder
+    syncedAt?: SortOrder
+  }
+
+  export type KiotVietMapWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    entity_kvId?: KiotVietMapEntityKvIdCompoundUniqueInput
+    AND?: KiotVietMapWhereInput | KiotVietMapWhereInput[]
+    OR?: KiotVietMapWhereInput[]
+    NOT?: KiotVietMapWhereInput | KiotVietMapWhereInput[]
+    entity?: StringFilter<"KiotVietMap"> | string
+    kvId?: StringFilter<"KiotVietMap"> | string
+    kvCode?: StringNullableFilter<"KiotVietMap"> | string | null
+    localId?: StringFilter<"KiotVietMap"> | string
+    syncedAt?: DateTimeFilter<"KiotVietMap"> | Date | string
+  }, "id" | "entity_kvId">
+
+  export type KiotVietMapOrderByWithAggregationInput = {
+    id?: SortOrder
+    entity?: SortOrder
+    kvId?: SortOrder
+    kvCode?: SortOrderInput | SortOrder
+    localId?: SortOrder
+    syncedAt?: SortOrder
+    _count?: KiotVietMapCountOrderByAggregateInput
+    _max?: KiotVietMapMaxOrderByAggregateInput
+    _min?: KiotVietMapMinOrderByAggregateInput
+  }
+
+  export type KiotVietMapScalarWhereWithAggregatesInput = {
+    AND?: KiotVietMapScalarWhereWithAggregatesInput | KiotVietMapScalarWhereWithAggregatesInput[]
+    OR?: KiotVietMapScalarWhereWithAggregatesInput[]
+    NOT?: KiotVietMapScalarWhereWithAggregatesInput | KiotVietMapScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"KiotVietMap"> | string
+    entity?: StringWithAggregatesFilter<"KiotVietMap"> | string
+    kvId?: StringWithAggregatesFilter<"KiotVietMap"> | string
+    kvCode?: StringNullableWithAggregatesFilter<"KiotVietMap"> | string | null
+    localId?: StringWithAggregatesFilter<"KiotVietMap"> | string
+    syncedAt?: DateTimeWithAggregatesFilter<"KiotVietMap"> | Date | string
+  }
+
+  export type KiotVietSyncLogWhereInput = {
+    AND?: KiotVietSyncLogWhereInput | KiotVietSyncLogWhereInput[]
+    OR?: KiotVietSyncLogWhereInput[]
+    NOT?: KiotVietSyncLogWhereInput | KiotVietSyncLogWhereInput[]
+    id?: StringFilter<"KiotVietSyncLog"> | string
+    entity?: StringFilter<"KiotVietSyncLog"> | string
+    mode?: StringFilter<"KiotVietSyncLog"> | string
+    dryRun?: BoolFilter<"KiotVietSyncLog"> | boolean
+    fromDate?: DateTimeNullableFilter<"KiotVietSyncLog"> | Date | string | null
+    toDate?: DateTimeNullableFilter<"KiotVietSyncLog"> | Date | string | null
+    fetched?: IntFilter<"KiotVietSyncLog"> | number
+    created?: IntFilter<"KiotVietSyncLog"> | number
+    updated?: IntFilter<"KiotVietSyncLog"> | number
+    skipped?: IntFilter<"KiotVietSyncLog"> | number
+    failed?: IntFilter<"KiotVietSyncLog"> | number
+    status?: StringFilter<"KiotVietSyncLog"> | string
+    errors?: StringNullableFilter<"KiotVietSyncLog"> | string | null
+    details?: StringNullableFilter<"KiotVietSyncLog"> | string | null
+    startedAt?: DateTimeFilter<"KiotVietSyncLog"> | Date | string
+    finishedAt?: DateTimeNullableFilter<"KiotVietSyncLog"> | Date | string | null
+  }
+
+  export type KiotVietSyncLogOrderByWithRelationInput = {
+    id?: SortOrder
+    entity?: SortOrder
+    mode?: SortOrder
+    dryRun?: SortOrder
+    fromDate?: SortOrderInput | SortOrder
+    toDate?: SortOrderInput | SortOrder
+    fetched?: SortOrder
+    created?: SortOrder
+    updated?: SortOrder
+    skipped?: SortOrder
+    failed?: SortOrder
+    status?: SortOrder
+    errors?: SortOrderInput | SortOrder
+    details?: SortOrderInput | SortOrder
+    startedAt?: SortOrder
+    finishedAt?: SortOrderInput | SortOrder
+  }
+
+  export type KiotVietSyncLogWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: KiotVietSyncLogWhereInput | KiotVietSyncLogWhereInput[]
+    OR?: KiotVietSyncLogWhereInput[]
+    NOT?: KiotVietSyncLogWhereInput | KiotVietSyncLogWhereInput[]
+    entity?: StringFilter<"KiotVietSyncLog"> | string
+    mode?: StringFilter<"KiotVietSyncLog"> | string
+    dryRun?: BoolFilter<"KiotVietSyncLog"> | boolean
+    fromDate?: DateTimeNullableFilter<"KiotVietSyncLog"> | Date | string | null
+    toDate?: DateTimeNullableFilter<"KiotVietSyncLog"> | Date | string | null
+    fetched?: IntFilter<"KiotVietSyncLog"> | number
+    created?: IntFilter<"KiotVietSyncLog"> | number
+    updated?: IntFilter<"KiotVietSyncLog"> | number
+    skipped?: IntFilter<"KiotVietSyncLog"> | number
+    failed?: IntFilter<"KiotVietSyncLog"> | number
+    status?: StringFilter<"KiotVietSyncLog"> | string
+    errors?: StringNullableFilter<"KiotVietSyncLog"> | string | null
+    details?: StringNullableFilter<"KiotVietSyncLog"> | string | null
+    startedAt?: DateTimeFilter<"KiotVietSyncLog"> | Date | string
+    finishedAt?: DateTimeNullableFilter<"KiotVietSyncLog"> | Date | string | null
+  }, "id">
+
+  export type KiotVietSyncLogOrderByWithAggregationInput = {
+    id?: SortOrder
+    entity?: SortOrder
+    mode?: SortOrder
+    dryRun?: SortOrder
+    fromDate?: SortOrderInput | SortOrder
+    toDate?: SortOrderInput | SortOrder
+    fetched?: SortOrder
+    created?: SortOrder
+    updated?: SortOrder
+    skipped?: SortOrder
+    failed?: SortOrder
+    status?: SortOrder
+    errors?: SortOrderInput | SortOrder
+    details?: SortOrderInput | SortOrder
+    startedAt?: SortOrder
+    finishedAt?: SortOrderInput | SortOrder
+    _count?: KiotVietSyncLogCountOrderByAggregateInput
+    _avg?: KiotVietSyncLogAvgOrderByAggregateInput
+    _max?: KiotVietSyncLogMaxOrderByAggregateInput
+    _min?: KiotVietSyncLogMinOrderByAggregateInput
+    _sum?: KiotVietSyncLogSumOrderByAggregateInput
+  }
+
+  export type KiotVietSyncLogScalarWhereWithAggregatesInput = {
+    AND?: KiotVietSyncLogScalarWhereWithAggregatesInput | KiotVietSyncLogScalarWhereWithAggregatesInput[]
+    OR?: KiotVietSyncLogScalarWhereWithAggregatesInput[]
+    NOT?: KiotVietSyncLogScalarWhereWithAggregatesInput | KiotVietSyncLogScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"KiotVietSyncLog"> | string
+    entity?: StringWithAggregatesFilter<"KiotVietSyncLog"> | string
+    mode?: StringWithAggregatesFilter<"KiotVietSyncLog"> | string
+    dryRun?: BoolWithAggregatesFilter<"KiotVietSyncLog"> | boolean
+    fromDate?: DateTimeNullableWithAggregatesFilter<"KiotVietSyncLog"> | Date | string | null
+    toDate?: DateTimeNullableWithAggregatesFilter<"KiotVietSyncLog"> | Date | string | null
+    fetched?: IntWithAggregatesFilter<"KiotVietSyncLog"> | number
+    created?: IntWithAggregatesFilter<"KiotVietSyncLog"> | number
+    updated?: IntWithAggregatesFilter<"KiotVietSyncLog"> | number
+    skipped?: IntWithAggregatesFilter<"KiotVietSyncLog"> | number
+    failed?: IntWithAggregatesFilter<"KiotVietSyncLog"> | number
+    status?: StringWithAggregatesFilter<"KiotVietSyncLog"> | string
+    errors?: StringNullableWithAggregatesFilter<"KiotVietSyncLog"> | string | null
+    details?: StringNullableWithAggregatesFilter<"KiotVietSyncLog"> | string | null
+    startedAt?: DateTimeWithAggregatesFilter<"KiotVietSyncLog"> | Date | string
+    finishedAt?: DateTimeNullableWithAggregatesFilter<"KiotVietSyncLog"> | Date | string | null
   }
 
   export type BranchCreateInput = {
@@ -171864,6 +180660,10 @@ export namespace Prisma {
     notes?: string | null
     expectedDate?: Date | string | null
     receivedDate?: Date | string | null
+    checkedBy?: string | null
+    checkedByName?: string | null
+    checkedAt?: Date | string | null
+    rejectReason?: string | null
     branchId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -171881,6 +180681,10 @@ export namespace Prisma {
     notes?: string | null
     expectedDate?: Date | string | null
     receivedDate?: Date | string | null
+    checkedBy?: string | null
+    checkedByName?: string | null
+    checkedAt?: Date | string | null
+    rejectReason?: string | null
     branchId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -171896,6 +180700,10 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     expectedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     receivedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    checkedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    checkedByName?: NullableStringFieldUpdateOperationsInput | string | null
+    checkedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    rejectReason?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -171913,6 +180721,10 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     expectedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     receivedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    checkedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    checkedByName?: NullableStringFieldUpdateOperationsInput | string | null
+    checkedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    rejectReason?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -171929,6 +180741,10 @@ export namespace Prisma {
     notes?: string | null
     expectedDate?: Date | string | null
     receivedDate?: Date | string | null
+    checkedBy?: string | null
+    checkedByName?: string | null
+    checkedAt?: Date | string | null
+    rejectReason?: string | null
     branchId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -171943,6 +180759,10 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     expectedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     receivedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    checkedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    checkedByName?: NullableStringFieldUpdateOperationsInput | string | null
+    checkedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    rejectReason?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -171958,6 +180778,10 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     expectedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     receivedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    checkedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    checkedByName?: NullableStringFieldUpdateOperationsInput | string | null
+    checkedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    rejectReason?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -172035,6 +180859,15 @@ export namespace Prisma {
     recurring?: boolean
     bankAccountId?: string | null
     status?: string
+    vatAmount?: number | null
+    supplierName?: string | null
+    supplierTaxCode?: string | null
+    invoiceNo?: string | null
+    invoiceSymbol?: string | null
+    invoiceDate?: Date | string | null
+    lookupCode?: string | null
+    taxAuthorityCode?: string | null
+    sourceRef?: string | null
     cancelledAt?: Date | string | null
     cancelReason?: string | null
     branchId?: string | null
@@ -172052,6 +180885,15 @@ export namespace Prisma {
     recurring?: boolean
     bankAccountId?: string | null
     status?: string
+    vatAmount?: number | null
+    supplierName?: string | null
+    supplierTaxCode?: string | null
+    invoiceNo?: string | null
+    invoiceSymbol?: string | null
+    invoiceDate?: Date | string | null
+    lookupCode?: string | null
+    taxAuthorityCode?: string | null
+    sourceRef?: string | null
     cancelledAt?: Date | string | null
     cancelReason?: string | null
     branchId?: string | null
@@ -172069,6 +180911,15 @@ export namespace Prisma {
     recurring?: BoolFieldUpdateOperationsInput | boolean
     bankAccountId?: NullableStringFieldUpdateOperationsInput | string | null
     status?: StringFieldUpdateOperationsInput | string
+    vatAmount?: NullableFloatFieldUpdateOperationsInput | number | null
+    supplierName?: NullableStringFieldUpdateOperationsInput | string | null
+    supplierTaxCode?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceNo?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceSymbol?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    lookupCode?: NullableStringFieldUpdateOperationsInput | string | null
+    taxAuthorityCode?: NullableStringFieldUpdateOperationsInput | string | null
+    sourceRef?: NullableStringFieldUpdateOperationsInput | string | null
     cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -172086,6 +180937,15 @@ export namespace Prisma {
     recurring?: BoolFieldUpdateOperationsInput | boolean
     bankAccountId?: NullableStringFieldUpdateOperationsInput | string | null
     status?: StringFieldUpdateOperationsInput | string
+    vatAmount?: NullableFloatFieldUpdateOperationsInput | number | null
+    supplierName?: NullableStringFieldUpdateOperationsInput | string | null
+    supplierTaxCode?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceNo?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceSymbol?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    lookupCode?: NullableStringFieldUpdateOperationsInput | string | null
+    taxAuthorityCode?: NullableStringFieldUpdateOperationsInput | string | null
+    sourceRef?: NullableStringFieldUpdateOperationsInput | string | null
     cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -172103,6 +180963,15 @@ export namespace Prisma {
     recurring?: boolean
     bankAccountId?: string | null
     status?: string
+    vatAmount?: number | null
+    supplierName?: string | null
+    supplierTaxCode?: string | null
+    invoiceNo?: string | null
+    invoiceSymbol?: string | null
+    invoiceDate?: Date | string | null
+    lookupCode?: string | null
+    taxAuthorityCode?: string | null
+    sourceRef?: string | null
     cancelledAt?: Date | string | null
     cancelReason?: string | null
     branchId?: string | null
@@ -172120,6 +180989,15 @@ export namespace Prisma {
     recurring?: BoolFieldUpdateOperationsInput | boolean
     bankAccountId?: NullableStringFieldUpdateOperationsInput | string | null
     status?: StringFieldUpdateOperationsInput | string
+    vatAmount?: NullableFloatFieldUpdateOperationsInput | number | null
+    supplierName?: NullableStringFieldUpdateOperationsInput | string | null
+    supplierTaxCode?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceNo?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceSymbol?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    lookupCode?: NullableStringFieldUpdateOperationsInput | string | null
+    taxAuthorityCode?: NullableStringFieldUpdateOperationsInput | string | null
+    sourceRef?: NullableStringFieldUpdateOperationsInput | string | null
     cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -172137,6 +181015,15 @@ export namespace Prisma {
     recurring?: BoolFieldUpdateOperationsInput | boolean
     bankAccountId?: NullableStringFieldUpdateOperationsInput | string | null
     status?: StringFieldUpdateOperationsInput | string
+    vatAmount?: NullableFloatFieldUpdateOperationsInput | number | null
+    supplierName?: NullableStringFieldUpdateOperationsInput | string | null
+    supplierTaxCode?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceNo?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceSymbol?: NullableStringFieldUpdateOperationsInput | string | null
+    invoiceDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    lookupCode?: NullableStringFieldUpdateOperationsInput | string | null
+    taxAuthorityCode?: NullableStringFieldUpdateOperationsInput | string | null
+    sourceRef?: NullableStringFieldUpdateOperationsInput | string | null
     cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -176665,6 +185552,7 @@ export namespace Prisma {
     website?: string | null
     notifyLowStock?: boolean
     smtpConfig?: string | null
+    mailboxConfig?: string | null
     geminiApiKey?: string | null
     notifyNewOrder?: boolean
     notifyDailyReport?: boolean
@@ -176678,6 +185566,9 @@ export namespace Prisma {
     monthlyRevenueTarget?: number | null
     dailyOrderTarget?: number | null
     driveFolderId?: string | null
+    driveOauthToken?: string | null
+    driveOauthEmail?: string | null
+    driveOauthAt?: Date | string | null
     updatedAt?: Date | string
   }
 
@@ -176702,6 +185593,7 @@ export namespace Prisma {
     website?: string | null
     notifyLowStock?: boolean
     smtpConfig?: string | null
+    mailboxConfig?: string | null
     geminiApiKey?: string | null
     notifyNewOrder?: boolean
     notifyDailyReport?: boolean
@@ -176715,6 +185607,9 @@ export namespace Prisma {
     monthlyRevenueTarget?: number | null
     dailyOrderTarget?: number | null
     driveFolderId?: string | null
+    driveOauthToken?: string | null
+    driveOauthEmail?: string | null
+    driveOauthAt?: Date | string | null
     updatedAt?: Date | string
   }
 
@@ -176739,6 +185634,7 @@ export namespace Prisma {
     website?: NullableStringFieldUpdateOperationsInput | string | null
     notifyLowStock?: BoolFieldUpdateOperationsInput | boolean
     smtpConfig?: NullableStringFieldUpdateOperationsInput | string | null
+    mailboxConfig?: NullableStringFieldUpdateOperationsInput | string | null
     geminiApiKey?: NullableStringFieldUpdateOperationsInput | string | null
     notifyNewOrder?: BoolFieldUpdateOperationsInput | boolean
     notifyDailyReport?: BoolFieldUpdateOperationsInput | boolean
@@ -176752,6 +185648,9 @@ export namespace Prisma {
     monthlyRevenueTarget?: NullableFloatFieldUpdateOperationsInput | number | null
     dailyOrderTarget?: NullableIntFieldUpdateOperationsInput | number | null
     driveFolderId?: NullableStringFieldUpdateOperationsInput | string | null
+    driveOauthToken?: NullableStringFieldUpdateOperationsInput | string | null
+    driveOauthEmail?: NullableStringFieldUpdateOperationsInput | string | null
+    driveOauthAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -176776,6 +185675,7 @@ export namespace Prisma {
     website?: NullableStringFieldUpdateOperationsInput | string | null
     notifyLowStock?: BoolFieldUpdateOperationsInput | boolean
     smtpConfig?: NullableStringFieldUpdateOperationsInput | string | null
+    mailboxConfig?: NullableStringFieldUpdateOperationsInput | string | null
     geminiApiKey?: NullableStringFieldUpdateOperationsInput | string | null
     notifyNewOrder?: BoolFieldUpdateOperationsInput | boolean
     notifyDailyReport?: BoolFieldUpdateOperationsInput | boolean
@@ -176789,6 +185689,9 @@ export namespace Prisma {
     monthlyRevenueTarget?: NullableFloatFieldUpdateOperationsInput | number | null
     dailyOrderTarget?: NullableIntFieldUpdateOperationsInput | number | null
     driveFolderId?: NullableStringFieldUpdateOperationsInput | string | null
+    driveOauthToken?: NullableStringFieldUpdateOperationsInput | string | null
+    driveOauthEmail?: NullableStringFieldUpdateOperationsInput | string | null
+    driveOauthAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -176813,6 +185716,7 @@ export namespace Prisma {
     website?: string | null
     notifyLowStock?: boolean
     smtpConfig?: string | null
+    mailboxConfig?: string | null
     geminiApiKey?: string | null
     notifyNewOrder?: boolean
     notifyDailyReport?: boolean
@@ -176826,6 +185730,9 @@ export namespace Prisma {
     monthlyRevenueTarget?: number | null
     dailyOrderTarget?: number | null
     driveFolderId?: string | null
+    driveOauthToken?: string | null
+    driveOauthEmail?: string | null
+    driveOauthAt?: Date | string | null
     updatedAt?: Date | string
   }
 
@@ -176850,6 +185757,7 @@ export namespace Prisma {
     website?: NullableStringFieldUpdateOperationsInput | string | null
     notifyLowStock?: BoolFieldUpdateOperationsInput | boolean
     smtpConfig?: NullableStringFieldUpdateOperationsInput | string | null
+    mailboxConfig?: NullableStringFieldUpdateOperationsInput | string | null
     geminiApiKey?: NullableStringFieldUpdateOperationsInput | string | null
     notifyNewOrder?: BoolFieldUpdateOperationsInput | boolean
     notifyDailyReport?: BoolFieldUpdateOperationsInput | boolean
@@ -176863,6 +185771,9 @@ export namespace Prisma {
     monthlyRevenueTarget?: NullableFloatFieldUpdateOperationsInput | number | null
     dailyOrderTarget?: NullableIntFieldUpdateOperationsInput | number | null
     driveFolderId?: NullableStringFieldUpdateOperationsInput | string | null
+    driveOauthToken?: NullableStringFieldUpdateOperationsInput | string | null
+    driveOauthEmail?: NullableStringFieldUpdateOperationsInput | string | null
+    driveOauthAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -176887,6 +185798,7 @@ export namespace Prisma {
     website?: NullableStringFieldUpdateOperationsInput | string | null
     notifyLowStock?: BoolFieldUpdateOperationsInput | boolean
     smtpConfig?: NullableStringFieldUpdateOperationsInput | string | null
+    mailboxConfig?: NullableStringFieldUpdateOperationsInput | string | null
     geminiApiKey?: NullableStringFieldUpdateOperationsInput | string | null
     notifyNewOrder?: BoolFieldUpdateOperationsInput | boolean
     notifyDailyReport?: BoolFieldUpdateOperationsInput | boolean
@@ -176900,6 +185812,9 @@ export namespace Prisma {
     monthlyRevenueTarget?: NullableFloatFieldUpdateOperationsInput | number | null
     dailyOrderTarget?: NullableIntFieldUpdateOperationsInput | number | null
     driveFolderId?: NullableStringFieldUpdateOperationsInput | string | null
+    driveOauthToken?: NullableStringFieldUpdateOperationsInput | string | null
+    driveOauthEmail?: NullableStringFieldUpdateOperationsInput | string | null
+    driveOauthAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
@@ -178165,6 +187080,8 @@ export namespace Prisma {
     platformFeeRate?: number
     netRevenue?: number
     adsVoucherDiscount?: number
+    isInstant?: boolean
+    shipByDate?: Date | string | null
     stockDeducted?: boolean
     syncedAt?: Date | string | null
     createdAt?: Date | string
@@ -178203,6 +187120,8 @@ export namespace Prisma {
     platformFeeRate?: number
     netRevenue?: number
     adsVoucherDiscount?: number
+    isInstant?: boolean
+    shipByDate?: Date | string | null
     stockDeducted?: boolean
     syncedAt?: Date | string | null
     createdAt?: Date | string
@@ -178239,6 +187158,8 @@ export namespace Prisma {
     platformFeeRate?: FloatFieldUpdateOperationsInput | number
     netRevenue?: FloatFieldUpdateOperationsInput | number
     adsVoucherDiscount?: FloatFieldUpdateOperationsInput | number
+    isInstant?: BoolFieldUpdateOperationsInput | boolean
+    shipByDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stockDeducted?: BoolFieldUpdateOperationsInput | boolean
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -178277,6 +187198,8 @@ export namespace Prisma {
     platformFeeRate?: FloatFieldUpdateOperationsInput | number
     netRevenue?: FloatFieldUpdateOperationsInput | number
     adsVoucherDiscount?: FloatFieldUpdateOperationsInput | number
+    isInstant?: BoolFieldUpdateOperationsInput | boolean
+    shipByDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stockDeducted?: BoolFieldUpdateOperationsInput | boolean
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -178314,6 +187237,8 @@ export namespace Prisma {
     platformFeeRate?: number
     netRevenue?: number
     adsVoucherDiscount?: number
+    isInstant?: boolean
+    shipByDate?: Date | string | null
     stockDeducted?: boolean
     syncedAt?: Date | string | null
     createdAt?: Date | string
@@ -178349,6 +187274,8 @@ export namespace Prisma {
     platformFeeRate?: FloatFieldUpdateOperationsInput | number
     netRevenue?: FloatFieldUpdateOperationsInput | number
     adsVoucherDiscount?: FloatFieldUpdateOperationsInput | number
+    isInstant?: BoolFieldUpdateOperationsInput | boolean
+    shipByDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stockDeducted?: BoolFieldUpdateOperationsInput | boolean
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -178385,6 +187312,8 @@ export namespace Prisma {
     platformFeeRate?: FloatFieldUpdateOperationsInput | number
     netRevenue?: FloatFieldUpdateOperationsInput | number
     adsVoucherDiscount?: FloatFieldUpdateOperationsInput | number
+    isInstant?: BoolFieldUpdateOperationsInput | boolean
+    shipByDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stockDeducted?: BoolFieldUpdateOperationsInput | boolean
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -179521,6 +188450,9 @@ export namespace Prisma {
     providerResponse?: string | null
     replacesInvoiceId?: string | null
     replacedByInvoiceId?: string | null
+    adjustsInvoiceId?: string | null
+    adjustedByInvoiceId?: string | null
+    adjustReturnCode?: string | null
     cancelReason?: string | null
     notes?: string | null
     branchId?: string | null
@@ -179564,6 +188496,9 @@ export namespace Prisma {
     providerResponse?: string | null
     replacesInvoiceId?: string | null
     replacedByInvoiceId?: string | null
+    adjustsInvoiceId?: string | null
+    adjustedByInvoiceId?: string | null
+    adjustReturnCode?: string | null
     cancelReason?: string | null
     notes?: string | null
     branchId?: string | null
@@ -179607,6 +188542,9 @@ export namespace Prisma {
     providerResponse?: NullableStringFieldUpdateOperationsInput | string | null
     replacesInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
     replacedByInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    adjustsInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    adjustedByInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    adjustReturnCode?: NullableStringFieldUpdateOperationsInput | string | null
     cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -179650,6 +188588,9 @@ export namespace Prisma {
     providerResponse?: NullableStringFieldUpdateOperationsInput | string | null
     replacesInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
     replacedByInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    adjustsInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    adjustedByInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    adjustReturnCode?: NullableStringFieldUpdateOperationsInput | string | null
     cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -179693,6 +188634,9 @@ export namespace Prisma {
     providerResponse?: string | null
     replacesInvoiceId?: string | null
     replacedByInvoiceId?: string | null
+    adjustsInvoiceId?: string | null
+    adjustedByInvoiceId?: string | null
+    adjustReturnCode?: string | null
     cancelReason?: string | null
     notes?: string | null
     branchId?: string | null
@@ -179735,6 +188679,9 @@ export namespace Prisma {
     providerResponse?: NullableStringFieldUpdateOperationsInput | string | null
     replacesInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
     replacedByInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    adjustsInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    adjustedByInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    adjustReturnCode?: NullableStringFieldUpdateOperationsInput | string | null
     cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -179777,6 +188724,9 @@ export namespace Prisma {
     providerResponse?: NullableStringFieldUpdateOperationsInput | string | null
     replacesInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
     replacedByInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    adjustsInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    adjustedByInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    adjustReturnCode?: NullableStringFieldUpdateOperationsInput | string | null
     cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -182707,6 +191657,415 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type FbBrandProfileCreateInput = {
+    id?: string
+    brandName?: string
+    industry?: string
+    audience?: string
+    toneOfVoice?: string
+    usp?: string
+    cta?: string
+    hashtags?: string
+    bannedWords?: string
+    emojiLevel?: string
+    postsPerWeek?: number
+    bestHours?: string
+    pillarMix?: string
+    notes?: string
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FbBrandProfileUncheckedCreateInput = {
+    id?: string
+    brandName?: string
+    industry?: string
+    audience?: string
+    toneOfVoice?: string
+    usp?: string
+    cta?: string
+    hashtags?: string
+    bannedWords?: string
+    emojiLevel?: string
+    postsPerWeek?: number
+    bestHours?: string
+    pillarMix?: string
+    notes?: string
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FbBrandProfileUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    brandName?: StringFieldUpdateOperationsInput | string
+    industry?: StringFieldUpdateOperationsInput | string
+    audience?: StringFieldUpdateOperationsInput | string
+    toneOfVoice?: StringFieldUpdateOperationsInput | string
+    usp?: StringFieldUpdateOperationsInput | string
+    cta?: StringFieldUpdateOperationsInput | string
+    hashtags?: StringFieldUpdateOperationsInput | string
+    bannedWords?: StringFieldUpdateOperationsInput | string
+    emojiLevel?: StringFieldUpdateOperationsInput | string
+    postsPerWeek?: IntFieldUpdateOperationsInput | number
+    bestHours?: StringFieldUpdateOperationsInput | string
+    pillarMix?: StringFieldUpdateOperationsInput | string
+    notes?: StringFieldUpdateOperationsInput | string
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FbBrandProfileUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    brandName?: StringFieldUpdateOperationsInput | string
+    industry?: StringFieldUpdateOperationsInput | string
+    audience?: StringFieldUpdateOperationsInput | string
+    toneOfVoice?: StringFieldUpdateOperationsInput | string
+    usp?: StringFieldUpdateOperationsInput | string
+    cta?: StringFieldUpdateOperationsInput | string
+    hashtags?: StringFieldUpdateOperationsInput | string
+    bannedWords?: StringFieldUpdateOperationsInput | string
+    emojiLevel?: StringFieldUpdateOperationsInput | string
+    postsPerWeek?: IntFieldUpdateOperationsInput | number
+    bestHours?: StringFieldUpdateOperationsInput | string
+    pillarMix?: StringFieldUpdateOperationsInput | string
+    notes?: StringFieldUpdateOperationsInput | string
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FbBrandProfileCreateManyInput = {
+    id?: string
+    brandName?: string
+    industry?: string
+    audience?: string
+    toneOfVoice?: string
+    usp?: string
+    cta?: string
+    hashtags?: string
+    bannedWords?: string
+    emojiLevel?: string
+    postsPerWeek?: number
+    bestHours?: string
+    pillarMix?: string
+    notes?: string
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FbBrandProfileUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    brandName?: StringFieldUpdateOperationsInput | string
+    industry?: StringFieldUpdateOperationsInput | string
+    audience?: StringFieldUpdateOperationsInput | string
+    toneOfVoice?: StringFieldUpdateOperationsInput | string
+    usp?: StringFieldUpdateOperationsInput | string
+    cta?: StringFieldUpdateOperationsInput | string
+    hashtags?: StringFieldUpdateOperationsInput | string
+    bannedWords?: StringFieldUpdateOperationsInput | string
+    emojiLevel?: StringFieldUpdateOperationsInput | string
+    postsPerWeek?: IntFieldUpdateOperationsInput | number
+    bestHours?: StringFieldUpdateOperationsInput | string
+    pillarMix?: StringFieldUpdateOperationsInput | string
+    notes?: StringFieldUpdateOperationsInput | string
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FbBrandProfileUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    brandName?: StringFieldUpdateOperationsInput | string
+    industry?: StringFieldUpdateOperationsInput | string
+    audience?: StringFieldUpdateOperationsInput | string
+    toneOfVoice?: StringFieldUpdateOperationsInput | string
+    usp?: StringFieldUpdateOperationsInput | string
+    cta?: StringFieldUpdateOperationsInput | string
+    hashtags?: StringFieldUpdateOperationsInput | string
+    bannedWords?: StringFieldUpdateOperationsInput | string
+    emojiLevel?: StringFieldUpdateOperationsInput | string
+    postsPerWeek?: IntFieldUpdateOperationsInput | number
+    bestHours?: StringFieldUpdateOperationsInput | string
+    pillarMix?: StringFieldUpdateOperationsInput | string
+    notes?: StringFieldUpdateOperationsInput | string
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FbContentPlanCreateInput = {
+    id?: string
+    pageId: string
+    title: string
+    goal?: string
+    fromDate: Date | string
+    toDate: Date | string
+    status?: string
+    summary?: string | null
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    drafts?: FbContentDraftCreateNestedManyWithoutPlanInput
+  }
+
+  export type FbContentPlanUncheckedCreateInput = {
+    id?: string
+    pageId: string
+    title: string
+    goal?: string
+    fromDate: Date | string
+    toDate: Date | string
+    status?: string
+    summary?: string | null
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    drafts?: FbContentDraftUncheckedCreateNestedManyWithoutPlanInput
+  }
+
+  export type FbContentPlanUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    pageId?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    goal?: StringFieldUpdateOperationsInput | string
+    fromDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    toDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    status?: StringFieldUpdateOperationsInput | string
+    summary?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    drafts?: FbContentDraftUpdateManyWithoutPlanNestedInput
+  }
+
+  export type FbContentPlanUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    pageId?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    goal?: StringFieldUpdateOperationsInput | string
+    fromDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    toDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    status?: StringFieldUpdateOperationsInput | string
+    summary?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    drafts?: FbContentDraftUncheckedUpdateManyWithoutPlanNestedInput
+  }
+
+  export type FbContentPlanCreateManyInput = {
+    id?: string
+    pageId: string
+    title: string
+    goal?: string
+    fromDate: Date | string
+    toDate: Date | string
+    status?: string
+    summary?: string | null
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FbContentPlanUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    pageId?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    goal?: StringFieldUpdateOperationsInput | string
+    fromDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    toDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    status?: StringFieldUpdateOperationsInput | string
+    summary?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FbContentPlanUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    pageId?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    goal?: StringFieldUpdateOperationsInput | string
+    fromDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    toDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    status?: StringFieldUpdateOperationsInput | string
+    summary?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FbContentDraftCreateInput = {
+    id?: string
+    pageId: string
+    pillar?: string
+    title?: string
+    hook?: string
+    message: string
+    hashtags?: string
+    mediaIdea?: string
+    mediaUrls?: string
+    linkUrl?: string | null
+    productIds?: string
+    suggestedAt?: Date | string | null
+    status?: string
+    rejectReason?: string | null
+    scheduledPostId?: string | null
+    fbPostId?: string | null
+    source?: string
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    plan?: FbContentPlanCreateNestedOneWithoutDraftsInput
+  }
+
+  export type FbContentDraftUncheckedCreateInput = {
+    id?: string
+    planId?: string | null
+    pageId: string
+    pillar?: string
+    title?: string
+    hook?: string
+    message: string
+    hashtags?: string
+    mediaIdea?: string
+    mediaUrls?: string
+    linkUrl?: string | null
+    productIds?: string
+    suggestedAt?: Date | string | null
+    status?: string
+    rejectReason?: string | null
+    scheduledPostId?: string | null
+    fbPostId?: string | null
+    source?: string
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FbContentDraftUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    pageId?: StringFieldUpdateOperationsInput | string
+    pillar?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    hook?: StringFieldUpdateOperationsInput | string
+    message?: StringFieldUpdateOperationsInput | string
+    hashtags?: StringFieldUpdateOperationsInput | string
+    mediaIdea?: StringFieldUpdateOperationsInput | string
+    mediaUrls?: StringFieldUpdateOperationsInput | string
+    linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    productIds?: StringFieldUpdateOperationsInput | string
+    suggestedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    rejectReason?: NullableStringFieldUpdateOperationsInput | string | null
+    scheduledPostId?: NullableStringFieldUpdateOperationsInput | string | null
+    fbPostId?: NullableStringFieldUpdateOperationsInput | string | null
+    source?: StringFieldUpdateOperationsInput | string
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    plan?: FbContentPlanUpdateOneWithoutDraftsNestedInput
+  }
+
+  export type FbContentDraftUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    planId?: NullableStringFieldUpdateOperationsInput | string | null
+    pageId?: StringFieldUpdateOperationsInput | string
+    pillar?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    hook?: StringFieldUpdateOperationsInput | string
+    message?: StringFieldUpdateOperationsInput | string
+    hashtags?: StringFieldUpdateOperationsInput | string
+    mediaIdea?: StringFieldUpdateOperationsInput | string
+    mediaUrls?: StringFieldUpdateOperationsInput | string
+    linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    productIds?: StringFieldUpdateOperationsInput | string
+    suggestedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    rejectReason?: NullableStringFieldUpdateOperationsInput | string | null
+    scheduledPostId?: NullableStringFieldUpdateOperationsInput | string | null
+    fbPostId?: NullableStringFieldUpdateOperationsInput | string | null
+    source?: StringFieldUpdateOperationsInput | string
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FbContentDraftCreateManyInput = {
+    id?: string
+    planId?: string | null
+    pageId: string
+    pillar?: string
+    title?: string
+    hook?: string
+    message: string
+    hashtags?: string
+    mediaIdea?: string
+    mediaUrls?: string
+    linkUrl?: string | null
+    productIds?: string
+    suggestedAt?: Date | string | null
+    status?: string
+    rejectReason?: string | null
+    scheduledPostId?: string | null
+    fbPostId?: string | null
+    source?: string
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FbContentDraftUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    pageId?: StringFieldUpdateOperationsInput | string
+    pillar?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    hook?: StringFieldUpdateOperationsInput | string
+    message?: StringFieldUpdateOperationsInput | string
+    hashtags?: StringFieldUpdateOperationsInput | string
+    mediaIdea?: StringFieldUpdateOperationsInput | string
+    mediaUrls?: StringFieldUpdateOperationsInput | string
+    linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    productIds?: StringFieldUpdateOperationsInput | string
+    suggestedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    rejectReason?: NullableStringFieldUpdateOperationsInput | string | null
+    scheduledPostId?: NullableStringFieldUpdateOperationsInput | string | null
+    fbPostId?: NullableStringFieldUpdateOperationsInput | string | null
+    source?: StringFieldUpdateOperationsInput | string
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FbContentDraftUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    planId?: NullableStringFieldUpdateOperationsInput | string | null
+    pageId?: StringFieldUpdateOperationsInput | string
+    pillar?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    hook?: StringFieldUpdateOperationsInput | string
+    message?: StringFieldUpdateOperationsInput | string
+    hashtags?: StringFieldUpdateOperationsInput | string
+    mediaIdea?: StringFieldUpdateOperationsInput | string
+    mediaUrls?: StringFieldUpdateOperationsInput | string
+    linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    productIds?: StringFieldUpdateOperationsInput | string
+    suggestedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    rejectReason?: NullableStringFieldUpdateOperationsInput | string | null
+    scheduledPostId?: NullableStringFieldUpdateOperationsInput | string | null
+    fbPostId?: NullableStringFieldUpdateOperationsInput | string | null
+    source?: StringFieldUpdateOperationsInput | string
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type CrmTaskCreateInput = {
     id?: string
     title: string
@@ -183478,6 +192837,377 @@ export namespace Prisma {
     chamTran?: BoolFieldUpdateOperationsInput | boolean
     errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
     trigger?: StringFieldUpdateOperationsInput | string
+  }
+
+  export type KiotVietConfigCreateInput = {
+    id?: string
+    clientId: string
+    clientSecret: string
+    retailer: string
+    webhookToken: string
+    webhookSecret?: string | null
+    strictSignature?: boolean
+    enabled?: boolean
+    syncProducts?: boolean
+    syncCustomers?: boolean
+    syncSuppliers?: boolean
+    syncInvoices?: boolean
+    overwriteNames?: boolean
+    overwritePrices?: boolean
+    overwriteStock?: boolean
+    defaultCategoryId?: string | null
+    defaultWarehouseId?: string | null
+    branchIds?: string | null
+    lastSyncAt?: Date | string | null
+    lastWebhookAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type KiotVietConfigUncheckedCreateInput = {
+    id?: string
+    clientId: string
+    clientSecret: string
+    retailer: string
+    webhookToken: string
+    webhookSecret?: string | null
+    strictSignature?: boolean
+    enabled?: boolean
+    syncProducts?: boolean
+    syncCustomers?: boolean
+    syncSuppliers?: boolean
+    syncInvoices?: boolean
+    overwriteNames?: boolean
+    overwritePrices?: boolean
+    overwriteStock?: boolean
+    defaultCategoryId?: string | null
+    defaultWarehouseId?: string | null
+    branchIds?: string | null
+    lastSyncAt?: Date | string | null
+    lastWebhookAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type KiotVietConfigUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    clientId?: StringFieldUpdateOperationsInput | string
+    clientSecret?: StringFieldUpdateOperationsInput | string
+    retailer?: StringFieldUpdateOperationsInput | string
+    webhookToken?: StringFieldUpdateOperationsInput | string
+    webhookSecret?: NullableStringFieldUpdateOperationsInput | string | null
+    strictSignature?: BoolFieldUpdateOperationsInput | boolean
+    enabled?: BoolFieldUpdateOperationsInput | boolean
+    syncProducts?: BoolFieldUpdateOperationsInput | boolean
+    syncCustomers?: BoolFieldUpdateOperationsInput | boolean
+    syncSuppliers?: BoolFieldUpdateOperationsInput | boolean
+    syncInvoices?: BoolFieldUpdateOperationsInput | boolean
+    overwriteNames?: BoolFieldUpdateOperationsInput | boolean
+    overwritePrices?: BoolFieldUpdateOperationsInput | boolean
+    overwriteStock?: BoolFieldUpdateOperationsInput | boolean
+    defaultCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    defaultWarehouseId?: NullableStringFieldUpdateOperationsInput | string | null
+    branchIds?: NullableStringFieldUpdateOperationsInput | string | null
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    lastWebhookAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type KiotVietConfigUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    clientId?: StringFieldUpdateOperationsInput | string
+    clientSecret?: StringFieldUpdateOperationsInput | string
+    retailer?: StringFieldUpdateOperationsInput | string
+    webhookToken?: StringFieldUpdateOperationsInput | string
+    webhookSecret?: NullableStringFieldUpdateOperationsInput | string | null
+    strictSignature?: BoolFieldUpdateOperationsInput | boolean
+    enabled?: BoolFieldUpdateOperationsInput | boolean
+    syncProducts?: BoolFieldUpdateOperationsInput | boolean
+    syncCustomers?: BoolFieldUpdateOperationsInput | boolean
+    syncSuppliers?: BoolFieldUpdateOperationsInput | boolean
+    syncInvoices?: BoolFieldUpdateOperationsInput | boolean
+    overwriteNames?: BoolFieldUpdateOperationsInput | boolean
+    overwritePrices?: BoolFieldUpdateOperationsInput | boolean
+    overwriteStock?: BoolFieldUpdateOperationsInput | boolean
+    defaultCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    defaultWarehouseId?: NullableStringFieldUpdateOperationsInput | string | null
+    branchIds?: NullableStringFieldUpdateOperationsInput | string | null
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    lastWebhookAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type KiotVietConfigCreateManyInput = {
+    id?: string
+    clientId: string
+    clientSecret: string
+    retailer: string
+    webhookToken: string
+    webhookSecret?: string | null
+    strictSignature?: boolean
+    enabled?: boolean
+    syncProducts?: boolean
+    syncCustomers?: boolean
+    syncSuppliers?: boolean
+    syncInvoices?: boolean
+    overwriteNames?: boolean
+    overwritePrices?: boolean
+    overwriteStock?: boolean
+    defaultCategoryId?: string | null
+    defaultWarehouseId?: string | null
+    branchIds?: string | null
+    lastSyncAt?: Date | string | null
+    lastWebhookAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type KiotVietConfigUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    clientId?: StringFieldUpdateOperationsInput | string
+    clientSecret?: StringFieldUpdateOperationsInput | string
+    retailer?: StringFieldUpdateOperationsInput | string
+    webhookToken?: StringFieldUpdateOperationsInput | string
+    webhookSecret?: NullableStringFieldUpdateOperationsInput | string | null
+    strictSignature?: BoolFieldUpdateOperationsInput | boolean
+    enabled?: BoolFieldUpdateOperationsInput | boolean
+    syncProducts?: BoolFieldUpdateOperationsInput | boolean
+    syncCustomers?: BoolFieldUpdateOperationsInput | boolean
+    syncSuppliers?: BoolFieldUpdateOperationsInput | boolean
+    syncInvoices?: BoolFieldUpdateOperationsInput | boolean
+    overwriteNames?: BoolFieldUpdateOperationsInput | boolean
+    overwritePrices?: BoolFieldUpdateOperationsInput | boolean
+    overwriteStock?: BoolFieldUpdateOperationsInput | boolean
+    defaultCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    defaultWarehouseId?: NullableStringFieldUpdateOperationsInput | string | null
+    branchIds?: NullableStringFieldUpdateOperationsInput | string | null
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    lastWebhookAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type KiotVietConfigUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    clientId?: StringFieldUpdateOperationsInput | string
+    clientSecret?: StringFieldUpdateOperationsInput | string
+    retailer?: StringFieldUpdateOperationsInput | string
+    webhookToken?: StringFieldUpdateOperationsInput | string
+    webhookSecret?: NullableStringFieldUpdateOperationsInput | string | null
+    strictSignature?: BoolFieldUpdateOperationsInput | boolean
+    enabled?: BoolFieldUpdateOperationsInput | boolean
+    syncProducts?: BoolFieldUpdateOperationsInput | boolean
+    syncCustomers?: BoolFieldUpdateOperationsInput | boolean
+    syncSuppliers?: BoolFieldUpdateOperationsInput | boolean
+    syncInvoices?: BoolFieldUpdateOperationsInput | boolean
+    overwriteNames?: BoolFieldUpdateOperationsInput | boolean
+    overwritePrices?: BoolFieldUpdateOperationsInput | boolean
+    overwriteStock?: BoolFieldUpdateOperationsInput | boolean
+    defaultCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    defaultWarehouseId?: NullableStringFieldUpdateOperationsInput | string | null
+    branchIds?: NullableStringFieldUpdateOperationsInput | string | null
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    lastWebhookAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type KiotVietMapCreateInput = {
+    id?: string
+    entity: string
+    kvId: string
+    kvCode?: string | null
+    localId: string
+    syncedAt?: Date | string
+  }
+
+  export type KiotVietMapUncheckedCreateInput = {
+    id?: string
+    entity: string
+    kvId: string
+    kvCode?: string | null
+    localId: string
+    syncedAt?: Date | string
+  }
+
+  export type KiotVietMapUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    entity?: StringFieldUpdateOperationsInput | string
+    kvId?: StringFieldUpdateOperationsInput | string
+    kvCode?: NullableStringFieldUpdateOperationsInput | string | null
+    localId?: StringFieldUpdateOperationsInput | string
+    syncedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type KiotVietMapUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    entity?: StringFieldUpdateOperationsInput | string
+    kvId?: StringFieldUpdateOperationsInput | string
+    kvCode?: NullableStringFieldUpdateOperationsInput | string | null
+    localId?: StringFieldUpdateOperationsInput | string
+    syncedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type KiotVietMapCreateManyInput = {
+    id?: string
+    entity: string
+    kvId: string
+    kvCode?: string | null
+    localId: string
+    syncedAt?: Date | string
+  }
+
+  export type KiotVietMapUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    entity?: StringFieldUpdateOperationsInput | string
+    kvId?: StringFieldUpdateOperationsInput | string
+    kvCode?: NullableStringFieldUpdateOperationsInput | string | null
+    localId?: StringFieldUpdateOperationsInput | string
+    syncedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type KiotVietMapUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    entity?: StringFieldUpdateOperationsInput | string
+    kvId?: StringFieldUpdateOperationsInput | string
+    kvCode?: NullableStringFieldUpdateOperationsInput | string | null
+    localId?: StringFieldUpdateOperationsInput | string
+    syncedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type KiotVietSyncLogCreateInput = {
+    id?: string
+    entity: string
+    mode?: string
+    dryRun?: boolean
+    fromDate?: Date | string | null
+    toDate?: Date | string | null
+    fetched?: number
+    created?: number
+    updated?: number
+    skipped?: number
+    failed?: number
+    status?: string
+    errors?: string | null
+    details?: string | null
+    startedAt?: Date | string
+    finishedAt?: Date | string | null
+  }
+
+  export type KiotVietSyncLogUncheckedCreateInput = {
+    id?: string
+    entity: string
+    mode?: string
+    dryRun?: boolean
+    fromDate?: Date | string | null
+    toDate?: Date | string | null
+    fetched?: number
+    created?: number
+    updated?: number
+    skipped?: number
+    failed?: number
+    status?: string
+    errors?: string | null
+    details?: string | null
+    startedAt?: Date | string
+    finishedAt?: Date | string | null
+  }
+
+  export type KiotVietSyncLogUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    entity?: StringFieldUpdateOperationsInput | string
+    mode?: StringFieldUpdateOperationsInput | string
+    dryRun?: BoolFieldUpdateOperationsInput | boolean
+    fromDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    toDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    fetched?: IntFieldUpdateOperationsInput | number
+    created?: IntFieldUpdateOperationsInput | number
+    updated?: IntFieldUpdateOperationsInput | number
+    skipped?: IntFieldUpdateOperationsInput | number
+    failed?: IntFieldUpdateOperationsInput | number
+    status?: StringFieldUpdateOperationsInput | string
+    errors?: NullableStringFieldUpdateOperationsInput | string | null
+    details?: NullableStringFieldUpdateOperationsInput | string | null
+    startedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    finishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  }
+
+  export type KiotVietSyncLogUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    entity?: StringFieldUpdateOperationsInput | string
+    mode?: StringFieldUpdateOperationsInput | string
+    dryRun?: BoolFieldUpdateOperationsInput | boolean
+    fromDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    toDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    fetched?: IntFieldUpdateOperationsInput | number
+    created?: IntFieldUpdateOperationsInput | number
+    updated?: IntFieldUpdateOperationsInput | number
+    skipped?: IntFieldUpdateOperationsInput | number
+    failed?: IntFieldUpdateOperationsInput | number
+    status?: StringFieldUpdateOperationsInput | string
+    errors?: NullableStringFieldUpdateOperationsInput | string | null
+    details?: NullableStringFieldUpdateOperationsInput | string | null
+    startedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    finishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  }
+
+  export type KiotVietSyncLogCreateManyInput = {
+    id?: string
+    entity: string
+    mode?: string
+    dryRun?: boolean
+    fromDate?: Date | string | null
+    toDate?: Date | string | null
+    fetched?: number
+    created?: number
+    updated?: number
+    skipped?: number
+    failed?: number
+    status?: string
+    errors?: string | null
+    details?: string | null
+    startedAt?: Date | string
+    finishedAt?: Date | string | null
+  }
+
+  export type KiotVietSyncLogUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    entity?: StringFieldUpdateOperationsInput | string
+    mode?: StringFieldUpdateOperationsInput | string
+    dryRun?: BoolFieldUpdateOperationsInput | boolean
+    fromDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    toDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    fetched?: IntFieldUpdateOperationsInput | number
+    created?: IntFieldUpdateOperationsInput | number
+    updated?: IntFieldUpdateOperationsInput | number
+    skipped?: IntFieldUpdateOperationsInput | number
+    failed?: IntFieldUpdateOperationsInput | number
+    status?: StringFieldUpdateOperationsInput | string
+    errors?: NullableStringFieldUpdateOperationsInput | string | null
+    details?: NullableStringFieldUpdateOperationsInput | string | null
+    startedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    finishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  }
+
+  export type KiotVietSyncLogUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    entity?: StringFieldUpdateOperationsInput | string
+    mode?: StringFieldUpdateOperationsInput | string
+    dryRun?: BoolFieldUpdateOperationsInput | boolean
+    fromDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    toDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    fetched?: IntFieldUpdateOperationsInput | number
+    created?: IntFieldUpdateOperationsInput | number
+    updated?: IntFieldUpdateOperationsInput | number
+    skipped?: IntFieldUpdateOperationsInput | number
+    failed?: IntFieldUpdateOperationsInput | number
+    status?: StringFieldUpdateOperationsInput | string
+    errors?: NullableStringFieldUpdateOperationsInput | string | null
+    details?: NullableStringFieldUpdateOperationsInput | string | null
+    startedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    finishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   }
 
   export type StringFilter<$PrismaModel = never> = {
@@ -185301,6 +195031,10 @@ export namespace Prisma {
     notes?: SortOrder
     expectedDate?: SortOrder
     receivedDate?: SortOrder
+    checkedBy?: SortOrder
+    checkedByName?: SortOrder
+    checkedAt?: SortOrder
+    rejectReason?: SortOrder
     branchId?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -185320,6 +195054,10 @@ export namespace Prisma {
     notes?: SortOrder
     expectedDate?: SortOrder
     receivedDate?: SortOrder
+    checkedBy?: SortOrder
+    checkedByName?: SortOrder
+    checkedAt?: SortOrder
+    rejectReason?: SortOrder
     branchId?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -185335,6 +195073,10 @@ export namespace Prisma {
     notes?: SortOrder
     expectedDate?: SortOrder
     receivedDate?: SortOrder
+    checkedBy?: SortOrder
+    checkedByName?: SortOrder
+    checkedAt?: SortOrder
+    rejectReason?: SortOrder
     branchId?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -185396,6 +195138,15 @@ export namespace Prisma {
     recurring?: SortOrder
     bankAccountId?: SortOrder
     status?: SortOrder
+    vatAmount?: SortOrder
+    supplierName?: SortOrder
+    supplierTaxCode?: SortOrder
+    invoiceNo?: SortOrder
+    invoiceSymbol?: SortOrder
+    invoiceDate?: SortOrder
+    lookupCode?: SortOrder
+    taxAuthorityCode?: SortOrder
+    sourceRef?: SortOrder
     cancelledAt?: SortOrder
     cancelReason?: SortOrder
     branchId?: SortOrder
@@ -185405,6 +195156,7 @@ export namespace Prisma {
 
   export type ExpenseAvgOrderByAggregateInput = {
     amount?: SortOrder
+    vatAmount?: SortOrder
   }
 
   export type ExpenseMaxOrderByAggregateInput = {
@@ -185417,6 +195169,15 @@ export namespace Prisma {
     recurring?: SortOrder
     bankAccountId?: SortOrder
     status?: SortOrder
+    vatAmount?: SortOrder
+    supplierName?: SortOrder
+    supplierTaxCode?: SortOrder
+    invoiceNo?: SortOrder
+    invoiceSymbol?: SortOrder
+    invoiceDate?: SortOrder
+    lookupCode?: SortOrder
+    taxAuthorityCode?: SortOrder
+    sourceRef?: SortOrder
     cancelledAt?: SortOrder
     cancelReason?: SortOrder
     branchId?: SortOrder
@@ -185434,6 +195195,15 @@ export namespace Prisma {
     recurring?: SortOrder
     bankAccountId?: SortOrder
     status?: SortOrder
+    vatAmount?: SortOrder
+    supplierName?: SortOrder
+    supplierTaxCode?: SortOrder
+    invoiceNo?: SortOrder
+    invoiceSymbol?: SortOrder
+    invoiceDate?: SortOrder
+    lookupCode?: SortOrder
+    taxAuthorityCode?: SortOrder
+    sourceRef?: SortOrder
     cancelledAt?: SortOrder
     cancelReason?: SortOrder
     branchId?: SortOrder
@@ -185443,6 +195213,7 @@ export namespace Prisma {
 
   export type ExpenseSumOrderByAggregateInput = {
     amount?: SortOrder
+    vatAmount?: SortOrder
   }
 
   export type CashReceiptCountOrderByAggregateInput = {
@@ -187896,6 +197667,7 @@ export namespace Prisma {
     website?: SortOrder
     notifyLowStock?: SortOrder
     smtpConfig?: SortOrder
+    mailboxConfig?: SortOrder
     geminiApiKey?: SortOrder
     notifyNewOrder?: SortOrder
     notifyDailyReport?: SortOrder
@@ -187909,6 +197681,9 @@ export namespace Prisma {
     monthlyRevenueTarget?: SortOrder
     dailyOrderTarget?: SortOrder
     driveFolderId?: SortOrder
+    driveOauthToken?: SortOrder
+    driveOauthEmail?: SortOrder
+    driveOauthAt?: SortOrder
     updatedAt?: SortOrder
   }
 
@@ -187939,6 +197714,7 @@ export namespace Prisma {
     website?: SortOrder
     notifyLowStock?: SortOrder
     smtpConfig?: SortOrder
+    mailboxConfig?: SortOrder
     geminiApiKey?: SortOrder
     notifyNewOrder?: SortOrder
     notifyDailyReport?: SortOrder
@@ -187952,6 +197728,9 @@ export namespace Prisma {
     monthlyRevenueTarget?: SortOrder
     dailyOrderTarget?: SortOrder
     driveFolderId?: SortOrder
+    driveOauthToken?: SortOrder
+    driveOauthEmail?: SortOrder
+    driveOauthAt?: SortOrder
     updatedAt?: SortOrder
   }
 
@@ -187976,6 +197755,7 @@ export namespace Prisma {
     website?: SortOrder
     notifyLowStock?: SortOrder
     smtpConfig?: SortOrder
+    mailboxConfig?: SortOrder
     geminiApiKey?: SortOrder
     notifyNewOrder?: SortOrder
     notifyDailyReport?: SortOrder
@@ -187989,6 +197769,9 @@ export namespace Prisma {
     monthlyRevenueTarget?: SortOrder
     dailyOrderTarget?: SortOrder
     driveFolderId?: SortOrder
+    driveOauthToken?: SortOrder
+    driveOauthEmail?: SortOrder
+    driveOauthAt?: SortOrder
     updatedAt?: SortOrder
   }
 
@@ -188710,6 +198493,8 @@ export namespace Prisma {
     platformFeeRate?: SortOrder
     netRevenue?: SortOrder
     adsVoucherDiscount?: SortOrder
+    isInstant?: SortOrder
+    shipByDate?: SortOrder
     stockDeducted?: SortOrder
     syncedAt?: SortOrder
     createdAt?: SortOrder
@@ -188757,6 +198542,8 @@ export namespace Prisma {
     platformFeeRate?: SortOrder
     netRevenue?: SortOrder
     adsVoucherDiscount?: SortOrder
+    isInstant?: SortOrder
+    shipByDate?: SortOrder
     stockDeducted?: SortOrder
     syncedAt?: SortOrder
     createdAt?: SortOrder
@@ -188793,6 +198580,8 @@ export namespace Prisma {
     platformFeeRate?: SortOrder
     netRevenue?: SortOrder
     adsVoucherDiscount?: SortOrder
+    isInstant?: SortOrder
+    shipByDate?: SortOrder
     stockDeducted?: SortOrder
     syncedAt?: SortOrder
     createdAt?: SortOrder
@@ -189478,6 +199267,9 @@ export namespace Prisma {
     providerResponse?: SortOrder
     replacesInvoiceId?: SortOrder
     replacedByInvoiceId?: SortOrder
+    adjustsInvoiceId?: SortOrder
+    adjustedByInvoiceId?: SortOrder
+    adjustReturnCode?: SortOrder
     cancelReason?: SortOrder
     notes?: SortOrder
     branchId?: SortOrder
@@ -189526,6 +199318,9 @@ export namespace Prisma {
     providerResponse?: SortOrder
     replacesInvoiceId?: SortOrder
     replacedByInvoiceId?: SortOrder
+    adjustsInvoiceId?: SortOrder
+    adjustedByInvoiceId?: SortOrder
+    adjustReturnCode?: SortOrder
     cancelReason?: SortOrder
     notes?: SortOrder
     branchId?: SortOrder
@@ -189568,6 +199363,9 @@ export namespace Prisma {
     providerResponse?: SortOrder
     replacesInvoiceId?: SortOrder
     replacedByInvoiceId?: SortOrder
+    adjustsInvoiceId?: SortOrder
+    adjustedByInvoiceId?: SortOrder
+    adjustReturnCode?: SortOrder
     cancelReason?: SortOrder
     notes?: SortOrder
     branchId?: SortOrder
@@ -191230,6 +201028,203 @@ export namespace Prisma {
     createdAt?: SortOrder
   }
 
+  export type FbBrandProfileCountOrderByAggregateInput = {
+    id?: SortOrder
+    brandName?: SortOrder
+    industry?: SortOrder
+    audience?: SortOrder
+    toneOfVoice?: SortOrder
+    usp?: SortOrder
+    cta?: SortOrder
+    hashtags?: SortOrder
+    bannedWords?: SortOrder
+    emojiLevel?: SortOrder
+    postsPerWeek?: SortOrder
+    bestHours?: SortOrder
+    pillarMix?: SortOrder
+    notes?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type FbBrandProfileAvgOrderByAggregateInput = {
+    postsPerWeek?: SortOrder
+  }
+
+  export type FbBrandProfileMaxOrderByAggregateInput = {
+    id?: SortOrder
+    brandName?: SortOrder
+    industry?: SortOrder
+    audience?: SortOrder
+    toneOfVoice?: SortOrder
+    usp?: SortOrder
+    cta?: SortOrder
+    hashtags?: SortOrder
+    bannedWords?: SortOrder
+    emojiLevel?: SortOrder
+    postsPerWeek?: SortOrder
+    bestHours?: SortOrder
+    pillarMix?: SortOrder
+    notes?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type FbBrandProfileMinOrderByAggregateInput = {
+    id?: SortOrder
+    brandName?: SortOrder
+    industry?: SortOrder
+    audience?: SortOrder
+    toneOfVoice?: SortOrder
+    usp?: SortOrder
+    cta?: SortOrder
+    hashtags?: SortOrder
+    bannedWords?: SortOrder
+    emojiLevel?: SortOrder
+    postsPerWeek?: SortOrder
+    bestHours?: SortOrder
+    pillarMix?: SortOrder
+    notes?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type FbBrandProfileSumOrderByAggregateInput = {
+    postsPerWeek?: SortOrder
+  }
+
+  export type FbContentDraftListRelationFilter = {
+    every?: FbContentDraftWhereInput
+    some?: FbContentDraftWhereInput
+    none?: FbContentDraftWhereInput
+  }
+
+  export type FbContentDraftOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type FbContentPlanCountOrderByAggregateInput = {
+    id?: SortOrder
+    pageId?: SortOrder
+    title?: SortOrder
+    goal?: SortOrder
+    fromDate?: SortOrder
+    toDate?: SortOrder
+    status?: SortOrder
+    summary?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type FbContentPlanMaxOrderByAggregateInput = {
+    id?: SortOrder
+    pageId?: SortOrder
+    title?: SortOrder
+    goal?: SortOrder
+    fromDate?: SortOrder
+    toDate?: SortOrder
+    status?: SortOrder
+    summary?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type FbContentPlanMinOrderByAggregateInput = {
+    id?: SortOrder
+    pageId?: SortOrder
+    title?: SortOrder
+    goal?: SortOrder
+    fromDate?: SortOrder
+    toDate?: SortOrder
+    status?: SortOrder
+    summary?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type FbContentPlanNullableScalarRelationFilter = {
+    is?: FbContentPlanWhereInput | null
+    isNot?: FbContentPlanWhereInput | null
+  }
+
+  export type FbContentDraftCountOrderByAggregateInput = {
+    id?: SortOrder
+    planId?: SortOrder
+    pageId?: SortOrder
+    pillar?: SortOrder
+    title?: SortOrder
+    hook?: SortOrder
+    message?: SortOrder
+    hashtags?: SortOrder
+    mediaIdea?: SortOrder
+    mediaUrls?: SortOrder
+    linkUrl?: SortOrder
+    productIds?: SortOrder
+    suggestedAt?: SortOrder
+    status?: SortOrder
+    rejectReason?: SortOrder
+    scheduledPostId?: SortOrder
+    fbPostId?: SortOrder
+    source?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type FbContentDraftMaxOrderByAggregateInput = {
+    id?: SortOrder
+    planId?: SortOrder
+    pageId?: SortOrder
+    pillar?: SortOrder
+    title?: SortOrder
+    hook?: SortOrder
+    message?: SortOrder
+    hashtags?: SortOrder
+    mediaIdea?: SortOrder
+    mediaUrls?: SortOrder
+    linkUrl?: SortOrder
+    productIds?: SortOrder
+    suggestedAt?: SortOrder
+    status?: SortOrder
+    rejectReason?: SortOrder
+    scheduledPostId?: SortOrder
+    fbPostId?: SortOrder
+    source?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type FbContentDraftMinOrderByAggregateInput = {
+    id?: SortOrder
+    planId?: SortOrder
+    pageId?: SortOrder
+    pillar?: SortOrder
+    title?: SortOrder
+    hook?: SortOrder
+    message?: SortOrder
+    hashtags?: SortOrder
+    mediaIdea?: SortOrder
+    mediaUrls?: SortOrder
+    linkUrl?: SortOrder
+    productIds?: SortOrder
+    suggestedAt?: SortOrder
+    status?: SortOrder
+    rejectReason?: SortOrder
+    scheduledPostId?: SortOrder
+    fbPostId?: SortOrder
+    source?: SortOrder
+    createdBy?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
   export type CrmTaskCountOrderByAggregateInput = {
     id?: SortOrder
     title?: SortOrder
@@ -191621,6 +201616,186 @@ export namespace Prisma {
 
   export type AiAgentRunSumOrderByAggregateInput = {
     steps?: SortOrder
+  }
+
+  export type KiotVietConfigCountOrderByAggregateInput = {
+    id?: SortOrder
+    clientId?: SortOrder
+    clientSecret?: SortOrder
+    retailer?: SortOrder
+    webhookToken?: SortOrder
+    webhookSecret?: SortOrder
+    strictSignature?: SortOrder
+    enabled?: SortOrder
+    syncProducts?: SortOrder
+    syncCustomers?: SortOrder
+    syncSuppliers?: SortOrder
+    syncInvoices?: SortOrder
+    overwriteNames?: SortOrder
+    overwritePrices?: SortOrder
+    overwriteStock?: SortOrder
+    defaultCategoryId?: SortOrder
+    defaultWarehouseId?: SortOrder
+    branchIds?: SortOrder
+    lastSyncAt?: SortOrder
+    lastWebhookAt?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type KiotVietConfigMaxOrderByAggregateInput = {
+    id?: SortOrder
+    clientId?: SortOrder
+    clientSecret?: SortOrder
+    retailer?: SortOrder
+    webhookToken?: SortOrder
+    webhookSecret?: SortOrder
+    strictSignature?: SortOrder
+    enabled?: SortOrder
+    syncProducts?: SortOrder
+    syncCustomers?: SortOrder
+    syncSuppliers?: SortOrder
+    syncInvoices?: SortOrder
+    overwriteNames?: SortOrder
+    overwritePrices?: SortOrder
+    overwriteStock?: SortOrder
+    defaultCategoryId?: SortOrder
+    defaultWarehouseId?: SortOrder
+    branchIds?: SortOrder
+    lastSyncAt?: SortOrder
+    lastWebhookAt?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type KiotVietConfigMinOrderByAggregateInput = {
+    id?: SortOrder
+    clientId?: SortOrder
+    clientSecret?: SortOrder
+    retailer?: SortOrder
+    webhookToken?: SortOrder
+    webhookSecret?: SortOrder
+    strictSignature?: SortOrder
+    enabled?: SortOrder
+    syncProducts?: SortOrder
+    syncCustomers?: SortOrder
+    syncSuppliers?: SortOrder
+    syncInvoices?: SortOrder
+    overwriteNames?: SortOrder
+    overwritePrices?: SortOrder
+    overwriteStock?: SortOrder
+    defaultCategoryId?: SortOrder
+    defaultWarehouseId?: SortOrder
+    branchIds?: SortOrder
+    lastSyncAt?: SortOrder
+    lastWebhookAt?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type KiotVietMapEntityKvIdCompoundUniqueInput = {
+    entity: string
+    kvId: string
+  }
+
+  export type KiotVietMapCountOrderByAggregateInput = {
+    id?: SortOrder
+    entity?: SortOrder
+    kvId?: SortOrder
+    kvCode?: SortOrder
+    localId?: SortOrder
+    syncedAt?: SortOrder
+  }
+
+  export type KiotVietMapMaxOrderByAggregateInput = {
+    id?: SortOrder
+    entity?: SortOrder
+    kvId?: SortOrder
+    kvCode?: SortOrder
+    localId?: SortOrder
+    syncedAt?: SortOrder
+  }
+
+  export type KiotVietMapMinOrderByAggregateInput = {
+    id?: SortOrder
+    entity?: SortOrder
+    kvId?: SortOrder
+    kvCode?: SortOrder
+    localId?: SortOrder
+    syncedAt?: SortOrder
+  }
+
+  export type KiotVietSyncLogCountOrderByAggregateInput = {
+    id?: SortOrder
+    entity?: SortOrder
+    mode?: SortOrder
+    dryRun?: SortOrder
+    fromDate?: SortOrder
+    toDate?: SortOrder
+    fetched?: SortOrder
+    created?: SortOrder
+    updated?: SortOrder
+    skipped?: SortOrder
+    failed?: SortOrder
+    status?: SortOrder
+    errors?: SortOrder
+    details?: SortOrder
+    startedAt?: SortOrder
+    finishedAt?: SortOrder
+  }
+
+  export type KiotVietSyncLogAvgOrderByAggregateInput = {
+    fetched?: SortOrder
+    created?: SortOrder
+    updated?: SortOrder
+    skipped?: SortOrder
+    failed?: SortOrder
+  }
+
+  export type KiotVietSyncLogMaxOrderByAggregateInput = {
+    id?: SortOrder
+    entity?: SortOrder
+    mode?: SortOrder
+    dryRun?: SortOrder
+    fromDate?: SortOrder
+    toDate?: SortOrder
+    fetched?: SortOrder
+    created?: SortOrder
+    updated?: SortOrder
+    skipped?: SortOrder
+    failed?: SortOrder
+    status?: SortOrder
+    errors?: SortOrder
+    details?: SortOrder
+    startedAt?: SortOrder
+    finishedAt?: SortOrder
+  }
+
+  export type KiotVietSyncLogMinOrderByAggregateInput = {
+    id?: SortOrder
+    entity?: SortOrder
+    mode?: SortOrder
+    dryRun?: SortOrder
+    fromDate?: SortOrder
+    toDate?: SortOrder
+    fetched?: SortOrder
+    created?: SortOrder
+    updated?: SortOrder
+    skipped?: SortOrder
+    failed?: SortOrder
+    status?: SortOrder
+    errors?: SortOrder
+    details?: SortOrder
+    startedAt?: SortOrder
+    finishedAt?: SortOrder
+  }
+
+  export type KiotVietSyncLogSumOrderByAggregateInput = {
+    fetched?: SortOrder
+    created?: SortOrder
+    updated?: SortOrder
+    skipped?: SortOrder
+    failed?: SortOrder
   }
 
   export type UserCreateNestedManyWithoutBranchInput = {
@@ -195055,6 +205230,64 @@ export namespace Prisma {
     upsert?: FbPageUpsertWithoutAutoReplyLogsInput
     connect?: FbPageWhereUniqueInput
     update?: XOR<XOR<FbPageUpdateToOneWithWhereWithoutAutoReplyLogsInput, FbPageUpdateWithoutAutoReplyLogsInput>, FbPageUncheckedUpdateWithoutAutoReplyLogsInput>
+  }
+
+  export type FbContentDraftCreateNestedManyWithoutPlanInput = {
+    create?: XOR<FbContentDraftCreateWithoutPlanInput, FbContentDraftUncheckedCreateWithoutPlanInput> | FbContentDraftCreateWithoutPlanInput[] | FbContentDraftUncheckedCreateWithoutPlanInput[]
+    connectOrCreate?: FbContentDraftCreateOrConnectWithoutPlanInput | FbContentDraftCreateOrConnectWithoutPlanInput[]
+    createMany?: FbContentDraftCreateManyPlanInputEnvelope
+    connect?: FbContentDraftWhereUniqueInput | FbContentDraftWhereUniqueInput[]
+  }
+
+  export type FbContentDraftUncheckedCreateNestedManyWithoutPlanInput = {
+    create?: XOR<FbContentDraftCreateWithoutPlanInput, FbContentDraftUncheckedCreateWithoutPlanInput> | FbContentDraftCreateWithoutPlanInput[] | FbContentDraftUncheckedCreateWithoutPlanInput[]
+    connectOrCreate?: FbContentDraftCreateOrConnectWithoutPlanInput | FbContentDraftCreateOrConnectWithoutPlanInput[]
+    createMany?: FbContentDraftCreateManyPlanInputEnvelope
+    connect?: FbContentDraftWhereUniqueInput | FbContentDraftWhereUniqueInput[]
+  }
+
+  export type FbContentDraftUpdateManyWithoutPlanNestedInput = {
+    create?: XOR<FbContentDraftCreateWithoutPlanInput, FbContentDraftUncheckedCreateWithoutPlanInput> | FbContentDraftCreateWithoutPlanInput[] | FbContentDraftUncheckedCreateWithoutPlanInput[]
+    connectOrCreate?: FbContentDraftCreateOrConnectWithoutPlanInput | FbContentDraftCreateOrConnectWithoutPlanInput[]
+    upsert?: FbContentDraftUpsertWithWhereUniqueWithoutPlanInput | FbContentDraftUpsertWithWhereUniqueWithoutPlanInput[]
+    createMany?: FbContentDraftCreateManyPlanInputEnvelope
+    set?: FbContentDraftWhereUniqueInput | FbContentDraftWhereUniqueInput[]
+    disconnect?: FbContentDraftWhereUniqueInput | FbContentDraftWhereUniqueInput[]
+    delete?: FbContentDraftWhereUniqueInput | FbContentDraftWhereUniqueInput[]
+    connect?: FbContentDraftWhereUniqueInput | FbContentDraftWhereUniqueInput[]
+    update?: FbContentDraftUpdateWithWhereUniqueWithoutPlanInput | FbContentDraftUpdateWithWhereUniqueWithoutPlanInput[]
+    updateMany?: FbContentDraftUpdateManyWithWhereWithoutPlanInput | FbContentDraftUpdateManyWithWhereWithoutPlanInput[]
+    deleteMany?: FbContentDraftScalarWhereInput | FbContentDraftScalarWhereInput[]
+  }
+
+  export type FbContentDraftUncheckedUpdateManyWithoutPlanNestedInput = {
+    create?: XOR<FbContentDraftCreateWithoutPlanInput, FbContentDraftUncheckedCreateWithoutPlanInput> | FbContentDraftCreateWithoutPlanInput[] | FbContentDraftUncheckedCreateWithoutPlanInput[]
+    connectOrCreate?: FbContentDraftCreateOrConnectWithoutPlanInput | FbContentDraftCreateOrConnectWithoutPlanInput[]
+    upsert?: FbContentDraftUpsertWithWhereUniqueWithoutPlanInput | FbContentDraftUpsertWithWhereUniqueWithoutPlanInput[]
+    createMany?: FbContentDraftCreateManyPlanInputEnvelope
+    set?: FbContentDraftWhereUniqueInput | FbContentDraftWhereUniqueInput[]
+    disconnect?: FbContentDraftWhereUniqueInput | FbContentDraftWhereUniqueInput[]
+    delete?: FbContentDraftWhereUniqueInput | FbContentDraftWhereUniqueInput[]
+    connect?: FbContentDraftWhereUniqueInput | FbContentDraftWhereUniqueInput[]
+    update?: FbContentDraftUpdateWithWhereUniqueWithoutPlanInput | FbContentDraftUpdateWithWhereUniqueWithoutPlanInput[]
+    updateMany?: FbContentDraftUpdateManyWithWhereWithoutPlanInput | FbContentDraftUpdateManyWithWhereWithoutPlanInput[]
+    deleteMany?: FbContentDraftScalarWhereInput | FbContentDraftScalarWhereInput[]
+  }
+
+  export type FbContentPlanCreateNestedOneWithoutDraftsInput = {
+    create?: XOR<FbContentPlanCreateWithoutDraftsInput, FbContentPlanUncheckedCreateWithoutDraftsInput>
+    connectOrCreate?: FbContentPlanCreateOrConnectWithoutDraftsInput
+    connect?: FbContentPlanWhereUniqueInput
+  }
+
+  export type FbContentPlanUpdateOneWithoutDraftsNestedInput = {
+    create?: XOR<FbContentPlanCreateWithoutDraftsInput, FbContentPlanUncheckedCreateWithoutDraftsInput>
+    connectOrCreate?: FbContentPlanCreateOrConnectWithoutDraftsInput
+    upsert?: FbContentPlanUpsertWithoutDraftsInput
+    disconnect?: FbContentPlanWhereInput | boolean
+    delete?: FbContentPlanWhereInput | boolean
+    connect?: FbContentPlanWhereUniqueInput
+    update?: XOR<XOR<FbContentPlanUpdateToOneWithWhereWithoutDraftsInput, FbContentPlanUpdateWithoutDraftsInput>, FbContentPlanUncheckedUpdateWithoutDraftsInput>
   }
 
   export type AiAgentRunCreateNestedManyWithoutJobInput = {
@@ -200072,6 +210305,10 @@ export namespace Prisma {
     notes?: string | null
     expectedDate?: Date | string | null
     receivedDate?: Date | string | null
+    checkedBy?: string | null
+    checkedByName?: string | null
+    checkedAt?: Date | string | null
+    rejectReason?: string | null
     branchId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -200087,6 +210324,10 @@ export namespace Prisma {
     notes?: string | null
     expectedDate?: Date | string | null
     receivedDate?: Date | string | null
+    checkedBy?: string | null
+    checkedByName?: string | null
+    checkedAt?: Date | string | null
+    rejectReason?: string | null
     branchId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -200132,6 +210373,10 @@ export namespace Prisma {
     notes?: StringNullableFilter<"PurchaseOrder"> | string | null
     expectedDate?: DateTimeNullableFilter<"PurchaseOrder"> | Date | string | null
     receivedDate?: DateTimeNullableFilter<"PurchaseOrder"> | Date | string | null
+    checkedBy?: StringNullableFilter<"PurchaseOrder"> | string | null
+    checkedByName?: StringNullableFilter<"PurchaseOrder"> | string | null
+    checkedAt?: DateTimeNullableFilter<"PurchaseOrder"> | Date | string | null
+    rejectReason?: StringNullableFilter<"PurchaseOrder"> | string | null
     branchId?: StringNullableFilter<"PurchaseOrder"> | string | null
     createdAt?: DateTimeFilter<"PurchaseOrder"> | Date | string
     updatedAt?: DateTimeFilter<"PurchaseOrder"> | Date | string
@@ -200288,6 +210533,10 @@ export namespace Prisma {
     notes?: string | null
     expectedDate?: Date | string | null
     receivedDate?: Date | string | null
+    checkedBy?: string | null
+    checkedByName?: string | null
+    checkedAt?: Date | string | null
+    rejectReason?: string | null
     branchId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -200304,6 +210553,10 @@ export namespace Prisma {
     notes?: string | null
     expectedDate?: Date | string | null
     receivedDate?: Date | string | null
+    checkedBy?: string | null
+    checkedByName?: string | null
+    checkedAt?: Date | string | null
+    rejectReason?: string | null
     branchId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -200334,6 +210587,10 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     expectedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     receivedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    checkedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    checkedByName?: NullableStringFieldUpdateOperationsInput | string | null
+    checkedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    rejectReason?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -200350,6 +210607,10 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     expectedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     receivedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    checkedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    checkedByName?: NullableStringFieldUpdateOperationsInput | string | null
+    checkedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    rejectReason?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -202757,6 +213018,8 @@ export namespace Prisma {
     platformFeeRate?: number
     netRevenue?: number
     adsVoucherDiscount?: number
+    isInstant?: boolean
+    shipByDate?: Date | string | null
     stockDeducted?: boolean
     syncedAt?: Date | string | null
     createdAt?: Date | string
@@ -202793,6 +213056,8 @@ export namespace Prisma {
     platformFeeRate?: number
     netRevenue?: number
     adsVoucherDiscount?: number
+    isInstant?: boolean
+    shipByDate?: Date | string | null
     stockDeducted?: boolean
     syncedAt?: Date | string | null
     createdAt?: Date | string
@@ -202905,6 +213170,8 @@ export namespace Prisma {
     platformFeeRate?: FloatFilter<"OnlineOrder"> | number
     netRevenue?: FloatFilter<"OnlineOrder"> | number
     adsVoucherDiscount?: FloatFilter<"OnlineOrder"> | number
+    isInstant?: BoolFilter<"OnlineOrder"> | boolean
+    shipByDate?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     stockDeducted?: BoolFilter<"OnlineOrder"> | boolean
     syncedAt?: DateTimeNullableFilter<"OnlineOrder"> | Date | string | null
     createdAt?: DateTimeFilter<"OnlineOrder"> | Date | string
@@ -203388,6 +213655,8 @@ export namespace Prisma {
     platformFeeRate?: number
     netRevenue?: number
     adsVoucherDiscount?: number
+    isInstant?: boolean
+    shipByDate?: Date | string | null
     stockDeducted?: boolean
     syncedAt?: Date | string | null
     createdAt?: Date | string
@@ -203425,6 +213694,8 @@ export namespace Prisma {
     platformFeeRate?: number
     netRevenue?: number
     adsVoucherDiscount?: number
+    isInstant?: boolean
+    shipByDate?: Date | string | null
     stockDeducted?: boolean
     syncedAt?: Date | string | null
     createdAt?: Date | string
@@ -203549,6 +213820,8 @@ export namespace Prisma {
     platformFeeRate?: FloatFieldUpdateOperationsInput | number
     netRevenue?: FloatFieldUpdateOperationsInput | number
     adsVoucherDiscount?: FloatFieldUpdateOperationsInput | number
+    isInstant?: BoolFieldUpdateOperationsInput | boolean
+    shipByDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stockDeducted?: BoolFieldUpdateOperationsInput | boolean
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -203586,6 +213859,8 @@ export namespace Prisma {
     platformFeeRate?: FloatFieldUpdateOperationsInput | number
     netRevenue?: FloatFieldUpdateOperationsInput | number
     adsVoucherDiscount?: FloatFieldUpdateOperationsInput | number
+    isInstant?: BoolFieldUpdateOperationsInput | boolean
+    shipByDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stockDeducted?: BoolFieldUpdateOperationsInput | boolean
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -204130,6 +214405,9 @@ export namespace Prisma {
     providerResponse?: string | null
     replacesInvoiceId?: string | null
     replacedByInvoiceId?: string | null
+    adjustsInvoiceId?: string | null
+    adjustedByInvoiceId?: string | null
+    adjustReturnCode?: string | null
     cancelReason?: string | null
     notes?: string | null
     branchId?: string | null
@@ -204172,6 +214450,9 @@ export namespace Prisma {
     providerResponse?: string | null
     replacesInvoiceId?: string | null
     replacedByInvoiceId?: string | null
+    adjustsInvoiceId?: string | null
+    adjustedByInvoiceId?: string | null
+    adjustReturnCode?: string | null
     cancelReason?: string | null
     notes?: string | null
     branchId?: string | null
@@ -204230,6 +214511,9 @@ export namespace Prisma {
     providerResponse?: NullableStringFieldUpdateOperationsInput | string | null
     replacesInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
     replacedByInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    adjustsInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    adjustedByInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    adjustReturnCode?: NullableStringFieldUpdateOperationsInput | string | null
     cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -204272,6 +214556,9 @@ export namespace Prisma {
     providerResponse?: NullableStringFieldUpdateOperationsInput | string | null
     replacesInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
     replacedByInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    adjustsInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    adjustedByInvoiceId?: NullableStringFieldUpdateOperationsInput | string | null
+    adjustReturnCode?: NullableStringFieldUpdateOperationsInput | string | null
     cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -206567,6 +216854,177 @@ export namespace Prisma {
     commentRules?: FbCommentRuleUncheckedUpdateManyWithoutPageNestedInput
   }
 
+  export type FbContentDraftCreateWithoutPlanInput = {
+    id?: string
+    pageId: string
+    pillar?: string
+    title?: string
+    hook?: string
+    message: string
+    hashtags?: string
+    mediaIdea?: string
+    mediaUrls?: string
+    linkUrl?: string | null
+    productIds?: string
+    suggestedAt?: Date | string | null
+    status?: string
+    rejectReason?: string | null
+    scheduledPostId?: string | null
+    fbPostId?: string | null
+    source?: string
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FbContentDraftUncheckedCreateWithoutPlanInput = {
+    id?: string
+    pageId: string
+    pillar?: string
+    title?: string
+    hook?: string
+    message: string
+    hashtags?: string
+    mediaIdea?: string
+    mediaUrls?: string
+    linkUrl?: string | null
+    productIds?: string
+    suggestedAt?: Date | string | null
+    status?: string
+    rejectReason?: string | null
+    scheduledPostId?: string | null
+    fbPostId?: string | null
+    source?: string
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FbContentDraftCreateOrConnectWithoutPlanInput = {
+    where: FbContentDraftWhereUniqueInput
+    create: XOR<FbContentDraftCreateWithoutPlanInput, FbContentDraftUncheckedCreateWithoutPlanInput>
+  }
+
+  export type FbContentDraftCreateManyPlanInputEnvelope = {
+    data: FbContentDraftCreateManyPlanInput | FbContentDraftCreateManyPlanInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type FbContentDraftUpsertWithWhereUniqueWithoutPlanInput = {
+    where: FbContentDraftWhereUniqueInput
+    update: XOR<FbContentDraftUpdateWithoutPlanInput, FbContentDraftUncheckedUpdateWithoutPlanInput>
+    create: XOR<FbContentDraftCreateWithoutPlanInput, FbContentDraftUncheckedCreateWithoutPlanInput>
+  }
+
+  export type FbContentDraftUpdateWithWhereUniqueWithoutPlanInput = {
+    where: FbContentDraftWhereUniqueInput
+    data: XOR<FbContentDraftUpdateWithoutPlanInput, FbContentDraftUncheckedUpdateWithoutPlanInput>
+  }
+
+  export type FbContentDraftUpdateManyWithWhereWithoutPlanInput = {
+    where: FbContentDraftScalarWhereInput
+    data: XOR<FbContentDraftUpdateManyMutationInput, FbContentDraftUncheckedUpdateManyWithoutPlanInput>
+  }
+
+  export type FbContentDraftScalarWhereInput = {
+    AND?: FbContentDraftScalarWhereInput | FbContentDraftScalarWhereInput[]
+    OR?: FbContentDraftScalarWhereInput[]
+    NOT?: FbContentDraftScalarWhereInput | FbContentDraftScalarWhereInput[]
+    id?: StringFilter<"FbContentDraft"> | string
+    planId?: StringNullableFilter<"FbContentDraft"> | string | null
+    pageId?: StringFilter<"FbContentDraft"> | string
+    pillar?: StringFilter<"FbContentDraft"> | string
+    title?: StringFilter<"FbContentDraft"> | string
+    hook?: StringFilter<"FbContentDraft"> | string
+    message?: StringFilter<"FbContentDraft"> | string
+    hashtags?: StringFilter<"FbContentDraft"> | string
+    mediaIdea?: StringFilter<"FbContentDraft"> | string
+    mediaUrls?: StringFilter<"FbContentDraft"> | string
+    linkUrl?: StringNullableFilter<"FbContentDraft"> | string | null
+    productIds?: StringFilter<"FbContentDraft"> | string
+    suggestedAt?: DateTimeNullableFilter<"FbContentDraft"> | Date | string | null
+    status?: StringFilter<"FbContentDraft"> | string
+    rejectReason?: StringNullableFilter<"FbContentDraft"> | string | null
+    scheduledPostId?: StringNullableFilter<"FbContentDraft"> | string | null
+    fbPostId?: StringNullableFilter<"FbContentDraft"> | string | null
+    source?: StringFilter<"FbContentDraft"> | string
+    createdBy?: StringNullableFilter<"FbContentDraft"> | string | null
+    createdAt?: DateTimeFilter<"FbContentDraft"> | Date | string
+    updatedAt?: DateTimeFilter<"FbContentDraft"> | Date | string
+  }
+
+  export type FbContentPlanCreateWithoutDraftsInput = {
+    id?: string
+    pageId: string
+    title: string
+    goal?: string
+    fromDate: Date | string
+    toDate: Date | string
+    status?: string
+    summary?: string | null
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FbContentPlanUncheckedCreateWithoutDraftsInput = {
+    id?: string
+    pageId: string
+    title: string
+    goal?: string
+    fromDate: Date | string
+    toDate: Date | string
+    status?: string
+    summary?: string | null
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FbContentPlanCreateOrConnectWithoutDraftsInput = {
+    where: FbContentPlanWhereUniqueInput
+    create: XOR<FbContentPlanCreateWithoutDraftsInput, FbContentPlanUncheckedCreateWithoutDraftsInput>
+  }
+
+  export type FbContentPlanUpsertWithoutDraftsInput = {
+    update: XOR<FbContentPlanUpdateWithoutDraftsInput, FbContentPlanUncheckedUpdateWithoutDraftsInput>
+    create: XOR<FbContentPlanCreateWithoutDraftsInput, FbContentPlanUncheckedCreateWithoutDraftsInput>
+    where?: FbContentPlanWhereInput
+  }
+
+  export type FbContentPlanUpdateToOneWithWhereWithoutDraftsInput = {
+    where?: FbContentPlanWhereInput
+    data: XOR<FbContentPlanUpdateWithoutDraftsInput, FbContentPlanUncheckedUpdateWithoutDraftsInput>
+  }
+
+  export type FbContentPlanUpdateWithoutDraftsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    pageId?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    goal?: StringFieldUpdateOperationsInput | string
+    fromDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    toDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    status?: StringFieldUpdateOperationsInput | string
+    summary?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FbContentPlanUncheckedUpdateWithoutDraftsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    pageId?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    goal?: StringFieldUpdateOperationsInput | string
+    fromDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    toDate?: DateTimeFieldUpdateOperationsInput | Date | string
+    status?: StringFieldUpdateOperationsInput | string
+    summary?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type AiAgentRunCreateWithoutJobInput = {
     id?: string
     startedAt?: Date | string
@@ -208621,6 +219079,10 @@ export namespace Prisma {
     notes?: string | null
     expectedDate?: Date | string | null
     receivedDate?: Date | string | null
+    checkedBy?: string | null
+    checkedByName?: string | null
+    checkedAt?: Date | string | null
+    rejectReason?: string | null
     branchId?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -208635,6 +219097,10 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     expectedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     receivedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    checkedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    checkedByName?: NullableStringFieldUpdateOperationsInput | string | null
+    checkedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    rejectReason?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -208650,6 +219116,10 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     expectedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     receivedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    checkedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    checkedByName?: NullableStringFieldUpdateOperationsInput | string | null
+    checkedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    rejectReason?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -208665,6 +219135,10 @@ export namespace Prisma {
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     expectedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     receivedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    checkedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    checkedByName?: NullableStringFieldUpdateOperationsInput | string | null
+    checkedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    rejectReason?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -209355,6 +219829,8 @@ export namespace Prisma {
     platformFeeRate?: number
     netRevenue?: number
     adsVoucherDiscount?: number
+    isInstant?: boolean
+    shipByDate?: Date | string | null
     stockDeducted?: boolean
     syncedAt?: Date | string | null
     createdAt?: Date | string
@@ -209408,6 +219884,8 @@ export namespace Prisma {
     platformFeeRate?: FloatFieldUpdateOperationsInput | number
     netRevenue?: FloatFieldUpdateOperationsInput | number
     adsVoucherDiscount?: FloatFieldUpdateOperationsInput | number
+    isInstant?: BoolFieldUpdateOperationsInput | boolean
+    shipByDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stockDeducted?: BoolFieldUpdateOperationsInput | boolean
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -209444,6 +219922,8 @@ export namespace Prisma {
     platformFeeRate?: FloatFieldUpdateOperationsInput | number
     netRevenue?: FloatFieldUpdateOperationsInput | number
     adsVoucherDiscount?: FloatFieldUpdateOperationsInput | number
+    isInstant?: BoolFieldUpdateOperationsInput | boolean
+    shipByDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stockDeducted?: BoolFieldUpdateOperationsInput | boolean
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -209480,6 +219960,8 @@ export namespace Prisma {
     platformFeeRate?: FloatFieldUpdateOperationsInput | number
     netRevenue?: FloatFieldUpdateOperationsInput | number
     adsVoucherDiscount?: FloatFieldUpdateOperationsInput | number
+    isInstant?: BoolFieldUpdateOperationsInput | boolean
+    shipByDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     stockDeducted?: BoolFieldUpdateOperationsInput | boolean
     syncedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -210422,6 +220904,98 @@ export namespace Prisma {
     success?: BoolFieldUpdateOperationsInput | boolean
     errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FbContentDraftCreateManyPlanInput = {
+    id?: string
+    pageId: string
+    pillar?: string
+    title?: string
+    hook?: string
+    message: string
+    hashtags?: string
+    mediaIdea?: string
+    mediaUrls?: string
+    linkUrl?: string | null
+    productIds?: string
+    suggestedAt?: Date | string | null
+    status?: string
+    rejectReason?: string | null
+    scheduledPostId?: string | null
+    fbPostId?: string | null
+    source?: string
+    createdBy?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type FbContentDraftUpdateWithoutPlanInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    pageId?: StringFieldUpdateOperationsInput | string
+    pillar?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    hook?: StringFieldUpdateOperationsInput | string
+    message?: StringFieldUpdateOperationsInput | string
+    hashtags?: StringFieldUpdateOperationsInput | string
+    mediaIdea?: StringFieldUpdateOperationsInput | string
+    mediaUrls?: StringFieldUpdateOperationsInput | string
+    linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    productIds?: StringFieldUpdateOperationsInput | string
+    suggestedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    rejectReason?: NullableStringFieldUpdateOperationsInput | string | null
+    scheduledPostId?: NullableStringFieldUpdateOperationsInput | string | null
+    fbPostId?: NullableStringFieldUpdateOperationsInput | string | null
+    source?: StringFieldUpdateOperationsInput | string
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FbContentDraftUncheckedUpdateWithoutPlanInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    pageId?: StringFieldUpdateOperationsInput | string
+    pillar?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    hook?: StringFieldUpdateOperationsInput | string
+    message?: StringFieldUpdateOperationsInput | string
+    hashtags?: StringFieldUpdateOperationsInput | string
+    mediaIdea?: StringFieldUpdateOperationsInput | string
+    mediaUrls?: StringFieldUpdateOperationsInput | string
+    linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    productIds?: StringFieldUpdateOperationsInput | string
+    suggestedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    rejectReason?: NullableStringFieldUpdateOperationsInput | string | null
+    scheduledPostId?: NullableStringFieldUpdateOperationsInput | string | null
+    fbPostId?: NullableStringFieldUpdateOperationsInput | string | null
+    source?: StringFieldUpdateOperationsInput | string
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type FbContentDraftUncheckedUpdateManyWithoutPlanInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    pageId?: StringFieldUpdateOperationsInput | string
+    pillar?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    hook?: StringFieldUpdateOperationsInput | string
+    message?: StringFieldUpdateOperationsInput | string
+    hashtags?: StringFieldUpdateOperationsInput | string
+    mediaIdea?: StringFieldUpdateOperationsInput | string
+    mediaUrls?: StringFieldUpdateOperationsInput | string
+    linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    productIds?: StringFieldUpdateOperationsInput | string
+    suggestedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    status?: StringFieldUpdateOperationsInput | string
+    rejectReason?: NullableStringFieldUpdateOperationsInput | string | null
+    scheduledPostId?: NullableStringFieldUpdateOperationsInput | string | null
+    fbPostId?: NullableStringFieldUpdateOperationsInput | string | null
+    source?: StringFieldUpdateOperationsInput | string
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type AiAgentRunCreateManyJobInput = {

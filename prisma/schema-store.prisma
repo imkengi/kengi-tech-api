@@ -1500,6 +1500,12 @@ model StoreSettings {
 
   // Google Drive folder ID for packing/return-unbox videos
   driveFolderId String?
+  // Kết nối Google Drive BẰNG TÀI KHOẢN CHỦ SHOP (OAuth). Cần vì file trong
+  // My Drive chỉ CHỦ SỞ HỮU xoá được — service account dù có quyền Editor vẫn
+  // bị Google chặn, nên dọn video tự động phải chạy dưới danh nghĩa chính chủ.
+  driveOauthToken String? // refresh_token (dài hạn)
+  driveOauthEmail String? // email tài khoản đã kết nối, để hiện trên giao diện
+  driveOauthAt    DateTime?
 
   updatedAt DateTime @updatedAt
 }
@@ -1744,6 +1750,11 @@ model OnlineOrder {
   platformFeeRate    Float     @default(0)
   netRevenue         Float     @default(0)
   adsVoucherDiscount Float     @default(0) // Shopee Ads Smart Voucher — chỉ quan sát, chưa trừ netRevenue
+  // Hỏa tốc (Shopee Instant Delivery — giao ≤4h): nhận diện qua logistics_channel_id
+  // thuộc get_channel_list có service_type_identifier='instant'. shipByDate là HẠN
+  // bàn giao ĐVVC (ship_by_date) — KHÔNG phải ngày đã gửi hàng (shippedAt).
+  isInstant          Boolean   @default(false)
+  shipByDate         DateTime?
   // Cờ chống trừ kho 2 lần: true khi BẤT KỲ đường nào (đổi status tay / convert
   // sync / webhook) đã trừ kho cho đơn này; hoàn kho khi hủy phải reset false.
   stockDeducted      Boolean   @default(false)
@@ -2020,6 +2031,13 @@ model EInvoice {
   // Replace / cancel trail
   replacesInvoiceId   String? // original invoice this one replaces
   replacedByInvoiceId String? // replacement invoice that supersedes this one
+  // Adjust trail — HĐ điều chỉnh giảm: gốc VẪN hiệu lực nên KHÔNG dùng chung
+  // hai cột replace ở trên. Cột đã có trong DB (ensureTables tự ALTER) nhưng
+  // THIẾU Ở ĐÂY khiến prisma.eInvoice.create nổ "Unknown argument
+  // adjustsInvoiceId" — hoá đơn phát hành xong bên VNPT mà không lưu được.
+  adjustsInvoiceId    String? // hoá đơn gốc mà bản này điều chỉnh giảm
+  adjustedByInvoiceId String? // bản điều chỉnh đã lập cho hoá đơn này
+  adjustReturnCode    String? // mã phiếu trả đã dùng để lập bản điều chỉnh này
   cancelReason        String?
   notes               String?
   branchId            String?
@@ -2880,5 +2898,82 @@ model AiAgentRun {
   job AiAgentJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   @@index([jobId])
+  @@index([startedAt])
+}
+
+// ─── Cổng đồng bộ KiotViet ─────────────────────────────────────────────────
+// Kéo hàng hoá/khách/NCC/hoá đơn từ KiotViet sang Kengi theo khoảng ngày, và
+// nhận webhook khi bên đó phát sinh. Xem src/services/kiotvietSync.ts để nắm
+// các nguyên tắc an toàn (chạy thử mặc định, không ghi đè, bất biến tồn kho).
+
+model KiotVietConfig {
+  id           String  @id @default("default")
+  clientId     String
+  clientSecret String
+  retailer     String // tên gian hàng, đi trong header `Retailer`
+  // Token 32 byte ngẫu nhiên nằm trong ĐƯỜNG DẪN webhook — đây là lớp bảo vệ
+  // CHÍNH của cổng nhận, vì công thức chữ ký của KiotViet không được công bố.
+  webhookToken String  @unique
+  webhookSecret   String?
+  strictSignature Boolean @default(false) // bật khi đã chốt được công thức ký
+
+  enabled       Boolean @default(false)
+  syncProducts  Boolean @default(true)
+  syncCustomers Boolean @default(true)
+  syncSuppliers Boolean @default(true)
+  syncInvoices  Boolean @default(false) // mặc định TẮT: hoá đơn đụng doanh thu
+
+  // Mặc định KHÔNG ghi đè dữ liệu Kengi — chỉ tạo mới và điền chỗ trống
+  overwriteNames  Boolean @default(false)
+  overwritePrices Boolean @default(false)
+  overwriteStock  Boolean @default(false)
+
+  defaultCategoryId  String? // nhóm hàng gán cho sản phẩm mới
+  defaultWarehouseId String? // kho nhận tồn đồng bộ
+  branchIds          String? // JSON mảng id chi nhánh KiotViet lấy tồn
+
+  lastSyncAt    DateTime?
+  lastWebhookAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// Bản đồ id KiotViet ↔ id Kengi. Chạy lại đợt đồng bộ cũ phải ra "cập nhật"
+// chứ không đẻ thêm bản ghi — bảng này là chỗ chống trùng chắc nhất.
+model KiotVietMap {
+  id       String   @id @default(cuid())
+  entity   String // product | customer | supplier | invoice | order | category
+  kvId     String
+  kvCode   String?
+  localId  String
+  syncedAt DateTime @default(now())
+
+  @@unique([entity, kvId])
+  @@index([entity, localId])
+  @@index([kvCode])
+}
+
+model KiotVietSyncLog {
+  id       String    @id @default(cuid())
+  entity   String
+  mode     String    @default("manual") // manual | webhook
+  dryRun   Boolean   @default(false)
+  fromDate DateTime?
+  toDate   DateTime?
+
+  fetched Int @default(0)
+  created Int @default(0)
+  updated Int @default(0)
+  skipped Int @default(0)
+  failed  Int @default(0)
+
+  status     String    @default("running") // running | success | partial | failed
+  errors     String?
+  details    String? // JSON kết quả theo từng loại dữ liệu
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  @@index([mode])
+  @@index([status])
   @@index([startedAt])
 }

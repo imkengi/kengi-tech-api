@@ -524,18 +524,24 @@ model Supplier {
 // ─── Purchase Orders ───────────────────────────────────────────────────────────
 
 model PurchaseOrder {
-  id           String    @id @default(cuid())
-  code         String    @unique
-  supplierId   String?
-  supplierName String
-  status       String    @default("draft")
-  totalAmount  Float     @default(0)
-  notes        String?
-  expectedDate DateTime?
-  receivedDate DateTime?
-  branchId     String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id            String    @id @default(cuid())
+  code          String    @unique
+  supplierId    String?
+  supplierName  String
+  status        String    @default("draft")
+  totalAmount   Float     @default(0)
+  notes         String?
+  expectedDate  DateTime?
+  receivedDate  DateTime?
+  // Cổng kiểm hàng (2026-08-04): hàng về ở trạng thái "checking", NGƯỜI KIỂM
+  // chấp nhận phiếu (→received) thì kho mới được ghi. Ai duyệt phải để lại tên.
+  checkedBy     String?
+  checkedByName String?
+  checkedAt     DateTime?
+  rejectReason  String?
+  branchId      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   supplier Supplier?           @relation(fields: [supplierId], references: [id])
   items    PurchaseOrderItem[]
@@ -557,20 +563,34 @@ model PurchaseOrderItem {
 // ─── Expenses ──────────────────────────────────────────────────────────────────
 
 model Expense {
-  id            String    @id @default(cuid())
-  description   String
-  amount        Float
-  category      String
-  date          DateTime  @default(now())
-  paidBy        String?
-  recurring     Boolean   @default(false)
-  bankAccountId String?
-  status        String    @default("active") // "active" | "cancelled"
-  cancelledAt   DateTime?
-  cancelReason  String?
-  branchId      String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id               String    @id @default(cuid())
+  description      String
+  amount           Float
+  category         String
+  date             DateTime  @default(now())
+  paidBy           String?
+  recurring        Boolean   @default(false)
+  bankAccountId    String?
+  // "pending" = bóc tự động từ email HĐĐT, CHỜ DUYỆT — thống kê chỉ tính
+  // "active" nên phiếu chờ không lọt vào sổ trước khi người dùng xem (2026-08-05)
+  status           String    @default("active") // "active" | "pending" | "cancelled"
+  // ─── Hoá đơn đầu vào (VAT khấu trừ) ───────────────────────────────────────
+  // Mất số hoá đơn / MST người bán là mất quyền khấu trừ, nên giữ đủ ngay từ
+  // lúc bóc thư, không để người dùng nhập lại tay.
+  vatAmount        Float?
+  supplierName     String?
+  supplierTaxCode  String?
+  invoiceNo        String?
+  invoiceSymbol    String?
+  invoiceDate      DateTime?
+  lookupCode       String? // mã tra cứu trên cổng HĐĐT của NCC
+  taxAuthorityCode String? // mã của cơ quan thuế
+  sourceRef        String? // khoá chống trùng: MST bán|ký hiệu|số HĐ
+  cancelledAt      DateTime?
+  cancelReason     String?
+  branchId         String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   @@index([branchId])
   @@index([status])
@@ -1446,7 +1466,10 @@ model StoreSettings {
   notifyLowStock     Boolean @default(true)
 
   // SMTP email công ty cho CRM gửi email chào hàng — JSON {host,port,user,pass,fromName,secure}
-  smtpConfig String?
+  smtpConfig    String?
+  // Hộp thư Gmail RIÊNG để check trong app (04/08/2026) — TÁCH khỏi smtpConfig
+  // (mail gửi CRM là tài khoản khác). JSON {user, pass, host?}
+  mailboxConfig String?
 
   // Key Gemini riêng của cửa hàng cho Trợ lý AI (chỉ admin cấu hình; API che dạng ••••).
   geminiApiKey String?
@@ -1476,7 +1499,13 @@ model StoreSettings {
   dailyOrderTarget     Int?
 
   // Google Drive folder ID for packing/return-unbox videos
-  driveFolderId String?
+  driveFolderId   String?
+  // Kết nối Google Drive BẰNG TÀI KHOẢN CHỦ SHOP (OAuth). Cần vì file trong
+  // My Drive chỉ CHỦ SỞ HỮU xoá được — service account dù có quyền Editor vẫn
+  // bị Google chặn, nên dọn video tự động phải chạy dưới danh nghĩa chính chủ.
+  driveOauthToken String? // refresh_token (dài hạn)
+  driveOauthEmail String? // email tài khoản đã kết nối, để hiện trên giao diện
+  driveOauthAt    DateTime?
 
   updatedAt DateTime @updatedAt
 }
@@ -1721,6 +1750,11 @@ model OnlineOrder {
   platformFeeRate    Float     @default(0)
   netRevenue         Float     @default(0)
   adsVoucherDiscount Float     @default(0) // Shopee Ads Smart Voucher — chỉ quan sát, chưa trừ netRevenue
+  // Hỏa tốc (Shopee Instant Delivery — giao ≤4h): nhận diện qua logistics_channel_id
+  // thuộc get_channel_list có service_type_identifier='instant'. shipByDate là HẠN
+  // bàn giao ĐVVC (ship_by_date) — KHÔNG phải ngày đã gửi hàng (shippedAt).
+  isInstant          Boolean   @default(false)
+  shipByDate         DateTime?
   // Cờ chống trừ kho 2 lần: true khi BẤT KỲ đường nào (đổi status tay / convert
   // sync / webhook) đã trừ kho cho đơn này; hoàn kho khi hủy phải reset false.
   stockDeducted      Boolean   @default(false)
@@ -1997,6 +2031,13 @@ model EInvoice {
   // Replace / cancel trail
   replacesInvoiceId   String? // original invoice this one replaces
   replacedByInvoiceId String? // replacement invoice that supersedes this one
+  // Adjust trail — HĐ điều chỉnh giảm: gốc VẪN hiệu lực nên KHÔNG dùng chung
+  // hai cột replace ở trên. Cột đã có trong DB (ensureTables tự ALTER) nhưng
+  // THIẾU Ở ĐÂY khiến prisma.eInvoice.create nổ "Unknown argument
+  // adjustsInvoiceId" — hoá đơn phát hành xong bên VNPT mà không lưu được.
+  adjustsInvoiceId    String? // hoá đơn gốc mà bản này điều chỉnh giảm
+  adjustedByInvoiceId String? // bản điều chỉnh đã lập cho hoá đơn này
+  adjustReturnCode    String? // mã phiếu trả đã dùng để lập bản điều chỉnh này
   cancelReason        String?
   notes               String?
   branchId            String?
@@ -2629,6 +2670,87 @@ model FbAutoReplyLog {
   @@index([createdAt])
 }
 
+// ─── AI MARKETING: hồ sơ thương hiệu · kế hoạch nội dung · bài nháp chờ duyệt ──
+// Agent tự lên content được là nhờ 3 bảng này. Không có hồ sơ thương hiệu thì
+// agent chỉ viết được văn mẫu chung chung — đó là khác biệt giữa "có AI" và
+// "AI viết đúng giọng shop".
+
+model FbBrandProfile {
+  id           String   @id @default(cuid())
+  // MỘT hồ sơ cho cả cửa hàng (shop = thương hiệu). Code luôn dùng findFirst,
+  // không tạo bản thứ hai — xem layHoSo() ở mcpMarketingTools.
+  brandName    String   @default("")
+  industry     String   @default("") // ngành hàng, VD "mỹ phẩm", "phụ tùng xe máy"
+  audience     String   @default("") // chân dung khách: tuổi, giới, khu vực, nỗi đau
+  toneOfVoice  String   @default("than-thien") // than-thien | chuyen-nghiep | hai-huoc | sang-trong
+  usp          String   @default("") // vì sao khách chọn shop này chứ không phải shop khác
+  cta          String   @default("") // lời kêu gọi mặc định, VD "Inbox để được tư vấn"
+  hashtags     String   @default("[]") // JSON array hashtag thương hiệu
+  bannedWords  String   @default("[]") // JSON array từ CẤM dùng (cam kết sai luật quảng cáo, từ nhạy cảm)
+  emojiLevel   String   @default("vua") // khong | vua | nhieu
+  postsPerWeek Int      @default(5)
+  bestHours    String   @default("[]") // JSON array giờ VN đăng tốt, VD [8,12,20]
+  pillarMix    String   @default("{}") // JSON {pillar: số bài/tuần} — giữ tỉ lệ 80/20 giá trị/bán hàng
+  notes        String   @default("") // dặn dò thêm cho agent
+  createdBy    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model FbContentPlan {
+  id        String   @id @default(cuid())
+  pageId    String // FbPage.pageId — KHÔNG đặt FK để kế hoạch còn nguyên khi gỡ/nối lại page
+  title     String
+  goal      String   @default("") // mục tiêu chiến dịch, VD "đẩy hàng tồn mùa hè"
+  fromDate  DateTime
+  toDate    DateTime
+  status    String   @default("active") // active | done | cancelled
+  summary   String? // báo cáo agent viết lại sau khi lên xong kế hoạch
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  drafts FbContentDraft[]
+
+  @@index([pageId, status])
+}
+
+model FbContentDraft {
+  id     String  @id @default(cuid())
+  planId String?
+  pageId String // FbPage.pageId
+  pillar String  @default("khac") // trụ nội dung: giao-duc | san-pham | khuyen-mai | chung-thuc | hau-truong | tuong-tac | xu-huong | khac
+
+  title      String  @default("") // nhãn nội bộ cho chủ shop lướt nhanh
+  hook       String  @default("") // 1-2 dòng đầu — thứ quyết định khách có bấm "xem thêm" không
+  message    String // TOÀN VĂN bài đăng (đã gồm hook + hashtag khi đăng)
+  hashtags   String  @default("[]") // JSON array
+  mediaIdea  String  @default("") // gợi ý ảnh/video cho chủ shop tự chụp nếu không dùng ảnh sẵn
+  mediaUrls  String  @default("[]") // JSON array URL ảnh THẬT (lấy từ ProductImage)
+  linkUrl    String?
+  productIds String  @default("[]") // JSON array Product.id được nhắc tới — để truy vết bài nào đẩy hàng nào
+
+  suggestedAt DateTime? // giờ đăng agent đề xuất (giờ VN đã quy đổi sang UTC)
+
+  // pending = CHỜ DUYỆT (agent chỉ được dừng ở đây), scheduled = đã duyệt và lên
+  // lịch thật trên Facebook, published = đã đăng, rejected = chủ shop bỏ.
+  status          String  @default("pending")
+  rejectReason    String?
+  scheduledPostId String? // FbScheduledPost.id sau khi duyệt
+  fbPostId        String?
+
+  source    String   @default("ai") // ai | manual
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  plan FbContentPlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
+
+  @@index([pageId, status])
+  @@index([suggestedAt])
+  @@index([planId])
+}
+
 // ─── CRM: công việc, cơ hội bán hàng, nhật ký (kengi.vn/crm) ──────────────────
 // Trước đây các mảng này chỉ nằm ở localStorage trình duyệt nên mỗi máy một dữ
 // liệu. Đưa lên DB để cả đội dùng chung.
@@ -2776,5 +2898,82 @@ model AiAgentRun {
   job AiAgentJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   @@index([jobId])
+  @@index([startedAt])
+}
+
+// ─── Cổng đồng bộ KiotViet ─────────────────────────────────────────────────
+// Kéo hàng hoá/khách/NCC/hoá đơn từ KiotViet sang Kengi theo khoảng ngày, và
+// nhận webhook khi bên đó phát sinh. Xem src/services/kiotvietSync.ts để nắm
+// các nguyên tắc an toàn (chạy thử mặc định, không ghi đè, bất biến tồn kho).
+
+model KiotVietConfig {
+  id              String  @id @default("default")
+  clientId        String
+  clientSecret    String
+  retailer        String // tên gian hàng, đi trong header `Retailer`
+  // Token 32 byte ngẫu nhiên nằm trong ĐƯỜNG DẪN webhook — đây là lớp bảo vệ
+  // CHÍNH của cổng nhận, vì công thức chữ ký của KiotViet không được công bố.
+  webhookToken    String  @unique
+  webhookSecret   String?
+  strictSignature Boolean @default(false) // bật khi đã chốt được công thức ký
+
+  enabled       Boolean @default(false)
+  syncProducts  Boolean @default(true)
+  syncCustomers Boolean @default(true)
+  syncSuppliers Boolean @default(true)
+  syncInvoices  Boolean @default(false) // mặc định TẮT: hoá đơn đụng doanh thu
+
+  // Mặc định KHÔNG ghi đè dữ liệu Kengi — chỉ tạo mới và điền chỗ trống
+  overwriteNames  Boolean @default(false)
+  overwritePrices Boolean @default(false)
+  overwriteStock  Boolean @default(false)
+
+  defaultCategoryId  String? // nhóm hàng gán cho sản phẩm mới
+  defaultWarehouseId String? // kho nhận tồn đồng bộ
+  branchIds          String? // JSON mảng id chi nhánh KiotViet lấy tồn
+
+  lastSyncAt    DateTime?
+  lastWebhookAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// Bản đồ id KiotViet ↔ id Kengi. Chạy lại đợt đồng bộ cũ phải ra "cập nhật"
+// chứ không đẻ thêm bản ghi — bảng này là chỗ chống trùng chắc nhất.
+model KiotVietMap {
+  id       String   @id @default(cuid())
+  entity   String // product | customer | supplier | invoice | order | category
+  kvId     String
+  kvCode   String?
+  localId  String
+  syncedAt DateTime @default(now())
+
+  @@unique([entity, kvId])
+  @@index([entity, localId])
+  @@index([kvCode])
+}
+
+model KiotVietSyncLog {
+  id       String    @id @default(cuid())
+  entity   String
+  mode     String    @default("manual") // manual | webhook
+  dryRun   Boolean   @default(false)
+  fromDate DateTime?
+  toDate   DateTime?
+
+  fetched Int @default(0)
+  created Int @default(0)
+  updated Int @default(0)
+  skipped Int @default(0)
+  failed  Int @default(0)
+
+  status     String    @default("running") // running | success | partial | failed
+  errors     String?
+  details    String? // JSON kết quả theo từng loại dữ liệu
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  @@index([mode])
+  @@index([status])
   @@index([startedAt])
 }
