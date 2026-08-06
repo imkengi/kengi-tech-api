@@ -600,8 +600,12 @@ export async function syncCashflow(sp: any, items: any[], opts: SyncOptions, c: 
             const amount = Math.abs(Number(kv?.amount) || 0)
             if (!kvId || !code || !amount) { c.skipped++; continue }
 
-            // Đã huỷ bên KiotViet thì không mang sang
-            if (Number(kv?.status) === 0 || /void|cancel/i.test(String(kv?.statusValue || ''))) { c.skipped++; continue }
+            // TRẠNG THÁI — đo trên dữ liệu thật của HUTI (06/08/2026):
+            //   status 0 = "Đã thanh toán"  ← HỢP LỆ
+            //   status 1 = "Đã hủy"          ← bỏ
+            // Bản đầu tôi làm NGƯỢC (loại status 0), nên loại sạch 515/523 phiếu
+            // hợp lệ và chỉ nhận đúng mấy phiếu đã huỷ. Đừng đảo lại lần nữa.
+            if (Number(kv?.status) === 1 || /hủy|huỷ|cancel|void/i.test(String(kv?.statusValue || ''))) { c.skipped++; continue }
 
             const dir = cashflowDirection(kv)
             if (!dir) {
@@ -615,7 +619,9 @@ export async function syncCashflow(sp: any, items: any[], opts: SyncOptions, c: 
 
             const when = kv?.transDate ? new Date(kv.transDate) : new Date()
             const date = isNaN(when.getTime()) ? new Date() : when
-            const note = String(kv?.description || kv?.contactName || 'Sổ quỹ KiotViet').slice(0, 300)
+            // Tên đối tác nằm ở partnerName (đã đo trên dữ liệu thật)
+            const partner = String(kv?.partnerName || kv?.contactName || '').trim()
+            const note = [String(kv?.cashGroup || 'Sổ quỹ KiotViet'), partner].filter(Boolean).join(' — ').slice(0, 300)
             const viaBank = /transfer|bank|chuy/i.test(String(kv?.method || ''))
 
             if (dir === 'in') {
@@ -626,7 +632,7 @@ export async function syncCashflow(sp: any, items: any[], opts: SyncOptions, c: 
                         data: {
                             description: note, amount, category: 'other', date,
                             receivedVia: viaBank ? 'Chuyển khoản' : 'Tiền mặt',
-                            customerName: kv?.contactName ? String(kv.contactName).slice(0, 200) : null,
+                            customerName: partner ? partner.slice(0, 200) : null,
                             reference: code, status: 'active',
                         },
                     })
@@ -640,7 +646,7 @@ export async function syncCashflow(sp: any, items: any[], opts: SyncOptions, c: 
                         data: {
                             description: note, amount, category: 'Sổ quỹ KiotViet', date,
                             status: 'pending',        // CHỜ DUYỆT — chưa vào thống kê
-                            paidBy: kv?.user ? String(kv.user).slice(0, 100) : null,
+                            supplierName: partner ? partner.slice(0, 200) : null,
                             sourceRef: `KV|${code}`,
                         },
                     })
@@ -655,19 +661,39 @@ export async function syncCashflow(sp: any, items: any[], opts: SyncOptions, c: 
     }
 }
 
-/** Dò chiều tiền của bản ghi sổ quỹ. Không chắc thì trả null (xem ghi chú trên). */
+/**
+ * Dò chiều tiền của bản ghi sổ quỹ. Không chắc thì trả null (xem ghi chú trên).
+ *
+ * CHỐT TỪ DỮ LIỆU THẬT (HUTI, 06/08/2026 — không phải suy diễn từ tài liệu):
+ *   THU: code TT…/TTHD… · cashGroup "Tiền khách trả" · origin "Pay"      ·
+ *        partnerType "C" · amount DƯƠNG
+ *   CHI: code PC…        · cashGroup "Tiền trả NCC"   · origin "Purchase" ·
+ *        partnerType "S" · amount ÂM
+ * Năm dấu hiệu này đi cùng nhau; xét lần lượt để một trường đổi tên bên KiotViet
+ * không làm câm cả bộ.
+ */
 function cashflowDirection(kv: any): 'in' | 'out' | null {
-    // 1. Trường chiều tường minh nếu có
-    const t = String(kv?.cashFlowType ?? kv?.type ?? '').toLowerCase()
-    if (/receipt|thu|in\b/.test(t) && !/chi/.test(t)) return 'in'
-    if (/payment|chi|out\b/.test(t)) return 'out'
+    // 1. Nhóm sổ quỹ — chuỗi người đọc được, rõ nghĩa nhất
+    const g = String(kv?.cashGroup || '').toLowerCase()
+    if (/trả ncc|tra ncc|chi/.test(g)) return 'out'
+    if (/khách trả|khach tra|thu/.test(g)) return 'in'
 
-    // 2. Tiền tố mã phiếu — KiotViet đánh TTHU… cho thu, TTCHI…/TCHI… cho chi
+    // 2. Nguồn phát sinh
+    const o = String(kv?.origin || '').toLowerCase()
+    if (o === 'purchase') return 'out'
+    if (o === 'pay') return 'in'
+
+    // 3. Tiền tố mã phiếu
     const code = String(kv?.code || '').toUpperCase()
-    if (/^TT?CHI/.test(code)) return 'out'
-    if (/^TT?THU/.test(code)) return 'in'
+    if (/^(PC|CT|TC)/.test(code)) return 'out'
+    if (/^TT/.test(code)) return 'in'
 
-    // 3. Dấu của số tiền (một số bản trả số âm cho chi)
+    // 4. Đối tác: S = nhà cung cấp (chi), C = khách hàng (thu)
+    const p = String(kv?.partnerType || '').toUpperCase()
+    if (p === 'S') return 'out'
+    if (p === 'C') return 'in'
+
+    // 5. Dấu của số tiền
     const raw = Number(kv?.amount)
     if (Number.isFinite(raw) && raw !== 0) return raw > 0 ? 'in' : 'out'
 
