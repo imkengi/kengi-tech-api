@@ -2967,11 +2967,14 @@ model KiotVietSyncLog {
   skipped Int @default(0)
   failed  Int @default(0)
 
-  status     String    @default("running") // running | success | partial | failed
-  errors     String?
-  details    String? // JSON kết quả theo từng loại dữ liệu
-  startedAt  DateTime  @default(now())
-  finishedAt DateTime?
+  status      String    @default("running") // running | success | partial | failed
+  errors      String?
+  details     String? // JSON kết quả theo từng loại dữ liệu
+  startedAt   DateTime  @default(now())
+  // Dấu "còn sống" đóng liên tục trong lúc chạy. Thiếu nó thì đợt chạy nền chết
+  // giữa chừng vẫn hiện "đang chạy" mãi mãi, không ai biết nên chờ hay bấm lại.
+  heartbeatAt DateTime?
+  finishedAt  DateTime?
 
   @@index([mode])
   @@index([status])

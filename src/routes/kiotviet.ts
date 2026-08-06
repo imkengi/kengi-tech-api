@@ -24,6 +24,7 @@ import { errMsg } from '../lib/errorResponse'
 import { KV, kvDate, testConnection, clearTokenCache, type KiotVietCreds } from '../services/kiotviet'
 import {
     newCounters, syncProducts, syncCustomers, syncSuppliers, syncInvoices,
+    syncPurchaseOrders, syncCashflow,
     parseWebhookPayload, verifyWebhookSignature, type SyncOptions, type SyncCounters,
 } from '../services/kiotvietSync'
 
@@ -420,7 +421,7 @@ router.post('/sync', async (req: Request, res: Response) => {
         const cfg = await loadConfig(store.sp)
         if (!cfg) { res.status(400).json({ success: false, error: 'Chưa cấu hình KiotViet' }); return }
 
-        const allowed = ['products', 'customers', 'suppliers', 'invoices']
+        const allowed = ['products', 'customers', 'suppliers', 'invoices', 'purchaseOrders', 'cashflow']
         const entities: string[] = Array.isArray(b.entities)
             ? b.entities.filter((e: any) => allowed.includes(String(e)))
             : []
@@ -437,14 +438,30 @@ router.post('/sync', async (req: Request, res: Response) => {
         const apply = b.apply === true
 
         // Một đợt đang chạy thì không cho bấm chồng — hai đợt song song sẽ đua
-        // nhau tạo cùng một bản ghi và đẻ trùng.
+        // nhau tạo cùng một bản ghi và đẻ trùng. Nhưng chỉ chặn khi đợt kia CÒN
+        // SỐNG (nhịp tim < 2 phút): trước đây chặn theo giờ bắt đầu nên một đợt
+        // chết giữa chừng khoá người dùng suốt 30 phút mà không nói vì sao.
         const running = await store.sp.kiotVietSyncLog.findFirst({
-            where: { mode: 'manual', status: 'running', startedAt: { gte: new Date(Date.now() - 30 * 60_000) } },
-            select: { id: true },
+            where: { mode: 'manual', status: 'running' },
+            orderBy: { startedAt: 'desc' },
+            select: { id: true, heartbeatAt: true, startedAt: true },
         }).catch(() => null)
         if (running) {
-            res.status(409).json({ success: false, error: 'Đang có một đợt đồng bộ chạy dở. Chờ xong rồi bấm lại.' })
-            return
+            const lastBeat = running.heartbeatAt || running.startedAt
+            const stale = Date.now() - new Date(lastBeat).getTime() > 2 * 60_000
+            if (stale) {
+                // Mất tín hiệu quá 2 phút = coi như chết, đóng lại để đi tiếp
+                await store.sp.kiotVietSyncLog.update({
+                    where: { id: running.id },
+                    data: {
+                        status: 'failed', finishedAt: new Date(),
+                        errors: 'Đợt chạy mất tín hiệu quá 2 phút — máy chủ có thể đã khởi động lại giữa chừng. Đã tự đóng để chạy lại được.',
+                    },
+                }).catch(() => { })
+            } else {
+                res.status(409).json({ success: false, error: 'Đang có một đợt đồng bộ chạy dở (còn tín hiệu). Chờ xong rồi bấm lại.' })
+                return
+            }
         }
 
         const log = await store.sp.kiotVietSyncLog.create({
@@ -482,10 +499,32 @@ async function runSync(
     sp: any, cfg: any, entities: string[],
     fromDate: Date | null, toDate: Date | null, apply: boolean, logId: string,
 ): Promise<void> {
-    const opts = await buildOptions(sp, cfg, apply)
+    const baseOpts = await buildOptions(sp, cfg, apply)
     const creds = credsOf(cfg)
     const totals = newCounters()
     const perEntity: Record<string, any> = {}
+
+    // NHỊP TIM: đóng dấu "còn sống" tối đa 3 giây một lần. Không có nó thì một
+    // đợt chết giữa chừng vẫn hiện "đang chạy" vĩnh viễn.
+    let lastBeat = 0
+    let beating: string | null = null
+    const opts: SyncOptions = {
+        ...baseOpts,
+        onProgress: (c) => {
+            const now = Date.now()
+            if (now - lastBeat < 3000) return
+            lastBeat = now
+            const snapshot = {
+                fetched: totals.fetched + c.fetched, created: totals.created + c.created,
+                updated: totals.updated + c.updated, skipped: totals.skipped + c.skipped,
+                failed: totals.failed + c.failed,
+            }
+            void sp.kiotVietSyncLog.update({
+                where: { id: logId },
+                data: { ...snapshot, heartbeatAt: new Date(), entity: beating ? `${entities.join(',')} · đang xử lý ${beating}` : undefined },
+            }).catch(() => { })
+        },
+    }
 
     // KiotViet lọc theo THỜI ĐIỂM CẬP NHẬT (lastModifiedFrom), không có tham số
     // "đến ngày" cho hàng hoá/khách/NCC → cận trên phải tự cắt phía mình.
@@ -493,6 +532,13 @@ async function runSync(
 
     for (const entity of entities) {
         const c = newCounters()
+        beating = entity
+        // Đập một nhịp NGAY khi bắt đầu loại mới: bước tải dữ liệu về có thể mất
+        // vài phút mà chưa có bản ghi nào chạy qua vòng lặp để đập nhịp.
+        await sp.kiotVietSyncLog.update({
+            where: { id: logId },
+            data: { heartbeatAt: new Date(), entity: `${entities.join(',')} · đang tải ${entity}` },
+        }).catch(() => { })
         try {
             if (entity === 'products') {
                 const { items, truncated } = await KV.products(creds, { lastModifiedFrom, isActive: true })
@@ -519,6 +565,24 @@ async function runSync(
                 const filtered = cutByDate(items, toDate, 'purchaseDate')
                 if (truncated) c.errors.push('Chạm trần 500 trang — thu hẹp khoảng ngày rồi chạy tiếp')
                 await syncInvoices(sp, filtered, opts, c)
+            } else if (entity === 'purchaseOrders') {
+                const { items, truncated } = await KV.purchaseOrders(creds, {
+                    fromPurchaseDate: kvDate(fromDate),
+                    toPurchaseDate: kvDate(toDate),
+                    lastModifiedFrom,
+                })
+                const filtered = cutByDate(items, toDate, 'purchaseDate', 'modifiedDate')
+                if (truncated) c.errors.push('Chạm trần 500 trang — thu hẹp khoảng ngày rồi chạy tiếp')
+                await syncPurchaseOrders(sp, filtered, opts, c)
+            } else if (entity === 'cashflow') {
+                const { items, truncated } = await KV.cashflow(creds, {
+                    startDate: kvDate(fromDate),
+                    endDate: kvDate(toDate),
+                    lastModifiedFrom,
+                })
+                const filtered = cutByDate(items, toDate, 'transDate', 'modifiedDate')
+                if (truncated) c.errors.push('Chạm trần 500 trang — thu hẹp khoảng ngày rồi chạy tiếp')
+                await syncCashflow(sp, filtered, opts, c)
             }
         } catch (e: any) {
             c.failed++
@@ -528,6 +592,10 @@ async function runSync(
         perEntity[entity] = {
             layVe: c.fetched, taoMoi: c.created, capNhat: c.updated,
             boQua: c.skipped, loi: c.failed, mau: c.samples,
+            // Lỗi phải nằm NGAY trong khối của từng loại. Trước đây chỉ gom vào
+            // trường errors ghi ở CUỐI đợt, nên đợt chạy dở hiện "lỗi 2183" mà
+            // không có lấy một dòng giải thích (dính 06/08/2026).
+            loiChiTiet: c.errors.slice(0, 10),
         }
         totals.fetched += c.fetched; totals.created += c.created; totals.updated += c.updated
         totals.skipped += c.skipped; totals.failed += c.failed
@@ -540,6 +608,8 @@ async function runSync(
                 fetched: totals.fetched, created: totals.created, updated: totals.updated,
                 skipped: totals.skipped, failed: totals.failed,
                 details: JSON.stringify(perEntity).slice(0, 60000),
+                errors: totals.errors.join('\n').slice(0, 4000) || null,
+                heartbeatAt: new Date(),
             },
         }).catch(() => { })
     }
@@ -552,6 +622,8 @@ async function runSync(
             skipped: totals.skipped, failed: totals.failed,
             errors: totals.errors.join('\n').slice(0, 4000) || null,
             details: JSON.stringify(perEntity).slice(0, 60000),
+            entity: entities.join(','),
+            heartbeatAt: new Date(),
             finishedAt: new Date(),
         },
     }).catch(() => { })

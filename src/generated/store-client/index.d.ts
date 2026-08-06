@@ -161639,6 +161639,7 @@ export namespace Prisma {
     errors: string | null
     details: string | null
     startedAt: Date | null
+    heartbeatAt: Date | null
     finishedAt: Date | null
   }
 
@@ -161658,6 +161659,7 @@ export namespace Prisma {
     errors: string | null
     details: string | null
     startedAt: Date | null
+    heartbeatAt: Date | null
     finishedAt: Date | null
   }
 
@@ -161677,6 +161679,7 @@ export namespace Prisma {
     errors: number
     details: number
     startedAt: number
+    heartbeatAt: number
     finishedAt: number
     _all: number
   }
@@ -161714,6 +161717,7 @@ export namespace Prisma {
     errors?: true
     details?: true
     startedAt?: true
+    heartbeatAt?: true
     finishedAt?: true
   }
 
@@ -161733,6 +161737,7 @@ export namespace Prisma {
     errors?: true
     details?: true
     startedAt?: true
+    heartbeatAt?: true
     finishedAt?: true
   }
 
@@ -161752,6 +161757,7 @@ export namespace Prisma {
     errors?: true
     details?: true
     startedAt?: true
+    heartbeatAt?: true
     finishedAt?: true
     _all?: true
   }
@@ -161858,6 +161864,7 @@ export namespace Prisma {
     errors: string | null
     details: string | null
     startedAt: Date
+    heartbeatAt: Date | null
     finishedAt: Date | null
     _count: KiotVietSyncLogCountAggregateOutputType | null
     _avg: KiotVietSyncLogAvgAggregateOutputType | null
@@ -161896,6 +161903,7 @@ export namespace Prisma {
     errors?: boolean
     details?: boolean
     startedAt?: boolean
+    heartbeatAt?: boolean
     finishedAt?: boolean
   }, ExtArgs["result"]["kiotVietSyncLog"]>
 
@@ -161915,6 +161923,7 @@ export namespace Prisma {
     errors?: boolean
     details?: boolean
     startedAt?: boolean
+    heartbeatAt?: boolean
     finishedAt?: boolean
   }, ExtArgs["result"]["kiotVietSyncLog"]>
 
@@ -161934,6 +161943,7 @@ export namespace Prisma {
     errors?: boolean
     details?: boolean
     startedAt?: boolean
+    heartbeatAt?: boolean
     finishedAt?: boolean
   }, ExtArgs["result"]["kiotVietSyncLog"]>
 
@@ -161953,10 +161963,11 @@ export namespace Prisma {
     errors?: boolean
     details?: boolean
     startedAt?: boolean
+    heartbeatAt?: boolean
     finishedAt?: boolean
   }
 
-  export type KiotVietSyncLogOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "entity" | "mode" | "dryRun" | "fromDate" | "toDate" | "fetched" | "created" | "updated" | "skipped" | "failed" | "status" | "errors" | "details" | "startedAt" | "finishedAt", ExtArgs["result"]["kiotVietSyncLog"]>
+  export type KiotVietSyncLogOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "entity" | "mode" | "dryRun" | "fromDate" | "toDate" | "fetched" | "created" | "updated" | "skipped" | "failed" | "status" | "errors" | "details" | "startedAt" | "heartbeatAt" | "finishedAt", ExtArgs["result"]["kiotVietSyncLog"]>
 
   export type $KiotVietSyncLogPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     name: "KiotVietSyncLog"
@@ -161977,6 +161988,7 @@ export namespace Prisma {
       errors: string | null
       details: string | null
       startedAt: Date
+      heartbeatAt: Date | null
       finishedAt: Date | null
     }, ExtArgs["result"]["kiotVietSyncLog"]>
     composites: {}
@@ -162416,6 +162428,7 @@ export namespace Prisma {
     readonly errors: FieldRef<"KiotVietSyncLog", 'String'>
     readonly details: FieldRef<"KiotVietSyncLog", 'String'>
     readonly startedAt: FieldRef<"KiotVietSyncLog", 'DateTime'>
+    readonly heartbeatAt: FieldRef<"KiotVietSyncLog", 'DateTime'>
     readonly finishedAt: FieldRef<"KiotVietSyncLog", 'DateTime'>
   }
     
@@ -165296,6 +165309,7 @@ export namespace Prisma {
     errors: 'errors',
     details: 'details',
     startedAt: 'startedAt',
+    heartbeatAt: 'heartbeatAt',
     finishedAt: 'finishedAt'
   };
 
@@ -178024,6 +178038,7 @@ export namespace Prisma {
     errors?: StringNullableFilter<"KiotVietSyncLog"> | string | null
     details?: StringNullableFilter<"KiotVietSyncLog"> | string | null
     startedAt?: DateTimeFilter<"KiotVietSyncLog"> | Date | string
+    heartbeatAt?: DateTimeNullableFilter<"KiotVietSyncLog"> | Date | string | null
     finishedAt?: DateTimeNullableFilter<"KiotVietSyncLog"> | Date | string | null
   }
 
@@ -178043,6 +178058,7 @@ export namespace Prisma {
     errors?: SortOrderInput | SortOrder
     details?: SortOrderInput | SortOrder
     startedAt?: SortOrder
+    heartbeatAt?: SortOrderInput | SortOrder
     finishedAt?: SortOrderInput | SortOrder
   }
 
@@ -178065,6 +178081,7 @@ export namespace Prisma {
     errors?: StringNullableFilter<"KiotVietSyncLog"> | string | null
     details?: StringNullableFilter<"KiotVietSyncLog"> | string | null
     startedAt?: DateTimeFilter<"KiotVietSyncLog"> | Date | string
+    heartbeatAt?: DateTimeNullableFilter<"KiotVietSyncLog"> | Date | string | null
     finishedAt?: DateTimeNullableFilter<"KiotVietSyncLog"> | Date | string | null
   }, "id">
 
@@ -178084,6 +178101,7 @@ export namespace Prisma {
     errors?: SortOrderInput | SortOrder
     details?: SortOrderInput | SortOrder
     startedAt?: SortOrder
+    heartbeatAt?: SortOrderInput | SortOrder
     finishedAt?: SortOrderInput | SortOrder
     _count?: KiotVietSyncLogCountOrderByAggregateInput
     _avg?: KiotVietSyncLogAvgOrderByAggregateInput
@@ -178111,6 +178129,7 @@ export namespace Prisma {
     errors?: StringNullableWithAggregatesFilter<"KiotVietSyncLog"> | string | null
     details?: StringNullableWithAggregatesFilter<"KiotVietSyncLog"> | string | null
     startedAt?: DateTimeWithAggregatesFilter<"KiotVietSyncLog"> | Date | string
+    heartbeatAt?: DateTimeNullableWithAggregatesFilter<"KiotVietSyncLog"> | Date | string | null
     finishedAt?: DateTimeNullableWithAggregatesFilter<"KiotVietSyncLog"> | Date | string | null
   }
 
@@ -193093,6 +193112,7 @@ export namespace Prisma {
     errors?: string | null
     details?: string | null
     startedAt?: Date | string
+    heartbeatAt?: Date | string | null
     finishedAt?: Date | string | null
   }
 
@@ -193112,6 +193132,7 @@ export namespace Prisma {
     errors?: string | null
     details?: string | null
     startedAt?: Date | string
+    heartbeatAt?: Date | string | null
     finishedAt?: Date | string | null
   }
 
@@ -193131,6 +193152,7 @@ export namespace Prisma {
     errors?: NullableStringFieldUpdateOperationsInput | string | null
     details?: NullableStringFieldUpdateOperationsInput | string | null
     startedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    heartbeatAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     finishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   }
 
@@ -193150,6 +193172,7 @@ export namespace Prisma {
     errors?: NullableStringFieldUpdateOperationsInput | string | null
     details?: NullableStringFieldUpdateOperationsInput | string | null
     startedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    heartbeatAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     finishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   }
 
@@ -193169,6 +193192,7 @@ export namespace Prisma {
     errors?: string | null
     details?: string | null
     startedAt?: Date | string
+    heartbeatAt?: Date | string | null
     finishedAt?: Date | string | null
   }
 
@@ -193188,6 +193212,7 @@ export namespace Prisma {
     errors?: NullableStringFieldUpdateOperationsInput | string | null
     details?: NullableStringFieldUpdateOperationsInput | string | null
     startedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    heartbeatAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     finishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   }
 
@@ -193207,6 +193232,7 @@ export namespace Prisma {
     errors?: NullableStringFieldUpdateOperationsInput | string | null
     details?: NullableStringFieldUpdateOperationsInput | string | null
     startedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    heartbeatAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     finishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   }
 
@@ -201741,6 +201767,7 @@ export namespace Prisma {
     errors?: SortOrder
     details?: SortOrder
     startedAt?: SortOrder
+    heartbeatAt?: SortOrder
     finishedAt?: SortOrder
   }
 
@@ -201768,6 +201795,7 @@ export namespace Prisma {
     errors?: SortOrder
     details?: SortOrder
     startedAt?: SortOrder
+    heartbeatAt?: SortOrder
     finishedAt?: SortOrder
   }
 
@@ -201787,6 +201815,7 @@ export namespace Prisma {
     errors?: SortOrder
     details?: SortOrder
     startedAt?: SortOrder
+    heartbeatAt?: SortOrder
     finishedAt?: SortOrder
   }
 

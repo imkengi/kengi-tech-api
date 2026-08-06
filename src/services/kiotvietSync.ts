@@ -59,6 +59,18 @@ export interface SyncOptions {
     branchIds?: number[]
     /** Người tạo cho bản ghi nhập từ KiotViet (bắt buộc với hoá đơn) */
     systemUserId?: string | null
+    /**
+     * NHỊP TIM. Gọi sau mỗi vài bản ghi để đóng dấu "còn sống" vào nhật ký.
+     * Không có nó thì đợt chạy nền chết giữa chừng vẫn hiện "đang chạy" mãi mãi
+     * và người dùng không biết nên chờ hay bấm lại (dính 06/08/2026).
+     * Bên gọi tự giới hạn tần suất ghi DB.
+     */
+    onProgress?: (c: SyncCounters) => void
+}
+
+/** Đập nhịp mỗi 25 bản ghi — đủ dày để thấy tiến độ, đủ thưa để không nghẽn DB. */
+function beat(opts: SyncOptions, c: SyncCounters) {
+    if (opts.onProgress && c.fetched % 25 === 0) opts.onProgress(c)
 }
 
 // ─── Bản đồ id KiotViet ↔ id Kengi ──────────────────────────────────────────
@@ -81,19 +93,31 @@ async function saveMap(sp: any, entity: string, kvId: string | number, kvCode: s
 
 // ─── Danh mục ───────────────────────────────────────────────────────────────
 
+/**
+ * Id giả dùng trong CHẠY THỬ khi nhóm hàng chưa tồn tại.
+ *
+ * Chạy thử không được tạo nhóm thật, nhưng cũng KHÔNG được báo lỗi: lần chạy
+ * thật sẽ tạo nhóm đó và sản phẩm vào bình thường. Trước đây trả null ở đây làm
+ * cửa hàng chưa có nhóm hàng nào bị báo lỗi 100% sản phẩm khi chạy thử — nhìn
+ * như hỏng nặng trong khi thực ra chạy thật là chạy được (dính 06/08/2026).
+ * Chỉ xuất hiện khi apply=false nên không bao giờ chạm tới DB.
+ */
+const DRYRUN_CATEGORY = '__CHAY_THU_SE_TAO_NHOM__'
+
 /** Lấy/ tạo Category theo tên KiotViet. Có bộ nhớ đệm trong một đợt đồng bộ. */
 async function resolveCategory(
     sp: any, name: string | undefined, fallbackId: string | null | undefined,
     cache: Map<string, string>, apply: boolean,
 ): Promise<string | null> {
-    const key = (name || '').trim()
-    if (!key) return fallbackId || null
+    const key = (name || '').trim() || 'Nhập từ KiotViet'
     if (cache.has(key)) return cache.get(key)!
 
     const found = await sp.category.findFirst({ where: { name: key }, select: { id: true } }).catch(() => null)
     if (found) { cache.set(key, found.id); return found.id }
 
-    if (!apply) return fallbackId || null
+    // Chưa có nhóm này: chạy thật thì tạo, chạy thử thì coi như sẽ tạo được
+    if (!apply) return fallbackId || DRYRUN_CATEGORY
+
     const created = await sp.category.create({ data: { name: key, description: 'Đồng bộ từ KiotViet' } })
         .catch(() => null)
     if (created) { cache.set(key, created.id); return created.id }
@@ -111,6 +135,7 @@ export async function syncProducts(sp: any, items: any[], opts: SyncOptions, c: 
 
     for (const kv of items) {
         c.fetched++
+        beat(opts, c)
         try {
             const kvId = kv?.id
             const code = String(kv?.code || '').trim()
@@ -257,6 +282,7 @@ async function applyStock(sp: any, product: any, target: number, opts: SyncOptio
 export async function syncCustomers(sp: any, items: any[], opts: SyncOptions, c: SyncCounters): Promise<void> {
     for (const kv of items) {
         c.fetched++
+        beat(opts, c)
         try {
             const kvId = kv?.id
             const code = String(kv?.code || '').trim()
@@ -326,6 +352,7 @@ export async function syncCustomers(sp: any, items: any[], opts: SyncOptions, c:
 export async function syncSuppliers(sp: any, items: any[], opts: SyncOptions, c: SyncCounters): Promise<void> {
     for (const kv of items) {
         c.fetched++
+        beat(opts, c)
         try {
             const kvId = kv?.id
             const code = String(kv?.code || '').trim()
@@ -398,6 +425,7 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
 
     for (const kv of items) {
         c.fetched++
+        beat(opts, c)
         try {
             const kvId = kv?.id
             const code = String(kv?.code || '').trim()
@@ -472,6 +500,167 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
             noteError(c, `HĐ ${kv?.code || kv?.id}: ${e?.message || e}`)
         }
     }
+}
+
+// ─── PHIẾU NHẬP HÀNG ────────────────────────────────────────────────────────
+
+/**
+ * KHÔNG CỘNG KHO (cùng lý do với hoá đơn: `onHand` bên KiotViet đã tính rồi,
+ * cộng thêm lần nữa là tồn khống gấp đôi). Phiếu nhập vào đây để có lịch sử giá
+ * vốn và công nợ nhà cung cấp.
+ *
+ * Trạng thái đưa vào 'received' vì đây là phiếu ĐÃ HOÀN TẤT bên KiotViet — cho
+ * nó đi qua cổng kiểm hàng một lần nữa là bắt nhân viên duyệt lại quá khứ.
+ */
+export async function syncPurchaseOrders(sp: any, items: any[], opts: SyncOptions, c: SyncCounters): Promise<void> {
+    for (const kv of items) {
+        c.fetched++
+        beat(opts, c)
+        try {
+            const kvId = kv?.id
+            const code = String(kv?.code || '').trim()
+            if (!kvId || !code) { c.skipped++; continue }
+
+            const existing = await sp.purchaseOrder.findUnique({ where: { code } }).catch(() => null)
+            if (existing) {
+                c.skipped++
+                if (opts.apply) await saveMap(sp, 'purchaseOrder', kvId, code, existing.id)
+                continue
+            }
+
+            // NCC: chỉ GẮN nếu đã đồng bộ, không tự đẻ NCC từ phiếu nhập
+            let supplierId: string | null = null
+            if (kv?.supplierId) supplierId = await findMap(sp, 'supplier', kv.supplierId)
+            const supplierName = String(kv?.supplierName || kv?.supplierCode || 'Nhà cung cấp').slice(0, 200)
+
+            const details: any[] = Array.isArray(kv?.purchaseOrderDetails) ? kv.purchaseOrderDetails
+                : Array.isArray(kv?.details) ? kv.details : []
+            const lines = details.map((d: any) => ({
+                productName: String(d?.productName || d?.productCode || '').slice(0, 200),
+                sku: d?.productCode ? String(d.productCode) : null,
+                quantity: Math.round(Number(d?.quantity) || 0),
+                unitPrice: Number(d?.price) || 0,
+            })).filter(l => l.productName)
+
+            const total = Number(kv?.total ?? kv?.totalPayment) || 0
+            const when = kv?.purchaseDate ? new Date(kv.purchaseDate) : null
+
+            if (opts.apply) {
+                const created = await sp.purchaseOrder.create({
+                    data: {
+                        code, supplierId, supplierName,
+                        status: 'received',
+                        totalAmount: total,
+                        notes: 'Nhập từ KiotViet',
+                        receivedDate: when && !isNaN(when.getTime()) ? when : null,
+                        ...(lines.length ? { items: { create: lines } } : {}),
+                    },
+                })
+                await saveMap(sp, 'purchaseOrder', kvId, code, created.id)
+            }
+            c.created++
+            noteSample(c, { code, ncc: supplierName, tong: total, soDong: lines.length, hanhDong: 'tạo mới' })
+        } catch (e: any) {
+            noteError(c, `Phiếu nhập ${kv?.code || kv?.id}: ${e?.message || e}`)
+        }
+    }
+}
+
+// ─── SỔ QUỸ: PHIẾU THU / PHIẾU CHI ──────────────────────────────────────────
+
+/**
+ * Một bản ghi sổ quỹ KiotViet ra PHIẾU THU (CashReceipt) hoặc PHIẾU CHI
+ * (Expense) tuỳ chiều tiền.
+ *
+ * Tài liệu công khai không mô tả rõ trường nào chỉ chiều, nên dò theo nhiều dấu
+ * hiệu và KHÔNG ĐOÁN BỪA: không suy được chiều thì BỎ QUA. Ghi nhầm chiều tiền
+ * còn tệ hơn không ghi vì nó lặng lẽ làm lệch sổ quỹ.
+ *
+ * Phiếu chi vào trạng thái 'pending' (chờ duyệt) — giống phiếu bóc từ email —
+ * để tiền chỉ vào sổ sau khi người dùng soát.
+ */
+export async function syncCashflow(sp: any, items: any[], opts: SyncOptions, c: SyncCounters): Promise<void> {
+    for (const kv of items) {
+        c.fetched++
+        beat(opts, c)
+        try {
+            const kvId = kv?.id
+            const code = String(kv?.code || '').trim()
+            const amount = Math.abs(Number(kv?.amount) || 0)
+            if (!kvId || !code || !amount) { c.skipped++; continue }
+
+            // Đã huỷ bên KiotViet thì không mang sang
+            if (Number(kv?.status) === 0 || /void|cancel/i.test(String(kv?.statusValue || ''))) { c.skipped++; continue }
+
+            const dir = cashflowDirection(kv)
+            if (!dir) {
+                noteError(c, `Sổ quỹ ${code}: không xác định được thu hay chi — bỏ qua để khỏi lệch sổ`)
+                continue
+            }
+
+            const entity = dir === 'in' ? 'cashReceipt' : 'expense'
+            const mapped = await findMap(sp, entity, kvId)
+            if (mapped) { c.skipped++; continue }
+
+            const when = kv?.transDate ? new Date(kv.transDate) : new Date()
+            const date = isNaN(when.getTime()) ? new Date() : when
+            const note = String(kv?.description || kv?.contactName || 'Sổ quỹ KiotViet').slice(0, 300)
+            const viaBank = /transfer|bank|chuy/i.test(String(kv?.method || ''))
+
+            if (dir === 'in') {
+                const dup = await sp.cashReceipt.findFirst({ where: { reference: code } }).catch(() => null)
+                if (dup) { c.skipped++; if (opts.apply) await saveMap(sp, entity, kvId, code, dup.id); continue }
+                if (opts.apply) {
+                    const created = await sp.cashReceipt.create({
+                        data: {
+                            description: note, amount, category: 'other', date,
+                            receivedVia: viaBank ? 'Chuyển khoản' : 'Tiền mặt',
+                            customerName: kv?.contactName ? String(kv.contactName).slice(0, 200) : null,
+                            reference: code, status: 'active',
+                        },
+                    })
+                    await saveMap(sp, entity, kvId, code, created.id)
+                }
+            } else {
+                const dup = await sp.expense.findFirst({ where: { sourceRef: `KV|${code}` } }).catch(() => null)
+                if (dup) { c.skipped++; if (opts.apply) await saveMap(sp, entity, kvId, code, dup.id); continue }
+                if (opts.apply) {
+                    const created = await sp.expense.create({
+                        data: {
+                            description: note, amount, category: 'Sổ quỹ KiotViet', date,
+                            status: 'pending',        // CHỜ DUYỆT — chưa vào thống kê
+                            paidBy: kv?.user ? String(kv.user).slice(0, 100) : null,
+                            sourceRef: `KV|${code}`,
+                        },
+                    })
+                    await saveMap(sp, entity, kvId, code, created.id)
+                }
+            }
+            c.created++
+            noteSample(c, { code, chieu: dir === 'in' ? 'THU' : 'CHI', soTien: amount, ngay: date.toISOString().slice(0, 10) })
+        } catch (e: any) {
+            noteError(c, `Sổ quỹ ${kv?.code || kv?.id}: ${e?.message || e}`)
+        }
+    }
+}
+
+/** Dò chiều tiền của bản ghi sổ quỹ. Không chắc thì trả null (xem ghi chú trên). */
+function cashflowDirection(kv: any): 'in' | 'out' | null {
+    // 1. Trường chiều tường minh nếu có
+    const t = String(kv?.cashFlowType ?? kv?.type ?? '').toLowerCase()
+    if (/receipt|thu|in\b/.test(t) && !/chi/.test(t)) return 'in'
+    if (/payment|chi|out\b/.test(t)) return 'out'
+
+    // 2. Tiền tố mã phiếu — KiotViet đánh TTHU… cho thu, TTCHI…/TCHI… cho chi
+    const code = String(kv?.code || '').toUpperCase()
+    if (/^TT?CHI/.test(code)) return 'out'
+    if (/^TT?THU/.test(code)) return 'in'
+
+    // 3. Dấu của số tiền (một số bản trả số âm cho chi)
+    const raw = Number(kv?.amount)
+    if (Number.isFinite(raw) && raw !== 0) return raw > 0 ? 'in' : 'out'
+
+    return null
 }
 
 // ─── WEBHOOK ────────────────────────────────────────────────────────────────

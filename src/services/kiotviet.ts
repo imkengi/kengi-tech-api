@@ -244,6 +244,14 @@ export const KV = {
     orders: (creds: KiotVietCreds, params: Record<string, any>, opts?: any) =>
         fetchAllPages(creds, '/orders', { includePayment: true, ...params }, opts),
 
+    /** Phiếu nhập hàng từ nhà cung cấp */
+    purchaseOrders: (creds: KiotVietCreds, params: Record<string, any>, opts?: any) =>
+        fetchAllPages(creds, '/purchaseorders', { includeOrderDelivery: false, ...params }, opts),
+
+    /** Sổ quỹ — phiếu thu + phiếu chi nằm chung một endpoint */
+    cashflow: (creds: KiotVietCreds, params: Record<string, any>, opts?: any) =>
+        fetchAllPages(creds, '/cashflow', params, opts),
+
     branches: (creds: KiotVietCreds) => fetchJson(creds, '/branches', { pageSize: 100 }),
 
     categories: (creds: KiotVietCreds) => fetchJson(creds, '/categories', { pageSize: 100 }),

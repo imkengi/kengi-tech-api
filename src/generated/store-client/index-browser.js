@@ -2248,6 +2248,7 @@ exports.Prisma.KiotVietSyncLogScalarFieldEnum = {
   errors: 'errors',
   details: 'details',
   startedAt: 'startedAt',
+  heartbeatAt: 'heartbeatAt',
   finishedAt: 'finishedAt'
 };
 
