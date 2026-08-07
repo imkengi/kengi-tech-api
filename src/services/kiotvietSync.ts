@@ -146,6 +146,30 @@ async function resolveCategory(
     return fallbackId || null
 }
 
+/**
+ * Lấy/tạo Thương hiệu theo `tradeMarkName` của KiotViet.
+ *
+ * KiotViet LƯỢC BỎ trường khi hàng không gắn thương hiệu, nên đừng kết luận
+ * "API không trả" chỉ vì xem trúng vài mã trống. Product.brandId cho phép rỗng
+ * nên không tìm thấy thì để trống — không phải lỗi.
+ */
+async function resolveBrand(
+    sp: any, name: string | undefined, cache: Map<string, string | null>, apply: boolean,
+): Promise<string | null> {
+    const key = String(name || '').trim()
+    if (!key) return null
+    if (cache.has(key)) return cache.get(key)!
+
+    const found = await sp.brand.findFirst({ where: { name: key }, select: { id: true } }).catch(() => null)
+    if (found) { cache.set(key, found.id); return found.id }
+
+    if (!apply) { cache.set(key, null); return null }   // chạy thử không tạo thật
+    const created = await sp.brand.create({ data: { name: key, description: 'Đồng bộ từ KiotViet' } })
+        .catch(() => null)
+    cache.set(key, created?.id || null)
+    return created?.id || null
+}
+
 // ─── HÀNG HOÁ ───────────────────────────────────────────────────────────────
 
 /**
@@ -154,6 +178,7 @@ async function resolveCategory(
  */
 export async function syncProducts(sp: any, items: any[], opts: SyncOptions, c: SyncCounters): Promise<void> {
     const catCache = new Map<string, string>()
+    const brandCache = new Map<string, string | null>()
 
     for (const kv of items) {
         c.fetched++
@@ -187,6 +212,7 @@ export async function syncProducts(sp: any, items: any[], opts: SyncOptions, c: 
 
             const price = Number(kv?.basePrice) || 0
             const cost = Number(kv?.cost ?? kv?.costPrice) || 0
+            const brandName = String(kv?.tradeMarkName || '').trim()
 
             if (existing) {
                 const data: any = {}
@@ -200,6 +226,12 @@ export async function syncProducts(sp: any, items: any[], opts: SyncOptions, c: 
                     if (!existing.costPrice && cost > 0) data.costPrice = cost
                 }
                 if (!existing.barcode && kv?.barCode) data.barcode = String(kv.barCode)
+                // Thương hiệu: điền khi hàng bên Kengi đang trống. Không ghi đè
+                // trừ khi người dùng bật, vì cửa hàng có thể đã tự gán khác.
+                if (brandName && (!existing.brandId || opts.overwriteNames)) {
+                    const bId = await resolveBrand(sp, brandName, brandCache, opts.apply)
+                    if (bId && bId !== existing.brandId) data.brandId = bId
+                }
 
                 const stockChanged = opts.overwriteStock && onHand !== existing.stock
 
@@ -227,6 +259,7 @@ export async function syncProducts(sp: any, items: any[], opts: SyncOptions, c: 
                     continue
                 }
 
+                const brandId = await resolveBrand(sp, brandName, brandCache, opts.apply)
                 if (opts.apply) {
                     const created = await sp.product.create({
                         data: {
@@ -234,6 +267,7 @@ export async function syncProducts(sp: any, items: any[], opts: SyncOptions, c: 
                             sku: code,
                             barcode: kv?.barCode ? String(kv.barCode) : null,
                             categoryId,
+                            brandId,
                             productType,
                             sellingPrice: price,
                             costPrice: cost,
@@ -248,7 +282,7 @@ export async function syncProducts(sp: any, items: any[], opts: SyncOptions, c: 
                     await saveMap(sp, 'product', kvId, code, created.id)
                 }
                 c.created++
-                noteSample(c, { sku: code, name, hanhDong: 'tạo mới', ton: onHand, gia: price })
+                noteSample(c, { sku: code, name, hanhDong: 'tạo mới', ton: onHand, gia: price, thuongHieu: brandName || '(không có)' })
             }
         } catch (e: any) {
             noteError(c, `Mã ${kv?.code || kv?.id}: ${e?.message || e}`)
