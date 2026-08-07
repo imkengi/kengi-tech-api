@@ -497,6 +497,56 @@ router.get('/peek', async (req: Request, res: Response) => {
     }
 })
 
+// ─── GET /api/kiotviet/imported-summary?storeCode= ──────────────────────────
+// CHỈ ĐỌC: soi dữ liệu ĐÃ đổ vào Kengi để biết đợt nhập có đúng không —
+// bao nhiêu bản ghi, ngày chứng từ có bị dồn về ngày đồng bộ không, sản phẩm
+// đã có thương hiệu chưa, có lọt phiếu huỷ nào không.
+router.get('/imported-summary', async (req: Request, res: Response) => {
+    try {
+        const store = await resolveStore(String(req.query.storeCode || ''))
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const sp = store.sp
+
+        const q = (sql: string) => sp.$queryRawUnsafe(sql).catch((e: any) => [{ loi: e?.message?.slice(0, 120) }])
+        const [tx, po, ret, cash, exp, prod] = await Promise.all([
+            q(`SELECT COUNT(*)::int AS tong,
+                      COUNT(*) FILTER (WHERE "status" <> 'completed')::int AS khongHoanThanh,
+                      COUNT(*) FILTER (WHERE DATE("createdAt") = DATE("transactionDate"))::int AS dungNgay,
+                      MIN("createdAt")::text AS somNhat, MAX("createdAt")::text AS muonNhat
+               FROM "Transaction" WHERE "createdByName" = 'KiotViet Sync'`),
+            q(`SELECT COUNT(*)::int AS tong,
+                      COUNT(*) FILTER (WHERE "status" <> 'received')::int AS khongHoanThanh,
+                      COUNT(*) FILTER (WHERE DATE("createdAt") = DATE("receivedDate"))::int AS dungNgay,
+                      MIN("createdAt")::text AS somNhat, MAX("createdAt")::text AS muonNhat
+               FROM "PurchaseOrder" WHERE "notes" LIKE '%KiotViet%'`),
+            q(`SELECT COUNT(*)::int AS tong, MIN("createdAt")::text AS somNhat, MAX("createdAt")::text AS muonNhat
+               FROM "ReturnOrder" WHERE "reason" LIKE '%KiotViet%'`),
+            q(`SELECT COUNT(*)::int AS tong,
+                      COUNT(*) FILTER (WHERE DATE("createdAt") = DATE("date"))::int AS dungNgay,
+                      MIN("createdAt")::text AS somNhat, MAX("createdAt")::text AS muonNhat
+               FROM "CashReceipt" WHERE "description" LIKE '%KiotViet%' OR "reference" LIKE 'TT%'`),
+            q(`SELECT COUNT(*)::int AS tong,
+                      COUNT(*) FILTER (WHERE DATE("createdAt") = DATE("date"))::int AS dungNgay
+               FROM "Expense" WHERE "sourceRef" LIKE 'KV|%'`),
+            q(`SELECT COUNT(*)::int AS tong,
+                      COUNT(*) FILTER (WHERE "brandId" IS NOT NULL)::int AS coThuongHieu
+               FROM "Product" p
+               WHERE EXISTS (SELECT 1 FROM "KiotVietMap" m WHERE m."entity"='product' AND m."localId"=p."id")`),
+        ])
+
+        res.json({
+            success: true,
+            data: {
+                hoaDonBan: tx?.[0], phieuNhap: po?.[0], traHang: ret?.[0],
+                phieuThu: cash?.[0], phieuChi: exp?.[0], hangHoa: prod?.[0],
+                ghiChu: 'dungNgay = số bản ghi có ngày tạo TRÙNG ngày chứng từ. Lệch nhiều nghĩa là dữ liệu cũ bị dồn về ngày đồng bộ.',
+            },
+        })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
 // ─── GET /api/kiotviet/logs?storeCode=&limit= ───────────────────────────────
 router.get('/logs', async (req: Request, res: Response) => {
     try {
