@@ -162,6 +162,9 @@ export async function buildOptions(sp: any, cfg: any, apply: boolean): Promise<S
         defaultWarehouseId: warehouseId,
         branchIds,
         systemUserId: user?.id || null,
+        // Chỗ nhớ chung cho cả lượt: hoá đơn ghi vào, sổ quỹ đọc ra để khỏi
+        // tạo lại phiếu thu đã tính vào hoá đơn
+        invoicePaymentCodes: new Set<string>(),
     }
 }
 

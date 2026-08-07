@@ -66,6 +66,12 @@ export interface SyncOptions {
      * Bên gọi tự giới hạn tần suất ghi DB.
      */
     onProgress?: (c: SyncCounters) => void
+    /**
+     * Mã phiếu thu ĐÃ tính vào hoá đơn trong CHÍNH lượt chạy này.
+     * Bảng map chỉ được ghi khi chạy thật, nên chạy thử cần chỗ nhớ tạm — thiếu
+     * nó thì số liệu chạy thử lệch hẳn với chạy thật ở phần sổ quỹ.
+     */
+    invoicePaymentCodes?: Set<string>
 }
 
 /** Đập nhịp mỗi 25 bản ghi — đủ dày để thấy tiến độ, đủ thưa để không nghẽn DB. */
@@ -547,8 +553,35 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
             if (kv?.customerId) customerId = await findMap(sp, 'customer', kv.customerId)
 
             const total = Number(kv?.total) || 0
-            const paid = Number(kv?.totalPayment) || 0
             const when = kv?.purchaseDate ? new Date(kv.purchaseDate) : new Date()
+
+            /**
+             * THANH TOÁN LÀ PHIẾU THU, KHÔNG PHẢI MỘT CON SỐ.
+             *
+             * `payments[]` của hoá đơn chính là các phiếu thu — mã dạng
+             * `TTHD016712` (gắn hoá đơn) hoặc `TT011815` (thu chung). CHÍNH
+             * NHỮNG MÃ ẤY CŨNG NẰM TRONG /cashflow. Bản trước tôi vừa đặt
+             * amountReceived trên hoá đơn vừa tạo phiếu thu riêng từ sổ quỹ →
+             * cùng một khoản tiền vào sổ HAI LẦN (đo 07/08/2026).
+             *
+             * Nay: phiếu thu của hoá đơn thành Payment gắn vào hoá đơn, và mã
+             * của chúng được ghi vào bảng map để bước sổ quỹ BỎ QUA.
+             */
+            const kvPayments: any[] = Array.isArray(kv?.payments) ? kv.payments : []
+            for (const p of kvPayments) {
+                if (p?.code) opts.invoicePaymentCodes?.add(String(p.code))
+            }
+            const paymentRows = kvPayments
+                .filter(p => Number(p?.status) !== 1)          // bỏ phiếu đã huỷ
+                .map(p => ({
+                    type: /transfer|bank/i.test(String(p?.method || '')) ? 'bank_transfer' : 'cash',
+                    amount: Number(p?.amount) || 0,
+                    reference: p?.code ? String(p.code) : null,
+                }))
+                .filter(p => p.amount > 0)
+            // Không có phiếu thu nào thì hoá đơn CHƯA thu tiền — dù KiotViet có
+            // điền totalPayment, vì tiền thật nằm ở phiếu thu.
+            const paid = paymentRows.reduce((s, p) => s + p.amount, 0)
 
             if (opts.apply) {
                 const created = await sp.transaction.create({
@@ -560,7 +593,9 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                         discount: Number(kv?.discount) || 0,
                         total,
                         amountReceived: paid,
-                        change: 0,
+                        // Khách đưa dư (một lần trả cho nhiều hoá đơn) thì phần
+                        // dư là tiền thối, không phải doanh thu
+                        change: paid > total ? paid - total : 0,
                         status: 'completed',
                         createdBy: opts.systemUserId,
                         createdByName: 'KiotViet Sync',
@@ -573,12 +608,18 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                         createdAt: isNaN(when.getTime()) ? new Date() : when,
                         channel: 'direct',
                         items: { create: lines },
+                        ...(paymentRows.length ? { payments: { create: paymentRows } } : {}),
                     },
                 })
                 await saveMap(sp, 'invoice', kvId, code, created.id)
+                // Đánh dấu các mã phiếu thu đã tính vào hoá đơn, để bước sổ quỹ
+                // không tạo lại chúng thành phiếu thu độc lập (tránh nhân đôi)
+                for (const p of paymentRows) {
+                    if (p.reference) await saveMap(sp, 'invoicePayment', p.reference, p.reference, created.id)
+                }
             }
             c.created++
-            noteSample(c, { code, total, soDong: lines.length, hanhDong: 'tạo mới', ngay: when.toISOString().slice(0, 10) })
+            noteSample(c, { code, total, daThu: paid, soDong: lines.length, hanhDong: 'tạo mới', ngay: when.toISOString().slice(0, 10) })
         } catch (e: any) {
             noteError(c, `HĐ ${kv?.code || kv?.id}: ${e?.message || e}`)
         }
@@ -793,6 +834,12 @@ export async function syncCashflow(sp: any, items: any[], opts: SyncOptions, c: 
             if (!dir) {
                 noteError(c, `Sổ quỹ ${code}: không xác định được thu hay chi — bỏ qua để khỏi lệch sổ`)
                 continue
+            }
+
+            // PHIẾU THU CỦA HOÁ ĐƠN ĐÃ TÍNH RỒI — bỏ qua, nếu không cùng một
+            // khoản tiền vào sổ hai lần (xem ghi chú trong syncInvoices).
+            if (dir === 'in' && (opts.invoicePaymentCodes?.has(code) || await findMap(sp, 'invoicePayment', code))) {
+                c.skipped++; continue
             }
 
             const entity = dir === 'in' ? 'cashReceipt' : 'expense'
