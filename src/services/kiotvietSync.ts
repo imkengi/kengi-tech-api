@@ -508,6 +508,8 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
         noteError(c, 'Chưa xác định được người dùng hệ thống để gán cho hoá đơn — bỏ qua toàn bộ')
         return
     }
+    // Khách nào còn nợ — hỏi một lần rồi nhớ, tránh tra DB cho từng hoá đơn
+    const customerDebtCache = new Map<string, boolean>()
 
     for (const kv of items) {
         c.fetched++
@@ -585,6 +587,31 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
             let customerId: string | null = null
             if (kv?.customerId) customerId = await findMap(sp, 'customer', kv.customerId)
 
+            /**
+             * KHÁCH KHÔNG NỢ THÌ HOÁ ĐƠN COI NHƯ ĐÃ THU ĐỦ.
+             *
+             * Khách trả nợ sau bằng PHIẾU THU RIÊNG không gắn hoá đơn nào, nên
+             * hoá đơn cũ trong API mãi mãi "chưa thu" dù thực tế đã tất toán.
+             * Cứ để nguyên thì trang công nợ suy ra người nợ từ hoá đơn chưa
+             * thu → đẻ ra 82 khách nợ ảo, tổng 768 triệu (đo 07/08/2026:
+             * Kengi 251 khách/5,44 tỷ so với KiotViet 169 khách/4,67 tỷ).
+             *
+             * `Customer.debt` của KiotViet là SỐ CHUẨN — đã đối chiếu khớp từng
+             * đồng. Nên: khách nào KiotViet bảo hết nợ thì hoá đơn của họ ghi
+             * là thu đủ; chỉ khách còn nợ thật mới để 'partial'.
+             */
+            let khachConNo = false
+            if (customerId) {
+                if (customerDebtCache.has(customerId)) {
+                    khachConNo = customerDebtCache.get(customerId)!
+                } else {
+                    const cust = await sp.customer.findUnique({
+                        where: { id: customerId }, select: { debt: true },
+                    }).catch(() => null)
+                    khachConNo = (Number(cust?.debt) || 0) > 0
+                    customerDebtCache.set(customerId, khachConNo)
+                }
+            }
             const total = Number(kv?.total) || 0
             const when = kv?.purchaseDate ? new Date(kv.purchaseDate) : new Date()
 
@@ -611,6 +638,9 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
             // Không có phiếu thu nào thì hoá đơn CHƯA thu tiền — dù KiotViet có
             // điền totalPayment, vì tiền thật nằm ở phiếu thu.
             const paid = paymentRows.reduce((s, p) => s + p.amount, 0)
+            // Xem khối "KHÁCH KHÔNG NỢ THÌ HOÁ ĐƠN COI NHƯ ĐÃ THU ĐỦ" ở trên
+            const thuDu = !khachConNo || paid >= total
+            const amountReceived = thuDu ? total : paid
 
             if (opts.apply) {
                 const created = await sp.transaction.create({
@@ -621,15 +651,15 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                         subtotal: lines.reduce((s, l) => s + l.lineTotal, 0),
                         discount: Number(kv?.discount) || 0,
                         total,
-                        amountReceived: paid,
+                        amountReceived,
                         // Khách đưa dư (một lần trả cho nhiều hoá đơn) thì phần
                         // dư là tiền thối, không phải doanh thu
-                        change: paid > total ? paid - total : 0,
+                        change: amountReceived > total ? amountReceived - total : 0,
                         // CHƯA THU ĐỦ = 'partial'. Kengi suy công nợ ra từ đơn
                         // 'partial' (total − amountReceived); nhập tất cả thành
                         // 'completed' là báo cáo công nợ ra 0 trong khi khách
                         // vẫn đang nợ thật (đo 07/08/2026: 14/40 khách có nợ).
-                        status: paid >= total ? 'completed' : 'partial',
+                        status: thuDu ? 'completed' : 'partial',
                         createdBy: opts.systemUserId,
                         createdByName: 'KiotViet Sync',
                         notes: `Nhập từ KiotViet (mã ${code})`,
