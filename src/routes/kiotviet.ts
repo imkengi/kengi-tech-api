@@ -54,6 +54,18 @@ async function loadConfig(sp: any): Promise<any | null> {
     return sp.kiotVietConfig.findUnique({ where: { id: 'default' } }).catch(() => null)
 }
 
+/**
+ * Lỗi do KIOTVIET trả về thì phải cho người quản trị đọc nguyên văn.
+ * `errMsg` cố ý giấu chi tiết ở production để không lộ nội bộ (SQL, đường dẫn
+ * file…) — đúng với API công khai. Nhưng ở đây thông điệp đến TỪ BÊN NGOÀI và
+ * cả vùng này đã nằm sau xác thực admin; giấu đi thì không ai lần ra được vì
+ * sao đăng ký webhook hỏng (dính 07/08/2026: chỉ thấy "Internal server error").
+ */
+function kvErr(e: any): string {
+    if (e?.name === 'KiotVietError' && e?.message) return String(e.message).slice(0, 400)
+    return errMsg(e)
+}
+
 function credsOf(cfg: any): KiotVietCreds {
     return {
         clientId: String(cfg.clientId || '').trim(),
@@ -799,7 +811,7 @@ router.post('/webhooks/register', async (req: Request, res: Response) => {
                 await KV.createWebhook(creds, t, myUrl, `Kengi ${storeCode}`)
                 ok.push(t)
             } catch (e: any) {
-                loi.push(`${t}: ${errMsg(e).slice(0, 150)}`)
+                loi.push(`${t}: ${kvErr(e).slice(0, 250)}`)
             }
         }
         res.json({
