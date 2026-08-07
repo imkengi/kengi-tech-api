@@ -534,11 +534,32 @@ router.get('/imported-summary', async (req: Request, res: Response) => {
                WHERE EXISTS (SELECT 1 FROM "KiotVietMap" m WHERE m."entity"='product' AND m."localId"=p."id")`),
         ])
 
+        // CÔNG NỢ: tách rõ phần ĐẾN TỪ KIOTVIET và phần vốn CÓ SẴN trên Kengi.
+        // Không tách thì thấy tổng lệch là đổ ngay cho đồng bộ, trong khi có thể
+        // là nợ cửa hàng tự ghi từ trước.
+        const [noKhach, noNcc] = await Promise.all([
+            q(`SELECT
+                 COUNT(*) FILTER (WHERE c."debt" > 0)::int AS soKhachCoNo,
+                 COALESCE(SUM(c."debt") FILTER (WHERE c."debt" > 0),0)::float8 AS tongNo,
+                 COUNT(*) FILTER (WHERE c."debt" > 0 AND m."localId" IS NOT NULL)::int AS tuKiotViet,
+                 COALESCE(SUM(c."debt") FILTER (WHERE c."debt" > 0 AND m."localId" IS NOT NULL),0)::float8 AS tongTuKiotViet,
+                 COUNT(*) FILTER (WHERE c."debt" > 0 AND m."localId" IS NULL)::int AS khongTuKiotViet,
+                 COALESCE(SUM(c."debt") FILTER (WHERE c."debt" > 0 AND m."localId" IS NULL),0)::float8 AS tongKhongTuKiotViet,
+                 COALESCE(SUM(c."debt") FILTER (WHERE c."debt" < 0),0)::float8 AS tongNoAm
+               FROM "Customer" c
+               LEFT JOIN "KiotVietMap" m ON m."entity"='customer' AND m."localId"=c."id"`),
+            q(`SELECT
+                 COUNT(*) FILTER (WHERE s."payable" > 0)::int AS soNccCoNo,
+                 COALESCE(SUM(s."payable") FILTER (WHERE s."payable" > 0),0)::float8 AS tongPhaiTra
+               FROM "Supplier" s`),
+        ])
+
         res.json({
             success: true,
             data: {
                 hoaDonBan: tx?.[0], phieuNhap: po?.[0], traHang: ret?.[0],
                 phieuThu: cash?.[0], phieuChi: exp?.[0], hangHoa: prod?.[0],
+                congNoKhach: noKhach?.[0], congNoNcc: noNcc?.[0],
                 ghiChu: 'dungNgay = số bản ghi có ngày tạo TRÙNG ngày chứng từ. Lệch nhiều nghĩa là dữ liệu cũ bị dồn về ngày đồng bộ.',
             },
         })
