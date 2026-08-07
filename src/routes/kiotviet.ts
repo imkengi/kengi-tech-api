@@ -804,25 +804,49 @@ router.post('/webhooks/register', async (req: Request, res: Response) => {
         const myUrl = `${baseUrlOf(req)}/api/kiotviet/webhook/${encodeURIComponent(storeCode)}/${cfg.webhookToken}`
         const creds = credsOf(cfg)
 
+        /**
+         * KIOTVIET CHỈ CHO MỘT WEBHOOK MỖI LOẠI SỰ KIỆN.
+         * Đăng ký trùng loại trả HTTP 500 "Type đã tồn tại" (đo 07/08/2026).
+         * Cửa hàng này đã dùng cả 6 loại cho n8n, nên muốn Kengi nhận thì buộc
+         * phải THAY THẾ — việc đó làm hỏng luồng n8n nên KHÔNG tự ý làm, phải
+         * có `thayThe: true` gửi lên.
+         */
+        const thayThe = b.thayThe === true
+        const hienCo = await KV.listWebhooks(creds).then(r => r?.data || []).catch(() => [])
+
         const ok: string[] = []
+        const viMatKhac: { type: string; url: string; id: any }[] = []
         const loi: string[] = []
+
         for (const t of types) {
+            const dangCo = hienCo.find((w: any) => w.type === t)
+            const laCuaKengi = dangCo && String(dangCo.url || '').includes('/api/kiotviet/webhook/')
+            if (dangCo && laCuaKengi) { ok.push(`${t} (đã có sẵn)`); continue }
+
+            if (dangCo && !thayThe) {
+                viMatKhac.push({ type: t, url: String(dangCo.url || ''), id: dangCo.id })
+                continue
+            }
             try {
+                if (dangCo) await KV.deleteWebhook(creds, dangCo.id)
                 await KV.createWebhook(creds, t, myUrl, `Kengi ${storeCode}`)
                 ok.push(t)
             } catch (e: any) {
                 loi.push(`${t}: ${kvErr(e).slice(0, 250)}`)
             }
         }
+
+        const phanMessage = [
+            ok.length ? `Đã đăng ký ${ok.length} sự kiện về Kengi: ${ok.join(', ')}.` : '',
+            viMatKhac.length
+                ? `${viMatKhac.length} loại đang được hệ thống khác dùng (${viMatKhac.map(v => v.type).join(', ')}) — KiotViet chỉ cho MỘT webhook mỗi loại. Muốn Kengi nhận thì phải thay thế, nhưng làm vậy luồng cũ sẽ ngừng nhận.`
+                : '',
+            loi.length ? `Lỗi: ${loi.join(' | ')}` : '',
+        ].filter(Boolean).join(' ')
+
         res.json({
-            success: ok.length > 0,
-            data: {
-                daDangKy: ok, loi,
-                message: ok.length
-                    ? `Đã đăng ký ${ok.length} sự kiện về Kengi: ${ok.join(', ')}.` +
-                      `${loi.length ? ` ${loi.length} loại lỗi.` : ''} Webhook cũ của bạn (n8n…) giữ nguyên.`
-                    : `Không đăng ký được: ${loi.join(' | ')}`,
-            },
+            success: ok.length > 0 || viMatKhac.length > 0,
+            data: { daDangKy: ok, viMatKhac, loi, message: phanMessage || 'Không có gì để làm.' },
         })
     } catch (e: any) {
         res.status(500).json({ success: false, error: errMsg(e) })
