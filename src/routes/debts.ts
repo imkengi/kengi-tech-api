@@ -68,9 +68,16 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 router.get('/summary', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        // 1. Get all customers with debt > 0
+        // 1. Khách có SỐ DƯ CÔNG NỢ — cả nợ (dương) LẪN trả thừa (âm).
+        //
+        // Trước đây chỉ lấy debt > 0 nên khách trả thừa không bao giờ về tới
+        // giao diện: bộ lọc "Trả thừa" luôn rỗng, và ô TỔNG NỢ cộng thiếu phần
+        // âm nên lệch với phần mềm khác (KiotViet cộng đại số). Đo 07/08/2026:
+        // Kengi 4.610.937.864 vs KiotViet 4.609.128.863 — chênh đúng 1.809.001
+        // là tiền 2 khách trả trước. Trang đã sẵn sàng xử lý số âm (lọc, đếm,
+        // cộng đại số); chỉ thiếu dữ liệu ở đây.
         const customersWithDebt = await prisma.customer.findMany({
-            where: { debt: { gt: 0 } },
+            where: { debt: { not: 0 } },
             select: { id: true, name: true, phone: true, debt: true },
         })
 
