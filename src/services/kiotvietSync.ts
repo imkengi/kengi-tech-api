@@ -506,10 +506,25 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
             // doanh thu thật, còn đơn đang xử lý bị gắn nhãn huỷ. Sai cả hai đầu.
             if (Number(kv?.status) !== 1) { c.skipped++; continue }
 
+            const kvPayments: any[] = Array.isArray(kv?.payments) ? kv.payments : []
+            // Ghi mã phiếu thu vào bộ nhớ lượt chạy TRƯỚC khi kiểm hoá đơn đã
+            // tồn tại. Hoá đơn cũ vẫn `continue` ở dưới, nhưng phiếu thu của nó
+            // thì bước sổ quỹ vẫn phải biết mà tránh — nếu không, đổ lại sổ quỹ
+            // trên nền hoá đơn đã có sẽ nhân đôi tiền y như cũ.
+            for (const p of kvPayments) {
+                if (p?.code) opts.invoicePaymentCodes?.add(String(p.code))
+            }
+
             const existing = await sp.transaction.findUnique({ where: { receiptNumber: code } }).catch(() => null)
             if (existing) {
                 c.skipped++
-                if (opts.apply) await saveMap(sp, 'invoice', kvId, code, existing.id)
+                if (opts.apply) {
+                    await saveMap(sp, 'invoice', kvId, code, existing.id)
+                    // Hoá đơn nhập bằng bản cũ chưa có bản đồ phiếu thu — vá lại
+                    for (const p of kvPayments) {
+                        if (p?.code) await saveMap(sp, 'invoicePayment', String(p.code), String(p.code), existing.id)
+                    }
+                }
                 continue
             }
 
@@ -567,10 +582,6 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
              * Nay: phiếu thu của hoá đơn thành Payment gắn vào hoá đơn, và mã
              * của chúng được ghi vào bảng map để bước sổ quỹ BỎ QUA.
              */
-            const kvPayments: any[] = Array.isArray(kv?.payments) ? kv.payments : []
-            for (const p of kvPayments) {
-                if (p?.code) opts.invoicePaymentCodes?.add(String(p.code))
-            }
             const paymentRows = kvPayments
                 .filter(p => Number(p?.status) !== 1)          // bỏ phiếu đã huỷ
                 .map(p => ({
