@@ -23,7 +23,24 @@ router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => 
         const count = customers.length
         const avgDebt = count > 0 ? Math.round(totalDebt / count) : 0
         const largest = customers[0] || null
-        res.json({ success: true, data: { totalDebt, count, avgDebt, largest } })
+
+        // KHÁCH TRẢ TRƯỚC (số dư có, debt âm). Tổng nợ ở trên chỉ cộng người
+        // ĐANG NỢ; phần mềm khác (KiotViet…) lại cộng đại số cả âm lẫn dương,
+        // nên đối chiếu hai bên thấy lệch đúng bằng khoản này. Trả thêm để
+        // người dùng soát được thay vì ngồi đoán (2026-08-07).
+        const credits = await prisma.customer.aggregate({
+            where: { debt: { lt: 0 } }, _sum: { debt: true }, _count: true,
+        })
+        const creditBalance = Math.abs(credits._sum.debt || 0)
+
+        res.json({
+            success: true,
+            data: {
+                totalDebt, count, avgDebt, largest,
+                creditBalance, creditCount: credits._count || 0,
+                netDebt: totalDebt - creditBalance,
+            },
+        })
     } catch (err) {
         console.error('Debt stats error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })

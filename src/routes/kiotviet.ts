@@ -162,6 +162,11 @@ async function handleWebhook(sp: any, cfg: any, notis: { action: string; data: a
                 if (!cfg.syncInvoices) continue
                 await syncInvoices(sp, n.data, opts, c)
             } else {
+                // order.update / pricebook.update… — KiotViet có gửi nhưng Kengi
+                // chưa đồng bộ loại đó. Ghi lại thay vì nuốt im, để còn biết
+                // đang bỏ lỡ gì mà cân nhắc làm tiếp.
+                await logWebhook(sp, n.action, 'skipped', n.data?.length || 0,
+                    `Nhận được ${n.data?.length || 0} bản ghi nhưng Kengi chưa đồng bộ loại này`)
                 continue
             }
 
@@ -734,6 +739,97 @@ async function chayDon(sp: any, cfg: any, apply: boolean, logId: string): Promis
         }).catch(() => { })
     }
 }
+
+// ─── GET /api/kiotviet/webhooks?storeCode= ──────────────────────────────────
+// Danh sách webhook ĐANG đăng ký bên KiotViet, đánh dấu cái nào trỏ về Kengi.
+const WEBHOOK_TYPES = ['product.update', 'stock.update', 'customer.update', 'invoice.update', 'order.update', 'pricebook.update']
+
+router.get('/webhooks', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || '')
+        const store = await resolveStore(storeCode)
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const cfg = await loadConfig(store.sp)
+        if (!cfg) { res.status(400).json({ success: false, error: 'Chưa cấu hình KiotViet' }); return }
+
+        const myUrl = `${baseUrlOf(req)}/api/kiotviet/webhook/${encodeURIComponent(storeCode)}/${cfg.webhookToken}`
+        const r = await KV.listWebhooks(credsOf(cfg))
+        const rows = (r?.data || []).map((w: any) => ({
+            id: w.id, type: w.type, url: w.url, isActive: !!w.isActive,
+            description: w.description,
+            cuaKengi: String(w.url || '').includes(`/api/kiotviet/webhook/`),
+        }))
+        res.json({
+            success: true,
+            data: {
+                duongDanKengi: myUrl,
+                daDangKy: rows,
+                // Loại nào Kengi CHƯA nhận được — đây là thứ cần bấm đăng ký
+                conThieu: WEBHOOK_TYPES.filter(t => !rows.some((w: any) => w.cuaKengi && w.type === t && w.isActive)),
+                loaiHopLe: WEBHOOK_TYPES,
+            },
+        })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// ─── POST /api/kiotviet/webhooks/register {storeCode, types?} ───────────────
+// Đăng ký webhook trỏ về Kengi. KHÔNG đụng webhook sẵn có của cửa hàng (n8n…)
+// — KiotViet cho nhiều webhook cùng loại, nên thêm vào chứ không thay thế.
+router.post('/webhooks/register', async (req: Request, res: Response) => {
+    try {
+        const b = req.body || {}
+        const storeCode = String(b.storeCode || '')
+        const store = await resolveStore(storeCode)
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const cfg = await loadConfig(store.sp)
+        if (!cfg) { res.status(400).json({ success: false, error: 'Chưa cấu hình KiotViet' }); return }
+
+        const types: string[] = Array.isArray(b.types) && b.types.length
+            ? WEBHOOK_TYPES.filter(t => b.types.map(String).includes(t))
+            : WEBHOOK_TYPES
+        const myUrl = `${baseUrlOf(req)}/api/kiotviet/webhook/${encodeURIComponent(storeCode)}/${cfg.webhookToken}`
+        const creds = credsOf(cfg)
+
+        const ok: string[] = []
+        const loi: string[] = []
+        for (const t of types) {
+            try {
+                await KV.createWebhook(creds, t, myUrl, `Kengi ${storeCode}`)
+                ok.push(t)
+            } catch (e: any) {
+                loi.push(`${t}: ${errMsg(e).slice(0, 150)}`)
+            }
+        }
+        res.json({
+            success: ok.length > 0,
+            data: {
+                daDangKy: ok, loi,
+                message: ok.length
+                    ? `Đã đăng ký ${ok.length} sự kiện về Kengi: ${ok.join(', ')}.` +
+                      `${loi.length ? ` ${loi.length} loại lỗi.` : ''} Webhook cũ của bạn (n8n…) giữ nguyên.`
+                    : `Không đăng ký được: ${loi.join(' | ')}`,
+            },
+        })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// ─── DELETE /api/kiotviet/webhooks/:id?storeCode= ───────────────────────────
+router.delete('/webhooks/:id', async (req: Request, res: Response) => {
+    try {
+        const store = await resolveStore(String(req.query.storeCode || ''))
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const cfg = await loadConfig(store.sp)
+        if (!cfg) { res.status(400).json({ success: false, error: 'Chưa cấu hình KiotViet' }); return }
+        await KV.deleteWebhook(credsOf(cfg), String(req.params.id))
+        res.json({ success: true })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
 
 // ─── GET /api/kiotviet/logs?storeCode=&limit= ───────────────────────────────
 router.get('/logs', async (req: Request, res: Response) => {

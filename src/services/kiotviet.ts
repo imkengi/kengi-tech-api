@@ -267,6 +267,59 @@ export const KV = {
     /** Gọi thẳng một đường dẫn bất kỳ — dùng cho webhook cần nạp lại 1 bản ghi. */
     raw: (creds: KiotVietCreds, path: string, params: Record<string, any> = {}) =>
         fetchJson(creds, path, params),
+
+    /** Danh sách webhook ĐANG đăng ký bên KiotViet */
+    listWebhooks: (creds: KiotVietCreds) => fetchJson(creds, '/webhooks', { pageSize: 100 }),
+
+    /**
+     * Đăng ký một webhook. Tên sự kiện hợp lệ (đọc được từ chính danh sách đang
+     * đăng ký của cửa hàng, 07/08/2026): product.update, stock.update,
+     * customer.update, invoice.update, order.update, pricebook.update.
+     */
+    createWebhook: (creds: KiotVietCreds, type: string, url: string, description: string) =>
+        sendJson(creds, 'POST', '/webhooks', {
+            Webhook: { Type: type, Url: url, IsActive: true, Description: description },
+        }),
+
+    deleteWebhook: (creds: KiotVietCreds, id: string | number) =>
+        sendJson(creds, 'DELETE', `/webhooks/${id}`),
+}
+
+/** POST/DELETE tới KiotViet. Tách khỏi fetchJson vì fetchJson chỉ làm GET. */
+async function sendJson(
+    creds: KiotVietCreds, method: 'POST' | 'DELETE', path: string, body?: any, attempt = 0,
+): Promise<any> {
+    const token = await getAccessToken(creds, attempt === 1)
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), 30_000)
+    let resp: Response
+    try {
+        resp = await fetch(`${API_BASE}${path}`, {
+            method,
+            headers: {
+                Retailer: creds.retailer,
+                Authorization: `Bearer ${token}`,
+                Accept: 'application/json',
+                ...(body ? { 'Content-Type': 'application/json' } : {}),
+            },
+            body: body ? JSON.stringify(body) : undefined,
+            signal: ctrl.signal,
+        })
+    } catch (e: any) {
+        throw new KiotVietError(`Lỗi mạng khi ${method} ${path}: ${e?.message || e}`)
+    } finally {
+        clearTimeout(timer)
+    }
+
+    if (resp.status === 401 && attempt === 0) {
+        clearTokenCache(creds.clientId)
+        return sendJson(creds, method, path, body, 1)
+    }
+    const text = await resp.text()
+    if (!resp.ok) {
+        throw new KiotVietError(`KiotViet ${method} ${path} lỗi HTTP ${resp.status}: ${text.slice(0, 300)}`, resp.status, text.slice(0, 500))
+    }
+    try { return text ? JSON.parse(text) : { ok: true } } catch { return { ok: true, raw: text.slice(0, 200) } }
 }
 
 /**
