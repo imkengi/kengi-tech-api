@@ -273,7 +273,13 @@ export async function syncProducts(sp: any, items: any[], opts: SyncOptions, c: 
                             costPrice: cost,
                             stock: 0,          // đặt qua applyStock để giữ bất biến kho
                             baseUnit: String(kv?.unit || 'cái').slice(0, 50),
-                            description: kv?.description ? String(kv.description).slice(0, 1000) : null,
+                            // Hàng NGỪNG KINH DOANH vẫn phải nhập: hoá đơn cũ
+                            // tham chiếu tới nó, bỏ đi là mất dòng hàng. Kengi
+                            // chưa có cờ ngừng bán nên ghi vào mô tả để nhìn ra.
+                            description: [
+                                kv?.isActive === false ? '[NGỪNG KINH DOANH bên KiotViet]' : '',
+                                kv?.description ? String(kv.description) : '',
+                            ].filter(Boolean).join(' ').slice(0, 1000) || null,
                         },
                     })
                     if (onHand > 0) {

@@ -232,8 +232,16 @@ export async function runSync(
         },
     }
 
-    // KiotViet lọc theo THỜI ĐIỂM CẬP NHẬT (lastModifiedFrom), không có tham số
-    // "đến ngày" cho hàng hoá/khách/NCC → cận trên phải tự cắt phía mình.
+    /**
+     * KHOẢNG NGÀY CHỈ ÁP CHO CHỨNG TỪ, KHÔNG ÁP CHO DỮ LIỆU GỐC.
+     *
+     * Hàng hoá / khách / NCC là dữ liệu gốc: hoá đơn tháng 7/2026 vẫn có thể bán
+     * một mã tạo từ 2022 chưa sửa lần nào. Trước đây tôi lọc cả ba theo
+     * `lastModifiedFrom` = ngày bắt đầu người dùng chọn → HUTI chỉ lấy 2183/3338
+     * mã đang kinh doanh, và 343 hoá đơn báo "mã hàng chưa có bên Kengi"
+     * (đo 07/08/2026). Nay luôn quét TRỌN dữ liệu gốc — chỉ 3.581 mã, rẻ hơn
+     * nhiều so với việc mất dòng hàng trên hoá đơn.
+     */
     const lastModifiedFrom = kvDate(fromDate)
 
     for (const entity of conLai) {
@@ -247,18 +255,18 @@ export async function runSync(
         }).catch(() => { })
         try {
             if (entity === 'products') {
-                const { items, truncated } = await KV.products(creds, { lastModifiedFrom, isActive: true }, pageOpts)
-                const filtered = cutByDate(items, toDate, 'modifiedDate', 'createdDate')
+                const { items, truncated } = await KV.products(creds, {}, pageOpts)
+                const filtered = items
                 if (truncated) c.errors.push('Chạm trần 500 trang — thu hẹp khoảng ngày rồi chạy tiếp')
                 await syncProducts(sp, filtered, opts, c)
             } else if (entity === 'customers') {
-                const { items, truncated } = await KV.customers(creds, { lastModifiedFrom }, pageOpts)
-                const filtered = cutByDate(items, toDate, 'modifiedDate', 'createdDate')
+                const { items, truncated } = await KV.customers(creds, {}, pageOpts)
+                const filtered = items
                 if (truncated) c.errors.push('Chạm trần 500 trang — thu hẹp khoảng ngày rồi chạy tiếp')
                 await syncCustomers(sp, filtered, opts, c)
             } else if (entity === 'suppliers') {
-                const { items, truncated } = await KV.suppliers(creds, { lastModifiedFrom }, pageOpts)
-                const filtered = cutByDate(items, toDate, 'modifiedDate', 'createdDate')
+                const { items, truncated } = await KV.suppliers(creds, {}, pageOpts)
+                const filtered = items
                 if (truncated) c.errors.push('Chạm trần 500 trang — thu hẹp khoảng ngày rồi chạy tiếp')
                 await syncSuppliers(sp, filtered, opts, c)
             } else if (entity === 'invoices') {
