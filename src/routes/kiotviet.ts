@@ -647,6 +647,23 @@ async function chayDon(sp: any, cfg: any, apply: boolean, logId: string): Promis
                    AND DATE("createdAt") <> DATE("receivedDate")`)
         }
 
+        // ─ 1b. Khách hết nợ thì hoá đơn của họ phải là ĐÃ THU ĐỦ ─
+        // Trang công nợ tự suy thêm người nợ từ hoá đơn chưa thu; hoá đơn cũ
+        // nhập bằng bản trước để amountReceived=0 nên đẻ ra khách nợ ảo.
+        // Customer.debt (đã đồng bộ từ KiotViet) là số chuẩn.
+        const noAo: any[] = await sp.$queryRawUnsafe(
+            `SELECT COUNT(*)::int AS n FROM "Transaction" t
+             JOIN "Customer" c ON c."id" = t."customerId"
+             WHERE t."createdByName" = 'KiotViet Sync' AND c."debt" <= 0
+               AND t."amountReceived" < t."total"`).catch(() => [{ n: 0 }])
+        if (apply) {
+            await sp.$executeRawUnsafe(
+                `UPDATE "Transaction" t SET "amountReceived" = t."total", "status" = 'completed'
+                 FROM "Customer" c
+                 WHERE c."id" = t."customerId" AND t."createdByName" = 'KiotViet Sync'
+                   AND c."debt" <= 0 AND t."amountReceived" < t."total"`)
+        }
+
         // ─ 2. Hỏi KiotViet phiếu nào KHÔNG hoàn thành rồi xoá ─
         const creds = credsOf(cfg)
         const huyHoaDon: string[] = []
@@ -710,6 +727,7 @@ async function chayDon(sp: any, cfg: any, apply: boolean, logId: string): Promis
                 errors: loiGoiApi ? `Không hỏi được KiotViet: ${loiGoiApi}` : null,
                 details: JSON.stringify({
                     'sửa ngày': { layVe: suaNgayTx + suaNgayPo, taoMoi: 0, capNhat: suaNgayTx + suaNgayPo, boQua: 0, loi: 0, xong: true, mau: [{ hoaDon: suaNgayTx, phieuNhap: suaNgayPo }] },
+                    'gỡ nợ ảo (khách hết nợ mà hoá đơn ghi chưa thu)': { layVe: noAo?.[0]?.n || 0, taoMoi: 0, capNhat: noAo?.[0]?.n || 0, boQua: 0, loi: 0, xong: true, mau: [{ soHoaDon: noAo?.[0]?.n || 0 }] },
                     'xoá chứng từ không hoàn thành': { layVe: xoaHoaDon + xoaPhieuNhap, taoMoi: 0, capNhat: 0, boQua: xoaHoaDon + xoaPhieuNhap, loi: 0, xong: true, mau: [{ hoaDon: xoaHoaDon, phieuNhap: xoaPhieuNhap }] },
                 }),
             },
