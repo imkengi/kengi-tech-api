@@ -916,6 +916,50 @@ export async function syncCashflow(sp: any, items: any[], opts: SyncOptions, c: 
             const note = [String(kv?.cashGroup || 'Sổ quỹ KiotViet'), partner].filter(Boolean).join(' — ').slice(0, 300)
             const viaBank = /transfer|bank|chuy/i.test(String(kv?.method || ''))
 
+            /**
+             * KHÁCH TRẢ NỢ → DebtEntry, KHÔNG PHẢI CashReceipt.
+             *
+             * Kengi ghi việc thu nợ vào sổ công nợ (DebtEntry type='payment') —
+             * đó là thứ trang "Lịch sử công nợ" đọc. Bản trước tôi đổ hết phiếu
+             * thu vào CashReceipt nên tiền có trong sổ quỹ nhưng lịch sử công nợ
+             * TRỐNG TRƠN, khách nợ bao nhiêu cũng không thấy đã trả lần nào
+             * (dính 07/08/2026).
+             *
+             * KHÔNG đụng Customer.debt: số dư đã lấy thẳng từ KiotViet và đã đối
+             * chiếu khớp từng đồng. Cộng trừ thêm ở đây là làm lệch trở lại.
+             * `balance` để 0 vì trang tự tính lại luỹ kế khi hiển thị.
+             */
+            const laKhachTraNo = dir === 'in'
+                && String(kv?.partnerType || '').toUpperCase() === 'C'
+                && kv?.partnerId
+            if (laKhachTraNo) {
+                const localCus = await findMap(sp, 'customer', kv.partnerId)
+                if (localCus) {
+                    if (await findMap(sp, 'debtPayment', code)) { c.skipped++; continue }
+                    if (opts.apply) {
+                        const cus = await sp.customer.findUnique({
+                            where: { id: localCus }, select: { name: true, phone: true },
+                        }).catch(() => null)
+                        const created = await sp.debtEntry.create({
+                            data: {
+                                customerId: localCus,
+                                customerName: cus?.name || partner || 'Khách hàng',
+                                phone: cus?.phone || null,
+                                type: 'payment',
+                                amount,
+                                description: `Trả nợ — phiếu thu ${code} (KiotViet)`,
+                                balance: 0,
+                                createdAt: date,
+                            },
+                        })
+                        await saveMap(sp, 'debtPayment', code, code, created.id)
+                    }
+                    c.created++
+                    noteSample(c, { code, chieu: 'THU NỢ', soTien: amount, khach: partner, ngay: date.toISOString().slice(0, 10) })
+                    continue
+                }
+            }
+
             if (dir === 'in') {
                 const dup = await sp.cashReceipt.findFirst({ where: { reference: code } }).catch(() => null)
                 if (dup) { c.skipped++; if (opts.apply) await saveMap(sp, entity, kvId, code, dup.id); continue }

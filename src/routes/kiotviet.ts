@@ -681,6 +681,22 @@ async function chayDon(sp: any, cfg: any, apply: boolean, logId: string): Promis
                    AND c."debt" <= 0 AND t."amountReceived" < t."total"`)
         }
 
+        // ─ 1c. Phiếu thu khách trả nợ bị nhập nhầm vào SỔ QUỸ ─
+        // Kengi đọc lịch sử công nợ từ DebtEntry; bản cũ đổ hết phiếu thu vào
+        // CashReceipt nên tiền có trong sổ quỹ mà lịch sử công nợ trống trơn.
+        // Xoá các phiếu thu DO ĐỒNG BỘ TẠO (nhận diện qua KiotVietMap) cùng dấu
+        // vết của chúng, để lần đồng bộ sổ quỹ sau dựng lại cho đúng chỗ.
+        const mapThu: any[] = await sp.kiotVietMap.findMany({
+            where: { entity: 'cashReceipt' }, select: { id: true, localId: true },
+        }).catch(() => [])
+        if (apply && mapThu.length) {
+            for (let i = 0; i < mapThu.length; i += 500) {
+                const lo = mapThu.slice(i, i + 500)
+                await sp.cashReceipt.deleteMany({ where: { id: { in: lo.map(m => m.localId) } } }).catch(() => { })
+                await sp.kiotVietMap.deleteMany({ where: { id: { in: lo.map(m => m.id) } } }).catch(() => { })
+            }
+        }
+
         // ─ 2. Hỏi KiotViet phiếu nào KHÔNG hoàn thành rồi xoá ─
         const creds = credsOf(cfg)
         const huyHoaDon: string[] = []
@@ -745,6 +761,7 @@ async function chayDon(sp: any, cfg: any, apply: boolean, logId: string): Promis
                 details: JSON.stringify({
                     'sửa ngày': { layVe: suaNgayTx + suaNgayPo, taoMoi: 0, capNhat: suaNgayTx + suaNgayPo, boQua: 0, loi: 0, xong: true, mau: [{ hoaDon: suaNgayTx, phieuNhap: suaNgayPo }] },
                     'gỡ nợ ảo (khách hết nợ mà hoá đơn ghi chưa thu)': { layVe: noAo?.[0]?.n || 0, taoMoi: 0, capNhat: noAo?.[0]?.n || 0, boQua: 0, loi: 0, xong: true, mau: [{ soHoaDon: noAo?.[0]?.n || 0 }] },
+                    'gỡ phiếu thu nhập nhầm sổ quỹ (chạy lại Phiếu thu/chi sau khi dọn)': { layVe: mapThu.length, taoMoi: 0, capNhat: 0, boQua: mapThu.length, loi: 0, xong: true, mau: [{ soPhieu: mapThu.length }] },
                     'xoá chứng từ không hoàn thành': { layVe: xoaHoaDon + xoaPhieuNhap, taoMoi: 0, capNhat: 0, boQua: xoaHoaDon + xoaPhieuNhap, loi: 0, xong: true, mau: [{ hoaDon: xoaHoaDon, phieuNhap: xoaPhieuNhap }] },
                 }),
             },
