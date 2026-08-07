@@ -371,12 +371,19 @@ export async function syncCustomers(sp: any, items: any[], opts: SyncOptions, c:
                 existing = await sp.customer.findFirst({ where: { phone } }).catch(() => null)
             }
 
+            // CÔNG NỢ lấy từ KiotViet — hệ thống đang là nguồn gốc dữ liệu.
+            // Chỉ ĐIỀN khi bên Kengi đang là 0 (chưa ai đụng tới), hoặc khi
+            // người dùng bật ghi đè giá/công nợ. Đè bừa là xoá mất khoản thu nợ
+            // mà cửa hàng đã ghi trên Kengi.
+            const kvDebt = Number(kv?.debt) || 0
+
             if (existing) {
                 const data: any = {}
                 if (opts.overwriteNames && name !== existing.name) data.name = name
                 if (!existing.phone && phone) data.phone = phone
                 if (!existing.address && kv?.address) data.address = String(kv.address).slice(0, 500)
                 if (!existing.email && kv?.email) data.email = String(kv.email)
+                if (kvDebt !== existing.debt && (!existing.debt || opts.overwritePrices)) data.debt = kvDebt
 
                 if (!Object.keys(data).length) {
                     c.skipped++
@@ -401,13 +408,14 @@ export async function syncCustomers(sp: any, items: any[], opts: SyncOptions, c:
                             email: kv?.email ? String(kv.email) : null,
                             address: kv?.address ? String(kv.address).slice(0, 500) : null,
                             gender: kv?.gender === true ? 'male' : kv?.gender === false ? 'female' : null,
+                            debt: kvDebt,
                             notes: 'Đồng bộ từ KiotViet',
                         },
                     })
                     await saveMap(sp, 'customer', kvId, finalCode, created.id)
                 }
                 c.created++
-                noteSample(c, { code: finalCode, name, phone, hanhDong: 'tạo mới' })
+                noteSample(c, { code: finalCode, name, phone, congNo: kvDebt, hanhDong: 'tạo mới' })
             }
         } catch (e: any) {
             noteError(c, `Khách ${kv?.code || kv?.id}: ${e?.message || e}`)
@@ -435,6 +443,12 @@ export async function syncSuppliers(sp: any, items: any[], opts: SyncOptions, c:
                 existing = await sp.supplier.findUnique({ where: { code } }).catch(() => null)
             }
 
+            // CÔNG NỢ PHẢI TRẢ + tổng đã mua, lấy từ KiotViet (nguồn gốc dữ liệu).
+            // Cùng quy tắc với công nợ khách: chỉ điền khi Kengi đang là 0, hoặc
+            // khi người dùng bật ghi đè giá/công nợ.
+            const kvPayable = Number(kv?.debt) || 0
+            const kvBought = Number(kv?.totalInvoiced) || 0
+
             if (existing) {
                 const data: any = {}
                 if (opts.overwriteNames && name !== existing.name) data.name = name
@@ -442,6 +456,8 @@ export async function syncSuppliers(sp: any, items: any[], opts: SyncOptions, c:
                 if (!existing.address && kv?.address) data.address = String(kv.address).slice(0, 500)
                 if (!existing.taxCode && kv?.taxCode) data.taxCode = String(kv.taxCode)
                 if (!existing.email && kv?.email) data.email = String(kv.email)
+                if (kvPayable !== existing.payable && (!existing.payable || opts.overwritePrices)) data.payable = kvPayable
+                if (kvBought && kvBought !== existing.totalValue && (!existing.totalValue || opts.overwritePrices)) data.totalValue = kvBought
 
                 if (!Object.keys(data).length) {
                     c.skipped++
@@ -464,13 +480,15 @@ export async function syncSuppliers(sp: any, items: any[], opts: SyncOptions, c:
                             email: kv?.email ? String(kv.email) : null,
                             address: kv?.address ? String(kv.address).slice(0, 500) : null,
                             taxCode: kv?.taxCode ? String(kv.taxCode) : null,
+                            payable: kvPayable,
+                            totalValue: kvBought,
                             notes: 'Đồng bộ từ KiotViet',
                         },
                     })
                     await saveMap(sp, 'supplier', kvId, finalCode, created.id)
                 }
                 c.created++
-                noteSample(c, { code: finalCode, name, hanhDong: 'tạo mới' })
+                noteSample(c, { code: finalCode, name, phaiTra: kvPayable, daMua: kvBought, hanhDong: 'tạo mới' })
             }
         } catch (e: any) {
             noteError(c, `NCC ${kv?.code || kv?.id}: ${e?.message || e}`)
@@ -607,7 +625,11 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                         // Khách đưa dư (một lần trả cho nhiều hoá đơn) thì phần
                         // dư là tiền thối, không phải doanh thu
                         change: paid > total ? paid - total : 0,
-                        status: 'completed',
+                        // CHƯA THU ĐỦ = 'partial'. Kengi suy công nợ ra từ đơn
+                        // 'partial' (total − amountReceived); nhập tất cả thành
+                        // 'completed' là báo cáo công nợ ra 0 trong khi khách
+                        // vẫn đang nợ thật (đo 07/08/2026: 14/40 khách có nợ).
+                        status: paid >= total ? 'completed' : 'partial',
                         createdBy: opts.systemUserId,
                         createdByName: 'KiotViet Sync',
                         notes: `Nhập từ KiotViet (mã ${code})`,
