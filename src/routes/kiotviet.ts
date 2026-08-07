@@ -547,6 +547,108 @@ router.get('/imported-summary', async (req: Request, res: Response) => {
     }
 })
 
+// ─── POST /api/kiotviet/repair {storeCode, apply?} ──────────────────────────
+/**
+ * DỌN DỮ LIỆU ĐÃ ĐỔ BẰNG BẢN CŨ CÓ LỖI.
+ *
+ * Sửa code chỉ đúng cho lần sau; bản ghi đã nằm trong sổ vẫn sai. Việc này làm
+ * hai chuyện, MẶC ĐỊNH CHẠY THỬ:
+ *
+ *  1. TRẢ NGÀY VỀ ĐÚNG CHỨNG TỪ. `transactionDate`/`receivedDate` vẫn luôn
+ *     đúng, chỉ `createdAt` bị để mặc định now() — mà báo cáo doanh thu lại
+ *     lọc theo createdAt. Chép ngược lại là xong, không cần gọi KiotViet.
+ *
+ *  2. XOÁ CHỨNG TỪ KHÔNG HOÀN THÀNH. Bản cũ hiểu sai mã trạng thái nên nuốt cả
+ *     hoá đơn đã huỷ lẫn đang xử lý. Phải hỏi lại KiotViet mới biết phiếu nào
+ *     thật sự hoàn thành — không suy được từ dữ liệu tại chỗ.
+ *
+ * Chỉ đụng bản ghi DO ĐỒNG BỘ TẠO RA (dò qua KiotVietMap), không chạm dữ liệu
+ * người dùng tự nhập.
+ */
+router.post('/repair', async (req: Request, res: Response) => {
+    try {
+        const b = req.body || {}
+        const store = await resolveStore(String(b.storeCode || ''))
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const sp = store.sp
+        const cfg = await loadConfig(sp)
+        if (!cfg) { res.status(400).json({ success: false, error: 'Chưa cấu hình KiotViet' }); return }
+        const apply = b.apply === true
+
+        // ─ 1. Ngày: chép transactionDate → createdAt ─
+        const txSaiNgay: any[] = await sp.$queryRawUnsafe(
+            `SELECT COUNT(*)::int AS n FROM "Transaction"
+             WHERE "createdByName" = 'KiotViet Sync' AND "transactionDate" IS NOT NULL
+               AND DATE("createdAt") <> DATE("transactionDate")`).catch(() => [{ n: 0 }])
+        const poSaiNgay: any[] = await sp.$queryRawUnsafe(
+            `SELECT COUNT(*)::int AS n FROM "PurchaseOrder"
+             WHERE "notes" LIKE '%KiotViet%' AND "receivedDate" IS NOT NULL
+               AND DATE("createdAt") <> DATE("receivedDate")`).catch(() => [{ n: 0 }])
+
+        if (apply) {
+            await sp.$executeRawUnsafe(
+                `UPDATE "Transaction" SET "createdAt" = "transactionDate"
+                 WHERE "createdByName" = 'KiotViet Sync' AND "transactionDate" IS NOT NULL
+                   AND DATE("createdAt") <> DATE("transactionDate")`)
+            await sp.$executeRawUnsafe(
+                `UPDATE "PurchaseOrder" SET "createdAt" = "receivedDate"
+                 WHERE "notes" LIKE '%KiotViet%' AND "receivedDate" IS NOT NULL
+                   AND DATE("createdAt") <> DATE("receivedDate")`)
+        }
+
+        // ─ 2. Hỏi KiotViet phiếu nào KHÔNG hoàn thành rồi xoá ─
+        const creds = credsOf(cfg)
+        const huyHoaDon: string[] = []
+        const huyPhieuNhap: string[] = []
+        let loiGoiApi: string | null = null
+        try {
+            const { items: invs } = await KV.invoices(creds, {}, { maxPages: 500 })
+            for (const iv of invs) {
+                if (Number(iv?.status) !== 1 && iv?.code) huyHoaDon.push(String(iv.code))
+            }
+            const { items: pos } = await KV.purchaseOrders(creds, {}, { maxPages: 500 })
+            for (const po of pos) {
+                const code = String(po?.code || '')
+                if (code && (Number(po?.status) !== 3 || /\{DEL\}/i.test(code))) huyPhieuNhap.push(code)
+            }
+        } catch (e: any) {
+            loiGoiApi = errMsg(e)
+        }
+
+        // Đếm/xoá theo LÔ — danh sách mã có thể lên hàng chục nghìn, nhét hết
+        // vào một câu IN (...) là vỡ câu lệnh.
+        const LO = 500
+        let xoaHoaDon = 0, xoaPhieuNhap = 0
+        for (let i = 0; i < huyHoaDon.length; i += LO) {
+            const lo = huyHoaDon.slice(i, i + LO)
+            const where = { receiptNumber: { in: lo }, createdByName: 'KiotViet Sync' }
+            xoaHoaDon += await sp.transaction.count({ where }).catch(() => 0)
+            if (apply) await sp.transaction.deleteMany({ where }).catch(() => { })
+        }
+        for (let i = 0; i < huyPhieuNhap.length; i += LO) {
+            const lo = huyPhieuNhap.slice(i, i + LO)
+            const where = { code: { in: lo }, notes: { contains: 'KiotViet' } }
+            xoaPhieuNhap += await sp.purchaseOrder.count({ where }).catch(() => 0)
+            if (apply) await sp.purchaseOrder.deleteMany({ where }).catch(() => { })
+        }
+
+        res.json({
+            success: true,
+            data: {
+                cheDo: apply ? 'ĐÃ DỌN' : 'CHẠY THỬ (chưa đụng gì)',
+                suaNgay: { hoaDon: txSaiNgay?.[0]?.n || 0, phieuNhap: poSaiNgay?.[0]?.n || 0 },
+                xoaKhongHoanThanh: { hoaDon: xoaHoaDon, phieuNhap: xoaPhieuNhap },
+                loiGoiApi,
+                message: apply
+                    ? `Đã trả ${txSaiNgay?.[0]?.n || 0} hoá đơn + ${poSaiNgay?.[0]?.n || 0} phiếu nhập về đúng ngày chứng từ, xoá ${xoaHoaDon} hoá đơn và ${xoaPhieuNhap} phiếu nhập không hoàn thành. Chạy lại đồng bộ Hàng hoá để điền thương hiệu.`
+                    : `Chạy thử: sẽ sửa ngày ${txSaiNgay?.[0]?.n || 0} hoá đơn + ${poSaiNgay?.[0]?.n || 0} phiếu nhập, xoá ${xoaHoaDon} hoá đơn và ${xoaPhieuNhap} phiếu nhập không hoàn thành.`,
+            },
+        })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
 // ─── GET /api/kiotviet/logs?storeCode=&limit= ───────────────────────────────
 router.get('/logs', async (req: Request, res: Response) => {
     try {
