@@ -453,6 +453,13 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
             const code = String(kv?.code || '').trim()
             if (!kvId || !code) { c.skipped++; continue }
 
+            // CHỈ LẤY HOÁ ĐƠN HOÀN THÀNH.
+            // Trạng thái đo trên dữ liệu thật (HUTI 06/08/2026):
+            //   1 = "Hoàn thành" · 2 = "Đã hủy" · 3 = "Đang xử lý"
+            // Bản trước tôi ghi 3 là huỷ → hoá đơn ĐÃ HUỶ (2) lọt vào sổ như
+            // doanh thu thật, còn đơn đang xử lý bị gắn nhãn huỷ. Sai cả hai đầu.
+            if (Number(kv?.status) !== 1) { c.skipped++; continue }
+
             const existing = await sp.transaction.findUnique({ where: { receiptNumber: code } }).catch(() => null)
             if (existing) {
                 c.skipped++
@@ -502,8 +509,6 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
             const total = Number(kv?.total) || 0
             const paid = Number(kv?.totalPayment) || 0
             const when = kv?.purchaseDate ? new Date(kv.purchaseDate) : new Date()
-            // status KiotViet: 1=hoàn thành, 2=đang xử lý, 3=đã huỷ, 5=đang giao
-            const cancelled = Number(kv?.status) === 3
 
             if (opts.apply) {
                 const created = await sp.transaction.create({
@@ -516,11 +521,16 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                         total,
                         amountReceived: paid,
                         change: 0,
-                        status: cancelled ? 'cancelled' : 'completed',
+                        status: 'completed',
                         createdBy: opts.systemUserId,
                         createdByName: 'KiotViet Sync',
                         notes: `Nhập từ KiotViet (mã ${code})`,
                         transactionDate: isNaN(when.getTime()) ? new Date() : when,
+                        // NGÀY CHỨNG TỪ, KHÔNG PHẢI NGÀY ĐỒNG BỘ. Báo cáo doanh
+                        // thu lọc theo `createdAt` chứ không phải transactionDate,
+                        // để mặc định now() là 24 nghìn hoá đơn cũ dồn hết vào
+                        // "hôm nay" (dính 06/08/2026).
+                        createdAt: isNaN(when.getTime()) ? new Date() : when,
                         channel: 'direct',
                         items: { create: lines },
                     },
@@ -561,11 +571,12 @@ export async function syncPurchaseOrders(sp: any, items: any[], opts: SyncOption
                 continue
             }
 
-            // PHIẾU ĐÃ XOÁ: KiotViet vẫn trả về nhưng gắn hậu tố {DEL} vào mã.
-            // Đo trên dữ liệu thật (HUTI 06/08/2026): 10/10 phiếu {DEL} đều
-            // status 4, tổng tiền tới hàng trăm triệu. Nuốt vào là thổi phồng
-            // lịch sử mua hàng.
-            if (/\{DEL\}/i.test(code)) { c.skipped++; continue }
+            // CHỈ LẤY PHIẾU NHẬP HOÀN THÀNH.
+            // Phiếu đã xoá vẫn được KiotViet trả về, gắn hậu tố {DEL} vào mã;
+            // 10/10 phiếu {DEL} đều status 4 (đo HUTI 06/08/2026). Status 3 là
+            // nhóm phiếu bình thường (60/60). Chỉ nhận 3, bỏ hết phần còn lại —
+            // nuốt phiếu huỷ vào là thổi phồng lịch sử mua hàng.
+            if (/\{DEL\}/i.test(code) || Number(kv?.status) !== 3) { c.skipped++; continue }
 
             // NHÀ CUNG CẤP: KiotViet LƯỢC BỎ trường khi phiếu không gắn NCC, nên
             // có phiếu thấy supplierName/supplierCode, có phiếu không. Đừng kết
@@ -593,15 +604,12 @@ export async function syncPurchaseOrders(sp: any, items: any[], opts: SyncOption
                 const created = await sp.purchaseOrder.create({
                     data: {
                         code, supplierId, supplierName,
-                        // CHỈ status 3 mới coi là đã nhập hàng. Trên dữ liệu thật
-                        // chỉ có 3 và 4; 4 là nhóm gắn với phiếu bị xoá nên KHÔNG
-                        // được tính là mua thật — cho vào 'cancelled' để không
-                        // cộng vào lịch sử mua. KiotViet không kèm nhãn chữ để
-                        // giải nghĩa, nên mã gốc giữ lại trong ghi chú.
-                        status: Number(kv?.status) === 3 ? 'received' : 'cancelled',
+                        status: 'received',
                         totalAmount: total,
-                        notes: `Nhập từ KiotViet (mã trạng thái gốc: ${kv?.status ?? '?'})`,
+                        notes: 'Nhập từ KiotViet',
                         receivedDate: when && !isNaN(when.getTime()) ? when : null,
+                        // Ngày chứng từ gốc, không phải ngày đồng bộ
+                        ...(when && !isNaN(when.getTime()) ? { createdAt: when } : {}),
                         ...(lines.length ? { items: { create: lines } } : {}),
                     },
                 })
@@ -611,6 +619,102 @@ export async function syncPurchaseOrders(sp: any, items: any[], opts: SyncOption
             noteSample(c, { code, ncc: supplierName, tong: total, soDong: lines.length, hanhDong: 'tạo mới' })
         } catch (e: any) {
             noteError(c, `Phiếu nhập ${kv?.code || kv?.id}: ${e?.message || e}`)
+        }
+    }
+}
+
+// ─── TRẢ HÀNG BÁN (khách trả lại) ───────────────────────────────────────────
+
+/**
+ * KiotViet `/returns` → ReturnOrder + ReturnItem của Kengi.
+ *
+ * KHÔNG CỘNG KHO (`restocked: false`): tồn lấy từ `onHand` của KiotViet vốn đã
+ * tính hàng trả về rồi. Chỉ lấy phiếu ĐÃ TRẢ XONG (status 1 = "Đã trả", đo trên
+ * dữ liệu thật HUTI 06/08/2026).
+ *
+ * TRẢ HÀNG MUA (trả lại nhà cung cấp) KHÔNG CÓ trong Public API của KiotViet —
+ * đã thử /purchaseReturns, /returnsupplier, /purchasereturns, /returnSuppliers,
+ * /supplierreturns đều lỗi, và danh sách phiếu nhập chỉ có tiền tố PN (không có
+ * phiếu trả trộn vào). Không dựng được thì nói thẳng, không bịa.
+ */
+export async function syncReturns(sp: any, items: any[], opts: SyncOptions, c: SyncCounters): Promise<void> {
+    for (const kv of items) {
+        c.fetched++
+        beat(opts, c)
+        try {
+            const kvId = kv?.id
+            const code = String(kv?.code || '').trim()
+            if (!kvId || !code) { c.skipped++; continue }
+            // Chỉ nhận phiếu đã trả xong
+            if (Number(kv?.status) !== 1) { c.skipped++; continue }
+
+            const existing = await sp.returnOrder.findUnique({ where: { code } }).catch(() => null)
+            if (existing) {
+                c.skipped++
+                if (opts.apply) await saveMap(sp, 'return', kvId, code, existing.id)
+                continue
+            }
+
+            // Gắn về hoá đơn gốc nếu hoá đơn đó đã được đồng bộ
+            let transactionId: string | null = null
+            let originalInvoice = kv?.invoiceId ? `KV#${kv.invoiceId}` : code
+            if (kv?.invoiceId) {
+                transactionId = await findMap(sp, 'invoice', kv.invoiceId)
+                if (transactionId) {
+                    const tx = await sp.transaction.findUnique({
+                        where: { id: transactionId }, select: { receiptNumber: true },
+                    }).catch(() => null)
+                    if (tx?.receiptNumber) originalInvoice = tx.receiptNumber
+                }
+            }
+
+            const details: any[] = Array.isArray(kv?.returnDetails) ? kv.returnDetails : []
+            const lines: any[] = []
+            for (const d of details) {
+                const sku = String(d?.productCode || '').trim()
+                // productId của ReturnItem cho phép rỗng → thiếu hàng vẫn giữ được dòng
+                const p = sku
+                    ? await sp.product.findUnique({ where: { sku }, select: { id: true } }).catch(() => null)
+                    : null
+                lines.push({
+                    productId: p?.id || null,
+                    productName: String(d?.productName || sku || 'Hàng trả').slice(0, 200),
+                    sku: sku || null,
+                    quantity: Math.round(Number(d?.quantity) || 0),
+                    unitPrice: Number(d?.price ?? d?.sellPrice) || 0,
+                    restocked: false,   // kho đã phản ánh bên KiotViet, xem ghi chú trên
+                })
+            }
+            if (!lines.length) { c.skipped++; continue }
+
+            const when = kv?.returnDate ? new Date(kv.returnDate) : new Date()
+            const date = isNaN(when.getTime()) ? new Date() : when
+            const total = Number(kv?.returnTotal) || 0
+
+            if (opts.apply) {
+                const created = await sp.returnOrder.create({
+                    data: {
+                        code,
+                        originalInvoice,
+                        transactionId,
+                        customerName: String(kv?.customerName || 'Khách lẻ').slice(0, 200),
+                        status: 'refunded',            // đã trả xong bên KiotViet
+                        reason: 'Nhập từ KiotViet',
+                        refundAmount: Number(kv?.totalPayment) || total,
+                        totalRefund: total,
+                        notes: `Phí trả hàng: ${Number(kv?.returnFee) || 0}`,
+                        processedAt: date,
+                        refundedAt: date,
+                        createdAt: date,               // ngày chứng từ gốc
+                        items: { create: lines },
+                    },
+                })
+                await saveMap(sp, 'return', kvId, code, created.id)
+            }
+            c.created++
+            noteSample(c, { code, khach: kv?.customerName, tien: total, soDong: lines.length, ngay: date.toISOString().slice(0, 10) })
+        } catch (e: any) {
+            noteError(c, `Trả hàng ${kv?.code || kv?.id}: ${e?.message || e}`)
         }
     }
 }
@@ -672,6 +776,7 @@ export async function syncCashflow(sp: any, items: any[], opts: SyncOptions, c: 
                             receivedVia: viaBank ? 'Chuyển khoản' : 'Tiền mặt',
                             customerName: partner ? partner.slice(0, 200) : null,
                             reference: code, status: 'active',
+                            createdAt: date,   // ngày chứng từ gốc
                         },
                     })
                     await saveMap(sp, entity, kvId, code, created.id)
@@ -686,6 +791,7 @@ export async function syncCashflow(sp: any, items: any[], opts: SyncOptions, c: 
                             status: 'pending',        // CHỜ DUYỆT — chưa vào thống kê
                             supplierName: partner ? partner.slice(0, 200) : null,
                             sourceRef: `KV|${code}`,
+                            createdAt: date,   // ngày chứng từ gốc
                         },
                     })
                     await saveMap(sp, entity, kvId, code, created.id)

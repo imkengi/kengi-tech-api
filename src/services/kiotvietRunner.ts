@@ -20,7 +20,7 @@ import { errMsg } from '../lib/errorResponse'
 import { KV, kvDate, type KiotVietCreds } from './kiotviet'
 import {
     newCounters, syncProducts, syncCustomers, syncSuppliers, syncInvoices,
-    syncPurchaseOrders, syncCashflow, type SyncOptions,
+    syncPurchaseOrders, syncCashflow, syncReturns, type SyncOptions,
 } from './kiotvietSync'
 
 /** Mất nhịp quá ngần này = coi như đợt chạy đã chết. */
@@ -33,7 +33,9 @@ export const STALE_MS = 2 * 60_000
  */
 export const MAX_ATTEMPTS = 5
 
-export const SYNC_ENTITIES = ['products', 'customers', 'suppliers', 'invoices', 'purchaseOrders', 'cashflow'] as const
+// THỨ TỰ CÓ Ý NGHĨA (phụ thuộc): hoá đơn tra sản phẩm theo SKU, phiếu trả tra
+// ngược hoá đơn gốc. Đảo thứ tự là tra vào chỗ chưa có.
+export const SYNC_ENTITIES = ['products', 'customers', 'suppliers', 'invoices', 'returns', 'purchaseOrders', 'cashflow'] as const
 
 export function credsOf(cfg: any): KiotVietCreds {
     return {
@@ -269,6 +271,15 @@ export async function runSync(
                 const filtered = cutByDate(items, toDate, 'purchaseDate')
                 if (truncated) c.errors.push('Chạm trần 500 trang — thu hẹp khoảng ngày rồi chạy tiếp')
                 await syncInvoices(sp, filtered, opts, c)
+            } else if (entity === 'returns') {
+                const { items, truncated } = await KV.returns(creds, {
+                    fromReturnDate: kvDate(fromDate),
+                    toReturnDate: kvDate(toDate),
+                    lastModifiedFrom,
+                }, pageOpts)
+                const filtered = cutByDate(items, toDate, 'returnDate', 'modifiedDate')
+                if (truncated) c.errors.push('Chạm trần 500 trang — thu hẹp khoảng ngày rồi chạy tiếp')
+                await syncReturns(sp, filtered, opts, c)
             } else if (entity === 'purchaseOrders') {
                 const { items, truncated } = await KV.purchaseOrders(creds, {
                     fromPurchaseDate: kvDate(fromDate),

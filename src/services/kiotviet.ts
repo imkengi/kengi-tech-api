@@ -252,6 +252,14 @@ export const KV = {
     cashflow: (creds: KiotVietCreds, params: Record<string, any>, opts?: any) =>
         fetchAllPages(creds, '/cashflow', params, opts),
 
+    /**
+     * Trả hàng BÁN (khách trả lại). Trả hàng MUA (trả nhà cung cấp) không có
+     * trong Public API — mọi biến thể đường dẫn đều lỗi, xem ghi chú ở
+     * kiotvietSync.syncReturns.
+     */
+    returns: (creds: KiotVietCreds, params: Record<string, any>, opts?: any) =>
+        fetchAllPages(creds, '/returns', params, opts),
+
     branches: (creds: KiotVietCreds) => fetchJson(creds, '/branches', { pageSize: 100 }),
 
     categories: (creds: KiotVietCreds) => fetchJson(creds, '/categories', { pageSize: 100 }),
