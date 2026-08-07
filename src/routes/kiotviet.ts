@@ -570,11 +570,41 @@ router.post('/repair', async (req: Request, res: Response) => {
         const b = req.body || {}
         const store = await resolveStore(String(b.storeCode || ''))
         if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
-        const sp = store.sp
-        const cfg = await loadConfig(sp)
+        const cfg = await loadConfig(store.sp)
         if (!cfg) { res.status(400).json({ success: false, error: 'Chưa cấu hình KiotViet' }); return }
         const apply = b.apply === true
 
+        // CHẠY NỀN. Bước hỏi lại KiotViet phải quét vài chục nghìn hoá đơn —
+        // làm trong một request là 504 (đã dính 07/08/2026). Ghi tiến độ vào
+        // cùng bảng nhật ký để hiện chung ở bảng lịch sử.
+        const log = await store.sp.kiotVietSyncLog.create({
+            data: {
+                entity: 'dọn dữ liệu', mode: 'repair', dryRun: !apply,
+                status: 'running', startedAt: new Date(), heartbeatAt: new Date(),
+            },
+        })
+        res.json({
+            success: true,
+            data: {
+                logId: log.id,
+                cheDo: apply ? 'ĐANG DỌN' : 'ĐANG CHẠY THỬ',
+                message: 'Đã bắt đầu. Kết quả hiện ở bảng lịch sử bên dưới trong ít phút.',
+            },
+        })
+
+        void chayDon(store.sp, cfg, apply, log.id).catch(async (e: any) => {
+            await store.sp.kiotVietSyncLog.update({
+                where: { id: log.id },
+                data: { status: 'failed', finishedAt: new Date(), errors: errMsg(e).slice(0, 2000) },
+            }).catch(() => { })
+        })
+    } catch (e: any) {
+        if (!res.headersSent) res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+async function chayDon(sp: any, cfg: any, apply: boolean, logId: string): Promise<void> {
+    {
         // ─ 1. Ngày: chép transactionDate → createdAt ─
         const txSaiNgay: any[] = await sp.$queryRawUnsafe(
             `SELECT COUNT(*)::int AS n FROM "Transaction"
@@ -601,12 +631,21 @@ router.post('/repair', async (req: Request, res: Response) => {
         const huyHoaDon: string[] = []
         const huyPhieuNhap: string[] = []
         let loiGoiApi: string | null = null
+        // Đập nhịp theo từng trang tải, nếu không sẽ hiện "đứng im" suốt lúc quét
+        const nhip = {
+            onPage: async (_i: any[], f: number, t: number) => {
+                await sp.kiotVietSyncLog.update({
+                    where: { id: logId },
+                    data: { heartbeatAt: new Date(), entity: `dọn dữ liệu · đang hỏi KiotViet ${f}/${t}` },
+                }).catch(() => { })
+            },
+        }
         try {
-            const { items: invs } = await KV.invoices(creds, {}, { maxPages: 500 })
+            const { items: invs } = await KV.invoices(creds, {}, { maxPages: 500, ...nhip })
             for (const iv of invs) {
                 if (Number(iv?.status) !== 1 && iv?.code) huyHoaDon.push(String(iv.code))
             }
-            const { items: pos } = await KV.purchaseOrders(creds, {}, { maxPages: 500 })
+            const { items: pos } = await KV.purchaseOrders(creds, {}, { maxPages: 500, ...nhip })
             for (const po of pos) {
                 const code = String(po?.code || '')
                 if (code && (Number(po?.status) !== 3 || /\{DEL\}/i.test(code))) huyPhieuNhap.push(code)
@@ -624,6 +663,10 @@ router.post('/repair', async (req: Request, res: Response) => {
             const where = { receiptNumber: { in: lo }, createdByName: 'KiotViet Sync' }
             xoaHoaDon += await sp.transaction.count({ where }).catch(() => 0)
             if (apply) await sp.transaction.deleteMany({ where }).catch(() => { })
+            await sp.kiotVietSyncLog.update({
+                where: { id: logId },
+                data: { heartbeatAt: new Date(), entity: `dọn dữ liệu · đang xử lý hoá đơn ${i + lo.length}/${huyHoaDon.length}` },
+            }).catch(() => { })
         }
         for (let i = 0; i < huyPhieuNhap.length; i += LO) {
             const lo = huyPhieuNhap.slice(i, i + LO)
@@ -632,22 +675,26 @@ router.post('/repair', async (req: Request, res: Response) => {
             if (apply) await sp.purchaseOrder.deleteMany({ where }).catch(() => { })
         }
 
-        res.json({
-            success: true,
+        const suaNgayTx = txSaiNgay?.[0]?.n || 0
+        const suaNgayPo = poSaiNgay?.[0]?.n || 0
+        await sp.kiotVietSyncLog.update({
+            where: { id: logId },
             data: {
-                cheDo: apply ? 'ĐÃ DỌN' : 'CHẠY THỬ (chưa đụng gì)',
-                suaNgay: { hoaDon: txSaiNgay?.[0]?.n || 0, phieuNhap: poSaiNgay?.[0]?.n || 0 },
-                xoaKhongHoanThanh: { hoaDon: xoaHoaDon, phieuNhap: xoaPhieuNhap },
-                loiGoiApi,
-                message: apply
-                    ? `Đã trả ${txSaiNgay?.[0]?.n || 0} hoá đơn + ${poSaiNgay?.[0]?.n || 0} phiếu nhập về đúng ngày chứng từ, xoá ${xoaHoaDon} hoá đơn và ${xoaPhieuNhap} phiếu nhập không hoàn thành. Chạy lại đồng bộ Hàng hoá để điền thương hiệu.`
-                    : `Chạy thử: sẽ sửa ngày ${txSaiNgay?.[0]?.n || 0} hoá đơn + ${poSaiNgay?.[0]?.n || 0} phiếu nhập, xoá ${xoaHoaDon} hoá đơn và ${xoaPhieuNhap} phiếu nhập không hoàn thành.`,
+                entity: 'dọn dữ liệu',
+                status: loiGoiApi ? 'partial' : 'success',
+                fetched: suaNgayTx + suaNgayPo + xoaHoaDon + xoaPhieuNhap,
+                updated: suaNgayTx + suaNgayPo,
+                skipped: xoaHoaDon + xoaPhieuNhap,
+                heartbeatAt: new Date(), finishedAt: new Date(),
+                errors: loiGoiApi ? `Không hỏi được KiotViet: ${loiGoiApi}` : null,
+                details: JSON.stringify({
+                    'sửa ngày': { layVe: suaNgayTx + suaNgayPo, taoMoi: 0, capNhat: suaNgayTx + suaNgayPo, boQua: 0, loi: 0, xong: true, mau: [{ hoaDon: suaNgayTx, phieuNhap: suaNgayPo }] },
+                    'xoá chứng từ không hoàn thành': { layVe: xoaHoaDon + xoaPhieuNhap, taoMoi: 0, capNhat: 0, boQua: xoaHoaDon + xoaPhieuNhap, loi: 0, xong: true, mau: [{ hoaDon: xoaHoaDon, phieuNhap: xoaPhieuNhap }] },
+                }),
             },
-        })
-    } catch (e: any) {
-        res.status(500).json({ success: false, error: errMsg(e) })
+        }).catch(() => { })
     }
-})
+}
 
 // ─── GET /api/kiotviet/logs?storeCode=&limit= ───────────────────────────────
 router.get('/logs', async (req: Request, res: Response) => {
