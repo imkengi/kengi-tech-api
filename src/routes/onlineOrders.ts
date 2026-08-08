@@ -1,3 +1,4 @@
+import { khoangNgayVN } from '../lib/vnTime'
 import { Router, Response, NextFunction } from 'express'
 import { errMsg } from '../lib/errorResponse'
 import { authMiddleware, AuthRequest, getBranchFilter } from '../middleware/auth'
@@ -131,7 +132,7 @@ router.get('/stats', authMiddleware, requirePermission('online_orders.view', 'or
         // ĐVVC ĐÃ LẤY HÀNG HÔM NAY — đếm riêng vì câu GROUP BY ở trên gom theo
         // trạng thái, còn cái này cắt theo `shippedAt` trong ngày (giờ VN).
         // Dùng lại đúng bộ điều kiện kênh/sàn để số tab khớp danh sách.
-        const { tu: dauNgay, den: cuoiNgay } = ngayHomNayVN()
+        const { tu: dauNgay, den: cuoiNgay } = khoangNgayVN()
         const pkConds = [...conds]
         const pkParams = [...params]
         pkParams.push(dauNgay); pkConds.push(`"shippedAt" >= $${pkParams.length}`)
@@ -368,24 +369,6 @@ router.delete('/channels/:id', authMiddleware, requirePermission('online_orders.
 //  ONLINE ORDERS CRUD
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/**
- * Mốc đầu/cuối của NGÀY HÔM NAY THEO GIỜ VIỆT NAM.
- *
- * Máy chủ chạy UTC, nên `new Date()` cắt ngày lúc 07:00 sáng giờ VN. Đơn đơn vị
- * vận chuyển lấy lúc 8 giờ tối hôm qua sẽ bị tính sang "hôm nay", còn đơn lấy
- * lúc 6 giờ sáng nay lại rơi về "hôm qua" — người dùng đối chiếu với biên bản
- * bàn giao của shipper là lệch ngay.
- */
-function ngayHomNayVN(): { tu: Date; den: Date } {
-    const LECH = 7 * 60 * 60_000
-    const nowVN = new Date(Date.now() + LECH)
-    const y = nowVN.getUTCFullYear(), m = nowVN.getUTCMonth(), d = nowVN.getUTCDate()
-    return {
-        tu: new Date(Date.UTC(y, m, d, 0, 0, 0) - LECH),
-        den: new Date(Date.UTC(y, m, d, 23, 59, 59, 999) - LECH),
-    }
-}
-
 // GET /api/online-orders
 router.get('/', authMiddleware, requirePermission('online_orders.view', 'orders.view'), async (req: AuthRequest, res: Response) => {
     try {
@@ -427,7 +410,7 @@ router.get('/', authMiddleware, requirePermission('online_orders.view', 'orders.
          */
         const layHomNay = pickedUpToday === 'true'
         if (layHomNay) {
-            const { tu, den } = ngayHomNayVN()
+            const { tu, den } = khoangNgayVN()
             where.shippedAt = { gte: tu, lte: den }
         }
         if (search) {
