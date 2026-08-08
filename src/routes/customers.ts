@@ -430,10 +430,37 @@ router.get('/:id/debt-history', authMiddleware, requirePermission('customers.vie
 
         // Sort by date ascending and calculate running balance
         history.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+
+        /**
+         * NEO LUỸ KẾ VÀO SỐ DƯ THẬT, KHÔNG BẮT ĐẦU TỪ 0.
+         *
+         * Bắt đầu từ 0 chỉ đúng khi lịch sử chứa MỌI phát sinh từ ngày đầu tiên.
+         * Dữ liệu nhập từ phần mềm khác thì không: có thể có 4.016 hoá đơn nhưng
+         * 7.971 phiếu thu trải từ nhiều năm trước — trả nhiều hơn bán, luỹ kế
+         * âm, `Math.max(0, …)` kẹp mọi dòng về 0 và cột dư nợ vô nghĩa
+         * (đo 08/08/2026 trên khách HA01: nợ 340.962.385 mà mọi dòng hiện 0).
+         *
+         * `Customer.debt` mới là số dư có thẩm quyền. Suy ngược ra dư đầu kỳ để
+         * dòng CUỐI CÙNG luôn bằng đúng số dư hiện tại — cùng cách /debts/summary
+         * đang làm. Phần không giải thích được nằm gọn ở dòng "Dư nợ đầu kỳ".
+         */
+        const net = history.reduce((s, i) => s + i.amount, 0)
+        const openingBalance = (customer.debt ?? 0) - net
+        if (Math.round(openingBalance) !== 0) {
+            history.unshift({
+                id: 'opening-balance',
+                code: 'DK',
+                date: history[0]?.date || new Date(0).toISOString(),
+                type: 'debt',
+                label: 'Dư nợ đầu kỳ',
+                amount: openingBalance,
+                balance: openingBalance,
+            })
+        }
         let runningBalance = 0
         for (const item of history) {
             runningBalance += item.amount
-            item.balance = Math.max(0, runningBalance)
+            item.balance = runningBalance
         }
 
         // Return newest first
