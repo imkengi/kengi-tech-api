@@ -587,7 +587,10 @@ router.get('/imported-summary', async (req: Request, res: Response) => {
                  (SELECT COUNT(*) FROM "DebtEntry" WHERE "type"='payment')::int AS tongButToanThu,
                  (SELECT COUNT(*) FROM "DebtEntry" WHERE "description" LIKE '%KiotViet%')::int AS tuKiotViet,
                  (SELECT COALESCE(SUM("amount"),0) FROM "DebtEntry" WHERE "description" LIKE '%KiotViet%')::float8 AS tienTuKiotViet,
-                 (SELECT COUNT(*) FROM "KiotVietMap" WHERE "entity"='cashReceipt')::int AS conNamNhamSoQuy,
+                 -- Phiếu thu KHÔNG gắn khách hàng (thu khác) — vào sổ quỹ là ĐÚNG.
+                 -- Đừng đọc con số này thành "còn nằm nhầm": sau khi sửa, phiếu
+                 -- thu của khách đã sang sổ công nợ, phần còn lại ở đây là thu khác.
+                 (SELECT COUNT(*) FROM "KiotVietMap" WHERE "entity"='cashReceipt')::int AS phieuThuKhac,
                  (SELECT COUNT(*) FROM "KiotVietMap" WHERE "entity"='debtPayment')::int AS daVaoSoCongNo`),
         ])
 
