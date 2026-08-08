@@ -781,7 +781,10 @@ async function chayDon(sp: any, cfg: any, apply: boolean, logId: string): Promis
                 details: JSON.stringify({
                     'sửa ngày': { layVe: suaNgayTx + suaNgayPo, taoMoi: 0, capNhat: suaNgayTx + suaNgayPo, boQua: 0, loi: 0, xong: true, mau: [{ hoaDon: suaNgayTx, phieuNhap: suaNgayPo }] },
                     'gỡ nợ ảo (khách hết nợ mà hoá đơn ghi chưa thu)': { layVe: noAo?.[0]?.n || 0, taoMoi: 0, capNhat: noAo?.[0]?.n || 0, boQua: 0, loi: 0, xong: true, mau: [{ soHoaDon: noAo?.[0]?.n || 0 }] },
-                    'gỡ phiếu thu nhập nhầm sổ quỹ (chạy lại Phiếu thu/chi sau khi dọn)': { layVe: mapThu.length, taoMoi: 0, capNhat: 0, boQua: mapThu.length, loi: 0, xong: true, mau: [{ soPhieu: mapThu.length }] },
+                    '⚠ ĐÃ GỠ phiếu thu khỏi sổ quỹ — BẮT BUỘC chạy lại "Phiếu thu / chi" với khoảng ngày TOÀN BỘ để dựng lại vào sổ công nợ': {
+                        layVe: mapThu.length, taoMoi: 0, capNhat: 0, boQua: mapThu.length, loi: 0, xong: true,
+                        mau: [{ soPhieuDaGo: mapThu.length, viecTiepTheo: 'Đồng bộ → chọn "Phiếu thu / chi" → bấm nút khoảng ngày "Toàn bộ" → Ghi thật' }],
+                    },
                     'xoá chứng từ không hoàn thành': { layVe: xoaHoaDon + xoaPhieuNhap, taoMoi: 0, capNhat: 0, boQua: xoaHoaDon + xoaPhieuNhap, loi: 0, xong: true, mau: [{ hoaDon: xoaHoaDon, phieuNhap: xoaPhieuNhap }] },
                 }),
             },
