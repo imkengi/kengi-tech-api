@@ -647,7 +647,11 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
             if (missing.length) {
                 noteError(c, `HĐ ${code}: ${missing.length} mã hàng chưa có bên Kengi (${missing.slice(0, 3).join(', ')}) — đồng bộ hàng hoá trước`)
             }
-            if (!lines.length) { c.skipped++; continue }
+            if (!lines.length) {
+                boQua(c, `HĐ ${code}: không dựng được dòng hàng nào` +
+                    `${details.length ? ` (${details.length} dòng nhưng không khớp mã bên Kengi)` : ' — payload không có invoiceDetails'}`)
+                continue
+            }
 
             // Khách: chỉ GẮN nếu đã có, không tự đẻ khách từ hoá đơn
             let customerId: string | null = null
