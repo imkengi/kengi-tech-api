@@ -1120,8 +1120,34 @@ export function parseWebhookPayload(body: any): { action: string; data: any[] }[
     if (!Array.isArray(notis)) return []
     return notis.map((n: any) => ({
         action: String(n?.Action || n?.action || '').toLowerCase(),
-        data: Array.isArray(n?.Data || n?.data) ? (n.Data || n.data) : [],
+        data: Array.isArray(n?.Data || n?.data) ? (n.Data || n.data).map(chuanHoaKhoa) : [],
     })).filter(n => n.action)
+}
+
+/**
+ * ĐƯA TÊN TRƯỜNG WEBHOOK VỀ CÙNG DẠNG VỚI REST API.
+ *
+ * KiotViet dùng HAI kiểu đặt tên tuỳ sự kiện (đo trên payload thật 08/08/2026):
+ *   customer.update → PascalCase: Id, Code, Name, ContactNumber, TaxCode…
+ *   stock.update    → PascalCase: ProductId, ProductCode, OnHand…
+ *   invoice.update  → camelCase : id, code, purchaseDate, invoiceDetails…
+ *
+ * Các hàm đồng bộ viết theo REST API (camelCase), nên payload PascalCase vào là
+ * mọi trường đều `undefined` → bản ghi bị bỏ qua lặng lẽ. Webhook khách hàng vì
+ * vậy CHƯA BAO GIỜ chạy được. Hạ chữ đầu của mọi khoá là xong, và làm luôn cho
+ * cả cấp con để phòng khi họ đổi thêm chỗ khác.
+ */
+function chuanHoaKhoa(v: any): any {
+    if (Array.isArray(v)) return v.map(chuanHoaKhoa)
+    if (!v || typeof v !== 'object' || v instanceof Date) return v
+    const out: any = {}
+    for (const [k, val] of Object.entries(v)) {
+        if (k.startsWith('__')) continue          // __type: rác của .NET, bỏ
+        const key = k.charAt(0).toLowerCase() + k.slice(1)
+        // Giữ cả khoá gốc nếu đụng nhau, ưu tiên khoá đã chuẩn hoá
+        out[key] = chuanHoaKhoa(val)
+    }
+    return out
 }
 
 /**
