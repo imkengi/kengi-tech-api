@@ -49,6 +49,15 @@ function noteSample(c: SyncCounters, s: any) {
     if (c.samples.length < 10) c.samples.push(s)
 }
 
+/**
+ * Bỏ qua CÓ GHI LÝ DO. Bỏ qua im lặng làm nhật ký chỉ còn con số "bỏ qua 1",
+ * không ai lần ra được vì sao webhook hoá đơn về mà không lưu (dính 08/08/2026).
+ */
+function boQua(c: SyncCounters, lyDo: string) {
+    c.skipped++
+    if (c.errors.length < 20) c.errors.push(`bỏ qua — ${lyDo}`.slice(0, 200))
+}
+
 export interface SyncOptions {
     apply: boolean
     overwriteNames?: boolean
@@ -517,14 +526,31 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
         try {
             const kvId = kv?.id
             const code = String(kv?.code || '').trim()
-            if (!kvId || !code) { c.skipped++; continue }
+            if (!kvId || !code) { boQua(c, 'thiếu id hoặc mã hoá đơn'); continue }
 
             // CHỈ LẤY HOÁ ĐƠN HOÀN THÀNH.
             // Trạng thái đo trên dữ liệu thật (HUTI 06/08/2026):
             //   1 = "Hoàn thành" · 2 = "Đã hủy" · 3 = "Đang xử lý"
             // Bản trước tôi ghi 3 là huỷ → hoá đơn ĐÃ HUỶ (2) lọt vào sổ như
             // doanh thu thật, còn đơn đang xử lý bị gắn nhãn huỷ. Sai cả hai đầu.
-            if (Number(kv?.status) !== 1) { c.skipped++; continue }
+            if (Number(kv?.status) !== 1) {
+                // ĐÃ VÀO SỔ RỒI MÀ NAY BỊ HUỶ/QUAY LẠI XỬ LÝ → phải rút khỏi
+                // doanh thu. Webhook `invoice.update` bắn đúng lúc này; bỏ qua
+                // im lặng là để lại doanh thu ma trong sổ.
+                const daCo = await sp.transaction.findUnique({
+                    where: { receiptNumber: code }, select: { id: true, status: true },
+                }).catch(() => null)
+                if (daCo && daCo.status !== 'voided') {
+                    if (opts.apply) {
+                        await sp.transaction.update({ where: { id: daCo.id }, data: { status: 'voided' } })
+                    }
+                    c.updated++
+                    noteSample(c, { code, hanhDong: 'huỷ khỏi sổ', trangThaiKiotViet: kv?.status })
+                } else {
+                    boQua(c, `HĐ ${code}: trạng thái ${kv?.status} (chỉ nhận hoàn thành = 1)`)
+                }
+                continue
+            }
 
             const kvPayments: any[] = Array.isArray(kv?.payments) ? kv.payments : []
             // Ghi mã phiếu thu vào bộ nhớ lượt chạy TRƯỚC khi kiểm hoá đơn đã
@@ -537,7 +563,6 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
 
             const existing = await sp.transaction.findUnique({ where: { receiptNumber: code } }).catch(() => null)
             if (existing) {
-                c.skipped++
                 if (opts.apply) {
                     await saveMap(sp, 'invoice', kvId, code, existing.id)
                     // Hoá đơn nhập bằng bản cũ chưa có bản đồ phiếu thu — vá lại
@@ -545,6 +570,47 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                         if (p?.code) await saveMap(sp, 'invoicePayment', String(p.code), String(p.code), existing.id)
                     }
                 }
+
+                /**
+                 * HOÁ ĐƠN ĐÃ CÓ VẪN PHẢI CẬP NHẬT.
+                 * `invoice.update` nghĩa là hoá đơn THAY ĐỔI — thường là vừa
+                 * thu thêm tiền. Bản trước chỉ biết TẠO MỚI, gặp hoá đơn đã có
+                 * là bỏ qua, nên webhook về đều đặn mà sổ không nhúc nhích.
+                 */
+                const thuMoi = kvPayments
+                    .filter((p: any) => Number(p?.status) !== 1)
+                    .reduce((s: number, p: any) => s + (Number(p?.amount) || 0), 0)
+                const data: any = {}
+                if (thuMoi > 0 && thuMoi !== existing.amountReceived) {
+                    data.amountReceived = thuMoi
+                    data.status = thuMoi >= existing.total ? 'completed' : 'partial'
+                    data.change = thuMoi > existing.total ? thuMoi - existing.total : 0
+                }
+                if (existing.status === 'voided') data.status = 'completed'   // huỷ rồi mở lại
+
+                if (!Object.keys(data).length) {
+                    boQua(c, `HĐ ${code}: đã có trong sổ và không có gì đổi`)
+                    continue
+                }
+                if (opts.apply) {
+                    await sp.transaction.update({ where: { id: existing.id }, data })
+                    if (kvPayments.length) {
+                        // Ghi lại phiếu thu cho khớp, tránh chồng bản ghi cũ
+                        await sp.payment.deleteMany({ where: { transactionId: existing.id } }).catch(() => { })
+                        await sp.payment.createMany({
+                            data: kvPayments
+                                .filter((p: any) => Number(p?.status) !== 1 && (Number(p?.amount) || 0) > 0)
+                                .map((p: any) => ({
+                                    transactionId: existing.id,
+                                    type: /transfer|bank/i.test(String(p?.method || '')) ? 'bank_transfer' : 'cash',
+                                    amount: Number(p.amount) || 0,
+                                    reference: p?.code ? String(p.code) : null,
+                                })),
+                        }).catch(() => { })
+                    }
+                }
+                c.updated++
+                noteSample(c, { code, hanhDong: 'cập nhật thanh toán', daThu: thuMoi, truong: Object.keys(data) })
                 continue
             }
 
