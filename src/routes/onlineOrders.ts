@@ -20,6 +20,32 @@ function markHasOnlineChannels(schema?: string) {
 //  ONLINE ORDER STATS
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════════════════════
+//  NHÓM TRẠNG THÁI — MỘT NGUỒN DUY NHẤT cho cả /stats (đếm) lẫn / (lọc danh sách)
+//  Trước đây hai chỗ khai riêng và LỆCH nhau (danh sách thiếu AWAITING_SHIPMENT,
+//  AWAITING_COLLECTION, IN_TRANSIT, DELIVERED, ON_HOLD của TikTok) → tab đếm 10
+//  đơn mà bấm vào chỉ thấy 7. Thêm trạng thái sàn mới thì sửa ĐÚNG BẢNG NÀY.
+// ═══════════════════════════════════════════════════════════════════════════════
+const STATUS_SYNONYMS: Record<string, string[]> = {
+    UNPAID:             ['UNPAID', 'ON_HOLD', 'pending'],
+    READY_TO_SHIP:      ['READY_TO_SHIP', 'AWAITING_SHIPMENT', 'confirmed'],
+    PROCESSED:          ['PROCESSED', 'AWAITING_COLLECTION', 'processing'],
+    SHIPPED:            ['SHIPPED', 'IN_TRANSIT', 'shipping'],
+    TO_CONFIRM_RECEIVE: ['TO_CONFIRM_RECEIVE', 'DELIVERED', 'delivered'],
+    COMPLETED:          ['COMPLETED', 'completed'],
+    IN_CANCEL:          ['IN_CANCEL', 'cancelling'],
+    CANCELLED:          ['CANCELLED', 'cancelled'],
+    TO_RETURN:          ['TO_RETURN', 'returned'],
+}
+/** Trạng thái bất kỳ → nhóm chuẩn của nó (dùng khi gom số đếm). */
+const STATUS_GROUP_OF: Record<string, string> = Object.entries(STATUS_SYNONYMS)
+    .reduce((acc, [group, list]) => { for (const s of list) acc[s] = group; return acc }, {} as Record<string, string>)
+/** Giá trị client gửi (nhóm chuẩn HOẶC một biến thể) → mọi trạng thái cùng nhóm. */
+const expandStatus = (raw: string): string[] => {
+    const group = STATUS_SYNONYMS[raw] ? raw : STATUS_GROUP_OF[raw]
+    return group ? STATUS_SYNONYMS[group] : [raw]
+}
+
 router.get('/stats', authMiddleware, requirePermission('online_orders.view', 'orders.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
@@ -102,26 +128,30 @@ router.get('/stats', authMiddleware, requirePermission('online_orders.view', 'or
         const byStatus = [...statusMap.entries()].map(([status, v]) => ({ status, _count: v.count, _sum: { total: v.total } }))
         const byChannel = [...platformMap.entries()].map(([platform, v]) => ({ platform, _count: v.count, _sum: { total: v.total } }))
 
+        // ĐVVC ĐÃ LẤY HÀNG HÔM NAY — đếm riêng vì câu GROUP BY ở trên gom theo
+        // trạng thái, còn cái này cắt theo `shippedAt` trong ngày (giờ VN).
+        // Dùng lại đúng bộ điều kiện kênh/sàn để số tab khớp danh sách.
+        const { tu: dauNgay, den: cuoiNgay } = ngayHomNayVN()
+        const pkConds = [...conds]
+        const pkParams = [...params]
+        pkParams.push(dauNgay); pkConds.push(`"shippedAt" >= $${pkParams.length}`)
+        pkParams.push(cuoiNgay); pkConds.push(`"shippedAt" <= $${pkParams.length}`)
+        const pickedRows: any[] = await (prisma as any).$queryRawUnsafe(
+            `SELECT COUNT(*)::int AS cnt, COALESCE(SUM("total"),0)::float8 AS total
+             FROM "OnlineOrder" WHERE ${pkConds.join(' AND ')}`,
+            ...pkParams
+        ).catch(() => [{ cnt: 0, total: 0 }])
+
         // Helper: aggregate count for a status, covering both Shopee UPPERCASE and legacy lowercase
         const countFor = (...statuses: string[]) =>
             statuses.reduce((sum, s) => sum + (statusMap.get(s)?.count ?? 0), 0)
 
-        // Group synonym statuses into their primary key for the donut chart so that
-        // e.g. READY_TO_SHIP/AWAITING_SHIPMENT/confirmed collapse into one slice.
-        const STATUS_GROUP: Record<string, string> = {
-            'UNPAID': 'UNPAID', 'ON_HOLD': 'UNPAID', 'pending': 'UNPAID',
-            'READY_TO_SHIP': 'READY_TO_SHIP', 'AWAITING_SHIPMENT': 'READY_TO_SHIP', 'confirmed': 'READY_TO_SHIP',
-            'PROCESSED': 'PROCESSED', 'AWAITING_COLLECTION': 'PROCESSED', 'processing': 'PROCESSED',
-            'SHIPPED': 'SHIPPED', 'IN_TRANSIT': 'SHIPPED', 'shipping': 'SHIPPED',
-            'TO_CONFIRM_RECEIVE': 'TO_CONFIRM_RECEIVE', 'DELIVERED': 'TO_CONFIRM_RECEIVE', 'delivered': 'TO_CONFIRM_RECEIVE',
-            'COMPLETED': 'COMPLETED', 'completed': 'COMPLETED',
-            'IN_CANCEL': 'IN_CANCEL',
-            'CANCELLED': 'CANCELLED', 'cancelled': 'CANCELLED',
-            'TO_RETURN': 'TO_RETURN',
-        }
+        // Gom trạng thái đồng nghĩa về nhóm chuẩn (dùng BẢNG CHUNG ở đầu file —
+        // phải khớp tuyệt đối với bộ lọc danh sách, nếu không tab đếm một đằng
+        // danh sách ra một nẻo).
         const grouped = new Map<string, { _count: number; _sum: { total: number } }>()
         for (const b of byStatus) {
-            const key = STATUS_GROUP[b.status] || b.status
+            const key = STATUS_GROUP_OF[b.status] || b.status
             const existing = grouped.get(key)
             if (existing) {
                 existing._count += b._count
@@ -147,12 +177,19 @@ router.get('/stats', authMiddleware, requirePermission('online_orders.view', 'or
                 totalNetRevenue: canSeeProfits ? totals.netRevenue : undefined,
                 // Completion rate: gom cả COMPLETED và completed
                 completionRate: totalOrders > 0 ? Math.round((countFor('COMPLETED', 'completed') / totalOrders) * 100) : 0,
-                // Pending count (Chờ xử lý): only orders ready to process/ship, NOT unpaid orders
-                pendingCount: countFor('READY_TO_SHIP', 'AWAITING_SHIPMENT', 'confirmed'),
-                // Processing count (Đã xử lý): PROCESSED + processing
-                processingCount: countFor('PROCESSED', 'processing'),
-                // Shipping count: SHIPPED + shipping
-                shippingCount: countFor('SHIPPED', 'shipping'),
+                // Số đếm từng nhóm — LUÔN expand qua bảng đồng nghĩa chung, đừng
+                // liệt kê tay (thiếu một biến thể là tab hụt đơn).
+                pendingCount: countFor(...STATUS_SYNONYMS.READY_TO_SHIP),
+                processingCount: countFor(...STATUS_SYNONYMS.PROCESSED),
+                shippingCount: countFor(...STATUS_SYNONYMS.SHIPPED),
+                // Bổ sung cho các tab app còn thiếu số (Hoàn thành / Đã hủy / Chưa trả / Chờ nhận)
+                completedCount: countFor(...STATUS_SYNONYMS.COMPLETED),
+                cancelledCount: countFor(...STATUS_SYNONYMS.CANCELLED, ...STATUS_SYNONYMS.IN_CANCEL, ...STATUS_SYNONYMS.TO_RETURN),
+                unpaidCount: countFor(...STATUS_SYNONYMS.UNPAID),
+                toConfirmCount: countFor(...STATUS_SYNONYMS.TO_CONFIRM_RECEIVE),
+                // ĐVVC đã lấy hàng hôm nay (theo shippedAt, giờ VN)
+                pickedUpTodayCount: Number(pickedRows?.[0]?.cnt) || 0,
+                pickedUpTodayRevenue: Number(pickedRows?.[0]?.total) || 0,
                 byStatus: groupedByStatus.map(s => ({ status: s.status, count: s._count, revenue: s._sum.total ?? 0 })),
                 byChannel: byChannel.map(c => ({ platform: c.platform, count: c._count, revenue: c._sum.total ?? 0 })),
                 canSeeProfits,
@@ -331,13 +368,31 @@ router.delete('/channels/:id', authMiddleware, requirePermission('online_orders.
 //  ONLINE ORDERS CRUD
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Mốc đầu/cuối của NGÀY HÔM NAY THEO GIỜ VIỆT NAM.
+ *
+ * Máy chủ chạy UTC, nên `new Date()` cắt ngày lúc 07:00 sáng giờ VN. Đơn đơn vị
+ * vận chuyển lấy lúc 8 giờ tối hôm qua sẽ bị tính sang "hôm nay", còn đơn lấy
+ * lúc 6 giờ sáng nay lại rơi về "hôm qua" — người dùng đối chiếu với biên bản
+ * bàn giao của shipper là lệch ngay.
+ */
+function ngayHomNayVN(): { tu: Date; den: Date } {
+    const LECH = 7 * 60 * 60_000
+    const nowVN = new Date(Date.now() + LECH)
+    const y = nowVN.getUTCFullYear(), m = nowVN.getUTCMonth(), d = nowVN.getUTCDate()
+    return {
+        tu: new Date(Date.UTC(y, m, d, 0, 0, 0) - LECH),
+        den: new Date(Date.UTC(y, m, d, 23, 59, 59, 999) - LECH),
+    }
+}
+
 // GET /api/online-orders
 router.get('/', authMiddleware, requirePermission('online_orders.view', 'orders.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const {
             search, status, channelId, platform, paymentStatus,
-            startDate, endDate,
+            startDate, endDate, isInstant, pickedUpToday,
             page = '1', pageSize = '20',
         } = req.query
 
@@ -348,42 +403,33 @@ router.get('/', authMiddleware, requirePermission('online_orders.view', 'orders.
 
         const where: any = {}
         if (status && status !== 'all') {
-            // Map: accept cả Shopee UPPERCASE và lowercase nội bộ để tránh mismatch
-            const STATUS_VARIANTS: Record<string, string[]> = {
-                UNPAID:             ['UNPAID', 'pending'],
-                READY_TO_SHIP:      ['READY_TO_SHIP', 'confirmed'],
-                PROCESSED:          ['PROCESSED', 'processing'],
-                SHIPPED:            ['SHIPPED', 'shipping'],
-                TO_CONFIRM_RECEIVE: ['TO_CONFIRM_RECEIVE', 'delivered'],
-                COMPLETED:          ['COMPLETED', 'completed'],
-                IN_CANCEL:          ['IN_CANCEL', 'cancelling'],
-                CANCELLED:          ['CANCELLED', 'cancelled'],
-                TO_RETURN:          ['TO_RETURN', 'returned'],
-                // lowercase → cũng map ngược lại UPPERCASE để dùng được từ cả hai phía
-                pending:     ['pending', 'UNPAID'],
-                confirmed:   ['confirmed', 'READY_TO_SHIP'],
-                processing:  ['processing', 'PROCESSED'],
-                shipping:    ['shipping', 'SHIPPED'],
-                delivered:   ['delivered', 'TO_CONFIRM_RECEIVE'],
-                completed:   ['completed', 'COMPLETED'],
-                cancelling:  ['cancelling', 'IN_CANCEL'],
-                cancelled:   ['cancelled', 'CANCELLED'],
-                returned:    ['returned', 'TO_RETURN'],
-            }
-            // Frontend gửi nhiều trạng thái cùng lúc dạng `?status=A,B,C`
-            // (mỗi tab gom Shopee UPPERCASE + TikTok + legacy lowercase).
-            // Tách CSV, expand từng giá trị qua STATUS_VARIANTS, rồi lọc bằng { in: [...] }.
+            // Client gửi 1 hoặc nhiều trạng thái `?status=A,B,C`; mỗi giá trị được
+            // expand qua BẢNG ĐỒNG NGHĨA CHUNG (đầu file) nên danh sách trả về
+            // khớp đúng con số mà /stats đếm cho tab đó.
             const requested = (status as string).split(',').map(s => s.trim()).filter(Boolean)
             const expanded = new Set<string>()
             for (const s of requested) {
                 expanded.add(s)
-                for (const v of STATUS_VARIANTS[s] ?? []) expanded.add(v)
+                for (const v of expandStatus(s)) expanded.add(v)
             }
             where.status = { in: [...expanded] }
         }
         if (channelId) where.channelId = channelId as string
         if (platform && platform !== 'all') where.platform = platform
         if (paymentStatus && paymentStatus !== 'all') where.paymentStatus = paymentStatus
+        // Tab HỎA TỐC (Shopee Instant Delivery): ?isInstant=true — chỉ đơn instant
+        if (isInstant === 'true') where.isInstant = true
+        /**
+         * Tab ĐVVC ĐÃ LẤY HÀNG HÔM NAY: ?pickedUpToday=true
+         * Mốc là `shippedAt` — thời điểm ĐVVC THỰC SỰ lấy hàng, không phải hạn
+         * bàn giao: Shopee lấy từ `pickup_done_time`, TikTok `rts_time`, Lazada
+         * `shipped_at`. Cắt ngày theo GIỜ VIỆT NAM để khớp biên bản của shipper.
+         */
+        const layHomNay = pickedUpToday === 'true'
+        if (layHomNay) {
+            const { tu, den } = ngayHomNayVN()
+            where.shippedAt = { gte: tu, lte: den }
+        }
         if (search) {
             where.OR = [
                 { orderNumber: { contains: search, mode: 'insensitive' } },
@@ -408,7 +454,15 @@ router.get('/', authMiddleware, requirePermission('online_orders.view', 'orders.
                 // items kèm SKU kho của SP đã link — packing list dùng làm fallback
                 // khi item.sku rỗng (SP Shopee nhiều phân loại có item_sku trống)
                 include: { items: { include: { product: { select: { sku: true } } } }, channel: true },
-                orderBy: { createdAt: 'desc' },
+                // Tab hỏa tốc: đơn cận HẠN bàn giao (shipByDate) lên đầu — SLA ≤4h,
+                // trễ là mất đơn. Postgres ASC mặc định đẩy null xuống cuối.
+                orderBy: layHomNay
+                    // Lấy gần nhất lên đầu — người dùng đang đối chiếu với chuyến
+                    // shipper vừa qua lấy
+                    ? [{ shippedAt: 'desc' as const }]
+                    : isInstant === 'true'
+                        ? [{ shipByDate: 'asc' as const }, { createdAt: 'desc' as const }]
+                        : { createdAt: 'desc' as const },
                 skip,
                 take: size,
             }),
@@ -2342,6 +2396,9 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                             shippedAt: order.shippedAt ? new Date(order.shippedAt) : existing.shippedAt,
                             deliveredAt: order.deliveredAt ? new Date(order.deliveredAt) : existing.deliveredAt,
                             paidAt: order.paidAt ? new Date(order.paidAt) : existing.paidAt,
+                            shipByDate: order.shipByDate ? new Date(order.shipByDate) : (existing as any).shipByDate,
+                            // Chỉ NÂNG cờ hỏa tốc, không hạ (get_channel_list lỗi → false giả)
+                            ...(order.isInstant ? { isInstant: true } : {}),
                             syncedAt: new Date(),
                         },
                     })
@@ -2376,6 +2433,8 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                             paidAt: order.paidAt ? new Date(order.paidAt) : null,
                             shippedAt: order.shippedAt ? new Date(order.shippedAt) : null,
                             deliveredAt: order.deliveredAt ? new Date(order.deliveredAt) : null,
+                            shipByDate: order.shipByDate ? new Date(order.shipByDate) : null,
+                            isInstant: order.isInstant || false,
                             syncedAt: new Date(),
                             createdAt: new Date(order.createdAt),
                             // PHÍ SÀN KHÔNG TỰ TÍNH: trước đây ước bằng tổng tiền ×
