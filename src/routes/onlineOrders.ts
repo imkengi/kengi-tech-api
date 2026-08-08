@@ -46,6 +46,16 @@ const expandStatus = (raw: string): string[] => {
     const group = STATUS_SYNONYMS[raw] ? raw : STATUS_GROUP_OF[raw]
     return group ? STATUS_SYNONYMS[group] : [raw]
 }
+/**
+ * Huỷ / đang xin huỷ / trả hàng — MỘT nguồn duy nhất, dùng chung cho cả phép
+ * loại khỏi doanh thu lẫn bộ lọc danh sách. Liệt kê tay ở từng chỗ là kiểu sai
+ * mà file này đã dặn nhiều lần: tab đếm một đằng, danh sách ra một nẻo.
+ */
+const CANCEL_LIKE_STATUSES: string[] = [
+    ...STATUS_SYNONYMS.CANCELLED,
+    ...STATUS_SYNONYMS.IN_CANCEL,
+    ...STATUS_SYNONYMS.TO_RETURN,
+]
 
 router.get('/stats', authMiddleware, requirePermission('online_orders.view', 'orders.view'), async (req: AuthRequest, res: Response) => {
     try {
@@ -98,7 +108,7 @@ router.get('/stats', authMiddleware, requirePermission('online_orders.view', 'or
 
         // Trạng thái hủy/hoàn — LOẠI khỏi doanh thu và số đếm doanh thu (đơn hủy
         // không phải doanh thu). byStatus/byChannel bên dưới vẫn giữ đầy đủ.
-        const CANCELLED_STATUSES = new Set(['CANCELLED', 'IN_CANCEL', 'TO_RETURN', 'cancelled', 'cancelling', 'returned'])
+        const CANCELLED_STATUSES = new Set(CANCEL_LIKE_STATUSES)
 
         let totalOrders = 0
         const totals = { count: 0, total: 0, shippingFee: 0, discount: 0, platformFee: 0, netRevenue: 0 }
@@ -137,6 +147,9 @@ router.get('/stats', authMiddleware, requirePermission('online_orders.view', 'or
         const pkParams = [...params]
         pkParams.push(dauNgay); pkConds.push(`"shippedAt" >= $${pkParams.length}`)
         pkParams.push(cuoiNgay); pkConds.push(`"shippedAt" <= $${pkParams.length}`)
+        // Loại đơn huỷ y HỆT bộ lọc danh sách — lệch điều kiện là tab đếm một
+        // đằng, danh sách ra một nẻo
+        pkParams.push(CANCEL_LIKE_STATUSES); pkConds.push(`NOT ("status" = ANY($${pkParams.length}))`)
         const pickedRows: any[] = await (prisma as any).$queryRawUnsafe(
             `SELECT COUNT(*)::int AS cnt, COALESCE(SUM("total"),0)::float8 AS total
              FROM "OnlineOrder" WHERE ${pkConds.join(' AND ')}`,
@@ -412,6 +425,9 @@ router.get('/', authMiddleware, requirePermission('online_orders.view', 'orders.
         if (layHomNay) {
             const { tu, den } = khoangNgayVN()
             where.shippedAt = { gte: tu, lte: den }
+            // ĐƠN HUỶ KHÔNG TÍNH LÀ ĐÃ GIAO ĐI. Danh sách này để đối chiếu với
+            // biên bản bàn giao của shipper; đơn đã huỷ nằm trong đó chỉ gây rối.
+            where.status = { notIn: [...CANCEL_LIKE_STATUSES] }
         }
         if (search) {
             where.OR = [
@@ -2545,7 +2561,7 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                             // nuốt luôn error → "Status refreshed: 0/323" lặp mãi, đơn đứng
                             // im ở trạng thái lúc nhập lần đầu.
                             const detailUrl = (shopeeForRefresh as any).apiUrl(detailPath) +
-                                `&order_sn_list=${batch.join(',')}&response_optional_fields=order_status,shipping_carrier`
+                                `&order_sn_list=${batch.join(',')}&response_optional_fields=order_status,shipping_carrier,pickup_done_time`
                             const detailData: any = await (shopeeForRefresh as any).httpGet(detailUrl)
                             if (detailData?.error) {
                                 throw new Error(`Shopee: ${detailData.error}${detailData.message ? ` - ${detailData.message}` : ''}`)
@@ -2574,7 +2590,13 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                                         shippingCarrier: newCarrier,
                                         syncedAt: new Date(),
                                     }
-                                    if (d.order_status === 'SHIPPED' && !snToOld[sn]?.trackingNumber) upd.shippedAt = new Date()
+                                    // GIỜ LẤY HÀNG THẬT của Shopee, KHÔNG phải giờ đồng bộ.
+                                    // Đóng dấu new Date() ở đây làm đơn giao từ tuần trước
+                                    // bị gắn ngày hôm nay mỗi lần chạy làm mới — tab "ĐVVC
+                                    // đã lấy hôm nay" vì thế lẫn cả đơn cũ lẫn đơn huỷ.
+                                    // Không có pickup_done_time thì để nguyên, thà trống
+                                    // còn hơn sai.
+                                    if (d.pickup_done_time) upd.shippedAt = new Date(d.pickup_done_time * 1000)
                                     if (d.order_status === 'TO_CONFIRM_RECEIVE') upd.deliveredAt = new Date()
                                     if (['COMPLETED', 'completed'].includes(newStatus)) { upd.paymentStatus = 'paid'; upd.paidAt = new Date() }
                                     await prisma.onlineOrder.update({ where: { id: dbId }, data: upd })
@@ -3094,7 +3116,7 @@ router.post('/channels/:id/sync-status', authMiddleware, async (req: AuthRequest
             try {
                 const detailPath = '/api/v2/order/get_order_detail'
                 const detailUrl = (shopee as any).apiUrl(detailPath) +
-                    `&order_sn_list=${batch.join(',')}&response_optional_fields=tracking_no,shipping_carrier`
+                    `&order_sn_list=${batch.join(',')}&response_optional_fields=tracking_no,shipping_carrier,order_status,pickup_done_time`
                 const detailData = await (shopee as any).httpGet(detailUrl)
                 const details = detailData.response?.order_list || []
 
@@ -3116,7 +3138,9 @@ router.post('/channels/:id/sync-status', authMiddleware, async (req: AuthRequest
                         shippingCarrier: newCarrier,
                         syncedAt: new Date(),
                     }
-                    if (d.order_status === 'SHIPPED' && !snToOld[sn]?.trackingNumber) upd.shippedAt = new Date()
+                    // Giờ lấy hàng thật, không phải giờ đồng bộ (xem ghi chú ở luồng
+                    // làm mới trạng thái phía trên)
+                    if (d.pickup_done_time) upd.shippedAt = new Date(d.pickup_done_time * 1000)
                     if (d.order_status === 'TO_CONFIRM_RECEIVE') upd.deliveredAt = new Date()
                     if (['COMPLETED', 'completed'].includes(newStatus)) { upd.paymentStatus = 'paid'; upd.paidAt = new Date() }
 
