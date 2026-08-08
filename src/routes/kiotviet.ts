@@ -580,12 +580,23 @@ router.get('/imported-summary', async (req: Request, res: Response) => {
                FROM "Supplier" s`),
         ])
 
+        // Sổ công nợ: bút toán thu nợ đã vào chưa, và còn bao nhiêu phiếu thu
+        // đang nằm nhầm bên sổ quỹ
+        const [soCongNo] = await Promise.all([
+            q(`SELECT
+                 (SELECT COUNT(*) FROM "DebtEntry" WHERE "type"='payment')::int AS tongButToanThu,
+                 (SELECT COUNT(*) FROM "DebtEntry" WHERE "description" LIKE '%KiotViet%')::int AS tuKiotViet,
+                 (SELECT COALESCE(SUM("amount"),0) FROM "DebtEntry" WHERE "description" LIKE '%KiotViet%')::float8 AS tienTuKiotViet,
+                 (SELECT COUNT(*) FROM "KiotVietMap" WHERE "entity"='cashReceipt')::int AS conNamNhamSoQuy,
+                 (SELECT COUNT(*) FROM "KiotVietMap" WHERE "entity"='debtPayment')::int AS daVaoSoCongNo`),
+        ])
+
         res.json({
             success: true,
             data: {
                 hoaDonBan: tx?.[0], phieuNhap: po?.[0], traHang: ret?.[0],
                 phieuThu: cash?.[0], phieuChi: exp?.[0], hangHoa: prod?.[0],
-                congNoKhach: noKhach?.[0], congNoNcc: noNcc?.[0],
+                congNoKhach: noKhach?.[0], congNoNcc: noNcc?.[0], soCongNo: soCongNo?.[0],
                 ghiChu: 'dungNgay = số bản ghi có ngày tạo TRÙNG ngày chứng từ. Lệch nhiều nghĩa là dữ liệu cũ bị dồn về ngày đồng bộ.',
             },
         })
