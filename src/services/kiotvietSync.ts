@@ -226,7 +226,25 @@ export async function syncProducts(sp: any, items: any[], opts: SyncOptions, c: 
             const onHand = Math.round(picked.reduce((s, i) => s + (Number(i?.onHand) || 0), 0))
 
             const price = Number(kv?.basePrice) || 0
-            const cost = Number(kv?.cost ?? kv?.costPrice) || 0
+            /**
+             * GIÁ VỐN NẰM TRONG `inventories`, KHÔNG Ở CẤP SẢN PHẨM.
+             *
+             * Đo trên dữ liệu thật (HUTI 08/08/2026): `cost`/`costPrice` ở cấp
+             * sản phẩm luôn null, còn `inventories[i].cost` mới có số thật
+             * (NA105 → 3.720). Đọc sai chỗ nên mọi mặt hàng nhập vào đều giá
+             * vốn 0 — hỏng luôn lãi gộp và giá trị tồn kho.
+             *
+             * Nhiều chi nhánh thì lấy giá vốn của chi nhánh có tồn (giá vốn
+             * bình quân chỉ có nghĩa khi còn hàng); không chi nhánh nào có tồn
+             * thì lấy giá vốn khác 0 đầu tiên.
+             */
+            const cost = (() => {
+                const coTon = picked.find(i => (Number(i?.onHand) || 0) > 0 && (Number(i?.cost) || 0) > 0)
+                if (coTon) return Number(coTon.cost)
+                const batKy = picked.find(i => (Number(i?.cost) || 0) > 0)
+                if (batKy) return Number(batKy.cost)
+                return Number(kv?.cost ?? kv?.costPrice) || 0
+            })()
             const brandName = String(kv?.tradeMarkName || '').trim()
 
             if (existing) {
