@@ -182,6 +182,14 @@ async function handleWebhook(sp: any, cfg: any, notis: { action: string; data: a
                 continue
             }
 
+            // NHẬN VÀO MÀ KHÔNG GHI ĐƯỢC GÌ thì phải giữ lại payload gốc.
+            // Không có nó thì chỉ thấy "lấy 1 · tạo 0" và không tài nào biết
+            // KiotViet gửi thiếu trường gì (dính 08/08/2026 với invoice.update).
+            const khongGhiDuoc = c.fetched > 0 && c.created === 0 && c.updated === 0
+            const mauGoc = khongGhiDuoc && n.data?.[0]
+                ? `Payload gốc — các trường: ${Object.keys(n.data[0]).join(', ')}\n${JSON.stringify(n.data[0]).slice(0, 1500)}`
+                : null
+
             await sp.kiotVietSyncLog.create({
                 data: {
                     entity: n.action, mode: 'webhook',
@@ -190,6 +198,7 @@ async function handleWebhook(sp: any, cfg: any, notis: { action: string; data: a
                     skipped: c.skipped, failed: c.failed,
                     errors: [...(sigOk ? [] : ['⚠ chữ ký không khớp — đang chạy chế độ nới lỏng']), ...c.errors]
                         .join('\n').slice(0, 2000) || null,
+                    details: mauGoc,
                     startedAt: started, finishedAt: new Date(),
                 },
             }).catch(() => { })
