@@ -301,9 +301,20 @@ export async function runSync(
                 if (truncated) c.errors.push('Chạm trần 500 trang — thu hẹp khoảng ngày rồi chạy tiếp')
                 await syncPurchaseOrders(sp, filtered, opts, c)
             } else if (entity === 'cashflow') {
+                /**
+                 * SỔ QUỸ BẮT BUỘC PHẢI TRUYỀN NGÀY.
+                 *
+                 * Khác mọi endpoint còn lại, `/cashflow` KHÔNG hiểu "bỏ trống
+                 * ngày = lấy tất cả" — nó tự áp một cửa sổ hẹp. Đo thật
+                 * (08/08/2026): không truyền ngày → 67 bản ghi; truyền
+                 * startDate=2026-01-01 → 3.221. Chọn "Toàn bộ" mà vẫn chỉ về
+                 * vài chục phiếu chính là do đây.
+                 * Hoá đơn / phiếu nhập / trả hàng thì bỏ trống vẫn ra đủ.
+                 */
+                const MOC_XA_NHAT = new Date('2010-01-01T00:00:00Z')
                 const { items, truncated } = await KV.cashflow(creds, {
-                    startDate: kvDate(fromDate),
-                    endDate: kvDate(toDate),
+                    startDate: kvDate(fromDate || MOC_XA_NHAT),
+                    endDate: kvDate(toDate || new Date()),
                     lastModifiedFrom,
                 }, pageOpts)
                 const filtered = cutByDate(items, toDate, 'transDate', 'modifiedDate')
