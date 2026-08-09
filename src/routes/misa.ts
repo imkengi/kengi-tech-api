@@ -18,11 +18,12 @@ import jwt from 'jsonwebtoken'
 import { registryPrisma, getStorePrisma } from '../lib/prisma'
 import { errMsg } from '../lib/errorResponse'
 import {
-    MISA, MISA_DATA_TYPE, misaTime, testMisaConnection, clearMisaToken, type MisaCreds,
+    MISA, MISA_DATA_TYPE, MISA_DEBT_TYPE, misaTime, testMisaConnection, clearMisaToken,
+    doDanhMuc, type MisaCreds,
 } from '../services/misa'
 import {
     newMisaCounters, syncMisaProducts, syncMisaPartners, syncMisaWarehouses, syncMisaStock,
-    type MisaOptions,
+    syncMisaDebt, syncMisaDeleted, type MisaOptions,
 } from '../services/misaSync'
 
 const router = Router()
@@ -31,8 +32,25 @@ const ADMIN_KEY = process.env.ADMIN_KEY
 const JWT_SECRET = process.env.JWT_SECRET || ''
 const PANEL_SCOPE = 'admin-panel'
 
-/** Thứ tự CÓ Ý NGHĨA: tồn kho tra vật tư theo mã, nên vật tư phải xong trước. */
-export const MISA_ENTITIES = ['products', 'partners', 'stocks', 'balance'] as const
+/**
+ * Thứ tự CÓ Ý NGHĨA: tồn kho tra vật tư theo mã và công nợ tra đối tượng theo
+ * mã, nên vật tư/đối tượng phải xong trước. "deleted" chạy cuối cùng — ngừng
+ * theo dõi một kho rồi mới tạo lại nó ở bước trên thì công cốc.
+ */
+export const MISA_ENTITIES = [
+    'products', 'partners', 'stocks', 'balance', 'debtCustomer', 'debtSupplier', 'deleted',
+] as const
+
+/** Nhãn hiện trên nhật ký, để dòng log đọc được mà không phải tra code. */
+export const MISA_ENTITY_LABEL: Record<string, string> = {
+    products: 'Vật tư, hàng hoá',
+    partners: 'Đối tượng (KH/NCC)',
+    stocks: 'Danh mục kho',
+    balance: 'Tồn kho',
+    debtCustomer: 'Công nợ phải thu',
+    debtSupplier: 'Công nợ phải trả',
+    deleted: 'Danh mục đã xoá bên MISA',
+}
 
 function safeEqual(a: string, b: string): boolean {
     const ab = Buffer.from(a), bb = Buffer.from(b)
@@ -100,8 +118,11 @@ function publicConfig(cfg: any) {
         overwriteNames: !!cfg.overwriteNames,
         overwritePrices: !!cfg.overwritePrices,
         overwriteStock: !!cfg.overwriteStock,
+        overwriteDebt: !!cfg.overwriteDebt,
+        negateDebt: !!cfg.negateDebt,
         defaultCategoryId: cfg.defaultCategoryId,
         defaultWarehouseId: cfg.defaultWarehouseId,
+        lastSyncTime: cfg.lastSyncTime || null,
         lastSyncAt: cfg.lastSyncAt,
     }
 }
@@ -142,7 +163,7 @@ router.put('/config', async (req: Request, res: Response) => {
         if (typeof b.baseUrl === 'string') data.baseUrl = b.baseUrl.trim() || null
 
         for (const k of ['enabled', 'syncProducts', 'syncPartners', 'syncStocks', 'syncBalance',
-            'overwriteNames', 'overwritePrices', 'overwriteStock']) {
+            'overwriteNames', 'overwritePrices', 'overwriteStock', 'overwriteDebt', 'negateDebt']) {
             if (typeof b[k] === 'boolean') data[k] = b[k]
         }
         if (b.defaultWarehouseId !== undefined) data.defaultWarehouseId = b.defaultWarehouseId || null
@@ -232,10 +253,40 @@ async function buildOptions(sp: any, cfg: any, apply: boolean): Promise<MisaOpti
         overwriteNames: !!cfg?.overwriteNames,
         overwritePrices: !!cfg?.overwritePrices,
         overwriteStock: !!cfg?.overwriteStock,
+        overwriteDebt: !!cfg?.overwriteDebt,
+        negateDebt: !!cfg?.negateDebt,
         defaultCategoryId: categoryId,
         defaultWarehouseId: warehouseId,
     }
 }
+
+// ─── GET /api/misa/probe?storeCode= ─────────────────────────────────────────
+// Hỏi thẳng MISA xem mỗi data_type thật sự trả về danh mục nào. Có route này vì
+// tài liệu tự mâu thuẫn (mục 2.4 gửi data_type=5 nhận về bản ghi KHO, mục 3.3
+// nói 5 = hệ thống tài khoản). CHỈ ĐỌC, mỗi loại lấy đúng 1 bản ghi.
+router.get('/probe', async (req: Request, res: Response) => {
+    try {
+        const store = await resolveStore(String(req.query.storeCode || ''))
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const cfg = await loadConfig(store.sp)
+        if (!cfg) { res.status(400).json({ success: false, error: 'Chưa cấu hình MISA' }); return }
+
+        const ketQua = await doDanhMuc(credsOf(cfg))
+        const lech = ketQua.filter(r => r.doanLa && r.doanLa !== '(không nhận ra)' && r.doanLa !== r.nhanTheoTaiLieu)
+        res.json({
+            success: true,
+            data: {
+                ketQua,
+                soLoaiLech: lech.length,
+                canhBao: lech.length
+                    ? `${lech.length} loại trả về KHÁC với tài liệu — sửa MISA_DATA_TYPE theo cột "đoán là" trước khi đồng bộ.`
+                    : null,
+            },
+        })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: misaErr(e) })
+    }
+})
 
 // ─── POST /api/misa/sync ────────────────────────────────────────────────────
 // Body: {storeCode, entities:['products','partners','stocks','balance'],
@@ -342,28 +393,54 @@ async function chayDongBo(
         },
     }
 
-    const lastSync = misaTime(fromDate)
+    /**
+     * MỐC NƯỚC. Người dùng chọn "từ ngày" thì theo ngày đó; để trống thì dùng
+     * `lastSyncTime` do CHÍNH MISA trả về đợt trước (CustomData.LastSyncTime) —
+     * đồng hồ của MISA mới là chuẩn, đồng hồ máy mình lệch một nhịp là mất bản
+     * ghi. Chưa có mốc nào thì lấy TẤT CẢ (null).
+     */
+    const lastSync = fromDate ? misaTime(fromDate) : (cfg?.lastSyncTime || null)
+    let mocMoi: string | null = null
+    const ghiMoc = (v: string | null) => { if (v) mocMoi = v }
 
     for (const entity of entities) {
         const c = newMisaCounters()
-        dangLam = entity
+        dangLam = MISA_ENTITY_LABEL[entity] || entity
         await nhip('đang tải')
         try {
             if (entity === 'products') {
-                const { items, truncated } = await MISA.danhMuc(creds, MISA_DATA_TYPE.VAT_TU, { last_sync_time: lastSync }, pageOpts)
-                if (truncated) c.errors.push('Chạm trần 500 trang — thu hẹp mốc ngày rồi chạy tiếp')
-                await syncMisaProducts(sp, items, opts, c)
+                const r = await MISA.danhMuc(creds, MISA_DATA_TYPE.VAT_TU, { last_sync_time: lastSync }, pageOpts)
+                if (r.truncated) c.errors.push('Chạm trần 500 trang — thu hẹp mốc ngày rồi chạy tiếp')
+                ghiMoc(r.lastSyncTime)
+                await syncMisaProducts(sp, r.items, opts, c)
             } else if (entity === 'partners') {
-                const { items, truncated } = await MISA.danhMuc(creds, MISA_DATA_TYPE.DOI_TUONG, { last_sync_time: lastSync }, pageOpts)
-                if (truncated) c.errors.push('Chạm trần 500 trang — thu hẹp mốc ngày rồi chạy tiếp')
-                await syncMisaPartners(sp, items, opts, c)
+                const r = await MISA.danhMuc(creds, MISA_DATA_TYPE.DOI_TUONG, { last_sync_time: lastSync }, pageOpts)
+                if (r.truncated) c.errors.push('Chạm trần 500 trang — thu hẹp mốc ngày rồi chạy tiếp')
+                ghiMoc(r.lastSyncTime)
+                await syncMisaPartners(sp, r.items, opts, c)
             } else if (entity === 'stocks') {
-                const { items } = await MISA.danhMuc(creds, MISA_DATA_TYPE.KHO, { last_sync_time: lastSync }, pageOpts)
-                await syncMisaWarehouses(sp, items, opts, c)
+                const r = await MISA.danhMuc(creds, MISA_DATA_TYPE.KHO, { last_sync_time: lastSync }, pageOpts)
+                ghiMoc(r.lastSyncTime)
+                await syncMisaWarehouses(sp, r.items, opts, c)
             } else if (entity === 'balance') {
-                const { items, truncated } = await MISA.tonKho(creds, { last_sync_time: lastSync }, pageOpts)
-                if (truncated) c.errors.push('Chạm trần 500 trang — thu hẹp mốc ngày rồi chạy tiếp')
-                await syncMisaStock(sp, items, opts, c)
+                const r = await MISA.tonKho(creds, { last_sync_time: lastSync }, pageOpts)
+                if (r.truncated) c.errors.push('Chạm trần 500 trang — thu hẹp mốc ngày rồi chạy tiếp')
+                ghiMoc(r.lastSyncTime)
+                await syncMisaStock(sp, r.items, opts, c)
+            } else if (entity === 'debtCustomer' || entity === 'debtSupplier') {
+                const loai = entity === 'debtCustomer' ? MISA_DEBT_TYPE.PHAI_THU : MISA_DEBT_TYPE.PHAI_TRA
+                // Công nợ KHÔNG lọc theo mốc nước: cần TOÀN BỘ số dư hiện tại,
+                // lấy phần chênh lệch thì những đối tượng không phát sinh sẽ giữ
+                // số cũ sai. Bài học từ KiotViet: lọc ngày lên dữ liệu danh mục.
+                const r = await MISA.congNo(creds, loai, { last_sync_time: null }, pageOpts)
+                if (r.truncated) c.errors.push('Chạm trần 500 trang — dữ liệu công nợ quá lớn')
+                await syncMisaDebt(sp, r.items, loai, opts, c)
+            } else if (entity === 'deleted') {
+                // Quét từng loại danh mục Kengi có quan tâm; MISA đòi data_type
+                for (const dt of [MISA_DATA_TYPE.DOI_TUONG, MISA_DATA_TYPE.VAT_TU, MISA_DATA_TYPE.KHO]) {
+                    const r = await MISA.danhMucDaXoa(creds, dt, { last_sync_time: lastSync }, pageOpts)
+                    await syncMisaDeleted(sp, r.items, opts, c)
+                }
             }
         } catch (e: any) {
             c.failed++
@@ -371,6 +448,7 @@ async function chayDongBo(
         }
 
         perEntity[entity] = {
+            ten: MISA_ENTITY_LABEL[entity] || entity,
             layVe: c.fetched, taoMoi: c.created, capNhat: c.updated,
             boQua: c.skipped, loi: c.failed, mau: c.samples,
             loiChiTiet: c.errors.slice(0, 10), xong: true,
@@ -405,7 +483,12 @@ async function chayDongBo(
     }).catch(() => { })
 
     if (apply) {
-        await sp.misaConfig.update({ where: { id: 'default' }, data: { lastSyncAt: new Date() } }).catch(() => { })
+        await sp.misaConfig.update({
+            where: { id: 'default' },
+            // Chỉ nhích mốc nước khi GHI THẬT — chạy thử mà nhích thì lần sau
+            // lấy thiếu đúng phần vừa xem
+            data: { lastSyncAt: new Date(), ...(mocMoi ? { lastSyncTime: mocMoi } : {}) },
+        }).catch(() => { })
     }
 }
 

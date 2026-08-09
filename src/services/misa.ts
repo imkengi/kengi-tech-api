@@ -15,6 +15,19 @@
  *   để MISA gửi ngược qua callback của đối tác. MISA là nơi NHẬN số liệu kế
  *   toán, không phải nguồn để rút chứng từ ra.
  *
+ * Các hàm KÉO VỀ hiện dùng (mục 2.4, 2.6, 2.7, 2.9, 2.12 của tài liệu):
+ *   get_dictionary             danh mục theo data_type
+ *   get_list_acc_obj_debt      công nợ phải thu / phải trả
+ *   get_list_inventory_balance tồn kho theo từng kho
+ *   get_dictionary_delete      danh mục đã bị xoá bên MISA
+ *   get_company_info           thông tin công ty
+ *
+ * Hàm ĐẨY LÊN (mục 2.2, 2.3, 2.14, 2.16) — CHƯA DÙNG, ghi lại để khỏi đọc lại
+ * tài liệu: `save` (đề nghị sinh chứng từ), `save_dictionary` (sinh danh mục),
+ * `delete` (xoá đề nghị), `get_call_back_detail_error` (tra kết quả). Lưu ý
+ * `save` là BẤT ĐỒNG BỘ — HTTP 200 chỉ nghĩa là MISA NHẬN ĐƯỢC, chưa phải đã
+ * ghi sổ.
+ *
  * Đường dẫn có hai tiền tố khác nhau, dễ nhầm:
  *   `/api/oauth/...`  cho xác thực
  *   `/apir/sync/...`  cho dữ liệu   (apiR — có chữ R)
@@ -31,7 +44,18 @@ export interface MisaCreds {
 const DEFAULT_BASE = 'https://actapp.misa.vn'
 const MAX_TAKE = 100
 
-/** Loại danh mục của get_dictionary — số lấy từ tài liệu MISA. */
+/**
+ * Loại danh mục của get_dictionary — chép từ mục 3.3 "Danh sách các loại danh
+ * mục hỗ trợ LẤY từ AMIS kế toán" (EnumOpenGetDictionaryType).
+ *
+ * ĐỪNG lẫn với `dictionary_type` ở mục 3.2 (danh mục ĐẨY LÊN) — hai bảng số
+ * KHÁC NHAU: chiều lấy về Kho = 3, chiều đẩy lên Kho = 5. Trước đây file này có
+ * NHOM_VAT_TU: 14 — số đó không nằm trong danh sách nào, đã bỏ.
+ *
+ * CẢNH BÁO: ví dụ trong chính tài liệu (mục 2.4) gửi data_type = 5 mà nhận về
+ * bản ghi KHO, tức mâu thuẫn với mục 3.3. Không đoán bên nào đúng — dùng
+ * GET /api/misa/probe để hỏi thẳng dữ liệu thật của cửa hàng rồi mới chốt.
+ */
 export const MISA_DATA_TYPE = {
     DOI_TUONG: 1,        // khách hàng / nhà cung cấp / nhân viên (chung một bảng)
     VAT_TU: 2,           // vật tư, hàng hoá
@@ -40,10 +64,29 @@ export const MISA_DATA_TYPE = {
     HE_THONG_TAI_KHOAN: 5,
     CO_CAU_TO_CHUC: 6,
     TAI_KHOAN_NGAN_HANG: 8,
+    CONG_TRINH: 9,
+    DOI_TUONG_THCP: 10,
     DIEU_KHOAN_THANH_TOAN: 11,
     NGAN_HANG: 12,
-    NHOM_VAT_TU: 14,
 } as const
+
+/** Nhãn tiếng Việt cho từng data_type — dùng ở màn dò danh mục. */
+export const MISA_DATA_TYPE_LABEL: Record<number, string> = {
+    1: 'Đối tượng (KH/NCC/NV)',
+    2: 'Vật tư, hàng hoá',
+    3: 'Kho',
+    4: 'Đơn vị tính',
+    5: 'Hệ thống tài khoản',
+    6: 'Cơ cấu tổ chức',
+    8: 'Tài khoản ngân hàng',
+    9: 'Công trình',
+    10: 'Đối tượng tập hợp chi phí',
+    11: 'Điều khoản thanh toán',
+    12: 'Ngân hàng',
+}
+
+/** Loại công nợ của get_list_acc_obj_debt — 0 phải thu, 1 phải trả. */
+export const MISA_DEBT_TYPE = { PHAI_THU: 0, PHAI_TRA: 1 } as const
 
 export class MisaError extends Error {
     constructor(message: string, public status?: number, public body?: string) {
@@ -194,7 +237,7 @@ export async function misaFetchAll(
         delayMs?: number
         onPage?: (items: any[], fetched: number) => Promise<void> | void
     } = {},
-): Promise<{ items: any[]; truncated: boolean }> {
+): Promise<{ items: any[]; truncated: boolean; lastSyncTime: string | null; message: string | null }> {
     const take = Math.min(MAX_TAKE, Math.max(1, opts.take || MAX_TAKE))
     const maxPages = opts.maxPages ?? 500
     const delayMs = opts.delayMs ?? 120
@@ -203,10 +246,17 @@ export async function misaFetchAll(
     let skip = 0
     let pages = 0
     let truncated = false
+    let lastSyncTime: string | null = null
+    let message: string | null = null
 
     for (;;) {
         const raw = await misaPost(creds, path, { ...body, skip, take })
         const batch = toArray(unwrap(raw))
+        // MISA tự trả về MỐC NƯỚC cho lần sau trong CustomData.LastSyncTime —
+        // dùng nó chính xác hơn là tự đoán "từ ngày" theo đồng hồ máy mình
+        const custom = docCustomData(raw)
+        if (custom?.LastSyncTime) lastSyncTime = String(custom.LastSyncTime)
+        if (custom?.Message) message = String(custom.Message).slice(0, 300)
         if (batch.length) {
             items.push(...batch)
             if (opts.onPage) await opts.onPage(batch, items.length)
@@ -218,7 +268,17 @@ export async function misaFetchAll(
         skip += take
         if (delayMs) await new Promise(r => setTimeout(r, delayMs))
     }
-    return { items, truncated }
+    return { items, truncated, lastSyncTime, message }
+}
+
+/** CustomData cũng có thể là CHUỖI JSON như Data — cùng một bệnh. */
+function docCustomData(raw: any): any {
+    const cd = raw?.CustomData ?? raw?.customData
+    if (!cd) return null
+    if (typeof cd === 'string') {
+        try { return JSON.parse(cd) } catch { return null }
+    }
+    return typeof cd === 'object' ? cd : null
 }
 
 /** MISA có chỗ trả mảng thẳng, có chỗ bọc trong {Data:{PageData:[...]}}. */
@@ -255,9 +315,90 @@ export const MISA = {
         misaFetchAll(creds, '/apir/sync/actopen/get_list_inventory_balance',
             { stock_id: null, branch_id: null, last_sync_time: null, ...params }, opts),
 
+    /**
+     * Công nợ phải thu (loai = 0) / phải trả (loai = 1).
+     *
+     * DẤU của `debt_amount` KHÔNG được suy diễn: ví dụ trong tài liệu cho công
+     * nợ phải trả là SỐ ÂM (-235.800.000). Trước khi ghi vào Kengi phải soi dữ
+     * liệu thật của cửa hàng bằng /peek — xem ghi chú ở syncMisaDebt.
+     */
+    congNo: (creds: MisaCreds, loai: number, params: Record<string, any> = {}, opts?: any) =>
+        misaFetchAll(creds, '/apir/sync/actopen/get_list_acc_obj_debt',
+            { data_type: loai, branch_id: null, last_sync_time: null, ...params }, opts),
+
+    /** Danh mục ĐÃ BỊ XOÁ bên MISA — để ngừng theo dõi bên Kengi, KHÔNG xoá thật */
+    danhMucDaXoa: (creds: MisaCreds, dataType: number, params: Record<string, any> = {}, opts?: any) =>
+        misaFetchAll(creds, '/apir/sync/actopen/get_dictionary_delete',
+            { data_type: dataType, branch_id: null, last_sync_time: null, ...params }, opts),
+
+    /** Thông tin công ty — không phân trang, trả về một object */
+    thongTinCongTy: async (creds: MisaCreds): Promise<any> =>
+        unwrap(await misaPost(creds, '/apir/sync/actopen/get_company_info', { branch_id: null })),
+
     /** Gọi thẳng một hàm bất kỳ — dùng để soi dữ liệu thô khi chẩn đoán */
     raw: (creds: MisaCreds, path: string, body: Record<string, any> = {}) =>
         misaPost(creds, path, body),
+}
+
+/**
+ * DÒ xem mỗi `data_type` thật sự trả về cái gì trên dữ liệu của cửa hàng này.
+ *
+ * Sinh ra vì tài liệu MISA tự mâu thuẫn (mục 2.4 gửi data_type = 5 lại nhận về
+ * bản ghi kho, trong khi mục 3.3 nói 5 = hệ thống tài khoản). Lấy 1 bản ghi mỗi
+ * loại rồi đọc TÊN TRƯỜNG để biết đó là danh mục gì — đo thay vì đoán.
+ */
+export async function doDanhMuc(creds: MisaCreds, loai: number[] = Object.values(MISA_DATA_TYPE)): Promise<Array<{
+    dataType: number
+    nhanTheoTaiLieu: string
+    soBanGhi: number
+    doanLa: string
+    cacTruong: string[]
+    banGhiMau: any
+    loi?: string
+}>> {
+    const ketQua: any[] = []
+    for (const dt of loai) {
+        try {
+            const { items } = await misaFetchAll(creds, '/apir/sync/actopen/get_dictionary',
+                { data_type: dt, branch_id: null, last_sync_time: null }, { take: 1, maxPages: 1, delayMs: 0 })
+            const mau = items[0] || null
+            ketQua.push({
+                dataType: dt,
+                nhanTheoTaiLieu: MISA_DATA_TYPE_LABEL[dt] || '(không có trong tài liệu)',
+                soBanGhi: items.length,
+                doanLa: doanTenDanhMuc(mau),
+                cacTruong: mau ? Object.keys(mau) : [],
+                banGhiMau: mau,
+            })
+        } catch (e: any) {
+            ketQua.push({
+                dataType: dt, nhanTheoTaiLieu: MISA_DATA_TYPE_LABEL[dt] || '(không có trong tài liệu)',
+                soBanGhi: 0, doanLa: '', cacTruong: [], banGhiMau: null,
+                loi: String(e?.message || e).slice(0, 200),
+            })
+        }
+    }
+    return ketQua
+}
+
+/** Nhìn khoá chính trong bản ghi để biết MISA vừa trả về danh mục nào. */
+function doanTenDanhMuc(m: any): string {
+    if (!m || typeof m !== 'object') return ''
+    const dau: Array<[string, string]> = [
+        ['inventory_item_id', 'Vật tư, hàng hoá'],
+        ['account_object_id', 'Đối tượng (KH/NCC/NV)'],
+        ['stock_id', 'Kho'],
+        ['unit_id', 'Đơn vị tính'],
+        ['bank_account_id', 'Tài khoản ngân hàng'],
+        ['payment_term_id', 'Điều khoản thanh toán'],
+        ['project_work_id', 'Công trình'],
+        ['job_id', 'Đối tượng tập hợp chi phí'],
+        ['organization_unit_id', 'Cơ cấu tổ chức'],
+        ['account_number', 'Hệ thống tài khoản'],
+        ['bank_id', 'Ngân hàng'],
+    ]
+    for (const [k, ten] of dau) if (k in m) return ten
+    return '(không nhận ra)'
 }
 
 /**

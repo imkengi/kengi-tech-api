@@ -1567,14 +1567,21 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                         "overwriteNames" BOOLEAN NOT NULL DEFAULT false,
                         "overwritePrices" BOOLEAN NOT NULL DEFAULT false,
                         "overwriteStock" BOOLEAN NOT NULL DEFAULT false,
+                        "overwriteDebt" BOOLEAN NOT NULL DEFAULT false,
+                        "negateDebt" BOOLEAN NOT NULL DEFAULT false,
                         "defaultCategoryId" TEXT,
                         "defaultWarehouseId" TEXT,
+                        "lastSyncTime" TEXT,
                         "lastSyncAt" TIMESTAMP(3),
                         "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
                         "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
                         CONSTRAINT "MisaConfig_pkey" PRIMARY KEY ("id")
                     )
                 `)
+                // Cột thêm sau đợt đọc lại tài liệu MISA (công nợ + mốc nước)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "MisaConfig" ADD COLUMN IF NOT EXISTS "overwriteDebt" BOOLEAN NOT NULL DEFAULT false`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "MisaConfig" ADD COLUMN IF NOT EXISTS "negateDebt" BOOLEAN NOT NULL DEFAULT false`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "MisaConfig" ADD COLUMN IF NOT EXISTS "lastSyncTime" TEXT`)
                 await (sp as any).$executeRawUnsafe(`
                     CREATE TABLE IF NOT EXISTS "MisaMap" (
                         "id" TEXT NOT NULL,

@@ -49,6 +49,10 @@ export interface MisaOptions {
     overwriteNames?: boolean
     overwritePrices?: boolean
     overwriteStock?: boolean
+    /** Ghi đè công nợ Kengi bằng số của MISA — tiền thật, mặc định TẮT */
+    overwriteDebt?: boolean
+    /** Đảo dấu công nợ phải trả (MISA có bản trả số âm) — xem syncMisaDebt */
+    negateDebt?: boolean
     defaultCategoryId?: string | null
     defaultWarehouseId?: string | null
     onProgress?: (c: MisaCounters) => void
@@ -150,9 +154,7 @@ export async function syncMisaProducts(sp: any, items: any[], opts: MisaOptions,
                     const created = await sp.product.create({
                         data: {
                             name, sku: code, categoryId,
-                            // MISA có inventory_item_type nhưng tài liệu không nói rõ
-                            // giá trị nào là dịch vụ → KHÔNG đoán, để mặc định hàng hoá
-                            productType: 'goods',
+                            productType: loaiHang(m),
                             sellingPrice: giaBan,
                             costPrice: giaVon,
                             stock: 0,          // đặt qua applyStock để giữ bất biến kho
@@ -162,12 +164,25 @@ export async function syncMisaProducts(sp: any, items: any[], opts: MisaOptions,
                     await saveMap(sp, 'product', misaId, code, created.id)
                 }
                 c.created++
-                noteSample(c, { sku: code, name, giaBan, giaVon, hanhDong: 'tạo mới' })
+                noteSample(c, { sku: code, name, giaBan, giaVon, loai: loaiHang(m), hanhDong: 'tạo mới' })
             }
         } catch (e: any) {
             noteError(c, `Vật tư ${pick(m, 'inventory_item_code') || ''}: ${e?.message || e}`)
         }
     }
+}
+
+/**
+ * Tính chất vật tư của MISA → loại sản phẩm Kengi.
+ *
+ * Tài liệu mục 5.7 (inventory_item): 0 = vật tư hàng hoá, 1 = thành phẩm,
+ * 2 = DỊCH VỤ, 3 = nguyên vật liệu. Chỉ 2 mới là dịch vụ; ba giá trị còn lại
+ * đều là hàng có tồn kho. Trước đây chỗ này để cứng 'goods' vì chưa tra ra bảng
+ * giá trị — nay đã có, dịch vụ không còn bị tính tồn kho oan.
+ */
+function loaiHang(m: any): 'goods' | 'service' {
+    const t = Number(pick(m, 'inventory_item_type', 'InventoryItemType'))
+    return t === 2 ? 'service' : 'goods'
 }
 
 async function resolveCategory(
@@ -423,4 +438,161 @@ async function datTon(sp: any, product: any, target: number, opts: MisaOptions, 
             },
         }).catch(() => { })
     })
+}
+
+// ─── CÔNG NỢ (get_list_acc_obj_debt) ────────────────────────────────────────
+
+/**
+ * Công nợ phải thu (loai = 0 → Customer.debt) và phải trả (loai = 1 →
+ * Supplier.payable).
+ *
+ * VỀ DẤU — chỗ này ĐÃ SUÝT ĐOÁN SAI nên viết rõ: ví dụ trong tài liệu MISA cho
+ * công nợ phải trả là SỐ ÂM (-235.800.000), trong khi Kengi quy ước
+ * `Supplier.payable` DƯƠNG = mình đang nợ NCC. Không có cách nào biết chắc bản
+ * dữ liệu của từng cửa hàng theo quy ước nào, nên:
+ *   - Chạy thử luôn ĐẾM số dòng âm/dương và báo lên màn hình.
+ *   - Nếu phần lớn ngược dấu với quy ước Kengi mà người dùng chưa bật "đảo dấu"
+ *     thì ghi một cảnh báo TO, KHÔNG tự ý đảo.
+ * Đây là tiền thật; thà bắt bấm thêm một nút còn hơn ghi ngược cả sổ công nợ.
+ *
+ * Chỉ cập nhật đối tượng ĐÃ CÓ bên Kengi. Không đẻ khách/NCC mới từ bảng công
+ * nợ — việc đó của mục "Đối tượng", chạy trước.
+ */
+export async function syncMisaDebt(
+    sp: any, rows: any[], loai: number, opts: MisaOptions, c: MisaCounters,
+): Promise<void> {
+    const laPhaiThu = Number(loai) === 0
+    const ten = laPhaiThu ? 'phải thu' : 'phải trả'
+
+    // Đo dấu TRƯỚC khi ghi — số liệu này hiện ra ở mục "mẫu" của đợt chạy
+    let duong = 0, am = 0, tongThuan = 0
+    for (const r of rows) {
+        const v = soTien(pick(r, 'debt_amount', 'DebtAmount'))
+        if (v > 0) duong++; else if (v < 0) am++
+        tongThuan += v
+    }
+    noteSample(c, {
+        khaoSatDau: `công nợ ${ten}`,
+        soDong: rows.length, soDongDuong: duong, soDongAm: am,
+        tongCong: Math.round(tongThuan),
+        dangDaoDau: !!opts.negateDebt,
+    })
+    if (am > duong && !opts.negateDebt) {
+        c.errors.push(
+            `Công nợ ${ten}: ${am}/${rows.length} dòng đang là SỐ ÂM trong khi Kengi quy ước số dương. ` +
+            `Nhiều khả năng phải bật "Đảo dấu công nợ" rồi chạy lại — chưa ghi gì theo chiều đoán.`,
+        )
+    }
+
+    if (!opts.overwriteDebt) {
+        c.fetched = rows.length
+        boQua(c, `Chưa bật "Ghi đè công nợ" — bỏ qua toàn bộ ${rows.length} dòng ${ten} để không đụng số dư thật`)
+        return
+    }
+
+    const heSo = opts.negateDebt ? -1 : 1
+
+    for (const r of rows) {
+        c.fetched++
+        beat(opts, c)
+        try {
+            const misaId = pick(r, 'account_object_id', 'AccountObjectID')
+            const code = String(pick(r, 'account_object_code', 'AccountObjectCode') || '').trim()
+            const soTienNo = Math.round(soTien(pick(r, 'debt_amount', 'DebtAmount')) * heSo)
+
+            if (laPhaiThu) {
+                let localId = misaId ? await findMap(sp, 'customer', misaId) : null
+                let kh = localId ? await sp.customer.findUnique({ where: { id: localId } }).catch(() => null) : null
+                if (!kh && code) kh = await sp.customer.findUnique({ where: { code } }).catch(() => null)
+                if (!kh) { boQua(c, `Phải thu ${code || misaId}: chưa có khách này bên Kengi`); continue }
+                if (Math.round(kh.debt || 0) === soTienNo) { c.skipped++; continue }
+                if (opts.apply) await sp.customer.update({ where: { id: kh.id }, data: { debt: soTienNo } })
+                c.updated++
+                noteSample(c, { code: kh.code, ten: kh.name, noCu: kh.debt, noMoi: soTienNo })
+            } else {
+                let localId = misaId ? await findMap(sp, 'supplier', misaId) : null
+                let ncc = localId ? await sp.supplier.findUnique({ where: { id: localId } }).catch(() => null) : null
+                if (!ncc && code) ncc = await sp.supplier.findUnique({ where: { code } }).catch(() => null)
+                if (!ncc) { boQua(c, `Phải trả ${code || misaId}: chưa có NCC này bên Kengi`); continue }
+                if (Math.round(ncc.payable || 0) === soTienNo) { c.skipped++; continue }
+                if (opts.apply) await sp.supplier.update({ where: { id: ncc.id }, data: { payable: soTienNo } })
+                c.updated++
+                noteSample(c, { code: ncc.code, ten: ncc.name, noCu: ncc.payable, noMoi: soTienNo })
+            }
+        } catch (e: any) {
+            noteError(c, `Công nợ ${ten} ${pick(r, 'account_object_code') || ''}: ${e?.message || e}`)
+        }
+    }
+}
+
+// ─── DANH MỤC ĐÃ XOÁ (get_dictionary_delete) ────────────────────────────────
+
+/**
+ * MISA xoá một danh mục thì bên Kengi NGỪNG THEO DÕI, tuyệt đối không xoá theo:
+ * mã hàng đã nằm trong hoá đơn, thẻ kho, đơn sàn — xoá là gãy lịch sử.
+ *
+ * Kengi không có cờ ngừng theo dõi cho Hàng hoá và Khách hàng (Product và
+ * Customer đều không có trường trạng thái), nên hai loại đó chỉ BÁO LÊN để chủ
+ * cửa hàng tự xử, không im lặng bỏ qua.
+ */
+export async function syncMisaDeleted(
+    sp: any, rows: any[], opts: MisaOptions, c: MisaCounters,
+): Promise<void> {
+    for (const r of rows) {
+        c.fetched++
+        beat(opts, c)
+        try {
+            const loai = Number(pick(r, 'type', 'Type'))
+            const misaId = pick(r, 'id', 'Id', 'ID')
+            // `data` là CHUỖI JSON lồng, chứa mã/tên của bản ghi bị xoá
+            const info = docJson(pick(r, 'data', 'Data'))
+            const code = String(
+                pick(info || {}, 'stock_code', 'inventory_item_code', 'account_object_code') || '',
+            ).trim()
+            const ten = String(
+                pick(info || {}, 'stock_name', 'inventory_item_name', 'account_object_name') || '',
+            ).trim()
+
+            if (loai === 3) {                       // Kho
+                let localId = misaId ? await findMap(sp, 'warehouse', misaId) : null
+                let kho = localId ? await sp.warehouse.findUnique({ where: { id: localId } }).catch(() => null) : null
+                if (!kho && code) kho = await sp.warehouse.findUnique({ where: { code } }).catch(() => null)
+                if (!kho) { c.skipped++; continue }
+                if (!kho.isActive) { c.skipped++; continue }
+                if (opts.apply) await sp.warehouse.update({ where: { id: kho.id }, data: { isActive: false } })
+                c.updated++
+                noteSample(c, { loai: 'kho', code: kho.code, ten: kho.name, hanhDong: 'ngừng theo dõi' })
+            } else if (loai === 1) {                // Đối tượng: chỉ NCC có cờ trạng thái
+                let localId = misaId ? await findMap(sp, 'supplier', misaId) : null
+                let ncc = localId ? await sp.supplier.findUnique({ where: { id: localId } }).catch(() => null) : null
+                if (!ncc && code) ncc = await sp.supplier.findUnique({ where: { code } }).catch(() => null)
+                if (ncc && ncc.status !== 'inactive') {
+                    if (opts.apply) await sp.supplier.update({ where: { id: ncc.id }, data: { status: 'inactive' } })
+                    c.updated++
+                    noteSample(c, { loai: 'nhà cung cấp', code: ncc.code, ten: ncc.name, hanhDong: 'ngừng theo dõi' })
+                    continue
+                }
+                const kh = code ? await sp.customer.findUnique({ where: { code } }).catch(() => null) : null
+                if (kh) {
+                    boQua(c, `Khách ${kh.code} (${kh.name}) đã bị xoá bên MISA — Kengi không có cờ ngừng theo dõi khách hàng, cần xử lý tay`)
+                } else c.skipped++
+            } else if (loai === 2) {                // Vật tư
+                const hang = code ? await sp.product.findUnique({ where: { sku: code } }).catch(() => null) : null
+                if (hang) {
+                    boQua(c, `Hàng ${hang.sku} (${hang.name}) đã bị xoá bên MISA — Kengi không có cờ ngừng theo dõi hàng hoá, cần xử lý tay`)
+                } else c.skipped++
+            } else {
+                boQua(c, `Loại danh mục ${loai}${ten ? ` (${ten})` : ''} đã xoá bên MISA — Kengi không quản lý loại này`)
+            }
+        } catch (e: any) {
+            noteError(c, `Danh mục đã xoá: ${e?.message || e}`)
+        }
+    }
+}
+
+/** MISA hay lồng JSON trong chuỗi — gỡ một lớp, hỏng thì trả null. */
+function docJson(v: any): any {
+    if (!v) return null
+    if (typeof v === 'object') return v
+    try { return JSON.parse(String(v)) } catch { return null }
 }

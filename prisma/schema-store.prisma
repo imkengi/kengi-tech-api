@@ -3004,9 +3004,17 @@ model MisaConfig {
   overwriteNames  Boolean @default(false)
   overwritePrices Boolean @default(false)
   overwriteStock  Boolean @default(false)
+  overwriteDebt   Boolean @default(false) // công nợ là tiền thật — mặc định TẮT
+  // MISA có bản trả công nợ phải trả bằng SỐ ÂM, Kengi quy ước số dương.
+  // Không tự đoán: chạy thử sẽ đếm dấu và nhắc bật cờ này nếu cần.
+  negateDebt      Boolean @default(false)
 
   defaultCategoryId  String?
   defaultWarehouseId String?
+
+  // Mốc nước do CHÍNH MISA trả về (CustomData.LastSyncTime) sau mỗi đợt lấy —
+  // dùng cho lần sau chính xác hơn là tự lấy đồng hồ máy mình.
+  lastSyncTime String?
 
   lastSyncAt DateTime?
   createdAt  DateTime  @default(now())
