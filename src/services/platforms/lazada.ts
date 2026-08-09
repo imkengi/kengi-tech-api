@@ -80,12 +80,54 @@ export class LazadaService extends PlatformService {
         )
     }
 
+    /**
+     * BỊ CHẶN THEO TẦN SUẤT — nguyên nhân làm nút Đồng bộ báo lỗi (09/08/2026).
+     *
+     * Lazada không trả HTTP 429. Nó trả HTTP 200 kèm code lỗi và câu
+     * "Api access frequency exceeds the limit. this ban will last N seconds",
+     * nên vòng thử lại của `lazadaFetch` — chỉ bắt lỗi MẠNG (exception) — không
+     * thấy gì; lỗi nổ ra tận chỗ kiểm `data.code` và giết cả đợt đồng bộ.
+     *
+     * Nghe đúng lời Lazada: ngủ N giây rồi gọi lại. Sau lần bị chặn đầu tiên thì
+     * tự giãn nhịp cho các lời gọi sau — `fetchOrders` hỏi chi tiết TỪNG đơn
+     * (50 đơn = 50 lời gọi liên tiếp), đó mới là chỗ đụng trần.
+     *
+     * URL đã ký sẵn nên gọi lại vẫn dùng timestamp cũ; chờ tối đa 30s nằm gọn
+     * trong cửa sổ chấp nhận của Lazada nên không cần ký lại.
+     */
+    private static readonly RATE_LIMIT_RETRIES = 4
+    private static readonly NHIP_TOI_DA_MS = 500
+    private nhipChoMs = 0
+
+    private static banBaoNhieuGiay(data: any): number | null {
+        const msg = String(data?.message ?? '')
+        if (!/frequency exceeds|ApiCallLimit|too many request/i.test(`${msg} ${data?.code ?? ''}`)) return null
+        const m = /last\s+(\d+)\s*second/i.exec(msg)
+        return Math.min(Math.max(m ? Number(m[1]) : 1, 1), 30)
+    }
+
+    private async goiLazada(url: string, method: 'GET' | 'POST', body?: any): Promise<any> {
+        const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+        for (let lan = 0; ; lan++) {
+            if (this.nhipChoMs) await sleep(this.nhipChoMs)
+            const data = await this.parseResponse(await this.lazadaFetch(url, method, body))
+            const giay = LazadaService.banBaoNhieuGiay(data)
+            if (giay === null) return data
+            // Hết lượt thì TRẢ NGUYÊN phản hồi để chỗ gọi ném ra thông báo thật
+            // của Lazada, đừng nuốt thành lỗi chung chung
+            if (lan >= LazadaService.RATE_LIMIT_RETRIES - 1) return data
+            this.nhipChoMs = Math.min(this.nhipChoMs + 100, LazadaService.NHIP_TOI_DA_MS)
+            console.warn(`[Lazada] bị chặn tần suất — chờ ${giay}s rồi thử lại (lần ${lan + 1}), giãn nhịp ${this.nhipChoMs}ms`)
+            await sleep(giay * 1000 + 250)
+        }
+    }
+
     protected async httpGet(url: string): Promise<any> {
-        return this.parseResponse(await this.lazadaFetch(url, 'GET'))
+        return this.goiLazada(url, 'GET')
     }
 
     protected async httpPost(url: string, body: any): Promise<any> {
-        return this.parseResponse(await this.lazadaFetch(url, 'POST', body))
+        return this.goiLazada(url, 'POST', body)
     }
 
     // ─── Auth ────────────────────────────────────────────────────────────────────

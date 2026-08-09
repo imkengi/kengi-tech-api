@@ -2276,12 +2276,15 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
         const DEADLINE_MS = 230_000
         const startedAt = Date.now()
         let stoppedAt: Date | null = null
+        let lyDoDung: string | null = null
         const fetchWithRetry = async () => {
             allOrders = []
             stoppedAt = null
-            for (const win of windows) {
+            lyDoDung = null
+            ngoai: for (const win of windows) {
                 if (Date.now() - startedAt > DEADLINE_MS) {
                     stoppedAt = win.from
+                    lyDoDung = `khoảng quá dài, đã chạy quá ${DEADLINE_MS / 1000}s`
                     console.warn(`[Sync] ${channel.name}: DỪNG vì quá ${DEADLINE_MS / 1000}s — mới kéo tới ${win.from.toISOString().slice(0, 10)}`)
                     break
                 }
@@ -2292,8 +2295,24 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                     // numeric `page`. Thread both — each platform reads what it needs.
                     let pageToken: string | undefined = undefined
                     while (hasMore && page <= PAGE_CAP && allOrders.length < MAX_ORDERS) {
-                        const result: { orders: PlatformOrder[]; hasMore: boolean; total: number; nextPageToken?: string } =
-                            await service.fetchOrders({ since: win.from, until: win.to, page, pageSize: 50, status: st, pageToken, timeRangeField })
+                        let result: { orders: PlatformOrder[]; hasMore: boolean; total: number; nextPageToken?: string }
+                        try {
+                            result = await service.fetchOrders({ since: win.from, until: win.to, page, pageSize: 50, status: st, pageToken, timeRangeField })
+                        } catch (e: any) {
+                            /**
+                             * SÀN GÃY GIỮA CHỪNG (hay gặp nhất: Lazada chặn tần
+                             * suất) — trước đây ném thẳng ra ngoài, mất sạch số
+                             * đơn đã kéo về và người dùng chỉ thấy "Internal
+                             * server error". Nếu đã có đơn thì dừng tử tế như
+                             * lúc chạm hạn giờ: nhập phần đã có, trả về mốc để
+                             * bấm chạy tiếp. Chưa có đơn nào thì mới ném lỗi.
+                             */
+                            if (!allOrders.length) throw e
+                            stoppedAt = win.from
+                            lyDoDung = String(e?.message || e).slice(0, 200)
+                            console.warn(`[Sync] ${channel.name}: DỪNG SỚM ở khung ${win.from.toISOString().slice(0, 10)} — ${lyDoDung}`)
+                            break ngoai
+                        }
                         allOrders = allOrders.concat(result.orders)
                         pageToken = result.nextPageToken
                         hasMore = result.hasMore
@@ -3008,11 +3027,15 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
             data: {
                 imported, updated, statusRefreshed, productsSynced,
                 errors: errors.length, total: allOrders.length, converted,
-                // Dừng vì hết giờ → báo rõ để người dùng bấm đồng bộ tiếp
+                // Dừng giữa chừng (hết giờ, hoặc sàn chặn) → báo rõ LÝ DO để
+                // người dùng biết bấm tiếp hay ngồi chờ
                 partial: !!stoppedAt,
                 ...(stoppedAt ? {
                     stoppedAt: (stoppedAt as Date).toISOString(),
-                    message: `Đồng bộ một phần: mới kéo tới ${(stoppedAt as Date).toLocaleDateString('vi-VN')} (khoảng quá dài). Bấm Đồng bộ lần nữa để chạy tiếp.`,
+                    lyDo: lyDoDung || undefined,
+                    message: `Đồng bộ một phần: mới kéo tới ${(stoppedAt as Date).toLocaleDateString('vi-VN')}`
+                        + (lyDoDung ? ` — ${lyDoDung}` : '')
+                        + '. Đơn đã kéo về vẫn được giữ; bấm Đồng bộ lần nữa để chạy tiếp.',
                 } : {}),
             },
         })
@@ -3064,6 +3087,22 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
             res.status(400).json({
                 success: false,
                 error: 'TikTok Shop cần được kết nối lại: token thiếu quyền hoặc shop_cipher không hợp lệ. Vui lòng vào phần Kênh → TikTok → Kết nối lại (authorize), và đảm bảo app đã được cấp đủ scope (Order Information, Authorization) trong TikTok Partner Center.',
+            })
+            return
+        }
+        /**
+         * Sàn CHẶN VÌ GỌI QUÁ NHANH — không phải lỗi hệ thống, chỉ cần chờ.
+         * Lazada trả HTTP 200 kèm "Api access frequency exceeds the limit",
+         * client đã tự chờ và thử lại vài lần; tới đây là vẫn không qua.
+         * Trước đây rơi xuống errMsg() nên màn hình chỉ hiện "Internal server
+         * error", chẳng ai biết đường mà chờ.
+         */
+        if (/frequency exceeds|ApiCallLimit|too many request|rate limit/i.test(m)) {
+            const giay = /last\s+(\d+)\s*second/i.exec(m)?.[1]
+            res.status(429).json({
+                success: false,
+                error: `Sàn tạm chặn vì gọi quá nhanh${giay ? ` (yêu cầu chờ ${giay} giây)` : ''}.`
+                    + ' Đợi một lát rồi bấm Đồng bộ lại. Nếu bị hoài thì thu hẹp khoảng ngày cho mỗi lần chạy.',
             })
             return
         }
