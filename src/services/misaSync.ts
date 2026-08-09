@@ -44,6 +44,15 @@ function noteSample(c: MisaCounters, s: any) {
     if (c.samples.length < 10) c.samples.push(s)
 }
 
+/**
+ * Tồn kho và công nợ tra mã trong CSDL Kengi, mà chạy thử thì Vật tư/Đối tượng
+ * chưa được tạo — nên toàn bộ đều "không tìm thấy". Nói thẳng ra, đừng để người
+ * xem tưởng hỏng: đợt chạy thử của HUTITAX hiện 1801 dòng tồn + 312 dòng công
+ * nợ bỏ qua, nhìn y như lỗi.
+ */
+const nhacChayThu = (opts: MisaOptions) =>
+    opts.apply ? '' : ' (đang CHẠY THỬ nên chưa tạo danh mục — chạy thật sẽ khớp)'
+
 export interface MisaOptions {
     apply: boolean
     overwriteNames?: boolean
@@ -387,7 +396,7 @@ export async function syncMisaStock(sp: any, rows: any[], opts: MisaOptions, c: 
             const p = await sp.product.findUnique({
                 where: { sku: code }, select: { id: true, name: true, sku: true, stock: true },
             }).catch(() => null)
-            if (!p) { boQua(c, `Mã ${code}: chưa có bên Kengi — đồng bộ Vật tư trước`); continue }
+            if (!p) { boQua(c, `Mã ${code}: chưa có bên Kengi — đồng bộ Vật tư trước${nhacChayThu(opts)}`); continue }
 
             const target = Math.round(qty)
             if (target === p.stock) { c.skipped++; continue }
@@ -477,10 +486,24 @@ export async function syncMisaDebt(
         tongCong: Math.round(tongThuan),
         dangDaoDau: !!opts.negateDebt,
     })
+    /**
+     * CẢNH BÁO PHẢI CANH CẢ HAI CHIỀU. Bản đầu chỉ canh chiều "dữ liệu âm mà
+     * quên bật đảo dấu"; đợt chạy 09/08/2026 của HUTITAX dính đúng chiều còn
+     * lại: dữ liệu vốn đã DƯƠNG (phải thu 161 dương / 43 âm) mà công tắc đảo
+     * dấu lại đang BẬT — chạy thật là lật ngược cả sổ công nợ mà không một lời
+     * nhắc. Thiếu sót của cảnh báo cũng là lỗi.
+     */
     if (am > duong && !opts.negateDebt) {
         c.errors.push(
             `Công nợ ${ten}: ${am}/${rows.length} dòng đang là SỐ ÂM trong khi Kengi quy ước số dương. ` +
-            `Nhiều khả năng phải bật "Đảo dấu công nợ" rồi chạy lại — chưa ghi gì theo chiều đoán.`,
+            `Nhiều khả năng phải BẬT "Đảo dấu công nợ" rồi chạy lại — chưa ghi gì theo chiều đoán.`,
+        )
+    }
+    if (duong > am && opts.negateDebt) {
+        c.errors.push(
+            `Công nợ ${ten}: ${duong}/${rows.length} dòng ĐÃ LÀ SỐ DƯƠNG, đúng quy ước Kengi, ` +
+            `mà công tắc "Đảo dấu công nợ" đang BẬT — chạy thật sẽ ghi ngược dấu toàn bộ. ` +
+            `TẮT công tắc đó rồi chạy lại.`,
         )
     }
 
@@ -504,7 +527,7 @@ export async function syncMisaDebt(
                 let localId = misaId ? await findMap(sp, 'customer', misaId) : null
                 let kh = localId ? await sp.customer.findUnique({ where: { id: localId } }).catch(() => null) : null
                 if (!kh && code) kh = await sp.customer.findUnique({ where: { code } }).catch(() => null)
-                if (!kh) { boQua(c, `Phải thu ${code || misaId}: chưa có khách này bên Kengi`); continue }
+                if (!kh) { boQua(c, `Phải thu ${code || misaId}: chưa có khách này bên Kengi${nhacChayThu(opts)}`); continue }
                 if (Math.round(kh.debt || 0) === soTienNo) { c.skipped++; continue }
                 if (opts.apply) await sp.customer.update({ where: { id: kh.id }, data: { debt: soTienNo } })
                 c.updated++
@@ -513,7 +536,7 @@ export async function syncMisaDebt(
                 let localId = misaId ? await findMap(sp, 'supplier', misaId) : null
                 let ncc = localId ? await sp.supplier.findUnique({ where: { id: localId } }).catch(() => null) : null
                 if (!ncc && code) ncc = await sp.supplier.findUnique({ where: { code } }).catch(() => null)
-                if (!ncc) { boQua(c, `Phải trả ${code || misaId}: chưa có NCC này bên Kengi`); continue }
+                if (!ncc) { boQua(c, `Phải trả ${code || misaId}: chưa có NCC này bên Kengi${nhacChayThu(opts)}`); continue }
                 if (Math.round(ncc.payable || 0) === soTienNo) { c.skipped++; continue }
                 if (opts.apply) await sp.supplier.update({ where: { id: ncc.id }, data: { payable: soTienNo } })
                 c.updated++

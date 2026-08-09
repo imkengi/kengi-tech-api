@@ -394,12 +394,22 @@ async function chayDongBo(
     }
 
     /**
-     * MỐC NƯỚC. Người dùng chọn "từ ngày" thì theo ngày đó; để trống thì dùng
-     * `lastSyncTime` do CHÍNH MISA trả về đợt trước (CustomData.LastSyncTime) —
-     * đồng hồ của MISA mới là chuẩn, đồng hồ máy mình lệch một nhịp là mất bản
-     * ghi. Chưa có mốc nào thì lấy TẤT CẢ (null).
+     * MỐC NGÀY CHỈ DÙNG CHO "DANH MỤC ĐÃ XOÁ" — đừng nới ra chỗ khác.
+     *
+     * Đã trả giá hai lần cho bài học này (KiotViet rồi MISA): lọc ngày lên
+     * DANH MỤC thì dữ liệu phụ thuộc gãy hết. Đợt chạy thử 09/08/2026 của
+     * HUTITAX chọn "từ 01/01/2026" và nhận: 0 kho (kho tạo lâu rồi, sau mốc
+     * không sửa gì), 128/312 đối tượng, rồi 1801 dòng tồn kho + 312 dòng công
+     * nợ "không tìm thấy mã bên Kengi" — vì chính những mã đó chưa được kéo về.
+     *
+     * Nên:
+     *   danh mục (vật tư/đối tượng/kho) → LUÔN lấy trọn bộ
+     *   tồn kho, công nợ               → là SỐ DƯ HIỆN TẠI, lấy trọn bộ; lấy
+     *                                    phần chênh thì mã không phát sinh giữ
+     *                                    số cũ sai
+     *   danh mục đã xoá                → mới đúng là thứ cần lọc theo ngày
      */
-    const lastSync = fromDate ? misaTime(fromDate) : (cfg?.lastSyncTime || null)
+    const mocXoa = fromDate ? misaTime(fromDate) : (cfg?.lastSyncTime || null)
     let mocMoi: string | null = null
     const ghiMoc = (v: string | null) => { if (v) mocMoi = v }
 
@@ -409,36 +419,33 @@ async function chayDongBo(
         await nhip('đang tải')
         try {
             if (entity === 'products') {
-                const r = await MISA.danhMuc(creds, MISA_DATA_TYPE.VAT_TU, { last_sync_time: lastSync }, pageOpts)
-                if (r.truncated) c.errors.push('Chạm trần 500 trang — thu hẹp mốc ngày rồi chạy tiếp')
+                const r = await MISA.danhMuc(creds, MISA_DATA_TYPE.VAT_TU, { last_sync_time: null }, pageOpts)
+                if (r.truncated) c.errors.push('Chạm trần 500 trang — danh mục vật tư quá lớn')
                 ghiMoc(r.lastSyncTime)
                 await syncMisaProducts(sp, r.items, opts, c)
             } else if (entity === 'partners') {
-                const r = await MISA.danhMuc(creds, MISA_DATA_TYPE.DOI_TUONG, { last_sync_time: lastSync }, pageOpts)
-                if (r.truncated) c.errors.push('Chạm trần 500 trang — thu hẹp mốc ngày rồi chạy tiếp')
+                const r = await MISA.danhMuc(creds, MISA_DATA_TYPE.DOI_TUONG, { last_sync_time: null }, pageOpts)
+                if (r.truncated) c.errors.push('Chạm trần 500 trang — danh mục đối tượng quá lớn')
                 ghiMoc(r.lastSyncTime)
                 await syncMisaPartners(sp, r.items, opts, c)
             } else if (entity === 'stocks') {
-                const r = await MISA.danhMuc(creds, MISA_DATA_TYPE.KHO, { last_sync_time: lastSync }, pageOpts)
+                const r = await MISA.danhMuc(creds, MISA_DATA_TYPE.KHO, { last_sync_time: null }, pageOpts)
                 ghiMoc(r.lastSyncTime)
                 await syncMisaWarehouses(sp, r.items, opts, c)
             } else if (entity === 'balance') {
-                const r = await MISA.tonKho(creds, { last_sync_time: lastSync }, pageOpts)
-                if (r.truncated) c.errors.push('Chạm trần 500 trang — thu hẹp mốc ngày rồi chạy tiếp')
+                const r = await MISA.tonKho(creds, { last_sync_time: null }, pageOpts)
+                if (r.truncated) c.errors.push('Chạm trần 500 trang — dữ liệu tồn kho quá lớn')
                 ghiMoc(r.lastSyncTime)
                 await syncMisaStock(sp, r.items, opts, c)
             } else if (entity === 'debtCustomer' || entity === 'debtSupplier') {
                 const loai = entity === 'debtCustomer' ? MISA_DEBT_TYPE.PHAI_THU : MISA_DEBT_TYPE.PHAI_TRA
-                // Công nợ KHÔNG lọc theo mốc nước: cần TOÀN BỘ số dư hiện tại,
-                // lấy phần chênh lệch thì những đối tượng không phát sinh sẽ giữ
-                // số cũ sai. Bài học từ KiotViet: lọc ngày lên dữ liệu danh mục.
                 const r = await MISA.congNo(creds, loai, { last_sync_time: null }, pageOpts)
                 if (r.truncated) c.errors.push('Chạm trần 500 trang — dữ liệu công nợ quá lớn')
                 await syncMisaDebt(sp, r.items, loai, opts, c)
             } else if (entity === 'deleted') {
-                // Quét từng loại danh mục Kengi có quan tâm; MISA đòi data_type
+                // Chỗ DUY NHẤT dùng mốc ngày — chỉ cần biết cái gì mới bị xoá
                 for (const dt of [MISA_DATA_TYPE.DOI_TUONG, MISA_DATA_TYPE.VAT_TU, MISA_DATA_TYPE.KHO]) {
-                    const r = await MISA.danhMucDaXoa(creds, dt, { last_sync_time: lastSync }, pageOpts)
+                    const r = await MISA.danhMucDaXoa(creds, dt, { last_sync_time: mocXoa }, pageOpts)
                     await syncMisaDeleted(sp, r.items, opts, c)
                 }
             }
