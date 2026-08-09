@@ -248,22 +248,6 @@ router.get('/:id/debt-history', authMiddleware, async (req: AuthRequest, res: Re
 
         const history: DebtHistoryItem[] = []
 
-        // Opening balance (số dư đầu kỳ) — công nợ phải trả NCC nhập tay / từ import.
-        // Coi như một khoản "phải trả" phát sinh tại thời điểm tạo NCC để running
-        // balance bên dưới cộng dồn đúng. Không tạo nếu = 0.
-        const openingPayable = (supplier as any).payable || 0
-        if (openingPayable > 0) {
-            history.push({
-                id: `${supplierId}-opening`,
-                code: 'SDĐK',
-                date: ((supplier as any).createdAt || new Date(0)).toISOString(),
-                type: 'purchase',
-                label: 'Số dư đầu kỳ',
-                amount: openingPayable,
-                balance: 0,
-            })
-        }
-
         // Process PurchaseOrders
         for (const po of purchaseOrders) {
             if (po.status === 'cancelled') continue // khớp với list (PO hủy không tính nợ)
@@ -282,7 +266,14 @@ router.get('/:id/debt-history', authMiddleware, async (req: AuthRequest, res: Re
                 history.push({
                     id: `${po.id}-pay`,
                     code: `TT-${po.code}`,
-                    date: (po.updatedAt || po.createdAt).toISOString(),
+                    /**
+                     * NGÀY CHỨNG TỪ, KHÔNG PHẢI `updatedAt`.
+                     * `updatedAt` là @updatedAt — nó nhảy theo MỌI lần ghi vào
+                     * bản ghi (sửa ghi chú, đợt đồng bộ KiotViet quét lại...),
+                     * nên cả sổ thanh toán NCC bị dồn về ngày sửa gần nhất.
+                     * Ngày đúng của khoản trả là ngày hàng về / ngày kiểm.
+                     */
+                    date: ((po as any).receivedDate || (po as any).checkedAt || po.createdAt).toISOString(),
                     type: 'payment',
                     label: 'Thanh toán PO',
                     amount: -po.totalAmount,
@@ -315,7 +306,9 @@ router.get('/:id/debt-history', authMiddleware, async (req: AuthRequest, res: Re
                 history.push({
                     id: `${ir.id}-pay`,
                     code: `TT-${ir.code}`,
-                    date: (ir.updatedAt || ir.createdAt).toISOString(),
+                    // Cùng NGÀY CHỨNG TỪ với dòng nhập hàng ở trên — không dùng
+                    // `updatedAt` (xem ghi chú ở phần thanh toán PO)
+                    date: (ir.transactionDate || ir.createdAt).toISOString(),
                     type: 'payment',
                     label: 'Thanh toán nhập hàng',
                     amount: -paid,
@@ -342,10 +335,35 @@ router.get('/:id/debt-history', authMiddleware, async (req: AuthRequest, res: Re
 
         // Sort and calculate running balance
         history.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+
+        /**
+         * SỐ DƯ ĐẦU KỲ SUY NGƯỢC — giống hệt lịch sử công nợ khách hàng.
+         *
+         * `Supplier.payable` mới là số dư có thẩm quyền (nhập tay, import, đồng
+         * bộ). Trước đây chỗ này ĐẨY THẲNG payable lên đầu rồi CỘNG TIẾP toàn bộ
+         * phát sinh — thành ra đếm hai lần và dòng cuối không bao giờ khớp số nợ
+         * thật. Lấy hiệu để phần không giải thích được nằm gọn ở một dòng.
+         */
+        const net = history.reduce((s, i) => s + i.amount, 0)
+        const openingBalance = ((supplier as any).payable || 0) - net
+        if (Math.round(openingBalance) !== 0) {
+            history.unshift({
+                id: `${supplierId}-opening`,
+                code: 'SDĐK',
+                date: history[0]?.date || ((supplier as any).createdAt || new Date(0)).toISOString(),
+                type: 'purchase',
+                label: 'Số dư đầu kỳ',
+                amount: openingBalance,
+                balance: openingBalance,
+            })
+        }
+
+        // KHÔNG kẹp về 0: số âm nghĩa là đã trả thừa cho NCC, kẹp đi là cả cột
+        // luỹ kế hiện sai (đã dính đúng lỗi này bên công nợ khách hàng)
         let runningBalance = 0
         for (const item of history) {
             runningBalance += item.amount
-            item.balance = Math.max(0, runningBalance)
+            item.balance = runningBalance
         }
 
         // Return newest first
