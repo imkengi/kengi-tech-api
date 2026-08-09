@@ -540,11 +540,15 @@ router.get('/imported-summary', async (req: Request, res: Response) => {
                       COUNT(*) FILTER (WHERE DATE("createdAt") = DATE("transactionDate"))::int AS dungNgay,
                       MIN("createdAt")::text AS somNhat, MAX("createdAt")::text AS muonNhat
                FROM "Transaction" WHERE "createdByName" = 'KiotViet Sync'`),
-            q(`SELECT COUNT(*)::int AS tong,
-                      COUNT(*) FILTER (WHERE "status" <> 'received')::int AS khongHoanThanh,
-                      COUNT(*) FILTER (WHERE DATE("createdAt") = DATE("receivedDate"))::int AS dungNgay,
-                      MIN("createdAt")::text AS somNhat, MAX("createdAt")::text AS muonNhat
-               FROM "PurchaseOrder" WHERE "notes" LIKE '%KiotViet%'`),
+            // Phiếu nhập nay nằm ở ImportReceipt (trang "Phiếu nhập hàng");
+            // vẫn đếm cả PurchaseOrder để thấy phần cũ đặt sai chỗ còn sót
+            q(`SELECT
+                 (SELECT COUNT(*) FROM "ImportReceipt" WHERE "note" LIKE '%KiotViet%')::int AS tong,
+                 (SELECT COUNT(*) FROM "ImportReceipt" WHERE "note" LIKE '%KiotViet%' AND "status" <> 'completed')::int AS khongHoanThanh,
+                 (SELECT COUNT(*) FROM "ImportReceipt" WHERE "note" LIKE '%KiotViet%' AND DATE("createdAt") = DATE("transactionDate"))::int AS dungNgay,
+                 (SELECT COUNT(*) FROM "PurchaseOrder" WHERE "notes" LIKE '%KiotViet%')::int AS conSaiBang,
+                 (SELECT MIN("createdAt")::text FROM "ImportReceipt" WHERE "note" LIKE '%KiotViet%') AS somNhat,
+                 (SELECT MAX("createdAt")::text FROM "ImportReceipt" WHERE "note" LIKE '%KiotViet%') AS muonNhat`),
             q(`SELECT COUNT(*)::int AS tong, MIN("createdAt")::text AS somNhat, MAX("createdAt")::text AS muonNhat
                FROM "ReturnOrder" WHERE "reason" LIKE '%KiotViet%'`),
             q(`SELECT COUNT(*)::int AS tong,
@@ -746,6 +750,25 @@ async function chayDon(sp: any, cfg: any, apply: boolean, logId: string, goPhieu
                  WHERE "referenceType" = 'kiotviet' AND "type" = 'in'`)
         }
 
+        // ─ 1e. Phiếu nhập nằm SAI MODULE ─
+        // Bản cũ đổ "Nhập hàng" của KiotViet vào PurchaseOrder (đơn ĐẶT hàng),
+        // trong khi trang "Phiếu nhập hàng" đọc ImportReceipt — nên trang đó
+        // trống trơn dù đã nhập hàng trăm phiếu. Xoá các bản ghi đặt sai chỗ
+        // cùng dấu vết, để lần đồng bộ Phiếu nhập sau dựng lại đúng bảng.
+        const poSaiBang: any[] = await sp.$queryRawUnsafe(
+            `SELECT COUNT(*)::int AS n FROM "PurchaseOrder" WHERE "notes" LIKE '%KiotViet%'`)
+            .catch(() => [{ n: 0 }])
+        if (apply && (poSaiBang?.[0]?.n || 0) > 0) {
+            const ids: any[] = await sp.purchaseOrder.findMany({
+                where: { notes: { contains: 'KiotViet' } }, select: { id: true },
+            }).catch(() => [])
+            for (let i = 0; i < ids.length; i += 500) {
+                const lo = ids.slice(i, i + 500).map(x => x.id)
+                await sp.purchaseOrder.deleteMany({ where: { id: { in: lo } } }).catch(() => { })
+                await sp.kiotVietMap.deleteMany({ where: { entity: 'purchaseOrder', localId: { in: lo } } }).catch(() => { })
+            }
+        }
+
         // ─ 2. Hỏi KiotViet phiếu nào KHÔNG hoàn thành rồi xoá ─
         const creds = credsOf(cfg)
         const huyHoaDon: string[] = []
@@ -810,6 +833,11 @@ async function chayDon(sp: any, cfg: any, apply: boolean, logId: string, goPhieu
                 details: JSON.stringify({
                     'sửa ngày': { layVe: suaNgayTx + suaNgayPo, taoMoi: 0, capNhat: suaNgayTx + suaNgayPo, boQua: 0, loi: 0, xong: true, mau: [{ hoaDon: suaNgayTx, phieuNhap: suaNgayPo }] },
                     'gỡ nợ ảo (khách hết nợ mà hoá đơn ghi chưa thu)': { layVe: noAo?.[0]?.n || 0, taoMoi: 0, capNhat: noAo?.[0]?.n || 0, boQua: 0, loi: 0, xong: true, mau: [{ soHoaDon: noAo?.[0]?.n || 0 }] },
+                    '⚠ gỡ phiếu nhập nằm SAI MODULE — chạy lại "Phiếu nhập hàng" sau khi dọn': {
+                        layVe: poSaiBang?.[0]?.n || 0, taoMoi: 0, capNhat: 0, boQua: poSaiBang?.[0]?.n || 0,
+                        loi: 0, xong: true,
+                        mau: [{ soPhieu: poSaiBang?.[0]?.n || 0, viecTiepTheo: 'Đồng bộ → "Phiếu nhập hàng" → khoảng ngày "Toàn bộ" → Ghi thật' }],
+                    },
                     'sửa dấu số lượng trong thẻ kho': {
                         layVe: theKhoSai?.[0]?.n || 0, taoMoi: 0, capNhat: theKhoSai?.[0]?.n || 0,
                         boQua: 0, loi: 0, xong: true, mau: [{ soDong: theKhoSai?.[0]?.n || 0 }],

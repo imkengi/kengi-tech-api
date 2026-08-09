@@ -791,12 +791,17 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
 // ─── PHIẾU NHẬP HÀNG ────────────────────────────────────────────────────────
 
 /**
- * KHÔNG CỘNG KHO (cùng lý do với hoá đơn: `onHand` bên KiotViet đã tính rồi,
- * cộng thêm lần nữa là tồn khống gấp đôi). Phiếu nhập vào đây để có lịch sử giá
- * vốn và công nợ nhà cung cấp.
+ * "Nhập hàng" của KiotViet → PHIẾU NHẬP KHO (ImportReceipt) của Kengi.
  *
- * Trạng thái đưa vào 'received' vì đây là phiếu ĐÃ HOÀN TẤT bên KiotViet — cho
- * nó đi qua cổng kiểm hàng một lần nữa là bắt nhân viên duyệt lại quá khứ.
+ * VÌ SAO KHÔNG PHẢI PurchaseOrder: Kengi tách hai module — `PurchaseOrder` là
+ * ĐƠN ĐẶT hàng nhập (có cổng kiểm hàng draft→pending→checking→received), còn
+ * `ImportReceipt` mới là PHIẾU NHẬP KHO đã hoàn tất (có giá vốn, công nợ NCC,
+ * hoá đơn VAT). `/purchaseorders` của KiotViet là chứng từ hàng ĐÃ VỀ, nên
+ * thuộc về ImportReceipt. Bản trước đổ vào PurchaseOrder nên trang "Phiếu nhập
+ * hàng" trống trơn dù đã nhập 758 phiếu (dính 09/08/2026).
+ *
+ * KHÔNG CỘNG KHO (cùng lý do với hoá đơn: `onHand` bên KiotViet đã tính rồi,
+ * cộng thêm lần nữa là tồn khống gấp đôi).
  */
 export async function syncPurchaseOrders(sp: any, items: any[], opts: SyncOptions, c: SyncCounters): Promise<void> {
     for (const kv of items) {
@@ -807,7 +812,7 @@ export async function syncPurchaseOrders(sp: any, items: any[], opts: SyncOption
             const code = String(kv?.code || '').trim()
             if (!kvId || !code) { c.skipped++; continue }
 
-            const existing = await sp.purchaseOrder.findUnique({ where: { code } }).catch(() => null)
+            const existing = await sp.importReceipt.findUnique({ where: { code } }).catch(() => null)
             if (existing) {
                 c.skipped++
                 if (opts.apply) await saveMap(sp, 'purchaseOrder', kvId, code, existing.id)
@@ -831,35 +836,62 @@ export async function syncPurchaseOrders(sp: any, items: any[], opts: SyncOption
                 kv?.supplierName || kv?.supplierCode || 'Không rõ (phiếu không gắn NCC)'
             ).slice(0, 200)
 
+            // ImportReceiptItem.productId là KHOÁ NGOẠI BẮT BUỘC → chỉ dựng được
+            // dòng cho mã đã có bên Kengi. Thiếu mã thì ghi rõ, không đẻ SP ma.
             const details: any[] = Array.isArray(kv?.purchaseOrderDetails) ? kv.purchaseOrderDetails
                 : Array.isArray(kv?.details) ? kv.details : []
-            const lines = details.map((d: any) => ({
-                productName: String(d?.productName || d?.productCode || '').slice(0, 200),
-                sku: d?.productCode ? String(d.productCode) : null,
-                quantity: Math.round(Number(d?.quantity) || 0),
-                unitPrice: Number(d?.price) || 0,
-            })).filter(l => l.productName)
+            const lines: any[] = []
+            const missing: string[] = []
+            for (const d of details) {
+                const sku = String(d?.productCode || '').trim()
+                const qty = Math.round(Number(d?.quantity) || 0)
+                const gia = Number(d?.price) || 0
+                const p = sku
+                    ? await sp.product.findUnique({ where: { sku }, select: { id: true, name: true, sku: true } }).catch(() => null)
+                    : null
+                if (!p) { if (sku) missing.push(sku); continue }
+                lines.push({
+                    productId: p.id,
+                    productName: p.name,
+                    productSku: p.sku,
+                    quantity: qty,
+                    costPrice: gia,
+                    discount: Number(d?.discount) || 0,
+                    total: Number(d?.subTotal ?? (qty * gia)) || 0,
+                })
+            }
+            if (missing.length) {
+                noteError(c, `Phiếu nhập ${code}: ${missing.length} mã hàng chưa có bên Kengi (${missing.slice(0, 3).join(', ')}) — đồng bộ Hàng hoá trước`)
+            }
 
-            const total = Number(kv?.total ?? kv?.totalPayment) || 0
+            const total = Number(kv?.total) || 0
+            const daTra = Number(kv?.totalPayment) || 0
             const when = kv?.purchaseDate ? new Date(kv.purchaseDate) : null
+            const ngay = when && !isNaN(when.getTime()) ? when : new Date()
 
             if (opts.apply) {
-                const created = await sp.purchaseOrder.create({
+                const created = await sp.importReceipt.create({
                     data: {
                         code, supplierId, supplierName,
-                        status: 'received',
-                        totalAmount: total,
-                        notes: 'Nhập từ KiotViet',
-                        receivedDate: when && !isNaN(when.getTime()) ? when : null,
-                        // Ngày chứng từ gốc, không phải ngày đồng bộ
-                        ...(when && !isNaN(when.getTime()) ? { createdAt: when } : {}),
+                        totalCost: total,
+                        totalItems: lines.reduce((s, l) => s + l.quantity, 0),
+                        status: 'completed',          // KiotViet status 3 = đã hoàn tất
+                        // Công nợ NCC suy từ số đã trả — mặc định của model là
+                        // 'paid', để nguyên là mọi phiếu nợ đều biến mất khỏi báo cáo
+                        paidAmount: daTra,
+                        paymentStatus: daTra >= total ? 'paid' : daTra > 0 ? 'partial' : 'unpaid',
+                        note: 'Nhập từ KiotViet',
+                        userId: opts.systemUserId || '',
+                        userName: 'KiotViet Sync',
+                        transactionDate: ngay,
+                        createdAt: ngay,              // ngày chứng từ gốc
                         ...(lines.length ? { items: { create: lines } } : {}),
                     },
                 })
                 await saveMap(sp, 'purchaseOrder', kvId, code, created.id)
             }
             c.created++
-            noteSample(c, { code, ncc: supplierName, tong: total, soDong: lines.length, hanhDong: 'tạo mới' })
+            noteSample(c, { code, ncc: supplierName, tong: total, daTra, soDong: lines.length, ngay: ngay.toISOString().slice(0, 10) })
         } catch (e: any) {
             noteError(c, `Phiếu nhập ${kv?.code || kv?.id}: ${e?.message || e}`)
         }
