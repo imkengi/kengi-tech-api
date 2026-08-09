@@ -7,7 +7,7 @@ import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { publishEvent } from '../lib/pubsub'
 import { createJournalEntriesForTransaction, postDebtCollectionJournal, reverseJournalEntriesForTransaction } from '../lib/autoJournal'
 import { nextCode } from '../lib/codeGenerator'
-import { getOrCreateDefaultWarehouse, updateWarehouseStock } from '../lib/warehouseHelper'
+import { getOrCreateDefaultWarehouse, updateWarehouseStock, adjustSellableStock } from '../lib/warehouseHelper'
 import { emitStockChanged, webhooksActive, emitEntityEvent } from '../lib/webhookDispatch'
 
 const router = Router()
@@ -1668,6 +1668,215 @@ router.post('/:id/revise', authMiddleware, requirePermission('pos.create_order')
         })
     } catch (err) {
         console.error('Revise transaction error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// Chuyến CHƯA ĐÓNG mới nhận thêm đơn. 'planned'/'loaded' là tên cũ, giao diện
+// gộp cả hai vào "loading" — bỏ sót là chuyến cũ không chọn được.
+const TRIP_NHAN_DON = ['loading', 'active', 'paused', 'planned', 'loaded']
+
+// ─── GET /api/transactions/:id/van-trips ────────────────────────────────────
+// Các chuyến đang mở để chọn khi chuyển đơn sang bán lưu động.
+router.get('/:id/van-trips', authMiddleware, requirePermission('transactions.convert_van'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const trips = await (prisma as any).salesTrip.findMany({
+            where: { status: { in: TRIP_NHAN_DON } },
+            select: {
+                id: true, code: true, status: true, warehouseId: true,
+                salesUserName: true, driverName: true, plannedDate: true, startedAt: true,
+                vehicle: { select: { code: true, licensePlate: true } },
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 50,
+        })
+        res.json({ success: true, data: trips })
+    } catch (err) {
+        console.error('List van trips error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+/**
+ * CHUYỂN ĐƠN THƯỜNG → ĐƠN BÁN HÀNG LƯU ĐỘNG
+ *
+ * Vì sao cần: nhân viên bán trên xe nhưng quên bật chế độ lưu động ở POS, đơn
+ * rơi vào channel 'direct'. Khi đó hàng bị trừ SAI CHỖ và chuyến đối soát thiếu.
+ *
+ * Hai đường đi kho khác hẳn nhau — đây là chỗ dễ làm sai nhất:
+ *   Đơn thường : Product.stock -= n  VÀ  kho main -= n
+ *   Chất lên xe: Product.stock -= n, kho main -= n, kho xe += n
+ *   Đơn lưu động: CHỈ kho xe -= n   (Product.stock giữ nguyên vì đã trừ lúc chất)
+ *
+ * Nên hàng bán trên xe mà ghi thành đơn thường thì tồn bán được bị trừ HAI LẦN
+ * (một lần lúc chất lên xe, một lần lúc bán) còn hàng trên xe thì vẫn nằm đó.
+ * Chuyển đơn phải làm đúng ba việc:
+ *   1. Trả n về tồn bán được (Product.stock + kho main) — gỡ lần trừ thừa
+ *   2. Trừ n trên kho xe — nơi hàng thật sự đi ra
+ *   3. Cộng vào SalesTripItem.soldQty + tổng chuyến để đối soát khớp
+ *
+ * Ghi một dòng thẻ kho 'adjustment' SỐ DƯƠNG cho khớp Product.stock vừa tăng.
+ * KHÔNG đụng dòng 'sale' cũ: đơn vẫn là một lần bán, chỉ đổi nơi xuất hàng.
+ *
+ * Một chiều duy nhất (thường → lưu động). Chưa làm chiều ngược lại.
+ */
+router.post('/:id/convert-to-van', authMiddleware, requirePermission('transactions.convert_van'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const txId = String(req.params.id)
+        const tripId = String(req.body?.tripId || '').trim()
+        if (!tripId) {
+            res.status(400).json({ success: false, error: 'Phải chọn chuyến bán hàng lưu động để gắn đơn vào' })
+            return
+        }
+
+        const transaction = await prisma.transaction.findUnique({
+            where: { id: txId },
+            include: { items: true },
+        })
+        if (!transaction) { res.status(404).json({ success: false, error: 'Không tìm thấy đơn hàng' }); return }
+        if (!canAccessBranch(req, transaction.branchId)) {
+            res.status(403).json({ success: false, error: 'Đơn thuộc chi nhánh khác' }); return
+        }
+        if ((transaction as any).channel === 'van') {
+            res.status(400).json({ success: false, error: 'Đơn này đã là đơn bán hàng lưu động' }); return
+        }
+        // Đơn đã huỷ/đã trả thì kho đã hoàn — chuyển nữa là cộng trừ lung tung
+        if (['cancelled', 'voided', 'returned'].includes(String(transaction.status))) {
+            res.status(400).json({ success: false, error: `Đơn đang ở trạng thái "${transaction.status}", không chuyển được` }); return
+        }
+        if (!transaction.items.length) {
+            res.status(400).json({ success: false, error: 'Đơn không có dòng hàng nào' }); return
+        }
+
+        const trip = await (prisma as any).salesTrip.findUnique({ where: { id: tripId } })
+        if (!trip) { res.status(404).json({ success: false, error: 'Không tìm thấy chuyến' }); return }
+        if (!TRIP_NHAN_DON.includes(String(trip.status))) {
+            res.status(400).json({
+                success: false,
+                error: `Chuyến ${trip.code} đang ở trạng thái "${trip.status}" — chỉ gắn đơn được vào chuyến chưa đóng`,
+            })
+            return
+        }
+
+        const user = await prisma.user.findUnique({ where: { id: req.user!.userId }, select: { name: true } })
+        // Bản ghi cũ chưa có baseQuantity thì lùi về quantity (xem ghi chú ở model)
+        const soLuong = (it: any) => Math.round(Number(it.baseQuantity) || Number(it.quantity) || 0)
+        const tongSoLuong = transaction.items.reduce((s, it: any) => s + soLuong(it), 0)
+
+        const ketQua = await prisma.$transaction(async (tx: any) => {
+            for (const item of transaction.items as any[]) {
+                const qty = soLuong(item)
+                if (qty <= 0) continue
+
+                // 2) Trừ kho xe TRƯỚC — thiếu hàng là hỏng cả lệnh, không đụng gì thêm
+                const dec = await tx.warehouseStock.updateMany({
+                    where: { warehouseId: trip.warehouseId, productId: item.productId, quantity: { gte: qty } },
+                    data: { quantity: { decrement: qty } },
+                })
+                if (dec.count === 0) {
+                    const row = await tx.warehouseStock.findUnique({
+                        where: { warehouseId_productId: { warehouseId: trip.warehouseId, productId: item.productId } },
+                        select: { quantity: true },
+                    })
+                    throw new Error(
+                        `"${item.productName}" chỉ còn ${row?.quantity ?? 0} trên xe (cần ${qty}). ` +
+                        `Chất thêm hàng lên chuyến ${trip.code} rồi chuyển lại.`,
+                    )
+                }
+
+                // 1) Trả về tồn bán được — gỡ lần trừ thừa của đơn thường
+                await adjustSellableStock(tx, item.productId, transaction.branchId, qty,
+                    `Chuyển đơn ${transaction.receiptNumber} sang bán lưu động`)
+
+                // Thẻ kho: SỐ CÓ DẤU + 'adjustment' theo đúng từ vựng của app
+                await tx.inventoryTransaction.create({
+                    data: {
+                        type: 'adjustment',
+                        productId: item.productId,
+                        productName: item.productName,
+                        productSku: item.sku || '',
+                        quantity: qty,
+                        reason: `Chuyển ${transaction.receiptNumber} sang bán lưu động (chuyến ${trip.code}) — hàng xuất từ kho xe`,
+                        referenceId: transaction.receiptNumber,
+                        referenceType: 'convert_van',
+                        branchId: transaction.branchId,
+                        userId: req.user!.userId,
+                        userName: user?.name || 'Admin',
+                    },
+                })
+
+                // 3) Đối soát chuyến
+                await tx.salesTripItem.upsert({
+                    where: { tripId_productId: { tripId, productId: item.productId } },
+                    update: { soldQty: { increment: qty } },
+                    create: {
+                        tripId, productId: item.productId,
+                        productName: item.productName,
+                        productSku: item.sku || null,
+                        loadedQty: 0, soldQty: qty,
+                        unitPrice: item.unitPrice || 0,
+                    },
+                })
+            }
+
+            await tx.salesTrip.update({
+                where: { id: tripId },
+                data: {
+                    totalSold: { increment: tongSoLuong },
+                    totalRevenue: { increment: transaction.total || 0 },
+                },
+            })
+
+            await tx.salesTripLog.create({
+                data: {
+                    tripId, action: 'sale',
+                    notes: `Chuyển đơn ${transaction.receiptNumber} sang chuyến (${tongSoLuong} sp, ${Math.round(transaction.total || 0).toLocaleString('vi-VN')}đ)`,
+                    userId: req.user!.userId,
+                    userName: user?.name || 'Admin',
+                    metadata: JSON.stringify({
+                        transactionId: txId,
+                        receiptNumber: transaction.receiptNumber,
+                        total: transaction.total,
+                        items: transaction.items.map((i: any) => ({ sku: i.sku, qty: soLuong(i) })),
+                    }),
+                },
+            })
+
+            return tx.transaction.update({
+                where: { id: txId },
+                data: { channel: 'van' },
+                include: { items: true },
+            })
+        })
+
+        await prisma.auditLog.create({
+            data: {
+                userId: req.user!.userId,
+                userName: user?.name || 'Admin',
+                action: 'convert_to_van',
+                entity: 'transaction',
+                entityId: txId,
+                details: `Chuyển đơn ${transaction.receiptNumber} sang bán lưu động — chuyến ${trip.code}`,
+            },
+        }).catch(() => { /* nhật ký hỏng không được giết nghiệp vụ */ })
+
+        cacheDel(`${req.user?.storeSchema || 'default'}:*:transactions:*`).catch(() => { })
+
+        res.json({
+            success: true,
+            data: ketQua,
+            message: `Đã chuyển ${transaction.receiptNumber} sang chuyến ${trip.code}`,
+        })
+    } catch (err: any) {
+        console.error('Convert to van sale error:', err)
+        // Lỗi nghiệp vụ (thiếu hàng trên xe) phải đọc được, không nuốt thành 500 câm
+        const msg = String(err?.message || '')
+        if (/trên xe|chuyến/i.test(msg)) {
+            res.status(409).json({ success: false, error: msg.slice(0, 300) })
+            return
+        }
         res.status(500).json({ success: false, error: 'Internal server error' })
     }
 })
