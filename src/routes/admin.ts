@@ -1551,6 +1551,70 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "KiotVietSyncLog_status_idx" ON "KiotVietSyncLog"("status")`)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "KiotVietSyncLog_startedAt_idx" ON "KiotVietSyncLog"("startedAt")`)
 
+                // ─── Cổng đồng bộ MISA AMIS ────────────────────────────────
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "MisaConfig" (
+                        "id" TEXT NOT NULL DEFAULT 'default',
+                        "appId" TEXT NOT NULL,
+                        "accessCode" TEXT NOT NULL,
+                        "orgCompanyCode" TEXT NOT NULL,
+                        "baseUrl" TEXT,
+                        "enabled" BOOLEAN NOT NULL DEFAULT false,
+                        "syncProducts" BOOLEAN NOT NULL DEFAULT true,
+                        "syncPartners" BOOLEAN NOT NULL DEFAULT true,
+                        "syncStocks" BOOLEAN NOT NULL DEFAULT true,
+                        "syncBalance" BOOLEAN NOT NULL DEFAULT false,
+                        "overwriteNames" BOOLEAN NOT NULL DEFAULT false,
+                        "overwritePrices" BOOLEAN NOT NULL DEFAULT false,
+                        "overwriteStock" BOOLEAN NOT NULL DEFAULT false,
+                        "defaultCategoryId" TEXT,
+                        "defaultWarehouseId" TEXT,
+                        "lastSyncAt" TIMESTAMP(3),
+                        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "MisaConfig_pkey" PRIMARY KEY ("id")
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "MisaMap" (
+                        "id" TEXT NOT NULL,
+                        "entity" TEXT NOT NULL,
+                        "misaId" TEXT NOT NULL,
+                        "misaCode" TEXT,
+                        "localId" TEXT NOT NULL,
+                        "syncedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "MisaMap_pkey" PRIMARY KEY ("id")
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "MisaMap_entity_misaId_key" ON "MisaMap"("entity", "misaId")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MisaMap_entity_localId_idx" ON "MisaMap"("entity", "localId")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MisaMap_misaCode_idx" ON "MisaMap"("misaCode")`)
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "MisaSyncLog" (
+                        "id" TEXT NOT NULL,
+                        "entity" TEXT NOT NULL,
+                        "mode" TEXT NOT NULL DEFAULT 'manual',
+                        "dryRun" BOOLEAN NOT NULL DEFAULT false,
+                        "fromDate" TIMESTAMP(3),
+                        "fetched" INTEGER NOT NULL DEFAULT 0,
+                        "created" INTEGER NOT NULL DEFAULT 0,
+                        "updated" INTEGER NOT NULL DEFAULT 0,
+                        "skipped" INTEGER NOT NULL DEFAULT 0,
+                        "failed" INTEGER NOT NULL DEFAULT 0,
+                        "status" TEXT NOT NULL DEFAULT 'running',
+                        "errors" TEXT,
+                        "details" TEXT,
+                        "startedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        "heartbeatAt" TIMESTAMP(3),
+                        "attempts" INTEGER NOT NULL DEFAULT 0,
+                        "finishedAt" TIMESTAMP(3),
+                        CONSTRAINT "MisaSyncLog_pkey" PRIMARY KEY ("id")
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MisaSyncLog_mode_idx" ON "MisaSyncLog"("mode")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MisaSyncLog_status_idx" ON "MisaSyncLog"("status")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MisaSyncLog_startedAt_idx" ON "MisaSyncLog"("startedAt")`)
+
                 storeResults.push(`${store.name}: OK`)
             } catch (e: any) {
                 storeResults.push(`${store.name}: ${e.message}`)

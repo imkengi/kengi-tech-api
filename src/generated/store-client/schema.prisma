@@ -2983,3 +2983,71 @@ model KiotVietSyncLog {
   @@index([status])
   @@index([startedAt])
 }
+
+// ─── Cổng đồng bộ MISA AMIS Kế toán ────────────────────────────────────────
+// Kéo DANH MỤC (đối tượng, vật tư, kho, ĐVT) và TỒN KHO từ MISA ACT Open API.
+// Chứng từ KHÔNG kéo được — MISA chỉ có hàm đẩy lên (xem services/misa.ts).
+
+model MisaConfig {
+  id             String  @id @default("default")
+  appId          String
+  accessCode     String
+  orgCompanyCode String
+  baseUrl        String? // để trống = https://actapp.misa.vn
+
+  enabled      Boolean @default(false)
+  syncProducts Boolean @default(true)
+  syncPartners Boolean @default(true) // khách hàng + NCC (MISA gộp chung)
+  syncStocks   Boolean @default(true) // danh mục kho
+  syncBalance  Boolean @default(false) // tồn kho — đụng tồn thật nên mặc định TẮT
+
+  overwriteNames  Boolean @default(false)
+  overwritePrices Boolean @default(false)
+  overwriteStock  Boolean @default(false)
+
+  defaultCategoryId  String?
+  defaultWarehouseId String?
+
+  lastSyncAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+model MisaMap {
+  id       String   @id @default(cuid())
+  entity   String // product | customer | supplier | warehouse
+  misaId   String
+  misaCode String?
+  localId  String
+  syncedAt DateTime @default(now())
+
+  @@unique([entity, misaId])
+  @@index([entity, localId])
+  @@index([misaCode])
+}
+
+model MisaSyncLog {
+  id       String    @id @default(cuid())
+  entity   String
+  mode     String    @default("manual")
+  dryRun   Boolean   @default(false)
+  fromDate DateTime?
+
+  fetched Int @default(0)
+  created Int @default(0)
+  updated Int @default(0)
+  skipped Int @default(0)
+  failed  Int @default(0)
+
+  status      String    @default("running")
+  errors      String?
+  details     String?
+  startedAt   DateTime  @default(now())
+  heartbeatAt DateTime?
+  attempts    Int       @default(0)
+  finishedAt  DateTime?
+
+  @@index([mode])
+  @@index([status])
+  @@index([startedAt])
+}

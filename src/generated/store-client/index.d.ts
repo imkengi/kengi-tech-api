@@ -641,6 +641,21 @@ export type KiotVietMap = $Result.DefaultSelection<Prisma.$KiotVietMapPayload>
  * 
  */
 export type KiotVietSyncLog = $Result.DefaultSelection<Prisma.$KiotVietSyncLogPayload>
+/**
+ * Model MisaConfig
+ * 
+ */
+export type MisaConfig = $Result.DefaultSelection<Prisma.$MisaConfigPayload>
+/**
+ * Model MisaMap
+ * 
+ */
+export type MisaMap = $Result.DefaultSelection<Prisma.$MisaMapPayload>
+/**
+ * Model MisaSyncLog
+ * 
+ */
+export type MisaSyncLog = $Result.DefaultSelection<Prisma.$MisaSyncLogPayload>
 
 /**
  * ##  Prisma Client ʲˢ
@@ -2009,6 +2024,36 @@ export class PrismaClient<
     * ```
     */
   get kiotVietSyncLog(): Prisma.KiotVietSyncLogDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.misaConfig`: Exposes CRUD operations for the **MisaConfig** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more MisaConfigs
+    * const misaConfigs = await prisma.misaConfig.findMany()
+    * ```
+    */
+  get misaConfig(): Prisma.MisaConfigDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.misaMap`: Exposes CRUD operations for the **MisaMap** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more MisaMaps
+    * const misaMaps = await prisma.misaMap.findMany()
+    * ```
+    */
+  get misaMap(): Prisma.MisaMapDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.misaSyncLog`: Exposes CRUD operations for the **MisaSyncLog** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more MisaSyncLogs
+    * const misaSyncLogs = await prisma.misaSyncLog.findMany()
+    * ```
+    */
+  get misaSyncLog(): Prisma.MisaSyncLogDelegate<ExtArgs, ClientOptions>;
 }
 
 export namespace Prisma {
@@ -2574,7 +2619,10 @@ export namespace Prisma {
     AiAgentRun: 'AiAgentRun',
     KiotVietConfig: 'KiotVietConfig',
     KiotVietMap: 'KiotVietMap',
-    KiotVietSyncLog: 'KiotVietSyncLog'
+    KiotVietSyncLog: 'KiotVietSyncLog',
+    MisaConfig: 'MisaConfig',
+    MisaMap: 'MisaMap',
+    MisaSyncLog: 'MisaSyncLog'
   };
 
   export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -2593,7 +2641,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "branch" | "user" | "apiKey" | "webhookEndpoint" | "webhookDelivery" | "salesCheckin" | "category" | "brand" | "product" | "productSerial" | "unitConversion" | "productImage" | "customerGroup" | "customer" | "transaction" | "transactionItem" | "payment" | "inventoryTransaction" | "importReceipt" | "importReceiptItem" | "promotion" | "supplier" | "purchaseOrder" | "purchaseOrderItem" | "expense" | "cashReceipt" | "notification" | "warranty" | "repair" | "quotation" | "auditLog" | "priceHistory" | "shippingOrder" | "driver" | "vehicle" | "vehicleMaintenance" | "crmEmailLog" | "vehicleFuelLog" | "vehicleDocument" | "deliveryRoute" | "deliveryStop" | "taxConfig" | "bankAccount" | "bankTransaction" | "bankConnectionConfig" | "taxDeclaration" | "customerSegment" | "currency" | "feedback" | "schedule" | "returnOrder" | "returnItem" | "debtEntry" | "bundle" | "salesOrder" | "salesOrderItem" | "priceList" | "priceListItem" | "priceRule" | "announcement" | "attendance" | "loyaltyMember" | "loyaltyTransaction" | "review" | "skuMapping" | "hkdRevenueEntry" | "storeSettings" | "store" | "branchRequest" | "branchDeleteRequest" | "payrollRecord" | "employee" | "payrollPeriod" | "payrollEntry" | "onlineChannel" | "onlineOrder" | "onlineProduct" | "onlineOrderItem" | "syncLog" | "journalEntry" | "fixedAsset" | "depreciationEntry" | "cCDC" | "cCDCAllocation" | "eInvoiceConfig" | "eInvoice" | "eInvoiceItem" | "adjustmentInvoice" | "adjustmentInvoiceItem" | "hKDRevenueEntry" | "warehouse" | "warehouseStock" | "stockTransfer" | "stockTransferItem" | "salesTrip" | "salesTripItem" | "salesTripLog" | "inventoryCount" | "inventoryCountItem" | "zReport" | "storageFile" | "chartOfAccount" | "periodLock" | "exchangeRate" | "taxDeadline" | "taxAuditLog" | "taxBudget" | "fbUserToken" | "fbPage" | "fbScheduledPost" | "fbCommentRule" | "fbAutoReplyLog" | "fbBrandProfile" | "fbContentPlan" | "fbContentDraft" | "crmTask" | "crmDeal" | "crmActivity" | "crmZaloLog" | "crmCampaign" | "aiAgentJob" | "aiAgentRun" | "kiotVietConfig" | "kiotVietMap" | "kiotVietSyncLog"
+      modelProps: "branch" | "user" | "apiKey" | "webhookEndpoint" | "webhookDelivery" | "salesCheckin" | "category" | "brand" | "product" | "productSerial" | "unitConversion" | "productImage" | "customerGroup" | "customer" | "transaction" | "transactionItem" | "payment" | "inventoryTransaction" | "importReceipt" | "importReceiptItem" | "promotion" | "supplier" | "purchaseOrder" | "purchaseOrderItem" | "expense" | "cashReceipt" | "notification" | "warranty" | "repair" | "quotation" | "auditLog" | "priceHistory" | "shippingOrder" | "driver" | "vehicle" | "vehicleMaintenance" | "crmEmailLog" | "vehicleFuelLog" | "vehicleDocument" | "deliveryRoute" | "deliveryStop" | "taxConfig" | "bankAccount" | "bankTransaction" | "bankConnectionConfig" | "taxDeclaration" | "customerSegment" | "currency" | "feedback" | "schedule" | "returnOrder" | "returnItem" | "debtEntry" | "bundle" | "salesOrder" | "salesOrderItem" | "priceList" | "priceListItem" | "priceRule" | "announcement" | "attendance" | "loyaltyMember" | "loyaltyTransaction" | "review" | "skuMapping" | "hkdRevenueEntry" | "storeSettings" | "store" | "branchRequest" | "branchDeleteRequest" | "payrollRecord" | "employee" | "payrollPeriod" | "payrollEntry" | "onlineChannel" | "onlineOrder" | "onlineProduct" | "onlineOrderItem" | "syncLog" | "journalEntry" | "fixedAsset" | "depreciationEntry" | "cCDC" | "cCDCAllocation" | "eInvoiceConfig" | "eInvoice" | "eInvoiceItem" | "adjustmentInvoice" | "adjustmentInvoiceItem" | "hKDRevenueEntry" | "warehouse" | "warehouseStock" | "stockTransfer" | "stockTransferItem" | "salesTrip" | "salesTripItem" | "salesTripLog" | "inventoryCount" | "inventoryCountItem" | "zReport" | "storageFile" | "chartOfAccount" | "periodLock" | "exchangeRate" | "taxDeadline" | "taxAuditLog" | "taxBudget" | "fbUserToken" | "fbPage" | "fbScheduledPost" | "fbCommentRule" | "fbAutoReplyLog" | "fbBrandProfile" | "fbContentPlan" | "fbContentDraft" | "crmTask" | "crmDeal" | "crmActivity" | "crmZaloLog" | "crmCampaign" | "aiAgentJob" | "aiAgentRun" | "kiotVietConfig" | "kiotVietMap" | "kiotVietSyncLog" | "misaConfig" | "misaMap" | "misaSyncLog"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -11847,6 +11895,228 @@ export namespace Prisma {
           }
         }
       }
+      MisaConfig: {
+        payload: Prisma.$MisaConfigPayload<ExtArgs>
+        fields: Prisma.MisaConfigFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.MisaConfigFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaConfigPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.MisaConfigFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaConfigPayload>
+          }
+          findFirst: {
+            args: Prisma.MisaConfigFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaConfigPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.MisaConfigFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaConfigPayload>
+          }
+          findMany: {
+            args: Prisma.MisaConfigFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaConfigPayload>[]
+          }
+          create: {
+            args: Prisma.MisaConfigCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaConfigPayload>
+          }
+          createMany: {
+            args: Prisma.MisaConfigCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.MisaConfigCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaConfigPayload>[]
+          }
+          delete: {
+            args: Prisma.MisaConfigDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaConfigPayload>
+          }
+          update: {
+            args: Prisma.MisaConfigUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaConfigPayload>
+          }
+          deleteMany: {
+            args: Prisma.MisaConfigDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.MisaConfigUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.MisaConfigUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaConfigPayload>[]
+          }
+          upsert: {
+            args: Prisma.MisaConfigUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaConfigPayload>
+          }
+          aggregate: {
+            args: Prisma.MisaConfigAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateMisaConfig>
+          }
+          groupBy: {
+            args: Prisma.MisaConfigGroupByArgs<ExtArgs>
+            result: $Utils.Optional<MisaConfigGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.MisaConfigCountArgs<ExtArgs>
+            result: $Utils.Optional<MisaConfigCountAggregateOutputType> | number
+          }
+        }
+      }
+      MisaMap: {
+        payload: Prisma.$MisaMapPayload<ExtArgs>
+        fields: Prisma.MisaMapFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.MisaMapFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaMapPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.MisaMapFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaMapPayload>
+          }
+          findFirst: {
+            args: Prisma.MisaMapFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaMapPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.MisaMapFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaMapPayload>
+          }
+          findMany: {
+            args: Prisma.MisaMapFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaMapPayload>[]
+          }
+          create: {
+            args: Prisma.MisaMapCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaMapPayload>
+          }
+          createMany: {
+            args: Prisma.MisaMapCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.MisaMapCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaMapPayload>[]
+          }
+          delete: {
+            args: Prisma.MisaMapDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaMapPayload>
+          }
+          update: {
+            args: Prisma.MisaMapUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaMapPayload>
+          }
+          deleteMany: {
+            args: Prisma.MisaMapDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.MisaMapUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.MisaMapUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaMapPayload>[]
+          }
+          upsert: {
+            args: Prisma.MisaMapUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaMapPayload>
+          }
+          aggregate: {
+            args: Prisma.MisaMapAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateMisaMap>
+          }
+          groupBy: {
+            args: Prisma.MisaMapGroupByArgs<ExtArgs>
+            result: $Utils.Optional<MisaMapGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.MisaMapCountArgs<ExtArgs>
+            result: $Utils.Optional<MisaMapCountAggregateOutputType> | number
+          }
+        }
+      }
+      MisaSyncLog: {
+        payload: Prisma.$MisaSyncLogPayload<ExtArgs>
+        fields: Prisma.MisaSyncLogFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.MisaSyncLogFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaSyncLogPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.MisaSyncLogFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaSyncLogPayload>
+          }
+          findFirst: {
+            args: Prisma.MisaSyncLogFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaSyncLogPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.MisaSyncLogFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaSyncLogPayload>
+          }
+          findMany: {
+            args: Prisma.MisaSyncLogFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaSyncLogPayload>[]
+          }
+          create: {
+            args: Prisma.MisaSyncLogCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaSyncLogPayload>
+          }
+          createMany: {
+            args: Prisma.MisaSyncLogCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.MisaSyncLogCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaSyncLogPayload>[]
+          }
+          delete: {
+            args: Prisma.MisaSyncLogDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaSyncLogPayload>
+          }
+          update: {
+            args: Prisma.MisaSyncLogUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaSyncLogPayload>
+          }
+          deleteMany: {
+            args: Prisma.MisaSyncLogDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.MisaSyncLogUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.MisaSyncLogUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaSyncLogPayload>[]
+          }
+          upsert: {
+            args: Prisma.MisaSyncLogUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaSyncLogPayload>
+          }
+          aggregate: {
+            args: Prisma.MisaSyncLogAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateMisaSyncLog>
+          }
+          groupBy: {
+            args: Prisma.MisaSyncLogGroupByArgs<ExtArgs>
+            result: $Utils.Optional<MisaSyncLogGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.MisaSyncLogCountArgs<ExtArgs>
+            result: $Utils.Optional<MisaSyncLogCountAggregateOutputType> | number
+          }
+        }
+      }
     }
   } & {
     other: {
@@ -12068,6 +12338,9 @@ export namespace Prisma {
     kiotVietConfig?: KiotVietConfigOmit
     kiotVietMap?: KiotVietMapOmit
     kiotVietSyncLog?: KiotVietSyncLogOmit
+    misaConfig?: MisaConfigOmit
+    misaMap?: MisaMapOmit
+    misaSyncLog?: MisaSyncLogOmit
   }
 
   /* Types for Logging */
@@ -162814,6 +163087,3383 @@ export namespace Prisma {
 
 
   /**
+   * Model MisaConfig
+   */
+
+  export type AggregateMisaConfig = {
+    _count: MisaConfigCountAggregateOutputType | null
+    _min: MisaConfigMinAggregateOutputType | null
+    _max: MisaConfigMaxAggregateOutputType | null
+  }
+
+  export type MisaConfigMinAggregateOutputType = {
+    id: string | null
+    appId: string | null
+    accessCode: string | null
+    orgCompanyCode: string | null
+    baseUrl: string | null
+    enabled: boolean | null
+    syncProducts: boolean | null
+    syncPartners: boolean | null
+    syncStocks: boolean | null
+    syncBalance: boolean | null
+    overwriteNames: boolean | null
+    overwritePrices: boolean | null
+    overwriteStock: boolean | null
+    defaultCategoryId: string | null
+    defaultWarehouseId: string | null
+    lastSyncAt: Date | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type MisaConfigMaxAggregateOutputType = {
+    id: string | null
+    appId: string | null
+    accessCode: string | null
+    orgCompanyCode: string | null
+    baseUrl: string | null
+    enabled: boolean | null
+    syncProducts: boolean | null
+    syncPartners: boolean | null
+    syncStocks: boolean | null
+    syncBalance: boolean | null
+    overwriteNames: boolean | null
+    overwritePrices: boolean | null
+    overwriteStock: boolean | null
+    defaultCategoryId: string | null
+    defaultWarehouseId: string | null
+    lastSyncAt: Date | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type MisaConfigCountAggregateOutputType = {
+    id: number
+    appId: number
+    accessCode: number
+    orgCompanyCode: number
+    baseUrl: number
+    enabled: number
+    syncProducts: number
+    syncPartners: number
+    syncStocks: number
+    syncBalance: number
+    overwriteNames: number
+    overwritePrices: number
+    overwriteStock: number
+    defaultCategoryId: number
+    defaultWarehouseId: number
+    lastSyncAt: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type MisaConfigMinAggregateInputType = {
+    id?: true
+    appId?: true
+    accessCode?: true
+    orgCompanyCode?: true
+    baseUrl?: true
+    enabled?: true
+    syncProducts?: true
+    syncPartners?: true
+    syncStocks?: true
+    syncBalance?: true
+    overwriteNames?: true
+    overwritePrices?: true
+    overwriteStock?: true
+    defaultCategoryId?: true
+    defaultWarehouseId?: true
+    lastSyncAt?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type MisaConfigMaxAggregateInputType = {
+    id?: true
+    appId?: true
+    accessCode?: true
+    orgCompanyCode?: true
+    baseUrl?: true
+    enabled?: true
+    syncProducts?: true
+    syncPartners?: true
+    syncStocks?: true
+    syncBalance?: true
+    overwriteNames?: true
+    overwritePrices?: true
+    overwriteStock?: true
+    defaultCategoryId?: true
+    defaultWarehouseId?: true
+    lastSyncAt?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type MisaConfigCountAggregateInputType = {
+    id?: true
+    appId?: true
+    accessCode?: true
+    orgCompanyCode?: true
+    baseUrl?: true
+    enabled?: true
+    syncProducts?: true
+    syncPartners?: true
+    syncStocks?: true
+    syncBalance?: true
+    overwriteNames?: true
+    overwritePrices?: true
+    overwriteStock?: true
+    defaultCategoryId?: true
+    defaultWarehouseId?: true
+    lastSyncAt?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type MisaConfigAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MisaConfig to aggregate.
+     */
+    where?: MisaConfigWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaConfigs to fetch.
+     */
+    orderBy?: MisaConfigOrderByWithRelationInput | MisaConfigOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: MisaConfigWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaConfigs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaConfigs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned MisaConfigs
+    **/
+    _count?: true | MisaConfigCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: MisaConfigMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: MisaConfigMaxAggregateInputType
+  }
+
+  export type GetMisaConfigAggregateType<T extends MisaConfigAggregateArgs> = {
+        [P in keyof T & keyof AggregateMisaConfig]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateMisaConfig[P]>
+      : GetScalarType<T[P], AggregateMisaConfig[P]>
+  }
+
+
+
+
+  export type MisaConfigGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: MisaConfigWhereInput
+    orderBy?: MisaConfigOrderByWithAggregationInput | MisaConfigOrderByWithAggregationInput[]
+    by: MisaConfigScalarFieldEnum[] | MisaConfigScalarFieldEnum
+    having?: MisaConfigScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: MisaConfigCountAggregateInputType | true
+    _min?: MisaConfigMinAggregateInputType
+    _max?: MisaConfigMaxAggregateInputType
+  }
+
+  export type MisaConfigGroupByOutputType = {
+    id: string
+    appId: string
+    accessCode: string
+    orgCompanyCode: string
+    baseUrl: string | null
+    enabled: boolean
+    syncProducts: boolean
+    syncPartners: boolean
+    syncStocks: boolean
+    syncBalance: boolean
+    overwriteNames: boolean
+    overwritePrices: boolean
+    overwriteStock: boolean
+    defaultCategoryId: string | null
+    defaultWarehouseId: string | null
+    lastSyncAt: Date | null
+    createdAt: Date
+    updatedAt: Date
+    _count: MisaConfigCountAggregateOutputType | null
+    _min: MisaConfigMinAggregateOutputType | null
+    _max: MisaConfigMaxAggregateOutputType | null
+  }
+
+  type GetMisaConfigGroupByPayload<T extends MisaConfigGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<MisaConfigGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof MisaConfigGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], MisaConfigGroupByOutputType[P]>
+            : GetScalarType<T[P], MisaConfigGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type MisaConfigSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    appId?: boolean
+    accessCode?: boolean
+    orgCompanyCode?: boolean
+    baseUrl?: boolean
+    enabled?: boolean
+    syncProducts?: boolean
+    syncPartners?: boolean
+    syncStocks?: boolean
+    syncBalance?: boolean
+    overwriteNames?: boolean
+    overwritePrices?: boolean
+    overwriteStock?: boolean
+    defaultCategoryId?: boolean
+    defaultWarehouseId?: boolean
+    lastSyncAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["misaConfig"]>
+
+  export type MisaConfigSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    appId?: boolean
+    accessCode?: boolean
+    orgCompanyCode?: boolean
+    baseUrl?: boolean
+    enabled?: boolean
+    syncProducts?: boolean
+    syncPartners?: boolean
+    syncStocks?: boolean
+    syncBalance?: boolean
+    overwriteNames?: boolean
+    overwritePrices?: boolean
+    overwriteStock?: boolean
+    defaultCategoryId?: boolean
+    defaultWarehouseId?: boolean
+    lastSyncAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["misaConfig"]>
+
+  export type MisaConfigSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    appId?: boolean
+    accessCode?: boolean
+    orgCompanyCode?: boolean
+    baseUrl?: boolean
+    enabled?: boolean
+    syncProducts?: boolean
+    syncPartners?: boolean
+    syncStocks?: boolean
+    syncBalance?: boolean
+    overwriteNames?: boolean
+    overwritePrices?: boolean
+    overwriteStock?: boolean
+    defaultCategoryId?: boolean
+    defaultWarehouseId?: boolean
+    lastSyncAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["misaConfig"]>
+
+  export type MisaConfigSelectScalar = {
+    id?: boolean
+    appId?: boolean
+    accessCode?: boolean
+    orgCompanyCode?: boolean
+    baseUrl?: boolean
+    enabled?: boolean
+    syncProducts?: boolean
+    syncPartners?: boolean
+    syncStocks?: boolean
+    syncBalance?: boolean
+    overwriteNames?: boolean
+    overwritePrices?: boolean
+    overwriteStock?: boolean
+    defaultCategoryId?: boolean
+    defaultWarehouseId?: boolean
+    lastSyncAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type MisaConfigOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "appId" | "accessCode" | "orgCompanyCode" | "baseUrl" | "enabled" | "syncProducts" | "syncPartners" | "syncStocks" | "syncBalance" | "overwriteNames" | "overwritePrices" | "overwriteStock" | "defaultCategoryId" | "defaultWarehouseId" | "lastSyncAt" | "createdAt" | "updatedAt", ExtArgs["result"]["misaConfig"]>
+
+  export type $MisaConfigPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "MisaConfig"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      appId: string
+      accessCode: string
+      orgCompanyCode: string
+      baseUrl: string | null
+      enabled: boolean
+      syncProducts: boolean
+      syncPartners: boolean
+      syncStocks: boolean
+      syncBalance: boolean
+      overwriteNames: boolean
+      overwritePrices: boolean
+      overwriteStock: boolean
+      defaultCategoryId: string | null
+      defaultWarehouseId: string | null
+      lastSyncAt: Date | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["misaConfig"]>
+    composites: {}
+  }
+
+  type MisaConfigGetPayload<S extends boolean | null | undefined | MisaConfigDefaultArgs> = $Result.GetResult<Prisma.$MisaConfigPayload, S>
+
+  type MisaConfigCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<MisaConfigFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: MisaConfigCountAggregateInputType | true
+    }
+
+  export interface MisaConfigDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['MisaConfig'], meta: { name: 'MisaConfig' } }
+    /**
+     * Find zero or one MisaConfig that matches the filter.
+     * @param {MisaConfigFindUniqueArgs} args - Arguments to find a MisaConfig
+     * @example
+     * // Get one MisaConfig
+     * const misaConfig = await prisma.misaConfig.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends MisaConfigFindUniqueArgs>(args: SelectSubset<T, MisaConfigFindUniqueArgs<ExtArgs>>): Prisma__MisaConfigClient<$Result.GetResult<Prisma.$MisaConfigPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one MisaConfig that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {MisaConfigFindUniqueOrThrowArgs} args - Arguments to find a MisaConfig
+     * @example
+     * // Get one MisaConfig
+     * const misaConfig = await prisma.misaConfig.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends MisaConfigFindUniqueOrThrowArgs>(args: SelectSubset<T, MisaConfigFindUniqueOrThrowArgs<ExtArgs>>): Prisma__MisaConfigClient<$Result.GetResult<Prisma.$MisaConfigPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first MisaConfig that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaConfigFindFirstArgs} args - Arguments to find a MisaConfig
+     * @example
+     * // Get one MisaConfig
+     * const misaConfig = await prisma.misaConfig.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends MisaConfigFindFirstArgs>(args?: SelectSubset<T, MisaConfigFindFirstArgs<ExtArgs>>): Prisma__MisaConfigClient<$Result.GetResult<Prisma.$MisaConfigPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first MisaConfig that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaConfigFindFirstOrThrowArgs} args - Arguments to find a MisaConfig
+     * @example
+     * // Get one MisaConfig
+     * const misaConfig = await prisma.misaConfig.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends MisaConfigFindFirstOrThrowArgs>(args?: SelectSubset<T, MisaConfigFindFirstOrThrowArgs<ExtArgs>>): Prisma__MisaConfigClient<$Result.GetResult<Prisma.$MisaConfigPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more MisaConfigs that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaConfigFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all MisaConfigs
+     * const misaConfigs = await prisma.misaConfig.findMany()
+     * 
+     * // Get first 10 MisaConfigs
+     * const misaConfigs = await prisma.misaConfig.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const misaConfigWithIdOnly = await prisma.misaConfig.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends MisaConfigFindManyArgs>(args?: SelectSubset<T, MisaConfigFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MisaConfigPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a MisaConfig.
+     * @param {MisaConfigCreateArgs} args - Arguments to create a MisaConfig.
+     * @example
+     * // Create one MisaConfig
+     * const MisaConfig = await prisma.misaConfig.create({
+     *   data: {
+     *     // ... data to create a MisaConfig
+     *   }
+     * })
+     * 
+     */
+    create<T extends MisaConfigCreateArgs>(args: SelectSubset<T, MisaConfigCreateArgs<ExtArgs>>): Prisma__MisaConfigClient<$Result.GetResult<Prisma.$MisaConfigPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many MisaConfigs.
+     * @param {MisaConfigCreateManyArgs} args - Arguments to create many MisaConfigs.
+     * @example
+     * // Create many MisaConfigs
+     * const misaConfig = await prisma.misaConfig.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends MisaConfigCreateManyArgs>(args?: SelectSubset<T, MisaConfigCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many MisaConfigs and returns the data saved in the database.
+     * @param {MisaConfigCreateManyAndReturnArgs} args - Arguments to create many MisaConfigs.
+     * @example
+     * // Create many MisaConfigs
+     * const misaConfig = await prisma.misaConfig.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many MisaConfigs and only return the `id`
+     * const misaConfigWithIdOnly = await prisma.misaConfig.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends MisaConfigCreateManyAndReturnArgs>(args?: SelectSubset<T, MisaConfigCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MisaConfigPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a MisaConfig.
+     * @param {MisaConfigDeleteArgs} args - Arguments to delete one MisaConfig.
+     * @example
+     * // Delete one MisaConfig
+     * const MisaConfig = await prisma.misaConfig.delete({
+     *   where: {
+     *     // ... filter to delete one MisaConfig
+     *   }
+     * })
+     * 
+     */
+    delete<T extends MisaConfigDeleteArgs>(args: SelectSubset<T, MisaConfigDeleteArgs<ExtArgs>>): Prisma__MisaConfigClient<$Result.GetResult<Prisma.$MisaConfigPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one MisaConfig.
+     * @param {MisaConfigUpdateArgs} args - Arguments to update one MisaConfig.
+     * @example
+     * // Update one MisaConfig
+     * const misaConfig = await prisma.misaConfig.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends MisaConfigUpdateArgs>(args: SelectSubset<T, MisaConfigUpdateArgs<ExtArgs>>): Prisma__MisaConfigClient<$Result.GetResult<Prisma.$MisaConfigPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more MisaConfigs.
+     * @param {MisaConfigDeleteManyArgs} args - Arguments to filter MisaConfigs to delete.
+     * @example
+     * // Delete a few MisaConfigs
+     * const { count } = await prisma.misaConfig.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends MisaConfigDeleteManyArgs>(args?: SelectSubset<T, MisaConfigDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more MisaConfigs.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaConfigUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many MisaConfigs
+     * const misaConfig = await prisma.misaConfig.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends MisaConfigUpdateManyArgs>(args: SelectSubset<T, MisaConfigUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more MisaConfigs and returns the data updated in the database.
+     * @param {MisaConfigUpdateManyAndReturnArgs} args - Arguments to update many MisaConfigs.
+     * @example
+     * // Update many MisaConfigs
+     * const misaConfig = await prisma.misaConfig.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more MisaConfigs and only return the `id`
+     * const misaConfigWithIdOnly = await prisma.misaConfig.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends MisaConfigUpdateManyAndReturnArgs>(args: SelectSubset<T, MisaConfigUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MisaConfigPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one MisaConfig.
+     * @param {MisaConfigUpsertArgs} args - Arguments to update or create a MisaConfig.
+     * @example
+     * // Update or create a MisaConfig
+     * const misaConfig = await prisma.misaConfig.upsert({
+     *   create: {
+     *     // ... data to create a MisaConfig
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the MisaConfig we want to update
+     *   }
+     * })
+     */
+    upsert<T extends MisaConfigUpsertArgs>(args: SelectSubset<T, MisaConfigUpsertArgs<ExtArgs>>): Prisma__MisaConfigClient<$Result.GetResult<Prisma.$MisaConfigPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of MisaConfigs.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaConfigCountArgs} args - Arguments to filter MisaConfigs to count.
+     * @example
+     * // Count the number of MisaConfigs
+     * const count = await prisma.misaConfig.count({
+     *   where: {
+     *     // ... the filter for the MisaConfigs we want to count
+     *   }
+     * })
+    **/
+    count<T extends MisaConfigCountArgs>(
+      args?: Subset<T, MisaConfigCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], MisaConfigCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a MisaConfig.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaConfigAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends MisaConfigAggregateArgs>(args: Subset<T, MisaConfigAggregateArgs>): Prisma.PrismaPromise<GetMisaConfigAggregateType<T>>
+
+    /**
+     * Group by MisaConfig.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaConfigGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends MisaConfigGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: MisaConfigGroupByArgs['orderBy'] }
+        : { orderBy?: MisaConfigGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, MisaConfigGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetMisaConfigGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the MisaConfig model
+   */
+  readonly fields: MisaConfigFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for MisaConfig.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__MisaConfigClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the MisaConfig model
+   */
+  interface MisaConfigFieldRefs {
+    readonly id: FieldRef<"MisaConfig", 'String'>
+    readonly appId: FieldRef<"MisaConfig", 'String'>
+    readonly accessCode: FieldRef<"MisaConfig", 'String'>
+    readonly orgCompanyCode: FieldRef<"MisaConfig", 'String'>
+    readonly baseUrl: FieldRef<"MisaConfig", 'String'>
+    readonly enabled: FieldRef<"MisaConfig", 'Boolean'>
+    readonly syncProducts: FieldRef<"MisaConfig", 'Boolean'>
+    readonly syncPartners: FieldRef<"MisaConfig", 'Boolean'>
+    readonly syncStocks: FieldRef<"MisaConfig", 'Boolean'>
+    readonly syncBalance: FieldRef<"MisaConfig", 'Boolean'>
+    readonly overwriteNames: FieldRef<"MisaConfig", 'Boolean'>
+    readonly overwritePrices: FieldRef<"MisaConfig", 'Boolean'>
+    readonly overwriteStock: FieldRef<"MisaConfig", 'Boolean'>
+    readonly defaultCategoryId: FieldRef<"MisaConfig", 'String'>
+    readonly defaultWarehouseId: FieldRef<"MisaConfig", 'String'>
+    readonly lastSyncAt: FieldRef<"MisaConfig", 'DateTime'>
+    readonly createdAt: FieldRef<"MisaConfig", 'DateTime'>
+    readonly updatedAt: FieldRef<"MisaConfig", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * MisaConfig findUnique
+   */
+  export type MisaConfigFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaConfig
+     */
+    select?: MisaConfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaConfig
+     */
+    omit?: MisaConfigOmit<ExtArgs> | null
+    /**
+     * Filter, which MisaConfig to fetch.
+     */
+    where: MisaConfigWhereUniqueInput
+  }
+
+  /**
+   * MisaConfig findUniqueOrThrow
+   */
+  export type MisaConfigFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaConfig
+     */
+    select?: MisaConfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaConfig
+     */
+    omit?: MisaConfigOmit<ExtArgs> | null
+    /**
+     * Filter, which MisaConfig to fetch.
+     */
+    where: MisaConfigWhereUniqueInput
+  }
+
+  /**
+   * MisaConfig findFirst
+   */
+  export type MisaConfigFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaConfig
+     */
+    select?: MisaConfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaConfig
+     */
+    omit?: MisaConfigOmit<ExtArgs> | null
+    /**
+     * Filter, which MisaConfig to fetch.
+     */
+    where?: MisaConfigWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaConfigs to fetch.
+     */
+    orderBy?: MisaConfigOrderByWithRelationInput | MisaConfigOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MisaConfigs.
+     */
+    cursor?: MisaConfigWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaConfigs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaConfigs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MisaConfigs.
+     */
+    distinct?: MisaConfigScalarFieldEnum | MisaConfigScalarFieldEnum[]
+  }
+
+  /**
+   * MisaConfig findFirstOrThrow
+   */
+  export type MisaConfigFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaConfig
+     */
+    select?: MisaConfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaConfig
+     */
+    omit?: MisaConfigOmit<ExtArgs> | null
+    /**
+     * Filter, which MisaConfig to fetch.
+     */
+    where?: MisaConfigWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaConfigs to fetch.
+     */
+    orderBy?: MisaConfigOrderByWithRelationInput | MisaConfigOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MisaConfigs.
+     */
+    cursor?: MisaConfigWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaConfigs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaConfigs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MisaConfigs.
+     */
+    distinct?: MisaConfigScalarFieldEnum | MisaConfigScalarFieldEnum[]
+  }
+
+  /**
+   * MisaConfig findMany
+   */
+  export type MisaConfigFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaConfig
+     */
+    select?: MisaConfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaConfig
+     */
+    omit?: MisaConfigOmit<ExtArgs> | null
+    /**
+     * Filter, which MisaConfigs to fetch.
+     */
+    where?: MisaConfigWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaConfigs to fetch.
+     */
+    orderBy?: MisaConfigOrderByWithRelationInput | MisaConfigOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing MisaConfigs.
+     */
+    cursor?: MisaConfigWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaConfigs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaConfigs.
+     */
+    skip?: number
+    distinct?: MisaConfigScalarFieldEnum | MisaConfigScalarFieldEnum[]
+  }
+
+  /**
+   * MisaConfig create
+   */
+  export type MisaConfigCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaConfig
+     */
+    select?: MisaConfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaConfig
+     */
+    omit?: MisaConfigOmit<ExtArgs> | null
+    /**
+     * The data needed to create a MisaConfig.
+     */
+    data: XOR<MisaConfigCreateInput, MisaConfigUncheckedCreateInput>
+  }
+
+  /**
+   * MisaConfig createMany
+   */
+  export type MisaConfigCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many MisaConfigs.
+     */
+    data: MisaConfigCreateManyInput | MisaConfigCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * MisaConfig createManyAndReturn
+   */
+  export type MisaConfigCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaConfig
+     */
+    select?: MisaConfigSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaConfig
+     */
+    omit?: MisaConfigOmit<ExtArgs> | null
+    /**
+     * The data used to create many MisaConfigs.
+     */
+    data: MisaConfigCreateManyInput | MisaConfigCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * MisaConfig update
+   */
+  export type MisaConfigUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaConfig
+     */
+    select?: MisaConfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaConfig
+     */
+    omit?: MisaConfigOmit<ExtArgs> | null
+    /**
+     * The data needed to update a MisaConfig.
+     */
+    data: XOR<MisaConfigUpdateInput, MisaConfigUncheckedUpdateInput>
+    /**
+     * Choose, which MisaConfig to update.
+     */
+    where: MisaConfigWhereUniqueInput
+  }
+
+  /**
+   * MisaConfig updateMany
+   */
+  export type MisaConfigUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update MisaConfigs.
+     */
+    data: XOR<MisaConfigUpdateManyMutationInput, MisaConfigUncheckedUpdateManyInput>
+    /**
+     * Filter which MisaConfigs to update
+     */
+    where?: MisaConfigWhereInput
+    /**
+     * Limit how many MisaConfigs to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * MisaConfig updateManyAndReturn
+   */
+  export type MisaConfigUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaConfig
+     */
+    select?: MisaConfigSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaConfig
+     */
+    omit?: MisaConfigOmit<ExtArgs> | null
+    /**
+     * The data used to update MisaConfigs.
+     */
+    data: XOR<MisaConfigUpdateManyMutationInput, MisaConfigUncheckedUpdateManyInput>
+    /**
+     * Filter which MisaConfigs to update
+     */
+    where?: MisaConfigWhereInput
+    /**
+     * Limit how many MisaConfigs to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * MisaConfig upsert
+   */
+  export type MisaConfigUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaConfig
+     */
+    select?: MisaConfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaConfig
+     */
+    omit?: MisaConfigOmit<ExtArgs> | null
+    /**
+     * The filter to search for the MisaConfig to update in case it exists.
+     */
+    where: MisaConfigWhereUniqueInput
+    /**
+     * In case the MisaConfig found by the `where` argument doesn't exist, create a new MisaConfig with this data.
+     */
+    create: XOR<MisaConfigCreateInput, MisaConfigUncheckedCreateInput>
+    /**
+     * In case the MisaConfig was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<MisaConfigUpdateInput, MisaConfigUncheckedUpdateInput>
+  }
+
+  /**
+   * MisaConfig delete
+   */
+  export type MisaConfigDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaConfig
+     */
+    select?: MisaConfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaConfig
+     */
+    omit?: MisaConfigOmit<ExtArgs> | null
+    /**
+     * Filter which MisaConfig to delete.
+     */
+    where: MisaConfigWhereUniqueInput
+  }
+
+  /**
+   * MisaConfig deleteMany
+   */
+  export type MisaConfigDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MisaConfigs to delete
+     */
+    where?: MisaConfigWhereInput
+    /**
+     * Limit how many MisaConfigs to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * MisaConfig without action
+   */
+  export type MisaConfigDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaConfig
+     */
+    select?: MisaConfigSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaConfig
+     */
+    omit?: MisaConfigOmit<ExtArgs> | null
+  }
+
+
+  /**
+   * Model MisaMap
+   */
+
+  export type AggregateMisaMap = {
+    _count: MisaMapCountAggregateOutputType | null
+    _min: MisaMapMinAggregateOutputType | null
+    _max: MisaMapMaxAggregateOutputType | null
+  }
+
+  export type MisaMapMinAggregateOutputType = {
+    id: string | null
+    entity: string | null
+    misaId: string | null
+    misaCode: string | null
+    localId: string | null
+    syncedAt: Date | null
+  }
+
+  export type MisaMapMaxAggregateOutputType = {
+    id: string | null
+    entity: string | null
+    misaId: string | null
+    misaCode: string | null
+    localId: string | null
+    syncedAt: Date | null
+  }
+
+  export type MisaMapCountAggregateOutputType = {
+    id: number
+    entity: number
+    misaId: number
+    misaCode: number
+    localId: number
+    syncedAt: number
+    _all: number
+  }
+
+
+  export type MisaMapMinAggregateInputType = {
+    id?: true
+    entity?: true
+    misaId?: true
+    misaCode?: true
+    localId?: true
+    syncedAt?: true
+  }
+
+  export type MisaMapMaxAggregateInputType = {
+    id?: true
+    entity?: true
+    misaId?: true
+    misaCode?: true
+    localId?: true
+    syncedAt?: true
+  }
+
+  export type MisaMapCountAggregateInputType = {
+    id?: true
+    entity?: true
+    misaId?: true
+    misaCode?: true
+    localId?: true
+    syncedAt?: true
+    _all?: true
+  }
+
+  export type MisaMapAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MisaMap to aggregate.
+     */
+    where?: MisaMapWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaMaps to fetch.
+     */
+    orderBy?: MisaMapOrderByWithRelationInput | MisaMapOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: MisaMapWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaMaps from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaMaps.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned MisaMaps
+    **/
+    _count?: true | MisaMapCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: MisaMapMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: MisaMapMaxAggregateInputType
+  }
+
+  export type GetMisaMapAggregateType<T extends MisaMapAggregateArgs> = {
+        [P in keyof T & keyof AggregateMisaMap]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateMisaMap[P]>
+      : GetScalarType<T[P], AggregateMisaMap[P]>
+  }
+
+
+
+
+  export type MisaMapGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: MisaMapWhereInput
+    orderBy?: MisaMapOrderByWithAggregationInput | MisaMapOrderByWithAggregationInput[]
+    by: MisaMapScalarFieldEnum[] | MisaMapScalarFieldEnum
+    having?: MisaMapScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: MisaMapCountAggregateInputType | true
+    _min?: MisaMapMinAggregateInputType
+    _max?: MisaMapMaxAggregateInputType
+  }
+
+  export type MisaMapGroupByOutputType = {
+    id: string
+    entity: string
+    misaId: string
+    misaCode: string | null
+    localId: string
+    syncedAt: Date
+    _count: MisaMapCountAggregateOutputType | null
+    _min: MisaMapMinAggregateOutputType | null
+    _max: MisaMapMaxAggregateOutputType | null
+  }
+
+  type GetMisaMapGroupByPayload<T extends MisaMapGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<MisaMapGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof MisaMapGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], MisaMapGroupByOutputType[P]>
+            : GetScalarType<T[P], MisaMapGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type MisaMapSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    entity?: boolean
+    misaId?: boolean
+    misaCode?: boolean
+    localId?: boolean
+    syncedAt?: boolean
+  }, ExtArgs["result"]["misaMap"]>
+
+  export type MisaMapSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    entity?: boolean
+    misaId?: boolean
+    misaCode?: boolean
+    localId?: boolean
+    syncedAt?: boolean
+  }, ExtArgs["result"]["misaMap"]>
+
+  export type MisaMapSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    entity?: boolean
+    misaId?: boolean
+    misaCode?: boolean
+    localId?: boolean
+    syncedAt?: boolean
+  }, ExtArgs["result"]["misaMap"]>
+
+  export type MisaMapSelectScalar = {
+    id?: boolean
+    entity?: boolean
+    misaId?: boolean
+    misaCode?: boolean
+    localId?: boolean
+    syncedAt?: boolean
+  }
+
+  export type MisaMapOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "entity" | "misaId" | "misaCode" | "localId" | "syncedAt", ExtArgs["result"]["misaMap"]>
+
+  export type $MisaMapPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "MisaMap"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      entity: string
+      misaId: string
+      misaCode: string | null
+      localId: string
+      syncedAt: Date
+    }, ExtArgs["result"]["misaMap"]>
+    composites: {}
+  }
+
+  type MisaMapGetPayload<S extends boolean | null | undefined | MisaMapDefaultArgs> = $Result.GetResult<Prisma.$MisaMapPayload, S>
+
+  type MisaMapCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<MisaMapFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: MisaMapCountAggregateInputType | true
+    }
+
+  export interface MisaMapDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['MisaMap'], meta: { name: 'MisaMap' } }
+    /**
+     * Find zero or one MisaMap that matches the filter.
+     * @param {MisaMapFindUniqueArgs} args - Arguments to find a MisaMap
+     * @example
+     * // Get one MisaMap
+     * const misaMap = await prisma.misaMap.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends MisaMapFindUniqueArgs>(args: SelectSubset<T, MisaMapFindUniqueArgs<ExtArgs>>): Prisma__MisaMapClient<$Result.GetResult<Prisma.$MisaMapPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one MisaMap that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {MisaMapFindUniqueOrThrowArgs} args - Arguments to find a MisaMap
+     * @example
+     * // Get one MisaMap
+     * const misaMap = await prisma.misaMap.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends MisaMapFindUniqueOrThrowArgs>(args: SelectSubset<T, MisaMapFindUniqueOrThrowArgs<ExtArgs>>): Prisma__MisaMapClient<$Result.GetResult<Prisma.$MisaMapPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first MisaMap that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaMapFindFirstArgs} args - Arguments to find a MisaMap
+     * @example
+     * // Get one MisaMap
+     * const misaMap = await prisma.misaMap.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends MisaMapFindFirstArgs>(args?: SelectSubset<T, MisaMapFindFirstArgs<ExtArgs>>): Prisma__MisaMapClient<$Result.GetResult<Prisma.$MisaMapPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first MisaMap that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaMapFindFirstOrThrowArgs} args - Arguments to find a MisaMap
+     * @example
+     * // Get one MisaMap
+     * const misaMap = await prisma.misaMap.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends MisaMapFindFirstOrThrowArgs>(args?: SelectSubset<T, MisaMapFindFirstOrThrowArgs<ExtArgs>>): Prisma__MisaMapClient<$Result.GetResult<Prisma.$MisaMapPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more MisaMaps that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaMapFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all MisaMaps
+     * const misaMaps = await prisma.misaMap.findMany()
+     * 
+     * // Get first 10 MisaMaps
+     * const misaMaps = await prisma.misaMap.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const misaMapWithIdOnly = await prisma.misaMap.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends MisaMapFindManyArgs>(args?: SelectSubset<T, MisaMapFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MisaMapPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a MisaMap.
+     * @param {MisaMapCreateArgs} args - Arguments to create a MisaMap.
+     * @example
+     * // Create one MisaMap
+     * const MisaMap = await prisma.misaMap.create({
+     *   data: {
+     *     // ... data to create a MisaMap
+     *   }
+     * })
+     * 
+     */
+    create<T extends MisaMapCreateArgs>(args: SelectSubset<T, MisaMapCreateArgs<ExtArgs>>): Prisma__MisaMapClient<$Result.GetResult<Prisma.$MisaMapPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many MisaMaps.
+     * @param {MisaMapCreateManyArgs} args - Arguments to create many MisaMaps.
+     * @example
+     * // Create many MisaMaps
+     * const misaMap = await prisma.misaMap.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends MisaMapCreateManyArgs>(args?: SelectSubset<T, MisaMapCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many MisaMaps and returns the data saved in the database.
+     * @param {MisaMapCreateManyAndReturnArgs} args - Arguments to create many MisaMaps.
+     * @example
+     * // Create many MisaMaps
+     * const misaMap = await prisma.misaMap.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many MisaMaps and only return the `id`
+     * const misaMapWithIdOnly = await prisma.misaMap.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends MisaMapCreateManyAndReturnArgs>(args?: SelectSubset<T, MisaMapCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MisaMapPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a MisaMap.
+     * @param {MisaMapDeleteArgs} args - Arguments to delete one MisaMap.
+     * @example
+     * // Delete one MisaMap
+     * const MisaMap = await prisma.misaMap.delete({
+     *   where: {
+     *     // ... filter to delete one MisaMap
+     *   }
+     * })
+     * 
+     */
+    delete<T extends MisaMapDeleteArgs>(args: SelectSubset<T, MisaMapDeleteArgs<ExtArgs>>): Prisma__MisaMapClient<$Result.GetResult<Prisma.$MisaMapPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one MisaMap.
+     * @param {MisaMapUpdateArgs} args - Arguments to update one MisaMap.
+     * @example
+     * // Update one MisaMap
+     * const misaMap = await prisma.misaMap.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends MisaMapUpdateArgs>(args: SelectSubset<T, MisaMapUpdateArgs<ExtArgs>>): Prisma__MisaMapClient<$Result.GetResult<Prisma.$MisaMapPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more MisaMaps.
+     * @param {MisaMapDeleteManyArgs} args - Arguments to filter MisaMaps to delete.
+     * @example
+     * // Delete a few MisaMaps
+     * const { count } = await prisma.misaMap.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends MisaMapDeleteManyArgs>(args?: SelectSubset<T, MisaMapDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more MisaMaps.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaMapUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many MisaMaps
+     * const misaMap = await prisma.misaMap.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends MisaMapUpdateManyArgs>(args: SelectSubset<T, MisaMapUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more MisaMaps and returns the data updated in the database.
+     * @param {MisaMapUpdateManyAndReturnArgs} args - Arguments to update many MisaMaps.
+     * @example
+     * // Update many MisaMaps
+     * const misaMap = await prisma.misaMap.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more MisaMaps and only return the `id`
+     * const misaMapWithIdOnly = await prisma.misaMap.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends MisaMapUpdateManyAndReturnArgs>(args: SelectSubset<T, MisaMapUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MisaMapPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one MisaMap.
+     * @param {MisaMapUpsertArgs} args - Arguments to update or create a MisaMap.
+     * @example
+     * // Update or create a MisaMap
+     * const misaMap = await prisma.misaMap.upsert({
+     *   create: {
+     *     // ... data to create a MisaMap
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the MisaMap we want to update
+     *   }
+     * })
+     */
+    upsert<T extends MisaMapUpsertArgs>(args: SelectSubset<T, MisaMapUpsertArgs<ExtArgs>>): Prisma__MisaMapClient<$Result.GetResult<Prisma.$MisaMapPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of MisaMaps.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaMapCountArgs} args - Arguments to filter MisaMaps to count.
+     * @example
+     * // Count the number of MisaMaps
+     * const count = await prisma.misaMap.count({
+     *   where: {
+     *     // ... the filter for the MisaMaps we want to count
+     *   }
+     * })
+    **/
+    count<T extends MisaMapCountArgs>(
+      args?: Subset<T, MisaMapCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], MisaMapCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a MisaMap.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaMapAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends MisaMapAggregateArgs>(args: Subset<T, MisaMapAggregateArgs>): Prisma.PrismaPromise<GetMisaMapAggregateType<T>>
+
+    /**
+     * Group by MisaMap.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaMapGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends MisaMapGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: MisaMapGroupByArgs['orderBy'] }
+        : { orderBy?: MisaMapGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, MisaMapGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetMisaMapGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the MisaMap model
+   */
+  readonly fields: MisaMapFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for MisaMap.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__MisaMapClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the MisaMap model
+   */
+  interface MisaMapFieldRefs {
+    readonly id: FieldRef<"MisaMap", 'String'>
+    readonly entity: FieldRef<"MisaMap", 'String'>
+    readonly misaId: FieldRef<"MisaMap", 'String'>
+    readonly misaCode: FieldRef<"MisaMap", 'String'>
+    readonly localId: FieldRef<"MisaMap", 'String'>
+    readonly syncedAt: FieldRef<"MisaMap", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * MisaMap findUnique
+   */
+  export type MisaMapFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaMap
+     */
+    select?: MisaMapSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaMap
+     */
+    omit?: MisaMapOmit<ExtArgs> | null
+    /**
+     * Filter, which MisaMap to fetch.
+     */
+    where: MisaMapWhereUniqueInput
+  }
+
+  /**
+   * MisaMap findUniqueOrThrow
+   */
+  export type MisaMapFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaMap
+     */
+    select?: MisaMapSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaMap
+     */
+    omit?: MisaMapOmit<ExtArgs> | null
+    /**
+     * Filter, which MisaMap to fetch.
+     */
+    where: MisaMapWhereUniqueInput
+  }
+
+  /**
+   * MisaMap findFirst
+   */
+  export type MisaMapFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaMap
+     */
+    select?: MisaMapSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaMap
+     */
+    omit?: MisaMapOmit<ExtArgs> | null
+    /**
+     * Filter, which MisaMap to fetch.
+     */
+    where?: MisaMapWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaMaps to fetch.
+     */
+    orderBy?: MisaMapOrderByWithRelationInput | MisaMapOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MisaMaps.
+     */
+    cursor?: MisaMapWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaMaps from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaMaps.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MisaMaps.
+     */
+    distinct?: MisaMapScalarFieldEnum | MisaMapScalarFieldEnum[]
+  }
+
+  /**
+   * MisaMap findFirstOrThrow
+   */
+  export type MisaMapFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaMap
+     */
+    select?: MisaMapSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaMap
+     */
+    omit?: MisaMapOmit<ExtArgs> | null
+    /**
+     * Filter, which MisaMap to fetch.
+     */
+    where?: MisaMapWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaMaps to fetch.
+     */
+    orderBy?: MisaMapOrderByWithRelationInput | MisaMapOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MisaMaps.
+     */
+    cursor?: MisaMapWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaMaps from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaMaps.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MisaMaps.
+     */
+    distinct?: MisaMapScalarFieldEnum | MisaMapScalarFieldEnum[]
+  }
+
+  /**
+   * MisaMap findMany
+   */
+  export type MisaMapFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaMap
+     */
+    select?: MisaMapSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaMap
+     */
+    omit?: MisaMapOmit<ExtArgs> | null
+    /**
+     * Filter, which MisaMaps to fetch.
+     */
+    where?: MisaMapWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaMaps to fetch.
+     */
+    orderBy?: MisaMapOrderByWithRelationInput | MisaMapOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing MisaMaps.
+     */
+    cursor?: MisaMapWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaMaps from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaMaps.
+     */
+    skip?: number
+    distinct?: MisaMapScalarFieldEnum | MisaMapScalarFieldEnum[]
+  }
+
+  /**
+   * MisaMap create
+   */
+  export type MisaMapCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaMap
+     */
+    select?: MisaMapSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaMap
+     */
+    omit?: MisaMapOmit<ExtArgs> | null
+    /**
+     * The data needed to create a MisaMap.
+     */
+    data: XOR<MisaMapCreateInput, MisaMapUncheckedCreateInput>
+  }
+
+  /**
+   * MisaMap createMany
+   */
+  export type MisaMapCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many MisaMaps.
+     */
+    data: MisaMapCreateManyInput | MisaMapCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * MisaMap createManyAndReturn
+   */
+  export type MisaMapCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaMap
+     */
+    select?: MisaMapSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaMap
+     */
+    omit?: MisaMapOmit<ExtArgs> | null
+    /**
+     * The data used to create many MisaMaps.
+     */
+    data: MisaMapCreateManyInput | MisaMapCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * MisaMap update
+   */
+  export type MisaMapUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaMap
+     */
+    select?: MisaMapSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaMap
+     */
+    omit?: MisaMapOmit<ExtArgs> | null
+    /**
+     * The data needed to update a MisaMap.
+     */
+    data: XOR<MisaMapUpdateInput, MisaMapUncheckedUpdateInput>
+    /**
+     * Choose, which MisaMap to update.
+     */
+    where: MisaMapWhereUniqueInput
+  }
+
+  /**
+   * MisaMap updateMany
+   */
+  export type MisaMapUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update MisaMaps.
+     */
+    data: XOR<MisaMapUpdateManyMutationInput, MisaMapUncheckedUpdateManyInput>
+    /**
+     * Filter which MisaMaps to update
+     */
+    where?: MisaMapWhereInput
+    /**
+     * Limit how many MisaMaps to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * MisaMap updateManyAndReturn
+   */
+  export type MisaMapUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaMap
+     */
+    select?: MisaMapSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaMap
+     */
+    omit?: MisaMapOmit<ExtArgs> | null
+    /**
+     * The data used to update MisaMaps.
+     */
+    data: XOR<MisaMapUpdateManyMutationInput, MisaMapUncheckedUpdateManyInput>
+    /**
+     * Filter which MisaMaps to update
+     */
+    where?: MisaMapWhereInput
+    /**
+     * Limit how many MisaMaps to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * MisaMap upsert
+   */
+  export type MisaMapUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaMap
+     */
+    select?: MisaMapSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaMap
+     */
+    omit?: MisaMapOmit<ExtArgs> | null
+    /**
+     * The filter to search for the MisaMap to update in case it exists.
+     */
+    where: MisaMapWhereUniqueInput
+    /**
+     * In case the MisaMap found by the `where` argument doesn't exist, create a new MisaMap with this data.
+     */
+    create: XOR<MisaMapCreateInput, MisaMapUncheckedCreateInput>
+    /**
+     * In case the MisaMap was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<MisaMapUpdateInput, MisaMapUncheckedUpdateInput>
+  }
+
+  /**
+   * MisaMap delete
+   */
+  export type MisaMapDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaMap
+     */
+    select?: MisaMapSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaMap
+     */
+    omit?: MisaMapOmit<ExtArgs> | null
+    /**
+     * Filter which MisaMap to delete.
+     */
+    where: MisaMapWhereUniqueInput
+  }
+
+  /**
+   * MisaMap deleteMany
+   */
+  export type MisaMapDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MisaMaps to delete
+     */
+    where?: MisaMapWhereInput
+    /**
+     * Limit how many MisaMaps to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * MisaMap without action
+   */
+  export type MisaMapDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaMap
+     */
+    select?: MisaMapSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaMap
+     */
+    omit?: MisaMapOmit<ExtArgs> | null
+  }
+
+
+  /**
+   * Model MisaSyncLog
+   */
+
+  export type AggregateMisaSyncLog = {
+    _count: MisaSyncLogCountAggregateOutputType | null
+    _avg: MisaSyncLogAvgAggregateOutputType | null
+    _sum: MisaSyncLogSumAggregateOutputType | null
+    _min: MisaSyncLogMinAggregateOutputType | null
+    _max: MisaSyncLogMaxAggregateOutputType | null
+  }
+
+  export type MisaSyncLogAvgAggregateOutputType = {
+    fetched: number | null
+    created: number | null
+    updated: number | null
+    skipped: number | null
+    failed: number | null
+    attempts: number | null
+  }
+
+  export type MisaSyncLogSumAggregateOutputType = {
+    fetched: number | null
+    created: number | null
+    updated: number | null
+    skipped: number | null
+    failed: number | null
+    attempts: number | null
+  }
+
+  export type MisaSyncLogMinAggregateOutputType = {
+    id: string | null
+    entity: string | null
+    mode: string | null
+    dryRun: boolean | null
+    fromDate: Date | null
+    fetched: number | null
+    created: number | null
+    updated: number | null
+    skipped: number | null
+    failed: number | null
+    status: string | null
+    errors: string | null
+    details: string | null
+    startedAt: Date | null
+    heartbeatAt: Date | null
+    attempts: number | null
+    finishedAt: Date | null
+  }
+
+  export type MisaSyncLogMaxAggregateOutputType = {
+    id: string | null
+    entity: string | null
+    mode: string | null
+    dryRun: boolean | null
+    fromDate: Date | null
+    fetched: number | null
+    created: number | null
+    updated: number | null
+    skipped: number | null
+    failed: number | null
+    status: string | null
+    errors: string | null
+    details: string | null
+    startedAt: Date | null
+    heartbeatAt: Date | null
+    attempts: number | null
+    finishedAt: Date | null
+  }
+
+  export type MisaSyncLogCountAggregateOutputType = {
+    id: number
+    entity: number
+    mode: number
+    dryRun: number
+    fromDate: number
+    fetched: number
+    created: number
+    updated: number
+    skipped: number
+    failed: number
+    status: number
+    errors: number
+    details: number
+    startedAt: number
+    heartbeatAt: number
+    attempts: number
+    finishedAt: number
+    _all: number
+  }
+
+
+  export type MisaSyncLogAvgAggregateInputType = {
+    fetched?: true
+    created?: true
+    updated?: true
+    skipped?: true
+    failed?: true
+    attempts?: true
+  }
+
+  export type MisaSyncLogSumAggregateInputType = {
+    fetched?: true
+    created?: true
+    updated?: true
+    skipped?: true
+    failed?: true
+    attempts?: true
+  }
+
+  export type MisaSyncLogMinAggregateInputType = {
+    id?: true
+    entity?: true
+    mode?: true
+    dryRun?: true
+    fromDate?: true
+    fetched?: true
+    created?: true
+    updated?: true
+    skipped?: true
+    failed?: true
+    status?: true
+    errors?: true
+    details?: true
+    startedAt?: true
+    heartbeatAt?: true
+    attempts?: true
+    finishedAt?: true
+  }
+
+  export type MisaSyncLogMaxAggregateInputType = {
+    id?: true
+    entity?: true
+    mode?: true
+    dryRun?: true
+    fromDate?: true
+    fetched?: true
+    created?: true
+    updated?: true
+    skipped?: true
+    failed?: true
+    status?: true
+    errors?: true
+    details?: true
+    startedAt?: true
+    heartbeatAt?: true
+    attempts?: true
+    finishedAt?: true
+  }
+
+  export type MisaSyncLogCountAggregateInputType = {
+    id?: true
+    entity?: true
+    mode?: true
+    dryRun?: true
+    fromDate?: true
+    fetched?: true
+    created?: true
+    updated?: true
+    skipped?: true
+    failed?: true
+    status?: true
+    errors?: true
+    details?: true
+    startedAt?: true
+    heartbeatAt?: true
+    attempts?: true
+    finishedAt?: true
+    _all?: true
+  }
+
+  export type MisaSyncLogAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MisaSyncLog to aggregate.
+     */
+    where?: MisaSyncLogWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaSyncLogs to fetch.
+     */
+    orderBy?: MisaSyncLogOrderByWithRelationInput | MisaSyncLogOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: MisaSyncLogWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaSyncLogs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaSyncLogs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned MisaSyncLogs
+    **/
+    _count?: true | MisaSyncLogCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: MisaSyncLogAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: MisaSyncLogSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: MisaSyncLogMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: MisaSyncLogMaxAggregateInputType
+  }
+
+  export type GetMisaSyncLogAggregateType<T extends MisaSyncLogAggregateArgs> = {
+        [P in keyof T & keyof AggregateMisaSyncLog]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateMisaSyncLog[P]>
+      : GetScalarType<T[P], AggregateMisaSyncLog[P]>
+  }
+
+
+
+
+  export type MisaSyncLogGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: MisaSyncLogWhereInput
+    orderBy?: MisaSyncLogOrderByWithAggregationInput | MisaSyncLogOrderByWithAggregationInput[]
+    by: MisaSyncLogScalarFieldEnum[] | MisaSyncLogScalarFieldEnum
+    having?: MisaSyncLogScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: MisaSyncLogCountAggregateInputType | true
+    _avg?: MisaSyncLogAvgAggregateInputType
+    _sum?: MisaSyncLogSumAggregateInputType
+    _min?: MisaSyncLogMinAggregateInputType
+    _max?: MisaSyncLogMaxAggregateInputType
+  }
+
+  export type MisaSyncLogGroupByOutputType = {
+    id: string
+    entity: string
+    mode: string
+    dryRun: boolean
+    fromDate: Date | null
+    fetched: number
+    created: number
+    updated: number
+    skipped: number
+    failed: number
+    status: string
+    errors: string | null
+    details: string | null
+    startedAt: Date
+    heartbeatAt: Date | null
+    attempts: number
+    finishedAt: Date | null
+    _count: MisaSyncLogCountAggregateOutputType | null
+    _avg: MisaSyncLogAvgAggregateOutputType | null
+    _sum: MisaSyncLogSumAggregateOutputType | null
+    _min: MisaSyncLogMinAggregateOutputType | null
+    _max: MisaSyncLogMaxAggregateOutputType | null
+  }
+
+  type GetMisaSyncLogGroupByPayload<T extends MisaSyncLogGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<MisaSyncLogGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof MisaSyncLogGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], MisaSyncLogGroupByOutputType[P]>
+            : GetScalarType<T[P], MisaSyncLogGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type MisaSyncLogSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    entity?: boolean
+    mode?: boolean
+    dryRun?: boolean
+    fromDate?: boolean
+    fetched?: boolean
+    created?: boolean
+    updated?: boolean
+    skipped?: boolean
+    failed?: boolean
+    status?: boolean
+    errors?: boolean
+    details?: boolean
+    startedAt?: boolean
+    heartbeatAt?: boolean
+    attempts?: boolean
+    finishedAt?: boolean
+  }, ExtArgs["result"]["misaSyncLog"]>
+
+  export type MisaSyncLogSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    entity?: boolean
+    mode?: boolean
+    dryRun?: boolean
+    fromDate?: boolean
+    fetched?: boolean
+    created?: boolean
+    updated?: boolean
+    skipped?: boolean
+    failed?: boolean
+    status?: boolean
+    errors?: boolean
+    details?: boolean
+    startedAt?: boolean
+    heartbeatAt?: boolean
+    attempts?: boolean
+    finishedAt?: boolean
+  }, ExtArgs["result"]["misaSyncLog"]>
+
+  export type MisaSyncLogSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    entity?: boolean
+    mode?: boolean
+    dryRun?: boolean
+    fromDate?: boolean
+    fetched?: boolean
+    created?: boolean
+    updated?: boolean
+    skipped?: boolean
+    failed?: boolean
+    status?: boolean
+    errors?: boolean
+    details?: boolean
+    startedAt?: boolean
+    heartbeatAt?: boolean
+    attempts?: boolean
+    finishedAt?: boolean
+  }, ExtArgs["result"]["misaSyncLog"]>
+
+  export type MisaSyncLogSelectScalar = {
+    id?: boolean
+    entity?: boolean
+    mode?: boolean
+    dryRun?: boolean
+    fromDate?: boolean
+    fetched?: boolean
+    created?: boolean
+    updated?: boolean
+    skipped?: boolean
+    failed?: boolean
+    status?: boolean
+    errors?: boolean
+    details?: boolean
+    startedAt?: boolean
+    heartbeatAt?: boolean
+    attempts?: boolean
+    finishedAt?: boolean
+  }
+
+  export type MisaSyncLogOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "entity" | "mode" | "dryRun" | "fromDate" | "fetched" | "created" | "updated" | "skipped" | "failed" | "status" | "errors" | "details" | "startedAt" | "heartbeatAt" | "attempts" | "finishedAt", ExtArgs["result"]["misaSyncLog"]>
+
+  export type $MisaSyncLogPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "MisaSyncLog"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      entity: string
+      mode: string
+      dryRun: boolean
+      fromDate: Date | null
+      fetched: number
+      created: number
+      updated: number
+      skipped: number
+      failed: number
+      status: string
+      errors: string | null
+      details: string | null
+      startedAt: Date
+      heartbeatAt: Date | null
+      attempts: number
+      finishedAt: Date | null
+    }, ExtArgs["result"]["misaSyncLog"]>
+    composites: {}
+  }
+
+  type MisaSyncLogGetPayload<S extends boolean | null | undefined | MisaSyncLogDefaultArgs> = $Result.GetResult<Prisma.$MisaSyncLogPayload, S>
+
+  type MisaSyncLogCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<MisaSyncLogFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: MisaSyncLogCountAggregateInputType | true
+    }
+
+  export interface MisaSyncLogDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['MisaSyncLog'], meta: { name: 'MisaSyncLog' } }
+    /**
+     * Find zero or one MisaSyncLog that matches the filter.
+     * @param {MisaSyncLogFindUniqueArgs} args - Arguments to find a MisaSyncLog
+     * @example
+     * // Get one MisaSyncLog
+     * const misaSyncLog = await prisma.misaSyncLog.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends MisaSyncLogFindUniqueArgs>(args: SelectSubset<T, MisaSyncLogFindUniqueArgs<ExtArgs>>): Prisma__MisaSyncLogClient<$Result.GetResult<Prisma.$MisaSyncLogPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one MisaSyncLog that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {MisaSyncLogFindUniqueOrThrowArgs} args - Arguments to find a MisaSyncLog
+     * @example
+     * // Get one MisaSyncLog
+     * const misaSyncLog = await prisma.misaSyncLog.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends MisaSyncLogFindUniqueOrThrowArgs>(args: SelectSubset<T, MisaSyncLogFindUniqueOrThrowArgs<ExtArgs>>): Prisma__MisaSyncLogClient<$Result.GetResult<Prisma.$MisaSyncLogPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first MisaSyncLog that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaSyncLogFindFirstArgs} args - Arguments to find a MisaSyncLog
+     * @example
+     * // Get one MisaSyncLog
+     * const misaSyncLog = await prisma.misaSyncLog.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends MisaSyncLogFindFirstArgs>(args?: SelectSubset<T, MisaSyncLogFindFirstArgs<ExtArgs>>): Prisma__MisaSyncLogClient<$Result.GetResult<Prisma.$MisaSyncLogPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first MisaSyncLog that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaSyncLogFindFirstOrThrowArgs} args - Arguments to find a MisaSyncLog
+     * @example
+     * // Get one MisaSyncLog
+     * const misaSyncLog = await prisma.misaSyncLog.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends MisaSyncLogFindFirstOrThrowArgs>(args?: SelectSubset<T, MisaSyncLogFindFirstOrThrowArgs<ExtArgs>>): Prisma__MisaSyncLogClient<$Result.GetResult<Prisma.$MisaSyncLogPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more MisaSyncLogs that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaSyncLogFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all MisaSyncLogs
+     * const misaSyncLogs = await prisma.misaSyncLog.findMany()
+     * 
+     * // Get first 10 MisaSyncLogs
+     * const misaSyncLogs = await prisma.misaSyncLog.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const misaSyncLogWithIdOnly = await prisma.misaSyncLog.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends MisaSyncLogFindManyArgs>(args?: SelectSubset<T, MisaSyncLogFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MisaSyncLogPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a MisaSyncLog.
+     * @param {MisaSyncLogCreateArgs} args - Arguments to create a MisaSyncLog.
+     * @example
+     * // Create one MisaSyncLog
+     * const MisaSyncLog = await prisma.misaSyncLog.create({
+     *   data: {
+     *     // ... data to create a MisaSyncLog
+     *   }
+     * })
+     * 
+     */
+    create<T extends MisaSyncLogCreateArgs>(args: SelectSubset<T, MisaSyncLogCreateArgs<ExtArgs>>): Prisma__MisaSyncLogClient<$Result.GetResult<Prisma.$MisaSyncLogPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many MisaSyncLogs.
+     * @param {MisaSyncLogCreateManyArgs} args - Arguments to create many MisaSyncLogs.
+     * @example
+     * // Create many MisaSyncLogs
+     * const misaSyncLog = await prisma.misaSyncLog.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends MisaSyncLogCreateManyArgs>(args?: SelectSubset<T, MisaSyncLogCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many MisaSyncLogs and returns the data saved in the database.
+     * @param {MisaSyncLogCreateManyAndReturnArgs} args - Arguments to create many MisaSyncLogs.
+     * @example
+     * // Create many MisaSyncLogs
+     * const misaSyncLog = await prisma.misaSyncLog.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many MisaSyncLogs and only return the `id`
+     * const misaSyncLogWithIdOnly = await prisma.misaSyncLog.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends MisaSyncLogCreateManyAndReturnArgs>(args?: SelectSubset<T, MisaSyncLogCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MisaSyncLogPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a MisaSyncLog.
+     * @param {MisaSyncLogDeleteArgs} args - Arguments to delete one MisaSyncLog.
+     * @example
+     * // Delete one MisaSyncLog
+     * const MisaSyncLog = await prisma.misaSyncLog.delete({
+     *   where: {
+     *     // ... filter to delete one MisaSyncLog
+     *   }
+     * })
+     * 
+     */
+    delete<T extends MisaSyncLogDeleteArgs>(args: SelectSubset<T, MisaSyncLogDeleteArgs<ExtArgs>>): Prisma__MisaSyncLogClient<$Result.GetResult<Prisma.$MisaSyncLogPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one MisaSyncLog.
+     * @param {MisaSyncLogUpdateArgs} args - Arguments to update one MisaSyncLog.
+     * @example
+     * // Update one MisaSyncLog
+     * const misaSyncLog = await prisma.misaSyncLog.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends MisaSyncLogUpdateArgs>(args: SelectSubset<T, MisaSyncLogUpdateArgs<ExtArgs>>): Prisma__MisaSyncLogClient<$Result.GetResult<Prisma.$MisaSyncLogPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more MisaSyncLogs.
+     * @param {MisaSyncLogDeleteManyArgs} args - Arguments to filter MisaSyncLogs to delete.
+     * @example
+     * // Delete a few MisaSyncLogs
+     * const { count } = await prisma.misaSyncLog.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends MisaSyncLogDeleteManyArgs>(args?: SelectSubset<T, MisaSyncLogDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more MisaSyncLogs.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaSyncLogUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many MisaSyncLogs
+     * const misaSyncLog = await prisma.misaSyncLog.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends MisaSyncLogUpdateManyArgs>(args: SelectSubset<T, MisaSyncLogUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more MisaSyncLogs and returns the data updated in the database.
+     * @param {MisaSyncLogUpdateManyAndReturnArgs} args - Arguments to update many MisaSyncLogs.
+     * @example
+     * // Update many MisaSyncLogs
+     * const misaSyncLog = await prisma.misaSyncLog.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more MisaSyncLogs and only return the `id`
+     * const misaSyncLogWithIdOnly = await prisma.misaSyncLog.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends MisaSyncLogUpdateManyAndReturnArgs>(args: SelectSubset<T, MisaSyncLogUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MisaSyncLogPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one MisaSyncLog.
+     * @param {MisaSyncLogUpsertArgs} args - Arguments to update or create a MisaSyncLog.
+     * @example
+     * // Update or create a MisaSyncLog
+     * const misaSyncLog = await prisma.misaSyncLog.upsert({
+     *   create: {
+     *     // ... data to create a MisaSyncLog
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the MisaSyncLog we want to update
+     *   }
+     * })
+     */
+    upsert<T extends MisaSyncLogUpsertArgs>(args: SelectSubset<T, MisaSyncLogUpsertArgs<ExtArgs>>): Prisma__MisaSyncLogClient<$Result.GetResult<Prisma.$MisaSyncLogPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of MisaSyncLogs.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaSyncLogCountArgs} args - Arguments to filter MisaSyncLogs to count.
+     * @example
+     * // Count the number of MisaSyncLogs
+     * const count = await prisma.misaSyncLog.count({
+     *   where: {
+     *     // ... the filter for the MisaSyncLogs we want to count
+     *   }
+     * })
+    **/
+    count<T extends MisaSyncLogCountArgs>(
+      args?: Subset<T, MisaSyncLogCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], MisaSyncLogCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a MisaSyncLog.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaSyncLogAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends MisaSyncLogAggregateArgs>(args: Subset<T, MisaSyncLogAggregateArgs>): Prisma.PrismaPromise<GetMisaSyncLogAggregateType<T>>
+
+    /**
+     * Group by MisaSyncLog.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaSyncLogGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends MisaSyncLogGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: MisaSyncLogGroupByArgs['orderBy'] }
+        : { orderBy?: MisaSyncLogGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, MisaSyncLogGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetMisaSyncLogGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the MisaSyncLog model
+   */
+  readonly fields: MisaSyncLogFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for MisaSyncLog.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__MisaSyncLogClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the MisaSyncLog model
+   */
+  interface MisaSyncLogFieldRefs {
+    readonly id: FieldRef<"MisaSyncLog", 'String'>
+    readonly entity: FieldRef<"MisaSyncLog", 'String'>
+    readonly mode: FieldRef<"MisaSyncLog", 'String'>
+    readonly dryRun: FieldRef<"MisaSyncLog", 'Boolean'>
+    readonly fromDate: FieldRef<"MisaSyncLog", 'DateTime'>
+    readonly fetched: FieldRef<"MisaSyncLog", 'Int'>
+    readonly created: FieldRef<"MisaSyncLog", 'Int'>
+    readonly updated: FieldRef<"MisaSyncLog", 'Int'>
+    readonly skipped: FieldRef<"MisaSyncLog", 'Int'>
+    readonly failed: FieldRef<"MisaSyncLog", 'Int'>
+    readonly status: FieldRef<"MisaSyncLog", 'String'>
+    readonly errors: FieldRef<"MisaSyncLog", 'String'>
+    readonly details: FieldRef<"MisaSyncLog", 'String'>
+    readonly startedAt: FieldRef<"MisaSyncLog", 'DateTime'>
+    readonly heartbeatAt: FieldRef<"MisaSyncLog", 'DateTime'>
+    readonly attempts: FieldRef<"MisaSyncLog", 'Int'>
+    readonly finishedAt: FieldRef<"MisaSyncLog", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * MisaSyncLog findUnique
+   */
+  export type MisaSyncLogFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSyncLog
+     */
+    select?: MisaSyncLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSyncLog
+     */
+    omit?: MisaSyncLogOmit<ExtArgs> | null
+    /**
+     * Filter, which MisaSyncLog to fetch.
+     */
+    where: MisaSyncLogWhereUniqueInput
+  }
+
+  /**
+   * MisaSyncLog findUniqueOrThrow
+   */
+  export type MisaSyncLogFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSyncLog
+     */
+    select?: MisaSyncLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSyncLog
+     */
+    omit?: MisaSyncLogOmit<ExtArgs> | null
+    /**
+     * Filter, which MisaSyncLog to fetch.
+     */
+    where: MisaSyncLogWhereUniqueInput
+  }
+
+  /**
+   * MisaSyncLog findFirst
+   */
+  export type MisaSyncLogFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSyncLog
+     */
+    select?: MisaSyncLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSyncLog
+     */
+    omit?: MisaSyncLogOmit<ExtArgs> | null
+    /**
+     * Filter, which MisaSyncLog to fetch.
+     */
+    where?: MisaSyncLogWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaSyncLogs to fetch.
+     */
+    orderBy?: MisaSyncLogOrderByWithRelationInput | MisaSyncLogOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MisaSyncLogs.
+     */
+    cursor?: MisaSyncLogWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaSyncLogs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaSyncLogs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MisaSyncLogs.
+     */
+    distinct?: MisaSyncLogScalarFieldEnum | MisaSyncLogScalarFieldEnum[]
+  }
+
+  /**
+   * MisaSyncLog findFirstOrThrow
+   */
+  export type MisaSyncLogFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSyncLog
+     */
+    select?: MisaSyncLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSyncLog
+     */
+    omit?: MisaSyncLogOmit<ExtArgs> | null
+    /**
+     * Filter, which MisaSyncLog to fetch.
+     */
+    where?: MisaSyncLogWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaSyncLogs to fetch.
+     */
+    orderBy?: MisaSyncLogOrderByWithRelationInput | MisaSyncLogOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MisaSyncLogs.
+     */
+    cursor?: MisaSyncLogWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaSyncLogs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaSyncLogs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MisaSyncLogs.
+     */
+    distinct?: MisaSyncLogScalarFieldEnum | MisaSyncLogScalarFieldEnum[]
+  }
+
+  /**
+   * MisaSyncLog findMany
+   */
+  export type MisaSyncLogFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSyncLog
+     */
+    select?: MisaSyncLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSyncLog
+     */
+    omit?: MisaSyncLogOmit<ExtArgs> | null
+    /**
+     * Filter, which MisaSyncLogs to fetch.
+     */
+    where?: MisaSyncLogWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaSyncLogs to fetch.
+     */
+    orderBy?: MisaSyncLogOrderByWithRelationInput | MisaSyncLogOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing MisaSyncLogs.
+     */
+    cursor?: MisaSyncLogWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaSyncLogs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaSyncLogs.
+     */
+    skip?: number
+    distinct?: MisaSyncLogScalarFieldEnum | MisaSyncLogScalarFieldEnum[]
+  }
+
+  /**
+   * MisaSyncLog create
+   */
+  export type MisaSyncLogCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSyncLog
+     */
+    select?: MisaSyncLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSyncLog
+     */
+    omit?: MisaSyncLogOmit<ExtArgs> | null
+    /**
+     * The data needed to create a MisaSyncLog.
+     */
+    data: XOR<MisaSyncLogCreateInput, MisaSyncLogUncheckedCreateInput>
+  }
+
+  /**
+   * MisaSyncLog createMany
+   */
+  export type MisaSyncLogCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many MisaSyncLogs.
+     */
+    data: MisaSyncLogCreateManyInput | MisaSyncLogCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * MisaSyncLog createManyAndReturn
+   */
+  export type MisaSyncLogCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSyncLog
+     */
+    select?: MisaSyncLogSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSyncLog
+     */
+    omit?: MisaSyncLogOmit<ExtArgs> | null
+    /**
+     * The data used to create many MisaSyncLogs.
+     */
+    data: MisaSyncLogCreateManyInput | MisaSyncLogCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * MisaSyncLog update
+   */
+  export type MisaSyncLogUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSyncLog
+     */
+    select?: MisaSyncLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSyncLog
+     */
+    omit?: MisaSyncLogOmit<ExtArgs> | null
+    /**
+     * The data needed to update a MisaSyncLog.
+     */
+    data: XOR<MisaSyncLogUpdateInput, MisaSyncLogUncheckedUpdateInput>
+    /**
+     * Choose, which MisaSyncLog to update.
+     */
+    where: MisaSyncLogWhereUniqueInput
+  }
+
+  /**
+   * MisaSyncLog updateMany
+   */
+  export type MisaSyncLogUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update MisaSyncLogs.
+     */
+    data: XOR<MisaSyncLogUpdateManyMutationInput, MisaSyncLogUncheckedUpdateManyInput>
+    /**
+     * Filter which MisaSyncLogs to update
+     */
+    where?: MisaSyncLogWhereInput
+    /**
+     * Limit how many MisaSyncLogs to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * MisaSyncLog updateManyAndReturn
+   */
+  export type MisaSyncLogUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSyncLog
+     */
+    select?: MisaSyncLogSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSyncLog
+     */
+    omit?: MisaSyncLogOmit<ExtArgs> | null
+    /**
+     * The data used to update MisaSyncLogs.
+     */
+    data: XOR<MisaSyncLogUpdateManyMutationInput, MisaSyncLogUncheckedUpdateManyInput>
+    /**
+     * Filter which MisaSyncLogs to update
+     */
+    where?: MisaSyncLogWhereInput
+    /**
+     * Limit how many MisaSyncLogs to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * MisaSyncLog upsert
+   */
+  export type MisaSyncLogUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSyncLog
+     */
+    select?: MisaSyncLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSyncLog
+     */
+    omit?: MisaSyncLogOmit<ExtArgs> | null
+    /**
+     * The filter to search for the MisaSyncLog to update in case it exists.
+     */
+    where: MisaSyncLogWhereUniqueInput
+    /**
+     * In case the MisaSyncLog found by the `where` argument doesn't exist, create a new MisaSyncLog with this data.
+     */
+    create: XOR<MisaSyncLogCreateInput, MisaSyncLogUncheckedCreateInput>
+    /**
+     * In case the MisaSyncLog was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<MisaSyncLogUpdateInput, MisaSyncLogUncheckedUpdateInput>
+  }
+
+  /**
+   * MisaSyncLog delete
+   */
+  export type MisaSyncLogDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSyncLog
+     */
+    select?: MisaSyncLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSyncLog
+     */
+    omit?: MisaSyncLogOmit<ExtArgs> | null
+    /**
+     * Filter which MisaSyncLog to delete.
+     */
+    where: MisaSyncLogWhereUniqueInput
+  }
+
+  /**
+   * MisaSyncLog deleteMany
+   */
+  export type MisaSyncLogDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MisaSyncLogs to delete
+     */
+    where?: MisaSyncLogWhereInput
+    /**
+     * Limit how many MisaSyncLogs to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * MisaSyncLog without action
+   */
+  export type MisaSyncLogDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSyncLog
+     */
+    select?: MisaSyncLogSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSyncLog
+     */
+    omit?: MisaSyncLogOmit<ExtArgs> | null
+  }
+
+
+  /**
    * Enums
    */
 
@@ -165332,6 +168982,65 @@ export namespace Prisma {
   };
 
   export type KiotVietSyncLogScalarFieldEnum = (typeof KiotVietSyncLogScalarFieldEnum)[keyof typeof KiotVietSyncLogScalarFieldEnum]
+
+
+  export const MisaConfigScalarFieldEnum: {
+    id: 'id',
+    appId: 'appId',
+    accessCode: 'accessCode',
+    orgCompanyCode: 'orgCompanyCode',
+    baseUrl: 'baseUrl',
+    enabled: 'enabled',
+    syncProducts: 'syncProducts',
+    syncPartners: 'syncPartners',
+    syncStocks: 'syncStocks',
+    syncBalance: 'syncBalance',
+    overwriteNames: 'overwriteNames',
+    overwritePrices: 'overwritePrices',
+    overwriteStock: 'overwriteStock',
+    defaultCategoryId: 'defaultCategoryId',
+    defaultWarehouseId: 'defaultWarehouseId',
+    lastSyncAt: 'lastSyncAt',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type MisaConfigScalarFieldEnum = (typeof MisaConfigScalarFieldEnum)[keyof typeof MisaConfigScalarFieldEnum]
+
+
+  export const MisaMapScalarFieldEnum: {
+    id: 'id',
+    entity: 'entity',
+    misaId: 'misaId',
+    misaCode: 'misaCode',
+    localId: 'localId',
+    syncedAt: 'syncedAt'
+  };
+
+  export type MisaMapScalarFieldEnum = (typeof MisaMapScalarFieldEnum)[keyof typeof MisaMapScalarFieldEnum]
+
+
+  export const MisaSyncLogScalarFieldEnum: {
+    id: 'id',
+    entity: 'entity',
+    mode: 'mode',
+    dryRun: 'dryRun',
+    fromDate: 'fromDate',
+    fetched: 'fetched',
+    created: 'created',
+    updated: 'updated',
+    skipped: 'skipped',
+    failed: 'failed',
+    status: 'status',
+    errors: 'errors',
+    details: 'details',
+    startedAt: 'startedAt',
+    heartbeatAt: 'heartbeatAt',
+    attempts: 'attempts',
+    finishedAt: 'finishedAt'
+  };
+
+  export type MisaSyncLogScalarFieldEnum = (typeof MisaSyncLogScalarFieldEnum)[keyof typeof MisaSyncLogScalarFieldEnum]
 
 
   export const SortOrder: {
@@ -178154,6 +181863,295 @@ export namespace Prisma {
     heartbeatAt?: DateTimeNullableWithAggregatesFilter<"KiotVietSyncLog"> | Date | string | null
     attempts?: IntWithAggregatesFilter<"KiotVietSyncLog"> | number
     finishedAt?: DateTimeNullableWithAggregatesFilter<"KiotVietSyncLog"> | Date | string | null
+  }
+
+  export type MisaConfigWhereInput = {
+    AND?: MisaConfigWhereInput | MisaConfigWhereInput[]
+    OR?: MisaConfigWhereInput[]
+    NOT?: MisaConfigWhereInput | MisaConfigWhereInput[]
+    id?: StringFilter<"MisaConfig"> | string
+    appId?: StringFilter<"MisaConfig"> | string
+    accessCode?: StringFilter<"MisaConfig"> | string
+    orgCompanyCode?: StringFilter<"MisaConfig"> | string
+    baseUrl?: StringNullableFilter<"MisaConfig"> | string | null
+    enabled?: BoolFilter<"MisaConfig"> | boolean
+    syncProducts?: BoolFilter<"MisaConfig"> | boolean
+    syncPartners?: BoolFilter<"MisaConfig"> | boolean
+    syncStocks?: BoolFilter<"MisaConfig"> | boolean
+    syncBalance?: BoolFilter<"MisaConfig"> | boolean
+    overwriteNames?: BoolFilter<"MisaConfig"> | boolean
+    overwritePrices?: BoolFilter<"MisaConfig"> | boolean
+    overwriteStock?: BoolFilter<"MisaConfig"> | boolean
+    defaultCategoryId?: StringNullableFilter<"MisaConfig"> | string | null
+    defaultWarehouseId?: StringNullableFilter<"MisaConfig"> | string | null
+    lastSyncAt?: DateTimeNullableFilter<"MisaConfig"> | Date | string | null
+    createdAt?: DateTimeFilter<"MisaConfig"> | Date | string
+    updatedAt?: DateTimeFilter<"MisaConfig"> | Date | string
+  }
+
+  export type MisaConfigOrderByWithRelationInput = {
+    id?: SortOrder
+    appId?: SortOrder
+    accessCode?: SortOrder
+    orgCompanyCode?: SortOrder
+    baseUrl?: SortOrderInput | SortOrder
+    enabled?: SortOrder
+    syncProducts?: SortOrder
+    syncPartners?: SortOrder
+    syncStocks?: SortOrder
+    syncBalance?: SortOrder
+    overwriteNames?: SortOrder
+    overwritePrices?: SortOrder
+    overwriteStock?: SortOrder
+    defaultCategoryId?: SortOrderInput | SortOrder
+    defaultWarehouseId?: SortOrderInput | SortOrder
+    lastSyncAt?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type MisaConfigWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: MisaConfigWhereInput | MisaConfigWhereInput[]
+    OR?: MisaConfigWhereInput[]
+    NOT?: MisaConfigWhereInput | MisaConfigWhereInput[]
+    appId?: StringFilter<"MisaConfig"> | string
+    accessCode?: StringFilter<"MisaConfig"> | string
+    orgCompanyCode?: StringFilter<"MisaConfig"> | string
+    baseUrl?: StringNullableFilter<"MisaConfig"> | string | null
+    enabled?: BoolFilter<"MisaConfig"> | boolean
+    syncProducts?: BoolFilter<"MisaConfig"> | boolean
+    syncPartners?: BoolFilter<"MisaConfig"> | boolean
+    syncStocks?: BoolFilter<"MisaConfig"> | boolean
+    syncBalance?: BoolFilter<"MisaConfig"> | boolean
+    overwriteNames?: BoolFilter<"MisaConfig"> | boolean
+    overwritePrices?: BoolFilter<"MisaConfig"> | boolean
+    overwriteStock?: BoolFilter<"MisaConfig"> | boolean
+    defaultCategoryId?: StringNullableFilter<"MisaConfig"> | string | null
+    defaultWarehouseId?: StringNullableFilter<"MisaConfig"> | string | null
+    lastSyncAt?: DateTimeNullableFilter<"MisaConfig"> | Date | string | null
+    createdAt?: DateTimeFilter<"MisaConfig"> | Date | string
+    updatedAt?: DateTimeFilter<"MisaConfig"> | Date | string
+  }, "id">
+
+  export type MisaConfigOrderByWithAggregationInput = {
+    id?: SortOrder
+    appId?: SortOrder
+    accessCode?: SortOrder
+    orgCompanyCode?: SortOrder
+    baseUrl?: SortOrderInput | SortOrder
+    enabled?: SortOrder
+    syncProducts?: SortOrder
+    syncPartners?: SortOrder
+    syncStocks?: SortOrder
+    syncBalance?: SortOrder
+    overwriteNames?: SortOrder
+    overwritePrices?: SortOrder
+    overwriteStock?: SortOrder
+    defaultCategoryId?: SortOrderInput | SortOrder
+    defaultWarehouseId?: SortOrderInput | SortOrder
+    lastSyncAt?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: MisaConfigCountOrderByAggregateInput
+    _max?: MisaConfigMaxOrderByAggregateInput
+    _min?: MisaConfigMinOrderByAggregateInput
+  }
+
+  export type MisaConfigScalarWhereWithAggregatesInput = {
+    AND?: MisaConfigScalarWhereWithAggregatesInput | MisaConfigScalarWhereWithAggregatesInput[]
+    OR?: MisaConfigScalarWhereWithAggregatesInput[]
+    NOT?: MisaConfigScalarWhereWithAggregatesInput | MisaConfigScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"MisaConfig"> | string
+    appId?: StringWithAggregatesFilter<"MisaConfig"> | string
+    accessCode?: StringWithAggregatesFilter<"MisaConfig"> | string
+    orgCompanyCode?: StringWithAggregatesFilter<"MisaConfig"> | string
+    baseUrl?: StringNullableWithAggregatesFilter<"MisaConfig"> | string | null
+    enabled?: BoolWithAggregatesFilter<"MisaConfig"> | boolean
+    syncProducts?: BoolWithAggregatesFilter<"MisaConfig"> | boolean
+    syncPartners?: BoolWithAggregatesFilter<"MisaConfig"> | boolean
+    syncStocks?: BoolWithAggregatesFilter<"MisaConfig"> | boolean
+    syncBalance?: BoolWithAggregatesFilter<"MisaConfig"> | boolean
+    overwriteNames?: BoolWithAggregatesFilter<"MisaConfig"> | boolean
+    overwritePrices?: BoolWithAggregatesFilter<"MisaConfig"> | boolean
+    overwriteStock?: BoolWithAggregatesFilter<"MisaConfig"> | boolean
+    defaultCategoryId?: StringNullableWithAggregatesFilter<"MisaConfig"> | string | null
+    defaultWarehouseId?: StringNullableWithAggregatesFilter<"MisaConfig"> | string | null
+    lastSyncAt?: DateTimeNullableWithAggregatesFilter<"MisaConfig"> | Date | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"MisaConfig"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"MisaConfig"> | Date | string
+  }
+
+  export type MisaMapWhereInput = {
+    AND?: MisaMapWhereInput | MisaMapWhereInput[]
+    OR?: MisaMapWhereInput[]
+    NOT?: MisaMapWhereInput | MisaMapWhereInput[]
+    id?: StringFilter<"MisaMap"> | string
+    entity?: StringFilter<"MisaMap"> | string
+    misaId?: StringFilter<"MisaMap"> | string
+    misaCode?: StringNullableFilter<"MisaMap"> | string | null
+    localId?: StringFilter<"MisaMap"> | string
+    syncedAt?: DateTimeFilter<"MisaMap"> | Date | string
+  }
+
+  export type MisaMapOrderByWithRelationInput = {
+    id?: SortOrder
+    entity?: SortOrder
+    misaId?: SortOrder
+    misaCode?: SortOrderInput | SortOrder
+    localId?: SortOrder
+    syncedAt?: SortOrder
+  }
+
+  export type MisaMapWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    entity_misaId?: MisaMapEntityMisaIdCompoundUniqueInput
+    AND?: MisaMapWhereInput | MisaMapWhereInput[]
+    OR?: MisaMapWhereInput[]
+    NOT?: MisaMapWhereInput | MisaMapWhereInput[]
+    entity?: StringFilter<"MisaMap"> | string
+    misaId?: StringFilter<"MisaMap"> | string
+    misaCode?: StringNullableFilter<"MisaMap"> | string | null
+    localId?: StringFilter<"MisaMap"> | string
+    syncedAt?: DateTimeFilter<"MisaMap"> | Date | string
+  }, "id" | "entity_misaId">
+
+  export type MisaMapOrderByWithAggregationInput = {
+    id?: SortOrder
+    entity?: SortOrder
+    misaId?: SortOrder
+    misaCode?: SortOrderInput | SortOrder
+    localId?: SortOrder
+    syncedAt?: SortOrder
+    _count?: MisaMapCountOrderByAggregateInput
+    _max?: MisaMapMaxOrderByAggregateInput
+    _min?: MisaMapMinOrderByAggregateInput
+  }
+
+  export type MisaMapScalarWhereWithAggregatesInput = {
+    AND?: MisaMapScalarWhereWithAggregatesInput | MisaMapScalarWhereWithAggregatesInput[]
+    OR?: MisaMapScalarWhereWithAggregatesInput[]
+    NOT?: MisaMapScalarWhereWithAggregatesInput | MisaMapScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"MisaMap"> | string
+    entity?: StringWithAggregatesFilter<"MisaMap"> | string
+    misaId?: StringWithAggregatesFilter<"MisaMap"> | string
+    misaCode?: StringNullableWithAggregatesFilter<"MisaMap"> | string | null
+    localId?: StringWithAggregatesFilter<"MisaMap"> | string
+    syncedAt?: DateTimeWithAggregatesFilter<"MisaMap"> | Date | string
+  }
+
+  export type MisaSyncLogWhereInput = {
+    AND?: MisaSyncLogWhereInput | MisaSyncLogWhereInput[]
+    OR?: MisaSyncLogWhereInput[]
+    NOT?: MisaSyncLogWhereInput | MisaSyncLogWhereInput[]
+    id?: StringFilter<"MisaSyncLog"> | string
+    entity?: StringFilter<"MisaSyncLog"> | string
+    mode?: StringFilter<"MisaSyncLog"> | string
+    dryRun?: BoolFilter<"MisaSyncLog"> | boolean
+    fromDate?: DateTimeNullableFilter<"MisaSyncLog"> | Date | string | null
+    fetched?: IntFilter<"MisaSyncLog"> | number
+    created?: IntFilter<"MisaSyncLog"> | number
+    updated?: IntFilter<"MisaSyncLog"> | number
+    skipped?: IntFilter<"MisaSyncLog"> | number
+    failed?: IntFilter<"MisaSyncLog"> | number
+    status?: StringFilter<"MisaSyncLog"> | string
+    errors?: StringNullableFilter<"MisaSyncLog"> | string | null
+    details?: StringNullableFilter<"MisaSyncLog"> | string | null
+    startedAt?: DateTimeFilter<"MisaSyncLog"> | Date | string
+    heartbeatAt?: DateTimeNullableFilter<"MisaSyncLog"> | Date | string | null
+    attempts?: IntFilter<"MisaSyncLog"> | number
+    finishedAt?: DateTimeNullableFilter<"MisaSyncLog"> | Date | string | null
+  }
+
+  export type MisaSyncLogOrderByWithRelationInput = {
+    id?: SortOrder
+    entity?: SortOrder
+    mode?: SortOrder
+    dryRun?: SortOrder
+    fromDate?: SortOrderInput | SortOrder
+    fetched?: SortOrder
+    created?: SortOrder
+    updated?: SortOrder
+    skipped?: SortOrder
+    failed?: SortOrder
+    status?: SortOrder
+    errors?: SortOrderInput | SortOrder
+    details?: SortOrderInput | SortOrder
+    startedAt?: SortOrder
+    heartbeatAt?: SortOrderInput | SortOrder
+    attempts?: SortOrder
+    finishedAt?: SortOrderInput | SortOrder
+  }
+
+  export type MisaSyncLogWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: MisaSyncLogWhereInput | MisaSyncLogWhereInput[]
+    OR?: MisaSyncLogWhereInput[]
+    NOT?: MisaSyncLogWhereInput | MisaSyncLogWhereInput[]
+    entity?: StringFilter<"MisaSyncLog"> | string
+    mode?: StringFilter<"MisaSyncLog"> | string
+    dryRun?: BoolFilter<"MisaSyncLog"> | boolean
+    fromDate?: DateTimeNullableFilter<"MisaSyncLog"> | Date | string | null
+    fetched?: IntFilter<"MisaSyncLog"> | number
+    created?: IntFilter<"MisaSyncLog"> | number
+    updated?: IntFilter<"MisaSyncLog"> | number
+    skipped?: IntFilter<"MisaSyncLog"> | number
+    failed?: IntFilter<"MisaSyncLog"> | number
+    status?: StringFilter<"MisaSyncLog"> | string
+    errors?: StringNullableFilter<"MisaSyncLog"> | string | null
+    details?: StringNullableFilter<"MisaSyncLog"> | string | null
+    startedAt?: DateTimeFilter<"MisaSyncLog"> | Date | string
+    heartbeatAt?: DateTimeNullableFilter<"MisaSyncLog"> | Date | string | null
+    attempts?: IntFilter<"MisaSyncLog"> | number
+    finishedAt?: DateTimeNullableFilter<"MisaSyncLog"> | Date | string | null
+  }, "id">
+
+  export type MisaSyncLogOrderByWithAggregationInput = {
+    id?: SortOrder
+    entity?: SortOrder
+    mode?: SortOrder
+    dryRun?: SortOrder
+    fromDate?: SortOrderInput | SortOrder
+    fetched?: SortOrder
+    created?: SortOrder
+    updated?: SortOrder
+    skipped?: SortOrder
+    failed?: SortOrder
+    status?: SortOrder
+    errors?: SortOrderInput | SortOrder
+    details?: SortOrderInput | SortOrder
+    startedAt?: SortOrder
+    heartbeatAt?: SortOrderInput | SortOrder
+    attempts?: SortOrder
+    finishedAt?: SortOrderInput | SortOrder
+    _count?: MisaSyncLogCountOrderByAggregateInput
+    _avg?: MisaSyncLogAvgOrderByAggregateInput
+    _max?: MisaSyncLogMaxOrderByAggregateInput
+    _min?: MisaSyncLogMinOrderByAggregateInput
+    _sum?: MisaSyncLogSumOrderByAggregateInput
+  }
+
+  export type MisaSyncLogScalarWhereWithAggregatesInput = {
+    AND?: MisaSyncLogScalarWhereWithAggregatesInput | MisaSyncLogScalarWhereWithAggregatesInput[]
+    OR?: MisaSyncLogScalarWhereWithAggregatesInput[]
+    NOT?: MisaSyncLogScalarWhereWithAggregatesInput | MisaSyncLogScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"MisaSyncLog"> | string
+    entity?: StringWithAggregatesFilter<"MisaSyncLog"> | string
+    mode?: StringWithAggregatesFilter<"MisaSyncLog"> | string
+    dryRun?: BoolWithAggregatesFilter<"MisaSyncLog"> | boolean
+    fromDate?: DateTimeNullableWithAggregatesFilter<"MisaSyncLog"> | Date | string | null
+    fetched?: IntWithAggregatesFilter<"MisaSyncLog"> | number
+    created?: IntWithAggregatesFilter<"MisaSyncLog"> | number
+    updated?: IntWithAggregatesFilter<"MisaSyncLog"> | number
+    skipped?: IntWithAggregatesFilter<"MisaSyncLog"> | number
+    failed?: IntWithAggregatesFilter<"MisaSyncLog"> | number
+    status?: StringWithAggregatesFilter<"MisaSyncLog"> | string
+    errors?: StringNullableWithAggregatesFilter<"MisaSyncLog"> | string | null
+    details?: StringNullableWithAggregatesFilter<"MisaSyncLog"> | string | null
+    startedAt?: DateTimeWithAggregatesFilter<"MisaSyncLog"> | Date | string
+    heartbeatAt?: DateTimeNullableWithAggregatesFilter<"MisaSyncLog"> | Date | string | null
+    attempts?: IntWithAggregatesFilter<"MisaSyncLog"> | number
+    finishedAt?: DateTimeNullableWithAggregatesFilter<"MisaSyncLog"> | Date | string | null
   }
 
   export type BranchCreateInput = {
@@ -193266,6 +197264,356 @@ export namespace Prisma {
     finishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   }
 
+  export type MisaConfigCreateInput = {
+    id?: string
+    appId: string
+    accessCode: string
+    orgCompanyCode: string
+    baseUrl?: string | null
+    enabled?: boolean
+    syncProducts?: boolean
+    syncPartners?: boolean
+    syncStocks?: boolean
+    syncBalance?: boolean
+    overwriteNames?: boolean
+    overwritePrices?: boolean
+    overwriteStock?: boolean
+    defaultCategoryId?: string | null
+    defaultWarehouseId?: string | null
+    lastSyncAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type MisaConfigUncheckedCreateInput = {
+    id?: string
+    appId: string
+    accessCode: string
+    orgCompanyCode: string
+    baseUrl?: string | null
+    enabled?: boolean
+    syncProducts?: boolean
+    syncPartners?: boolean
+    syncStocks?: boolean
+    syncBalance?: boolean
+    overwriteNames?: boolean
+    overwritePrices?: boolean
+    overwriteStock?: boolean
+    defaultCategoryId?: string | null
+    defaultWarehouseId?: string | null
+    lastSyncAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type MisaConfigUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    appId?: StringFieldUpdateOperationsInput | string
+    accessCode?: StringFieldUpdateOperationsInput | string
+    orgCompanyCode?: StringFieldUpdateOperationsInput | string
+    baseUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    enabled?: BoolFieldUpdateOperationsInput | boolean
+    syncProducts?: BoolFieldUpdateOperationsInput | boolean
+    syncPartners?: BoolFieldUpdateOperationsInput | boolean
+    syncStocks?: BoolFieldUpdateOperationsInput | boolean
+    syncBalance?: BoolFieldUpdateOperationsInput | boolean
+    overwriteNames?: BoolFieldUpdateOperationsInput | boolean
+    overwritePrices?: BoolFieldUpdateOperationsInput | boolean
+    overwriteStock?: BoolFieldUpdateOperationsInput | boolean
+    defaultCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    defaultWarehouseId?: NullableStringFieldUpdateOperationsInput | string | null
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MisaConfigUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    appId?: StringFieldUpdateOperationsInput | string
+    accessCode?: StringFieldUpdateOperationsInput | string
+    orgCompanyCode?: StringFieldUpdateOperationsInput | string
+    baseUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    enabled?: BoolFieldUpdateOperationsInput | boolean
+    syncProducts?: BoolFieldUpdateOperationsInput | boolean
+    syncPartners?: BoolFieldUpdateOperationsInput | boolean
+    syncStocks?: BoolFieldUpdateOperationsInput | boolean
+    syncBalance?: BoolFieldUpdateOperationsInput | boolean
+    overwriteNames?: BoolFieldUpdateOperationsInput | boolean
+    overwritePrices?: BoolFieldUpdateOperationsInput | boolean
+    overwriteStock?: BoolFieldUpdateOperationsInput | boolean
+    defaultCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    defaultWarehouseId?: NullableStringFieldUpdateOperationsInput | string | null
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MisaConfigCreateManyInput = {
+    id?: string
+    appId: string
+    accessCode: string
+    orgCompanyCode: string
+    baseUrl?: string | null
+    enabled?: boolean
+    syncProducts?: boolean
+    syncPartners?: boolean
+    syncStocks?: boolean
+    syncBalance?: boolean
+    overwriteNames?: boolean
+    overwritePrices?: boolean
+    overwriteStock?: boolean
+    defaultCategoryId?: string | null
+    defaultWarehouseId?: string | null
+    lastSyncAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type MisaConfigUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    appId?: StringFieldUpdateOperationsInput | string
+    accessCode?: StringFieldUpdateOperationsInput | string
+    orgCompanyCode?: StringFieldUpdateOperationsInput | string
+    baseUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    enabled?: BoolFieldUpdateOperationsInput | boolean
+    syncProducts?: BoolFieldUpdateOperationsInput | boolean
+    syncPartners?: BoolFieldUpdateOperationsInput | boolean
+    syncStocks?: BoolFieldUpdateOperationsInput | boolean
+    syncBalance?: BoolFieldUpdateOperationsInput | boolean
+    overwriteNames?: BoolFieldUpdateOperationsInput | boolean
+    overwritePrices?: BoolFieldUpdateOperationsInput | boolean
+    overwriteStock?: BoolFieldUpdateOperationsInput | boolean
+    defaultCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    defaultWarehouseId?: NullableStringFieldUpdateOperationsInput | string | null
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MisaConfigUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    appId?: StringFieldUpdateOperationsInput | string
+    accessCode?: StringFieldUpdateOperationsInput | string
+    orgCompanyCode?: StringFieldUpdateOperationsInput | string
+    baseUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    enabled?: BoolFieldUpdateOperationsInput | boolean
+    syncProducts?: BoolFieldUpdateOperationsInput | boolean
+    syncPartners?: BoolFieldUpdateOperationsInput | boolean
+    syncStocks?: BoolFieldUpdateOperationsInput | boolean
+    syncBalance?: BoolFieldUpdateOperationsInput | boolean
+    overwriteNames?: BoolFieldUpdateOperationsInput | boolean
+    overwritePrices?: BoolFieldUpdateOperationsInput | boolean
+    overwriteStock?: BoolFieldUpdateOperationsInput | boolean
+    defaultCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
+    defaultWarehouseId?: NullableStringFieldUpdateOperationsInput | string | null
+    lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MisaMapCreateInput = {
+    id?: string
+    entity: string
+    misaId: string
+    misaCode?: string | null
+    localId: string
+    syncedAt?: Date | string
+  }
+
+  export type MisaMapUncheckedCreateInput = {
+    id?: string
+    entity: string
+    misaId: string
+    misaCode?: string | null
+    localId: string
+    syncedAt?: Date | string
+  }
+
+  export type MisaMapUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    entity?: StringFieldUpdateOperationsInput | string
+    misaId?: StringFieldUpdateOperationsInput | string
+    misaCode?: NullableStringFieldUpdateOperationsInput | string | null
+    localId?: StringFieldUpdateOperationsInput | string
+    syncedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MisaMapUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    entity?: StringFieldUpdateOperationsInput | string
+    misaId?: StringFieldUpdateOperationsInput | string
+    misaCode?: NullableStringFieldUpdateOperationsInput | string | null
+    localId?: StringFieldUpdateOperationsInput | string
+    syncedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MisaMapCreateManyInput = {
+    id?: string
+    entity: string
+    misaId: string
+    misaCode?: string | null
+    localId: string
+    syncedAt?: Date | string
+  }
+
+  export type MisaMapUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    entity?: StringFieldUpdateOperationsInput | string
+    misaId?: StringFieldUpdateOperationsInput | string
+    misaCode?: NullableStringFieldUpdateOperationsInput | string | null
+    localId?: StringFieldUpdateOperationsInput | string
+    syncedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MisaMapUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    entity?: StringFieldUpdateOperationsInput | string
+    misaId?: StringFieldUpdateOperationsInput | string
+    misaCode?: NullableStringFieldUpdateOperationsInput | string | null
+    localId?: StringFieldUpdateOperationsInput | string
+    syncedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MisaSyncLogCreateInput = {
+    id?: string
+    entity: string
+    mode?: string
+    dryRun?: boolean
+    fromDate?: Date | string | null
+    fetched?: number
+    created?: number
+    updated?: number
+    skipped?: number
+    failed?: number
+    status?: string
+    errors?: string | null
+    details?: string | null
+    startedAt?: Date | string
+    heartbeatAt?: Date | string | null
+    attempts?: number
+    finishedAt?: Date | string | null
+  }
+
+  export type MisaSyncLogUncheckedCreateInput = {
+    id?: string
+    entity: string
+    mode?: string
+    dryRun?: boolean
+    fromDate?: Date | string | null
+    fetched?: number
+    created?: number
+    updated?: number
+    skipped?: number
+    failed?: number
+    status?: string
+    errors?: string | null
+    details?: string | null
+    startedAt?: Date | string
+    heartbeatAt?: Date | string | null
+    attempts?: number
+    finishedAt?: Date | string | null
+  }
+
+  export type MisaSyncLogUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    entity?: StringFieldUpdateOperationsInput | string
+    mode?: StringFieldUpdateOperationsInput | string
+    dryRun?: BoolFieldUpdateOperationsInput | boolean
+    fromDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    fetched?: IntFieldUpdateOperationsInput | number
+    created?: IntFieldUpdateOperationsInput | number
+    updated?: IntFieldUpdateOperationsInput | number
+    skipped?: IntFieldUpdateOperationsInput | number
+    failed?: IntFieldUpdateOperationsInput | number
+    status?: StringFieldUpdateOperationsInput | string
+    errors?: NullableStringFieldUpdateOperationsInput | string | null
+    details?: NullableStringFieldUpdateOperationsInput | string | null
+    startedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    heartbeatAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    attempts?: IntFieldUpdateOperationsInput | number
+    finishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  }
+
+  export type MisaSyncLogUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    entity?: StringFieldUpdateOperationsInput | string
+    mode?: StringFieldUpdateOperationsInput | string
+    dryRun?: BoolFieldUpdateOperationsInput | boolean
+    fromDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    fetched?: IntFieldUpdateOperationsInput | number
+    created?: IntFieldUpdateOperationsInput | number
+    updated?: IntFieldUpdateOperationsInput | number
+    skipped?: IntFieldUpdateOperationsInput | number
+    failed?: IntFieldUpdateOperationsInput | number
+    status?: StringFieldUpdateOperationsInput | string
+    errors?: NullableStringFieldUpdateOperationsInput | string | null
+    details?: NullableStringFieldUpdateOperationsInput | string | null
+    startedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    heartbeatAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    attempts?: IntFieldUpdateOperationsInput | number
+    finishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  }
+
+  export type MisaSyncLogCreateManyInput = {
+    id?: string
+    entity: string
+    mode?: string
+    dryRun?: boolean
+    fromDate?: Date | string | null
+    fetched?: number
+    created?: number
+    updated?: number
+    skipped?: number
+    failed?: number
+    status?: string
+    errors?: string | null
+    details?: string | null
+    startedAt?: Date | string
+    heartbeatAt?: Date | string | null
+    attempts?: number
+    finishedAt?: Date | string | null
+  }
+
+  export type MisaSyncLogUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    entity?: StringFieldUpdateOperationsInput | string
+    mode?: StringFieldUpdateOperationsInput | string
+    dryRun?: BoolFieldUpdateOperationsInput | boolean
+    fromDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    fetched?: IntFieldUpdateOperationsInput | number
+    created?: IntFieldUpdateOperationsInput | number
+    updated?: IntFieldUpdateOperationsInput | number
+    skipped?: IntFieldUpdateOperationsInput | number
+    failed?: IntFieldUpdateOperationsInput | number
+    status?: StringFieldUpdateOperationsInput | string
+    errors?: NullableStringFieldUpdateOperationsInput | string | null
+    details?: NullableStringFieldUpdateOperationsInput | string | null
+    startedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    heartbeatAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    attempts?: IntFieldUpdateOperationsInput | number
+    finishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  }
+
+  export type MisaSyncLogUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    entity?: StringFieldUpdateOperationsInput | string
+    mode?: StringFieldUpdateOperationsInput | string
+    dryRun?: BoolFieldUpdateOperationsInput | boolean
+    fromDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    fetched?: IntFieldUpdateOperationsInput | number
+    created?: IntFieldUpdateOperationsInput | number
+    updated?: IntFieldUpdateOperationsInput | number
+    skipped?: IntFieldUpdateOperationsInput | number
+    failed?: IntFieldUpdateOperationsInput | number
+    status?: StringFieldUpdateOperationsInput | string
+    errors?: NullableStringFieldUpdateOperationsInput | string | null
+    details?: NullableStringFieldUpdateOperationsInput | string | null
+    startedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    heartbeatAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    attempts?: IntFieldUpdateOperationsInput | number
+    finishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  }
+
   export type StringFilter<$PrismaModel = never> = {
     equals?: string | StringFieldRefInput<$PrismaModel>
     in?: string[] | ListStringFieldRefInput<$PrismaModel>
@@ -201854,6 +206202,179 @@ export namespace Prisma {
   }
 
   export type KiotVietSyncLogSumOrderByAggregateInput = {
+    fetched?: SortOrder
+    created?: SortOrder
+    updated?: SortOrder
+    skipped?: SortOrder
+    failed?: SortOrder
+    attempts?: SortOrder
+  }
+
+  export type MisaConfigCountOrderByAggregateInput = {
+    id?: SortOrder
+    appId?: SortOrder
+    accessCode?: SortOrder
+    orgCompanyCode?: SortOrder
+    baseUrl?: SortOrder
+    enabled?: SortOrder
+    syncProducts?: SortOrder
+    syncPartners?: SortOrder
+    syncStocks?: SortOrder
+    syncBalance?: SortOrder
+    overwriteNames?: SortOrder
+    overwritePrices?: SortOrder
+    overwriteStock?: SortOrder
+    defaultCategoryId?: SortOrder
+    defaultWarehouseId?: SortOrder
+    lastSyncAt?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type MisaConfigMaxOrderByAggregateInput = {
+    id?: SortOrder
+    appId?: SortOrder
+    accessCode?: SortOrder
+    orgCompanyCode?: SortOrder
+    baseUrl?: SortOrder
+    enabled?: SortOrder
+    syncProducts?: SortOrder
+    syncPartners?: SortOrder
+    syncStocks?: SortOrder
+    syncBalance?: SortOrder
+    overwriteNames?: SortOrder
+    overwritePrices?: SortOrder
+    overwriteStock?: SortOrder
+    defaultCategoryId?: SortOrder
+    defaultWarehouseId?: SortOrder
+    lastSyncAt?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type MisaConfigMinOrderByAggregateInput = {
+    id?: SortOrder
+    appId?: SortOrder
+    accessCode?: SortOrder
+    orgCompanyCode?: SortOrder
+    baseUrl?: SortOrder
+    enabled?: SortOrder
+    syncProducts?: SortOrder
+    syncPartners?: SortOrder
+    syncStocks?: SortOrder
+    syncBalance?: SortOrder
+    overwriteNames?: SortOrder
+    overwritePrices?: SortOrder
+    overwriteStock?: SortOrder
+    defaultCategoryId?: SortOrder
+    defaultWarehouseId?: SortOrder
+    lastSyncAt?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type MisaMapEntityMisaIdCompoundUniqueInput = {
+    entity: string
+    misaId: string
+  }
+
+  export type MisaMapCountOrderByAggregateInput = {
+    id?: SortOrder
+    entity?: SortOrder
+    misaId?: SortOrder
+    misaCode?: SortOrder
+    localId?: SortOrder
+    syncedAt?: SortOrder
+  }
+
+  export type MisaMapMaxOrderByAggregateInput = {
+    id?: SortOrder
+    entity?: SortOrder
+    misaId?: SortOrder
+    misaCode?: SortOrder
+    localId?: SortOrder
+    syncedAt?: SortOrder
+  }
+
+  export type MisaMapMinOrderByAggregateInput = {
+    id?: SortOrder
+    entity?: SortOrder
+    misaId?: SortOrder
+    misaCode?: SortOrder
+    localId?: SortOrder
+    syncedAt?: SortOrder
+  }
+
+  export type MisaSyncLogCountOrderByAggregateInput = {
+    id?: SortOrder
+    entity?: SortOrder
+    mode?: SortOrder
+    dryRun?: SortOrder
+    fromDate?: SortOrder
+    fetched?: SortOrder
+    created?: SortOrder
+    updated?: SortOrder
+    skipped?: SortOrder
+    failed?: SortOrder
+    status?: SortOrder
+    errors?: SortOrder
+    details?: SortOrder
+    startedAt?: SortOrder
+    heartbeatAt?: SortOrder
+    attempts?: SortOrder
+    finishedAt?: SortOrder
+  }
+
+  export type MisaSyncLogAvgOrderByAggregateInput = {
+    fetched?: SortOrder
+    created?: SortOrder
+    updated?: SortOrder
+    skipped?: SortOrder
+    failed?: SortOrder
+    attempts?: SortOrder
+  }
+
+  export type MisaSyncLogMaxOrderByAggregateInput = {
+    id?: SortOrder
+    entity?: SortOrder
+    mode?: SortOrder
+    dryRun?: SortOrder
+    fromDate?: SortOrder
+    fetched?: SortOrder
+    created?: SortOrder
+    updated?: SortOrder
+    skipped?: SortOrder
+    failed?: SortOrder
+    status?: SortOrder
+    errors?: SortOrder
+    details?: SortOrder
+    startedAt?: SortOrder
+    heartbeatAt?: SortOrder
+    attempts?: SortOrder
+    finishedAt?: SortOrder
+  }
+
+  export type MisaSyncLogMinOrderByAggregateInput = {
+    id?: SortOrder
+    entity?: SortOrder
+    mode?: SortOrder
+    dryRun?: SortOrder
+    fromDate?: SortOrder
+    fetched?: SortOrder
+    created?: SortOrder
+    updated?: SortOrder
+    skipped?: SortOrder
+    failed?: SortOrder
+    status?: SortOrder
+    errors?: SortOrder
+    details?: SortOrder
+    startedAt?: SortOrder
+    heartbeatAt?: SortOrder
+    attempts?: SortOrder
+    finishedAt?: SortOrder
+  }
+
+  export type MisaSyncLogSumOrderByAggregateInput = {
     fetched?: SortOrder
     created?: SortOrder
     updated?: SortOrder

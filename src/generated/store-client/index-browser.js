@@ -2253,6 +2253,56 @@ exports.Prisma.KiotVietSyncLogScalarFieldEnum = {
   finishedAt: 'finishedAt'
 };
 
+exports.Prisma.MisaConfigScalarFieldEnum = {
+  id: 'id',
+  appId: 'appId',
+  accessCode: 'accessCode',
+  orgCompanyCode: 'orgCompanyCode',
+  baseUrl: 'baseUrl',
+  enabled: 'enabled',
+  syncProducts: 'syncProducts',
+  syncPartners: 'syncPartners',
+  syncStocks: 'syncStocks',
+  syncBalance: 'syncBalance',
+  overwriteNames: 'overwriteNames',
+  overwritePrices: 'overwritePrices',
+  overwriteStock: 'overwriteStock',
+  defaultCategoryId: 'defaultCategoryId',
+  defaultWarehouseId: 'defaultWarehouseId',
+  lastSyncAt: 'lastSyncAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.MisaMapScalarFieldEnum = {
+  id: 'id',
+  entity: 'entity',
+  misaId: 'misaId',
+  misaCode: 'misaCode',
+  localId: 'localId',
+  syncedAt: 'syncedAt'
+};
+
+exports.Prisma.MisaSyncLogScalarFieldEnum = {
+  id: 'id',
+  entity: 'entity',
+  mode: 'mode',
+  dryRun: 'dryRun',
+  fromDate: 'fromDate',
+  fetched: 'fetched',
+  created: 'created',
+  updated: 'updated',
+  skipped: 'skipped',
+  failed: 'failed',
+  status: 'status',
+  errors: 'errors',
+  details: 'details',
+  startedAt: 'startedAt',
+  heartbeatAt: 'heartbeatAt',
+  attempts: 'attempts',
+  finishedAt: 'finishedAt'
+};
+
 exports.Prisma.SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -2394,7 +2444,10 @@ exports.Prisma.ModelName = {
   AiAgentRun: 'AiAgentRun',
   KiotVietConfig: 'KiotVietConfig',
   KiotVietMap: 'KiotVietMap',
-  KiotVietSyncLog: 'KiotVietSyncLog'
+  KiotVietSyncLog: 'KiotVietSyncLog',
+  MisaConfig: 'MisaConfig',
+  MisaMap: 'MisaMap',
+  MisaSyncLog: 'MisaSyncLog'
 };
 
 /**
