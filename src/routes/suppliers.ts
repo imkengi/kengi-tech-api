@@ -284,7 +284,10 @@ router.get('/:id/debt-history', authMiddleware, async (req: AuthRequest, res: Re
 
         // Process ImportReceipts
         for (const ir of importReceipts) {
-            if (ir.status === 'cancelled') continue
+            // Bỏ cả 'draft' cho KHỚP trang danh sách NCC (nó lọc
+            // status notIn ['cancelled','draft']). Trước đây sổ chi tiết tính
+            // thêm phiếu nháp nên tổng ở hai màn không bằng nhau.
+            if (ir.status === 'cancelled' || ir.status === 'draft') continue
             if (ir.totalCost > 0) {
                 history.push({
                     id: ir.id,
@@ -337,24 +340,24 @@ router.get('/:id/debt-history', authMiddleware, async (req: AuthRequest, res: Re
         history.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
         /**
-         * SỐ DƯ ĐẦU KỲ SUY NGƯỢC — giống hệt lịch sử công nợ khách hàng.
+         * SỐ DƯ ĐẦU KỲ — ĐỪNG "sửa" thành suy ngược như bên khách hàng.
          *
-         * `Supplier.payable` mới là số dư có thẩm quyền (nhập tay, import, đồng
-         * bộ). Trước đây chỗ này ĐẨY THẲNG payable lên đầu rồi CỘNG TIẾP toàn bộ
-         * phát sinh — thành ra đếm hai lần và dòng cuối không bao giờ khớp số nợ
-         * thật. Lấy hiệu để phần không giải thích được nằm gọn ở một dòng.
+         * `Supplier.payable` là SỐ DƯ ĐẦU KỲ (nhập tay / import / đồng bộ),
+         * KHÔNG phải số dư hiện tại — khác hẳn `Customer.debt`. Trang danh sách
+         * NCC cũng tính: công nợ = payable + Σ phiếu nhập chưa trả + Σ PO chưa
+         * nhận. Nên ở đây phải đẩy thẳng payable lên đầu rồi cộng tiếp phát
+         * sinh thì dòng cuối mới khớp con số trang danh sách.
          */
-        const net = history.reduce((s, i) => s + i.amount, 0)
-        const openingBalance = ((supplier as any).payable || 0) - net
-        if (Math.round(openingBalance) !== 0) {
+        const openingPayable = (supplier as any).payable || 0
+        if (Math.round(openingPayable) !== 0) {
             history.unshift({
                 id: `${supplierId}-opening`,
                 code: 'SDĐK',
                 date: history[0]?.date || ((supplier as any).createdAt || new Date(0)).toISOString(),
                 type: 'purchase',
                 label: 'Số dư đầu kỳ',
-                amount: openingBalance,
-                balance: openingBalance,
+                amount: openingPayable,
+                balance: openingPayable,
             })
         }
 
