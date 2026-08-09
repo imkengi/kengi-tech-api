@@ -358,13 +358,24 @@ async function applyStock(sp: any, product: any, target: number, opts: SyncOptio
         await tx.product.update({ where: { id: product.id }, data: { stock: target < 0 ? 0 : target } })
         await tx.inventoryTransaction.create({
             data: {
-                type: delta > 0 ? 'in' : 'out',
+                /**
+                 * SỐ LƯỢNG CÓ DẤU — cả hệ thống quy ước vậy.
+                 * Thẻ kho chia cột Nhập/Xuất theo DẤU của quantity (dương = nhập,
+                 * âm = xuất), `runningBalance` và Tổng nhập/Tổng xuất cũng cộng
+                 * theo dấu. Ghi Math.abs() thì dòng giảm tồn vẫn nhảy vào cột
+                 * Nhập, tổng nhập phồng lên và tồn luỹ kế ra số âm vô nghĩa
+                 * (đã thấy trên SHD4568 ngày 09/08/2026).
+                 *
+                 * `adjustment` là đúng bản chất: đây là điều chỉnh tồn cho khớp
+                 * KiotViet, không phải nhập mua hay bán ra. Dùng đúng từ vựng
+                 * của app ('in'/'out' không có trong các báo cáo lọc theo type).
+                 */
+                type: 'adjustment',
                 productId: product.id,
                 productName: product.name,
                 productSku: product.sku,
-                quantity: Math.abs(delta),
-                reason: 'kiotviet_sync',
-                note: reason,
+                quantity: delta,
+                reason,
                 referenceType: 'kiotviet',
                 userName: 'KiotViet Sync',
             },

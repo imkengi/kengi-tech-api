@@ -720,6 +720,25 @@ async function chayDon(sp: any, cfg: any, apply: boolean, logId: string): Promis
             }
         }
 
+        // ─ 1d. Thẻ kho: sửa dòng ghi sai DẤU số lượng ─
+        // Cả hệ thống quy ước quantity CÓ DẤU (dương = nhập, âm = xuất); bản cũ
+        // ghi Math.abs() nên dòng giảm tồn vẫn nhảy vào cột Nhập, tổng nhập
+        // phồng lên và tồn luỹ kế ra số âm. Nhận diện qua referenceType.
+        const theKhoSai: any[] = await sp.$queryRawUnsafe(
+            `SELECT COUNT(*)::int AS n FROM "InventoryTransaction"
+             WHERE "referenceType" = 'kiotviet' AND ("type" IN ('in','out'))`).catch(() => [{ n: 0 }])
+        if (apply) {
+            // 'out' đã ghi số dương → lật dấu cho đúng chiều
+            await sp.$executeRawUnsafe(
+                `UPDATE "InventoryTransaction"
+                 SET "quantity" = -ABS("quantity"), "type" = 'adjustment'
+                 WHERE "referenceType" = 'kiotviet' AND "type" = 'out'`)
+            // 'in' đã đúng dấu, chỉ đổi về từ vựng chuẩn của app
+            await sp.$executeRawUnsafe(
+                `UPDATE "InventoryTransaction" SET "type" = 'adjustment'
+                 WHERE "referenceType" = 'kiotviet' AND "type" = 'in'`)
+        }
+
         // ─ 2. Hỏi KiotViet phiếu nào KHÔNG hoàn thành rồi xoá ─
         const creds = credsOf(cfg)
         const huyHoaDon: string[] = []
@@ -784,6 +803,10 @@ async function chayDon(sp: any, cfg: any, apply: boolean, logId: string): Promis
                 details: JSON.stringify({
                     'sửa ngày': { layVe: suaNgayTx + suaNgayPo, taoMoi: 0, capNhat: suaNgayTx + suaNgayPo, boQua: 0, loi: 0, xong: true, mau: [{ hoaDon: suaNgayTx, phieuNhap: suaNgayPo }] },
                     'gỡ nợ ảo (khách hết nợ mà hoá đơn ghi chưa thu)': { layVe: noAo?.[0]?.n || 0, taoMoi: 0, capNhat: noAo?.[0]?.n || 0, boQua: 0, loi: 0, xong: true, mau: [{ soHoaDon: noAo?.[0]?.n || 0 }] },
+                    'sửa dấu số lượng trong thẻ kho': {
+                        layVe: theKhoSai?.[0]?.n || 0, taoMoi: 0, capNhat: theKhoSai?.[0]?.n || 0,
+                        boQua: 0, loi: 0, xong: true, mau: [{ soDong: theKhoSai?.[0]?.n || 0 }],
+                    },
                     '⚠ ĐÃ GỠ phiếu thu khỏi sổ quỹ — BẮT BUỘC chạy lại "Phiếu thu / chi" với khoảng ngày TOÀN BỘ để dựng lại vào sổ công nợ': {
                         layVe: mapThu.length, taoMoi: 0, capNhat: 0, boQua: mapThu.length, loi: 0, xong: true,
                         mau: [{ soPhieuDaGo: mapThu.length, viecTiepTheo: 'Đồng bộ → chọn "Phiếu thu / chi" → bấm nút khoảng ngày "Toàn bộ" → Ghi thật' }],
