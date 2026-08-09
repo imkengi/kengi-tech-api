@@ -653,7 +653,7 @@ router.post('/repair', async (req: Request, res: Response) => {
             },
         })
 
-        void chayDon(store.sp, cfg, apply, log.id).catch(async (e: any) => {
+        void chayDon(store.sp, cfg, apply, log.id, b?.goPhieuThu === true).catch(async (e: any) => {
             await store.sp.kiotVietSyncLog.update({
                 where: { id: log.id },
                 data: { status: 'failed', finishedAt: new Date(), errors: errMsg(e).slice(0, 2000) },
@@ -664,7 +664,7 @@ router.post('/repair', async (req: Request, res: Response) => {
     }
 })
 
-async function chayDon(sp: any, cfg: any, apply: boolean, logId: string): Promise<void> {
+async function chayDon(sp: any, cfg: any, apply: boolean, logId: string, goPhieuThu: boolean): Promise<void> {
     {
         // ─ 1. Ngày: chép transactionDate → createdAt ─
         const txSaiNgay: any[] = await sp.$queryRawUnsafe(
@@ -704,15 +704,22 @@ async function chayDon(sp: any, cfg: any, apply: boolean, logId: string): Promis
                    AND c."debt" <= 0 AND t."amountReceived" < t."total"`)
         }
 
-        // ─ 1c. Phiếu thu khách trả nợ bị nhập nhầm vào SỔ QUỸ ─
-        // Kengi đọc lịch sử công nợ từ DebtEntry; bản cũ đổ hết phiếu thu vào
-        // CashReceipt nên tiền có trong sổ quỹ mà lịch sử công nợ trống trơn.
-        // Xoá các phiếu thu DO ĐỒNG BỘ TẠO (nhận diện qua KiotVietMap) cùng dấu
-        // vết của chúng, để lần đồng bộ sổ quỹ sau dựng lại cho đúng chỗ.
+        /**
+         * ─ 1c. Phiếu thu nằm trong SỔ QUỸ ─ CHỈ LÀM KHI ĐƯỢC YÊU CẦU RÕ.
+         *
+         * Bản cũ đổ MỌI phiếu thu vào CashReceipt nên lịch sử công nợ trống;
+         * cách chữa là gỡ hết rồi đồng bộ lại để chúng vào đúng sổ. Nhưng sau
+         * khi đã chữa xong, các phiếu thu còn lại trong sổ quỹ là phiếu thu
+         * KHÔNG gắn khách (thu khác) — nằm ĐÚNG CHỖ. Cứ gỡ mặc định thì mỗi lần
+         * bấm Dọn lại xoá oan dữ liệu tốt rồi bắt đồng bộ lại (đo HUTI
+         * 09/08/2026: 551 phiếu hợp lệ suýt bị gỡ).
+         *
+         * Nên: mặc định CHỈ ĐẾM, chỉ gỡ khi gửi `goPhieuThu: true`.
+         */
         const mapThu: any[] = await sp.kiotVietMap.findMany({
             where: { entity: 'cashReceipt' }, select: { id: true, localId: true },
         }).catch(() => [])
-        if (apply && mapThu.length) {
+        if (apply && goPhieuThu && mapThu.length) {
             for (let i = 0; i < mapThu.length; i += 500) {
                 const lo = mapThu.slice(i, i + 500)
                 await sp.cashReceipt.deleteMany({ where: { id: { in: lo.map(m => m.localId) } } }).catch(() => { })
@@ -807,9 +814,13 @@ async function chayDon(sp: any, cfg: any, apply: boolean, logId: string): Promis
                         layVe: theKhoSai?.[0]?.n || 0, taoMoi: 0, capNhat: theKhoSai?.[0]?.n || 0,
                         boQua: 0, loi: 0, xong: true, mau: [{ soDong: theKhoSai?.[0]?.n || 0 }],
                     },
-                    '⚠ ĐÃ GỠ phiếu thu khỏi sổ quỹ — BẮT BUỘC chạy lại "Phiếu thu / chi" với khoảng ngày TOÀN BỘ để dựng lại vào sổ công nợ': {
+                    [goPhieuThu
+                        ? '⚠ ĐÃ GỠ phiếu thu khỏi sổ quỹ — BẮT BUỘC chạy lại "Phiếu thu / chi" với khoảng ngày TOÀN BỘ'
+                        : 'phiếu thu đang nằm ở sổ quỹ (thu khác — KHÔNG đụng tới)']: {
                         layVe: mapThu.length, taoMoi: 0, capNhat: 0, boQua: mapThu.length, loi: 0, xong: true,
-                        mau: [{ soPhieuDaGo: mapThu.length, viecTiepTheo: 'Đồng bộ → chọn "Phiếu thu / chi" → bấm nút khoảng ngày "Toàn bộ" → Ghi thật' }],
+                        mau: [goPhieuThu
+                            ? { soPhieuDaGo: mapThu.length, viecTiepTheo: 'Đồng bộ → "Phiếu thu / chi" → khoảng ngày "Toàn bộ" → Ghi thật' }
+                            : { soPhieu: mapThu.length, ghiChu: 'Giữ nguyên. Chỉ gỡ khi bấm riêng nút chuyển phiếu thu sang sổ công nợ.' }],
                     },
                     'xoá chứng từ không hoàn thành': { layVe: xoaHoaDon + xoaPhieuNhap, taoMoi: 0, capNhat: 0, boQua: xoaHoaDon + xoaPhieuNhap, loi: 0, xong: true, mau: [{ hoaDon: xoaHoaDon, phieuNhap: xoaPhieuNhap }] },
                 }),
