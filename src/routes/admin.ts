@@ -848,6 +848,22 @@ router.get('/warehouse-stock', async (req: Request, res: Response) => {
                 soDongTon: soDong, soMaCoTon: khac0, tongSoLuong: tong,
             })
         }
+        /**
+         * BẤT BIẾN TỒN KHO: Product.stock == tổng WarehouseStock của các kho
+         * `main`. Không đối chiếu con số này thì không thể biết một kho main
+         * thứ hai là DỮ LIỆU THẬT hay BẢN SAO THỪA — mà đó là câu hỏi sống còn
+         * trước khi gộp hay xoá kho (HUTI 10/08/2026: hai kho main, một cái
+         * 128.616 một cái 125.035).
+         */
+        const [soSp, tongTonSp] = await Promise.all([
+            sp.product.count(),
+            sp.product.aggregate({ _sum: { stock: true } })
+                .then((r: any) => Number(r?._sum?.stock) || 0).catch(() => 0),
+        ])
+        const tongKhoMain = ketQua
+            .filter(k => k.loai === 'main')
+            .reduce((s, k) => s + k.tongSoLuong, 0)
+
         res.json({
             success: true,
             data: {
@@ -856,6 +872,13 @@ router.get('/warehouse-stock', async (req: Request, res: Response) => {
                 chiNhanh: branches.map((b: any) => `${b.name} (${b.code})${b.isMainBranch ? ' — CHÍNH' : ''}`),
                 soKho: khos.length,
                 kho: ketQua,
+                batBien: {
+                    soSanPham: soSp,
+                    tongProductStock: tongTonSp,
+                    tongKhoMain,
+                    lech: tongKhoMain - tongTonSp,
+                    khop: tongKhoMain === tongTonSp,
+                },
             },
         })
     } catch (err: any) {
