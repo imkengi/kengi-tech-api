@@ -1645,6 +1645,27 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "KiotVietSyncLog_status_idx" ON "KiotVietSyncLog"("status")`)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "KiotVietSyncLog_startedAt_idx" ON "KiotVietSyncLog"("startedAt")`)
 
+                /**
+                 * LỆCH SCHEMA LÀM SẬP ĐĂNG NHẬP — vá gấp 10/08/2026.
+                 *
+                 * Tính năng kết nối Google Drive thêm 4 cột vào StoreSettings
+                 * trong schema Prisma nhưng KHÔNG hề thêm ALTER ở đây. Prisma
+                 * sinh client SELECT đủ mọi cột, nên chỉ cần thiếu một cột là
+                 * `storeSettings.findUnique()` NÉM LỖI — mà đăng nhập có gọi nó.
+                 * Kết quả: nhập đúng mật khẩu vẫn nhận 500 "Internal server
+                 * error", nhìn như sập máy chủ:
+                 *
+                 *   Login error: Invalid `prisma.storeSettings.findUnique()`
+                 *   The column `StoreSettings.driveOauthToken` does not exist
+                 *
+                 * Bài học: production KHÔNG chạy `prisma migrate`, nên thêm cột
+                 * vào schema mà quên thêm ALTER ở đây là gài mìn hẹn giờ.
+                 */
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "driveFolderId" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "driveOauthToken" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "driveOauthEmail" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "driveOauthAt" TIMESTAMP(3)`)
+
                 // ─── Phiếu sửa/bảo hành: nguồn hàng + móc nối tồn kho ──────
                 // Xem đầu routes/repairs.ts. Ba dấu mốc thời gian là thứ giữ cho
                 // mỗi khoản tồn chỉ ghi MỘT lần và hoàn lại được khi xoá phiếu.
