@@ -667,8 +667,32 @@ model Repair {
   estimatedDate DateTime?
   completedDate DateTime?
   notes         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+
+  // ─── Nguồn hàng & tồn kho ────────────────────────────────────────────────
+  // "customer" = máy của khách mang tới: KHÔNG đụng tồn kho chính, vì nó chưa
+  //              bao giờ là tài sản của cửa hàng.
+  // "internal" = chuyển kho nội bộ: hàng của shop để lâu bị hư → rời kho bán
+  //              được, sang kho hàng hư hỏng.
+  source    String  @default("customer")
+  productId String? // bắt buộc khi source = internal, và khi muốn đổi mới
+  productSku String?
+  quantity  Int     @default(1)
+  branchId  String? // quyết định lấy kho chính / kho hư hỏng của chi nhánh nào
+
+  // Dấu mốc để mỗi lần ghi kho CHỈ CHẠY MỘT LẦN. Không có chúng thì bấm đổi
+  // trạng thái hai lần là trừ tồn hai lần, và không cách nào biết phiếu nào đã
+  // đụng kho để hoàn lại khi xoá.
+  stockMovedAt       DateTime? // đã chuyển kho chính → kho hư hỏng (internal)
+  replacedStockAt    DateTime? // đã xuất máy mới cho khách (đổi mới)
+  supplierReturnedAt DateTime? // NCC đã trả hàng, đã cộng lại kho chính
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([branchId])
+  @@index([status])
+  @@index([source])
+  @@index([productId])
 }
 
 // ─── Quotations ────────────────────────────────────────────────────────────────

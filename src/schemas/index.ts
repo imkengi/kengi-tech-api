@@ -169,6 +169,11 @@ export const CreateRepairSchema = z.object({
     estimatedDate: z.string().optional().nullable(),
     notes: z.string().max(5000).optional().nullable(),
     status: z.string().default('pending'),
+    // Nguồn hàng quyết định phiếu có đụng tồn kho chính hay không —
+    // xem đầu routes/repairs.ts
+    source: z.enum(['customer', 'internal']).default('customer'),
+    productId: z.string().optional().nullable(),
+    quantity: z.number().int().min(1).max(9999).optional(),
 })
 
 export const UpdateRepairSchema = CreateRepairSchema.partial()
@@ -394,10 +399,13 @@ export const CreateStockTransferSchema = z.object({
 )
 
 // ─── Sales Trips (Bán hàng lưu động trên xe) ──────────────────────────────────
+// LƯU Ý: app Android (kotlinx.serialization) ghi null TƯỜNG MINH cho field bỏ
+// trống — optional() KHÔNG nhận null nên các field số optional ở nhóm sales-trip
+// phải kèm .nullable(), không thì nút Chất hàng/Ghi bán/Kiểm hàng 400 câm.
 const SalesTripItemInputSchema = z.object({
     productId: z.string().min(1, 'productId là bắt buộc'),
     quantity: z.number().int().min(1, 'Số lượng phải lớn hơn 0'),
-    unitPrice: z.number().min(0).optional(),
+    unitPrice: z.number().min(0).optional().nullable(),
     notes: z.string().max(500).optional().nullable(),
 })
 
@@ -426,7 +434,7 @@ export const SalesTripSaleSchema = z.object({
     items: z.array(z.object({
         productId: z.string().min(1),
         quantity: z.number().int().min(1, 'Số lượng phải lớn hơn 0'),
-        unitPrice: z.number().min(0).optional(),
+        unitPrice: z.number().min(0).optional().nullable(),
         notes: z.string().max(500).optional().nullable(),
     })).min(1, 'Cần ít nhất 1 sản phẩm'),
     notes: z.string().max(1000).optional().nullable(),
@@ -436,14 +444,14 @@ export const ReconcileSalesTripSchema = z.object({
     items: z.array(z.object({
         productId: z.string().min(1),
         // Either send the explicit returned total...
-        actualReturnedQty: z.number().int().min(0).optional(),
+        actualReturnedQty: z.number().int().min(0).optional().nullable(),
         // ...or send the split (good + damaged still on vehicle); backend sums them.
-        actualQuantity: z.number().int().min(0).optional(),
-        damagedQuantity: z.number().int().min(0).optional(),
+        actualQuantity: z.number().int().min(0).optional().nullable(),
+        damagedQuantity: z.number().int().min(0).optional().nullable(),
         notes: z.string().max(500).optional().nullable(),
     })).optional().default([]),
     // Cash count from the salesperson; persisted as a note for now (no DB column yet).
-    actualCash: z.number().min(0).optional(),
+    actualCash: z.number().min(0).optional().nullable(),
     notes: z.string().max(1000).optional().nullable(),
 })
 

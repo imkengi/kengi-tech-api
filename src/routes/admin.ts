@@ -1645,6 +1645,22 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "KiotVietSyncLog_status_idx" ON "KiotVietSyncLog"("status")`)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "KiotVietSyncLog_startedAt_idx" ON "KiotVietSyncLog"("startedAt")`)
 
+                // ─── Phiếu sửa/bảo hành: nguồn hàng + móc nối tồn kho ──────
+                // Xem đầu routes/repairs.ts. Ba dấu mốc thời gian là thứ giữ cho
+                // mỗi khoản tồn chỉ ghi MỘT lần và hoàn lại được khi xoá phiếu.
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "source" TEXT NOT NULL DEFAULT 'customer'`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "productId" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "productSku" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "quantity" INTEGER NOT NULL DEFAULT 1`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "branchId" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "stockMovedAt" TIMESTAMP(3)`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "replacedStockAt" TIMESTAMP(3)`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "supplierReturnedAt" TIMESTAMP(3)`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Repair_branchId_idx" ON "Repair"("branchId")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Repair_status_idx" ON "Repair"("status")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Repair_source_idx" ON "Repair"("source")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Repair_productId_idx" ON "Repair"("productId")`)
+
                 // ─── Cổng đồng bộ MISA AMIS ────────────────────────────────
                 await (sp as any).$executeRawUnsafe(`
                     CREATE TABLE IF NOT EXISTS "MisaConfig" (
