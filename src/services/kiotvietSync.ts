@@ -607,12 +607,26 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                     .filter((p: any) => Number(p?.status) !== 1)
                     .reduce((s: number, p: any) => s + (Number(p?.amount) || 0), 0)
                 const data: any = {}
-                if (thuMoi > 0 && thuMoi !== existing.amountReceived) {
+                /**
+                 * PHẢI CHỈNH CẢ KHI THU VỀ 0.
+                 *
+                 * Bản trước để `thuMoi > 0` mới đụng vào. Nghe hợp lý nhưng nó
+                 * khoá đúng những hoá đơn cần sửa nhất: hoá đơn KHÔNG có phiếu
+                 * thu nào (thuMoi = 0) mà bản cũ đã lỡ ghi "đã thu đủ" thì chạy
+                 * lại bao nhiêu lần cũng không nhúc nhích (đo 10/08/2026 khi đi
+                 * sửa vụ HD030321 — Duy Khương ghi thu 14.332.320 trong khi
+                 * KiotViet totalPayment = 0).
+                 *
+                 * Nay: số đã thu LUÔN kéo về đúng tổng phiếu thu thật.
+                 */
+                if (thuMoi !== existing.amountReceived) {
                     data.amountReceived = thuMoi
-                    data.status = thuMoi >= existing.total ? 'completed' : 'partial'
                     data.change = thuMoi > existing.total ? thuMoi - existing.total : 0
                 }
-                if (existing.status === 'voided') data.status = 'completed'   // huỷ rồi mở lại
+                const trangThaiDung = thuMoi >= existing.total ? 'completed' : 'partial'
+                // 'voided' = huỷ rồi mở lại; các trạng thái khác cũng kéo về cho
+                // khớp số tiền vừa tính, đừng để 'completed' treo trên đơn chưa thu
+                if (existing.status !== trangThaiDung) data.status = trangThaiDung
 
                 if (!Object.keys(data).length) {
                     boQua(c, `HĐ ${code}: đã có trong sổ và không có gì đổi`)
@@ -620,20 +634,19 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                 }
                 if (opts.apply) {
                     await sp.transaction.update({ where: { id: existing.id }, data })
-                    if (kvPayments.length) {
-                        // Ghi lại phiếu thu cho khớp, tránh chồng bản ghi cũ
-                        await sp.payment.deleteMany({ where: { transactionId: existing.id } }).catch(() => { })
-                        await sp.payment.createMany({
-                            data: kvPayments
-                                .filter((p: any) => Number(p?.status) !== 1 && (Number(p?.amount) || 0) > 0)
-                                .map((p: any) => ({
-                                    transactionId: existing.id,
-                                    type: /transfer|bank/i.test(String(p?.method || '')) ? 'bank_transfer' : 'cash',
-                                    amount: Number(p.amount) || 0,
-                                    reference: p?.code ? String(p.code) : null,
-                                })),
-                        }).catch(() => { })
-                    }
+                    // Dựng lại phiếu thu cho khớp KiotViet. XOÁ TRƯỚC, kể cả khi
+                    // KiotViet không còn phiếu nào — phiếu thu bị huỷ bên đó mà
+                    // Kengi vẫn giữ thì sổ quỹ tiếp tục đếm tiền không có thật.
+                    await sp.payment.deleteMany({ where: { transactionId: existing.id } }).catch(() => { })
+                    const rows = kvPayments
+                        .filter((p: any) => Number(p?.status) !== 1 && (Number(p?.amount) || 0) > 0)
+                        .map((p: any) => ({
+                            transactionId: existing.id,
+                            type: /transfer|bank/i.test(String(p?.method || '')) ? 'bank_transfer' : 'cash',
+                            amount: Number(p.amount) || 0,
+                            reference: p?.code ? String(p.code) : null,
+                        }))
+                    if (rows.length) await sp.payment.createMany({ data: rows }).catch(() => { })
                 }
                 c.updated++
                 noteSample(c, { code, hanhDong: 'cập nhật thanh toán', daThu: thuMoi, truong: Object.keys(data) })

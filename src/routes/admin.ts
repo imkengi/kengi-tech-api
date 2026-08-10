@@ -800,6 +800,70 @@ router.post('/adjust-stock', async (req: Request, res: Response) => {
 //
 // Ưu tiên vô hiệu hoá thay vì xoá: StockTransfer/SalesTrip trỏ tới Warehouse
 // KHÔNG có onDelete cascade → xoá cứng sẽ vỡ khoá ngoại nếu lỡ có tham chiếu.
+// ─── GET /admin/warehouse-stock?storeCode= ──────────────────────────────────
+/**
+ * CHỈ ĐỌC: tồn của TỪNG kho, kèm chi nhánh nào đang giữ nó.
+ *
+ * Có route này vì khi đi soi cặp kho trùng ở HUTI (10/08/2026) không có cách
+ * nào nhìn được kho nào ôm hàng thật, kho nào rỗng — mà đó là câu hỏi bắt buộc
+ * phải trả lời TRƯỚC khi gộp hay xoá kho.
+ */
+router.get('/warehouse-stock', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || '').trim()
+        if (!storeCode) return res.status(400).json({ success: false, error: 'Thiếu storeCode' })
+        const store = await prisma.store.findFirst({
+            where: { code: { equals: storeCode, mode: 'insensitive' } },
+            select: { code: true, name: true, schema: true },
+        })
+        if (!store) return res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' })
+
+        const sp: any = getStorePrisma(store.schema)
+        const [khos, branches] = await Promise.all([
+            sp.warehouse.findMany({
+                select: {
+                    id: true, code: true, name: true, type: true,
+                    isDefault: true, isActive: true, branchId: true, vehicleId: true,
+                },
+                orderBy: [{ type: 'asc' }, { code: 'asc' }],
+            }),
+            sp.branch.findMany({ select: { id: true, code: true, name: true, isMainBranch: true } }).catch(() => []),
+        ])
+        const tenChiNhanh: Record<string, string> = {}
+        for (const b of branches) tenChiNhanh[b.id] = `${b.name} (${b.code})${b.isMainBranch ? ' — CHÍNH' : ''}`
+
+        const ketQua = []
+        for (const w of khos) {
+            const [soDong, khac0, tong] = await Promise.all([
+                sp.warehouseStock.count({ where: { warehouseId: w.id } }),
+                sp.warehouseStock.count({ where: { warehouseId: w.id, quantity: { not: 0 } } }),
+                sp.warehouseStock.aggregate({ where: { warehouseId: w.id }, _sum: { quantity: true } })
+                    .then((r: any) => Number(r?._sum?.quantity) || 0).catch(() => 0),
+            ])
+            ketQua.push({
+                ma: w.code, ten: w.name, loai: w.type,
+                macDinh: w.isDefault, dangHoatDong: w.isActive,
+                chiNhanh: w.branchId ? (tenChiNhanh[w.branchId] || w.branchId) : '(mồ côi — không gắn chi nhánh)',
+                ganXe: !!w.vehicleId,
+                soDongTon: soDong, soMaCoTon: khac0, tongSoLuong: tong,
+            })
+        }
+        res.json({
+            success: true,
+            data: {
+                store: store.code,
+                soChiNhanh: branches.length,
+                chiNhanh: branches.map((b: any) => `${b.name} (${b.code})${b.isMainBranch ? ' — CHÍNH' : ''}`),
+                soKho: khos.length,
+                kho: ketQua,
+            },
+        })
+    } catch (err: any) {
+        console.error('[admin] warehouse-stock:', err?.message)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
 router.post('/cleanup-orphan-warehouses', async (req: Request, res: Response) => {
     try {
         const { storeCode, apply, hard } = req.body || {}
@@ -838,7 +902,14 @@ router.post('/cleanup-orphan-warehouses', async (req: Request, res: Response) =>
                         : null
 
                     const canTro: string[] = []
-                    if (!khoThat) canTro.push('Chi nhánh chính CHƯA có kho main riêng — kho này đang là kho thật, không được dọn')
+                    /**
+                     * Rào "chi nhánh chính chưa có kho riêng" chỉ để bảo vệ kho
+                     * ĐANG ĐƯỢC DÙNG làm kho mặc định. Áp cho MỌI kho mồ côi là
+                     * chặn nhầm: kho mồ côi KHÔNG mặc định và RỖNG thì chẳng ai
+                     * dùng, chặn lại chỉ khiến rác nằm mãi (đo 10/08/2026:
+                     * HUTITAX có kho "HH" 0 tồn mà công cụ từ chối dọn).
+                     */
+                    if (!khoThat && w.isDefault) canTro.push('Chi nhánh chính CHƯA có kho main riêng — kho này đang là kho thật, không được dọn')
                     if (tonKhac0 > 0) canTro.push(`Còn ${tonKhac0} mã hàng có tồn khác 0`)
                     if (w.vehicleId) canTro.push('Đang gắn với một xe')
                     if (hard && (chuyenTu + chuyenDen + chuyenDi) > 0) {
