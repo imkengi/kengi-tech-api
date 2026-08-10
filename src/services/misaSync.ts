@@ -325,7 +325,28 @@ function laySoDienThoai(m: any): string {
 
 // ─── KHO (data_type = 3) ────────────────────────────────────────────────────
 
+/**
+ * ĐỪNG ĐẺ THÊM "KHO CHÍNH" THỨ HAI.
+ *
+ * Kengi tạo sẵn cho mỗi chi nhánh một kho `main` mặc định. MISA của cửa hàng
+ * bán lẻ thường chỉ có ĐÚNG MỘT kho, nên tạo thêm một kho `main` nữa là cửa
+ * hàng mới toanh đã có 2 "kho chính" (đo 10/08/2026: HUTITAX vừa tạo, 1 chi
+ * nhánh, mà có "Kho chính" + "Kho Hàng" do đồng bộ MISA đẻ ra).
+ *
+ * Tệ hơn: kho vừa tạo đó KHÔNG được dùng — `syncMisaStock` ghi tồn vào kho mặc
+ * định của chi nhánh (xem `datTon`), nên nó chỉ nằm đó làm rối mọi ô chọn kho.
+ *
+ * Nên: MISA chỉ có một kho thì GẮN nó vào kho mặc định sẵn có; nhiều kho mới
+ * tạo thêm.
+ */
 export async function syncMisaWarehouses(sp: any, items: any[], opts: MisaOptions, c: MisaCounters): Promise<void> {
+    const khoMacDinh = opts.defaultWarehouseId
+        ? await sp.warehouse.findUnique({
+            where: { id: opts.defaultWarehouseId }, select: { id: true, code: true, name: true },
+        }).catch(() => null)
+        : null
+    const chiMotKho = items.length === 1
+
     for (const m of items) {
         c.fetched++
         beat(opts, c)
@@ -342,6 +363,16 @@ export async function syncMisaWarehouses(sp: any, items: any[], opts: MisaOption
             if (kho) {
                 c.skipped++
                 if (opts.apply) await saveMap(sp, 'warehouse', misaId, code, kho.id)
+                continue
+            }
+            // Kho MISA duy nhất → dùng luôn kho mặc định của Kengi, không tạo thêm
+            if (chiMotKho && khoMacDinh) {
+                if (opts.apply) await saveMap(sp, 'warehouse', misaId, code, khoMacDinh.id)
+                c.skipped++
+                noteSample(c, {
+                    code, name,
+                    hanhDong: `gắn vào kho sẵn có "${khoMacDinh.name}" (${khoMacDinh.code}) — MISA chỉ có 1 kho nên không tạo kho mới`,
+                })
                 continue
             }
             if (opts.apply) {
