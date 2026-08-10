@@ -546,9 +546,6 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
         noteError(c, 'Chưa xác định được người dùng hệ thống để gán cho hoá đơn — bỏ qua toàn bộ')
         return
     }
-    // Khách nào còn nợ — hỏi một lần rồi nhớ, tránh tra DB cho từng hoá đơn
-    const customerDebtCache = new Map<string, boolean>()
-
     for (const kv of items) {
         c.fetched++
         beat(opts, c)
@@ -687,30 +684,31 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
             if (kv?.customerId) customerId = await findMap(sp, 'customer', kv.customerId)
 
             /**
-             * KHÁCH KHÔNG NỢ THÌ HOÁ ĐƠN COI NHƯ ĐÃ THU ĐỦ.
+             * ĐÃ THU HAY CHƯA THU LÀ VIỆC CỦA PHIẾU THU, KHÔNG SUY DIỄN.
              *
-             * Khách trả nợ sau bằng PHIẾU THU RIÊNG không gắn hoá đơn nào, nên
-             * hoá đơn cũ trong API mãi mãi "chưa thu" dù thực tế đã tất toán.
-             * Cứ để nguyên thì trang công nợ suy ra người nợ từ hoá đơn chưa
-             * thu → đẻ ra 82 khách nợ ảo, tổng 768 triệu (đo 07/08/2026:
-             * Kengi 251 khách/5,44 tỷ so với KiotViet 169 khách/4,67 tỷ).
+             * Bản trước ở đây có quy tắc "khách không còn nợ thì hoá đơn coi
+             * như đã thu đủ" — dựng lên để chặn 82 khách nợ ảo hồi 07/08/2026.
+             * Nó SAI và đã gây hậu quả ngược (đo 10/08/2026):
              *
-             * `Customer.debt` của KiotViet là SỐ CHUẨN — đã đối chiếu khớp từng
-             * đồng. Nên: khách nào KiotViet bảo hết nợ thì hoá đơn của họ ghi
-             * là thu đủ; chỉ khách còn nợ thật mới để 'partial'.
+             *   KiotViet HD030321 — Duy Khương: total 14.332.320,
+             *   totalPayment = 0, KHÔNG có phiếu thu nào, khách đang nợ
+             *   89.751.811. Vậy mà Kengi ghi amountReceived = total,
+             *   status 'completed', không có dòng Payment nào → sổ quỹ thấy
+             *   "đơn hoàn thành mà không có phiếu thu" liền coi là đã thu đủ
+             *   và cộng 14.332.320 vào TIỀN VÀO. Tiền chưa hề về.
+             *
+             * `khachConNo` còn hỏng thêm một nước: khách chưa map thì
+             * customerId = null → mặc định coi như KHÔNG nợ → mọi hoá đơn của
+             * khách lạ đều thành "đã thu".
+             *
+             * Còn lý do dựng nó lên thì nay không còn: /debts/summary đã đọc
+             * thẳng `Customer.debt` (số KiotViet đồng bộ sang), chứ không suy
+             * người nợ từ hoá đơn chưa thu nữa; lịch sử công nợ cũng neo dòng
+             * cuối vào `Customer.debt` bằng dòng dư đầu kỳ. Nên để hoá đơn
+             * 'partial' KHÔNG đẻ ra khách nợ ảo.
+             *
+             * Từ đây: có phiếu thu bao nhiêu ghi bấy nhiêu.
              */
-            let khachConNo = false
-            if (customerId) {
-                if (customerDebtCache.has(customerId)) {
-                    khachConNo = customerDebtCache.get(customerId)!
-                } else {
-                    const cust = await sp.customer.findUnique({
-                        where: { id: customerId }, select: { debt: true },
-                    }).catch(() => null)
-                    khachConNo = (Number(cust?.debt) || 0) > 0
-                    customerDebtCache.set(customerId, khachConNo)
-                }
-            }
             const total = Number(kv?.total) || 0
             const when = kv?.purchaseDate ? new Date(kv.purchaseDate) : new Date()
 
@@ -737,9 +735,9 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
             // Không có phiếu thu nào thì hoá đơn CHƯA thu tiền — dù KiotViet có
             // điền totalPayment, vì tiền thật nằm ở phiếu thu.
             const paid = paymentRows.reduce((s, p) => s + p.amount, 0)
-            // Xem khối "KHÁCH KHÔNG NỢ THÌ HOÁ ĐƠN COI NHƯ ĐÃ THU ĐỦ" ở trên
-            const thuDu = !khachConNo || paid >= total
-            const amountReceived = thuDu ? total : paid
+            // Có phiếu thu bao nhiêu ghi bấy nhiêu — xem khối ghi chú ở trên
+            const thuDu = paid >= total
+            const amountReceived = paid
 
             if (opts.apply) {
                 const created = await sp.transaction.create({
