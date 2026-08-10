@@ -22,12 +22,21 @@ const router = Router()
  *     kho chính −n, kho hàng hư hỏng +n. Tổng tài sản không bốc hơi, vẫn tra
  *     lại được món nào đang hỏng.
  *
- *  3. Đổi mới (status = 'replaced') — áp dụng cho CẢ HAI nguồn.
- *     Xuất một máy mới từ kho chính giao khách: kho chính −n. Máy hỏng gửi NCC;
- *     khi NCC trả về thì cộng lại kho chính +n (bấm "NCC đã trả").
+ *  3. HÀNG TỪ NCC VỀ — chỉ với nguồn 'internal'.
+ *     Món hỏng ĐÃ NẰM SẴN trong kho hư hỏng từ bước 2, nên khi NCC xử lý xong
+ *     thì hàng đi ngược lại: kho chính +n, kho hư hỏng −n.
+ *
+ *     "Đổi mới" (NCC đưa máy khác) và "NCC trả" (NCC sửa xong trả lại máy cũ)
+ *     là CÙNG MỘT phép tính — chỉ khác cái máy nằm trong thùng. Nên hai đường
+ *     dùng chung `nhanHangVe` và chung một dấu mốc, bấm đường nào trước cũng
+ *     được, đường còn lại tự khoá.
+ *
+ *     Bản đầu tôi hiểu ngược: cho 'replaced' TRỪ kho chính (tưởng là xuất máy
+ *     mới cho khách). Sai — món hỏng là hàng của shop, nó đang nằm ở kho hư
+ *     hỏng chứ không phải vừa bán đi (người dùng chỉnh 10/08/2026).
  *
  * Mỗi lần ghi kho đều neo vào một DẤU MỐC (stockMovedAt / replacedStockAt /
- * supplierReturnedAt). Không có mốc thì bấm đổi trạng thái hai lần là trừ tồn
+ * supplierReturnedAt). Không có mốc thì bấm đổi trạng thái hai lần là ghi tồn
  * hai lần, và xoá phiếu xong không ai biết đường hoàn lại.
  */
 
@@ -67,6 +76,20 @@ async function ghiTheKho(
             userName: (req as any).user?.name || 'Hệ thống',
         },
     }).catch(() => { /* thẻ kho hỏng không được giết nghiệp vụ chính */ })
+}
+
+/**
+ * HÀNG TỪ NCC VỀ: kho chính +n, kho hư hỏng −n.
+ *
+ * Dùng chung cho cả "đổi mới" lẫn "NCC trả lại máy cũ" — hai chuyện khác nhau
+ * ngoài đời nhưng giống hệt nhau trên sổ: món hỏng rời kho hư hỏng, một món
+ * dùng được nhập vào kho chính.
+ */
+async function nhanHangVe(tx: any, r: any, sl: number, req: AuthRequest, lyDo: string) {
+    await adjustSellableStock(tx, r.productId, r.branchId, sl, `${lyDo} — phiếu ${r.code}`)
+    const khoHu = await khoHuHong(tx, r.branchId)
+    if (khoHu) await updateWarehouseStock(tx, khoHu, r.productId, -sl)
+    await ghiTheKho(tx, r, sl, lyDo, req)
 }
 
 // GET /api/repairs/stats
@@ -164,17 +187,20 @@ router.put('/:id', authMiddleware, requirePermission('repairs.edit'), validate(U
         if (status === 'done' || completedDate) data.completedDate = new Date()
 
         const sl = Math.max(1, Number(existing.quantity) || 1)
-        const canDoiMoi = status === 'replaced' && !existing.replacedStockAt
-        const canChuyenKho = existing.source === 'internal'
+        const laNoiBo = existing.source === 'internal'
+        const canChuyenKho = laNoiBo
             && !existing.stockMovedAt
             && status && DA_VAO_XUONG.includes(String(status))
+        // Chuyển sang 'replaced' = NCC đã đổi máy mới → hàng về, xem nhanHangVe
+        const canNhanVe = laNoiBo
+            && status === 'replaced'
+            && !!existing.stockMovedAt
+            && !existing.supplierReturnedAt
 
-        if ((canDoiMoi || canChuyenKho) && !existing.productId) {
+        if ((canChuyenKho || canNhanVe) && !existing.productId) {
             return res.status(400).json({
                 success: false,
-                error: canDoiMoi
-                    ? 'Phiếu chưa nối với sản phẩm nào nên không trừ được tồn khi đổi mới. Sửa phiếu, chọn sản phẩm rồi thử lại.'
-                    : 'Phiếu chuyển kho nội bộ nhưng chưa nối sản phẩm — không biết trừ tồn mã nào.',
+                error: 'Phiếu chuyển kho nội bộ nhưng chưa nối sản phẩm — không biết ghi tồn cho mã nào.',
             })
         }
 
@@ -189,11 +215,10 @@ router.put('/:id', authMiddleware, requirePermission('repairs.edit'), validate(U
                 await ghiTheKho(tx, existing, -sl, 'Chuyển kho nội bộ: hàng hư hỏng', req)
                 data.stockMovedAt = new Date()
             }
-            if (canDoiMoi) {
-                const du = await decrementSellableStock(tx, existing.productId, existing.branchId, sl)
-                if (!du) throw new Error(`KHO_THIEU:Kho chính không đủ ${sl} của "${existing.productName}" để đổi mới cho khách`)
-                await ghiTheKho(tx, existing, -sl, 'Đổi mới cho khách', req)
+            if (canNhanVe) {
+                await nhanHangVe(tx, existing, sl, req, 'NCC đổi máy mới')
                 data.replacedStockAt = new Date()
+                data.supplierReturnedAt = new Date()
             }
             return tx.repair.update({ where: { id }, data })
         })
@@ -209,13 +234,12 @@ router.put('/:id', authMiddleware, requirePermission('repairs.edit'), validate(U
     }
 })
 
-// POST /api/repairs/:id/supplier-returned — NCC đã trả hàng về
+// POST /api/repairs/:id/supplier-returned — NCC trả hàng về (sửa xong máy cũ)
 /**
- * Cộng lại kho chính. Hai trường hợp, số học khác nhau:
- *   - Đã đổi mới: lúc đó đã trừ kho chính để giao máy cho khách → nay cộng lại,
- *     bù đúng khoản đã trừ. Kho hư hỏng không liên quan.
- *   - Hàng nội bộ gửi NCC sửa: lúc vào xưởng đã chuyển kho chính → kho hư hỏng.
- *     Nay máy về dùng được → kho chính +n VÀ kho hư hỏng −n.
+ * Cùng phép tính với "đổi mới": kho chính +n, kho hư hỏng −n. Khác nhau ở đời
+ * thực (máy khác hay máy cũ đã sửa) chứ trên sổ thì y hệt, nên dùng chung
+ * `nhanHangVe` và chung dấu mốc `supplierReturnedAt` — bấm đường nào trước
+ * cũng được, đường còn lại tự khoá, không bao giờ cộng hai lần.
  */
 router.post('/:id/supplier-returned', authMiddleware, requirePermission('repairs.edit'), async (req: AuthRequest, res: Response) => {
     try {
@@ -224,32 +248,29 @@ router.post('/:id/supplier-returned', authMiddleware, requirePermission('repairs
         const r: any = await prisma.repair.findUnique({ where: { id } })
         if (!r) return res.status(404).json({ success: false, error: 'Không tìm thấy phiếu' })
         if (r.supplierReturnedAt) {
-            return res.status(409).json({ success: false, error: 'Phiếu này đã ghi nhận NCC trả hàng rồi' })
+            return res.status(409).json({ success: false, error: 'Phiếu này đã ghi nhận hàng về rồi' })
         }
         if (!r.productId) {
             return res.status(400).json({ success: false, error: 'Phiếu chưa nối với sản phẩm nào — không biết cộng tồn cho mã nào' })
         }
-        const daTruDoiMoi = !!r.replacedStockAt
-        const daChuyenKho = r.source === 'internal' && !!r.stockMovedAt
-        if (!daTruDoiMoi && !daChuyenKho) {
+        // Hàng phải ĐANG NẰM ở kho hư hỏng thì mới có cái để trả về. Phiếu hàng
+        // của khách không đụng tồn nên cũng không có gì để cộng.
+        if (r.source !== 'internal' || !r.stockMovedAt) {
             return res.status(400).json({
                 success: false,
-                error: 'Phiếu này chưa trừ tồn kho lần nào nên không có gì để cộng lại. Chỉ dùng sau khi đã đổi mới hoặc đã chuyển kho nội bộ.',
+                error: r.source === 'internal'
+                    ? 'Hàng chưa được chuyển sang kho hư hỏng nên chưa có gì để nhận về. Đưa phiếu sang Sửa chữa/Bảo hành trước.'
+                    : 'Phiếu hàng của khách không đụng tồn kho, không có gì để cộng lại.',
             })
         }
         const sl = Math.max(1, Number(r.quantity) || 1)
 
         const ketQua = await prisma.$transaction(async (tx: any) => {
-            await adjustSellableStock(tx, r.productId, r.branchId, sl, `NCC trả hàng — phiếu ${r.code}`)
-            if (daChuyenKho && !daTruDoiMoi) {
-                const khoHu = await khoHuHong(tx, r.branchId)
-                if (khoHu) await updateWarehouseStock(tx, khoHu, r.productId, -sl)
-            }
-            await ghiTheKho(tx, r, sl, 'NCC trả hàng', req)
+            await nhanHangVe(tx, r, sl, req, 'NCC trả hàng')
             return tx.repair.update({ where: { id }, data: { supplierReturnedAt: new Date() } })
         })
 
-        res.json({ success: true, data: ketQua, message: `Đã cộng ${sl} "${r.productName}" lại kho chính` })
+        res.json({ success: true, data: ketQua, message: `Đã cộng ${sl} "${r.productName}" vào kho chính, trừ ở kho hư hỏng` })
     } catch (err) {
         console.error('Supplier returned error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
@@ -267,21 +288,21 @@ router.delete('/:id', authMiddleware, requirePermission('repairs.edit'), async (
             return res.status(403).json({ success: false, error: 'Phiếu đã trả khách — đã chốt, chỉ admin mới xóa được' })
         }
 
-        // Xoá phiếu phải HOÀN LẠI mọi khoản tồn nó đã đụng, nếu không thì hàng
-        // biến mất khỏi sổ mà không còn phiếu nào giải thích
+        /**
+         * Xoá phiếu phải HOÀN LẠI đúng phần tồn nó còn đang giữ, nếu không thì
+         * hàng biến mất khỏi sổ mà không còn phiếu nào giải thích.
+         *
+         * Chỉ hoàn khi hàng CÒN NẰM ở kho hư hỏng: đã chuyển kho mà CHƯA nhận
+         * về. Nhận về rồi thì hai vế đã triệt tiêu nhau, hoàn thêm là đẻ hàng
+         * từ hư không.
+         */
         await prisma.$transaction(async (tx: any) => {
-            if (r.productId && !r.supplierReturnedAt) {
+            if (r.productId && r.stockMovedAt && !r.supplierReturnedAt) {
                 const sl = Math.max(1, Number(r.quantity) || 1)
-                if (r.stockMovedAt) {
-                    await adjustSellableStock(tx, r.productId, r.branchId, sl, `Xoá phiếu ${r.code} — hoàn chuyển kho nội bộ`)
-                    const khoHu = await khoHuHong(tx, r.branchId)
-                    if (khoHu) await updateWarehouseStock(tx, khoHu, r.productId, -sl)
-                    await ghiTheKho(tx, r, sl, 'Xoá phiếu — hoàn hàng hư hỏng về kho chính', req)
-                }
-                if (r.replacedStockAt) {
-                    await adjustSellableStock(tx, r.productId, r.branchId, sl, `Xoá phiếu ${r.code} — hoàn máy đổi mới`)
-                    await ghiTheKho(tx, r, sl, 'Xoá phiếu — hoàn máy đổi mới', req)
-                }
+                await adjustSellableStock(tx, r.productId, r.branchId, sl, `Xoá phiếu ${r.code} — hoàn chuyển kho nội bộ`)
+                const khoHu = await khoHuHong(tx, r.branchId)
+                if (khoHu) await updateWarehouseStock(tx, khoHu, r.productId, -sl)
+                await ghiTheKho(tx, r, sl, 'Xoá phiếu — hoàn hàng hư hỏng về kho chính', req)
             }
             await tx.repair.delete({ where: { id } })
         })
