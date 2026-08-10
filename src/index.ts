@@ -340,8 +340,31 @@ app.get('/api/health', async (_req, res) => {
 })
 
 // ─── Error handler ──────────────────────────────────────────────────────────
-app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     console.error('Unhandled error:', err)
+
+    /**
+     * LỖI CỦA NGƯỜI GỌI THÌ ĐỪNG BÁO THÀNH LỖI MÁY CHỦ.
+     *
+     * body-parser ném SyntaxError kèm sẵn status 400 khi thân request không
+     * phải JSON hợp lệ, nhưng khối này vứt status đó đi và trả 500
+     * "Internal server error" — người tích hợp nhìn vào tưởng máy chủ sập,
+     * đi tìm nhầm chỗ (chính tôi vừa mất một lượt vì nó, 10/08/2026).
+     *
+     * 4xx là lỗi phía gửi lên: giữ nguyên mã và nói rõ sai ở đâu. Chỉ 5xx mới
+     * giấu chi tiết, vì đó mới là chuyện nội bộ không nên lộ ra ngoài.
+     */
+    const status = Number(err?.status || err?.statusCode) || 500
+    if (status >= 400 && status < 500) {
+        const laJsonHong = err?.type === 'entity.parse.failed' || err instanceof SyntaxError
+        res.status(status).json({
+            success: false,
+            error: laJsonHong
+                ? 'Dữ liệu gửi lên không phải JSON hợp lệ'
+                : (typeof err?.message === 'string' && err.message) || 'Yêu cầu không hợp lệ',
+        })
+        return
+    }
     res.status(500).json({ success: false, error: 'Internal server error', detail: errorDetail(err) })
 })
 
