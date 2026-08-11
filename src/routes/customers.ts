@@ -121,7 +121,7 @@ router.get('/segments-live', authMiddleware, requirePermission('customers.view')
          * Chỉ owner/admin thấy (cùng cổng với lợi nhuận đơn online).
          */
         const laChuCua = ['owner', 'admin'].includes(String((req as any).user?.role || '').toLowerCase())
-        const [customers, grp, ghiNo, nam12, gan90, vonRows] = await Promise.all([
+        const [customers, grp, nam12, gan90, vonRows] = await Promise.all([
             prisma.customer.findMany({
                 select: {
                     id: true, code: true, name: true, phone: true, debt: true,
@@ -136,25 +136,7 @@ router.get('/segments-live', authMiddleware, requirePermission('customers.view')
                 _max: { createdAt: true },
             }),
             /**
-             * TỐC ĐỘ TRẢ NỢ: tuổi của NỢ CÒN LẠI THỰC, không phải tuổi đơn
-             * 'partial' cổ nhất. Thu nợ qua phiếu thu độc lập (TT... KiotViet)
-             * không đụng vào hoá đơn nên đơn đứng 'partial' mãi dù đã trả xong
-             * (bằng chứng: HD030344.01 — Việt Nhật, trả đủ qua PT00498 mà
-             * status vẫn partial, đo 11/08/2026). Lấy _min.createdAt của mọi
-             * đơn partial là dán "Chậm" cho khách trả sòng phẳng.
-             *
-             * Cách đúng (FIFO như trang Công nợ): lấy danh sách đơn treo kèm
-             * số CHƯA THU của từng đơn, đi từ MỚI NHẤT ngược về, gom đủ đúng
-             * Customer.debt thì dừng — tuổi nợ = mốc xa nhất còn dính nợ thật.
-             * Ngày chứng từ (createdAt) vẫn là dữ liệu tin được với mọi nguồn;
-             * KHÔNG đo bằng ngày Payment (bảng không có cột ngày, và phiếu thu
-             * dựng lại từ KiotViet đều dính ngày hôm chạy).
-             */
-            prisma.transaction.findMany({
-                where: { customerId: { not: null }, status: 'partial' },
-                select: { customerId: true, createdAt: true, total: true, amountReceived: true },
-                orderBy: { createdAt: 'desc' },
-            }),
+
             // CỬA SỔ 12 THÁNG: xếp hạng theo bình quân tháng gần đây, không phải
             // tổng trọn đời — mua một cục năm ngoái rồi biến mất mà vẫn Kim cương
             // là xếp sai (người dùng chỉnh 11/08/2026, ca 'Mỹ Duyên')
@@ -192,27 +174,43 @@ router.get('/segments-live', authMiddleware, requirePermission('customers.view')
                 : Promise.resolve([]),
         ])
         const agg = new Map(grp.map((g: any) => [g.customerId as string, g]))
-        // customerId -> [{ngay, chuaThu}] MỚI NHẤT trước (query đã orderBy desc)
-        const mapNo = new Map<string, Array<{ ngay: Date; chuaThu: number }>>()
-        for (const t of ghiNo as any[]) {
-            const chuaThu = Math.max(0, (t.total || 0) - (t.amountReceived ?? 0))
-            if (chuaThu <= 0) continue
-            const ds = mapNo.get(t.customerId) || []
-            ds.push({ ngay: t.createdAt, chuaThu })
-            mapNo.set(t.customerId, ds)
+        /**
+         * TUỔI NỢ FIFO TRÊN TOÀN BỘ ĐƠN BÁN, neo vào Customer.debt.
+         *
+         * KHÔNG dùng status/số-đã-thu của từng đơn: thu nợ qua phiếu thu độc
+         * lập không đụng hoá đơn nên "chưa thu" từng đơn là SỐ MA — Thúy An
+         * mua đều, nợ 9tr, mà bị dán "Chậm 316d" vì đơn partial ma của 316
+         * ngày trước (đo 11/08/2026). Quy ước FIFO: tiền trả cover nợ CŨ
+         * trước → nợ còn lại nằm ở các đơn MỚI NHẤT. Đi từ đơn bán mới nhất
+         * ngược về, gom đủ Customer.debt thì dừng — mốc dừng là tuổi nợ.
+         * Cùng quy ước với trang Công nợ.
+         */
+        const khachCoNo = customers.filter((c: any) => (c.debt ?? 0) > 0).map((c: any) => c.id)
+        const mapNo = new Map<string, Array<{ ngay: Date; soTien: number }>>()
+        if (khachCoNo.length) {
+            const donBan = await prisma.transaction.findMany({
+                where: { customerId: { in: khachCoNo }, status: { notIn: ['voided', 'returned'] } },
+                select: { customerId: true, createdAt: true, total: true },
+                orderBy: { createdAt: 'desc' },
+            })
+            for (const t of donBan as any[]) {
+                const ds = mapNo.get(t.customerId) || []
+                ds.push({ ngay: t.createdAt, soTien: t.total || 0 })
+                mapNo.set(t.customerId, ds)
+            }
         }
-        /** Tuổi nợ FIFO: gom đơn treo từ mới về cũ cho đủ số nợ hiện tại. */
         const tuoiNoFifo = (custId: string, debt: number): { tuoi: number; soDon: number } => {
             if (debt <= 0) return { tuoi: 0, soDon: 0 }
             const ds = mapNo.get(custId) || []
             let con = debt, moc: Date | null = null, soDon = 0
             for (const d of ds) {
                 moc = d.ngay; soDon++
-                con -= d.chuaThu
+                con -= d.soTien
                 if (con <= 0) break
             }
-            // Nợ nhiều hơn tổng đơn treo (phần dư đầu kỳ không có chứng từ):
-            // tuổi tính tới đơn treo cổ nhất — không bịa xa hơn chứng từ có thật
+            // Nợ nhiều hơn tổng đơn bán (dư đầu kỳ không chứng từ): tuổi tính
+            // tới đơn cổ nhất có thật, không bịa xa hơn. Không có đơn nào thì
+            // không đoán tuổi (0 → 'dungHan', trung tính).
             if (!moc) return { tuoi: 0, soDon: 0 }
             return { tuoi: Math.floor((Date.now() - new Date(moc).getTime()) / (24 * 60 * 60 * 1000)), soDon }
         }
