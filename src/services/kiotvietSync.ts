@@ -665,11 +665,32 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                 if (!p) { missing.push(sku); continue }
                 const qty = Math.round(Number(d?.quantity) || 0)
                 const unitPrice = Number(d?.price) || 0
-                const disc = Number(d?.discount) || 0
+                /**
+                 * GIẢM GIÁ: KiotViet tính theo MỖI ĐƠN VỊ, Kengi theo CẢ DÒNG.
+                 *
+                 * Bê thẳng con số qua là hoá đơn không cộng ra tổng. Đo trên HĐ
+                 * HD030345 (11/08/2026): KiotViet ghi giảm 35.333 cho mã BS1112TV
+                 * — đúng 39,7% của đơn giá 89.000, tức mỗi cái. Kengi lưu y số
+                 * đó rồi hiểu là giảm cho cả 20 cái, nên dòng thành 1.744.667
+                 * thay vì 1.073.340. Ba dòng cộng lại 4.510.104 trong khi tổng
+                 * phiếu vẫn là 2.817.040 lấy từ kv.total — lệch 1,7 triệu.
+                 *
+                 * `subTotal` mới là số tiền dòng có thẩm quyền bên KiotViet nên
+                 * suy ngược giảm giá từ nó: đúng dù họ có đổi quy ước. Không có
+                 * subTotal thì mới nhân số giảm mỗi đơn vị với số lượng.
+                 */
+                const giamMoiCai = Number(d?.discount) || 0
+                const gop = qty * unitPrice
+                const sub = Number(d?.subTotal)
+                const disc = Number.isFinite(sub) && sub > 0
+                    ? Math.min(gop, Math.max(0, gop - sub))
+                    : Math.min(gop, giamMoiCai * qty)
                 lines.push({
                     productId: p.id, productName: p.name, sku: p.sku,
                     quantity: qty, unitPrice, discount: disc,
-                    lineTotal: Number(d?.subTotal ?? (qty * unitPrice - disc)) || 0,
+                    // Luôn cho khớp với discount ở trên, đừng lấy subTotal thô:
+                    // hai số lệch nhau là giao diện lại hiện một đằng, tổng một nẻo
+                    lineTotal: gop - disc,
                 })
             }
             // CHẠY THỬ: hàng hoá chưa được tạo (chạy thử không ghi gì) nên mọi
@@ -751,6 +772,24 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
             // Có phiếu thu bao nhiêu ghi bấy nhiêu — xem khối ghi chú ở trên
             const thuDu = paid >= total
             const amountReceived = paid
+
+            /**
+             * CHỐT TỰ KIỂM: dòng hàng phải cộng ra đúng tổng phiếu.
+             *
+             * Tổng lấy thẳng từ `kv.total` còn dòng hàng thì tự dựng, nên khi
+             * hiểu sai quy ước một trường nào đó (đã dính với `discount`) hoá
+             * đơn vẫn lưu trót lọt, chỉ vỡ ra lúc người dùng mở phiếu. Lệch thì
+             * ghi vào nhật ký — KHÔNG tính là hỏng, phiếu vẫn tạo, nhưng phải
+             * có dấu vết để lần ra thay vì im lặng như lần trước.
+             */
+            const tongDong = lines.reduce((s, l) => s + l.lineTotal, 0)
+            const giamHoaDon = Number(kv?.discount) || 0
+            if (Math.abs(tongDong - giamHoaDon - total) > 1 && c.errors.length < 20) {
+                c.errors.push(
+                    `⚠ HĐ ${code}: dòng hàng cộng ${Math.round(tongDong)} − giảm ${Math.round(giamHoaDon)} ` +
+                    `≠ tổng ${Math.round(total)} (lệch ${Math.round(tongDong - giamHoaDon - total)}) — soát lại quy ước giảm giá`,
+                )
+            }
 
             if (opts.apply) {
                 const created = await sp.transaction.create({
