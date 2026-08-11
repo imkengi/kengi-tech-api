@@ -232,7 +232,7 @@ router.put('/:id', authMiddleware, requirePermission('repairs.edit'), validate(U
          * replaced không ghi kho nào cả: bấm đổi mới xong vào kho hư hỏng tìm
          * không thấy (người dùng báo 11/08/2026).
          */
-        const canChuyenKho = laNoiBo
+        let canChuyenKho = laNoiBo
             && !existing.stockMovedAt
             && status && (DA_VAO_XUONG.includes(String(status)) || String(status) === 'replaced')
         /**
@@ -242,21 +242,26 @@ router.put('/:id', authMiddleware, requirePermission('repairs.edit'), validate(U
          * Còn "đổi mới" trên phiếu NỘI BỘ thì KHÔNG ghi kho ở đây — xem mục 3
          * đầu file: lúc đó hàng vẫn nằm chỗ NCC, chưa cầm trên tay.
          */
-        const canDoiMoiKhach = !laNoiBo
+        let canDoiMoiKhach = !laNoiBo
             && status === 'replaced'
             && !existing.replacedStockAt
             && !existing.supplierReturnedAt
 
-        if ((canChuyenKho || canDoiMoiKhach) && !existing.productId) {
-            return res.status(400).json({
-                success: false,
-                error: canDoiMoiKhach
-                    ? 'Đổi mới cho khách sẽ trừ một máy ở kho chính — hãy sửa phiếu, chọn sản phẩm trong danh mục trước.'
-                    : 'Phiếu chuyển kho nội bộ nhưng chưa nối sản phẩm — không biết ghi tồn cho mã nào.',
-            })
-        }
-
         let message: string | undefined
+        /**
+         * Phiếu CHƯA NỐI SẢN PHẨM (phiếu cũ trước khi có cột productId, phiếu
+         * tạo nhanh ở POS): vẫn cho đổi trạng thái — trước đây trả 400 ở đây
+         * và người dùng "k cập nhật được" bất cứ phiếu cũ nào (11/08/2026).
+         * Chỉ BỎ phần ghi kho, và nói thẳng là kho không đổi + cách bật lại.
+         * Mốc stockMovedAt/replacedStockAt vẫn trống nên sau khi sửa phiếu
+         * nối sản phẩm, chọn lại trạng thái là kho ghi bù ngay.
+         */
+        if ((canChuyenKho || canDoiMoiKhach) && !existing.productId) {
+            message = 'Đã đổi trạng thái. Tồn kho KHÔNG đổi vì phiếu chưa nối sản phẩm trong danh mục — '
+                + 'bấm Sửa phiếu, chọn sản phẩm rồi chọn lại trạng thái này nếu muốn trừ/chuyển kho.'
+            canChuyenKho = false
+            canDoiMoiKhach = false
+        }
         // Ghi kho và cập nhật phiếu trong CÙNG một transaction: nửa chừng lỗi thì
         // không được để tồn đã trừ mà phiếu vẫn trạng thái cũ
         const ketQua = await prisma.$transaction(async (tx: any) => {
