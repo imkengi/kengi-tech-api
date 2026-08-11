@@ -121,7 +121,7 @@ router.get('/segments-live', authMiddleware, requirePermission('customers.view')
          * Chỉ owner/admin thấy (cùng cổng với lợi nhuận đơn online).
          */
         const laChuCua = ['owner', 'admin'].includes(String((req as any).user?.role || '').toLowerCase())
-        const [customers, grp, ghiNo, vonRows] = await Promise.all([
+        const [customers, grp, ghiNo, gan90, vonRows] = await Promise.all([
             prisma.customer.findMany({
                 select: {
                     id: true, code: true, name: true, phone: true, debt: true,
@@ -147,6 +147,15 @@ router.get('/segments-live', authMiddleware, requirePermission('customers.view')
                 _count: { _all: true },
                 _min: { createdAt: true },
             }),
+            // ĐỘ ĐỀU ĐẶN: số đơn 90 ngày gần đây — VIP mà lâu không mua phải lộ ra
+            prisma.transaction.groupBy({
+                by: ['customerId'],
+                where: {
+                    customerId: { not: null }, status: { notIn: ['voided', 'returned'] },
+                    createdAt: { gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) },
+                },
+                _count: { _all: true },
+            }),
             laChuCua
                 ? (prisma as any).$queryRawUnsafe(
                     `SELECT t."customerId" AS cid,
@@ -163,6 +172,7 @@ router.get('/segments-live', authMiddleware, requirePermission('customers.view')
         ])
         const agg = new Map(grp.map((g: any) => [g.customerId as string, g]))
         const mapNo = new Map(ghiNo.map((g: any) => [g.customerId as string, g]))
+        const map90 = new Map(gan90.map((g: any) => [g.customerId as string, g._count?._all ?? 0]))
         const mapVon = new Map((vonRows as any[]).map((r: any) => [r.cid as string, r]))
         const XEP_HANG: Array<[number, string]> = [
             [100_000_000, 'diamond'], [50_000_000, 'platinum'],
@@ -190,6 +200,17 @@ router.get('/segments-live', authMiddleware, requirePermission('customers.view')
             // Còn nợ mà đơn treo lâu nhất quá 30 ngày = chậm.
             const thanhToan = debt <= 0 ? 'tot' : tuoiNoNgay > 30 ? 'cham' : 'dungHan'
 
+            // ── Độ đều đặn mua hàng ──
+            const donGan90 = map90.get(c.id) ?? 0
+            const ngayTuLanCuoi = lanCuoi
+                ? Math.floor((Date.now() - new Date(lanCuoi).getTime()) / NGAY)
+                : null
+            // deu = >=3 đơn/90 ngày · thinhThoang = có mua trong 90 ngày
+            // lau = >90 ngày chưa quay lại · chua = chưa mua bao giờ
+            const muaDeu = totalOrders === 0 ? 'chua'
+                : donGan90 >= 3 ? 'deu'
+                    : (ngayTuLanCuoi != null && ngayTuLanCuoi <= 90) ? 'thinhThoang' : 'lau'
+
             // ── Mua có lời không ── (chỉ chủ cửa hàng thấy)
             const v: any = mapVon.get(c.id)
             const loiNhuan = laChuCua && v ? Math.round((v.rev || 0) - (v.von || 0)) : null
@@ -201,6 +222,7 @@ router.get('/segments-live', authMiddleware, requirePermission('customers.view')
                 id: c.id, code: c.code, name: c.name, phone: c.phone,
                 debt, totalOrders, totalPurchases, tier,
                 soDonGhiNo, tuoiNoNgay, thanhToan,
+                donGan90, ngayTuLanCuoi, muaDeu,
                 loiNhuan, bienLoiNhuan,
                 createdAt: c.createdAt.toISOString(),
                 lastPurchaseDate: lanCuoi ? new Date(lanCuoi).toISOString() : null,
