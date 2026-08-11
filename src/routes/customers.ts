@@ -121,7 +121,7 @@ router.get('/segments-live', authMiddleware, requirePermission('customers.view')
          * Chỉ owner/admin thấy (cùng cổng với lợi nhuận đơn online).
          */
         const laChuCua = ['owner', 'admin'].includes(String((req as any).user?.role || '').toLowerCase())
-        const [customers, grp, ghiNo, gan90, vonRows] = await Promise.all([
+        const [customers, grp, ghiNo, nam12, gan90, vonRows] = await Promise.all([
             prisma.customer.findMany({
                 select: {
                     id: true, code: true, name: true, phone: true, debt: true,
@@ -147,6 +147,17 @@ router.get('/segments-live', authMiddleware, requirePermission('customers.view')
                 _count: { _all: true },
                 _min: { createdAt: true },
             }),
+            // CỬA SỔ 12 THÁNG: xếp hạng theo bình quân tháng gần đây, không phải
+            // tổng trọn đời — mua một cục năm ngoái rồi biến mất mà vẫn Kim cương
+            // là xếp sai (người dùng chỉnh 11/08/2026, ca 'Mỹ Duyên')
+            prisma.transaction.groupBy({
+                by: ['customerId'],
+                where: {
+                    customerId: { not: null }, status: { notIn: ['voided', 'returned'] },
+                    createdAt: { gte: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000) },
+                },
+                _count: { _all: true }, _sum: { total: true },
+            }),
             // ĐỘ ĐỀU ĐẶN: số đơn 90 ngày gần đây — VIP mà lâu không mua phải lộ ra
             prisma.transaction.groupBy({
                 by: ['customerId'],
@@ -160,7 +171,9 @@ router.get('/segments-live', authMiddleware, requirePermission('customers.view')
                 ? (prisma as any).$queryRawUnsafe(
                     `SELECT t."customerId" AS cid,
                             SUM(i."lineTotal")::float AS rev,
-                            SUM(i."quantity" * COALESCE(p."costPrice", 0))::float AS von
+                            SUM(i."quantity" * COALESCE(p."costPrice", 0))::float AS von,
+                            SUM(i."lineTotal") FILTER (WHERE t."createdAt" >= NOW() - INTERVAL '365 days')::float AS rev12,
+                            SUM(i."quantity" * COALESCE(p."costPrice", 0)) FILTER (WHERE t."createdAt" >= NOW() - INTERVAL '365 days')::float AS von12
                      FROM "TransactionItem" i
                      JOIN "Transaction" t ON t."id" = i."transactionId"
                      LEFT JOIN "Product" p ON p."id" = i."productId"
@@ -173,21 +186,44 @@ router.get('/segments-live', authMiddleware, requirePermission('customers.view')
         const agg = new Map(grp.map((g: any) => [g.customerId as string, g]))
         const mapNo = new Map(ghiNo.map((g: any) => [g.customerId as string, g]))
         const map90 = new Map(gan90.map((g: any) => [g.customerId as string, g._count?._all ?? 0]))
+        const map12 = new Map(nam12.map((g: any) => [g.customerId as string, g]))
         const mapVon = new Map((vonRows as any[]).map((r: any) => [r.cid as string, r]))
-        const XEP_HANG: Array<[number, string]> = [
-            [100_000_000, 'diamond'], [50_000_000, 'platinum'],
-            [20_000_000, 'gold'], [5_000_000, 'silver'],
-        ]
         const NGAY = 24 * 60 * 60 * 1000
         const data = customers.map((c: any) => {
             const a: any = agg.get(c.id)
             const totalOrders = a?._count?._all ?? 0
             const totalPurchases = a?._sum?.total ?? 0
             const lanCuoi = a?._max?.createdAt ?? c.lastPurchaseDate
-            let tier = 'bronze'
-            for (const [nguong, hang] of XEP_HANG) {
-                if (totalPurchases >= nguong) { tier = hang; break }
-            }
+            /**
+             * ĐIỂM KHÁCH 0–100, GỘP 5 YẾU TỐ trên cửa sổ 12 tháng — hạng xếp
+             * theo điểm, không theo một con số đơn lẻ (người dùng chỉnh
+             * 11/08/2026: tổng trọn đời làm 'Mỹ Duyên mua năm ngoái vẫn Kim
+             * cương'; một mình doanh thu tháng cũng chưa đủ):
+             *   30đ doanh thu BQ tháng (kịch trần ở 10tr/tháng)
+             *   25đ lợi nhuận BQ tháng (kịch trần ở 2tr/tháng — tính nội bộ
+             *       cho MỌI người để hạng nhất quán, nhưng CHỈ owner/admin
+             *       thấy con số lợi nhuận thô)
+             *   20đ đều đặn (kịch trần ở 4 đơn/tháng)
+             *   15đ mới mua gần đây (≤30 ngày trọn điểm, >180 ngày 0đ)
+             *   10đ trả nợ (hết nợ 10, còn nợ đúng hạn 6, treo >30 ngày 0)
+             * Diamond ≥80 · Platinum ≥65 · Gold ≥45 · Silver ≥25 · Bronze.
+             */
+            const t12: any = map12.get(c.id)
+            const v: any = mapVon.get(c.id)
+            const doanhThuThang = Math.round(((t12?._sum?.total ?? 0) as number) / 12)
+            const donThang = Math.round(((t12?._count?._all ?? 0) as number) / 12 * 10) / 10
+            const loiThang = v ? Math.round((((v.rev12 || 0) - (v.von12 || 0)) as number) / 12) : 0
+            const ngayCuoi = lanCuoi ? Math.floor((Date.now() - new Date(lanCuoi).getTime()) / NGAY) : null
+            const diemDoanhThu = Math.min(30, Math.round(doanhThuThang / 10_000_000 * 30))
+            const diemLoiNhuan = Math.min(25, Math.max(0, Math.round(loiThang / 2_000_000 * 25)))
+            const diemDeuDan = Math.min(20, Math.round(donThang / 4 * 20))
+            const diemGanDay = ngayCuoi == null ? 0 : ngayCuoi <= 30 ? 15 : ngayCuoi <= 60 ? 11 : ngayCuoi <= 90 ? 8 : ngayCuoi <= 180 ? 4 : 0
+            // thanhToan tính ở dưới nhưng cần cho điểm — tính trước tại đây
+            const gnDiem: any = mapNo.get(c.id)
+            const tuoiNoDiem = gnDiem?._min?.createdAt ? Math.floor((Date.now() - new Date(gnDiem._min.createdAt).getTime()) / NGAY) : 0
+            const diemThanhToan = (c.debt ?? 0) <= 0 ? 10 : tuoiNoDiem > 30 ? 0 : 6
+            const diemKhach = diemDoanhThu + diemLoiNhuan + diemDeuDan + diemGanDay + diemThanhToan
+            const tier = diemKhach >= 80 ? 'diamond' : diemKhach >= 65 ? 'platinum' : diemKhach >= 45 ? 'gold' : diemKhach >= 25 ? 'silver' : 'bronze'
 
             // ── Trả nợ nhanh hay chậm ──
             const gn: any = mapNo.get(c.id)
@@ -212,7 +248,6 @@ router.get('/segments-live', authMiddleware, requirePermission('customers.view')
                     : (ngayTuLanCuoi != null && ngayTuLanCuoi <= 90) ? 'thinhThoang' : 'lau'
 
             // ── Mua có lời không ── (chỉ chủ cửa hàng thấy)
-            const v: any = mapVon.get(c.id)
             const loiNhuan = laChuCua && v ? Math.round((v.rev || 0) - (v.von || 0)) : null
             const bienLoiNhuan = laChuCua && v && v.rev > 0
                 ? Math.round(((v.rev - v.von) / v.rev) * 1000) / 10
@@ -223,6 +258,10 @@ router.get('/segments-live', authMiddleware, requirePermission('customers.view')
                 debt, totalOrders, totalPurchases, tier,
                 soDonGhiNo, tuoiNoNgay, thanhToan,
                 donGan90, ngayTuLanCuoi, muaDeu,
+                doanhThuThang, donThang,
+                diemKhach,
+                diem: { doanhThu: diemDoanhThu, loiNhuan: diemLoiNhuan, deuDan: diemDeuDan, ganDay: diemGanDay, thanhToan: diemThanhToan },
+                loiNhuanThang: laChuCua && v ? Math.round((((v.rev12 || 0) - (v.von12 || 0)) as number) / 12) : null,
                 loiNhuan, bienLoiNhuan,
                 createdAt: c.createdAt.toISOString(),
                 lastPurchaseDate: lanCuoi ? new Date(lanCuoi).toISOString() : null,
