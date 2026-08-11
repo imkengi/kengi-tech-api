@@ -11,33 +11,37 @@ const router = Router()
 /**
  * PHIẾU SỬA / BẢO HÀNH VÀ TỒN KHO
  *
- * Ba luồng khác nhau, đừng gộp:
+ * Chỉ có HAI phép tính, dùng đi dùng lại:
  *
- *  1. source = 'customer' — máy của khách mang tới.
- *     KHÔNG đụng tồn kho chính một chút nào: món đó chưa bao giờ là tài sản của
- *     cửa hàng, cộng/trừ vào kho là thổi phồng tồn.
+ *   GỬI ĐI  = kho chính −n, kho hư hỏng +n   (`dayVaoKhoHu`)
+ *   NHẬN VỀ = kho chính +n, kho hư hỏng −n   (`nhanHangVe`)
  *
- *  2. source = 'internal' — chuyển kho nội bộ: hàng của shop để lâu bị hư.
- *     Khi phiếu chuyển sang Sửa chữa/Bảo hành thì hàng RỜI kho bán được:
- *     kho chính −n, kho hàng hư hỏng +n. Tổng tài sản không bốc hơi, vẫn tra
- *     lại được món nào đang hỏng.
+ * Ai gọi phép nào:
  *
- *  3. HÀNG TỪ NCC VỀ — chỉ với nguồn 'internal'.
- *     Món hỏng ĐÃ NẰM SẴN trong kho hư hỏng từ bước 2, nên khi NCC xử lý xong
- *     thì hàng đi ngược lại: kho chính +n, kho hư hỏng −n.
+ *  1. source = 'internal' — hàng của shop để lâu bị hư.
+ *     Chuyển sang Sửa chữa/Bảo hành/Trả NCC → GỬI ĐI. Món hỏng rời kho bán
+ *     được nhưng không bốc hơi khỏi sổ, vẫn tra lại được nó đang nằm đâu.
  *
- *     "Đổi mới" (NCC đưa máy khác) và "NCC trả" (NCC sửa xong trả lại máy cũ)
- *     là CÙNG MỘT phép tính — chỉ khác cái máy nằm trong thùng. Nên hai đường
- *     dùng chung `nhanHangVe` và chung một dấu mốc, bấm đường nào trước cũng
- *     được, đường còn lại tự khoá.
+ *  2. source = 'customer' — máy khách mang tới.
+ *     Sửa/bảo hành bình thường thì KHÔNG đụng tồn: máy đó chưa bao giờ là tài
+ *     sản của shop. NHƯNG "Đổi mới" thì có: shop lấy một máy mới trong kho đưa
+ *     khách, và ôm lại cái máy hỏng của khách → GỬI ĐI.
  *
- *     Bản đầu tôi hiểu ngược: cho 'replaced' TRỪ kho chính (tưởng là xuất máy
- *     mới cho khách). Sai — món hỏng là hàng của shop, nó đang nằm ở kho hư
- *     hỏng chứ không phải vừa bán đi (người dùng chỉnh 10/08/2026).
+ *  3. "Đổi mới" trên phiếu NỘI BỘ KHÔNG ghi kho.
+ *     Nó chỉ có nghĩa "NCC đồng ý đổi máy khác" — hàng vẫn đang ở chỗ NCC.
+ *     Cộng kho lúc này là đếm hàng chưa cầm trên tay. Phải đợi hàng về thật
+ *     rồi bấm "NCC đã trả" (người dùng chỉnh 11/08/2026).
+ *
+ *  4. "NCC đã trả" — NHẬN VỀ. Bấm được cho CẢ HAI nguồn, miễn là phiếu đang
+ *     giữ hàng ở kho hư hỏng: máy hỏng của khách sau khi đổi mới cũng gửi NCC
+ *     được như hàng nội bộ.
  *
  * Mỗi lần ghi kho đều neo vào một DẤU MỐC (stockMovedAt / replacedStockAt /
  * supplierReturnedAt). Không có mốc thì bấm đổi trạng thái hai lần là ghi tồn
  * hai lần, và xoá phiếu xong không ai biết đường hoàn lại.
+ *
+ * `dangGiuHang()` là câu hỏi duy nhất cần trả lời trước khi NHẬN VỀ hoặc hoàn
+ * kho lúc xoá — đừng hỏi lại theo `source`, vì hai nguồn đều gửi đi được.
  */
 
 /** Trạng thái nghĩa là "đã xác nhận hỏng, bắt tay vào xử lý" */
@@ -79,7 +83,24 @@ async function ghiTheKho(
 }
 
 /**
- * HÀNG TỪ NCC VỀ: kho chính +n, kho hư hỏng −n.
+ * GỬI ĐI: kho chính −n, kho hư hỏng +n.
+ *
+ * Dùng cho cả hàng nội bộ vào xưởng lẫn đổi mới cho khách — ngoài đời là hai
+ * chuyện, trên sổ y hệt: một món rời kho bán được, một món hỏng vào kho hư.
+ *
+ * Ném KHO_THIEU nếu kho chính không đủ. Trừ âm ở đây là đẻ ra hàng không có
+ * thật, thà chặn còn hơn để sổ sai không ai biết.
+ */
+async function dayVaoKhoHu(tx: any, r: any, sl: number, req: AuthRequest, lyDo: string) {
+    const du = await decrementSellableStock(tx, r.productId, r.branchId, sl)
+    if (!du) throw new Error(`KHO_THIEU:Kho chính chỉ còn ít hơn ${sl} của "${r.productName}" — không trừ được.`)
+    const khoHu = await khoHuHong(tx, r.branchId)
+    if (khoHu) await updateWarehouseStock(tx, khoHu, r.productId, sl)
+    await ghiTheKho(tx, r, -sl, lyDo, req)
+}
+
+/**
+ * NHẬN VỀ: kho chính +n, kho hư hỏng −n.
  *
  * Dùng chung cho cả "đổi mới" lẫn "NCC trả lại máy cũ" — hai chuyện khác nhau
  * ngoài đời nhưng giống hệt nhau trên sổ: món hỏng rời kho hư hỏng, một món
@@ -91,6 +112,16 @@ async function nhanHangVe(tx: any, r: any, sl: number, req: AuthRequest, lyDo: s
     if (khoHu) await updateWarehouseStock(tx, khoHu, r.productId, -sl)
     await ghiTheKho(tx, r, sl, lyDo, req)
 }
+
+/**
+ * Phiếu này có đang GIỮ hàng ở kho hư hỏng không?
+ *
+ * Hai đường đẩy hàng vào đó — nội bộ vào xưởng (stockMovedAt) và đổi mới cho
+ * khách (replacedStockAt) — nên phải hỏi cả hai. Hỏi theo `source` là bỏ sót
+ * máy hỏng của khách, khiến nút "NCC đã trả" không bấm được.
+ */
+const dangGiuHang = (r: any) =>
+    !!(r.stockMovedAt || r.replacedStockAt) && !r.supplierReturnedAt
 
 // GET /api/repairs/stats
 router.get('/stats', authMiddleware, requirePermission('repairs.view'), async (req: AuthRequest, res: Response) => {
@@ -191,39 +222,51 @@ router.put('/:id', authMiddleware, requirePermission('repairs.edit'), validate(U
         const canChuyenKho = laNoiBo
             && !existing.stockMovedAt
             && status && DA_VAO_XUONG.includes(String(status))
-        // Chuyển sang 'replaced' = NCC đã đổi máy mới → hàng về, xem nhanHangVe
-        const canNhanVe = laNoiBo
+        /**
+         * "Đổi mới" trên phiếu CỦA KHÁCH: shop rút một máy mới trong kho đưa
+         * khách và ôm lại máy hỏng của khách. Đúng phép GỬI ĐI.
+         *
+         * Còn "đổi mới" trên phiếu NỘI BỘ thì KHÔNG ghi kho ở đây — xem mục 3
+         * đầu file: lúc đó hàng vẫn nằm chỗ NCC, chưa cầm trên tay.
+         */
+        const canDoiMoiKhach = !laNoiBo
             && status === 'replaced'
-            && !!existing.stockMovedAt
+            && !existing.replacedStockAt
             && !existing.supplierReturnedAt
 
-        if ((canChuyenKho || canNhanVe) && !existing.productId) {
+        if ((canChuyenKho || canDoiMoiKhach) && !existing.productId) {
             return res.status(400).json({
                 success: false,
-                error: 'Phiếu chuyển kho nội bộ nhưng chưa nối sản phẩm — không biết ghi tồn cho mã nào.',
+                error: canDoiMoiKhach
+                    ? 'Đổi mới cho khách sẽ trừ một máy ở kho chính — hãy sửa phiếu, chọn sản phẩm trong danh mục trước.'
+                    : 'Phiếu chuyển kho nội bộ nhưng chưa nối sản phẩm — không biết ghi tồn cho mã nào.',
             })
         }
 
+        let message: string | undefined
         // Ghi kho và cập nhật phiếu trong CÙNG một transaction: nửa chừng lỗi thì
         // không được để tồn đã trừ mà phiếu vẫn trạng thái cũ
         const ketQua = await prisma.$transaction(async (tx: any) => {
             if (canChuyenKho) {
-                const du = await decrementSellableStock(tx, existing.productId, existing.branchId, sl)
-                if (!du) throw new Error(`KHO_THIEU:Kho chính chỉ còn ít hơn ${sl} của "${existing.productName}" — không chuyển sang hàng hư hỏng được`)
-                const khoHu = await khoHuHong(tx, existing.branchId)
-                if (khoHu) await updateWarehouseStock(tx, khoHu, existing.productId, sl)
-                await ghiTheKho(tx, existing, -sl, 'Chuyển kho nội bộ: hàng hư hỏng', req)
+                await dayVaoKhoHu(tx, existing, sl, req, 'Chuyển kho nội bộ: hàng hư hỏng')
                 data.stockMovedAt = new Date()
+                message = `Đã trừ ${sl} "${existing.productName}" ở kho chính, chuyển sang kho hư hỏng`
             }
-            if (canNhanVe) {
-                await nhanHangVe(tx, existing, sl, req, 'NCC đổi máy mới')
+            if (canDoiMoiKhach) {
+                await dayVaoKhoHu(tx, existing, sl, req, 'Đổi mới cho khách: giao máy mới, nhận máy hỏng')
                 data.replacedStockAt = new Date()
-                data.supplierReturnedAt = new Date()
+                message = `Đổi mới: đã trừ ${sl} "${existing.productName}" ở kho chính, máy hỏng nhập kho hư hỏng`
+            }
+            if (laNoiBo && status === 'replaced' && !message) {
+                // Không ghi kho — phải nói thẳng, kẻo lại tưởng đã cộng rồi
+                message = existing.stockMovedAt
+                    ? 'Đã ghi nhận NCC đồng ý đổi mới. Kho chính CHƯA cộng — hàng về thì bấm "NCC đã trả".'
+                    : 'Đã ghi nhận đổi mới. Phiếu này chưa từng chuyển hàng sang kho hư hỏng nên không có gì để cộng.'
             }
             return tx.repair.update({ where: { id }, data })
         })
 
-        res.json({ success: true, data: ketQua })
+        res.json({ success: true, data: ketQua, ...(message ? { message } : {}) })
     } catch (err: any) {
         const m = String(err?.message || '')
         if (m.startsWith('KHO_THIEU:')) {
@@ -236,10 +279,12 @@ router.put('/:id', authMiddleware, requirePermission('repairs.edit'), validate(U
 
 // POST /api/repairs/:id/supplier-returned — NCC trả hàng về (sửa xong máy cũ)
 /**
- * Cùng phép tính với "đổi mới": kho chính +n, kho hư hỏng −n. Khác nhau ở đời
- * thực (máy khác hay máy cũ đã sửa) chứ trên sổ thì y hệt, nên dùng chung
- * `nhanHangVe` và chung dấu mốc `supplierReturnedAt` — bấm đường nào trước
- * cũng được, đường còn lại tự khoá, không bao giờ cộng hai lần.
+ * ĐÂY mới là chỗ cộng lại kho chính — không phải lúc chọn trạng thái "Đổi mới".
+ * Bấm nút này nghĩa là hàng đã về tới tay, dù NCC đổi máy khác hay sửa xong
+ * trả máy cũ; trên sổ hai chuyện đó y hệt nhau.
+ *
+ * Bấm được cho CẢ phiếu của khách: sau khi đổi mới, máy hỏng của khách nằm ở
+ * kho hư hỏng và cũng gửi NCC được như hàng nội bộ.
  */
 router.post('/:id/supplier-returned', authMiddleware, requirePermission('repairs.edit'), async (req: AuthRequest, res: Response) => {
     try {
@@ -253,14 +298,13 @@ router.post('/:id/supplier-returned', authMiddleware, requirePermission('repairs
         if (!r.productId) {
             return res.status(400).json({ success: false, error: 'Phiếu chưa nối với sản phẩm nào — không biết cộng tồn cho mã nào' })
         }
-        // Hàng phải ĐANG NẰM ở kho hư hỏng thì mới có cái để trả về. Phiếu hàng
-        // của khách không đụng tồn nên cũng không có gì để cộng.
-        if (r.source !== 'internal' || !r.stockMovedAt) {
+        // Hàng phải ĐANG NẰM ở kho hư hỏng thì mới có cái để nhận về
+        if (!dangGiuHang(r)) {
             return res.status(400).json({
                 success: false,
                 error: r.source === 'internal'
                     ? 'Hàng chưa được chuyển sang kho hư hỏng nên chưa có gì để nhận về. Đưa phiếu sang Sửa chữa/Bảo hành trước.'
-                    : 'Phiếu hàng của khách không đụng tồn kho, không có gì để cộng lại.',
+                    : 'Phiếu của khách chỉ giữ hàng ở kho hư hỏng sau khi Đổi mới. Phiếu này chưa đổi mới nên không có gì để cộng lại.',
             })
         }
         const sl = Math.max(1, Number(r.quantity) || 1)
@@ -297,12 +341,11 @@ router.delete('/:id', authMiddleware, requirePermission('repairs.edit'), async (
          * từ hư không.
          */
         await prisma.$transaction(async (tx: any) => {
-            if (r.productId && r.stockMovedAt && !r.supplierReturnedAt) {
+            if (r.productId && dangGiuHang(r)) {
+                // Cả hai đường gửi đi đều là (kho chính −n, kho hư +n) nên phép
+                // hoàn y hệt nhau — không cần rẽ theo `source`
                 const sl = Math.max(1, Number(r.quantity) || 1)
-                await adjustSellableStock(tx, r.productId, r.branchId, sl, `Xoá phiếu ${r.code} — hoàn chuyển kho nội bộ`)
-                const khoHu = await khoHuHong(tx, r.branchId)
-                if (khoHu) await updateWarehouseStock(tx, khoHu, r.productId, -sl)
-                await ghiTheKho(tx, r, sl, 'Xoá phiếu — hoàn hàng hư hỏng về kho chính', req)
+                await nhanHangVe(tx, r, sl, req, 'Xoá phiếu — hoàn hàng hư hỏng về kho chính')
             }
             await tx.repair.delete({ where: { id } })
         })
