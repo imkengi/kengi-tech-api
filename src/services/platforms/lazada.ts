@@ -401,6 +401,22 @@ export class LazadaService extends PlatformService {
                 ` — đang lấy "${allStatuses[0]}" làm trạng thái cả đơn`)
         }
 
+        /**
+         * ĐO: đơn đã qua khâu ĐVVC lấy hàng mà không có mốc thời gian nào.
+         *
+         * `shipped_at` không nằm trong tài liệu đơn hàng của Lazada. Nếu nó
+         * luôn rỗng thì tab "ĐVVC đã lấy hàng hôm nay" mất trắng sàn Lazada mà
+         * chẳng báo lỗi gì. In danh sách khoá THẬT SỰ có trong payload để chọn
+         * đúng trường, thay vì đoán rồi ghi nhầm ngày lên biên bản shipper.
+         */
+        const daGiaoDi = ['shipping', 'delivered', 'completed']
+            .includes(this.mapStatus(o.statuses?.[0] || o.status || ''))
+        if (daGiaoDi && !o.shipped_at) {
+            const khoaThoiGian = Object.keys(o).filter(k => /time|date|_at$/i.test(k))
+            console.warn(`[Lazada] đơn ${o.order_id} đã giao đi nhưng KHÔNG có shipped_at` +
+                ` — các khoá thời gian có thật: ${JSON.stringify(khoaThoiGian)}`)
+        }
+
         return {
             externalOrderId: String(o.order_id),
             orderNumber: `LZD-${o.order_number || o.order_id}`,
@@ -421,6 +437,17 @@ export class LazadaService extends PlatformService {
             items,
             createdAt: o.created_at || new Date().toISOString(),
             paidAt: o.payment_time || undefined,
+            /**
+             * NGỜ: `shipped_at` KHÔNG có trong tài liệu đơn hàng của Lazada
+             * (order chỉ có created_at/updated_at). Nếu đúng vậy thì trường này
+             * luôn rỗng và CẢ SÀN LAZADA biến mất khỏi tab "ĐVVC đã lấy hàng
+             * hôm nay" — im lặng, không lỗi.
+             *
+             * Chưa sửa vội vì chưa đo được payload thật. Dòng log dưới để bắt
+             * tận tay: đơn đã qua khâu lấy hàng mà không có mốc thời gian nào —
+             * gặp trong nhật ký thì lấy danh sách khoá in ra mà chọn trường
+             * đúng (cùng lối "học mã" đang dùng cho mã giao hàng TikTok).
+             */
             shippedAt: o.shipped_at || undefined,
             deliveredAt: o.delivered_at || undefined,
         }

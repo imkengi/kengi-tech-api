@@ -8,6 +8,9 @@ import { PlatformService, PlatformCredentials, PlatformOrder, PlatformOrderItem,
 const TIKTOK_AUTH = 'https://auth.tiktok-shops.com'
 const TIKTOK_API = 'https://open-api.tiktokglobalshop.com'
 
+/** Đơn đã qua khâu ĐVVC lấy hàng — dùng để quyết có được lùi về `rts_time` không */
+const DA_QUA_LAY_HANG = new Set(['IN_TRANSIT', 'DELIVERED', 'COMPLETED'])
+
 export class TikTokService extends PlatformService {
     get platformName() { return 'tiktok' }
 
@@ -1067,7 +1070,25 @@ export class TikTokService extends PlatformService {
             items,
             createdAt: o.create_time ? new Date(o.create_time * 1000).toISOString() : new Date().toISOString(),
             paidAt: o.paid_time ? new Date(o.paid_time * 1000).toISOString() : undefined,
-            shippedAt: o.rts_time ? new Date(o.rts_time * 1000).toISOString() : undefined,
+            /**
+             * LÚC ĐVVC LẤY HÀNG, KHÔNG PHẢI LÚC NGƯỜI BÁN BẤM SẴN SÀNG.
+             *
+             * `rts_time` = Ready-To-Ship: người bán vừa xác nhận sẽ giao, đơn
+             * mới chuyển sang AWAITING_COLLECTION — hàng còn nằm ở kho mình,
+             * có khi cả ngày sau shipper mới qua lấy. Dùng nó cho tab "ĐVVC đã
+             * lấy hàng hôm nay" là sai hai chiều: kể thừa đơn mới bấm hôm nay
+             * mà chưa ai lấy, và bỏ sót đơn bấm hôm qua nhưng shipper lấy hôm
+             * nay. `collection_time` mới là lúc lấy thật (đơn sang IN_TRANSIT).
+             *
+             * Chỉ lùi về `rts_time` khi đơn ĐÃ qua khâu lấy hàng mà sàn không
+             * trả collection_time — để dữ liệu cũ không trắng ngày gửi. Đơn
+             * chưa được lấy thì để TRỐNG, đừng đoán.
+             */
+            shippedAt: o.collection_time
+                ? new Date(o.collection_time * 1000).toISOString()
+                : (o.rts_time && DA_QUA_LAY_HANG.has(this.mapStatus(rawStatus))
+                    ? new Date(o.rts_time * 1000).toISOString()
+                    : undefined),
             deliveredAt: o.delivery_time ? new Date(o.delivery_time * 1000).toISOString() : undefined,
         }
     }
