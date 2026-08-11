@@ -3573,8 +3573,10 @@ router.post('/fix-kiotviet-discount', async (req: Request, res: Response) => {
         if (!store) return res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' })
         const sp: any = getStorePrisma(store.schema)
 
+        // Lọc theo số phiếu để soi kỹ MỘT hoá đơn trước khi ghi cả loạt
+        const loc = String(req.query.phieu || '').trim()
         const dsHoaDon = await sp.transaction.findMany({
-            where: { createdByName: 'KiotViet Sync' },
+            where: { createdByName: 'KiotViet Sync', ...(loc ? { receiptNumber: loc } : {}) },
             select: {
                 id: true, receiptNumber: true, total: true, discount: true, subtotal: true,
                 items: { select: { id: true, quantity: true, unitPrice: true, discount: true, lineTotal: true } },
@@ -3618,9 +3620,16 @@ router.post('/fix-kiotviet-discount', async (req: Request, res: Response) => {
             if (viDu.length < 5) {
                 viDu.push({
                     phieu: t.receiptNumber, cach: chon === cachA ? 'A (từ lineTotal)' : 'B (× số lượng)',
-                    truoc: items.map((i: any) => Math.round(i.lineTotal)),
-                    sau: items.map((i: any, k: number) => Math.round(i.quantity * i.unitPrice - chon[k])),
-                    tong: t.total,
+                    tong: t.total, gopDong: Math.round(gop), canGiam: Math.round(canGiam),
+                    dong: items.map((i: any, k: number) => ({
+                        sl: i.quantity, donGia: Math.round(i.unitPrice),
+                        giamTruoc: Math.round(i.discount), giamSau: Math.round(chon[k]),
+                        dongTruoc: Math.round(i.lineTotal),
+                        dongSau: Math.round(i.quantity * i.unitPrice - chon[k]),
+                        // Con số NGƯỜI DÙNG thấy: giao diện tự tính lại gộp − giảm,
+                        // KHÔNG dùng lineTotal đã lưu. Đây mới là chỗ vỡ.
+                        manHinhTruoc: Math.round(i.quantity * i.unitPrice - i.discount),
+                    })),
                 })
             }
             if (!apply) continue
