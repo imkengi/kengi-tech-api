@@ -149,6 +149,13 @@ export interface SyncOptions {
      * nó thì số liệu chạy thử lệch hẳn với chạy thật ở phần sổ quỹ.
      */
     invoicePaymentCodes?: Set<string>
+    /**
+     * Khách được TẠO MỚI trong chính lượt chạy này, với debt seed = số dư
+     * KiotViet. Số dư đó ĐÃ GỒM các hoá đơn nợ sắp nhập ngay sau trong cùng
+     * lượt — bước hoá đơn mà cộng nợ cho họ nữa là ĐẾM ĐÔI. Bước hoá đơn phải
+     * tra tập này và bỏ qua phần cộng nợ cho khách vừa seed.
+     */
+    seededCustomerIds?: Set<string>
 }
 
 /** Đập nhịp mỗi 25 bản ghi — đủ dày để thấy tiến độ, đủ thưa để không nghẽn DB. */
@@ -519,6 +526,8 @@ export async function syncCustomers(sp: any, items: any[], opts: SyncOptions, c:
                         },
                     })
                     await saveMap(sp, 'customer', kvId, finalCode, created.id)
+                    // Đánh dấu để bước hoá đơn KHÔNG cộng nợ lần nữa — xem SyncOptions
+                    opts.seededCustomerIds?.add(created.id)
                 }
                 c.created++
                 noteSample(c, { code: finalCode, name, phone, congNo: kvDebt, hanhDong: 'tạo mới' })
@@ -632,11 +641,21 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                 // doanh thu. Webhook `invoice.update` bắn đúng lúc này; bỏ qua
                 // im lặng là để lại doanh thu ma trong sổ.
                 const daCo = await sp.transaction.findUnique({
-                    where: { receiptNumber: code }, select: { id: true, status: true },
+                    where: { receiptNumber: code },
+                    select: { id: true, status: true, customerId: true, total: true, amountReceived: true },
                 }).catch(() => null)
                 if (daCo && daCo.status !== 'voided') {
                     if (opts.apply) {
                         await sp.transaction.update({ where: { id: daCo.id }, data: { status: 'voided' } })
+                        // Đơn nợ bị huỷ thì phần chưa thu phải RÚT khỏi số dư khách,
+                        // không thì khách gánh nợ của một hoá đơn không còn tồn tại
+                        const noTreo = Math.max(0, (daCo.total || 0) - (daCo.amountReceived ?? 0))
+                        if (noTreo > 0 && daCo.customerId) {
+                            await sp.customer.update({
+                                where: { id: daCo.customerId },
+                                data: { debt: { decrement: noTreo } },
+                            }).catch(() => { })
+                        }
                     }
                     c.updated++
                     noteSample(c, { code, hanhDong: 'huỷ khỏi sổ', trangThaiKiotViet: kv?.status })
@@ -697,6 +716,23 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                 if (existing.status !== trangThaiDung) data.status = trangThaiDung
 
                 /**
+                 * GIỮ Customer.debt SỐNG THEO CHỨNG TỪ — như luồng POS gốc
+                 * (bán nợ increment, thu nợ decrement). Trước đây sync ghi hoá
+                 * đơn nợ mà không đụng số dư khách → khách có đơn ghi nợ mới
+                 * qua webhook nhưng debt vẫn là ảnh chụp cũ; lịch sử công nợ
+                 * neo dòng cuối vào debt nên CẢ SỔ trượt xuống đúng phần thiếu,
+                 * và "Nợ cũ" trên hoá đơn in ra số âm vô nghĩa (đo 11/08/2026:
+                 * Phượng Dung debt=0, đơn nợ 2.817.040 → in "Nợ cũ −2.817.040").
+                 *
+                 * Delta từ số đang lưu về số đúng nên chạy lại bao nhiêu lần
+                 * cũng không cộng trùng; đơn đang 'voided' coi nợ cũ = 0.
+                 */
+                const noCu = existing.status === 'voided' ? 0
+                    : Math.max(0, existing.total - (existing.amountReceived ?? 0))
+                const noMoi = Math.max(0, existing.total - thuMoi)
+                const deltaNo = noMoi - noCu
+
+                /**
                  * DỰNG LẠI DÒNG HÀNG (chỉ khi bật rebuildLines).
                  *
                  * Ba cổng phải qua HẾT mới được đụng vào dòng cũ — thiếu cổng
@@ -740,6 +776,12 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                         })
                     }
                     await sp.transaction.update({ where: { id: existing.id }, data })
+                    if (deltaNo !== 0 && existing.customerId) {
+                        await sp.customer.update({
+                            where: { id: existing.customerId },
+                            data: { debt: { increment: deltaNo } },
+                        }).catch(() => { })
+                    }
                     // Dựng lại phiếu thu cho khớp KiotViet. XOÁ TRƯỚC, kể cả khi
                     // KiotViet không còn phiếu nào — phiếu thu bị huỷ bên đó mà
                     // Kengi vẫn giữ thì sổ quỹ tiếp tục đếm tiền không có thật.
@@ -904,6 +946,20 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                     },
                 })
                 await saveMap(sp, 'invoice', kvId, code, created.id)
+                /**
+                 * Đơn nợ mới → Customer.debt tăng theo, như luồng POS gốc.
+                 *
+                 * TRỪ khách vừa được seed trong CHÍNH lượt này: debt seed lấy từ
+                 * KiotViet đã GỒM các hoá đơn nợ sắp nhập đây — cộng nữa là đếm
+                 * đôi (khách mới 10 đơn nợ sẽ thành nợ ×2).
+                 */
+                const noDonMoi = Math.max(0, total - amountReceived)
+                if (noDonMoi > 0 && customerId && !opts.seededCustomerIds?.has(customerId)) {
+                    await sp.customer.update({
+                        where: { id: customerId },
+                        data: { debt: { increment: noDonMoi } },
+                    }).catch(() => { })
+                }
                 // Đánh dấu các mã phiếu thu đã tính vào hoá đơn, để bước sổ quỹ
                 // không tạo lại chúng thành phiếu thu độc lập (tránh nhân đôi)
                 for (const p of paymentRows) {
@@ -1186,8 +1242,12 @@ export async function syncCashflow(sp: any, items: any[], opts: SyncOptions, c: 
              * TRỐNG TRƠN, khách nợ bao nhiêu cũng không thấy đã trả lần nào
              * (dính 07/08/2026).
              *
-             * KHÔNG đụng Customer.debt: số dư đã lấy thẳng từ KiotViet và đã đối
-             * chiếu khớp từng đồng. Cộng trừ thêm ở đây là làm lệch trở lại.
+             * Customer.debt GIẢM theo phiếu thu — đổi thiết kế 11/08/2026.
+             * Trước đây chỗ này ghi "không đụng debt vì số dư lấy thẳng từ
+             * KiotViet", nhưng ảnh chụp đó chỉ tươi tại thời điểm đồng bộ
+             * khách; webhook ghi chứng từ mới mà debt đứng yên là sổ trượt
+             * (vụ in "Nợ cũ −2.817.040"). Nay MỌI chứng từ nợ qua sync đều
+             * chỉnh debt như luồng POS gốc; chống trùng đã có map debtPayment.
              * `balance` để 0 vì trang tự tính lại luỹ kế khi hiển thị.
              */
             const laKhachTraNo = dir === 'in'
@@ -1214,6 +1274,10 @@ export async function syncCashflow(sp: any, items: any[], opts: SyncOptions, c: 
                             },
                         })
                         await saveMap(sp, 'debtPayment', code, code, created.id)
+                        await sp.customer.update({
+                            where: { id: localCus },
+                            data: { debt: { decrement: amount } },
+                        }).catch(() => { })
                     }
                     c.created++
                     noteSample(c, { code, chieu: 'THU NỢ', soTien: amount, khach: partner, ngay: date.toISOString().slice(0, 10) })
