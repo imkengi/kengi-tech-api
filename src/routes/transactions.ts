@@ -92,6 +92,20 @@ router.get('/', authMiddleware, requirePermission('pos.view'), async (req: AuthR
 
         if (status && status !== 'all') {
             const statusList = (status as string).split(',').map(s => s.trim()).filter(Boolean)
+            /**
+             * "Hoàn thành" GỒM CẢ ĐƠN GHI NỢ ('partial') — hàng đã giao, bán đã
+             * xong, chỉ còn tiền chưa thu đủ. Người dùng vào lịch sử giao dịch
+             * xem theo tab Hoàn thành mà đơn ghi nợ biến mất là tưởng chưa bán
+             * (yêu cầu 11/08/2026).
+             *
+             * CHỈ nới ở bộ lọc đọc này. KHÔNG đổi giá trị lưu trong DB: 'partial'
+             * đang gánh máy trả nợ — POST /:id/pay-debt chặn đơn không 'partial',
+             * tổng nợ tính từ đơn 'partial' — đổi chỗ lưu là gãy cả dây.
+             * Tab "Ghi nợ" vẫn lọc đúng tập con vì 'partial' nằm nguyên trong DB.
+             */
+            if (statusList.includes('completed') && !statusList.includes('partial')) {
+                statusList.push('partial')
+            }
             where.status = statusList.length > 1 ? { in: statusList } : statusList[0]
         }
         if (cashier) where.createdBy = cashier
@@ -249,7 +263,9 @@ router.get('/stats', authMiddleware, requirePermission('pos.view'), async (req: 
         // KPI aggregations
         const totalOrders = recent.length
         const totalRevenue = revenueTx.reduce((s, t) => s + t.total, 0)
-        const completedCount = completed.length
+        // Đơn ghi nợ TÍNH là hoàn thành (hàng đã giao, bán đã xong) — khớp với
+        // bộ lọc "Hoàn thành" ở danh sách, kẻo thẻ KPI và bảng vênh số nhau
+        const completedCount = completed.length + partial.length
         const voidedCount = voided.length
         const returnedCount = returned.length
 
