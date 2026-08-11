@@ -3578,7 +3578,7 @@ router.post('/fix-kiotviet-discount', async (req: Request, res: Response) => {
         const dsHoaDon = await sp.transaction.findMany({
             where: { createdByName: 'KiotViet Sync', ...(loc ? { receiptNumber: loc } : {}) },
             select: {
-                id: true, receiptNumber: true, total: true, discount: true, subtotal: true,
+                id: true, receiptNumber: true, total: true, discount: true, subtotal: true, createdAt: true,
                 items: { select: { id: true, quantity: true, unitPrice: true, discount: true, lineTotal: true } },
             },
         })
@@ -3606,10 +3606,13 @@ router.post('/fix-kiotviet-discount', async (req: Request, res: Response) => {
 
             if (!chon) {
                 dem.khongVaDuoc++
-                if (khongVa.length < 20) {
+                if (khongVa.length < 50) {
                     khongVa.push({
                         phieu: t.receiptNumber, tong: t.total, gopDong: Math.round(gop),
                         canGiam: Math.round(canGiam), dangGiam: Math.round(dangGiam),
+                        // Ngày chứng từ — để chạy lát rebuild đúng khoảng, khỏi quét
+                        // cả 50k trang chỉ vì vài phiếu cũ nằm ngoài cửa sổ
+                        ngay: t.createdAt ? new Date(t.createdAt).toISOString().slice(0, 10) : null,
                     })
                 }
                 continue
