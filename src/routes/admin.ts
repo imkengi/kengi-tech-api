@@ -3599,6 +3599,54 @@ router.get('/debt-trace', async (req: Request, res: Response) => {
     }
 })
 
+// ─── GET /admin/repair-trace?storeCode= ─────────────────────────────────────
+/**
+ * CHỈ ĐỌC: soi vì sao "đổi mới không vào kho hư hỏng" — liệt kê phiếu sửa
+ * gần nhất (kèm mốc ghi kho), thẻ kho referenceType='repair', và các dòng
+ * tồn của kho hư hỏng (kể cả ÂM — di sản chiều sai trước 10/08).
+ */
+router.get('/repair-trace', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || '').trim()
+        if (!storeCode) return res.status(400).json({ success: false, error: 'Thiếu storeCode' })
+        const store = await prisma.store.findFirst({
+            where: { code: { equals: storeCode, mode: 'insensitive' } }, select: { schema: true },
+        })
+        if (!store) return res.status(404).json({ success: false, error: 'Không thấy cửa hàng' })
+        const sp: any = getStorePrisma(store.schema)
+        const [phieu, theKho, khoHu] = await Promise.all([
+            sp.repair.findMany({
+                orderBy: { updatedAt: 'desc' }, take: 12,
+                select: {
+                    code: true, source: true, status: true, productId: true, productName: true,
+                    quantity: true, branchId: true, stockMovedAt: true, replacedStockAt: true,
+                    supplierReturnedAt: true, updatedAt: true,
+                },
+            }),
+            sp.inventoryTransaction.findMany({
+                where: { referenceType: 'repair' },
+                orderBy: { createdAt: 'desc' }, take: 15,
+                select: { createdAt: true, productName: true, productSku: true, quantity: true, reason: true },
+            }),
+            sp.warehouse.findMany({
+                where: { type: 'damaged' },
+                select: {
+                    id: true, code: true, branchId: true, isActive: true,
+                    stocks: {
+                        where: { quantity: { not: 0 } },
+                        select: { quantity: true, product: { select: { sku: true, name: true } } },
+                        take: 40,
+                    },
+                },
+            }),
+        ])
+        res.json({ success: true, phieu, theKho, khoHu })
+    } catch (err: any) {
+        console.error('repair-trace error:', err)
+        res.status(500).json({ success: false, error: err?.message })
+    }
+})
+
 // ─── POST /admin/fix-kiotviet-discount?storeCode=&apply= ────────────────────
 /**
  * VÁ GIẢM GIÁ DÒNG CỦA HOÁ ĐƠN ĐÃ ĐỒNG BỘ TỪ KIOTVIET.
