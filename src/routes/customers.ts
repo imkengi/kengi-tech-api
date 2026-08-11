@@ -136,16 +136,24 @@ router.get('/segments-live', authMiddleware, requirePermission('customers.view')
                 _max: { createdAt: true },
             }),
             /**
-             * TỐC ĐỘ TRẢ NỢ đo bằng TUỔI đơn ghi nợ đang treo ('partial'):
-             * ngày chứng từ (createdAt) là dữ liệu tin được với mọi nguồn.
-             * KHÔNG đo bằng ngày Payment — bảng Payment không có cột ngày,
-             * và phiếu thu dựng lại từ KiotViet đều dính ngày hôm chạy.
+             * TỐC ĐỘ TRẢ NỢ: tuổi của NỢ CÒN LẠI THỰC, không phải tuổi đơn
+             * 'partial' cổ nhất. Thu nợ qua phiếu thu độc lập (TT... KiotViet)
+             * không đụng vào hoá đơn nên đơn đứng 'partial' mãi dù đã trả xong
+             * (bằng chứng: HD030344.01 — Việt Nhật, trả đủ qua PT00498 mà
+             * status vẫn partial, đo 11/08/2026). Lấy _min.createdAt của mọi
+             * đơn partial là dán "Chậm" cho khách trả sòng phẳng.
+             *
+             * Cách đúng (FIFO như trang Công nợ): lấy danh sách đơn treo kèm
+             * số CHƯA THU của từng đơn, đi từ MỚI NHẤT ngược về, gom đủ đúng
+             * Customer.debt thì dừng — tuổi nợ = mốc xa nhất còn dính nợ thật.
+             * Ngày chứng từ (createdAt) vẫn là dữ liệu tin được với mọi nguồn;
+             * KHÔNG đo bằng ngày Payment (bảng không có cột ngày, và phiếu thu
+             * dựng lại từ KiotViet đều dính ngày hôm chạy).
              */
-            prisma.transaction.groupBy({
-                by: ['customerId'],
+            prisma.transaction.findMany({
                 where: { customerId: { not: null }, status: 'partial' },
-                _count: { _all: true },
-                _min: { createdAt: true },
+                select: { customerId: true, createdAt: true, total: true, amountReceived: true },
+                orderBy: { createdAt: 'desc' },
             }),
             // CỬA SỔ 12 THÁNG: xếp hạng theo bình quân tháng gần đây, không phải
             // tổng trọn đời — mua một cục năm ngoái rồi biến mất mà vẫn Kim cương
@@ -184,7 +192,30 @@ router.get('/segments-live', authMiddleware, requirePermission('customers.view')
                 : Promise.resolve([]),
         ])
         const agg = new Map(grp.map((g: any) => [g.customerId as string, g]))
-        const mapNo = new Map(ghiNo.map((g: any) => [g.customerId as string, g]))
+        // customerId -> [{ngay, chuaThu}] MỚI NHẤT trước (query đã orderBy desc)
+        const mapNo = new Map<string, Array<{ ngay: Date; chuaThu: number }>>()
+        for (const t of ghiNo as any[]) {
+            const chuaThu = Math.max(0, (t.total || 0) - (t.amountReceived ?? 0))
+            if (chuaThu <= 0) continue
+            const ds = mapNo.get(t.customerId) || []
+            ds.push({ ngay: t.createdAt, chuaThu })
+            mapNo.set(t.customerId, ds)
+        }
+        /** Tuổi nợ FIFO: gom đơn treo từ mới về cũ cho đủ số nợ hiện tại. */
+        const tuoiNoFifo = (custId: string, debt: number): { tuoi: number; soDon: number } => {
+            if (debt <= 0) return { tuoi: 0, soDon: 0 }
+            const ds = mapNo.get(custId) || []
+            let con = debt, moc: Date | null = null, soDon = 0
+            for (const d of ds) {
+                moc = d.ngay; soDon++
+                con -= d.chuaThu
+                if (con <= 0) break
+            }
+            // Nợ nhiều hơn tổng đơn treo (phần dư đầu kỳ không có chứng từ):
+            // tuổi tính tới đơn treo cổ nhất — không bịa xa hơn chứng từ có thật
+            if (!moc) return { tuoi: 0, soDon: 0 }
+            return { tuoi: Math.floor((Date.now() - new Date(moc).getTime()) / (24 * 60 * 60 * 1000)), soDon }
+        }
         const map90 = new Map(gan90.map((g: any) => [g.customerId as string, g._count?._all ?? 0]))
         const map12 = new Map(nam12.map((g: any) => [g.customerId as string, g]))
         const mapVon = new Map((vonRows as any[]).map((r: any) => [r.cid as string, r]))
@@ -219,18 +250,14 @@ router.get('/segments-live', authMiddleware, requirePermission('customers.view')
             const diemDeuDan = Math.min(20, Math.round(donThang / 4 * 20))
             const diemGanDay = ngayCuoi == null ? 0 : ngayCuoi <= 30 ? 15 : ngayCuoi <= 60 ? 11 : ngayCuoi <= 90 ? 8 : ngayCuoi <= 180 ? 4 : 0
             // thanhToan tính ở dưới nhưng cần cho điểm — tính trước tại đây
-            const gnDiem: any = mapNo.get(c.id)
-            const tuoiNoDiem = gnDiem?._min?.createdAt ? Math.floor((Date.now() - new Date(gnDiem._min.createdAt).getTime()) / NGAY) : 0
-            const diemThanhToan = (c.debt ?? 0) <= 0 ? 10 : tuoiNoDiem > 30 ? 0 : 6
+            const noFifo = tuoiNoFifo(c.id, c.debt ?? 0)
+            const diemThanhToan = (c.debt ?? 0) <= 0 ? 10 : noFifo.tuoi > 30 ? 0 : 6
             const diemKhach = diemDoanhThu + diemLoiNhuan + diemDeuDan + diemGanDay + diemThanhToan
             const tier = diemKhach >= 80 ? 'diamond' : diemKhach >= 65 ? 'platinum' : diemKhach >= 45 ? 'gold' : diemKhach >= 25 ? 'silver' : 'bronze'
 
-            // ── Trả nợ nhanh hay chậm ──
-            const gn: any = mapNo.get(c.id)
-            const soDonGhiNo = gn?._count?._all ?? 0
-            const tuoiNoNgay = gn?._min?.createdAt
-                ? Math.floor((Date.now() - new Date(gn._min.createdAt).getTime()) / NGAY)
-                : 0
+            // ── Trả nợ nhanh hay chậm ── (tuổi FIFO tính ở trên, dùng chung với điểm)
+            const soDonGhiNo = noFifo.soDon
+            const tuoiNoNgay = noFifo.tuoi
             const debt = c.debt ?? 0
             // Hết nợ = tốt, kể cả từng ghi nợ (đã trả xong là khách đàng hoàng).
             // Còn nợ mà đơn treo lâu nhất quá 30 ngày = chậm.
