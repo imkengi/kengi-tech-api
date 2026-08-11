@@ -3634,7 +3634,7 @@ router.get('/repair-trace', async (req: Request, res: Response) => {
                     id: true, code: true, branchId: true, isActive: true,
                     stocks: {
                         where: { quantity: { not: 0 } },
-                        select: { quantity: true, product: { select: { sku: true, name: true } } },
+                        select: { quantity: true, productSku: true, productName: true },
                         take: 40,
                     },
                 },
