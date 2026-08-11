@@ -249,18 +249,22 @@ router.get('/:id/prices/:productId', authMiddleware, requirePermission('customer
 
 
 // GET /api/customers/:id/debt-history — Build debt movement history from transactions + DebtEntry
-router.get('/:id/debt-history', authMiddleware, requirePermission('customers.view'), async (req: AuthRequest, res: Response) => {
-    try {
-        const prisma = req.storePrisma!
-        const custId = String(req.params.id)
-
+/**
+ * Tách thành hàm để /admin/debt-trace tái hiện ĐÚNG con số mà nút In hoá đơn
+ * sẽ ra (FE tính "nợ cũ" = balance − amount của dòng Bán hàng). Truy lỗi mà
+ * chép lại thuật toán ở chỗ khác là truy một bản sao, không phải thứ đang chạy.
+ */
+export async function buildDebtHistory(prisma: any, custId: string): Promise<{
+    customer: { name: string | null; phone: string | null; debt: number } | null
+    history: any[]
+}> {
+    {
         const customer = await prisma.customer.findFirst({
             where: { id: custId },
             select: { name: true, phone: true, debt: true },
         })
         if (!customer) {
-            res.status(404).json({ success: false, error: 'Customer not found' })
-            return
+            return { customer: null, history: [] }
         }
 
         // 1. Get ALL transactions for this customer
@@ -347,11 +351,11 @@ router.get('/:id/debt-history', authMiddleware, requirePermission('customers.vie
 
             // ── 2. "Phiếu thu lúc bán": payments at time of sale
             //    = all payments that are NOT credit AND NOT "Thanh toán nợ"
-            const salePayments = t.payments.filter(p =>
+            const salePayments = t.payments.filter((p: any) =>
                 p.type !== 'credit' &&
                 !(p.reference && p.reference.includes('Thanh toán nợ'))
             )
-            const saleReceived = salePayments.reduce((sum, p) => sum + p.amount, 0)
+            const saleReceived = salePayments.reduce((sum: number, p: any) => sum + p.amount, 0)
             if (saleReceived > 0) {
                 history.push({
                     id: `${t.id}-receipt`,
@@ -365,7 +369,7 @@ router.get('/:id/debt-history', authMiddleware, requirePermission('customers.vie
             }
 
             // ── 3. "Phiếu thu trả nợ": each debt payment record
-            const debtPaymentRecords = t.payments.filter(p =>
+            const debtPaymentRecords = t.payments.filter((p: any) =>
                 p.reference && p.reference.includes('Thanh toán nợ')
             )
             for (const dp of debtPaymentRecords) {
@@ -466,7 +470,17 @@ router.get('/:id/debt-history', authMiddleware, requirePermission('customers.vie
         // Return newest first
         history.reverse()
 
-        console.log(`[debt-history] Final history items: ${history.length}`)
+        return { customer, history }
+    }
+}
+
+router.get('/:id/debt-history', authMiddleware, requirePermission('customers.view'), async (req: AuthRequest, res: Response) => {
+    try {
+        const { customer, history } = await buildDebtHistory(req.storePrisma!, String(req.params.id))
+        if (!customer) {
+            res.status(404).json({ success: false, error: 'Customer not found' })
+            return
+        }
         res.json({ success: true, data: history })
     } catch (err) {
         console.error('Get customer debt history error:', err)

@@ -3537,6 +3537,68 @@ router.get('/vnpt-probe', async (req: Request, res: Response) => {
     }
 })
 
+// ─── GET /admin/debt-trace?storeCode=&phieu= ────────────────────────────────
+/**
+ * CHỈ ĐỌC: tái hiện đúng con số "Nợ cũ" mà nút In hoá đơn sẽ in ra cho một
+ * phiếu — cùng hàm dựng lịch sử (`buildDebtHistory`) và cùng phép tìm dòng
+ * như FE (`printReceipt.ts` → noCuTruocHoaDon). Có nó vì khi người dùng báo
+ * "nợ cũ in sai" thì phải nhìn được từng dòng sổ quanh phiếu đó, thay vì
+ * đoán mò trong thuật toán.
+ */
+router.get('/debt-trace', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || '').trim()
+        const phieu = String(req.query.phieu || '').trim()
+        if (!storeCode || !phieu) return res.status(400).json({ success: false, error: 'Thiếu storeCode hoặc phieu' })
+        const store = await prisma.store.findFirst({
+            where: { code: { equals: storeCode, mode: 'insensitive' } }, select: { schema: true },
+        })
+        if (!store) return res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' })
+        const sp: any = getStorePrisma(store.schema)
+
+        const t = await sp.transaction.findFirst({
+            where: { receiptNumber: phieu },
+            select: {
+                id: true, receiptNumber: true, customerId: true, customerName: true,
+                total: true, amountReceived: true, status: true, createdAt: true,
+            },
+        })
+        if (!t) return res.status(404).json({ success: false, error: `Không thấy phiếu ${phieu}` })
+        if (!t.customerId) {
+            return res.json({ success: true, transaction: t, noCuSeIn: 0, ghiChu: 'Phiếu không gắn khách — FE in nợ cũ 0' })
+        }
+
+        const { buildDebtHistory } = await import('./customers')
+        const { customer, history } = await buildDebtHistory(sp, t.customerId)
+
+        // Đúng phép tìm của FE: dòng Bán hàng của CHÍNH phiếu, khớp id trước rồi tới code
+        const row = history.find((r: any) => r?.type === 'sale' &&
+            (r.id === t.id || (t.receiptNumber && r.code === t.receiptNumber)))
+        const debtAmount = t.status === 'partial' ? Math.max(0, t.total - (t.amountReceived ?? 0)) : 0
+        const noCu = row && typeof row.balance === 'number'
+            ? row.balance - (Number(row.amount) || 0)
+            : (customer ? (customer.debt ?? 0) - debtAmount : 0)
+
+        const idx = row ? history.indexOf(row) : -1
+        return res.json({
+            success: true,
+            transaction: t,
+            customerDebt: customer?.debt ?? null,
+            // Neo phải khớp: dòng mới nhất (history[0] vì đã đảo) = đúng số dư hiện tại
+            neoKhop: history.length ? Math.abs((history[0].balance ?? 0) - (customer?.debt ?? 0)) <= 1 : null,
+            timThayDong: !!row,
+            noCuSeIn: Math.round(noCu),
+            dongBanHang: row || null,
+            // 6 dòng sổ quanh phiếu (mới → cũ) để nhìn bằng mắt
+            lanCan: idx >= 0 ? history.slice(Math.max(0, idx - 3), idx + 4) : history.slice(0, 8),
+            tongSoDong: history.length,
+        })
+    } catch (err: any) {
+        console.error('debt-trace error:', err)
+        res.status(500).json({ success: false, error: err?.message })
+    }
+})
+
 // ─── POST /admin/fix-kiotviet-discount?storeCode=&apply= ────────────────────
 /**
  * VÁ GIẢM GIÁ DÒNG CỦA HOÁ ĐƠN ĐÃ ĐỒNG BỘ TỪ KIOTVIET.
