@@ -3537,4 +3537,124 @@ router.get('/vnpt-probe', async (req: Request, res: Response) => {
     }
 })
 
+// ─── POST /admin/fix-kiotviet-discount?storeCode=&apply= ────────────────────
+/**
+ * VÁ GIẢM GIÁ DÒNG CỦA HOÁ ĐƠN ĐÃ ĐỒNG BỘ TỪ KIOTVIET.
+ *
+ * KiotViet tính giảm giá theo MỖI ĐƠN VỊ, Kengi theo CẢ DÒNG. Bản sync cũ bê
+ * thẳng con số qua nên dòng hàng không cộng ra tổng phiếu (đo HD030345: ba
+ * dòng cộng 4.510.104 trong khi tổng là 2.817.040). Bản sync đã sửa, nhưng
+ * hoá đơn nhập TRƯỚC đó vẫn sai — route này vá chúng.
+ *
+ * KHÔNG ĐOÁN. `Transaction.total` lấy thẳng từ `kv.total` nên là số có thẩm
+ * quyền; mọi cách sửa đều phải cộng ra đúng nó thì mới ghi:
+ *
+ *   cầnGiảm = Σ(qty × đơn giá) − (total + giảm giá phiếu)
+ *
+ * Thử hai cách rồi mới chọn, vì bản cũ lưu `lineTotal` theo hai kiểu khác
+ * nhau tuỳ payload có `subTotal` hay không:
+ *   A. suy từ lineTotal đã lưu   (payload CÓ subTotal → lineTotal vốn đã đúng)
+ *   B. nhân giảm-mỗi-đơn-vị với số lượng (payload KHÔNG có subTotal)
+ *
+ * Cách nào cộng khớp `cầnGiảm` thì dùng. Không cách nào khớp → BỎ QUA và liệt
+ * kê ra, tuyệt đối không ghi bừa lên sổ tiền.
+ *
+ * apply=false (mặc định) chỉ đọc và đếm.
+ */
+router.post('/fix-kiotviet-discount', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || '').trim()
+        const apply = String(req.query.apply || '') === 'true'
+        if (!storeCode) return res.status(400).json({ success: false, error: 'Thiếu storeCode' })
+        const store = await prisma.store.findFirst({
+            where: { code: { equals: storeCode, mode: 'insensitive' } },
+            select: { code: true, name: true, schema: true },
+        })
+        if (!store) return res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' })
+        const sp: any = getStorePrisma(store.schema)
+
+        const dsHoaDon = await sp.transaction.findMany({
+            where: { createdByName: 'KiotViet Sync' },
+            select: {
+                id: true, receiptNumber: true, total: true, discount: true, subtotal: true,
+                items: { select: { id: true, quantity: true, unitPrice: true, discount: true, lineTotal: true } },
+            },
+        })
+
+        const dem = { tong: dsHoaDon.length, dungSan: 0, vaDuoc: 0, khongVaDuoc: 0, daGhi: 0 }
+        const lechTruoc: number[] = []
+        const khongVa: any[] = []
+        const viDu: any[] = []
+
+        for (const t of dsHoaDon) {
+            const items = t.items || []
+            if (!items.length) continue
+            const gop = items.reduce((s: number, i: any) => s + i.quantity * i.unitPrice, 0)
+            const canGiam = gop - (Number(t.total) || 0) - (Number(t.discount) || 0)
+            const dangGiam = items.reduce((s: number, i: any) => s + (Number(i.discount) || 0), 0)
+            if (Math.abs(dangGiam - canGiam) <= 1) { dem.dungSan++; continue }
+
+            const hopLe = (ds: number[]) =>
+                ds.every((d, k) => d >= -1 && d <= items[k].quantity * items[k].unitPrice + 1) &&
+                Math.abs(ds.reduce((s, d) => s + d, 0) - canGiam) <= 1
+
+            const cachA = items.map((i: any) => i.quantity * i.unitPrice - (Number(i.lineTotal) || 0))
+            const cachB = items.map((i: any) => (Number(i.discount) || 0) * i.quantity)
+            const chon = hopLe(cachA) ? cachA : hopLe(cachB) ? cachB : null
+
+            if (!chon) {
+                dem.khongVaDuoc++
+                if (khongVa.length < 20) {
+                    khongVa.push({
+                        phieu: t.receiptNumber, tong: t.total, gopDong: Math.round(gop),
+                        canGiam: Math.round(canGiam), dangGiam: Math.round(dangGiam),
+                    })
+                }
+                continue
+            }
+
+            dem.vaDuoc++
+            lechTruoc.push(canGiam - dangGiam)
+            if (viDu.length < 5) {
+                viDu.push({
+                    phieu: t.receiptNumber, cach: chon === cachA ? 'A (từ lineTotal)' : 'B (× số lượng)',
+                    truoc: items.map((i: any) => Math.round(i.lineTotal)),
+                    sau: items.map((i: any, k: number) => Math.round(i.quantity * i.unitPrice - chon[k])),
+                    tong: t.total,
+                })
+            }
+            if (!apply) continue
+
+            await sp.$transaction(async (tx: any) => {
+                for (let k = 0; k < items.length; k++) {
+                    const i = items[k]
+                    const d = Math.round(chon[k])
+                    await tx.transactionItem.update({
+                        where: { id: i.id },
+                        data: { discount: d, lineTotal: i.quantity * i.unitPrice - d },
+                    })
+                }
+                await tx.transaction.update({
+                    where: { id: t.id },
+                    data: { subtotal: gop - chon.reduce((s: number, d: number) => s + d, 0) },
+                })
+            })
+            dem.daGhi++
+        }
+
+        res.json({
+            success: true,
+            cuaHang: `${store.name} (${store.code})`,
+            cheDo: apply ? 'GHI THẬT' : 'dò khô — không ghi gì',
+            dem,
+            tongMucLech: Math.round(lechTruoc.reduce((s, x) => s + x, 0)),
+            viDu,
+            khongVaDuoc: khongVa,
+        })
+    } catch (err: any) {
+        console.error('fix-kiotviet-discount error:', err)
+        res.status(500).json({ success: false, error: err?.message })
+    }
+})
+
 export default router
