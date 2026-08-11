@@ -27,10 +27,15 @@ const router = Router()
  *     sản của shop. NHƯNG "Đổi mới" thì có: shop lấy một máy mới trong kho đưa
  *     khách, và ôm lại cái máy hỏng của khách → GỬI ĐI.
  *
- *  3. "Đổi mới" trên phiếu NỘI BỘ KHÔNG ghi kho.
+ *  3. "Đổi mới" trên phiếu NỘI BỘ KHÔNG cộng kho chính.
  *     Nó chỉ có nghĩa "NCC đồng ý đổi máy khác" — hàng vẫn đang ở chỗ NCC.
  *     Cộng kho lúc này là đếm hàng chưa cầm trên tay. Phải đợi hàng về thật
  *     rồi bấm "NCC đã trả" (người dùng chỉnh 11/08/2026).
+ *
+ *     NHƯNG nếu phiếu nhảy THẲNG received → replaced (chưa từng GỬI ĐI) thì
+ *     bước GỬI ĐI chạy ngay lúc này: món đó chắc chắn hỏng và đang đi đường
+ *     NCC, phải rời kho bán được vào kho hư hỏng — không thì bấm đổi mới
+ *     xong vào kho hư hỏng tìm không thấy (người dùng báo 11/08/2026).
  *
  *  4. "NCC đã trả" — NHẬN VỀ. Bấm được cho CẢ HAI nguồn, miễn là phiếu đang
  *     giữ hàng ở kho hư hỏng: máy hỏng của khách sau khi đổi mới cũng gửi NCC
@@ -219,9 +224,17 @@ router.put('/:id', authMiddleware, requirePermission('repairs.edit'), validate(U
 
         const sl = Math.max(1, Number(existing.quantity) || 1)
         const laNoiBo = existing.source === 'internal'
+        /**
+         * Phiếu nội bộ nhảy THẲNG sang "Đổi mới" (không qua Sửa chữa/Bảo hành)
+         * cũng phải chuyển kho: chọn đổi mới nghĩa là món đó chắc chắn hỏng và
+         * đang đi đường NCC — hàng phải rời kho bán được vào kho hư hỏng.
+         * Trước đây chỉ DA_VAO_XUONG mới kích hoạt, nên đường tắt received →
+         * replaced không ghi kho nào cả: bấm đổi mới xong vào kho hư hỏng tìm
+         * không thấy (người dùng báo 11/08/2026).
+         */
         const canChuyenKho = laNoiBo
             && !existing.stockMovedAt
-            && status && DA_VAO_XUONG.includes(String(status))
+            && status && (DA_VAO_XUONG.includes(String(status)) || String(status) === 'replaced')
         /**
          * "Đổi mới" trên phiếu CỦA KHÁCH: shop rút một máy mới trong kho đưa
          * khách và ôm lại máy hỏng của khách. Đúng phép GỬI ĐI.
@@ -250,7 +263,9 @@ router.put('/:id', authMiddleware, requirePermission('repairs.edit'), validate(U
             if (canChuyenKho) {
                 await dayVaoKhoHu(tx, existing, sl, req, 'Chuyển kho nội bộ: hàng hư hỏng')
                 data.stockMovedAt = new Date()
-                message = `Đã trừ ${sl} "${existing.productName}" ở kho chính, chuyển sang kho hư hỏng`
+                message = String(status) === 'replaced'
+                    ? `Đã chuyển ${sl} "${existing.productName}" vào kho hư hỏng (kho chính −${sl}). Khi NCC đưa hàng về, bấm "NCC đã trả" để cộng lại kho chính.`
+                    : `Đã trừ ${sl} "${existing.productName}" ở kho chính, chuyển sang kho hư hỏng`
             }
             if (canDoiMoiKhach) {
                 await dayVaoKhoHu(tx, existing, sl, req, 'Đổi mới cho khách: giao máy mới, nhận máy hỏng')
@@ -258,10 +273,9 @@ router.put('/:id', authMiddleware, requirePermission('repairs.edit'), validate(U
                 message = `Đổi mới: đã trừ ${sl} "${existing.productName}" ở kho chính, máy hỏng nhập kho hư hỏng`
             }
             if (laNoiBo && status === 'replaced' && !message) {
-                // Không ghi kho — phải nói thẳng, kẻo lại tưởng đã cộng rồi
-                message = existing.stockMovedAt
-                    ? 'Đã ghi nhận NCC đồng ý đổi mới. Kho chính CHƯA cộng — hàng về thì bấm "NCC đã trả".'
-                    : 'Đã ghi nhận đổi mới. Phiếu này chưa từng chuyển hàng sang kho hư hỏng nên không có gì để cộng.'
+                // Đã chuyển kho từ trước (stockMovedAt) — không ghi kho lần nữa,
+                // nhưng phải nói thẳng kẻo lại tưởng đã cộng rồi
+                message = 'Đã ghi nhận NCC đồng ý đổi mới. Kho chính CHƯA cộng — hàng về thì bấm "NCC đã trả".'
             }
             return tx.repair.update({ where: { id }, data })
         })
