@@ -58,11 +58,70 @@ function boQua(c: SyncCounters, lyDo: string) {
     if (c.errors.length < 20) c.errors.push(`bỏ qua — ${lyDo}`.slice(0, 200))
 }
 
+/**
+ * Dựng dòng hàng Kengi từ `invoiceDetails` của KiotViet — dùng chung cho cả
+ * nhánh tạo mới lẫn nhánh dựng lại (rebuildLines), để hai đường không bao giờ
+ * lệch quy ước nhau.
+ *
+ * GIẢM GIÁ: KiotViet tính theo MỖI ĐƠN VỊ, Kengi theo CẢ DÒNG.
+ *
+ * Bê thẳng con số qua là hoá đơn không cộng ra tổng. Đo trên HĐ HD030345
+ * (11/08/2026): KiotViet ghi giảm 35.333 cho mã BS1112TV — đúng 39,7% của đơn
+ * giá 89.000, tức mỗi cái. Kengi lưu y số đó rồi hiểu là giảm cho cả 20 cái,
+ * nên dòng thành 1.744.667 thay vì 1.073.340. Ba dòng cộng lại 4.510.104
+ * trong khi tổng phiếu vẫn là 2.817.040 lấy từ kv.total — lệch 1,7 triệu.
+ *
+ * `subTotal` mới là số tiền dòng có thẩm quyền bên KiotViet nên suy ngược
+ * giảm giá từ nó: đúng dù họ có đổi quy ước. Không có subTotal thì mới nhân
+ * số giảm mỗi đơn vị với số lượng.
+ */
+async function dungDongHoaDon(sp: any, kv: any): Promise<{ lines: any[]; missing: string[] }> {
+    const details: any[] = Array.isArray(kv?.invoiceDetails) ? kv.invoiceDetails : []
+    const lines: any[] = []
+    const missing: string[] = []
+    for (const d of details) {
+        const sku = String(d?.productCode || '').trim()
+        if (!sku) continue
+        const p = await sp.product.findUnique({
+            where: { sku }, select: { id: true, name: true, sku: true },
+        }).catch(() => null)
+        if (!p) { missing.push(sku); continue }
+        const qty = Math.round(Number(d?.quantity) || 0)
+        const unitPrice = Number(d?.price) || 0
+        const giamMoiCai = Number(d?.discount) || 0
+        const gop = qty * unitPrice
+        const sub = Number(d?.subTotal)
+        const disc = Number.isFinite(sub) && sub > 0
+            ? Math.min(gop, Math.max(0, gop - sub))
+            : Math.min(gop, giamMoiCai * qty)
+        lines.push({
+            productId: p.id, productName: p.name, sku: p.sku,
+            quantity: qty, unitPrice, discount: disc,
+            // Luôn cho khớp với discount ở trên, đừng lấy subTotal thô:
+            // hai số lệch nhau là giao diện lại hiện một đằng, tổng một nẻo
+            lineTotal: gop - disc,
+        })
+    }
+    return { lines, missing }
+}
+
 export interface SyncOptions {
     apply: boolean
     overwriteNames?: boolean
     overwritePrices?: boolean
     overwriteStock?: boolean
+    /**
+     * DỰNG LẠI DÒNG HÀNG của hoá đơn ĐÃ CÓ trong sổ.
+     *
+     * Công tắc riêng vì đây là ghi đè phá huỷ: xoá sạch dòng cũ rồi tạo lại
+     * theo KiotViet. Mặc định TẮT — nhánh cập nhật chỉ đụng thanh toán.
+     *
+     * Có nó vì trước đây nhánh cập nhật `continue` trước khi tới đoạn dựng
+     * dòng, nên hoá đơn nào nhập thiếu dòng thì đồng bộ lại bao nhiêu lần cũng
+     * đứng yên vĩnh viễn (đo 11/08/2026: 1.392 phiếu ở HUTI có dòng hàng
+     * không cộng ra tổng, ví dụ HD030283 tổng 3.957.860 mà dòng chỉ 480.000).
+     */
+    rebuildLines?: boolean
     defaultCategoryId?: string | null
     defaultWarehouseId?: string | null
     branchIds?: number[]
@@ -628,11 +687,49 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                 // khớp số tiền vừa tính, đừng để 'completed' treo trên đơn chưa thu
                 if (existing.status !== trangThaiDung) data.status = trangThaiDung
 
-                if (!Object.keys(data).length) {
+                /**
+                 * DỰNG LẠI DÒNG HÀNG (chỉ khi bật rebuildLines).
+                 *
+                 * Ba cổng phải qua HẾT mới được đụng vào dòng cũ — thiếu cổng
+                 * nào cũng là đổi "thiếu một phần" thành "hỏng nặng hơn":
+                 *   1. đủ 100% mã hàng (thiếu mã mà xoá dòng cũ là mất thêm dòng)
+                 *   2. có ít nhất một dòng
+                 *   3. dòng cộng ra ĐÚNG tổng phiếu (± giảm giá phiếu)
+                 * Không qua thì để nguyên và ghi lý do — sửa xong danh mục chạy
+                 * lại sẽ vào.
+                 */
+                let dongMoi: any[] | null = null
+                if (opts.rebuildLines) {
+                    const dung = await dungDongHoaDon(sp, kv)
+                    const tongDong = dung.lines.reduce((s: number, l: any) => s + l.lineTotal, 0)
+                    const giamHD = Number(kv?.discount) || 0
+                    if (dung.missing.length) {
+                        noteError(c, `HĐ ${code}: KHÔNG dựng lại dòng — thiếu ${dung.missing.length} mã hàng (${dung.missing.slice(0, 3).join(', ')}…) — đồng bộ hàng hoá trước rồi chạy lại`)
+                    } else if (!dung.lines.length) {
+                        noteError(c, `HĐ ${code}: KHÔNG dựng lại dòng — payload KiotViet không có dòng nào`)
+                    } else if (Math.abs(tongDong - giamHD - (Number(kv?.total) || 0)) > 1) {
+                        noteError(c, `HĐ ${code}: KHÔNG dựng lại — dòng cộng ${Math.round(tongDong)} − giảm ${Math.round(giamHD)} ≠ tổng ${Math.round(Number(kv?.total) || 0)}`)
+                    } else {
+                        dongMoi = dung.lines
+                        data.subtotal = tongDong
+                    }
+                }
+
+                if (!Object.keys(data).length && !dongMoi) {
                     boQua(c, `HĐ ${code}: đã có trong sổ và không có gì đổi`)
                     continue
                 }
                 if (opts.apply) {
+                    if (dongMoi) {
+                        // Xoá rồi tạo lại trong CÙNG transaction — đứt giữa chừng
+                        // không được để hoá đơn trắng dòng
+                        await sp.$transaction(async (tx: any) => {
+                            await tx.transactionItem.deleteMany({ where: { transactionId: existing.id } })
+                            await tx.transactionItem.createMany({
+                                data: dongMoi!.map((l: any) => ({ ...l, transactionId: existing.id })),
+                            })
+                        })
+                    }
                     await sp.transaction.update({ where: { id: existing.id }, data })
                     // Dựng lại phiếu thu cho khớp KiotViet. XOÁ TRƯỚC, kể cả khi
                     // KiotViet không còn phiếu nào — phiếu thu bị huỷ bên đó mà
@@ -649,50 +746,18 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                     if (rows.length) await sp.payment.createMany({ data: rows }).catch(() => { })
                 }
                 c.updated++
-                noteSample(c, { code, hanhDong: 'cập nhật thanh toán', daThu: thuMoi, truong: Object.keys(data) })
+                noteSample(c, {
+                    code,
+                    hanhDong: dongMoi ? 'cập nhật + DỰNG LẠI DÒNG' : 'cập nhật thanh toán',
+                    daThu: thuMoi,
+                    ...(dongMoi ? { soDong: dongMoi.length } : {}),
+                    truong: Object.keys(data),
+                })
                 continue
             }
 
             const details: any[] = Array.isArray(kv?.invoiceDetails) ? kv.invoiceDetails : []
-            const lines: any[] = []
-            const missing: string[] = []
-            for (const d of details) {
-                const sku = String(d?.productCode || '').trim()
-                if (!sku) continue
-                const p = await sp.product.findUnique({
-                    where: { sku }, select: { id: true, name: true, sku: true },
-                }).catch(() => null)
-                if (!p) { missing.push(sku); continue }
-                const qty = Math.round(Number(d?.quantity) || 0)
-                const unitPrice = Number(d?.price) || 0
-                /**
-                 * GIẢM GIÁ: KiotViet tính theo MỖI ĐƠN VỊ, Kengi theo CẢ DÒNG.
-                 *
-                 * Bê thẳng con số qua là hoá đơn không cộng ra tổng. Đo trên HĐ
-                 * HD030345 (11/08/2026): KiotViet ghi giảm 35.333 cho mã BS1112TV
-                 * — đúng 39,7% của đơn giá 89.000, tức mỗi cái. Kengi lưu y số
-                 * đó rồi hiểu là giảm cho cả 20 cái, nên dòng thành 1.744.667
-                 * thay vì 1.073.340. Ba dòng cộng lại 4.510.104 trong khi tổng
-                 * phiếu vẫn là 2.817.040 lấy từ kv.total — lệch 1,7 triệu.
-                 *
-                 * `subTotal` mới là số tiền dòng có thẩm quyền bên KiotViet nên
-                 * suy ngược giảm giá từ nó: đúng dù họ có đổi quy ước. Không có
-                 * subTotal thì mới nhân số giảm mỗi đơn vị với số lượng.
-                 */
-                const giamMoiCai = Number(d?.discount) || 0
-                const gop = qty * unitPrice
-                const sub = Number(d?.subTotal)
-                const disc = Number.isFinite(sub) && sub > 0
-                    ? Math.min(gop, Math.max(0, gop - sub))
-                    : Math.min(gop, giamMoiCai * qty)
-                lines.push({
-                    productId: p.id, productName: p.name, sku: p.sku,
-                    quantity: qty, unitPrice, discount: disc,
-                    // Luôn cho khớp với discount ở trên, đừng lấy subTotal thô:
-                    // hai số lệch nhau là giao diện lại hiện một đằng, tổng một nẻo
-                    lineTotal: gop - disc,
-                })
-            }
+            const { lines, missing } = await dungDongHoaDon(sp, kv)
             // CHẠY THỬ: hàng hoá chưa được tạo (chạy thử không ghi gì) nên mọi
             // dòng đều "không tìm thấy". Báo lỗi ở đây là báo oan — chạy thật
             // đồng bộ hàng hoá trước thì có đủ (dính 06/08/2026: 24462 lỗi ảo).

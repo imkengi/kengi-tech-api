@@ -172,8 +172,15 @@ export async function buildOptions(sp: any, cfg: any, apply: boolean): Promise<S
 export async function runSync(
     sp: any, cfg: any, entities: string[],
     fromDate: Date | null, toDate: Date | null, apply: boolean, logId: string,
+    /**
+     * Dựng lại dòng hàng hoá đơn ĐÃ CÓ theo payload KiotViet (sửa dữ liệu đổ
+     * sai). CHỈ nhận từ body lần bấm tay, không lưu vào config — lưu là quên
+     * tắt, rồi webhook nào về cũng xoá-tạo lại dòng của hoá đơn cũ.
+     */
+    rebuildLines = false,
 ): Promise<void> {
     const baseOpts = await buildOptions(sp, cfg, apply)
+    baseOpts.rebuildLines = rebuildLines
     const creds = credsOf(cfg)
     const totals = newCounters()
 

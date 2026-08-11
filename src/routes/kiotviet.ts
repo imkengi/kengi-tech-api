@@ -473,7 +473,9 @@ router.post('/sync', async (req: Request, res: Response) => {
             },
         })
 
-        void runSync(store.sp, cfg, entities, fromDate, toDate, apply, log.id)
+        // rebuildLines: sửa hoá đơn đã đổ sai dòng hàng — truyền theo lần bấm,
+        // không lưu vào config (xem ghi chú ở runSync)
+        void runSync(store.sp, cfg, entities, fromDate, toDate, apply, log.id, b.rebuildLines === true)
             .catch(async (e: any) => {
                 await store.sp.kiotVietSyncLog.update({
                     where: { id: log.id },
