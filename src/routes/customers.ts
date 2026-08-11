@@ -135,8 +135,6 @@ router.get('/segments-live', authMiddleware, requirePermission('customers.view')
                 _sum: { total: true },
                 _max: { createdAt: true },
             }),
-            /**
-
             // CỬA SỔ 12 THÁNG: xếp hạng theo bình quân tháng gần đây, không phải
             // tổng trọn đời — mua một cục năm ngoái rồi biến mất mà vẫn Kim cương
             // là xếp sai (người dùng chỉnh 11/08/2026, ca 'Mỹ Duyên')
