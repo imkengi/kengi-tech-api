@@ -178,9 +178,12 @@ export async function runSync(
      * tắt, rồi webhook nào về cũng xoá-tạo lại dòng của hoá đơn cũ.
      */
     rebuildLines = false,
+    /** Chỉ cập nhật phiếu đã có — xem ghi chú ở SyncOptions.updateOnly */
+    updateOnly = false,
 ): Promise<void> {
     const baseOpts = await buildOptions(sp, cfg, apply)
     baseOpts.rebuildLines = rebuildLines
+    baseOpts.updateOnly = updateOnly
     const creds = credsOf(cfg)
     const totals = newCounters()
 

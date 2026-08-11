@@ -122,6 +122,15 @@ export interface SyncOptions {
      * không cộng ra tổng, ví dụ HD030283 tổng 3.957.860 mà dòng chỉ 480.000).
      */
     rebuildLines?: boolean
+    /**
+     * CHỈ CẬP NHẬT phiếu đã có, không tạo mới.
+     *
+     * Dùng khi quét lát ngày cũ để sửa phiếu hỏng: vùng 2024–2025 có hàng
+     * nghìn hoá đơn KiotViet chưa từng nhập vào Kengi — không có cờ này thì
+     * lát quét "đi sửa 35 phiếu" sẽ tiện tay ĐẺ THÊM cả nghìn phiếu cũ, đúng
+     * vụ mở rộng phạm vi 9.012 phiếu đang treo quyết định (11/08/2026).
+     */
+    updateOnly?: boolean
     defaultCategoryId?: string | null
     defaultWarehouseId?: string | null
     branchIds?: number[]
@@ -753,6 +762,12 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                     ...(dongMoi ? { soDong: dongMoi.length } : {}),
                     truong: Object.keys(data),
                 })
+                continue
+            }
+
+            // Từ đây trở xuống là ĐƯỜNG TẠO MỚI — updateOnly thì dừng ở đây
+            if (opts.updateOnly) {
+                boQua(c, `HĐ ${code}: chưa có trong sổ — updateOnly nên không tạo mới`)
                 continue
             }
 
