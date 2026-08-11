@@ -215,15 +215,39 @@ router.put('/:id', authMiddleware, requirePermission('repairs.edit'), validate(U
         if (existing.status === 'returned' && !laAdmin(req)) {
             return res.status(403).json({ success: false, error: 'Phiếu đã trả khách — đã chốt, chỉ admin mới sửa được' })
         }
-        const { status, cost, notes, completedDate } = req.body
+        const { status, cost, notes, completedDate, productId, quantity, source } = req.body
         const data: any = {}
         if (status) data.status = status
         if (cost !== undefined) data.cost = Number(cost)
         if (notes !== undefined) data.notes = notes
+        /**
+         * CHO NỐI SẢN PHẨM VÀO PHIẾU CŨ — trước đây PUT không nhận productId,
+         * nên phiếu tạo nhanh (không nối SP) vĩnh viễn không ghi kho được:
+         * đổi mới xong kho hư hỏng vẫn trống, và lời khuyên "sửa phiếu chọn
+         * sản phẩm" là việc bất khả thi (đo 11/08/2026: RP-0038/39/40).
+         * CHỈ cho đổi khi CHƯA có mốc ghi kho nào — đổi sản phẩm sau khi đã
+         * trừ kho là hoàn kho sai mã.
+         */
+        const chuaGhiKho = !existing.stockMovedAt && !existing.replacedStockAt && !existing.supplierReturnedAt
+        if (productId !== undefined && chuaGhiKho) {
+            if (productId) {
+                const sp = await prisma.product.findUnique({
+                    where: { id: String(productId) }, select: { sku: true, name: true },
+                }).catch(() => null)
+                if (!sp) return res.status(400).json({ success: false, error: 'Không tìm thấy sản phẩm đã chọn' })
+                data.productId = String(productId)
+                data.productSku = sp.sku
+            } else {
+                data.productId = null
+                data.productSku = null
+            }
+        }
+        if (quantity !== undefined && chuaGhiKho) data.quantity = Math.max(1, Math.round(Number(quantity) || 1))
+        if (source !== undefined && chuaGhiKho && ['customer', 'internal'].includes(String(source))) data.source = source
         if (status === 'done' || completedDate) data.completedDate = new Date()
 
-        const sl = Math.max(1, Number(existing.quantity) || 1)
-        const laNoiBo = existing.source === 'internal'
+        const sl = Math.max(1, Number(data.quantity ?? existing.quantity) || 1)
+        const laNoiBo = (data.source ?? existing.source) === 'internal'
         /**
          * Phiếu nội bộ nhảy THẲNG sang "Đổi mới" (không qua Sửa chữa/Bảo hành)
          * cũng phải chuyển kho: chọn đổi mới nghĩa là món đó chắc chắn hỏng và
@@ -256,7 +280,7 @@ router.put('/:id', authMiddleware, requirePermission('repairs.edit'), validate(U
          * Mốc stockMovedAt/replacedStockAt vẫn trống nên sau khi sửa phiếu
          * nối sản phẩm, chọn lại trạng thái là kho ghi bù ngay.
          */
-        if ((canChuyenKho || canDoiMoiKhach) && !existing.productId) {
+        if ((canChuyenKho || canDoiMoiKhach) && !(data.productId ?? existing.productId)) {
             message = 'Đã đổi trạng thái. Tồn kho KHÔNG đổi vì phiếu chưa nối sản phẩm trong danh mục — '
                 + 'bấm Sửa phiếu, chọn sản phẩm rồi chọn lại trạng thái này nếu muốn trừ/chuyển kho.'
             canChuyenKho = false
