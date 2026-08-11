@@ -96,6 +96,67 @@ router.get('/', authMiddleware, requirePermission('customers.view'), async (req:
     }
 })
 
+// GET /api/customers/segments-live — KH kèm chỉ số mua hàng TÍNH SỐNG từ giao dịch
+/**
+ * Trang Phân Khúc phân loại bằng totalOrders/totalPurchases/lastPurchaseDate
+ * trên bảng Customer — nhưng chỉ luồng POS gốc đắp các cột đó, dữ liệu đổ từ
+ * KiotViet thì không, nên cả nghìn khách dồn vào "Chưa mua hàng" (đo
+ * 11/08/2026 trên HUTI). Cột `tier` cũng không ai ghi (loyalty dùng bảng
+ * LoyaltyMember riêng) — VIP vĩnh viễn rỗng.
+ *
+ * Ở đây tính lại từ bảng Transaction — nguồn sự thật duy nhất, đúng bất kể
+ * dữ liệu vào bằng đường nào — và tự xếp hạng theo chi tiêu:
+ *   diamond ≥ 100tr · platinum ≥ 50tr · gold ≥ 20tr · silver ≥ 5tr · bronze
+ *
+ * CHỈ ĐỌC, không ghi ngược vào Customer: cột cũ để nguyên cho tới khi có
+ * quyết định backfill riêng.
+ */
+router.get('/segments-live', authMiddleware, requirePermission('customers.view'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const [customers, grp] = await Promise.all([
+            prisma.customer.findMany({
+                select: {
+                    id: true, code: true, name: true, phone: true, debt: true,
+                    createdAt: true, lastPurchaseDate: true,
+                },
+            }),
+            prisma.transaction.groupBy({
+                by: ['customerId'],
+                where: { customerId: { not: null }, status: { notIn: ['voided', 'returned'] } },
+                _count: { _all: true },
+                _sum: { total: true },
+                _max: { createdAt: true },
+            }),
+        ])
+        const agg = new Map(grp.map((g: any) => [g.customerId as string, g]))
+        const XEP_HANG: Array<[number, string]> = [
+            [100_000_000, 'diamond'], [50_000_000, 'platinum'],
+            [20_000_000, 'gold'], [5_000_000, 'silver'],
+        ]
+        const data = customers.map((c: any) => {
+            const a: any = agg.get(c.id)
+            const totalOrders = a?._count?._all ?? 0
+            const totalPurchases = a?._sum?.total ?? 0
+            const lanCuoi = a?._max?.createdAt ?? c.lastPurchaseDate
+            let tier = 'bronze'
+            for (const [nguong, hang] of XEP_HANG) {
+                if (totalPurchases >= nguong) { tier = hang; break }
+            }
+            return {
+                id: c.id, code: c.code, name: c.name, phone: c.phone,
+                debt: c.debt ?? 0, totalOrders, totalPurchases, tier,
+                createdAt: c.createdAt.toISOString(),
+                lastPurchaseDate: lanCuoi ? new Date(lanCuoi).toISOString() : null,
+            }
+        })
+        res.json({ success: true, data })
+    } catch (err) {
+        console.error('segments-live error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
 // GET /api/customers/:id
 router.get('/:id', authMiddleware, requirePermission('customers.view'), async (req: AuthRequest, res: Response) => {
     try {
