@@ -795,6 +795,31 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                             reference: p?.code ? String(p.code) : null,
                         }))
                     if (rows.length) await sp.payment.createMany({ data: rows }).catch(() => { })
+                    /**
+                     * Phiếu thu từng nhập ĐỘC LẬP qua sổ quỹ (webhook sổ quỹ tới
+                     * trước) nay gắn vào hoá đơn: xoá bản độc lập + map của nó,
+                     * và CỘNG TRẢ phần nợ nó đã trừ — deltaNo ở trên là lần trừ
+                     * duy nhất theo đường hoá đơn. Thiếu bước này thì cùng một
+                     * khoản tiền trừ nợ hai lần và lịch sử công nợ hiện đúp.
+                     */
+                    let buLai = 0
+                    for (const p of kvPayments) {
+                        const maPhieu = p?.code ? String(p.code) : null
+                        if (!maPhieu) continue
+                        const cu = await findMap(sp, 'debtPayment', maPhieu)
+                        if (!cu) continue
+                        await sp.debtEntry.delete({ where: { id: cu } }).catch(() => { })
+                        await sp.kiotVietMap.delete({
+                            where: { entity_kvId: { entity: 'debtPayment', kvId: maPhieu } },
+                        }).catch(() => { })
+                        buLai += Number(p?.amount) || 0
+                    }
+                    if (buLai > 0 && existing.customerId) {
+                        await sp.customer.update({
+                            where: { id: existing.customerId },
+                            data: { debt: { increment: buLai } },
+                        }).catch(() => { })
+                    }
                 }
                 c.updated++
                 noteSample(c, {
@@ -964,6 +989,26 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                 // không tạo lại chúng thành phiếu thu độc lập (tránh nhân đôi)
                 for (const p of paymentRows) {
                     if (p.reference) await saveMap(sp, 'invoicePayment', p.reference, p.reference, created.id)
+                }
+                // Phiếu thu từng nhập ĐỘC LẬP trước khi hoá đơn về (webhook sổ
+                // quỹ nhanh chân hơn): xoá bản độc lập + cộng trả phần nợ nó đã
+                // trừ — xem ghi chú cùng tên ở nhánh cập nhật
+                let buLaiTaoMoi = 0
+                for (const p of paymentRows) {
+                    if (!p.reference) continue
+                    const cu = await findMap(sp, 'debtPayment', p.reference)
+                    if (!cu) continue
+                    await sp.debtEntry.delete({ where: { id: cu } }).catch(() => { })
+                    await sp.kiotVietMap.delete({
+                        where: { entity_kvId: { entity: 'debtPayment', kvId: p.reference } },
+                    }).catch(() => { })
+                    buLaiTaoMoi += Number(p.amount) || 0
+                }
+                if (buLaiTaoMoi > 0 && customerId) {
+                    await sp.customer.update({
+                        where: { id: customerId },
+                        data: { debt: { increment: buLaiTaoMoi } },
+                    }).catch(() => { })
                 }
             }
             c.created++
@@ -1257,6 +1302,18 @@ export async function syncCashflow(sp: any, items: any[], opts: SyncOptions, c: 
                 const localCus = await findMap(sp, 'customer', kv.partnerId)
                 if (localCus) {
                     if (await findMap(sp, 'debtPayment', code)) { c.skipped++; continue }
+                    /**
+                     * CÙNG MỘT PHIẾU THU về qua HAI cửa: gắn trên hoá đơn
+                     * (invoice.payments) VÀ nằm trong sổ quỹ. Webhook là các
+                     * lượt chạy riêng nên bộ nhớ trong-lượt không đỡ được —
+                     * phải hỏi map BỀN do đường hoá đơn ghi. Thiếu chốt này là
+                     * cùng khoản tiền trừ nợ HAI lần (đo 11/08/2026: Việt Nhật
+                     * −6.029.562, hoá đơn in "Nợ cũ −135.000").
+                     */
+                    if (opts.invoicePaymentCodes?.has(code) || await findMap(sp, 'invoicePayment', code)) {
+                        boQua(c, `Phiếu thu ${code}: đã tính vào hoá đơn — không ghi lần hai`)
+                        continue
+                    }
                     if (opts.apply) {
                         const cus = await sp.customer.findUnique({
                             where: { id: localCus }, select: { name: true, phone: true },

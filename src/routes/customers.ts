@@ -114,7 +114,14 @@ router.get('/', authMiddleware, requirePermission('customers.view'), async (req:
 router.get('/segments-live', authMiddleware, requirePermission('customers.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        const [customers, grp] = await Promise.all([
+        /**
+         * Lợi nhuận = Σ lineTotal − Σ(số lượng × giá vốn HIỆN TẠI của sản phẩm).
+         * TransactionItem không lưu giá vốn tại thời điểm bán nên đây là ước
+         * tính theo giá vốn hôm nay — đủ để xếp loại, đừng đem đi quyết toán.
+         * Chỉ owner/admin thấy (cùng cổng với lợi nhuận đơn online).
+         */
+        const laChuCua = ['owner', 'admin'].includes(String((req as any).user?.role || '').toLowerCase())
+        const [customers, grp, ghiNo, vonRows] = await Promise.all([
             prisma.customer.findMany({
                 select: {
                     id: true, code: true, name: true, phone: true, debt: true,
@@ -128,12 +135,40 @@ router.get('/segments-live', authMiddleware, requirePermission('customers.view')
                 _sum: { total: true },
                 _max: { createdAt: true },
             }),
+            /**
+             * TỐC ĐỘ TRẢ NỢ đo bằng TUỔI đơn ghi nợ đang treo ('partial'):
+             * ngày chứng từ (createdAt) là dữ liệu tin được với mọi nguồn.
+             * KHÔNG đo bằng ngày Payment — bảng Payment không có cột ngày,
+             * và phiếu thu dựng lại từ KiotViet đều dính ngày hôm chạy.
+             */
+            prisma.transaction.groupBy({
+                by: ['customerId'],
+                where: { customerId: { not: null }, status: 'partial' },
+                _count: { _all: true },
+                _min: { createdAt: true },
+            }),
+            laChuCua
+                ? (prisma as any).$queryRawUnsafe(
+                    `SELECT t."customerId" AS cid,
+                            SUM(i."lineTotal")::float AS rev,
+                            SUM(i."quantity" * COALESCE(p."costPrice", 0))::float AS von
+                     FROM "TransactionItem" i
+                     JOIN "Transaction" t ON t."id" = i."transactionId"
+                     LEFT JOIN "Product" p ON p."id" = i."productId"
+                     WHERE t."customerId" IS NOT NULL
+                       AND t."status" NOT IN ('voided', 'returned')
+                     GROUP BY t."customerId"`,
+                ).catch((e: any) => { console.error('segments-live von:', e?.message); return [] })
+                : Promise.resolve([]),
         ])
         const agg = new Map(grp.map((g: any) => [g.customerId as string, g]))
+        const mapNo = new Map(ghiNo.map((g: any) => [g.customerId as string, g]))
+        const mapVon = new Map((vonRows as any[]).map((r: any) => [r.cid as string, r]))
         const XEP_HANG: Array<[number, string]> = [
             [100_000_000, 'diamond'], [50_000_000, 'platinum'],
             [20_000_000, 'gold'], [5_000_000, 'silver'],
         ]
+        const NGAY = 24 * 60 * 60 * 1000
         const data = customers.map((c: any) => {
             const a: any = agg.get(c.id)
             const totalOrders = a?._count?._all ?? 0
@@ -143,9 +178,30 @@ router.get('/segments-live', authMiddleware, requirePermission('customers.view')
             for (const [nguong, hang] of XEP_HANG) {
                 if (totalPurchases >= nguong) { tier = hang; break }
             }
+
+            // ── Trả nợ nhanh hay chậm ──
+            const gn: any = mapNo.get(c.id)
+            const soDonGhiNo = gn?._count?._all ?? 0
+            const tuoiNoNgay = gn?._min?.createdAt
+                ? Math.floor((Date.now() - new Date(gn._min.createdAt).getTime()) / NGAY)
+                : 0
+            const debt = c.debt ?? 0
+            // Hết nợ = tốt, kể cả từng ghi nợ (đã trả xong là khách đàng hoàng).
+            // Còn nợ mà đơn treo lâu nhất quá 30 ngày = chậm.
+            const thanhToan = debt <= 0 ? 'tot' : tuoiNoNgay > 30 ? 'cham' : 'dungHan'
+
+            // ── Mua có lời không ── (chỉ chủ cửa hàng thấy)
+            const v: any = mapVon.get(c.id)
+            const loiNhuan = laChuCua && v ? Math.round((v.rev || 0) - (v.von || 0)) : null
+            const bienLoiNhuan = laChuCua && v && v.rev > 0
+                ? Math.round(((v.rev - v.von) / v.rev) * 1000) / 10
+                : null
+
             return {
                 id: c.id, code: c.code, name: c.name, phone: c.phone,
-                debt: c.debt ?? 0, totalOrders, totalPurchases, tier,
+                debt, totalOrders, totalPurchases, tier,
+                soDonGhiNo, tuoiNoNgay, thanhToan,
+                loiNhuan, bienLoiNhuan,
                 createdAt: c.createdAt.toISOString(),
                 lastPurchaseDate: lanCuoi ? new Date(lanCuoi).toISOString() : null,
             }
