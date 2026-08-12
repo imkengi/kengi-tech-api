@@ -163,9 +163,29 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
             })
             branches.forEach((b: any) => branchMap.set(b.id, b.name))
         }
+        /**
+         * SỐ TỒN TỪNG KHO — trước đây không trả trường nào, FE đọc
+         * stockCount ?? productCount ?? 0 nên MỌI kho hiện "0 tồn" từ ngày
+         * trang ra đời (người dùng bắt 12/08/2026). Một groupBy cho cả list.
+         * Lưu ý: stockCount là TỔNG ĐẠI SỐ — kho có dòng âm (di sản) có thể
+         * ra 0 dù vẫn còn mã; vì vậy trả kèm productCount (số mã ≠ 0).
+         */
+        const tonTheoKho = await prisma.warehouseStock.groupBy({
+            by: ['warehouseId'],
+            where: { quantity: { not: 0 } },
+            _sum: { quantity: true },
+            _count: { _all: true },
+        }).catch(() => [])
+        const tonMap = new Map<string, { tong: number; soMa: number }>()
+        for (const t of tonTheoKho as any[]) {
+            tonMap.set(t.warehouseId, { tong: t._sum?.quantity ?? 0, soMa: t._count?._all ?? 0 })
+        }
+
         const data = warehouses.map((w: any) => ({
             ...w,
             branchName: w.branchId ? (branchMap.get(w.branchId) || null) : null,
+            stockCount: tonMap.get(w.id)?.tong ?? 0,
+            productCount: tonMap.get(w.id)?.soMa ?? 0,
         }))
 
         res.json({ success: true, data })
