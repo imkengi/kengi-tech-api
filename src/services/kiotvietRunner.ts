@@ -184,6 +184,8 @@ export async function runSync(
     updateOnly = false,
 ): Promise<void> {
     const baseOpts = await buildOptions(sp, cfg, apply)
+    baseOpts.creds = credsOf(cfg)
+    baseOpts.daTuoiNo = new Set<string>()
     baseOpts.rebuildLines = rebuildLines
     baseOpts.updateOnly = updateOnly
     const creds = credsOf(cfg)

@@ -25,6 +25,7 @@
  */
 
 import crypto from 'crypto'
+import { KV } from './kiotviet'
 
 export interface SyncCounters {
     fetched: number
@@ -156,6 +157,10 @@ export interface SyncOptions {
      * tra tập này và bỏ qua phần cộng nợ cho khách vừa seed.
      */
     seededCustomerIds?: Set<string>
+    /** Creds KiotViet — để hỏi lại số dư khách ngay khi chứng từ đụng tới họ */
+    creds?: any
+    /** Khách đã làm tươi trong lượt này — khỏi hỏi KV trùng */
+    daTuoiNo?: Set<string>
 }
 
 /** Đập nhịp mỗi 25 bản ghi — đủ dày để thấy tiến độ, đủ thưa để không nghẽn DB. */
@@ -193,6 +198,32 @@ async function findMap(sp: any, entity: string, kvId: string | number): Promise<
         select: { localId: true },
     }).catch(() => null)
     return row?.localId || null
+}
+
+/**
+ * LÀM TƯƠI SỐ DƯ MỘT KHÁCH TỪ KIOTVIET.
+ *
+ * Đây là cách duy nhất giữ Customer.debt đúng theo thời gian thực mà không
+ * drift: chứng từ về (hoá đơn/thu nợ) thì hỏi thẳng KV "khách này giờ nợ
+ * bao nhiêu" — KHÔNG tự cộng trừ (đã trả giá 12/08/2026: lịch sử Kengi
+ * thiếu hoá đơn cũ nên cộng trừ theo chứng từ ăn dần công nợ về 0).
+ * KV lỗi thì giữ số cũ, không đoán.
+ */
+async function lamTuoiNoKhach(sp: any, opts: SyncOptions, kvCustomerId: any) {
+    const key = String(kvCustomerId || '')
+    if (!key || !opts.creds || !opts.apply) return
+    if (!opts.daTuoiNo) opts.daTuoiNo = new Set()
+    if (opts.daTuoiNo.has(key)) return
+    opts.daTuoiNo.add(key)
+    try {
+        const kvCus: any = await KV.customerById(opts.creds, key)
+        const debt = Number(kvCus?.debt ?? kvCus?.data?.debt)
+        if (!Number.isFinite(debt)) return
+        const localId = await findMap(sp, 'customer', key)
+        if (localId) {
+            await sp.customer.update({ where: { id: localId }, data: { debt } }).catch(() => { })
+        }
+    } catch { /* giữ số cũ */ }
 }
 
 async function saveMap(sp: any, entity: string, kvId: string | number, kvCode: string | null, localId: string) {
@@ -647,6 +678,7 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                 if (daCo && daCo.status !== 'voided') {
                     if (opts.apply) {
                         await sp.transaction.update({ where: { id: daCo.id }, data: { status: 'voided' } })
+                        await lamTuoiNoKhach(sp, opts, kv?.customerId)
                         // Đơn nợ bị huỷ thì phần chưa thu phải RÚT khỏi số dư khách,
                         // không thì khách gánh nợ của một hoá đơn không còn tồn tại
                         const noTreo = Math.max(0, (daCo.total || 0) - (daCo.amountReceived ?? 0))
@@ -773,6 +805,7 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                         })
                     }
                     await sp.transaction.update({ where: { id: existing.id }, data })
+                    await lamTuoiNoKhach(sp, opts, kv?.customerId)
                     if (deltaNo !== 0 && existing.customerId) {
                         /* HOTFIX 12/08/2026: NGUNG cong-tru debt theo chung tu — so du chi lay tu dong bo khach (kvDebt). Doc-driven drift lam cong no an dan ve 0. */
                     }
@@ -964,6 +997,7 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                     },
                 })
                 await saveMap(sp, 'invoice', kvId, code, created.id)
+                await lamTuoiNoKhach(sp, opts, kv?.customerId)
                 /**
                  * Đơn nợ mới → Customer.debt tăng theo, như luồng POS gốc.
                  *
@@ -1318,6 +1352,7 @@ export async function syncCashflow(sp: any, items: any[], opts: SyncOptions, c: 
                             },
                         })
                         await saveMap(sp, 'debtPayment', code, code, created.id)
+                        await lamTuoiNoKhach(sp, opts, kv.partnerId)
                         /* HOTFIX 12/08/2026: NGUNG cong-tru debt theo chung tu — so du chi lay tu dong bo khach (kvDebt). Doc-driven drift lam cong no an dan ve 0. */
                     }
                     c.created++

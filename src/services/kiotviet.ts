@@ -235,6 +235,10 @@ export const KV = {
     customers: (creds: KiotVietCreds, params: Record<string, any>, opts?: any) =>
         fetchAllPages(creds, '/customers', params, opts),
 
+    /** Chi tiết MỘT khách — dùng để làm tươi số dư ngay khi webhook đụng tới họ */
+    customerById: (creds: KiotVietCreds, id: string | number) =>
+        fetchJson(creds, `/customers/${id}`, {}),
+
     suppliers: (creds: KiotVietCreds, params: Record<string, any>, opts?: any) =>
         fetchAllPages(creds, '/suppliers', params, opts),
 

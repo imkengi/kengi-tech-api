@@ -150,6 +150,9 @@ async function logWebhook(sp: any, entity: string, status: string, count: number
 async function handleWebhook(sp: any, cfg: any, notis: { action: string; data: any[] }[], sigOk: boolean): Promise<void> {
     const opts = await buildOptions(sp, cfg, true)
     const creds = credsOf(cfg)
+    // Webhook đụng khách nào thì hỏi lại KV số dư khách đó (làm tươi, không cộng trừ)
+    opts.creds = creds
+    opts.daTuoiNo = new Set<string>()
 
     for (const n of notis) {
         const c = newCounters()
