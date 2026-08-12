@@ -651,10 +651,7 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                         // không thì khách gánh nợ của một hoá đơn không còn tồn tại
                         const noTreo = Math.max(0, (daCo.total || 0) - (daCo.amountReceived ?? 0))
                         if (noTreo > 0 && daCo.customerId) {
-                            await sp.customer.update({
-                                where: { id: daCo.customerId },
-                                data: { debt: { decrement: noTreo } },
-                            }).catch(() => { })
+                            /* HOTFIX 12/08/2026: NGUNG cong-tru debt theo chung tu — so du chi lay tu dong bo khach (kvDebt). Doc-driven drift lam cong no an dan ve 0. */
                         }
                     }
                     c.updated++
@@ -777,10 +774,7 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                     }
                     await sp.transaction.update({ where: { id: existing.id }, data })
                     if (deltaNo !== 0 && existing.customerId) {
-                        await sp.customer.update({
-                            where: { id: existing.customerId },
-                            data: { debt: { increment: deltaNo } },
-                        }).catch(() => { })
+                        /* HOTFIX 12/08/2026: NGUNG cong-tru debt theo chung tu — so du chi lay tu dong bo khach (kvDebt). Doc-driven drift lam cong no an dan ve 0. */
                     }
                     // Dựng lại phiếu thu cho khớp KiotViet. XOÁ TRƯỚC, kể cả khi
                     // KiotViet không còn phiếu nào — phiếu thu bị huỷ bên đó mà
@@ -815,10 +809,7 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                         buLai += Number(p?.amount) || 0
                     }
                     if (buLai > 0 && existing.customerId) {
-                        await sp.customer.update({
-                            where: { id: existing.customerId },
-                            data: { debt: { increment: buLai } },
-                        }).catch(() => { })
+                        /* HOTFIX 12/08/2026: NGUNG cong-tru debt theo chung tu — so du chi lay tu dong bo khach (kvDebt). Doc-driven drift lam cong no an dan ve 0. */
                     }
                 }
                 c.updated++
@@ -980,10 +971,7 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                  */
                 const noDonMoi = Math.max(0, total - amountReceived)
                 if (noDonMoi > 0 && customerId && !opts.seededCustomerIds?.has(customerId)) {
-                    await sp.customer.update({
-                        where: { id: customerId },
-                        data: { debt: { increment: noDonMoi } },
-                    }).catch(() => { })
+                    /* HOTFIX 12/08/2026: NGUNG cong-tru debt theo chung tu — so du chi lay tu dong bo khach (kvDebt). Doc-driven drift lam cong no an dan ve 0. */
                 }
                 // Đánh dấu các mã phiếu thu đã tính vào hoá đơn, để bước sổ quỹ
                 // không tạo lại chúng thành phiếu thu độc lập (tránh nhân đôi)
@@ -1005,10 +993,7 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                     buLaiTaoMoi += Number(p.amount) || 0
                 }
                 if (buLaiTaoMoi > 0 && customerId) {
-                    await sp.customer.update({
-                        where: { id: customerId },
-                        data: { debt: { increment: buLaiTaoMoi } },
-                    }).catch(() => { })
+                    /* HOTFIX 12/08/2026: NGUNG cong-tru debt theo chung tu — so du chi lay tu dong bo khach (kvDebt). Doc-driven drift lam cong no an dan ve 0. */
                 }
             }
             c.created++
@@ -1331,10 +1316,7 @@ export async function syncCashflow(sp: any, items: any[], opts: SyncOptions, c: 
                             },
                         })
                         await saveMap(sp, 'debtPayment', code, code, created.id)
-                        await sp.customer.update({
-                            where: { id: localCus },
-                            data: { debt: { decrement: amount } },
-                        }).catch(() => { })
+                        /* HOTFIX 12/08/2026: NGUNG cong-tru debt theo chung tu — so du chi lay tu dong bo khach (kvDebt). Doc-driven drift lam cong no an dan ve 0. */
                     }
                     c.created++
                     noteSample(c, { code, chieu: 'THU NỢ', soTien: amount, khach: partner, ngay: date.toISOString().slice(0, 10) })
