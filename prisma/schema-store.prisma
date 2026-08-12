@@ -685,6 +685,7 @@ model Repair {
   stockMovedAt       DateTime? // đã chuyển kho chính → kho hư hỏng (internal)
   replacedStockAt    DateTime? // đã xuất máy mới cho khách (đổi mới)
   supplierReturnedAt DateTime? // NCC đã trả hàng, đã cộng lại kho chính
+  newUnitIssuedAt    DateTime? // Đã xuất máy mới giao khách (kho chính −n) — đổi mới của khách
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

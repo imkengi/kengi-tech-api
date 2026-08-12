@@ -1677,6 +1677,7 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "stockMovedAt" TIMESTAMP(3)`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "replacedStockAt" TIMESTAMP(3)`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "supplierReturnedAt" TIMESTAMP(3)`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "newUnitIssuedAt" TIMESTAMP(3)`)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Repair_branchId_idx" ON "Repair"("branchId")`)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Repair_status_idx" ON "Repair"("status")`)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Repair_source_idx" ON "Repair"("source")`)

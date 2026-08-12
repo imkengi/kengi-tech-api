@@ -24,10 +24,12 @@ const router = Router()
  *
  *  2. source = 'customer' — máy khách mang tới.
  *     Sửa/bảo hành bình thường thì KHÔNG đụng tồn: máy đó chưa bao giờ là tài
- *     sản của shop. "Đổi mới" chỉ là QUYẾT ĐỊNH — máy mới chưa rời kệ, chưa
- *     trừ gì. Đến khi phiếu chuyển "ĐÃ TRẢ" (giao máy mới tận tay khách, ôm
- *     lại máy hỏng) mới GỬI ĐI: kho chính −n, kho hư hỏng +n
- *     (người dùng chỉnh 12/08/2026 — trừ ngay lúc chọn Đổi mới là trừ non).
+ *     sản của shop. "Đổi mới" tách làm HAI mốc theo dòng hàng thật
+ *     (người dùng chỉnh 12/08/2026, hai lần):
+ *       - Chọn "Đổi mới": máy hỏng khách ĐỂ LẠI shop → kho hư hỏng +n ngay
+ *         (mốc replacedStockAt). Kho chính chưa đụng — máy mới còn trên kệ.
+ *       - Chuyển "ĐÃ TRẢ": giao máy mới tận tay khách → kho chính −n
+ *         (mốc newUnitIssuedAt, có chốt KHO_THIEU).
  *
  *  3. "Đổi mới" trên phiếu NỘI BỘ KHÔNG cộng kho chính.
  *     Nó chỉ có nghĩa "NCC đồng ý đổi máy khác" — hàng vẫn đang ở chỗ NCC.
@@ -262,9 +264,9 @@ router.put('/:id', authMiddleware, requirePermission('repairs.edit'), validate(U
             && !existing.stockMovedAt
             && status && (DA_VAO_XUONG.includes(String(status)) || String(status) === 'replaced')
         /**
-         * Phiếu CỦA KHÁCH đã "Đổi mới": GỬI ĐI chạy lúc chuyển "ĐÃ TRẢ" — máy
-         * mới THẬT SỰ rời kho vào tay khách, máy hỏng của khách ở lại. Chọn
-         * "Đổi mới" không đụng kho (mới là quyết định, trừ ngay là trừ non).
+         * Phiếu CỦA KHÁCH "Đổi mới" — hai mốc tách theo dòng hàng thật: chọn
+         * Đổi mới = máy hỏng vào kho hư hỏng NGAY (khách để máy lại, không
+         * trừ kho chính); chuyển Đã trả = máy mới rời kho chính. Mục 2 đầu file.
          *
          * "Đổi mới" trên phiếu NỘI BỘ cũng không ghi kho ở đây — xem mục 3
          * đầu file: lúc đó hàng vẫn nằm chỗ NCC, chưa cầm trên tay.
@@ -297,10 +299,14 @@ router.put('/:id', authMiddleware, requirePermission('repairs.edit'), validate(U
             }
         }
 
+        let canNhanMayHong = !laNoiBo
+            && status === 'replaced'
+            && !existing.replacedStockAt
+            && !existing.supplierReturnedAt
         let canTraKhachDoiMoi = !laNoiBo
             && status === 'returned'
-            && existing.status === 'replaced'
-            && !existing.replacedStockAt
+            && !!existing.replacedStockAt
+            && !existing.newUnitIssuedAt
             && !existing.supplierReturnedAt
 
         let message: string | undefined
@@ -312,11 +318,12 @@ router.put('/:id', authMiddleware, requirePermission('repairs.edit'), validate(U
          * Mốc stockMovedAt/replacedStockAt vẫn trống nên sau khi sửa phiếu
          * nối sản phẩm, chọn lại trạng thái là kho ghi bù ngay.
          */
-        if ((canChuyenKho || canTraKhachDoiMoi) && !(data.productId ?? existing.productId)) {
+        if ((canChuyenKho || canNhanMayHong || canTraKhachDoiMoi) && !(data.productId ?? existing.productId)) {
             message = `Đã đổi trạng thái. Tồn kho KHÔNG đổi: không khớp được "${existing.productName}" `
                 + 'với sản phẩm nào trong danh mục (cần trùng tên hoặc SKU, và không trùng 2 mã). '
                 + 'Tạo phiếu mới và chọn sản phẩm từ gợi ý để phiếu ghi được kho.'
             canChuyenKho = false
+            canNhanMayHong = false
             canTraKhachDoiMoi = false
         }
         // Ghi kho và cập nhật phiếu trong CÙNG một transaction: nửa chừng lỗi thì
@@ -329,13 +336,21 @@ router.put('/:id', authMiddleware, requirePermission('repairs.edit'), validate(U
                     ? `Đã chuyển ${sl} "${existing.productName}" vào kho hư hỏng (kho chính −${sl}). Khi NCC đưa hàng về, bấm "NCC đã trả" để cộng lại kho chính.`
                     : `Đã trừ ${sl} "${existing.productName}" ở kho chính, chuyển sang kho hư hỏng`
             }
-            if (canTraKhachDoiMoi) {
-                await dayVaoKhoHu(tx, existing, sl, req, 'Trả khách đổi mới: giao máy mới, nhận máy hỏng')
+            if (canNhanMayHong) {
+                // Máy hỏng CỦA KHÁCH vào kho hư hỏng — không phải hàng shop rời
+                // kệ nên KHÔNG trừ kho chính, chỉ nhập kho hư
+                const khoHu = await khoHuHong(tx, existing.branchId)
+                if (khoHu) await updateWarehouseStock(tx, khoHu, existing.productId, sl)
+                await ghiTheKho(tx, existing, sl, 'Đổi mới: nhận máy hỏng của khách vào kho hư hỏng', req)
                 data.replacedStockAt = new Date()
-                message = `Đã trả khách: trừ ${sl} "${existing.productName}" ở kho chính, máy hỏng nhập kho hư hỏng`
+                message = `Đã nhập ${sl} máy hỏng của khách vào kho hư hỏng. Khi giao máy mới, chuyển phiếu sang "Đã trả" để trừ kho chính.`
             }
-            if (!laNoiBo && status === 'replaced' && !message) {
-                message = 'Đã ghi nhận đổi mới. Kho CHƯA trừ — khi giao máy mới cho khách, chuyển phiếu sang "Đã trả" là kho trừ lúc đó.'
+            if (canTraKhachDoiMoi) {
+                const du = await decrementSellableStock(tx, existing.productId, existing.branchId, sl)
+                if (!du) throw new Error(`KHO_THIEU:Kho chính chỉ còn ít hơn ${sl} của "${existing.productName}" — chưa trừ được, nhập kho món này rồi chuyển Đã trả lại.`)
+                await ghiTheKho(tx, existing, -sl, 'Trả khách đổi mới: xuất máy mới giao khách', req)
+                data.newUnitIssuedAt = new Date()
+                message = `Đã trả khách: trừ ${sl} "${existing.productName}" ở kho chính (máy hỏng đã nằm kho hư hỏng từ lúc đổi mới)`
             }
             if (laNoiBo && status === 'replaced' && !message) {
                 // Đã chuyển kho từ trước (stockMovedAt) — không ghi kho lần nữa,
@@ -420,11 +435,24 @@ router.delete('/:id', authMiddleware, requirePermission('repairs.edit'), async (
          * từ hư không.
          */
         await prisma.$transaction(async (tx: any) => {
-            if (r.productId && dangGiuHang(r)) {
-                // Cả hai đường gửi đi đều là (kho chính −n, kho hư +n) nên phép
-                // hoàn y hệt nhau — không cần rẽ theo `source`
-                const sl = Math.max(1, Number(r.quantity) || 1)
-                await nhanHangVe(tx, r, sl, req, 'Xoá phiếu — hoàn hàng hư hỏng về kho chính')
+            const sl = Math.max(1, Number(r.quantity) || 1)
+            if (r.productId && !r.supplierReturnedAt) {
+                /**
+                 * Hoàn ĐÚNG phần phiếu đang giữ — hai vế độc lập:
+                 *  - kho hư hỏng −n nếu hàng đang nằm đó (nội bộ đã gửi đi,
+                 *    hoặc máy hỏng khách đã nhập lúc đổi mới)
+                 *  - kho chính +n nếu phiếu từng TRỪ kho chính (nội bộ:
+                 *    stockMovedAt; đổi mới khách: newUnitIssuedAt)
+                 */
+                if (r.stockMovedAt || r.replacedStockAt) {
+                    const khoHu = await khoHuHong(tx, r.branchId)
+                    if (khoHu) await updateWarehouseStock(tx, khoHu, r.productId, -sl)
+                    await ghiTheKho(tx, r, -sl, 'Xoá phiếu — rút khỏi kho hư hỏng', req)
+                }
+                if (r.stockMovedAt || r.newUnitIssuedAt) {
+                    await adjustSellableStock(tx, r.productId, r.branchId, sl, `Xoá phiếu ${r.code} — hoàn kho chính`)
+                    await ghiTheKho(tx, r, sl, 'Xoá phiếu — hoàn kho chính', req)
+                }
             }
             await tx.repair.delete({ where: { id } })
         })
