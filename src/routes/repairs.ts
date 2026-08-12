@@ -24,8 +24,10 @@ const router = Router()
  *
  *  2. source = 'customer' — máy khách mang tới.
  *     Sửa/bảo hành bình thường thì KHÔNG đụng tồn: máy đó chưa bao giờ là tài
- *     sản của shop. NHƯNG "Đổi mới" thì có: shop lấy một máy mới trong kho đưa
- *     khách, và ôm lại cái máy hỏng của khách → GỬI ĐI.
+ *     sản của shop. "Đổi mới" chỉ là QUYẾT ĐỊNH — máy mới chưa rời kệ, chưa
+ *     trừ gì. Đến khi phiếu chuyển "ĐÃ TRẢ" (giao máy mới tận tay khách, ôm
+ *     lại máy hỏng) mới GỬI ĐI: kho chính −n, kho hư hỏng +n
+ *     (người dùng chỉnh 12/08/2026 — trừ ngay lúc chọn Đổi mới là trừ non).
  *
  *  3. "Đổi mới" trên phiếu NỘI BỘ KHÔNG cộng kho chính.
  *     Nó chỉ có nghĩa "NCC đồng ý đổi máy khác" — hàng vẫn đang ở chỗ NCC.
@@ -260,10 +262,11 @@ router.put('/:id', authMiddleware, requirePermission('repairs.edit'), validate(U
             && !existing.stockMovedAt
             && status && (DA_VAO_XUONG.includes(String(status)) || String(status) === 'replaced')
         /**
-         * "Đổi mới" trên phiếu CỦA KHÁCH: shop rút một máy mới trong kho đưa
-         * khách và ôm lại máy hỏng của khách. Đúng phép GỬI ĐI.
+         * Phiếu CỦA KHÁCH đã "Đổi mới": GỬI ĐI chạy lúc chuyển "ĐÃ TRẢ" — máy
+         * mới THẬT SỰ rời kho vào tay khách, máy hỏng của khách ở lại. Chọn
+         * "Đổi mới" không đụng kho (mới là quyết định, trừ ngay là trừ non).
          *
-         * Còn "đổi mới" trên phiếu NỘI BỘ thì KHÔNG ghi kho ở đây — xem mục 3
+         * "Đổi mới" trên phiếu NỘI BỘ cũng không ghi kho ở đây — xem mục 3
          * đầu file: lúc đó hàng vẫn nằm chỗ NCC, chưa cầm trên tay.
          */
         /**
@@ -294,8 +297,9 @@ router.put('/:id', authMiddleware, requirePermission('repairs.edit'), validate(U
             }
         }
 
-        let canDoiMoiKhach = !laNoiBo
-            && status === 'replaced'
+        let canTraKhachDoiMoi = !laNoiBo
+            && status === 'returned'
+            && existing.status === 'replaced'
             && !existing.replacedStockAt
             && !existing.supplierReturnedAt
 
@@ -308,12 +312,12 @@ router.put('/:id', authMiddleware, requirePermission('repairs.edit'), validate(U
          * Mốc stockMovedAt/replacedStockAt vẫn trống nên sau khi sửa phiếu
          * nối sản phẩm, chọn lại trạng thái là kho ghi bù ngay.
          */
-        if ((canChuyenKho || canDoiMoiKhach) && !(data.productId ?? existing.productId)) {
+        if ((canChuyenKho || canTraKhachDoiMoi) && !(data.productId ?? existing.productId)) {
             message = `Đã đổi trạng thái. Tồn kho KHÔNG đổi: không khớp được "${existing.productName}" `
                 + 'với sản phẩm nào trong danh mục (cần trùng tên hoặc SKU, và không trùng 2 mã). '
                 + 'Tạo phiếu mới và chọn sản phẩm từ gợi ý để phiếu ghi được kho.'
             canChuyenKho = false
-            canDoiMoiKhach = false
+            canTraKhachDoiMoi = false
         }
         // Ghi kho và cập nhật phiếu trong CÙNG một transaction: nửa chừng lỗi thì
         // không được để tồn đã trừ mà phiếu vẫn trạng thái cũ
@@ -325,10 +329,13 @@ router.put('/:id', authMiddleware, requirePermission('repairs.edit'), validate(U
                     ? `Đã chuyển ${sl} "${existing.productName}" vào kho hư hỏng (kho chính −${sl}). Khi NCC đưa hàng về, bấm "NCC đã trả" để cộng lại kho chính.`
                     : `Đã trừ ${sl} "${existing.productName}" ở kho chính, chuyển sang kho hư hỏng`
             }
-            if (canDoiMoiKhach) {
-                await dayVaoKhoHu(tx, existing, sl, req, 'Đổi mới cho khách: giao máy mới, nhận máy hỏng')
+            if (canTraKhachDoiMoi) {
+                await dayVaoKhoHu(tx, existing, sl, req, 'Trả khách đổi mới: giao máy mới, nhận máy hỏng')
                 data.replacedStockAt = new Date()
-                message = `Đổi mới: đã trừ ${sl} "${existing.productName}" ở kho chính, máy hỏng nhập kho hư hỏng`
+                message = `Đã trả khách: trừ ${sl} "${existing.productName}" ở kho chính, máy hỏng nhập kho hư hỏng`
+            }
+            if (!laNoiBo && status === 'replaced' && !message) {
+                message = 'Đã ghi nhận đổi mới. Kho CHƯA trừ — khi giao máy mới cho khách, chuyển phiếu sang "Đã trả" là kho trừ lúc đó.'
             }
             if (laNoiBo && status === 'replaced' && !message) {
                 // Đã chuyển kho từ trước (stockMovedAt) — không ghi kho lần nữa,
