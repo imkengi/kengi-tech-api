@@ -949,7 +949,9 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                         status: thuDu ? 'completed' : 'partial',
                         createdBy: opts.systemUserId,
                         createdByName: 'KiotViet Sync',
-                        notes: `Nhập từ KiotViet (mã ${code})`,
+                        // Người dùng bỏ ghi chú nguồn trên hoá đơn (12/08/2026)
+                        // — bản in từng hiện "*GC: Nhập từ KiotViet (mã ...)"
+                        notes: null,
                         transactionDate: isNaN(when.getTime()) ? new Date() : when,
                         // NGÀY CHỨNG TỪ, KHÔNG PHẢI NGÀY ĐỒNG BỘ. Báo cáo doanh
                         // thu lọc theo `createdAt` chứ không phải transactionDate,

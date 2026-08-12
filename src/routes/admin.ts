@@ -3648,6 +3648,62 @@ router.get('/repair-trace', async (req: Request, res: Response) => {
     }
 })
 
+// ─── POST /admin/tidy-kiotviet-2026?storeCode=&apply= ──────────────────────
+/**
+ * DỌN SỔ VỀ TỪ 2026 + BỎ GHI CHÚ NGUỒN (người dùng chốt 12/08/2026):
+ *  1. Xoá DebtEntry "Trả nợ — phiếu thu TT... (KiotViet)" TRƯỚC 01/01/2026 —
+ *     đám phiếu thu mồ côi 2022–2025 nhập từ sổ quỹ KV trong khi hoá đơn
+ *     cùng thời chưa từng nhập (ngoài trần 50k) → sao kê toàn phiếu thu
+ *     không có hoá đơn xen kẽ. Số dư KHÔNG đổi: neo vẫn là Customer.debt,
+ *     phần thiếu dồn vào "Dư nợ đầu kỳ". GIỮ NGUYÊN bảng map debtPayment
+ *     để lần đồng bộ sau không tái nhập chúng.
+ *  2. Xoá ghi chú "Nhập từ KiotViet (mã ...)" trên hoá đơn đã đồng bộ —
+ *     bản in hiện "*GC: ..." người dùng không muốn.
+ * apply=false: chỉ đếm.
+ */
+router.post('/tidy-kiotviet-2026', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || '').trim()
+        const apply = String(req.query.apply || '') === 'true'
+        if (!storeCode) return res.status(400).json({ success: false, error: 'Thiếu storeCode' })
+        const store = await prisma.store.findFirst({
+            where: { code: { equals: storeCode, mode: 'insensitive' } }, select: { schema: true },
+        })
+        if (!store) return res.status(404).json({ success: false, error: 'Không thấy cửa hàng' })
+        const sp: any = getStorePrisma(store.schema)
+        const moc2026 = new Date('2026-01-01T00:00:00.000Z')
+
+        const dkPhieuThuCu = {
+            description: { contains: '(KiotViet)' },
+            type: 'payment',
+            createdAt: { lt: moc2026 },
+        }
+        const dkGhiChu = { notes: { startsWith: 'Nhập từ KiotViet' } }
+
+        const [soPhieuThuCu, tongTienCu, soGhiChu] = await Promise.all([
+            sp.debtEntry.count({ where: dkPhieuThuCu }),
+            sp.debtEntry.aggregate({ where: dkPhieuThuCu, _sum: { amount: true } }),
+            sp.transaction.count({ where: dkGhiChu }),
+        ])
+
+        let daXoa = 0, daXoaGhiChu = 0
+        if (apply) {
+            daXoa = (await sp.debtEntry.deleteMany({ where: dkPhieuThuCu })).count
+            daXoaGhiChu = (await sp.transaction.updateMany({ where: dkGhiChu, data: { notes: null } })).count
+        }
+        res.json({
+            success: true, cheDo: apply ? 'GHI THẬT' : 'dò khô',
+            phieuThuCuTruoc2026: soPhieuThuCu,
+            tongTienPhieuThuCu: tongTienCu._sum.amount || 0,
+            hoaDonCoGhiChu: soGhiChu,
+            daXoa, daXoaGhiChu,
+        })
+    } catch (err: any) {
+        console.error('tidy-kiotviet-2026 error:', err)
+        res.status(500).json({ success: false, error: err?.message })
+    }
+})
+
 // ─── POST /admin/fix-kiotviet-discount?storeCode=&apply= ────────────────────
 /**
  * VÁ GIẢM GIÁ DÒNG CỦA HOÁ ĐƠN ĐÃ ĐỒNG BỘ TỪ KIOTVIET.
