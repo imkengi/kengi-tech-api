@@ -266,6 +266,34 @@ router.put('/:id', authMiddleware, requirePermission('repairs.edit'), validate(U
          * Còn "đổi mới" trên phiếu NỘI BỘ thì KHÔNG ghi kho ở đây — xem mục 3
          * đầu file: lúc đó hàng vẫn nằm chỗ NCC, chưa cầm trên tay.
          */
+        /**
+         * PHIẾU CHƯA CÓ productId → TỰ TRA DANH MỤC THEO TÊN trước khi quyết
+         * ghi kho. "Khi tạo phiếu đã chọn sản phẩm rồi" — người dùng đúng:
+         * bước nối tay là vô lý (đã gỡ 11/08/2026). Phiếu cũ lưu tên dạng
+         * "Tên sản phẩm (x2)" nên bóc hậu tố (xN) rồi so tên/SKU không phân
+         * biệt hoa thường; khớp đúng MỘT sản phẩm thì nối luôn và ghi kho
+         * bình thường, không khớp thì như cũ (đổi trạng thái, không đụng kho).
+         */
+        if (!(data.productId ?? existing.productId) && status && existing.productName) {
+            const tenGoc = String(existing.productName).replace(/\s*\(x\d+\)\s*$/i, '').trim()
+            if (tenGoc) {
+                const timThay = await prisma.product.findMany({
+                    where: {
+                        OR: [
+                            { name: { equals: tenGoc, mode: 'insensitive' } },
+                            { sku: { equals: tenGoc, mode: 'insensitive' } },
+                        ],
+                    },
+                    select: { id: true, sku: true }, take: 2,
+                }).catch(() => [])
+                // 2+ ket qua = ten trung nhau, khong doan bua
+                if (timThay.length === 1) {
+                    data.productId = timThay[0].id
+                    data.productSku = timThay[0].sku
+                }
+            }
+        }
+
         let canDoiMoiKhach = !laNoiBo
             && status === 'replaced'
             && !existing.replacedStockAt
@@ -281,8 +309,9 @@ router.put('/:id', authMiddleware, requirePermission('repairs.edit'), validate(U
          * nối sản phẩm, chọn lại trạng thái là kho ghi bù ngay.
          */
         if ((canChuyenKho || canDoiMoiKhach) && !(data.productId ?? existing.productId)) {
-            message = 'Đã đổi trạng thái. Tồn kho KHÔNG đổi vì phiếu chưa nối sản phẩm trong danh mục — '
-                + 'bấm Sửa phiếu, chọn sản phẩm rồi chọn lại trạng thái này nếu muốn trừ/chuyển kho.'
+            message = `Đã đổi trạng thái. Tồn kho KHÔNG đổi: không khớp được "${existing.productName}" `
+                + 'với sản phẩm nào trong danh mục (cần trùng tên hoặc SKU, và không trùng 2 mã). '
+                + 'Tạo phiếu mới và chọn sản phẩm từ gợi ý để phiếu ghi được kho.'
             canChuyenKho = false
             canDoiMoiKhach = false
         }
