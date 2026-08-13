@@ -162,6 +162,42 @@ router.get('/', authMiddleware, requirePermission('repairs.view'), async (req: A
     } catch (err) { res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
 
+/**
+ * Tra danh mục theo TÊN phiếu gõ tay, trả về đúng MỘT sản phẩm hoặc null.
+ * Nới dần: nguyên văn → bóc "(xN)" → bóc MỌI ngoặc đuôi ("Quạt lỡ ống nhựa
+ * (4/T)") + gom khoảng trắng, so tên/SKU không phân biệt hoa thường; vòng
+ * chót mới dùng chứa-chuỗi. 2+ kết quả ở bất kỳ vòng nào = trùng tên, không
+ * đoán bừa (trả null, phiếu vẫn đổi trạng thái, chỉ không ghi kho).
+ */
+async function traSanPhamTheoTen(prisma: any, tenPhieu: string): Promise<{ id: string; sku: string | null } | null> {
+    const tenGoc = String(tenPhieu || '').trim()
+    if (!tenGoc) return null
+    let tenTho = tenGoc.replace(/\s*\(x\d+\)\s*$/i, '').trim()
+    for (let i = 0; i < 3; i++) tenTho = tenTho.replace(/\s*\([^()]*\)\s*$/, '').trim()
+    tenTho = tenTho.replace(/\s+/g, ' ')
+    const ungVien = Array.from(new Set([tenGoc, tenTho].filter(Boolean)))
+    for (const ten of ungVien) {
+        const timThay = await prisma.product.findMany({
+            where: {
+                OR: [
+                    { name: { equals: ten, mode: 'insensitive' } },
+                    { sku: { equals: ten, mode: 'insensitive' } },
+                ],
+            },
+            select: { id: true, sku: true }, take: 2,
+        }).catch(() => [])
+        if (timThay.length === 1) return timThay[0]
+    }
+    if (tenTho.length >= 6) {
+        const gan = await prisma.product.findMany({
+            where: { name: { contains: tenTho, mode: 'insensitive' } },
+            select: { id: true, sku: true }, take: 2,
+        }).catch(() => [])
+        if (gan.length === 1) return gan[0]
+    }
+    return null
+}
+
 // POST /api/repairs
 router.post('/', authMiddleware, requirePermission('repairs.create'), validate(CreateRepairSchema), async (req: AuthRequest, res: Response) => {
     try {
@@ -179,10 +215,16 @@ router.post('/', authMiddleware, requirePermission('repairs.create'), validate(C
         const sl = Math.max(1, Math.round(Number(quantity) || 1))
 
         let productSku: string | null = null
-        if (productId) {
-            const p = await prisma.product.findUnique({ where: { id: String(productId) }, select: { sku: true } }).catch(() => null)
+        let productIdCuoi: string | null = productId ? String(productId) : null
+        if (productIdCuoi) {
+            const p = await prisma.product.findUnique({ where: { id: productIdCuoi }, select: { sku: true } }).catch(() => null)
             if (!p) return res.status(400).json({ success: false, error: 'Không tìm thấy sản phẩm đã chọn' })
             productSku = p.sku
+        } else {
+            // Phiếu của khách gõ tay tên máy: tự tra danh mục ngay lúc tạo,
+            // khớp đúng một mã thì nối luôn — khỏi đợi tới lúc ghi kho.
+            const khop = await traSanPhamTheoTen(prisma, productName)
+            if (khop) { productIdCuoi = khop.id; productSku = khop.sku }
         }
 
         const code = await nextCode(prisma, 'repairCodeSeq', 'RP', 4, '-', 'Repair', 'code')
@@ -193,7 +235,7 @@ router.post('/', authMiddleware, requirePermission('repairs.create'), validate(C
                 estimatedDate: estimatedDate ? new Date(estimatedDate) : null,
                 notes,
                 source: nguon,
-                productId: productId || null,
+                productId: productIdCuoi,
                 productSku,
                 quantity: sl,
                 branchId: getBranchId(req) || null,
@@ -280,22 +322,10 @@ router.put('/:id', authMiddleware, requirePermission('repairs.edit'), validate(U
          * bình thường, không khớp thì như cũ (đổi trạng thái, không đụng kho).
          */
         if (!(data.productId ?? existing.productId) && status && existing.productName) {
-            const tenGoc = String(existing.productName).replace(/\s*\(x\d+\)\s*$/i, '').trim()
-            if (tenGoc) {
-                const timThay = await prisma.product.findMany({
-                    where: {
-                        OR: [
-                            { name: { equals: tenGoc, mode: 'insensitive' } },
-                            { sku: { equals: tenGoc, mode: 'insensitive' } },
-                        ],
-                    },
-                    select: { id: true, sku: true }, take: 2,
-                }).catch(() => [])
-                // 2+ ket qua = ten trung nhau, khong doan bua
-                if (timThay.length === 1) {
-                    data.productId = timThay[0].id
-                    data.productSku = timThay[0].sku
-                }
+            const khop = await traSanPhamTheoTen(prisma, existing.productName)
+            if (khop) {
+                data.productId = khop.id
+                data.productSku = khop.sku
             }
         }
 
