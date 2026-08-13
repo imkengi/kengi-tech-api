@@ -5,6 +5,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { Tool, ToolCtx, ToolError } from '../lib/mcpTypes'
+import { kiemTraThue } from '../lib/taxAudit'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -548,6 +549,76 @@ export const FINANCE_TOOLS: Tool[] = [
                         .filter((x: any) => x.soLuong !== 0),
                 })),
                 ghiChu: 'Tồn tổng của hàng LUÔN bằng tồn ở kho chính — các kho khác (lỗi, bảo hành, xe) tách riêng.',
+            }
+        },
+    },
+    {
+        name: 'tax_audit_check',
+        description: 'KIỂM TRA TRƯỚC THANH TRA THUẾ: đối chiếu ba nguồn doanh thu (sổ kế toán / tờ khai GTGT / hóa đơn điện tử), tìm dấu hiệu bị ấn định thuế và các khoản sẽ bị loại khi quyết toán, kèm ước tính tiền truy thu + phạt + chậm nộp. Gọi khi chủ shop hỏi "sổ sách có vấn đề gì không", "có rủi ro thuế gì", "bị thanh tra thì mất bao nhiêu". CHỈ ĐỌC, không sửa gì.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                year: { type: 'number', description: 'Năm cần soát (mặc định năm hiện tại)' },
+                month: { type: 'number', description: 'Tháng 1-12; bỏ trống để soát cả năm' },
+                quarter: { type: 'number', description: 'Quý 1-4 (dùng thay cho month)' },
+            },
+            additionalProperties: false,
+        },
+        run: async (a, { prisma }: ToolCtx) => {
+            const nay = new Date()
+            const year = num(a?.year, nay.getFullYear())
+            const month = a?.month ? num(a.month, 0) : 0
+            const quarter = a?.quarter ? num(a.quarter, 0) : 0
+            const p2 = (n: number) => String(n).padStart(2, '0')
+
+            let from: string, to: string, maKy: string, nhan: string
+            if (month >= 1 && month <= 12) {
+                const cuoi = new Date(year, month, 0).getDate()
+                from = `${year}-${p2(month)}-01`
+                to = `${year}-${p2(month)}-${p2(cuoi)}`
+                maKy = `${year}-${p2(month)}`
+                nhan = `tháng ${month}/${year}`
+            } else if (quarter >= 1 && quarter <= 4) {
+                const dauThang = (quarter - 1) * 3 + 1
+                const cuoiThang = dauThang + 2
+                const cuoi = new Date(year, cuoiThang, 0).getDate()
+                from = `${year}-${p2(dauThang)}-01`
+                to = `${year}-${p2(cuoiThang)}-${p2(cuoi)}`
+                maKy = `${year}-Q${quarter}`
+                nhan = `quý ${quarter}/${year}`
+            } else {
+                from = `${year}-01-01`
+                to = `${year}-12-31`
+                maKy = String(year)
+                nhan = `năm ${year}`
+            }
+
+            const h = await kiemTraThue(prisma, {
+                from, to, maKy, nhan,
+                start: new Date(`${from}T00:00:00.000Z`),
+                // +7h để lấy trọn ngày cuối theo giờ VN
+                end: new Date(new Date(`${to}T23:59:59.999Z`).getTime() + VN_OFFSET_MS),
+            })
+
+            return {
+                ky: h.ky,
+                diemSanSang: h.diem,
+                xepLoai: h.xepLoai,
+                doanhThuBaNguon: h.doanhThu,
+                thueGTGT: h.thue,
+                uocTinhPhaiNopThem: h.uocTinhPhat,
+                soCanhBao: h.canhBao.length,
+                canhBao: h.canhBao.map(c => ({
+                    mucDo: c.muc,
+                    noiDung: c.tieuDe,
+                    chiTiet: c.chiTiet,
+                    canCu: c.canCu,
+                    viecCanLam: c.canLam,
+                    tienRuiRo: c.tienRuiRo,
+                    viDu: c.viDu,
+                })),
+                khoanBiLoaiKhiQuyetToan: h.khoanBiLoai,
+                ghiChu: 'Soi trên dữ liệu có trong phần mềm, KHÔNG thay thế rà soát của kế toán hay tư vấn thuế. Số ước tính không phải số ấn định của cơ quan thuế.',
             }
         },
     },
