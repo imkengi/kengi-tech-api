@@ -439,6 +439,103 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
         }
     } catch { /* bỏ qua */ }
 
+    /* ── 11. Thuế TNCN từ lương ──────────────────────────────────────────────
+     * Nhóm bị soi nhiều thứ hai sau GTGT: chi lương vào chi phí thì phải chứng
+     * minh được đã khấu trừ và kê khai TNCN, và người lao động phải có MST. */
+    try {
+        const kyLuong = await prisma.payrollPeriod.findMany({
+            where: { year: Number(maKy.slice(0, 4)) },
+            select: { id: true, month: true, year: true, status: true, totalGross: true },
+        }).catch(() => [])
+        const thangKy = /^\d{4}-(\d{2})$/.exec(maKy)
+        const ky = thangKy
+            ? (kyLuong as any[]).filter(p => p.month === Number(thangKy[1]))
+            : (kyLuong as any[])
+        if (ky.length > 0) {
+            const dsEntry = await prisma.payrollEntry.findMany({
+                where: { periodId: { in: ky.map((p: any) => p.id) } },
+                select: { employeeId: true, employeeName: true, grossSalary: true, taxableIncome: true, pitAmount: true, totalInsuranceEmployee: true, dependents: true },
+            })
+            // Thu nhập vượt ngưỡng chịu thuế mà pitAmount = 0 → thiếu khấu trừ
+            const NGUONG_GIAM_TRU = 11_000_000
+            const thieuKhauTru = dsEntry.filter((e: any) =>
+                (e.grossSalary || 0) - (e.totalInsuranceEmployee || 0)
+                - NGUONG_GIAM_TRU - (e.dependents || 0) * 4_400_000 > 0
+                && (e.pitAmount || 0) <= 0)
+            if (thieuKhauTru.length > 0) {
+                const thuNhap = thieuKhauTru.reduce((s: number, e: any) => s + (e.grossSalary || 0), 0)
+                canhBao.push({
+                    code: 'tncn-thieu-khau-tru', muc: 'cao',
+                    tieuDe: `${thieuKhauTru.length} lao động có thu nhập trên ngưỡng nhưng không khấu trừ TNCN`,
+                    chiTiet: `Tổng thu nhập nhóm này ${vnd(thuNhap)} ₫ trong kỳ. Doanh nghiệp trả lương có nghĩa vụ khấu trừ trước khi chi; không khấu trừ thì bị truy thu và phạt, đồng thời khoản lương đó có nguy cơ bị loại khỏi chi phí được trừ.`,
+                    canCu: 'Điều 24, 25 Luật Thuế TNCN; Điều 4 TT 96/2015 về chi phí tiền lương được trừ.',
+                    canLam: 'Tính lại TNCN cho các lao động này, khấu trừ bù và khai bổ sung tờ khai 05/KK-TNCN của kỳ tương ứng.',
+                    tienRuiRo: null, soLuong: thieuKhauTru.length,
+                    viDu: thieuKhauTru.slice(0, 5).map((e: any) => `${e.employeeName || e.employeeId} · ${vnd(e.grossSalary || 0)} ₫`),
+                })
+            }
+            // Lao động trong bảng lương chưa có mã số thuế
+            const dsNv = await prisma.employee.findMany({
+                where: { id: { in: dsEntry.map((e: any) => e.employeeId).filter(Boolean) } },
+                select: { id: true, name: true, taxCode: true },
+            }).catch(() => [])
+            const thieuMst = (dsNv as any[]).filter(n => !n.taxCode)
+            if (thieuMst.length > 0) canhBao.push({
+                code: 'tncn-thieu-mst', muc: 'vua',
+                tieuDe: `${thieuMst.length} lao động trong bảng lương chưa có mã số thuế`,
+                chiTiet: 'Thiếu MST thì không kê khai được vào tờ khai khấu trừ TNCN, và người lao động cũng không quyết toán được — đoàn thanh tra thường yêu cầu bổ sung ngay tại chỗ.',
+                canCu: 'Điều 30 Luật Quản lý thuế 38/2019 — đăng ký thuế cho cá nhân có thu nhập.',
+                canLam: 'Đăng ký MST cá nhân qua cơ quan thuế hoặc ủy quyền doanh nghiệp đăng ký thay, rồi cập nhật vào hồ sơ nhân sự.',
+                tienRuiRo: null, soLuong: thieuMst.length,
+                viDu: thieuMst.slice(0, 5).map((n: any) => n.name || n.id),
+            })
+        } else if (dtSo > 0) {
+            // Có doanh thu mà không có bảng lương nào trong kỳ
+            canhBao.push({
+                code: 'thieu-bang-luong', muc: 'thap',
+                tieuDe: 'Kỳ có doanh thu nhưng không có bảng lương',
+                chiTiet: 'Cửa hàng có bán hàng mà không ghi nhận chi phí nhân công nào. Nếu thực tế có thuê người, phần lương trả ngoài sổ vừa không được tính chi phí, vừa là rủi ro về bảo hiểm và TNCN.',
+                canCu: 'Điều 4 TT 96/2015 — chi phí tiền lương phải có hợp đồng, bảng lương, chứng từ chi.',
+                canLam: 'Lập bảng lương cho kỳ; nếu chủ hộ tự làm không thuê ai thì bỏ qua cảnh báo này.',
+                tienRuiRo: null, soLuong: 0, viDu: [],
+            })
+        }
+    } catch { /* bỏ qua nếu thiếu bảng lương */ }
+
+    /* ── 12. Riêng HỘ KINH DOANH ─────────────────────────────────────────────
+     * Từ 01/01/2026 bỏ thuế khoán (NQ 198/2025), HKD chuyển sang kê khai theo
+     * doanh thu thực — nên phần sổ sách và hóa đơn của HKD bị soi kỹ hơn trước. */
+    try {
+        const cauHinh = await prisma.storeSettings.findFirst({ select: { businessType: true } }).catch(() => null)
+        const laHkd = cauHinh?.businessType === 'household' || cauHinh?.businessType === 'individual'
+        if (laHkd) {
+            const nam = Number(maKy.slice(0, 4))
+            const dsHkd = await prisma.hkdRevenueEntry.findMany({
+                where: { date: { gte: new Date(`${nam}-01-01T00:00:00.000Z`), lte: new Date(`${nam}-12-31T23:59:59.999Z`) } },
+                select: { doanhThuThuan: true, doanhThu: true },
+            }).catch(() => [])
+            const dtNam = (dsHkd as any[]).reduce((s, r) => s + (r.doanhThuThuan || r.doanhThu || 0), 0)
+            const NGUONG_HKD_CHIU_THUE = 200_000_000
+            const NGUONG_HKD_POS = 1_000_000_000
+            if (dtNam >= NGUONG_HKD_CHIU_THUE) canhBao.push({
+                code: 'hkd-vuot-nguong-chiu-thue', muc: 'vua',
+                tieuDe: `Doanh thu năm ${nam} đã vượt ngưỡng chịu thuế của hộ kinh doanh`,
+                chiTiet: `Sổ doanh thu HKD ghi nhận ${vnd(dtNam)} ₫, vượt mức ${vnd(NGUONG_HKD_CHIU_THUE)} ₫/năm — phát sinh nghĩa vụ nộp thuế GTGT và TNCN theo tỷ lệ trên doanh thu.`,
+                canCu: 'Luật Thuế GTGT 48/2024 — ngưỡng doanh thu không chịu thuế của hộ, cá nhân kinh doanh (200 triệu/năm từ 2026).',
+                canLam: 'Kê khai và nộp thuế theo doanh thu thực; giữ đủ hóa đơn đầu vào để chứng minh nguồn hàng.',
+                tienRuiRo: null, soLuong: 0, viDu: [],
+            })
+            if (dtNam >= NGUONG_HKD_POS) canhBao.push({
+                code: 'hkd-phai-ket-noi-pos', muc: 'cao',
+                tieuDe: 'Doanh thu vượt 1 tỷ — bắt buộc dùng hóa đơn điện tử khởi tạo từ máy tính tiền',
+                chiTiet: `Doanh thu năm ${nam} là ${vnd(dtNam)} ₫. Hộ kinh doanh nhóm này phải xuất hóa đơn điện tử từ máy tính tiền có kết nối dữ liệu với cơ quan thuế.`,
+                canCu: 'Nghị định 70/2025/NĐ-CP sửa đổi NĐ 123/2020 — hóa đơn điện tử khởi tạo từ máy tính tiền.',
+                canLam: 'Kích hoạt kết nối máy tính tiền với cơ quan thuế và xuất hóa đơn cho từng lần bán.',
+                tienRuiRo: null, soLuong: 0, viDu: [],
+            })
+        }
+    } catch { /* bỏ qua */ }
+
     // ── Chấm điểm sẵn sàng ───────────────────────────────────────────────────
     const tru: Record<MucRuiRo, number> = { cao: 22, vua: 9, thap: 3 }
     let diem = 100

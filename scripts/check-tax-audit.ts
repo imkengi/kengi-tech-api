@@ -26,6 +26,11 @@ interface Kho {
     products: any[]
     transactions: any[]
     deadlines: any[]
+    payrollPeriods: any[]
+    payrollEntries: any[]
+    employees: any[]
+    settings: any
+    hkdRevenue: any[]
 }
 
 function fakePrisma(k: Kho) {
@@ -56,6 +61,17 @@ function fakePrisma(k: Kho) {
         },
         transaction: { findMany: async ({ where }: any = {}) => k.transactions.filter(t => ngay(t.createdAt, where?.createdAt)) },
         taxDeadline: { findMany: async () => k.deadlines },
+        payrollPeriod: { findMany: async ({ where }: any = {}) => k.payrollPeriods.filter(p => !where?.year || p.year === where.year) },
+        payrollEntry: {
+            findMany: async ({ where }: any = {}) => k.payrollEntries.filter(e =>
+                !where?.periodId?.in || where.periodId.in.includes(e.periodId)),
+        },
+        employee: {
+            findMany: async ({ where }: any = {}) => k.employees.filter(n =>
+                !where?.id?.in || where.id.in.includes(n.id)),
+        },
+        storeSettings: { findFirst: async () => k.settings },
+        hkdRevenueEntry: { findMany: async () => k.hkdRevenue },
     }
 }
 
@@ -79,6 +95,12 @@ function khoSach(): Kho {
         products: [{ name: 'Sữa', stock: 10, costPrice: 20_000 }],
         transactions: [],
         deadlines: [],
+        // Có bảng lương hợp lệ: thu nhập dưới ngưỡng nên không phải khấu trừ TNCN
+        payrollPeriods: [{ id: 'p8', month: 8, year: 2026, status: 'paid', totalGross: 10_000_000 }],
+        payrollEntries: [{ periodId: 'p8', employeeId: 'nv1', employeeName: 'Nguyễn A', grossSalary: 10_000_000, totalInsuranceEmployee: 1_050_000, pitAmount: 0, dependents: 0 }],
+        employees: [{ id: 'nv1', name: 'Nguyễn A', taxCode: '8123456789' }],
+        settings: { businessType: 'company' },
+        hkdRevenue: [],
     }
 }
 
@@ -302,7 +324,55 @@ async function main() {
             `truyThu=${h.uocTinhPhat.truyThu}`)
     }
 
-    // ── 19. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
+    // ── 19. TNCN: thu nhập trên ngưỡng mà không khấu trừ ───────────────────
+    {
+        const k = khoSach()
+        k.payrollEntries = [
+            { periodId: 'p8', employeeId: 'nv1', employeeName: 'Nguyễn A', grossSalary: 30_000_000, totalInsuranceEmployee: 3_150_000, pitAmount: 0, dependents: 0 },
+            { periodId: 'p8', employeeId: 'nv2', employeeName: 'Trần B', grossSalary: 30_000_000, totalInsuranceEmployee: 3_150_000, pitAmount: 1_500_000, dependents: 0 },
+        ]
+        k.employees = [{ id: 'nv1', name: 'Nguyễn A', taxCode: '81' }, { id: 'nv2', name: 'Trần B', taxCode: '82' }]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const c = lay(h, 'tncn-thieu-khau-tru')
+        kiemTra('Bắt lao động trên ngưỡng không khấu trừ TNCN (người đã khấu trừ thì bỏ qua)',
+            !!c && c.soLuong === 1, JSON.stringify(c?.soLuong))
+    }
+
+    // ── 20. Thu nhập DƯỚI ngưỡng thì không được kêu ────────────────────────
+    {
+        const h = await kiemTraThue(fakePrisma(khoSach()), KY)
+        kiemTra('Thu nhập dưới ngưỡng giảm trừ — không báo thiếu khấu trừ',
+            !co(h, 'tncn-thieu-khau-tru'), h.canhBao.map((c: any) => c.code).join(','))
+    }
+
+    // ── 21. Lao động thiếu mã số thuế ──────────────────────────────────────
+    {
+        const k = khoSach()
+        k.employees = [{ id: 'nv1', name: 'Nguyễn A', taxCode: null }]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        kiemTra('Bắt lao động chưa có mã số thuế', co(h, 'tncn-thieu-mst'))
+    }
+
+    // ── 22. HKD vượt ngưỡng doanh thu + ngưỡng máy tính tiền ───────────────
+    {
+        const k = khoSach()
+        k.settings = { businessType: 'household' }
+        k.hkdRevenue = [{ doanhThuThuan: 1_200_000_000 }]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        kiemTra('HKD: bắt cả vượt ngưỡng chịu thuế và ngưỡng máy tính tiền 1 tỷ',
+            co(h, 'hkd-vuot-nguong-chiu-thue') && co(h, 'hkd-phai-ket-noi-pos'))
+    }
+
+    // ── 23. Doanh nghiệp thì KHÔNG áp luật hộ kinh doanh ───────────────────
+    {
+        const k = khoSach()
+        k.hkdRevenue = [{ doanhThuThuan: 1_200_000_000 }] // dữ liệu rác, nhưng là công ty
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        kiemTra('Công ty không bị áp cảnh báo dành riêng cho hộ kinh doanh',
+            !co(h, 'hkd-vuot-nguong-chiu-thue') && !co(h, 'hkd-phai-ket-noi-pos'))
+    }
+
+    // ── 24. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
     {
         const h = await kiemTraThue(fakePrisma(khoSach()), KY)
         kiemTra('Luôn trả checklist hồ sơ cần chuẩn bị', h.hoSoCanChuanBi.length >= 8)
