@@ -64,6 +64,61 @@ function dungKy(q: any): KhoangKy {
     }
 }
 
+/**
+ * GET /api/tax/audit-year?year= — bản đồ rủi ro 12 tháng.
+ *
+ * Chạy TUẦN TỰ từng tháng: pool Prisma mỗi cửa hàng rất nhỏ, bắn 12 lượt soát
+ * song song là cạn kết nối và kéo sập cả dashboard. Chậm hơn nhưng không làm
+ * chết hệ thống lúc người khác đang bán hàng.
+ */
+router.get('/audit-year', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const nay = new Date()
+        const year = Number(req.query.year) || nay.getFullYear()
+        // Chỉ soát tới tháng hiện tại nếu là năm nay — tháng chưa tới thì không có gì để soát
+        const thangCuoi = year === nay.getFullYear() ? nay.getMonth() + 1 : 12
+
+        const thang: Array<{
+            thang: number; diem: number; xepLoai: string
+            soCanhBao: number; soNang: number
+            truyThuUocTinh: number; tongUocTinh: number
+            doanhThuSo: number
+            maNang: string[]
+        }> = []
+
+        for (let m = 1; m <= thangCuoi; m++) {
+            const h = await kiemTraThue(prisma, dungKy({ year, month: m }))
+            thang.push({
+                thang: m,
+                diem: h.diem,
+                xepLoai: h.xepLoai,
+                soCanhBao: h.canhBao.length,
+                soNang: h.canhBao.filter(c => c.muc === 'cao').length,
+                truyThuUocTinh: h.uocTinhPhat.truyThu,
+                tongUocTinh: h.uocTinhPhat.tong,
+                doanhThuSo: h.doanhThu.so,
+                maNang: h.canhBao.filter(c => c.muc === 'cao').map(c => c.code).slice(0, 4),
+            })
+        }
+
+        const coSo = thang.filter(t => t.doanhThuSo > 0 || t.soCanhBao > 0)
+        res.json({
+            success: true,
+            data: {
+                year,
+                thang,
+                diemTrungBinh: coSo.length ? Math.round(coSo.reduce((s, t) => s + t.diem, 0) / coSo.length) : 100,
+                thangRuiRoNhat: coSo.length ? coSo.slice().sort((a, b) => a.diem - b.diem)[0]!.thang : null,
+                tongUocTinhCaNam: thang.reduce((s, t) => s + t.tongUocTinh, 0),
+            },
+        })
+    } catch (err) {
+        console.error('Bản đồ rủi ro thuế theo năm lỗi:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
 router.get('/audit-check', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma: any = req.storePrisma!
