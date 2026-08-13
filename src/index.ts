@@ -78,6 +78,7 @@ import accountingReportRoutes from './routes/accountingReports'
 import accountingReconcileRoutes from './routes/accountingReconcile'
 import financialStatementRoutes from './routes/financialStatements'
 import taxDeclarationRoutes from './routes/taxDeclarations'
+import taxAuditRoutes from './routes/taxAudit'
 import fanpageRoutes from './routes/fanpage'
 import aiJobRoutes from './routes/aiJobs'
 import { cacheDisconnect, cacheHealth } from './lib/cache'
@@ -247,6 +248,8 @@ app.use('/api/drivers', driverRoutes)
 app.use('/api/delivery-routes', deliveryRouteRoutes)
 app.use('/api/vehicles', vehicleRoutes)
 app.use('/api/tax', taxDeclarationRoutes) // BCTC phase-2 tax forms (no path overlap with taxRoutes)
+// Kiểm tra trước thanh tra thuế — /audit-check, không trùng path nào của taxRoutes
+app.use('/api/tax', taxAuditRoutes)
 app.use('/api/tax', taxRoutes)
 app.use('/api/segments', segmentRoutes)
 app.use('/api/currencies', currencyRoutes)

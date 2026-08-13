@@ -1,0 +1,275 @@
+/**
+ * Kiểm chứng bộ KIỂM TRA TRƯỚC THANH TRA THUẾ bằng dữ liệu giả.
+ *
+ * Chạy:  npx tsx scripts/check-tax-audit.ts
+ *
+ * Đây là phần dễ gây thiệt hại nhất nếu sai: báo nhầm thì kế toán đi sửa những
+ * thứ không cần sửa, bỏ sót thì tới lúc thanh tra mới biết. Nên mỗi phép kiểm
+ * tra đều có 2 ca: một ca PHẢI kêu, một ca PHẢI im.
+ */
+
+import { kiemTraThue, NGUONG_KHONG_TIEN_MAT, NGUONG_CHI_CAN_HOA_DON, type KhoangKy } from '../src/lib/taxAudit'
+
+const KY: KhoangKy = {
+    from: '2026-08-01', to: '2026-08-31',
+    start: new Date('2026-08-01T00:00:00.000Z'),
+    end: new Date('2026-09-01T00:00:00.000Z'),
+    maKy: '2026-08', nhan: 'tháng 8/2026',
+}
+
+interface Kho {
+    journal: any[]
+    declarations: any[]
+    invoices: any[]
+    expenses: any[]
+    imports: any[]
+    products: any[]
+    transactions: any[]
+    deadlines: any[]
+}
+
+function fakePrisma(k: Kho) {
+    const chuoi = (v: string, w: any) => {
+        if (!w) return true
+        if (w.gte !== undefined && v < w.gte) return false
+        if (w.lte !== undefined && v > w.lte) return false
+        if (w.lt !== undefined && !(v < w.lt)) return false
+        return true
+    }
+    const ngay = (v: any, w: any) => {
+        if (!w) return true
+        const t = new Date(v).getTime()
+        if (w.gte !== undefined && t < new Date(w.gte).getTime()) return false
+        if (w.lte !== undefined && t > new Date(w.lte).getTime()) return false
+        return true
+    }
+    return {
+        journalEntry: { findMany: async ({ where }: any = {}) => k.journal.filter(e => chuoi(e.date, where?.date)) },
+        taxDeclaration: { findFirst: async ({ where }: any = {}) => k.declarations.find(d => d.period === where?.period) ?? null },
+        eInvoice: { findMany: async ({ where }: any = {}) => k.invoices.filter(i => chuoi(i.invoiceDate, where?.invoiceDate)) },
+        expense: { findMany: async ({ where }: any = {}) => k.expenses.filter(e => ngay(e.date, where?.date)) },
+        importReceipt: { findMany: async ({ where }: any = {}) => k.imports.filter(i => ngay(i.createdAt, where?.createdAt)) },
+        product: {
+            findMany: async ({ where }: any = {}) => where?.stock?.lt !== undefined
+                ? k.products.filter(p => (p.stock ?? 0) < where.stock.lt)
+                : k.products,
+        },
+        transaction: { findMany: async ({ where }: any = {}) => k.transactions.filter(t => ngay(t.createdAt, where?.createdAt)) },
+        taxDeadline: { findMany: async () => k.deadlines },
+    }
+}
+
+/** Cửa hàng SẠCH: sổ = tờ khai = hóa đơn, không dấu hiệu nào */
+function khoSach(): Kho {
+    return {
+        journal: [
+            // Doanh thu 100tr, VAT ra 10tr, thu tiền mặt
+            { date: '2026-08-05', debitAccount: '111', creditAccount: '511', amount: 100_000_000 },
+            { date: '2026-08-05', debitAccount: '111', creditAccount: '3331', amount: 10_000_000 },
+            // VAT vào 4tr
+            { date: '2026-08-03', debitAccount: '1331', creditAccount: '331', amount: 4_000_000 },
+            { date: '2026-08-01', debitAccount: '111', creditAccount: '411', amount: 50_000_000 },
+        ],
+        declarations: [{ period: '2026-08', ct29: 100_000_000, ct30: 10_000_000, ct33: 4_000_000 }],
+        invoices: [
+            { invoiceDate: '2026-08-05', invoiceType: 'SALE', status: 'SIGNED', totalBeforeVat: 100_000_000, vatAmount: 10_000_000, totalAmount: 110_000_000 },
+        ],
+        expenses: [],
+        imports: [],
+        products: [{ name: 'Sữa', stock: 10, costPrice: 20_000 }],
+        transactions: [],
+        deadlines: [],
+    }
+}
+
+let soCa = 0, soLoi = 0
+const co = (h: any, code: string) => h.canhBao.some((c: any) => c.code === code)
+const lay = (h: any, code: string) => h.canhBao.find((c: any) => c.code === code)
+function kiemTra(ten: string, dat: boolean, ghiChu = '') {
+    soCa++
+    if (dat) console.log(`✓ ${ten}`)
+    else { soLoi++; console.log(`✗ ${ten}${ghiChu ? ' — ' + ghiChu : ''}`) }
+}
+
+async function main() {
+    // ── 1. Sổ sạch: không cảnh báo, điểm 100 ───────────────────────────────
+    {
+        const h = await kiemTraThue(fakePrisma(khoSach()), KY)
+        kiemTra('Hồ sơ sạch — không cảnh báo, điểm 100 "Sẵn sàng"',
+            h.canhBao.length === 0 && h.diem === 100 && h.xepLoai === 'Sẵn sàng',
+            `${h.canhBao.length} cảnh báo (${h.canhBao.map((c: any) => c.code).join(',')}), điểm ${h.diem}`)
+    }
+
+    // ── 2. Doanh thu sổ lệch tờ khai ───────────────────────────────────────
+    {
+        const k = khoSach()
+        k.declarations = [{ period: '2026-08', ct29: 80_000_000, ct30: 8_000_000, ct33: 4_000_000 }]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const c = lay(h, 'dt-so-vs-tokhai')
+        kiemTra('Bắt lệch doanh thu sổ vs tờ khai (đúng 20tr)',
+            !!c && c.tienRuiRo === 20_000_000 && c.muc === 'cao', JSON.stringify(c?.tienRuiRo))
+    }
+
+    // ── 3. Kỳ có doanh thu mà chưa có tờ khai ──────────────────────────────
+    {
+        const k = khoSach(); k.declarations = []
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        kiemTra('Bắt kỳ có doanh thu nhưng thiếu tờ khai', co(h, 'thieu-to-khai'))
+    }
+
+    // ── 4. Doanh thu sổ lệch hóa đơn điện tử ───────────────────────────────
+    {
+        const k = khoSach()
+        k.invoices = [{ invoiceDate: '2026-08-05', invoiceType: 'SALE', status: 'SIGNED', totalBeforeVat: 60_000_000 }]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const c = lay(h, 'dt-so-vs-hoadon')
+        kiemTra('Bắt doanh thu chưa xuất hóa đơn (lệch 40tr)', !!c && c.tienRuiRo === 40_000_000, JSON.stringify(c?.tienRuiRo))
+    }
+
+    // ── 5. Hóa đơn trả lại phải TRỪ khỏi doanh thu hóa đơn ─────────────────
+    {
+        const k = khoSach()
+        k.invoices = [
+            { invoiceDate: '2026-08-05', invoiceType: 'SALE', status: 'SIGNED', totalBeforeVat: 130_000_000 },
+            { invoiceDate: '2026-08-20', invoiceType: 'RETURN', status: 'SIGNED', totalBeforeVat: 30_000_000 },
+        ]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        kiemTra('Hóa đơn trả lại được trừ đúng (130−30=100, không kêu)', !co(h, 'dt-so-vs-hoadon'),
+            JSON.stringify(h.doanhThu))
+    }
+
+    // ── 6. Hóa đơn nháp/hủy KHÔNG được tính vào doanh thu ──────────────────
+    {
+        const k = khoSach()
+        k.invoices = [
+            { invoiceDate: '2026-08-05', invoiceType: 'SALE', status: 'SIGNED', totalBeforeVat: 100_000_000 },
+            { invoiceDate: '2026-08-06', invoiceType: 'SALE', status: 'DRAFT', totalBeforeVat: 50_000_000 },
+            { invoiceDate: '2026-08-07', invoiceType: 'SALE', status: 'CANCELLED', totalBeforeVat: 70_000_000 },
+        ]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        kiemTra('Hóa đơn nháp/hủy không tính vào doanh thu', h.doanhThu.hoaDon === 100_000_000, String(h.doanhThu.hoaDon))
+    }
+
+    // ── 7. Thanh toán tiền mặt vượt ngưỡng khấu trừ ────────────────────────
+    {
+        const k = khoSach()
+        k.expenses = [
+            { id: 'e1', description: 'Mua thiết bị', amount: NGUONG_KHONG_TIEN_MAT + 1_000_000, vatAmount: 600_000, invoiceNo: 'HD123', paidBy: 'cash', date: new Date('2026-08-10'), status: 'active', category: 'supplies' },
+            { id: 'e2', description: 'Mua thiết bị 2', amount: NGUONG_KHONG_TIEN_MAT + 5_000_000, vatAmount: 1_000_000, invoiceNo: 'HD124', paidBy: 'bank', date: new Date('2026-08-11'), status: 'active', category: 'supplies' },
+        ]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const c = lay(h, 'tien-mat-vuot-nguong')
+        kiemTra('Bắt đúng 1 khoản tiền mặt vượt ngưỡng (khoản chuyển khoản KHÔNG bị kêu)',
+            !!c && c.soLuong === 1, JSON.stringify(c?.soLuong))
+    }
+
+    // ── 8. Trả tiền NCC không bị tính là chi phí thiếu hóa đơn ─────────────
+    {
+        const k = khoSach()
+        k.expenses = [
+            { id: 'e3', description: 'Trả tiền NCC A', amount: 50_000_000, paidBy: 'cash', date: new Date('2026-08-12'), status: 'active', category: 'supplier_payment' },
+        ]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        kiemTra('Trả nợ NCC không bị kêu thiếu hóa đơn / vượt ngưỡng tiền mặt',
+            !co(h, 'chi-khong-hoa-don') && !co(h, 'tien-mat-vuot-nguong'),
+            h.canhBao.map((c: any) => c.code).join(','))
+    }
+
+    // ── 9. Chi phí thiếu hóa đơn → ước thuế TNDN 20% ───────────────────────
+    {
+        const k = khoSach()
+        k.expenses = [
+            { id: 'e4', description: 'Chi tiếp khách', amount: 10_000_000, paidBy: 'cash', date: new Date('2026-08-13'), status: 'active', category: 'food' },
+            { id: 'e5', description: 'Chi lặt vặt', amount: NGUONG_CHI_CAN_HOA_DON - 1, paidBy: 'cash', date: new Date('2026-08-13'), status: 'active', category: 'other' },
+        ]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const c = lay(h, 'chi-khong-hoa-don')
+        kiemTra('Chi ≥ ngưỡng thiếu hóa đơn bị kêu, chi nhỏ thì không; rủi ro = 20%',
+            !!c && c.soLuong === 1 && c.tienRuiRo === 2_000_000, JSON.stringify(c))
+    }
+
+    // ── 10. Tồn kho âm ─────────────────────────────────────────────────────
+    {
+        const k = khoSach()
+        k.products = [{ name: 'Sữa', stock: -8, costPrice: 25_000 }, { name: 'Bánh', stock: 5, costPrice: 10_000 }]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const c = lay(h, 'ton-kho-am')
+        kiemTra('Bắt tồn kho âm, tính đúng giá trị 200k', !!c && c.soLuong === 1 && c.tienRuiRo === 200_000, JSON.stringify(c?.tienRuiRo))
+    }
+
+    // ── 11. Quỹ tiền mặt âm giữa kỳ (dù cuối kỳ dương) ─────────────────────
+    {
+        const k = khoSach()
+        k.journal = [
+            { date: '2026-08-02', debitAccount: '642', creditAccount: '111', amount: 30_000_000 }, // chi trước khi có thu
+            { date: '2026-08-20', debitAccount: '111', creditAccount: '511', amount: 100_000_000 },
+        ]
+        k.declarations = [{ period: '2026-08', ct29: 100_000_000, ct30: 0, ct33: 0 }]
+        k.invoices = [{ invoiceDate: '2026-08-20', invoiceType: 'SALE', status: 'SIGNED', totalBeforeVat: 100_000_000 }]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        kiemTra('Bắt quỹ tiền mặt âm giữa kỳ dù cuối kỳ dương', co(h, 'quy-am-trong-ky'),
+            h.canhBao.map((c: any) => c.code).join(','))
+    }
+
+    // ── 12. Bán dưới giá vốn ───────────────────────────────────────────────
+    {
+        const k = khoSach()
+        k.transactions = [{
+            receiptNumber: 'HD001', createdAt: new Date('2026-08-09'),
+            items: [
+                { productName: 'Sữa', quantity: 10, lineTotal: 150_000, product: { costPrice: 25_000 } }, // lỗ 100k
+                { productName: 'Bánh', quantity: 2, lineTotal: 100_000, product: { costPrice: 20_000 } }, // lãi
+            ],
+        }]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const c = lay(h, 'ban-duoi-gia-von')
+        kiemTra('Bắt bán dưới giá vốn, đúng 1 dòng lỗ 100k', !!c && c.soLuong === 1 && c.tienRuiRo === 100_000, JSON.stringify(c?.tienRuiRo))
+    }
+
+    // ── 13. Hồ sơ khai thuế quá hạn ────────────────────────────────────────
+    {
+        const k = khoSach()
+        k.deadlines = [
+            { taxType: 'GTGT', period: '2026-06', dueDate: '2026-07-20', status: 'pending' },
+            { taxType: 'GTGT', period: '2026-07', dueDate: '2026-08-20', status: 'filed' },
+            { taxType: 'TNDN', period: '2030-01', dueDate: '2030-01-30', status: 'pending' },
+        ]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const c = lay(h, 'to-khai-tre-han')
+        kiemTra('Bắt hồ sơ quá hạn, bỏ qua hồ sơ đã nộp và hạn tương lai',
+            !!c && c.soLuong === 1, JSON.stringify(c?.soLuong))
+    }
+
+    // ── 14. Hóa đơn hủy nhiều bất thường ───────────────────────────────────
+    {
+        const k = khoSach()
+        k.invoices = Array.from({ length: 30 }, (_, i) => ({
+            invoiceDate: '2026-08-05', invoiceType: 'SALE',
+            status: i < 5 ? 'CANCELLED' : 'SIGNED',
+            totalBeforeVat: i < 5 ? 0 : 4_000_000,
+        }))
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        kiemTra('Bắt tỉ lệ hóa đơn hủy cao (5/30)', co(h, 'hoadon-huy-nhieu'))
+    }
+
+    // ── 15. Điểm số phải tụt theo mức độ ───────────────────────────────────
+    {
+        const k = khoSach()
+        k.products = [{ name: 'Sữa', stock: -8, costPrice: 25_000 }]
+        k.declarations = [{ period: '2026-08', ct29: 50_000_000, ct30: 10_000_000, ct33: 4_000_000 }]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        kiemTra('Nhiều vấn đề nặng thì điểm tụt và xếp loại xấu đi',
+            h.diem < 70 && h.canhBao[0].muc === 'cao', `điểm ${h.diem}, loại ${h.xepLoai}`)
+    }
+
+    // ── 16. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
+    {
+        const h = await kiemTraThue(fakePrisma(khoSach()), KY)
+        kiemTra('Luôn trả checklist hồ sơ cần chuẩn bị', h.hoSoCanChuanBi.length >= 8)
+    }
+
+    console.log(`\n${soCa - soLoi}/${soCa} ca đạt`)
+    process.exit(soLoi > 0 ? 1 : 0)
+}
+
+main().catch(e => { console.error(e); process.exit(1) })

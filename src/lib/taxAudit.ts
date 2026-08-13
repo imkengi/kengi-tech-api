@@ -1,0 +1,427 @@
+/**
+ * KIỂM TRA TRƯỚC THANH TRA THUẾ — hàm thuần, chạy được với client giả.
+ *
+ * Khác với module "Tuân thủ pháp lý" (kiểm tra NGHĨA VỤ: có giấy phép chưa, có
+ * dùng HĐĐT chưa…), file này soi CHÍNH DỮ LIỆU của cửa hàng theo đúng cách một
+ * đoàn thanh tra thuế soi: đối chiếu ba nguồn doanh thu, tìm dấu hiệu bị ấn
+ * định thuế, và tìm những khoản sẽ bị loại khi tính thuế.
+ *
+ * Nguyên tắc viết các phép kiểm tra ở đây:
+ *  1. Mỗi cảnh báo phải nói RÕ CĂN CỨ PHÁP LÝ và HẬU QUẢ bằng tiền, vì người
+ *     đọc phải quyết định có bỏ công đi sửa hay không.
+ *  2. Thà bỏ sót còn hơn báo bừa: chỗ nào dữ liệu không đủ để kết luận thì ghi
+ *     "cần đối chiếu chứng từ" chứ không phán là sai phạm.
+ *  3. Ngưỡng luật để thành hằng số có chú thích — luật đổi thì sửa một chỗ.
+ */
+
+export type MucRuiRo = 'cao' | 'vua' | 'thap'
+
+export interface CanhBaoThue {
+    code: string
+    muc: MucRuiRo
+    tieuDe: string
+    /** Diễn giải kèm con số cụ thể */
+    chiTiet: string
+    /** Điều khoản làm căn cứ */
+    canCu: string
+    /** Việc cần làm trước khi đoàn thanh tra tới */
+    canLam: string
+    /** Số tiền có nguy cơ bị truy thu/loại trừ (nếu ước lượng được) */
+    tienRuiRo: number | null
+    soLuong: number
+    viDu: string[]
+}
+
+export interface HoSoThue {
+    ky: string
+    /** Điểm sẵn sàng 0–100 (100 = không phát hiện dấu hiệu nào) */
+    diem: number
+    xepLoai: string
+    canhBao: CanhBaoThue[]
+    /** Ba nguồn doanh thu để đối chiếu */
+    doanhThu: { so: number; toKhai: number | null; hoaDon: number }
+    thue: { vatRaSo: number; vatRaToKhai: number | null; vatVaoSo: number; vatVaoToKhai: number | null }
+    /** Hồ sơ cần chuẩn bị mang ra khi đoàn tới */
+    hoSoCanChuanBi: string[]
+}
+
+/* ── Ngưỡng luật ────────────────────────────────────────────────────────────
+ * Từ 01/07/2025 (Luật Thuế GTGT 48/2024, NĐ 181/2025) chứng từ thanh toán
+ * KHÔNG DÙNG TIỀN MẶT là điều kiện khấu trừ GTGT với hàng hóa/dịch vụ mua vào
+ * từ 5.000.000đ (đã gồm thuế) — trước đó ngưỡng là 20.000.000đ. Nếu kế toán
+ * của cửa hàng áp ngưỡng khác, sửa đúng hằng số này. */
+export const NGUONG_KHONG_TIEN_MAT = 5_000_000
+/** Dưới mức này thì chi lặt vặt còn lập bảng kê được; trên mức này mà thiếu hóa
+ *  đơn là gần như chắc chắn bị loại khi quyết toán thuế TNDN. */
+export const NGUONG_CHI_CAN_HOA_DON = 2_000_000
+/** Chênh lệch dưới mức này coi như sai số làm tròn, không báo động */
+export const NGUONG_LECH_BO_QUA = 1_000
+
+const vnd = (v: number) => Math.round(v).toLocaleString('vi-VN')
+const ngayISO = (d: Date) => d.toISOString().slice(0, 10)
+
+/** Số phát sinh Nợ/Có của một nhóm tài khoản theo tiền tố */
+function phatSinh(
+    entries: Array<{ debitAccount: string; creditAccount: string; amount: number }>,
+    tienTo: string,
+) {
+    let no = 0, co = 0
+    for (const e of entries) {
+        if (String(e.debitAccount || '').startsWith(tienTo)) no += e.amount
+        if (String(e.creditAccount || '').startsWith(tienTo)) co += e.amount
+    }
+    return { no, co }
+}
+
+export interface KhoangKy {
+    from: string
+    to: string
+    start: Date
+    end: Date
+    /** Mã kỳ của tờ khai: "2026-08" (tháng) hoặc "2026-Q3" (quý) */
+    maKy: string
+    nhan: string
+}
+
+export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> {
+    const { from, to, start, end, maKy, nhan } = ky
+    const canhBao: CanhBaoThue[] = []
+
+    // ── Số liệu trên SỔ ──────────────────────────────────────────────────────
+    const butToan: Array<{ debitAccount: string; creditAccount: string; amount: number; date: string }> =
+        await prisma.journalEntry.findMany({
+            where: { date: { gte: from, lte: to } },
+            select: { debitAccount: true, creditAccount: true, amount: true, date: true },
+        })
+    const ps511 = phatSinh(butToan, '511')
+    const ps521 = phatSinh(butToan, '521')     // giảm trừ doanh thu (hàng bán bị trả lại)
+    const ps3331 = phatSinh(butToan, '3331')
+    const ps133 = phatSinh(butToan, '133')
+    // Doanh thu thuần trên sổ = phát sinh Có 511 − các khoản giảm trừ 521
+    const dtSo = Math.round(ps511.co - ps511.no - (ps521.no - ps521.co))
+    const vatRaSo = Math.round(ps3331.co - ps3331.no)
+    const vatVaoSo = Math.round(ps133.no - ps133.co)
+
+    // ── Số liệu trên TỜ KHAI đã lập ──────────────────────────────────────────
+    let dtToKhai: number | null = null
+    let vatRaToKhai: number | null = null
+    let vatVaoToKhai: number | null = null
+    let coToKhai = false
+    try {
+        const tk = await prisma.taxDeclaration.findFirst({ where: { period: maKy } })
+        if (tk) {
+            coToKhai = true
+            // ct29 = tổng doanh thu HHDV bán ra, ct30 = tổng thuế GTGT đầu ra,
+            // ct33 = thuế GTGT đầu vào được khấu trừ (theo cách app tự lập tờ khai)
+            dtToKhai = Math.round(tk.ct29 ?? 0)
+            vatRaToKhai = Math.round(tk.ct30 ?? 0)
+            vatVaoToKhai = Math.round(tk.ct33 ?? tk.ct32 ?? 0)
+        }
+    } catch { /* chưa có bảng TaxDeclaration */ }
+
+    // ── Số liệu trên HÓA ĐƠN ĐIỆN TỬ đã phát hành ────────────────────────────
+    let dtHoaDon = 0
+    let soHdHuy = 0, soHdTong = 0
+    try {
+        const hds = await prisma.eInvoice.findMany({
+            where: { invoiceDate: { gte: from, lte: to } },
+            select: { invoiceNumber: true, invoiceType: true, status: true, totalBeforeVat: true, vatAmount: true, totalAmount: true, buyerTaxCode: true, buyerName: true, paymentMethod: true },
+        })
+        soHdTong = hds.length
+        for (const h of hds) {
+            const st = String(h.status || '').toUpperCase()
+            if (st === 'CANCELLED' || st === 'REPLACED') { soHdHuy++; continue }
+            if (st === 'DRAFT' || st === 'ERROR') continue
+            const loai = String(h.invoiceType || 'SALE').toUpperCase()
+            dtHoaDon += (loai === 'RETURN' ? -1 : 1) * (h.totalBeforeVat || 0)
+        }
+        dtHoaDon = Math.round(dtHoaDon)
+
+        // Hóa đơn hủy/thay thế nhiều bất thường
+        if (soHdTong >= 20 && soHdHuy / soHdTong >= 0.1) canhBao.push({
+            code: 'hoadon-huy-nhieu', muc: 'vua',
+            tieuDe: `${soHdHuy}/${soHdTong} hóa đơn bị hủy hoặc thay thế`,
+            chiTiet: `Tỉ lệ ${(soHdHuy / soHdTong * 100).toFixed(1)}% — đoàn thanh tra thường lấy mẫu chính nhóm hóa đơn này để hỏi lý do hủy và đối chiếu với hàng đã giao.`,
+            canCu: 'Điều 19 NĐ 123/2020 — xử lý hóa đơn có sai sót; hủy hóa đơn phải có biên bản thỏa thuận với người mua.',
+            canLam: 'Chuẩn bị biên bản hủy/điều chỉnh cho từng hóa đơn, kèm chứng từ chứng minh hàng không giao hoặc giao sai.',
+            tienRuiRo: null, soLuong: soHdHuy, viDu: [],
+        })
+    } catch { /* chưa có bảng EInvoice */ }
+
+    // ── 1. Đối chiếu ba nguồn doanh thu ──────────────────────────────────────
+    if (coToKhai && dtToKhai !== null) {
+        const lech = dtSo - dtToKhai
+        if (Math.abs(lech) >= NGUONG_LECH_BO_QUA) canhBao.push({
+            code: 'dt-so-vs-tokhai', muc: Math.abs(lech) > Math.max(dtToKhai, 1) * 0.02 ? 'cao' : 'vua',
+            tieuDe: 'Doanh thu trên sổ lệch với tờ khai GTGT',
+            chiTiet: `Sổ ghi ${vnd(dtSo)} ₫, tờ khai kỳ ${nhan} khai ${vnd(dtToKhai)} ₫ — lệch ${vnd(Math.abs(lech))} ₫. Đây là phép đối chiếu ĐẦU TIÊN mà đoàn thanh tra làm; lệch mà không giải trình được thì bị ấn định theo số cao hơn.`,
+            canCu: 'Điều 50 Luật Quản lý thuế 38/2019 — ấn định thuế khi số liệu kê khai không trung thực.',
+            canLam: lech > 0
+                ? 'Sổ cao hơn tờ khai: kiểm tra có doanh thu chưa kê khai không, nếu có phải khai bổ sung trước khi bị phát hiện (được giảm nhẹ).'
+                : 'Tờ khai cao hơn sổ: kiểm tra bút toán doanh thu còn thiếu, hoặc tờ khai đã kê nhầm; số đã khai thì không được tự ý giảm mà phải khai điều chỉnh.',
+            tienRuiRo: Math.abs(lech), soLuong: 0, viDu: [],
+        })
+    } else if (dtSo > 0) {
+        canhBao.push({
+            code: 'thieu-to-khai', muc: 'cao',
+            tieuDe: `Kỳ ${nhan} có doanh thu nhưng chưa có tờ khai GTGT`,
+            chiTiet: `Sổ ghi nhận ${vnd(dtSo)} ₫ doanh thu mà hệ thống chưa lưu tờ khai nào cho kỳ này.`,
+            canCu: 'Điều 44 Luật Quản lý thuế 38/2019 — thời hạn nộp hồ sơ khai thuế; Điều 13 NĐ 125/2020 — phạt chậm nộp hồ sơ khai thuế.',
+            canLam: 'Lập và nộp tờ khai cho kỳ này; nếu đã nộp ngoài hệ thống thì nhập lại vào phần Tờ Khai GTGT để đối chiếu về sau.',
+            tienRuiRo: null, soLuong: 0, viDu: [],
+        })
+    }
+
+    if (dtHoaDon > 0 || dtSo > 0) {
+        const lech = dtSo - dtHoaDon
+        if (Math.abs(lech) >= Math.max(NGUONG_LECH_BO_QUA, dtSo * 0.01)) canhBao.push({
+            code: 'dt-so-vs-hoadon', muc: Math.abs(lech) > Math.max(dtSo, 1) * 0.05 ? 'cao' : 'vua',
+            tieuDe: 'Doanh thu trên sổ lệch với hóa đơn điện tử đã phát hành',
+            chiTiet: `Sổ ghi ${vnd(dtSo)} ₫, tổng hóa đơn đã phát hành (trừ hóa đơn trả lại) là ${vnd(dtHoaDon)} ₫ — lệch ${vnd(Math.abs(lech))} ₫.`,
+            canCu: 'Điều 90 Luật Quản lý thuế 38/2019 và Điều 4 NĐ 123/2020 — bán hàng phải lập hóa đơn, kể cả khi khách không lấy.',
+            canLam: lech > 0
+                ? 'Sổ nhiều hơn hóa đơn: có doanh thu chưa xuất hóa đơn — rà lại các đơn bán lẻ không lấy hóa đơn và xuất bù (hoặc lập hóa đơn tổng hợp theo quy định).'
+                : 'Hóa đơn nhiều hơn sổ: kiểm tra hóa đơn xuất trùng hoặc doanh thu chưa ghi sổ.',
+            tienRuiRo: Math.abs(lech), soLuong: 0, viDu: [],
+        })
+    }
+
+    // ── 2. Đối chiếu thuế GTGT ───────────────────────────────────────────────
+    if (vatRaToKhai !== null) {
+        const lech = vatRaSo - vatRaToKhai
+        if (Math.abs(lech) >= NGUONG_LECH_BO_QUA) canhBao.push({
+            code: 'vat-ra-lech', muc: 'cao',
+            tieuDe: 'Thuế GTGT đầu ra trên sổ lệch với tờ khai',
+            chiTiet: `Sổ (TK 3331) ${vnd(vatRaSo)} ₫, tờ khai ${vnd(vatRaToKhai)} ₫ — lệch ${vnd(Math.abs(lech))} ₫. Số này bị soi trực tiếp vì liên quan tới tiền phải nộp.`,
+            canCu: 'Điều 8, 12 Luật Thuế GTGT 48/2024 — xác định thuế đầu ra.',
+            canLam: 'Đối chiếu bảng kê hóa đơn bán ra với sổ 3331 từng tháng, tìm hóa đơn ghi sổ sai thuế suất hoặc chưa ghi.',
+            tienRuiRo: Math.abs(lech), soLuong: 0, viDu: [],
+        })
+    }
+    if (vatVaoToKhai !== null) {
+        const lech = vatVaoSo - vatVaoToKhai
+        if (Math.abs(lech) >= NGUONG_LECH_BO_QUA) canhBao.push({
+            code: 'vat-vao-lech', muc: 'vua',
+            tieuDe: 'Thuế GTGT đầu vào trên sổ lệch với tờ khai',
+            chiTiet: `Sổ (TK 133) ${vnd(vatVaoSo)} ₫, tờ khai ${vnd(vatVaoToKhai)} ₫ — lệch ${vnd(Math.abs(lech))} ₫.`,
+            canCu: 'Điều 14 Luật Thuế GTGT 48/2024 — điều kiện khấu trừ thuế đầu vào.',
+            canLam: 'Rà bảng kê hóa đơn mua vào: hóa đơn nào chưa ghi sổ, hóa đơn nào đã kê khai nhưng không đủ điều kiện khấu trừ.',
+            tienRuiRo: Math.abs(lech), soLuong: 0, viDu: [],
+        })
+    }
+
+    // ── 3. Thanh toán tiền mặt vượt ngưỡng cho hóa đơn có VAT ────────────────
+    try {
+        const chi = await prisma.expense.findMany({
+            where: { date: { gte: start, lte: end } },
+            select: { id: true, description: true, amount: true, vatAmount: true, invoiceNo: true, supplierName: true, paidBy: true, bankAccountId: true, status: true, category: true },
+        })
+        const tienMatVuot = chi.filter((e: any) =>
+            (e.status ?? 'active') === 'active'
+            && String(e.category || '') !== 'supplier_payment'
+            && (e.amount || 0) >= NGUONG_KHONG_TIEN_MAT
+            && ((e.vatAmount || 0) > 0 || e.invoiceNo)
+            && !e.bankAccountId
+            && String(e.paidBy || 'cash').toLowerCase() !== 'bank'
+            && String(e.paidBy || 'cash').toLowerCase() !== 'transfer')
+        if (tienMatVuot.length > 0) {
+            const vatMat = tienMatVuot.reduce((s: number, e: any) => s + (e.vatAmount || 0), 0)
+            const chiMat = tienMatVuot.reduce((s: number, e: any) => s + (e.amount || 0), 0)
+            canhBao.push({
+                code: 'tien-mat-vuot-nguong', muc: 'cao',
+                tieuDe: `${tienMatVuot.length} khoản mua vào từ ${vnd(NGUONG_KHONG_TIEN_MAT)} ₫ trả bằng tiền mặt`,
+                chiTiet: `Tổng ${vnd(chiMat)} ₫, trong đó ${vnd(vatMat)} ₫ thuế GTGT có nguy cơ bị loại khỏi khấu trừ, và phần chi phí tương ứng bị loại khi tính thuế TNDN.`,
+                canCu: `Điều 14 Luật Thuế GTGT 48/2024 và NĐ 181/2025 — mua vào từ ${vnd(NGUONG_KHONG_TIEN_MAT)} ₫ phải có chứng từ thanh toán không dùng tiền mặt mới được khấu trừ; Điều 4 TT 96/2015 với chi phí được trừ.`,
+                canLam: 'Tìm lại chứng từ chuyển khoản nếu thực tế đã chuyển khoản mà ghi nhầm; khoản nào đúng là trả tiền mặt thì chủ động loại khỏi khấu trừ trước, đừng để đoàn thanh tra loại rồi phạt kê khai sai.',
+                tienRuiRo: Math.round(vatMat + chiMat * 0.2),
+                soLuong: tienMatVuot.length,
+                viDu: tienMatVuot.slice(0, 5).map((e: any) => `${(e.description || '').slice(0, 32)} · ${vnd(e.amount)} ₫`),
+            })
+        }
+
+        // ── 4. Chi phí không có hóa đơn ──────────────────────────────────────
+        const khongHoaDon = chi.filter((e: any) =>
+            (e.status ?? 'active') === 'active'
+            && String(e.category || '') !== 'supplier_payment'
+            && (e.amount || 0) >= NGUONG_CHI_CAN_HOA_DON
+            && !e.invoiceNo)
+        if (khongHoaDon.length > 0) {
+            const tong = khongHoaDon.reduce((s: number, e: any) => s + (e.amount || 0), 0)
+            canhBao.push({
+                code: 'chi-khong-hoa-don', muc: 'vua',
+                tieuDe: `${khongHoaDon.length} khoản chi từ ${vnd(NGUONG_CHI_CAN_HOA_DON)} ₫ chưa có số hóa đơn`,
+                chiTiet: `Tổng ${vnd(tong)} ₫. Chi phí không có hóa đơn hợp lệ sẽ bị loại khi quyết toán thuế TNDN — thuế phải nộp thêm ước tính ${vnd(tong * 0.2)} ₫ theo thuế suất 20%.`,
+                canCu: 'Điều 4 TT 96/2015/TT-BTC — điều kiện chi phí được trừ: có đủ hóa đơn, chứng từ hợp pháp.',
+                canLam: 'Bổ sung số hóa đơn cho các khoản đã có hóa đơn giấy/điện tử; khoản nào thực sự không có hóa đơn thì tách riêng để loại khi quyết toán, tránh bị phạt kê khai sai.',
+                tienRuiRo: Math.round(tong * 0.2),
+                soLuong: khongHoaDon.length,
+                viDu: khongHoaDon.slice(0, 5).map((e: any) => `${(e.description || '').slice(0, 32)} · ${vnd(e.amount)} ₫`),
+            })
+        }
+    } catch { /* bỏ qua nếu thiếu bảng */ }
+
+    // ── 5. Phiếu nhập có hóa đơn GTGT nhưng trả ngay bằng tiền mặt ───────────
+    try {
+        const nhaps = await prisma.importReceipt.findMany({
+            where: { status: 'completed', createdAt: { gte: start, lte: end } },
+            select: { code: true, totalCost: true, vatAmount: true, paidAmount: true, hasVatInvoice: true, supplierName: true },
+        })
+        const nghiNgo = nhaps.filter((r: any) =>
+            r.hasVatInvoice && (r.paidAmount || 0) >= NGUONG_KHONG_TIEN_MAT)
+        if (nghiNgo.length > 0) {
+            const vat = nghiNgo.reduce((s: number, r: any) => s + (r.vatAmount || 0), 0)
+            canhBao.push({
+                code: 'nhap-tra-tien-mat', muc: 'vua',
+                tieuDe: `${nghiNgo.length} phiếu nhập có hóa đơn GTGT trả ngay từ ${vnd(NGUONG_KHONG_TIEN_MAT)} ₫`,
+                chiTiet: `Tổng thuế GTGT đầu vào liên quan ${vnd(vat)} ₫. Hệ thống không lưu phương thức thanh toán của phần trả ngay nên KHÔNG kết luận là sai — nhưng đây đúng là nhóm đoàn thanh tra sẽ đòi chứng từ.`,
+                canCu: `Điều 14 Luật Thuế GTGT 48/2024 — chứng từ thanh toán không dùng tiền mặt với giao dịch từ ${vnd(NGUONG_KHONG_TIEN_MAT)} ₫.`,
+                canLam: 'Kẹp ủy nhiệm chi / sao kê ngân hàng vào từng phiếu nhập trong nhóm này trước khi đoàn tới.',
+                tienRuiRo: Math.round(vat),
+                soLuong: nghiNgo.length,
+                viDu: nghiNgo.slice(0, 5).map((r: any) => `${r.code}${r.supplierName ? ' · ' + r.supplierName : ''}`),
+            })
+        }
+    } catch { /* bỏ qua */ }
+
+    // ── 6. Tồn kho âm — dấu hiệu mua bán không hóa đơn ───────────────────────
+    try {
+        const am = await prisma.product.findMany({
+            where: { stock: { lt: 0 } },
+            select: { name: true, sku: true, stock: true, costPrice: true },
+        })
+        if (am.length > 0) {
+            const giaTri = am.reduce((s: number, p: any) => s + Math.abs(p.stock || 0) * (p.costPrice || 0), 0)
+            canhBao.push({
+                code: 'ton-kho-am', muc: 'cao',
+                tieuDe: `${am.length} mặt hàng đang có tồn kho ÂM`,
+                chiTiet: `Giá trị tương ứng khoảng ${vnd(giaTri)} ₫. Bán ra nhiều hơn số đã nhập là dấu hiệu điển hình của mua hàng không hóa đơn — cơ quan thuế có quyền ấn định cả doanh thu lẫn chi phí.`,
+                canCu: 'Điều 50 Luật Quản lý thuế 38/2019 — ấn định thuế; Điều 14 NĐ 125/2020 — xử phạt hành vi khai sai.',
+                canLam: 'Rà lại phiếu nhập bị thiếu, nhập bổ sung kèm hóa đơn đầu vào hợp lệ; nếu là sai sót kiểm kê thì lập biên bản kiểm kê và điều chỉnh trước khi khóa sổ.',
+                tienRuiRo: Math.round(giaTri),
+                soLuong: am.length,
+                viDu: am.slice(0, 5).map((p: any) => `${p.name} (${p.stock})`),
+            })
+        }
+    } catch { /* bỏ qua */ }
+
+    // ── 7. Quỹ tiền mặt âm tại một thời điểm bất kỳ trong kỳ ─────────────────
+    {
+        const theoNgay: Record<string, number> = {}
+        for (const e of butToan) {
+            const d = String(e.date)
+            if (String(e.debitAccount || '').startsWith('111')) theoNgay[d] = (theoNgay[d] ?? 0) + e.amount
+            if (String(e.creditAccount || '').startsWith('111')) theoNgay[d] = (theoNgay[d] ?? 0) - e.amount
+        }
+        // Số dư đầu kỳ của quỹ để cộng dồn cho đúng
+        let duDau = 0
+        try {
+            const truoc: Array<{ debitAccount: string; creditAccount: string; amount: number }> =
+                await prisma.journalEntry.findMany({
+                    where: { date: { lt: from } },
+                    select: { debitAccount: true, creditAccount: true, amount: true },
+                })
+            const p = phatSinh(truoc, '111')
+            duDau = p.no - p.co
+        } catch { /* bỏ qua */ }
+        let duy = duDau
+        const ngayAm: string[] = []
+        let amNhat = 0
+        for (const d of Object.keys(theoNgay).sort()) {
+            duy += theoNgay[d]!
+            if (duy < -NGUONG_LECH_BO_QUA) {
+                ngayAm.push(`${d} (${vnd(duy)} ₫)`)
+                if (duy < amNhat) amNhat = duy
+            }
+        }
+        if (ngayAm.length > 0) canhBao.push({
+            code: 'quy-am-trong-ky', muc: 'cao',
+            tieuDe: `Sổ quỹ tiền mặt âm ở ${ngayAm.length} ngày trong kỳ`,
+            chiTiet: `Âm sâu nhất ${vnd(amNhat)} ₫. Quỹ tiền mặt không thể âm trên thực tế — đây là bằng chứng sổ sách không phản ánh đúng, thường dẫn tới việc bác bỏ toàn bộ sổ và ấn định thuế.`,
+            canCu: 'Điều 50 Luật Quản lý thuế 38/2019; nguyên tắc ghi sổ theo Luật Kế toán 88/2015.',
+            canLam: 'Tìm khoản thu chưa ghi (thu nợ, góp vốn, vay chủ) và bổ sung chứng từ; tuyệt đối không lùi ngày phiếu chi để che.',
+            tienRuiRo: Math.abs(Math.round(amNhat)),
+            soLuong: ngayAm.length,
+            viDu: ngayAm.slice(0, 5),
+        })
+    }
+
+    // ── 8. Bán dưới giá vốn ──────────────────────────────────────────────────
+    try {
+        const txs = await prisma.transaction.findMany({
+            where: { status: { in: ['completed', 'partial'] }, createdAt: { gte: start, lte: end } },
+            select: {
+                receiptNumber: true,
+                items: { select: { productId: true, productName: true, quantity: true, lineTotal: true, product: { select: { costPrice: true } } } },
+            },
+        })
+        let soDong = 0, tienLo = 0
+        const viDu: string[] = []
+        for (const t of txs) {
+            for (const i of (t.items ?? [])) {
+                const von = (i.product?.costPrice ?? 0) * (i.quantity ?? 0)
+                if (von <= 0) continue
+                const thu = i.lineTotal ?? 0
+                if (thu < von) {
+                    soDong++; tienLo += von - thu
+                    if (viDu.length < 5) viDu.push(`${t.receiptNumber} · ${i.productName}`)
+                }
+            }
+        }
+        if (soDong > 0) canhBao.push({
+            code: 'ban-duoi-gia-von', muc: 'vua',
+            tieuDe: `${soDong} dòng bán dưới giá vốn`,
+            chiTiet: `Tổng phần thấp hơn giá vốn là ${vnd(tienLo)} ₫. Bán lỗ kéo dài bị nghi là hạ giá trên hóa đơn để giấu doanh thu, và cơ quan thuế có quyền ấn định lại giá.`,
+            canCu: 'Điều 50 Luật Quản lý thuế 38/2019 — ấn định khi giá giao dịch không theo giá thị trường.',
+            canLam: 'Chuẩn bị giải trình cho từng trường hợp: hàng cận hạn, hàng trưng bày, chương trình khuyến mãi đã đăng ký. Khuyến mãi phải có quyết định/thông báo kèm theo.',
+            tienRuiRo: Math.round(tienLo), soLuong: soDong, viDu,
+        })
+    } catch { /* bỏ qua */ }
+
+    // ── 9. Hồ sơ khai thuế quá hạn ───────────────────────────────────────────
+    try {
+        const homNay = ngayISO(new Date())
+        const dl = await prisma.taxDeadline.findMany({
+            select: { taxType: true, period: true, dueDate: true, status: true },
+        })
+        const treHan = dl.filter((d: any) => d.status !== 'filed' && d.status !== 'paid' && String(d.dueDate) < homNay)
+        if (treHan.length > 0) canhBao.push({
+            code: 'to-khai-tre-han', muc: 'cao',
+            tieuDe: `${treHan.length} hồ sơ khai thuế đã quá hạn`,
+            chiTiet: `Quá hạn lâu nhất: ${treHan.map((d: any) => d.dueDate).sort()[0]}. Chậm nộp hồ sơ bị phạt riêng, độc lập với tiền thuế; chậm nộp tiền thuế còn tính thêm 0,03%/ngày.`,
+            canCu: 'Điều 13 NĐ 125/2020 — phạt chậm nộp hồ sơ khai thuế; Điều 59 Luật Quản lý thuế 38/2019 — tiền chậm nộp.',
+            canLam: 'Nộp ngay hồ sơ còn thiếu; nộp trước khi cơ quan thuế lập biên bản thì mức phạt nhẹ hơn đáng kể.',
+            tienRuiRo: null, soLuong: treHan.length,
+            viDu: treHan.slice(0, 5).map((d: any) => `${d.taxType} kỳ ${d.period} · hạn ${d.dueDate}`),
+        })
+    } catch { /* bỏ qua */ }
+
+    // ── Chấm điểm sẵn sàng ───────────────────────────────────────────────────
+    const tru: Record<MucRuiRo, number> = { cao: 22, vua: 9, thap: 3 }
+    let diem = 100
+    for (const c of canhBao) diem -= tru[c.muc]
+    diem = Math.max(0, Math.min(100, diem))
+    const xepLoai = diem >= 90 ? 'Sẵn sàng' : diem >= 70 ? 'Cần bổ sung hồ sơ' : diem >= 45 ? 'Rủi ro cao' : 'Rất rủi ro'
+
+    const thuTu: Record<MucRuiRo, number> = { cao: 0, vua: 1, thap: 2 }
+    canhBao.sort((a, b) => thuTu[a.muc] - thuTu[b.muc] || (b.tienRuiRo ?? 0) - (a.tienRuiRo ?? 0))
+
+    return {
+        ky: nhan,
+        diem, xepLoai,
+        canhBao,
+        doanhThu: { so: dtSo, toKhai: dtToKhai, hoaDon: dtHoaDon },
+        thue: { vatRaSo, vatRaToKhai, vatVaoSo, vatVaoToKhai },
+        hoSoCanChuanBi: [
+            'Sổ nhật ký chung, sổ cái các tài khoản 111, 112, 131, 331, 156, 511, 632, 641, 642 của kỳ thanh tra',
+            'Bảng cân đối phát sinh và Báo cáo tài chính đã nộp',
+            'Toàn bộ tờ khai GTGT, TNDN, TNCN đã nộp kèm giấy nộp tiền',
+            'Bảng kê hóa đơn bán ra, mua vào; file XML hóa đơn điện tử',
+            'Hợp đồng, biên bản giao nhận, chứng từ thanh toán cho các giao dịch lớn',
+            'Ủy nhiệm chi / sao kê ngân hàng cho mọi khoản mua vào từ ' + vnd(NGUONG_KHONG_TIEN_MAT) + ' ₫',
+            'Biên bản kiểm kê kho, biên bản xử lý hàng thiếu/thừa/hỏng',
+            'Hợp đồng lao động, bảng lương, chứng từ khấu trừ thuế TNCN',
+            'Quyết định/thông báo chương trình khuyến mãi (nếu có bán dưới giá vốn)',
+            'Biên bản hủy, điều chỉnh hóa đơn kèm thỏa thuận với người mua',
+        ],
+    }
+}
