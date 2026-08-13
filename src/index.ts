@@ -76,6 +76,7 @@ import accountRoutes from './routes/accounts'
 import accountingRoutes from './routes/accounting'
 import accountingReportRoutes from './routes/accountingReports'
 import accountingReconcileRoutes from './routes/accountingReconcile'
+import complianceRoutes from './routes/compliance'
 import financialStatementRoutes from './routes/financialStatements'
 import taxDeclarationRoutes from './routes/taxDeclarations'
 import taxAuditRoutes from './routes/taxAudit'
@@ -302,6 +303,8 @@ app.use('/api/accounting', accountingRoutes)
 // Đối chiếu sổ sách — mount SAU accountingRoutes, đường dẫn /reconcile* không
 // trùng với /lock-status, /close-period, /carry-forward nên không che nhau.
 app.use('/api/accounting', accountingReconcileRoutes)
+// Tuân thủ pháp lý — FE /dashboard-compliance gọi 2 endpoint này (trước đây 404)
+app.use('/api/compliance', complianceRoutes)
 // Financial statements (B01/B02/B03-DNN) mount at /api/reports before the
 // bookkeeping reports; their paths never overlap.
 app.use('/api/reports', financialStatementRoutes)
