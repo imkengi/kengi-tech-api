@@ -498,7 +498,53 @@ async function main() {
             !co(h, 'ban-vuot-hoa-don-vao') && h.diem === 100)
     }
 
-    // ── 30. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
+    // ── 30. Hóa đơn nhảy số / trùng số / lùi ngày ──────────────────────────
+    {
+        const k = khoSach()
+        const t = new Date('2026-08-05T03:00:00.000Z')
+        k.invoices = [
+            { invoiceDate: '2026-08-05', invoiceNumber: '0000001', invoiceSymbol: '1C26TAA', status: 'SIGNED', invoiceType: 'SALE', totalBeforeVat: 25_000_000, createdAt: t },
+            { invoiceDate: '2026-08-05', invoiceNumber: '0000002', invoiceSymbol: '1C26TAA', status: 'CANCELLED', invoiceType: 'SALE', totalBeforeVat: 0, createdAt: t },
+            // thiếu số 3
+            { invoiceDate: '2026-08-06', invoiceNumber: '0000004', invoiceSymbol: '1C26TAA', status: 'SIGNED', invoiceType: 'SALE', totalBeforeVat: 75_000_000, createdAt: t },
+        ]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const c = lay(h, 'hoa-don-nhay-so')
+        kiemTra('Bắt số hóa đơn bị khuyết (hóa đơn HỦY vẫn tính là có số)',
+            !!c && c.soLuong === 1 && c.viDu[0].includes('số 3'), JSON.stringify(c?.viDu))
+    }
+    {
+        const k = khoSach()
+        const t = new Date('2026-08-05T03:00:00.000Z')
+        k.invoices = [
+            { invoiceDate: '2026-08-05', invoiceNumber: '0000001', invoiceSymbol: '1C26TAA', status: 'SIGNED', invoiceType: 'SALE', totalBeforeVat: 50_000_000, createdAt: t },
+            { invoiceDate: '2026-08-06', invoiceNumber: '0000001', invoiceSymbol: '1C26TAA', status: 'SIGNED', invoiceType: 'SALE', totalBeforeVat: 50_000_000, createdAt: t },
+        ]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        kiemTra('Bắt hóa đơn trùng số trong cùng ký hiệu', co(h, 'hoa-don-trung-so'))
+    }
+    {
+        const k = khoSach()
+        k.invoices = [
+            { invoiceDate: '2026-08-01', invoiceNumber: '0000001', invoiceSymbol: '1C26TAA', status: 'SIGNED', invoiceType: 'SALE', totalBeforeVat: 100_000_000, createdAt: new Date('2026-08-20T03:00:00.000Z') },
+        ]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        kiemTra('Bắt hóa đơn ghi lùi ngày (HĐ 01/08 nhưng nhập ngày 20/08)', co(h, 'hoa-don-lui-ngay'))
+    }
+    {
+        // Ký hiệu khác nhau thì không được coi là nhảy số của nhau
+        const k = khoSach()
+        const t = new Date('2026-08-05T03:00:00.000Z')
+        k.invoices = [
+            { invoiceDate: '2026-08-05', invoiceNumber: '0000001', invoiceSymbol: '1C26TAA', status: 'SIGNED', invoiceType: 'SALE', totalBeforeVat: 50_000_000, createdAt: t },
+            { invoiceDate: '2026-08-05', invoiceNumber: '0000009', invoiceSymbol: '2C26TBB', status: 'SIGNED', invoiceType: 'SALE', totalBeforeVat: 50_000_000, createdAt: t },
+        ]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        kiemTra('Hai ký hiệu khác nhau không bị coi là nhảy số/trùng số',
+            !co(h, 'hoa-don-nhay-so') && !co(h, 'hoa-don-trung-so'))
+    }
+
+    // ── 31. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
     {
         const h = await kiemTraThue(fakePrisma(khoSach()), KY)
         kiemTra('Luôn trả checklist hồ sơ cần chuẩn bị', h.hoSoCanChuanBi.length >= 8)

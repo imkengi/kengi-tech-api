@@ -545,6 +545,82 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
         })
     } catch { /* bỏ qua */ }
 
+    /* ── 9a. Số hóa đơn: nhảy số, trùng số, lùi ngày ─────────────────────────
+     * Ba phép này đoàn thanh tra làm gần như mặc định vì chúng phát hiện việc
+     * "giấu" hóa đơn (nhảy số), xuất trùng (trùng số) và hợp thức hóa chứng từ
+     * sau khi sự việc đã xảy ra (lùi ngày). Hóa đơn bị HỦY vẫn giữ số nên vẫn
+     * nằm trong dữ liệu — số thiếu nghĩa là số đó chưa từng được ghi nhận. */
+    try {
+        const hds = await prisma.eInvoice.findMany({
+            where: { invoiceDate: { gte: from, lte: to } },
+            select: { invoiceNumber: true, invoiceSymbol: true, invoiceDate: true, status: true, createdAt: true },
+        })
+        const theoKyHieu: Record<string, Array<{ so: number; goc: string }>> = {}
+        const trungSo: string[] = []
+        for (const h of (hds || [])) {
+            const st = String(h.status || '').toUpperCase()
+            if (st === 'DRAFT' || st === 'ERROR') continue      // chưa phát hành thì chưa có số chính thức
+            const so = Number(String(h.invoiceNumber || '').replace(/\D/g, ''))
+            if (!so) continue
+            const kh = String(h.invoiceSymbol || '(không ký hiệu)')
+            const ds = theoKyHieu[kh] ?? (theoKyHieu[kh] = [])
+            if (ds.some(x => x.so === so)) trungSo.push(`${kh} · ${h.invoiceNumber}`)
+            else ds.push({ so, goc: String(h.invoiceNumber) })
+        }
+
+        const thieuSo: string[] = []
+        let tongThieu = 0
+        for (const [kh, ds] of Object.entries(theoKyHieu)) {
+            if (ds.length < 2) continue
+            const sos = ds.map(x => x.so).sort((a, b) => a - b)
+            const min = sos[0]!, max = sos[sos.length - 1]!
+            // Dải quá rộng so với số hóa đơn thực có → nhiều khả năng dữ liệu nhập
+            // thiếu chứ không phải nhảy số; không kết luận để khỏi báo bừa.
+            if (max - min > sos.length * 50) continue
+            const coSo = new Set(sos)
+            for (let n = min; n <= max; n++) {
+                if (coSo.has(n)) continue
+                tongThieu++
+                if (thieuSo.length < 5) thieuSo.push(`${kh} · số ${n}`)
+            }
+        }
+        if (tongThieu > 0) canhBao.push({
+            code: 'hoa-don-nhay-so', muc: 'cao',
+            tieuDe: `${tongThieu} số hóa đơn bị thiếu trong dải đã phát hành`,
+            chiTiet: 'Hóa đơn phải liên tục theo ký hiệu; hóa đơn hủy vẫn giữ số nên vẫn phải có mặt. Số bị khuyết là dấu hiệu có hóa đơn không được ghi nhận vào hệ thống.',
+            canCu: 'Điều 10 NĐ 123/2020 — ký hiệu và số hóa đơn liên tục theo thứ tự; Điều 19 NĐ 123/2020 — xử lý hóa đơn sai sót.',
+            canLam: 'Tra cứu các số bị khuyết trên cổng hóa đơn điện tử, tải về và nhập lại vào hệ thống; số nào thực sự chưa dùng thì lập biên bản ghi nhận.',
+            tienRuiRo: null, soLuong: tongThieu, viDu: thieuSo,
+        })
+        if (trungSo.length > 0) canhBao.push({
+            code: 'hoa-don-trung-so', muc: 'cao',
+            tieuDe: `${trungSo.length} hóa đơn trùng số trong cùng ký hiệu`,
+            chiTiet: 'Hai hóa đơn cùng ký hiệu và cùng số là lỗi nghiêm trọng về quản lý hóa đơn, thường do nhập tay hoặc đồng bộ hai lần.',
+            canCu: 'Điều 10 NĐ 123/2020 — mỗi số hóa đơn chỉ dùng một lần trong cùng ký hiệu.',
+            canLam: 'Đối chiếu với dữ liệu trên cổng hóa đơn điện tử của cơ quan thuế, xóa bản ghi trùng trong phần mềm (không xóa hóa đơn đã phát hành thật).',
+            tienRuiRo: null, soLuong: trungSo.length, viDu: trungSo.slice(0, 5),
+        })
+
+        // Lùi ngày: ngày trên hóa đơn sớm hơn ngày bản ghi được tạo quá 1 ngày
+        const luiNgay = (hds || []).filter((h: any) => {
+            const st = String(h.status || '').toUpperCase()
+            if (st === 'DRAFT' || st === 'ERROR') return false
+            if (!h.invoiceDate || !h.createdAt) return false
+            const ngayHd = new Date(`${h.invoiceDate}T00:00:00.000Z`).getTime()
+            const ngayTao = new Date(ngayISO(new Date(h.createdAt)) + 'T00:00:00.000Z').getTime()
+            return ngayTao - ngayHd > 86400000
+        })
+        if (luiNgay.length > 0) canhBao.push({
+            code: 'hoa-don-lui-ngay', muc: 'vua',
+            tieuDe: `${luiNgay.length} hóa đơn có ngày sớm hơn ngày lập trên hệ thống`,
+            chiTiet: 'Ngày ghi trên hóa đơn sớm hơn thời điểm bản ghi được tạo từ 2 ngày trở lên. Có thể do nhập bù hóa đơn cũ, nhưng đây cũng là dấu hiệu hợp thức hóa chứng từ nên đoàn thanh tra sẽ hỏi.',
+            canCu: 'Điều 9 NĐ 123/2020 — thời điểm lập hóa đơn là thời điểm chuyển giao hàng hóa, cung cấp dịch vụ.',
+            canLam: 'Chuẩn bị chứng từ giao hàng/nghiệm thu chứng minh thời điểm thực tế; nếu là nhập bù dữ liệu cũ thì ghi chú rõ trong hồ sơ.',
+            tienRuiRo: null, soLuong: luiNgay.length,
+            viDu: luiNgay.slice(0, 5).map((h: any) => `${h.invoiceSymbol || ''} ${h.invoiceNumber || ''} · HĐ ${h.invoiceDate}`.trim()),
+        })
+    } catch { /* chưa có bảng EInvoice — bỏ qua */ }
+
     /* ── 9b. Hóa đơn giá trị lớn cho khách doanh nghiệp mà thiếu MST người mua ─
      * Người mua là doanh nghiệp thì phải có MST trên hóa đơn mới khấu trừ được;
      * bên bán bị hỏi vì xuất hóa đơn thiếu chỉ tiêu bắt buộc. */
