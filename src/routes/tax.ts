@@ -5,6 +5,7 @@ import { createJournalEntriesForTransaction, AUTO_JOURNAL_REF_TYPES, PLATFORM_AR
 import { postImportReceiptJournal, postExpenseJournal, postReturnJournal } from '../lib/autoJournalPurchase'
 import { COA_SEED, accountName } from '../lib/chartOfAccounts'
 import { enforcePeriodLock, assertNotLocked } from '../lib/periodLock'
+import { giaiTrinhKhaiBoSung } from '../lib/amendmentExplain'
 
 const router = Router()
 
@@ -879,6 +880,58 @@ router.get('/vat-amendment/:id/diff', authMiddleware, async (req: AuthRequest, r
         })
     } catch (err: any) {
         console.error('GET /vat-amendment/:id/diff error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+/**
+ * GET /api/tax/vat-amendment/:id/explanation?ngayNop=&daThanhTra=
+ *   — bản giải trình 01-1/KHBS + tiền chậm nộp tự tính.
+ *
+ * Hệ thống đã lập được tờ khai bổ sung và so chênh lệch. Nhưng hai thứ người
+ * khai hay quên rồi bị truy sau lại nằm ngoài đó: bản giải trình bắt buộc nộp
+ * kèm (Điều 47 Luật QLT; TT 80/2021), và TIỀN CHẬM NỘP 0,03%/ngày mà người nộp
+ * thuế phải TỰ tính tự nộp chứ không chờ cơ quan thuế ra thông báo (Điều 59).
+ */
+router.get('/vat-amendment/:id/explanation', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
+
+        const amendment = await prisma.taxDeclaration.findUnique({ where: { id } })
+        if (!amendment || amendment.formType !== '01_GTGT_BS') {
+            return res.status(404).json({ success: false, error: 'Khong tim thay to khai bo sung' })
+        }
+
+        const notes = parseAmendmentNotes(amendment.notes)
+        let originalSnap: Record<string, number> = notes.originalSnapshot || {}
+        if (!originalSnap || Object.keys(originalSnap).length === 0) {
+            const original = (amendment as any).originalId
+                ? await prisma.taxDeclaration.findUnique({ where: { id: (amendment as any).originalId } })
+                : null
+            originalSnap = original ? snapshotVatLines(original as any) : {}
+        }
+
+        // Ngày nộp mặc định là hôm nay theo giờ VN — lệch múi giờ là lệch cả ngày chậm nộp
+        const ngayNop = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.ngayNop || ''))
+            ? String(req.query.ngayNop)
+            : new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10)
+
+        const data = giaiTrinhKhaiBoSung(originalSnap, snapshotVatLines(amendment as any), {
+            kyGoc: String((amendment as any).period || '').replace(/-BS\d*$/, ''),
+            lanBoSung: Number((amendment as any).amendmentNumber || 1),
+            // Cột amendmentReason trước, rồi mới tới bản chép trong notes — KHÔNG rơi
+            // xuống notes thô, vì notes là JSON và sẽ đổ nguyên khối vào văn bản in.
+            lyDo: String((amendment as any).amendmentReason || notes.amendmentReason || ''),
+            tenDonVi: (amendment as any).companyName || undefined,
+            maSoThue: (amendment as any).taxCode || undefined,
+            ngayNop,
+            daCoQuyetDinhThanhTra: String(req.query.daThanhTra || '') === 'true',
+        })
+
+        res.json({ success: true, data: { amendmentId: amendment.id, ...data } })
+    } catch (err: any) {
+        console.error('GET /vat-amendment/:id/explanation error:', err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }
 })

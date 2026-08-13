@@ -22,7 +22,7 @@
     "docker:build": "docker build -t kengitech-api .",
     "docker:run": "docker run -p 8080:8080 --env-file .env.gcloud kengitech-api",
     "deploy:gcloud": "gcloud builds submit --config cloudbuild.yaml .",
-    "check:tax": "npx tsx scripts/check-tax-audit.ts && npx tsx scripts/check-tax-tool.ts && npx tsx scripts/check-tax-cron.ts && npx tsx scripts/check-audit-pack.ts && npx tsx scripts/check-audit-drill.ts && npx tsx scripts/check-tax-assessment.ts",
+    "check:tax": "npx tsx scripts/check-tax-audit.ts && npx tsx scripts/check-tax-tool.ts && npx tsx scripts/check-tax-cron.ts && npx tsx scripts/check-audit-pack.ts && npx tsx scripts/check-audit-drill.ts && npx tsx scripts/check-tax-assessment.ts && npx tsx scripts/check-amendment.ts",
     "check:ketoan": "npx tsx scripts/check-auto-journal.ts && npx tsx scripts/check-reconcile.ts && npx tsx scripts/check-remediation.ts",
     "check:all": "npm run check:mcp && npm run check:tax && npm run check:ketoan"
   },
