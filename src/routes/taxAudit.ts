@@ -19,6 +19,7 @@ import { boHoSoThanhTra, sangCsv, truyVetChungTu } from '../lib/auditPack'
 import { moPhongThanhTra } from '../lib/auditDrill'
 import { moPhongAnDinh, TY_LE_TT40 } from '../lib/taxAssessment'
 import { lapKeHoachKhacPhuc } from '../lib/remediationPlan'
+import { quyetToanTndn, THUE_SUAT_TNDN } from '../lib/citAdjustment'
 
 const router = Router()
 
@@ -367,6 +368,81 @@ router.get('/audit-plan', authMiddleware, async (req: AuthRequest, res: Response
         res.json({ success: true, data: { ...keHoach, diemSanSang: hoSo.diem, xepLoai: hoSo.xepLoai } })
     } catch (err) {
         console.error('Kế hoạch khắc phục lỗi:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+/**
+ * GET /api/tax/cit-adjustment?year= — quyết toán thuế TNDN CÓ ĐIỀU CHỈNH.
+ *
+ * Phép tính quyết toán sẵn có lấy thẳng lãi kế toán × 20%. Endpoint này bù đúng
+ * hai dòng bị bỏ qua: cộng các khoản chi không được trừ (Điều 4 TT 96/2015) và
+ * trừ lỗ được chuyển (Điều 9 TT 78/2014) — hai dòng đó chính là chỗ chênh lệch
+ * lớn nhất giữa số tự khai và số cơ quan thuế tính.
+ */
+router.get('/cit-adjustment', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const nam = Number(req.query.year) || new Date().getFullYear()
+
+        /* Lãi/lỗ từng năm gộp bằng SQL thô: quét 6 năm bút toán về ứng dụng rồi
+         * cộng trong JavaScript có thể kéo về hàng chục nghìn dòng, quá nặng cho
+         * pool kết nối nhỏ của mỗi cửa hàng. */
+        const laiLoTheoNam = new Map<number, number>()
+        try {
+            const rows: any[] = await prisma.$queryRawUnsafe(`
+                SELECT LEFT(date, 4) AS nam,
+                       SUM(CASE WHEN "creditAccount" LIKE '511%' OR "creditAccount" LIKE '515%' OR "creditAccount" LIKE '711%' THEN amount ELSE 0 END)::float8
+                     - SUM(CASE WHEN "debitAccount"  LIKE '511%' OR "debitAccount"  LIKE '515%' OR "debitAccount"  LIKE '711%' THEN amount ELSE 0 END)::float8 AS doanhthu,
+                       SUM(CASE WHEN "debitAccount"  LIKE '632%' OR "debitAccount"  LIKE '635%' OR "debitAccount"  LIKE '641%' OR "debitAccount" LIKE '642%' OR "debitAccount" LIKE '811%' THEN amount ELSE 0 END)::float8
+                     - SUM(CASE WHEN "creditAccount" LIKE '632%' OR "creditAccount" LIKE '635%' OR "creditAccount" LIKE '641%' OR "creditAccount" LIKE '642%' OR "creditAccount" LIKE '811%' THEN amount ELSE 0 END)::float8 AS chiphi
+                FROM "JournalEntry"
+                WHERE date >= '${nam - 5}-01-01' AND date <= '${nam}-12-31'
+                GROUP BY 1
+            `)
+            for (const r of rows || []) {
+                laiLoTheoNam.set(Number(r.nam), Math.round((Number(r.doanhthu) || 0) - (Number(r.chiphi) || 0)))
+            }
+        } catch (e: any) {
+            console.warn('Gộp lãi/lỗ theo năm lỗi, bỏ qua phần chuyển lỗ:', e?.message || e)
+        }
+
+        // Khoản bị loại lấy đúng kết quả bộ soát — một nguồn sự thật cho cả hai nơi
+        const hoSo = await kiemTraThue(prisma, dungKy({ year: nam }))
+
+        /* Thuế TNDN đã tạm nộp: phát sinh Nợ 3334 (nộp tiền vào ngân sách) trong
+         * năm. Không lấy Có 3334 vì đó là số trích lập, chưa phải đã nộp. */
+        let daTamNop = 0
+        try {
+            const bt: any[] = await prisma.journalEntry.findMany({
+                where: { date: { gte: `${nam}-01-01`, lte: `${nam}-12-31` } },
+                select: { debitAccount: true, amount: true },
+            })
+            daTamNop = Math.round(bt
+                .filter(e => String(e.debitAccount || '').startsWith('3334'))
+                .reduce((s, e) => s + (e.amount || 0), 0))
+        } catch { /* thiếu bảng — coi như chưa tạm nộp */ }
+
+        const kq = quyetToanTndn({
+            nam,
+            loiNhuanKeToan: laiLoTheoNam.get(nam) ?? 0,
+            khoanBiLoai: hoSo.khoanBiLoai?.dong ?? [],
+            laiLoTheoNam,
+            daTamNop,
+            thueSuat: THUE_SUAT_TNDN,
+        })
+
+        res.json({
+            success: true,
+            data: {
+                ...kq,
+                laiLoCacNam: Array.from(laiLoTheoNam.entries())
+                    .sort((a, b) => a[0] - b[0])
+                    .map(([n, v]) => ({ nam: n, laiLo: v })),
+            },
+        })
+    } catch (err) {
+        console.error('Quyết toán TNDN có điều chỉnh lỗi:', err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
