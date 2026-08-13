@@ -679,6 +679,15 @@ model Repair {
   quantity  Int     @default(1)
   branchId  String? // quyết định lấy kho chính / kho hư hỏng của chi nhánh nào
 
+  // ─── Nối khách & hoá đơn bán ─────────────────────────────────────────────
+  // customerId: auto-gắn ở POS dò theo id khách, không lệ thuộc gõ tên trùng
+  // khớp từng ký tự (phiếu thiếu tên khách từng không bao giờ khớp, 13/08/2026).
+  // transactionId/soldReceiptNumber: hoá đơn POS đã thu tiền phiếu này — ghi
+  // MỘT lần lúc phiếu chuyển 'returned' qua luồng thanh toán.
+  customerId        String?
+  transactionId     String?
+  soldReceiptNumber String?
+
   // Dấu mốc để mỗi lần ghi kho CHỈ CHẠY MỘT LẦN. Không có chúng thì bấm đổi
   // trạng thái hai lần là trừ tồn hai lần, và không cách nào biết phiếu nào đã
   // đụng kho để hoàn lại khi xoá.

@@ -174,6 +174,11 @@ export const CreateRepairSchema = z.object({
     source: z.enum(['customer', 'internal']).default('customer'),
     productId: z.string().optional().nullable(),
     quantity: z.number().int().min(1).max(9999).optional(),
+    // Nối khách theo id (auto-gắn ở POS không lệ thuộc gõ tên trùng khớp)
+    customerId: z.string().optional().nullable(),
+    // Link sang hoá đơn bán đã thu tiền phiếu này — POS gửi lúc chuyển 'returned'
+    transactionId: z.string().optional().nullable(),
+    soldReceiptNumber: z.string().max(50).optional().nullable(),
 })
 
 export const UpdateRepairSchema = CreateRepairSchema.partial()

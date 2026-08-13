@@ -203,7 +203,7 @@ router.post('/', authMiddleware, requirePermission('repairs.create'), validate(C
     try {
         const prisma = req.storePrisma!
         const { productName, customerName, customerPhone, issue, cost, estimatedDate, notes,
-            source, productId, quantity } = req.body
+            source, productId, quantity, customerId } = req.body
         if (!productName?.trim() || !issue?.trim()) return res.status(400).json({ success: false, error: 'Tên thiết bị và mô tả sự cố không được để trống' })
 
         const nguon = source === 'internal' ? 'internal' : 'customer'
@@ -239,6 +239,7 @@ router.post('/', authMiddleware, requirePermission('repairs.create'), validate(C
                 productSku,
                 quantity: sl,
                 branchId: getBranchId(req) || null,
+                customerId: customerId || null,
             } as any,
         })
         res.status(201).json({ success: true, data })
@@ -261,11 +262,23 @@ router.put('/:id', authMiddleware, requirePermission('repairs.edit'), validate(U
         if (existing.status === 'returned' && !laAdmin(req)) {
             return res.status(403).json({ success: false, error: 'Phiếu đã trả khách — đã chốt, chỉ admin mới sửa được' })
         }
-        const { status, cost, notes, completedDate, productId, quantity, source } = req.body
+        const { status, cost, notes, completedDate, productId, quantity, source,
+            customerId, transactionId, soldReceiptNumber } = req.body
         const data: any = {}
         if (status) data.status = status
         if (cost !== undefined) data.cost = Number(cost)
         if (notes !== undefined) data.notes = notes
+        if (customerId !== undefined) data.customerId = customerId || null
+        /**
+         * Link sang hoá đơn bán: POS gửi kèm lúc chuyển 'returned' sau khi thu
+         * tiền — "phiếu sửa xong mà không biết thu ở hoá đơn nào" (13/08/2026).
+         * Ghi MỘT lần: phiếu đã có link thì không cho đè (tránh lần thanh toán
+         * sau — ví dụ sửa đơn — ghi nhầm lên phiếu đã chốt).
+         */
+        if (transactionId && !existing.transactionId) {
+            data.transactionId = String(transactionId)
+            if (soldReceiptNumber) data.soldReceiptNumber = String(soldReceiptNumber)
+        }
         /**
          * CHO NỐI SẢN PHẨM VÀO PHIẾU CŨ — trước đây PUT không nhận productId,
          * nên phiếu tạo nhanh (không nối SP) vĩnh viễn không ghi kho được:
