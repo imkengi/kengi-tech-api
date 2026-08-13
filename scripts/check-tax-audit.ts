@@ -665,7 +665,33 @@ async function main() {
             !co(h, 'vat-sai-so-hoc'), h.canhBao.map((c: any) => c.code).join(','))
     }
 
-    // ── 36. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
+    // ── 36. Hao hụt kho treo trên 1381 ─────────────────────────────────────
+    {
+        const k = khoSach()
+        // Kiểm kê thiếu 5tr (5% doanh thu 100tr) → phải kêu, ước thuế 1tr
+        k.journal.push({ reference: 'ADJ-1', date: '2026-08-10', debitAccount: '1381', creditAccount: '156', amount: 5_000_000 })
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const c = lay(h, 'hao-hut-vuot-muc')
+        kiemTra('Bắt hàng thiếu treo 1381 đáng kể, ước thuế TNDN 20%',
+            !!c && c.tienRuiRo === 1_000_000, JSON.stringify(c?.tienRuiRo))
+    }
+    {
+        const k = khoSach()
+        // Đã kết chuyển xử lý xong (Có 1381) → không còn treo, không được kêu
+        k.journal.push({ reference: 'ADJ-2', date: '2026-08-10', debitAccount: '1381', creditAccount: '156', amount: 5_000_000 })
+        k.journal.push({ reference: 'XL-2', date: '2026-08-11', debitAccount: '632', creditAccount: '1381', amount: 5_000_000 })
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        kiemTra('Đã xử lý xong hàng thiếu thì không kêu nữa', !co(h, 'hao-hut-vuot-muc'))
+    }
+    {
+        const k = khoSach()
+        // Hao hụt nhỏ (0,2% doanh thu) → dưới ngưỡng, không kêu
+        k.journal.push({ reference: 'ADJ-3', date: '2026-08-10', debitAccount: '1381', creditAccount: '156', amount: 200_000 })
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        kiemTra('Hao hụt nhỏ dưới ngưỡng thì không kêu', !co(h, 'hao-hut-vuot-muc'))
+    }
+
+    // ── 37. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
     {
         const h = await kiemTraThue(fakePrisma(khoSach()), KY)
         kiemTra('Luôn trả checklist hồ sơ cần chuẩn bị', h.hoSoCanChuanBi.length >= 8)

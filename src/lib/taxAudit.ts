@@ -965,6 +965,27 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
         }
     }
 
+    /* ── 12d. Hao hụt kho vượt mức bình thường ───────────────────────────────
+     * Hàng thiếu khi kiểm kê treo ở TK 1381 chờ xử lý. Nếu để treo lâu hoặc giá
+     * trị lớn so với doanh thu, cơ quan thuế sẽ hỏi: hao hụt trong định mức thì
+     * được tính chi phí, vượt định mức mà không quy trách nhiệm bồi thường thì
+     * bị loại khỏi chi phí được trừ. */
+    {
+        const ps1381 = phatSinh(butToan, '1381')
+        const treo = ps1381.no - ps1381.co
+        if (treo > 0 && dtSo > 0) {
+            const tyLe = treo / dtSo * 100
+            if (treo >= 1_000_000 && tyLe >= 0.5) canhBao.push({
+                code: 'hao-hut-vuot-muc', muc: 'vua',
+                tieuDe: `Hàng thiếu chờ xử lý ${vnd(treo)} ₫ đang treo trên sổ`,
+                chiTiet: `Bằng ${tyLe.toFixed(1)}% doanh thu kỳ. Hao hụt trong định mức được tính chi phí; phần vượt định mức mà không quy được trách nhiệm bồi thường sẽ bị loại khi tính thuế TNDN (ước tính ${vnd(treo * 0.2)} ₫ thuế).`,
+                canCu: 'Điều 4 TT 96/2015/TT-BTC — hao hụt trong định mức được trừ; Điều 50 Luật Quản lý thuế 38/2019.',
+                canLam: 'Ban hành định mức hao hụt cho từng nhóm hàng, lập biên bản xử lý hàng thiếu và kết chuyển 1381 sang 632 (trong định mức) hoặc quy trách nhiệm bồi thường (vượt định mức) — đừng để treo qua kỳ.',
+                tienRuiRo: Math.round(treo * 0.2), soLuong: 0, viDu: [],
+            })
+        }
+    }
+
     /* ── 13. Mua hàng của hộ/cá nhân không có hóa đơn ────────────────────────
      * Bán lẻ hay mua nông sản, hàng thủ công của hộ/cá nhân không có hóa đơn.
      * Khoản này VẪN được tính chi phí nếu lập Bảng kê 01/TNDN kèm chứng từ chi;
