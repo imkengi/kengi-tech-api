@@ -6,6 +6,8 @@ import { createJournalEntriesForTransaction, postDebtCollectionJournal } from '.
 import { Tool, ToolCtx, ToolError } from '../lib/mcpTypes'
 import { FANPAGE_TOOLS } from './mcpFanpageTools'
 import { FINANCE_TOOLS } from './mcpFinanceTools'
+import { MARKETING_TOOLS } from './mcpMarketingTools'
+import { REPORT_TOOLS } from './mcpReportTools'
 
 // Re-export để mcpAgent.ts (và code cũ) vẫn `import { ToolError, ToolCtx } from './mcp'`
 export { ToolError }
@@ -46,6 +48,7 @@ const INSTRUCTIONS =
     'Chăm bình luận: fanpage_list_comments (chỉ trả bình luận CHƯA được trả lời) → fanpage_reply_comment / fanpage_hide_comment. ' +
     'Đăng bài: fanpage_create_post (bỏ scheduled_at = đăng ngay; có thì phải cách hiện tại ≥ 10 phút), quản lý bài đã hẹn bằng fanpage_manage_scheduled_post. ' +
     'Trả lời tự động 24/7: fanpage_create_rule rồi fanpage_set_auto_reply để bật. Tool fanpage_* ghi cũng cần scope write. ' +
+    'PHÂN TÍCH TỔNG THỂ / SWOT: gọi swot_data(from,to) — MỘT lần gọi gom đủ doanh thu, biên lãi, đà kỳ, khách quay lại, ghi nợ, hàng sắp hết/đã hết, vốn tồn, hàng chết, cơ cấu thanh toán; nhận định dựa trên số đó. ' +
     'TÀI CHÍNH: profit_report cho câu hỏi lãi/lỗ (doanh thu − giá vốn − chi phí; giá vốn là ƯỚC TÍNH theo giá vốn hiện tại, hãy nói rõ điều đó khi báo cáo), '+
     'expense_report cho chi phí theo nhóm, supplier_debt cho công nợ phải trả nhà cung cấp, list_import_receipts cho lịch sử nhập hàng, '+
     'stock_by_warehouse cho tồn theo từng kho/xe. Ngày truyền dạng 2026-07-01 và được hiểu theo GIỜ VN.'
@@ -768,6 +771,11 @@ export const TOOLS: Tool[] = [
     ...FANPAGE_TOOLS,
     // Tài chính & mua hàng — lãi lỗ, chi phí, công nợ NCC, nhập hàng, tồn theo kho
     ...FINANCE_TOOLS,
+    // AI marketing — lên kế hoạch nội dung, soạn bài vào hàng đợi CHỜ DUYỆT.
+    // Không tool nào ở đây đẩy ra ngoài: chủ shop duyệt thì bài mới lên Facebook.
+    ...MARKETING_TOOLS,
+    // Báo cáo tổng thể — swot_data gom sẵn nguyên liệu phân tích SWOT một lần gọi
+    ...REPORT_TOOLS,
 ]
 
 function errContentThrow(message: string): never { throw new ToolError(message) }
