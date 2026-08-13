@@ -6,7 +6,8 @@ import { postImportReceiptJournal, postExpenseJournal, postReturnJournal } from 
 import { COA_SEED, accountName } from '../lib/chartOfAccounts'
 import { enforcePeriodLock, assertNotLocked } from '../lib/periodLock'
 import { giaiTrinhKhaiBoSung } from '../lib/amendmentExplain'
-import { lichNghiaVuThue, suyKyKeKhai, mocCanDon, ganTienChoMoc, type KyKeKhai } from '../lib/taxCalendar'
+import { ganTienChoMoc, type MocNghiaVu } from '../lib/taxCalendar'
+import { suyHoSoThue, gieoLichNghiaVu } from '../lib/taxCalendarStore'
 
 const router = Router()
 
@@ -6692,72 +6693,10 @@ router.get('/deadlines', authMiddleware, async (req: AuthRequest, res: Response)
          * hạn chúng tự chuyển sang "quá hạn" và biến trang nghĩa vụ thuế thành
          * một bức tường báo động giả. Hộ kinh doanh còn bị hiện cả quyết toán
          * TNDN và báo cáo tài chính, hai thứ họ không phải nộp. */
-        const cauHinh = await prisma.storeSettings.findFirst({
-            select: { businessType: true },
-        }).catch(() => null)
-        const loaiHinh = cauHinh?.businessType === 'household' ? 'household' : 'company'
+        const hoSo = await suyHoSoThue(prisma, year, String(req.query.kyKeKhai || ''))
+        const loaiHinh = hoSo.loaiHinh
+        const seeds = await gieoLichNghiaVu(prisma, year, hoSo)
 
-        /* Kỳ kê khai: ưu tiên theo tờ khai cửa hàng ĐANG lập thật; chưa có tờ
-         * khai nào thì suy theo doanh thu năm trước so với ngưỡng 50 tỷ
-         * (Điều 9 NĐ 126/2020). Cho phép ép bằng ?kyKeKhai=month|quarter. */
-        let kyKeKhai: KyKeKhai
-        const epKy = String(req.query.kyKeKhai || '')
-        if (epKy === 'month' || epKy === 'quarter') {
-            kyKeKhai = epKy
-        } else {
-            const daKhai: any[] = await prisma.taxDeclaration.findMany({
-                where: { formType: { in: ['01_GTGT', '01_CNKD'] } },
-                select: { periodType: true },
-                take: 24,
-                orderBy: { createdAt: 'desc' },
-            }).catch(() => [])
-            if (daKhai.length > 0) {
-                const soThang = daKhai.filter(d => d.periodType === 'month').length
-                kyKeKhai = soThang > daKhai.length / 2 ? 'month' : 'quarter'
-            } else {
-                const bt: any[] = await prisma.journalEntry.findMany({
-                    where: { date: { gte: `${year - 1}-01-01`, lte: `${year - 1}-12-31` } },
-                    select: { creditAccount: true, debitAccount: true, amount: true },
-                }).catch(() => [])
-                const dt = bt.reduce((s: number, e: any) =>
-                    s + (String(e.creditAccount || '').startsWith('511') ? e.amount : 0)
-                    - (String(e.debitAccount || '').startsWith('511') ? e.amount : 0), 0)
-                kyKeKhai = suyKyKeKhai(bt.length ? dt : null)
-            }
-        }
-
-        const coNhanVien = await prisma.payrollEntry.count().then((n: number) => n > 0).catch(() => false)
-
-        const seeds = lichNghiaVuThue(year, { loaiHinh, kyKeKhai, coNhanVien })
-        for (const s of seeds) {
-            await prisma.taxDeadline.upsert({
-                where: { taxType_period: { taxType: s.taxType, period: s.period } },
-                create: {
-                    taxType: s.taxType, period: s.period, dueDate: s.dueDate,
-                    description: s.description, status: 'pending',
-                },
-                update: { dueDate: s.dueDate, description: s.description },
-            })
-        }
-
-        /* Dọn mốc do bản cũ sinh ra mà nay không còn đúng — nhưng CHỈ mốc chưa ai
-         * động tới. Mốc đã nộp, đã gắn tờ khai hay có ghi chú thì giữ nguyên. */
-        try {
-            const dangCo: any[] = await prisma.taxDeadline.findMany({
-                select: {
-                    id: true, taxType: true, period: true, status: true,
-                    filedAt: true, declarationId: true, notes: true,
-                },
-            })
-            const cuaNam = dangCo.filter(d =>
-                String(d.period || '').includes(String(year)) ||
-                String(d.dueDate || '').startsWith(String(year)))
-            const canXoa = mocCanDon(cuaNam, seeds)
-            if (canXoa.length > 0) {
-                await prisma.taxDeadline.deleteMany({ where: { id: { in: canXoa } } })
-                console.log(`[Deadlines] dọn ${canXoa.length} mốc không còn đúng hồ sơ (kỳ kê khai ${kyKeKhai}, loại hình ${loaiHinh})`)
-            }
-        } catch { /* dọn dẹp là việc phụ, hỏng thì bỏ qua chứ không chặn trả dữ liệu */ }
 
         // Auto-mark overdue: pending items whose dueDate < today
         const today = new Date().toISOString().slice(0, 10)
@@ -6783,7 +6722,7 @@ router.get('/deadlines', authMiddleware, async (req: AuthRequest, res: Response)
         })
         // Bổ sung field FE cần: type/label/daysUntilDue/estimatedAmount + status
         // upcoming|due_soon (giữ nguyên field gốc để không vỡ chỗ khác)
-        const seedTheoKhoa = new Map(seeds.map(x => [`${x.taxType}|${x.period}`, x]))
+        const seedTheoKhoa = new Map(seeds.map((x: MocNghiaVu) => [`${x.taxType}|${x.period}`, x]))
 
         /* Số tiền phải nộp của từng mốc. Bảng TaxDeadline không có cột tiền nên
          * trang nghĩa vụ thuế đang hiện 0đ cho tất cả — một danh sách hạn nộp
