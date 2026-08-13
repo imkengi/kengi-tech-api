@@ -650,6 +650,64 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
         })
     } catch { /* chưa có bảng EInvoice — bỏ qua */ }
 
+    /* ── 9d. Thuế suất trên hóa đơn: tính sai và áp không nhất quán ──────────
+     * Hai lỗi này bị bắt ngay khi đoàn đối chiếu bảng kê với hóa đơn:
+     *  - Tiền thuế không khớp với thuế suất ghi trên chính dòng đó (lỗi số học)
+     *  - Cùng một mặt hàng lúc áp 8%, lúc 10% giữa các hóa đơn (áp sai thuế suất)
+     * Không kết luận thuế suất nào đúng — việc đó tùy mặt hàng — chỉ chỉ ra chỗ
+     * KHÔNG NHẤT QUÁN để kế toán tự đối chiếu biểu thuế. */
+    try {
+        const hdct = await prisma.eInvoice.findMany({
+            where: { invoiceDate: { gte: from, lte: to } },
+            select: {
+                invoiceNumber: true, invoiceSymbol: true, status: true,
+                items: { select: { itemName: true, vatRate: true, vatAmount: true, amount: true } },
+            },
+        })
+        const saiSoHoc: string[] = []
+        let tienSaiSoHoc = 0
+        const rateTheoTen: Record<string, Set<number>> = {}
+        for (const h of (hdct || [])) {
+            const st = String(h.status || '').toUpperCase()
+            if (st === 'DRAFT' || st === 'ERROR' || st === 'CANCELLED') continue
+            for (const it of (h.items ?? [])) {
+                const tien = Number(it.amount) || 0
+                const rate = Number(it.vatRate) || 0
+                const vat = Number(it.vatAmount) || 0
+                if (tien > 0) {
+                    const mong = Math.round(tien * rate / 100)
+                    // Dung sai 1% hoặc 1.000đ cho chênh lệch làm tròn từng dòng
+                    if (Math.abs(vat - mong) > Math.max(1000, mong * 0.01)) {
+                        tienSaiSoHoc += Math.abs(vat - mong)
+                        if (saiSoHoc.length < 5) {
+                            saiSoHoc.push(`${h.invoiceNumber || '(chưa số)'} · ${it.itemName} · ghi ${vnd(vat)} ≠ ${vnd(mong)}`)
+                        }
+                    }
+                }
+                const ten = String(it.itemName || '').trim().toLowerCase()
+                if (ten) (rateTheoTen[ten] ??= new Set<number>()).add(rate)
+            }
+        }
+        if (saiSoHoc.length > 0) canhBao.push({
+            code: 'vat-sai-so-hoc', muc: 'cao',
+            tieuDe: `Có dòng hóa đơn tiền thuế không khớp thuế suất`,
+            chiTiet: `Tổng chênh khoảng ${vnd(tienSaiSoHoc)} ₫. Tiền thuế phải bằng thành tiền nhân thuế suất ghi trên chính dòng đó — lệch là lỗi lộ ngay khi đối chiếu bảng kê.`,
+            canCu: 'Điều 10 NĐ 123/2020 — nội dung hóa đơn phải phản ánh đúng thuế suất và tiền thuế.',
+            canLam: 'Kiểm tra lại cấu hình thuế suất của mặt hàng và lập hóa đơn điều chỉnh cho những hóa đơn đã phát hành sai.',
+            tienRuiRo: Math.round(tienSaiSoHoc), soLuong: saiSoHoc.length, viDu: saiSoHoc,
+        })
+        const khongNhatQuan = Object.entries(rateTheoTen).filter(([, s]) => s.size > 1)
+        if (khongNhatQuan.length > 0) canhBao.push({
+            code: 'vat-khong-nhat-quan', muc: 'vua',
+            tieuDe: `${khongNhatQuan.length} mặt hàng bị áp nhiều mức thuế suất khác nhau`,
+            chiTiet: 'Cùng một mặt hàng nhưng các hóa đơn ghi thuế suất khác nhau. Có thể đúng nếu chính sách thuế đổi giữa kỳ, nhưng đoàn thanh tra sẽ yêu cầu giải trình từng trường hợp.',
+            canCu: 'Điều 9 Luật Thuế GTGT 48/2024 — thuế suất theo loại hàng hóa, dịch vụ.',
+            canLam: 'Đối chiếu biểu thuế cho từng mặt hàng, chốt lại một mức trong danh mục sản phẩm; trường hợp đổi do chính sách thì lưu văn bản làm căn cứ.',
+            tienRuiRo: null, soLuong: khongNhatQuan.length,
+            viDu: khongNhatQuan.slice(0, 5).map(([ten, s]) => `${ten} · ${[...s].sort((a, b) => a - b).join('% / ')}%`),
+        })
+    } catch { /* chưa có bảng EInvoiceItem — bỏ qua */ }
+
     /* ── 9b. Hóa đơn giá trị lớn cho khách doanh nghiệp mà thiếu MST người mua ─
      * Người mua là doanh nghiệp thì phải có MST trên hóa đơn mới khấu trừ được;
      * bên bán bị hỏi vì xuất hóa đơn thiếu chỉ tiêu bắt buộc. */

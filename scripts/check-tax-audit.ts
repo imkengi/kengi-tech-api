@@ -620,7 +620,52 @@ async function main() {
             !co(h, 'tien-mat-ty-trong-cao'), h.canhBao.map((c: any) => c.code).join(','))
     }
 
-    // ── 35. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
+    // ── 35. Thuế suất trên hóa đơn ─────────────────────────────────────────
+    {
+        const k = khoSach()
+        const t = new Date('2026-08-05T03:00:00.000Z')
+        k.invoices = [
+            {
+                invoiceDate: '2026-08-05', invoiceNumber: '0000001', invoiceSymbol: '1C26TAA', status: 'SIGNED',
+                invoiceType: 'SALE', totalBeforeVat: 100_000_000, createdAt: t,
+                items: [
+                    { itemName: 'Sữa tươi', vatRate: 8, amount: 10_000_000, vatAmount: 800_000 },   // đúng
+                    { itemName: 'Bánh quy', vatRate: 10, amount: 10_000_000, vatAmount: 500_000 },  // SAI: phải 1tr
+                ],
+            },
+            {
+                invoiceDate: '2026-08-06', invoiceNumber: '0000002', invoiceSymbol: '1C26TAA', status: 'SIGNED',
+                invoiceType: 'SALE', totalBeforeVat: 0, createdAt: t,
+                items: [
+                    { itemName: 'Sữa tươi', vatRate: 10, amount: 5_000_000, vatAmount: 500_000 },   // đúng số học, nhưng lệch thuế suất với HĐ trước
+                ],
+            },
+        ]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const a = lay(h, 'vat-sai-so-hoc')
+        const b = lay(h, 'vat-khong-nhat-quan')
+        kiemTra('Bắt dòng thuế sai số học (chênh 500k) và mặt hàng áp 2 mức thuế suất',
+            !!a && a.tienRuiRo === 500_000 && !!b && b.soLuong === 1,
+            JSON.stringify({ saiSoHoc: a?.tienRuiRo, khongNhatQuan: b?.soLuong }))
+    }
+    {
+        const k = khoSach()
+        const t = new Date('2026-08-05T03:00:00.000Z')
+        k.invoices = [{
+            invoiceDate: '2026-08-05', invoiceNumber: '0000001', invoiceSymbol: '1C26TAA', status: 'SIGNED',
+            invoiceType: 'SALE', totalBeforeVat: 100_000_000, createdAt: t,
+            items: [
+                { itemName: 'Sữa tươi', vatRate: 8, amount: 10_000_000, vatAmount: 800_000 },
+                // Lệch 300đ do làm tròn → nằm trong dung sai, KHÔNG được kêu
+                { itemName: 'Bánh quy', vatRate: 10, amount: 3_333_333, vatAmount: 333_633 },
+            ],
+        }]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        kiemTra('Chênh lệch làm tròn nhỏ không bị báo sai số học',
+            !co(h, 'vat-sai-so-hoc'), h.canhBao.map((c: any) => c.code).join(','))
+    }
+
+    // ── 36. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
     {
         const h = await kiemTraThue(fakePrisma(khoSach()), KY)
         kiemTra('Luôn trả checklist hồ sơ cần chuẩn bị', h.hoSoCanChuanBi.length >= 8)
