@@ -209,3 +209,124 @@ export function mocCanDon(
             && !d.filedAt && !d.declarationId && !d.notes)
         .map(d => d.id)
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * ƯỚC TÍNH SỐ TIỀN CỦA TỪNG MỐC
+ *
+ * Trang nghĩa vụ thuế đang hiện "0 ₫" cho mọi mốc vì bảng TaxDeadline không có
+ * cột tiền. Một danh sách hạn nộp không kèm số tiền thì chỉ trả lời được "khi
+ * nào", còn câu người ta thật sự cần là "phải chuẩn bị bao nhiêu".
+ *
+ * Mọi số ở đây là ƯỚC TÍNH từ dữ liệu đang có, KHÔNG phải số chốt trên tờ khai —
+ * mốc nào đã có tờ khai thật thì lấy số của tờ khai, chỗ nào chỉ suy từ sổ thì
+ * đánh dấu là ước tính để người dùng biết mà đối chiếu.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+export interface TienMoc {
+    /** Số tiền ước tính phải nộp, null = không suy ra được */
+    soTien: number | null
+    /** true nếu lấy từ tờ khai đã lập; false nếu suy từ sổ sách */
+    tuToKhai: boolean
+    dienGiai: string
+}
+
+/** Bậc lệ phí môn bài của hộ kinh doanh theo doanh thu năm trước — NĐ 139/2016 */
+export function monBaiHoKinhDoanh(doanhThuNamTruoc: number | null): TienMoc {
+    if (doanhThuNamTruoc === null) {
+        return { soTien: null, tuToKhai: false, dienGiai: 'Chưa có số liệu doanh thu năm trước để xác định bậc' }
+    }
+    if (doanhThuNamTruoc <= 100_000_000) {
+        return { soTien: 0, tuToKhai: false, dienGiai: 'Doanh thu ≤ 100 triệu/năm — được miễn lệ phí môn bài' }
+    }
+    if (doanhThuNamTruoc <= 300_000_000) {
+        return { soTien: 300_000, tuToKhai: false, dienGiai: 'Doanh thu trên 100 đến 300 triệu/năm — bậc 300.000đ' }
+    }
+    if (doanhThuNamTruoc <= 500_000_000) {
+        return { soTien: 500_000, tuToKhai: false, dienGiai: 'Doanh thu trên 300 đến 500 triệu/năm — bậc 500.000đ' }
+    }
+    return { soTien: 1_000_000, tuToKhai: false, dienGiai: 'Doanh thu trên 500 triệu/năm — bậc 1.000.000đ' }
+}
+
+/**
+ * Gắn số tiền ước tính cho từng mốc.
+ *
+ * @param toKhaiTheoKy  mã kỳ của tờ khai ("2026-08", "2026-Q3") → số phải nộp
+ * @param tncnTheoKy    mã kỳ → tổng TNCN đã khấu trừ trên bảng lương
+ * @param laiTheoQuy    quý (1-4) → lãi kế toán lũy kế dùng để ước tạm nộp TNDN
+ */
+export function ganTienChoMoc(
+    moc: MocNghiaVu,
+    nguon: {
+        loaiHinh: LoaiHinh
+        doanhThuNamTruoc: number | null
+        toKhaiTheoKy: Map<string, number>
+        tncnTheoKy: Map<string, number>
+        laiTheoQuy: Map<number, number>
+    },
+): TienMoc {
+    const { period, taxType } = moc
+
+    /** "T08/2026" → "2026-08" ; "Q3/2026" → "2026-Q3" — khớp cách TaxDeclaration lưu kỳ */
+    const maKy = (() => {
+        const t = period.match(/T(\d{1,2})\/(\d{4})/)
+        if (t) return `${t[2]}-${p2(Number(t[1]))}`
+        const q = period.match(/Q(\d)\/(\d{4})/)
+        if (q) return `${q[2]}-Q${q[1]}`
+        return null
+    })()
+
+    if (taxType === 'MON_BAI') {
+        return nguon.loaiHinh === 'household'
+            ? monBaiHoKinhDoanh(nguon.doanhThuNamTruoc)
+            : {
+                soTien: null, tuToKhai: false,
+                dienGiai: 'Doanh nghiệp: 2 triệu nếu vốn điều lệ ≤ 10 tỷ, 3 triệu nếu trên 10 tỷ — phần mềm không lưu vốn điều lệ nên không tự xác định được',
+            }
+    }
+
+    if (taxType === '01_GTGT' || taxType === '01_GTGT_Q' || taxType === '01_CNKD') {
+        if (maKy && nguon.toKhaiTheoKy.has(maKy)) {
+            return {
+                soTien: Math.round(nguon.toKhaiTheoKy.get(maKy)!),
+                tuToKhai: true,
+                dienGiai: `Lấy từ tờ khai kỳ ${maKy} đã lập`,
+            }
+        }
+        return { soTien: null, tuToKhai: false, dienGiai: 'Chưa lập tờ khai kỳ này nên chưa có số phải nộp' }
+    }
+
+    if (taxType === '05_KK_TNCN' || taxType === '06_TNCN') {
+        if (maKy && nguon.tncnTheoKy.has(maKy)) {
+            return {
+                soTien: Math.round(nguon.tncnTheoKy.get(maKy)!),
+                tuToKhai: false,
+                dienGiai: `Tổng thuế TNCN đã khấu trừ trên bảng lương kỳ ${maKy}`,
+            }
+        }
+        return { soTien: null, tuToKhai: false, dienGiai: 'Chưa có bảng lương kỳ này' }
+    }
+
+    if (taxType === 'TNDN_TAM_NOP') {
+        const q = Number(period.match(/Q(\d)/)?.[1] || 0)
+        const lai = nguon.laiTheoQuy.get(q)
+        if (lai === undefined) {
+            return { soTien: null, tuToKhai: false, dienGiai: 'Chưa đủ số liệu quý để ước tính' }
+        }
+        return {
+            soTien: lai > 0 ? Math.round(lai * 0.2) : 0,
+            tuToKhai: false,
+            dienGiai: lai > 0
+                ? `Ước tính: lãi kế toán quý ${q} ${Math.round(lai).toLocaleString('vi-VN')}đ × 20%. Chưa trừ khoản chi không được trừ nên số thật có thể CAO hơn.`
+                : `Quý ${q} lỗ theo sổ nên tạm nộp 0đ — nhưng vẫn phải theo dõi mức 80% cả năm (Điều 55 NĐ 126/2020).`,
+        }
+    }
+
+    if (taxType === '03_TNDN') {
+        return {
+            soTien: null, tuToKhai: false,
+            dienGiai: 'Xem bảng quyết toán TNDN có điều chỉnh để biết số còn phải nộp — số này phụ thuộc khoản chi không được trừ và lỗ được chuyển',
+        }
+    }
+
+    return { soTien: null, tuToKhai: false, dienGiai: '' }
+}

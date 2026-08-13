@@ -6,7 +6,7 @@ import { postImportReceiptJournal, postExpenseJournal, postReturnJournal } from 
 import { COA_SEED, accountName } from '../lib/chartOfAccounts'
 import { enforcePeriodLock, assertNotLocked } from '../lib/periodLock'
 import { giaiTrinhKhaiBoSung } from '../lib/amendmentExplain'
-import { lichNghiaVuThue, suyKyKeKhai, mocCanDon, type KyKeKhai } from '../lib/taxCalendar'
+import { lichNghiaVuThue, suyKyKeKhai, mocCanDon, ganTienChoMoc, type KyKeKhai } from '../lib/taxCalendar'
 
 const router = Router()
 
@@ -6784,6 +6784,81 @@ router.get('/deadlines', authMiddleware, async (req: AuthRequest, res: Response)
         // Bổ sung field FE cần: type/label/daysUntilDue/estimatedAmount + status
         // upcoming|due_soon (giữ nguyên field gốc để không vỡ chỗ khác)
         const seedTheoKhoa = new Map(seeds.map(x => [`${x.taxType}|${x.period}`, x]))
+
+        /* Số tiền phải nộp của từng mốc. Bảng TaxDeadline không có cột tiền nên
+         * trang nghĩa vụ thuế đang hiện 0đ cho tất cả — một danh sách hạn nộp
+         * không kèm số tiền chỉ trả lời được "khi nào", còn câu người ta cần là
+         * "phải chuẩn bị bao nhiêu". Ba truy vấn gộp một lần rồi tra tại chỗ. */
+        const tienTheoKhoa = new Map<string, any>()
+        try {
+            const toKhaiNam: any[] = await prisma.taxDeclaration.findMany({
+                where: { year },
+                select: { period: true, formType: true, ct40a: true, cnkdTotalTax: true },
+            }).catch(() => [])
+            const toKhaiTheoKy = new Map<string, number>()
+            for (const t of toKhaiNam) {
+                if (String(t.formType || '').includes('_BS')) continue   // bản bổ sung không phải số gốc
+                toKhaiTheoKy.set(String(t.period),
+                    Number(t.formType === '01_CNKD' ? t.cnkdTotalTax : t.ct40a) || 0)
+            }
+
+            const kyLuong: any[] = await prisma.payrollPeriod.findMany({
+                where: { year },
+                select: { id: true, month: true },
+            }).catch(() => [])
+            const tncnTheoKy = new Map<string, number>()
+            if (kyLuong.length) {
+                const dong: any[] = await prisma.payrollEntry.findMany({
+                    where: { periodId: { in: kyLuong.map((k: any) => k.id) } },
+                    select: { periodId: true, pitAmount: true },
+                }).catch(() => [])
+                const thangCua = new Map(kyLuong.map((k: any) => [k.id, k.month]))
+                for (const e of dong) {
+                    const m = thangCua.get(e.periodId)
+                    if (!m) continue
+                    const kThang = `${year}-${String(m).padStart(2, '0')}`
+                    const kQuy = `${year}-Q${Math.ceil(m / 3)}`
+                    tncnTheoKy.set(kThang, (tncnTheoKy.get(kThang) || 0) + (e.pitAmount || 0))
+                    tncnTheoKy.set(kQuy, (tncnTheoKy.get(kQuy) || 0) + (e.pitAmount || 0))
+                }
+            }
+
+            const btNam: any[] = await prisma.journalEntry.findMany({
+                where: { date: { gte: `${year}-01-01`, lte: `${year}-12-31` } },
+                select: { date: true, debitAccount: true, creditAccount: true, amount: true },
+            }).catch(() => [])
+            const laiTheoQuy = new Map<number, number>()
+            const laDoanhThu = (tk: string) => /^(511|515|711)/.test(tk)
+            const laChiPhi = (tk: string) => /^(632|635|641|642|811)/.test(tk)
+            for (const e of btNam) {
+                const q = Math.ceil(Number(String(e.date).slice(5, 7)) / 3)
+                if (!q) continue
+                let v = 0
+                if (laDoanhThu(String(e.creditAccount || ''))) v += e.amount
+                if (laDoanhThu(String(e.debitAccount || ''))) v -= e.amount
+                if (laChiPhi(String(e.debitAccount || ''))) v -= e.amount
+                if (laChiPhi(String(e.creditAccount || ''))) v += e.amount
+                laiTheoQuy.set(q, (laiTheoQuy.get(q) || 0) + v)
+            }
+
+            const dtNamTruoc: any[] = await prisma.journalEntry.findMany({
+                where: { date: { gte: `${year - 1}-01-01`, lte: `${year - 1}-12-31` } },
+                select: { debitAccount: true, creditAccount: true, amount: true },
+            }).catch(() => [])
+            const doanhThuNamTruoc = dtNamTruoc.length
+                ? dtNamTruoc.reduce((s: number, e: any) =>
+                    s + (String(e.creditAccount || '').startsWith('511') ? e.amount : 0)
+                    - (String(e.debitAccount || '').startsWith('511') ? e.amount : 0), 0)
+                : null
+
+            for (const m of seeds) {
+                tienTheoKhoa.set(`${m.taxType}|${m.period}`, ganTienChoMoc(m, {
+                    loaiHinh, doanhThuNamTruoc, toKhaiTheoKy, tncnTheoKy, laiTheoQuy,
+                }))
+            }
+        } catch (e: any) {
+            console.warn('[Deadlines] không ước tính được số tiền:', e?.message || e)
+        }
         const nowMs = Date.now()
         const enriched = data.map((d: any) => {
             const daysUntilDue = Math.ceil((new Date(d.dueDate).getTime() - nowMs) / 86400000)
@@ -6795,12 +6870,18 @@ router.get('/deadlines', authMiddleware, async (req: AuthRequest, res: Response)
              * quý" là phải nộp tờ khai, rồi đi tìm mẫu tờ khai không tồn tại.
              * Gắn lại từ lịch chuẩn vừa dựng, khớp theo loại + kỳ. */
             const chuan = seedTheoKhoa.get(`${d.taxType}|${d.period}`)
+            const tien = tienTheoKhoa.get(`${d.taxType}|${d.period}`)
             return {
                 ...d,
                 type: d.taxType,
                 label: d.description || d.taxType,
                 daysUntilDue,
-                estimatedAmount: d.estimatedAmount ?? d.amount ?? 0,
+                /* null khi không suy ra được — KHÔNG quy về 0, vì "0đ" nghĩa là
+                 * không phải nộp gì, còn "chưa biết" là phải đi tra. Hai điều
+                 * hoàn toàn khác nhau với người đang chuẩn bị tiền nộp thuế. */
+                estimatedAmount: d.estimatedAmount ?? tien?.soTien ?? null,
+                nguonSoTien: tien ? (tien.tuToKhai ? 'to-khai' : 'uoc-tinh') : null,
+                dienGiaiSoTien: tien?.dienGiai ?? null,
                 status: feStatus,
                 rawStatus: d.status,
                 canCu: chuan?.canCu ?? null,

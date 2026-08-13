@@ -10,6 +10,7 @@
 
 import {
     lichNghiaVuThue, suyKyKeKhai, mocCanDon, NGUONG_KHAI_THEO_THANG,
+    ganTienChoMoc, monBaiHoKinhDoanh,
 } from '../src/lib/taxCalendar'
 
 let dat = 0, hong = 0
@@ -123,6 +124,50 @@ async function main() {
     ok('KHÔNG dọn mốc người dùng có ghi chú', !don.includes('g'))
     ok('KHÔNG đụng loại hạn nộp do người dùng tự tạo', !don.includes('h'))
     ok('chỉ dọn đúng 2 mốc', don.length === 2, don)
+
+    console.log('\n▸ Ước tính số tiền từng mốc')
+    const nguon = {
+        loaiHinh: 'company' as const,
+        doanhThuNamTruoc: 2_000_000_000,
+        toKhaiTheoKy: new Map([['2026-Q1', 12_000_000]]),
+        tncnTheoKy: new Map([['2026-Q1', 3_500_000]]),
+        laiTheoQuy: new Map([[1, 100_000_000], [2, -20_000_000]]),
+    }
+    const gtgtQ1 = ganTienChoMoc(loai(dnQuy, '01_GTGT_Q').find(m => m.period === 'Q1/2026')!, nguon)
+    ok('GTGT lấy số từ tờ khai đã lập', gtgtQ1.soTien === 12_000_000 && gtgtQ1.tuToKhai, gtgtQ1)
+    const gtgtQ2 = ganTienChoMoc(loai(dnQuy, '01_GTGT_Q').find(m => m.period === 'Q2/2026')!, nguon)
+    ok('chưa lập tờ khai thì để trống, KHÔNG đoán bừa số 0',
+        gtgtQ2.soTien === null && /Chưa lập tờ khai/.test(gtgtQ2.dienGiai), gtgtQ2)
+
+    const tncnQ1 = ganTienChoMoc(loai(dnQuy, '05_KK_TNCN').find(m => m.period === 'TNCN-Q1/2026')!, nguon)
+    ok('TNCN lấy tổng đã khấu trừ trên bảng lương', tncnQ1.soTien === 3_500_000, tncnQ1)
+    ok('TNCN đánh dấu là suy từ sổ, không phải số tờ khai', tncnQ1.tuToKhai === false)
+
+    const tnQ1 = ganTienChoMoc(loai(dnQuy, 'TNDN_TAM_NOP').find(m => m.period === 'TN-Q1/2026')!, nguon)
+    ok('tạm nộp TNDN ước = lãi quý × 20%', tnQ1.soTien === 20_000_000, tnQ1)
+    ok('nói rõ số thật có thể CAO hơn vì chưa trừ khoản bị loại',
+        /CAO hơn/.test(tnQ1.dienGiai), tnQ1.dienGiai)
+    const tnQ2 = ganTienChoMoc(loai(dnQuy, 'TNDN_TAM_NOP').find(m => m.period === 'TN-Q2/2026')!, nguon)
+    ok('quý lỗ thì tạm nộp 0 nhưng vẫn nhắc mức 80%',
+        tnQ2.soTien === 0 && tnQ2.dienGiai.includes('80%'), tnQ2)
+    const tnQ3 = ganTienChoMoc(loai(dnQuy, 'TNDN_TAM_NOP').find(m => m.period === 'TN-Q3/2026')!, nguon)
+    ok('quý chưa có số liệu thì để trống', tnQ3.soTien === null, tnQ3)
+
+    const mbDn = ganTienChoMoc(loai(dnQuy, 'MON_BAI')[0], nguon)
+    ok('môn bài doanh nghiệp: không tự xác định được vì thiếu vốn điều lệ',
+        mbDn.soTien === null && /vốn điều lệ/.test(mbDn.dienGiai), mbDn)
+
+    console.log('\n▸ Bậc môn bài hộ kinh doanh (NĐ 139/2016)')
+    ok('≤ 100 triệu → miễn', monBaiHoKinhDoanh(100_000_000).soTien === 0)
+    ok('trên 100 đến 300 triệu → 300k', monBaiHoKinhDoanh(250_000_000).soTien === 300_000)
+    ok('đúng 300 triệu → vẫn 300k', monBaiHoKinhDoanh(300_000_000).soTien === 300_000)
+    ok('trên 300 đến 500 triệu → 500k', monBaiHoKinhDoanh(400_000_000).soTien === 500_000)
+    ok('trên 500 triệu → 1 triệu', monBaiHoKinhDoanh(800_000_000).soTien === 1_000_000)
+    ok('không biết doanh thu thì để trống, không đoán bậc',
+        monBaiHoKinhDoanh(null).soTien === null)
+    const mbHkd = ganTienChoMoc(loai(hkd, 'MON_BAI')[0],
+        { ...nguon, loaiHinh: 'household' as const, doanhThuNamTruoc: 700_000_000 })
+    ok('mốc môn bài của hộ lấy đúng bậc theo doanh thu', mbHkd.soTien === 1_000_000, mbHkd)
 
     console.log(`\n${dat}/${dat + hong} ca đạt`)
     if (hong) process.exit(1)
