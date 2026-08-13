@@ -22,6 +22,7 @@ interface Kho {
     products: any[]
     locks: any[]
     adjustments: any[]
+    chartOfAccounts: any[]
 }
 
 /** Prisma giả — chỉ hỗ trợ đúng những phép truy vấn mà reconcile.ts dùng */
@@ -50,9 +51,13 @@ function fakePrisma(k: Kho) {
             findMany: async ({ where }: any = {}) => k.journal.filter(e => chuoiTrongKhoang(e.date, where?.date)),
         },
         transaction: {
-            findMany: async ({ where }: any = {}) => k.transactions.filter(t =>
-                hopTrangThai(t.status, where?.status) && trongKhoang(t.createdAt, where?.createdAt)),
+            findMany: async ({ where }: any = {}) => k.transactions.filter(t => {
+                // Truy vấn tìm bút toán mồ côi lọc theo receiptNumber, không theo ngày
+                if (where?.receiptNumber?.in) return where.receiptNumber.in.includes(t.receiptNumber)
+                return hopTrangThai(t.status, where?.status) && trongKhoang(t.createdAt, where?.createdAt)
+            }),
         },
+        chartOfAccount: { findMany: async () => k.chartOfAccounts },
         importReceipt: {
             findMany: async ({ where }: any = {}) => k.imports.filter(i =>
                 hopTrangThai(i.status, where?.status)
@@ -104,6 +109,8 @@ function khoSach(): Kho {
         products: [{ stock: 50, costPrice: 100_000 }],
         locks: [],
         adjustments: [],
+        // Danh mục tài khoản đủ cho các bút toán của cửa hàng mẫu
+        chartOfAccounts: ['111', '112', '131', '156', '331', '411', '511', '5212', '632', '6421', '3331'].map(code => ({ code })),
     }
 }
 
@@ -217,6 +224,47 @@ async function main() {
         k.journal = k.journal.filter(e => e.reference !== 'OPEN-111') // bỏ vốn đầu kỳ → quỹ âm
         const kq = await soatSoSach(fakePrisma(k), KHOANG)
         kiemTra('Bắt được sổ quỹ tiền mặt âm', co(kq, 'quy-am'))
+    }
+
+    // ── 5b. Sổ ngân hàng âm ────────────────────────────────────────────────
+    {
+        const k = khoSach()
+        k.journal.push({ reference: 'CHI-NH', date: '2026-08-09', debitAccount: '6421', creditAccount: '112', amount: 20_000_000 })
+        const kq = await soatSoSach(fakePrisma(k), KHOANG)
+        kiemTra('Bắt sổ tiền gửi ngân hàng âm (mức vừa, vì có thể có thấu chi)',
+            co(kq, 'ngan-hang-am') && lay(kq, 'ngan-hang-am').muc === 'vua')
+    }
+
+    // ── 5c. Bút toán mồ côi (hóa đơn đã bị xóa) ────────────────────────────
+    {
+        const k = khoSach()
+        k.journal.push({ reference: 'SALE-HD999', date: '2026-08-09', debitAccount: '111', creditAccount: '511', amount: 5_000_000 })
+        const kq = await soatSoSach(fakePrisma(k), KHOANG)
+        const v = lay(kq, 'but-toan-mo-coi')
+        kiemTra('Bắt bút toán doanh thu của hóa đơn không còn tồn tại',
+            !!v && v.soLuong === 1 && v.viDu[0] === 'HD999', JSON.stringify(v?.viDu))
+    }
+    {
+        const kq = await soatSoSach(fakePrisma(khoSach()), KHOANG)
+        kiemTra('Hóa đơn còn nguyên thì không báo mồ côi', !co(kq, 'but-toan-mo-coi'))
+    }
+
+    // ── 5d. Tài khoản không có trong hệ thống tài khoản ────────────────────
+    {
+        const k = khoSach()
+        k.journal.push({ reference: 'LA-1', date: '2026-08-09', debitAccount: '9999', creditAccount: '111', amount: 1_000_000 })
+        const kq = await soatSoSach(fakePrisma(k), KHOANG)
+        const v = lay(kq, 'tai-khoan-la')
+        kiemTra('Bắt bút toán ghi vào tài khoản lạ', !!v && v.viDu.includes('9999'), JSON.stringify(v?.viDu))
+    }
+    {
+        const k = khoSach()
+        // TK chi tiết 131-SHOPEE hợp lệ vì phần gốc 131 có trong danh mục
+        k.journal.push({ reference: 'SALE-SPE-1', date: '2026-08-09', debitAccount: '131-SHOPEE', creditAccount: '511', amount: 2_000_000 })
+        k.transactions.push({ receiptNumber: 'SPE-1', total: 2_000_000, status: 'completed', createdAt: NGAY('2026-08-09') })
+        const kq = await soatSoSach(fakePrisma(k), KHOANG)
+        kiemTra('Tài khoản chi tiết 131-SHOPEE không bị coi là lạ', !co(kq, 'tai-khoan-la'),
+            JSON.stringify(lay(kq, 'tai-khoan-la')?.viDu))
     }
 
     // ── 6. Bút toán không hợp lệ ───────────────────────────────────────────

@@ -232,6 +232,18 @@ export async function soatSoSach(
         })
     }
 
+    /* 5e. Sổ tiền gửi ngân hàng âm — khác quỹ tiền mặt ở chỗ ngân hàng CÓ THỂ
+     * cho thấu chi, nên chỉ nói ở mức 'vừa' và nhắc đối chiếu sao kê. */
+    {
+        const nh = soDuTheoTienTo(luyKe, '112').du
+        if (nh < -1000) vanDe.push({
+            code: 'ngan-hang-am', muc: 'vua',
+            tieuDe: 'Sổ tiền gửi ngân hàng đang ÂM',
+            chiTiet: `TK 112 dư ${vnd(nh)} ₫. Nếu tài khoản không có hạn mức thấu chi thì đây là dấu hiệu thiếu bút toán tiền về hoặc ghi trùng khoản chi — đối chiếu với sao kê ngân hàng.`,
+            tien: Math.abs(Math.round(nh)), soLuong: 0, viDu: [], ghiBuDuoc: false,
+        })
+    }
+
     // ─── 6. Bút toán không hợp lệ ───────────────────────────────────────────
     {
         const xau = butToanKy.filter(e =>
@@ -245,6 +257,65 @@ export async function soatSoSach(
             ghiBuDuoc: false,
         })
     }
+
+    /* ── 6b. Bút toán MỒ CÔI: sổ có doanh thu của hóa đơn không còn tồn tại ──
+     * Xóa hóa đơn trong phần mềm nhưng bút toán vẫn nằm lại thì sổ có doanh thu
+     * ảo — Kết quả kinh doanh cao hơn thực tế mà rất khó phát hiện, vì Bảng cân
+     * đối vẫn cân. */
+    {
+        const soHdTrongSo = new Set(
+            butToanKy
+                .map(e => String(e.reference || ''))
+                .filter(r => r.startsWith('SALE-'))
+                .map(r => r.slice(5)),
+        )
+        if (soHdTrongSo.size > 0) {
+            try {
+                const txs = await prisma.transaction.findMany({
+                    where: { receiptNumber: { in: Array.from(soHdTrongSo) } },
+                    select: { receiptNumber: true },
+                })
+                const con = new Set((txs || []).map((t: any) => t.receiptNumber))
+                const moCoi = Array.from(soHdTrongSo).filter(rn => !con.has(rn))
+                if (moCoi.length > 0) vanDe.push({
+                    code: 'but-toan-mo-coi', muc: 'cao',
+                    tieuDe: `${moCoi.length} bút toán doanh thu không còn hóa đơn tương ứng`,
+                    chiTiet: 'Sổ ghi doanh thu cho những hóa đơn đã bị xóa khỏi hệ thống — Kết quả kinh doanh đang cao hơn thực tế đúng bằng phần này, mà Bảng cân đối vẫn cân nên rất khó phát hiện.',
+                    tien: null, soLuong: moCoi.length,
+                    viDu: moCoi.slice(0, 5),
+                    ghiBuDuoc: false,
+                })
+            } catch { /* bỏ qua */ }
+        }
+    }
+
+    /* ── 6c. Bút toán ghi vào tài khoản không có trong hệ thống tài khoản ────
+     * Gõ nhầm số hiệu tài khoản thì khoản đó biến mất khỏi mọi báo cáo gộp theo
+     * đầu số — tiền vẫn cân nhưng không ai nhìn thấy nó ở đâu. */
+    try {
+        const tk = await prisma.chartOfAccount.findMany({ select: { code: true } })
+        const hopLe = new Set((tk || []).map((t: any) => String(t.code)))
+        if (hopLe.size > 0) {
+            const la = new Set<string>()
+            for (const e of butToanKy) {
+                for (const ma of [e.debitAccount, e.creditAccount]) {
+                    const m = String(ma || '')
+                    if (!m) continue
+                    // TK chi tiết dạng 131-SHOPEE vẫn hợp lệ nếu phần gốc có trong danh mục
+                    const goc = m.split('-')[0]!
+                    if (!hopLe.has(m) && !hopLe.has(goc)) la.add(m)
+                }
+            }
+            if (la.size > 0) vanDe.push({
+                code: 'tai-khoan-la', muc: 'vua',
+                tieuDe: `${la.size} tài khoản không có trong hệ thống tài khoản`,
+                chiTiet: 'Bút toán ghi vào số hiệu tài khoản không tồn tại trong danh mục — khoản đó biến mất khỏi các báo cáo gộp theo đầu số, tiền vẫn cân nhưng không ai nhìn thấy nó ở đâu.',
+                tien: null, soLuong: la.size,
+                viDu: Array.from(la).slice(0, 5),
+                ghiBuDuoc: false,
+            })
+        }
+    } catch { /* chưa seed hệ thống tài khoản — bỏ qua */ }
 
     // ─── 7. Bút toán ghi vào kỳ đã khóa sổ ──────────────────────────────────
     try {
