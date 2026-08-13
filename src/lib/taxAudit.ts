@@ -574,6 +574,52 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
         })
     } catch { /* bỏ qua */ }
 
+    /* ── 9c. Bán nhiều hơn lượng nhập CÓ HÓA ĐƠN đầu vào ─────────────────────
+     * Đây là kết luận mạnh nhất mà đoàn thanh tra rút ra được từ số liệu: bán ra
+     * vượt quá số đã mua có hóa đơn nghĩa là có nguồn hàng không chứng từ. Hệ
+     * thống đã chặn việc XUẤT hóa đơn khi thiếu tồn kho thuế, nhưng chưa bao giờ
+     * tổng hợp lại cho người dùng thấy toàn cảnh.
+     *
+     * Dùng SQL thô vì phải gộp theo SKU trên hai bảng lớn; bọc try/catch để nơi
+     * nào chưa có bảng/cột thì bỏ qua thay vì làm hỏng cả bản soát. */
+    try {
+        const rows: any[] = await prisma.$queryRawUnsafe(`
+            WITH nhap AS (
+                SELECT LOWER(TRIM(ii."productSku")) AS k,
+                       SUM(ii.quantity - COALESCE(ii."returnedQuantity",0))::float8 AS q
+                FROM "ImportReceiptItem" ii
+                JOIN "ImportReceipt" r ON r.id = ii."receiptId"
+                WHERE r."hasVatInvoice" = true AND r.status = 'completed'
+                GROUP BY 1
+            ), ban AS (
+                SELECT LOWER(TRIM(i.sku)) AS k,
+                       SUM(COALESCE(NULLIF(i."baseQuantity",0), i.quantity))::float8 AS q,
+                       MAX(i."productName") AS ten
+                FROM "TransactionItem" i
+                JOIN "Transaction" t ON t.id = i."transactionId"
+                WHERE t.status IN ('completed','partial','returned') AND i.sku IS NOT NULL AND TRIM(i.sku) <> ''
+                GROUP BY 1
+            )
+            SELECT b.k AS sku, b.ten, b.q AS ban, COALESCE(n.q,0) AS nhap, (b.q - COALESCE(n.q,0)) AS thieu
+            FROM ban b LEFT JOIN nhap n ON n.k = b.k
+            WHERE b.q - COALESCE(n.q,0) > 0
+            ORDER BY (b.q - COALESCE(n.q,0)) DESC
+            LIMIT 50
+        `)
+        if (rows && rows.length > 0) {
+            const tongThieu = rows.reduce((s: number, r: any) => s + Number(r.thieu || 0), 0)
+            canhBao.push({
+                code: 'ban-vuot-hoa-don-vao', muc: 'cao',
+                tieuDe: `${rows.length} mã bán ra nhiều hơn lượng nhập có hóa đơn`,
+                chiTiet: `Tổng chênh khoảng ${Math.round(tongThieu).toLocaleString('vi-VN')} đơn vị. Phần bán vượt này không có hóa đơn đầu vào tương ứng — đoàn thanh tra thường coi đây là bằng chứng mua hàng trôi nổi và có thể ấn định cả doanh thu lẫn chi phí.`,
+                canCu: 'Điều 50 Luật Quản lý thuế 38/2019 — ấn định thuế; Điều 14 Luật Thuế GTGT 48/2024 — điều kiện khấu trừ.',
+                canLam: 'Bổ sung hóa đơn đầu vào cho phần hàng đã bán; mã nào không có nguồn hóa đơn thì chuẩn bị phương án giải trình và tính trước phần thuế có thể bị truy thu.',
+                tienRuiRo: null, soLuong: rows.length,
+                viDu: rows.slice(0, 5).map((r: any) => `${r.ten || r.sku} · thiếu ${Math.round(Number(r.thieu))}`),
+            })
+        }
+    } catch { /* thiếu bảng hoặc DB không phải Postgres — bỏ qua */ }
+
     // ── 10. Hóa đơn đầu vào thiếu thông tin bắt buộc để khấu trừ ─────────────
     try {
         const chiVat = await prisma.expense.findMany({

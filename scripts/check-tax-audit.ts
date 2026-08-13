@@ -64,6 +64,8 @@ function fakePrisma(k: Kho) {
         },
         transaction: { findMany: async ({ where }: any = {}) => k.transactions.filter(t => ngay(t.createdAt, where?.createdAt)) },
         taxDeadline: { findMany: async () => k.deadlines },
+        // SQL thô cho phép soát "bán vượt hóa đơn đầu vào" — mặc định không có mã nào
+        $queryRawUnsafe: async () => (k as any).banVuot ?? [],
         payrollPeriod: { findMany: async ({ where }: any = {}) => k.payrollPeriods.filter(p => !where?.year || p.year === where.year) },
         payrollEntry: {
             findMany: async ({ where }: any = {}) => k.payrollEntries.filter(e =>
@@ -474,7 +476,29 @@ async function main() {
         kiemTra('Không có hàng tặng thì không kêu', !co(h, 'hang-tang-gia-0'))
     }
 
-    // ── 29. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
+    // ── 29. Bán vượt lượng nhập có hóa đơn ─────────────────────────────────
+    {
+        const k: any = khoSach()
+        k.banVuot = [
+            { sku: 'sp1', ten: 'Sữa tươi', ban: 120, nhap: 80, thieu: 40 },
+            { sku: 'sp2', ten: 'Bánh quy', ban: 50, nhap: 30, thieu: 20 },
+        ]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const c = lay(h, 'ban-vuot-hoa-don-vao')
+        kiemTra('Bắt mã bán vượt lượng nhập có hóa đơn (mức cao)',
+            !!c && c.soLuong === 2 && c.muc === 'cao', JSON.stringify(c?.soLuong))
+    }
+    {
+        // Truy vấn SQL hỏng (DB khác, thiếu bảng) thì bỏ qua, không làm vỡ bản soát
+        const k: any = khoSach()
+        const p: any = fakePrisma(k)
+        p.$queryRawUnsafe = async () => { throw new Error('relation không tồn tại') }
+        const h = await kiemTraThue(p, KY)
+        kiemTra('SQL soát tồn kho thuế lỗi thì bỏ qua, bản soát vẫn chạy',
+            !co(h, 'ban-vuot-hoa-don-vao') && h.diem === 100)
+    }
+
+    // ── 30. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
     {
         const h = await kiemTraThue(fakePrisma(khoSach()), KY)
         kiemTra('Luôn trả checklist hồ sơ cần chuẩn bị', h.hoSoCanChuanBi.length >= 8)
