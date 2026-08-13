@@ -39,6 +39,7 @@ function fakePrisma(k: Kho) {
         if (w.gte !== undefined && v < w.gte) return false
         if (w.lte !== undefined && v > w.lte) return false
         if (w.lt !== undefined && !(v < w.lt)) return false
+        if (w.gt !== undefined && !(v > w.gt)) return false
         return true
     }
     const ngay = (v: any, w: any) => {
@@ -90,6 +91,10 @@ function khoSach(): Kho {
             // VAT vào 4tr
             { date: '2026-08-03', debitAccount: '1331', creditAccount: '331', amount: 4_000_000 },
             { date: '2026-08-01', debitAccount: '111', creditAccount: '411', amount: 50_000_000 },
+            /* Một dòng tiền vào qua NGÂN HÀNG (vay 341, không phải doanh thu) để
+             * cửa hàng mẫu không bị coi là 100% tiền mặt — cửa hàng thật hiếm khi
+             * thu toàn tiền mặt, và để nguyên thì mọi ca "sổ sạch" đều vướng. */
+            { date: '2026-08-02', debitAccount: '112', creditAccount: '341', amount: 40_000_000 },
         ],
         /* Cửa hàng sạch = đã khai đủ các kỳ đã qua trong năm (1–8/2026), kỳ đang
          * soát có số khớp sổ. Thiếu phần này thì chính bộ soát sẽ kêu "chưa khai
@@ -581,7 +586,41 @@ async function main() {
             !!c && c.soLuong === 1 && c.tienRuiRo === 10_000_000, JSON.stringify({ sl: c?.soLuong, tien: c?.tienRuiRo }))
     }
 
-    // ── 33. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
+    // ── 33. Cut-off doanh thu ──────────────────────────────────────────────
+    {
+        const k = khoSach()
+        k.transactions = [
+            { id: 'tx1', receiptNumber: 'HD500', total: 60_000_000, createdAt: new Date('2026-08-28'), items: [] },
+        ]
+        k.invoices = [
+            // Hóa đơn xuất tháng 9 cho đơn bán tháng 8 → lệch kỳ
+            { invoiceDate: '2026-09-03', invoiceNumber: '0000050', invoiceSymbol: '1C26TAA', status: 'SIGNED', invoiceType: 'SALE', totalBeforeVat: 0, totalAmount: 66_000_000, transactionId: 'tx1', createdAt: new Date('2026-09-03') },
+            // Hóa đơn tháng 9 cho đơn tháng 9 → KHÔNG được kêu
+            { invoiceDate: '2026-09-05', invoiceNumber: '0000051', invoiceSymbol: '1C26TAA', status: 'SIGNED', invoiceType: 'SALE', totalBeforeVat: 0, totalAmount: 10_000_000, transactionId: 'txKhac', createdAt: new Date('2026-09-05') },
+        ]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const c = lay(h, 'cut-off-doanh-thu')
+        kiemTra('Bắt đơn bán trong kỳ mà hóa đơn mang ngày kỳ sau (đơn kỳ sau không bị kêu)',
+            !!c && c.soLuong === 1 && c.tienRuiRo === 66_000_000, JSON.stringify({ sl: c?.soLuong, t: c?.tienRuiRo }))
+    }
+
+    // ── 34. Tỷ trọng tiền mặt cao ──────────────────────────────────────────
+    {
+        const k = khoSach()
+        // Bỏ dòng tiền vào qua ngân hàng → cửa hàng thu 100% tiền mặt
+        k.journal = k.journal.filter(e => e.debitAccount !== '112')
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const c = lay(h, 'tien-mat-ty-trong-cao')
+        kiemTra('Cảnh báo tỷ trọng tiền mặt cao ở mức "ghi nhận", không phải sai phạm',
+            !!c && c.muc === 'thap', JSON.stringify(c?.muc))
+    }
+    {
+        const h = await kiemTraThue(fakePrisma(khoSach()), KY)
+        kiemTra('Có thu qua ngân hàng thì không kêu tỷ trọng tiền mặt',
+            !co(h, 'tien-mat-ty-trong-cao'), h.canhBao.map((c: any) => c.code).join(','))
+    }
+
+    // ── 35. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
     {
         const h = await kiemTraThue(fakePrisma(khoSach()), KY)
         kiemTra('Luôn trả checklist hồ sơ cần chuẩn bị', h.hoSoCanChuanBi.length >= 8)

@@ -848,6 +848,65 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
         }
     } catch { /* bỏ qua */ }
 
+    /* ── 12b. Cut-off doanh thu: bán trong kỳ, hóa đơn xuất sang kỳ sau ──────
+     * Phép "cut-off" là bài kiểm tra kinh điển: nếu hàng đã giao trong kỳ mà
+     * hóa đơn mang ngày kỳ sau thì doanh thu bị đẩy sang kỳ sau, làm sai cả tờ
+     * khai GTGT lẫn kỳ tính thuế TNDN. */
+    try {
+        const txKy = await prisma.transaction.findMany({
+            where: { status: { in: ['completed', 'partial'] }, createdAt: { gte: start, lte: end } },
+            select: { id: true, receiptNumber: true, total: true },
+        })
+        const idTrongKy = new Map<string, { receiptNumber: string; total: number }>(
+            (txKy || []).map((t: any) => [t.id, { receiptNumber: t.receiptNumber, total: t.total || 0 }]),
+        )
+        if (idTrongKy.size > 0) {
+            // Hóa đơn mang ngày SAU kỳ (giới hạn 60 ngày để không quét cả năm)
+            const sauKy = new Date(new Date(`${to}T00:00:00.000Z`).getTime() + 60 * 86400000).toISOString().slice(0, 10)
+            const hdSau = await prisma.eInvoice.findMany({
+                where: { invoiceDate: { gt: to, lte: sauKy } },
+                select: { invoiceNumber: true, invoiceDate: true, status: true, transactionId: true, totalAmount: true },
+            })
+            const lech = (hdSau || []).filter((h: any) => {
+                const st = String(h.status || '').toUpperCase()
+                if (st === 'DRAFT' || st === 'ERROR' || st === 'CANCELLED') return false
+                return h.transactionId && idTrongKy.has(h.transactionId)
+            })
+            if (lech.length > 0) {
+                const tien = lech.reduce((s: number, h: any) => s + (h.totalAmount || 0), 0)
+                canhBao.push({
+                    code: 'cut-off-doanh-thu', muc: 'cao',
+                    tieuDe: `${lech.length} đơn bán trong kỳ nhưng hóa đơn mang ngày kỳ sau`,
+                    chiTiet: `Tổng ${vnd(tien)} ₫. Hàng đã giao trong kỳ mà hóa đơn ghi ngày kỳ sau làm doanh thu bị đẩy sang kỳ sau — sai cả tờ khai GTGT lẫn kỳ tính thuế TNDN.`,
+                    canCu: 'Điều 9 NĐ 123/2020 — thời điểm lập hóa đơn là thời điểm chuyển giao hàng hóa; Điều 8 TT 78/2014 về thời điểm xác định doanh thu tính thuế TNDN.',
+                    canLam: 'Rà lại thời điểm giao hàng thực tế; nếu giao trong kỳ thì phải kê doanh thu vào kỳ này (khai bổ sung), đồng thời chấn chỉnh quy trình xuất hóa đơn ngay khi giao hàng.',
+                    tienRuiRo: Math.round(tien), soLuong: lech.length,
+                    viDu: lech.slice(0, 5).map((h: any) => `${idTrongKy.get(h.transactionId)?.receiptNumber || ''} · HĐ ${h.invoiceDate}`.trim()),
+                })
+            }
+        }
+    } catch { /* bỏ qua */ }
+
+    /* ── 12c. Tỷ trọng doanh thu tiền mặt cao bất thường ─────────────────────
+     * Cơ quan thuế xếp cửa hàng thu tiền mặt tỷ trọng lớn vào nhóm rủi ro cao vì
+     * khó đối chiếu dòng tiền. Không phải sai phạm — nhưng nên biết trước. */
+    {
+        const tienMat = phatSinh(butToan, '111')
+        const nganHang = phatSinh(butToan, '112')
+        const tongThu = tienMat.no + nganHang.no
+        if (tongThu > 0 && dtSo > 0) {
+            const tyLe = tienMat.no / tongThu * 100
+            if (tyLe >= 85) canhBao.push({
+                code: 'tien-mat-ty-trong-cao', muc: 'thap',
+                tieuDe: `${tyLe.toFixed(0)}% dòng tiền vào là tiền mặt`,
+                chiTiet: `Thu tiền mặt ${vnd(tienMat.no)} ₫ so với qua ngân hàng ${vnd(nganHang.no)} ₫. Cơ quan thuế xếp nhóm thu tiền mặt tỷ trọng lớn vào diện rủi ro cao vì khó đối chiếu dòng tiền — đây không phải sai phạm nhưng làm tăng khả năng bị chọn thanh tra.`,
+                canCu: 'Quản lý rủi ro trong quản lý thuế — TT 31/2021/TT-BTC.',
+                canLam: 'Tăng tỷ trọng thu qua chuyển khoản/QR, và giữ sổ quỹ tiền mặt cùng biên bản kiểm kê quỹ đầy đủ để chứng minh khi cần.',
+                tienRuiRo: null, soLuong: 0, viDu: [],
+            })
+        }
+    }
+
     /* ── 13. Mua hàng của hộ/cá nhân không có hóa đơn ────────────────────────
      * Bán lẻ hay mua nông sản, hàng thủ công của hộ/cá nhân không có hóa đơn.
      * Khoản này VẪN được tính chi phí nếu lập Bảng kê 01/TNDN kèm chứng từ chi;
