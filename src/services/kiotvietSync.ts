@@ -226,6 +226,45 @@ async function lamTuoiNoKhach(sp: any, opts: SyncOptions, kvCustomerId: any) {
     } catch { /* giữ số cũ */ }
 }
 
+/**
+ * Hoá đơn đồng bộ về xong → TỰ GẮN phiếu sửa chữa ĐÃ XONG của đúng khách đó
+ * (bán bên KiotViet là luồng chính của cửa hàng nối KV — khách lấy máy sửa
+ * xong, nhân viên lên đơn bên KV, không đi qua POS Kengi; báo 13/08/2026).
+ *
+ * Chỉ khớp theo DẤU VẾT CHẮC: customerId đã nối hoặc SĐT trùng (so số trần).
+ * KHÔNG so tên — đồng bộ chạy hàng loạt không có người nhìn, trùng tên là
+ * gắn nhầm hồ sơ tiền nong. Các rào còn lại:
+ *   - đơn cũ quá 7 ngày (re-import lịch sử) không gắn
+ *   - phiếu xong SAU ngày đơn quá 1 ngày không gắn (không phải đơn trả máy này)
+ *   - phiếu đổi-mới đang giữ kho (replacedStockAt) để luồng tay xử — tự flip
+ *     'returned' ở đây sẽ nhảy cóc bước xuất kho máy mới
+ * Ghi MỘT lần (transactionId đã có thì thôi), lỗi nuốt tại chỗ — gắn hụt
+ * không được phá đợt đồng bộ.
+ */
+async function ganPhieuSuaChuaKhiSync(sp: any, opts: SyncOptions, localCustomerId: any, txId: string, code: string, ngayDon: Date) {
+    if (!opts.apply || !localCustomerId || !txId) return
+    try {
+        const ngay = ngayDon && !isNaN(ngayDon.getTime()) ? ngayDon.getTime() : Date.now()
+        if (Date.now() - ngay > 7 * 864e5) return
+        const kh = await sp.customer.findUnique({ where: { id: String(localCustomerId) }, select: { phone: true } }).catch(() => null)
+        const soDT = String(kh?.phone || '').replace(/\D/g, '')
+        const phieux: any[] = await sp.repair.findMany({
+            where: { status: 'done', transactionId: null, replacedStockAt: null },
+            take: 50,
+        }).catch(() => [])
+        for (const p of phieux) {
+            const khopId = p.customerId && String(p.customerId) === String(localCustomerId)
+            const khopSDT = soDT.length >= 8 && String(p.customerPhone || '').replace(/\D/g, '') === soDT
+            if (!khopId && !khopSDT) continue
+            if (p.completedDate && new Date(p.completedDate).getTime() > ngay + 864e5) continue
+            await sp.repair.update({
+                where: { id: p.id },
+                data: { status: 'returned', transactionId: txId, soldReceiptNumber: code },
+            }).catch(() => { })
+        }
+    } catch { /* không phá đồng bộ */ }
+}
+
 async function saveMap(sp: any, entity: string, kvId: string | number, kvCode: string | null, localId: string) {
     await sp.kiotVietMap.upsert({
         where: { entity_kvId: { entity, kvId: String(kvId) } },
@@ -806,6 +845,7 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                     }
                     await sp.transaction.update({ where: { id: existing.id }, data })
                     await lamTuoiNoKhach(sp, opts, kv?.customerId)
+                    await ganPhieuSuaChuaKhiSync(sp, opts, existing.customerId, existing.id, code, existing.createdAt)
                     if (deltaNo !== 0 && existing.customerId) {
                         /* HOTFIX 12/08/2026: NGUNG cong-tru debt theo chung tu — so du chi lay tu dong bo khach (kvDebt). Doc-driven drift lam cong no an dan ve 0. */
                     }
@@ -998,6 +1038,7 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                 })
                 await saveMap(sp, 'invoice', kvId, code, created.id)
                 await lamTuoiNoKhach(sp, opts, kv?.customerId)
+                await ganPhieuSuaChuaKhiSync(sp, opts, customerId, created.id, code, when)
                 /**
                  * Đơn nợ mới → Customer.debt tăng theo, như luồng POS gốc.
                  *
