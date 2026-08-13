@@ -259,7 +259,10 @@ router.get('/:id/detail', authMiddleware, async (req: AuthRequest, res: Response
         // Get employees list
         const employees = await prisma.user.findMany({
             where: { branchId },
-            select: { id: true, name: true, email: true, role: true, status: true },
+            // Cột trạng thái nhân viên tên là employeeStatus; đọc `status` khiến
+            // truy vấn ném P2022 rồi rơi vào .catch(() => []) — danh sách nhân
+            // viên của chi nhánh luôn rỗng mà không báo lỗi gì.
+            select: { id: true, name: true, email: true, role: true, employeeStatus: true },
             orderBy: { name: 'asc' },
         }).catch(() => [])
 

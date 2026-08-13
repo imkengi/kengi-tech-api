@@ -277,12 +277,43 @@ async function main() {
         kiemTra('Bắt được bút toán không hợp lệ', !!v && v.soLuong === 2, JSON.stringify(v))
     }
 
-    // ── 7. Bút toán nằm trong kỳ đã khóa sổ ────────────────────────────────
+    /* ── 7. Bút toán nằm trong kỳ đã khóa sổ ────────────────────────────────
+     *
+     * Fixture cũ dùng {year, month, isLocked} — ba trường KHÔNG có trong model
+     * PeriodLock. Mã nguồn cũng đọc đúng ba trường đó nên test "đạt", trong khi
+     * ngoài đời truy vấn ném P2022 và phép soát chưa từng chạy được lần nào.
+     * Bài học: fixture phải theo SCHEMA THẬT, không theo trí nhớ.
+     * Model thật: một mốc ngày lockDate + cờ isActive.
+     */
     {
         const k = khoSach()
-        k.locks = [{ year: 2026, month: 8, isLocked: true }]
+        k.locks = [{ lockDate: '2026-08-31', isActive: true }]
         const kq = await soatSoSach(fakePrisma(k), KHOANG)
         kiemTra('Bắt được bút toán trong kỳ đã khóa sổ', co(kq, 'ghi-vao-ky-khoa'))
+    }
+    {
+        // Mốc khóa nằm TRƯỚC kỳ đang soát → mọi bút toán đều hợp lệ, phải im
+        const k = khoSach()
+        k.locks = [{ lockDate: '2026-07-31', isActive: true }]
+        const kq = await soatSoSach(fakePrisma(k), KHOANG)
+        kiemTra('Mốc khóa trước kỳ soát thì không kêu', !co(kq, 'ghi-vao-ky-khoa'))
+    }
+    {
+        // Mốc đã bỏ khóa (isActive=false) thì coi như không khóa
+        const k = khoSach()
+        k.locks = [{ lockDate: '2026-08-31', isActive: false }]
+        const kq = await soatSoSach(fakePrisma(k), KHOANG)
+        kiemTra('Mốc đã bỏ khóa thì không kêu', !co(kq, 'ghi-vao-ky-khoa'))
+    }
+    {
+        // Nhiều mốc thì lấy mốc MỚI NHẤT đang hiệu lực
+        const k = khoSach()
+        k.locks = [
+            { lockDate: '2026-06-30', isActive: false },
+            { lockDate: '2026-08-31', isActive: true },
+        ]
+        const kq = await soatSoSach(fakePrisma(k), KHOANG)
+        kiemTra('Lấy mốc khóa mới nhất đang hiệu lực', co(kq, 'ghi-vao-ky-khoa'))
     }
 
     // ── 8. Xếp mức độ: vấn đề nặng phải nằm trên ───────────────────────────

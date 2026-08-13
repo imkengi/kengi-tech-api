@@ -319,16 +319,24 @@ export async function soatSoSach(
 
     // ─── 7. Bút toán ghi vào kỳ đã khóa sổ ──────────────────────────────────
     try {
-        const khoa = await prisma.periodLock.findMany({ select: { year: true, month: true, isLocked: true } })
-        const kyKhoa = new Set(
-            (khoa || []).filter((k: any) => k.isLocked).map((k: any) => `${k.year}-${String(k.month).padStart(2, '0')}`),
-        )
-        if (kyKhoa.size > 0) {
+        /* PeriodLock lưu MỘT MỐC NGÀY (lockDate) đang hiệu lực, không phải cờ khóa
+         * theo từng tháng. Bản đầu đọc year/month/isLocked — ba trường không tồn
+         * tại — nên truy vấn ném lỗi và rơi thẳng vào catch bên dưới: phép soát
+         * này chưa từng chạy được lần nào kể từ khi viết. */
+        const khoa: Array<{ lockDate: string; isActive: boolean }> =
+            await prisma.periodLock.findMany({ select: { lockDate: true, isActive: true } })
+        const mocKhoa = (khoa || [])
+            .filter(k => k.isActive && k.lockDate)
+            .map(k => String(k.lockDate).slice(0, 10))
+            .sort()
+            .pop()
+        if (mocKhoa) {
             const trongKy: Array<{ reference: string | null; date: string }> = await prisma.journalEntry.findMany({
                 where: { date: { gte: from, lte: to } },
                 select: { reference: true, date: true },
             })
-            const pham = trongKy.filter(e => kyKhoa.has(String(e.date).slice(0, 7)))
+            // Chứng từ mang ngày TỪ mốc khóa trở về trước là nằm trong kỳ đã khóa
+            const pham = trongKy.filter(e => String(e.date).slice(0, 10) <= mocKhoa)
             if (pham.length > 0) vanDe.push({
                 code: 'ghi-vao-ky-khoa', muc: 'cao',
                 tieuDe: `${pham.length} bút toán nằm trong kỳ đã khóa sổ`,

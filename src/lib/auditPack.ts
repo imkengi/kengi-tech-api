@@ -524,7 +524,7 @@ export async function boHoSoThanhTra(
             const ids = [...map.keys()]
             const sp = await prisma.product.findMany({
                 where: { id: { in: ids } },
-                select: { id: true, stock: true, costPrice: true, unit: true },
+                select: { id: true, stock: true, costPrice: true, baseUnit: true },
             }).catch(() => [])
             const spMap = new Map((sp || []).map((p: any) => [p.id, p]))
             const cot: CotBang[] = [
@@ -543,7 +543,7 @@ export async function boHoSoThanhTra(
                     const p: any = spMap.get(id)
                     const ton = p?.stock ?? 0
                     return {
-                        sku: o.sku, ten: o.ten, dvt: p?.unit || '',
+                        sku: o.sku, ten: o.ten, dvt: p?.baseUnit || '',
                         slNhap: o.slNhap, tienNhap: r0(o.tienNhap),
                         slXuat: o.slXuat, tienXuat: r0(o.tienXuat),
                         tonCuoi: ton, giaTriTon: r0(ton * (p?.costPrice || 0)),
@@ -675,7 +675,7 @@ export async function boHoSoThanhTra(
             const tk = await prisma.taxDeclaration.findMany({
                 select: {
                     formType: true, period: true, periodType: true, status: true,
-                    ct29: true, ct30: true, ct33: true, ct40a: true, submittedAt: true,
+                    ct29: true, ct30: true, ct33: true, ct40a: true, filedAt: true,
                 },
             })
             const trongKy = (tk || []).filter((d: any) => {
@@ -709,7 +709,7 @@ export async function boHoSoThanhTra(
                         trangThai: d.status || '',
                         dtChiuThue: r0(d.ct29), vatRa: r0(d.ct30),
                         vatVao: r0(d.ct33), phaiNop: r0(d.ct40a),
-                        ngayNop: ngayCua(d, 'submittedAt'),
+                        ngayNop: ngayCua(d, 'filedAt'),
                     })),
             })
         })
@@ -973,7 +973,7 @@ async function truyVetBanHang(
         const maKy = ngayKk.slice(0, 7)
         const tk = await prisma.taxDeclaration.findFirst({
             where: { period: maKy },
-            select: { period: true, status: true, ct29: true, submittedAt: true },
+            select: { period: true, status: true, ct29: true, filedAt: true },
         }).catch(() => null)
         moc.push({
             buoc: 6,

@@ -179,7 +179,7 @@ function khoDayDu(): Kho {
             { code: 'TS01', name: 'Tủ lạnh trưng bày', acquisitionDate: '2025-01-01', originalCost: 24_000_000, usefulLifeMonths: 60, monthlyDepreciation: 400_000, accumulatedDepreciation: 8_000_000, netBookValue: 16_000_000, expenseAccountCode: '6424', status: 'active' },
         ],
         declarations: [
-            { formType: '01_GTGT', period: '2026-08', periodType: 'month', status: 'submitted', ct29: 10_000_000, ct30: 1_000_000, ct33: 1_000_000, ct40a: 0, submittedAt: new Date('2026-09-18') },
+            { formType: '01_GTGT', period: '2026-08', periodType: 'month', status: 'submitted', ct29: 10_000_000, ct30: 1_000_000, ct33: 1_000_000, ct40a: 0, filedAt: new Date('2026-09-18') },
         ],
     }
 }

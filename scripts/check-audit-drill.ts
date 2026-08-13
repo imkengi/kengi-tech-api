@@ -89,7 +89,7 @@ function khoSach(): Kho {
             { code: 'PN001', totalCost: 70_000_000, vatAmount: 7_000_000, hasVatInvoice: true, vatInvoiceNo: '9999', supplierName: 'NCC Lớn', paidAmount: 70_000_000 },
         ],
         products: [],
-        declaration: { ct29: 100_000_000, ct30: 10_000_000, ct33: 7_000_000, ct40a: 3_000_000, status: 'submitted', submittedAt: new Date('2026-09-18') },
+        declaration: { ct29: 100_000_000, ct30: 10_000_000, ct33: 7_000_000, ct40a: 3_000_000, status: 'submitted', filedAt: new Date('2026-09-18') },
         settings: { businessType: 'company', taxCode: '0101234567' },
         payrollPeriods: [{ id: 'pp1', month: 8, year: 2026 }],
         payrollEntries: [

@@ -120,7 +120,7 @@ export async function moPhongThanhTra(
     }), [])
     const toKhai: any = await an(() => prisma.taxDeclaration.findFirst({
         where: { period: maKy },
-        select: { ct29: true, ct30: true, ct33: true, ct40a: true, status: true, submittedAt: true },
+        select: { ct29: true, ct30: true, ct33: true, ct40a: true, status: true, filedAt: true },
     }), null)
     const cauHinh: any = await an(() => prisma.storeSettings.findFirst({
         select: { businessType: true, taxCode: true },
@@ -509,13 +509,13 @@ export async function moPhongThanhTra(
         vaSao: 'Nộp muộn bị phạt hành chính riêng (NĐ 125/2020) và là tình tiết tăng nặng khi xét các lỗi khác.',
         traLoi: !toKhai
             ? `CHƯA có tờ khai kỳ ${maKy} trong hệ thống.`
-            : toKhai.submittedAt
-                ? `Tờ khai kỳ ${maKy} trạng thái "${toKhai.status}", ghi nhận nộp ngày ${new Date(toKhai.submittedAt).toISOString().slice(0, 10)}.`
+            : toKhai.filedAt
+                ? `Tờ khai kỳ ${maKy} trạng thái "${toKhai.status}", ghi nhận nộp ngày ${new Date(toKhai.filedAt).toISOString().slice(0, 10)}.`
                 : `Tờ khai kỳ ${maKy} đã lập, trạng thái "${toKhai.status}" nhưng CHƯA ghi nhận ngày nộp.`,
-        muc: !toKhai ? 'nguy-hiem' : toKhai.submittedAt ? 'an-toan' : 'can-chuan-bi',
+        muc: !toKhai ? 'nguy-hiem' : toKhai.filedAt ? 'an-toan' : 'can-chuan-bi',
         chungTu: ['Thông báo tiếp nhận hồ sơ khai thuế', 'Tờ khai đã ký gửi'],
         canLam: !toKhai ? `Lập và nộp tờ khai kỳ ${maKy} ngay.`
-            : !toKhai.submittedAt ? 'Cập nhật ngày nộp và lưu thông báo tiếp nhận của cơ quan thuế.' : undefined,
+            : !toKhai.filedAt ? 'Cập nhật ngày nộp và lưu thông báo tiếp nhận của cơ quan thuế.' : undefined,
     })
 
     if (laHkd) {
