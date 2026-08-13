@@ -131,6 +131,30 @@ function soanGiaiTrinh(c: CanhBaoThue, nhanKy: string): GiaiTrinh | null {
             noiDung: `${mo}\n\n1. Số liệu: ${c.chiTiet}\n2. Nguyên nhân: [nêu rõ — ví dụ: khoản thu tiền mặt chưa ghi sổ kịp thời; chủ doanh nghiệp cho vay/góp thêm vốn chưa lập chứng từ].\n3. Biện pháp: đơn vị đã bổ sung chứng từ thu số ..... ngày ..... và điều chỉnh sổ quỹ; số dư quỹ tiền mặt sau điều chỉnh khớp với biên bản kiểm kê quỹ ngày ......\n\n${ket}`,
             chungTuKem: ['Biên bản kiểm kê quỹ tiền mặt', 'Phiếu thu bổ sung', 'Hợp đồng vay/biên bản góp vốn của chủ sở hữu (nếu có)'],
         },
+        'vat-ra-lech': {
+            noiDung: `${mo}\n\n1. Số liệu: ${c.chiTiet}\n2. Nguyên nhân chênh lệch thuế GTGT đầu ra: [nêu rõ — ví dụ: hóa đơn điều chỉnh giảm chưa cập nhật vào tờ khai; ghi sổ sai thuế suất; hóa đơn của kỳ trước kê khai vào kỳ này].\n3. Đơn vị đã đối chiếu bảng kê hóa đơn bán ra với sổ chi tiết TK 3331 và [đã lập tờ khai bổ sung kỳ ..... / xác định chênh lệch do làm tròn, không ảnh hưởng số thuế phải nộp].\n\n${ket}`,
+            chungTuKem: ['Bảng kê hóa đơn bán ra của kỳ', 'Sổ chi tiết TK 3331', 'Tờ khai bổ sung (nếu có)'],
+        },
+        'ban-vuot-hoa-don-vao': {
+            noiDung: `${mo}\n\n1. Số liệu: ${c.chiTiet}\n2. Nguyên nhân: [nêu rõ — ví dụ: hàng nhập đầu kỳ chưa được cập nhật vào phần mềm; sai mã hàng khi nhập kho; hàng nhận ký gửi].\n3. Đơn vị đã rà soát và bổ sung hóa đơn đầu vào cho các mặt hàng nêu trên (danh sách kèm theo); phần không có hóa đơn hợp pháp, đơn vị tự loại khỏi chi phí được trừ và không kê khai khấu trừ thuế GTGT.\n\n${ket}`,
+            chungTuKem: ['Bảng đối chiếu số lượng nhập – bán từng mặt hàng', 'Hóa đơn đầu vào bổ sung', 'Hợp đồng ký gửi (nếu có)'],
+        },
+        'hoa-don-nhay-so': {
+            noiDung: `${mo}\n\n1. Số liệu: ${c.chiTiet}\n2. Giải trình: các số hóa đơn bị khuyết trong dữ liệu phần mềm [đã được tra cứu trên cổng hóa đơn điện tử và nhập bổ sung / chưa từng được phát hành].\n3. Đơn vị khẳng định không có hóa đơn nào đã phát hành mà không ghi nhận doanh thu; dữ liệu trên cổng hóa đơn điện tử của cơ quan thuế là căn cứ đối chiếu.\n\n${ket}`,
+            chungTuKem: ['Bảng kê hóa đơn tải từ cổng hóa đơn điện tử', 'Biên bản ghi nhận các số hóa đơn chưa sử dụng'],
+        },
+        'hoa-don-vao-trung': {
+            noiDung: `${mo}\n\n1. Số liệu: ${c.chiTiet}\n2. Nguyên nhân: bản ghi bị nhập/đồng bộ hai lần trong phần mềm; hóa đơn gốc chỉ có một bản duy nhất.\n3. Đơn vị đã xóa bản ghi trùng và [đã khai điều chỉnh kỳ ..... / chưa kê khai khấu trừ phần trùng nên không phát sinh chênh lệch].\n\n${ket}`,
+            chungTuKem: ['Hóa đơn gốc của giao dịch', 'Bảng kê hóa đơn mua vào sau khi loại trùng', 'Tờ khai điều chỉnh (nếu có)'],
+        },
+        'cut-off-doanh-thu': {
+            noiDung: `${mo}\n\n1. Số liệu: ${c.chiTiet}\n2. Giải trình thời điểm giao hàng thực tế: [nêu rõ — ví dụ: hàng giao ngày ..... nhưng khách xác nhận nhận hàng ngày ..... nên hóa đơn lập theo ngày nghiệm thu].\n3. Đơn vị đã chấn chỉnh quy trình lập hóa đơn ngay tại thời điểm chuyển giao hàng hóa theo Điều 9 Nghị định 123/2020.\n\n${ket}`,
+            chungTuKem: ['Phiếu giao hàng / biên bản nghiệm thu có chữ ký khách', 'Hợp đồng mua bán (nếu có)', 'Bảng đối chiếu ngày giao hàng và ngày hóa đơn'],
+        },
+        'nhap-khong-hoa-don': {
+            noiDung: `${mo}\n\n1. Số liệu: ${c.chiTiet}\n2. Đây là hàng mua trực tiếp của hộ gia đình, cá nhân không kinh doanh nên không có hóa đơn. Đơn vị đã lập Bảng kê thu mua hàng hóa, dịch vụ mua vào không có hóa đơn (mẫu 01/TNDN) cho từng lần mua, có chữ ký người bán và chứng từ thanh toán kèm theo.\n3. [Trường hợp chưa lập đủ bảng kê: đơn vị đang hoàn thiện và sẽ loại khỏi chi phí được trừ phần không có bảng kê.]\n\n${ket}`,
+            chungTuKem: ['Bảng kê 01/TNDN từng lần mua', 'Chứng từ thanh toán', 'Giấy tờ tùy thân người bán (bản sao)'],
+        },
         'tncn-thieu-khau-tru': {
             noiDung: `${mo}\n\n1. Số liệu: ${c.chiTiet}\n2. Nguyên nhân: [nêu rõ — ví dụ: chưa cập nhật người phụ thuộc; tính nhầm thu nhập chịu thuế].\n3. Biện pháp: đơn vị đã tính lại thuế TNCN phải khấu trừ, thực hiện khấu trừ bù và khai bổ sung tờ khai 05/KK-TNCN kỳ ..... vào ngày ......\n\n${ket}`,
             chungTuKem: ['Bảng lương chi tiết của kỳ', 'Bảng tính lại thuế TNCN', 'Tờ khai 05/KK-TNCN bổ sung', 'Hồ sơ đăng ký người phụ thuộc'],

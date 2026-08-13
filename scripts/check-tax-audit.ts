@@ -755,7 +755,28 @@ async function main() {
             !co(h, 'hoa-don-vao-trung') && !co(h, 'mua-cua-chinh-minh'))
     }
 
-    // ── 40. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
+    // ── 40. Mẫu giải trình phủ hết các phát hiện nặng ──────────────────────
+    {
+        /* Cảnh báo mức 'cao' mà không có mẫu giải trình là bỏ người dùng giữa
+         * chừng đúng lúc căng nhất — ca này canh cho việc đó. */
+        const k: any = khoSach()
+        k.settings = { businessType: 'company', taxCode: '0312345678' }
+        k.products = [{ name: 'Sữa', stock: -8, costPrice: 25_000 }]
+        k.banVuot = [{ sku: 'sp1', ten: 'Sữa tươi', ban: 120, nhap: 80, thieu: 40 }]
+        k.declarations = [{ period: '2026-08', ct29: 80_000_000, ct30: 8_000_000, ct33: 4_000_000 }]
+        k.imports = [{ code: 'NH01', totalCost: 50_000_000, paidAmount: 0, status: 'completed', paymentStatus: 'unpaid', hasVatInvoice: false, createdAt: new Date('2026-08-04') }]
+        k.expenses = [
+            { id: 'g1', description: 'Mua hàng', amount: 11_000_000, vatAmount: 1_000_000, invoiceNo: 'HD777', supplierTaxCode: '0101234567', invoiceDate: new Date('2026-08-05'), paidBy: 'cash', date: new Date('2026-08-05'), status: 'active', category: 'supplies' },
+            { id: 'g2', description: 'Mua hàng lần 2', amount: 11_000_000, vatAmount: 1_000_000, invoiceNo: 'HD777', supplierTaxCode: '0101234567', invoiceDate: new Date('2026-08-05'), paidBy: 'cash', date: new Date('2026-08-05'), status: 'active', category: 'supplies' },
+        ]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const coMau = new Set(h.giaiTrinh.map((g: any) => g.code))
+        const nangThieuMau = h.canhBao.filter((c: any) => c.muc === 'cao' && !coMau.has(c.code)).map((c: any) => c.code)
+        kiemTra('Mọi cảnh báo mức "cao" đều có mẫu giải trình soạn sẵn',
+            nangThieuMau.length === 0, `thiếu mẫu: ${nangThieuMau.join(', ')}`)
+    }
+
+    // ── 41. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
     {
         const h = await kiemTraThue(fakePrisma(khoSach()), KY)
         kiemTra('Luôn trả checklist hồ sơ cần chuẩn bị', h.hoSoCanChuanBi.length >= 8)
