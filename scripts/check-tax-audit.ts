@@ -544,7 +544,31 @@ async function main() {
             !co(h, 'hoa-don-nhay-so') && !co(h, 'hoa-don-trung-so'))
     }
 
-    // ── 31. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
+    // ── 31. Bảng kê khoản bị loại khi quyết toán TNDN ──────────────────────
+    {
+        const k = khoSach()
+        k.expenses = [
+            // Chi 10tr không hóa đơn → loại 10tr chi phí
+            { id: 'x1', description: 'Chi tiếp khách', amount: 10_000_000, paidBy: 'cash', date: new Date('2026-08-10'), status: 'active', category: 'food' },
+            // Mua 11tr (gồm 1tr VAT) trả tiền mặt → loại 10tr chi phí + 1tr VAT
+            { id: 'x2', description: 'Mua kệ', amount: 11_000_000, vatAmount: 1_000_000, invoiceNo: 'HD9', supplierTaxCode: '0101', invoiceDate: new Date('2026-08-11'), paidBy: 'cash', date: new Date('2026-08-11'), status: 'active', category: 'supplies' },
+            // Hóa đơn thiếu MST → loại 500k VAT (chi phí vẫn được trừ nếu có chứng từ khác)
+            { id: 'x3', description: 'Mua mực in', amount: 5_500_000, vatAmount: 500_000, invoiceNo: 'HD10', supplierTaxCode: null, invoiceDate: new Date('2026-08-12'), paidBy: 'bank', date: new Date('2026-08-12'), status: 'active', category: 'supplies' },
+        ]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const b = h.khoanBiLoai
+        kiemTra('Bảng kê khoản bị loại: 3 dòng, chi phí 20tr, VAT 1,5tr, TNDN 4tr',
+            b.dong.length === 3 && b.tongChiPhiBiLoai === 20_000_000
+            && b.tongVatBiLoai === 1_500_000 && b.thueTndnUocTinh === 4_000_000,
+            JSON.stringify({ dong: b.dong.length, cp: b.tongChiPhiBiLoai, vat: b.tongVatBiLoai, tndn: b.thueTndnUocTinh }))
+    }
+    {
+        const h = await kiemTraThue(fakePrisma(khoSach()), KY)
+        kiemTra('Sổ sạch thì bảng kê khoản bị loại rỗng',
+            h.khoanBiLoai.dong.length === 0 && h.khoanBiLoai.thueTndnUocTinh === 0)
+    }
+
+    // ── 32. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
     {
         const h = await kiemTraThue(fakePrisma(khoSach()), KY)
         kiemTra('Luôn trả checklist hồ sơ cần chuẩn bị', h.hoSoCanChuanBi.length >= 8)

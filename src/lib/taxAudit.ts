@@ -55,6 +55,17 @@ export interface GiaiTrinh {
     chungTuKem: string[]
 }
 
+export interface KhoanBiLoai {
+    /** Lý do bị loại — nhóm theo đúng cách kê trên phụ lục quyết toán */
+    lyDo: string
+    canCu: string
+    soLuong: number
+    /** Chi phí bị loại khi tính thu nhập chịu thuế */
+    chiPhiBiLoai: number
+    /** Thuế GTGT đầu vào không được khấu trừ */
+    vatBiLoai: number
+}
+
 export interface HoSoThue {
     ky: string
     /** Điểm sẵn sàng 0–100 (100 = không phát hiện dấu hiệu nào) */
@@ -69,6 +80,15 @@ export interface HoSoThue {
     hoSoCanChuanBi: string[]
     /** Bản giải trình soạn sẵn cho từng phát hiện */
     giaiTrinh: GiaiTrinh[]
+    /** Bảng kê khoản bị loại — dùng khi lập quyết toán thuế TNDN */
+    khoanBiLoai: {
+        dong: KhoanBiLoai[]
+        tongChiPhiBiLoai: number
+        tongVatBiLoai: number
+        /** Thuế TNDN phải nộp thêm ước tính theo thuế suất 20% */
+        thueTndnUocTinh: number
+        ghiChu: string
+    }
 }
 
 /**
@@ -166,6 +186,13 @@ export interface KhoangKy {
 export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> {
     const { from, to, start, end, maKy, nhan } = ky
     const canhBao: CanhBaoThue[] = []
+
+    /* Số gốc dùng để lập bảng kê khoản bị loại. Phải giữ riêng thay vì suy ngược
+     * từ `tienRuiRo` của cảnh báo — tienRuiRo là số đã quy đổi (vd đã nhân 20%),
+     * suy ngược là chỗ rất dễ sai mà không ai phát hiện. */
+    let _chiKhongHd = 0, _soChiKhongHd = 0
+    let _chiTienMat = 0, _vatTienMat = 0, _soTienMat = 0
+    let _vatThieuTt = 0, _soThieuTt = 0
 
     // ── Số liệu trên SỔ ──────────────────────────────────────────────────────
     const butToan: Array<{ debitAccount: string; creditAccount: string; amount: number; date: string }> =
@@ -307,6 +334,7 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
         if (tienMatVuot.length > 0) {
             const vatMat = tienMatVuot.reduce((s: number, e: any) => s + (e.vatAmount || 0), 0)
             const chiMat = tienMatVuot.reduce((s: number, e: any) => s + (e.amount || 0), 0)
+            _chiTienMat = Math.round(chiMat - vatMat); _vatTienMat = Math.round(vatMat); _soTienMat = tienMatVuot.length
             canhBao.push({
                 code: 'tien-mat-vuot-nguong', muc: 'cao',
                 tieuDe: `${tienMatVuot.length} khoản mua vào từ ${vnd(NGUONG_KHONG_TIEN_MAT)} ₫ trả bằng tiền mặt`,
@@ -327,6 +355,7 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
             && !e.invoiceNo)
         if (khongHoaDon.length > 0) {
             const tong = khongHoaDon.reduce((s: number, e: any) => s + (e.amount || 0), 0)
+            _chiKhongHd = Math.round(tong); _soChiKhongHd = khongHoaDon.length
             canhBao.push({
                 code: 'chi-khong-hoa-don', muc: 'vua',
                 tieuDe: `${khongHoaDon.length} khoản chi từ ${vnd(NGUONG_CHI_CAN_HOA_DON)} ₫ chưa có số hóa đơn`,
@@ -709,6 +738,7 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
             && (!e.supplierTaxCode || !e.invoiceNo || !e.invoiceDate))
         if (thieuTt.length > 0) {
             const vat = thieuTt.reduce((s: number, e: any) => s + (e.vatAmount || 0), 0)
+            _vatThieuTt = Math.round(vat); _soThieuTt = thieuTt.length
             canhBao.push({
                 code: 'hoa-don-vao-thieu-thong-tin', muc: 'vua',
                 tieuDe: `${thieuTt.length} hóa đơn đầu vào thiếu thông tin bắt buộc`,
@@ -897,5 +927,30 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
             'Chứng từ nộp lệ phí môn bài của năm (hạn 30/01 hằng năm)',
         ],
         giaiTrinh: canhBao.map(c => soanGiaiTrinh(c, nhan)).filter((g): g is GiaiTrinh => g !== null),
+        khoanBiLoai: (() => {
+            const dong: KhoanBiLoai[] = []
+            if (_soChiKhongHd > 0) dong.push({
+                lyDo: 'Chi phí không có hóa đơn, chứng từ hợp pháp',
+                canCu: 'Điều 4 TT 96/2015/TT-BTC',
+                soLuong: _soChiKhongHd, chiPhiBiLoai: _chiKhongHd, vatBiLoai: 0,
+            })
+            if (_soTienMat > 0) dong.push({
+                lyDo: `Mua vào từ ${vnd(NGUONG_KHONG_TIEN_MAT)} ₫ không có chứng từ thanh toán không dùng tiền mặt`,
+                canCu: 'Điều 14 Luật Thuế GTGT 48/2024; Điều 4 TT 96/2015/TT-BTC',
+                soLuong: _soTienMat, chiPhiBiLoai: _chiTienMat, vatBiLoai: _vatTienMat,
+            })
+            if (_soThieuTt > 0) dong.push({
+                lyDo: 'Hóa đơn đầu vào thiếu thông tin bắt buộc (MST người bán, số hoặc ngày hóa đơn)',
+                canCu: 'Điều 10 NĐ 123/2020; Điều 14 Luật Thuế GTGT 48/2024',
+                soLuong: _soThieuTt, chiPhiBiLoai: 0, vatBiLoai: _vatThieuTt,
+            })
+            const tongChiPhiBiLoai = dong.reduce((s, d) => s + d.chiPhiBiLoai, 0)
+            const tongVatBiLoai = dong.reduce((s, d) => s + d.vatBiLoai, 0)
+            return {
+                dong, tongChiPhiBiLoai, tongVatBiLoai,
+                thueTndnUocTinh: Math.round(tongChiPhiBiLoai * 0.2),
+                ghiChu: 'Bảng kê để lập quyết toán thuế TNDN (chỉ tiêu "các khoản chi không được trừ" trên tờ khai 03/TNDN). Doanh nghiệp CHỦ ĐỘNG loại các khoản này trước khi nộp thì chỉ phải nộp thuế; để cơ quan thuế phát hiện thì còn bị phạt khai sai 20% và tiền chậm nộp.',
+            }
+        })(),
     }
 }
