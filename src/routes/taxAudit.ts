@@ -130,4 +130,90 @@ router.get('/audit-check', authMiddleware, async (req: AuthRequest, res: Respons
     }
 })
 
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  LỊCH SỬ TỰ RÀ SOÁT
+ *
+ *  Vì sao đáng lưu: khi cơ quan thuế phát hiện sai sót, việc doanh nghiệp CHỨNG
+ *  MINH ĐƯỢC mình đã tự rà soát định kỳ và chủ động khắc phục là tình tiết giảm
+ *  nhẹ khi xem xét xử phạt. Ngoài ra còn thấy điểm sẵn sàng đang lên hay xuống.
+ *
+ *  Dùng lại bảng TaxAuditLog sẵn có (action='self-audit') — KHÔNG thêm bảng mới
+ *  để khỏi phải chạy migrate trên production.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+// POST /audit-save — chạy soát rồi lưu kết quả tóm tắt
+router.post('/audit-save', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const ky = dungKy(req.body || {})
+        const h = await kiemTraThue(prisma, ky)
+
+        const tomTat = {
+            maKy: ky.maKy,
+            nhan: ky.nhan,
+            diem: h.diem,
+            xepLoai: h.xepLoai,
+            soCanhBao: h.canhBao.length,
+            soNang: h.canhBao.filter(c => c.muc === 'cao').length,
+            truyThu: h.uocTinhPhat.truyThu,
+            tongUocTinh: h.uocTinhPhat.tong,
+            ma: h.canhBao.map(c => c.code),
+            doanhThuSo: h.doanhThu.so,
+        }
+
+        await prisma.taxAuditLog.create({
+            data: {
+                action: 'self-audit',
+                entityType: 'tax-audit',
+                entityId: ky.maKy,
+                userId: req.user?.userId || null,
+                userName: (req.user as any)?.name || (req.user as any)?.email || null,
+                changes: JSON.stringify(tomTat),
+                ip: (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || null,
+            },
+        })
+
+        res.json({ success: true, data: tomTat })
+    } catch (err) {
+        console.error('Lưu lần soát thuế lỗi:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// GET /audit-history?year= — các lần đã soát
+router.get('/audit-history', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const year = Number(req.query.year) || new Date().getFullYear()
+        const rows = await prisma.taxAuditLog.findMany({
+            where: { action: 'self-audit', entityType: 'tax-audit' },
+            orderBy: { timestamp: 'desc' },
+            take: 100,
+        })
+        const data = (rows || [])
+            .map((r: any) => {
+                let t: any = {}
+                try { t = JSON.parse(r.changes || '{}') } catch { t = {} }
+                return {
+                    id: r.id,
+                    thoiDiem: r.timestamp,
+                    nguoiSoat: r.userName || null,
+                    maKy: t.maKy || r.entityId || '',
+                    nhan: t.nhan || r.entityId || '',
+                    diem: t.diem ?? null,
+                    xepLoai: t.xepLoai ?? null,
+                    soCanhBao: t.soCanhBao ?? null,
+                    soNang: t.soNang ?? null,
+                    tongUocTinh: t.tongUocTinh ?? null,
+                }
+            })
+            // Chỉ giữ bản ghi của năm đang xem (mã kỳ dạng 2026-08 / 2026-Q3 / 2026)
+            .filter((r: any) => String(r.maKy).startsWith(String(year)))
+        res.json({ success: true, data })
+    } catch (err) {
+        console.error('Lịch sử soát thuế lỗi:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
 export default router
