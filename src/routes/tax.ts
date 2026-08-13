@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import { errMsg } from '../lib/errorResponse'
 import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
 import { createJournalEntriesForTransaction, AUTO_JOURNAL_REF_TYPES, PLATFORM_AR } from '../lib/autoJournal'
+import { postImportReceiptJournal, postExpenseJournal, postReturnJournal } from '../lib/autoJournalPurchase'
 import { COA_SEED, accountName } from '../lib/chartOfAccounts'
 import { enforcePeriodLock, assertNotLocked } from '../lib/periodLock'
 
@@ -2204,6 +2205,12 @@ router.post('/auto-journal', authMiddleware, async (req: AuthRequest, res: Respo
         const branchId = (req as any).branchId || null
         const userId = (req as any).userId || null
 
+        /* HKD/cá nhân không được khấu trừ VAT đầu vào → VAT nằm trong giá vốn,
+         * không tách sang 1331. Phải đọc đúng loại hình, nếu không sổ của HKD sẽ
+         * mọc ra một khoản thuế được khấu trừ không có thật. */
+        const _bt = (await prisma.storeSettings.findFirst({ select: { businessType: true } }).catch(() => null))?.businessType || 'company'
+        const _hkdKhongKhauTru = _bt === 'household' || _bt === 'individual'
+
         // ═══ 1. TRANSACTIONS → Revenue + VAT + COGS journal entries ═══
         const txs = await prisma.transaction.findMany({
             where: { status: { in: ['completed', 'partial'] }, createdAt: { gte: start, lte: end } },
@@ -2232,42 +2239,18 @@ router.post('/auto-journal', authMiddleware, async (req: AuthRequest, res: Respo
             orderBy: { date: 'asc' },
         })
 
-        // Map expense category to account code
-        const expenseAccountMap: Record<string, { code: string; name: string }> = {
-            'rent': { code: '6421', name: 'CP thuê mặt bằng' },
-            'utilities': { code: '6422', name: 'CP điện nước' },
-            'salary': { code: '6411', name: 'CP lương nhân viên' },
-            'transport': { code: '6415', name: 'CP vận chuyển' },
-            'marketing': { code: '6418', name: 'CP marketing' },
-            'maintenance': { code: '6423', name: 'CP sửa chữa' },
-            'supplies': { code: '6424', name: 'CP vật tư' },
-            'insurance': { code: '6425', name: 'CP bảo hiểm' },
-            // Trả tiền NCC: KHÔNG phải chi phí — là giảm phải trả. Ghi Nợ 331 / Có 11x
-            // (vế Có do paidBy quyết định). Tránh double-count vào 6428.
-            'supplier_payment': { code: '331', name: 'Phải trả người bán' },
-            'other': { code: '6428', name: 'CP khác' },
-        }
-
+        /* Ghi bù chi phí — dùng CHUNG postExpenseJournal với đường ghi lúc phát
+         * sinh (routes/expenses.ts). Trước đây khối này có bộ map tài khoản
+         * riêng và không tách VAT đầu vào, nên cùng một khoản chi ghi bù và ghi
+         * live ra hai kết quả khác nhau. Phiếu đã hủy thì bỏ qua. */
         for (const exp of expenses) {
+            if ((exp as any).status === 'cancelled' || (exp as any).status === 'pending') continue
             const ref = `EXP-${exp.id}`
             if (existingRefs.has(ref)) continue
-
-            const acct = expenseAccountMap[exp.category?.toLowerCase()] || expenseAccountMap['other']
-            const date = fmtDate(exp.date)
-
-            try {
-                await prisma.journalEntry.create({
-                    data: {
-                        date, description: exp.description || `Chi phí ${exp.category}`,
-                        debitAccount: acct.code, debitAccountName: acct.name,
-                        creditAccount: (exp.paidBy === 'bank' || exp.paidBy === 'transfer') ? '112' : '111',
-                        creditAccountName: (exp.paidBy === 'bank' || exp.paidBy === 'transfer') ? 'Tiền gửi ngân hàng' : 'Tiền mặt',
-                        amount: exp.amount, reference: ref, referenceType: 'expense',
-                        branchId: exp.branchId || branchId, createdBy: userId,
-                    }
-                })
-                created.push({ type: 'expense', ref, amount: exp.amount })
-            } catch (_) { }
+            const r = await postExpenseJournal(prisma, exp as any, {
+                branchId: exp.branchId || branchId, userId, vatKhauTru: !_hkdKhongKhauTru,
+            })
+            for (const entry of r.created) { created.push(entry); existingRefs.add(entry.ref) }
         }
 
         // ═══ 3. IMPORT RECEIPTS → Inventory + Payable journal entries ═══
@@ -2276,26 +2259,51 @@ router.post('/auto-journal', authMiddleware, async (req: AuthRequest, res: Respo
             orderBy: { createdAt: 'asc' },
         })
 
+        /* Ghi bù phiếu nhập — dùng CHUNG postImportReceiptJournal với đường ghi
+         * lúc phát sinh. Bản cũ ở đây chỉ ghi Nợ 156 = totalCost: bỏ mất VAT đầu
+         * vào (1331), bỏ phí vận chuyển/thuế NK/chiết khấu khỏi giá vốn, và
+         * không hề ghi phần đã trả tiền NCC → TK 331 phình mãi không giảm. */
         for (const imp of imports) {
             const ref = `IMP-${imp.code}`
             if (existingRefs.has(ref)) continue
-
-            const date = fmtDate(imp.transactionDate || imp.createdAt)
-
-            try {
-                // Nợ TK156 (Hàng hóa), Có TK331 (Phải trả NCC)
-                await prisma.journalEntry.create({
-                    data: {
-                        date, description: `Nhập hàng ${imp.code}${imp.supplierName ? ' - NCC: ' + imp.supplierName : ''}`,
-                        debitAccount: '156', debitAccountName: 'Hàng hóa',
-                        creditAccount: '331', creditAccountName: 'Phải trả người bán',
-                        amount: imp.totalCost, reference: ref, referenceType: 'import',
-                        branchId: imp.branchId || branchId, createdBy: userId,
-                    }
-                })
-                created.push({ type: 'import', ref, amount: imp.totalCost })
-            } catch (_) { }
+            const r = await postImportReceiptJournal(prisma, imp as any, {
+                branchId: imp.branchId || branchId, userId, vatKhauTru: !_hkdKhongKhauTru,
+            })
+            for (const entry of r.created) { created.push(entry); existingRefs.add(entry.ref) }
         }
+
+        // ═══ 3b. RETURN ORDERS → giảm doanh thu + nhập lại kho ═══
+        // Trả hàng trước đây không hề có mặt trong backfill: doanh thu trên sổ
+        // giữ nguyên dù tiền đã trả lại khách.
+        try {
+            const rets = await prisma.returnOrder.findMany({
+                where: { status: { in: ['refunded', 'exchanged'] }, createdAt: { gte: start, lte: end } },
+                include: { items: true },
+                orderBy: { createdAt: 'asc' },
+            })
+            for (const ret of rets) {
+                if (existingRefs.has(`RET-${ret.code}`)) continue
+                // Giá vốn hàng nhập lại: chỉ tính dòng đã đánh dấu restocked
+                let giaVon = 0
+                for (const it of (ret as any).items ?? []) {
+                    if (!it.productId || !it.restocked) continue
+                    const p = await prisma.product.findUnique({ where: { id: it.productId }, select: { costPrice: true } })
+                    giaVon += (p?.costPrice ?? 0) * (it.quantity ?? 0)
+                }
+                let vatTra = 0
+                if (ret.transactionId) {
+                    const goc = await prisma.transaction.findUnique({ where: { id: ret.transactionId }, select: { tax: true, total: true } })
+                    if (goc && goc.total > 0 && goc.tax > 0) vatTra = Math.round((ret.totalRefund || 0) * (goc.tax / goc.total))
+                }
+                const r = await postReturnJournal(prisma, {
+                    code: ret.code, customerName: ret.customerName, originalInvoice: ret.originalInvoice,
+                    totalRefund: ret.totalRefund || 0, refundMethod: ret.refundMethod,
+                    costValue: giaVon, vatAmount: vatTra,
+                    branchId: ret.branchId, createdAt: ret.createdAt,
+                }, { branchId: ret.branchId || branchId, userId })
+                for (const entry of r.created) { created.push(entry); existingRefs.add(entry.ref) }
+            }
+        } catch (e) { console.error('Backfill bút toán trả hàng lỗi (bỏ qua):', e) }
 
         // ═══ 4. PAYROLL → Salary expense journal entries ═══
         try {
