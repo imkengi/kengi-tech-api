@@ -17,6 +17,54 @@
  * tính lại — một nguồn sự thật, sửa luật một chỗ.
  */
 
+/**
+ * Lãi/lỗ kế toán từng năm trong 6 năm gần nhất (dương = lãi).
+ *
+ * Gộp bằng SQL thô: quét 6 năm bút toán về ứng dụng rồi cộng trong JavaScript có
+ * thể kéo về hàng chục nghìn dòng — quá nặng cho pool kết nối nhỏ của mỗi cửa
+ * hàng. Nhóm doanh thu/chi phí lấy đúng như phép tính quyết toán sẵn có để hai
+ * nơi không ra hai số khác nhau.
+ */
+export async function layLaiLoTheoNam(prisma: any, nam: number): Promise<Map<number, number>> {
+    const ra = new Map<number, number>()
+    const DT = ['511', '515', '711']
+    const CP = ['632', '635', '641', '642', '811']
+    const dieuKien = (cot: string, ds: string[]) =>
+        ds.map(p => `"${cot}" LIKE '${p}%'`).join(' OR ')
+    try {
+        const rows: any[] = await prisma.$queryRawUnsafe(`
+            SELECT LEFT(date, 4) AS nam,
+                   SUM(CASE WHEN ${dieuKien('creditAccount', DT)} THEN amount ELSE 0 END)::float8
+                 - SUM(CASE WHEN ${dieuKien('debitAccount', DT)}  THEN amount ELSE 0 END)::float8 AS doanhthu,
+                   SUM(CASE WHEN ${dieuKien('debitAccount', CP)}  THEN amount ELSE 0 END)::float8
+                 - SUM(CASE WHEN ${dieuKien('creditAccount', CP)} THEN amount ELSE 0 END)::float8 AS chiphi
+            FROM "JournalEntry"
+            WHERE date >= '${nam - 5}-01-01' AND date <= '${nam}-12-31'
+            GROUP BY 1
+        `)
+        for (const r of rows || []) {
+            ra.set(Number(r.nam), Math.round((Number(r.doanhthu) || 0) - (Number(r.chiphi) || 0)))
+        }
+    } catch {
+        /* Thiếu bảng hoặc SQL không chạy được: trả map rỗng để phần chuyển lỗ bỏ
+         * qua, thay vì làm hỏng cả bảng quyết toán. */
+    }
+    return ra
+}
+
+/** Thuế TNDN đã tạm nộp trong năm = phát sinh Nợ TK 3334 (đã nộp vào ngân sách) */
+export async function layThueDaTamNop(prisma: any, nam: number): Promise<number> {
+    try {
+        const bt: any[] = await prisma.journalEntry.findMany({
+            where: { date: { gte: `${nam}-01-01`, lte: `${nam}-12-31` } },
+            select: { debitAccount: true, amount: true },
+        })
+        return Math.round(bt
+            .filter(e => String(e.debitAccount || '').startsWith('3334'))
+            .reduce((s, e) => s + (e.amount || 0), 0))
+    } catch { return 0 }
+}
+
 export interface DongDieuChinh {
     ma: string
     ten: string

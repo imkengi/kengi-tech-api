@@ -132,6 +132,28 @@ async function main() {
     kiemTra('Ấn định có ít nhất một kịch bản tính tiền',
         Array.isArray(anDinh?.kichBan) && anDinh.kichBan.length > 0)
 
+    const planTool = FINANCE_TOOLS.find(t => t.name === 'tax_remediation_plan')!
+    const plan: any = await (planTool as any).run({ year: 2026, month: 8 }, { prisma: fakePrisma() } as any)
+    kiemTra('Kế hoạch trả danh sách việc',
+        Array.isArray(plan?.danhSachViec) && plan.danhSachViec.length > 0, String(plan?.danhSachViec?.length))
+    kiemTra('Việc nào cũng có hạn chót đúng dạng và người chịu trách nhiệm',
+        plan?.danhSachViec?.every((v: any) => /^\d{4}-\d{2}-\d{2}$/.test(v.hanChot) && !!v.aiLam))
+    kiemTra('Nêu hạn nộp tờ khai của kỳ (tháng 8 → 20/09)',
+        plan?.hanNopToKhaiCuaKy === '2026-09-20', String(plan?.hanNopToKhaiCuaKy))
+    kiemTra('Việc gấp xếp trước việc ít gấp',
+        plan?.danhSachViec?.[0]?.uuTien <= plan?.danhSachViec?.[plan.danhSachViec.length - 1]?.uuTien)
+
+    const citTool = FINANCE_TOOLS.find(t => t.name === 'tax_cit_settlement')!
+    const cit: any = await (citTool as any).run({ year: 2026 }, { prisma: fakePrisma() } as any)
+    kiemTra('Quyết toán trả đủ bậc thang tính thuế',
+        cit && 'loiNhuanKeToan' in cit && 'thuNhapChiuThue' in cit
+        && 'thuNhapTinhThue' in cit && 'thueTndnPhaiNop' in cit,
+        JSON.stringify(Object.keys(cit || {})))
+    kiemTra('Nêu rõ tính theo lãi kế toán sẽ khai thiếu bao nhiêu',
+        typeof cit?.neuTinhTheoLaiKeToanSeKhaiThieu === 'number')
+    kiemTra('Ghi chú nhắc đối chiếu phụ lục chuyển lỗ đã nộp',
+        /03-2A\/TNDN/.test(String(cit?.ghiChu)))
+
     console.log(`\n${soCa - soLoi}/${soCa} ca đạt`)
     process.exit(soLoi > 0 ? 1 : 0)
 }

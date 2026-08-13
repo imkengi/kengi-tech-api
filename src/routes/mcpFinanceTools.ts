@@ -9,6 +9,8 @@ import { kiemTraThue, type KhoangKy } from '../lib/taxAudit'
 import { truyVetChungTu } from '../lib/auditPack'
 import { moPhongThanhTra } from '../lib/auditDrill'
 import { moPhongAnDinh } from '../lib/taxAssessment'
+import { lapKeHoachKhacPhuc } from '../lib/remediationPlan'
+import { quyetToanTndn, layLaiLoTheoNam, layThueDaTamNop } from '../lib/citAdjustment'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -720,6 +722,77 @@ export const FINANCE_TOOLS: Tool[] = [
                 kichBan: d.kichBan,
                 lamNgay: d.canLamNgay,
                 ghiChu: d.ghiChu,
+            }
+        },
+    },
+    {
+        name: 'tax_remediation_plan',
+        description: 'KẾ HOẠCH KHẮC PHỤC TRƯỚC THANH TRA: danh sách việc phải làm theo thứ tự ưu tiên (tiền nhiều + làm nhanh lên trước), kèm hạn chót tính theo hạn nộp tờ khai thật của kỳ và người chịu trách nhiệm. Gọi khi chủ shop hỏi "giờ tôi phải làm gì", "sửa cái nào trước", "còn bao lâu nữa". CHỈ ĐỌC.',
+        inputSchema: {
+            type: 'object',
+            properties: { ...SCHEMA_KY },
+            additionalProperties: false,
+        },
+        run: async (a, { prisma }: ToolCtx) => {
+            const ky = dungKyThue(a)
+            const hoSo = await kiemTraThue(prisma, ky)
+            const anDinh = await moPhongAnDinh(prisma, ky).catch(() => null)
+            // Hôm nay theo giờ VN — lệch múi giờ là sai hạn chót cả ngày
+            const homNay = new Date(Date.now() + VN_OFFSET_MS).toISOString().slice(0, 10)
+            const kh = lapKeHoachKhacPhuc(hoSo, anDinh, ky, homNay)
+            return {
+                ky: kh.ky,
+                tomTat: kh.tomTat,
+                hanNopToKhaiCuaKy: kh.hanNopToKhai,
+                soViecPhaiLamNgay: kh.soViecLamNgay,
+                soViecQuaHan: kh.soViecQuaHan,
+                tongTienThueLienQuan: kh.tongTienLoiIch,
+                danhSachViec: kh.viec.map(v => ({
+                    uuTien: v.uuTien, viec: v.tieuDe, phaiLamGi: v.viecLam, vaSao: v.vaSao,
+                    hanChot: v.hanChot, soNgayConLai: v.soNgayConLai, quaHan: v.quaHan,
+                    tienLienQuan: v.tienLoiIch, congSuc: v.congSuc, aiLam: v.aiLam, canCu: v.canCu,
+                })),
+                ghiChu: kh.ghiChu,
+            }
+        },
+    },
+    {
+        name: 'tax_cit_settlement',
+        description: 'QUYẾT TOÁN THUẾ TNDN CÓ ĐIỀU CHỈNH cho một năm: lãi kế toán + chi phí không được trừ − lỗ được chuyển = thu nhập tính thuế, kèm số thuế còn phải nộp và cảnh báo lỗ sắp hết hạn chuyển. Gọi khi chủ shop hỏi "năm nay phải nộp bao nhiêu thuế TNDN", "quyết toán thuế năm ngoái", "lỗ năm trước có được trừ không". CHỈ ĐỌC.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                year: { type: 'number', description: 'Năm quyết toán (mặc định năm hiện tại)' },
+            },
+            additionalProperties: false,
+        },
+        run: async (a, { prisma }: ToolCtx) => {
+            const nay = new Date()
+            const nam = num(a?.year, nay.getFullYear())
+            const laiLoTheoNam = await layLaiLoTheoNam(prisma, nam)
+            const hoSo = await kiemTraThue(prisma, dungKyThue({ year: nam }))
+            const daTamNop = await layThueDaTamNop(prisma, nam)
+            const kq = quyetToanTndn({
+                nam,
+                loiNhuanKeToan: laiLoTheoNam.get(nam) ?? 0,
+                khoanBiLoai: hoSo.khoanBiLoai?.dong ?? [],
+                laiLoTheoNam,
+                daTamNop,
+            })
+            return {
+                nam: kq.nam,
+                loiNhuanKeToan: kq.loiNhuanKeToan,
+                chiPhiKhongDuocTru: kq.tongDieuChinhTang,
+                chiTietKhongDuocTru: kq.dieuChinhTang,
+                thuNhapChiuThue: kq.thuNhapChiuThue,
+                loDuocChuyen: kq.loChuyen,
+                thuNhapTinhThue: kq.thuNhapTinhThue,
+                thueTndnPhaiNop: kq.thueTndnPhaiNop,
+                daTamNop: kq.daTamNop,
+                conPhaiNop: kq.conPhaiNop,
+                neuTinhTheoLaiKeToanSeKhaiThieu: kq.chenhSoVoiCachTinhThieu,
+                canhBao: kq.canhBao,
+                ghiChu: kq.ghiChu,
             }
         },
     },
