@@ -30,11 +30,19 @@ function fakePrisma() {
             findFirst: async () => ({ period: '2026-08', ct29: 80_000_000, ct30: 8_000_000, ct33: 0 }),
             findMany: async () => [{ period: '2026-08' }],
         },
-        eInvoice: { findMany: async () => [] },
+        eInvoice: {
+            findMany: async () => [],
+            findFirst: async () => null,
+        },
         expense: { findMany: async () => [] },
-        importReceipt: { findMany: async () => [] },
+        importReceipt: { findMany: async () => [], findFirst: async () => null },
         product: { findMany: async () => [] },
-        transaction: { findMany: async () => [{ id: 't1', receiptNumber: 'HD1', total: 110_000_000, createdAt: NGAY('2026-08-05'), items: [] }] },
+        transaction: {
+            findMany: async () => [{ id: 't1', receiptNumber: 'HD1', total: 110_000_000, createdAt: NGAY('2026-08-05'), items: [] }],
+            findFirst: async ({ where }: any = {}) => where?.receiptNumber === 'HD1'
+                ? { id: 't1', receiptNumber: 'HD1', customerName: 'Khách', total: 110_000_000, amountReceived: 110_000_000, status: 'completed', createdAt: NGAY('2026-08-05'), items: [{ productName: 'Hàng', sku: 'H1', quantity: 1, unitPrice: 110_000_000, lineTotal: 110_000_000 }] }
+                : null,
+        },
         taxDeadline: { findMany: async () => [] },
         payrollPeriod: { findMany: async () => [] },
         payrollEntry: { findMany: async () => [] },
@@ -80,6 +88,49 @@ async function main() {
 
     const kqNam: any = await (tool as any).run({ year: 2026 }, { prisma: fakePrisma() } as any)
     kiemTra('Không truyền tháng/quý thì soát cả năm', kqNam?.ky === 'năm 2026', String(kqNam?.ky))
+
+    // ── Ba tool thanh tra mới ────────────────────────────────────────────────
+    for (const ten of ['tax_trace_document', 'tax_audit_drill', 'tax_assessment_risk']) {
+        const t = FINANCE_TOOLS.find(x => x.name === ten)
+        kiemTra(`Tool ${ten} có trong danh sách`, !!t)
+        kiemTra(`Tool ${ten} khai rõ CHỈ ĐỌC`, !!t && /CHỈ ĐỌC/i.test(t.description))
+        kiemTra(`Tool ${ten} nói rõ khi nào gọi`, !!t && /Gọi khi/.test(t.description))
+    }
+
+    const traceTool = FINANCE_TOOLS.find(t => t.name === 'tax_trace_document')!
+    const trace: any = await (traceTool as any).run({ ma: 'HD1' }, { prisma: fakePrisma() } as any)
+    kiemTra('Truy vết tìm được phiếu bán',
+        trace?.timThay === true && trace?.loaiChungTu === 'ban-hang', String(trace?.loaiChungTu))
+    kiemTra('Truy vết trả các mốc kèm câu đoàn hay hỏi',
+        Array.isArray(trace?.cacMoc) && trace.cacMoc.every((m: any) => !!m.doanHayHoi))
+    kiemTra('Truy vết bắt được thiếu hóa đơn điện tử',
+        trace?.soMatXichDut >= 1 && trace?.diemSeBiHoi?.some((c: string) => c.includes('hóa đơn')),
+        JSON.stringify(trace?.diemSeBiHoi))
+    let loiThieuMa: any = null
+    try { await (traceTool as any).run({}, { prisma: fakePrisma() } as any) } catch (e) { loiThieuMa = e }
+    kiemTra('Truy vết thiếu mã thì báo lỗi rõ ràng',
+        !!loiThieuMa && /mã chứng từ/i.test(String(loiThieuMa.message)))
+
+    const drillTool = FINANCE_TOOLS.find(t => t.name === 'tax_audit_drill')!
+    const drill: any = await (drillTool as any).run({ year: 2026, month: 8 }, { prisma: fakePrisma() } as any)
+    kiemTra('Mô phỏng trả bộ câu hỏi',
+        Array.isArray(drill?.cauHoi) && drill.cauHoi.length >= 14, String(drill?.cauHoi?.length))
+    kiemTra('Mỗi câu đều có lời giải thích vì sao đoàn hỏi',
+        drill?.cauHoi?.every((c: any) => !!c.viSaoHoHoi && !!c.traLoiTuSoLieu))
+    kiemTra('Mô phỏng bắt được lệch doanh thu sổ vs tờ khai',
+        drill?.cauHoi?.some((c: any) => c.cauHoi.includes('Doanh thu') && c.mucDo === 'nguy-hiem'))
+
+    const anDinhTool = FINANCE_TOOLS.find(t => t.name === 'tax_assessment_risk')!
+    const anDinh: any = await (anDinhTool as any).run({ year: 2026, month: 8 }, { prisma: fakePrisma() } as any)
+    kiemTra('Ấn định trả căn cứ kèm cách cãi lại',
+        Array.isArray(anDinh?.canCuAnDinhTimThay) && anDinh.canCuAnDinhTimThay.every((c: any) => !!c.caiLaiTheNao))
+    kiemTra('Ấn định bắt được số liệu lệch tờ khai',
+        anDinh?.canCuAnDinhTimThay?.some((c: any) => c.dieuKhoan.includes('Điều 50')),
+        JSON.stringify(anDinh?.canCuAnDinhTimThay?.map((c: any) => c.dieuKhoan)))
+    kiemTra('Ấn định luôn kèm ghi chú là ước tính minh họa',
+        /ƯỚC TÍNH MINH HỌA/.test(String(anDinh?.ghiChu)))
+    kiemTra('Ấn định có ít nhất một kịch bản tính tiền',
+        Array.isArray(anDinh?.kichBan) && anDinh.kichBan.length > 0)
 
     console.log(`\n${soCa - soLoi}/${soCa} ca đạt`)
     process.exit(soLoi > 0 ? 1 : 0)

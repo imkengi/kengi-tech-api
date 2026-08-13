@@ -5,7 +5,10 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { Tool, ToolCtx, ToolError } from '../lib/mcpTypes'
-import { kiemTraThue } from '../lib/taxAudit'
+import { kiemTraThue, type KhoangKy } from '../lib/taxAudit'
+import { truyVetChungTu } from '../lib/auditPack'
+import { moPhongThanhTra } from '../lib/auditDrill'
+import { moPhongAnDinh } from '../lib/taxAssessment'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -38,6 +41,54 @@ function khoangNgay(from?: string, to?: string, macDinhNgay = 30): { tu: Date; d
     const nhan = (d: Date) => new Date(d.getTime() + VN_OFFSET_MS).toISOString().slice(0, 10)
     return { tu, den, moTa: `${nhan(tu)} → ${nhan(den)} (giờ VN)` }
 }
+
+/**
+ * Dựng kỳ thuế từ tham số tool (year/month/quarter). Mã kỳ phải khớp cách
+ * TaxDeclaration.period được lưu, nếu không thì mọi phép đối chiếu tờ khai đều
+ * tưởng là "chưa kê khai".
+ */
+function dungKyThue(a: any): KhoangKy {
+    const nay = new Date()
+    const year = num(a?.year, nay.getFullYear())
+    const month = a?.month ? num(a.month, 0) : 0
+    const quarter = a?.quarter ? num(a.quarter, 0) : 0
+    const p2 = (n: number) => String(n).padStart(2, '0')
+
+    let from: string, to: string, maKy: string, nhan: string
+    if (month >= 1 && month <= 12) {
+        const cuoi = new Date(year, month, 0).getDate()
+        from = `${year}-${p2(month)}-01`
+        to = `${year}-${p2(month)}-${p2(cuoi)}`
+        maKy = `${year}-${p2(month)}`
+        nhan = `tháng ${month}/${year}`
+    } else if (quarter >= 1 && quarter <= 4) {
+        const dauThang = (quarter - 1) * 3 + 1
+        const cuoiThang = dauThang + 2
+        const cuoi = new Date(year, cuoiThang, 0).getDate()
+        from = `${year}-${p2(dauThang)}-01`
+        to = `${year}-${p2(cuoiThang)}-${p2(cuoi)}`
+        maKy = `${year}-Q${quarter}`
+        nhan = `quý ${quarter}/${year}`
+    } else {
+        from = `${year}-01-01`
+        to = `${year}-12-31`
+        maKy = String(year)
+        nhan = `năm ${year}`
+    }
+    return {
+        from, to, maKy, nhan,
+        start: new Date(`${from}T00:00:00.000Z`),
+        // +7h để lấy trọn ngày cuối theo giờ VN
+        end: new Date(new Date(`${to}T23:59:59.999Z`).getTime() + VN_OFFSET_MS),
+    }
+}
+
+/** Ba tham số kỳ dùng chung cho mọi tool thuế */
+const SCHEMA_KY = {
+    year: { type: 'number', description: 'Năm cần soát (mặc định năm hiện tại)' },
+    month: { type: 'number', description: 'Tháng 1-12; bỏ trống để soát cả năm' },
+    quarter: { type: 'number', description: 'Quý 1-4 (dùng thay cho month)' },
+} as const
 
 // ─── Tools ───────────────────────────────────────────────────────────────────
 
@@ -557,48 +608,11 @@ export const FINANCE_TOOLS: Tool[] = [
         description: 'KIỂM TRA TRƯỚC THANH TRA THUẾ: đối chiếu ba nguồn doanh thu (sổ kế toán / tờ khai GTGT / hóa đơn điện tử), tìm dấu hiệu bị ấn định thuế và các khoản sẽ bị loại khi quyết toán, kèm ước tính tiền truy thu + phạt + chậm nộp. Gọi khi chủ shop hỏi "sổ sách có vấn đề gì không", "có rủi ro thuế gì", "bị thanh tra thì mất bao nhiêu". CHỈ ĐỌC, không sửa gì.',
         inputSchema: {
             type: 'object',
-            properties: {
-                year: { type: 'number', description: 'Năm cần soát (mặc định năm hiện tại)' },
-                month: { type: 'number', description: 'Tháng 1-12; bỏ trống để soát cả năm' },
-                quarter: { type: 'number', description: 'Quý 1-4 (dùng thay cho month)' },
-            },
+            properties: { ...SCHEMA_KY },
             additionalProperties: false,
         },
         run: async (a, { prisma }: ToolCtx) => {
-            const nay = new Date()
-            const year = num(a?.year, nay.getFullYear())
-            const month = a?.month ? num(a.month, 0) : 0
-            const quarter = a?.quarter ? num(a.quarter, 0) : 0
-            const p2 = (n: number) => String(n).padStart(2, '0')
-
-            let from: string, to: string, maKy: string, nhan: string
-            if (month >= 1 && month <= 12) {
-                const cuoi = new Date(year, month, 0).getDate()
-                from = `${year}-${p2(month)}-01`
-                to = `${year}-${p2(month)}-${p2(cuoi)}`
-                maKy = `${year}-${p2(month)}`
-                nhan = `tháng ${month}/${year}`
-            } else if (quarter >= 1 && quarter <= 4) {
-                const dauThang = (quarter - 1) * 3 + 1
-                const cuoiThang = dauThang + 2
-                const cuoi = new Date(year, cuoiThang, 0).getDate()
-                from = `${year}-${p2(dauThang)}-01`
-                to = `${year}-${p2(cuoiThang)}-${p2(cuoi)}`
-                maKy = `${year}-Q${quarter}`
-                nhan = `quý ${quarter}/${year}`
-            } else {
-                from = `${year}-01-01`
-                to = `${year}-12-31`
-                maKy = String(year)
-                nhan = `năm ${year}`
-            }
-
-            const h = await kiemTraThue(prisma, {
-                from, to, maKy, nhan,
-                start: new Date(`${from}T00:00:00.000Z`),
-                // +7h để lấy trọn ngày cuối theo giờ VN
-                end: new Date(new Date(`${to}T23:59:59.999Z`).getTime() + VN_OFFSET_MS),
-            })
+            const h = await kiemTraThue(prisma, dungKyThue(a))
 
             return {
                 ky: h.ky,
@@ -619,6 +633,93 @@ export const FINANCE_TOOLS: Tool[] = [
                 })),
                 khoanBiLoaiKhiQuyetToan: h.khoanBiLoai,
                 ghiChu: 'Soi trên dữ liệu có trong phần mềm, KHÔNG thay thế rà soát của kế toán hay tư vấn thuế. Số ước tính không phải số ấn định của cơ quan thuế.',
+            }
+        },
+    },
+    {
+        name: 'tax_trace_document',
+        description: 'TRUY VẾT MỘT CHỨNG TỪ hết chuỗi giống cách đoàn thanh tra làm: chứng từ gốc → xuất kho → hóa đơn điện tử → bút toán ghi sổ → thu tiền → kỳ kê khai. Nhận số phiếu bán, mã phiếu nhập hoặc số hóa đơn điện tử. Gọi khi chủ shop hỏi "hóa đơn này đi đâu về đâu", "phiếu này đã xuất hóa đơn chưa", "đơn này ghi sổ chưa". CHỈ ĐỌC.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                ma: { type: 'string', description: 'Số phiếu bán (vd HD000123), mã phiếu nhập, hoặc số hóa đơn điện tử' },
+            },
+            required: ['ma'],
+            additionalProperties: false,
+        },
+        run: async (a, { prisma }: ToolCtx) => {
+            const ma = String(a?.ma || '').trim()
+            if (!ma) throw new ToolError('Cần mã chứng từ để truy vết — số phiếu bán, mã phiếu nhập hoặc số hóa đơn')
+            const kq = await truyVetChungTu(prisma, ma)
+            return {
+                timThay: kq.timThay,
+                loaiChungTu: kq.loai,
+                tieuDe: kq.tieuDe,
+                soMatXichDut: kq.soMocDut,
+                cacMoc: kq.moc.map(m => ({
+                    buoc: m.buoc, ten: m.ten, trangThai: m.trangThai,
+                    chiTiet: m.chiTiet, doanHayHoi: m.cauHoi,
+                })),
+                diemSeBiHoi: kq.canhBao,
+            }
+        },
+    },
+    {
+        name: 'tax_audit_drill',
+        description: 'MÔ PHỎNG BUỔI LÀM VIỆC VỚI ĐOÀN THANH TRA: trả về những câu đoàn hay hỏi kèm CÂU TRẢ LỜI dựng sẵn từ số liệu thật của kỳ, chứng từ phải chìa ra, và việc cần làm trước. Gọi khi chủ shop hỏi "thanh tra sẽ hỏi gì", "tôi trả lời sao", "cần chuẩn bị giấy tờ gì". CHỈ ĐỌC.',
+        inputSchema: {
+            type: 'object',
+            properties: { ...SCHEMA_KY },
+            additionalProperties: false,
+        },
+        run: async (a, { prisma }: ToolCtx) => {
+            const d = await moPhongThanhTra(prisma, dungKyThue(a))
+            return {
+                ky: d.ky,
+                tiLeTraLoiDuocNgay: d.diemTraLoi,
+                soCauSeBiTruy: d.soNguyHiem,
+                soCauCanChuanBi: d.soCanChuanBi,
+                cauHoi: d.cauHoi.map(c => ({
+                    nhom: c.nhom, cauHoi: c.cauHoi, viSaoHoHoi: c.vaSao,
+                    traLoiTuSoLieu: c.traLoi, mucDo: c.muc,
+                    chungTuPhaiChiaRa: c.chungTu, viecCanLam: c.canLam,
+                })),
+                nhaCungCapNenTraCuu: d.nhaCungCapCanTraCuu,
+                luuY: d.luuY,
+            }
+        },
+    },
+    {
+        name: 'tax_assessment_risk',
+        description: 'MÔ PHỎNG BỊ ẤN ĐỊNH THUẾ (Điều 50 Luật Quản lý thuế): liệt kê căn cứ ấn định đang CÓ THẬT trong dữ liệu kèm cách phản bác từng cái, và ước tính số thuế phải nộp thêm nếu cơ quan thuế bỏ qua sổ sách. Gọi khi chủ shop hỏi "bị ấn định thuế thì mất bao nhiêu", "sổ sách của tôi có bị bác không". CHỈ ĐỌC. Nhắc người dùng đây là ước tính minh họa, không phải số cơ quan thuế sẽ ra.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                ...SCHEMA_KY,
+                tySuatLoiNhuan: { type: 'number', description: 'Tỷ suất lợi nhuận ngành dạng thập phân (0.05 = 5%), chỉ dùng cho doanh nghiệp' },
+            },
+            additionalProperties: false,
+        },
+        run: async (a, { prisma }: ToolCtx) => {
+            const ts = Number(a?.tySuatLoiNhuan)
+            const d = await moPhongAnDinh(prisma, dungKyThue(a), {
+                tySuatLoiNhuan: Number.isFinite(ts) && ts > 0 && ts <= 1 ? ts : undefined,
+            })
+            return {
+                ky: d.ky,
+                nguyCoBiAnDinh: d.nguyCo,
+                canCuAnDinhTimThay: d.canCu.map(c => ({
+                    dauHieu: c.dauHieu, mucDo: c.muc, dieuKhoan: c.dieuKhoan,
+                    hauQua: c.chiTiet, caiLaiTheNao: c.caiThenao,
+                })),
+                doanhThu: {
+                    trenSo: d.doanhThuSo, trenHoaDon: d.doanhThuHoaDon,
+                    gocAnDinh: d.doanhThuGocAnDinh,
+                },
+                thueDaKeKhai: d.thueDaKeKhai,
+                kichBan: d.kichBan,
+                lamNgay: d.canLamNgay,
+                ghiChu: d.ghiChu,
             }
         },
     },
