@@ -149,10 +149,12 @@ router.get('/stats', authMiddleware, requirePermission('repairs.view'), async (r
 router.get('/', authMiddleware, requirePermission('repairs.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        const { search, status, source } = req.query
+        const { search, status, source, transactionId } = req.query
         const where: any = {}
         if (status && status !== 'all') where.status = status
         if (source && source !== 'all') where.source = source
+        // Lọc theo hoá đơn đã thu — bản in hoá đơn dùng để moi các phiếu SC đã gắn
+        if (transactionId) where.transactionId = String(transactionId)
         if (search) {
             const q = String(search)
             where.OR = [{ productName: { contains: q } }, { customerName: { contains: q } }, { code: { contains: q } }]
