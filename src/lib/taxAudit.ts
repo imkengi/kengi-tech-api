@@ -32,12 +32,27 @@ export interface CanhBaoThue {
     viDu: string[]
 }
 
+export interface UocTinhPhat {
+    /** Tiền thuế có nguy cơ bị truy thu (gộp từ các cảnh báo định lượng được) */
+    truyThu: number
+    /** Phạt khai sai 20% trên số thuế thiếu — Điều 16 NĐ 125/2020 */
+    phatKhaiSai: number
+    /** Tiền chậm nộp 0,03%/ngày — Điều 59 Luật Quản lý thuế 38/2019 */
+    chamNop: number
+    soNgayCham: number
+    hanNop: string | null
+    tong: number
+    /** Ghi rõ đây là ƯỚC TÍNH, không phải số ấn định của cơ quan thuế */
+    ghiChu: string
+}
+
 export interface HoSoThue {
     ky: string
     /** Điểm sẵn sàng 0–100 (100 = không phát hiện dấu hiệu nào) */
     diem: number
     xepLoai: string
     canhBao: CanhBaoThue[]
+    uocTinhPhat: UocTinhPhat
     /** Ba nguồn doanh thu để đối chiếu */
     doanhThu: { so: number; toKhai: number | null; hoaDon: number }
     thue: { vatRaSo: number; vatRaToKhai: number | null; vatVaoSo: number; vatVaoToKhai: number | null }
@@ -54,6 +69,10 @@ export const NGUONG_KHONG_TIEN_MAT = 5_000_000
 /** Dưới mức này thì chi lặt vặt còn lập bảng kê được; trên mức này mà thiếu hóa
  *  đơn là gần như chắc chắn bị loại khi quyết toán thuế TNDN. */
 export const NGUONG_CHI_CAN_HOA_DON = 2_000_000
+/** Phạt khai sai dẫn đến thiếu thuế — Điều 16 NĐ 125/2020 */
+export const TY_LE_PHAT_KHAI_SAI = 0.2
+/** Tiền chậm nộp mỗi ngày — Điều 59 Luật Quản lý thuế 38/2019 */
+export const TY_LE_CHAM_NOP_NGAY = 0.0003
 /** Chênh lệch dưới mức này coi như sai số làm tròn, không báo động */
 export const NGUONG_LECH_BO_QUA = 1_000
 
@@ -395,6 +414,31 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
         })
     } catch { /* bỏ qua */ }
 
+    // ── 10. Hóa đơn đầu vào thiếu thông tin bắt buộc để khấu trừ ─────────────
+    try {
+        const chiVat = await prisma.expense.findMany({
+            where: { date: { gte: start, lte: end } },
+            select: { id: true, description: true, amount: true, vatAmount: true, invoiceNo: true, supplierTaxCode: true, invoiceDate: true, status: true, category: true },
+        })
+        const thieuTt = chiVat.filter((e: any) =>
+            (e.status ?? 'active') === 'active'
+            && String(e.category || '') !== 'supplier_payment'
+            && (e.vatAmount || 0) > 0
+            && (!e.supplierTaxCode || !e.invoiceNo || !e.invoiceDate))
+        if (thieuTt.length > 0) {
+            const vat = thieuTt.reduce((s: number, e: any) => s + (e.vatAmount || 0), 0)
+            canhBao.push({
+                code: 'hoa-don-vao-thieu-thong-tin', muc: 'vua',
+                tieuDe: `${thieuTt.length} hóa đơn đầu vào thiếu thông tin bắt buộc`,
+                chiTiet: `Thiếu mã số thuế người bán, số hóa đơn hoặc ngày hóa đơn — tổng thuế GTGT liên quan ${vnd(vat)} ₫ có thể bị loại khỏi khấu trừ vì không đủ căn cứ đối chiếu với dữ liệu hóa đơn của cơ quan thuế.`,
+                canCu: 'Điều 14 Luật Thuế GTGT 48/2024 — hóa đơn hợp pháp là điều kiện khấu trừ; Điều 10 NĐ 123/2020 — nội dung bắt buộc của hóa đơn.',
+                canLam: 'Mở lại từng hóa đơn giấy/PDF và nhập bổ sung MST người bán, số và ngày hóa đơn vào phiếu chi tương ứng.',
+                tienRuiRo: Math.round(vat), soLuong: thieuTt.length,
+                viDu: thieuTt.slice(0, 5).map((e: any) => `${(e.description || '').slice(0, 32)} · ${vnd(e.vatAmount || 0)} ₫ VAT`),
+            })
+        }
+    } catch { /* bỏ qua */ }
+
     // ── Chấm điểm sẵn sàng ───────────────────────────────────────────────────
     const tru: Record<MucRuiRo, number> = { cao: 22, vua: 9, thap: 3 }
     let diem = 100
@@ -405,10 +449,59 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
     const thuTu: Record<MucRuiRo, number> = { cao: 0, vua: 1, thap: 2 }
     canhBao.sort((a, b) => thuTu[a.muc] - thuTu[b.muc] || (b.tienRuiRo ?? 0) - (a.tienRuiRo ?? 0))
 
+    /* ── Ước tính tiền phải nộp thêm ─────────────────────────────────────────
+     * CHỈ gộp những cảnh báo mà số tiền thực sự là THUẾ có nguy cơ bị truy thu.
+     * Các cảnh báo còn lại (tồn kho âm, bán dưới giá vốn, hóa đơn hủy nhiều) là
+     * dấu hiệu dẫn tới ấn định — mức ấn định do cơ quan thuế quyết, không thể
+     * ước lượng nghiêm túc từ dữ liệu ở đây nên KHÔNG cộng vào, tránh dọa nhầm. */
+    const MA_TINH_TRUY_THU = new Set([
+        'vat-ra-lech',                   // chênh thuế đầu ra so tờ khai
+        'tien-mat-vuot-nguong',          // VAT bị loại + chi phí bị loại
+        'chi-khong-hoa-don',             // thuế TNDN phải nộp thêm
+        'hoa-don-vao-thieu-thong-tin',   // VAT đầu vào bị loại
+        'nhap-tra-tien-mat',             // VAT đầu vào rủi ro
+    ])
+    const truyThu = Math.round(
+        canhBao.filter(c => MA_TINH_TRUY_THU.has(c.code)).reduce((s, c) => s + (c.tienRuiRo ?? 0), 0),
+    )
+    const phatKhaiSai = Math.round(truyThu * TY_LE_PHAT_KHAI_SAI)
+
+    /* Hạn nộp: tờ khai tháng — ngày 20 tháng sau; quý — ngày cuối tháng đầu quý
+     * sau (Điều 44 Luật Quản lý thuế 38/2019). Tiền chậm nộp tính từ hạn đó. */
+    let hanNop: string | null = null
+    {
+        const m = /^(\d{4})-(\d{2})$/.exec(maKy)
+        const q = /^(\d{4})-Q([1-4])$/.exec(maKy)
+        if (m) {
+            const nam = Number(m[1]), thang = Number(m[2])
+            const d = new Date(Date.UTC(nam, thang, 20)) // tháng sau, ngày 20
+            hanNop = d.toISOString().slice(0, 10)
+        } else if (q) {
+            const nam = Number(q[1]), quy = Number(q[2])
+            // cuối tháng đầu tiên của quý sau
+            const thangSau = quy * 3 + 1
+            const d = new Date(Date.UTC(nam, thangSau, 0))
+            hanNop = d.toISOString().slice(0, 10)
+        }
+    }
+    let soNgayCham = 0
+    if (hanNop && truyThu > 0) {
+        const cach = Math.floor((Date.now() - new Date(`${hanNop}T00:00:00.000Z`).getTime()) / 86400000)
+        soNgayCham = Math.max(0, cach)
+    }
+    const chamNop = Math.round(truyThu * TY_LE_CHAM_NOP_NGAY * soNgayCham)
+
+    const uocTinhPhat: UocTinhPhat = {
+        truyThu, phatKhaiSai, chamNop, soNgayCham, hanNop,
+        tong: truyThu + phatKhaiSai + chamNop,
+        ghiChu: 'Ước tính theo mức phạt khai sai 20% (Điều 16 NĐ 125/2020) và tiền chậm nộp 0,03%/ngày (Điều 59 Luật Quản lý thuế 38/2019), tính từ hạn nộp của kỳ tới hôm nay. Chỉ gộp phần thuế định lượng được; các dấu hiệu dẫn tới ẤN ĐỊNH thuế (tồn kho âm, bán dưới giá vốn) không cộng vào vì mức ấn định do cơ quan thuế quyết định. Đây KHÔNG phải số liệu chính thức.',
+    }
+
     return {
         ky: nhan,
         diem, xepLoai,
         canhBao,
+        uocTinhPhat,
         doanhThu: { so: dtSo, toKhai: dtToKhai, hoaDon: dtHoaDon },
         thue: { vatRaSo, vatRaToKhai, vatVaoSo, vatVaoToKhai },
         hoSoCanChuanBi: [

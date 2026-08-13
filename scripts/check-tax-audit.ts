@@ -262,7 +262,47 @@ async function main() {
             h.diem < 70 && h.canhBao[0].muc === 'cao', `điểm ${h.diem}, loại ${h.xepLoai}`)
     }
 
-    // ── 16. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
+    // ── 16. Hóa đơn đầu vào thiếu thông tin bắt buộc ───────────────────────
+    {
+        const k = khoSach()
+        k.expenses = [
+            { id: 'e6', description: 'Mua văn phòng phẩm', amount: 3_300_000, vatAmount: 300_000, invoiceNo: 'HD1', supplierTaxCode: null, invoiceDate: new Date('2026-08-05'), paidBy: 'bank', date: new Date('2026-08-05'), status: 'active', category: 'supplies' },
+            { id: 'e7', description: 'Mua mực in', amount: 2_200_000, vatAmount: 200_000, invoiceNo: 'HD2', supplierTaxCode: '0101234567', invoiceDate: new Date('2026-08-06'), paidBy: 'bank', date: new Date('2026-08-06'), status: 'active', category: 'supplies' },
+        ]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const c = lay(h, 'hoa-don-vao-thieu-thong-tin')
+        kiemTra('Bắt hóa đơn đầu vào thiếu MST (hóa đơn đủ thông tin thì bỏ qua)',
+            !!c && c.soLuong === 1 && c.tienRuiRo === 300_000, JSON.stringify(c?.soLuong))
+    }
+
+    // ── 17. Ước tính truy thu + phạt + chậm nộp ────────────────────────────
+    {
+        const k = khoSach()
+        // Chỉ một nguồn định lượng: chi 10tr không hóa đơn → truy thu 2tr (20%)
+        k.expenses = [
+            { id: 'e8', description: 'Chi tiếp khách', amount: 10_000_000, paidBy: 'cash', date: new Date('2026-08-13'), status: 'active', category: 'food' },
+        ]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const u = h.uocTinhPhat
+        const phatDung = u.truyThu === 2_000_000 && u.phatKhaiSai === 400_000
+        const chamDung = u.chamNop === Math.round(2_000_000 * 0.0003 * u.soNgayCham)
+        const tongDung = u.tong === u.truyThu + u.phatKhaiSai + u.chamNop
+        kiemTra('Ước tính: truy thu 2tr, phạt 20% = 400k, chậm nộp 0,03%/ngày, tổng khớp',
+            phatDung && chamDung && tongDung && u.hanNop === '2026-09-20',
+            JSON.stringify(u))
+    }
+
+    // ── 18. Dấu hiệu ẤN ĐỊNH không được cộng vào tiền truy thu ─────────────
+    {
+        const k = khoSach()
+        k.products = [{ name: 'Sữa', stock: -100, costPrice: 1_000_000 }] // tồn âm 100tr
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        kiemTra('Tồn kho âm KHÔNG bị cộng vào ước tính truy thu (mức ấn định do CQT quyết)',
+            h.uocTinhPhat.truyThu === 0 && co(h, 'ton-kho-am'),
+            `truyThu=${h.uocTinhPhat.truyThu}`)
+    }
+
+    // ── 19. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
     {
         const h = await kiemTraThue(fakePrisma(khoSach()), KY)
         kiemTra('Luôn trả checklist hồ sơ cần chuẩn bị', h.hoSoCanChuanBi.length >= 8)
