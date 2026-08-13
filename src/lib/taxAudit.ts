@@ -1011,6 +1011,65 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
         }
     } catch { /* bỏ qua */ }
 
+    /* ── 14. Mã số thuế người bán sai định dạng ──────────────────────────────
+     * MST Việt Nam là 10 số (đơn vị chính) hoặc 13 ký tự dạng 10 số + "-" + 3 số
+     * (đơn vị phụ thuộc). Sai định dạng thì chắc chắn không tra cứu được trên hệ
+     * thống của cơ quan thuế, tức là hóa đơn không đối chiếu được → mất khấu trừ. */
+    try {
+        const chiMst = await prisma.expense.findMany({
+            where: { date: { gte: start, lte: end } },
+            select: { id: true, description: true, supplierTaxCode: true, supplierName: true, vatAmount: true, status: true, category: true },
+        })
+        const saiMst = (chiMst || []).filter((e: any) => {
+            if ((e.status ?? 'active') !== 'active') return false
+            if (String(e.category || '') === 'supplier_payment') return false
+            const mst = String(e.supplierTaxCode || '').trim()
+            if (!mst) return false                       // thiếu MST đã có phép kiểm tra riêng
+            return !/^\d{10}(-\d{3})?$/.test(mst)
+        })
+        if (saiMst.length > 0) {
+            const vat = saiMst.reduce((s: number, e: any) => s + (e.vatAmount || 0), 0)
+            canhBao.push({
+                code: 'mst-sai-dinh-dang', muc: 'vua',
+                tieuDe: `${saiMst.length} hóa đơn đầu vào có mã số thuế sai định dạng`,
+                chiTiet: `Mã số thuế phải là 10 số, hoặc 13 ký tự dạng 0101234567-001 với đơn vị phụ thuộc. Sai định dạng thì không tra cứu được trên hệ thống cơ quan thuế${vat > 0 ? `, ${vnd(vat)} ₫ thuế GTGT liên quan có nguy cơ mất khấu trừ` : ''}.`,
+                canCu: 'Điều 30 Luật Quản lý thuế 38/2019 — cấu trúc mã số thuế; Điều 14 Luật Thuế GTGT 48/2024.',
+                canLam: 'Mở lại hóa đơn gốc và nhập đúng mã số thuế người bán; tra cứu trên tracuunnt.gdt.gov.vn để chắc chắn nhà cung cấp đang hoạt động.',
+                tienRuiRo: Math.round(vat), soLuong: saiMst.length,
+                viDu: saiMst.slice(0, 5).map((e: any) => `${e.supplierName || e.description || ''} · MST "${e.supplierTaxCode}"`.trim()),
+            })
+        }
+    } catch { /* bỏ qua */ }
+
+    /* ── 15. Thuế GTGT đầu vào tồn đọng chưa khấu trừ hết ────────────────────
+     * TK 133 dư lớn kéo dài nghĩa là mua nhiều hơn bán, hoặc kê khai chưa đúng.
+     * Cơ quan thuế luôn soi số dư này vì nó là tiền nhà nước đang "nợ" doanh
+     * nghiệp — và cũng là chỗ hay bị kê khống hóa đơn đầu vào. */
+    {
+        const ps133LuyKe = await (async () => {
+            try {
+                const bt: Array<{ debitAccount: string; creditAccount: string; amount: number }> =
+                    await prisma.journalEntry.findMany({
+                        where: { date: { lte: to } },
+                        select: { debitAccount: true, creditAccount: true, amount: true },
+                    })
+                return phatSinh(bt, '133')
+            } catch { return null }
+        })()
+        if (ps133LuyKe) {
+            const du = ps133LuyKe.no - ps133LuyKe.co
+            // Chỉ nói khi số dư đáng kể so với chính thuế đầu ra của kỳ
+            if (du > 0 && vatRaSo > 0 && du >= vatRaSo * 2 && du >= 5_000_000) canhBao.push({
+                code: 'vat-vao-ton-dong', muc: 'thap',
+                tieuDe: `Thuế GTGT đầu vào chưa khấu trừ hết còn ${vnd(du)} ₫`,
+                chiTiet: `Gấp ${(du / vatRaSo).toFixed(1)} lần thuế đầu ra của kỳ. Số dư lớn kéo dài là chỗ cơ quan thuế luôn soi — vừa vì đó là tiền được khấu trừ về sau, vừa vì đây là nơi hay bị kê khống hóa đơn đầu vào.`,
+                canCu: 'Điều 14, 15 Luật Thuế GTGT 48/2024 — khấu trừ và hoàn thuế GTGT đầu vào.',
+                canLam: 'Đối chiếu bảng kê mua vào với sổ 133; nếu số dư đủ điều kiện hoàn thuế thì lập hồ sơ hoàn, đừng để treo nhiều kỳ mà không giải thích được.',
+                tienRuiRo: null, soLuong: 0, viDu: [],
+            })
+        }
+    }
+
     // ── Chấm điểm sẵn sàng ───────────────────────────────────────────────────
     const tru: Record<MucRuiRo, number> = { cao: 22, vua: 9, thap: 3 }
     let diem = 100

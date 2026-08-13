@@ -691,7 +691,39 @@ async function main() {
         kiemTra('Hao hụt nhỏ dưới ngưỡng thì không kêu', !co(h, 'hao-hut-vuot-muc'))
     }
 
-    // ── 37. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
+    // ── 37. Mã số thuế người bán sai định dạng ─────────────────────────────
+    {
+        const k = khoSach()
+        k.expenses = [
+            { id: 'm1', description: 'Mua giấy', amount: 3_300_000, vatAmount: 300_000, invoiceNo: 'H1', supplierTaxCode: '123', invoiceDate: new Date('2026-08-05'), paidBy: 'bank', date: new Date('2026-08-05'), status: 'active', category: 'supplies' },
+            { id: 'm2', description: 'Mua mực', amount: 2_200_000, vatAmount: 200_000, invoiceNo: 'H2', supplierTaxCode: '0101234567', invoiceDate: new Date('2026-08-06'), paidBy: 'bank', date: new Date('2026-08-06'), status: 'active', category: 'supplies' },
+            { id: 'm3', description: 'Mua bút', amount: 2_200_000, vatAmount: 200_000, invoiceNo: 'H3', supplierTaxCode: '0101234567-001', invoiceDate: new Date('2026-08-07'), paidBy: 'bank', date: new Date('2026-08-07'), status: 'active', category: 'supplies' },
+        ]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const c = lay(h, 'mst-sai-dinh-dang')
+        kiemTra('Chỉ kêu MST sai định dạng; 10 số và dạng 13 ký tự đơn vị phụ thuộc đều hợp lệ',
+            !!c && c.soLuong === 1 && c.tienRuiRo === 300_000, JSON.stringify({ sl: c?.soLuong, t: c?.tienRuiRo }))
+    }
+
+    // ── 38. Thuế GTGT đầu vào tồn đọng ─────────────────────────────────────
+    {
+        const k = khoSach()
+        // VAT vào 4tr (khoSach) → thêm 30tr nữa để dư gấp >2 lần VAT ra 10tr
+        k.journal.push({ reference: 'IMPVAT-X', date: '2026-08-04', debitAccount: '1331', creditAccount: '331', amount: 30_000_000 })
+        k.declarations = [
+            ...Array.from({ length: 7 }, (_, i) => ({ period: `2026-${String(i + 1).padStart(2, '0')}`, ct29: 0, ct30: 0, ct33: 0 })),
+            { period: '2026-08', ct29: 100_000_000, ct30: 10_000_000, ct33: 34_000_000 },
+        ]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        kiemTra('Bắt thuế đầu vào tồn đọng lớn (mức "ghi nhận")',
+            co(h, 'vat-vao-ton-dong') && lay(h, 'vat-vao-ton-dong').muc === 'thap')
+    }
+    {
+        const h = await kiemTraThue(fakePrisma(khoSach()), KY)
+        kiemTra('Đầu vào bình thường thì không kêu tồn đọng', !co(h, 'vat-vao-ton-dong'))
+    }
+
+    // ── 39. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
     {
         const h = await kiemTraThue(fakePrisma(khoSach()), KY)
         kiemTra('Luôn trả checklist hồ sơ cần chuẩn bị', h.hoSoCanChuanBi.length >= 8)
