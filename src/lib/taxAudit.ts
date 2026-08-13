@@ -46,6 +46,15 @@ export interface UocTinhPhat {
     ghiChu: string
 }
 
+export interface GiaiTrinh {
+    code: string
+    tieuDe: string
+    /** Văn bản giải trình soạn sẵn, kế toán sửa lại cho khớp thực tế rồi in */
+    noiDung: string
+    /** Chứng từ phải kẹp kèm khi nộp bản giải trình này */
+    chungTuKem: string[]
+}
+
 export interface HoSoThue {
     ky: string
     /** Điểm sẵn sàng 0–100 (100 = không phát hiện dấu hiệu nào) */
@@ -58,6 +67,58 @@ export interface HoSoThue {
     thue: { vatRaSo: number; vatRaToKhai: number | null; vatVaoSo: number; vatVaoToKhai: number | null }
     /** Hồ sơ cần chuẩn bị mang ra khi đoàn tới */
     hoSoCanChuanBi: string[]
+    /** Bản giải trình soạn sẵn cho từng phát hiện */
+    giaiTrinh: GiaiTrinh[]
+}
+
+/**
+ * Soạn bản giải trình mẫu cho từng phát hiện.
+ *
+ * Đây là VĂN BẢN NHÁP để kế toán sửa lại cho khớp thực tế, không phải lời khai
+ * thay doanh nghiệp — nên mọi mẫu đều để chỗ trống [.....] ở phần lý do, và
+ * tuyệt đối không tự bịa nguyên nhân. Viết sẵn phần khung giúp tiết kiệm thời
+ * gian lúc đoàn đã ngồi vào bàn, khi mà soạn từ đầu là rất căng.
+ */
+function soanGiaiTrinh(c: CanhBaoThue, nhanKy: string): GiaiTrinh | null {
+    const mo = `Về nội dung "${c.tieuDe}" trong kỳ ${nhanKy}, đơn vị xin giải trình như sau:`
+    const ket = 'Đơn vị cam kết số liệu giải trình là trung thực và chịu trách nhiệm trước pháp luật.'
+    const mau: Record<string, { noiDung: string; chungTuKem: string[] }> = {
+        'dt-so-vs-tokhai': {
+            noiDung: `${mo}\n\n1. Nguyên nhân chênh lệch giữa doanh thu trên sổ kế toán và doanh thu đã kê khai: [nêu rõ — ví dụ: hóa đơn xuất sau ngày ghi nhận doanh thu; hàng bán bị trả lại chưa điều chỉnh tờ khai; sai sót nhập liệu].\n2. Số liệu chi tiết: ${c.chiTiet}\n3. Biện pháp xử lý: đơn vị đã/sẽ lập tờ khai bổ sung theo Điều 47 Luật Quản lý thuế 38/2019 cho kỳ nêu trên trước ngày [.....].\n\n${ket}`,
+            chungTuKem: ['Bảng đối chiếu doanh thu sổ kế toán và tờ khai từng tháng', 'Sổ chi tiết TK 511, 5212', 'Tờ khai bổ sung (nếu đã lập)'],
+        },
+        'dt-so-vs-hoadon': {
+            noiDung: `${mo}\n\n1. Số liệu: ${c.chiTiet}\n2. Nguyên nhân: [nêu rõ — ví dụ: doanh thu bán lẻ cho khách không lấy hóa đơn đã được lập hóa đơn tổng hợp cuối ngày/cuối kỳ; hoặc hóa đơn xuất lệch kỳ].\n3. Đơn vị đã rà soát và [đã xuất bổ sung hóa đơn số ..... ngày ..... / đang hoàn thiện].\n\n${ket}`,
+            chungTuKem: ['Bảng kê hóa đơn đã phát hành trong kỳ', 'Bảng kê doanh thu bán lẻ không lấy hóa đơn', 'Hóa đơn tổng hợp (nếu có)'],
+        },
+        'tien-mat-vuot-nguong': {
+            noiDung: `${mo}\n\n1. Số liệu: ${c.chiTiet}\n2. Giải trình: các khoản nêu trên [đã được thanh toán qua ngân hàng, chứng từ kèm theo / thực tế thanh toán bằng tiền mặt].\n3. Đối với các khoản thực tế thanh toán bằng tiền mặt từ ${vnd(NGUONG_KHONG_TIEN_MAT)} đồng trở lên, đơn vị chủ động không kê khai khấu trừ thuế GTGT đầu vào và loại khỏi chi phí được trừ khi quyết toán thuế TNDN.\n\n${ket}`,
+            chungTuKem: ['Ủy nhiệm chi / sao kê ngân hàng của từng giao dịch', 'Hóa đơn GTGT đầu vào tương ứng', 'Bảng kê các khoản tự loại khỏi khấu trừ'],
+        },
+        'chi-khong-hoa-don': {
+            noiDung: `${mo}\n\n1. Số liệu: ${c.chiTiet}\n2. Giải trình: các khoản chi này [đã có hóa đơn nhưng chưa cập nhật số hóa đơn vào phần mềm, hóa đơn gốc kèm theo / không có hóa đơn].\n3. Đối với các khoản không có hóa đơn hợp pháp, đơn vị tự loại khỏi chi phí được trừ khi xác định thu nhập chịu thuế TNDN theo Điều 4 Thông tư 96/2015/TT-BTC.\n\n${ket}`,
+            chungTuKem: ['Hóa đơn gốc của các khoản đã bổ sung được', 'Bảng kê các khoản tự loại khỏi chi phí được trừ', 'Chứng từ chi tương ứng'],
+        },
+        'ton-kho-am': {
+            noiDung: `${mo}\n\n1. Số liệu: ${c.chiTiet}\n2. Nguyên nhân: [nêu rõ — ví dụ: phiếu nhập kho chưa được nhập vào phần mềm tại thời điểm bán; sai sót khi kiểm kê; nhầm đơn vị tính].\n3. Biện pháp: đơn vị đã bổ sung phiếu nhập số ..... ngày ..... kèm hóa đơn đầu vào hợp pháp, và đã lập biên bản kiểm kê điều chỉnh tồn kho ngày ......\n\n${ket}`,
+            chungTuKem: ['Phiếu nhập kho và hóa đơn đầu vào bổ sung', 'Biên bản kiểm kê kho', 'Thẻ kho / sổ chi tiết vật tư hàng hóa'],
+        },
+        'ban-duoi-gia-von': {
+            noiDung: `${mo}\n\n1. Số liệu: ${c.chiTiet}\n2. Lý do bán thấp hơn giá vốn: [nêu rõ — hàng cận hạn sử dụng, hàng lỗi mẫu/trưng bày, thanh lý hàng chậm luân chuyển, chương trình khuyến mãi đã thông báo tới cơ quan quản lý].\n3. Việc bán hàng nêu trên phù hợp quy luật kinh doanh, giá bán được xác định theo thỏa thuận thực tế với khách hàng, đơn vị không có hành vi hạ giá trên hóa đơn nhằm giảm nghĩa vụ thuế.\n\n${ket}`,
+            chungTuKem: ['Quyết định/thông báo chương trình khuyến mãi', 'Biên bản xác định hàng cận hạn, hàng lỗi', 'Bảng kê chi tiết các giao dịch liên quan'],
+        },
+        'quy-am-trong-ky': {
+            noiDung: `${mo}\n\n1. Số liệu: ${c.chiTiet}\n2. Nguyên nhân: [nêu rõ — ví dụ: khoản thu tiền mặt chưa ghi sổ kịp thời; chủ doanh nghiệp cho vay/góp thêm vốn chưa lập chứng từ].\n3. Biện pháp: đơn vị đã bổ sung chứng từ thu số ..... ngày ..... và điều chỉnh sổ quỹ; số dư quỹ tiền mặt sau điều chỉnh khớp với biên bản kiểm kê quỹ ngày ......\n\n${ket}`,
+            chungTuKem: ['Biên bản kiểm kê quỹ tiền mặt', 'Phiếu thu bổ sung', 'Hợp đồng vay/biên bản góp vốn của chủ sở hữu (nếu có)'],
+        },
+        'tncn-thieu-khau-tru': {
+            noiDung: `${mo}\n\n1. Số liệu: ${c.chiTiet}\n2. Nguyên nhân: [nêu rõ — ví dụ: chưa cập nhật người phụ thuộc; tính nhầm thu nhập chịu thuế].\n3. Biện pháp: đơn vị đã tính lại thuế TNCN phải khấu trừ, thực hiện khấu trừ bù và khai bổ sung tờ khai 05/KK-TNCN kỳ ..... vào ngày ......\n\n${ket}`,
+            chungTuKem: ['Bảng lương chi tiết của kỳ', 'Bảng tính lại thuế TNCN', 'Tờ khai 05/KK-TNCN bổ sung', 'Hồ sơ đăng ký người phụ thuộc'],
+        },
+    }
+    const m = mau[c.code]
+    if (!m) return null
+    return { code: c.code, tieuDe: c.tieuDe, noiDung: m.noiDung, chungTuKem: m.chungTuKem }
 }
 
 /* ── Ngưỡng luật ────────────────────────────────────────────────────────────
@@ -613,5 +674,6 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
             'Quyết định/thông báo chương trình khuyến mãi (nếu có bán dưới giá vốn)',
             'Biên bản hủy, điều chỉnh hóa đơn kèm thỏa thuận với người mua',
         ],
+        giaiTrinh: canhBao.map(c => soanGiaiTrinh(c, nhan)).filter((g): g is GiaiTrinh => g !== null),
     }
 }

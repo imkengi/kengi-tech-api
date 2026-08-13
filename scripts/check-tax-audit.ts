@@ -372,7 +372,29 @@ async function main() {
             !co(h, 'hkd-vuot-nguong-chiu-thue') && !co(h, 'hkd-phai-ket-noi-pos'))
     }
 
-    // ── 24. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
+    // ── 24. Bản giải trình soạn sẵn ────────────────────────────────────────
+    {
+        const k = khoSach()
+        k.products = [{ name: 'Sữa', stock: -8, costPrice: 25_000 }]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const g = h.giaiTrinh.find((x: any) => x.code === 'ton-kho-am')
+        kiemTra('Có bản giải trình cho tồn kho âm, kèm chứng từ và chừa chỗ điền lý do',
+            !!g && g.noiDung.includes('[nêu rõ') && g.chungTuKem.length >= 2 && g.noiDung.includes('cam kết'),
+            JSON.stringify(g?.chungTuKem))
+    }
+    {
+        // Cảnh báo không có mẫu (vd hóa đơn hủy nhiều) thì KHÔNG được tự bịa văn bản
+        const k = khoSach()
+        k.invoices = Array.from({ length: 30 }, (_, i) => ({
+            invoiceDate: '2026-08-05', invoiceType: 'SALE',
+            status: i < 5 ? 'CANCELLED' : 'SIGNED', totalBeforeVat: i < 5 ? 0 : 4_000_000,
+        }))
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        kiemTra('Cảnh báo chưa có mẫu giải trình thì bỏ trống, không bịa văn bản',
+            !h.giaiTrinh.some((g: any) => g.code === 'hoadon-huy-nhieu'))
+    }
+
+    // ── 25. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
     {
         const h = await kiemTraThue(fakePrisma(khoSach()), KY)
         kiemTra('Luôn trả checklist hồ sơ cần chuẩn bị', h.hoSoCanChuanBi.length >= 8)
