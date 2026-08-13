@@ -31,8 +31,11 @@ function kyThangTruoc(now: Date): { year: number; month: number } {
     return m === 1 ? { year: y - 1, month: 12 } : { year: y, month: m - 1 }
 }
 
-async function soatChoStore(schema: string, tenStore: string, year: number, month: number): Promise<void> {
-    const prisma = getStorePrisma(schema) as any
+/**
+ * Soát một cửa hàng. Nhận prisma từ ngoài thay vì tự lấy theo schema — nhờ vậy
+ * kiểm chứng được bằng client giả, không phải dựng cả cơ sở dữ liệu.
+ */
+export async function soatChoStore(prisma: any, tenStore: string, year: number, month: number): Promise<void> {
     const p2 = (n: number) => String(n).padStart(2, '0')
     const cuoi = new Date(year, month, 0).getDate()
     const from = `${year}-${p2(month)}-01`
@@ -74,6 +77,30 @@ async function soatChoStore(schema: string, tenStore: string, year: number, mont
     if (nang > 0) {
         console.log(`⚖️  [${tenStore}] soát thuế tháng ${month}/${year}: ${h.diem}/100 — ${nang} dấu hiệu rủi ro cao, ước tính ${Math.round(h.uocTinhPhat.tong).toLocaleString('vi-VN')}đ`)
     }
+
+    /* Ghi log thôi thì vẫn câm: người dùng chỉ biết khi tự mở trang, mà lúc họ
+     * chịu mở thường là đã có giấy mời làm việc. Đẩy thông báo để họ thấy ngay
+     * trên web và app — nhưng CHỈ khi có dấu hiệu nặng, kẻo tháng nào cũng kêu
+     * thì thành tiếng ồn và bị bỏ qua đúng lúc cần nghe nhất. */
+    if (nang === 0) return
+
+    const han = `${month === 12 ? year + 1 : year}-${p2(month === 12 ? 1 : month + 1)}-20`
+    const conNgay = Math.ceil((new Date(han + 'T00:00:00.000Z').getTime() - Date.now()) / 86400_000)
+    const tien = Math.round(h.uocTinhPhat.tong)
+
+    await prisma.notification.create({
+        data: {
+            type: 'tax-audit',
+            title: `⚖️ Soát thuế tháng ${month}/${year}: ${nang} dấu hiệu rủi ro cao`,
+            message:
+                `Điểm sẵn sàng ${h.diem}/100 (${h.xepLoai}).` +
+                (tien > 0 ? ` Ước tính phải nộp thêm ${tien.toLocaleString('vi-VN')}đ nếu bị phát hiện.` : '') +
+                ` Vấn đề chính: ${h.canhBao.filter(c => c.muc === 'cao').slice(0, 3).map(c => c.tieuDe).join('; ')}.` +
+                (conNgay > 0
+                    ? ` Còn ${conNgay} ngày tới hạn nộp tờ khai — khai bổ sung trước hạn thì không bị phạt 20% khai sai.`
+                    : ' Đã qua hạn nộp tờ khai kỳ này; tự khai bổ sung vẫn nhẹ hơn để cơ quan thuế phát hiện.'),
+        },
+    }).catch(() => { /* thiếu bảng Notification — không chặn vòng chạy */ })
 }
 
 async function runSoat(): Promise<void> {
@@ -84,7 +111,7 @@ async function runSoat(): Promise<void> {
         const stores = await registryPrisma.store.findMany({ where: { status: 'active' } as any }) as any[]
         for (const store of stores) {
             try {
-                await soatChoStore(store.schema, store.name, year, month)
+                await soatChoStore(getStorePrisma(store.schema), store.name, year, month)
             } catch (e: any) {
                 console.error(`Soát thuế tự động lỗi ở store ${store.name}:`, e?.message || e)
             }
