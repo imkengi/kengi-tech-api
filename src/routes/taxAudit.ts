@@ -16,6 +16,7 @@ import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { errMsg } from '../lib/errorResponse'
 import { kiemTraThue, type KhoangKy } from '../lib/taxAudit'
 import { boHoSoThanhTra, sangCsv, truyVetChungTu } from '../lib/auditPack'
+import { moPhongThanhTra } from '../lib/auditDrill'
 
 const router = Router()
 
@@ -296,6 +297,24 @@ router.get('/trace', authMiddleware, async (req: AuthRequest, res: Response) => 
         res.json({ success: true, data: kq })
     } catch (err) {
         console.error('Truy vết chứng từ lỗi:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+/**
+ * GET /api/tax/audit-drill?year=&month=|quarter= — mô phỏng buổi làm việc.
+ *
+ * Trả bộ câu hỏi đoàn thanh tra hay hỏi, kèm câu trả lời dựng sẵn từ số liệu
+ * thật của kỳ và chứng từ phải chìa ra. Khác /audit-check ở chỗ: audit-check
+ * nói "sai chỗ nào", drill nói "họ hỏi gì và trả lời ra sao".
+ */
+router.get('/audit-drill', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const kq = await moPhongThanhTra(prisma, dungKy(req.query))
+        res.json({ success: true, data: kq })
+    } catch (err) {
+        console.error('Mô phỏng thanh tra lỗi:', err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
