@@ -262,15 +262,32 @@ router.put('/:id', authMiddleware, requirePermission('repairs.edit'), validate(U
         const existing: any = await prisma.repair.findUnique({ where: { id } })
         if (!existing) return res.status(404).json({ success: false, error: 'Không tìm thấy phiếu' })
         if (existing.status === 'returned' && !laAdmin(req)) {
-            return res.status(403).json({ success: false, error: 'Phiếu đã trả khách — đã chốt, chỉ admin mới sửa được' })
+            /**
+             * Phiếu đã trả = chốt sổ, NHƯNG nhận dạng khách (tên/SĐT/nối id)
+             * thì vẫn cho bổ sung: phiếu cũ đa số trống khách, mà điền khách
+             * là điều kiện để auto-gắn hoá đơn chạy — chặn nốt là người dùng
+             * kẹt đúng việc được dặn làm (403 đo 13/08/2026). Tiền/kho/trạng
+             * thái vẫn khoá như cũ.
+             */
+            const khoaTru = ['customerName', 'customerPhone', 'customerId']
+            const keCoGiaTri = Object.keys(req.body || {}).filter(k => req.body[k] !== undefined)
+            const chiSuaKhach = keCoGiaTri.length > 0 && keCoGiaTri.every(k => khoaTru.includes(k))
+            if (!chiSuaKhach) {
+                return res.status(403).json({ success: false, error: 'Phiếu đã trả khách — đã chốt, chỉ admin mới sửa được (riêng tên/SĐT khách thì sửa được)' })
+            }
         }
         const { status, cost, notes, completedDate, productId, quantity, source,
-            customerId, transactionId, soldReceiptNumber } = req.body
+            customerId, customerName, customerPhone, transactionId, soldReceiptNumber } = req.body
         const data: any = {}
         if (status) data.status = status
         if (cost !== undefined) data.cost = Number(cost)
         if (notes !== undefined) data.notes = notes
         if (customerId !== undefined) data.customerId = customerId || null
+        // Trước đây PUT không đọc 2 trường này — form sửa tên/SĐT khách lưu
+        // thành công giả (server lặng lẽ bỏ qua). Điền khách là điều kiện của
+        // auto-gắn hoá đơn nên phải nhận thật (13/08/2026).
+        if (customerName !== undefined) data.customerName = String(customerName ?? '')
+        if (customerPhone !== undefined) data.customerPhone = customerPhone || null
         /**
          * Link sang hoá đơn bán: POS gửi kèm lúc chuyển 'returned' sau khi thu
          * tiền — "phiếu sửa xong mà không biết thu ở hoá đơn nào" (13/08/2026).
