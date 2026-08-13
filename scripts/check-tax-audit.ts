@@ -776,7 +776,25 @@ async function main() {
             nangThieuMau.length === 0, `thiếu mẫu: ${nangThieuMau.join(', ')}`)
     }
 
-    // ── 41. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
+    // ── 41. Tiền vào vượt doanh thu ghi nhận ───────────────────────────────
+    {
+        const k = khoSach()
+        // Thu thêm 60tr từ khách (Nợ 111 / Có 131) trong khi doanh thu kỳ chỉ 100tr+10tr thuế
+        k.journal.push({ reference: 'THU-1', date: '2026-08-09', debitAccount: '111', creditAccount: '131', amount: 60_000_000 })
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const c = lay(h, 'tien-vao-vuot-doanh-thu')
+        kiemTra('Bắt tiền vào từ bán hàng cao hơn doanh thu ghi nhận', !!c, JSON.stringify(c?.tienRuiRo))
+    }
+    {
+        const k = khoSach()
+        // Tiền vào từ VAY ngân hàng (Có 341) KHÔNG được tính là tiền bán hàng
+        k.journal.push({ reference: 'VAY-1', date: '2026-08-09', debitAccount: '112', creditAccount: '341', amount: 500_000_000 })
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        kiemTra('Tiền vay/góp vốn không bị coi là doanh thu ngoài sổ',
+            !co(h, 'tien-vao-vuot-doanh-thu'), h.canhBao.map((c: any) => c.code).join(','))
+    }
+
+    // ── 42. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
     {
         const h = await kiemTraThue(fakePrisma(khoSach()), KY)
         kiemTra('Luôn trả checklist hồ sơ cần chuẩn bị', h.hoSoCanChuanBi.length >= 8)

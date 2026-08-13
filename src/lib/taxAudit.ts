@@ -1035,6 +1035,38 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
         }
     } catch { /* bỏ qua */ }
 
+    /* ── 13b. Tiền vào nhiều hơn doanh thu ghi nhận ──────────────────────────
+     * Phép "soi dòng tiền" của đoàn thanh tra: tổng tiền thực nhận (quỹ + ngân
+     * hàng) mà lớn hơn hẳn doanh thu đã ghi thì phần chênh phải giải thích được
+     * bằng nguồn khác (thu nợ cũ, vay, góp vốn, hoàn thuế). Không giải thích
+     * được thì bị quy là doanh thu ngoài sổ.
+     *
+     * CHỈ tính tiền vào từ các tài khoản DOANH THU/PHẢI THU để tránh báo bừa:
+     * vay và góp vốn đã có tài khoản riêng (341, 411) nên không bị tính vào. */
+    {
+        let tienTuBanHang = 0
+        for (const e of butToan) {
+            const no = String(e.debitAccount || '')
+            const co = String(e.creditAccount || '')
+            const laTien = no.startsWith('111') || no.startsWith('112')
+            if (!laTien) continue
+            // Đối ứng là doanh thu, thuế đầu ra hoặc phải thu khách → tiền bán hàng
+            if (co.startsWith('511') || co.startsWith('3331') || co.startsWith('131')) tienTuBanHang += e.amount
+        }
+        const dtVaThue = dtSo + vatRaSo
+        // Thu nợ kỳ trước làm tiền vào cao hơn doanh thu kỳ này một cách hợp lệ,
+        // nên chỉ nói khi chênh lớn hơn 15% và trên 10 triệu.
+        const chenh = tienTuBanHang - dtVaThue
+        if (dtVaThue > 0 && chenh > Math.max(10_000_000, dtVaThue * 0.15)) canhBao.push({
+            code: 'tien-vao-vuot-doanh-thu', muc: 'vua',
+            tieuDe: 'Tiền thu từ bán hàng cao hơn doanh thu đã ghi nhận',
+            chiTiet: `Tiền vào từ bán hàng và phải thu là ${vnd(tienTuBanHang)} ₫, trong khi doanh thu cộng thuế đầu ra chỉ ${vnd(dtVaThue)} ₫ — chênh ${vnd(chenh)} ₫. Phần chênh hợp lệ thường là thu nợ của kỳ trước; nếu không chứng minh được thì bị quy là doanh thu ngoài sổ.`,
+            canCu: 'Điều 50 Luật Quản lý thuế 38/2019 — ấn định thuế khi có căn cứ xác định doanh thu chưa kê khai.',
+            canLam: 'Đối chiếu sổ chi tiết công nợ phải thu để chỉ rõ phần nào là thu nợ kỳ trước; phần còn lại phải kê khai bổ sung doanh thu.',
+            tienRuiRo: Math.round(chenh * 0.1), soLuong: 0, viDu: [],
+        })
+    }
+
     /* ── 14. Mã số thuế người bán sai định dạng ──────────────────────────────
      * MST Việt Nam là 10 số (đơn vị chính) hoặc 13 ký tự dạng 10 số + "-" + 3 số
      * (đơn vị phụ thuộc). Sai định dạng thì chắc chắn không tra cứu được trên hệ
