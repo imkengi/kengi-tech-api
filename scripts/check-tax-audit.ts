@@ -568,7 +568,20 @@ async function main() {
             h.khoanBiLoai.dong.length === 0 && h.khoanBiLoai.thueTndnUocTinh === 0)
     }
 
-    // ── 32. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
+    // ── 32. Phiếu nhập không có hóa đơn GTGT (cần Bảng kê 01/TNDN) ─────────
+    {
+        const k = khoSach()
+        k.imports = [
+            { code: 'NH01', totalCost: 50_000_000, paidAmount: 0, status: 'completed', paymentStatus: 'unpaid', hasVatInvoice: false, supplierName: 'Cô Ba (nông sản)', createdAt: new Date('2026-08-04') },
+            { code: 'NH02', totalCost: 30_000_000, paidAmount: 0, status: 'completed', paymentStatus: 'unpaid', hasVatInvoice: true, vatAmount: 3_000_000, createdAt: new Date('2026-08-05') },
+        ]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const c = lay(h, 'nhap-khong-hoa-don')
+        kiemTra('Bắt phiếu nhập không hóa đơn (phiếu CÓ hóa đơn thì bỏ qua), ước TNDN 20%',
+            !!c && c.soLuong === 1 && c.tienRuiRo === 10_000_000, JSON.stringify({ sl: c?.soLuong, tien: c?.tienRuiRo }))
+    }
+
+    // ── 33. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
     {
         const h = await kiemTraThue(fakePrisma(khoSach()), KY)
         kiemTra('Luôn trả checklist hồ sơ cần chuẩn bị', h.hoSoCanChuanBi.length >= 8)

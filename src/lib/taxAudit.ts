@@ -848,6 +848,31 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
         }
     } catch { /* bỏ qua */ }
 
+    /* ── 13. Mua hàng của hộ/cá nhân không có hóa đơn ────────────────────────
+     * Bán lẻ hay mua nông sản, hàng thủ công của hộ/cá nhân không có hóa đơn.
+     * Khoản này VẪN được tính chi phí nếu lập Bảng kê 01/TNDN kèm chứng từ chi;
+     * thiếu bảng kê thì bị loại. Hệ thống chưa có chỗ lưu bảng kê 01/TNDN nên
+     * đây là NHẮC VIỆC, không phải kết luận sai phạm. */
+    try {
+        const nhaps = await prisma.importReceipt.findMany({
+            where: { status: 'completed', createdAt: { gte: start, lte: end } },
+            select: { code: true, totalCost: true, hasVatInvoice: true, supplierName: true, supplierId: true },
+        })
+        const khongHd = (nhaps || []).filter((r: any) => !r.hasVatInvoice && (r.totalCost || 0) > 0)
+        if (khongHd.length > 0) {
+            const tong = khongHd.reduce((s: number, r: any) => s + (r.totalCost || 0), 0)
+            canhBao.push({
+                code: 'nhap-khong-hoa-don', muc: 'vua',
+                tieuDe: `${khongHd.length} phiếu nhập không có hóa đơn GTGT đầu vào`,
+                chiTiet: `Tổng giá trị ${vnd(tong)} ₫. Mua của hộ/cá nhân không kinh doanh vẫn được tính chi phí NẾU có Bảng kê 01/TNDN kèm chứng từ chi; không có bảng kê thì toàn bộ khoản này bị loại khi quyết toán (thuế TNDN tương ứng khoảng ${vnd(tong * 0.2)} ₫).`,
+                canCu: 'Điều 4 TT 96/2015/TT-BTC — Bảng kê thu mua hàng hóa, dịch vụ mua vào không có hóa đơn (mẫu 01/TNDN).',
+                canLam: 'Lập Bảng kê 01/TNDN cho từng phiếu, có chữ ký người bán và chứng từ thanh toán; lưu cùng phiếu nhập để xuất trình.',
+                tienRuiRo: Math.round(tong * 0.2), soLuong: khongHd.length,
+                viDu: khongHd.slice(0, 5).map((r: any) => `${r.code}${r.supplierName ? ' · ' + r.supplierName : ''}`),
+            })
+        }
+    } catch { /* bỏ qua */ }
+
     // ── Chấm điểm sẵn sàng ───────────────────────────────────────────────────
     const tru: Record<MucRuiRo, number> = { cao: 22, vua: 9, thap: 3 }
     let diem = 100
