@@ -18,6 +18,7 @@ import { kiemTraThue, type KhoangKy } from '../lib/taxAudit'
 import { boHoSoThanhTra, sangCsv, truyVetChungTu } from '../lib/auditPack'
 import { moPhongThanhTra } from '../lib/auditDrill'
 import { moPhongAnDinh, TY_LE_TT40 } from '../lib/taxAssessment'
+import { lapKeHoachKhacPhuc } from '../lib/remediationPlan'
 
 const router = Router()
 
@@ -341,6 +342,31 @@ router.get('/audit-assessment', authMiddleware, async (req: AuthRequest, res: Re
         res.json({ success: true, data: { ...kq, nganhCoThe: TY_LE_TT40 } })
     } catch (err) {
         console.error('Mô phỏng ấn định thuế lỗi:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+/**
+ * GET /api/tax/audit-plan?year=&month=|quarter= — kế hoạch khắc phục.
+ *
+ * Gom phát hiện của phép soát dữ liệu và phép mô phỏng ấn định thành DANH SÁCH
+ * VIỆC có hạn chót, người làm và thứ tự ưu tiên theo tiền/công sức.
+ *
+ * Chạy hai phép quét TUẦN TỰ (soát rồi mới tới ấn định) — pool Prisma mỗi cửa
+ * hàng rất nhỏ, chạy song song là cạn kết nối lúc người khác đang bán hàng.
+ */
+router.get('/audit-plan', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const ky = dungKy(req.query)
+        const hoSo = await kiemTraThue(prisma, ky)
+        const anDinh = await moPhongAnDinh(prisma, ky).catch(() => null)
+        // Hôm nay theo giờ VN — lệch múi giờ là sai hạn chót cả ngày
+        const homNay = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10)
+        const keHoach = lapKeHoachKhacPhuc(hoSo, anDinh, ky, homNay)
+        res.json({ success: true, data: { ...keHoach, diemSanSang: hoSo.diem, xepLoai: hoSo.xepLoai } })
+    } catch (err) {
+        console.error('Kế hoạch khắc phục lỗi:', err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
