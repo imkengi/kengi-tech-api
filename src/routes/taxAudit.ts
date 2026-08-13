@@ -15,6 +15,7 @@ import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { errMsg } from '../lib/errorResponse'
 import { kiemTraThue, type KhoangKy } from '../lib/taxAudit'
+import { boHoSoThanhTra, sangCsv, truyVetChungTu } from '../lib/auditPack'
 
 const router = Router()
 
@@ -217,6 +218,84 @@ router.get('/audit-history', authMiddleware, async (req: AuthRequest, res: Respo
         res.json({ success: true, data })
     } catch (err) {
         console.error('Lịch sử soát thuế lỗi:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+/**
+ * GET /api/tax/audit-pack?year=&month=|quarter=  — bộ hồ sơ thanh tra.
+ *
+ * Trả manifest (tên tài liệu, mẫu sổ, căn cứ, số dòng, số tổng) chứ KHÔNG trả
+ * toàn bộ dòng: một kỳ vài nghìn bút toán mà nhét hết vào JSON là trang treo.
+ * Muốn xem/tải chi tiết thì gọi kèm ?doc=<mã> để lấy CSV.
+ */
+router.get('/audit-pack', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const ky = dungKy(req.query)
+        const bo = await boHoSoThanhTra(prisma, { from: ky.from, to: ky.to, nhan: ky.nhan })
+
+        const doc = String(req.query.doc || '').trim()
+        if (doc) {
+            const t = bo.taiLieu.find(x => x.ma === doc)
+            if (!t) {
+                const thieu = bo.thieu.find(x => x.ma === doc)
+                return res.status(404).json({
+                    success: false,
+                    error: thieu ? `${thieu.ten}: ${thieu.lyDo}` : `Không có tài liệu "${doc}" trong bộ hồ sơ`,
+                })
+            }
+            if (String(req.query.format) === 'csv') {
+                res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+                res.setHeader('Content-Disposition',
+                    `attachment; filename="${t.ma}-${ky.from}-${ky.to}.csv"`)
+                return res.send(sangCsv(t))
+            }
+            return res.json({ success: true, data: { ky: bo.ky, taiLieu: t } })
+        }
+
+        res.json({
+            success: true,
+            data: {
+                ky: bo.ky,
+                tongQuan: bo.tongQuan,
+                thieu: bo.thieu,
+                // Bỏ mảng dòng, chỉ giữ phần mô tả + số tổng
+                taiLieu: bo.taiLieu.map(t => ({
+                    ma: t.ma, ten: t.ten, mau: t.mau, canCu: t.canCu, vaiTro: t.vaiTro,
+                    ghiChu: t.ghiChu, soDong: t.dong.length,
+                    cot: t.cot, tong: t.tong,
+                    // Vài dòng đầu để xem trước, đủ biết bảng có đúng không
+                    xemTruoc: t.dong.slice(0, 5),
+                })),
+            },
+        })
+    } catch (err) {
+        console.error('Bộ hồ sơ thanh tra lỗi:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+/**
+ * GET /api/tax/trace?ma= — truy vết một chứng từ hết chuỗi.
+ *
+ * Đúng thao tác đoàn thanh tra hay làm: chọn ngẫu nhiên vài số hóa đơn rồi bắt
+ * đi hết đường đi của nó. Đứt mắt xích nào thì hỏi vào đúng chỗ đó.
+ */
+router.get('/trace', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const ma = String(req.query.ma || '').trim()
+        if (!ma) {
+            return res.status(400).json({
+                success: false,
+                error: 'Thiếu tham số ma — nhập số phiếu bán, mã phiếu nhập hoặc số hóa đơn điện tử',
+            })
+        }
+        const kq = await truyVetChungTu(prisma, ma)
+        res.json({ success: true, data: kq })
+    } catch (err) {
+        console.error('Truy vết chứng từ lỗi:', err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
