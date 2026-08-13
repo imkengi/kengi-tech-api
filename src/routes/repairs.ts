@@ -269,7 +269,8 @@ router.put('/:id', authMiddleware, requirePermission('repairs.edit'), validate(U
              * kẹt đúng việc được dặn làm (403 đo 13/08/2026). Tiền/kho/trạng
              * thái vẫn khoá như cũ.
              */
-            const khoaTru = ['customerName', 'customerPhone', 'customerId']
+            // Gắn hoá đơn (write-once, đã guard bên dưới) cũng là bổ sung hồ sơ
+            const khoaTru = ['customerName', 'customerPhone', 'customerId', 'transactionId', 'soldReceiptNumber']
             const keCoGiaTri = Object.keys(req.body || {}).filter(k => req.body[k] !== undefined)
             const chiSuaKhach = keCoGiaTri.length > 0 && keCoGiaTri.every(k => khoaTru.includes(k))
             if (!chiSuaKhach) {
