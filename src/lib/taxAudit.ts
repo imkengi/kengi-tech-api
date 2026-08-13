@@ -457,13 +457,58 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
         })
     } catch { /* bỏ qua */ }
 
-    // ── 9. Hồ sơ khai thuế quá hạn ───────────────────────────────────────────
+    /* ── 9. Hồ sơ khai thuế quá hạn ──────────────────────────────────────────
+     * Đọc bảng TaxDeadline NHƯNG không phụ thuộc vào việc bảng đã được seed:
+     * bảng này chỉ được sinh khi ai đó mở trang Lịch thuế, nên nếu chưa ai mở,
+     * phép kiểm tra sẽ câm lặng — đúng lúc cần nó nhất. Vì vậy khi bảng rỗng,
+     * tự dựng hạn nộp trong bộ nhớ theo Điều 44 Luật Quản lý thuế 38/2019. */
     try {
         const homNay = ngayISO(new Date())
         const dl = await prisma.taxDeadline.findMany({
             select: { taxType: true, period: true, dueDate: true, status: true },
         })
-        const treHan = dl.filter((d: any) => d.status !== 'filed' && d.status !== 'paid' && String(d.dueDate) < homNay)
+        if (!dl || dl.length === 0) {
+            // Tự dựng: tờ khai GTGT tháng (hạn 20 tháng sau) + lệ phí môn bài (30/01)
+            const namKy = Number(maKy.slice(0, 4))
+            const tuDung: Array<{ taxType: string; period: string; dueDate: string }> = []
+            for (let m = 1; m <= 12; m++) {
+                const nam = m === 12 ? namKy + 1 : namKy
+                const thang = m === 12 ? 1 : m + 1
+                tuDung.push({
+                    taxType: '01_GTGT', period: `T${String(m).padStart(2, '0')}/${namKy}`,
+                    dueDate: `${nam}-${String(thang).padStart(2, '0')}-20`,
+                })
+            }
+            /* CỐ Ý không tự dựng lệ phí môn bài ở đây: dữ liệu trong phần mềm
+             * không cho biết đã nộp hay chưa, cảnh báo là tố oan. Khoản này đã
+             * nằm trong lịch thuế chính thức (tax.ts) và trong danh mục hồ sơ
+             * cần chuẩn bị bên dưới. */
+
+            /* Danh sách kỳ ĐÃ khai. Nếu không đọc được danh sách này thì TUYỆT
+             * ĐỐI không cảnh báo: coi mọi kỳ là chưa khai sẽ tố oan doanh nghiệp
+             * đã nộp đầy đủ — thà im còn hơn báo sai ở mảng thuế. */
+            let daKhai: Set<string> | null = null
+            try {
+                const tks = await prisma.taxDeclaration.findMany({ select: { period: true } })
+                daKhai = new Set<string>((tks || []).map((t: any) => String(t.period)))
+            } catch { daKhai = null }
+            const treTuDung = daKhai === null ? [] : tuDung.filter(d => {
+                if (d.dueDate >= homNay) return false
+                const m = /^T(\d{2})\/(\d{4})$/.exec(d.period)
+                if (!m) return false
+                return !daKhai!.has(`${m[2]}-${m[1]}`)
+            })
+            if (treTuDung.length > 0) canhBao.push({
+                code: 'to-khai-tre-han-uoc', muc: 'vua',
+                tieuDe: `${treTuDung.length} kỳ có thể đã quá hạn khai thuế`,
+                chiTiet: `Hệ thống chưa có lịch thuế nên tự dựng theo quy định: quá hạn sớm nhất là ${treTuDung.map(d => d.dueDate).sort()[0]}. Danh sách này dựa trên việc CHƯA thấy tờ khai trong phần mềm — nếu đã nộp ngoài hệ thống thì nhập lại để đối chiếu.`,
+                canCu: 'Điều 44 Luật Quản lý thuế 38/2019 — thời hạn nộp hồ sơ khai thuế; Điều 13 NĐ 125/2020 — phạt chậm nộp.',
+                canLam: 'Mở trang Lịch thuế để hệ thống lập lịch chính thức, rồi đánh dấu các kỳ đã nộp.',
+                tienRuiRo: null, soLuong: treTuDung.length,
+                viDu: treTuDung.slice(0, 5).map(d => `${d.taxType} kỳ ${d.period} · hạn ${d.dueDate}`),
+            })
+        }
+        const treHan = (dl || []).filter((d: any) => d.status !== 'filed' && d.status !== 'paid' && String(d.dueDate) < homNay)
         if (treHan.length > 0) canhBao.push({
             code: 'to-khai-tre-han', muc: 'cao',
             tieuDe: `${treHan.length} hồ sơ khai thuế đã quá hạn`,
@@ -673,6 +718,7 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
             'Hợp đồng lao động, bảng lương, chứng từ khấu trừ thuế TNCN',
             'Quyết định/thông báo chương trình khuyến mãi (nếu có bán dưới giá vốn)',
             'Biên bản hủy, điều chỉnh hóa đơn kèm thỏa thuận với người mua',
+            'Chứng từ nộp lệ phí môn bài của năm (hạn 30/01 hằng năm)',
         ],
         giaiTrinh: canhBao.map(c => soanGiaiTrinh(c, nhan)).filter((g): g is GiaiTrinh => g !== null),
     }

@@ -6694,6 +6694,18 @@ function generateDeadlinesForYear(year: number): DeadlineSeed[] {
         description: `Bao cao tai chinh nam ${year}`,
     })
 
+    /* Lệ phí môn bài — hạn nộp 30/01 hằng năm (Điều 5 NĐ 139/2016, sửa đổi bởi
+     * NĐ 22/2020). Trước đây bộ hạn nộp bỏ sót khoản này: số tiền nhỏ nhưng
+     * chậm nộp vẫn bị phạt và là lỗi bị bắt nhiều nhất khi rà soát. Mức nộp tùy
+     * vốn điều lệ (doanh nghiệp) hoặc doanh thu năm trước (hộ kinh doanh) nên
+     * ghi rõ trong mô tả thay vì áp một con số cứng. */
+    out.push({
+        taxType: 'MON_BAI',
+        period: `MB-${year}`,
+        dueDate: fmtDateYMD(year, 1, 30),
+        description: `Le phi mon bai nam ${year} — DN: 2tr (von <=10 ty) / 3tr (von >10 ty); HKD: 300k-1tr theo doanh thu nam truoc`,
+    })
+
     return out
 }
 

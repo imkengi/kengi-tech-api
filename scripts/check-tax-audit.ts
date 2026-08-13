@@ -50,7 +50,10 @@ function fakePrisma(k: Kho) {
     }
     return {
         journalEntry: { findMany: async ({ where }: any = {}) => k.journal.filter(e => chuoi(e.date, where?.date)) },
-        taxDeclaration: { findFirst: async ({ where }: any = {}) => k.declarations.find(d => d.period === where?.period) ?? null },
+        taxDeclaration: {
+            findFirst: async ({ where }: any = {}) => k.declarations.find(d => d.period === where?.period) ?? null,
+            findMany: async () => k.declarations,
+        },
         eInvoice: { findMany: async ({ where }: any = {}) => k.invoices.filter(i => chuoi(i.invoiceDate, where?.invoiceDate)) },
         expense: { findMany: async ({ where }: any = {}) => k.expenses.filter(e => ngay(e.date, where?.date)) },
         importReceipt: { findMany: async ({ where }: any = {}) => k.imports.filter(i => ngay(i.createdAt, where?.createdAt)) },
@@ -86,7 +89,13 @@ function khoSach(): Kho {
             { date: '2026-08-03', debitAccount: '1331', creditAccount: '331', amount: 4_000_000 },
             { date: '2026-08-01', debitAccount: '111', creditAccount: '411', amount: 50_000_000 },
         ],
-        declarations: [{ period: '2026-08', ct29: 100_000_000, ct30: 10_000_000, ct33: 4_000_000 }],
+        /* Cửa hàng sạch = đã khai đủ các kỳ đã qua trong năm (1–8/2026), kỳ đang
+         * soát có số khớp sổ. Thiếu phần này thì chính bộ soát sẽ kêu "chưa khai
+         * các tháng đầu năm" — và nó kêu đúng. */
+        declarations: [
+            ...Array.from({ length: 7 }, (_, i) => ({ period: `2026-${String(i + 1).padStart(2, '0')}`, ct29: 0, ct30: 0, ct33: 0 })),
+            { period: '2026-08', ct29: 100_000_000, ct30: 10_000_000, ct33: 4_000_000 },
+        ],
         invoices: [
             { invoiceDate: '2026-08-05', invoiceType: 'SALE', status: 'SIGNED', totalBeforeVat: 100_000_000, vatAmount: 10_000_000, totalAmount: 110_000_000 },
         ],
@@ -394,7 +403,43 @@ async function main() {
             !h.giaiTrinh.some((g: any) => g.code === 'hoadon-huy-nhieu'))
     }
 
-    // ── 25. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
+    // ── 25. Chưa có lịch thuế thì vẫn phải cảnh báo được ───────────────────
+    {
+        const k = khoSach()
+        k.deadlines = []                    // bảng lịch thuế rỗng (chưa ai mở trang)
+        k.declarations = [{ period: '2026-08', ct29: 100_000_000, ct30: 10_000_000, ct33: 4_000_000 }]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const c = lay(h, 'to-khai-tre-han-uoc')
+        // Kỳ 8/2026 đã khai; các kỳ 1-7/2026 chưa khai và đã quá hạn → phải kêu
+        kiemTra('Chưa có lịch thuế vẫn tự dựng hạn và bắt kỳ quá hạn',
+            !!c && c.soLuong >= 1 && !c.viDu.some((v: string) => v.includes('T08/2026')),
+            JSON.stringify(c?.viDu))
+    }
+    {
+        const k = khoSach()
+        k.deadlines = []
+        // Đã khai đủ 12 tháng + đã qua hạn môn bài → chỉ còn môn bài bị kêu
+        k.declarations = Array.from({ length: 12 }, (_, i) => ({ period: `2026-${String(i + 1).padStart(2, '0')}`, ct29: 0, ct30: 0, ct33: 0 }))
+        k.declarations[7] = { period: '2026-08', ct29: 100_000_000, ct30: 10_000_000, ct33: 4_000_000 }
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        // Đã khai đủ mọi kỳ → không được cảnh báo gì. Lệ phí môn bài CỐ Ý không
+        // tự dựng vì dữ liệu không cho biết đã nộp hay chưa (tránh tố oan).
+        kiemTra('Đã khai đủ các kỳ thì im lặng hoàn toàn',
+            !co(h, 'to-khai-tre-han-uoc'), JSON.stringify(lay(h, 'to-khai-tre-han-uoc')?.viDu))
+    }
+
+    // ── 26b. Không đọc được danh sách tờ khai → PHẢI IM, không tố oan ──────
+    {
+        const k = khoSach()
+        k.deadlines = []
+        const p: any = fakePrisma(k)
+        p.taxDeclaration.findMany = async () => { throw new Error('DB lỗi') }
+        const h = await kiemTraThue(p, KY)
+        kiemTra('Không đọc được danh sách tờ khai thì không cảnh báo quá hạn (thà im còn hơn tố oan)',
+            !co(h, 'to-khai-tre-han-uoc'), h.canhBao.map((c: any) => c.code).join(','))
+    }
+
+    // ── 27. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
     {
         const h = await kiemTraThue(fakePrisma(khoSach()), KY)
         kiemTra('Luôn trả checklist hồ sơ cần chuẩn bị', h.hoSoCanChuanBi.length >= 8)
