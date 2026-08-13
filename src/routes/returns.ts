@@ -6,6 +6,7 @@ import { requirePermission } from '../middleware/permissionMiddleware'
 import { CreateReturnSchema, UpdateReturnSchema } from '../schemas'
 import { nextCode } from '../lib/codeGenerator'
 import { adjustSellableStock } from '../lib/warehouseHelper'
+import { postReturnJournal } from '../lib/autoJournalPurchase'
 
 const router = Router()
 
@@ -248,11 +249,15 @@ router.post('/', authMiddleware, requirePermission('returns.create'), validate(C
         }
 
         // Auto-restock items
+        // Ghi lại đúng những dòng THỰC SỰ nhập lại kho — bút toán Nợ 156/Có 632
+        // chỉ được ghi cho phần hàng quay lại kho, hàng hỏng không tính.
+        const dsNhapLai: Array<{ productId: string; quantity: number }> = []
         try {
             const storeSettings = await prisma.storeSettings.findFirst()
             if (storeSettings?.autoRestockOnReturn) {
                 for (const item of returnOrder.items) {
                     if (!item.productId || item.condition === 'damaged' || item.condition === 'defective') continue
+                    dsNhapLai.push({ productId: item.productId, quantity: item.quantity })
 
                     // Mark as restocked
                     await prisma.returnItem.update({
@@ -283,6 +288,39 @@ router.post('/', authMiddleware, requirePermission('returns.create'), validate(C
             }
         } catch (restockErr) {
             console.error('Auto restock on return creation failed (non-fatal):', restockErr)
+        }
+
+        /* ─── Ghi sổ kế toán cho phiếu trả ──────────────────────────────────
+         * Nợ 5212 / Có 111|131 (giảm doanh thu), Nợ 3331 (giảm VAT đầu ra theo
+         * tỷ lệ thuế của hóa đơn gốc), Nợ 156 / Có 632 cho phần hàng nhập lại.
+         * Trước đây trả hàng KHÔNG sinh bút toán nào: doanh thu trên sổ vẫn giữ
+         * nguyên dù tiền đã trả lại khách, tồn kho sổ cũng không tăng lại. */
+        try {
+            let giaVonNhapLai = 0
+            for (const d of dsNhapLai) {
+                const p = await prisma.product.findUnique({ where: { id: d.productId }, select: { costPrice: true } })
+                giaVonNhapLai += (p?.costPrice ?? 0) * (d.quantity ?? 0)
+            }
+            let vatTra = 0
+            if (txId) {
+                const goc = await prisma.transaction.findUnique({ where: { id: txId }, select: { tax: true, total: true } })
+                if (goc && goc.total > 0 && goc.tax > 0) {
+                    vatTra = Math.round((Number(totalRefund) || 0) * (goc.tax / goc.total))
+                }
+            }
+            await postReturnJournal(prisma, {
+                code: returnOrder.code,
+                customerName: returnOrder.customerName,
+                originalInvoice: returnOrder.originalInvoice,
+                totalRefund: Number(totalRefund) || 0,
+                refundMethod: returnOrder.refundMethod,
+                costValue: giaVonNhapLai,
+                vatAmount: vatTra,
+                branchId: returnOrder.branchId,
+                createdAt: returnOrder.createdAt,
+            }, { branchId: returnOrder.branchId || null, userId: req.user?.userId || null })
+        } catch (jErr) {
+            console.error('Ghi sổ phiếu trả hàng thất bại (không chặn nghiệp vụ):', jErr)
         }
 
         res.status(201).json({ success: true, data: returnOrder })

@@ -5,6 +5,7 @@ import { calculateCostPrice, getCostPriceMethod } from '../lib/costPrice'
 import { nextCode } from '../lib/codeGenerator'
 import { getOrCreateDefaultWarehouse, updateWarehouseStock, adjustSellableStock } from '../lib/warehouseHelper'
 import { emitStockChanged, emitEntityEvent, webhooksActive } from '../lib/webhookDispatch'
+import { postImportReceiptJournal, postExpenseJournal, refsOfImport, reverseJournalRefs } from '../lib/autoJournalPurchase'
 
 // Payload phiếu nhập cho webhook (kèm thông tin NCC + chi tiết mặt hàng)
 const importPayload = (r: any) => ({
@@ -346,6 +347,18 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
             }
         }
 
+        /* Ghi sổ kế toán NGAY khi phiếu đã hoàn tất (Nợ 156 + 1331 / Có 331, và
+         * phần trả ngay Nợ 331 / Có 111). Phiếu nháp chưa phải nghiệp vụ nên
+         * không ghi. Không chặn phản hồi nếu ghi sổ hỏng — bút toán còn có thể
+         * dựng lại bằng POST /api/tax/auto-journal. */
+        if (receipt.status === 'completed') {
+            await postImportReceiptJournal(prisma, receipt as any, {
+                branchId: receipt.branchId || branchId || null,
+                userId: user.userId || user.id,
+                vatKhauTru: !_vatIntoCost,
+            }).catch(() => { })
+        }
+
         res.status(201).json({
             success: true,
             data: {
@@ -600,7 +613,7 @@ router.put('/:id/pay', authMiddleware, async (req: AuthRequest, res: Response) =
         // category 'supplier_payment' → auto-journal ghi Nợ 331/Có 11x (giảm phải
         // trả), KHÔNG vào chi phí 6428. paidBy quyết định vế Có 111 (cash) hay 112.
         const payBy = String(req.body?.paidBy || req.body?.method || 'cash').toLowerCase()
-        await (prisma as any).expense.create({
+        const phieuChi = await (prisma as any).expense.create({
             data: {
                 description: `Trả tiền NCC ${receipt.supplierName || ''} - phiếu nhập ${receipt.code}`.trim(),
                 amount: payAmount,
@@ -609,7 +622,17 @@ router.put('/:id/pay', authMiddleware, async (req: AuthRequest, res: Response) =
                 date: new Date(),
                 branchId: receipt.branchId || null,
             },
-        }).catch((e: any) => console.error('Expense mirror failed:', e.message))
+        }).catch((e: any) => { console.error('Expense mirror failed:', e.message); return null })
+
+        /* Ghi sổ ngay cho phiếu chi vừa tạo (Nợ 331 / Có 111|112 vì category là
+         * supplier_payment). CHỈ ghi qua đường phiếu chi này — thêm một bút toán
+         * PAYSUP-* nữa là ghi trùng, vì backfill cũng ghi theo EXP-<id>. */
+        if (phieuChi) {
+            await postExpenseJournal(prisma, phieuChi as any, {
+                branchId: receipt.branchId || null,
+                userId: (req as any).user?.userId || (req as any).user?.id || null,
+            }).catch(() => { })
+        }
 
         // Audit log (best-effort)
         try {

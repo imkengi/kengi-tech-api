@@ -6,6 +6,7 @@ import { CreateExpenseSchema, UpdateExpenseSchema } from '../schemas'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { enforcePeriodLock } from '../lib/periodLock'
 import { emitEntityEvent } from '../lib/webhookDispatch'
+import { postExpenseJournal, refsOfExpense, reverseJournalRefs } from '../lib/autoJournalPurchase'
 
 const router = Router()
 
@@ -97,6 +98,16 @@ router.post('/', authMiddleware, requireRole('admin', 'manager'), validate(Creat
             }).catch((e: any) => console.error('Bank transaction mirror failed:', e.message))
         }
 
+        /* Ghi sổ kế toán ngay: Nợ 641/642 (theo loại) / Có 111|112, tách VAT đầu
+         * vào sang 1331. Phiếu 'pending' (bóc tự động từ hộp thư, chờ duyệt)
+         * KHÔNG ghi — chưa được xác nhận thì chưa phải nghiệp vụ. */
+        if ((expense.status ?? 'active') === 'active') {
+            await postExpenseJournal(prisma, expense as any, {
+                branchId: expense.branchId || null,
+                userId: req.user?.userId || null,
+            }).catch(() => { })
+        }
+
         cacheDel(`${req.user?.storeSchema || 'default'}:expenses:*`).catch(() => {})
         res.status(201).json({ success: true, data: expense })
         emitEntityEvent(prisma, 'expense.created', expensePayload(expense), req.user?.storeSchema).catch(() => { })
@@ -169,6 +180,12 @@ router.post('/:id/cancel', authMiddleware, requireRole('admin', 'manager'), asyn
                 },
             }).catch((e: any) => console.error('Bank transaction reversal failed:', e.message))
         }
+
+        /* Hủy phiếu chi thì phải ghi BÚT TOÁN ĐẢO, không xóa bút toán cũ — sổ kế
+         * toán sửa bằng bút toán đảo mới giữ được dấu vết kiểm toán. */
+        await reverseJournalRefs(prisma, refsOfExpense(existing.id), {
+            branchId: existing.branchId || null, userId: req.user?.userId || null,
+        }).catch(() => { })
 
         cacheDel(`${req.user?.storeSchema || 'default'}:expenses:*`).catch(() => {})
         res.json({ success: true, data: expense })
