@@ -6783,12 +6783,18 @@ router.get('/deadlines', authMiddleware, async (req: AuthRequest, res: Response)
         })
         // Bổ sung field FE cần: type/label/daysUntilDue/estimatedAmount + status
         // upcoming|due_soon (giữ nguyên field gốc để không vỡ chỗ khác)
+        const seedTheoKhoa = new Map(seeds.map(x => [`${x.taxType}|${x.period}`, x]))
         const nowMs = Date.now()
         const enriched = data.map((d: any) => {
             const daysUntilDue = Math.ceil((new Date(d.dueDate).getTime() - nowMs) / 86400000)
             const feStatus = d.status === 'pending'
                 ? (daysUntilDue <= 7 ? 'due_soon' : 'upcoming')
                 : d.status
+            /* Bảng TaxDeadline không có cột căn cứ pháp lý và loại việc, mà hai
+             * thứ đó lại quan trọng: rất nhiều người nhầm "tạm nộp thuế TNDN
+             * quý" là phải nộp tờ khai, rồi đi tìm mẫu tờ khai không tồn tại.
+             * Gắn lại từ lịch chuẩn vừa dựng, khớp theo loại + kỳ. */
+            const chuan = seedTheoKhoa.get(`${d.taxType}|${d.period}`)
             return {
                 ...d,
                 type: d.taxType,
@@ -6797,6 +6803,8 @@ router.get('/deadlines', authMiddleware, async (req: AuthRequest, res: Response)
                 estimatedAmount: d.estimatedAmount ?? d.amount ?? 0,
                 status: feStatus,
                 rawStatus: d.status,
+                canCu: chuan?.canCu ?? null,
+                loaiViec: chuan?.loaiViec ?? null,
             }
         })
         res.json({ success: true, data: enriched })
