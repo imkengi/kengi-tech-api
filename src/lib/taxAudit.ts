@@ -226,6 +226,62 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
     let _chiTienMat = 0, _vatTienMat = 0, _soTienMat = 0
     let _vatThieuTt = 0, _soThieuTt = 0
 
+    /* ── Bộ nạp dữ liệu dùng chung ───────────────────────────────────────────
+     * Trước đây mỗi phép soát tự truy vấn lấy dữ liệu của mình: hóa đơn bị nạp
+     * 5 lần, phiếu chi 4 lần… tổng 27 truy vấn mỗi lần soát. Bản đồ rủi ro 12
+     * tháng gọi 12 lần liên tiếp = hơn 300 truy vấn, quá nặng cho pool Prisma
+     * nhỏ của từng cửa hàng. Nạp một lần rồi dùng lại, và tách riêng bản CÓ dòng
+     * chi tiết hóa đơn (nặng hơn) cho đúng phép cần nó. */
+    const nap = <T,>(fn: () => Promise<T>) => {
+        let cache: Promise<T> | null = null
+        return () => (cache ??= fn().catch(() => null as any))
+    }
+
+    const layHoaDon = nap(() => prisma.eInvoice.findMany({
+        where: { invoiceDate: { gte: from, lte: to } },
+        select: {
+            invoiceNumber: true, invoiceSymbol: true, invoiceDate: true, invoiceType: true,
+            status: true, createdAt: true, transactionId: true,
+            totalBeforeVat: true, vatAmount: true, totalAmount: true,
+            buyerName: true, buyerTaxCode: true, paymentMethod: true,
+        },
+    }))
+    const layHoaDonKemDong = nap(() => prisma.eInvoice.findMany({
+        where: { invoiceDate: { gte: from, lte: to } },
+        select: {
+            invoiceNumber: true, invoiceSymbol: true, status: true,
+            items: { select: { itemName: true, vatRate: true, vatAmount: true, amount: true } },
+        },
+    }))
+    const layPhieuChi = nap(() => prisma.expense.findMany({
+        where: { date: { gte: start, lte: end } },
+        select: {
+            id: true, description: true, amount: true, vatAmount: true, invoiceNo: true,
+            supplierName: true, supplierTaxCode: true, invoiceDate: true,
+            paidBy: true, bankAccountId: true, status: true, category: true,
+        },
+    }))
+    const layPhieuNhap = nap(() => prisma.importReceipt.findMany({
+        where: { status: 'completed', createdAt: { gte: start, lte: end } },
+        select: {
+            code: true, totalCost: true, vatAmount: true, paidAmount: true,
+            hasVatInvoice: true, supplierName: true, supplierId: true,
+        },
+    }))
+    const layGiaoDich = nap(() => prisma.transaction.findMany({
+        where: { status: { in: ['completed', 'partial'] }, createdAt: { gte: start, lte: end } },
+        select: {
+            id: true, receiptNumber: true, total: true,
+            items: { select: { productId: true, productName: true, quantity: true, lineTotal: true, product: { select: { costPrice: true } } } },
+        },
+    }))
+    const layCauHinh = nap(() => prisma.storeSettings.findFirst({ select: { businessType: true, taxCode: true } }))
+    /** Bút toán TRƯỚC kỳ — để tính số dư đầu kỳ và số dư lũy kế mà không phải quét lại */
+    const layButToanTruocKy = nap(() => prisma.journalEntry.findMany({
+        where: { date: { lt: from } },
+        select: { debitAccount: true, creditAccount: true, amount: true },
+    }))
+
     // ── Số liệu trên SỔ ──────────────────────────────────────────────────────
     const butToan: Array<{ debitAccount: string; creditAccount: string; amount: number; date: string }> =
         await prisma.journalEntry.findMany({
@@ -262,10 +318,7 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
     let dtHoaDon = 0
     let soHdHuy = 0, soHdTong = 0
     try {
-        const hds = await prisma.eInvoice.findMany({
-            where: { invoiceDate: { gte: from, lte: to } },
-            select: { invoiceNumber: true, invoiceType: true, status: true, totalBeforeVat: true, vatAmount: true, totalAmount: true, buyerTaxCode: true, buyerName: true, paymentMethod: true },
-        })
+        const hds = (await layHoaDon()) || []
         soHdTong = hds.length
         for (const h of hds) {
             const st = String(h.status || '').toUpperCase()
@@ -351,10 +404,7 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
 
     // ── 3. Thanh toán tiền mặt vượt ngưỡng cho hóa đơn có VAT ────────────────
     try {
-        const chi = await prisma.expense.findMany({
-            where: { date: { gte: start, lte: end } },
-            select: { id: true, description: true, amount: true, vatAmount: true, invoiceNo: true, supplierName: true, paidBy: true, bankAccountId: true, status: true, category: true },
-        })
+        const chi = (await layPhieuChi()) || []
         const tienMatVuot = chi.filter((e: any) =>
             (e.status ?? 'active') === 'active'
             && String(e.category || '') !== 'supplier_payment'
@@ -403,10 +453,7 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
 
     // ── 5. Phiếu nhập có hóa đơn GTGT nhưng trả ngay bằng tiền mặt ───────────
     try {
-        const nhaps = await prisma.importReceipt.findMany({
-            where: { status: 'completed', createdAt: { gte: start, lte: end } },
-            select: { code: true, totalCost: true, vatAmount: true, paidAmount: true, hasVatInvoice: true, supplierName: true },
-        })
+        const nhaps = (await layPhieuNhap()) || []
         const nghiNgo = nhaps.filter((r: any) =>
             r.hasVatInvoice && (r.paidAmount || 0) >= NGUONG_KHONG_TIEN_MAT)
         if (nghiNgo.length > 0) {
@@ -455,15 +502,11 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
         }
         // Số dư đầu kỳ của quỹ để cộng dồn cho đúng
         let duDau = 0
-        try {
-            const truoc: Array<{ debitAccount: string; creditAccount: string; amount: number }> =
-                await prisma.journalEntry.findMany({
-                    where: { date: { lt: from } },
-                    select: { debitAccount: true, creditAccount: true, amount: true },
-                })
+        {
+            const truoc = (await layButToanTruocKy()) || []
             const p = phatSinh(truoc, '111')
             duDau = p.no - p.co
-        } catch { /* bỏ qua */ }
+        }
         let duy = duDau
         const ngayAm: string[] = []
         let amNhat = 0
@@ -488,13 +531,7 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
 
     // ── 8. Bán dưới giá vốn ──────────────────────────────────────────────────
     try {
-        const txs = await prisma.transaction.findMany({
-            where: { status: { in: ['completed', 'partial'] }, createdAt: { gte: start, lte: end } },
-            select: {
-                receiptNumber: true,
-                items: { select: { productId: true, productName: true, quantity: true, lineTotal: true, product: { select: { costPrice: true } } } },
-            },
-        })
+        const txs = (await layGiaoDich()) || []
         let soDong = 0, tienLo = 0
         const viDu: string[] = []
         for (const t of txs) {
@@ -612,10 +649,7 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
      * sau khi sự việc đã xảy ra (lùi ngày). Hóa đơn bị HỦY vẫn giữ số nên vẫn
      * nằm trong dữ liệu — số thiếu nghĩa là số đó chưa từng được ghi nhận. */
     try {
-        const hds = await prisma.eInvoice.findMany({
-            where: { invoiceDate: { gte: from, lte: to } },
-            select: { invoiceNumber: true, invoiceSymbol: true, invoiceDate: true, status: true, createdAt: true },
-        })
+        const hds = (await layHoaDon()) || []
         const theoKyHieu: Record<string, Array<{ so: number; goc: string }>> = {}
         const trungSo: string[] = []
         for (const h of (hds || [])) {
@@ -689,13 +723,7 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
      * Không kết luận thuế suất nào đúng — việc đó tùy mặt hàng — chỉ chỉ ra chỗ
      * KHÔNG NHẤT QUÁN để kế toán tự đối chiếu biểu thuế. */
     try {
-        const hdct = await prisma.eInvoice.findMany({
-            where: { invoiceDate: { gte: from, lte: to } },
-            select: {
-                invoiceNumber: true, invoiceSymbol: true, status: true,
-                items: { select: { itemName: true, vatRate: true, vatAmount: true, amount: true } },
-            },
-        })
+        const hdct = (await layHoaDonKemDong()) || []
         const saiSoHoc: string[] = []
         let tienSaiSoHoc = 0
         const rateTheoTen: Record<string, Set<number>> = {}
@@ -744,10 +772,7 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
      * Người mua là doanh nghiệp thì phải có MST trên hóa đơn mới khấu trừ được;
      * bên bán bị hỏi vì xuất hóa đơn thiếu chỉ tiêu bắt buộc. */
     try {
-        const hds = await prisma.eInvoice.findMany({
-            where: { invoiceDate: { gte: from, lte: to } },
-            select: { invoiceNumber: true, status: true, invoiceType: true, totalAmount: true, buyerName: true, buyerTaxCode: true },
-        })
+        const hds = (await layHoaDon()) || []
         const thieuMstMua = (hds || []).filter((h: any) => {
             const st = String(h.status || '').toUpperCase()
             if (st === 'CANCELLED' || st === 'DRAFT' || st === 'ERROR' || st === 'REPLACED') return false
@@ -817,10 +842,7 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
 
     // ── 10. Hóa đơn đầu vào thiếu thông tin bắt buộc để khấu trừ ─────────────
     try {
-        const chiVat = await prisma.expense.findMany({
-            where: { date: { gte: start, lte: end } },
-            select: { id: true, description: true, amount: true, vatAmount: true, invoiceNo: true, supplierTaxCode: true, invoiceDate: true, status: true, category: true },
-        })
+        const chiVat = (await layPhieuChi()) || []
         const thieuTt = chiVat.filter((e: any) =>
             (e.status ?? 'active') === 'active'
             && String(e.category || '') !== 'supplier_payment'
@@ -908,7 +930,7 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
      * Từ 01/01/2026 bỏ thuế khoán (NQ 198/2025), HKD chuyển sang kê khai theo
      * doanh thu thực — nên phần sổ sách và hóa đơn của HKD bị soi kỹ hơn trước. */
     try {
-        const cauHinh = await prisma.storeSettings.findFirst({ select: { businessType: true } }).catch(() => null)
+        const cauHinh = await layCauHinh()
         const laHkd = cauHinh?.businessType === 'household' || cauHinh?.businessType === 'individual'
         if (laHkd) {
             const nam = Number(maKy.slice(0, 4))
@@ -943,10 +965,7 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
      * hóa đơn mang ngày kỳ sau thì doanh thu bị đẩy sang kỳ sau, làm sai cả tờ
      * khai GTGT lẫn kỳ tính thuế TNDN. */
     try {
-        const txKy = await prisma.transaction.findMany({
-            where: { status: { in: ['completed', 'partial'] }, createdAt: { gte: start, lte: end } },
-            select: { id: true, receiptNumber: true, total: true },
-        })
+        const txKy = (await layGiaoDich()) || []
         const idTrongKy = new Map<string, { receiptNumber: string; total: number }>(
             (txKy || []).map((t: any) => [t.id, { receiptNumber: t.receiptNumber, total: t.total || 0 }]),
         )
@@ -1024,10 +1043,7 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
      * thiếu bảng kê thì bị loại. Hệ thống chưa có chỗ lưu bảng kê 01/TNDN nên
      * đây là NHẮC VIỆC, không phải kết luận sai phạm. */
     try {
-        const nhaps = await prisma.importReceipt.findMany({
-            where: { status: 'completed', createdAt: { gte: start, lte: end } },
-            select: { code: true, totalCost: true, hasVatInvoice: true, supplierName: true, supplierId: true },
-        })
+        const nhaps = (await layPhieuNhap()) || []
         const khongHd = (nhaps || []).filter((r: any) => !r.hasVatInvoice && (r.totalCost || 0) > 0)
         if (khongHd.length > 0) {
             const tong = khongHd.reduce((s: number, r: any) => s + (r.totalCost || 0), 0)
@@ -1080,10 +1096,7 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
      * (đơn vị phụ thuộc). Sai định dạng thì chắc chắn không tra cứu được trên hệ
      * thống của cơ quan thuế, tức là hóa đơn không đối chiếu được → mất khấu trừ. */
     try {
-        const chiMst = await prisma.expense.findMany({
-            where: { date: { gte: start, lte: end } },
-            select: { id: true, description: true, supplierTaxCode: true, supplierName: true, vatAmount: true, status: true, category: true },
-        })
+        const chiMst = (await layPhieuChi()) || []
         const saiMst = (chiMst || []).filter((e: any) => {
             if ((e.status ?? 'active') !== 'active') return false
             if (String(e.category || '') === 'supplier_payment') return false
@@ -1112,10 +1125,7 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
      * Trùng hóa đơn thường chỉ là nhập liệu hai lần, nhưng vẫn làm khấu trừ
      * thừa nên phải sửa; mua của chính mình thì gần như luôn là nhập nhầm. */
     try {
-        const chiHd = await prisma.expense.findMany({
-            where: { date: { gte: start, lte: end } },
-            select: { id: true, description: true, invoiceNo: true, supplierTaxCode: true, supplierName: true, vatAmount: true, amount: true, status: true, category: true },
-        })
+        const chiHd = (await layPhieuChi()) || []
         const hopLe = (chiHd || []).filter((e: any) =>
             (e.status ?? 'active') === 'active' && String(e.category || '') !== 'supplier_payment')
 
@@ -1144,7 +1154,7 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
             })
         }
 
-        const st = await prisma.storeSettings.findFirst({ select: { taxCode: true } }).catch(() => null)
+        const st = await layCauHinh()
         const mstMinh = String(st?.taxCode || '').trim()
         if (mstMinh) {
             const tuMua = hopLe.filter((e: any) => String(e.supplierTaxCode || '').trim() === mstMinh)
@@ -1166,15 +1176,12 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
      * Cơ quan thuế luôn soi số dư này vì nó là tiền nhà nước đang "nợ" doanh
      * nghiệp — và cũng là chỗ hay bị kê khống hóa đơn đầu vào. */
     {
+        /* Lũy kế = bút toán TRƯỚC kỳ (đã nạp sẵn) + bút toán trong kỳ. Ghép từ
+         * hai tập đã có thay vì quét lại toàn bộ sổ thêm một lần nữa. */
         const ps133LuyKe = await (async () => {
-            try {
-                const bt: Array<{ debitAccount: string; creditAccount: string; amount: number }> =
-                    await prisma.journalEntry.findMany({
-                        where: { date: { lte: to } },
-                        select: { debitAccount: true, creditAccount: true, amount: true },
-                    })
-                return phatSinh(bt, '133')
-            } catch { return null }
+            const truoc = await layButToanTruocKy()
+            if (!truoc) return null
+            return phatSinh([...truoc, ...butToan], '133')
         })()
         if (ps133LuyKe) {
             const du = ps133LuyKe.no - ps133LuyKe.co
