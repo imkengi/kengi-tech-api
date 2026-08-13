@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { authMiddleware, AuthRequest, getBranchFilter } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
+import { errMsg } from '../lib/errorResponse'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { ensureDefaultWarehouses } from './warehouses'
 
@@ -396,6 +397,97 @@ router.post('/migrate-branch-ids', authMiddleware, requireRole('admin', 'superad
     } catch (err) {
         console.error('Migrate branch IDs error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  NHÂN VIÊN CỦA CHI NHÁNH
+ *
+ *  Giao diện trang Chi Nhánh đã gọi ba đường này từ lâu nhưng backend chưa bao
+ *  giờ có chúng: danh sách nhân viên luôn rỗng, hai nút gán/bỏ gán bấm vào chỉ
+ *  hiện lỗi đỏ. Phát hiện bằng scripts/check-api-contract.ts.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+// GET /api/branches/:id/employees — nhân viên đang thuộc chi nhánh
+router.get('/:id/employees', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const branchId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
+        const employees = await prisma.user.findMany({
+            where: { branchId },
+            select: {
+                id: true, name: true, email: true, role: true,
+                employeeStatus: true, avatar: true,
+            },
+            orderBy: { name: 'asc' },
+        })
+        // Giao diện đọc `status` — ánh xạ ở đây thay vì bắt nó biết tên cột thật
+        res.json({
+            success: true,
+            data: (employees || []).map((e: any) => ({
+                id: e.id, name: e.name, email: e.email, role: e.role,
+                status: e.employeeStatus, avatar: e.avatar ?? null,
+            })),
+        })
+    } catch (err: any) {
+        console.error('GET /branches/:id/employees error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// POST /api/branches/:id/assign — gán nhân viên vào chi nhánh
+router.post('/:id/assign', authMiddleware, requireRole('admin', 'manager', 'superadmin'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const branchId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
+        const userId = String(req.body?.userId || '')
+        if (!userId) return res.status(400).json({ success: false, error: 'Thiếu userId' })
+
+        const branch = await prisma.branch.findUnique({ where: { id: branchId } })
+        if (!branch) return res.status(404).json({ success: false, error: 'Không tìm thấy chi nhánh' })
+
+        const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, branchId: true } })
+        if (!user) return res.status(404).json({ success: false, error: 'Không tìm thấy nhân viên' })
+
+        const updated = await prisma.user.update({
+            where: { id: userId },
+            data: { branchId },
+            select: { id: true, name: true, email: true, role: true, employeeStatus: true, branchId: true },
+        })
+        // Danh sách nhân viên hay được đọc từ cache — không xóa thì trang vẫn hiện số cũ
+        await cacheDel('employees').catch(() => { })
+        res.json({ success: true, data: { ...updated, status: updated.employeeStatus } })
+    } catch (err: any) {
+        console.error('POST /branches/:id/assign error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// DELETE /api/branches/:id/assign/:userId — bỏ nhân viên khỏi chi nhánh
+router.delete('/:id/assign/:userId', authMiddleware, requireRole('admin', 'manager', 'superadmin'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const branchId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
+        const userId = Array.isArray(req.params.userId) ? req.params.userId[0] : req.params.userId
+
+        const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, branchId: true } })
+        if (!user) return res.status(404).json({ success: false, error: 'Không tìm thấy nhân viên' })
+        /* Chỉ bỏ gán khi nhân viên đang THUỘC chi nhánh này — nếu không, một lần
+         * bấm nhầm ở chi nhánh khác sẽ gỡ nhân viên khỏi nơi họ đang làm. */
+        if (user.branchId !== branchId) {
+            return res.status(400).json({ success: false, error: 'Nhân viên không thuộc chi nhánh này' })
+        }
+
+        const updated = await prisma.user.update({
+            where: { id: userId },
+            data: { branchId: null },
+            select: { id: true, name: true, branchId: true },
+        })
+        await cacheDel('employees').catch(() => { })
+        res.json({ success: true, data: updated })
+    } catch (err: any) {
+        console.error('DELETE /branches/:id/assign/:userId error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
 
