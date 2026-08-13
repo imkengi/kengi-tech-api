@@ -6,6 +6,7 @@ import { postImportReceiptJournal, postExpenseJournal, postReturnJournal } from 
 import { COA_SEED, accountName } from '../lib/chartOfAccounts'
 import { enforcePeriodLock, assertNotLocked } from '../lib/periodLock'
 import { giaiTrinhKhaiBoSung } from '../lib/amendmentExplain'
+import { lichNghiaVuThue, suyKyKeKhai, mocCanDon, type KyKeKhai } from '../lib/taxCalendar'
 
 const router = Router()
 
@@ -6676,91 +6677,7 @@ function fmtDateYMD(y: number, m1to12: number, d: number): string {
     return `${y}-${String(m1to12).padStart(2, '0')}-${String(d).padStart(2, '0')}`
 }
 
-type DeadlineSeed = { taxType: string; period: string; dueDate: string; description: string }
 
-function generateDeadlinesForYear(year: number): DeadlineSeed[] {
-    const out: DeadlineSeed[] = []
-
-    // VAT monthly (01/GTGT): for each month M, due 20th of M+1
-    for (let m = 1; m <= 12; m++) {
-        const dueYear = m === 12 ? year + 1 : year
-        const dueMonth = m === 12 ? 1 : m + 1
-        out.push({
-            taxType: '01_GTGT',
-            period: `T${String(m).padStart(2, '0')}/${year}`,
-            dueDate: fmtDateYMD(dueYear, dueMonth, 20),
-            description: `To khai VAT thang ${m}/${year}`,
-        })
-    }
-
-    // VAT quarterly (01/GTGT_Q): for each quarter, due last day of month after quarter end
-    for (let q = 1; q <= 4; q++) {
-        const qEndMonth = q * 3
-        const dueYear = qEndMonth === 12 ? year + 1 : year
-        const dueMonth = qEndMonth === 12 ? 1 : qEndMonth + 1
-        out.push({
-            taxType: '01_GTGT_Q',
-            period: `Q${q}/${year}`,
-            dueDate: fmtDateYMD(dueYear, dueMonth, lastDayOfMonth(dueYear, dueMonth)),
-            description: `To khai VAT quy ${q}/${year}`,
-        })
-    }
-
-    // CIT (03/TNDN) quarterly: same cadence as VAT quarterly
-    for (let q = 1; q <= 4; q++) {
-        const qEndMonth = q * 3
-        const dueYear = qEndMonth === 12 ? year + 1 : year
-        const dueMonth = qEndMonth === 12 ? 1 : qEndMonth + 1
-        out.push({
-            taxType: '03_TNDN',
-            period: `CIT-Q${q}/${year}`,
-            dueDate: fmtDateYMD(dueYear, dueMonth, lastDayOfMonth(dueYear, dueMonth)),
-            description: `To khai TNDN tam tinh quy ${q}/${year}`,
-        })
-    }
-
-    // PIT withholding (06/TNCN) monthly: due 20th of M+1
-    for (let m = 1; m <= 12; m++) {
-        const dueYear = m === 12 ? year + 1 : year
-        const dueMonth = m === 12 ? 1 : m + 1
-        out.push({
-            taxType: '06_TNCN',
-            period: `PIT-T${String(m).padStart(2, '0')}/${year}`,
-            dueDate: fmtDateYMD(dueYear, dueMonth, 20),
-            description: `Khau tru PIT thang ${m}/${year}`,
-        })
-    }
-
-    // PIT settlement (05/QTT-TNCN): March 31 of following year
-    out.push({
-        taxType: '05_QTT_TNCN',
-        period: `QTT-${year}`,
-        dueDate: fmtDateYMD(year + 1, 3, 31),
-        description: `Quyet toan TNCN nam ${year}`,
-    })
-
-    // Financial statements (BCTC): 90 days after fiscal year end (Dec 31 → Mar 31)
-    out.push({
-        taxType: 'BCTC',
-        period: `BCTC-${year}`,
-        dueDate: fmtDateYMD(year + 1, 3, 31),
-        description: `Bao cao tai chinh nam ${year}`,
-    })
-
-    /* Lệ phí môn bài — hạn nộp 30/01 hằng năm (Điều 5 NĐ 139/2016, sửa đổi bởi
-     * NĐ 22/2020). Trước đây bộ hạn nộp bỏ sót khoản này: số tiền nhỏ nhưng
-     * chậm nộp vẫn bị phạt và là lỗi bị bắt nhiều nhất khi rà soát. Mức nộp tùy
-     * vốn điều lệ (doanh nghiệp) hoặc doanh thu năm trước (hộ kinh doanh) nên
-     * ghi rõ trong mô tả thay vì áp một con số cứng. */
-    out.push({
-        taxType: 'MON_BAI',
-        period: `MB-${year}`,
-        dueDate: fmtDateYMD(year, 1, 30),
-        description: `Le phi mon bai nam ${year} — DN: 2tr (von <=10 ty) / 3tr (von >10 ty); HKD: 300k-1tr theo doanh thu nam truoc`,
-    })
-
-    return out
-}
 
 // GET /api/tax/deadlines?year= - list (auto-seed for year if missing)
 router.get('/deadlines', authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -6768,15 +6685,79 @@ router.get('/deadlines', authMiddleware, async (req: AuthRequest, res: Response)
         const prisma: any = req.storePrisma!
         const year = Number(req.query.year) || new Date().getFullYear()
 
-        // Auto-seed any missing deadlines for the year (idempotent upsert)
-        const seeds = generateDeadlinesForYear(year)
+        /* Lịch nghĩa vụ phải theo ĐÚNG hồ sơ của cửa hàng.
+         *
+         * Bản trước sinh cả tờ khai GTGT tháng LẪN quý cho mọi cửa hàng: một nơi
+         * chỉ khai một kiểu, nên nửa số mốc là việc không bao giờ làm — rồi tới
+         * hạn chúng tự chuyển sang "quá hạn" và biến trang nghĩa vụ thuế thành
+         * một bức tường báo động giả. Hộ kinh doanh còn bị hiện cả quyết toán
+         * TNDN và báo cáo tài chính, hai thứ họ không phải nộp. */
+        const cauHinh = await prisma.storeSettings.findFirst({
+            select: { businessType: true },
+        }).catch(() => null)
+        const loaiHinh = cauHinh?.businessType === 'household' ? 'household' : 'company'
+
+        /* Kỳ kê khai: ưu tiên theo tờ khai cửa hàng ĐANG lập thật; chưa có tờ
+         * khai nào thì suy theo doanh thu năm trước so với ngưỡng 50 tỷ
+         * (Điều 9 NĐ 126/2020). Cho phép ép bằng ?kyKeKhai=month|quarter. */
+        let kyKeKhai: KyKeKhai
+        const epKy = String(req.query.kyKeKhai || '')
+        if (epKy === 'month' || epKy === 'quarter') {
+            kyKeKhai = epKy
+        } else {
+            const daKhai: any[] = await prisma.taxDeclaration.findMany({
+                where: { formType: { in: ['01_GTGT', '01_CNKD'] } },
+                select: { periodType: true },
+                take: 24,
+                orderBy: { createdAt: 'desc' },
+            }).catch(() => [])
+            if (daKhai.length > 0) {
+                const soThang = daKhai.filter(d => d.periodType === 'month').length
+                kyKeKhai = soThang > daKhai.length / 2 ? 'month' : 'quarter'
+            } else {
+                const bt: any[] = await prisma.journalEntry.findMany({
+                    where: { date: { gte: `${year - 1}-01-01`, lte: `${year - 1}-12-31` } },
+                    select: { creditAccount: true, debitAccount: true, amount: true },
+                }).catch(() => [])
+                const dt = bt.reduce((s: number, e: any) =>
+                    s + (String(e.creditAccount || '').startsWith('511') ? e.amount : 0)
+                    - (String(e.debitAccount || '').startsWith('511') ? e.amount : 0), 0)
+                kyKeKhai = suyKyKeKhai(bt.length ? dt : null)
+            }
+        }
+
+        const coNhanVien = await prisma.payrollEntry.count().then((n: number) => n > 0).catch(() => false)
+
+        const seeds = lichNghiaVuThue(year, { loaiHinh, kyKeKhai, coNhanVien })
         for (const s of seeds) {
             await prisma.taxDeadline.upsert({
                 where: { taxType_period: { taxType: s.taxType, period: s.period } },
-                create: { ...s, status: 'pending' },
+                create: {
+                    taxType: s.taxType, period: s.period, dueDate: s.dueDate,
+                    description: s.description, status: 'pending',
+                },
                 update: { dueDate: s.dueDate, description: s.description },
             })
         }
+
+        /* Dọn mốc do bản cũ sinh ra mà nay không còn đúng — nhưng CHỈ mốc chưa ai
+         * động tới. Mốc đã nộp, đã gắn tờ khai hay có ghi chú thì giữ nguyên. */
+        try {
+            const dangCo: any[] = await prisma.taxDeadline.findMany({
+                select: {
+                    id: true, taxType: true, period: true, status: true,
+                    filedAt: true, declarationId: true, notes: true,
+                },
+            })
+            const cuaNam = dangCo.filter(d =>
+                String(d.period || '').includes(String(year)) ||
+                String(d.dueDate || '').startsWith(String(year)))
+            const canXoa = mocCanDon(cuaNam, seeds)
+            if (canXoa.length > 0) {
+                await prisma.taxDeadline.deleteMany({ where: { id: { in: canXoa } } })
+                console.log(`[Deadlines] dọn ${canXoa.length} mốc không còn đúng hồ sơ (kỳ kê khai ${kyKeKhai}, loại hình ${loaiHinh})`)
+            }
+        } catch { /* dọn dẹp là việc phụ, hỏng thì bỏ qua chứ không chặn trả dữ liệu */ }
 
         // Auto-mark overdue: pending items whose dueDate < today
         const today = new Date().toISOString().slice(0, 10)
@@ -7280,15 +7261,10 @@ router.get('/reports/tax-obligations', authMiddleware, async (req: AuthRequest, 
         const year = Number(req.query.year) || new Date().getFullYear()
         const today = new Date().toISOString().slice(0, 10)
 
-        // Auto-seed deadlines for the year
-        const seeds = generateDeadlinesForYear(year)
-        for (const s of seeds) {
-            await prisma.taxDeadline.upsert({
-                where: { taxType_period: { taxType: s.taxType, period: s.period } },
-                create: { ...s, status: 'pending' },
-                update: { dueDate: s.dueDate, description: s.description },
-            })
-        }
+        /* KHÔNG gieo lịch ở đây. Việc gieo nằm ở GET /deadlines, nơi biết loại
+         * hình và kỳ kê khai thật của cửa hàng. Trước đây hai endpoint cùng gieo
+         * bằng hai bộ luật khác nhau: /deadlines dọn mốc khai tháng thừa xong,
+         * người dùng mở trang Nghĩa Vụ Thuế là chúng mọc lại ngay. */
         await prisma.taxDeadline.updateMany({
             where: { status: 'pending', dueDate: { lt: today } },
             data: { status: 'overdue' },
