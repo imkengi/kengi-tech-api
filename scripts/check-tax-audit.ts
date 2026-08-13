@@ -774,6 +774,12 @@ async function main() {
         const nangThieuMau = h.canhBao.filter((c: any) => c.muc === 'cao' && !coMau.has(c.code)).map((c: any) => c.code)
         kiemTra('Mọi cảnh báo mức "cao" đều có mẫu giải trình soạn sẵn',
             nangThieuMau.length === 0, `thiếu mẫu: ${nangThieuMau.join(', ')}`)
+
+        // Mẫu giải trình không được để lọt chỗ trống chưa điền vào bản in
+        const thieuChoDien = h.giaiTrinh.filter((g: any) =>
+            !/\[.*\]/.test(g.noiDung) && !/cam kết/.test(g.noiDung)).map((g: any) => g.code)
+        kiemTra('Mẫu giải trình nào cũng có phần cam kết và chỗ để điền',
+            thieuChoDien.length === 0, `thiếu: ${thieuChoDien.join(', ')}`)
     }
 
     // ── 41. Tiền vào vượt doanh thu ghi nhận ───────────────────────────────

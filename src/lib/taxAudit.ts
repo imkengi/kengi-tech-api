@@ -131,6 +131,14 @@ function soanGiaiTrinh(c: CanhBaoThue, nhanKy: string): GiaiTrinh | null {
             noiDung: `${mo}\n\n1. Số liệu: ${c.chiTiet}\n2. Nguyên nhân: [nêu rõ — ví dụ: khoản thu tiền mặt chưa ghi sổ kịp thời; chủ doanh nghiệp cho vay/góp thêm vốn chưa lập chứng từ].\n3. Biện pháp: đơn vị đã bổ sung chứng từ thu số ..... ngày ..... và điều chỉnh sổ quỹ; số dư quỹ tiền mặt sau điều chỉnh khớp với biên bản kiểm kê quỹ ngày ......\n\n${ket}`,
             chungTuKem: ['Biên bản kiểm kê quỹ tiền mặt', 'Phiếu thu bổ sung', 'Hợp đồng vay/biên bản góp vốn của chủ sở hữu (nếu có)'],
         },
+        'tien-vao-vuot-doanh-thu': {
+            noiDung: `${mo}\n\n1. Số liệu: ${c.chiTiet}\n2. Giải trình phần chênh lệch: [nêu rõ từng nguồn — ví dụ: thu nợ khách hàng của kỳ trước ..... đồng theo sổ chi tiết công nợ; khách đặt cọc cho đơn hàng kỳ sau ..... đồng; hoàn thuế ..... đồng].\n3. Đơn vị khẳng định toàn bộ doanh thu phát sinh trong kỳ đã được lập hóa đơn và kê khai đầy đủ; số dư công nợ phải thu đầu kỳ và cuối kỳ khớp với sổ chi tiết kèm theo.\n\n${ket}`,
+            chungTuKem: ['Sổ chi tiết công nợ phải thu (đầu kỳ, phát sinh, cuối kỳ)', 'Phiếu thu / sao kê ngân hàng của các khoản thu nợ', 'Hợp đồng và chứng từ đặt cọc (nếu có)'],
+        },
+        'mua-cua-chinh-minh': {
+            noiDung: `${mo}\n\n1. Số liệu: ${c.chiTiet}\n2. Nguyên nhân: nhập nhầm mã số thuế người bán trên phần mềm; hóa đơn gốc ghi người bán là [.....], mã số thuế [.....].\n3. Đơn vị đã sửa lại dữ liệu và [chưa kê khai khấu trừ các hóa đơn này nên không phát sinh chênh lệch / đã khai điều chỉnh kỳ .....].\n\n${ket}`,
+            chungTuKem: ['Hóa đơn gốc của các giao dịch nêu trên', 'Bảng kê hóa đơn mua vào sau khi sửa'],
+        },
         'vat-ra-lech': {
             noiDung: `${mo}\n\n1. Số liệu: ${c.chiTiet}\n2. Nguyên nhân chênh lệch thuế GTGT đầu ra: [nêu rõ — ví dụ: hóa đơn điều chỉnh giảm chưa cập nhật vào tờ khai; ghi sổ sai thuế suất; hóa đơn của kỳ trước kê khai vào kỳ này].\n3. Đơn vị đã đối chiếu bảng kê hóa đơn bán ra với sổ chi tiết TK 3331 và [đã lập tờ khai bổ sung kỳ ..... / xác định chênh lệch do làm tròn, không ảnh hưởng số thuế phải nộp].\n\n${ket}`,
             chungTuKem: ['Bảng kê hóa đơn bán ra của kỳ', 'Sổ chi tiết TK 3331', 'Tờ khai bổ sung (nếu có)'],
