@@ -439,7 +439,21 @@ async function main() {
             !co(h, 'to-khai-tre-han-uoc'), h.canhBao.map((c: any) => c.code).join(','))
     }
 
-    // ── 27. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
+    // ── 27. Hóa đơn bán cho tổ chức thiếu MST người mua ────────────────────
+    {
+        const k = khoSach()
+        k.invoices = [
+            { invoiceDate: '2026-08-05', invoiceNumber: '001', invoiceType: 'SALE', status: 'SIGNED', totalBeforeVat: 100_000_000, totalAmount: 110_000_000, buyerName: 'Công ty TNHH ABC', buyerTaxCode: null },
+            { invoiceDate: '2026-08-06', invoiceNumber: '002', invoiceType: 'SALE', status: 'SIGNED', totalBeforeVat: 0, totalAmount: 20_000_000, buyerName: 'Công ty CP XYZ', buyerTaxCode: '0101' },
+            { invoiceDate: '2026-08-07', invoiceNumber: '003', invoiceType: 'SALE', status: 'SIGNED', totalBeforeVat: 0, totalAmount: 30_000_000, buyerName: 'Chị Lan', buyerTaxCode: null },
+        ]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const c = lay(h, 'hoa-don-ra-thieu-mst-mua')
+        kiemTra('Chỉ kêu hóa đơn cho TỔ CHỨC thiếu MST (khách lẻ và HĐ có MST thì bỏ qua)',
+            !!c && c.soLuong === 1 && c.viDu[0].includes('001'), JSON.stringify(c?.viDu))
+    }
+
+    // ── 28. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
     {
         const h = await kiemTraThue(fakePrisma(khoSach()), KY)
         kiemTra('Luôn trả checklist hồ sơ cần chuẩn bị', h.hoSoCanChuanBi.length >= 8)

@@ -520,6 +520,35 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
         })
     } catch { /* bỏ qua */ }
 
+    /* ── 9b. Hóa đơn giá trị lớn cho khách doanh nghiệp mà thiếu MST người mua ─
+     * Người mua là doanh nghiệp thì phải có MST trên hóa đơn mới khấu trừ được;
+     * bên bán bị hỏi vì xuất hóa đơn thiếu chỉ tiêu bắt buộc. */
+    try {
+        const hds = await prisma.eInvoice.findMany({
+            where: { invoiceDate: { gte: from, lte: to } },
+            select: { invoiceNumber: true, status: true, invoiceType: true, totalAmount: true, buyerName: true, buyerTaxCode: true },
+        })
+        const thieuMstMua = (hds || []).filter((h: any) => {
+            const st = String(h.status || '').toUpperCase()
+            if (st === 'CANCELLED' || st === 'DRAFT' || st === 'ERROR' || st === 'REPLACED') return false
+            if (String(h.invoiceType || 'SALE').toUpperCase() !== 'SALE') return false
+            if ((h.totalAmount || 0) < NGUONG_KHONG_TIEN_MAT) return false
+            if (h.buyerTaxCode) return false
+            // Chỉ nghi ngờ khi tên người mua trông như tổ chức — khách lẻ không cần MST
+            const ten = String(h.buyerName || '')
+            return /công ty|cty|doanh nghiệp|dn |tnhh|cổ phần|cp |hộ kinh doanh|hkd/i.test(ten)
+        })
+        if (thieuMstMua.length > 0) canhBao.push({
+            code: 'hoa-don-ra-thieu-mst-mua', muc: 'vua',
+            tieuDe: `${thieuMstMua.length} hóa đơn bán cho tổ chức nhưng thiếu mã số thuế người mua`,
+            chiTiet: `Giá trị từ ${vnd(NGUONG_KHONG_TIEN_MAT)} ₫ trở lên. Thiếu MST người mua là thiếu chỉ tiêu bắt buộc trên hóa đơn, bên mua không khấu trừ được và thường quay lại yêu cầu bên bán điều chỉnh.`,
+            canCu: 'Điều 10 NĐ 123/2020 — nội dung bắt buộc của hóa đơn, gồm mã số thuế người mua khi người mua là tổ chức.',
+            canLam: 'Liên hệ khách lấy MST và lập hóa đơn điều chỉnh/thay thế theo Điều 19 NĐ 123/2020.',
+            tienRuiRo: null, soLuong: thieuMstMua.length,
+            viDu: thieuMstMua.slice(0, 5).map((h: any) => `${h.invoiceNumber || '(chưa số)'} · ${h.buyerName || ''}`.trim()),
+        })
+    } catch { /* bỏ qua */ }
+
     // ── 10. Hóa đơn đầu vào thiếu thông tin bắt buộc để khấu trừ ─────────────
     try {
         const chiVat = await prisma.expense.findMany({
