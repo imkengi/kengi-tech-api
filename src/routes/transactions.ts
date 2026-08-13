@@ -444,13 +444,17 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
         // Giữ base + suffix ra biến riêng để retry khi 2 revise đồng thời đụng số (P2002).
         let revisionBaseReceipt: string | null = null
         let revisionSuffix = 0
+        // Bản gốc đầy đủ (kèm dòng hàng) — dùng để hoàn kho atomic bên trong
+        // $transaction phía dưới, không chỉ để đặt số phiếu.
+        let revisionSource: any = null
         if (txData.revisionOfId) {
             try {
                 const sourceTransaction = await prisma.transaction.findUnique({
                     where: { id: txData.revisionOfId },
-                    select: { receiptNumber: true },
+                    include: { items: true },
                 })
                 if (sourceTransaction) {
+                    revisionSource = sourceTransaction
                     // Get the base receipt number (strip any existing .N suffix)
                     revisionBaseReceipt = sourceTransaction.receiptNumber.replace(/\.\d+$/, '')
                     // Count how many revisions already exist
@@ -599,6 +603,63 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
                             where: { id: promoId },
                             data: { usageCount: { increment: 1 } },
                         })
+                    }
+
+                    /**
+                     * SỬA ĐƠN (revisionOfId): hoàn kho bản gốc TRƯỚC khi trừ dòng
+                     * mới — cùng sống chết trong giao dịch này. Trước đây hoàn kho
+                     * nằm ở /:id/revise gọi SAU khi tạo đơn, nên sửa đơn nhiều hàng
+                     * bị 409 "hết hàng" oan (kho còn giữ phần đã trừ của bản gốc),
+                     * kéo cả luồng gắn phiếu bảo hành chết theo (13/08/2026).
+                     * updateMany có điều kiện = giành quyền huỷ race-safe: chỉ MỘT
+                     * create được hoàn kho; /:id/revise gọi sau thấy 'voided' là
+                     * dừng (400 sẵn có) nên FE bundle cũ 2 bước không hoàn kho đúp.
+                     */
+                    if (revisionSource) {
+                        const gianhQuyenHuy = await tx.transaction.updateMany({
+                            where: { id: revisionSource.id, status: { not: 'voided' } },
+                            data: {
+                                status: 'voided',
+                                notes: (revisionSource.notes ? revisionSource.notes + '\n' : '') + `[Cập nhật] → ${receiptNumber}`,
+                            },
+                        })
+                        if (gianhQuyenHuy.count === 1) {
+                            const khoGoc = await getOrCreateDefaultWarehouse(tx as any, revisionSource.branchId || null)
+                            for (const dong of (revisionSource.items || []) as any[]) {
+                                const traLai = dong.baseQuantity > 0 ? dong.baseQuantity : dong.quantity
+                                if (!dong.productId || !(traLai > 0)) continue
+                                await tx.product.updateMany({
+                                    where: { id: dong.productId },
+                                    data: { stock: { increment: traLai } },
+                                })
+                                if (khoGoc?.id) {
+                                    await updateWarehouseStock(tx as any, khoGoc.id, dong.productId, traLai)
+                                }
+                                await tx.inventoryTransaction.create({
+                                    data: {
+                                        type: 'adjustment',
+                                        productId: dong.productId,
+                                        productName: dong.productName,
+                                        productSku: dong.sku || '',
+                                        quantity: traLai,
+                                        reason: `Cập nhật phiếu - ${revisionSource.receiptNumber} → ${receiptNumber}`,
+                                        note: `Hoàn kho do cập nhật giao dịch ${revisionSource.receiptNumber}`,
+                                        referenceId: revisionSource.receiptNumber,
+                                        referenceType: 'revision',
+                                        unitPrice: dong.unitPrice || 0,
+                                        userId: req.user!.userId,
+                                        userName: user?.name || 'Admin',
+                                    },
+                                })
+                            }
+                            // Trả lại thống kê khách của bản gốc (đơn mới cộng lại bên dưới)
+                            if (revisionSource.customerId) {
+                                await tx.customer.updateMany({
+                                    where: { id: revisionSource.customerId },
+                                    data: { totalPurchases: { decrement: revisionSource.total }, totalOrders: { decrement: 1 } },
+                                })
+                            }
+                        }
                     }
 
                     // Trừ kho + ghi thẻ kho theo ĐƠN VỊ GỐC (baseQuantity).
