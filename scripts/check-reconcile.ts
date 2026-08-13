@@ -21,6 +21,7 @@ interface Kho {
     customers: any[]
     products: any[]
     locks: any[]
+    adjustments: any[]
 }
 
 /** Prisma giả — chỉ hỗ trợ đúng những phép truy vấn mà reconcile.ts dùng */
@@ -70,6 +71,10 @@ function fakePrisma(k: Kho) {
         },
         product: { findMany: async () => k.products },
         periodLock: { findMany: async () => k.locks },
+        inventoryTransaction: {
+            findMany: async ({ where }: any = {}) => k.adjustments.filter(a =>
+                hopTrangThai(a.type, where?.type) && trongKhoang(a.createdAt, where?.createdAt)),
+        },
     }
 }
 
@@ -98,6 +103,7 @@ function khoSach(): Kho {
         // 156 trên sổ = 5.000.000 → tồn thực tế phải bằng đúng
         products: [{ stock: 50, costPrice: 100_000 }],
         locks: [],
+        adjustments: [],
     }
 }
 
@@ -161,6 +167,25 @@ async function main() {
         k.journal.push({ reference: 'VOID-SALE-HD001', date: '2026-08-07', debitAccount: '511', creditAccount: '111', amount: 1_000_000 })
         const kq = await soatSoSach(fakePrisma(k), KHOANG)
         kiemTra('Bút toán đã đảo — tính là chưa ghi sổ', co(kq, 'ban-chua-ghi'))
+    }
+
+    // ── 4b. Điều chỉnh kho chưa vào sổ ─────────────────────────────────────
+    {
+        const k = khoSach()
+        k.adjustments = [{ id: 'adj1', type: 'adjustment', productName: 'Sữa tươi', quantity: -12, createdAt: NGAY('2026-08-09') }]
+        const kq = await soatSoSach(fakePrisma(k), KHOANG)
+        const v = lay(kq, 'kho-chua-ghi')
+        kiemTra('Bắt được điều chỉnh kho chưa vào sổ', !!v && v.soLuong === 1 && kq.thieu.kho === 1, JSON.stringify(v))
+    }
+    {
+        const k = khoSach()
+        k.adjustments = [{ id: 'adj1', type: 'adjustment', productName: 'Sữa tươi', quantity: -12, createdAt: NGAY('2026-08-09') }]
+        k.journal.push({ reference: 'ADJ-adj1', date: '2026-08-09', debitAccount: '1381', creditAccount: '156', amount: 300_000 })
+        // Sổ 156 giảm 300k → tồn thực tế phải giảm theo cho khỏi báo lệch 156
+        k.products = [{ stock: 47, costPrice: 100_000 }]
+        const kq = await soatSoSach(fakePrisma(k), KHOANG)
+        kiemTra('Điều chỉnh kho đã ghi sổ — không báo thiếu', !co(kq, 'kho-chua-ghi'),
+            kq.vanDe.map((v: any) => v.code).join(','))
     }
 
     // ── 5. Lệch số dư ──────────────────────────────────────────────────────

@@ -30,7 +30,7 @@ export interface KetQuaSoat {
     ghiBuDuoc: boolean
     tongButToanKy: number
     vanDe: VanDe[]
-    thieu: { ban: number; nhap: number; chi: number; tra: number }
+    thieu: { ban: number; nhap: number; chi: number; tra: number; kho: number }
 }
 
 const vnd = (v: number) => Math.round(v).toLocaleString('vi-VN')
@@ -145,6 +145,26 @@ export async function soatSoSach(
             viDu: traChuaGhi.slice(0, 5).map(r => r.code),
             ghiBuDuoc: true,
         })
+    }
+
+    // ─── 4b. Điều chỉnh/kiểm kê kho chưa vào sổ ─────────────────────────────
+    const khoChuaGhi: Array<{ id: string; productName: string | null; quantity: number }> = []
+    {
+        try {
+            const dcs = await prisma.inventoryTransaction.findMany({
+                where: { type: 'adjustment', createdAt: { gte: start, lte: end } },
+                select: { id: true, productName: true, quantity: true },
+            })
+            for (const d of dcs) if (!daGhi(`ADJ-${d.id}`)) khoChuaGhi.push(d)
+            if (khoChuaGhi.length > 0) vanDe.push({
+                code: 'kho-chua-ghi', muc: 'vua',
+                tieuDe: `${khoChuaGhi.length} lần điều chỉnh kho chưa vào sổ`,
+                chiTiet: 'Kiểm kê phát hiện thừa/thiếu nhưng chưa ghi Nợ 1381 / Có 156 (thiếu) hoặc Nợ 156 / Có 3381 (thừa) — hao hụt kho đang vô hình trên sổ, giá trị hàng hóa vẫn giữ nguyên dù hàng đã không còn.',
+                tien: null, soLuong: khoChuaGhi.length,
+                viDu: khoChuaGhi.slice(0, 5).map(d => `${d.productName || d.id} (${d.quantity > 0 ? '+' : ''}${d.quantity})`),
+                ghiBuDuoc: true,
+            })
+        } catch { /* chưa có bảng InventoryTransaction — bỏ qua */ }
     }
 
     /* ─── 5. Đối chiếu SỐ DƯ ────────────────────────────────────────────────
@@ -262,6 +282,7 @@ export async function soatSoSach(
         thieu: {
             ban: banChuaGhi.length, nhap: nhapChuaGhi.length,
             chi: chiChuaGhi.length, tra: traChuaGhi.length,
+            kho: khoChuaGhi.length,
         },
     }
 }

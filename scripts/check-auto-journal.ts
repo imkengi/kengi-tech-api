@@ -10,7 +10,8 @@
  */
 
 import {
-    postImportReceiptJournal, postExpenseJournal, postReturnJournal, reverseJournalRefs, refsOfImport,
+    postImportReceiptJournal, postExpenseJournal, postReturnJournal, postStockAdjustJournal,
+    reverseJournalRefs, refsOfImport,
 } from '../src/lib/autoJournalPurchase'
 
 type Entry = {
@@ -192,6 +193,39 @@ async function main() {
         } else {
             console.log(`✓ Đảo bút toán phiếu nhập  (đảo ${daDao} bút toán, TK156 về 0)`)
         }
+    }
+
+    // ── 10. Kiểm kê THIẾU: Nợ 1381 / Có 156 ───────────────────────────────
+    {
+        const c = fakeClient()
+        await postStockAdjustJournal(c, {
+            id: 'adj1', productName: 'Sữa tươi', quantity: -12, costPrice: 25_000,
+            reason: 'Kiểm kê tháng 8', date: ngay,
+        })
+        kiemTra('Kiểm kê thiếu — treo 1381, giảm 156', c.rows, {
+            'N:1381': 300_000, 'C:156': 300_000, 'N:632': 0,
+        })
+    }
+
+    // ── 11. Kiểm kê THỪA: Nợ 156 / Có 3381 ────────────────────────────────
+    {
+        const c = fakeClient()
+        await postStockAdjustJournal(c, {
+            id: 'adj2', productName: 'Bánh quy', quantity: 5, costPrice: 40_000, date: ngay,
+        })
+        kiemTra('Kiểm kê thừa — tăng 156, treo 3381', c.rows, {
+            'N:156': 200_000, 'C:3381': 200_000,
+        })
+    }
+
+    // ── 12. Điều chỉnh 0 hoặc không có giá vốn → không ghi gì ─────────────
+    {
+        const c = fakeClient()
+        await postStockAdjustJournal(c, { id: 'adj3', quantity: 0, costPrice: 25_000, date: ngay })
+        await postStockAdjustJournal(c, { id: 'adj4', quantity: -3, costPrice: 0, date: ngay })
+        soCa++
+        if (c.rows.length !== 0) { soLoi++; console.log(`✗ Điều chỉnh 0 / thiếu giá vốn — không được ghi bút toán (đã ghi ${c.rows.length})`) }
+        else console.log('✓ Điều chỉnh 0 hoặc thiếu giá vốn — không ghi bút toán rác')
     }
 
     console.log(`\n${soCa - soLoi}/${soCa} ca đạt`)

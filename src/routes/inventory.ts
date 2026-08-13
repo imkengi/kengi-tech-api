@@ -6,6 +6,7 @@ import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { nextCode } from '../lib/codeGenerator'
 import { getOrCreateDefaultWarehouse, updateWarehouseStock, adjustSellableStock } from '../lib/warehouseHelper'
 import { emitStockChanged } from '../lib/webhookDispatch'
+import { postStockAdjustJournal } from '../lib/autoJournalPurchase'
 
 const router = Router()
 
@@ -623,6 +624,24 @@ router.post('/adjustments', authMiddleware, async (req: AuthRequest, res: Respon
                 },
             })
         })
+
+        /* Ghi sổ chênh lệch kiểm kê: thiếu → Nợ 1381 / Có 156, thừa → Nợ 156 /
+         * Có 3381. Trước đây hao hụt kho hoàn toàn vô hình trên sổ: hàng đã
+         * không còn mà TK 156 vẫn giữ nguyên giá trị. */
+        try {
+            const sp = await prisma.product.findUnique({ where: { id: productId }, select: { costPrice: true } })
+            await postStockAdjustJournal(prisma, {
+                id: transaction.id,
+                productName: productName || null,
+                quantity: Number(quantity) || 0,
+                costPrice: sp?.costPrice ?? 0,
+                reason: reason || note || null,
+                branchId: getBranchId(req) || null,
+                date: transaction.createdAt,
+            }, { branchId: getBranchId(req) || null, userId: req.user!.userId })
+        } catch (e) {
+            console.error('Ghi sổ điều chỉnh kho thất bại (không chặn nghiệp vụ):', e)
+        }
 
         res.status(201).json({
             success: true,

@@ -311,6 +311,62 @@ export async function postReturnJournal(
     return result
 }
 
+/* ─── ĐIỀU CHỈNH / KIỂM KÊ KHO ───────────────────────────────────────────── */
+
+export interface StockAdjustForJournal {
+    /** id của InventoryTransaction — làm khóa chống trùng */
+    id: string
+    productName?: string | null
+    /** Dương = thừa so với sổ, âm = thiếu */
+    quantity: number
+    /** Giá vốn đơn vị tại thời điểm điều chỉnh */
+    costPrice: number
+    reason?: string | null
+    branchId?: string | null
+    date?: Date | null
+}
+
+/**
+ * Kiểm kê phát hiện chênh lệch thì phải đưa vào sổ, nếu không hao hụt kho hoàn
+ * toàn vô hình: TK 156 trên sổ cứ giữ nguyên trong khi hàng đã không còn.
+ *
+ *   Thiếu (quantity < 0): Nợ 1381 Tài sản thiếu chờ xử lý / Có 156
+ *   Thừa  (quantity > 0): Nợ 156 / Có 3381 Tài sản thừa chờ giải quyết
+ *
+ * Dừng ở 1381/3381 là CỐ Ý: chưa biết nguyên nhân (mất trộm, đổ vỡ, nhập sai
+ * sổ) thì chưa được đưa thẳng vào giá vốn hay chi phí. Kế toán xử lý xong mới
+ * kết chuyển 1381 sang 632/811 hoặc bắt bồi thường.
+ */
+export async function postStockAdjustJournal(
+    client: any, a: StockAdjustForJournal, opts: JournalOpts = {},
+): Promise<JournalResult> {
+    const result: JournalResult = { created: [] }
+    if (!a?.id) return result
+    const soLuong = Number(a.quantity) || 0
+    const giaTri = Math.round(Math.abs(soLuong) * (Number(a.costPrice) || 0))
+    if (giaTri <= 0) return result
+
+    const date = fmtDate(a.date || new Date())
+    const branchId = opts.branchId ?? a.branchId ?? null
+    const userId = opts.userId ?? null
+    const ten = a.productName ? ` - ${a.productName}` : ''
+    const lyDo = a.reason ? ` (${a.reason})` : ''
+    const ref = `ADJ-${a.id}`
+
+    const thieu = soLuong < 0
+    if (await ghi(client, {
+        date,
+        description: `${thieu ? 'Kiểm kê thiếu' : 'Kiểm kê thừa'}${ten}${lyDo}`,
+        debitAccount: thieu ? '1381' : '156',
+        debitAccountName: thieu ? 'Tài sản thiếu chờ xử lý' : 'Hàng hóa',
+        creditAccount: thieu ? '156' : '3381',
+        creditAccountName: thieu ? 'Hàng hóa' : 'Tài sản thừa chờ giải quyết',
+        amount: giaTri, reference: ref, referenceType: 'adjustment', branchId, userId,
+    })) result.created.push({ type: thieu ? 'adjust-short' : 'adjust-over', ref, amount: giaTri })
+
+    return result
+}
+
 /* ─── ĐẢO BÚT TOÁN KHI HỦY / XÓA ─────────────────────────────────────────── */
 
 /** Danh sách reference của một phiếu nhập */

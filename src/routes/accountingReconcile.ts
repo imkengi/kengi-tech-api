@@ -20,7 +20,7 @@ import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { errMsg } from '../lib/errorResponse'
 import { createJournalEntriesForTransaction } from '../lib/autoJournal'
-import { postImportReceiptJournal, postExpenseJournal, postReturnJournal } from '../lib/autoJournalPurchase'
+import { postImportReceiptJournal, postExpenseJournal, postReturnJournal, postStockAdjustJournal } from '../lib/autoJournalPurchase'
 import { soatSoSach } from '../lib/reconcile'
 
 const router = Router()
@@ -133,6 +133,25 @@ router.post('/reconcile/fix', authMiddleware, async (req: AuthRequest, res: Resp
             }, { branchId: ret.branchId ?? null, userId })
             daTao.push(...r.created)
         }
+
+        // Điều chỉnh/kiểm kê kho — giá vốn lấy theo giá hiện tại của sản phẩm
+        try {
+            const dcs = await prisma.inventoryTransaction.findMany({
+                where: { type: 'adjustment', createdAt: { gte: start, lte: end } },
+            })
+            for (const d of dcs) {
+                if (daGhi(`ADJ-${d.id}`)) continue
+                const sp = d.productId
+                    ? await prisma.product.findUnique({ where: { id: d.productId }, select: { costPrice: true } })
+                    : null
+                const r = await postStockAdjustJournal(prisma, {
+                    id: d.id, productName: d.productName, quantity: d.quantity || 0,
+                    costPrice: sp?.costPrice ?? d.unitPrice ?? 0,
+                    reason: d.reason || d.note || null, date: d.createdAt,
+                }, { userId })
+                daTao.push(...r.created)
+            }
+        } catch (e) { console.error('Ghi bù điều chỉnh kho lỗi (bỏ qua):', e) }
 
         res.json({
             success: true,
