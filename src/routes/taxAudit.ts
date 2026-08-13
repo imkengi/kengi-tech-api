@@ -185,8 +185,12 @@ router.get('/audit-history', authMiddleware, async (req: AuthRequest, res: Respo
     try {
         const prisma: any = req.storePrisma!
         const year = Number(req.query.year) || new Date().getFullYear()
+        /* Lấy CẢ hai loại: soát tay (self-audit) và soát tự động hằng tháng
+         * (self-audit-auto do cron ghi). Bỏ sót loại tự động thì bảng lịch sử
+         * trống trơn dù hệ thống vẫn đang soát đều — đúng thứ khiến người dùng
+         * mất niềm tin vào tính năng. */
         const rows = await prisma.taxAuditLog.findMany({
-            where: { action: 'self-audit', entityType: 'tax-audit' },
+            where: { action: { in: ['self-audit', 'self-audit-auto'] }, entityType: 'tax-audit' },
             orderBy: { timestamp: 'desc' },
             take: 100,
         })
@@ -197,7 +201,8 @@ router.get('/audit-history', authMiddleware, async (req: AuthRequest, res: Respo
                 return {
                     id: r.id,
                     thoiDiem: r.timestamp,
-                    nguoiSoat: r.userName || null,
+                    tuDong: r.action === 'self-audit-auto',
+                    nguoiSoat: r.userName || (r.action === 'self-audit-auto' ? 'Hệ thống (tự động)' : null),
                     maKy: t.maKy || r.entityId || '',
                     nhan: t.nhan || r.entityId || '',
                     diem: t.diem ?? null,
