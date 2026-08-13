@@ -6,7 +6,6 @@ import { createJournalEntriesForTransaction, postDebtCollectionJournal } from '.
 import { Tool, ToolCtx, ToolError } from '../lib/mcpTypes'
 import { FANPAGE_TOOLS } from './mcpFanpageTools'
 import { FINANCE_TOOLS } from './mcpFinanceTools'
-import { MARKETING_TOOLS } from './mcpMarketingTools'
 import { REPORT_TOOLS } from './mcpReportTools'
 
 // Re-export để mcpAgent.ts (và code cũ) vẫn `import { ToolError, ToolCtx } from './mcp'`
@@ -771,9 +770,6 @@ export const TOOLS: Tool[] = [
     ...FANPAGE_TOOLS,
     // Tài chính & mua hàng — lãi lỗ, chi phí, công nợ NCC, nhập hàng, tồn theo kho
     ...FINANCE_TOOLS,
-    // AI marketing — lên kế hoạch nội dung, soạn bài vào hàng đợi CHỜ DUYỆT.
-    // Không tool nào ở đây đẩy ra ngoài: chủ shop duyệt thì bài mới lên Facebook.
-    ...MARKETING_TOOLS,
     // Báo cáo tổng thể — swot_data gom sẵn nguyên liệu phân tích SWOT một lần gọi
     ...REPORT_TOOLS,
 ]
