@@ -21,7 +21,10 @@
     "db:reset": "npx prisma db push --force-reset && npx tsx prisma/seed.ts",
     "docker:build": "docker build -t kengitech-api .",
     "docker:run": "docker run -p 8080:8080 --env-file .env.gcloud kengitech-api",
-    "deploy:gcloud": "gcloud builds submit --config cloudbuild.yaml ."
+    "deploy:gcloud": "gcloud builds submit --config cloudbuild.yaml .",
+    "check:tax": "npx tsx scripts/check-tax-audit.ts && npx tsx scripts/check-tax-tool.ts && npx tsx scripts/check-tax-cron.ts",
+    "check:ketoan": "npx tsx scripts/check-auto-journal.ts && npx tsx scripts/check-reconcile.ts",
+    "check:all": "npm run check:mcp && npm run check:tax && npm run check:ketoan"
   },
   "dependencies": {
     "@google-cloud/bigquery": "^8.1.1",
