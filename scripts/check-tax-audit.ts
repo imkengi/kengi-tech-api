@@ -453,7 +453,28 @@ async function main() {
             !!c && c.soLuong === 1 && c.viDu[0].includes('001'), JSON.stringify(c?.viDu))
     }
 
-    // ── 28. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
+    // ── 28. Hàng tặng giá 0 đồng ───────────────────────────────────────────
+    {
+        const k = khoSach()
+        k.transactions = [{
+            receiptNumber: 'HD777', createdAt: new Date('2026-08-09'),
+            items: [
+                { productName: 'Ly thủy tinh', quantity: 20, lineTotal: 0, product: { costPrice: 30_000 } },   // tặng
+                { productName: 'Sữa', quantity: 2, lineTotal: 100_000, product: { costPrice: 20_000 } },        // bán bình thường
+                { productName: 'Tờ rơi', quantity: 5, lineTotal: 0, product: { costPrice: 0 } },                // không có giá vốn → bỏ qua
+            ],
+        }]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const c = lay(h, 'hang-tang-gia-0')
+        kiemTra('Bắt hàng tặng giá 0đ (bỏ qua dòng không có giá vốn), ước VAT 10%',
+            !!c && c.soLuong === 1 && c.tienRuiRo === 60_000, JSON.stringify({ sl: c?.soLuong, tien: c?.tienRuiRo }))
+    }
+    {
+        const h = await kiemTraThue(fakePrisma(khoSach()), KY)
+        kiemTra('Không có hàng tặng thì không kêu', !co(h, 'hang-tang-gia-0'))
+    }
+
+    // ── 29. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
     {
         const h = await kiemTraThue(fakePrisma(khoSach()), KY)
         kiemTra('Luôn trả checklist hồ sơ cần chuẩn bị', h.hoSoCanChuanBi.length >= 8)

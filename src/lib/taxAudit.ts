@@ -447,6 +447,31 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
                 }
             }
         }
+        /* Hàng xuất giá 0 đồng = hàng cho/biếu/tặng/khuyến mãi. Theo Điều 4 NĐ
+         * 123/2020 vẫn PHẢI lập hóa đơn; và nếu chương trình khuyến mãi không
+         * được thực hiện theo pháp luật thương mại thì phải tính thuế GTGT đầu
+         * ra theo giá bán hàng cùng loại. Đây là lỗi bị bắt rất thường xuyên. */
+        let soDongTang = 0, giaTriTang = 0
+        const viDuTang: string[] = []
+        for (const t of txs) {
+            for (const i of (t.items ?? [])) {
+                if ((i.quantity ?? 0) <= 0) continue
+                if ((i.lineTotal ?? 0) > 0) continue
+                const von = (i.product?.costPrice ?? 0) * (i.quantity ?? 0)
+                if (von <= 0) continue
+                soDongTang++; giaTriTang += von
+                if (viDuTang.length < 5) viDuTang.push(`${t.receiptNumber} · ${i.productName} ×${i.quantity}`)
+            }
+        }
+        if (soDongTang > 0) canhBao.push({
+            code: 'hang-tang-gia-0', muc: 'vua',
+            tieuDe: `${soDongTang} dòng hàng xuất giá 0 đồng (hàng tặng/khuyến mãi)`,
+            chiTiet: `Giá vốn tương ứng ${vnd(giaTriTang)} ₫. Hàng cho, biếu, tặng và hàng khuyến mãi vẫn phải lập hóa đơn; nếu chương trình khuyến mãi không được đăng ký/thông báo theo pháp luật thương mại thì còn phải tính thuế GTGT đầu ra theo giá bán hàng cùng loại.`,
+            canCu: 'Điều 4 NĐ 123/2020 — lập hóa đơn kể cả hàng cho, biếu, tặng, khuyến mãi; khoản 5 Điều 7 TT 219/2013 — giá tính thuế hàng khuyến mãi.',
+            canLam: 'Đối chiếu với hồ sơ đăng ký/thông báo chương trình khuyến mãi; phần không thuộc chương trình hợp lệ thì lập hóa đơn và kê khai thuế đầu ra bổ sung.',
+            tienRuiRo: Math.round(giaTriTang * 0.1), soLuong: soDongTang, viDu: viDuTang,
+        })
+
         if (soDong > 0) canhBao.push({
             code: 'ban-duoi-gia-von', muc: 'vua',
             tieuDe: `${soDong} dòng bán dưới giá vốn`,
