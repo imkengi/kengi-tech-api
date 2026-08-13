@@ -89,6 +89,7 @@ import { startEInvoiceQueueCron } from './cron/einvoiceQueue'
 import { startFanpageCron, stopFanpageCron } from './cron/fanpageCron'
 import { startAiAgentCron, stopAiAgentCron } from './cron/aiAgentCron'
 import { startWebhookCron, stopWebhookCron } from './cron/webhookCron'
+import { startTaxAuditCron, stopTaxAuditCron } from './cron/taxAuditCron'
 import { startEmailReplyCron, stopEmailReplyCron } from './cron/emailReplyCron'
 import webhookEndpointRoutes from './routes/webhookEndpoints'
 import { setupWebSocket, getWebSocketStats } from './lib/websocket'
@@ -1503,6 +1504,7 @@ if (!process.env.PASSENGER_BASE_URI) {
                 startEmailReplyCron()
                 startFlashSaleScheduler()
                 startEInvoiceQueueCron()
+                startTaxAuditCron()
             })
         })
 
@@ -1517,6 +1519,7 @@ if (!process.env.PASSENGER_BASE_URI) {
         stopAiAgentCron()
         stopWebhookCron()
         stopEmailReplyCron()
+        stopTaxAuditCron()
         process.exit(0)
     }
     process.on('SIGTERM', shutdown)
