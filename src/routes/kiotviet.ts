@@ -153,6 +153,15 @@ async function handleWebhook(sp: any, cfg: any, notis: { action: string; data: a
     // Webhook đụng khách nào thì hỏi lại KV số dư khách đó (làm tươi, không cộng trừ)
     opts.creds = creds
     opts.daTuoiNo = new Set<string>()
+    /**
+     * SỬA HOÁ ĐƠN BÊN KIOTVIET PHẢI THEO VỀ ĐỦ DÒNG HÀNG.
+     * KV sửa phiếu là huỷ bản gốc + đẻ bản .01 rồi bắn invoice.update — không
+     * dựng lại dòng thì bản Kengi ôm dòng cũ vĩnh viễn (đo 13/08/2026:
+     * HD030373 → .01, người dùng sửa xong mà phiếu không thấy hàng mới).
+     * Ba cổng an toàn trong syncInvoices vẫn gác: đủ 100% mã, có dòng,
+     * cộng khớp tổng — không qua thì giữ nguyên và ghi lý do.
+     */
+    opts.rebuildLines = true
 
     for (const n of notis) {
         const c = newCounters()
