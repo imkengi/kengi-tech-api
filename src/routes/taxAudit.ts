@@ -17,6 +17,7 @@ import { errMsg } from '../lib/errorResponse'
 import { kiemTraThue, type KhoangKy } from '../lib/taxAudit'
 import { boHoSoThanhTra, sangCsv, truyVetChungTu } from '../lib/auditPack'
 import { moPhongThanhTra } from '../lib/auditDrill'
+import { moPhongAnDinh, TY_LE_TT40 } from '../lib/taxAssessment'
 
 const router = Router()
 
@@ -315,6 +316,31 @@ router.get('/audit-drill', authMiddleware, async (req: AuthRequest, res: Respons
         res.json({ success: true, data: kq })
     } catch (err) {
         console.error('Mô phỏng thanh tra lỗi:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+/**
+ * GET /api/tax/audit-assessment?year=&month=|quarter=&nganh=&tySuat=
+ *   — mô phỏng kịch bản xấu nhất: bị ấn định thuế theo Điều 50 Luật QLT.
+ *
+ * Trả căn cứ ấn định ĐANG CÓ THẬT trong dữ liệu (kèm cách phản bác từng cái) và
+ * ước tính số thuế nếu bị ấn định. Con số ở đây là minh họa mức thiệt hại, không
+ * phải dự báo số cơ quan thuế sẽ ra — điều đó ghi thẳng trong phần trả về.
+ */
+router.get('/audit-assessment', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const nganhQ = String(req.query.nganh || '')
+        const tySuatQ = Number(req.query.tySuat)
+        const kq = await moPhongAnDinh(prisma, dungKy(req.query), {
+            nganh: (nganhQ in TY_LE_TT40 ? nganhQ : undefined) as any,
+            // Chặn tỷ suất vô lý: âm hoặc trên 100% thì bỏ qua, dùng mặc định
+            tySuatLoiNhuan: isFinite(tySuatQ) && tySuatQ > 0 && tySuatQ <= 1 ? tySuatQ : undefined,
+        })
+        res.json({ success: true, data: { ...kq, nganhCoThe: TY_LE_TT40 } })
+    } catch (err) {
+        console.error('Mô phỏng ấn định thuế lỗi:', err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }
 })
