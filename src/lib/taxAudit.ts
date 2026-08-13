@@ -1041,6 +1041,62 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
         }
     } catch { /* bỏ qua */ }
 
+    /* ── 14b. Hóa đơn đầu vào trùng và mua của chính mình ────────────────────
+     * Hai dấu hiệu cổ điển của hóa đơn khống / kê khai trùng:
+     *  - Cùng MST người bán + cùng số hóa đơn xuất hiện nhiều lần
+     *  - MST người bán trùng MST của chính cửa hàng (tự mua của mình)
+     * Trùng hóa đơn thường chỉ là nhập liệu hai lần, nhưng vẫn làm khấu trừ
+     * thừa nên phải sửa; mua của chính mình thì gần như luôn là nhập nhầm. */
+    try {
+        const chiHd = await prisma.expense.findMany({
+            where: { date: { gte: start, lte: end } },
+            select: { id: true, description: true, invoiceNo: true, supplierTaxCode: true, supplierName: true, vatAmount: true, amount: true, status: true, category: true },
+        })
+        const hopLe = (chiHd || []).filter((e: any) =>
+            (e.status ?? 'active') === 'active' && String(e.category || '') !== 'supplier_payment')
+
+        const dem: Record<string, { lan: number; vat: number; ten: string }> = {}
+        for (const e of hopLe) {
+            const so = String(e.invoiceNo || '').trim()
+            const mst = String(e.supplierTaxCode || '').trim()
+            if (!so || !mst) continue
+            const k = `${mst}|${so}`
+            const o = dem[k] ?? (dem[k] = { lan: 0, vat: 0, ten: e.supplierName || '' })
+            o.lan++
+            o.vat += e.vatAmount || 0
+        }
+        const trung = Object.entries(dem).filter(([, v]) => v.lan > 1)
+        if (trung.length > 0) {
+            // Phần khấu trừ THỪA = tổng VAT của các bản ghi trùng trừ đi một bản
+            const vatThua = trung.reduce((s, [, v]) => s + v.vat * (v.lan - 1) / v.lan, 0)
+            canhBao.push({
+                code: 'hoa-don-vao-trung', muc: 'cao',
+                tieuDe: `${trung.length} hóa đơn đầu vào bị nhập trùng`,
+                chiTiet: `Cùng mã số thuế người bán và cùng số hóa đơn xuất hiện nhiều lần — phần thuế khấu trừ thừa ước tính ${vnd(vatThua)} ₫. Thường do nhập tay hai lần hoặc đồng bộ lặp, nhưng vẫn là khấu trừ sai và bị truy thu.`,
+                canCu: 'Điều 14 Luật Thuế GTGT 48/2024 — mỗi hóa đơn chỉ được khấu trừ một lần.',
+                canLam: 'Xóa bản ghi trùng trong phần mềm (giữ lại một bản), rồi khai điều chỉnh kỳ tương ứng nếu đã kê khai khấu trừ cả hai.',
+                tienRuiRo: Math.round(vatThua), soLuong: trung.length,
+                viDu: trung.slice(0, 5).map(([k, v]) => `${v.ten || k.split('|')[0]} · HĐ ${k.split('|')[1]} (${v.lan} lần)`),
+            })
+        }
+
+        const st = await prisma.storeSettings.findFirst({ select: { taxCode: true } }).catch(() => null)
+        const mstMinh = String(st?.taxCode || '').trim()
+        if (mstMinh) {
+            const tuMua = hopLe.filter((e: any) => String(e.supplierTaxCode || '').trim() === mstMinh)
+            if (tuMua.length > 0) canhBao.push({
+                code: 'mua-cua-chinh-minh', muc: 'cao',
+                tieuDe: `${tuMua.length} hóa đơn đầu vào ghi người bán chính là cửa hàng`,
+                chiTiet: `Mã số thuế người bán trùng mã số thuế của chính đơn vị (${mstMinh}). Gần như luôn là nhập nhầm, nhưng nếu để nguyên thì đó là khoản khấu trừ không có thật.`,
+                canCu: 'Điều 14 Luật Thuế GTGT 48/2024 — chỉ khấu trừ thuế của hàng hóa, dịch vụ MUA VÀO.',
+                canLam: 'Mở lại hóa đơn gốc và sửa mã số thuế người bán cho đúng; nếu đã kê khai thì khai điều chỉnh.',
+                tienRuiRo: Math.round(tuMua.reduce((s: number, e: any) => s + (e.vatAmount || 0), 0)),
+                soLuong: tuMua.length,
+                viDu: tuMua.slice(0, 5).map((e: any) => `${e.description || ''} · ${vnd(e.amount || 0)} ₫`.trim()),
+            })
+        }
+    } catch { /* bỏ qua */ }
+
     /* ── 15. Thuế GTGT đầu vào tồn đọng chưa khấu trừ hết ────────────────────
      * TK 133 dư lớn kéo dài nghĩa là mua nhiều hơn bán, hoặc kê khai chưa đúng.
      * Cơ quan thuế luôn soi số dư này vì nó là tiền nhà nước đang "nợ" doanh

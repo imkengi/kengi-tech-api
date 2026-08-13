@@ -723,7 +723,39 @@ async function main() {
         kiemTra('Đầu vào bình thường thì không kêu tồn đọng', !co(h, 'vat-vao-ton-dong'))
     }
 
-    // ── 39. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
+    // ── 39. Hóa đơn đầu vào trùng / mua của chính mình ─────────────────────
+    {
+        const k = khoSach()
+        k.settings = { businessType: 'company', taxCode: '0312345678' }
+        k.expenses = [
+            // Trùng: cùng MST + cùng số hóa đơn, mỗi bản 1tr VAT → thừa 1tr
+            { id: 'd1', description: 'Mua hàng', amount: 11_000_000, vatAmount: 1_000_000, invoiceNo: 'HD777', supplierTaxCode: '0101234567', invoiceDate: new Date('2026-08-05'), paidBy: 'bank', date: new Date('2026-08-05'), status: 'active', category: 'supplies' },
+            { id: 'd2', description: 'Mua hàng (nhập lại)', amount: 11_000_000, vatAmount: 1_000_000, invoiceNo: 'HD777', supplierTaxCode: '0101234567', invoiceDate: new Date('2026-08-05'), paidBy: 'bank', date: new Date('2026-08-05'), status: 'active', category: 'supplies' },
+            // Cùng số nhưng KHÁC nhà cung cấp → không phải trùng
+            { id: 'd3', description: 'Mua khác', amount: 5_500_000, vatAmount: 500_000, invoiceNo: 'HD777', supplierTaxCode: '0109999999', invoiceDate: new Date('2026-08-06'), paidBy: 'bank', date: new Date('2026-08-06'), status: 'active', category: 'supplies' },
+            // Mua của chính mình
+            { id: 'd4', description: 'Hóa đơn nhập nhầm', amount: 2_200_000, vatAmount: 200_000, invoiceNo: 'HD888', supplierTaxCode: '0312345678', invoiceDate: new Date('2026-08-07'), paidBy: 'bank', date: new Date('2026-08-07'), status: 'active', category: 'supplies' },
+        ]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const a = lay(h, 'hoa-don-vao-trung')
+        const b = lay(h, 'mua-cua-chinh-minh')
+        kiemTra('Bắt hóa đơn trùng (1 cặp, thừa 1tr) và mua của chính mình (200k VAT)',
+            !!a && a.soLuong === 1 && a.tienRuiRo === 1_000_000 && !!b && b.soLuong === 1 && b.tienRuiRo === 200_000,
+            JSON.stringify({ trung: [a?.soLuong, a?.tienRuiRo], tuMua: [b?.soLuong, b?.tienRuiRo] }))
+    }
+    {
+        const k = khoSach()
+        k.settings = { businessType: 'company', taxCode: '0312345678' }
+        k.expenses = [
+            { id: 'e1', description: 'Mua hàng', amount: 11_000_000, vatAmount: 1_000_000, invoiceNo: 'HD001', supplierTaxCode: '0101234567', invoiceDate: new Date('2026-08-05'), paidBy: 'bank', date: new Date('2026-08-05'), status: 'active', category: 'supplies' },
+            { id: 'e2', description: 'Mua hàng', amount: 11_000_000, vatAmount: 1_000_000, invoiceNo: 'HD002', supplierTaxCode: '0101234567', invoiceDate: new Date('2026-08-06'), paidBy: 'bank', date: new Date('2026-08-06'), status: 'active', category: 'supplies' },
+        ]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        kiemTra('Hóa đơn khác số của cùng NCC không bị coi là trùng',
+            !co(h, 'hoa-don-vao-trung') && !co(h, 'mua-cua-chinh-minh'))
+    }
+
+    // ── 40. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
     {
         const h = await kiemTraThue(fakePrisma(khoSach()), KY)
         kiemTra('Luôn trả checklist hồ sơ cần chuẩn bị', h.hoSoCanChuanBi.length >= 8)
