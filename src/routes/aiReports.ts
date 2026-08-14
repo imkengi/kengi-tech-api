@@ -118,4 +118,97 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) =>
     }
 })
 
+/* ═══════════════════════════════════════════════════════════════════════════
+ * HỘI THOẠI VỚI TRỢ LÝ AI
+ *
+ * Khác bản phân tích (một lần chạy ra một văn bản), hội thoại là nhiều lượt và
+ * còn nói tiếp được — nên nó ĐƯỢC GHI ĐÈ theo id, không tạo bản ghi mới mỗi lượt.
+ *
+ * Đặt chung file vì cùng một mối quan tâm: giữ lại thứ đã tốn hạn mức Gemini và
+ * thời gian chờ của người dùng.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/** GET /api/ai-reports/chats — danh sách hội thoại, không kèm nội dung */
+router.get('/chats/list', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const ds = await prisma.aiChat.findMany({
+            select: { id: true, tieuDe: true, soLuot: true, createdByName: true, updatedAt: true },
+            orderBy: { updatedAt: 'desc' },
+            take: Math.min(60, Math.max(1, Number((req.query as any).limit) || 30)),
+        })
+        res.json({ success: true, data: ds })
+    } catch (err: any) {
+        if (laThieuBang(err)) return res.json({ success: true, data: [], warning: CHUA_CO_BANG })
+        console.error('GET /ai-reports/chats/list error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+/** GET /api/ai-reports/chats/:id — đầy đủ các lượt */
+router.get('/chats/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const c = await prisma.aiChat.findUnique({ where: { id: String(req.params.id) } })
+        if (!c) return res.status(404).json({ success: false, error: 'Không tìm thấy hội thoại' })
+        res.json({ success: true, data: c })
+    } catch (err: any) {
+        if (laThieuBang(err)) return res.status(404).json({ success: false, error: 'Chưa có bảng lưu hội thoại' })
+        console.error('GET /ai-reports/chats/:id error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+/**
+ * POST /api/ai-reports/chats — tạo mới hoặc ghi đè theo `id`.
+ * Trả về id để lượt sau ghi tiếp vào đúng cuộc trò chuyện đó.
+ */
+router.post('/chats', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const b = req.body || {}
+        const luot = Array.isArray(b.luot) ? b.luot : null
+        if (!luot || luot.length === 0) {
+            return res.status(400).json({ success: false, error: 'Thiếu nội dung hội thoại' })
+        }
+
+        /* Tiêu đề suy từ câu hỏi ĐẦU TIÊN, không phải câu mới nhất: người ta tìm
+         * lại cuộc trò chuyện theo việc đã hỏi lúc mở, không theo câu cuối. */
+        const cauDau = String(luot.find((x: any) => x?.role === 'user')?.text || 'Hội thoại').trim()
+        const tieuDe = (cauDau.length > 70 ? cauDau.slice(0, 69) + '…' : cauDau) || 'Hội thoại'
+        const noiDung = JSON.stringify(luot).slice(0, 200_000)
+
+        const dulieu = {
+            tieuDe, noiDung, soLuot: luot.length,
+            createdBy: req.user?.userId || null,
+            createdByName: req.user?.email || null,
+        }
+
+        const id = String(b.id || '')
+        const c = id
+            ? await prisma.aiChat.upsert({ where: { id }, update: { noiDung, soLuot: luot.length }, create: { id, ...dulieu }, select: { id: true } })
+            : await prisma.aiChat.create({ data: dulieu, select: { id: true } })
+        res.json({ success: true, data: c })
+    } catch (err: any) {
+        if (laThieuBang(err)) {
+            return res.status(200).json({ success: false, error: 'Chưa có bảng lưu hội thoại — chạy migrate rồi thử lại', warning: CHUA_CO_BANG })
+        }
+        console.error('POST /ai-reports/chats error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+/** DELETE /api/ai-reports/chats/:id */
+router.delete('/chats/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        await prisma.aiChat.delete({ where: { id: String(req.params.id) } })
+        res.json({ success: true })
+    } catch (err: any) {
+        if (laThieuBang(err)) return res.status(404).json({ success: false, error: 'Không tìm thấy hội thoại' })
+        console.error('DELETE /ai-reports/chats/:id error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
 export default router

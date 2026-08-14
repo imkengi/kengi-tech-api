@@ -3143,3 +3143,22 @@ model AiReport {
   @@index([loai])
   @@index([createdAt])
 }
+
+/// HOI THOAI VOI TRO LY AI DA LUU.
+/// Truoc day toan bo cuoc tro chuyen chi nam trong useState: bam F5 la mat sach,
+/// ke ca nhung cau tra loi ton han muc Gemini va vai chuc giay cho.
+model AiChat {
+  id            String   @id @default(cuid())
+  /// Suy tu cau hoi dau tien, de nhan ra cuoc tro chuyen trong danh sach
+  tieuDe        String
+  /// JSON mang cac luot: [{ role, text, toolCalls }]
+  noiDung       String
+  soLuot        Int      @default(0)
+  createdBy     String?
+  createdByName String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([updatedAt])
+  @@index([createdBy])
+}
