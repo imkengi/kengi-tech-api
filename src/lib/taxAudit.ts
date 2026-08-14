@@ -311,6 +311,10 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
     const ps133 = phatSinh(butToan, '133')
     // Doanh thu thuần trên sổ = phát sinh Có 511 − các khoản giảm trừ 521
     const dtSo = Math.round(ps511.co - ps511.no - (ps521.no - ps521.co))
+    /* Sổ kế toán TRỐNG khác hẳn "không có doanh thu" — xem khối giải thích dài
+     * ở phép đối chiếu sổ với hoá đơn bên dưới. Đặt cờ ngay cạnh nơi tính dtSo
+     * để mọi phép dùng dtSo đều nhìn thấy nó. */
+    const soChuaGhiDoanhThu = ps511.co === 0 && ps511.no === 0
     const vatRaSo = Math.round(ps3331.co - ps3331.no)
     const vatVaoSo = Math.round(ps133.no - ps133.co)
 
@@ -358,7 +362,7 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
     } catch { /* chưa có bảng EInvoice */ }
 
     // ── 1. Đối chiếu ba nguồn doanh thu ──────────────────────────────────────
-    if (coToKhai && dtToKhai !== null) {
+    if (coToKhai && dtToKhai !== null && !soChuaGhiDoanhThu) {
         const lech = dtSo - dtToKhai
         if (Math.abs(lech) >= NGUONG_LECH_BO_QUA) canhBao.push({
             code: 'dt-so-vs-tokhai', muc: Math.abs(lech) > Math.max(dtToKhai, 1) * 0.02 ? 'cao' : 'vua',
@@ -381,7 +385,34 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
         })
     }
 
-    if (dtHoaDon > 0 || dtSo > 0) {
+    /* ── SỔ KẾ TOÁN TRỐNG KHÁC HẲN "KHÔNG CÓ DOANH THU" ──────────────────────
+     *
+     * `dtSo` lấy từ BÚT TOÁN (phát sinh Có 511 trừ giảm trừ 521), không phải từ
+     * đơn hàng. Cửa hàng chưa ghi bút toán doanh thu — rất thường gặp, và với
+     * HỘ KINH DOANH là chuyện bình thường vì họ không bắt buộc ghi sổ kép, chỉ
+     * cần sổ doanh thu theo TT 88/2021 — sẽ có `dtSo = 0`.
+     *
+     * Bản trước lấy số 0 đó đem so với hoá đơn đã phát hành rồi kết luận "lệch"
+     * ở mức CAO kèm rủi ro bằng đúng toàn bộ tiền hoá đơn, viện Điều 90 về việc
+     * bán hàng phải lập hoá đơn. Đo thật trên KENGISTORE: "Sổ ghi 0 ₫, hóa đơn
+     * 510.338.820 ₫ — lệch 510.338.820 ₫", rủi ro 510 triệu. Chiều buộc tội
+     * NGƯỢC HẲN sự thật: họ ĐÃ xuất hoá đơn, chỉ là chưa ghi bút toán.
+     *
+     * Và chính báo cáo này ở chỗ khác đã biết điều đó — cảnh báo hộ kinh doanh
+     * ghi rõ "nguồn: doanh thu bán hàng thực tế (sổ doanh thu HKD chưa nhập)".
+     * Cùng một màn hình nói hai kiểu thì người dùng không tin cái nào. */
+    if (soChuaGhiDoanhThu && dtHoaDon > 0) {
+        canhBao.push({
+            code: 'chua-ghi-so-doanh-thu', muc: 'vua',
+            tieuDe: 'Chưa ghi bút toán doanh thu vào sổ kế toán',
+            chiTiet: `Kỳ ${nhan} có ${vnd(dtHoaDon)} ₫ hóa đơn đã phát hành nhưng sổ kế toán chưa có bút toán doanh thu nào (tài khoản 511). Vì vậy KHÔNG kết luận được là lệch: chưa ghi sổ khác hẳn với bán mà giấu doanh thu. Mọi phép đối chiếu "sổ với hóa đơn" và "sổ với tờ khai" của kỳ này đều chưa dùng được.`,
+            canCu: 'Điều 3 TT 88/2021 — hộ kinh doanh nộp thuế theo kê khai chỉ bắt buộc sổ doanh thu, không bắt buộc sổ kép; doanh nghiệp thì theo chế độ kế toán đang áp dụng.',
+            canLam: 'Nếu là doanh nghiệp: chạy ghi sổ tự động ở Kế Toán để sinh bút toán doanh thu cho kỳ. Nếu là hộ kinh doanh: nhập Sổ Doanh Thu trong phần Thuế — không cần sổ kép.',
+            tienRuiRo: null, soLuong: 0, viDu: [],
+        })
+    }
+
+    if (!soChuaGhiDoanhThu && (dtHoaDon > 0 || dtSo > 0)) {
         const lech = dtSo - dtHoaDon
         if (Math.abs(lech) >= Math.max(NGUONG_LECH_BO_QUA, dtSo * 0.01)) canhBao.push({
             code: 'dt-so-vs-hoadon', muc: Math.abs(lech) > Math.max(dtSo, 1) * 0.05 ? 'cao' : 'vua',

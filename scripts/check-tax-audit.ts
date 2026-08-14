@@ -1059,6 +1059,47 @@ async function main() {
             !co(h, 'tien-vao-vuot-doanh-thu'), h.canhBao.map((c: any) => c.code).join(','))
     }
 
+    // ── 41b. Sổ kế toán trống ≠ giấu doanh thu ─────────────────────────────
+    /* `dtSo` lấy từ bút toán 511, không phải từ đơn hàng. Hộ kinh doanh không
+     * bắt buộc ghi sổ kép nên dtSo = 0 là bình thường. Đem số 0 đó so với hoá
+     * đơn đã phát hành rồi kêu "lệch" mức cao là tố ngược: họ ĐÃ xuất hoá đơn.
+     * Ca thật 14/08/2026 ở KENGISTORE: rủi ro 510.338.820 ₫ dựng từ đúng lỗi này. */
+    {
+        const k = khoSach()
+        k.journal = k.journal.filter((b: any) => b.debitAccount !== '511' && b.creditAccount !== '511')
+        k.declarations = []
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        kiemTra('Sổ chưa ghi doanh thu thì KHÔNG kêu lệch sổ với hoá đơn',
+            !co(h, 'dt-so-vs-hoadon'), JSON.stringify(lay(h, 'dt-so-vs-hoadon')?.tienRuiRo))
+        const c = lay(h, 'chua-ghi-so-doanh-thu')
+        kiemTra('… mà nói đúng việc: chưa ghi bút toán doanh thu, mức vừa',
+            !!c && c.muc === 'vua', JSON.stringify(c?.muc))
+        kiemTra('… nói rõ chưa ghi sổ KHÁC với giấu doanh thu',
+            !!c && /khác hẳn với bán mà giấu doanh thu/.test(c.chiTiet), c?.chiTiet?.slice(0, 80))
+        kiemTra('… không gán số tiền rủi ro cho việc chưa ghi sổ',
+            !!c && c.tienRuiRo === null, JSON.stringify(c?.tienRuiRo))
+        kiemTra('… chỉ đúng đường cho cả hộ kinh doanh lẫn doanh nghiệp',
+            !!c && /Sổ Doanh Thu/.test(c.canLam) && /Kế Toán/.test(c.canLam), c?.canLam)
+    }
+    {
+        // Sổ trống mà có tờ khai thì cũng không được đem 0 ra so với tờ khai
+        const k = khoSach()
+        k.journal = k.journal.filter((b: any) => b.debitAccount !== '511' && b.creditAccount !== '511')
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        kiemTra('Sổ chưa ghi doanh thu thì KHÔNG kêu lệch sổ với tờ khai',
+            !co(h, 'dt-so-vs-tokhai'), JSON.stringify(lay(h, 'dt-so-vs-tokhai')?.tienRuiRo))
+    }
+    {
+        /* Chiều ngược: sổ CÓ ghi doanh thu mà lệch thật thì vẫn phải kêu — nới
+         * lỏng nhầm chỗ này là bỏ lọt đúng phép đối chiếu quan trọng nhất. */
+        const k = khoSach()
+        k.journal.push({ date: '2026-08-06', debitAccount: '131', creditAccount: '511', amount: 300_000_000 })
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        kiemTra('Sổ có ghi doanh thu mà lệch hoá đơn thì vẫn kêu',
+            co(h, 'dt-so-vs-hoadon'), JSON.stringify(lay(h, 'dt-so-vs-hoadon')?.tienRuiRo))
+        kiemTra('… và không kèm cảnh báo "chưa ghi sổ"', !co(h, 'chua-ghi-so-doanh-thu'))
+    }
+
     // ── 42. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
     {
         const h = await kiemTraThue(fakePrisma(khoSach()), KY)

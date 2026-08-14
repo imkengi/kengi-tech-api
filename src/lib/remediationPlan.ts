@@ -76,6 +76,9 @@ const PHAN_CONG: Record<string, { aiLam: NguoiLam; congSuc: CongSuc }> = {
     'vat-khong-nhat-quan': { aiLam: 'ke-toan', congSuc: 'trung-binh' },
     'vat-vao-ton-dong': { aiLam: 'ke-toan', congSuc: 'nhanh' },
     'thieu-to-khai': { aiLam: 'ke-toan', congSuc: 'nhanh' },
+    /* Ghi bút toán doanh thu (hoặc nhập sổ doanh thu với hộ kinh doanh) là việc
+     * của kế toán, và chạy ghi sổ tự động thì nhanh. */
+    'chua-ghi-so-doanh-thu': { aiLam: 'ke-toan', congSuc: 'nhanh' },
     'to-khai-tre-han': { aiLam: 'ke-toan', congSuc: 'nhanh' },
     'to-khai-tre-han-uoc': { aiLam: 'ke-toan', congSuc: 'nhanh' },
     /* Việc này là ĐỐI CHIẾU giấy đăng ký kinh doanh chứ không phải nộp tờ khai,
