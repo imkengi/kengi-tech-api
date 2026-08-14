@@ -174,7 +174,13 @@ export async function duBaoDongTien(
         ngayCoMatDauTien = ld ? new Date(ld) : null
         if (ngayCoMatDauTien && ngayCoMatDauTien.getTime() > tuDo.getTime()) {
             const songDuoc = Math.ceil((Date.now() - ngayCoMatDauTien.getTime()) / 86400_000)
-            mauSoNgay = Math.min(NGAY_DO, Math.max(1, songDuoc))
+            /* Mẫu số không được nhỏ hơn SỐ NGÀY THỰC SỰ CÓ BÁN: không thể bán
+             * 32 ngày khác nhau trong một cửa hàng mới sống 31 ngày. Hai con số
+             * đo hai thứ khác nhau (số ngày trôi qua so với số ngày trong lịch
+             * có phát sinh) nên lệch nhau một ngày ở ranh giới múi giờ +7 là
+             * chuyện thường — nhưng để mẫu số nhỏ hơn thì tốc độ thu bị thổi
+             * lên, và lịch tiền lạc quan quá đà còn nguy hơn bi quan. */
+            mauSoNgay = Math.min(NGAY_DO, Math.max(1, songDuoc, soNgayDoDuoc))
         }
         thuMoiNgay = soNgayDoDuoc > 0 ? so(rows[0].tien) / mauSoNgay : 0
     } catch (e: any) {

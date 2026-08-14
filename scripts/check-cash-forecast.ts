@@ -216,6 +216,16 @@ async function main() {
             ranh.uocTinh.soNgayLayTrungBinh === 60, ranh.uocTinh.soNgayLayTrungBinh)
     }
     {
+        /* Ranh giới múi giờ +7: cửa hàng "sống 31 ngày" nhưng chạm 32 ngày khác
+         * nhau trong lịch. Mẫu số phải lấy con lớn, không thì tốc độ thu bị
+         * thổi lên — dữ liệu thật của KENGISTORE rơi đúng vào ca này. */
+        const bien = await duBaoDongTien(fakePrisma({
+            taiKhoan: [{ balance: 100_000_000 }], thuMoiNgay: 1_000_000, soNgayThu: 32, tuoiNgay: 31,
+        }), { soNgay: 30 })
+        ok('mẫu số không được nhỏ hơn số ngày thực sự có bán',
+            bien.uocTinh.soNgayLayTrungBinh === 32, bien.uocTinh.soNgayLayTrungBinh)
+    }
+    {
         // Mẫu số không bao giờ được bằng 0 (chia cho 0 ra Infinity, vẽ đường vô nghĩa)
         const hnay = await duBaoDongTien(fakePrisma({
             taiKhoan: [{ balance: 10_000_000 }], thuMoiNgay: 1_000_000, soNgayThu: 1, tuoiNgay: 0,
