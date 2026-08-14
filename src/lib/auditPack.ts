@@ -61,7 +61,15 @@ export interface BoHoSoThanhTra {
 }
 
 const r0 = (v: number) => Math.round(v || 0)
-const ngayISO = (d: Date) => d.toISOString().slice(0, 10)
+/* NGÀY THEO GIỜ VIỆT NAM. Cột giờ trong DB là UTC, nên cắt thẳng `toISOString()`
+ * sẽ trả về ngày HÔM TRƯỚC cho mọi giao dịch từ 00:00 đến 06:59 giờ VN.
+ *
+ * Chỗ này không phải lệch cho vui: `ngayBan` dựng từ đây rồi đem so với
+ * `invoiceDate` (vốn đã là ngày nghiệp vụ dạng chuỗi). Lệch một ngày là đơn nào
+ * bán đêm cũng bị gắn cảnh báo "Ngày hóa đơn khác ngày bán — Điều 9 NĐ 123/2020
+ * buộc lập tại thời điểm chuyển giao hàng", tức tố cửa hàng lập hóa đơn sai thời
+ * điểm. Đơn sàn đặt lúc 1–2h sáng là chuyện thường ngày. */
+const ngayISO = (d: Date) => new Date(d.getTime() + 7 * 3600_000).toISOString().slice(0, 10)
 
 /** Ngày của bản ghi, ưu tiên ngày nghiệp vụ hơn ngày tạo bản ghi */
 function ngayCua(x: any, ...truong: string[]): string {

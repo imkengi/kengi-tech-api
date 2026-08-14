@@ -292,6 +292,65 @@ async function main() {
             !!c && c.muc === 'nguy-hiem', c?.muc)
     }
 
+    console.log('\n▸ Thời điểm lập hoá đơn: so ngày NGHIỆP VỤ theo giờ VN')
+    /* Hai lỗi từng nằm trên cùng một dòng và cả hai đều đẩy phép kiểm lên mức
+     * nguy-hiem: dùng `createdAt` (ngày ghi dòng dữ liệu) và cắt UTC không +7h.
+     * Hệ quả: "N hoá đơn có ngày lập khác ngày bán", viện Điều 9 NĐ 123/2020
+     * kèm phạt hành chính — tố cửa hàng lập hoá đơn sai thời điểm. */
+    {
+        const k = khoSach()
+        // Ghi sổ ngày 20/08 nhưng bán thật ngày 05/08, hoá đơn cũng 05/08
+        k.transactions = [{
+            id: 'tn', receiptNumber: 'HDN', total: 11_000_000, channel: 'direct',
+            status: 'completed',
+            transactionDate: new Date('2026-08-05T09:00:00+07:00'),
+            createdAt: new Date('2026-08-20T09:00:00+07:00'),
+        }]
+        k.invoices = [{
+            invoiceNumber: 'N1', invoiceDate: '2026-08-05', invoiceType: 'SALE',
+            status: 'SIGNED', totalBeforeVat: 10_000_000, transactionId: 'tn',
+        }]
+        const r = await moPhongThanhTra(fakePrisma(k), KY)
+        const c = r.cauHoi.find((x: any) => x.ma === 'hd-thoi-diem')
+        ok('ngày ghi sổ khác ngày bán KHÔNG bị tính là lệch thời điểm',
+            !!c && c.muc === 'an-toan', [c?.muc, c?.traLoi])
+    }
+    {
+        // Bán 01h30 sáng giờ VN: cắt UTC sẽ ra ngày hôm trước
+        const k = khoSach()
+        const dem = new Date('2026-08-15T01:30:00+07:00')
+        k.transactions = [{
+            id: 'tn', receiptNumber: 'HDN', total: 11_000_000, channel: 'direct',
+            status: 'completed', transactionDate: dem, createdAt: dem,
+        }]
+        k.invoices = [{
+            invoiceNumber: 'N1', invoiceDate: '2026-08-15', invoiceType: 'SALE',
+            status: 'SIGNED', totalBeforeVat: 10_000_000, transactionId: 'tn',
+        }]
+        const r = await moPhongThanhTra(fakePrisma(k), KY)
+        const c = r.cauHoi.find((x: any) => x.ma === 'hd-thoi-diem')
+        ok('đơn bán 01h30 sáng không bị lệch một ngày',
+            !!c && c.muc === 'an-toan', [c?.muc, c?.traLoi])
+    }
+    {
+        // Chiều ngược: lập hoá đơn dồn cuối tháng thì vẫn phải bắt
+        const k = khoSach()
+        k.transactions = [{
+            id: 'tn', receiptNumber: 'HDN', total: 11_000_000, channel: 'direct',
+            status: 'completed',
+            transactionDate: new Date('2026-08-05T09:00:00+07:00'),
+            createdAt: new Date('2026-08-05T09:00:00+07:00'),
+        }]
+        k.invoices = [{
+            invoiceNumber: 'N1', invoiceDate: '2026-08-31', invoiceType: 'SALE',
+            status: 'SIGNED', totalBeforeVat: 10_000_000, transactionId: 'tn',
+        }]
+        const r = await moPhongThanhTra(fakePrisma(k), KY)
+        const c = r.cauHoi.find((x: any) => x.ma === 'hd-thoi-diem')
+        ok('lập hoá đơn dồn cuối tháng thì VẪN bị bắt',
+            !!c && c.muc !== 'an-toan', [c?.muc, c?.traLoi])
+    }
+
     console.log(`\n${dat}/${dat + hong} ca đạt`)
     if (hong) process.exit(1)
 }

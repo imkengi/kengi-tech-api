@@ -377,6 +377,37 @@ async function main() {
     const v9 = await truyVetChungTu(px, '   ')
     ok('mã rỗng cũng không nổ', !v9.timThay)
 
+    console.log('\n▶ Ngày bán tính theo giờ VIỆT NAM, không theo UTC\n')
+    /* Cột giờ trong DB là UTC. Cắt thẳng toISOString() thì mọi giao dịch từ
+     * 00:00 đến 06:59 giờ VN mang ngày HÔM TRƯỚC, rồi bị đem so với invoiceDate
+     * (vốn đã là ngày nghiệp vụ) → đơn nào bán đêm cũng dính cảnh báo "Ngày hóa
+     * đơn khác ngày bán — Điều 9 NĐ 123/2020", tức tố lập hóa đơn sai thời điểm.
+     * Đơn sàn đặt lúc 1–2h sáng là chuyện thường ngày. */
+    {
+        // 01:30 sáng 15/08 giờ VN = 18:30 ngày 14/08 UTC
+        const dem = new Date('2026-08-15T01:30:00+07:00')
+        const tv = await truyVetChungTu(fakePrisma({
+            ...khoDayDu(),
+            transactions: [{
+                id: 'tn', receiptNumber: 'HDN', customerId: null, customerName: 'Khách lẻ',
+                subtotal: 1_000_000, discount: 0, tax: 100_000, total: 1_100_000,
+                amountReceived: 1_100_000, status: 'completed', createdByName: 'Thu ngân',
+                transactionDate: dem, createdAt: dem, vatStatus: 'issued', vatInvoiceNumber: 'N1',
+            }],
+            invoices: [{
+                invoiceNumber: 'N1', invoiceSymbol: '1C26TAA', invoiceDate: '2026-08-15',
+                invoiceType: 'SALE', status: 'SIGNED', buyerName: 'Khách lẻ', buyerTaxCode: null,
+                paymentMethod: 'TM', totalBeforeVat: 1_000_000, vatAmount: 100_000,
+                totalAmount: 1_100_000, lookupCode: null, transactionId: 'tn',
+            }],
+        }), 'HDN')
+        ok('đơn bán 01h30 sáng lấy đúng ngày VN',
+            tv.moc.some((m: any) => /ngày 2026-08-15/.test(m.chiTiet || '')),
+            tv.moc.map((m: any) => m.chiTiet).filter(Boolean)[0])
+        ok('… nên KHÔNG bị gắn cờ Điều 9 NĐ 123/2020',
+            !tv.canhBao.some((c: string) => /Điều 9 NĐ 123\/2020/.test(c)), tv.canhBao)
+    }
+
     console.log(`\n${dat}/${dat + hong} ca đạt`)
     if (hong) process.exit(1)
 }

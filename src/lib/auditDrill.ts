@@ -102,7 +102,7 @@ export async function moPhongThanhTra(
     }), [])
     const giaoDich: any[] = await an(() => prisma.transaction.findMany({
         where: { status: { in: ['completed', 'partial'] }, createdAt: { gte: start, lte: end } },
-        select: { id: true, receiptNumber: true, total: true, channel: true, createdAt: true },
+        select: { id: true, receiptNumber: true, total: true, channel: true, createdAt: true, transactionDate: true },
     }), [])
     const phieuChi: any[] = await an(() => prisma.expense.findMany({
         where: { date: { gte: start, lte: end } },
@@ -262,7 +262,21 @@ export async function moPhongThanhTra(
         if (!h.transactionId || !h.invoiceDate) continue
         const g = gdTheoId.get(h.transactionId)
         if (!g) continue
-        const ngayBan = new Date(g.createdAt).toISOString().slice(0, 10)
+        /* NGÀY BÁN THEO GIỜ VN, VÀ LẤY NGÀY NGHIỆP VỤ.
+         *
+         * Hai lỗi cùng nằm trên một dòng, và cả hai đều đẩy phép kiểm này lên
+         * mức nguy-hiem:
+         *  - `createdAt` là lúc ghi dòng dữ liệu. Cửa hàng nhập lịch sử từ phần
+         *    mềm cũ có createdAt trùng nhau vài tuần trong khi invoiceDate trải
+         *    nhiều tháng → gần như 100% hóa đơn bị tính là "lệch ngày".
+         *  - cắt thẳng toISOString() cho ra ngày HÔM TRƯỚC với mọi đơn bán từ
+         *    00:00 đến 06:59 giờ VN. Đơn sàn đặt lúc 1–2h sáng là chuyện thường.
+         *
+         * Hệ quả là câu trả lời "N hóa đơn có ngày lập khác ngày bán", viện
+         * Điều 9 NĐ 123/2020 kèm phạt hành chính — tố cửa hàng lập hóa đơn sai
+         * thời điểm trong khi họ làm đúng. */
+        const ngayBan = new Date(new Date(g.transactionDate || g.createdAt).getTime() + 7 * 3600_000)
+            .toISOString().slice(0, 10)
         if (ngayBan !== h.invoiceDate) lechNgay++
     }
     them({
