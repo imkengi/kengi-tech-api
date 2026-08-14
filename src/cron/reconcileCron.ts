@@ -83,12 +83,23 @@ export function dungLoiNhac(kq: any): { tieuDe: string; noiDung: string } | null
     }
 }
 
-export async function doiChieuChoStore(prisma: any, tenStore: string, homNay: string): Promise<boolean> {
+/**
+ * `chayThu` = tính đủ nhưng KHÔNG tạo thông báo, chỉ in ra log. Dùng để kiểm
+ * phép đối chiếu trên dữ liệu THẬT mà không làm phiền cửa hàng nào.
+ *
+ * Vì sao cần dù đã có 40 ca test: prisma giả trong test trả về mảng do chính
+ * fixture đặt, nên nó KHÔNG chứng minh được truy vấn chạy nổi trên schema thật.
+ * Bài học ngày 14/08/2026: một câu SQL sai tên khoá ngoại làm cả 9 cửa hàng im
+ * lặng trong khi toàn bộ test vẫn xanh.
+ */
+export async function doiChieuChoStore(
+    prisma: any, tenStore: string, homNay: string, chayThu = false,
+): Promise<boolean> {
     const ky = kyThangTruoc(homNay)
 
     /* Đã nhắc kỳ này rồi thì thôi — dùng chính Notification làm dấu, tránh thêm
      * một bảng trạng thái cho việc chạy mỗi tháng một lần. */
-    const daNhac = await prisma.notification.findFirst({
+    const daNhac = chayThu ? null : await prisma.notification.findFirst({
         where: { type: LOAI_TB, message: { contains: ky.nhan } },
         select: { id: true },
     }).catch(() => null)
@@ -105,12 +116,25 @@ export async function doiChieuChoStore(prisma: any, tenStore: string, homNay: st
     /* Không đọc được dữ liệu thì im hẳn. Gửi thông báo dựa trên số rỗng là buộc
      * tội oan, và người dùng sẽ tắt loại thông báo này vĩnh viễn. */
     if (kq.thieu.length > 0) {
-        console.log(`🔍 [${tenStore}] bỏ qua đối chiếu ${ky.nhan}: chưa đọc được ${kq.thieu.length} bảng`)
+        // In ĐÚNG truy vấn nào hỏng — log đếm số bảng thì không chẩn được gì.
+        console.log(`🔍 [${tenStore}] bỏ qua đối chiếu ${ky.nhan} — chưa đọc được: ${kq.thieu.join(' | ')}`)
         return false
     }
 
     const loi = dungLoiNhac(kq)
-    if (!loi) return false
+    if (!loi) {
+        if (chayThu) {
+            console.log(`🔍 [${tenStore}] CHẠY THỬ ${ky.nhan}: không có lệch đáng nhắc ` +
+                `(sổ ${kq.soSach.tong}, hoá đơn ${kq.hoaDon.tongCoThue}, ` +
+                `tiền vào ${kq.dongTien.duocKetLuan ? kq.dongTien.tienVao : 'chưa có sao kê'})`)
+        }
+        return false
+    }
+
+    if (chayThu) {
+        console.log(`🔍 [${tenStore}] CHẠY THỬ ${ky.nhan} — sẽ gửi: ${loi.tieuDe} :: ${loi.noiDung.split('\n').join(' ')}`)
+        return true
+    }
 
     await prisma.notification.create({
         data: { type: LOAI_TB, title: loi.tieuDe, message: loi.noiDung.slice(0, 1500) },
@@ -120,7 +144,7 @@ export async function doiChieuChoStore(prisma: any, tenStore: string, homNay: st
     return true
 }
 
-async function runDoiChieu(): Promise<void> {
+async function runDoiChieu(chayThu = false): Promise<void> {
     if (running) return
     running = true
     try {
@@ -130,7 +154,7 @@ async function runDoiChieu(): Promise<void> {
         // song song nhiều store sẽ đụng trần kết nối của cả cụm.
         for (const store of stores) {
             try {
-                await doiChieuChoStore(getStorePrisma(store.schema), store.name, homNay)
+                await doiChieuChoStore(getStorePrisma(store.schema), store.name, homNay, chayThu)
             } catch (e: any) {
                 console.error(`Đối chiếu ba chiều lỗi ở store ${store.name}:`, e?.message || e)
             }

@@ -4007,11 +4007,18 @@ router.post('/run-weekly-brief', async (req: Request, res: Response) => {
 })
 
 // POST /api/admin/run-reconcile — chạy ngay vòng đối chiếu ba chiều tháng trước
-router.post('/run-reconcile', async (_req: Request, res: Response) => {
+router.post('/run-reconcile', async (req: Request, res: Response) => {
     try {
+        // ?dryRun=1 — tính đủ trên dữ liệu thật nhưng không tạo thông báo nào.
+        const chayThu = String((req.query as any)?.dryRun || '') === '1'
         const { chayDoiChieuNgay } = await import('../cron/reconcileCron')
-        chayDoiChieuNgay().catch(e => console.error('run-reconcile lỗi:', e))
-        res.json({ success: true, message: 'Đã kích hoạt vòng đối chiếu ba chiều — xem tiến độ trong log' })
+        chayDoiChieuNgay(chayThu).catch(e => console.error('run-reconcile lỗi:', e))
+        res.json({
+            success: true,
+            message: chayThu
+                ? 'Đã kích hoạt CHẠY THỬ đối chiếu (không gửi thông báo) — xem kết quả trong log'
+                : 'Đã kích hoạt vòng đối chiếu ba chiều — xem tiến độ trong log',
+        })
     } catch (err: any) {
         res.status(500).json({ success: false, error: err?.message })
     }
