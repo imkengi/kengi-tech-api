@@ -49,9 +49,23 @@ function fakePrisma(k: Kho, hong?: { transaction?: boolean; product?: boolean })
         transaction: {
             findMany: async ({ where, take }: any) => {
                 if (hong?.transaction) throw new Error('The table `Transaction` does not exist')
+                /* Bắt chước đúng dạng OR mà lib dùng để lọc theo NGÀY BÁN:
+                 *   [{ transactionDate: range }, { transactionDate: null, createdAt: range }]
+                 * Prisma giả phải theo đúng hình dạng truy vấn thật, nếu không
+                 * nó "đạt" cho một truy vấn production không hề chạy. */
+                const khopOr = (t: any) => {
+                    const or = where?.OR
+                    if (!Array.isArray(or)) return trongKhoang(t.createdAt, where?.createdAt)
+                    return or.some((dk: any) => {
+                        if (dk.transactionDate === null) {
+                            return (t.transactionDate ?? null) === null
+                                && trongKhoang(t.createdAt, dk.createdAt)
+                        }
+                        return t.transactionDate != null && trongKhoang(t.transactionDate, dk.transactionDate)
+                    })
+                }
                 let ds = k.transactions.filter(t =>
-                    trongKhoang(t.createdAt, where?.createdAt) &&
-                    khopTrangThai(t.status, where?.status))
+                    khopOr(t) && khopTrangThai(t.status, where?.status))
                 if (take) ds = ds.slice(0, take)
                 return ds
             },
@@ -320,6 +334,58 @@ async function main() {
     ok('giỏ hàng một món → không dựng combo', rr.banKem.cap.length === 0, rr.banKem.cap.length)
     ok('… và nói thẳng combo không phải đòn bẩy ở đây', !!rr.banKem.lyDo)
     ok('… không có khuyến nghị combo', !rr.khuyenNghi.some(k => k.ma === 'combo'))
+
+    console.log('\n▶ Mùa vụ phải đọc NGÀY BÁN, không đọc ngày ghi dòng dữ liệu\n')
+    {
+        /* Cửa hàng nhập lịch sử từ phần mềm cũ: createdAt là lúc chạy nhập (một
+         * ngày, một giờ duy nhất), transactionDate là ngày bán thật. Nếu đọc
+         * nhầm cột thì "giờ vàng" hoá ra là giờ script chạy. */
+        const dsNhap: any[] = []
+        for (let i = 0; i < 60; i++) {
+            const ngay = `2026-06-${String((i % 28) + 1).padStart(2, '0')}`
+            const gioThat = 8 + (i % 10)
+            const d: any = don(ngay, gioThat, [['P1', 1, 150_000]])
+            // Toàn bộ đều được ghi vào sổ lúc 03h ngày 12/07
+            d.transactionDate = d.createdAt
+            d.createdAt = new Date('2026-07-12T03:00:00+07:00')
+            dsNhap.push(d)
+        }
+        const r = await coHoiTangTruong(fakePrisma({ ...khoDay(), transactions: dsNhap }), {
+            tu: new Date('2026-06-01T00:00:00+07:00'),
+            den: new Date('2026-07-31T23:59:59+07:00'),
+            moTa: 'nhập từ phần mềm cũ',
+        })
+        const gio = r.muaVu.theoGio || []
+        ok('không dồn hết doanh thu vào giờ chạy nhập liệu',
+            !(gio.length === 1 && gio[0].gio === 3), gio.map(g => g.gio))
+        ok('nhận ra nhiều khung giờ bán thật', gio.length >= 5, gio.length)
+    }
+    {
+        /* Chứng từ chỉ có NGÀY, phần giờ để 00:00 — không suy ra được giờ đông
+         * khách. Nói đại một "giờ vàng" ở đây là bịa. */
+        const dsPhang: any[] = []
+        for (let i = 0; i < 60; i++) {
+            dsPhang.push(don(`2026-06-${String((i % 28) + 1).padStart(2, '0')}`, 0, [['P1', 1, 150_000]]))
+        }
+        const r = await coHoiTangTruong(fakePrisma({ ...khoDay(), transactions: dsPhang }), {
+            tu: new Date('2026-06-01T00:00:00+07:00'),
+            den: new Date('2026-07-31T23:59:59+07:00'),
+            moTa: 'chứng từ không có giờ',
+        })
+        ok('dữ liệu không mang giờ → KHÔNG bịa ra giờ vàng', r.muaVu.gioVang === '', r.muaVu.gioVang)
+        ok('… nói rõ vì sao để trống',
+            /không mang giờ bán/.test(r.muaVu.nhanXet), r.muaVu.nhanXet?.slice(0, 100))
+    }
+    {
+        // Giờ trải bình thường thì vẫn phải nêu được khung giờ vàng
+        const r = await coHoiTangTruong(fakePrisma(khoDay()), {
+            tu: new Date('2026-05-01T00:00:00+07:00'),
+            den: new Date('2026-07-31T23:59:59+07:00'),
+            moTa: 'ba tháng',
+        })
+        ok('giờ trải bình thường thì vẫn nêu khung giờ vàng',
+            !!r.muaVu.gioVang, r.muaVu.gioVang)
+    }
 
     console.log(`\n${dat}/${dat + hong} ca đạt`)
     if (hong) process.exit(1)

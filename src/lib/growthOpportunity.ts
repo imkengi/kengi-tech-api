@@ -215,9 +215,21 @@ export async function coHoiTangTruong(
  * sổ" — chiều lệch nặng nhất. Đã gặp thật ngày 14/08/2026 ở một cửa hàng: lệch
  * ảo 677 triệu. Mọi module thuế khác trong repo đều dùng ['completed','partial'].
  */
-        where: { createdAt: { gte: ky.tu, lte: ky.den }, status: { in: ['completed', 'partial'] } },
+        /* Lọc theo NGÀY BÁN. Cùng lý do với phần mùa vụ bên dưới: cửa hàng nhập
+         * lịch sử từ phần mềm cũ có `createdAt` = lúc chạy nhập, nên lọc theo
+         * nó là lấy nhầm tập đơn. Dạng OR này là idiom sẵn có trong repo
+         * (importReceipts.ts) — tương đương COALESCE nhưng viết được bằng
+         * Prisma và vẫn dùng được chỉ mục. Đây là cỗ máy CHIẾN LƯỢC, không sinh
+         * số kê khai, nên đổi ở đây không đụng tới tờ khai nào. */
+        where: {
+            status: { in: ['completed', 'partial'] },
+            OR: [
+                { transactionDate: { gte: ky.tu, lte: ky.den } },
+                { transactionDate: null, createdAt: { gte: ky.tu, lte: ky.den } },
+            ],
+        },
             select: {
-                id: true, createdAt: true, total: true, customerId: true,
+                id: true, createdAt: true, transactionDate: true, total: true, customerId: true,
                 items: { select: { productId: true, productName: true, quantity: true, unitPrice: true, lineTotal: true } },
             },
             orderBy: { createdAt: 'asc' },
@@ -268,7 +280,12 @@ export async function coHoiTangTruong(
             hang: Array.from(new Set(items.map((i: any) => String(i.productId)).filter(Boolean))),
             slMax,
             khach: d.customerId ? String(d.customerId) : null,
-            luc: vn(d.createdAt),
+            /* NGÀY BÁN, không phải ngày ghi dòng dữ liệu. Cửa hàng nhập lịch sử
+             * từ phần mềm cũ có `createdAt` = lúc chạy nhập, nên toàn bộ phần
+             * mùa vụ ở dưới sẽ là "giờ và thứ mà script nhập chạy" chứ không
+             * phải nhịp bán thật — một kết luận bịa nguyên vẹn, mà lại đúng cái
+             * người ta dùng để xếp ca nhân viên và chọn giờ chạy khuyến mãi. */
+            luc: vn(d.transactionDate || d.createdAt),
         }
     })
 
@@ -642,9 +659,22 @@ function phanTichMuaVu(don: any[], donHang: any[], tenHang: Map<string, string>,
     const top3Gio = gioTop.slice(0, 3)
     const tyLeTop3 = tongDT > 0 ? Math.round((top3Gio.reduce((s, g) => s + g.doanhThu, 0) / tongDT) * 100) : 0
 
-    const gioVang = top3Gio.length
-        ? `${top3Gio.map(g => `${String(g.gio).padStart(2, '0')}h`).join(', ')} gom ${tyLeTop3}% doanh thu cả kỳ`
-        : ''
+    /* ── DỮ LIỆU CÓ MANG GIỜ THẬT KHÔNG? ───────────────────────────────────
+     * Chứng từ nhập từ phần mềm cũ thường chỉ có NGÀY, phần giờ để 00:00. Khi
+     * đó biểu đồ theo giờ dồn hết vào một cột và "giờ vàng" hóa ra là giờ mặc
+     * định của dữ liệu — nói ra là bịa. Đây KHÔNG phải lỗi của cửa hàng, cũng
+     * không phải "không có dữ liệu": chỉ là dữ liệu không mang thông tin giờ.
+     * Ngưỡng 90% đủ chặt để không đụng cửa hàng thật (bán lẻ đông nhất cũng
+     * hiếm khi dồn 90% doanh thu vào đúng một giờ). */
+    const gioDayNhat = gioTop[0]
+    const donGio = gioTop.length <= 1
+        || (tongDT > 0 && gioDayNhat && gioDayNhat.doanhThu / tongDT >= 0.9)
+
+    const gioVang = donGio
+        ? ''
+        : top3Gio.length
+            ? `${top3Gio.map(g => `${String(g.gio).padStart(2, '0')}h`).join(', ')} gom ${tyLeTop3}% doanh thu cả kỳ`
+            : ''
     const ngayVang = thuTop.length
         ? `${thuTop[0].ten} mạnh nhất (chỉ số ${thuTop[0].chiSo}/100), ${thuTop[thuTop.length - 1].ten} yếu nhất (${thuTop[thuTop.length - 1].chiSo}/100)`
         : ''
@@ -677,7 +707,7 @@ function phanTichMuaVu(don: any[], donHang: any[], tenHang: Map<string, string>,
     if (theoThang && theoThang.length >= 3) {
         const bang = new Map<string, Map<number, number>>()
         for (const d of donHang) {
-            const t = vn(d.createdAt).thang
+            const t = vn(d.transactionDate || d.createdAt).thang
             for (const i of (d.items || [])) {
                 const id = String(i.productId)
                 if (!bang.has(id)) bang.set(id, new Map())
@@ -707,6 +737,7 @@ function phanTichMuaVu(don: any[], donHang: any[], tenHang: Map<string, string>,
 
     const nhanXet = [
         gioVang && `Khung giờ vàng: ${gioVang}.`,
+        donGio && 'Dữ liệu không mang giờ bán (chứng từ nhập từ phần mềm cũ thường chỉ có ngày), nên phần khung giờ vàng để trống — không suy ra được giờ đông khách.',
         ngayVang && `Nhịp tuần: ${ngayVang}.`,
         `Doanh thu mỗi ngày nửa sau kỳ ${xuHuong.nhan}${Math.abs(thayDoi) >= 5 ? ` ${Math.abs(thayDoi)}%` : ''} so với nửa đầu.`,
         matHangTheoMua.length ? `${matHangTheoMua.length} mặt hàng có tính mùa rõ rệt — đặt hàng theo mùa sẽ tránh vừa thiếu vừa ế.` : '',
@@ -743,7 +774,7 @@ function phanTichDoNhayGia(
     // productId → ngày → { tiền, lượng }
     const bang = new Map<string, Map<string, { tien: number; luong: number }>>()
     for (const d of donHang) {
-        const ngay = vn(d.createdAt).ngay
+        const ngay = vn(d.transactionDate || d.createdAt).ngay
         for (const i of (d.items || [])) {
             const id = String(i.productId)
             const sl = so(i.quantity)
