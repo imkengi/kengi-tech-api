@@ -37,6 +37,8 @@ interface Kho {
     tonAmTop?: any[]
     /** Đơn có ngày bán khác tháng với ngày ghi sổ. */
     lechKy?: Array<{ thangGhiSo: string; thangBan: string; so: number; tien: number }>
+    /** Phiếu nhập có ngày hoá đơn khác tháng với ngày ghi sổ. */
+    lechKyNhap?: Array<{ thangGhiSo: string; thangNhap: string; so: number; tien: number }>
 }
 
 function fake(k: Kho, loi?: Record<string, boolean>) {
@@ -46,6 +48,10 @@ function fake(k: Kho, loi?: Record<string, boolean>) {
             /* Phân nhánh theo câu SQL. Bản trước trả cùng một shape cho MỌI truy
              * vấn, nên phép soát mới im lặng báo "on" và test xanh mà không hề
              * chạy qua nó — prisma giả quá dễ dãi thì test thành vô hiệu. */
+            if (/thangNhap/.test(String(sql || ''))) {
+                no('lechKyNhap')
+                return k.lechKyNhap ?? []
+            }
             if (/thangGhiSo/.test(String(sql || ''))) {
                 no('lechKyGhiSo')
                 return k.lechKy ?? []
@@ -289,8 +295,8 @@ async function main() {
     {
         const r = await sucKhoeDuLieu(fake({ lechKy: [] }), KY)
         const m = layMuc(r, 'ky-ghi-so-lech-ky-ban')
-        ok('không đơn nào lệch → mức ổn', !!m && m.muc === 'on', m?.muc)
-        ok('… và không trừ điểm', !!m && /không có đơn nào lệch/.test(m.so || ''), m?.so)
+        ok('không chứng từ nào lệch → mức ổn', !!m && m.muc === 'on', m?.muc)
+        ok('… và không trừ điểm', !!m && /không có chứng từ nào lệch/.test(m.so || ''), m?.so)
     }
     {
         const r = await sucKhoeDuLieu(fake({
@@ -301,7 +307,7 @@ async function main() {
         }), KY)
         const m = layMuc(r, 'ky-ghi-so-lech-ky-ban')
         ok('lệch số tiền lớn → mức nặng', !!m && m.muc === 'nang', m?.muc)
-        ok('cộng đúng tổng số đơn lệch', !!m && /2\.600 đơn/.test(m.so || ''), m?.so)
+        ok('cộng đúng tổng số đơn lệch', !!m && /2\.600 đơn bán/.test(m.so || ''), m?.so)
         ok('nói rõ ảnh hưởng tới TỜ KHAI THUẾ',
             !!m && /TỜ KHAI THUẾ/.test(m.anhHuong), m?.anhHuong?.slice(0, 80))
         ok('KHÔNG đổ lỗi cho cửa hàng khai sai',
@@ -319,6 +325,33 @@ async function main() {
         }), KY)
         const m = layMuc(r, 'ky-ghi-so-lech-ky-ban')
         ok('lệch nhỏ → mức vừa, không phải nặng', !!m && m.muc === 'vua', m?.muc)
+    }
+    {
+        /* Phiếu nhập lệch kỳ kéo theo VAT đầu vào và giá vốn, và màn hình Nhập
+         * Hàng lọc theo ngày hoá đơn nên nó hiện KHÁC số khi soát thuế. */
+        const r = await sucKhoeDuLieu(fake({
+            lechKy: [],
+            lechKyNhap: [{ thangGhiSo: '2026-07', thangNhap: '2026-04', so: 40, tien: 900_000_000 }],
+        }), KY)
+        const m = layMuc(r, 'ky-ghi-so-lech-ky-ban')
+        ok('phiếu nhập lệch kỳ cũng bị bắt', !!m && m.muc === 'nang', m?.muc)
+        ok('… đếm riêng phiếu nhập, không gộp vào đơn bán',
+            !!m && /40 phiếu nhập/.test(m.so || '') && !/đơn bán/.test(m.so || ''), m?.so)
+        ok('… nói rõ kéo theo VAT đầu vào và giá vốn',
+            !!m && /VAT đầu vào và giá vốn/.test(m.anhHuong), m?.anhHuong?.slice(0, 90))
+        ok('… nêu ví dụ phiếu nhập riêng',
+            !!m && (m.viDu || []).some((v: any) => /Nhập tháng 2026-04 nhưng ghi sổ tháng 2026-07/.test(v.nhan)),
+            m?.viDu)
+    }
+    {
+        // Cả hai loại cùng lệch thì gộp tiền, đếm riêng từng loại
+        const r = await sucKhoeDuLieu(fake({
+            lechKy: [{ thangGhiSo: '2026-07', thangBan: '2026-05', so: 100, tien: 500_000_000 }],
+            lechKyNhap: [{ thangGhiSo: '2026-07', thangNhap: '2026-05', so: 20, tien: 300_000_000 }],
+        }), KY)
+        const m = layMuc(r, 'ky-ghi-so-lech-ky-ban')
+        ok('gộp tiền cả hai loại, đếm riêng từng loại',
+            !!m && /100 đơn bán/.test(m.so || '') && /20 phiếu nhập/.test(m.so || ''), m?.so)
     }
     {
         // Không đọc được thì PHẢI nói là không đọc được, tuyệt đối không báo "ổn"

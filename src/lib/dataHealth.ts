@@ -338,6 +338,24 @@ export async function sucKhoeDuLieu(
               GROUP BY 1, 2
               ORDER BY tien DESC`), null)
 
+        /* Phiếu nhập cũng có `transactionDate` (= ngày trên hoá đơn mua). Route
+         * Nhập Hàng đã lọc đúng theo nó, nhưng các cỗ máy soát thuế thì cắt
+         * theo `createdAt` — nên cùng một phiếu hiện ở tháng này trên màn hình
+         * Nhập Hàng mà lại tính vào tháng khác khi soát thuế. Lệch ở đây kéo
+         * theo VAT đầu vào và giá vốn, không chỉ doanh thu. */
+        const lechNhap: any[] | null = await thu<any[] | null>('lechKyNhap', thieu, () => prisma.$queryRawUnsafe(
+            `SELECT to_char("createdAt" + interval '7 hours', 'YYYY-MM')       AS "thangGhiSo",
+                    to_char("transactionDate" + interval '7 hours', 'YYYY-MM') AS "thangNhap",
+                    COUNT(*)::int                                              AS so,
+                    COALESCE(SUM("totalCost"), 0)::float8                      AS tien
+               FROM "ImportReceipt"
+              WHERE status <> 'cancelled'
+                AND "transactionDate" IS NOT NULL
+                AND to_char("createdAt" + interval '7 hours', 'YYYY-MM')
+                 <> to_char("transactionDate" + interval '7 hours', 'YYYY-MM')
+              GROUP BY 1, 2
+              ORDER BY tien DESC`), null)
+
         if (lech === null) {
             /* Không đọc được thì nói là không đọc được. Im lặng ở đây khiến
              * người dùng tin mọi kỳ đều khớp, đúng kiểu ngược lại với sự thật. */
@@ -348,25 +366,39 @@ export async function sucKhoeDuLieu(
                 canLam: 'Thử lại sau; nếu vẫn không đọc được thì báo kỹ thuật.',
             })
         } else {
+            const dsNhap = lechNhap || []
             const tongTien = lech.reduce((s, r) => s + (Number(r.tien) || 0), 0)
-            const tongSo = lech.reduce((s, r) => s + (Number(r.so) || 0), 0)
+                + dsNhap.reduce((s, r) => s + (Number(r.tien) || 0), 0)
+            const soBan = lech.reduce((s, r) => s + (Number(r.so) || 0), 0)
+            const soNhap = dsNhap.reduce((s, r) => s + (Number(r.so) || 0), 0)
+            const tongSo = soBan + soNhap
+            const phanBan = soBan > 0 ? `${soBan.toLocaleString('vi-VN')} đơn bán` : ''
+            const phanNhap = soNhap > 0 ? `${soNhap.toLocaleString('vi-VN')} phiếu nhập` : ''
             muc.push({
                 ma: 'ky-ghi-so-lech-ky-ban',
-                ten: 'Kỳ ghi sổ so với kỳ bán',
+                ten: 'Kỳ ghi sổ so với kỳ bán / kỳ nhập',
                 /* Nặng khi số tiền lệch đủ lớn để đổi kết quả một kỳ thuế. */
                 muc: tongSo === 0 ? 'on' : tongTien >= 100_000_000 ? 'nang' : 'vua',
-                so: tongSo === 0 ? 'không có đơn nào lệch kỳ'
-                    : `${tongSo.toLocaleString('vi-VN')} đơn · ${tien(tongTien)} nằm sai kỳ`,
+                so: tongSo === 0 ? 'không có chứng từ nào lệch kỳ'
+                    : `${[phanBan, phanNhap].filter(Boolean).join(' · ')} · ${tien(tongTien)} nằm sai kỳ`,
                 anhHuong: tongSo === 0
-                    ? 'Ngày bán và ngày ghi sổ nằm cùng một tháng ở mọi đơn.'
-                    : 'Những đơn này có NGÀY BÁN ở tháng khác với tháng ghi vào phần mềm — thường gặp khi nhập lịch sử từ phần mềm cũ. Mọi báo cáo theo kỳ, KỂ CẢ TỜ KHAI THUẾ, đang tính doanh thu theo tháng ghi sổ, nên tháng nhập bị phồng lên còn các tháng bán thật hiện thiếu hoặc bằng 0. Đây là cách phần mềm đang tính, KHÔNG phải cửa hàng khai sai.',
+                    ? 'Ngày trên chứng từ và ngày ghi sổ nằm cùng một tháng ở mọi bản ghi.'
+                    : 'Những chứng từ này có NGÀY THẬT ở tháng khác với tháng ghi vào phần mềm — thường gặp khi nhập lịch sử từ phần mềm cũ. Mọi báo cáo theo kỳ, KỂ CẢ TỜ KHAI THUẾ, đang cắt kỳ theo ngày ghi sổ, nên tháng nhập liệu bị phồng lên còn các tháng thật hiện thiếu hoặc bằng 0.'
+                    + (soNhap > 0 ? ' Phần phiếu nhập còn kéo theo VAT đầu vào và giá vốn, không chỉ doanh thu — và màn hình Nhập Hàng lọc theo ngày hoá đơn nên nó hiện KHÁC với số khi soát thuế.' : '')
+                    + ' Đây là cách phần mềm đang tính, KHÔNG phải cửa hàng khai sai.',
                 canLam: tongSo === 0
                     ? 'Không cần làm gì.'
-                    : 'Đối chiếu doanh thu từng tháng với sổ của phần mềm cũ trước khi nộp tờ khai. Kỳ nào đã nộp theo số cũ thì cân nhắc khai bổ sung. Muốn phần mềm cắt kỳ theo ngày bán thì báo để đổi — đổi xong số của các kỳ đã nộp sẽ khác đi.',
-                viDu: lech.slice(0, 5).map((r: any) => ({
-                    nhan: `Bán tháng ${r.thangBan} nhưng ghi sổ tháng ${r.thangGhiSo}`,
-                    phu: `${r.so} đơn · ${tien(Number(r.tien) || 0)}`,
-                })),
+                    : 'Đối chiếu từng tháng với sổ của phần mềm cũ trước khi nộp tờ khai. Kỳ nào đã nộp theo số cũ thì cân nhắc khai bổ sung. Muốn phần mềm cắt kỳ theo ngày thật trên chứng từ thì báo để đổi — đổi xong số của các kỳ đã nộp sẽ khác đi.',
+                viDu: [
+                    ...lech.slice(0, 4).map((r: any) => ({
+                        nhan: `Bán tháng ${r.thangBan} nhưng ghi sổ tháng ${r.thangGhiSo}`,
+                        phu: `${r.so} đơn · ${tien(Number(r.tien) || 0)}`,
+                    })),
+                    ...dsNhap.slice(0, 3).map((r: any) => ({
+                        nhan: `Nhập tháng ${r.thangNhap} nhưng ghi sổ tháng ${r.thangGhiSo}`,
+                        phu: `${r.so} phiếu · ${tien(Number(r.tien) || 0)}`,
+                    })),
+                ],
             })
         }
     }
