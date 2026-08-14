@@ -1452,9 +1452,25 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
     }
 
     // ── Chấm điểm sẵn sàng ───────────────────────────────────────────────────
-    const tru: Record<MucRuiRo, number> = { cao: 22, vua: 9, thap: 3 }
-    let diem = 100
-    for (const c of canhBao) diem -= tru[c.muc]
+    /* Trừ theo TỶ LỆ chứ không trừ thẳng.
+     *
+     * Bản trước trừ tuyến tính rồi kẹp sàn ở 0, nên điểm bão hoà: cửa hàng có 5
+     * vấn đề và cửa hàng có 15 vấn đề đều hiện 0/100, và sửa xong 10 cái vẫn
+     * 0/100. Kim không nhúc nhích thì người ta kết luận công cụ hỏng — hoặc tệ
+     * hơn, kết luận mình vô phương cứu chữa — rồi bỏ dở việc dọn dẹp.
+     *
+     * Đo thật ngày 14/08/2026: sau khi gỡ ba cáo buộc sai (dt-so-vs-hoadon 510
+     * triệu, và hạ hai mức của tồn âm / bán vượt hoá đơn vào), KENGISTORE vẫn
+     * đứng nguyên 0/100. Không ai thấy được là bảng vừa đúng hơn hẳn.
+     *
+     * Cách trừ nhân: mỗi cảnh báo cắt đi một phần trăm của phần CÒN LẠI, nên
+     * điểm giảm dần chứ không bao giờ chạm 0. Ở số lượng ít (1–2 cảnh báo) kết
+     * quả gần như trùng cách cũ — cửa hàng bình thường không thấy khác gì; chỉ
+     * ở vùng nhiều cảnh báo, nơi cách cũ mất hết độ phân giải, mới khác. */
+    const heSoConLai: Record<MucRuiRo, number> = { cao: 0.78, vua: 0.91, thap: 0.97 }
+    let conLai = 1
+    for (const c of canhBao) conLai *= heSoConLai[c.muc]
+    let diem = Math.round(100 * conLai)
     diem = Math.max(0, Math.min(100, diem))
     const xepLoai = diem >= 90 ? 'Sẵn sàng' : diem >= 70 ? 'Cần bổ sung hồ sơ' : diem >= 45 ? 'Rủi ro cao' : 'Rất rủi ro'
 

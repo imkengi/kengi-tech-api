@@ -1161,6 +1161,37 @@ async function main() {
             !!c && c.muc === 'cao', JSON.stringify(c?.muc))
     }
 
+    // ── 41d. Điểm phải còn phân giải khi có nhiều cảnh báo ─────────────────
+    /* Cách trừ tuyến tính cũ kẹp sàn ở 0: cửa hàng 5 vấn đề và 15 vấn đề đều
+     * hiện 0/100, sửa xong 10 cái vẫn 0/100. Đo thật: sau khi gỡ ba cáo buộc
+     * sai, KENGISTORE vẫn đứng nguyên 0 — không ai thấy bảng vừa đúng hơn. */
+    {
+        const nhieu = { canhBao: Array.from({ length: 6 }, () => ({ muc: 'cao' })).concat(Array.from({ length: 3 }, () => ({ muc: 'vua' }))) }
+        const it = { canhBao: Array.from({ length: 3 }, () => ({ muc: 'cao' })).concat(Array.from({ length: 6 }, () => ({ muc: 'vua' }))) }
+        const cham = (ds: any) => {
+            const hs: any = { cao: 0.78, vua: 0.91, thap: 0.97 }
+            let c = 1
+            for (const x of ds.canhBao) c *= hs[x.muc]
+            return Math.round(100 * c)
+        }
+        const dNhieu = cham(nhieu), dIt = cham(it)
+        kiemTra('Nhiều cảnh báo nặng hơn thì điểm vẫn thấp hơn, không cùng chạm 0',
+            dNhieu < dIt && dNhieu > 0, `${dNhieu} vs ${dIt}`)
+        kiemTra('Gỡ bớt cảnh báo nặng thì điểm nhích lên thấy được',
+            dIt - dNhieu >= 5, `${dIt} - ${dNhieu}`)
+    }
+    {
+        // Một cảnh báo nặng duy nhất vẫn cho điểm gần cách tính cũ (100 − 22)
+        const k = khoSach()
+        k.products = [{ name: 'Nồi', sku: 'N1', stock: -50, costPrice: 1_000_000 }]
+        ;(k as any).banDauTien = '2026-03-21T00:00:00.000Z'
+        ;(k as any).nhapDauTien = '2026-03-25T00:00:00.000Z'
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const soNang = h.canhBao.filter((c: any) => c.muc === 'cao').length
+        kiemTra('Ít cảnh báo thì điểm gần với cách tính cũ, không nới lỏng',
+            soNang !== 1 || (h.diem >= 74 && h.diem <= 80), `${soNang} nặng, điểm ${h.diem}`)
+    }
+
     // ── 42. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
     {
         const h = await kiemTraThue(fakePrisma(khoSach()), KY)
