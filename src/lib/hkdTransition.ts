@@ -141,9 +141,23 @@ export async function tinhChuyenDoiHKD(
     let soNgayCoBan = 0
     try {
         const r: any[] = await prisma.$queryRawUnsafe(
-            `SELECT COUNT(DISTINCT (t."createdAt" + interval '7 hours')::date)::int AS n
+            /* Đếm theo NGÀY BÁN. Câu ghi chú bên dưới hỏi "dữ liệu có phủ hết kỳ
+             * không" — đó là câu hỏi về ngày bán, không phải ngày nhập liệu.
+             * Cửa hàng nhập lịch sử từ phần mềm cũ có `createdAt` gom trong vài
+             * tuần nên đếm theo nó ra "chỉ 32 ngày phát sinh bán" cho một cửa
+             * hàng bán 147 ngày, rồi khuyên đừng tin con số thuế vừa tính —
+             * trong khi doanh thu ở đây đã đủ. Một lời cảnh báo thừa làm người
+             * ta bỏ qua cả những cảnh báo thật.
+             *
+             * CỐ Ý chỉ đổi phép ĐẾM NGÀY, không đổi cách cắt kỳ của doanh thu:
+             * đổi cắt kỳ là đổi số thuế đã kê khai, việc đó chờ người dùng
+             * quyết. Ở đây hai câu hỏi khác nhau nên dùng hai thước đo là đúng,
+             * miễn là nói rõ câu này đo cái gì. */
+            `SELECT COUNT(DISTINCT (COALESCE(t."transactionDate", t."createdAt") + interval '7 hours')::date)::int AS n
              FROM "Transaction" t
-             WHERE t.status IN ('completed','partial') AND t."createdAt" >= $1 AND t."createdAt" <= $2`,
+             WHERE t.status IN ('completed','partial')
+               AND COALESCE(t."transactionDate", t."createdAt") >= $1
+               AND COALESCE(t."transactionDate", t."createdAt") <= $2`,
             ky.tu, ky.den,
         )
         soNgayCoBan = Number(r?.[0]?.n) || 0
@@ -151,7 +165,7 @@ export async function tinhChuyenDoiHKD(
 
     const soNgay = Math.max(1, Math.round((ky.den.getTime() - ky.tu.getTime()) / 86400_000))
     if (soNgayCoBan > 0 && soNgayCoBan < soNgay * 0.6) {
-        ghiChu.push(`Trong ${soNgay} ngày của kỳ chỉ có ${soNgayCoBan} ngày phát sinh bán trên phần mềm. Nếu cửa hàng đã bán cả kỳ mà mới nhập dữ liệu gần đây thì doanh thu ở đây THẤP HƠN thực tế, và số thuế tính ra chỉ là mức sàn — không phải mức đúng.`)
+        ghiChu.push(`Trong ${soNgay} ngày của kỳ chỉ có ${soNgayCoBan} ngày phát sinh bán (đếm theo NGÀY BÁN trên chứng từ). Nếu cửa hàng đã bán cả kỳ mà mới nhập dữ liệu gần đây thì doanh thu ở đây THẤP HƠN thực tế, và số thuế tính ra chỉ là mức sàn — không phải mức đúng.`)
     }
     const daQuyNam = soNgay < 350
     const quyNam = daQuyNam ? doanhThuKy * (365 / soNgay) : doanhThuKy
