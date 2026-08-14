@@ -135,6 +135,8 @@ export interface KetQuaCoHoi {
         soNgayDuLieu: number
         theoThu: { thu: number; ten: string; doanhThu: number; soNgay: number; chiSo: number }[]
         theoGio: { gio: number; doanhThu: number; chiSo: number }[]
+        /** Lưới "thu-gio" → doanh thu, để vẽ nhiệt đồ. Chỉ ô có tiền mới có mặt. */
+        luoiGioThu: Record<string, number>
         theoThang: { thang: number; doanhThu: number; soNgay: number; chiSo: number }[] | null
         gioVang: string
         ngayVang: string
@@ -576,7 +578,7 @@ function phanTichMuaVu(don: any[], donHang: any[], tenHang: Map<string, string>,
         return {
             duocKetLuan: false,
             lyDo: `Kỳ dài ${soNgay} ngày với ${don.length} đơn — quá ngắn để tách nhịp mùa vụ khỏi biến động ngẫu nhiên. Cần từ 14 ngày và 30 đơn trở lên.`,
-            soNgayDuLieu: soNgay, theoThu: [], theoGio: [], theoThang: null,
+            soNgayDuLieu: soNgay, theoThu: [], theoGio: [], luoiGioThu: {}, theoThang: null,
             gioVang: '', ngayVang: '', xuHuong: null, matHangTheoMua: [], nhanXet: '',
         }
     }
@@ -589,7 +591,10 @@ function phanTichMuaVu(don: any[], donHang: any[], tenHang: Map<string, string>,
     const ngayCuaThang = new Map<number, Set<string>>()
     const moiNgay = new Set<string>()
 
+    const luoiGioThu: Record<string, number> = {}
     for (const d of don) {
+        const oLuoi = `${d.luc.thu}-${d.luc.gio}`
+        luoiGioThu[oLuoi] = (luoiGioThu[oLuoi] || 0) + d.tien
         dtThu[d.luc.thu] += d.tien
         ngayCuaThu[d.luc.thu].add(d.luc.ngay)
         dtGio[d.luc.gio] += d.tien
@@ -695,6 +700,7 @@ function phanTichMuaVu(don: any[], donHang: any[], tenHang: Map<string, string>,
         duocKetLuan: true,
         soNgayDuLieu: soNgay,
         theoThu, theoGio, theoThang,
+        luoiGioThu: Object.fromEntries(Object.entries(luoiGioThu).map(([k, v]) => [k, lam(v)])),
         gioVang, ngayVang, xuHuong, matHangTheoMua, nhanXet,
     }
 }
@@ -744,7 +750,6 @@ function phanTichDoNhayGia(
     let loaiViDoYeu = 0
 
     for (const [id, theoNgay] of bang) {
-        if (theoNgay.length !== undefined) { /* Map không có length — giữ chỗ cho ts */ }
         const diem = Array.from(theoNgay.entries())
             .map(([ngay, v]) => ({ ngay, gia: v.tien / v.luong, luong: v.luong }))
             .filter(p => p.gia > 0 && p.luong > 0)

@@ -33,6 +33,8 @@ export interface MatHangDatHang {
     ten: string
     sku: string
     nhaCungCap: string | null
+    /** Nhóm hàng (danh mục) — để gom xem theo ngành hàng. */
+    nhomHang: string | null
     tonHienTai: number
     dangVe: number
     /** Bán trung bình mỗi ngày, tính trên TOÀN kỳ (kể cả ngày không bán). */
@@ -171,11 +173,21 @@ export async function keHoachDatHang(
             where: { productType: { not: 'service' }, mergedIntoId: null },
             select: {
                 id: true, name: true, sku: true, stock: true, minStock: true,
-                costPrice: true, sellingPrice: true, createdAt: true,
+                costPrice: true, sellingPrice: true, createdAt: true, categoryId: true,
             },
         })
     } catch (e: any) {
         thieu.push(`Không đọc được danh mục hàng hoá: ${String(e?.message || e).slice(0, 120)}`)
+    }
+
+    /* Tên nhóm hàng: đặt hàng thực tế gom theo NHÀ CUNG CẤP (mỗi bên một đơn),
+     * còn nhóm hàng để soát theo ngành hàng. Nạp một lượt, không N+1. */
+    const tenNhom = new Map<string, string>()
+    try {
+        const dm = await prisma.category.findMany({ select: { id: true, name: true } })
+        for (const c of dm) tenNhom.set(String(c.id), String(c.name || ''))
+    } catch (e: any) {
+        thieu.push(`Không đọc được nhóm hàng: ${String(e?.message || e).slice(0, 120)}`)
     }
 
     /* Product không có cột nhà cung cấp — suy từ phiếu nhập GẦN NHẤT của chính
@@ -341,6 +353,7 @@ export async function keHoachDatHang(
             ten: String(p.name || ''),
             sku: String(p.sku || ''),
             nhaCungCap: nccId ? (tenNcc.get(nccId) || null) : null,
+            nhomHang: p.categoryId ? (tenNhom.get(String(p.categoryId)) || null) : null,
             tonHienTai: lam(ton),
             dangVe: lam(ve),
             banMoiNgay: Math.round(mu * 100) / 100,
