@@ -4686,6 +4686,87 @@ router.get('/engine-probe', async (req: Request, res: Response) => {
     }
 })
 
+/**
+ * GET /api/admin/dup-invoice-sweep?months=12
+ *
+ * Tìm những phiếu nhập ĐÃ trùng số hoá đơn cùng một nhà cung cấp.
+ *
+ * Chốt chặn vừa thêm chỉ ngăn phiếu SẮP nhập. Những cặp đã trùng sẵn thì vẫn
+ * đang khai trùng thuế GTGT được khấu trừ và trùng chi phí được trừ — đó là rủi
+ * ro đang chạy, không phải rủi ro tương lai.
+ *
+ * CHỈ ĐỌC. Chạy tuần tự từng cửa hàng.
+ */
+router.get('/dup-invoice-sweep', async (req: Request, res: Response) => {
+    try {
+        const thang = Math.max(1, Math.min(36, Number((req.query as any)?.months) || 12))
+        const tu = new Date(Date.now() - thang * 30 * 86400_000)
+        const chuan = (v: any) => String(v || '').replace(/\s+/g, '').toLowerCase()
+
+        const stores = await registryPrisma.store.findMany({ select: { name: true, schema: true, code: true } }) as any[]
+        const bang: any[] = []
+
+        for (const store of stores) {
+            try {
+                const p: any = getStorePrisma(store.schema)
+                const ds: any[] = await p.importReceipt.findMany({
+                    where: {
+                        createdAt: { gte: tu },
+                        status: { not: 'cancelled' },
+                        vatInvoiceNo: { not: null },
+                    },
+                    select: {
+                        id: true, code: true, vatInvoiceNo: true, supplierId: true, supplierName: true,
+                        totalCost: true, vatAmount: true, createdAt: true,
+                    },
+                    orderBy: { createdAt: 'asc' },
+                    take: 5000,
+                })
+
+                /* Khoá gom = nhà cung cấp + số hoá đơn đã chuẩn hoá. Dùng
+                 * supplierId nếu có, không thì tên — hai phiếu cùng tên NCC mà
+                 * một cái chưa gắn mã vẫn phải gom chung. */
+                const nhom = new Map<string, any[]>()
+                for (const r of ds) {
+                    const so = chuan(r.vatInvoiceNo)
+                    if (!so) continue
+                    const ncc = r.supplierId || chuan(r.supplierName)
+                    if (!ncc) continue
+                    const k = `${ncc}|${so}`
+                    if (!nhom.has(k)) nhom.set(k, [])
+                    nhom.get(k)!.push(r)
+                }
+
+                const trung = Array.from(nhom.values()).filter(v => v.length > 1)
+                bang.push({
+                    cuaHang: store.name, ma: store.code,
+                    soPhieuXet: ds.length,
+                    soCapTrung: trung.length,
+                    /* Tiền khai trùng = tổng của các phiếu THỪA (bỏ phiếu đầu
+                     * tiên trong mỗi nhóm — đó mới là phiếu thật). */
+                    vatKhaiTrung: Math.round(trung.reduce((s, v) =>
+                        s + v.slice(1).reduce((s2: number, r: any) => s2 + (Number(r.vatAmount) || 0), 0), 0)),
+                    chiPhiKhaiTrung: Math.round(trung.reduce((s, v) =>
+                        s + v.slice(1).reduce((s2: number, r: any) => s2 + (Number(r.totalCost) || 0), 0), 0)),
+                    mau: trung.slice(0, 5).map(v => ({
+                        nhaCungCap: v[0].supplierName || v[0].supplierId,
+                        soHoaDon: v[0].vatInvoiceNo,
+                        phieu: v.map((r: any) => ({ code: r.code, tien: Math.round(Number(r.totalCost) || 0), ngay: new Date(r.createdAt).toISOString().slice(0, 10) })),
+                    })),
+                })
+            } catch (e: any) {
+                bang.push({ cuaHang: store.name, ma: store.code, loi: String(e?.message || e).slice(0, 200) })
+            }
+        }
+
+        const tong = bang.filter(b => !b.loi).reduce((s, b) => s + b.soCapTrung, 0)
+        res.json({ success: true, data: { soThang: thang, tongSoCapTrung: tong, bang } })
+    } catch (err: any) {
+        console.error('GET /admin/dup-invoice-sweep error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
 // POST /api/admin/run-reconcile — chạy ngay vòng đối chiếu ba chiều tháng trước
 router.post('/run-reconcile', async (req: Request, res: Response) => {
     try {
