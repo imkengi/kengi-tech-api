@@ -301,6 +301,43 @@ async function main() {
         kiemTra('Bắt hồ sơ quá hạn, bỏ qua hồ sơ đã nộp và hạn tương lai',
             !!c && c.soLuong === 1, JSON.stringify(c?.soLuong))
     }
+    /* Ca dưới đây từng KHÔNG có, và đó là lý do lỗi sống sót: ca 13 dựng mốc đã
+     * nộp bằng status 'filed' — đúng bằng giá trị tưởng tượng mà mã đang trừ.
+     * Test lặp lại y nguyên giả định sai của mã thì mãi mãi xanh. Giá trị THẬT
+     * mà PUT /api/tax/deadlines/:id ghi xuống là 'submitted'. */
+    {
+        const k = khoSach()
+        k.deadlines = [
+            { taxType: 'GTGT', period: '2026-05', dueDate: '2026-06-20', status: 'submitted' },
+            { taxType: 'GTGT', period: '2026-06', dueDate: '2026-07-20', status: 'submitted' },
+        ]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        kiemTra('Mốc đã đánh dấu nộp (submitted) KHÔNG bị tính quá hạn',
+            !co(h, 'to-khai-tre-han'), JSON.stringify(lay(h, 'to-khai-tre-han')?.soLuong))
+    }
+    {
+        const k = khoSach()
+        k.deadlines = [
+            { taxType: 'GTGT', period: '2026-05', dueDate: '2026-06-20', status: 'submitted' },
+            { taxType: 'GTGT', period: '2026-06', dueDate: '2026-07-20', status: 'overdue' },
+        ]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const c = lay(h, 'to-khai-tre-han')
+        kiemTra('Đếm đúng khi trộn mốc đã nộp và mốc quá hạn thật',
+            !!c && c.soLuong === 1 && String(c.viDu?.[0] || '').includes('2026-07-20'),
+            JSON.stringify(c?.viDu))
+    }
+    {
+        /* Trạng thái lạ (bản cũ, sửa tay trong DB, tính năng tương lai) thì IM.
+         * Hướng an toàn ở đây ngược với lịch tiền: buộc tội sai đắt hơn bỏ sót. */
+        const k = khoSach()
+        k.deadlines = [
+            { taxType: 'GTGT', period: '2026-06', dueDate: '2026-07-20', status: 'da_nop_ngoai_he_thong' },
+        ]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        kiemTra('Trạng thái lạ thì không kết luận quá hạn',
+            !co(h, 'to-khai-tre-han'), JSON.stringify(lay(h, 'to-khai-tre-han')?.soLuong))
+    }
 
     // ── 14. Hóa đơn hủy nhiều bất thường ───────────────────────────────────
     {

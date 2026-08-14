@@ -193,6 +193,37 @@ export function lichNghiaVuThue(
  * dùng thì giữ nguyên — xóa dữ liệu người ta đã làm việc trên đó là điều không
  * bao giờ được phép, kể cả khi nó "không còn đúng".
  */
+/* ────────────────────────────────────────────────────────────────────────────
+ * TỪ VỰNG TRẠNG THÁI CỦA MỘT MỐC NGHĨA VỤ
+ *
+ * Mọi phép kiểm phải hỏi theo DANH SÁCH TRẮNG — "trạng thái này có nằm trong
+ * nhóm đã xong không" / "có nằm trong nhóm chưa xong không" — chứ KHÔNG được
+ * hỏi phủ định kiểu `status !== 'filed'`. Hỏi phủ định thì bất kỳ giá trị nào
+ * lọt vào cột status (do bản cũ, do nhập tay, do một tính năng mới) đều tự động
+ * rơi về phía "chưa nộp", và cửa hàng bị tố oan mà không ai hay.
+ *
+ * Đã dính đúng lỗi đó ở hai nơi: toàn bộ phần mềm ghi 'submitted' khi người
+ * dùng đánh dấu đã nộp (PUT /api/tax/deadlines/:id chỉ nhận pending | submitted
+ * | overdue), nhưng taxAudit lại trừ 'filed'/'paid' — hai giá trị KHÔNG chỗ nào
+ * ghi cho bảng này ('filed' là trạng thái của TaxDeclaration, model khác). Hệ
+ * quả: cửa hàng đánh dấu đủ mọi kỳ vẫn bị chấm "N hồ sơ khai thuế đã quá hạn"
+ * ở mức CAO kèm điều luật phạt, và không thao tác nào trong phần mềm gỡ được. */
+export const TRANG_THAI_MOC_DA_XONG = ['submitted', 'filed', 'paid'] as const
+export const TRANG_THAI_MOC_CHUA_XONG = ['pending', 'overdue'] as const
+
+/** Mốc đã hoàn thành nghĩa vụ. Dùng khi bỏ sót một mốc đã xong là an toàn hơn
+ *  (ví dụ lịch tiền: thà dự trù dư còn hơn thiếu tiền lúc đến hạn). */
+export function mocDaXong(status: any): boolean {
+    return (TRANG_THAI_MOC_DA_XONG as readonly string[]).includes(String(status ?? ''))
+}
+
+/** Mốc chắc chắn CHƯA xong. Dùng khi sắp buộc tội — chỉ nói quá hạn với trạng
+ *  thái mình thật sự hiểu; trạng thái lạ thì im, vì báo sai ở mảng thuế đắt hơn
+ *  nhiều so với bỏ sót một dòng. */
+export function mocChuaXong(status: any): boolean {
+    return (TRANG_THAI_MOC_CHUA_XONG as readonly string[]).includes(String(status ?? ''))
+}
+
 export function mocCanDon(
     dangCo: Array<{ id: string; taxType: string; period: string; status: string; filedAt?: any; declarationId?: string | null; notes?: string | null }>,
     mocDung: MocNghiaVu[],

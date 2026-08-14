@@ -18,6 +18,7 @@
 import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { errMsg } from '../lib/errorResponse'
+import { TRANG_THAI_MOC_CHUA_XONG } from '../lib/taxCalendar'
 
 const router = Router()
 
@@ -119,8 +120,12 @@ router.get('/snapshot', authMiddleware, async (req: AuthRequest, res: Response) 
         let overdueDeclarations = 0
         try {
             const homNay = new Date().toISOString().slice(0, 10)
+            /* Đếm theo danh sách TRẮNG các trạng thái chưa xong. Bản trước loại
+             * theo ['filed','paid'] — hai giá trị không chỗ nào ghi cho bảng
+             * này — nên mốc người dùng đã đánh dấu nộp ('submitted') vẫn bị đếm
+             * là quá hạn, kéo điểm tuân thủ xuống mà không cách nào gỡ. */
             overdueDeclarations = await prisma.taxDeadline.count({
-                where: { status: { notIn: ['filed', 'paid'] }, dueDate: { lt: homNay } },
+                where: { status: { in: [...TRANG_THAI_MOC_CHUA_XONG] }, dueDate: { lt: homNay } },
             })
         } catch { overdueDeclarations = 0 }
 

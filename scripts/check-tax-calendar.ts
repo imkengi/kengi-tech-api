@@ -11,6 +11,7 @@
 import {
     lichNghiaVuThue, suyKyKeKhai, mocCanDon, NGUONG_KHAI_THEO_THANG,
     ganTienChoMoc, monBaiHoKinhDoanh,
+    mocDaXong, mocChuaXong, TRANG_THAI_MOC_DA_XONG, TRANG_THAI_MOC_CHUA_XONG,
 } from '../src/lib/taxCalendar'
 
 let dat = 0, hong = 0
@@ -168,6 +169,57 @@ async function main() {
     const mbHkd = ganTienChoMoc(loai(hkd, 'MON_BAI')[0],
         { ...nguon, loaiHinh: 'household' as const, doanhThuNamTruoc: 700_000_000 })
     ok('mốc môn bài của hộ lấy đúng bậc theo doanh thu', mbHkd.soTien === 1_000_000, mbHkd)
+
+    /* ── Từ vựng trạng thái mốc nghĩa vụ ────────────────────────────────────
+     * Đây là phép kiểm HỢP ĐỒNG, không phải quét đoán mò. Đã thử bản quét rộng
+     * "so sánh với giá trị không chỗ nào ghi" trên toàn bộ model: 149 nghi vấn
+     * trên 257 lần so sánh (58%) — vô dụng, vì phần lớn status được ghi ở chỗ
+     * regex không thấy (create lồng nhau, raw SQL, giá trị do sàn trả về). Bỏ
+     * bản rộng, giữ đúng MỘT model có từ vựng thật sự tập trung ở một nơi. */
+    console.log('\n▸ Từ vựng trạng thái mốc nghĩa vụ (TaxDeadline)')
+    ok('mốc đã đánh dấu nộp được tính là xong', mocDaXong('submitted'))
+    ok('mốc pending chưa xong', mocChuaXong('pending') && !mocDaXong('pending'))
+    ok('mốc overdue chưa xong', mocChuaXong('overdue') && !mocDaXong('overdue'))
+    ok('trạng thái lạ không rơi vào nhóm nào',
+        !mocDaXong('la_hoac') && !mocChuaXong('la_hoac'))
+    ok('null/undefined không bị coi là chưa nộp',
+        !mocChuaXong(null) && !mocChuaXong(undefined))
+
+    const fs = await import('fs'), path = await import('path')
+    const goc = path.resolve(__dirname, '..', 'src')
+    const tuVung = new Set<string>([...TRANG_THAI_MOC_DA_XONG, ...TRANG_THAI_MOC_CHUA_XONG])
+
+    // 1) Danh sách route nhận vào phải nằm trong từ vựng
+    const srcTax = fs.readFileSync(path.join(goc, 'routes', 'tax.ts'), 'utf8')
+    const mRoute = /if\s*\(!\[([^\]]*)\]\.includes\(String\(status\)\)\)/.exec(srcTax)
+    const nhanVao = (mRoute?.[1].match(/'[^']*'/g) || []).map(s => s.slice(1, -1))
+    ok('PUT /deadlines/:id nhận đúng các trạng thái có trong từ vựng',
+        nhanVao.length > 0 && nhanVao.every(v => tuVung.has(v)), nhanVao)
+
+    // 2) Không nơi nào so sánh trạng thái mốc bằng một giá trị ngoài từ vựng
+    const lechs: string[] = []
+    const quet = (thuMuc: string) => {
+        for (const t of fs.readdirSync(thuMuc)) {
+            const f = path.join(thuMuc, t)
+            if (fs.statSync(f).isDirectory()) { if (t !== 'generated') quet(f) }
+            else if (t.endsWith('.ts')) {
+                const s = fs.readFileSync(f, 'utf8')
+                const re = /prisma\.taxDeadline\.\w+\s*\(\s*\{[\s\S]{0,400}?status\s*:\s*(\{[^}]*\}|'[^']*')/g
+                let m: RegExpExecArray | null
+                while ((m = re.exec(s))) {
+                    for (const lit of m[1].match(/'[^']*'/g) || []) {
+                        const v = lit.slice(1, -1)
+                        if (!tuVung.has(v)) {
+                            lechs.push(`${path.relative(goc, f)}:${s.slice(0, m.index).split('\n').length} → '${v}'`)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    quet(goc)
+    ok('không truy vấn mốc nghĩa vụ bằng trạng thái ngoài từ vựng',
+        lechs.length === 0, lechs)
 
     console.log(`\n${dat}/${dat + hong} ca đạt`)
     if (hong) process.exit(1)

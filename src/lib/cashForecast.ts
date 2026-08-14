@@ -24,6 +24,8 @@
  *    thế mọi cửa hàng đều trông như sắp vỡ nợ. Trả cờ `coSoDuDau: false`.
  */
 
+import { TRANG_THAI_MOC_DA_XONG } from './taxCalendar'
+
 export interface DongTienMuc {
     ngay: string
     loai: 'thu' | 'chi'
@@ -197,7 +199,12 @@ export async function duBaoDongTien(
     let thueChuaRoSoTien = 0
     try {
         const moc = await prisma.taxDeadline.findMany({
-            where: { dueDate: { gte: homNay, lte: denNgay }, status: { not: 'filed' } },
+            /* Ở lịch tiền thì hướng an toàn NGƯỢC với bên soát thuế: bỏ sót một
+             * mốc còn phải nộp là thiếu tiền lúc đến hạn, nên loại đúng nhóm đã
+             * xong và giữ lại mọi trạng thái lạ. Bản trước loại theo 'filed' —
+             * giá trị không chỗ nào ghi cho bảng này — nên mốc đã đánh dấu nộp
+             * ('submitted') vẫn nằm trong dự trù, lịch tiền nặng hơn thực tế. */
+            where: { dueDate: { gte: homNay, lte: denNgay }, status: { notIn: [...TRANG_THAI_MOC_DA_XONG] } },
             select: { taxType: true, period: true, dueDate: true, description: true },
         })
         /* Số tiền lấy từ tờ khai CÙNG KỲ nếu đã lập. Chưa lập thì biết NGÀY mà

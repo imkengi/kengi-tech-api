@@ -14,6 +14,8 @@
  *  3. Ngưỡng luật để thành hằng số có chú thích — luật đổi thì sửa một chỗ.
  */
 
+import { mocChuaXong } from './taxCalendar'
+
 export type MucRuiRo = 'cao' | 'vua' | 'thap'
 
 export interface CanhBaoThue {
@@ -704,7 +706,12 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
                 viDu: treTuDung.slice(0, 5).map(d => `${d.taxType} kỳ ${d.period} · hạn ${d.dueDate}`),
             })
         }
-        const treHan = (dl || []).filter((d: any) => d.status !== 'filed' && d.status !== 'paid' && String(d.dueDate) < homNay)
+        /* Danh sách TRẮNG, không phải phủ định: chỉ nói quá hạn với mốc mang
+         * trạng thái mình thật sự hiểu là chưa xong. Xem TRANG_THAI_MOC_* ở
+         * taxCalendar.ts — bản trước trừ 'filed'/'paid' là hai giá trị không
+         * chỗ nào ghi cho bảng này, nên mốc người dùng đã đánh dấu 'submitted'
+         * vẫn bị tính quá hạn ở mức cao và không cách nào gỡ. */
+        const treHan = (dl || []).filter((d: any) => mocChuaXong(d.status) && String(d.dueDate) < homNay)
         if (treHan.length > 0) canhBao.push({
             code: 'to-khai-tre-han', muc: 'cao',
             tieuDe: `${treHan.length} hồ sơ khai thuế đã quá hạn`,

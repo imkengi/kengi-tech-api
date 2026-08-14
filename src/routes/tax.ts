@@ -10,6 +10,7 @@ import { giaiTrinhKhaiBoSung } from '../lib/amendmentExplain'
 import { ganTienChoMoc, type MocNghiaVu } from '../lib/taxCalendar'
 import { nguongChiuThueHKD } from '../lib/taxAudit'
 import { suyHoSoThue, gieoLichNghiaVu } from '../lib/taxCalendarStore'
+import { tienThueDaNop, dieuKienButToanNopThue, ghiChuNguonDaNop } from '../lib/taxPaidLedger'
 
 const router = Router()
 
@@ -4222,6 +4223,32 @@ router.get('/hkd/s4', authMiddleware, async (req: AuthRequest, res: Response) =>
         const p = req.storePrisma! as any
         const year = Number(req.query.year) || new Date().getFullYear()
         const decls = await p.taxDeclaration.findMany({ where: { year }, orderBy: { createdAt: 'asc' } })
+
+        /* ── "Đã nộp" phải lấy từ SỔ, không suy từ trạng thái tờ khai ────────
+         * Ba cột dưới đây từng viết `d.status === 'paid'`. TaxDeclaration KHÔNG
+         * BAO GIỜ mang trạng thái 'paid' — route lưu chỉ nhận draft|submitted|
+         * filed. Nên điều kiện luôn sai: "đã nộp" luôn 0 và "còn phải nộp" luôn
+         * bằng toàn bộ số thuế. Sổ S4 vì thế không bao giờ ghi nhận được đồng
+         * nào đã nộp, và con số đó chảy tiếp vào chỉ tiêu [13] "thuế đã tạm nộp
+         * trong năm" của tờ quyết toán trên giao diện — tức là tờ khai in ra
+         * nói hộ còn nợ đúng khoản họ đã nộp rồi.
+         *
+         * Nộp tờ khai (filed) KHÔNG phải là nộp tiền, nên cũng không được quy
+         * filed → đã nộp: sai theo chiều ngược lại, còn nguy hơn. Nguồn duy
+         * nhất đáng tin là bút toán chi tiền nộp thuế: Nợ 333x / Có 111,112.
+         * Ràng buộc bên Có là 111/112 để loại bút toán cấn trừ 133 ↔ 3331 — cái
+         * đó chuyển vế trong nội bộ tài khoản thuế chứ không phải chi tiền. */
+        let btNopThue: any[] | null = null
+        try {
+            btNopThue = await p.journalEntry.findMany({
+                where: dieuKienButToanNopThue(year),
+                select: { date: true, amount: true, description: true, reference: true },
+            })
+        } catch { btNopThue = null }   // chưa có bảng bút toán ở store cũ
+
+        const daNop = tienThueDaNop(btNopThue, decls.map((d: any) => String(d.period)))
+        const nopCuaKy = (period: string) => daNop === null ? null : (daNop.theoKy.get(String(period)) || 0)
+
         const rows = decls.map((d: any, i: number) => {
             const isCnkd = d.formType === '01_CNKD'
             const doanhThu = isCnkd ? (d.cnkdRevenue || 0) : (d.ct29 || 0)
@@ -4242,9 +4269,9 @@ router.get('/hkd/s4', authMiddleware, async (req: AuthRequest, res: Response) =>
                 tongPhaiNop,
                 tongGTGT: vatPhaiNop,
                 tongTNCN: tncnPhaiNop,
-                daKhaiNop: d.status === 'paid' ? tongPhaiNop : 0,
-                tongDaNop: d.status === 'paid' ? tongPhaiNop : 0,
-                conPhaiNop: d.status !== 'paid' ? tongPhaiNop : 0,
+                daKhaiNop: nopCuaKy(d.period),
+                tongDaNop: nopCuaKy(d.period),
+                conPhaiNop: daNop === null ? null : tongPhaiNop - (nopCuaKy(d.period) || 0),
                 trangThai: d.status,
                 ghiChu: d.notes || ''
             }
@@ -4253,10 +4280,19 @@ router.get('/hkd/s4', authMiddleware, async (req: AuthRequest, res: Response) =>
             tongGTGT: rows.reduce((s: number, r: any) => s + r.vatPhaiNop, 0),
             tongTNCN: rows.reduce((s: number, r: any) => s + r.tncnPhaiNop, 0),
             tongPhaiNop: rows.reduce((s: number, r: any) => s + r.tongPhaiNop, 0),
-            tongDaNop: rows.reduce((s: number, r: any) => s + r.daKhaiNop, 0),
+            /* Ở mức NĂM thì mọi bút toán nộp thuế đều tính, kể cả cái chưa gán
+             * được về kỳ — chỉ tiêu [13] của tờ quyết toán hỏi tổng cả năm. */
+            tongDaNop: daNop === null ? null : daNop.tongNam,
             tongPhatSinh: rows.reduce((s: number, r: any) => s + r.tongPhaiNop, 0),
-            tongDaKhaiNop: rows.reduce((s: number, r: any) => s + r.daKhaiNop, 0),
-            tongConPhaiNop: rows.reduce((s: number, r: any) => s + r.conPhaiNop, 0),
+            tongDaKhaiNop: daNop === null ? null : daNop.tongNam,
+            tongConPhaiNop: daNop === null ? null
+                : rows.reduce((s: number, r: any) => s + r.tongPhaiNop, 0) - daNop.tongNam,
+            /* Nói rõ con số "đã nộp" từ đâu ra, để người dùng phân biệt được
+             * "0 vì chưa nộp" với "0 vì chưa ghi sổ bút toán nộp thuế". */
+            nguonDaNop: daNop === null ? 'chua-doc-duoc-so' : 'so-ke-toan',
+            soChungTuNop: daNop?.soChungTu ?? 0,
+            daNopChuaGanKy: daNop?.chuaGanKy ?? 0,
+            ghiChuDaNop: ghiChuNguonDaNop(daNop),
         }
         res.json({ success: true, data: { rows, summary, year } })
     } catch (err) { console.error('GET /hkd/s4:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
