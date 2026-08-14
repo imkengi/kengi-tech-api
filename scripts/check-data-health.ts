@@ -290,6 +290,24 @@ async function main() {
     ok('điểm tụt theo số vấn đề', nhieu.diem < 60, nhieu.diem)
     ok('xếp loại "chưa tin được"', nhieu.xepLoai === 'chưa tin được', nhieu.xepLoai)
 
+    console.log('\n▶ Điểm: đổi sang trừ theo tỷ lệ mà KHÔNG đổi nhãn xếp loại\n')
+    /* Cách cũ trừ tuyến tính rồi kẹp sàn 0 nên bão hoà: 5 mục nặng + 2 vừa và
+     * 15 mục nặng đều ra 0/100, dọn xong 2 mục vẫn 0/100. Cách nhân giữ được độ
+     * phân giải, nhưng chỉ đổi được nếu NHÃN không xê dịch — người dùng đọc
+     * nhãn chứ ít khi đọc con số. Ca này khoá lại điều đó. */
+    {
+        const cu = (n: number, v: number) => Math.max(0, 100 - 25 * n - 10 * v)
+        const moi = (n: number, v: number) => Math.round(100 * Math.pow(0.72, n) * Math.pow(0.90, v))
+        const nhan = (d: number) => d >= 85 ? 'tốt' : d >= 55 ? 'cần dọn' : 'chưa tin được'
+        const toHop: Array<[number, number]> = [[0, 0], [0, 1], [0, 2], [1, 0], [1, 1], [2, 0], [2, 1], [3, 0]]
+        const lech = toHop.filter(([n, v]) => nhan(cu(n, v)) !== nhan(moi(n, v)))
+        ok('mọi tổ hợp ít lỗi giữ nguyên nhãn xếp loại như cách cũ',
+            lech.length === 0, lech.map(([n, v]) => `nặng=${n} vừa=${v}: ${nhan(cu(n, v))} → ${nhan(moi(n, v))}`))
+        ok('nhưng ở vùng cách cũ bão hoà thì điểm mới còn phân giải',
+            cu(5, 2) === 0 && cu(7, 0) === 0 && moi(5, 2) > moi(7, 0) && moi(7, 0) > 0,
+            [moi(5, 2), moi(7, 0)])
+    }
+
     console.log('\n▶ Kỳ ghi sổ lệch kỳ bán (dữ liệu nhập từ phần mềm cũ)\n')
     const layMuc = (r: any, ma: string) => r.muc.find((m: any) => m.ma === ma)
     {

@@ -1466,8 +1466,10 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
      * Cách trừ nhân: mỗi cảnh báo cắt đi một phần trăm của phần CÒN LẠI, nên
      * điểm giảm dần chứ không bao giờ chạm 0. Ở số lượng ít (1–2 cảnh báo) kết
      * quả gần như trùng cách cũ — cửa hàng bình thường không thấy khác gì; chỉ
-     * ở vùng nhiều cảnh báo, nơi cách cũ mất hết độ phân giải, mới khác. */
-    const heSoConLai: Record<MucRuiRo, number> = { cao: 0.78, vua: 0.91, thap: 0.97 }
+     * ở vùng nhiều cảnh báo, nơi cách cũ mất hết độ phân giải, mới khác. Hệ số
+     * chọn sao cho MỌI nhãn xếp loại trùng khớp cách cũ ở vùng ít cảnh báo — đã
+     * đối chiếu từng tổ hợp, và có ca test khoá lại. */
+    const heSoConLai: Record<MucRuiRo, number> = { cao: 0.75, vua: 0.91, thap: 0.97 }
     let conLai = 1
     for (const c of canhBao) conLai *= heSoConLai[c.muc]
     let diem = Math.round(100 * conLai)

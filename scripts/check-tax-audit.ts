@@ -1179,6 +1179,16 @@ async function main() {
             dNhieu < dIt && dNhieu > 0, `${dNhieu} vs ${dIt}`)
         kiemTra('Gỡ bớt cảnh báo nặng thì điểm nhích lên thấy được',
             dIt - dNhieu >= 5, `${dIt} - ${dNhieu}`)
+
+        /* Đổi cách chấm chỉ được phép nếu NHÃN không xê dịch — người dùng đọc
+         * nhãn chứ ít khi đọc con số. Khoá lại bằng đối chiếu từng tổ hợp. */
+        const cu = (c: number, v: number) => Math.max(0, 100 - 22 * c - 9 * v)
+        const moi = (c: number, v: number) => Math.round(100 * Math.pow(0.75, c) * Math.pow(0.91, v))
+        const nhan = (d: number) => d >= 90 ? 'Sẵn sàng' : d >= 70 ? 'Cần bổ sung hồ sơ' : d >= 45 ? 'Rủi ro cao' : 'Rất rủi ro'
+        const toHop: Array<[number, number]> = [[0, 0], [0, 1], [0, 2], [1, 0], [1, 1], [2, 0], [2, 1], [3, 0], [4, 0]]
+        const lech = toHop.filter(([c, v]) => nhan(cu(c, v)) !== nhan(moi(c, v)))
+        kiemTra('Mọi tổ hợp ít cảnh báo giữ nguyên nhãn xếp loại như cách cũ',
+            lech.length === 0, lech.map(([c, v]) => `cao=${c} vừa=${v}: ${nhan(cu(c, v))} → ${nhan(moi(c, v))}`).join('; '))
     }
     {
         // Một cảnh báo nặng duy nhất vẫn cho điểm gần cách tính cũ (100 − 22)

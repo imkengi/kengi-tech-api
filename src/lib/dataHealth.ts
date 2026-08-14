@@ -403,9 +403,21 @@ export async function sucKhoeDuLieu(
         }
     }
 
-    /* Điểm: mỗi mục nặng trừ 25, vừa trừ 10. Không phải thang khoa học — chỉ để
-     * xếp thứ tự ưu tiên và cho người dùng thấy tiến bộ khi dọn dần. */
-    const diem = Math.max(0, 100 - muc.reduce((s, m) => s + (m.muc === 'nang' ? 25 : m.muc === 'vua' ? 10 : 0), 0))
+    /* Điểm: mỗi mục nặng cắt 28% phần CÒN LẠI, vừa cắt 10%. Không phải thang
+     * khoa học — mục đích là xếp thứ tự ưu tiên và **cho người dùng thấy tiến
+     * bộ khi dọn dần**, nên trừ theo tỷ lệ chứ không trừ thẳng rồi kẹp sàn.
+     *
+     * Bản trước trừ tuyến tính: KENGISTORE có 5 mục nặng + 2 mục vừa ra
+     * 100−125−20 = −45, kẹp về 0. Họ dọn xong 2 mục nặng vẫn thấy 0/100 — kim
+     * không nhúc nhích thì người ta bỏ dở. Cách nhân không bao giờ chạm 0 và ở
+     * vùng ít lỗi cho kết quả gần y hệt cách cũ (1 mục nặng: 75 điểm ở cả hai
+     * cách), nên cửa hàng đang sạch không thấy khác gì. Hệ số chọn sao cho MỌI
+     * nhãn xếp loại trùng khớp cách cũ ở vùng ít lỗi — đã đối chiếu từng tổ hợp,
+     * và có ca test khoá lại. Cùng cách chấm với bộ
+     * soát Sẵn Sàng Thanh Tra — hai bảng nằm cùng một trang thì không được
+     * chấm điểm theo hai triết lý khác nhau. */
+    const conLai = muc.reduce((s, m) => s * (m.muc === 'nang' ? 0.72 : m.muc === 'vua' ? 0.90 : 1), 1)
+    const diem = Math.max(0, Math.min(100, Math.round(100 * conLai)))
     return {
         ky: { from: ky.from, to: ky.to },
         diem,
