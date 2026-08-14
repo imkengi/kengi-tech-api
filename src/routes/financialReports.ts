@@ -240,12 +240,14 @@ async function buildReportFromPrisma(prisma: any, startDate: Date, endDate: Date
         // t."createdAt" is invalid under the outer GROUP BY (Postgres 42803).
         prisma.$queryRawUnsafe(
             `SELECT
+                -- mui-gio-co-y: d.bucket da cong 7 tieng trong CTE ben duoi roi,
+                -- cong them lan nua la day sang ngay hom sau
                 to_char(d.bucket, 'YYYY-MM-DD') AS bucket,
                 d.revenue,
                 d.orders,
                 COALESCE(c.cogs, 0) AS cogs
              FROM (
-                SELECT date_trunc('${bucketUnit}', t.\"createdAt\") AS bucket,
+                SELECT date_trunc('${bucketUnit}', t.\"createdAt\" + interval '7 hours') AS bucket,
                        COALESCE(SUM(t.total), 0) AS revenue,
                        COUNT(*) AS orders
                 FROM \"Transaction\" t
@@ -253,7 +255,7 @@ async function buildReportFromPrisma(prisma: any, startDate: Date, endDate: Date
                 GROUP BY 1
              ) d
              LEFT JOIN (
-                SELECT date_trunc('${bucketUnit}', t2.\"createdAt\") AS bucket,
+                SELECT date_trunc('${bucketUnit}', t2.\"createdAt\" + interval '7 hours') AS bucket,
                        SUM(p.\"costPrice\" * ti.quantity) AS cogs
                 FROM \"TransactionItem\" ti
                 JOIN \"Transaction\" t2 ON t2.id = ti.\"transactionId\"
@@ -266,7 +268,7 @@ async function buildReportFromPrisma(prisma: any, startDate: Date, endDate: Date
         ),
         prisma.$queryRawUnsafe(
             `SELECT
-                to_char(date_trunc('${bucketUnit}', date), 'YYYY-MM-DD') AS bucket,
+                to_char(date_trunc('${bucketUnit}', date + interval '7 hours'), 'YYYY-MM-DD') AS bucket,
                 COALESCE(SUM(amount), 0) AS expense
              FROM \"Expense\"
              WHERE date >= $1 AND date <= $2

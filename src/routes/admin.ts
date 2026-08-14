@@ -2538,8 +2538,8 @@ router.get('/returns-summary', async (req: Request, res: Response) => {
                                 ELSE 'khac' END AS nguon,
                            status, COUNT(*)::int AS n,
                            COALESCE(SUM("totalRefund"),0)::float8 AS tien,
-                           to_char(MIN("createdAt"),'YYYY-MM-DD') AS dau,
-                           to_char(MAX("createdAt"),'YYYY-MM-DD') AS cuoi
+                           to_char(MIN("createdAt") + interval '7 hours','YYYY-MM-DD') AS dau,
+                           to_char(MAX("createdAt") + interval '7 hours','YYYY-MM-DD') AS cuoi
                     FROM "ReturnOrder" GROUP BY 1,2 ORDER BY 1,3 DESC`)
                 out.push({ store: store.code, rows })
             } catch (e: any) {
@@ -2571,7 +2571,7 @@ router.get('/store-health', async (req: Request, res: Response) => {
             sp.$queryRawUnsafe(`
                 SELECT name, platform, status,
                        to_char("lastSyncAt",'YYYY-MM-DD HH24:MI') AS "lastSyncAt",
-                       to_char("tokenExpiresAt",'YYYY-MM-DD') AS "tokenExpiresAt"
+                       to_char("tokenExpiresAt" + interval '7 hours','YYYY-MM-DD') AS "tokenExpiresAt"
                 FROM "OnlineChannel" ORDER BY platform, name`),
             sp.$queryRawUnsafe(`
                 SELECT COUNT(*)::int AS n
@@ -2665,8 +2665,8 @@ router.post('/clean-fake-fees', async (req: Request, res: Response) => {
                     SELECT COUNT(*)::int AS n,
                            COALESCE(SUM("platformFee"),0)::float8 AS "tongPhiAo",
                            COALESCE(SUM("total"),0)::float8 AS "tongDon",
-                           to_char(MIN("createdAt"),'YYYY-MM-DD') AS dau,
-                           to_char(MAX("createdAt"),'YYYY-MM-DD') AS cuoi
+                           to_char(MIN("createdAt") + interval '7 hours','YYYY-MM-DD') AS dau,
+                           to_char(MAX("createdAt") + interval '7 hours','YYYY-MM-DD') AS cuoi
                     FROM "OnlineOrder" WHERE ${COND}`)
                 const row = (stat as any[])[0] || {}
                 if ((row.n || 0) > 0 && !dryRun) {

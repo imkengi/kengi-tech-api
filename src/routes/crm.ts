@@ -554,7 +554,7 @@ router.get('/overview', authMiddleware, requirePermission('customers.view'), asy
             prisma.crmEmailLog.count({ where: { sentAt: { gte: from } } }),
             prisma.crmEmailLog.count({ where: { sentAt: { gte: from }, repliedAt: { not: null } } }),
             prisma.$queryRawUnsafe<any[]>(
-                `SELECT to_char("createdAt", 'YYYY-MM-DD') AS day,
+                `SELECT to_char("createdAt" + interval '7 hours', 'YYYY-MM-DD') AS day,
                         COALESCE(SUM(total), 0)::float8 AS revenue,
                         COUNT(*)::int AS orders
                  FROM "Transaction"
