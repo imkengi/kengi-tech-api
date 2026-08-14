@@ -380,7 +380,10 @@ export async function duBaoDongTien(
             soNgayDoDuoc,
             soNgayLayTrungBinh: mauSoNgay,
             cachTinh: mauSoNgay < NGAY_DO
-                ? `Cửa hàng mới thu tiền lần đầu cách đây ${mauSoNgay} ngày nên lấy trung bình theo ${mauSoNgay} ngày đó, không chia cho ${NGAY_DO} — chia cho ${NGAY_DO} sẽ dìm tốc độ thu xuống và vẽ ra cảnh sắp cạn tiền không có thật.`
+                /* KHÔNG viết "thu tiền lần đầu cách đây N ngày": mẫu số còn được
+                 * nâng lên bằng số ngày có bán, nên N có thể lệch một ngày so
+                 * với mốc thật. Câu chữ chỉ được nói đúng cái phép tính đã làm. */
+                ? `Cửa hàng mới có khoảng ${mauSoNgay} ngày dữ liệu nên lấy trung bình theo ${mauSoNgay} ngày đó, không chia cho ${NGAY_DO} — chia cho ${NGAY_DO} sẽ dìm tốc độ thu xuống và vẽ ra cảnh sắp cạn tiền không có thật.`
                 : `Trung bình ${NGAY_DO} ngày gần nhất: tổng tiền đã thu chia cho ${NGAY_DO}, tổng chi phí đã ghi sổ chia cho ${NGAY_DO}. Ngày không bán vẫn tính là một ngày, vì lịch dự báo cũng chạy theo ngày trong lịch.`,
         },
         ngay,
