@@ -7,6 +7,53 @@ import { getOrCreateDefaultWarehouse, updateWarehouseStock, adjustSellableStock 
 import { emitStockChanged, emitEntityEvent, webhooksActive } from '../lib/webhookDispatch'
 import { postImportReceiptJournal, postExpenseJournal, refsOfImport, reverseJournalRefs } from '../lib/autoJournalPurchase'
 
+/**
+ * MỘT SỐ HOÁ ĐƠN CHỈ ĐƯỢC DÙNG MỘT LẦN CHO MỘT NHÀ CUNG CẤP.
+ *
+ * Nhập trùng số hoá đơn đầu vào là nhân đôi thuế GTGT được khấu trừ và nhân đôi
+ * chi phí được trừ — đúng thứ cơ quan thuế đối chiếu ra ngay, vì bên bán chỉ
+ * phát hành một tờ. Hậu quả là truy thu cộng phạt kê khai sai, chứ không phải
+ * một lỗi nhập liệu vặt.
+ *
+ * Trùng số ở HAI nhà cung cấp KHÁC NHAU thì bình thường: mỗi bên có dải số
+ * riêng, tờ 0000123 của bên A không liên quan gì tờ 0000123 của bên B. Chặn cả
+ * trường hợp đó là bắt người dùng sửa một thứ không sai.
+ *
+ * So sánh sau khi chuẩn hoá: bỏ khoảng trắng và không phân biệt hoa thường —
+ * "HD 001" và "hd001" là cùng một tờ, chặn được thì mới có tác dụng thật.
+ */
+export async function timPhieuTrungSoHoaDon(
+    prisma: any,
+    args: { vatInvoiceNo?: string | null; supplierId?: string | null; supplierName?: string | null; boQuaId?: string },
+): Promise<{ code: string; createdAt: any } | null> {
+    const so = String(args.vatInvoiceNo || '').replace(/\s+/g, '').toLowerCase()
+    if (!so) return null
+
+    /* Lọc theo nhà cung cấp ở tầng DB, còn so số hoá đơn thì làm ở Node: Prisma
+     * không có hàm bỏ khoảng trắng, mà so thô sẽ lọt "HD 001" vs "HD001". */
+    const dieuKien: any = args.supplierId
+        ? { supplierId: args.supplierId }
+        : args.supplierName
+            ? { supplierName: args.supplierName }
+            : null
+    if (!dieuKien) return null   // không biết nhà cung cấp thì không kết luận được
+
+    const ds = await prisma.importReceipt.findMany({
+        where: {
+            ...dieuKien,
+            status: { not: 'cancelled' },
+            vatInvoiceNo: { not: null },
+            ...(args.boQuaId ? { id: { not: args.boQuaId } } : {}),
+        },
+        select: { id: true, code: true, vatInvoiceNo: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: 500,
+    }).catch(() => [])
+
+    const trung = ds.find((r: any) => String(r.vatInvoiceNo || '').replace(/\s+/g, '').toLowerCase() === so)
+    return trung ? { code: trung.code, createdAt: trung.createdAt } : null
+}
+
 // Payload phiếu nhập cho webhook (kèm thông tin NCC + chi tiết mặt hàng)
 const importPayload = (r: any) => ({
     id: r?.id, code: r?.code,
@@ -206,6 +253,25 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         const branchId = getBranchId(req)
         const { items, ...receiptData } = req.body
         const user = (req as any).user
+
+        /* Chặn trùng số hoá đơn TRƯỚC khi làm bất cứ việc gì khác: phiếu nhập
+         * đụng vào tồn kho, giá vốn và bút toán, nên phát hiện muộn là phải gỡ
+         * cả chuỗi. */
+        const trung = await timPhieuTrungSoHoaDon(prisma, {
+            vatInvoiceNo: receiptData?.vatInvoiceNo,
+            supplierId: receiptData?.supplierId,
+            supplierName: receiptData?.supplierName,
+        })
+        if (trung) {
+            return res.status(400).json({
+                success: false,
+                error: `Số hoá đơn "${receiptData.vatInvoiceNo}" đã dùng cho nhà cung cấp này ở phiếu ${trung.code}. `
+                    + 'Nhập trùng số hoá đơn là khai trùng thuế GTGT được khấu trừ và trùng chi phí được trừ — cơ quan thuế đối chiếu ra ngay vì bên bán chỉ phát hành một tờ. '
+                    + 'Kiểm tra lại số trên hoá đơn, hoặc mở phiếu cũ nếu đây là cùng một lần nhập.',
+                code: 'TRUNG_SO_HOA_DON',
+                phieuTrung: trung.code,
+            })
+        }
 
         // Fetch actual user name from DB
         const dbUser = await prisma.user.findUnique({ where: { id: user.userId || user.id } })
@@ -535,6 +601,31 @@ router.put('/:id/vat-invoice', authMiddleware, async (req: AuthRequest, res: Res
     try {
         const prisma = req.storePrisma! as any
         const has = Boolean(req.body?.hasVatInvoice)
+
+        /* Cửa thứ hai: gán số hoá đơn cho phiếu đã tạo. Chặn ở mỗi cửa tạo phiếu
+         * là bịt được một nửa — người dùng vẫn gõ trùng được qua đường này. */
+        if (has && String(req.body?.vatInvoiceNo || '').trim()) {
+            const hienTai = await prisma.importReceipt.findUnique({
+                where: { id: String(req.params.id) },
+                select: { supplierId: true, supplierName: true },
+            }).catch(() => null)
+            const trung = await timPhieuTrungSoHoaDon(prisma, {
+                vatInvoiceNo: req.body.vatInvoiceNo,
+                supplierId: hienTai?.supplierId,
+                supplierName: hienTai?.supplierName,
+                boQuaId: String(req.params.id),
+            })
+            if (trung) {
+                return res.status(400).json({
+                    success: false,
+                    error: `Số hoá đơn "${req.body.vatInvoiceNo}" đã dùng cho nhà cung cấp này ở phiếu ${trung.code}. `
+                        + 'Nhập trùng là khai trùng thuế GTGT được khấu trừ và trùng chi phí được trừ.',
+                    code: 'TRUNG_SO_HOA_DON',
+                    phieuTrung: trung.code,
+                })
+            }
+        }
+
         const updated = await prisma.importReceipt.update({
             where: { id: String(req.params.id) },
             data: { hasVatInvoice: has, vatInvoiceNo: has ? (req.body?.vatInvoiceNo || null) : null },

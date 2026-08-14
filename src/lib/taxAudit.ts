@@ -466,6 +466,49 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
         }
     } catch { /* bỏ qua nếu thiếu bảng */ }
 
+    /* ── 4b. Sổ chi phí gần như trống so với doanh thu ──────────────────────
+     *
+     * Không cửa hàng nào vận hành mà chi phí chưa tới 5% doanh thu. Sổ trống
+     * nghĩa là tiền thuê, lương, điện nước, vận chuyển chưa được ghi — và hậu
+     * quả nằm đúng chỗ đắt nhất: thuế TNDN tính trên lợi nhuận, không có chi phí
+     * được trừ thì lợi nhuận bị thổi lên và thuế phải nộp cao hơn hẳn thực tế.
+     *
+     * Đo trên dữ liệu thật 14/08/2026: một cửa hàng 14,1 tỷ doanh thu trong 90
+     * ngày mà sổ chi phí trống trơn. Mọi báo cáo lãi lỗ và số thuế của cửa hàng
+     * đó đều vô nghĩa, nhưng không một dòng nào nói ra.
+     *
+     * Đây là cảnh báo có lợi CHO cửa hàng — nó chỉ ra tiền đang nộp thừa, không
+     * phải tố họ sai. */
+    try {
+        const chi = (await layPhieuChi()) || []
+        const tongChi = chi
+            .filter((e: any) => (e.status ?? 'active') === 'active')
+            .reduce((s: number, e: any) => s + (e.amount || 0), 0)
+        const tyLe = dtSo > 0 ? tongChi / dtSo : null
+        if (dtSo > 0 && tyLe !== null && tyLe < 0.05) {
+            const phanTram = Math.round(tyLe * 1000) / 10
+            canhBao.push({
+                code: 'so-chi-phi-trong',
+                /* Muc VUA chu khong CAO: diem nay do do SAN SANG THANH TRA, ma
+                 * ghi thieu chi phi thi cua hang NOP THUA thue chu khong bi truy
+                 * thu. Do la thiet hai cua ho, khong phai rui ro phap ly — de
+                 * muc cao la lam nhieu dung thu can uu tien. */
+                muc: 'vua',
+                tieuDe: tongChi === 0
+                    ? 'Sổ chi phí trống trong khi doanh thu đã ghi đủ'
+                    : `Chi phí ghi sổ chỉ bằng ${phanTram}% doanh thu`,
+                chiTiet: `Doanh thu ${vnd(dtSo)} ₫ nhưng chi phí đã ghi sổ chỉ ${vnd(tongChi)} ₫. `
+                    + 'Không cửa hàng nào vận hành với mức chi phí này — nhiều khả năng tiền thuê mặt bằng, lương, điện nước, vận chuyển chưa được ghi. '
+                    + 'Hệ quả: lợi nhuận trên sổ bị thổi lên, và thuế TNDN tính ra CAO HƠN số thực sự phải nộp.',
+                canCu: 'Điều 4 TT 96/2015/TT-BTC: chi phí thực tế phát sinh, phục vụ hoạt động sản xuất kinh doanh, có đủ hoá đơn chứng từ thì được trừ khi tính thuế TNDN. Không ghi vào sổ thì không được trừ.',
+                canLam: 'Ghi các khoản chi cố định hằng tháng vào sổ chi phí kèm hoá đơn (thuê mặt bằng, lương, điện nước, vận chuyển, phí sàn). Đây là quyền được trừ của cửa hàng — bỏ trống là tự nộp thừa.',
+                tienRuiRo: null,
+                soLuong: chi.length,
+                viDu: [],
+            })
+        }
+    } catch { /* thiếu bảng chi phí thì bỏ qua — đã có cảnh báo khác về dữ liệu */ }
+
     // ── 5. Phiếu nhập có hóa đơn GTGT nhưng trả ngay bằng tiền mặt ───────────
     try {
         const nhaps = (await layPhieuNhap()) || []

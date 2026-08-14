@@ -116,7 +116,11 @@ function khoSach(): Kho {
         invoices: [
             { invoiceDate: '2026-08-05', invoiceType: 'SALE', status: 'SIGNED', totalBeforeVat: 100_000_000, vatAmount: 10_000_000, totalAmount: 110_000_000 },
         ],
-        expenses: [],
+        /* Cua hang sach van phai co chi phi: thue mat bang, dien nuoc. De trong
+         * thi chinh bo soat se keu "so chi phi trong" — va no keu dung. */
+        expenses: [
+            { date: '2026-08-02', amount: 20_000_000, vatAmount: 0, invoiceNo: 'HD001', status: 'active', category: 'rent', description: 'Thue mat bang thang 8', supplierName: 'Chu nha', bankAccountId: 'bank1' },
+        ],
         imports: [],
         products: [{ name: 'Sữa', stock: 10, costPrice: 20_000 }],
         transactions: [],
