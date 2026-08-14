@@ -79,6 +79,101 @@ function dungKy(q: any): KhoangKy {
  * chết hệ thống lúc người khác đang bán hàng.
  */
 /**
+ * GET /api/tax/einvoice-errors?from=YYYY-MM-DD&to=YYYY-MM-DD
+ *
+ * Hoá đơn PHÁT HÀNH HỎNG — trạng thái ERROR, không có số hoá đơn.
+ *
+ * Vì sao cần: bán hàng xong mà hoá đơn không phát hành được thì về mặt thuế
+ * giống hệt như chưa lập hoá đơn (Điều 90 Luật QLT 38/2019). Nhưng trên phần
+ * mềm nó nằm im trong bảng, không ai thấy — soát dữ liệu thật ngày 14/08/2026
+ * ra 68 tờ hỏng chỉ trong một tháng của một cửa hàng.
+ *
+ * Gom theo NGUYÊN NHÂN chứ không liệt kê phẳng: mỗi nguyên nhân có một cách
+ * chữa riêng (thiếu mã số thuế người mua, hết dải số, chữ ký hết hạn, nhà cung
+ * cấp từ chối…). Liệt kê 68 dòng giống nhau thì người đọc không biết bắt đầu
+ * từ đâu.
+ */
+router.get('/einvoice-errors', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const q = req.query as any
+        const hopLe = (s: any) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''))
+        const nay = new Date(Date.now() + 7 * 3600_000)
+        const from = hopLe(q.from) ? String(q.from)
+            : new Date(Date.UTC(nay.getUTCFullYear(), nay.getUTCMonth() - 2, 1)).toISOString().slice(0, 10)
+        const to = hopLe(q.to) ? String(q.to) : nay.toISOString().slice(0, 10)
+
+        const ds: any[] = await prisma.eInvoice.findMany({
+            where: { invoiceDate: { gte: from, lte: to }, status: 'ERROR' },
+            select: {
+                id: true, invoiceDate: true, totalAmount: true, errorMessage: true,
+                transactionId: true, buyerName: true, buyerTaxCode: true, invoiceType: true,
+            },
+            orderBy: { invoiceDate: 'desc' },
+            take: 2000,
+        })
+
+        /* Thông điệp lỗi của nhà cung cấp thường kèm mã phiếu/thời điểm nên mỗi
+         * dòng một khác. Cắt phần đầu để gom được về cùng nguyên nhân, thay số
+         * bằng dấu # để "hoá đơn 00012345" và "hoá đơn 00012346" về một nhóm. */
+        const chuanHoa = (s: any) => String(s || '(không ghi lý do)')
+            .replace(/\d+/g, '#')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 160)
+
+        const nhom = new Map<string, { so: number; tien: number; mau: any[] }>()
+        for (const h of ds) {
+            const k = chuanHoa(h.errorMessage)
+            const o = nhom.get(k) || { so: 0, tien: 0, mau: [] }
+            o.so++
+            o.tien += Number(h.totalAmount) || 0
+            if (o.mau.length < 3) {
+                o.mau.push({
+                    id: h.id, ngay: h.invoiceDate,
+                    tien: Math.round(Number(h.totalAmount) || 0),
+                    khach: h.buyerName || null, mstKhach: h.buyerTaxCode || null,
+                    phieuBan: h.transactionId || null,
+                    loiDayDu: String(h.errorMessage || '').slice(0, 300) || null,
+                })
+            }
+            nhom.set(k, o)
+        }
+
+        // Rải đều hay dồn một đợt? Dồn một ngày thường là sự cố nhà cung cấp.
+        const theoNgay = new Map<string, number>()
+        for (const h of ds) {
+            const n = String(h.invoiceDate || '')
+            theoNgay.set(n, (theoNgay.get(n) || 0) + 1)
+        }
+        const ngay = Array.from(theoNgay.entries())
+            .map(([ngay, so]) => ({ ngay, so }))
+            .sort((a, b) => a.ngay.localeCompare(b.ngay))
+        const ngayDon = ngay.length > 0 ? ngay.reduce((a, b) => (b.so > a.so ? b : a)) : null
+
+        res.json({
+            success: true,
+            data: {
+                ky: { from, to },
+                tong: { so: ds.length, tien: Math.round(ds.reduce((s, h) => s + (Number(h.totalAmount) || 0), 0)) },
+                daCatBot: ds.length >= 2000,
+                theoNguyenNhan: Array.from(nhom.entries())
+                    .map(([lyDo, v]) => ({ lyDo, so: v.so, tien: Math.round(v.tien), mau: v.mau }))
+                    .sort((a, b) => b.so - a.so),
+                theoNgay: ngay,
+                ngayDonNhat: ngayDon,
+                ghiChu: ds.length === 0
+                    ? 'Không có hoá đơn nào phát hành hỏng trong kỳ.'
+                    : 'Hoá đơn hỏng về mặt thuế giống như chưa lập hoá đơn (Điều 90 Luật Quản lý thuế 38/2019). Sửa nguyên nhân rồi phát hành lại trước khi hết kỳ kê khai.',
+            },
+        })
+    } catch (err) {
+        console.error('GET /tax/einvoice-errors error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+/**
  * GET /api/tax/reconcile-3way?from=YYYY-MM-DD&to=YYYY-MM-DD
  *
  * Đối chiếu ba chiều sổ sách ↔ hoá đơn ↔ dòng tiền — việc đầu tiên đoàn thanh

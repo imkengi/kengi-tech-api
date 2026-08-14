@@ -4346,6 +4346,69 @@ router.get('/reconcile-why', async (req: Request, res: Response) => {
     }
 })
 
+/**
+ * GET /api/admin/einvoice-error-sweep?from=YYYY-MM-DD&to=YYYY-MM-DD
+ *
+ * Hoá đơn phát hành hỏng của TOÀN BỘ cửa hàng, gom theo nguyên nhân.
+ *
+ * Hỏng ở đây không phải lỗi kỹ thuật vặt: bán xong mà hoá đơn không ra thì về
+ * mặt thuế giống như chưa lập hoá đơn. Trước giờ chúng nằm im trong bảng, không
+ * màn hình nào hiện.
+ *
+ * CHỈ ĐỌC, chạy tuần tự từng cửa hàng.
+ */
+router.get('/einvoice-error-sweep', async (req: Request, res: Response) => {
+    try {
+        const q = req.query as any
+        const hopLe = (s: any) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''))
+        const nay = new Date(Date.now() + 7 * 3600_000)
+        const from = hopLe(q.from) ? String(q.from)
+            : new Date(Date.UTC(nay.getUTCFullYear(), nay.getUTCMonth() - 2, 1)).toISOString().slice(0, 10)
+        const to = hopLe(q.to) ? String(q.to) : nay.toISOString().slice(0, 10)
+
+        const chuanHoa = (s: any) => String(s || '(không ghi lý do)')
+            .replace(/\d+/g, '#').replace(/\s+/g, ' ').trim().slice(0, 160)
+
+        const stores = await registryPrisma.store.findMany({ select: { name: true, schema: true, code: true } }) as any[]
+        const bang: any[] = []
+
+        for (const store of stores) {
+            try {
+                const p: any = getStorePrisma(store.schema)
+                const ds: any[] = await p.eInvoice.findMany({
+                    where: { invoiceDate: { gte: from, lte: to }, status: 'ERROR' },
+                    select: { invoiceDate: true, totalAmount: true, errorMessage: true },
+                    take: 3000,
+                })
+                if (ds.length === 0) { bang.push({ cuaHang: store.name, ma: store.code, so: 0, tien: 0, nguyenNhan: [] }); continue }
+                const nhom = new Map<string, { so: number; tien: number }>()
+                for (const h of ds) {
+                    const k = chuanHoa(h.errorMessage)
+                    const o = nhom.get(k) || { so: 0, tien: 0 }
+                    o.so++; o.tien += Number(h.totalAmount) || 0
+                    nhom.set(k, o)
+                }
+                bang.push({
+                    cuaHang: store.name, ma: store.code,
+                    so: ds.length,
+                    tien: Math.round(ds.reduce((s, h) => s + (Number(h.totalAmount) || 0), 0)),
+                    nguyenNhan: Array.from(nhom.entries())
+                        .map(([lyDo, v]) => ({ lyDo, so: v.so, tien: Math.round(v.tien) }))
+                        .sort((a, b) => b.so - a.so).slice(0, 6),
+                })
+            } catch (e: any) {
+                bang.push({ cuaHang: store.name, ma: store.code, loi: String(e?.message || e).slice(0, 200) })
+            }
+        }
+
+        const tong = bang.filter(b => !b.loi).reduce((s, b) => s + b.so, 0)
+        res.json({ success: true, data: { ky: { from, to }, tongSoHoaDonHong: tong, bang } })
+    } catch (err: any) {
+        console.error('GET /admin/einvoice-error-sweep error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
 // POST /api/admin/run-reconcile — chạy ngay vòng đối chiếu ba chiều tháng trước
 router.post('/run-reconcile', async (req: Request, res: Response) => {
     try {
