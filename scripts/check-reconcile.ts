@@ -23,6 +23,8 @@ interface Kho {
     locks: any[]
     adjustments: any[]
     chartOfAccounts: any[]
+    /** 'household' = hộ kinh doanh (không bắt buộc sổ kép), mặc định doanh nghiệp. */
+    loaiHinh?: string
 }
 
 /** Prisma giả — chỉ hỗ trợ đúng những phép truy vấn mà reconcile.ts dùng */
@@ -47,6 +49,9 @@ function fakePrisma(k: Kho) {
         return true
     }
     return {
+        storeSettings: {
+            findFirst: async () => ({ businessType: k.loaiHinh ?? 'company' }),
+        },
         journalEntry: {
             findMany: async ({ where }: any = {}) => k.journal.filter(e => chuoiTrongKhoang(e.date, where?.date)),
         },
@@ -323,6 +328,53 @@ async function main() {
         k.journal.push({ reference: 'BAD-1', date: '2026-08-08', debitAccount: '111', creditAccount: '111', amount: 1 })
         const kq = await soatSoSach(fakePrisma(k), KHOANG)
         kiemTra('Vấn đề mức "cao" xếp trước mức "vừa"', kq.vanDe[0]?.muc === 'cao' && kq.soVanDeNang >= 1)
+    }
+
+    // ── Sổ hoàn toàn trống là MỘT sự việc, không phải bốn lỗi ──────────────
+    /* Bốn phép kiểm "chưa vào sổ" đều hỏi cùng một câu khi sổ chưa có bút toán
+     * nào. Để nguyên thì hộ kinh doanh mở trang ra thấy bốn khối đỏ mức CAO cho
+     * một việc mà TT 88/2021 KHÔNG bắt buộc họ làm. Menu Kế Toán không có cờ
+     * companyOnly nên họ vẫn vào được — phải xử ở đây chứ không giấu trang. */
+    {
+        const k = khoSach()
+        k.journal = []
+        k.loaiHinh = 'household'
+        const r = await soatSoSach(fakePrisma(k), KHOANG)
+        const giaiThich = r.vanDe.find((v: any) => v.code === 'chua-dung-so-kep')
+        kiemTra('hộ kinh doanh, sổ trống → có mục giải thích riêng', !!giaiThich)
+        kiemTra('… ở mức thấp, không phải cao', giaiThich?.muc === 'thap', giaiThich?.muc)
+        kiemTra('… nói rõ TT 88/2021 không bắt buộc sổ kép',
+            !!giaiThich && giaiThich.chiTiet.includes('TT 88/2021'))
+        const banChuaGhi = r.vanDe.find((v: any) => v.code === 'ban-chua-ghi')
+        kiemTra('… và bốn mục "chưa vào sổ" hạ xuống mức thấp',
+            !banChuaGhi || banChuaGhi.muc === 'thap', banChuaGhi?.muc)
+        kiemTra('… không còn mục nào ở mức cao',
+            !r.vanDe.some((v: any) => v.muc === 'cao'),
+            r.vanDe.filter((v: any) => v.muc === 'cao').map((v: any) => v.code).join(','))
+    }
+    {
+        // Doanh nghiệp thì sổ trống VẪN là mức cao — có nghĩa vụ kế toán
+        const k = khoSach()
+        k.journal = []
+        k.loaiHinh = 'company'
+        const r = await soatSoSach(fakePrisma(k), KHOANG)
+        const giaiThich = r.vanDe.find((v: any) => v.code === 'chua-dung-so-kep')
+        kiemTra('doanh nghiệp, sổ trống → mức CAO', giaiThich?.muc === 'cao', giaiThich?.muc)
+        kiemTra('… nói rõ doanh nghiệp có nghĩa vụ kế toán',
+            !!giaiThich && giaiThich.chiTiet.includes('nghĩa vụ kế toán'))
+    }
+    {
+        /* Sổ CÓ bút toán mà sót vài phiếu thì vẫn là mức cao — nới lỏng nhầm
+         * chỗ này là bỏ lọt đúng phép kiểm chính của cả module. */
+        const k = khoSach()
+        k.loaiHinh = 'household'
+        k.journal = k.journal.filter((e: any) => !String(e.reference || '').startsWith('SALE-'))
+        const r = await soatSoSach(fakePrisma(k), KHOANG)
+        const banChuaGhi = r.vanDe.find((v: any) => v.code === 'ban-chua-ghi')
+        kiemTra('sổ có ghi mà sót phiếu bán thì VẪN mức cao',
+            banChuaGhi?.muc === 'cao', banChuaGhi?.muc)
+        kiemTra('… và không kèm mục "chưa dùng sổ kép"',
+            !r.vanDe.some((v: any) => v.code === 'chua-dung-so-kep'))
     }
 
     console.log(`\n${soCa - soLoi}/${soCa} ca đạt`)

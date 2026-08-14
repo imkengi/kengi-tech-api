@@ -64,9 +64,49 @@ export async function soatSoSach(
             select: { reference: true, debitAccount: true, creditAccount: true, amount: true },
         })
     const refCo = new Set(butToanKy.map(e => e.reference).filter(Boolean) as string[])
+
+    /* ── SỔ HOÀN TOÀN TRỐNG LÀ MỘT SỰ VIỆC, KHÔNG PHẢI BỐN LỖI ──────────────
+     *
+     * Bốn phép kiểm đầu (bán / nhập / chi / trả "chưa vào sổ") đều hỏi cùng một
+     * câu khi sổ chưa có bút toán nào: cửa hàng chưa ghi sổ kép. Để nguyên thì
+     * hộ kinh doanh mở trang ra thấy bốn khối đỏ mức CAO — "9.545 hóa đơn bán
+     * chưa vào sổ", "42 phiếu nhập chưa vào sổ"… — cho một việc mà TT 88/2021
+     * KHÔNG bắt buộc họ làm (hộ nộp thuế theo kê khai chỉ cần sổ doanh thu).
+     *
+     * Menu Kế Toán không có cờ companyOnly nên hộ kinh doanh vẫn vào được, vì
+     * vậy phải xử ở đây chứ không phải giấu trang đi — hộ nào muốn ghi sổ kép
+     * thì vẫn ghi được.
+     *
+     * Doanh nghiệp thì khác: có nghĩa vụ kế toán, nên sổ trống vẫn là mức cao. */
+    let laHoKinhDoanh = false
+    try {
+        const cd = await prisma.storeSettings.findFirst({ select: { businessType: true } })
+        laHoKinhDoanh = String(cd?.businessType || '') === 'household'
+    } catch { /* không đọc được thì coi như doanh nghiệp — không nới lỏng vì thiếu tin */ }
+    /* `soTrong` hạ mức cho MỌI phép kiểm bắt nguồn từ việc chưa ghi sổ — kể cả
+     * ba phép so số dư 131/331/156, vì số dư sổ bằng 0 so với công nợ và tồn
+     * kho thật thì lệch đúng bằng toàn bộ, cùng một sự việc chứ không phải một
+     * lỗi riêng. Chính ca test "không còn mục nào ở mức cao" bắt được hai chỗ
+     * này sau khi đã sửa bốn chỗ kia. */
+    const soTrong = butToanKy.length === 0
     // VOID-<ref> nghĩa là <ref> đã bị đảo → không tính là "đã ghi" nữa
     const daDao = new Set(Array.from(refCo).filter(r => r.startsWith('VOID-')).map(r => r.slice(5)))
     const daGhi = (ref: string) => refCo.has(ref) && !daDao.has(ref)
+
+    if (soTrong) {
+        vanDe.push({
+            code: 'chua-dung-so-kep',
+            muc: laHoKinhDoanh ? 'thap' : 'cao',
+            tieuDe: laHoKinhDoanh
+                ? 'Chưa dùng sổ kép — hộ kinh doanh không bắt buộc'
+                : 'Kỳ này chưa có bút toán nào trong sổ',
+            chiTiet: laHoKinhDoanh
+                ? 'Không có bút toán nào trong kỳ. Hộ kinh doanh nộp thuế theo kê khai chỉ bắt buộc SỔ DOANH THU (Điều 3 TT 88/2021), không bắt buộc sổ kép — nên đây không phải thiếu sót. Các mục "chưa vào sổ" bên dưới chỉ là hệ quả của cùng một việc, đã hạ mức tương ứng. Muốn có báo cáo kết quả kinh doanh và bảng cân đối thì mới cần ghi sổ.'
+                : 'Không có bút toán nào trong kỳ, nên mọi phép đối chiếu sổ với chứng từ đều báo thiếu. Doanh nghiệp có nghĩa vụ kế toán nên đây là việc phải xử lý trước, không phải xử lý từng mục "chưa vào sổ" bên dưới — chúng là hệ quả của cùng một việc.',
+            tien: null, soLuong: 0, viDu: [],
+            ghiBuDuoc: true,
+        })
+    }
 
     // ─── 1. Hóa đơn bán chưa vào sổ ─────────────────────────────────────────
     const banChuaGhi: Array<{ receiptNumber: string; total: number }> = []
@@ -78,7 +118,7 @@ export async function soatSoSach(
         for (const t of txs) if (!daGhi(`SALE-${t.receiptNumber}`)) banChuaGhi.push(t)
         const tien = banChuaGhi.reduce((s, t) => s + (t.total || 0), 0)
         if (banChuaGhi.length > 0) vanDe.push({
-            code: 'ban-chua-ghi', muc: 'cao',
+            code: 'ban-chua-ghi', muc: soTrong ? (laHoKinhDoanh ? 'thap' : 'vua') : 'cao',
             tieuDe: `${banChuaGhi.length} hóa đơn bán chưa vào sổ`,
             chiTiet: `Tổng ${vnd(tien)} ₫ doanh thu chưa có bút toán — Báo cáo kết quả kinh doanh đang thiếu đúng khoản này.`,
             tien, soLuong: banChuaGhi.length,
@@ -97,7 +137,7 @@ export async function soatSoSach(
         for (const i of imps) if (!daGhi(`IMP-${i.code}`)) nhapChuaGhi.push(i)
         const tien = nhapChuaGhi.reduce((s, i) => s + (i.totalCost || 0), 0)
         if (nhapChuaGhi.length > 0) vanDe.push({
-            code: 'nhap-chua-ghi', muc: 'cao',
+            code: 'nhap-chua-ghi', muc: soTrong ? (laHoKinhDoanh ? 'thap' : 'vua') : 'cao',
             tieuDe: `${nhapChuaGhi.length} phiếu nhập chưa vào sổ`,
             chiTiet: `Tổng ${vnd(tien)} ₫ hàng nhập chưa ghi Nợ 156 / Có 331 — tồn kho và công nợ nhà cung cấp trên sổ đều thiếu.`,
             tien, soLuong: nhapChuaGhi.length,
@@ -119,7 +159,7 @@ export async function soatSoSach(
         }
         const tien = chiChuaGhi.reduce((s, e) => s + (e.amount || 0), 0)
         if (chiChuaGhi.length > 0) vanDe.push({
-            code: 'chi-chua-ghi', muc: 'cao',
+            code: 'chi-chua-ghi', muc: soTrong ? (laHoKinhDoanh ? 'thap' : 'vua') : 'cao',
             tieuDe: `${chiChuaGhi.length} khoản chi chưa vào sổ`,
             chiTiet: `Tổng ${vnd(tien)} ₫ chi phí chưa ghi sổ — lãi trên báo cáo đang cao hơn thực tế đúng bằng khoản này.`,
             tien, soLuong: chiChuaGhi.length,
@@ -138,7 +178,7 @@ export async function soatSoSach(
         for (const r of rets) if (!daGhi(`RET-${r.code}`)) traChuaGhi.push(r)
         const tien = traChuaGhi.reduce((s, r) => s + (r.totalRefund || 0), 0)
         if (traChuaGhi.length > 0) vanDe.push({
-            code: 'tra-chua-ghi', muc: 'cao',
+            code: 'tra-chua-ghi', muc: soTrong ? (laHoKinhDoanh ? 'thap' : 'vua') : 'cao',
             tieuDe: `${traChuaGhi.length} phiếu trả hàng chưa vào sổ`,
             chiTiet: `Tổng ${vnd(tien)} ₫ đã trả lại khách nhưng doanh thu trên sổ vẫn giữ nguyên.`,
             tien, soLuong: traChuaGhi.length,
@@ -183,7 +223,8 @@ export async function soatSoSach(
         const that = Math.round(agg?._sum?.debt || 0)
         const lech = Math.round(so) - that
         if (Math.abs(lech) >= 1000) vanDe.push({
-            code: 'lech-131', muc: Math.abs(lech) > Math.max(that, 1) * 0.1 ? 'cao' : 'vua',
+            code: 'lech-131', muc: soTrong ? (laHoKinhDoanh ? 'thap' : 'vua')
+                : Math.abs(lech) > Math.max(that, 1) * 0.1 ? 'cao' : 'vua',
             tieuDe: 'Phải thu khách hàng trên sổ lệch với công nợ thực tế',
             chiTiet: `Sổ TK 131 dư ${vnd(so)} ₫, tổng nợ trên hồ sơ khách là ${vnd(that)} ₫ — lệch ${vnd(Math.abs(lech))} ₫. Thường do thu nợ ghi thẳng vào sổ quỹ mà quên bút toán, hoặc sửa nợ khách bằng tay.`,
             tien: Math.abs(lech), soLuong: 0, viDu: [], ghiBuDuoc: false,
@@ -200,7 +241,8 @@ export async function soatSoSach(
         const that = Math.round(imps.reduce((s: number, i: any) => s + Math.max(0, (i.totalCost || 0) - (i.paidAmount || 0)), 0))
         const lech = Math.round(so) - that
         if (Math.abs(lech) >= 1000) vanDe.push({
-            code: 'lech-331', muc: Math.abs(lech) > Math.max(that, 1) * 0.1 ? 'cao' : 'vua',
+            code: 'lech-331', muc: soTrong ? (laHoKinhDoanh ? 'thap' : 'vua')
+                : Math.abs(lech) > Math.max(that, 1) * 0.1 ? 'cao' : 'vua',
             tieuDe: 'Phải trả người bán trên sổ lệch với công nợ nhà cung cấp',
             chiTiet: `Sổ TK 331 dư Có ${vnd(so)} ₫, tổng còn nợ trên phiếu nhập là ${vnd(that)} ₫ — lệch ${vnd(Math.abs(lech))} ₫. Hay gặp khi phiếu nhập cũ chưa được ghi sổ, hoặc trả tiền NCC không qua chức năng thanh toán phiếu.`,
             tien: Math.abs(lech), soLuong: imps.length, viDu: [], ghiBuDuoc: false,
@@ -214,7 +256,8 @@ export async function soatSoSach(
         const that = Math.round(sps.reduce((s: number, p: any) => s + Math.max(0, p.stock || 0) * (p.costPrice || 0), 0))
         const lech = Math.round(so) - that
         if (Math.abs(lech) >= 1000) vanDe.push({
-            code: 'lech-156', muc: Math.abs(lech) > Math.max(that, 1) * 0.15 ? 'cao' : 'vua',
+            code: 'lech-156', muc: soTrong ? (laHoKinhDoanh ? 'thap' : 'vua')
+                : Math.abs(lech) > Math.max(that, 1) * 0.15 ? 'cao' : 'vua',
             tieuDe: 'Giá trị hàng hóa trên sổ lệch với tồn kho thực tế',
             chiTiet: `Sổ TK 156 dư ${vnd(so)} ₫, tồn kho tính theo giá vốn hiện tại là ${vnd(that)} ₫ — lệch ${vnd(Math.abs(lech))} ₫. Nguyên nhân thường gặp: phiếu nhập chưa ghi sổ, điều chỉnh kho thủ công, hoặc giá vốn được cập nhật lại sau khi đã bán.`,
             tien: Math.abs(lech), soLuong: 0, viDu: [], ghiBuDuoc: false,
