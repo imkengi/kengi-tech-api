@@ -305,6 +305,57 @@ async function main() {
     ok('hỏng bảng hàng đang về → vẫn tính được, nhưng nói rõ có thể đặt dư',
         rHongVe.canDat.length === 1 && rHongVe.ghiChu.some(g => /cao hơn thực tế/.test(g)), rHongVe.ghiChu)
 
+    console.log('\n▶ Nhu cầu giật cục — một cú sỉ không được quyết định cả đơn hàng\n')
+    /** Bán thưa: hầu hết ngày bằng 0, thỉnh thoảng một đơn sỉ lớn. */
+    const giatCuc = (soNgay: number, cuSi: number, moiBaoNhieuNgay: number) =>
+        Array.from({ length: soNgay }, (_, i) => (i % moiBaoNhieuNgay === 0 ? cuSi : 0))
+    {
+        // 90 ngày, cứ 10 ngày một đơn 60 cái → mu = 6/ngày nhưng sigma rất lớn
+        const r = await keHoachDatHang(fakePrisma({
+            ban: { P1: giatCuc(N, 60, 10) },
+            hang: [hangMau('P1', { stock: 5 })],
+        }), { soNgayLichSu: N, soNgayChoMacDinh: 7, chuKyDat: 7 })
+        const m = r.canDat[0] || r.hetHang[0]
+        ok('nhận ra nhu cầu giật cục', !!m && m.nhuCauGiatCuc === true, m && [m.banMoiNgay, m.doDaoDong])
+        ok('tồn an toàn bị chặn ở đúng một quãng chờ nhu cầu trung bình',
+            !!m && m.tonAnToan === Math.ceil(m.banMoiNgay * 7), m && [m.tonAnToan, m.banMoiNgay])
+        ok('nói rõ đã chặn và công thức gốc đòi bao nhiêu',
+            !!m && m.canhBao.some((c: string) => /Công thức tồn an toàn đòi trữ/.test(c)), m?.canhBao)
+        ok('câu cảnh báo bảo đặt theo đơn khách đã chốt',
+            !!m && m.canhBao.some((c: string) => /đơn sỉ nữa thì đặt thêm/.test(c)), m?.canhBao)
+        ok('ghi chú tổng nêu tỷ trọng tiền của nhóm giật cục',
+            r.ghiChu.some(g => /nhu cầu GIẬT CỤC/.test(g) && /% số tiền đề xuất/.test(g)), r.ghiChu)
+        ok('tổng có tách riêng phần tiền giật cục',
+            r.tomTat.soMaGiatCuc === 1 && r.tomTat.tienCanBoNgayGiatCuc > 0,
+            [r.tomTat.soMaGiatCuc, r.tomTat.tienCanBoNgayGiatCuc])
+    }
+    {
+        /* Bán ĐỀU thì tuyệt đối không được đụng vào: chặn nhầm nhóm này là bảo
+         * người ta trữ thiếu, đứt hàng ngay giữa quãng chờ. */
+        const r = await keHoachDatHang(fakePrisma({
+            ban: { P1: deu(10, N) },
+            hang: [hangMau('P1', { stock: 5 })],
+        }), { soNgayLichSu: N, soNgayChoMacDinh: 7, chuKyDat: 7 })
+        const m = r.canDat[0] || r.hetHang[0]
+        ok('bán đều thì KHÔNG bị gắn nhãn giật cục', !!m && m.nhuCauGiatCuc === false, m?.nhuCauGiatCuc)
+        ok('… và không có ghi chú giật cục nào',
+            !r.ghiChu.some(g => /GIẬT CỤC/.test(g)), r.ghiChu)
+        ok('… tổng phần giật cục bằng 0',
+            r.tomTat.soMaGiatCuc === 0 && r.tomTat.tienCanBoNgayGiatCuc === 0)
+    }
+    {
+        /* Dao động vừa phải (CV² < 0,49) cũng không được chặn — ngưỡng phải
+         * bám phân loại Syntetos–Boylan chứ không phải "hễ lệch là chặn". */
+        const nhap = Array.from({ length: N }, (_, i) => (i % 2 === 0 ? 11 : 9))
+        const r = await keHoachDatHang(fakePrisma({
+            ban: { P1: nhap },
+            hang: [hangMau('P1', { stock: 5 })],
+        }), { soNgayLichSu: N, soNgayChoMacDinh: 7, chuKyDat: 7 })
+        const m = r.canDat[0] || r.hetHang[0]
+        ok('dao động nhẹ quanh mức trung bình không bị coi là giật cục',
+            !!m && m.nhuCauGiatCuc === false, m && [m.banMoiNgay, m.doDaoDong])
+    }
+
     console.log(`\n${dat}/${dat + hong} ca đạt`)
     if (hong) process.exit(1)
 }

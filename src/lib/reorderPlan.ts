@@ -41,6 +41,8 @@ export interface MatHangDatHang {
     banMoiNgay: number
     /** Độ dao động sức bán theo ngày — càng lớn càng phải trữ dày. */
     doDaoDong: number
+    /** Nhu cầu giật cục (vài đơn sỉ lớn) — số đề xuất kém tin cậy hơn hẳn. */
+    nhuCauGiatCuc: boolean
     soNgayCoBan: number
     /** Số ngày chờ hàng dùng để tính, và nó từ đâu ra. */
     soNgayCho: number
@@ -72,6 +74,8 @@ export interface KetQuaDatHang {
         soMaXet: number
         soMaHetHang: number
         soMaCanDat: number
+        soMaGiatCuc: number
+        tienCanBoNgayGiatCuc: number
         soMaTonDong: number
         soMaChuaDuLichSu: number
         /** Ma dang co ton AM — dau hieu lech so sach, phai soat kho chu khong phai dat hang. */
@@ -303,6 +307,7 @@ export async function keHoachDatHang(
         let co: CoNgay
         let diemDatHang: number | null = null
         let tonAnToan: number | null = null
+        let giatCuc = false
         let conBanDuoc: number | null = null
         let nenDat = 0
 
@@ -335,7 +340,41 @@ export async function keHoachDatHang(
                 canhBao.push(`Mới có ${b.soNgay} ngày phát sinh bán trong ${soNgayLichSu} ngày — chưa đủ để tính điểm đặt hàng.`)
             }
         } else {
-            tonAnToan = Math.ceil(z * sigma * Math.sqrt(cho))
+            /* ── NHU CẦU GIẬT CỤC LÀM CÔNG THỨC TỒN AN TOÀN VÔ NGHĨA ─────────
+             *
+             * `z * sigma * sqrt(cho)` giả định nhu cầu mỗi ngày dao động quanh
+             * một mức trung bình theo phân phối chuẩn. Bán lẻ pha sỉ KHÔNG như
+             * vậy: phần lớn ngày bán 0-2 cái, thỉnh thoảng một đơn sỉ vài trăm
+             * cái. Khi đó sigma lớn gấp nhiều lần mu và công thức đòi trữ một
+             * núi hàng để "phòng" một cú sỉ có thể không bao giờ lặp lại.
+             *
+             * Đo trên dữ liệu thật (KENGISTORE): SHD4038 bán 6,58 cái/ngày mà
+             * sigma 52,1 → tồn an toàn 228 cái, đề xuất đặt 300 cái = 327 triệu
+             * cho MỘT mã. Ba mã mẫu đều có sigma gấp 6,7–7,9 lần mức bán.
+             *
+             * Phân loại theo Syntetos–Boylan: ADI = số ngày trong kỳ / số ngày
+             * có bán; nhu cầu là "giật cục" khi ADI ≥ 1,32 VÀ CV² ≥ 0,49. Với
+             * nhóm này, chặn tồn an toàn ở đúng một quãng chờ nhu cầu trung
+             * bình — vẫn có đệm, nhưng không để một cú sỉ quyết định cả đơn
+             * hàng. Và phải NÓI RA là đã chặn, kèm con số công thức gốc đòi,
+             * để người biết hàng của mình tự quyết. */
+            const adi = b.soNgay > 0 ? soNgayLichSu / b.soNgay : Infinity
+            const cv2 = mu > 0 ? (sigma / mu) ** 2 : 0
+            giatCuc = adi >= 1.32 && cv2 >= 0.49
+
+            const theoCongThuc = Math.ceil(z * sigma * Math.sqrt(cho))
+            if (giatCuc) {
+                const chan = Math.ceil(mu * cho)
+                tonAnToan = Math.min(theoCongThuc, chan)
+                if (theoCongThuc > chan) {
+                    canhBao.push(
+                        `Nhu cầu giật cục: ${b.soNgay} ngày có bán trong ${soNgayLichSu} ngày, mức dao động gấp ${(sigma / mu).toFixed(1)} lần mức bán trung bình — gần như chắc chắn do vài đơn sỉ lớn chứ không phải bán đều. `
+                        + `Công thức tồn an toàn đòi trữ ${theoCongThuc}; đã chặn xuống ${tonAnToan} (bằng một quãng chờ ${cho} ngày) để một cú sỉ không quyết định cả đơn hàng. `
+                        + `Nếu biết chắc sắp có đơn sỉ nữa thì đặt thêm theo đơn đó, đừng dựa vào con số này.`)
+                }
+            } else {
+                tonAnToan = theoCongThuc
+            }
             diemDatHang = Math.ceil(mu * cho + tonAnToan)
             conBanDuoc = Math.floor(ton / mu)
             /* Đặt đủ dùng cho quãng chờ CỘNG một chu kỳ đặt: nếu chỉ đặt đủ cho
@@ -394,6 +433,7 @@ export async function keHoachDatHang(
             dangVe: lam(ve),
             banMoiNgay: Math.round(mu * 100) / 100,
             doDaoDong: Math.round(sigma * 100) / 100,
+            nhuCauGiatCuc: giatCuc,
             soNgayCoBan: b.soNgay,
             soNgayCho: cho,
             nguonSoNgayCho: choDo ? 'đo từ lịch sử đặt hàng' : 'mặc định',
@@ -449,6 +489,22 @@ export async function keHoachDatHang(
 
     ghiChu.push(`Tồn an toàn tính theo mức phục vụ ${Math.round(mucPhucVu * 100)}%: cứ 100 lần đặt hàng thì khoảng ${Math.round(mucPhucVu * 100)} lần không bị hụt giữa lúc chờ hàng. Muốn chắc hơn thì nâng mức này lên, đổi lại vốn nằm trong kho dày hơn.`)
 
+    /* Con số "cần bỏ ra ngay" là lời khuyên tiêu tiền. Nếu phần lớn nó đến từ
+     * mã bán giật cục thì phải nói trước khi người ta rút ví. */
+    {
+        const dsTien = [...hetHang, ...canDat]
+        const tongTien = dsTien.reduce((s2, m) => s2 + m.tienCanBo, 0)
+        const tienGiatCuc = dsTien.filter(m => m.nhuCauGiatCuc).reduce((s2, m) => s2 + m.tienCanBo, 0)
+        const soGiatCuc = dsTien.filter(m => m.nhuCauGiatCuc).length
+        if (soGiatCuc > 0 && tongTien > 0) {
+            const pt = Math.round(tienGiatCuc / tongTien * 100)
+            ghiChu.push(
+                `${soGiatCuc} mã trong danh sách có nhu cầu GIẬT CỤC — phần lớn ngày bán rất ít, thỉnh thoảng một đơn sỉ lớn. `
+                + `Chúng chiếm ${pt}% số tiền đề xuất bỏ ra (${Math.round(tienGiatCuc).toLocaleString('vi-VN')} ₫ trên ${Math.round(tongTien).toLocaleString('vi-VN')} ₫). `
+                + `Công thức tồn an toàn giả định bán đều mỗi ngày nên với nhóm này nó đòi trữ quá tay; hệ thống đã chặn bớt, nhưng vẫn nên đặt theo đơn khách đã chốt thay vì theo trung bình.`)
+        }
+    }
+
     return {
         ky: { tuNgay: tuNgay.toISOString().slice(0, 10), soNgay: soNgayLichSu },
         thamSo: { mucPhucVu, heSoZ: z, soNgayChoMacDinh, chuKyDat },
@@ -461,6 +517,13 @@ export async function keHoachDatHang(
             soMaTonAm: tatCa.filter(m => m.tonHienTai < 0).length,
             tongTonAm: lam(tatCa.reduce((s2, m) => s2 + Math.min(0, m.tonHienTai), 0)),
             tienCanBoNgay: lam([...hetHang, ...canDat].reduce((s, m) => s + m.tienCanBo, 0)),
+            /* Tách riêng phần tiền thuộc mã bán giật cục. Một con số tổng gộp
+             * chung dễ đọc thành "phải bỏ ngay ngần này" trong khi phần lớn có
+             * thể đến từ vài mã có đơn sỉ bất thường — người dùng cần thấy được
+             * bao nhiêu trong đó là chắc chắn. */
+            soMaGiatCuc: [...hetHang, ...canDat].filter(m => m.nhuCauGiatCuc).length,
+            tienCanBoNgayGiatCuc: lam([...hetHang, ...canDat]
+                .filter(m => m.nhuCauGiatCuc).reduce((s, m) => s + m.tienCanBo, 0)),
             matMoiNgayDoHetHang: lam(hetHang.reduce((s, m) => s + m.matMoiNgay, 0)),
             vonKetODongHang: lam(tonDong.reduce((s, m) => s + m.vonKet, 0)),
         },
