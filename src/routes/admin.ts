@@ -4213,9 +4213,14 @@ router.get('/reconcile-sweep', async (req: Request, res: Response) => {
                     soChungTu: kq.soSach.soChungTu,
                     hoaDonDaXuat: kq.hoaDon.tongCoThue,
                     soHoaDon: kq.hoaDon.soHoaDon,
-                    tyLeXuatHoaDon: kq.lech.tyLeXuatHoaDon,
-                    chuaXuatHoaDon: kq.lech.chuaXuatHoaDon,
-                    hoaDonVuotSo: kq.lech.hoaDonVuotSo,
+                    /* Cửa hàng KHÔNG dùng hoá đơn điện tử trên phần mềm thì phép
+                     * trừ sổ − hoá đơn không có nghĩa. Trả null thay vì con số,
+                     * vì một ô ghi "chưa xuất hoá đơn 5,4 tỷ" sẽ bị đọc thành
+                     * cáo buộc — trong khi sự thật chỉ là họ phát hành ở nơi
+                     * khác. Ai muốn biết vì sao thì nhìn cột duocKetLuan. */
+                    tyLeXuatHoaDon: kq.hoaDon.duocKetLuan ? kq.lech.tyLeXuatHoaDon : null,
+                    chuaXuatHoaDon: kq.hoaDon.duocKetLuan ? kq.lech.chuaXuatHoaDon : null,
+                    hoaDonVuotSo: kq.hoaDon.duocKetLuan ? kq.lech.hoaDonVuotSo : null,
                     tienVaoChuaGiaiTrinh: kq.dongTien.duocKetLuan ? kq.dongTien.chuaGiaiThich : null,
                     chiTienMatLon: kq.chiTienMatLon.danhSach.length,
                     duocKetLuan: {
