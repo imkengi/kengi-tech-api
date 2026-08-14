@@ -182,6 +182,21 @@ export const NGUONG_KHONG_TIEN_MAT = 5_000_000
 /** Dưới mức này thì chi lặt vặt còn lập bảng kê được; trên mức này mà thiếu hóa
  *  đơn là gần như chắc chắn bị loại khi quyết toán thuế TNDN. */
 export const NGUONG_CHI_CAN_HOA_DON = 2_000_000
+
+/**
+ * Ngưỡng doanh thu năm KHÔNG phải nộp thuế GTGT và TNCN của hộ/cá nhân kinh doanh.
+ *
+ * 100 triệu/năm theo Thông tư 40/2021/TT-BTC; nâng lên 200 triệu/năm từ
+ * 01/01/2026 theo Luật Thuế GTGT 48/2024/QH15.
+ *
+ * Trước đây trong mã có bốn chỗ ghi 500.000.000 và gọi đó là "ngưỡng chịu thuế".
+ * Con số 500 triệu KHÔNG phải ngưỡng chịu thuế — nó là mốc bậc lệ phí môn bài
+ * cao nhất. Hộ kinh doanh nhìn thấy "ngưỡng 500tr" rồi yên tâm là dưới mức đó
+ * không phải nộp gì, trong khi nghĩa vụ đã phát sinh từ 200 triệu.
+ */
+export function nguongChiuThueHKD(nam: number): number {
+    return nam >= 2026 ? 200_000_000 : 100_000_000
+}
 /** Phạt khai sai dẫn đến thiếu thuế — Điều 16 NĐ 125/2020 */
 export const TY_LE_PHAT_KHAI_SAI = 0.2
 /** Tiền chậm nộp mỗi ngày — Điều 59 Luật Quản lý thuế 38/2019 */
@@ -967,7 +982,7 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
                     nguonDt = 'doanh thu bán hàng thực tế (sổ doanh thu HKD chưa nhập)'
                 }
             }
-            const NGUONG_HKD_CHIU_THUE = 200_000_000
+            const NGUONG_HKD_CHIU_THUE = nguongChiuThueHKD(nam)
             const NGUONG_HKD_POS = 1_000_000_000
             if (dtNam >= NGUONG_HKD_CHIU_THUE) canhBao.push({
                 code: 'hkd-vuot-nguong-chiu-thue', muc: 'vua',

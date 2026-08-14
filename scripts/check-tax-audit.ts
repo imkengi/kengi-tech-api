@@ -8,7 +8,7 @@
  * tra đều có 2 ca: một ca PHẢI kêu, một ca PHẢI im.
  */
 
-import { kiemTraThue, NGUONG_KHONG_TIEN_MAT, NGUONG_CHI_CAN_HOA_DON, type KhoangKy } from '../src/lib/taxAudit'
+import { kiemTraThue, NGUONG_KHONG_TIEN_MAT, NGUONG_CHI_CAN_HOA_DON, nguongChiuThueHKD, type KhoangKy } from '../src/lib/taxAudit'
 
 const KY: KhoangKy = {
     from: '2026-08-01', to: '2026-08-31',
@@ -444,6 +444,32 @@ async function main() {
         kiemTra('KHÔNG đọc được bảng lương → im, không buộc tội',
             !co(h, 'thieu-bang-luong'),
             h.canhBao.map((c: any) => c.code).join(','))
+    }
+
+    /* ── 22d. Ngưỡng chịu thuế của hộ kinh doanh theo đúng năm ───────────────
+     *
+     * 100 triệu/năm (TT 40/2021), nâng lên 200 triệu/năm từ 01/01/2026 (Luật
+     * Thuế GTGT 48/2024). Trong mã từng có bốn chỗ ghi 500 triệu và gọi đó là
+     * "ngưỡng chịu thuế" — 500 triệu là mốc bậc lệ phí môn bài cao nhất, không
+     * phải ngưỡng chịu thuế. Hộ kinh doanh đọc nhầm là tưởng dưới 500 triệu
+     * không phát sinh nghĩa vụ gì.
+     */
+    kiemTra('Ngưỡng chịu thuế HKD năm 2025 là 100 triệu',
+        nguongChiuThueHKD(2025) === 100_000_000, String(nguongChiuThueHKD(2025)))
+    kiemTra('Ngưỡng chịu thuế HKD năm 2026 là 200 triệu',
+        nguongChiuThueHKD(2026) === 200_000_000, String(nguongChiuThueHKD(2026)))
+    kiemTra('Không nơi nào còn dùng 500 triệu làm ngưỡng chịu thuế',
+        nguongChiuThueHKD(2026) !== 500_000_000 && nguongChiuThueHKD(2030) === 200_000_000)
+    {
+        // Hộ kinh doanh doanh thu 250 triệu năm 2026: đã vượt ngưỡng 200 triệu
+        const k = khoSach()
+        k.settings = { businessType: 'household' }
+        k.hkdRevenue = [{ doanhThuThuan: 250_000_000 }]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        kiemTra('HKD 250 triệu năm 2026 → vượt ngưỡng chịu thuế',
+            co(h, 'hkd-vuot-nguong-chiu-thue'))
+        kiemTra('Nhưng chưa tới ngưỡng máy tính tiền 1 tỷ',
+            !co(h, 'hkd-phai-ket-noi-pos'))
     }
 
     // ── 23. Doanh nghiệp thì KHÔNG áp luật hộ kinh doanh ───────────────────

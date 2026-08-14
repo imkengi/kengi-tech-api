@@ -7,6 +7,7 @@ import { COA_SEED, accountName } from '../lib/chartOfAccounts'
 import { enforcePeriodLock, assertNotLocked } from '../lib/periodLock'
 import { giaiTrinhKhaiBoSung } from '../lib/amendmentExplain'
 import { ganTienChoMoc, type MocNghiaVu } from '../lib/taxCalendar'
+import { nguongChiuThueHKD } from '../lib/taxAudit'
 import { suyHoSoThue, gieoLichNghiaVu } from '../lib/taxCalendarStore'
 
 const router = Router()
@@ -206,10 +207,20 @@ router.get('/revenue-check', authMiddleware, async (req: AuthRequest, res: Respo
             select: { total: true },
         })
         const totalRevenue = transactions.reduce((s, t) => s + (t.total || 0), 0)
-        const threshold = 500000000
+        /* 500.000.000 KHONG phai nguong chiu thue cua ho kinh doanh — do la moc
+         * bac le phi mon bai cao nhat. Nguong that: 100 trieu/nam (TT 40/2021),
+         * nang len 200 trieu/nam tu 01/01/2026 (Luat Thue GTGT 48/2024). */
+        const threshold = nguongChiuThueHKD(year)
         res.json({
             success: true,
-            data: { totalRevenue, threshold, isAboveThreshold: totalRevenue >= threshold, year },
+            data: {
+                totalRevenue, threshold,
+                isAboveThreshold: totalRevenue >= threshold,
+                year,
+                canCu: year >= 2026
+                    ? 'Luat Thue GTGT 48/2024/QH15 — 200 trieu/nam tu 01/01/2026'
+                    : 'Thong tu 40/2021/TT-BTC — 100 trieu/nam',
+            },
         })
     } catch (err) {
         console.error('GET /revenue-check error:', err)
@@ -342,7 +353,7 @@ async function calculate01CNKD(prisma: any, periodType: string, year: number, mo
     const cnkdVatRate = 1
     // PIT rate for retail/trade: 0.5%
     const cnkdPitRate = 0.5
-    const cnkdThreshold = 500000000 // 500 triệu/năm
+    const cnkdThreshold = nguongChiuThueHKD(year)
 
     // Annualized revenue for threshold check (estimate)
     const monthsInPeriod = periodType === 'quarter' ? 3 : 1
@@ -485,12 +496,23 @@ router.post('/declarations', authMiddleware, async (req: AuthRequest, res: Respo
             select: { total: true },
         })
         const annualRevenue = allYearTx.reduce((s, t) => s + (t.total || 0), 0)
-        const isAboveThreshold = annualRevenue >= 500000000
 
-        // Ưu tiên businessType từ user chọn, fallback theo doanh thu
+        /* Chọn mẫu tờ khai theo LOẠI HÌNH, không phải theo doanh thu.
+         *
+         * Bản trước đoán: doanh thu ≥ 500 triệu thì coi là doanh nghiệp. Đoán sai
+         * là lập nhầm mẫu tờ khai — hộ kinh doanh doanh thu 600 triệu (rất phổ
+         * biến) bị đẩy sang mẫu 01/GTGT của doanh nghiệp. Trong khi cửa hàng đã
+         * khai loại hình trong cài đặt, cứ hỏi thẳng chỗ đó.
+         *
+         * Doanh thu chỉ dùng làm phương án cuối khi cài đặt cũng không có. */
+        const cauHinhCh = await prisma.storeSettings.findFirst({
+            select: { businessType: true },
+        }).catch(() => null)
         const businessType = (reqBusinessType === 'company' || reqBusinessType === 'household')
             ? reqBusinessType
-            : (isAboveThreshold ? 'company' : 'household')
+            : (cauHinhCh?.businessType === 'household' || cauHinhCh?.businessType === 'company')
+                ? cauHinhCh.businessType
+                : (annualRevenue >= 500000000 ? 'company' : 'household')
         const formType = businessType === 'company' ? '01_GTGT' : '01_CNKD'
 
         const period = periodType === 'quarter'
@@ -541,7 +563,7 @@ router.post('/declarations', authMiddleware, async (req: AuthRequest, res: Respo
                 const cnkdVatAmount = cnkdRevenue * (cnkdVatRate / 100)
                 const cnkdPitAmount = cnkdRevenue * (cnkdPitRate / 100)
                 const cnkdTotalTax = cnkdVatAmount + cnkdPitAmount
-                calculated = { cnkdRevenue, cnkdVatRate, cnkdVatAmount, cnkdPitRate, cnkdPitAmount, cnkdTotalTax, cnkdThreshold: 500000000 }
+                calculated = { cnkdRevenue, cnkdVatRate, cnkdVatAmount, cnkdPitRate, cnkdPitAmount, cnkdTotalTax, cnkdThreshold: nguongChiuThueHKD(year) }
             }
         } else {
             // Fallback: calculate from all transactions in period
