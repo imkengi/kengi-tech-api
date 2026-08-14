@@ -116,6 +116,22 @@ async function main() {
     ok('gộp nhiều vấn đề vào MỘT thông báo', !!gop && gop.noiDung.split('\n•').length >= 3, gop?.noiDung)
     ok('… tiêu đề nói đúng số điểm', !!gop && /3 điểm/.test(gop.tieuDe), gop?.tieuDe)
 
+    console.log('\n▶ Hoá đơn phát hành hỏng — nhắc kể cả khi tiền nhỏ\n')
+
+    /* Khác các mục kia, mục này KHÔNG lấy ngưỡng tiền làm chuẩn: chủ shop không
+     * thấy tờ hỏng ở đâu khác, và một phần trong đó thật ra đã phát hành xong —
+     * biết sớm thì ghi bù, không biết thì đi xuất lại và hỏng tiếp. */
+    /* KHÔNG đặt tên biến là `hong` — trùng với bộ đếm lỗi ở đầu file, che mất nó
+     * và làm script luôn thoát mã 1 dù mọi ca đều đạt. */
+    const nhacHong = dungLoiNhac(kq({ hoaDon: { duocKetLuan: true, soLoi: 12, tienLoi: 800_000 } }))
+    ok('12 tờ hỏng dù chỉ 800k → vẫn nhắc', !!nhacHong, nhacHong)
+    ok('… nêu đúng số tờ', !!nhacHong && /12 hoá đơn phát hành hỏng/.test(nhacHong.noiDung), nhacHong?.noiDung)
+
+    ok('1-2 tờ hỏng → im (lẻ tẻ, không đáng dựng thông báo)',
+        dungLoiNhac(kq({ hoaDon: { duocKetLuan: true, soLoi: 2, tienLoi: 500_000 } })) === null)
+    ok('không có tờ hỏng → im',
+        dungLoiNhac(kq({ hoaDon: { duocKetLuan: true, soLoi: 0, tienLoi: 0 } })) === null)
+
     console.log('\n▶ Chạm DB — không nhắc lại kỳ đã nhắc, không nhắc khi đọc hỏng\n')
 
     let daTao = 0

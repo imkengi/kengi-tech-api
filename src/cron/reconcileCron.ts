@@ -68,6 +68,14 @@ export function dungLoiNhac(kq: any): { tieuDe: string; noiDung: string } | null
     if (kq?.dongTien?.duocKetLuan && dangKe(Number(kq.dongTien?.chuaGiaiThich) || 0)) {
         dong.push(`• ${tien(kq.dongTien.chuaGiaiThich)} vào tài khoản chưa gắn được với doanh thu nào.`)
     }
+    /* Hoá đơn phát hành hỏng: nói ra kể cả khi số tiền nhỏ, vì đây là thứ chủ
+     * shop KHÔNG thấy ở đâu khác và một phần trong đó thật ra đã phát hành xong
+     * — biết sớm thì ghi bù, không biết thì đi xuất lại và hỏng tiếp. */
+    const soLoi = Number(kq?.hoaDon?.soLoi) || 0
+    if (soLoi >= 3) {
+        dong.push(`• ${soLoi} hoá đơn phát hành hỏng (${tien(Number(kq.hoaDon.tienLoi) || 0)}) — chưa được tính vào phần đã xuất.`)
+    }
+
     const soChi = kq?.chiTienMatLon?.danhSach?.length || 0
     const vatMat = Number(kq?.chiTienMatLon?.tongVatMat) || 0
     if (soChi > 0 && vatMat >= 500_000) {
