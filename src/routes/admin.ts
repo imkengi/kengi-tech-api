@@ -4643,6 +4643,26 @@ router.get('/engine-probe', async (req: Request, res: Response) => {
                     mauCanDat: (datHang?.canDat || []).slice(0, 3),
                 },
                 dongTien: loiTien ? { loi: loiTien } : { chayHet: `${giay2}s`, ...tien },
+                hkd: await (async () => {
+                    /* Chuyển đổi hộ kinh doanh 2026 — cỗ máy nói những câu rất
+                     * nặng ("sang năm bạn nộp bao nhiêu"), càng phải soi trên số
+                     * thật trước khi tin. */
+                    try {
+                        const { tinhChuyenDoiHKD } = await import('../lib/hkdTransition')
+                        const den2 = new Date()
+                        const tu2 = new Date(den2.getTime() - 365 * 86400_000)
+                        const t3 = Date.now()
+                        const k: any = await tinhChuyenDoiHKD(prisma, { tu: tu2, den: den2 })
+                        return {
+                            chayHet: `${Math.round((Date.now() - t3) / 100) / 10}s`,
+                            ...k,
+                            // Danh sách việc phải làm có thể rất dài — chỉ lấy mẫu
+                            viecPhaiLam: Array.isArray(k?.viecPhaiLam) ? k.viecPhaiLam.slice(0, 4) : k?.viecPhaiLam,
+                        }
+                    } catch (e: any) {
+                        return { loi: String(e?.message || e).slice(0, 300) }
+                    }
+                })(),
             },
         })
     } catch (err: any) {
