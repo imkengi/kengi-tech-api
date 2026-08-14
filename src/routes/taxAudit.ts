@@ -17,6 +17,7 @@ import { errMsg } from '../lib/errorResponse'
 import { kiemTraThue, type KhoangKy } from '../lib/taxAudit'
 import { boHoSoThanhTra, sangCsv, truyVetChungTu } from '../lib/auditPack'
 import { moPhongThanhTra } from '../lib/auditDrill'
+import { doiChieuBaChieu } from '../lib/revenueReconcile'
 import { moPhongAnDinh, TY_LE_TT40 } from '../lib/taxAssessment'
 import { lapKeHoachKhacPhuc } from '../lib/remediationPlan'
 import { quyetToanTndn, layLaiLoTheoNam, layThueDaTamNop, THUE_SUAT_TNDN } from '../lib/citAdjustment'
@@ -76,6 +77,44 @@ function dungKy(q: any): KhoangKy {
  * song song là cạn kết nối và kéo sập cả dashboard. Chậm hơn nhưng không làm
  * chết hệ thống lúc người khác đang bán hàng.
  */
+/**
+ * GET /api/tax/reconcile-3way?from=YYYY-MM-DD&to=YYYY-MM-DD
+ *
+ * Đối chiếu ba chiều sổ sách ↔ hoá đơn ↔ dòng tiền — việc đầu tiên đoàn thanh
+ * tra làm. Mặc định tháng trước liền kề, vì đó là kỳ vừa chốt sổ và còn kịp
+ * khai bổ sung nếu phát hiện lệch.
+ */
+router.get('/reconcile-3way', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const q = req.query as any
+        const hopLe = (s: any) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''))
+
+        let from: string, to: string
+        if (hopLe(q.from) && hopLe(q.to)) {
+            from = String(q.from); to = String(q.to)
+        } else {
+            const nay = new Date(Date.now() + 7 * 3600_000)
+            const truoc = new Date(Date.UTC(nay.getUTCFullYear(), nay.getUTCMonth() - 1, 1))
+            const cuoi = new Date(Date.UTC(nay.getUTCFullYear(), nay.getUTCMonth(), 0))
+            from = truoc.toISOString().slice(0, 10)
+            to = cuoi.toISOString().slice(0, 10)
+        }
+        if (from > to) return res.status(400).json({ success: false, error: 'Ngày bắt đầu phải trước ngày kết thúc' })
+
+        const start = new Date(`${from}T00:00:00+07:00`)
+        const end = new Date(new Date(`${to}T00:00:00+07:00`).getTime() + 86400_000)
+        const kq = await doiChieuBaChieu(prisma, {
+            from, to, start, end,
+            nhan: from.slice(0, 7) === to.slice(0, 7) ? `tháng ${Number(from.slice(5, 7))}/${from.slice(0, 4)}` : `${from} → ${to}`,
+        })
+        res.json({ success: true, data: kq })
+    } catch (err) {
+        console.error('GET /tax/reconcile-3way error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
 router.get('/audit-year', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma: any = req.storePrisma!

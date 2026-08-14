@@ -9,6 +9,7 @@ import { kiemTraThue, type KhoangKy } from '../lib/taxAudit'
 import { truyVetChungTu } from '../lib/auditPack'
 import { moPhongThanhTra } from '../lib/auditDrill'
 import { moPhongAnDinh } from '../lib/taxAssessment'
+import { doiChieuBaChieu } from '../lib/revenueReconcile'
 import { lapKeHoachKhacPhuc } from '../lib/remediationPlan'
 import { quyetToanTndn, layLaiLoTheoNam, layThueDaTamNop } from '../lib/citAdjustment'
 
@@ -603,6 +604,43 @@ export const FINANCE_TOOLS: Tool[] = [
                 })),
                 ghiChu: 'Tồn tổng của hàng LUÔN bằng tồn ở kho chính — các kho khác (lỗi, bảo hành, xe) tách riêng.',
             }
+        },
+    },
+    {
+        name: 'tax_reconcile_3way',
+        description:
+            'ĐỐI CHIẾU BA CHIỀU sổ sách ↔ hoá đơn ↔ dòng tiền — đúng việc đoàn thanh tra thuế làm đầu tiên. Trả về: ' +
+            'doanh thu đã ghi sổ, doanh thu đã phát hành hoá đơn (đã trừ hoá đơn huỷ và hoá đơn trả hàng/điều chỉnh), ' +
+            'tiền thực vào tài khoản ngân hàng và phần chưa gắn được với doanh thu nào; ' +
+            'kèm bảng lệch TỪNG NGÀY, danh sách chứng từ bán chưa có hoá đơn, và các khoản mua vào từ 5 triệu trả tiền mặt ' +
+            '(mất quyền khấu trừ GTGT theo Luật 48/2024 hiệu lực 01/7/2025). ' +
+            'Dùng khi được hỏi "có rủi ro thuế gì không", "đã xuất đủ hoá đơn chưa", "chuẩn bị thanh tra". ' +
+            'QUAN TRỌNG: mỗi chiều có cờ duocKetLuan — bằng false nghĩa là THIẾU DỮ LIỆU (ví dụ chưa nhập sao kê ngân hàng), ' +
+            'TUYỆT ĐỐI không được diễn giải thành "cửa hàng giấu doanh thu" hay "làm sai".',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                from: { type: 'string', description: 'Từ ngày, dạng 2026-07-01 (giờ VN). Bỏ trống = tháng trước liền kề.' },
+                to: { type: 'string', description: 'Đến ngày, dạng 2026-07-31 (giờ VN).' },
+            },
+            additionalProperties: false,
+        },
+        run: async (a, { prisma }: ToolCtx) => {
+            const hopLe = (s: any) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''))
+            let from: string, to: string
+            if (hopLe(a?.from) && hopLe(a?.to)) { from = String(a.from); to = String(a.to) }
+            else {
+                const nay = new Date(Date.now() + 7 * 3600_000)
+                from = new Date(Date.UTC(nay.getUTCFullYear(), nay.getUTCMonth() - 1, 1)).toISOString().slice(0, 10)
+                to = new Date(Date.UTC(nay.getUTCFullYear(), nay.getUTCMonth(), 0)).toISOString().slice(0, 10)
+            }
+            if (from > to) throw new ToolError('Ngày bắt đầu phải trước ngày kết thúc')
+            const start = new Date(`${from}T00:00:00+07:00`)
+            const end = new Date(new Date(`${to}T00:00:00+07:00`).getTime() + 86400_000)
+            return await doiChieuBaChieu(prisma, {
+                from, to, start, end,
+                nhan: from.slice(0, 7) === to.slice(0, 7) ? `tháng ${Number(from.slice(5, 7))}/${from.slice(0, 4)}` : `${from} → ${to}`,
+            })
         },
     },
     {
