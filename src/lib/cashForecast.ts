@@ -173,7 +173,11 @@ export async function duBaoDongTien(
         const ld = rows?.[0]?.lanThuDauTien
         ngayCoMatDauTien = ld ? new Date(ld) : null
         if (ngayCoMatDauTien && ngayCoMatDauTien.getTime() > tuDo.getTime()) {
-            const songDuoc = Math.ceil((Date.now() - ngayCoMatDauTien.getTime()) / 86400_000)
+            /* LÀM TRÒN chứ không làm tròn LÊN: cửa hàng bán lần đầu đúng 20
+             * ngày trước sẽ ra 20,0001 ngày (vài mili giây trôi giữa hai lần
+             * đọc đồng hồ) và `ceil` đẩy thành 21 — sai một ngày ở mọi mốc
+             * chẵn, và làm chính bộ test lúc xanh lúc đỏ tùy tốc độ máy. */
+            const songDuoc = Math.round((Date.now() - ngayCoMatDauTien.getTime()) / 86400_000)
             /* Mẫu số không được nhỏ hơn SỐ NGÀY THỰC SỰ CÓ BÁN: không thể bán
              * 32 ngày khác nhau trong một cửa hàng mới sống 31 ngày. Hai con số
              * đo hai thứ khác nhau (số ngày trôi qua so với số ngày trong lịch
