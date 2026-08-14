@@ -57,7 +57,10 @@ export interface KetQuaDuBaoTien {
     uocTinh: {
         thuMoiNgay: number
         chiVanHanhMoiNgay: number
+        /** Số ngày THỰC SỰ có phát sinh thu tiền trong cửa sổ đo. */
         soNgayDoDuoc: number
+        /** Mẫu số của phép trung bình — bằng 60, hoặc tuổi cửa hàng nếu nhỏ hơn. */
+        soNgayLayTrungBinh: number
         cachTinh: string
     }
     ngay: NgayTien[]
@@ -133,11 +136,26 @@ export async function duBaoDongTien(
     let thuMoiNgay = 0
     let chiVanHanhMoiNgay = 0
     let soNgayDoDuoc = 0
+    /* Mẫu số của phép trung bình. Mặc định là 60, NHƯNG cửa hàng mới mở chưa
+     * sống đủ 60 ngày thì chia cho 60 là dìm tốc độ thu xuống — cửa hàng mới 20
+     * ngày tuổi bị chia như thể có 60 ngày sẽ ra tốc độ chỉ bằng 1/3 thực tế,
+     * và lịch tiền báo "sắp cạn tiền" cho một cửa hàng đang khỏe. Báo động giả
+     * kiểu này còn nguy hơn im lặng: chủ cửa hàng dừng nhập hàng, hoặc đi vay
+     * khoản không cần vay. */
+    let mauSoNgay = NGAY_DO
+    let ngayCoMatDauTien: Date | null = null
     try {
         const tuDo = new Date(Date.now() - NGAY_DO * 86400_000)
         const rows: any[] = await prisma.$queryRawUnsafe(
             `SELECT COALESCE(SUM(p.amount), 0)::float8 AS tien,
-                    COUNT(DISTINCT (t."createdAt" + interval '7 hours')::date)::int AS "soNgay"
+                    COUNT(DISTINCT (t."createdAt" + interval '7 hours')::date)::int AS "soNgay",
+                    /* Cố ý KHÔNG join sang Payment ở đây: chỉ cần một cận dưới
+                     * cho tuổi cửa hàng, mà MIN trên cột có @@index([createdAt])
+                     * đọc thẳng chỉ mục, còn join cả bảng Payment thì quét nặng
+                     * trên cửa hàng nhiều dữ liệu. Đơn hàng đầu tiên luôn có
+                     * trước hoặc cùng lúc với lần thu tiền đầu tiên, nên mẫu số
+                     * ra lớn hơn hoặc bằng — lệch về phía thận trọng. */
+                    (SELECT MIN(t2."createdAt") FROM "Transaction" t2) AS "lanThuDauTien"
              FROM "Payment" p
              JOIN "Transaction" t ON t.id = p."transactionId"
              WHERE t.status IN ('completed', 'partial') AND t."createdAt" >= $1`,
@@ -146,7 +164,19 @@ export async function duBaoDongTien(
         /* Dùng PHIẾU THU chứ không dùng tổng đơn: đơn ghi nợ chưa mang tiền về,
          * cộng nó vào dòng tiền là vẽ ra tiền chưa tồn tại. */
         soNgayDoDuoc = Number(rows?.[0]?.soNgay) || 0
-        thuMoiNgay = soNgayDoDuoc > 0 ? so(rows[0].tien) / NGAY_DO : 0
+
+        /* Lần thu ĐẦU TIÊN của cả cửa hàng (không giới hạn cửa sổ). Nằm trong
+         * 60 ngày qua nghĩa là cửa hàng chưa từng thu tiền trước đó, tức là
+         * lịch sử ngắn hơn cửa sổ đo. Khác hẳn chuyện "có 60 ngày lịch sử
+         * nhưng chỉ bán 32 ngày" — trường hợp đó chia cho 60 mới đúng, vì
+         * ngày nghỉ vẫn là ngày trong lịch dự báo. */
+        const ld = rows?.[0]?.lanThuDauTien
+        ngayCoMatDauTien = ld ? new Date(ld) : null
+        if (ngayCoMatDauTien && ngayCoMatDauTien.getTime() > tuDo.getTime()) {
+            const songDuoc = Math.ceil((Date.now() - ngayCoMatDauTien.getTime()) / 86400_000)
+            mauSoNgay = Math.min(NGAY_DO, Math.max(1, songDuoc))
+        }
+        thuMoiNgay = soNgayDoDuoc > 0 ? so(rows[0].tien) / mauSoNgay : 0
     } catch (e: any) {
         thieuChinh.push(`Không đọc được tiền bán hàng đã thu: ${moTaLoi(e)}`)
     }
@@ -157,7 +187,8 @@ export async function duBaoDongTien(
             where: { status: 'active', date: { gte: tuDo } },
             _sum: { amount: true },
         })
-        chiVanHanhMoiNgay = so(chi?._sum?.amount) / NGAY_DO
+        // Cùng mẫu số với vế thu: cửa hàng mới thì vế chi cũng chỉ có bấy nhiêu ngày.
+        chiVanHanhMoiNgay = so(chi?._sum?.amount) / mauSoNgay
     } catch (e: any) {
         thieuChinh.push(`Không đọc được chi phí vận hành: ${moTaLoi(e)}`)
     }
@@ -341,7 +372,10 @@ export async function duBaoDongTien(
             thuMoiNgay: lam(thuMoiNgay),
             chiVanHanhMoiNgay: lam(chiVanHanhMoiNgay),
             soNgayDoDuoc,
-            cachTinh: `Trung bình ${NGAY_DO} ngày gần nhất: tổng tiền đã thu chia cho ${NGAY_DO}, tổng chi phí đã ghi sổ chia cho ${NGAY_DO}.`,
+            soNgayLayTrungBinh: mauSoNgay,
+            cachTinh: mauSoNgay < NGAY_DO
+                ? `Cửa hàng mới thu tiền lần đầu cách đây ${mauSoNgay} ngày nên lấy trung bình theo ${mauSoNgay} ngày đó, không chia cho ${NGAY_DO} — chia cho ${NGAY_DO} sẽ dìm tốc độ thu xuống và vẽ ra cảnh sắp cạn tiền không có thật.`
+                : `Trung bình ${NGAY_DO} ngày gần nhất: tổng tiền đã thu chia cho ${NGAY_DO}, tổng chi phí đã ghi sổ chia cho ${NGAY_DO}. Ngày không bán vẫn tính là một ngày, vì lịch dự báo cũng chạy theo ngày trong lịch.`,
         },
         ngay,
         diemChamDay,

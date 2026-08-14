@@ -34,6 +34,8 @@ interface Kho {
     mocThue?: any[]
     toKhai?: any[]
     noKhach?: number
+    /** Cửa hàng thu tiền lần đầu cách đây bao nhiêu ngày (null = lâu hơn cửa sổ đo). */
+    tuoiNgay?: number | null
 }
 
 function fakePrisma(k: Kho, loi?: Record<string, boolean>) {
@@ -42,7 +44,15 @@ function fakePrisma(k: Kho, loi?: Record<string, boolean>) {
         bankAccount: { findMany: async () => { no('BankAccount'); return k.taiKhoan || [] } },
         $queryRawUnsafe: async () => {
             no('Payment')
-            return [{ tien: (k.thuMoiNgay ?? 0) * 60, soNgay: k.soNgayThu ?? 60 }]
+            /* `tien` là TỔNG cả cửa sổ. Fixture khai theo "mỗi ngày × 60" nên
+             * khi đặt tuoiNgay ngắn hơn, tổng vẫn giữ nguyên — đúng tình huống
+             * cần bắt: cùng một số tiền, chia cho mẫu số nào mới ra tốc độ đúng. */
+            return [{
+                tien: (k.thuMoiNgay ?? 0) * 60,
+                soNgay: k.soNgayThu ?? 60,
+                lanThuDauTien: k.tuoiNgay == null ? null
+                    : new Date(Date.now() - k.tuoiNgay * 86400_000).toISOString(),
+            }]
         },
         expense: { aggregate: async () => { no('Expense'); return { _sum: { amount: (k.chiPhi ?? 0) * 60 } } } },
         importReceipt: { findMany: async () => { no('ImportReceipt'); return k.phieuNhap || [] } },
@@ -171,6 +181,49 @@ async function main() {
         rYeu.ghiChu.some(g => /đừng dựa vào nó/.test(g)), rYeu.ghiChu)
     ok('luôn nói rõ tiền bán lấy từ PHIẾU THU, không lấy tổng đơn',
         rYeu.ghiChu.some(g => /PHIẾU THU/.test(g)))
+
+    console.log('\n▶ Mẫu số của phép trung bình — cửa hàng mới không bị dìm tốc độ thu\n')
+    {
+        // Lâu năm: bán 32/60 ngày. Ngày nghỉ VẪN là ngày trong lịch dự báo → chia 60.
+        const cu = await duBaoDongTien(fakePrisma({
+            taiKhoan: [{ balance: 100_000_000 }], thuMoiNgay: 1_000_000, soNgayThu: 32, tuoiNgay: null,
+        }), { soNgay: 30 })
+        ok('cửa hàng lâu năm nghỉ nhiều ngày vẫn chia cho 60',
+            cu.uocTinh.soNgayLayTrungBinh === 60 && cu.uocTinh.thuMoiNgay === 1_000_000,
+            [cu.uocTinh.soNgayLayTrungBinh, cu.uocTinh.thuMoiNgay])
+        ok('… và nói rõ ngày không bán vẫn được tính là một ngày',
+            /Ngày không bán vẫn tính/.test(cu.uocTinh.cachTinh), cu.uocTinh.cachTinh)
+    }
+    {
+        /* Mới mở 20 ngày, thu tổng đúng bằng cửa hàng trên. Chia cho 60 sẽ ra
+         * tốc độ chỉ bằng 1/3 và lịch tiền vẽ ra cảnh sắp cạn tiền không có thật. */
+        const moi = await duBaoDongTien(fakePrisma({
+            taiKhoan: [{ balance: 100_000_000 }], thuMoiNgay: 1_000_000, soNgayThu: 20, tuoiNgay: 20,
+        }), { soNgay: 30 })
+        ok('cửa hàng mới 20 ngày thì chia cho 20, không chia cho 60',
+            moi.uocTinh.soNgayLayTrungBinh === 20, moi.uocTinh.soNgayLayTrungBinh)
+        ok('… nên tốc độ thu gấp 3 lần cách tính cũ',
+            moi.uocTinh.thuMoiNgay === 3_000_000, moi.uocTinh.thuMoiNgay)
+        ok('… và câu giải thích nêu đúng lý do dùng mẫu số khác',
+            /không chia cho 60/.test(moi.uocTinh.cachTinh), moi.uocTinh.cachTinh)
+    }
+    {
+        // Đúng ranh giới 60 ngày thì không đổi gì
+        const ranh = await duBaoDongTien(fakePrisma({
+            taiKhoan: [{ balance: 100_000_000 }], thuMoiNgay: 1_000_000, soNgayThu: 60, tuoiNgay: 61,
+        }), { soNgay: 30 })
+        ok('thu lần đầu ngoài cửa sổ đo thì giữ mẫu số 60',
+            ranh.uocTinh.soNgayLayTrungBinh === 60, ranh.uocTinh.soNgayLayTrungBinh)
+    }
+    {
+        // Mẫu số không bao giờ được bằng 0 (chia cho 0 ra Infinity, vẽ đường vô nghĩa)
+        const hnay = await duBaoDongTien(fakePrisma({
+            taiKhoan: [{ balance: 10_000_000 }], thuMoiNgay: 1_000_000, soNgayThu: 1, tuoiNgay: 0,
+        }), { soNgay: 30 })
+        ok('cửa hàng thu lần đầu ngay hôm nay vẫn ra số hữu hạn',
+            Number.isFinite(hnay.uocTinh.thuMoiNgay) && hnay.uocTinh.soNgayLayTrungBinh >= 1,
+            [hnay.uocTinh.soNgayLayTrungBinh, hnay.uocTinh.thuMoiNgay])
+    }
 
     console.log(`\n${dat}/${dat + hong} ca đạt`)
     if (hong) process.exit(1)
