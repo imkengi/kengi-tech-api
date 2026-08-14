@@ -53,13 +53,44 @@ async function main() {
 
     console.log('\n▶ Thiếu dữ liệu — không được suy thành sai phạm\n')
 
+    /* Không có hoá đơn nào thì phép trừ sổ↔hoá đơn vô nghĩa, nên TUYỆT ĐỐI không
+     * được nói "còn 100 triệu chưa xuất hoá đơn". Cửa hàng này doanh thu quy năm
+     * vượt 1 tỷ nên vẫn nhận lời nhắc về NĐ 70/2025 — nhưng đó là lời nhắc về
+     * DỮ LIỆU và nghĩa vụ, không phải lời buộc tội. */
+    const khongHd = dungLoiNhac(kq({
+        hoaDon: { duocKetLuan: false },
+        lech: { chuaXuatHoaDon: 100_000_000, hoaDonVuotSo: 0, tyLeXuatHoaDon: 0 },
+    }))
     ok('chưa có hoá đơn nào trong phần mềm → KHÔNG nhắc "chưa xuất hoá đơn"',
-        dungLoiNhac(kq({
-            hoaDon: { duocKetLuan: false },
-            lech: { chuaXuatHoaDon: 100_000_000, hoaDonVuotSo: 0, tyLeXuatHoaDon: 0 },
-        })) === null)
+        !khongHd || !/chưa có hoá đơn \(mới xuất/.test(khongHd.noiDung), khongHd?.noiDung)
     ok('chưa nhập sao kê → KHÔNG nhắc "tiền vào chưa giải trình"',
         dungLoiNhac(kq({ dongTien: { duocKetLuan: false, chuaGiaiThich: 500_000_000 } })) === null)
+
+    console.log('\n▶ Cửa hàng lớn mà không có hoá đơn nào — nói một lần, nói cho đúng\n')
+
+    /* Cửa hàng doanh thu 1,37 tỷ/tháng mà hệ thống không thấy hoá đơn nào: không
+     * được tố họ trốn thuế (có thể xuất ở phần mềm khác), nhưng im hoàn toàn
+     * cũng sai — đây là ca thật gặp ngày 14/08/2026. */
+    const lonKhongHd = dungLoiNhac(kq({
+        soSach: { duocKetLuan: true, tong: 1_370_000_000 },
+        hoaDon: { duocKetLuan: false },
+        lech: { chuaXuatHoaDon: 1_370_000_000, hoaDonVuotSo: 0, tyLeXuatHoaDon: 0 },
+    }))
+    ok('doanh thu lớn + không hoá đơn nào → có nhắc', !!lonKhongHd)
+    ok('… dẫn đúng NĐ 70/2025', !!lonKhongHd && /70\/2025/.test(lonKhongHd.noiDung))
+    ok('… KHÔNG tố "chưa xuất hoá đơn 1,37 tỷ"',
+        !!lonKhongHd && !/chưa có hoá đơn \(mới xuất/.test(lonKhongHd.noiDung), lonKhongHd?.noiDung)
+    ok('… chừa đường cho việc họ xuất ở phần mềm khác',
+        !!lonKhongHd && /phần mềm khác/.test(lonKhongHd.noiDung))
+
+    /* Cửa hàng nhỏ chưa tới ngưỡng thì không có nghĩa vụ này — nhắc là làm phiền
+     * và còn sai luật. */
+    const nhoKhongHd = dungLoiNhac(kq({
+        soSach: { duocKetLuan: true, tong: 30_000_000 },
+        hoaDon: { duocKetLuan: false },
+        lech: { chuaXuatHoaDon: 30_000_000, hoaDonVuotSo: 0, tyLeXuatHoaDon: 0 },
+    }))
+    ok('doanh thu nhỏ + không hoá đơn → im (chưa tới ngưỡng 1 tỷ/năm)', nhoKhongHd === null, nhoKhongHd)
 
     console.log('\n▶ Có lệch thật — phải nói rõ và nói đúng\n')
 

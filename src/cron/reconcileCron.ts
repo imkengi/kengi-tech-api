@@ -27,6 +27,9 @@ const LOAI_TB = 'tax-reconcile'
 const NGUONG_TIEN = 2_000_000
 const NGUONG_TY_LE = 0.02       // 2% doanh thu kỳ
 
+/** Ngưỡng doanh thu năm buộc dùng hoá đơn điện tử từ máy tính tiền (NĐ 70/2025). */
+const NGUONG_HDDT_NAM = 1_000_000_000
+
 let timer: NodeJS.Timeout | null = null
 let lastRunMonth = ''
 let running = false
@@ -69,6 +72,25 @@ export function dungLoiNhac(kq: any): { tieuDe: string; noiDung: string } | null
     const vatMat = Number(kq?.chiTienMatLon?.tongVatMat) || 0
     if (soChi > 0 && vatMat >= 500_000) {
         dong.push(`• ${soChi} khoản mua vào từ 5 triệu trả tiền mặt — mất khấu trừ ${tien(vatMat)} thuế GTGT.`)
+    }
+
+    /* CỬA HÀNG LỚN MÀ KHÔNG CÓ HOÁ ĐƠN NÀO TRONG PHẦN MỀM.
+     *
+     * Phép so sổ↔hoá đơn ở trên cố ý im khi không có hoá đơn nào — vì cửa hàng
+     * có thể đang phát hành ở phần mềm khác, và tố họ "chưa xuất hoá đơn" dựa
+     * trên dữ liệu mình không có là buộc tội oan.
+     *
+     * Nhưng im HOÀN TOÀN cũng sai: một cửa hàng doanh thu quy năm trên 1 tỷ mà
+     * hệ thống không thấy hoá đơn nào thì hoặc là chưa kết nối (mình sửa được),
+     * hoặc là chưa dùng hoá đơn điện tử (nghĩa vụ pháp lý có thật). Cả hai đều
+     * đáng nói MỘT lần — nên câu chữ là về DỮ LIỆU và về nghĩa vụ, không phải
+     * lời buộc tội. */
+    if (kq?.soSach?.duocKetLuan && !kq?.hoaDon?.duocKetLuan && dt * 12 >= NGUONG_HDDT_NAM) {
+        dong.push(`• Doanh thu ${kq.ky.nhan} là ${tien(dt)} — quy ra năm đã vượt ngưỡng 1 tỷ, ` +
+            `nhưng phần mềm chưa thấy hoá đơn điện tử nào của kỳ này. ` +
+            `NĐ 70/2025 buộc hộ và cá nhân kinh doanh doanh thu từ 1 tỷ/năm dùng hoá đơn điện tử ` +
+            `khởi tạo từ máy tính tiền có kết nối cơ quan thuế. ` +
+            `Nếu bạn đang phát hành ở phần mềm khác thì hãy kết nối hoặc nhập hoá đơn về, để phần đối chiếu này dùng được.`)
     }
 
     if (dong.length === 0) return null
