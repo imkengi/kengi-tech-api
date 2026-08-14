@@ -4240,6 +4240,107 @@ router.get('/reconcile-sweep', async (req: Request, res: Response) => {
     }
 })
 
+/**
+ * GET /api/admin/reconcile-why?store=CODE&from=YYYY-MM-DD&to=YYYY-MM-DD
+ *
+ * Vì sao một cửa hàng bị báo lệch. Bảng tổng ở /reconcile-sweep chỉ nói CÓ lệch;
+ * cái này nói lệch từ đâu ra, để không đi kết luận cửa hàng làm sai trong khi
+ * thực ra dữ liệu nằm ở chỗ khác.
+ *
+ * Trả về: cơ cấu hoá đơn trong kỳ (theo trạng thái, theo loại), bao nhiêu hoá
+ * đơn KHÔNG gắn phiếu bán, bao nhiêu gắn vào phiếu KHÔNG TỒN TẠI trong schema
+ * này, và cơ cấu phiếu bán theo trạng thái. Kèm vài mẫu để soi tay.
+ *
+ * CHỈ ĐỌC. Truy vấn tuần tự.
+ */
+router.get('/reconcile-why', async (req: Request, res: Response) => {
+    try {
+        const q = req.query as any
+        const ma = String(q.store || '').trim()
+        if (!ma) return res.status(400).json({ success: false, error: 'Thiếu ?store=<mã cửa hàng>' })
+        const hopLe = (s: any) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''))
+        if (!hopLe(q.from) || !hopLe(q.to)) return res.status(400).json({ success: false, error: 'Cần ?from & ?to dạng YYYY-MM-DD' })
+        const from = String(q.from), to = String(q.to)
+
+        const store: any = await registryPrisma.store.findFirst({ where: { code: ma }, select: { name: true, schema: true, code: true } })
+        if (!store) return res.status(404).json({ success: false, error: `Không có cửa hàng mã "${ma}"` })
+        const p: any = getStorePrisma(store.schema)
+
+        const start = new Date(`${from}T00:00:00+07:00`)
+        const end = new Date(new Date(`${to}T00:00:00+07:00`).getTime() + 86400_000)
+
+        const hoaDon: any[] = await p.eInvoice.findMany({
+            where: { invoiceDate: { gte: from, lte: to } },
+            select: { id: true, invoiceNumber: true, invoiceDate: true, invoiceType: true, status: true, totalAmount: true, transactionId: true },
+        })
+
+        const dem = (ds: any[], khoa: string) => ds.reduce((m: any, x: any) => {
+            const k = String(x[khoa] ?? '(trống)')
+            m[k] = (m[k] || 0) + 1
+            return m
+        }, {})
+        const tong = (ds: any[]) => Math.round(ds.reduce((s: number, x: any) => s + (Number(x.totalAmount) || 0), 0))
+
+        const coGan = hoaDon.filter(h => h.transactionId)
+        const khongGan = hoaDon.filter(h => !h.transactionId)
+
+        // Hoá đơn có gắn phiếu bán — phiếu đó có thật trong schema này không?
+        const idPhieu = Array.from(new Set(coGan.map(h => String(h.transactionId))))
+        const phieuCo: any[] = idPhieu.length
+            ? await p.transaction.findMany({ where: { id: { in: idPhieu } }, select: { id: true, status: true, createdAt: true, total: true } })
+            : []
+        const boPhieu = new Map(phieuCo.map((t: any) => [String(t.id), t]))
+        const ganNhungMat = coGan.filter(h => !boPhieu.has(String(h.transactionId)))
+        const ganVaCo = coGan.filter(h => boPhieu.has(String(h.transactionId)))
+
+        /* Phiếu có thật nhưng NGÀY nằm ngoài kỳ → hoá đơn kỳ này của hàng bán kỳ
+         * trước. Đây là nguyên nhân lệch rất hay gặp và hoàn toàn hợp lệ. */
+        const ngoaiKy = ganVaCo.filter(h => {
+            const t = boPhieu.get(String(h.transactionId))
+            const d = new Date(t.createdAt).getTime()
+            return d < start.getTime() || d >= end.getTime()
+        })
+
+        const phieuTrongKy: any[] = await p.transaction.findMany({
+            where: { createdAt: { gte: start, lt: end } },
+            select: { status: true, total: true },
+        })
+
+        res.json({
+            success: true,
+            data: {
+                cuaHang: store.name, ma: store.code, ky: { from, to },
+                hoaDon: {
+                    soLuong: hoaDon.length,
+                    tongTien: tong(hoaDon),
+                    theoTrangThai: dem(hoaDon, 'status'),
+                    theoLoai: dem(hoaDon, 'invoiceType'),
+                    khongGanPhieuBan: { so: khongGan.length, tien: tong(khongGan) },
+                    ganPhieuKhongTonTai: { so: ganNhungMat.length, tien: tong(ganNhungMat) },
+                    ganPhieuNgoaiKy: { so: ngoaiKy.length, tien: tong(ngoaiKy) },
+                    mau: hoaDon.slice(0, 5).map(h => ({
+                        so: h.invoiceNumber, ngay: h.invoiceDate, loai: h.invoiceType,
+                        trangThai: h.status, tien: Math.round(Number(h.totalAmount) || 0),
+                        phieuBan: h.transactionId ? (boPhieu.has(String(h.transactionId)) ? 'có' : 'KHÔNG TỒN TẠI') : 'không gắn',
+                    })),
+                },
+                phieuBanTrongKy: {
+                    soLuong: phieuTrongKy.length,
+                    theoTrangThai: dem(phieuTrongKy, 'status'),
+                    tongTheoTrangThai: phieuTrongKy.reduce((m: any, t: any) => {
+                        const k = String(t.status)
+                        m[k] = Math.round((m[k] || 0) + (Number(t.total) || 0))
+                        return m
+                    }, {}),
+                },
+            },
+        })
+    } catch (err: any) {
+        console.error('GET /admin/reconcile-why error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
 // POST /api/admin/run-reconcile — chạy ngay vòng đối chiếu ba chiều tháng trước
 router.post('/run-reconcile', async (req: Request, res: Response) => {
     try {
