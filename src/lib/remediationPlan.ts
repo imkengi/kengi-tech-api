@@ -76,6 +76,9 @@ const PHAN_CONG: Record<string, { aiLam: NguoiLam; congSuc: CongSuc }> = {
     'vat-khong-nhat-quan': { aiLam: 'ke-toan', congSuc: 'trung-binh' },
     'vat-vao-ton-dong': { aiLam: 'ke-toan', congSuc: 'nhanh' },
     'thieu-to-khai': { aiLam: 'ke-toan', congSuc: 'nhanh' },
+    /* Ghi bù bút toán cho hàng loạt phiếu bán còn thiếu — kế toán làm, và chạy
+     * ghi bù hàng loạt ở trang Đối Chiếu Sổ Sách thì không lâu. */
+    'so-thieu-doanh-thu-thuc-te': { aiLam: 'ke-toan', congSuc: 'trung-binh' },
     /* Ghi bút toán doanh thu (hoặc nhập sổ doanh thu với hộ kinh doanh) là việc
      * của kế toán, và chạy ghi sổ tự động thì nhanh. */
     'chua-ghi-so-doanh-thu': { aiLam: 'ke-toan', congSuc: 'nhanh' },

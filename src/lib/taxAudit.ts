@@ -443,6 +443,39 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
      * Và chính báo cáo này ở chỗ khác đã biết điều đó — cảnh báo hộ kinh doanh
      * ghi rõ "nguồn: doanh thu bán hàng thực tế (sổ doanh thu HKD chưa nhập)".
      * Cùng một màn hình nói hai kiểu thì người dùng không tin cái nào. */
+    /* ── SỔ GHI NHẬN ĐƯỢC BAO NHIÊU PHẦN DOANH THU THẬT? ────────────────────
+     *
+     * `dtSo` là bút toán, `dtHoaDon` là hoá đơn — cả hai đều có thể thấp hơn
+     * doanh thu THẬT trên phiếu bán rất nhiều. Đo trên HUTI ngày 14/08/2026:
+     * bán 1.967.661.493 ₫ trong 14 ngày mà sổ chỉ ghi 23.525.478 ₫ (1,2%) và 0
+     * hoá đơn. Phép so "sổ với hoá đơn" khi đó ra "lệch 23,5 triệu" — nghe như
+     * chuyện nhỏ, trong khi nghĩa vụ theo Điều 90 gắn với DOANH THU THẬT, tức
+     * phơi nhiễm gần 2 tỷ. Trấn an sai cũng nguy hiểm ngang buộc tội oan: người
+     * đọc yên tâm rồi không làm gì.
+     *
+     * Không đọc được phiếu bán thì để null và im — không suy đoán. */
+    let dtThucTe: number | null = null
+    try {
+        const txs = (await layGiaoDich()) || []
+        dtThucTe = Math.round(txs.reduce((t: number, x: any) => t + (Number(x.total) || 0), 0))
+    } catch { /* không đọc được — bỏ qua */ }
+
+    if (dtThucTe !== null && dtThucTe > 0) {
+        /* Ngưỡng 20%: sổ thấp hơn doanh thu thật quá 1/5 thì mọi con số dựng
+         * trên sổ đều không dùng được, không chỉ lệch cho vui. */
+        const thieu = dtThucTe - dtSo
+        const tyLeGhi = Math.round(dtSo / dtThucTe * 100)
+        if (thieu > NGUONG_LECH_BO_QUA && tyLeGhi < 80) canhBao.push({
+            code: 'so-thieu-doanh-thu-thuc-te',
+            muc: tyLeGhi < 50 ? 'cao' : 'vua',
+            tieuDe: `Sổ chỉ ghi nhận ${tyLeGhi}% doanh thu thực tế`,
+            chiTiet: `Phiếu bán trong kỳ cộng lại ${vnd(dtThucTe)} ₫ nhưng sổ kế toán chỉ ghi ${vnd(dtSo)} ₫ — thiếu ${vnd(thieu)} ₫. Mọi con số dựng trên sổ (lệch với tờ khai, lệch với hoá đơn, lãi lỗ) đều đang tính trên phần đã ghi, nên chúng NHỎ HƠN mức thật. Nghĩa vụ lập hoá đơn và kê khai gắn với doanh thu thực tế, không gắn với phần đã ghi sổ.`,
+            canCu: 'Điều 90 Luật Quản lý thuế 38/2019 — lập hoá đơn theo từng lần bán; Điều 50 — ấn định khi sổ sách không phản ánh đầy đủ.',
+            canLam: 'Mở Kế Toán → Đối Chiếu Sổ Sách, chạy ghi bù bút toán cho các phiếu bán còn thiếu, rồi soát lại kỳ này.',
+            tienRuiRo: thieu, soLuong: 0, viDu: [],
+        })
+    }
+
     if (soChuaGhiDoanhThu && dtHoaDon > 0) {
         canhBao.push({
             code: 'chua-ghi-so-doanh-thu', muc: 'vua',

@@ -1202,6 +1202,46 @@ async function main() {
             soNang !== 1 || (h.diem >= 74 && h.diem <= 80), `${soNang} nặng, điểm ${h.diem}`)
     }
 
+    // ── 41e. Sổ ghi nhận được bao nhiêu phần doanh thu thật ────────────────
+    /* Đo trên HUTI ngày 14/08/2026: bán 1.967.661.493 ₫ trong 14 ngày mà sổ chỉ
+     * ghi 23.525.478 ₫ (1,2%) và 0 hoá đơn. Phép so "sổ với hoá đơn" ra "lệch
+     * 23,5 triệu" — nghe như chuyện nhỏ, trong khi nghĩa vụ theo Điều 90 gắn với
+     * DOANH THU THẬT. Trấn an sai nguy hiểm ngang buộc tội oan. */
+    {
+        const k = khoSach()
+        k.transactions = [
+            { createdAt: '2026-08-05T02:00:00.000Z', total: 1_000_000_000, status: 'completed' },
+        ] as any
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const c = lay(h, 'so-thieu-doanh-thu-thuc-te')
+        kiemTra('Sổ ghi ít hơn doanh thu thật thì phải nói ra', !!c, JSON.stringify(c?.tieuDe))
+        kiemTra('… ở mức cao khi sổ dưới một nửa', !!c && c.muc === 'cao', c?.muc)
+        kiemTra('… nêu đúng số tiền còn thiếu',
+            !!c && c.tienRuiRo === 1_000_000_000 - 100_000_000, JSON.stringify(c?.tienRuiRo))
+        kiemTra('… nói rõ nghĩa vụ gắn với doanh thu thực tế',
+            !!c && /gắn với doanh thu thực tế/.test(c.chiTiet))
+    }
+    {
+        // Sổ ghi đủ thì tuyệt đối không kêu — nới nhầm là thêm một cảnh báo rác
+        const k = khoSach()
+        k.transactions = [
+            { createdAt: '2026-08-05T02:00:00.000Z', total: 100_000_000, status: 'completed' },
+        ] as any
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        kiemTra('Sổ ghi khớp doanh thu thật thì im',
+            !co(h, 'so-thieu-doanh-thu-thuc-te'),
+            JSON.stringify(lay(h, 'so-thieu-doanh-thu-thuc-te')?.tieuDe))
+    }
+    {
+        // Không đọc được phiếu bán thì KHÔNG suy đoán
+        const k = khoSach()
+        const p: any = fakePrisma(k)
+        p.transaction.findMany = async () => { throw new Error('mất bảng') }
+        const h = await kiemTraThue(p, KY)
+        kiemTra('Không đọc được phiếu bán thì không kết luận sổ thiếu',
+            !co(h, 'so-thieu-doanh-thu-thuc-te'))
+    }
+
     // ── 42. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
     {
         const h = await kiemTraThue(fakePrisma(khoSach()), KY)
