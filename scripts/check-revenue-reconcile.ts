@@ -71,8 +71,20 @@ function fakePrisma(k: Kho, loi?: Record<string, boolean>) {
         transaction: {
             findMany: async ({ where }: any) => {
                 no('transaction')
+                /* Lib lọc theo NGÀY BÁN bằng dạng OR:
+                 *   [{ transactionDate: range }, { transactionDate: null, createdAt: range }]
+                 * Prisma giả phải theo đúng hình dạng đó — nếu chỉ nhìn
+                 * `where.createdAt` thì nó là undefined, bộ lọc ngày biến mất và
+                 * mọi ca test đều "đạt" mà không kiểm gì. */
+                const khopNgay = (t: any) => {
+                    const or = where?.OR
+                    if (!Array.isArray(or)) return trongNgay(t.createdAt, where?.createdAt)
+                    return or.some((dk: any) => dk.transactionDate === null
+                        ? (t.transactionDate ?? null) === null && trongNgay(t.createdAt, dk.createdAt)
+                        : t.transactionDate != null && trongNgay(t.transactionDate, dk.transactionDate))
+                }
                 return (k.transactions || []).filter(t =>
-                    trongNgay(t.createdAt, where?.createdAt) && khopTrangThai(t.status, where?.status))
+                    khopNgay(t) && khopTrangThai(t.status, where?.status))
             },
         },
         onlineOrder: {
@@ -387,6 +399,56 @@ async function main() {
         theoNgay.theoNgay.find(n => n.ngay === '2026-07-06')?.lech === 2_000_000,
         theoNgay.theoNgay)
     ok('ngày 05 không lệch', theoNgay.theoNgay.find(n => n.ngay === '2026-07-05')?.lech === 0)
+
+    console.log('\n▶ Cắt kỳ theo NGÀY BÁN — so cùng một thước đo với hoá đơn\n')
+    /* Vế hoá đơn cắt theo `invoiceDate` (ngày nghiệp vụ thật). Vế sổ mà cắt theo
+     * `createdAt` là so hai thước đo khác nhau. Với cửa hàng nhập lịch sử từ
+     * phần mềm cũ, lệch không phải vài phần trăm mà là toàn bộ. */
+    {
+        // Bán tháng 7, nhưng mãi tháng 8 mới nhập vào phần mềm → vẫn thuộc kỳ 7
+        const r = await doiChieuBaChieu(fakePrisma({
+            transactions: [gd(1, 100_000_000, '2026-08-20', {
+                transactionDate: new Date('2026-07-10T10:00:00+07:00'),
+            })],
+            invoices: [hd('A1', 100_000_000, { transactionId: 'T1' })],
+        }), KY)
+        ok('đơn bán tháng 7 nhập sổ tháng 8 vẫn được tính vào kỳ tháng 7',
+            r.soSach.tong === 100_000_000, r.soSach)
+        ok('… nên không sinh lệch ảo với hoá đơn cùng kỳ',
+            Math.abs(r.lech.chuaXuatHoaDon) < 1000 && Math.abs(r.lech.hoaDonVuotSo) < 1000, r.lech)
+    }
+    {
+        // Ngược lại: nhập sổ trong tháng 7 nhưng ngày bán là tháng 6 → KHÔNG thuộc kỳ 7
+        const r = await doiChieuBaChieu(fakePrisma({
+            transactions: [gd(2, 80_000_000, '2026-07-05', {
+                transactionDate: new Date('2026-06-15T10:00:00+07:00'),
+            })],
+            invoices: [],
+        }), KY)
+        ok('đơn bán tháng 6 nhập sổ tháng 7 KHÔNG bị tính vào kỳ tháng 7',
+            r.soSach.tong === 0, r.soSach)
+    }
+    {
+        // Cửa hàng bán tại chỗ (transactionDate trống) giữ nguyên hành vi cũ
+        const r = await doiChieuBaChieu(fakePrisma({
+            transactions: [gd(3, 50_000_000, '2026-07-12')],
+            invoices: [],
+        }), KY)
+        ok('không có ngày bán riêng thì vẫn dùng ngày ghi sổ như cũ',
+            r.soSach.tong === 50_000_000, r.soSach)
+    }
+    {
+        // Bảng theo ngày phải xếp đơn vào NGÀY BÁN, không phải ngày nhập sổ
+        const r = await doiChieuBaChieu(fakePrisma({
+            transactions: [gd(4, 60_000_000, '2026-08-20', {
+                transactionDate: new Date('2026-07-03T10:00:00+07:00'),
+            })],
+            invoices: [hd('A2', 60_000_000, { invoiceDate: '2026-07-03', transactionId: 'T4' })],
+        }), KY)
+        const n3 = r.theoNgay.find(n => n.ngay === '2026-07-03')
+        ok('bảng theo ngày xếp đơn vào đúng ngày bán', !!n3 && n3.soSach === 60_000_000, r.theoNgay)
+        ok('… và khớp hoá đơn cùng ngày, không lệch', !!n3 && n3.lech === 0, n3)
+    }
 
     console.log(`\n${dat}/${dat + hong} ca đạt`)
     if (hong) process.exit(1)

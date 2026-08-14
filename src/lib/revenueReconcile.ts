@@ -184,9 +184,27 @@ export async function doiChieuBaChieu(
      * đơn vượt sổ" — chiều lệch nặng nhất. Đã gặp thật ngày 14/08/2026 ở một cửa
      * hàng: lệch ảo 677 triệu. Mọi module thuế khác trong repo đều dùng
      * ['completed','partial']. */
+    /* CẮT KỲ THEO NGÀY BÁN, ĐỂ SO CÙNG MỘT THƯỚC ĐO.
+     *
+     * Vế hoá đơn bên dưới cắt theo `invoiceDate` — ngày nghiệp vụ thật. Vế sổ
+     * mà cắt theo `createdAt` là so hai thước đo khác nhau, và với cửa hàng
+     * nhập lịch sử từ phần mềm cũ thì lệch không phải vài phần trăm mà là toàn
+     * bộ: KENGISTORE có 5 tháng bán hàng mang cùng một khoảng `createdAt` vài
+     * tuần, nên tháng nhập liệu "sổ vượt hoá đơn" hàng tỷ còn các tháng trước
+     * đó "hoá đơn vượt sổ" — cả hai đều là ảo ảnh của phép so sai cơ sở.
+     *
+     * Đây là công cụ ĐỐI CHIẾU, không sinh số kê khai, nên sửa ở đây không đụng
+     * tới tờ khai nào. Dạng OR là idiom sẵn có trong repo (importReceipts.ts),
+     * tương đương COALESCE nhưng viết được bằng Prisma. */
     const giaoDich = await thu('transaction', thieu, () => prisma.transaction.findMany({
-        where: { createdAt: { gte: ky.start, lt: ky.end }, status: { in: ['completed', 'partial'] } },
-        select: { id: true, receiptNumber: true, total: true, createdAt: true, vatInvoiceNumber: true, vatStatus: true, channel: true },
+        where: {
+            status: { in: ['completed', 'partial'] },
+            OR: [
+                { transactionDate: { gte: ky.start, lt: ky.end } },
+                { transactionDate: null, createdAt: { gte: ky.start, lt: ky.end } },
+            ],
+        },
+        select: { id: true, receiptNumber: true, total: true, createdAt: true, transactionDate: true, vatInvoiceNumber: true, vatStatus: true, channel: true },
     }), [] as any[])
 
     const donSan = await thu('onlineOrder', thieu, () => prisma.onlineOrder.findMany({
@@ -346,7 +364,7 @@ export async function doiChieuBaChieu(
     /* Dùng ĐÚNG tập đã dựng ở chiều 1: mọi phiếu bán, cộng thêm đơn sàn chưa có
      * phiếu. Nếu chỗ này đếm khác chiều 1 thì tổng và bảng ngày sẽ chỏi nhau, và
      * người dùng không biết tin con số nào. */
-    for (const t of giaoDich) cong(ngayVN(t.createdAt), 'so', Number(t.total) || 0)
+    for (const t of giaoDich) cong(ngayVN(t.transactionDate || t.createdAt), 'so', Number(t.total) || 0)
     for (const o of sanChuaCoPhieu) cong(ngayVN(o.createdAt), 'so', Number(o.total) || 0)
     for (const h of conHieuLuc) cong(String(h.invoiceDate || ''), 'hd', dauCua(h) * (Number(h.totalAmount) || 0))
 
@@ -358,7 +376,7 @@ export async function doiChieuBaChieu(
     const idDaGanHoaDon = new Set(conHieuLuc.map((h: any) => String(h.transactionId || '')).filter(Boolean))
     const chungTuChuaCoHoaDon: ChungTuLech[] = giaoDich
         .filter((t: any) => !idDaGanHoaDon.has(String(t.id)) && !t.vatInvoiceNumber)
-        .map((t: any) => ({ ma: String(t.receiptNumber || t.id), ngay: ngayVN(t.createdAt), tien: lam(t.total) }))
+        .map((t: any) => ({ ma: String(t.receiptNumber || t.id), ngay: ngayVN(t.transactionDate || t.createdAt), tien: lam(t.total) }))
         .sort((a, b) => b.tien - a.tien)
         .slice(0, 100)
 
