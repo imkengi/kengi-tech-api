@@ -54,6 +54,7 @@ export async function timPhieuTrungSoHoaDon(
     return trung ? { code: trung.code, createdAt: trung.createdAt } : null
 }
 
+
 // Payload phiếu nhập cho webhook (kèm thông tin NCC + chi tiết mặt hàng)
 const importPayload = (r: any) => ({
     id: r?.id, code: r?.code,
@@ -70,6 +71,82 @@ const importPayload = (r: any) => ({
 })
 
 const router = Router()
+
+/**
+ * GET /api/import-receipts/duplicates?months=12
+ *
+ * Những phiếu nhập ĐÃ trùng số hoá đơn cùng một nhà cung cấp.
+ *
+ * Chốt chặn lúc nhập chỉ ngăn phiếu sắp tạo. Cặp đã trùng sẵn thì tồn kho đang
+ * thừa, giá vốn đang lệch, công nợ nhà cung cấp đang ghi thừa, và chi phí được
+ * trừ đang khai trùng — bốn thứ cùng lúc, ngay lúc này.
+ *
+ * Đặt ở đây thay vì chỉ trong trang Thuế: người nhập hàng làm việc ở màn hình
+ * này, và họ mới là người biết phiếu nào là nhầm.
+ */
+router.get('/duplicates', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const thang = Math.max(1, Math.min(36, Number((req.query as any)?.months) || 12))
+        const tu = new Date(Date.now() - thang * 30 * 86400_000)
+        const chuan = (v: any) => String(v || '').replace(/\s+/g, '').toLowerCase()
+
+        const ds: any[] = await prisma.importReceipt.findMany({
+            where: { createdAt: { gte: tu }, status: { not: 'cancelled' }, vatInvoiceNo: { not: null } },
+            select: {
+                id: true, code: true, vatInvoiceNo: true, supplierId: true, supplierName: true,
+                totalCost: true, vatAmount: true, createdAt: true, transactionDate: true, status: true,
+            },
+            orderBy: { createdAt: 'asc' },
+            take: 5000,
+        })
+
+        const nhom = new Map<string, any[]>()
+        for (const r of ds) {
+            const so = chuan(r.vatInvoiceNo)
+            const ncc = r.supplierId || chuan(r.supplierName)
+            if (!so || !ncc) continue
+            const k = `${ncc}|${so}`
+            if (!nhom.has(k)) nhom.set(k, [])
+            nhom.get(k)!.push(r)
+        }
+
+        const cap = Array.from(nhom.values())
+            .filter(v => v.length > 1)
+            .map(v => ({
+                nhaCungCap: v[0].supplierName || null,
+                soHoaDon: v[0].vatInvoiceNo,
+                /* Phiếu ĐẦU TIÊN là phiếu thật (nhập trước); các phiếu sau mới là
+                 * phiếu cần xem xét huỷ. Đánh dấu rõ để người dùng không huỷ nhầm
+                 * phiếu gốc rồi mất luôn dữ liệu đúng. */
+                phieu: v.map((r: any, i: number) => ({
+                    id: r.id, code: r.code,
+                    tien: Math.round(Number(r.totalCost) || 0),
+                    ngay: new Date(r.transactionDate || r.createdAt).toISOString().slice(0, 10),
+                    laPhieuGoc: i === 0,
+                })),
+                tienGhiThua: Math.round(v.slice(1).reduce((s: number, r: any) => s + (Number(r.totalCost) || 0), 0)),
+            }))
+            .sort((a, b) => b.tienGhiThua - a.tienGhiThua)
+
+        res.json({
+            success: true,
+            data: {
+                soThang: thang,
+                soCap: cap.length,
+                tongGhiThua: cap.reduce((s, c) => s + c.tienGhiThua, 0),
+                cap,
+                ghiChu: cap.length === 0
+                    ? 'Không có phiếu nhập nào trùng số hoá đơn.'
+                    : 'Giữ phiếu ĐẦU TIÊN, huỷ phiếu sau. Huỷ phiếu nhập sẽ tự trừ lại tồn kho và đảo bút toán tương ứng.',
+            },
+        })
+    } catch (err) {
+        console.error('GET /import-receipts/duplicates error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
 
 // GET /api/import-receipts
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
