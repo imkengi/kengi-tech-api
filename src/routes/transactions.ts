@@ -771,6 +771,30 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
                                     totalRevenue: { increment: created.total },
                                 },
                             })
+
+                            /* Ghi vết từng đơn vào nhật ký chuyến. Đường chuyển
+                             * đơn có sẵn từ lâu đã ghi, còn đường bán thẳng trên
+                             * POS thì không — hệ quả là bảng tổng kết chuyến
+                             * không liệt kê được đơn nào và không tính được tiền
+                             * mặt nhân viên phải nộp. Ghi ở đây để đối soát cuối
+                             * chuyến truy ngược được về đúng hoá đơn.
+                             *
+                             * catch rỗng có chủ đích: mất một dòng nhật ký không
+                             * đáng để huỷ cả giao dịch bán đã trừ kho xong. */
+                            await (tx as any).salesTripLog.create({
+                                data: {
+                                    tripId: String(salesTripId),
+                                    action: 'sale',
+                                    notes: `Bán tại chuyến: ${created.receiptNumber} (${totalBaseQty} sp, ${Math.round(created.total || 0).toLocaleString('vi-VN')}đ)`,
+                                    userId: req.user!.userId,
+                                    userName: req.user?.email || null,
+                                    metadata: JSON.stringify({
+                                        transactionId: created.id,
+                                        receiptNumber: created.receiptNumber,
+                                        total: created.total,
+                                    }),
+                                },
+                            }).catch(() => { })
                         }
                     }
 

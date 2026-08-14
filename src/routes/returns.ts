@@ -534,6 +534,87 @@ router.post('/:id/restock', authMiddleware, requirePermission('returns.edit', 'r
 })
 
 // ═══════════════════════════════════════════════════════════════════════════════
+//  POST /api/returns/:id/dispose — ghi nhận huỷ hàng trả không dùng lại được
+//
+//  Ngược với /restock: hàng hỏng, hết hạn, vỡ… KHÔNG nhập lại kho. Nhưng vẫn
+//  phải ghi lại, vì hai lý do:
+//   - kế toán cần biết giá trị hàng đã huỷ để đưa vào chi phí;
+//   - không ghi thì phiếu trả nằm mãi ở trạng thái "chưa xử lý" và người sau
+//     không biết lô hàng đó đi đâu.
+//
+//  Trước đây endpoint này KHÔNG tồn tại, mà giao diện lại bắt lỗi 404 rồi báo
+//  "đã huỷ N sản phẩm" — người dùng tin là đã xử lý xong trong khi không có gì
+//  được ghi. Đó là lý do phần này được làm thật thay vì gỡ nút đi.
+// ═══════════════════════════════════════════════════════════════════════════════
+router.post('/:id/dispose', authMiddleware, requirePermission('returns.edit', 'returns.create'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const retId = String(req.params.id)
+        const { itemIds, reason } = req.body || {}
+
+        const returnOrder = await prisma.returnOrder.findUnique({
+            where: { id: retId },
+            include: { items: true },
+        })
+        if (!returnOrder) return res.status(404).json({ success: false, error: 'Không tìm thấy phiếu trả' })
+
+        /* Không đụng tới hàng ĐÃ nhập lại kho: huỷ một món đã nằm trong kho bán
+         * mà không trừ tồn sẽ làm lệch kho. Muốn huỷ thì phải xuất huỷ từ kho,
+         * không phải từ phiếu trả. */
+        const canHuy = Array.isArray(itemIds) && itemIds.length > 0
+            ? returnOrder.items.filter((i: any) => itemIds.includes(i.id) && !i.restocked && !i.disposed)
+            : returnOrder.items.filter((i: any) => !i.restocked && !i.disposed &&
+                (i.condition === 'damaged' || i.condition === 'defective'))
+
+        const boQua = Array.isArray(itemIds) && itemIds.length > 0
+            ? returnOrder.items.filter((i: any) => itemIds.includes(i.id) && i.restocked).length
+            : 0
+
+        let disposed = 0
+        let giaTri = 0
+        for (const item of canHuy) {
+            await prisma.returnItem.update({ where: { id: item.id }, data: { disposed: true } })
+            disposed++
+            giaTri += (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0)
+
+            /* Ghi vào thẻ kho dạng bản ghi huỷ để truy vết được về sau. Hàng trả
+             * chưa từng nhập lại kho nên KHÔNG trừ tồn — chỉ ghi dấu. */
+            await prisma.inventoryTransaction.create({
+                data: {
+                    type: 'dispose',
+                    productId: item.productId,
+                    productName: item.productName || 'Unknown',
+                    productSku: item.sku || '',
+                    quantity: item.quantity,
+                    reason: `Huỷ hàng trả không dùng lại được — phiếu ${returnOrder.code}${reason ? ` (${String(reason).slice(0, 120)})` : ''}`,
+                    referenceId: returnOrder.code,
+                    referenceType: 'sale_return_dispose',
+                    unitPrice: item.unitPrice || 0,
+                    userId: req.user!.userId,
+                    userName: req.user?.email || 'Hệ thống - Trả hàng',
+                },
+            }).catch((e: any) => {
+                // Thiếu bảng/cột ở store cũ không được phép nuốt mất việc đánh dấu huỷ
+                console.error('Ghi thẻ kho khi huỷ hàng trả lỗi:', e?.message || e)
+            })
+        }
+
+        res.json({
+            success: true,
+            data: {
+                disposed,
+                total: returnOrder.items.length,
+                giaTriHuy: Math.round(giaTri),
+                boQuaViDaNhapKho: boQua,
+            },
+        })
+    } catch (err) {
+        console.error('Dispose return items error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
 //  DELETE /api/returns/:id
 // ═══════════════════════════════════════════════════════════════════════════════
 

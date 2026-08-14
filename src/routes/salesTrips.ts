@@ -93,8 +93,8 @@ const TRIP_INCLUDE = {
     items: true,
 }
 
-const MANAGER_ROLES = ['admin', 'manager', 'superadmin']
-const TRIP_OPERATOR_ROLES = ['admin', 'manager', 'superadmin', 'cashier', 'driver', 'staff']
+const MANAGER_ROLES = ['admin', 'manager', 'superadmin', 'owner']
+const TRIP_OPERATOR_ROLES = ['admin', 'manager', 'superadmin', 'owner', 'cashier', 'driver', 'staff', 'sales']
 
 function isManager(role?: string): boolean {
     return !!role && MANAGER_ROLES.includes(role)
@@ -246,6 +246,144 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
         res.json({ success: true, data: shapeTrip(trip) })
     } catch (err) {
         console.error('Get sales trip error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// ═════════════════════════════════════════════════════════════════════════════
+// GET /api/sales-trips/:id/summary — bảng tổng kết chuyến
+//
+// Giao diện đã có sẵn khung hiển thị bảng này từ lâu nhưng endpoint chưa bao giờ
+// tồn tại; hook nuốt lỗi nên phần tổng kết chỉ trống mãi chứ không báo đỏ.
+//
+// Ba chỗ dễ nói sai, đã xử lý riêng:
+//  1. THIẾU HỤT chỉ có nghĩa SAU khi đã đếm hàng về (chuyến ở trạng thái đối
+//     soát hoặc đã đóng). Trước đó, "loaded − sold − returned" luôn ra một số
+//     dương to đùng vì hàng còn đang trên xe — hiện nó lên là vu cho nhân viên
+//     làm mất hàng.
+//  2. TIỀN THỰC NỘP hiện chưa có cột riêng, đang được ghi vào notes dạng
+//     "Tiền thực nộp: X đ". Chưa đếm thì trả null để giao diện hiện "chưa đếm",
+//     KHÔNG trả 0 — trả 0 sẽ thành "thiếu hụt toàn bộ tiền hàng".
+//  3. DANH SÁCH ĐƠN chỉ dựng được từ SalesTripLog action='sale'. Đường bán
+//     thẳng trên POS trước đây không ghi log này, nên chuyến cũ sẽ có danh sách
+//     rỗng — trả kèm ghiChu nói rõ, thay vì để người dùng tưởng chuyến không bán
+//     được đơn nào.
+// ═════════════════════════════════════════════════════════════════════════════
+router.get('/:id/summary', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const trip = await prisma.salesTrip.findFirst({
+            where: scopeFilter(req, { id: String(req.params.id) }),
+            include: TRIP_INCLUDE,
+        })
+        if (!trip) return res.status(404).json({ success: false, error: 'Không tìm thấy chuyến bán hàng' })
+
+        const daDemHang = ['reconciling', 'closed'].includes(String(trip.status))
+        const ghiChu: string[] = []
+
+        const items = (trip.items || []).map((it: any) => {
+            const loaded = Number(it.loadedQty) || 0
+            const sold = Number(it.soldQty) || 0
+            const returned = Number(it.returnedQty) || 0
+            const damaged = Number(it.damagedQty) || 0
+            const actual = Number(it.actualQty) || 0
+            /* returnedQty đã bao gồm cả hàng hỏng (lúc đối soát ghi
+             * returned = actual + damaged), nên KHÔNG trừ damaged thêm lần nữa. */
+            const thieu = daDemHang ? Math.max(0, loaded - sold - returned) : 0
+            return {
+                productId: String(it.productId),
+                productName: String(it.productName || ''),
+                sku: it.productSku || undefined,
+                loaded, sold, damaged, actual,
+                shortage: thieu,
+                revenue: Math.round(sold * (Number(it.unitPrice) || 0)),
+            }
+        })
+        if (items.some((i: any) => i.revenue > 0)) {
+            ghiChu.push('Doanh thu từng mặt hàng tính theo đơn giá gần nhất của chuyến — nếu trong chuyến có bán nhiều mức giá thì con số này là xấp xỉ. Doanh thu tổng lấy từ tiền thật của đơn nên vẫn chính xác.')
+        }
+        if (!daDemHang) {
+            ghiChu.push('Chuyến chưa đối soát nên chưa tính thiếu hụt — hàng chưa bán vẫn đang nằm trên xe, không phải mất.')
+        }
+
+        // ── Đơn đã bán trong chuyến ─────────────────────────────────────────
+        const logs = await prisma.salesTripLog.findMany({
+            where: { tripId: trip.id, action: 'sale' },
+            select: { metadata: true, createdAt: true },
+            orderBy: { createdAt: 'desc' },
+            take: 200,
+        })
+        const idDon: string[] = []
+        for (const l of logs) {
+            try {
+                const m = JSON.parse(String(l.metadata || '{}'))
+                if (m?.transactionId) idDon.push(String(m.transactionId))
+            } catch { /* log cũ có metadata không phải JSON — bỏ qua, không chặn */ }
+        }
+
+        let donHang: any[] = []
+        if (idDon.length > 0) {
+            donHang = await prisma.transaction.findMany({
+                where: { id: { in: idDon } },
+                select: { id: true, receiptNumber: true, total: true, createdAt: true, payments: { select: { type: true, amount: true } } },
+                orderBy: { createdAt: 'desc' },
+            })
+        }
+
+        /* Tiền mặt phải nộp = phần thu bằng tiền mặt của các đơn thuộc chuyến.
+         * Không lấy tổng doanh thu: khách chuyển khoản thì tiền không qua tay
+         * nhân viên bán, tính vào đây là bắt họ nộp phần mình chưa từng cầm. */
+        let tienMatPhaiNop = 0
+        for (const d of donHang) {
+            for (const p of (d.payments || [])) {
+                const loai = String(p.type || '').toLowerCase()
+                if (loai === 'cash' || loai === 'tien-mat' || loai === '') tienMatPhaiNop += Number(p.amount) || 0
+            }
+        }
+        const truyDuocDon = donHang.length > 0
+        if (!truyDuocDon && (Number(trip.totalRevenue) || 0) > 0) {
+            ghiChu.push('Chuyến này chưa có vết từng đơn nên chưa liệt kê được danh sách hoá đơn và chưa tính được tiền mặt phải nộp. Doanh thu tổng vẫn đúng.')
+        }
+
+        // ── Tiền thực nộp: đang nằm trong notes cho tới khi có cột riêng ────
+        let tienThucNop: number | null = null
+        const khop = String(trip.notes || '').match(/Tiền thực nộp:\s*([\d.,]+)/)
+        if (khop) {
+            const n = Number(khop[1].replace(/[.,]/g, ''))
+            if (Number.isFinite(n)) tienThucNop = n
+        }
+
+        const tong = (f: (i: any) => number) => items.reduce((s: number, i: any) => s + f(i), 0)
+        res.json({
+            success: true,
+            data: {
+                trip: shapeTrip(trip),
+                totals: {
+                    revenue: Math.round(Number(trip.totalRevenue) || 0),
+                    itemsLoaded: tong(i => i.loaded),
+                    itemsSold: tong(i => i.sold),
+                    itemsDamaged: tong(i => i.damaged),
+                    itemsShortage: tong(i => i.shortage),
+                    transactionCount: donHang.length,
+                    expectedCash: truyDuocDon ? Math.round(tienMatPhaiNop) : null,
+                    actualCash: tienThucNop,
+                    cashShortage: truyDuocDon && tienThucNop !== null
+                        ? Math.round(tienMatPhaiNop - tienThucNop)
+                        : null,
+                },
+                items,
+                transactions: donHang.slice(0, 50).map((d: any) => ({
+                    id: String(d.id),
+                    receiptNumber: String(d.receiptNumber || ''),
+                    total: Math.round(Number(d.total) || 0),
+                    createdAt: d.createdAt,
+                })),
+                daDoiSoat: daDemHang,
+                ghiChu,
+            },
+        })
+    } catch (err) {
+        console.error('Get sales trip summary error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
     }
 })
@@ -1181,14 +1319,14 @@ const closeHandler = async (req: AuthRequest, res: Response) => {
 router.post(
     '/:id/close',
     authMiddleware,
-    requireRole('admin', 'manager', 'superadmin'),
+    requireRole(...MANAGER_ROLES),
     validate(CloseSalesTripSchema),
     closeHandler,
 )
 router.put(
     '/:id/close',
     authMiddleware,
-    requireRole('admin', 'manager', 'superadmin'),
+    requireRole(...MANAGER_ROLES),
     validate(CloseSalesTripSchema),
     closeHandler,
 )
@@ -1376,7 +1514,7 @@ router.get('/:id/transfers', authMiddleware, async (req: AuthRequest, res: Respo
 router.delete(
     '/:id',
     authMiddleware,
-    requireRole('admin', 'manager', 'superadmin'),
+    requireRole(...MANAGER_ROLES),
     async (req: AuthRequest, res: Response) => {
         try {
             const prisma = req.storePrisma! as any

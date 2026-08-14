@@ -1207,6 +1207,9 @@ model ReturnItem {
   returnReason  String?
   condition     String? // new, used, damaged, defective
   restocked     Boolean @default(false)
+  // Hang hong da ghi nhan huy — KHONG nhap lai kho. Tach khoi restocked vi mot
+  // mon chi duoc di MOT trong hai duong; gop chung se khong biet hang dang o dau.
+  disposed      Boolean @default(false)
 
   returnOrder ReturnOrder @relation(fields: [returnOrderId], references: [id], onDelete: Cascade)
 

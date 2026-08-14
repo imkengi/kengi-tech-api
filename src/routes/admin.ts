@@ -1779,6 +1779,13 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 `)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "PrintTemplate_type_idx" ON "PrintTemplate"("type")`)
 
+                /* Huy hang tra khong dung lai duoc (2026-08-14).
+                 * Truoc day giao dien co nut "huy hang loai" nhung backend khong
+                 * co endpoint; hook bat 404 roi bao thanh cong gia. Cot nay de
+                 * ghi nhan that, tach khoi restocked vi mot mon chi duoc di MOT
+                 * trong hai duong. */
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "ReturnItem" ADD COLUMN IF NOT EXISTS "disposed" BOOLEAN NOT NULL DEFAULT false`)
+
                 storeResults.push(`${store.name}: OK`)
             } catch (e: any) {
                 storeResults.push(`${store.name}: ${e.message}`)
