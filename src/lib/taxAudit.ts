@@ -207,7 +207,12 @@ export const TY_LE_CHAM_NOP_NGAY = 0.0003
 export const NGUONG_LECH_BO_QUA = 1_000
 
 const vnd = (v: number) => Math.round(v).toLocaleString('vi-VN')
-const ngayISO = (d: Date) => d.toISOString().slice(0, 10)
+/* NGÀY THEO GIỜ VN. Cột giờ trong DB là UTC nên cắt thẳng toISOString() cho ra
+ * ngày HÔM TRƯỚC trong khoảng 00:00–06:59 giờ VN. Ở file này lệch một ngày đẩy
+ * về phía IM LẶNG (hôm nay tính thành hôm qua → mốc vừa quá hạn chưa bị kêu),
+ * nên không nguy hiểm — nhưng vẫn sai, và một báo cáo thuế chạy lúc 6h sáng thì
+ * ra kết quả khác lúc 8h sáng. */
+const ngayISO = (d: Date) => new Date(d.getTime() + 7 * 3600_000).toISOString().slice(0, 10)
 
 /** Số phát sinh Nợ/Có của một nhóm tài khoản theo tiền tố */
 function phatSinh(

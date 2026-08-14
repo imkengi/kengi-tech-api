@@ -139,7 +139,9 @@ export function hanNopToKhai(maKy: string): string {
     return `${nam + 1}-03-31`
 }
 
-const ngayISO = (d: Date) => d.toISOString().slice(0, 10)
+/* NGÀY THEO GIỜ VN — hạn hoàn thành việc khắc phục tính từ đây, cắt thẳng
+ * toISOString() sẽ lệch một ngày với mọi lần chạy trong khoảng 00:00–06:59. */
+const ngayISO = (d: Date) => new Date(d.getTime() + 7 * 3600_000).toISOString().slice(0, 10)
 const themNgay = (goc: string, soNgay: number) =>
     ngayISO(new Date(new Date(goc + 'T00:00:00.000Z').getTime() + soNgay * 86400_000))
 const cachNhau = (tu: string, den: string) =>
