@@ -4056,19 +4056,39 @@ router.post('/backfill-loyalty', async (req: Request, res: Response) => {
                  * của tổng — hai cách ra số khác nhau. */
                 const rows: any[] = await sp.$queryRawUnsafe(
                     `SELECT t."customerId" AS id,
-                            COALESCE(SUM(FLOOR(t.total / 1000)), 0)::int AS diem
+                            COALESCE(SUM(FLOOR(t.total / 1000)), 0)::int AS diem,
+                            COALESCE(SUM(t.total), 0)::float8 AS "tongMua"
                      FROM "Transaction" t
                      WHERE t."customerId" IS NOT NULL
                        AND t.status IN ('completed', 'partial')
                      GROUP BY 1`,
                 )
                 const theoKhach = new Map<string, number>()
-                for (const r of rows) theoKhach.set(String(r.id), Number(r.diem) || 0)
+                const muaTheoKhach = new Map<string, number>()
+                for (const r of rows) {
+                    theoKhach.set(String(r.id), Number(r.diem) || 0)
+                    muaTheoKhach.set(String(r.id), Number(r.tongMua) || 0)
+                }
 
                 const khach = await sp.customer.findMany({
                     where: { id: { in: [...theoKhach.keys()] } },
                     select: { id: true, name: true, loyaltyPoints: true, tier: true, totalPurchases: true },
                 })
+
+                /* Đối chiếu luôn cột totalPurchases với tổng đơn thật. Hạng khách
+                 * tính từ cột này, nên nếu nó sai thì hạng cũng sai — và không ai
+                 * nhìn ra vì không có chỗ nào đối chiếu. */
+                let soLechTongMua = 0
+                let tongLech = 0
+                const vdLech: any[] = []
+                for (const k of khach) {
+                    const that = muaTheoKhach.get(String(k.id)) || 0
+                    const dangLuu = Number(k.totalPurchases) || 0
+                    if (Math.abs(that - dangLuu) < 1000) continue
+                    soLechTongMua++
+                    tongLech += that - dangLuu
+                    if (vdLech.length < 3) vdLech.push({ ten: k.name, dangLuu: Math.round(dangLuu), tinhTuDon: Math.round(that) })
+                }
 
                 let soDoi = 0, tongThem = 0
                 const vd: any[] = []
@@ -4091,7 +4111,11 @@ router.post('/backfill-loyalty', async (req: Request, res: Response) => {
                         }).catch(() => { })
                     }
                 }
-                ketQua.push({ store: store.name, soKhachCoDon: khach.length, soKhachDoi: soDoi, tongDiemThem: tongThem, viDu: vd })
+                ketQua.push({
+                    store: store.name, soKhachCoDon: khach.length, soKhachDoi: soDoi,
+                    tongDiemThem: tongThem, viDu: vd,
+                    tongMuaLech: { soKhach: soLechTongMua, chenh: Math.round(tongLech), viDu: vdLech },
+                })
             } catch (e: any) {
                 ketQua.push({ store: store.name, loi: String(e?.message || e).slice(0, 200) })
             }
