@@ -4748,11 +4748,40 @@ router.get('/dup-invoice-sweep', async (req: Request, res: Response) => {
                         s + v.slice(1).reduce((s2: number, r: any) => s2 + (Number(r.vatAmount) || 0), 0), 0)),
                     chiPhiKhaiTrung: Math.round(trung.reduce((s, v) =>
                         s + v.slice(1).reduce((s2: number, r: any) => s2 + (Number(r.totalCost) || 0), 0), 0)),
-                    mau: trung.slice(0, 5).map(v => ({
-                        nhaCungCap: v[0].supplierName || v[0].supplierId,
-                        soHoaDon: v[0].vatInvoiceNo,
-                        phieu: v.map((r: any) => ({ code: r.code, tien: Math.round(Number(r.totalCost) || 0), ngay: new Date(r.createdAt).toISOString().slice(0, 10) })),
-                    })),
+                    /* Kèm HÀNG HOÁ của các phiếu thừa: mỗi phiếu nhập cộng tồn
+                     * kho, nên biết mã nào đang thừa bao nhiêu mới quyết được có
+                     * huỷ hay không — và huỷ xong phải soát lại đúng những mã đó.
+                     * Chỉ tra hàng cho các phiếu THỪA (bỏ phiếu đầu mỗi nhóm). */
+                    mau: await (async () => {
+                        const ra: any[] = []
+                        for (const v of trung.slice(0, 5)) {
+                            const idThua = v.slice(1).map((r: any) => r.id)
+                            let hang: any[] = []
+                            if (idThua.length) {
+                                hang = await p.importReceiptItem.findMany({
+                                    where: { receiptId: { in: idThua } },
+                                    select: { productName: true, productSku: true, quantity: true, total: true },
+                                    take: 40,
+                                }).catch(() => [])
+                            }
+                            ra.push({
+                                nhaCungCap: v[0].supplierName || v[0].supplierId,
+                                soHoaDon: v[0].vatInvoiceNo,
+                                phieu: v.map((r: any, i: number) => ({
+                                    code: r.code,
+                                    tien: Math.round(Number(r.totalCost) || 0),
+                                    ngay: new Date(r.createdAt).toISOString().slice(0, 10),
+                                    laPhieuGoc: i === 0,
+                                })),
+                                hangThuaTon: hang.map((it: any) => ({
+                                    ten: it.productName, sku: it.productSku,
+                                    soLuongThua: Number(it.quantity) || 0,
+                                    tien: Math.round(Number(it.total) || 0),
+                                })),
+                            })
+                        }
+                        return ra
+                    })(),
                 })
             } catch (e: any) {
                 bang.push({ cuaHang: store.name, ma: store.code, loi: String(e?.message || e).slice(0, 200) })
