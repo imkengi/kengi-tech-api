@@ -675,7 +675,7 @@ export async function boHoSoThanhTra(
             const tk = await prisma.taxDeclaration.findMany({
                 select: {
                     formType: true, period: true, periodType: true, status: true,
-                    ct29: true, ct30: true, ct33: true, ct40a: true, filedAt: true,
+                    ct29: true, ct30: true, ct33: true, ct38: true, ct40a: true, filedAt: true,
                 },
             })
             const trongKy = (tk || []).filter((d: any) => {
@@ -708,7 +708,7 @@ export async function boHoSoThanhTra(
                         mau: d.formType, ky: d.period, loaiKy: d.periodType,
                         trangThai: d.status || '',
                         dtChiuThue: r0(d.ct29), vatRa: r0(d.ct30),
-                        vatVao: r0(d.ct33), phaiNop: r0(d.ct40a),
+                        vatVao: r0(d.ct33), phaiNop: r0(d.ct38) || r0(d.ct40a),
                         ngayNop: ngayCua(d, 'filedAt'),
                     })),
             })

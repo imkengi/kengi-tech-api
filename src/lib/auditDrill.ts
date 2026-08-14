@@ -125,7 +125,7 @@ export async function moPhongThanhTra(
     let khongDocDuocToKhai = false
     const toKhai: any = await prisma.taxDeclaration.findFirst({
         where: { period: maKy },
-        select: { ct29: true, ct30: true, ct33: true, ct40a: true, status: true, filedAt: true },
+        select: { ct29: true, ct30: true, ct33: true, ct38: true, ct40a: true, status: true, filedAt: true },
     }).catch(() => { khongDocDuocToKhai = true; return null })
     const cauHinh: any = await an(() => prisma.storeSettings.findFirst({
         select: { businessType: true, taxCode: true },

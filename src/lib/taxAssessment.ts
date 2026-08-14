@@ -120,7 +120,7 @@ export async function moPhongAnDinh(
     let khongDocDuocToKhai = false
     const toKhai: any = await prisma.taxDeclaration.findFirst({
         where: { period: maKy },
-        select: { ct29: true, ct30: true, ct33: true, ct40a: true },
+        select: { ct29: true, ct30: true, ct33: true, ct38: true, ct40a: true },
     }).catch(() => { khongDocDuocToKhai = true; return null })
     const cauHinh: any = await an(() => prisma.storeSettings.findFirst({
         select: { businessType: true },
@@ -252,7 +252,12 @@ export async function moPhongAnDinh(
     // Thuế đã kê khai của kỳ: GTGT phải nộp + TNDN tạm tính trên lãi sổ
     const p3331 = ps(butToan, '3331'), p133 = ps(butToan, '133')
     const gtgtTheoSo = Math.max(0, r0(p3331.co - p3331.no) - r0(p133.no - p133.co))
-    const gtgtDaKhai = toKhai ? Math.max(0, r0(toKhai.ct40a)) : gtgtTheoSo
+    /* Số thuế GTGT đã kê khai nằm ở [38]; [40a] là ĐỀ NGHỊ HOÀN và hệ thống để
+     * luôn bằng 0 khi tự tính tờ khai. Đọc [40a] là luôn ra 0 — kịch bản ấn định
+     * sẽ tưởng cửa hàng chưa kê khai đồng nào và thổi phồng số phải nộp thêm. */
+    const gtgtDaKhai = toKhai
+        ? Math.max(0, r0(toKhai.ct38) || r0(toKhai.ct40a))
+        : gtgtTheoSo
     const p632 = ps(butToan, '632'), p641 = ps(butToan, '641'), p642 = ps(butToan, '642')
     const laiSo = doanhThuSo - r0(p632.no - p632.co) - r0(p641.no - p641.co) - r0(p642.no - p642.co)
     const tndnTheoSo = laiSo > 0 ? r0(laiSo * THUE_SUAT_TNDN) : 0

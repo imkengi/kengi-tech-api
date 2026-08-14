@@ -17,29 +17,38 @@
 /** Tiền chậm nộp 0,03%/ngày — Điều 59 Luật Quản lý thuế 38/2019 */
 export const TY_LE_CHAM_NOP_NGAY = 0.0003
 
-/** Tên chỉ tiêu trên tờ khai 01/GTGT — để bản giải trình đọc được, không phải "ct30" */
+/**
+ * Tên chỉ tiêu trên tờ khai 01/GTGT — để bản giải trình đọc được, không phải "ct30".
+ *
+ * Bảng này PHẢI khớp quy ước của chính hệ thống (xem CHI_TIEU_LABELS ở giao diện
+ * và công thức recalcVatTotals ở backend: [29] = [21]+[22]+[23]+[25]+[27] là tổng
+ * doanh thu, [30] = [24]+[26]+[28] là tổng thuế bán ra). Bản đầu tiên ở đây tự
+ * đặt tên theo trí nhớ và lệch hẳn: [21] bị ghi là hàng MUA VÀO trong khi hệ
+ * thống dùng nó cho hàng BÁN RA không chịu thuế. Sai ở đây không dừng ở màn hình
+ * — nó in thẳng vào bản giải trình mang đi ký nộp cho cơ quan thuế.
+ */
 export const TEN_CHI_TIEU: Record<string, string> = {
-    ct21: '[21] Giá trị hàng hóa, dịch vụ mua vào',
-    ct22: '[22] Thuế GTGT của hàng hóa, dịch vụ mua vào',
-    ct23: '[23] Giá trị mua vào của hàng hóa, dịch vụ chịu thuế',
-    ct24: '[24] Thuế GTGT của hàng hóa, dịch vụ mua vào',
-    ct25: '[25] Tổng số thuế GTGT được khấu trừ kỳ này',
-    ct26: '[26] Doanh thu hàng hóa, dịch vụ không chịu thuế',
-    ct27: '[27] Doanh thu hàng hóa, dịch vụ chịu thuế suất 0%',
-    ct28: '[28] Doanh thu hàng hóa, dịch vụ chịu thuế suất 5%',
-    ct29: '[29] Tổng doanh thu hàng hóa, dịch vụ bán ra chịu thuế',
+    ct21: '[21] Hàng hóa, dịch vụ bán ra không chịu thuế GTGT',
+    ct22: '[22] Hàng hóa, dịch vụ bán ra chịu thuế suất 0%',
+    ct23: '[23] Hàng hóa, dịch vụ chịu thuế suất 5% — giá trị',
+    ct24: '[24] Hàng hóa, dịch vụ chịu thuế suất 5% — thuế GTGT',
+    ct25: '[25] Hàng hóa, dịch vụ chịu thuế suất 8% — giá trị',
+    ct26: '[26] Hàng hóa, dịch vụ chịu thuế suất 8% — thuế GTGT',
+    ct27: '[27] Hàng hóa, dịch vụ chịu thuế suất 10% — giá trị',
+    ct28: '[28] Hàng hóa, dịch vụ chịu thuế suất 10% — thuế GTGT',
+    ct29: '[29] Tổng doanh thu hàng hóa, dịch vụ bán ra',
     ct30: '[30] Tổng số thuế GTGT của hàng hóa, dịch vụ bán ra',
-    ct31: '[31] Doanh thu chịu thuế suất 10%',
-    ct32: '[32] Thuế GTGT của doanh thu chịu thuế suất 10%',
-    ct33: '[33] Tổng số thuế GTGT được khấu trừ kỳ này',
-    ct34: '[34] Điều chỉnh tăng/giảm thuế GTGT còn được khấu trừ',
+    ct31: '[31] Hàng hóa, dịch vụ mua vào — giá trị',
+    ct32: '[32] Hàng hóa, dịch vụ mua vào — thuế GTGT',
+    ct33: '[33] Thuế GTGT được khấu trừ kỳ này',
+    ct34: '[34] Thuế GTGT khấu trừ kỳ trước chuyển sang',
     ct35: '[35] Thuế GTGT phát sinh trong kỳ',
-    ct36: '[36] Điều chỉnh tăng thuế GTGT còn phải nộp',
-    ct37: '[37] Điều chỉnh giảm thuế GTGT còn phải nộp',
-    ct38: '[38] Tổng số thuế GTGT còn phải nộp',
-    ct39: '[39] Tổng số thuế GTGT chưa khấu trừ hết kỳ này',
-    ct40a: '[40a] Thuế GTGT phải nộp trong kỳ',
-    ct40b: '[40b] Thuế GTGT còn được khấu trừ chuyển kỳ sau',
+    ct36: '[36] Điều chỉnh tăng thuế GTGT các kỳ trước',
+    ct37: '[37] Điều chỉnh giảm thuế GTGT các kỳ trước',
+    ct38: '[38] Thuế GTGT còn phải nộp trong kỳ',
+    ct39: '[39] Thuế GTGT còn được khấu trừ chuyển kỳ sau',
+    ct40a: '[40a] Thuế GTGT đề nghị hoàn',
+    ct40b: '[40b] Thuế GTGT còn được khấu trừ sau hoàn',
 }
 
 export interface DongGiaiTrinh {
@@ -101,7 +110,23 @@ export function hanNopKy(period: string): string {
 }
 
 /** Chỉ tiêu phản ánh SỐ THUẾ PHẢI NỘP — tăng ở đây mới sinh tiền chậm nộp */
-const CHI_TIEU_PHAI_NOP = 'ct40a'
+const CHI_TIEU_PHAI_NOP = 'ct38'
+const CHI_TIEU_PHAI_NOP_DU_PHONG = 'ct40a'
+
+/**
+ * So thue phai nop cua mot to khai.
+ *
+ * Phep tinh to khai cua he thong dat so phai nop vao [38] va de [40a] = 0 ([40a]
+ * la de nghi hoan, he thong khong tu tinh). Doc [40a] la luon ra 0 — nghia la
+ * moi phep so sanh "chenh so thue phai nop" deu bang 0, va tien cham nop cung
+ * bang 0. Do la con so nguoi dung mang di nop that.
+ *
+ * Van doc [40a] lam duong lui cho to khai cu nhap tay theo kieu khac.
+ */
+function soThuePhaiNop(d: Record<string, number>): number {
+    const ct38 = r0(d[CHI_TIEU_PHAI_NOP] || 0)
+    return ct38 !== 0 ? ct38 : r0(d[CHI_TIEU_PHAI_NOP_DU_PHONG] || 0)
+}
 
 export function giaiTrinhKhaiBoSung(
     soCu: Record<string, number>,
@@ -133,7 +158,7 @@ export function giaiTrinhKhaiBoSung(
         })
     }
 
-    const chenhThuePhaiNop = r0((soMoi[CHI_TIEU_PHAI_NOP] || 0) - (soCu[CHI_TIEU_PHAI_NOP] || 0))
+    const chenhThuePhaiNop = soThuePhaiNop(soMoi) - soThuePhaiNop(soCu)
     const hanGoc = hanNopKy(thongTin.kyGoc)
 
     let chamNop: TienChamNop | null = null

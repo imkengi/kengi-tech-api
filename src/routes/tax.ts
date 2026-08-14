@@ -6762,13 +6762,18 @@ router.get('/deadlines', authMiddleware, async (req: AuthRequest, res: Response)
         try {
             const toKhaiNam: any[] = await prisma.taxDeclaration.findMany({
                 where: { year },
-                select: { period: true, formType: true, ct40a: true, cnkdTotalTax: true },
+                select: { period: true, formType: true, ct38: true, ct40a: true, cnkdTotalTax: true },
             }).catch(() => [])
             const toKhaiTheoKy = new Map<string, number>()
             for (const t of toKhaiNam) {
                 if (String(t.formType || '').includes('_BS')) continue   // bản bổ sung không phải số gốc
+                /* So thue phai nop nam o [38]; [40a] la de nghi hoan va he thong
+                 * de luon bang 0 khi tu tinh to khai. Doc [40a] la moi moc han
+                 * nop deu hien 0 dong. */
                 toKhaiTheoKy.set(String(t.period),
-                    Number(t.formType === '01_CNKD' ? t.cnkdTotalTax : t.ct40a) || 0)
+                    Number(t.formType === '01_CNKD'
+                        ? t.cnkdTotalTax
+                        : (t.ct38 || t.ct40a)) || 0)
             }
 
             const kyLuong: any[] = await prisma.payrollPeriod.findMany({

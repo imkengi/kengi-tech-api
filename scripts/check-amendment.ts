@@ -19,8 +19,8 @@ function ok(ten: string, dk: boolean, thucTe?: any) {
     else { hong++; console.log(`  ✗ ${ten}${thucTe !== undefined ? ` — thực tế: ${JSON.stringify(thucTe)}` : ''}`) }
 }
 
-const CU = { ct29: 100_000_000, ct30: 10_000_000, ct33: 6_000_000, ct40a: 4_000_000 }
-const MOI = { ct29: 150_000_000, ct30: 15_000_000, ct33: 6_000_000, ct40a: 9_000_000 }
+const CU = { ct29: 100_000_000, ct30: 10_000_000, ct33: 6_000_000, ct38: 4_000_000 }
+const MOI = { ct29: 150_000_000, ct30: 15_000_000, ct33: 6_000_000, ct38: 9_000_000 }
 
 const TT = {
     kyGoc: '2026-07', lanBoSung: 1,
@@ -47,7 +47,28 @@ async function main() {
         g.dong.every(d => d.ten.length > 10 && d.ten.includes('[')))
     ok('tính đúng chênh lệch', g.dong.find(d => d.chiTieu === 'ct29')!.chenh === 50_000_000)
     ok('đánh dấu hướng tăng/giảm', g.dong.every(d => d.huong === (d.chenh > 0 ? 'tang' : 'giam')))
-    ok('chênh thuế phải nộp lấy từ [40a]', g.chenhThuePhaiNop === 5_000_000, g.chenhThuePhaiNop)
+    /* Số thuế phải nộp nằm ở [38]. [40a] là ĐỀ NGHỊ HOÀN và phép tính tờ khai của
+     * hệ thống để nó luôn bằng 0 — đọc [40a] thì chênh lệch luôn ra 0, kéo theo
+     * tiền chậm nộp cũng 0. Đó lại chính là con số người dùng mang đi nộp. */
+    ok('chênh thuế phải nộp lấy từ [38]', g.chenhThuePhaiNop === 5_000_000, g.chenhThuePhaiNop)
+    {
+        // Tờ khai cũ nhập tay theo kiểu khác (số nằm ở [40a]) vẫn phải tính được
+        const cuKieuCu = { ...CU, ct38: 0, ct40a: 4_000_000 }
+        const moiKieuCu = { ...MOI, ct38: 0, ct40a: 9_000_000 }
+        const gCu = giaiTrinhKhaiBoSung(cuKieuCu, moiKieuCu, TT)
+        ok('vẫn đọc được tờ khai cũ ghi số ở [40a]', gCu.chenhThuePhaiNop === 5_000_000, gCu.chenhThuePhaiNop)
+    }
+    {
+        // [40a] có số nhưng [38] mới là số thật → phải lấy [38]
+        const gUuTien = giaiTrinhKhaiBoSung(
+            { ...CU, ct38: 4_000_000, ct40a: 99_000_000 },
+            { ...MOI, ct38: 9_000_000, ct40a: 99_000_000 }, TT)
+        ok('có cả hai thì ưu tiên [38]', gUuTien.chenhThuePhaiNop === 5_000_000, gUuTien.chenhThuePhaiNop)
+    }
+    ok('tên chỉ tiêu [21] là hàng BÁN RA không chịu thuế, khớp quy ước hệ thống',
+        TEN_CHI_TIEU.ct21.includes('bán ra'), TEN_CHI_TIEU.ct21)
+    ok('[40a] gọi đúng là đề nghị hoàn', TEN_CHI_TIEU.ct40a.includes('hoàn'), TEN_CHI_TIEU.ct40a)
+    ok('[38] gọi đúng là thuế còn phải nộp', TEN_CHI_TIEU.ct38.includes('phải nộp'), TEN_CHI_TIEU.ct38)
 
     console.log('\n▸ Tiền chậm nộp')
     const c = g.chamNop!
