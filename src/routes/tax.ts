@@ -333,8 +333,76 @@ async function calculate01GTGT(prisma: any, req: any, periodType: string, year: 
         (s: number, t: any) => s + (t.subtotal || 0) - tienGiamGia(t), 0)
     const totalSalesTax = transactions.reduce((s: number, t: any) => s + (t.tax || 0), 0)
     let ct21 = 0, ct22 = 0, ct23 = 0, ct24 = 0, ct25 = 0, ct26 = 0, ct27 = 0, ct28 = 0
+    let nguonDoanhThu = 'phiếu bán hàng'
 
-    if (defaultRate === 0) { ct22 = totalSalesSubtotal }
+    /* TÁCH DOANH THU THEO TỪNG THUẾ SUẤT.
+     *
+     * Bản trước dồn TOÀN BỘ doanh thu vào đúng một dòng, chọn theo thuế suất mặc
+     * định của cửa hàng. Cửa hàng bán lẫn hàng 10% với hàng 5% hay hàng không
+     * chịu thuế (rau, thịt tươi) thì tờ khai sai cả cơ cấu lẫn số thuế.
+     *
+     * Dòng hóa đơn điện tử có sẵn `vatRate` từng dòng — và đó mới là số CƠ QUAN
+     * THUẾ nhìn thấy, vì hóa đơn đã lên hệ thống của họ. Có hóa đơn thì lấy hóa
+     * đơn làm gốc; chưa dùng hóa đơn điện tử thì mới lùi về cách cũ. */
+    const dongHoaDon: any[] = await prisma.eInvoiceItem.findMany({
+        where: {
+            eInvoice: {
+                invoiceDate: {
+                    gte: startDate.toISOString().slice(0, 10),
+                    lte: endDate.toISOString().slice(0, 10),
+                },
+                status: { in: ['SIGNED', 'SENT'] },
+            },
+        },
+        select: { vatRate: true, vatAmount: true, amount: true, eInvoice: { select: { invoiceType: true } } },
+    }).catch(() => [])
+
+    if (dongHoaDon.length > 0) {
+        nguonDoanhThu = 'hóa đơn điện tử đã phát hành'
+        for (const d of dongHoaDon) {
+            // Hóa đơn trả lại / điều chỉnh giảm phải TRỪ khỏi doanh thu kỳ
+            const dau = d.eInvoice?.invoiceType === 'RETURN' ? -1 : 1
+            const tien = dau * (d.amount || 0)
+            const thue = dau * (d.vatAmount || 0)
+            const r = Number(d.vatRate) || 0
+            if (r === 5) { ct23 += tien; ct24 += thue }
+            else if (r === 8) { ct25 += tien; ct26 += thue }
+            else if (r === 10) { ct27 += tien; ct28 += thue }
+            else {
+                /* vatRate = 0 có thể là "không chịu thuế" [21] hoặc "thuế suất 0%"
+                 * [22] — dữ liệu hóa đơn không phân biệt được. Với bán lẻ, hàng
+                 * không chịu thuế (nông sản tươi) phổ biến hơn nhiều so với 0%
+                 * (chỉ dành cho hàng xuất khẩu), nên xếp vào [21]. Hai chỉ tiêu
+                 * này đều sửa tay được trên màn hình tờ khai. */
+                ct21 += tien
+            }
+        }
+        /* BÁN KHÔNG XUẤT HÓA ĐƠN VẪN PHẢI KÊ KHAI.
+         *
+         * Nhiều cửa hàng chỉ xuất hóa đơn khi khách yêu cầu. Lấy hóa đơn làm gốc
+         * mà bỏ qua phần còn lại là KHAI THIẾU doanh thu — hướng sai nguy hiểm
+         * hơn hẳn khai thừa, vì bị truy thu kèm phạt 20% và tiền chậm nộp. Nghĩa
+         * vụ thuế phát sinh khi bán hàng, không phải khi xuất hóa đơn (Điều 90
+         * Luật Quản lý thuế còn buộc lập hóa đơn cả khi khách không lấy).
+         *
+         * Nên: hóa đơn cho phần tách thuế suất, cộng thêm phần bán chưa có hóa
+         * đơn vào dòng thuế suất mặc định của cửa hàng. */
+        const dtHoaDon = ct21 + ct22 + ct23 + ct25 + ct27
+        const conThieu = Math.round(totalSalesSubtotal - dtHoaDon)
+        if (conThieu > 1000) {
+            const thueThieu = Math.round(conThieu * defaultRate / 100)
+            if (defaultRate === 0) ct22 += conThieu
+            else if (defaultRate === 5) { ct23 += conThieu; ct24 += thueThieu }
+            else if (defaultRate === 8) { ct25 += conThieu; ct26 += thueThieu }
+            else { ct27 += conThieu; ct28 += thueThieu }
+            nguonDoanhThu = `hóa đơn điện tử đã phát hành + ${conThieu.toLocaleString('vi-VN')}đ doanh thu chưa xuất hóa đơn (tính theo thuế suất ${defaultRate}%)`
+        }
+
+        ct21 = Math.round(ct21); ct22 = Math.round(ct22)
+        ct23 = Math.round(ct23); ct24 = Math.round(ct24)
+        ct25 = Math.round(ct25); ct26 = Math.round(ct26)
+        ct27 = Math.round(ct27); ct28 = Math.round(ct28)
+    } else if (defaultRate === 0) { ct22 = totalSalesSubtotal }
     else if (defaultRate === 5) { ct23 = totalSalesSubtotal; ct24 = totalSalesTax }
     else if (defaultRate === 8) { ct25 = totalSalesSubtotal; ct26 = totalSalesTax }
     else { ct27 = totalSalesSubtotal; ct28 = totalSalesTax }
@@ -379,7 +447,14 @@ async function calculate01GTGT(prisma: any, req: any, periodType: string, year: 
     const ct40a = 0
     const ct40b = ct39 - ct40a
 
-    return { ct21, ct22, ct23, ct24, ct25, ct26, ct27, ct28, ct29, ct30, ct31, ct32, ct33, ct34, ct35, ct36, ct37, ct38, ct39, ct40a, ct40b }
+    return {
+        ct21, ct22, ct23, ct24, ct25, ct26, ct27, ct28, ct29, ct30,
+        ct31, ct32, ct33, ct34, ct35, ct36, ct37, ct38, ct39, ct40a, ct40b,
+        /* Nói rõ số liệu dựng từ đâu — kế toán cần biết mình đang đối chiếu với
+         * hóa đơn hay với phiếu bán trước khi ký nộp. Trường này không phải chỉ
+         * tiêu của tờ khai nên nơi lưu phải lọc bỏ. */
+        nguonDoanhThu,
+    }
 }
 
 // ── Helper: calculate 01/CNKD data (Household / Individual business) ────────
@@ -641,6 +716,11 @@ router.post('/declarations', authMiddleware, async (req: AuthRequest, res: Respo
 
         console.log('Calculated:', JSON.stringify(calculated))
 
+        /* `nguonDoanhThu` là thông tin cho người đọc, KHÔNG phải cột của bảng —
+         * để lẫn trong `...calculated` là Prisma báo "Unknown argument" và việc
+         * lập tờ khai hỏng hẳn. Tách ra trước khi ghi, trả kèm ở response. */
+        const { nguonDoanhThu, ...chiTieu } = calculated as any
+
         const data = await prisma.taxDeclaration.create({
             data: {
                 formType,
@@ -649,11 +729,11 @@ router.post('/declarations', authMiddleware, async (req: AuthRequest, res: Respo
                 month: periodType === 'month' ? (month || null) : null,
                 quarter: periodType === 'quarter' ? (quarter || null) : null,
                 taxCode, companyName, companyAddress: companyAddress || null,
-                ...calculated,
+                ...chiTieu,
             },
         })
 
-        res.status(201).json({ success: true, data })
+        res.status(201).json({ success: true, data: { ...data, nguonDoanhThu: nguonDoanhThu ?? null } })
     } catch (err: any) {
         console.error('POST /declarations error:', err)
         res.status(500).json({ success: false, error: errMsg(err) })
