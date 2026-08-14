@@ -103,10 +103,17 @@ export function ghepBanTin(tien_: any, kho: any): BanTin | null {
     }
 }
 
-export async function banTinChoStore(prisma: any, tenStore: string, tuanMa: string): Promise<boolean> {
+/**
+ * `chayThu` = tính đủ nhưng KHÔNG tạo thông báo, chỉ in ra log những gì sẽ gửi.
+ * Dùng để kiểm hai phép tính nặng này trên dữ liệu thật mà không làm phiền cửa
+ * hàng nào — chạy thử trên dữ liệu giả không bắt được lỗi truy vấn.
+ */
+export async function banTinChoStore(
+    prisma: any, tenStore: string, tuanMa: string, chayThu = false,
+): Promise<boolean> {
     /* Đã gửi tuần này rồi thì thôi — dùng chính Notification làm dấu thay vì
      * thêm bảng trạng thái cho việc chạy mỗi tuần một lần. */
-    const daGui = await prisma.notification.findFirst({
+    const daGui = chayThu ? null : await prisma.notification.findFirst({
         where: { type: LOAI_TB, message: { contains: tuanMa } },
         select: { id: true },
     }).catch(() => null)
@@ -124,7 +131,17 @@ export async function banTinChoStore(prisma: any, tenStore: string, tuanMa: stri
     }
 
     const tin = ghepBanTin(tien_, kho)
-    if (!tin) return false
+    if (!tin) {
+        if (chayThu) console.log(`📋 [${tenStore}] CHẠY THỬ: không có gì đáng gửi`)
+        return false
+    }
+
+    if (chayThu) {
+        console.log(`📋 [${tenStore}] CHẠY THỬ — sẽ gửi:
+${tin.tieuDe}
+${tin.noiDung}`)
+        return true
+    }
 
     await prisma.notification.create({
         data: {
@@ -154,7 +171,7 @@ export function maTuan(homNay: Date): string {
     return `tuần ${namCuaTuan}-W${String(tuan).padStart(2, '0')}`
 }
 
-async function runBanTin(): Promise<void> {
+async function runBanTin(chayThu = false): Promise<void> {
     if (running) return
     running = true
     try {
@@ -163,7 +180,7 @@ async function runBanTin(): Promise<void> {
         const stores = await registryPrisma.store.findMany({ where: { status: 'active' } as any }) as any[]
         for (const store of stores) {
             try {
-                await banTinChoStore(getStorePrisma(store.schema), store.name, tuanMa)
+                await banTinChoStore(getStorePrisma(store.schema), store.name, tuanMa, chayThu)
             } catch (e: any) {
                 console.error(`Bản tin tuần lỗi ở store ${store.name}:`, e?.message || e)
             }

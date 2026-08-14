@@ -3986,11 +3986,21 @@ router.post('/run-tax-deadline-reminder', async (_req: Request, res: Response) =
 })
 
 // POST /api/admin/run-weekly-brief — chạy ngay vòng bản tin đầu tuần
-router.post('/run-weekly-brief', async (_req: Request, res: Response) => {
+router.post('/run-weekly-brief', async (req: Request, res: Response) => {
     try {
+        /* ?dryRun=1 — tính đủ nhưng KHÔNG tạo thông báo, chỉ in ra log. Dùng để
+         * kiểm hai phép tính nặng (lịch tiền + đặt hàng) trên dữ liệu THẬT mà
+         * không làm phiền cửa hàng nào: chạy trên dữ liệu giả không bắt được lỗi
+         * truy vấn. */
+        const chayThu = String((req.query as any)?.dryRun || '') === '1'
         const { chayBanTinNgay } = await import('../cron/weeklyBriefCron')
-        chayBanTinNgay().catch(e => console.error('run-weekly-brief lỗi:', e))
-        res.json({ success: true, message: 'Đã kích hoạt vòng bản tin đầu tuần — xem tiến độ trong log' })
+        chayBanTinNgay(chayThu).catch(e => console.error('run-weekly-brief lỗi:', e))
+        res.json({
+            success: true,
+            message: chayThu
+                ? 'Đã kích hoạt CHẠY THỬ bản tin (không gửi thông báo) — xem kết quả trong log'
+                : 'Đã kích hoạt vòng bản tin đầu tuần — xem tiến độ trong log',
+        })
     } catch (err: any) {
         res.status(500).json({ success: false, error: err?.message })
     }
