@@ -142,24 +142,40 @@ export async function moPhongThanhTra(
         .filter(h => ['SIGNED', 'SENT'].includes(String(h.status)) && h.invoiceType !== 'RETURN')
         .reduce((s, h) => s + (h.totalBeforeVat || 0), 0))
 
+    /* SỔ TRỐNG KHÔNG PHẢI LỆCH.
+     *
+     * `dtSo` lấy từ phát sinh Có 511 — bút toán, không phải đơn hàng. Hộ kinh
+     * doanh không bắt buộc ghi sổ kép nên `dtSo = 0` là bình thường; khi đó câu
+     * trả lời "lệch so với tờ khai X đ" ở mức nguy-hiem là dựng một tình huống
+     * thanh tra không có thật, và người dùng sẽ đi soạn giải trình cho một khoản
+     * lệch không tồn tại. Nói thẳng là chưa đối chiếu được. */
+    const soChuaGhiDoanhThu = ps511.co === 0 && ps511.no === 0
+    const baNguonKhop = dtToKhai !== null
+        && Math.abs(dtSo - dtToKhai) < 1000 && Math.abs(dtSo - dtHoaDon) < 1000
+
     them({
         ma: 'dt-khop',
         nhom: NHOM_DT,
         cauHoi: 'Doanh thu trên sổ kế toán, trên tờ khai và trên hóa đơn điện tử có khớp nhau không?',
         vaSao: 'Đây luôn là câu đầu tiên. Ba nguồn lệch nhau là đoàn có cớ ấn định doanh thu theo Điều 50 Luật Quản lý thuế.',
-        traLoi: dtToKhai === null
-            ? `Sổ ghi ${vnd(dtSo)}đ, hóa đơn điện tử ${vnd(dtHoaDon)}đ. CHƯA có tờ khai kỳ ${maKy} trong hệ thống để đối chiếu.`
-            : `Sổ ${vnd(dtSo)}đ · tờ khai [29] ${vnd(dtToKhai)}đ · hóa đơn ${vnd(dtHoaDon)}đ.` +
-            (Math.abs(dtSo - dtToKhai) < 1000 && Math.abs(dtSo - dtHoaDon) < 1000
-                ? ' Ba nguồn khớp nhau.'
-                : ` Lệch so với tờ khai ${vnd(Math.abs(dtSo - dtToKhai))}đ, lệch so với hóa đơn ${vnd(Math.abs(dtSo - dtHoaDon))}đ.`),
-        muc: dtToKhai === null ? 'khong-du-lieu'
-            : (Math.abs(dtSo - dtToKhai) < 1000 && Math.abs(dtSo - dtHoaDon) < 1000) ? 'an-toan' : 'nguy-hiem',
+        traLoi: soChuaGhiDoanhThu
+            ? `Sổ kế toán chưa có bút toán doanh thu nào (TK 511 không phát sinh) nên CHƯA đối chiếu được ba nguồn. Hóa đơn điện tử ${vnd(dtHoaDon)}đ${dtToKhai === null ? '' : `, tờ khai [29] ${vnd(dtToKhai)}đ`}. Đây không phải là lệch — hộ kinh doanh không bắt buộc ghi sổ kép, doanh nghiệp thì có thể chưa chạy ghi sổ.`
+            : dtToKhai === null
+                ? `Sổ ghi ${vnd(dtSo)}đ, hóa đơn điện tử ${vnd(dtHoaDon)}đ. CHƯA có tờ khai kỳ ${maKy} trong hệ thống để đối chiếu.`
+                : `Sổ ${vnd(dtSo)}đ · tờ khai [29] ${vnd(dtToKhai)}đ · hóa đơn ${vnd(dtHoaDon)}đ.` +
+                (baNguonKhop
+                    ? ' Ba nguồn khớp nhau.'
+                    : ` Lệch so với tờ khai ${vnd(Math.abs(dtSo - dtToKhai))}đ, lệch so với hóa đơn ${vnd(Math.abs(dtSo - dtHoaDon))}đ.`),
+        muc: soChuaGhiDoanhThu ? 'khong-du-lieu'
+            : dtToKhai === null ? 'khong-du-lieu'
+                : baNguonKhop ? 'an-toan' : 'nguy-hiem',
         chungTu: ['Sổ cái TK 511', 'Tờ khai 01/GTGT kỳ ' + maKy, 'Bảng kê hóa đơn bán ra'],
-        canLam: dtToKhai === null ? `Lập tờ khai kỳ ${maKy} rồi soát lại.`
-            : (Math.abs(dtSo - dtToKhai) >= 1000 || Math.abs(dtSo - dtHoaDon) >= 1000)
-                ? 'Tìm nguyên nhân lệch từng khoản và chuẩn bị bản giải trình có số liệu đối chiếu, trước khi đoàn tự kết luận.'
-                : undefined,
+        canLam: soChuaGhiDoanhThu
+            ? 'Hộ kinh doanh: nhập Sổ Doanh Thu trong phần Thuế. Doanh nghiệp: chạy ghi sổ tự động ở Kế Toán cho kỳ này rồi soát lại — có sổ mới đối chiếu được.'
+            : dtToKhai === null ? `Lập tờ khai kỳ ${maKy} rồi soát lại.`
+                : !baNguonKhop
+                    ? 'Tìm nguyên nhân lệch từng khoản và chuẩn bị bản giải trình có số liệu đối chiếu, trước khi đoàn tự kết luận.'
+                    : undefined,
         soLieu: { so: dtSo, toKhai: dtToKhai, hoaDon: dtHoaDon },
     })
 

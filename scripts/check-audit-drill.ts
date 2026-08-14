@@ -262,6 +262,36 @@ async function main() {
     ok('vẫn chỉ ra việc cần làm: kiểm tra thủ công trên cổng thuế',
         /thuedientu/.test(String(cauNop.canLam)), cauNop.canLam)
 
+    console.log('\n▸ Sổ chưa ghi doanh thu ≠ ba nguồn lệch nhau')
+    /* `dtSo` lấy từ phát sinh Có 511 — bút toán, không phải đơn hàng. Hộ kinh
+     * doanh không bắt buộc ghi sổ kép nên dtSo = 0 là bình thường; khi đó câu
+     * trả lời "lệch so với tờ khai X đ" ở mức nguy-hiem là dựng một tình huống
+     * thanh tra không có thật, và người dùng đi soạn giải trình cho khoản lệch
+     * không tồn tại. */
+    {
+        const k = khoSach()
+        k.journal = k.journal.filter((b: any) => b.debitAccount !== '511' && b.creditAccount !== '511')
+        const r = await moPhongThanhTra(fakePrisma(k), KY)
+        const c = r.cauHoi.find((x: any) => x.ma === 'dt-khop')
+        ok('sổ chưa ghi doanh thu → KHÔNG xếp mức nguy hiểm',
+            !!c && c.muc === 'khong-du-lieu', c?.muc)
+        ok('… câu trả lời nói thẳng là chưa đối chiếu được',
+            !!c && /CHƯA đối chiếu được ba nguồn/.test(c.traLoi), c?.traLoi?.slice(0, 90))
+        ok('… và nói rõ đây không phải là lệch',
+            !!c && /không phải là lệch/.test(c.traLoi))
+        ok('… việc cần làm là ghi sổ, không phải soạn giải trình',
+            !!c && /Sổ Doanh Thu/.test(c.canLam || '') && !/giải trình/.test(c.canLam || ''), c?.canLam)
+    }
+    {
+        // Chiều ngược: sổ CÓ ghi mà lệch thật thì vẫn phải xếp nguy hiểm
+        const k = khoSach()
+        k.declaration = { ...(k as any).declaration, ct29: 999_000_000 }
+        const r = await moPhongThanhTra(fakePrisma(k), KY)
+        const c = r.cauHoi.find((x: any) => x.ma === 'dt-khop')
+        ok('sổ có ghi mà lệch tờ khai thật thì vẫn nguy hiểm',
+            !!c && c.muc === 'nguy-hiem', c?.muc)
+    }
+
     console.log(`\n${dat}/${dat + hong} ca đạt`)
     if (hong) process.exit(1)
 }
