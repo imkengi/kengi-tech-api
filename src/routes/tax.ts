@@ -303,7 +303,7 @@ async function calculate01GTGT(prisma: any, req: any, periodType: string, year: 
 
     const transactions = await prisma.transaction.findMany({
         where: { status: { in: ['completed', 'partial'] }, createdAt: { gte: startDate, lte: endDate } },
-        select: { subtotal: true, tax: true, total: true, discount: true },
+        select: { subtotal: true, tax: true, total: true, discount: true, discountType: true },
     })
     const imports = await prisma.importReceipt.findMany({
         where: { status: 'completed', createdAt: { gte: startDate, lte: endDate } },
@@ -312,7 +312,20 @@ async function calculate01GTGT(prisma: any, req: any, periodType: string, year: 
     const taxConfigs = await prisma.taxConfig.findMany({ where: { ...getBranchFilter(req as any), status: 'active' } })
     const defaultRate = taxConfigs.find((t: any) => t.isDefault)?.rate ?? 10
 
-    const totalSalesSubtotal = transactions.reduce((s: number, t: any) => s + (t.subtotal || 0), 0)
+    /* Doanh thu kê khai phải là doanh thu THUẦN — trừ giảm giá.
+     *
+     * Bản trước lấy thẳng `subtotal` (giá trước giảm giá), nên với cửa hàng có
+     * giảm giá thì chỉ tiêu [29] luôn CAO hơn doanh thu trên sổ đúng bằng tổng
+     * giảm giá (sổ ghi 511 = subtotal và 521 = giảm giá, doanh thu thuần là hiệu
+     * hai bên). Hệ quả kép: tờ khai khai vống doanh thu, và phép soát "sổ lệch
+     * tờ khai" kêu mỗi kỳ khiến kế toán đi tìm một sai sót không tồn tại.
+     *
+     * `discount` có thể là SỐ TIỀN hoặc PHẦN TRĂM tùy `discountType`. */
+    const tienGiamGia = (t: any) => String(t.discountType || '') === 'percent'
+        ? Math.round((t.subtotal || 0) * (t.discount || 0) / 100)
+        : Math.round(t.discount || 0)
+    const totalSalesSubtotal = transactions.reduce(
+        (s: number, t: any) => s + (t.subtotal || 0) - tienGiamGia(t), 0)
     const totalSalesTax = transactions.reduce((s: number, t: any) => s + (t.tax || 0), 0)
     let ct21 = 0, ct22 = 0, ct23 = 0, ct24 = 0, ct25 = 0, ct26 = 0, ct27 = 0, ct28 = 0
 

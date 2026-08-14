@@ -228,6 +228,56 @@ async function main() {
         else console.log('✓ Điều chỉnh 0 hoặc thiếu giá vốn — không ghi bút toán rác')
     }
 
+    /* ── 13. Giảm giá theo PHẦN TRĂM ────────────────────────────────────────
+     *
+     * Cột `discount` là SỐ TIỀN hay PHẦN TRĂM tùy `discountType`. Bản trước ghi
+     * thẳng tx.discount vào TK 521, nên đơn giảm 10% bị ghi là 10 ĐỒNG. Hậu quả
+     * không dừng ở doanh thu sai: bút toán thu tiền (Nợ 111 = doanh thu + thuế −
+     * giảm giá) cũng lệch, nên số dư tiền mặt trên sổ trôi dần khỏi thực tế.
+     */
+    {
+        const { createJournalEntriesForTransaction } = await import('../src/lib/autoJournal')
+        const c = fakeClient()
+        await createJournalEntriesForTransaction(c as any, {
+            id: 'tx-pc', receiptNumber: 'HD500',
+            subtotal: 1_000_000, discount: 10, discountType: 'percent',
+            tax: 90_000, total: 990_000, amountReceived: 990_000,
+            createdAt: new Date('2026-08-10'), items: [],
+        } as any, { skipDupCheck: true })
+        const disc = c.rows.find(r => r.reference === 'DISC-HD500')
+        soCa++
+        if (!disc || disc.amount !== 100_000) {
+            soLoi++
+            console.log(`✗ Giảm 10% trên 1tr phải ghi 100.000đ vào TK521 (ghi ${disc?.amount})`)
+        } else console.log('✓ Giảm giá phần trăm quy ra đúng số tiền trước khi ghi sổ')
+
+        // Bút toán phải cân: Nợ 111 = doanh thu + thuế − giảm giá = tổng thực thu
+        const no = c.rows.reduce((s, r) => s + (r.debitAccount.startsWith('111') ? r.amount : 0), 0)
+        const co = c.rows.reduce((s, r) => s + (r.creditAccount.startsWith('111') ? r.amount : 0), 0)
+        soCa++
+        if (no - co !== 990_000) {
+            soLoi++
+            console.log(`✗ Tiền mặt ghi sổ phải bằng thực thu 990.000đ (đang ${no - co})`)
+        } else console.log('✓ Tiền mặt vào sổ khớp đúng số thực thu của đơn giảm %')
+    }
+    {
+        // Giảm giá số tiền tuyệt đối vẫn giữ nguyên hành vi cũ
+        const { createJournalEntriesForTransaction } = await import('../src/lib/autoJournal')
+        const c = fakeClient()
+        await createJournalEntriesForTransaction(c as any, {
+            id: 'tx-fx', receiptNumber: 'HD501',
+            subtotal: 1_000_000, discount: 50_000, discountType: 'fixed',
+            tax: 95_000, total: 1_045_000, amountReceived: 1_045_000,
+            createdAt: new Date('2026-08-10'), items: [],
+        } as any, { skipDupCheck: true })
+        const disc = c.rows.find(r => r.reference === 'DISC-HD501')
+        soCa++
+        if (!disc || disc.amount !== 50_000) {
+            soLoi++
+            console.log(`✗ Giảm giá số tiền phải giữ nguyên 50.000đ (ghi ${disc?.amount})`)
+        } else console.log('✓ Giảm giá dạng số tiền không bị quy đổi nhầm')
+    }
+
     console.log(`\n${soCa - soLoi}/${soCa} ca đạt`)
     process.exit(soLoi > 0 ? 1 : 0)
 }

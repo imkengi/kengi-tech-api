@@ -25,6 +25,8 @@ export type TxWithRelations = {
     customerName?: string | null
     subtotal: number
     discount: number
+    /** 'percent' thi `discount` la PHAN TRAM, khong phai so tien */
+    discountType?: string | null
     tax: number
     total: number
     amountReceived: number
@@ -143,6 +145,17 @@ export async function createJournalEntriesForTransaction(
 
     const date = fmtDate(tx.createdAt)
     const revenue = tx.subtotal || (tx.total - (tx.tax || 0))
+
+    /* So tien giam gia THAT.
+     *
+     * Cot `discount` co the la SO TIEN hoac PHAN TRAM tuy `discountType` — may
+     * ban hang gui 'percent' cho don giam theo %. Ban truoc ghi thang tx.discount
+     * vao TK 521, nen don giam 10% bi ghi la 10 DONG. Hau qua khong dung o cho
+     * doanh thu sai: but toan thu tien (No 111 = subtotal + thue - giam gia)
+     * cung lech, nen SO DU TIEN MAT tren so troi dan khoi thuc te sau moi don. */
+    const discountAmount = String(tx.discountType || '') === 'percent'
+        ? Math.round(revenue * (tx.discount || 0) / 100)
+        : Math.round(tx.discount || 0)
     const vatAmount = tx.tax || 0
     const branchId = opts.branchId ?? tx.branchId ?? null
     const userId = opts.userId ?? null
@@ -207,7 +220,7 @@ export async function createJournalEntriesForTransaction(
     }
 
     // 3. Discount entry — Nợ TK521 / Có TK11x/131
-    if (tx.discount > 0 && !existing.has(discRef)) {
+    if (discountAmount > 0 && !existing.has(discRef)) {
         try {
             await prisma.journalEntry.create({
                 data: {
@@ -215,11 +228,11 @@ export async function createJournalEntriesForTransaction(
                     description: `Giảm giá hàng bán ${tx.receiptNumber}`,
                     debitAccount: '521', debitAccountName: 'Chiết khấu thương mại',
                     creditAccount: debitAccount, creditAccountName: debitName,
-                    amount: tx.discount, reference: discRef, referenceType: 'sale',
+                    amount: discountAmount, reference: discRef, referenceType: 'sale',
                     branchId, createdBy: userId,
                 },
             })
-            result.created.push({ type: 'discount', ref: discRef, amount: tx.discount })
+            result.created.push({ type: 'discount', ref: discRef, amount: discountAmount })
         } catch (_) { }
     }
 

@@ -3850,6 +3850,91 @@ router.post('/fix-kiotviet-discount', async (req: Request, res: Response) => {
  *  sửa được chưa.
  * ═══════════════════════════════════════════════════════════════════════════ */
 
+/**
+ * POST /admin/fix-percent-discount-journal?storeCode=&apply=&from=&to=
+ *
+ * VÁ BÚT TOÁN GIẢM GIÁ GHI THEO PHẦN TRĂM.
+ *
+ * Cột `Transaction.discount` là SỐ TIỀN hoặc PHẦN TRĂM tùy `discountType`. Bản
+ * ghi sổ tự động trước đây ghi thẳng con số đó vào TK 521, nên đơn giảm 10% bị
+ * ghi thành 10 ĐỒNG. Hai hậu quả:
+ *   - doanh thu thuần trên sổ cao hơn thực tế;
+ *   - bút toán thu tiền lệch, nên số dư TK 111 trôi dần khỏi tiền thật trong két.
+ *
+ * Mã nguồn đã sửa nên bút toán MỚI ghi đúng; route này vá những bút toán ĐÃ ghi.
+ *
+ * apply=false (mặc định) chỉ đọc và liệt kê. Chỉ sửa đúng số tiền của bút toán
+ * DISC- đã có — không tạo mới, không xóa, không đụng bút toán nào khác.
+ */
+router.post('/fix-percent-discount-journal', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || '').trim()
+        const apply = String(req.query.apply || '') === 'true'
+        if (!storeCode) return res.status(400).json({ success: false, error: 'Thiếu storeCode' })
+
+        const store = await prisma.store.findFirst({
+            where: { code: { equals: storeCode, mode: 'insensitive' } },
+            select: { code: true, name: true, schema: true },
+        })
+        if (!store) return res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' })
+        const sp: any = getStorePrisma(store.schema)
+
+        const from = String(req.query.from || '').slice(0, 10)
+        const to = String(req.query.to || '').slice(0, 10)
+        const loc: any = { discountType: 'percent', discount: { gt: 0 } }
+        if (/^\d{4}-\d{2}-\d{2}$/.test(from)) loc.createdAt = { gte: new Date(from + 'T00:00:00.000Z') }
+        if (/^\d{4}-\d{2}-\d{2}$/.test(to)) {
+            loc.createdAt = { ...(loc.createdAt || {}), lte: new Date(to + 'T23:59:59.999Z') }
+        }
+
+        const dsGiam = await sp.transaction.findMany({
+            where: loc,
+            select: { receiptNumber: true, subtotal: true, discount: true, total: true, tax: true, createdAt: true },
+        })
+
+        const canSua: any[] = []
+        let daSua = 0
+        for (const t of dsGiam) {
+            const dung = Math.round((t.subtotal || 0) * (t.discount || 0) / 100)
+            const bt = await sp.journalEntry.findFirst({
+                where: { reference: `DISC-${t.receiptNumber}` },
+                select: { id: true, amount: true },
+            }).catch(() => null)
+            if (!bt) continue
+            if (Math.abs((bt.amount || 0) - dung) < 1) continue
+
+            canSua.push({
+                phieu: t.receiptNumber,
+                ngay: new Date(t.createdAt).toISOString().slice(0, 10),
+                giamPhanTram: t.discount,
+                dangGhi: Math.round(bt.amount || 0),
+                phaiLa: dung,
+                lech: dung - Math.round(bt.amount || 0),
+            })
+            if (apply) {
+                await sp.journalEntry.update({ where: { id: bt.id }, data: { amount: dung } })
+                daSua++
+            }
+        }
+
+        res.json({
+            success: true,
+            data: {
+                cuaHang: store.name,
+                soDonGiamPhanTram: dsGiam.length,
+                soButToanSai: canSua.length,
+                tongLech: canSua.reduce((s, x) => s + x.lech, 0),
+                daSua: apply ? daSua : 0,
+                cheDo: apply ? 'ĐÃ GHI' : 'chỉ xem trước (thêm apply=true để ghi)',
+                viDu: canSua.slice(0, 20),
+            },
+        })
+    } catch (err: any) {
+        console.error('fix-percent-discount-journal error:', err)
+        res.status(500).json({ success: false, error: err?.message })
+    }
+})
+
 // POST /api/admin/run-tax-audit — chạy ngay vòng soát thuế tháng trước
 router.post('/run-tax-audit', async (_req: Request, res: Response) => {
     try {
