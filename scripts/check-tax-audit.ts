@@ -63,7 +63,17 @@ function fakePrisma(k: Kho) {
                 ? k.products.filter(p => (p.stock ?? 0) < where.stock.lt)
                 : k.products,
         },
-        transaction: { findMany: async ({ where }: any = {}) => k.transactions.filter(t => ngay(t.createdAt, where?.createdAt)) },
+        transaction: {
+            findMany: async ({ where }: any = {}) => k.transactions.filter(t => ngay(t.createdAt, where?.createdAt)),
+            // Dùng cho đường lùi khi sổ doanh thu HKD nhập tay còn rỗng
+            aggregate: async ({ where }: any = {}) => ({
+                _sum: {
+                    total: k.transactions
+                        .filter(t => ngay(t.createdAt, where?.createdAt))
+                        .reduce((s, t) => s + (t.total || 0), 0),
+                },
+            }),
+        },
         taxDeadline: { findMany: async () => k.deadlines },
         // SQL thô cho phép soát "bán vượt hóa đơn đầu vào" — mặc định không có mã nào
         $queryRawUnsafe: async () => (k as any).banVuot ?? [],
@@ -377,6 +387,39 @@ async function main() {
         const h = await kiemTraThue(fakePrisma(k), KY)
         kiemTra('HKD: bắt cả vượt ngưỡng chịu thuế và ngưỡng máy tính tiền 1 tỷ',
             co(h, 'hkd-vuot-nguong-chiu-thue') && co(h, 'hkd-phai-ket-noi-pos'))
+    }
+
+    /* ── 22b. HKD bán qua máy tính tiền: sổ doanh thu nhập tay còn RỖNG ──────
+     *
+     * Bảng HkdRevenueEntry phải nhập tay. Cửa hàng bán qua POS không ai ngồi
+     * nhập lại doanh thu vào đó, nên trước đây hai phép kiểm ngưỡng chưa từng
+     * kêu — kể cả khi doanh thu thật đã vượt xa mốc 1 tỷ.
+     */
+    {
+        const k = khoSach()
+        k.settings = { businessType: 'household' }
+        k.hkdRevenue = []
+        k.transactions = [
+            { id: 't-hkd', receiptNumber: 'HD900', total: 1_500_000_000, createdAt: new Date('2026-08-10'), items: [] },
+        ]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        kiemTra('HKD: sổ nhập tay rỗng thì lấy doanh thu bán hàng thật',
+            co(h, 'hkd-vuot-nguong-chiu-thue') && co(h, 'hkd-phai-ket-noi-pos'))
+        const cb = h.canhBao.find(c => c.code === 'hkd-phai-ket-noi-pos')
+        kiemTra('Nói rõ số liệu lấy từ đâu để kế toán biết đối chiếu',
+            !!cb && cb.chiTiet.includes('doanh thu bán hàng thực tế'), cb?.chiTiet)
+    }
+    {
+        // Doanh thu thật dưới ngưỡng thì vẫn phải im
+        const k = khoSach()
+        k.settings = { businessType: 'household' }
+        k.hkdRevenue = []
+        k.transactions = [
+            { id: 't-nho', receiptNumber: 'HD901', total: 50_000_000, createdAt: new Date('2026-08-10'), items: [] },
+        ]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        kiemTra('HKD doanh thu nhỏ thì không kêu ngưỡng nào',
+            !co(h, 'hkd-vuot-nguong-chiu-thue') && !co(h, 'hkd-phai-ket-noi-pos'))
     }
 
     // ── 23. Doanh nghiệp thì KHÔNG áp luật hộ kinh doanh ───────────────────

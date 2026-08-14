@@ -938,13 +938,36 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
                 where: { date: { gte: new Date(`${nam}-01-01T00:00:00.000Z`), lte: new Date(`${nam}-12-31T23:59:59.999Z`) } },
                 select: { doanhThuThuan: true, doanhThu: true },
             }).catch(() => [])
-            const dtNam = (dsHkd as any[]).reduce((s, r) => s + (r.doanhThuThuan || r.doanhThu || 0), 0)
+            let dtNam = (dsHkd as any[]).reduce((s, r) => s + (r.doanhThuThuan || r.doanhThu || 0), 0)
+            let nguonDt = 'sổ doanh thu hộ kinh doanh'
+
+            /* Bảng HkdRevenueEntry là sổ NHẬP TAY. Cửa hàng bán qua máy tính tiền
+             * không ai ngồi nhập lại doanh thu vào đó, nên bảng rỗng và hai phép
+             * kiểm ngưỡng bên dưới CHƯA TỪNG kêu — kể cả khi doanh thu thật đã
+             * vượt xa mốc 1 tỷ. Bảng rỗng thì lấy doanh thu bán hàng thật. */
+            if (dtNam === 0) {
+                const banHang = await prisma.transaction.aggregate({
+                    where: {
+                        status: { in: ['completed', 'partial'] },
+                        createdAt: {
+                            gte: new Date(`${nam}-01-01T00:00:00.000Z`),
+                            lte: new Date(`${nam}-12-31T23:59:59.999Z`),
+                        },
+                    },
+                    _sum: { total: true },
+                }).catch(() => null)
+                const dtBan = Number(banHang?._sum?.total || 0)
+                if (dtBan > 0) {
+                    dtNam = dtBan
+                    nguonDt = 'doanh thu bán hàng thực tế (sổ doanh thu HKD chưa nhập)'
+                }
+            }
             const NGUONG_HKD_CHIU_THUE = 200_000_000
             const NGUONG_HKD_POS = 1_000_000_000
             if (dtNam >= NGUONG_HKD_CHIU_THUE) canhBao.push({
                 code: 'hkd-vuot-nguong-chiu-thue', muc: 'vua',
                 tieuDe: `Doanh thu năm ${nam} đã vượt ngưỡng chịu thuế của hộ kinh doanh`,
-                chiTiet: `Sổ doanh thu HKD ghi nhận ${vnd(dtNam)} ₫, vượt mức ${vnd(NGUONG_HKD_CHIU_THUE)} ₫/năm — phát sinh nghĩa vụ nộp thuế GTGT và TNCN theo tỷ lệ trên doanh thu.`,
+                chiTiet: `Doanh thu năm ${nam} là ${vnd(dtNam)} ₫ (nguồn: ${nguonDt}), vượt mức ${vnd(NGUONG_HKD_CHIU_THUE)} ₫/năm — phát sinh nghĩa vụ nộp thuế GTGT và TNCN theo tỷ lệ trên doanh thu.`,
                 canCu: 'Luật Thuế GTGT 48/2024 — ngưỡng doanh thu không chịu thuế của hộ, cá nhân kinh doanh (200 triệu/năm từ 2026).',
                 canLam: 'Kê khai và nộp thuế theo doanh thu thực; giữ đủ hóa đơn đầu vào để chứng minh nguồn hàng.',
                 tienRuiRo: null, soLuong: 0, viDu: [],
@@ -952,7 +975,7 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
             if (dtNam >= NGUONG_HKD_POS) canhBao.push({
                 code: 'hkd-phai-ket-noi-pos', muc: 'cao',
                 tieuDe: 'Doanh thu vượt 1 tỷ — bắt buộc dùng hóa đơn điện tử khởi tạo từ máy tính tiền',
-                chiTiet: `Doanh thu năm ${nam} là ${vnd(dtNam)} ₫. Hộ kinh doanh nhóm này phải xuất hóa đơn điện tử từ máy tính tiền có kết nối dữ liệu với cơ quan thuế.`,
+                chiTiet: `Doanh thu năm ${nam} là ${vnd(dtNam)} ₫ (nguồn: ${nguonDt}). Hộ kinh doanh nhóm này phải xuất hóa đơn điện tử từ máy tính tiền có kết nối dữ liệu với cơ quan thuế.`,
                 canCu: 'Nghị định 70/2025/NĐ-CP sửa đổi NĐ 123/2020 — hóa đơn điện tử khởi tạo từ máy tính tiền.',
                 canLam: 'Kích hoạt kết nối máy tính tiền với cơ quan thuế và xuất hóa đơn cho từng lần bán.',
                 tienRuiRo: null, soLuong: 0, viDu: [],
