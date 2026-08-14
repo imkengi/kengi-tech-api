@@ -467,7 +467,7 @@ export async function doiChieuBaChieu(
             tieuDe: `${hoaDon.soLoi} hoá đơn phát hành hỏng (${lam(hoaDon.tienLoi).toLocaleString('vi-VN')}đ)`,
             vaSao: 'Những tờ này chưa có số hoá đơn nên KHÔNG được tính vào phần đã xuất ở trên — tỷ lệ phủ hoá đơn vì thế thấp hơn thực tế. Về mặt thuế, hoá đơn hỏng giống như chưa lập hoá đơn.',
             canCu: 'Điều 90 Luật Quản lý thuế 38/2019: bán hàng phải lập hoá đơn. Hoá đơn chưa phát hành được thì nghĩa vụ vẫn còn nguyên.',
-            canLam: 'Mở Hoá Đơn VAT → bảng "hoá đơn phát hành hỏng" để xem nguyên nhân từng nhóm. Lưu ý nhóm báo trùng khoá: đó là hoá đơn ĐÃ phát hành thành công, phải ghi bù chứ không được xuất lại.',
+            canLam: 'Mở Hóa Đơn VAT → bảng "hoá đơn phát hành hỏng" để xem nguyên nhân từng nhóm. Lưu ý nhóm báo trùng khoá: đó là hoá đơn ĐÃ phát hành thành công, phải ghi bù chứ không được xuất lại.',
             soTien: hoaDon.tienLoi,
         })
         ghiChu.push(`${hoaDon.soLoi} hoá đơn ở trạng thái phát hành hỏng chưa được tính vào phần đã xuất — con số "đã xuất hoá đơn" ở trên vì thế THẤP HƠN thực tế.`)

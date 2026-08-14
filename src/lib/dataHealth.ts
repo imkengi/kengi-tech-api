@@ -187,8 +187,8 @@ export async function sucKhoeDuLieu(
         canLam: hong.length === 0
             ? 'Không cần làm gì.'
             : soTrungKhoa > 0
-                ? 'Mở Hoá Đơn VAT → bảng hoá đơn hỏng. Nhóm báo trùng khoá thì bấm ghi bù (ĐỪNG xuất lại — sẽ hỏng tiếp); các nhóm còn lại sửa theo hướng dẫn từng nguyên nhân.'
-                : 'Mở Hoá Đơn VAT → bảng hoá đơn hỏng để xem nguyên nhân từng nhóm.',
+                ? 'Mở Hóa Đơn VAT → bảng hoá đơn hỏng. Nhóm báo trùng khoá thì bấm ghi bù (ĐỪNG xuất lại — sẽ hỏng tiếp); các nhóm còn lại sửa theo hướng dẫn từng nguyên nhân.'
+                : 'Mở Hóa Đơn VAT → bảng hoá đơn hỏng để xem nguyên nhân từng nhóm.',
     })
 
     // ── 4. Chi phí ghi sổ có tương xứng doanh thu không ──────────────────
@@ -258,7 +258,7 @@ export async function sucKhoeDuLieu(
                 : 'Mỗi phiếu nhập cộng tồn kho, tính lại giá vốn, ghi công nợ nhà cung cấp và sinh bút toán — nhập trùng là sai đủ bốn chỗ cùng lúc. Khi quyết toán còn thành khai trùng chi phí được trừ, mà bên bán chỉ phát hành một tờ cho mỗi số.',
             canLam: trung.length === 0
                 ? 'Không cần làm gì.'
-                : 'Mở Nhập hàng, lọc theo số hoá đơn ở danh sách bên dưới, giữ phiếu ĐẦU TIÊN và huỷ phiếu nhập sau — huỷ sẽ tự trừ lại tồn kho và đảo bút toán.',
+                : 'Mở Nhập Hàng, lọc theo số hoá đơn ở danh sách bên dưới, giữ phiếu ĐẦU TIÊN và huỷ phiếu nhập sau — huỷ sẽ tự trừ lại tồn kho và đảo bút toán.',
         })
     }
 

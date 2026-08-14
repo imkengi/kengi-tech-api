@@ -109,7 +109,7 @@ export function dungLoiNhac(kq: any): { tieuDe: string; noiDung: string } | null
             `Đã đối chiếu sổ bán hàng với hoá đơn đã phát hành và tiền vào tài khoản:\n` +
             dong.join('\n') +
             `\n\nSửa trước ngày 20 thì chỉ cần khai đúng; để sau hạn phải khai bổ sung. ` +
-            `Mở Thuế → Thanh tra thuế → Đối chiếu ba chiều để xem lệch rơi vào ngày nào.`,
+            `Mở Thuế → Sẵn Sàng Thanh Tra → Đối chiếu ba chiều để xem lệch rơi vào ngày nào.`,
     }
 }
 
