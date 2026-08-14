@@ -80,6 +80,32 @@ function dungKy(q: any): KhoangKy {
  * chết hệ thống lúc người khác đang bán hàng.
  */
 /**
+ * GET /api/tax/data-health?from=YYYY-MM-DD&to=YYYY-MM-DD
+ *
+ * Sức khoẻ dữ liệu — đọc báo cáo nào cũng nên liếc qua đây trước. Mặc định 90
+ * ngày gần nhất.
+ */
+router.get('/data-health', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const q = req.query as any
+        const hopLe = (s: any) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''))
+        const nay = new Date(Date.now() + 7 * 3600_000)
+        const to = hopLe(q.to) ? String(q.to) : nay.toISOString().slice(0, 10)
+        const from = hopLe(q.from) ? String(q.from)
+            : new Date(new Date(`${to}T00:00:00+07:00`).getTime() - 90 * 86400_000 + 7 * 3600_000).toISOString().slice(0, 10)
+        const start = new Date(`${from}T00:00:00+07:00`)
+        const end = new Date(new Date(`${to}T00:00:00+07:00`).getTime() + 86400_000)
+
+        const { sucKhoeDuLieu } = await import('../lib/dataHealth')
+        const kq = await sucKhoeDuLieu(req.storePrisma!, { from, to, start, end })
+        res.json({ success: true, data: kq })
+    } catch (err) {
+        console.error('GET /tax/data-health error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+/**
  * GET /api/tax/einvoice-errors?from=YYYY-MM-DD&to=YYYY-MM-DD
  *
  * Hoá đơn PHÁT HÀNH HỎNG — trạng thái ERROR, không có số hoá đơn.
