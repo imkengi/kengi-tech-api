@@ -42,7 +42,7 @@ export interface BanTin { tieuDe: string; noiDung: string }
  * Ghép bản tin từ hai kết quả đã tính. Tách khỏi phần chạm DB để test được từng
  * ngưỡng mà không phải dựng cả cron.
  */
-export function ghepBanTin(tien_: any, kho: any): BanTin | null {
+export function ghepBanTin(tien_: any, kho: any, sucKhoe?: any): BanTin | null {
     const muc: string[] = []
     let gap = false
 
@@ -116,6 +116,22 @@ export function ghepBanTin(tien_: any, kho: any): BanTin | null {
 
     if (muc.length === 0) return null
 
+    /* CẢNH BÁO DỮ LIỆU ĐI TRƯỚC MỌI LỜI KHUYÊN, không phải xuống cuối.
+     *
+     * Bản tin này nói những câu rất cụ thể: "đến ngày 20 là không đủ tiền trả",
+     * "cần nhập ngần này hàng". Nếu chi phí chưa được ghi sổ hoặc tồn kho đang
+     * âm thì CHÍNH những câu đó sai — và người đọc sẽ hành động theo chúng.
+     *
+     * Đo trên dữ liệu thật 14/08/2026: một cửa hàng 14,1 tỷ doanh thu mà sổ chi
+     * phí trống trơn; một cửa hàng khác có 262 mã tồn âm và 115 hoá đơn hỏng.
+     * Bản tin gửi cho hai cửa hàng đó mà không nói gì là bản tin sai. */
+    const nang = Array.isArray(sucKhoe?.muc) ? sucKhoe.muc.filter((m: any) => m.muc === 'nang') : []
+    if (nang.length > 0) {
+        muc.unshift(`⚠️ ĐỌC CÁI NÀY TRƯỚC: dữ liệu nền đang có ${nang.length} chỗ làm lệch chính các con số bên dưới — `
+            + nang.map((m: any) => `${String(m.ten).toLowerCase()} (${m.so})`).join('; ')
+            + `. Dọn xong rồi hãy quyết theo bản tin này. Xem ở Thuế → Thanh tra thuế, mục Sức khoẻ dữ liệu.`)
+    }
+
     return {
         tieuDe: gap ? '🔔 Tuần này có việc cần xử lý' : '📋 Bản tin đầu tuần',
         noiDung: muc.join('\n\n') + '\n\nXem chi tiết ở Chiến Lược → Lịch tiền, và Kho → Đặt hàng thông minh.',
@@ -153,7 +169,23 @@ export async function banTinChoStore(
         return false
     }
 
-    const tin = ghepBanTin(tien_, kho)
+    /* Sức khoẻ dữ liệu chạy SAU hai phép kia, và lỗi ở đây KHÔNG được làm hỏng
+     * bản tin: thiếu nó thì bản tin vẫn đúng, chỉ là thiếu lời cảnh báo. */
+    const sucKhoe = await (async () => {
+        try {
+            const { sucKhoeDuLieu } = await import('../lib/dataHealth')
+            const nay = new Date(Date.now() + 7 * 3600_000)
+            const to = nay.toISOString().slice(0, 10)
+            const from = new Date(nay.getTime() - 90 * 86400_000).toISOString().slice(0, 10)
+            return await sucKhoeDuLieu(prisma, {
+                from, to,
+                start: new Date(`${from}T00:00:00+07:00`),
+                end: new Date(new Date(`${to}T00:00:00+07:00`).getTime() + 86400_000),
+            })
+        } catch { return null }
+    })()
+
+    const tin = ghepBanTin(tien_, kho, sucKhoe)
     if (!tin) {
         if (chayThu) console.log(`📋 [${tenStore}] CHẠY THỬ: không có gì đáng gửi`)
         return false

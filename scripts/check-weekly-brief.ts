@@ -142,6 +142,38 @@ async function main() {
     ok('có việc gấp rồi thì mới nhân tiện nhắc vốn đọng',
         !!kemDong && /nằm chết/.test(kemDong.noiDung))
 
+    console.log('\n▶ Cảnh báo dữ liệu phải đi TRƯỚC mọi lời khuyên\n')
+
+    /* Bản tin nói những câu rất cụ thể: "đến ngày X là không đủ tiền trả", "cần
+     * nhập ngần này". Nếu chi phí chưa ghi sổ hoặc tồn kho đang âm thì CHÍNH
+     * những câu đó sai — mà người đọc sẽ hành động theo chúng. Đo trên dữ liệu
+     * thật 14/08/2026: một cửa hàng 14,1 tỷ doanh thu mà sổ chi phí trống trơn. */
+    const sucKhoeXau = {
+        muc: [
+            { ma: 'chi-phi-ghi-so', ten: 'Chi phí đã ghi sổ so với doanh thu', muc: 'nang', so: '0% (0đ trên 14.117.061.233đ)' },
+            { ma: 'ton-am', ten: 'Mã hàng có tồn âm', muc: 'nang', so: '262 mã' },
+            { ma: 'so-du-ngan-hang', ten: 'Số dư tài khoản ngân hàng', muc: 'vua', so: 'để 0' },
+        ],
+    }
+    const coCanhBao = ghepBanTin(tienSach({ ngayCanTien: '2026-08-25' }), khoSach(), sucKhoeXau)
+    ok('có mục nặng → bản tin phải nhắc', !!coCanhBao && /ĐỌC CÁI NÀY TRƯỚC/.test(coCanhBao.noiDung), coCanhBao?.noiDung?.slice(0, 80))
+    ok('… và nhắc đứng ĐẦU, trước lời khuyên về tiền',
+        !!coCanhBao && coCanhBao.noiDung.indexOf('ĐỌC CÁI NÀY TRƯỚC') < coCanhBao.noiDung.indexOf('💸'),
+        coCanhBao?.noiDung?.slice(0, 60))
+    ok('… nêu đúng số chỗ nặng (không đếm mục mức vừa)',
+        !!coCanhBao && /2 chỗ làm lệch/.test(coCanhBao.noiDung), coCanhBao?.noiDung?.slice(0, 120))
+    ok('… và chỉ đường tới chỗ xem', !!coCanhBao && /Sức khoẻ dữ liệu/.test(coCanhBao.noiDung))
+
+    const sucKhoeTot = { muc: [{ ma: 'ton-am', ten: 'Mã hàng có tồn âm', muc: 'on', so: 'không có' }] }
+    const khongCanhBao = ghepBanTin(tienSach({ ngayCanTien: '2026-08-25' }), khoSach(), sucKhoeTot)
+    ok('dữ liệu sạch → KHÔNG chèn cảnh báo thừa',
+        !!khongCanhBao && !/ĐỌC CÁI NÀY TRƯỚC/.test(khongCanhBao.noiDung))
+
+    /* Không đọc được sức khoẻ dữ liệu thì bản tin vẫn phải gửi bình thường —
+     * thiếu lời cảnh báo còn hơn im hẳn. */
+    const khongCoSucKhoe = ghepBanTin(tienSach({ ngayCanTien: '2026-08-25' }), khoSach(), null)
+    ok('thiếu dữ liệu sức khoẻ → bản tin vẫn gửi', !!khongCoSucKhoe && /💸/.test(khongCoSucKhoe.noiDung))
+
     console.log('\n▶ Mã tuần — chống gửi trùng, không vỡ ở giao thừa\n')
 
     ok('thứ Hai và Chủ nhật cùng tuần cho cùng mã',
