@@ -77,7 +77,22 @@ export async function getOrCreateDefaultWarehouse(
     // Thử mã cơ bản trước; nếu đã bị chiếm (đụng schema-suffix), dùng mã duy nhất để
     // LUÔN tạo được kho gắn đúng branchId — không bao giờ trả về undefined.
     const codes = [baseCode, `${baseCode}-${Date.now().toString(36).slice(-4).toUpperCase()}`, `WH-MAIN-${Date.now().toString(36).toUpperCase()}`]
+
+    /* Bỏ trước những mã ĐÃ CÓ CHỦ thay vì cứ tạo rồi ăn lỗi.
+     *
+     * Đường lùi bên dưới vẫn đúng, nhưng mỗi lần đụng mã Prisma lại tự in một
+     * khối `prisma:error ... Unique constraint failed on the fields: (code)` —
+     * 288 lần trong 7 ngày trên log production. Không phải lỗi, nhưng là tiếng
+     * ồn, và tiếng ồn che mất lỗi thật: đúng ba lỗi im lặng tìm ra hôm nay đều
+     * nằm lẫn trong đống log kiểu này. */
+    const daCoChu = new Set(
+        (await prisma.warehouse.findMany({ where: { code: { in: codes } }, select: { code: true } })
+            .catch(() => [] as any[]))
+            .map((w: any) => String(w.code)),
+    )
+
     for (const code of codes) {
+        if (daCoChu.has(code)) continue
         try {
             return await prisma.warehouse.create({
                 data: {
