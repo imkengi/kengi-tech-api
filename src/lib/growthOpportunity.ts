@@ -656,10 +656,20 @@ function phanTichMuaVu(don: any[], donHang: any[], tenHang: Map<string, string>,
     const ngayNua = Math.max(1, soNgay / 2)
     const dtDau = nuaDau.reduce((s, d) => s + d.tien, 0) / ngayNua
     const dtSau = nuaSau.reduce((s, d) => s + d.tien, 0) / ngayNua
-    const thayDoi = dtDau > 0 ? Math.round(((dtSau - dtDau) / dtDau) * 1000) / 10 : 0
+    /* NỬA ĐẦU KHÔNG CÓ DOANH THU THÌ KHÔNG SO SÁNH ĐƯỢC, chứ không phải "đi ngang".
+     *
+     * Bản đầu tính `thayDoi = dtDau > 0 ? … : 0` rồi để nhãn rơi vào nhánh
+     * "đi ngang" vì |0| < 5. Chạy trên dữ liệu thật (KENGISTORE, 3 tháng) ra
+     * đúng cảnh đó: nửa đầu 0đ, nửa sau 126 triệu/ngày, mà báo "đi ngang" —
+     * ngược hẳn sự thật. Thường gặp khi cửa hàng mới nhập dữ liệu vào hệ thống
+     * giữa kỳ; nói "đi ngang" khiến họ tưởng bán chững lại. */
+    const soSanhDuoc = dtDau > 0 && dtSau > 0
+    const thayDoi = soSanhDuoc ? Math.round(((dtSau - dtDau) / dtDau) * 1000) / 10 : 0
     const xuHuong = {
         nuaDau: lam(dtDau), nuaSau: lam(dtSau), thayDoi,
-        nhan: Math.abs(thayDoi) < 5 ? 'đi ngang' : thayDoi > 0 ? 'đang lên' : 'đang xuống',
+        nhan: !soSanhDuoc
+            ? (dtDau === 0 && dtSau === 0 ? 'không có doanh thu' : 'chỉ một nửa kỳ có dữ liệu — không so sánh được')
+            : Math.abs(thayDoi) < 5 ? 'đi ngang' : thayDoi > 0 ? 'đang lên' : 'đang xuống',
     }
 
     // ── Mặt hàng nào có tính mùa: chỉ xét khi kỳ trải ≥3 tháng.
@@ -791,7 +801,17 @@ function phanTichDoNhayGia(
         /* Bỏ qua khi phép đo quá yếu, hoặc khi hệ số DƯƠNG (giá tăng mà bán
          * nhiều hơn) — dấu dương gần như luôn là do mùa vụ hoặc đợt sỉ chen vào,
          * đem nó đi khuyên tăng giá là nguy hiểm. */
-        if (r2 < 0.3 || b >= 0) { loaiViDoYeu++; continue }
+        /* Chặn thêm CON SỐ VÔ LÝ, không chỉ chặn phép đo yếu.
+         *
+         * Chạy trên dữ liệu thật ra một mặt hàng "độ co giãn −13,4": giá lên 1%
+         * thì mất 13,4% lượng bán. Không mặt hàng bán lẻ nào như vậy — đó là dấu
+         * vết của một lần xả hàng giá sốc, hoặc một ngày bán buôn lẫn vào. Độ tin
+         * cậy 0,34 vừa đủ lọt ngưỡng nên nó đi thẳng ra màn hình.
+         *
+         * Ngoài đời, co giãn của hàng bán lẻ hiếm khi vượt −3. Lấy −5 làm biên
+         * cho rộng rãi; vượt qua đó thì phép đo đang đo thứ khác chứ không phải
+         * phản ứng với giá. */
+        if (r2 < 0.3 || b >= 0 || b < -5) { loaiViDoYeu++; continue }
 
         const giaCuoi = diem[diem.length - 1].gia
         const gv = giaVon.get(id)
@@ -877,15 +897,27 @@ function dungKhuyenNghi(
         })
     }
 
-    if (banKem.duocKetLuan && banKem.cap.length > 0) {
-        const c = banKem.cap[0]
+    /* KHUYẾN NGHỊ combo chỉ dựng từ cặp có ĐỦ SỐ LẦN TRÙNG HỢP.
+     *
+     * Bảng cặp vẫn hiện từ 5 lần để người dùng tự nhìn, nhưng biến nó thành
+     * "việc nên làm" kèm con số tiền thì phải chắc tay hơn: chạy trên dữ liệu
+     * thật ra một cặp chỉ đi cùng nhau 5 lần mà tiềm năng quy ra 1,8 triệu —
+     * vì phần "đơn còn bỏ lỡ" đếm trên toàn bộ đơn có món chính, trong khi tín
+     * hiệu chỉ dựa vào 5 quan sát. Đó là khuyên người ta bỏ công theo một con
+     * số mà chính mình không chắc. */
+    const capDuChac = banKem.cap.filter(c => c.soDonCoCa2 >= 10)
+    if (banKem.duocKetLuan && capDuChac.length > 0) {
+        const c = capDuChac[0]
         ra.push({
             ma: 'combo',
             tieuDe: `Dựng combo "${c.tenA} + ${c.tenB}"`,
             viSao: `Hai món này đã đi cùng nhau trong ${c.soDonCoCa2} đơn, tức là gấp ${c.lift} lần mức ngẫu nhiên. Vẫn còn ${c.donCoAChuaCoB.toLocaleString('vi-VN')} đơn mua ${c.tenA} mà chưa mua ${c.tenB}.`,
             lamGi: `Để hai món cạnh nhau, gợi ý bán kèm ngay trên máy tính tiền, hoặc gộp thành combo giảm nhẹ. Chỉ cần ${Math.round(banKem.tyLeChuyenDoiGiaDinh * 100)}% số đơn còn thiếu mua thêm là đã có phần lợi nhuận ước tính bên cạnh.`,
             danhDoi: 'Giảm giá combo sẽ ăn vào biên lãi của món đang bán tốt; đừng giảm sâu hơn phần lãi tăng thêm từ món kèm.',
-            uocTinh: banKem.tongTiemNangLoiNhuan || null,
+            /* Chỉ cộng tiềm năng của những cặp ĐỦ CHẮC. Dùng tổng của cả 12 cặp
+             * (gồm cặp chỉ trùng 5 lần) là gắn một con số to vào lời khuyên mà
+             * phần lớn con số đó đến từ tín hiệu mình vừa tự loại. */
+            uocTinh: lam(capDuChac.reduce((s, x) => s + (x.tiemNangLoiNhuan || 0), 0)) || null,
         })
     }
 

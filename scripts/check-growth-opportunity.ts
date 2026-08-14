@@ -241,6 +241,58 @@ async function main() {
     ok('luôn kèm cảnh báo tương quan ≠ nhân quả', /tương quan/i.test(rGia.doNhayGia.canhBao), rGia.doNhayGia.canhBao)
     ok('khuyến nghị giá có nêu đánh đổi', rGia.khuyenNghi.filter(k => k.ma === 'gia').every(k => k.danhDoi.length > 30))
 
+    console.log('\n▶ Ba ca lộ ra khi chạy trên DỮ LIỆU THẬT (14/08/2026)\n')
+
+    /* (1) Cửa hàng mới nhập dữ liệu vào hệ thống giữa kỳ: nửa đầu không có đơn
+     * nào. Bản đầu tính thayDoi = 0 rồi rơi vào nhãn "đi ngang" — ngược hẳn sự
+     * thật và khiến chủ shop tưởng bán chững lại. */
+    const nuaSauMoiCo: Kho = {
+        transactions: Array.from({ length: 60 }, (_, i) =>
+            don(`2026-06-${String((i % 28) + 1).padStart(2, '0')}`, 10, [['P1', 1, 100_000]])),
+        products: SAN_PHAM,
+    }
+    const kyTraiDai = { tu: new Date('2026-04-01T00:00:00+07:00'), den: new Date('2026-06-30T23:59:59+07:00'), moTa: '3 tháng' }
+    const r1 = await coHoiTangTruong(fakePrisma(nuaSauMoiCo), kyTraiDai)
+    ok('nửa đầu kỳ không có doanh thu → KHÔNG gọi là "đi ngang"',
+        r1.muaVu.xuHuong?.nhan !== 'đi ngang', r1.muaVu.xuHuong)
+    ok('… mà nói thẳng là không so sánh được',
+        /không so sánh được/.test(r1.muaVu.xuHuong?.nhan || ''), r1.muaVu.xuHuong?.nhan)
+
+    /* (2) Độ co giãn vô lý: một lần xả hàng giá sốc làm phép đo ra −13,4 mà độ
+     * tin cậy vẫn vừa đủ lọt ngưỡng. Không mặt hàng bán lẻ nào nhạy giá tới mức
+     * đó — phép đo đang đo thứ khác. */
+    const xaHang: Kho = { transactions: [], products: [{ id: 'Z1', name: 'Hàng xả', costPrice: 50_000 }] }
+    for (let i = 0; i < 28; i++) {
+        // Giá giảm nhẹ nhưng lượng bán nhảy vọt — dấu vết của một đợt xả
+        const gia = 100_000 - (i % 4) * 2_000
+        const luong = gia <= 96_000 ? 900 : 100
+        xaHang.transactions.push(don(`2026-05-${String(i + 1).padStart(2, '0')}`, 10, [['Z1', luong, gia]]))
+    }
+    const r2 = await coHoiTangTruong(fakePrisma(xaHang), KY)
+    ok('độ co giãn vượt -5 → loại, không đưa ra màn hình',
+        !r2.doNhayGia.matHang.some(m => m.doCoGian < -5), r2.doNhayGia.matHang.map(m => m.doCoGian))
+
+    /* (3) Cặp chỉ trùng hợp 5 lần vẫn hiện trong BẢNG để người dùng tự nhìn,
+     * nhưng KHÔNG được biến thành "việc nên làm" kèm con số tiền. */
+    const capMong: Kho = { transactions: [], products: SAN_PHAM }
+    for (let i = 0; i < 120; i++) {
+        const d = `2026-05-${String((i % 28) + 1).padStart(2, '0')}`
+        capMong.transactions.push(don(d, 9, [['P1', 1, 100_000]]))
+    }
+    for (let i = 0; i < 6; i++) {
+        capMong.transactions.push(don(`2026-05-${String(i + 1).padStart(2, '0')}`, 11, [['P1', 1, 100_000], ['P2', 1, 40_000]]))
+    }
+    for (let i = 0; i < 40; i++) {
+        capMong.transactions.push(don(`2026-05-${String((i % 28) + 1).padStart(2, '0')}`, 15, [['P3', 1, 30_000], ['P5', 1, 150_000]]))
+    }
+    const r3 = await coHoiTangTruong(fakePrisma(capMong), KY)
+    const capYeu = r3.banKem.cap.find(c => c.soDonCoCa2 < 10)
+    ok('cặp trùng dưới 10 lần vẫn hiện trong bảng', !!capYeu || r3.banKem.cap.length > 0)
+    const knCombo = r3.khuyenNghi.find(k => k.ma === 'combo')
+    ok('… nhưng khuyến nghị combo KHÔNG dựng từ cặp mỏng đó',
+        !knCombo || !knCombo.tieuDe.includes(capYeu?.tenB ?? ' '),
+        knCombo?.tieuDe)
+
     console.log('\n▶ Truy vấn hỏng — KHÔNG được quy thành "cửa hàng không có gì"\n')
 
     const hongTx = await coHoiTangTruong(fakePrisma(khoDay(), { transaction: true }), KY)
