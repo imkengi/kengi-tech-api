@@ -3841,4 +3841,36 @@ router.post('/fix-kiotviet-discount', async (req: Request, res: Response) => {
     }
 })
 
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  CHẠY TAY CÁC CRON THUẾ
+ *
+ *  Hai cron thuế chạy theo lịch (soát tháng: ngày 16; nhắc hạn: 08:00 hằng
+ *  ngày). Không có cách gọi tay thì muốn kiểm chứng trên production phải chờ
+ *  đúng ngày đúng giờ — và nếu nó hỏng thì cũng phải chờ tháng sau mới biết đã
+ *  sửa được chưa.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+// POST /api/admin/run-tax-audit — chạy ngay vòng soát thuế tháng trước
+router.post('/run-tax-audit', async (_req: Request, res: Response) => {
+    try {
+        const { chaySoatThueNgay } = await import('../cron/taxAuditCron')
+        // Chạy nền: quét mọi cửa hàng có thể lâu hơn giới hạn chờ của HTTP
+        chaySoatThueNgay().catch(e => console.error('run-tax-audit lỗi:', e))
+        res.json({ success: true, message: 'Đã kích hoạt vòng soát thuế — xem tiến độ trong log' })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err?.message })
+    }
+})
+
+// POST /api/admin/run-tax-deadline-reminder — chạy ngay vòng nhắc hạn nộp
+router.post('/run-tax-deadline-reminder', async (_req: Request, res: Response) => {
+    try {
+        const { chayNhacHanNopNgay } = await import('../cron/taxDeadlineCron')
+        chayNhacHanNopNgay().catch(e => console.error('run-tax-deadline-reminder lỗi:', e))
+        res.json({ success: true, message: 'Đã kích hoạt vòng nhắc hạn nộp — xem tiến độ trong log' })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err?.message })
+    }
+})
+
 export default router
