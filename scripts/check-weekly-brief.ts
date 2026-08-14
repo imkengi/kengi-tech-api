@@ -105,6 +105,29 @@ async function main() {
     ok('… KHÔNG lôi mã còn kịp vào cùng', !!sapDut && !/Ly giữ nhiệt/.test(sapDut.noiDung), sapDut?.noiDung)
     ok('… chỉ cộng vốn của mã thật sự gấp', !!sapDut && /5\.000\.000đ/.test(sapDut.noiDung), sapDut?.noiDung)
 
+    console.log('\n▶ Mối nối hai cỗ máy: cần vốn nhập so với tiền đang có\n')
+
+    const khongDuVon = ghepBanTin(
+        tienSach({ diemChamDay: { ngay: '2026-08-22', soDu: 40_000_000 }, tomTat: { tongChiChacChan: 10_000_000, noKhachChuaCoHan: 0 } }),
+        khoSach({ canDat: [{ ten: 'Nồi chiên', conBanDuoc: 2, soNgayCho: 7, tienCanBo: 300_000_000 }] }))
+    ok('cần 300tr nhập mà đáy tiền chỉ 40tr → cảnh báo ghép',
+        !!khongDuVon && /ghép hai con số/.test(khongDuVon.noiDung), khongDuVon?.noiDung)
+    ok('… gợi xếp thứ tự thay vì nhập hết một lượt',
+        !!khongDuVon && /xếp thứ tự/.test(khongDuVon.noiDung))
+
+    const duVon = ghepBanTin(
+        tienSach({ diemChamDay: { ngay: '2026-08-22', soDu: 900_000_000 }, tomTat: { tongChiChacChan: 10_000_000, noKhachChuaCoHan: 0 } }),
+        khoSach({ canDat: [{ ten: 'Nồi chiên', conBanDuoc: 2, soNgayCho: 7, tienCanBo: 300_000_000 }] }))
+    ok('tiền dư dả → KHÔNG cảnh báo ghép',
+        !!duVon && !/ghép hai con số/.test(duVon.noiDung), duVon?.noiDung)
+
+    /* Chưa nhập số dư thì không có vế tiền để so — không được đoán là thiếu vốn. */
+    const chuaCoSoDu = ghepBanTin(
+        tienSach({ soDuDau: { coSoDuDau: false }, diemChamDay: { ngay: '2026-08-22', soDu: -5_000_000 } }),
+        khoSach({ canDat: [{ ten: 'Nồi chiên', conBanDuoc: 2, soNgayCho: 7, tienCanBo: 300_000_000 }] }))
+    ok('chưa nhập số dư → không cảnh báo thiếu vốn',
+        !!chuaCoSoDu && !/ghép hai con số/.test(chuaCoSoDu.noiDung), chuaCoSoDu?.noiDung)
+
     console.log('\n▶ Vốn đọng — không tự nó đánh thức ai\n')
 
     const chiDong = ghepBanTin(tienSach(), khoSach({

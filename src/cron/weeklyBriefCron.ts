@@ -89,6 +89,25 @@ export function ghepBanTin(tien_: any, kho: any): BanTin | null {
             `. Tổng vốn cần khoảng ${tien(tienBo)}.`)
     }
 
+    /* MỐI NỐI GIỮA HAI CỖ MÁY — chỗ có giá trị nhất của bản tin này.
+     *
+     * "Cần 338 triệu nhập hàng" và "đáy tiền còn 40 triệu" đọc riêng thì đều
+     * đúng và đều vô hại; đặt cạnh nhau mới thấy vấn đề. Chủ shop hay nhập theo
+     * danh sách thiếu hàng rồi mới phát hiện không đủ tiền trả nhà cung cấp
+     * tháng đó — lúc ấy vừa kẹt hàng vừa kẹt tiền.
+     *
+     * Chỉ nói khi ĐO ĐƯỢC cả hai vế: chưa nhập số dư thì không có vế nào để so. */
+    if (sapDut.length > 0 && tien_?.soDuDau?.coSoDuDau && tien_?.diemChamDay) {
+        const canVon = sapDut.reduce((s: number, m: any) => s + m.tienCanBo, 0)
+        const dayTien = tien_.diemChamDay.soDu
+        if (canVon > dayTien) {
+            muc.push(`🔗 Lưu ý ghép hai con số: nhập đủ số hàng trên cần ${tien(canVon)}, ` +
+                `trong khi tiền chạm đáy chỉ còn ${tien(dayTien)} vào ${tien_.diemChamDay.ngay}. ` +
+                `Nhập hết một lượt là hụt tiền trả nhà cung cấp — nên xếp thứ tự theo mã mất tiền nhiều nhất, ` +
+                `hoặc xin giãn hạn trước khi đặt.`)
+        }
+    }
+
     /* Vốn đọng: không gấp, chỉ vào tin khi ĐÃ có mục khác — tự nó không đáng để
      * đánh thức ai vào sáng thứ Hai. */
     if (gap && kho?.tomTat?.vonKetODongHang > 0 && kho.tomTat.soMaTonDong >= 5) {
