@@ -149,12 +149,17 @@ router.get('/einvoice-errors', authMiddleware, async (req: AuthRequest, res: Res
             .trim()
             .slice(0, 160)
 
-        const nhom = new Map<string, { so: number; tien: number; mau: any[] }>()
+        const nhom = new Map<string, { so: number; tien: number; mau: any[]; ganNhat: string }>()
         for (const h of ds) {
             const k = chuanHoa(h.errorMessage)
-            const o = nhom.get(k) || { so: 0, tien: 0, mau: [] }
+            const o = nhom.get(k) || { so: 0, tien: 0, mau: [], ganNhat: '' }
             o.so++
             o.tien += Number(h.totalAmount) || 0
+            /* Ngày hỏng GẦN NHẤT của nhóm — thứ quyết định nhóm này còn đang
+             * sinh ra hay đã tắt. Không có nó thì người dùng phải mở từng nhóm
+             * ra mới biết, mà đó lại là điều đầu tiên cần biết. */
+            const ng = String(h.invoiceDate || '')
+            if (ng > o.ganNhat) o.ganNhat = ng
             if (o.mau.length < 3) {
                 o.mau.push({
                     id: h.id, ngay: h.invoiceDate,
@@ -185,7 +190,7 @@ router.get('/einvoice-errors', authMiddleware, async (req: AuthRequest, res: Res
                 tong: { so: ds.length, tien: Math.round(ds.reduce((s, h) => s + (Number(h.totalAmount) || 0), 0)) },
                 daCatBot: ds.length >= 2000,
                 theoNguyenNhan: Array.from(nhom.entries())
-                    .map(([lyDo, v]) => ({ lyDo, so: v.so, tien: Math.round(v.tien), mau: v.mau }))
+                    .map(([lyDo, v]) => ({ lyDo, so: v.so, tien: Math.round(v.tien), ngayGanNhat: v.ganNhat || null, mau: v.mau }))
                     .sort((a, b) => b.so - a.so),
                 theoNgay: ngay,
                 ngayDonNhat: ngayDon,
