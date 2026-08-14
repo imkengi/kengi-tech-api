@@ -5,6 +5,14 @@ import { CreateBundleSchema, UpdateBundleSchema } from '../schemas'
 
 const router = Router()
 
+/** items lưu dạng chuỗi JSON — bản ghi hỏng không được làm sập cả trang combo. */
+function docItems(raw: any): any[] {
+    try {
+        const v = JSON.parse(raw || '[]')
+        return Array.isArray(v) ? v : []
+    } catch { return [] }
+}
+
 // GET /api/bundles/stats
 router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
@@ -36,7 +44,68 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         if (search) where.name = { contains: String(search) }
 
         const bundles = await prisma.bundle.findMany({ where, orderBy: { createdAt: 'desc' } })
-        const data = bundles.map(b => ({ ...b, items: JSON.parse(b.items || '[]') }))
+        const daDoc = bundles.map(b => ({ ...b, items: docItems(b.items) }))
+
+        /* GIÁ VỐN COMBO — thiếu nó thì màn hình combo chỉ khoe "khách tiết kiệm
+         * bao nhiêu" mà không ai thấy CỬA HÀNG còn lại bao nhiêu. Đặt giá combo
+         * dưới giá vốn là bán càng nhiều lỗ càng nặng, và không có gì cảnh báo.
+         *
+         * Một truy vấn cho toàn bộ mã hàng của mọi combo, không N+1. */
+        const khoaHang = new Set<string>()
+        for (const b of daDoc) {
+            for (const i of b.items) {
+                if (i?.productId) khoaHang.add(String(i.productId))
+            }
+        }
+        const sku = new Set<string>()
+        for (const b of daDoc) {
+            for (const i of b.items) {
+                if (!i?.productId && i?.sku) sku.add(String(i.sku))
+            }
+        }
+
+        const vonTheoId = new Map<string, number>()
+        const vonTheoSku = new Map<string, number>()
+        if (khoaHang.size > 0 || sku.size > 0) {
+            try {
+                const ds = await (prisma as any).product.findMany({
+                    where: { OR: [{ id: { in: [...khoaHang] } }, { sku: { in: [...sku] } }] },
+                    select: { id: true, sku: true, costPrice: true },
+                })
+                for (const p of ds) {
+                    vonTheoId.set(String(p.id), Number(p.costPrice) || 0)
+                    if (p.sku) vonTheoSku.set(String(p.sku), Number(p.costPrice) || 0)
+                }
+            } catch (e) {
+                console.error('Đọc giá vốn cho combo lỗi:', e)
+            }
+        }
+
+        const data = daDoc.map(b => {
+            let von = 0
+            let thieuGiaVon = 0
+            const items = b.items.map((i: any) => {
+                const sl = Number(i?.quantity) || 0
+                const gv = i?.productId ? vonTheoId.get(String(i.productId))
+                    : (i?.sku ? vonTheoSku.get(String(i.sku)) : undefined)
+                if (gv === undefined || gv <= 0) thieuGiaVon++
+                else von += gv * sl
+                return { ...i, costPrice: gv ?? null }
+            })
+
+            /* Thiếu giá vốn dù chỉ MỘT món là không được kết luận lãi lỗ: cộng
+             * thiếu một chân sẽ ra "lãi" trong khi thực tế đang lỗ — sai theo
+             * đúng hướng nguy hiểm nhất. */
+            const doDuoc = items.length > 0 && thieuGiaVon === 0
+            const gia = Number(b.bundlePrice) || 0
+            return {
+                ...b, items,
+                giaVon: doDuoc ? Math.round(von) : null,
+                lai: doDuoc ? Math.round(gia - von) : null,
+                bienLai: doDuoc && gia > 0 ? Math.round(((gia - von) / gia) * 1000) / 10 : null,
+                soMonThieuGiaVon: thieuGiaVon,
+            }
+        })
         res.json({ success: true, data })
     } catch (err) {
         console.error('Get bundles error:', err)
