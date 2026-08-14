@@ -4634,6 +4634,11 @@ router.get('/engine-probe', async (req: Request, res: Response) => {
                     chayHet: `${giay1}s`,
                     ky: datHang?.ky, thamSo: datHang?.thamSo, tomTat: datHang?.tomTat,
                     thieuChinh: datHang?.thieuChinh,
+                    /* Phải trả cả ghiChu/thieu: chính những dòng này nói ra giới
+                     * hạn của con số. Probe mà cắt chúng đi thì lúc soi kết quả
+                     * sẽ tưởng engine im lặng, rồi đi sửa nhầm chỗ. */
+                    ghiChu: datHang?.ghiChu,
+                    thieu: datHang?.thieu,
                     mauHetHang: (datHang?.hetHang || []).slice(0, 3),
                     mauCanDat: (datHang?.canDat || []).slice(0, 3),
                 },
