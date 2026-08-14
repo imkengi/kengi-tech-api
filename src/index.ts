@@ -125,12 +125,20 @@ const allowedOrigins = [
     'http://localhost:3100', // Kengi Stream studio dev
 ]
 app.use(cors({
+    /* Origin lạ thì TỪ CHỐI SẠCH, không ném Error.
+     *
+     * Ném Error làm Express trả 500 — kể cả cho preflight OPTIONS. Trên log
+     * production 7 ngày: 300 request 5xx, TOÀN BỘ là do đây (166 lần
+     * /notifications/stream, 106 lần OPTIONS /notifications, 28 lần
+     * OPTIONS /events). Không chặn được gì thêm so với cách từ chối sạch —
+     * trình duyệt vẫn chặn vì thiếu header CORS — nhưng lại:
+     *   - đội 5xx của dịch vụ lên, làm cảnh báo hạ tầng kêu oan;
+     *   - đổ "Unhandled error" vào log, che mất lỗi thật (đúng ba lỗi im lặng
+     *     tìm ra hôm nay đều nằm lẫn trong đống này).
+     *
+     * callback(null, false) = không gắn header CORS, không lỗi. */
     origin: (origin, callback) => {
-        if (!origin || allowedOrigins.includes(origin)) {
-            callback(null, true)
-        } else {
-            callback(new Error(`CORS: origin '${origin}' not allowed`))
-        }
+        callback(null, !origin || allowedOrigins.includes(origin))
     },
     credentials: true,
 }))
