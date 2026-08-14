@@ -4678,7 +4678,25 @@ router.get('/engine-probe', async (req: Request, res: Response) => {
                                  FROM "Transaction" WHERE status IN ('completed','partial')
                              ) z
                              GROUP BY thang ORDER BY thang`)
+                        /* Lịch sử NHẬP HÀNG có được nhập vào cùng độ dài với
+                         * lịch sử bán không? Nếu bán có 5 tháng mà nhập chỉ có
+                         * 1 tháng thì tồn âm và "bán vượt hoá đơn vào" là hệ
+                         * quả tất yếu của dữ liệu, không phải bằng chứng mua
+                         * hàng trôi nổi. */
+                        const pn: any[] = await prisma.$queryRawUnsafe(
+                            `SELECT COUNT(*)::int AS tong,
+                                    COUNT("transactionDate")::int AS "coNgayHd",
+                                    MIN(COALESCE("transactionDate","createdAt")) AS "somNhat",
+                                    MAX(COALESCE("transactionDate","createdAt")) AS "muonNhat",
+                                    COALESCE(SUM("totalCost"),0)::float8 AS tien
+                               FROM "ImportReceipt" WHERE status <> 'cancelled'`)
+                        const y = pn?.[0] || {}
                         return {
+                            phieuNhap: {
+                                tong: y.tong, soCoNgayHoaDon: y.coNgayHd,
+                                tu: d(y.somNhat), den: d(y.muonNhat),
+                                tongTien: Math.round(Number(y.tien) || 0),
+                            },
                             tongGiaoDich: x.tong, soCoNgayBan: x.coNgayBan,
                             ngayTao: { tu: d(x.taoMin), den: d(x.taoMax), soNgayKhacNhau: x.soNgayTao },
                             ngayBan: { tu: d(x.banMin), den: d(x.banMax), soNgayKhacNhau: x.soNgayBan },
