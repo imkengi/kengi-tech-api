@@ -247,6 +247,16 @@ async function main() {
         const h = await kiemTraThue(fakePrisma(k), KY)
         const c = lay(h, 'ton-kho-am')
         kiemTra('Bắt tồn kho âm, tính đúng giá trị 200k', !!c && c.soLuong === 1 && c.tienRuiRo === 200_000, JSON.stringify(c?.tienRuiRo))
+
+        /* Không được khẳng định MỘT nguyên nhân khi có hai. Bán trước rồi hàng
+         * mới về (rất phổ biến, có hẳn cờ allowNegativeStock cho việc đó) cũng
+         * ra tồn âm y hệt như mua chui — nhưng cách chữa khác hẳn. Nói sai
+         * nguyên nhân là đẩy người dùng đi giải trình sai chỗ, và nếu họ vô can
+         * thì họ mất luôn niềm tin vào cả bản soát. */
+        kiemTra('Nêu CẢ HAI khả năng, không chỉ "mua hàng không hoá đơn"',
+            !!c && /hai khả năng/.test(c.chiTiet) && /sai kỳ ghi nhận/.test(c.chiTiet), c?.chiTiet)
+        kiemTra('Việc cần làm bắt XÁC ĐỊNH khả năng nào trước khi xử lý',
+            !!c && /[Xx]ác định thuộc khả năng nào/.test(c.canLam), c?.canLam)
     }
 
     // ── 11. Quỹ tiền mặt âm giữa kỳ (dù cuối kỳ dương) ─────────────────────

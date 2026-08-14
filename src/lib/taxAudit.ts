@@ -540,9 +540,21 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
             canhBao.push({
                 code: 'ton-kho-am', muc: 'cao',
                 tieuDe: `${am.length} mặt hàng đang có tồn kho ÂM`,
-                chiTiet: `Giá trị tương ứng khoảng ${vnd(giaTri)} ₫. Bán ra nhiều hơn số đã nhập là dấu hiệu điển hình của mua hàng không hóa đơn — cơ quan thuế có quyền ấn định cả doanh thu lẫn chi phí.`,
+                /* HAI khả năng, không phải một — và cách chữa khác hẳn nhau.
+                 *
+                 * Bản cũ khẳng định thẳng "dấu hiệu điển hình của mua hàng không
+                 * hoá đơn". Nhưng cửa hàng bán trước rồi hàng mới về (rất phổ
+                 * biến, có hẳn cờ allowNegativeStock cho việc đó) cũng ra tồn âm
+                 * y hệt — chỉ là phiếu nhập rơi sang kỳ sau, tức sai kỳ ghi nhận
+                 * chứ không phải mua chui.
+                 *
+                 * Cả hai đều là vấn đề khi thanh tra, nên vẫn cảnh báo. Nhưng nói
+                 * đúng MỘT nguyên nhân trong khi có hai là đẩy người dùng đi giải
+                 * trình sai chỗ — và nếu họ vô can thì họ mất luôn niềm tin vào
+                 * cả bản soát. */
+                chiTiet: `Giá trị tương ứng khoảng ${vnd(giaTri)} ₫. Bán ra nhiều hơn số đã nhập trong kỳ có hai khả năng: (1) mua hàng không có hóa đơn đầu vào, hoặc (2) bán trước khi hàng về nên phiếu nhập rơi sang kỳ sau — sai kỳ ghi nhận. Cả hai đều là điểm cơ quan thuế bắt bẻ được: Điều 50 cho phép ấn định khi sổ sách không khớp chứng từ.`,
                 canCu: 'Điều 50 Luật Quản lý thuế 38/2019 — ấn định thuế; Điều 14 NĐ 125/2020 — xử phạt hành vi khai sai.',
-                canLam: 'Rà lại phiếu nhập bị thiếu, nhập bổ sung kèm hóa đơn đầu vào hợp lệ; nếu là sai sót kiểm kê thì lập biên bản kiểm kê và điều chỉnh trước khi khóa sổ.',
+                canLam: 'Xác định thuộc khả năng nào trước: nếu hàng ĐÃ về mà chưa nhập phiếu thì nhập bổ sung kèm hóa đơn đầu vào và ghi đúng ngày hàng về; nếu hàng chưa về thì đó là sai kỳ ghi nhận, cần khớp lại ngày bán với ngày nhập; nếu là sai sót kiểm kê thì lập biên bản kiểm kê và điều chỉnh trước khi khóa sổ.',
                 tienRuiRo: Math.round(giaTri),
                 soLuong: am.length,
                 viDu: am.slice(0, 5).map((p: any) => `${p.name} (${p.stock})`),
