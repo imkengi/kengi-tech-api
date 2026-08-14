@@ -4643,6 +4643,32 @@ router.get('/engine-probe', async (req: Request, res: Response) => {
                     mauCanDat: (datHang?.canDat || []).slice(0, 3),
                 },
                 dongTien: loiTien ? { loi: loiTien } : { chayHet: `${giay2}s`, ...tien },
+                dauVetThoiGian: await (async () => {
+                    /* "Cửa hàng mới 31 ngày" và "dữ liệu được nhập vào 31 ngày
+                     * trước" cho ra cùng một MIN(createdAt) nhưng ý nghĩa ngược
+                     * nhau. kiotvietSync ghi transactionDate = ngày bán thật,
+                     * còn createdAt là lúc chạy nhập. Phải đo mới biết. */
+                    try {
+                        const r: any[] = await prisma.$queryRawUnsafe(
+                            `SELECT COUNT(*)::int AS tong,
+                                    COUNT("transactionDate")::int AS "coNgayBan",
+                                    MIN("createdAt") AS "taoMin", MAX("createdAt") AS "taoMax",
+                                    MIN("transactionDate") AS "banMin", MAX("transactionDate") AS "banMax",
+                                    COUNT(DISTINCT ("createdAt" + interval '7 hours')::date)::int AS "soNgayTao",
+                                    COUNT(DISTINCT ("transactionDate" + interval '7 hours')::date)::int AS "soNgayBan"
+                             FROM "Transaction"
+                             WHERE status IN ('completed', 'partial')`)
+                        const x = r?.[0] || {}
+                        const d = (v: any) => v ? new Date(v).toISOString().slice(0, 10) : null
+                        return {
+                            tongGiaoDich: x.tong, soCoNgayBan: x.coNgayBan,
+                            ngayTao: { tu: d(x.taoMin), den: d(x.taoMax), soNgayKhacNhau: x.soNgayTao },
+                            ngayBan: { tu: d(x.banMin), den: d(x.banMax), soNgayKhacNhau: x.soNgayBan },
+                        }
+                    } catch (e: any) {
+                        return { loi: String(e?.message || e).slice(0, 300) }
+                    }
+                })(),
                 soatThue: await (async () => {
                     /* Bộ soát sẵn sàng thanh tra là cỗ máy nói nặng nhất trong cả
                      * phần mềm — nó chấm điểm và ước tính tiền phạt. Cửa hàng
