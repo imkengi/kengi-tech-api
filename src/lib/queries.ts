@@ -247,30 +247,52 @@ export async function getRevenueByDays(prisma: StorePrisma, days: number = 7, br
      * Gop luon theo GIO VN (+7h): may chu chay UTC, nhom theo ngay UTC thi don
      * ban buoi toi bi day sang ngay hom sau.
      */
+    /* Giá vốn tính ở BẢNG DẪN XUẤT RIÊNG rồi LEFT JOIN, không dùng truy vấn con
+     * tương quan.
+     *
+     * Bản cũ đặt một subquery tham chiếu t."createdAt" bên trong một truy vấn đã
+     * GROUP BY, và Postgres từ chối: 42803 "subquery uses ungrouped column".
+     * Tệ hơn, `.catch(() => [])` nuốt trọn lỗi — BIỂU ĐỒ DOANH THU TRÊN TRANG
+     * CHỦ im lặng trả rỗng chứ không báo gì. Log production ngày 14/08/2026 ghi
+     * đúng lỗi này trên ba revision liên tiếp.
+     *
+     * Giá vốn dùng COALESCE(NULLIF(baseQuantity,0), quantity) — số lượng theo
+     * ĐƠN VỊ GỐC. Bản ghi cũ có baseQuantity = 0 nên phải có nhánh lùi; hàng bán
+     * theo vỉ/lốc mà lấy `quantity` trần thì giá vốn hụt nhiều lần. */
     const rows: any[] = await (prisma as any).$queryRawUnsafe(
-        `SELECT to_char((t."createdAt" + interval '7 hours')::date, 'DD/MM') AS ngay,
-                COALESCE(SUM(t.total), 0)::float8 AS doanh_thu,
-                COUNT(DISTINCT t.id)::int AS so_don,
-                COALESCE((
-                    SELECT SUM(ti.quantity * COALESCE(p."costPrice", 0))
-                    FROM "TransactionItem" ti
-                    LEFT JOIN "Product" p ON p.id = ti."productId"
-                    WHERE ti."transactionId" IN (
-                        SELECT t2.id FROM "Transaction" t2
-                        WHERE (t2."createdAt" + interval '7 hours')::date = (t."createdAt" + interval '7 hours')::date
-                          AND t2."createdAt" >= $1
-                          AND t2.status NOT IN ('voided', 'returned')
-                          AND ($2::text IS NULL OR t2."branchId" = $2)
-                    )
-                ), 0)::float8 AS gia_von
-         FROM "Transaction" t
-         WHERE t."createdAt" >= $1
-           AND t.status NOT IN ('voided', 'returned')
-           AND ($2::text IS NULL OR t."branchId" = $2)
-         GROUP BY 1, (t."createdAt" + interval '7 hours')::date
-         ORDER BY (t."createdAt" + interval '7 hours')::date`,
+        `SELECT to_char(d.ngay, 'DD/MM') AS ngay,
+                d.doanh_thu,
+                d.so_don,
+                COALESCE(c.gia_von, 0)::float8 AS gia_von
+         FROM (
+            SELECT (t."createdAt" + interval '7 hours')::date AS ngay,
+                   COALESCE(SUM(t.total), 0)::float8 AS doanh_thu,
+                   COUNT(DISTINCT t.id)::int AS so_don
+            FROM "Transaction" t
+            WHERE t."createdAt" >= $1
+              AND t.status NOT IN ('voided', 'returned')
+              AND ($2::text IS NULL OR t."branchId" = $2)
+            GROUP BY 1
+         ) d
+         LEFT JOIN (
+            SELECT (t2."createdAt" + interval '7 hours')::date AS ngay,
+                   SUM(COALESCE(NULLIF(ti."baseQuantity", 0), ti.quantity) * COALESCE(p."costPrice", 0))::float8 AS gia_von
+            FROM "TransactionItem" ti
+            JOIN "Transaction" t2 ON t2.id = ti."transactionId"
+            LEFT JOIN "Product" p ON p.id = ti."productId"
+            WHERE t2."createdAt" >= $1
+              AND t2.status NOT IN ('voided', 'returned')
+              AND ($2::text IS NULL OR t2."branchId" = $2)
+            GROUP BY 1
+         ) c ON c.ngay = d.ngay
+         ORDER BY d.ngay`,
         since, branchId,
-    ).catch(() => [])
+    ).catch((e: any) => {
+        /* KHÔNG nuốt im lặng nữa: bản cũ hỏng suốt mà không ai biết vì lỗi bị
+         * nuốt trọn. Vẫn trả rỗng để trang không sập, nhưng phải để lại vết. */
+        console.error('[getRevenueByDays] truy vấn hỏng — biểu đồ doanh thu sẽ rỗng:', e?.message || e)
+        return []
+    })
 
     const theoNgay = new Map<string, { revenue: number; orders: number; profit: number }>()
     for (const r of rows || []) {
