@@ -170,8 +170,37 @@ export async function moPhongAnDinh(
         })
     }
 
+    /* SỔ KẾ TOÁN TRỐNG KHÔNG PHẢI "SỐ LIỆU KHÔNG TRUNG THỰC".
+     *
+     * `doanhThuSo` lấy từ phát sinh Có 511 — tức BÚT TOÁN, không phải đơn hàng.
+     * Hộ kinh doanh không bắt buộc ghi sổ kép (chỉ cần sổ doanh thu theo TT
+     * 88/2021), và nhiều doanh nghiệp nhỏ chưa chạy ghi sổ tự động, nên
+     * `doanhThuSo = 0` là chuyện thường.
+     *
+     * Khi đó `lechToKhai` = TOÀN BỘ doanh thu đã khai, và ngưỡng so sánh tụt về
+     * 1.000đ (vì `doanhThuSo * 0.02` = 0) — nên bất kỳ tờ khai nào cũng dựng lên
+     * căn cứ ấn định mức "rõ ràng" theo Điểm đ khoản 1 Điều 50. Đây là căn cứ
+     * pháp lý nặng nhất trong cả module: nó nói cơ quan thuế có cơ sở chắc chắn
+     * để BỎ QUA toàn bộ sổ sách và tự ấn định. Dựng nó từ một cuốn sổ chưa ghi
+     * là vu oan ở mức không thể nặng hơn.
+     *
+     * Chưa ghi sổ vẫn là việc phải làm, nhưng đó là thiếu sót hồ sơ — nêu ở mức
+     * "có dấu hiệu" và gọi đúng tên, không phải "phản ánh không trung thực". */
+    const soChuaGhiDoanhThu = p511.co === 0 && p511.no === 0
+
+    if (toKhai && soChuaGhiDoanhThu) {
+        canCu.push({
+            ma: 'chua-ghi-so-doanh-thu',
+            muc: 'co-dau-hieu',
+            dauHieu: `Đã có tờ khai nhưng sổ kế toán chưa ghi bút toán doanh thu nào`,
+            dieuKhoan: 'Điều 3 TT 88/2021 (hộ kinh doanh) / chế độ kế toán đang áp dụng (doanh nghiệp)',
+            chiTiet: 'Không đối chiếu được sổ với tờ khai vì sổ chưa có số. Đây KHÔNG phải dấu hiệu khai không trung thực — hộ kinh doanh không bắt buộc ghi sổ kép, và doanh nghiệp có thể chưa chạy ghi sổ. Nhưng khi thanh tra hỏi "căn cứ tính thuế đâu" thì phải có sổ để trình.',
+            caiThenao: 'Hộ kinh doanh: nhập Sổ Doanh Thu trong phần Thuế. Doanh nghiệp: chạy ghi sổ tự động ở Kế Toán cho kỳ này rồi đối chiếu lại.',
+        })
+    }
+
     const lechToKhai = toKhai ? Math.abs(doanhThuSo - r0(toKhai.ct29)) : 0
-    if (toKhai && lechToKhai > Math.max(1000, doanhThuSo * 0.02)) {
+    if (toKhai && !soChuaGhiDoanhThu && lechToKhai > Math.max(1000, doanhThuSo * 0.02)) {
         canCu.push({
             ma: 'so-lieu-khong-trung-thuc',
             muc: 'ro-rang',

@@ -215,6 +215,39 @@ async function main() {
         !kqHong.canCu.some(c => c.ma === 'so-lieu-khong-trung-thuc'),
         kqHong.canCu.map(c => c.ma))
 
+    console.log('\n▸ Sổ kế toán trống ≠ "số liệu không trung thực"')
+    /* `doanhThuSo` lấy từ phát sinh Có 511 — BÚT TOÁN, không phải đơn hàng. Hộ
+     * kinh doanh không bắt buộc ghi sổ kép (TT 88/2021) nên sổ trống là chuyện
+     * thường. Khi đó lechToKhai = TOÀN BỘ doanh thu đã khai và ngưỡng tụt về
+     * 1.000đ, nên bất kỳ tờ khai nào cũng dựng căn cứ ấn định mức "rõ ràng"
+     * theo Điểm đ khoản 1 Điều 50 — căn cứ pháp lý nặng nhất của cả module. */
+    {
+        const k = khoSach()
+        k.journal = k.journal.filter((b: any) => b.debitAccount !== '511' && b.creditAccount !== '511')
+        const r = await moPhongAnDinh(fakePrisma(k), KY)
+        ok('sổ chưa ghi doanh thu → KHÔNG dựng căn cứ "số liệu không trung thực"',
+            !r.canCu.some(c => c.ma === 'so-lieu-khong-trung-thuc'), r.canCu.map(c => c.ma))
+        const c = r.canCu.find(x => x.ma === 'chua-ghi-so-doanh-thu')
+        ok('… mà gọi đúng tên: chưa ghi bút toán doanh thu', !!c, r.canCu.map(x => x.ma))
+        ok('… ở mức "có dấu hiệu", không phải "rõ ràng"', !!c && c.muc === 'co-dau-hieu', c?.muc)
+        ok('… nói rõ KHÔNG phải dấu hiệu khai không trung thực',
+            !!c && /KHÔNG phải dấu hiệu khai không trung thực/.test(c.chiTiet), c?.chiTiet?.slice(0, 80))
+        ok('… chỉ đường cho cả hộ kinh doanh lẫn doanh nghiệp',
+            !!c && /Sổ Doanh Thu/.test(c.caiThenao) && /Kế Toán/.test(c.caiThenao), c?.caiThenao)
+    }
+    {
+        /* Chiều ngược: sổ CÓ ghi doanh thu mà lệch tờ khai thật thì vẫn phải
+         * dựng căn cứ — nới lỏng nhầm chỗ này là bỏ lọt phép kiểm quan trọng
+         * nhất của cả module ấn định. */
+        const k = khoSach()
+        k.declaration = { ...k.declaration, ct29: 500_000_000 }
+        const r = await moPhongAnDinh(fakePrisma(k), KY)
+        ok('sổ có ghi mà lệch tờ khai thật thì vẫn dựng căn cứ',
+            r.canCu.some(c => c.ma === 'so-lieu-khong-trung-thuc'), r.canCu.map(c => c.ma))
+        ok('… và không kèm cảnh báo "chưa ghi sổ"',
+            !r.canCu.some(c => c.ma === 'chua-ghi-so-doanh-thu'))
+    }
+
     console.log(`\n${dat}/${dat + hong} ca đạt`)
     if (hong) process.exit(1)
 }
