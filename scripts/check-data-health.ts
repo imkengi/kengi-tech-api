@@ -34,6 +34,7 @@ interface Kho {
     taiKhoan?: any[]
     phieuNhap?: any[]
     choBanAm?: boolean
+    tonAmTop?: any[]
 }
 
 function fake(k: Kho, loi?: Record<string, boolean>) {
@@ -47,6 +48,10 @@ function fake(k: Kho, loi?: Record<string, boolean>) {
             aggregate: async () => {
                 no('product')
                 return { _count: k.tonAm?.so ?? 0, _sum: { stock: k.tonAm?.tong ?? 0 } }
+            },
+            findMany: async () => {
+                no('product')
+                return (k.tonAmTop ?? []) as any[]
             },
         },
         eInvoice: { findMany: async () => { no('eInvoice'); return k.hoaDonHong ?? [] } },
@@ -126,6 +131,26 @@ async function main() {
     ok('… việc cần làm là KIỂM KÊ, không phải đặt hàng', /[Kk]iểm kê/.test(mTon.canLam), mTon.canLam)
     ok('… nói rõ cửa hàng KHÔNG bật cho bán âm nên đây là lệch sổ',
         /KHÔNG bật cho phép bán âm/.test(mTon.anhHuong), mTon.anhHuong)
+
+    /* "262 mã tồn âm" không nói được phải mở cái gì trước. Phải kèm mã cụ thể,
+     * và ưu tiên mã âm SÂU NHẤT vì đó thường là chỗ lệch rõ nhất. */
+    const coViDu = await sucKhoeDuLieu(fake({
+        ...SACH,
+        tonAm: { so: 3, tong: -600 },
+        tonAmTop: [
+            { id: 'p1', name: 'Nồi chiên', sku: 'NC01', stock: -500 },
+            { id: 'p2', name: 'Ấm siêu tốc', sku: 'AS01', stock: -80 },
+        ],
+    }), KY)
+    const mVd = lay(coViDu, 'ton-am')
+    ok('kèm danh sách mã cụ thể để bắt đầu', (mVd.viDu?.length ?? 0) === 2, mVd.viDu)
+    ok('… có id để bấm vào truy vết được', !!mVd.viDu?.[0]?.id, mVd.viDu?.[0])
+    ok('… nhãn gồm cả tên lẫn mã hàng', /Nồi chiên \(NC01\)/.test(mVd.viDu?.[0]?.nhan || ''), mVd.viDu?.[0]?.nhan)
+    ok('… và số tồn đang âm', /tồn -500/.test(mVd.viDu?.[0]?.phu || ''), mVd.viDu?.[0]?.phu)
+
+    const khongTonAm = await sucKhoeDuLieu(fake({ ...SACH, tonAm: { so: 0, tong: 0 } }), KY)
+    ok('không có mã âm → danh sách rỗng, không gọi thừa',
+        (lay(khongTonAm, 'ton-am').viDu?.length ?? 0) === 0)
 
     /* Cửa hàng CỐ Ý bật "cho phép bán khi hết tồn": tồn âm là bán trước, hàng về
      * sẽ bù. Nói "lệch sổ sách" ở đây là buộc tội oan đúng cái họ chủ động chọn,

@@ -31,6 +31,9 @@ export interface MucSucKhoe {
     /** Ảnh hưởng tới báo cáo nào, nói bằng lời. */
     anhHuong: string
     canLam: string
+    /** Vài bản ghi cụ thể để người dùng bắt đầu từ đâu. Một con số tổng không
+     *  nói được phải mở cái gì ra trước. */
+    viDu?: Array<{ id?: string; nhan: string; phu?: string }>
 }
 
 export interface KetQuaSucKhoe {
@@ -131,9 +134,25 @@ export async function sucKhoeDuLieu(
     const tonAm: any = await thu('tonAm', thieu, () => prisma.product.aggregate({
         where: { stock: { lt: 0 } }, _count: true, _sum: { stock: true },
     }), null)
+    /* Kèm mã âm SÂU NHẤT: "234 mã tồn âm" không nói được phải mở cái gì trước.
+     * Âm sâu nhất thường cũng là chỗ lệch rõ nhất và dễ tìm ra nguyên nhân nhất. */
+    const tonAmTop: any[] = (Number(tonAm?._count) || 0) > 0
+        ? await thu('tonAmChiTiet', thieu, () => prisma.product.findMany({
+            where: { stock: { lt: 0 } },
+            select: { id: true, name: true, sku: true, stock: true },
+            orderBy: { stock: 'asc' },
+            take: 8,
+        }), [])
+        : []
+
     if (tonAm) {
         const so = Number(tonAm?._count) || 0
         muc.push({
+            viDu: tonAmTop.map((p: any) => ({
+                id: String(p.id),
+                nhan: `${p.name}${p.sku ? ` (${p.sku})` : ''}`,
+                phu: `tồn ${lam(p.stock)}`,
+            })),
             ma: 'ton-am',
             ten: choBanAm ? 'Mã hàng có tồn âm (cửa hàng cho bán âm)' : 'Mã hàng có tồn âm',
             muc: so === 0 ? 'on' : choBanAm ? 'vua' : so > 50 ? 'nang' : 'vua',
