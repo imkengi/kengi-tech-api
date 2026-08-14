@@ -1202,6 +1202,31 @@ async function main() {
             soNang !== 1 || (h.diem >= 74 && h.diem <= 80), `${soNang} nặng, điểm ${h.diem}`)
     }
 
+    {
+        /* Sổ TRỐNG: chỉ được một cảnh báo, và phép so có nghĩa là hoá đơn với
+         * DOANH THU THẬT chứ không phải với cuốn sổ rỗng — nếu không, cửa hàng
+         * sổ trống không thấy phần phơi nhiễm hoá đơn ở đâu cả. */
+        const k = khoSach()
+        k.journal = k.journal.filter((b: any) => b.debitAccount !== '511' && b.creditAccount !== '511')
+        k.declarations = []
+        /* total ĐÃ gồm VAT còn TK 511 và totalBeforeVat thì chưa — phải trừ ra,
+         * nếu không một cuốn sổ ghi đúng tuyệt đối vẫn hiện thiếu đúng phần VAT. */
+        k.transactions = [
+            { createdAt: '2026-08-05T02:00:00.000Z', total: 550_000_000, tax: 50_000_000, status: 'completed' },
+        ] as any
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        kiemTra('Sổ trống thì KHÔNG kèm thêm cảnh báo "sổ chỉ ghi nhận 0%"',
+            !co(h, 'so-thieu-doanh-thu-thuc-te'))
+        const c = lay(h, 'chua-ghi-so-doanh-thu')
+        kiemTra('… mà gộp vào một cảnh báo, kèm doanh thu thật ĐÃ TRỪ VAT',
+            !!c && c.chiTiet.includes('500.000.000') && !c.chiTiet.includes('550.000.000'),
+            c?.chiTiet?.slice(0, 130))
+        kiemTra('… và so hoá đơn với DOANH THU THẬT, không so với sổ rỗng',
+            !!c && /hóa đơn với DOANH THU THẬT/.test(c.chiTiet), c?.chiTiet?.slice(-200))
+        kiemTra('… nêu đúng phần chưa có hoá đơn (500tr − 100tr)',
+            !!c && c.chiTiet.includes('400.000.000'), c?.chiTiet?.slice(-160))
+    }
+
     // ── 41e. Sổ ghi nhận được bao nhiêu phần doanh thu thật ────────────────
     /* Đo trên HUTI ngày 14/08/2026: bán 1.967.661.493 ₫ trong 14 ngày mà sổ chỉ
      * ghi 23.525.478 ₫ (1,2%) và 0 hoá đơn. Phép so "sổ với hoá đơn" ra "lệch
@@ -1210,7 +1235,7 @@ async function main() {
     {
         const k = khoSach()
         k.transactions = [
-            { createdAt: '2026-08-05T02:00:00.000Z', total: 1_000_000_000, status: 'completed' },
+            { createdAt: '2026-08-05T02:00:00.000Z', total: 1_100_000_000, tax: 100_000_000, status: 'completed' },
         ] as any
         const h = await kiemTraThue(fakePrisma(k), KY)
         const c = lay(h, 'so-thieu-doanh-thu-thuc-te')
@@ -1224,11 +1249,13 @@ async function main() {
     {
         // Sổ ghi đủ thì tuyệt đối không kêu — nới nhầm là thêm một cảnh báo rác
         const k = khoSach()
+        /* Sổ ghi 100tr (TK 511, chưa VAT) và bán 110tr đã gồm 10tr VAT → khớp
+         * tuyệt đối. Nếu quên trừ VAT thì ca này sẽ kêu oan. */
         k.transactions = [
-            { createdAt: '2026-08-05T02:00:00.000Z', total: 100_000_000, status: 'completed' },
+            { createdAt: '2026-08-05T02:00:00.000Z', total: 110_000_000, tax: 10_000_000, status: 'completed' },
         ] as any
         const h = await kiemTraThue(fakePrisma(k), KY)
-        kiemTra('Sổ ghi khớp doanh thu thật thì im',
+        kiemTra('Sổ ghi khớp doanh thu thật (sau khi trừ VAT) thì im',
             !co(h, 'so-thieu-doanh-thu-thuc-te'),
             JSON.stringify(lay(h, 'so-thieu-doanh-thu-thuc-te')?.tieuDe))
     }

@@ -293,7 +293,7 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
     const layGiaoDich = nap(() => prisma.transaction.findMany({
         where: { status: { in: ['completed', 'partial'] }, createdAt: { gte: start, lte: end } },
         select: {
-            id: true, receiptNumber: true, total: true,
+            id: true, receiptNumber: true, total: true, tax: true,
             items: { select: { productId: true, productName: true, quantity: true, lineTotal: true, product: { select: { costPrice: true } } } },
         },
     }))
@@ -457,7 +457,16 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
     let dtThucTe: number | null = null
     try {
         const txs = (await layGiaoDich()) || []
-        dtThucTe = Math.round(txs.reduce((t: number, x: any) => t + (Number(x.total) || 0), 0))
+        /* TRỪ VAT ra cho khớp đơn vị.
+         *
+         * `dtSo` lấy từ TK 511 — doanh thu THUẦN, không gồm thuế đầu ra (thuế
+         * nằm ở 3331). `dtHoaDon` cộng `totalBeforeVat`, cũng chưa thuế. Còn
+         * `transaction.total` thì ĐÃ GỒM thuế. Cộng thẳng `total` rồi đem so là
+         * lệch đơn vị: một cuốn sổ ghi đúng tuyệt đối vẫn hiện thiếu đúng bằng
+         * phần VAT (~8–10%), và với ngưỡng 80% thì chỉ cần thuế suất 10% cộng
+         * chút chiết khấu là kêu oan. Chính ca test bắt được. */
+        dtThucTe = Math.round(txs.reduce(
+            (t: number, x: any) => t + ((Number(x.total) || 0) - (Number(x.tax) || 0)), 0))
     } catch { /* không đọc được — bỏ qua */ }
 
     if (dtThucTe !== null && dtThucTe > 0) {
@@ -465,7 +474,9 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
          * trên sổ đều không dùng được, không chỉ lệch cho vui. */
         const thieu = dtThucTe - dtSo
         const tyLeGhi = Math.round(dtSo / dtThucTe * 100)
-        if (thieu > NGUONG_LECH_BO_QUA && tyLeGhi < 80) canhBao.push({
+        /* Sổ TRỐNG HẲN đã có cảnh báo riêng bên dưới — không nói hai lần về cùng
+         * một sự việc, và "sổ chỉ ghi nhận 0%" là câu đọc rất kỳ. */
+        if (!soChuaGhiDoanhThu && thieu > NGUONG_LECH_BO_QUA && tyLeGhi < 80) canhBao.push({
             code: 'so-thieu-doanh-thu-thuc-te',
             muc: tyLeGhi < 50 ? 'cao' : 'vua',
             tieuDe: `Sổ chỉ ghi nhận ${tyLeGhi}% doanh thu thực tế`,
@@ -476,11 +487,20 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
         })
     }
 
-    if (soChuaGhiDoanhThu && dtHoaDon > 0) {
+    if (soChuaGhiDoanhThu && (dtHoaDon > 0 || (dtThucTe ?? 0) > 0)) {
+        /* Sổ trống thì phép so có nghĩa KHÔNG phải "hoá đơn với sổ" (sổ bằng 0,
+         * so ra vô nghĩa) mà là "hoá đơn với DOANH THU THẬT" — nghĩa vụ lập hoá
+         * đơn theo Điều 90 gắn với từng lần bán, không gắn với việc đã ghi sổ
+         * hay chưa. Không nêu ra thì cửa hàng có sổ trống lại không thấy phần
+         * phơi nhiễm hoá đơn ở đâu cả, vì phép so kia đã bị chặn. */
+        const chenhHoaDon = (dtThucTe ?? 0) - dtHoaDon
+        const cauHoaDon = (dtThucTe ?? 0) > 0 && chenhHoaDon > NGUONG_LECH_BO_QUA
+            ? ` Đối chiếu có nghĩa ở đây là hóa đơn với DOANH THU THẬT: phiếu bán trong kỳ cộng lại ${vnd(dtThucTe as number)} ₫, hóa đơn đã phát hành ${vnd(dtHoaDon)} ₫ — còn ${vnd(chenhHoaDon)} ₫ chưa có hóa đơn. Nghĩa vụ lập hóa đơn gắn với từng lần bán, không phụ thuộc việc đã ghi sổ hay chưa.`
+            : ''
         canhBao.push({
             code: 'chua-ghi-so-doanh-thu', muc: 'vua',
             tieuDe: 'Chưa ghi bút toán doanh thu vào sổ kế toán',
-            chiTiet: `Kỳ ${nhan} có ${vnd(dtHoaDon)} ₫ hóa đơn đã phát hành nhưng sổ kế toán chưa có bút toán doanh thu nào (tài khoản 511). Vì vậy KHÔNG kết luận được là lệch: chưa ghi sổ khác hẳn với bán mà giấu doanh thu. Mọi phép đối chiếu "sổ với hóa đơn" và "sổ với tờ khai" của kỳ này đều chưa dùng được.`,
+            chiTiet: `Kỳ ${nhan}: sổ kế toán chưa có bút toán doanh thu nào (tài khoản 511)${dtThucTe !== null ? `, trong khi phiếu bán cộng lại ${vnd(dtThucTe)} ₫` : ''}. Vì vậy KHÔNG kết luận được là lệch sổ: chưa ghi sổ khác hẳn với bán mà giấu doanh thu. Mọi phép đối chiếu "sổ với hóa đơn" và "sổ với tờ khai" của kỳ này đều chưa dùng được.${cauHoaDon}`,
             canCu: 'Điều 3 TT 88/2021 — hộ kinh doanh nộp thuế theo kê khai chỉ bắt buộc sổ doanh thu, không bắt buộc sổ kép; doanh nghiệp thì theo chế độ kế toán đang áp dụng.',
             canLam: 'Nếu là doanh nghiệp: chạy ghi sổ tự động ở Kế Toán để sinh bút toán doanh thu cho kỳ. Nếu là hộ kinh doanh: nhập Sổ Doanh Thu trong phần Thuế — không cần sổ kép.',
             tienRuiRo: null, soLuong: 0, viDu: [],
