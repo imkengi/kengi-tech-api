@@ -66,11 +66,21 @@ export async function sucKhoeDuLieu(
     // ── 1. Dữ liệu bán có phủ hết kỳ không ───────────────────────────────
     const soNgayKy = Math.max(1, Math.round((ky.end.getTime() - ky.start.getTime()) / 86400_000))
     const phu: any[] = await thu('phamViBan', thieu, () => prisma.$queryRawUnsafe(
-        `SELECT COUNT(DISTINCT (t."createdAt" + interval '7 hours')::date)::int AS "soNgay",
-                MIN(t."createdAt") AS "somNhat",
-                MAX(t."createdAt") AS "muonNhat"
+        /* Đếm theo NGÀY BÁN. Cửa hàng nhập lịch sử từ phần mềm cũ có `createdAt`
+         * là cửa sổ chạy nhập vài tuần, nên đếm theo nó sẽ ra "31/91 ngày →
+         * dữ liệu rải rác, thiếu nhiều quãng giữa kỳ" cho một cửa hàng bán
+         * liên tục suốt 5 tháng — chê nhầm chất lượng dữ liệu của họ.
+         *
+         * Chuyện kỳ báo cáo đang bị cắt theo ngày ghi sổ là vấn đề KHÁC, và đã
+         * có mục `ky-ghi-so-lech-ky-ban` bên dưới nói riêng. Hai sự thật khác
+         * nhau thì phải nói ở hai chỗ, đừng trộn vào một con số. */
+        `SELECT COUNT(DISTINCT (COALESCE(t."transactionDate", t."createdAt") + interval '7 hours')::date)::int AS "soNgay",
+                MIN(COALESCE(t."transactionDate", t."createdAt")) AS "somNhat",
+                MAX(COALESCE(t."transactionDate", t."createdAt")) AS "muonNhat"
          FROM "Transaction" t
-         WHERE t.status IN ('completed','partial') AND t."createdAt" >= $1 AND t."createdAt" < $2`,
+         WHERE t.status IN ('completed','partial')
+           AND COALESCE(t."transactionDate", t."createdAt") >= $1
+           AND COALESCE(t."transactionDate", t."createdAt") < $2`,
         ky.start, ky.end,
     ), [])
     const soNgayCoBan = Number(phu?.[0]?.soNgay) || 0
