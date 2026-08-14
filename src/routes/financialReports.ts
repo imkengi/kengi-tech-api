@@ -1,5 +1,6 @@
 import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
+import { chayTheoDot } from '../lib/poolGuard'
 import { requirePermission } from '../middleware/permissionMiddleware'
 import { isBigQueryEnabled, queryBQ } from '../lib/bigquery'
 import { cacheGet, cacheSet } from '../lib/cache'
@@ -175,9 +176,9 @@ async function buildReportFromPrisma(prisma: any, startDate: Date, endDate: Date
         dailyExpenseRows,
         paymentRows,
         topProductRows,
-    ] = await Promise.all([
+    ] = await chayTheoDot([
         // Transaction P&L summary + COGS in one query (joined to TransactionItem×Product)
-        prisma.$queryRawUnsafe(
+        () => prisma.$queryRawUnsafe(
             `SELECT
                 COALESCE(SUM(t.total), 0) AS total_revenue,
                 COALESCE(SUM(t.discount), 0) AS total_discount,
@@ -194,7 +195,7 @@ async function buildReportFromPrisma(prisma: any, startDate: Date, endDate: Date
              WHERE t.\"createdAt\" >= $1 AND t.\"createdAt\" <= $2 AND t.status <> 'voided'`,
             startDate, endDate,
         ),
-        prisma.$queryRawUnsafe(
+        () => prisma.$queryRawUnsafe(
             `SELECT category, COALESCE(SUM(amount), 0) AS total
              FROM \"Expense\"
              WHERE date >= $1 AND date <= $2
@@ -202,7 +203,7 @@ async function buildReportFromPrisma(prisma: any, startDate: Date, endDate: Date
             startDate, endDate,
         ),
         // Inventory totals: cost+retail value, SKU count
-        prisma.$queryRawUnsafe(
+        () => prisma.$queryRawUnsafe(
             `SELECT
                 COALESCE(SUM(\"costPrice\" * stock), 0) AS inventory_cost,
                 COALESCE(SUM(\"sellingPrice\" * stock), 0) AS inventory_retail,
@@ -211,34 +212,34 @@ async function buildReportFromPrisma(prisma: any, startDate: Date, endDate: Date
              WHERE \"productType\" <> 'service' OR \"productType\" IS NULL`,
         ),
         // Low-stock count (separate so the WHERE doesn't blow away the totals)
-        prisma.$queryRawUnsafe(
+        () => prisma.$queryRawUnsafe(
             `SELECT COUNT(*) AS low_stock_count
              FROM \"Product\"
              WHERE (\"productType\" <> 'service' OR \"productType\" IS NULL)
                AND stock >= 0 AND stock <= 10`,
         ),
-        prisma.$queryRawUnsafe(
+        () => prisma.$queryRawUnsafe(
             `SELECT type, COALESCE(SUM(amount), 0) AS total
              FROM \"DebtEntry\"
              WHERE \"createdAt\" >= $1 AND \"createdAt\" <= $2
              GROUP BY type`,
             startDate, endDate,
         ),
-        prisma.$queryRawUnsafe(
+        () => prisma.$queryRawUnsafe(
             `SELECT COALESCE(SUM(total), 0) AS revenue
              FROM \"Transaction\"
              WHERE \"createdAt\" >= $1 AND \"createdAt\" <= $2 AND status <> 'voided'`,
             prevStart, prevEnd,
         ),
         // Accounts payable: unpaid import receipts (all time up to endDate)
-        prisma.importReceipt.findMany({
+        () => prisma.importReceipt.findMany({
             where: { createdAt: { lte: endDate } },
             select: { totalCost: true, status: true },
         }).catch(() => [] as any[]),
         // Daily/monthly transaction buckets — revenue + orders + COGS.
         // COGS is aggregated in its own derived table: a correlated subquery on
         // t."createdAt" is invalid under the outer GROUP BY (Postgres 42803).
-        prisma.$queryRawUnsafe(
+        () => prisma.$queryRawUnsafe(
             `SELECT
                 -- mui-gio-co-y: d.bucket da cong 7 tieng trong CTE ben duoi roi,
                 -- cong them lan nua la day sang ngay hom sau
@@ -266,7 +267,7 @@ async function buildReportFromPrisma(prisma: any, startDate: Date, endDate: Date
              ORDER BY 1`,
             startDate, endDate,
         ),
-        prisma.$queryRawUnsafe(
+        () => prisma.$queryRawUnsafe(
             `SELECT
                 to_char(date_trunc('${bucketUnit}', date + interval '7 hours'), 'YYYY-MM-DD') AS bucket,
                 COALESCE(SUM(amount), 0) AS expense
@@ -277,7 +278,7 @@ async function buildReportFromPrisma(prisma: any, startDate: Date, endDate: Date
             startDate, endDate,
         ),
         // Payment breakdown — group by payment.type
-        prisma.$queryRawUnsafe(
+        () => prisma.$queryRawUnsafe(
             `SELECT pm.type, COALESCE(SUM(pm.amount), 0) AS amount
              FROM \"Payment\" pm
              JOIN \"Transaction\" t ON t.id = pm.\"transactionId\"
@@ -286,7 +287,7 @@ async function buildReportFromPrisma(prisma: any, startDate: Date, endDate: Date
             startDate, endDate,
         ),
         // Top products — already aggregate-only, top 10
-        prisma.$queryRawUnsafe(
+        () => prisma.$queryRawUnsafe(
             `SELECT
                 ti.\"productId\" AS product_id,
                 MAX(ti.\"productName\") AS name,

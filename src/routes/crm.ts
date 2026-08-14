@@ -538,21 +538,36 @@ router.get('/overview', authMiddleware, requirePermission('customers.view'), asy
         const prevFrom = new Date(from.getTime() - days * 86400000)
         const endOfToday = new Date(now); endOfToday.setHours(23, 59, 59, 999)
 
-        const [
-            totalCustomers, newCustomers, prevNewCustomers, debtAgg,
-            deals, tasksOpen, tasksOverdue, tasksDoneRecently,
-            emailsSent, emailsReplied, revenueRows, topCustomers, tierRows,
-        ] = await Promise.all([
+        /* CHIA ĐỢT, KHÔNG BẮN MỘT LẦN 13 TRUY VẤN.
+         *
+         * Pool mỗi cửa hàng chỉ 3-8 kết nối. Bản cũ gom cả 13 vào một Promise.all
+         * nên MỘT lượt xem trang này chiếm ngần ấy kết nối cùng lúc — hai người
+         * mở, hoặc đúng lúc cron chạy, là cạn pool và các request khác trả 500.
+         * Tệ nhất là lỗi hiện ra ở NHỮNG TRANG KHÁC chứ không phải trang này,
+         * nên rất khó lần ra thủ phạm.
+         *
+         * Chia 5 đợt, mỗi đợt tối đa 3 kết nối: chậm hơn vài trăm mili giây,
+         * đổi lấy việc không bao giờ một mình làm nghẽn cả cửa hàng. */
+        const [totalCustomers, newCustomers, prevNewCustomers] = await Promise.all([
             prisma.customer.count(),
             prisma.customer.count({ where: { createdAt: { gte: from } } }),
             prisma.customer.count({ where: { createdAt: { gte: prevFrom, lt: from } } }),
+        ])
+        const [debtAgg, deals, tierRows] = await Promise.all([
             prisma.customer.aggregate({ _sum: { debt: true }, where: { debt: { gt: 0 } } }),
             prisma.crmDeal.findMany({ select: { stage: true, value: true } }),
+            prisma.customer.groupBy({ by: ['tier'], _count: { _all: true } }),
+        ])
+        const [tasksOpen, tasksOverdue, tasksDoneRecently] = await Promise.all([
             prisma.crmTask.count({ where: { status: { not: 'done' } } }),
             prisma.crmTask.count({ where: { status: { not: 'done' }, dueDate: { lt: now } } }),
             prisma.crmTask.count({ where: { status: 'done', completedAt: { gte: from } } }),
+        ])
+        const [emailsSent, emailsReplied] = await Promise.all([
             prisma.crmEmailLog.count({ where: { sentAt: { gte: from } } }),
             prisma.crmEmailLog.count({ where: { sentAt: { gte: from }, repliedAt: { not: null } } }),
+        ])
+        const [revenueRows, topCustomers] = await Promise.all([
             prisma.$queryRawUnsafe<any[]>(
                 `SELECT to_char("createdAt" + interval '7 hours', 'YYYY-MM-DD') AS day,
                         COALESCE(SUM(total), 0)::float8 AS revenue,
@@ -564,7 +579,6 @@ router.get('/overview', authMiddleware, requirePermission('customers.view'), asy
                 orderBy: { totalPurchases: 'desc' }, take: 8,
                 select: { id: true, name: true, phone: true, totalPurchases: true, totalOrders: true, tier: true, debt: true },
             }),
-            prisma.customer.groupBy({ by: ['tier'], _count: { _all: true } }),
         ])
 
         const stageOrder = DEAL_STAGES
