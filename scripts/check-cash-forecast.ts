@@ -153,7 +153,11 @@ async function main() {
         thuMoiNgay: 1_000_000,
     }, { ImportReceipt: true }), { soNgay: 30 })
     ok('hỏng bảng phiếu nhập → không sập', rHong.ngay.length === 30)
-    ok('… ghi vào mục thiếu', rHong.thieu.some(t => /ImportReceipt|công nợ nhà cung cấp/.test(t)), rHong.thieu)
+    /* Nợ nhà cung cấp là khoản CHẮC CHẮN phải trả — đọc hỏng nó làm lịch tiền
+     * trông nhẹ hơn thực tế, nên nó thuộc nhóm thiếu NGHIÊM TRỌNG, không phải
+     * thiếu phụ. Bản tin tuần dựa vào đúng phân loại này để quyết định im lặng. */
+    ok('… ghi vào mục thiếu NGHIÊM TRỌNG',
+        rHong.thieuChinh.some(t => /ImportReceipt|công nợ nhà cung cấp/.test(t)), rHong.thieuChinh)
     ok('… và nợ NCC để 0 chứ không bịa', rHong.tomTat.noNccDenHan === 0)
 
     console.log('\n▶ Ít ngày phát sinh thu — phải nói mức ước tính còn yếu\n')

@@ -125,11 +125,11 @@ export async function banTinChoStore(
 
     /* Đọc hỏng dữ liệu thì im hẳn. Gửi bản tin dựng trên số rỗng là vừa sai vừa
      * làm mất lòng tin vào mọi bản tin sau. */
-    if (tien_?.thieu?.length || kho?.thieu?.length) {
+    if (tien_?.thieuChinh?.length || kho?.thieuChinh?.length) {
         /* In ra ĐÚNG truy vấn nào hỏng. Log kiểu "chưa đọc được dữ liệu" chung
          * chung từng làm mất một buổi: cả 9 cửa hàng đều im mà không biết vì sao,
          * hoá ra một câu SQL thô sai tên cột khoá ngoại. */
-        const lyDo = [...(tien_?.thieu || []), ...(kho?.thieu || [])].join(' | ')
+        const lyDo = [...(tien_?.thieuChinh || []), ...(kho?.thieuChinh || [])].join(' | ')
         console.log(`📋 [${tenStore}] bỏ qua bản tin tuần — chưa đọc được: ${lyDo}`)
         return false
     }

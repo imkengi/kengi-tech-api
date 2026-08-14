@@ -78,6 +78,10 @@ export interface KetQuaDatHang {
         matMoiNgayDoHetHang: number
         vonKetODongHang: number
     }
+    /** Chỉ những thiếu sót LÀM SAI kết luận: mất lịch sử bán hoặc mất danh mục
+     *  hàng. Thiếu nguồn nhập hay thiếu hàng đang về chỉ làm số kém chính xác
+     *  hơn, đã có đường lùi — không được phép làm câm cả báo cáo. */
+    thieuChinh: string[]
     canDat: MatHangDatHang[]
     hetHang: MatHangDatHang[]
     tonDong: MatHangDatHang[]
@@ -95,6 +99,15 @@ function zTheoMucPhucVu(p: number): number {
         .map(Number)
         .reduce((a, b) => (Math.abs(b - p) < Math.abs(a - p) ? b : a), 0.95)
     return HE_SO_Z[khoa.toFixed(2)] ?? 1.65
+}
+
+/** Mô tả lỗi cho người đọc log. Nhiều lỗi Prisma/pg có message RỖNG — chỉ in
+ *  message là ra chuỗi cụt, không chẩn được gì. */
+function moTaLoi(e: any): string {
+    const m = String(e?.message || '').trim()
+    if (m) return m.slice(0, 160)
+    const phu = [e?.name, e?.code, e?.meta && JSON.stringify(e.meta)].filter(Boolean).join(' ')
+    return (phu || String(e) || 'lỗi không rõ').slice(0, 160)
 }
 
 const lam = (n: any) => Math.round(Number(n) || 0)
@@ -118,6 +131,7 @@ export async function keHoachDatHang(
     },
 ): Promise<KetQuaDatHang> {
     const thieu: string[] = []
+    const thieuChinh: string[] = []
     const ghiChu: string[] = []
 
     const soNgayLichSu = Math.max(14, Math.min(365, tuyChon?.soNgayLichSu ?? 90))
@@ -154,7 +168,7 @@ export async function keHoachDatHang(
         )
         docDuocBan = true
     } catch (e: any) {
-        thieu.push(`Không đọc được lịch sử bán: ${String(e?.message || e).slice(0, 120)}`)
+        thieuChinh.push(`Không đọc được lịch sử bán: ${moTaLoi(e)}`)
     }
     const ban = new Map<string, { tong: number; tongBp: number; soNgay: number }>()
     for (const r of banRows) {
@@ -177,7 +191,7 @@ export async function keHoachDatHang(
             },
         })
     } catch (e: any) {
-        thieu.push(`Không đọc được danh mục hàng hoá: ${String(e?.message || e).slice(0, 120)}`)
+        thieuChinh.push(`Không đọc được danh mục hàng hoá: ${moTaLoi(e)}`)
     }
 
     /* Tên nhóm hàng: đặt hàng thực tế gom theo NHÀ CUNG CẤP (mỗi bên một đơn),
@@ -187,7 +201,7 @@ export async function keHoachDatHang(
         const dm = await prisma.category.findMany({ select: { id: true, name: true } })
         for (const c of dm) tenNhom.set(String(c.id), String(c.name || ''))
     } catch (e: any) {
-        thieu.push(`Không đọc được nhóm hàng: ${String(e?.message || e).slice(0, 120)}`)
+        thieu.push(`Không đọc được nhóm hàng: ${moTaLoi(e)}`)
     }
 
     /* Product không có cột nhà cung cấp — suy từ phiếu nhập GẦN NHẤT của chính
@@ -205,7 +219,7 @@ export async function keHoachDatHang(
         )
         for (const r of rows) nccCuaHang.set(String(r.productId), String(r.supplierId))
     } catch (e: any) {
-        thieu.push(`Không đọc được nguồn nhập của hàng hoá: ${String(e?.message || e).slice(0, 120)}`)
+        thieu.push(`Không đọc được nguồn nhập của hàng hoá: ${moTaLoi(e)}`)
     }
 
     // ── Số ngày chờ hàng thật, theo từng nhà cung cấp ────────────────────
@@ -236,7 +250,7 @@ export async function keHoachDatHang(
             if (ds.length >= 3) choTheoNcc.set(id, Math.max(1, Math.round(trungVi(ds))))
         }
     } catch (e: any) {
-        thieu.push(`Không đọc được lịch sử đặt hàng: ${String(e?.message || e).slice(0, 120)}`)
+        thieu.push(`Không đọc được lịch sử đặt hàng: ${moTaLoi(e)}`)
     }
 
     // ── Hàng đang trên đường về ──────────────────────────────────────────
@@ -258,7 +272,7 @@ export async function keHoachDatHang(
         /* Không đọc được thì coi như chưa có hàng về — sẽ đề xuất đặt DƯ chứ
          * không đề xuất thiếu. Đặt dư thì kẹt vốn, đề xuất thiếu thì đứt hàng;
          * chọn hướng an toàn hơn nhưng phải nói ra. */
-        thieu.push(`Không đọc được hàng đang về: ${String(e?.message || e).slice(0, 120)}`)
+        thieu.push(`Không đọc được hàng đang về: ${moTaLoi(e)}`)
         ghiChu.push('Chưa đọc được lượng hàng đang trên đường về — số đề xuất đặt có thể cao hơn thực tế cần.')
     }
 
@@ -398,6 +412,7 @@ export async function keHoachDatHang(
             matMoiNgayDoHetHang: lam(hetHang.reduce((s, m) => s + m.matMoiNgay, 0)),
             vonKetODongHang: lam(tonDong.reduce((s, m) => s + m.vonKet, 0)),
         },
+        thieuChinh,
         canDat: canDat.slice(0, soMaToiDa),
         hetHang: hetHang.slice(0, soMaToiDa),
         tonDong: tonDong.slice(0, soMaToiDa),

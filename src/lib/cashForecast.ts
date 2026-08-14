@@ -74,6 +74,18 @@ export interface KetQuaDuBaoTien {
     canhBao: string[]
     ghiChu: string[]
     thieu: string[]
+    /** Thiếu sót LÀM SAI kết luận về tiền. Thiếu công nợ khách chỉ mất một ô
+     *  hiển thị; thiếu nợ nhà cung cấp thì lịch tiền trông nhẹ hơn thực tế và
+     *  cảnh báo trở nên nguy hiểm. */
+    thieuChinh: string[]
+}
+
+/** Nhiều lỗi Prisma/pg có message RỖNG — in mỗi message là ra chuỗi cụt. */
+function moTaLoi(e: any): string {
+    const m = String(e?.message || '').trim()
+    if (m) return m.slice(0, 160)
+    const phu = [e?.name, e?.code, e?.meta && JSON.stringify(e.meta)].filter(Boolean).join(' ')
+    return (phu || String(e) || 'lỗi không rõ').slice(0, 160)
 }
 
 const VN_OFFSET_MS = 7 * 3600 * 1000
@@ -86,6 +98,7 @@ export async function duBaoDongTien(
     tuyChon?: { soNgay?: number; tienMatDauKy?: number },
 ): Promise<KetQuaDuBaoTien> {
     const thieu: string[] = []
+    const thieuChinh: string[] = []
     const ghiChu: string[] = []
     const canhBao: string[] = []
 
@@ -103,7 +116,7 @@ export async function duBaoDongTien(
             select: { id: true, bankName: true, balance: true },
         })
     } catch (e: any) {
-        thieu.push(`Không đọc được tài khoản ngân hàng: ${String(e?.message || e).slice(0, 120)}`)
+        thieuChinh.push(`Không đọc được tài khoản ngân hàng: ${moTaLoi(e)}`)
     }
     const tienNganHang = taiKhoan.reduce((s: number, t: any) => s + so(t.balance), 0)
     const tienMatDauKy = so(tuyChon?.tienMatDauKy)
@@ -133,7 +146,7 @@ export async function duBaoDongTien(
         soNgayDoDuoc = Number(rows?.[0]?.soNgay) || 0
         thuMoiNgay = soNgayDoDuoc > 0 ? so(rows[0].tien) / NGAY_DO : 0
     } catch (e: any) {
-        thieu.push(`Không đọc được tiền bán hàng đã thu: ${String(e?.message || e).slice(0, 120)}`)
+        thieuChinh.push(`Không đọc được tiền bán hàng đã thu: ${moTaLoi(e)}`)
     }
 
     try {
@@ -144,7 +157,7 @@ export async function duBaoDongTien(
         })
         chiVanHanhMoiNgay = so(chi?._sum?.amount) / NGAY_DO
     } catch (e: any) {
-        thieu.push(`Không đọc được chi phí vận hành: ${String(e?.message || e).slice(0, 120)}`)
+        thieuChinh.push(`Không đọc được chi phí vận hành: ${moTaLoi(e)}`)
     }
 
     // ── Nợ nhà cung cấp đến hạn (CHẮC CHẮN, có ngày) ─────────────────────
@@ -176,7 +189,7 @@ export async function duBaoDongTien(
             noNccDenHan += conNo
         }
     } catch (e: any) {
-        thieu.push(`Không đọc được công nợ nhà cung cấp: ${String(e?.message || e).slice(0, 120)}`)
+        thieuChinh.push(`Không đọc được công nợ nhà cung cấp: ${moTaLoi(e)}`)
     }
 
     // ── Nghĩa vụ thuế sắp tới ────────────────────────────────────────────
@@ -226,7 +239,7 @@ export async function duBaoDongTien(
             }
         }
     } catch (e: any) {
-        thieu.push(`Không đọc được lịch nghĩa vụ thuế: ${String(e?.message || e).slice(0, 120)}`)
+        thieuChinh.push(`Không đọc được lịch nghĩa vụ thuế: ${moTaLoi(e)}`)
     }
 
     // ── Công nợ khách: KHÔNG rải lên lịch ────────────────────────────────
@@ -235,7 +248,7 @@ export async function duBaoDongTien(
         const kh = await prisma.customer.aggregate({ where: { debt: { gt: 0 } }, _sum: { debt: true } })
         noKhachChuaCoHan = so(kh?._sum?.debt)
     } catch (e: any) {
-        thieu.push(`Không đọc được công nợ khách: ${String(e?.message || e).slice(0, 120)}`)
+        thieu.push(`Không đọc được công nợ khách: ${moTaLoi(e)}`)
     }
     if (noKhachChuaCoHan > 0) {
         ghiChu.push(`Khách đang nợ ${lam(noKhachChuaCoHan).toLocaleString('vi-VN')}đ nhưng sổ không lưu hạn thu từng khoản, nên KHÔNG được rải lên lịch này. Đây là khoản có thể thu nếu đi đòi — đừng cộng sẵn vào số dư rồi yên tâm.`)
@@ -322,6 +335,6 @@ export async function duBaoDongTien(
             thueChuaRoSoTien,
             noKhachChuaCoHan: lam(noKhachChuaCoHan),
         },
-        canhBao, ghiChu, thieu,
+        canhBao, ghiChu, thieu, thieuChinh,
     }
 }
