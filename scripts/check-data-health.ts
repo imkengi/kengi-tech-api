@@ -35,12 +35,21 @@ interface Kho {
     phieuNhap?: any[]
     choBanAm?: boolean
     tonAmTop?: any[]
+    /** Đơn có ngày bán khác tháng với ngày ghi sổ. */
+    lechKy?: Array<{ thangGhiSo: string; thangBan: string; so: number; tien: number }>
 }
 
 function fake(k: Kho, loi?: Record<string, boolean>) {
     const no = (t: string) => { if (loi?.[t]) throw new Error(`The table \`${t}\` does not exist`) }
     return {
-        $queryRawUnsafe: async () => {
+        $queryRawUnsafe: async (sql: string) => {
+            /* Phân nhánh theo câu SQL. Bản trước trả cùng một shape cho MỌI truy
+             * vấn, nên phép soát mới im lặng báo "on" và test xanh mà không hề
+             * chạy qua nó — prisma giả quá dễ dãi thì test thành vô hiệu. */
+            if (/thangGhiSo/.test(String(sql || ''))) {
+                no('lechKyGhiSo')
+                return k.lechKy ?? []
+            }
             no('phamVi')
             return [{ soNgay: k.soNgayCoBan ?? 90, somNhat: new Date('2026-05-16T00:00:00Z'), muonNhat: new Date('2026-08-13T00:00:00Z') }]
         },
@@ -274,6 +283,52 @@ async function main() {
     ok('mục NẶNG xếp trước mục ổn', nhieu.muc[0].muc === 'nang', nhieu.muc.map((m: any) => m.muc))
     ok('điểm tụt theo số vấn đề', nhieu.diem < 60, nhieu.diem)
     ok('xếp loại "chưa tin được"', nhieu.xepLoai === 'chưa tin được', nhieu.xepLoai)
+
+    console.log('\n▶ Kỳ ghi sổ lệch kỳ bán (dữ liệu nhập từ phần mềm cũ)\n')
+    const layMuc = (r: any, ma: string) => r.muc.find((m: any) => m.ma === ma)
+    {
+        const r = await sucKhoeDuLieu(fake({ lechKy: [] }), KY)
+        const m = layMuc(r, 'ky-ghi-so-lech-ky-ban')
+        ok('không đơn nào lệch → mức ổn', !!m && m.muc === 'on', m?.muc)
+        ok('… và không trừ điểm', !!m && /không có đơn nào lệch/.test(m.so || ''), m?.so)
+    }
+    {
+        const r = await sucKhoeDuLieu(fake({
+            lechKy: [
+                { thangGhiSo: '2026-07', thangBan: '2026-05', so: 1200, tien: 1_537_538_227 },
+                { thangGhiSo: '2026-07', thangBan: '2026-06', so: 1400, tien: 1_684_255_734 },
+            ],
+        }), KY)
+        const m = layMuc(r, 'ky-ghi-so-lech-ky-ban')
+        ok('lệch số tiền lớn → mức nặng', !!m && m.muc === 'nang', m?.muc)
+        ok('cộng đúng tổng số đơn lệch', !!m && /2\.600 đơn/.test(m.so || ''), m?.so)
+        ok('nói rõ ảnh hưởng tới TỜ KHAI THUẾ',
+            !!m && /TỜ KHAI THUẾ/.test(m.anhHuong), m?.anhHuong?.slice(0, 80))
+        ok('KHÔNG đổ lỗi cho cửa hàng khai sai',
+            !!m && /KHÔNG phải cửa hàng khai sai/.test(m.anhHuong))
+        ok('việc cần làm nhắc cân nhắc khai bổ sung',
+            !!m && /khai bổ sung/.test(m.canLam), m?.canLam?.slice(0, 80))
+        ok('nêu ví dụ tháng bán ↔ tháng ghi sổ',
+            !!m && (m.viDu || []).some((v: any) => /Bán tháng 2026-05 nhưng ghi sổ tháng 2026-07/.test(v.nhan)),
+            m?.viDu)
+    }
+    {
+        // Lệch nhỏ thì chỉ ở mức vừa — không phải chuyện nào cũng đáng báo động
+        const r = await sucKhoeDuLieu(fake({
+            lechKy: [{ thangGhiSo: '2026-08', thangBan: '2026-07', so: 3, tien: 4_500_000 }],
+        }), KY)
+        const m = layMuc(r, 'ky-ghi-so-lech-ky-ban')
+        ok('lệch nhỏ → mức vừa, không phải nặng', !!m && m.muc === 'vua', m?.muc)
+    }
+    {
+        // Không đọc được thì PHẢI nói là không đọc được, tuyệt đối không báo "ổn"
+        const r = await sucKhoeDuLieu(fake({}, { lechKyGhiSo: true }), KY)
+        const m = layMuc(r, 'ky-ghi-so-lech-ky-ban')
+        ok('không đọc được → không kết luận là khớp', !!m && m.muc !== 'on', m?.muc)
+        ok('… nói thẳng đây không phải kết luận có lệch',
+            !!m && /KHÔNG phải kết luận là có lệch/.test(m.anhHuong), m?.anhHuong)
+        ok('… và để trống con số thay vì bịa 0', !!m && m.so === null, m?.so)
+    }
 
     console.log(`\n${dat}/${dat + hong} ca đạt`)
     if (hong) process.exit(1)

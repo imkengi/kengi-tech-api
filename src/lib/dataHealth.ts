@@ -308,6 +308,69 @@ export async function sucKhoeDuLieu(
         canLam: coSoDu ? 'Không cần làm gì.' : 'Nhập số dư hiện tại của từng tài khoản ở mục Tài khoản ngân hàng.',
     })
 
+    /* ── 7. Kỳ ghi sổ lệch kỳ bán ────────────────────────────────────────
+     *
+     * Cửa hàng nhập lịch sử từ phần mềm cũ (kiotvietSync ghi `transactionDate`
+     * = ngày bán thật, `createdAt` = lúc chạy nhập) sẽ có nhiều tháng bán hàng
+     * mang cùng một khoảng `createdAt` vài tuần. Mọi báo cáo theo kỳ — kể cả tờ
+     * khai thuế — đang cắt theo `createdAt`, nên doanh thu rơi vào THÁNG NHẬP
+     * chứ không phải tháng bán.
+     *
+     * Đo trên KENGISTORE: tháng 7 hiện 5.008.923.223 ₫ trong khi bán thật
+     * 975.813.049 ₫; tháng 3–6 hiện 0 ₫ dù bán hơn 4 tỷ.
+     *
+     * Ở đây CHỈ NÊU RA, không tự sửa: đổi cách cắt kỳ là thay đổi doanh thu đã
+     * kê khai, việc đó phải do người dùng quyết. Và phải nói cho đúng chỗ đau:
+     * đây là cách PHẦN MỀM đang tính, KHÔNG phải cửa hàng khai sai. */
+    {
+        /* macDinh = null CỐ Ý, không phải []: `[]` nghĩa là "đọc được, không có
+         * đơn nào lệch" — kết luận ngược hẳn với "không đọc được". */
+        const lech: any[] | null = await thu<any[] | null>('lechKyGhiSo', thieu, () => prisma.$queryRawUnsafe(
+            `SELECT to_char("createdAt" + interval '7 hours', 'YYYY-MM')                      AS "thangGhiSo",
+                    to_char(COALESCE("transactionDate","createdAt") + interval '7 hours', 'YYYY-MM') AS "thangBan",
+                    COUNT(*)::int                                                             AS so,
+                    COALESCE(SUM(total), 0)::float8                                           AS tien
+               FROM "Transaction"
+              WHERE status IN ('completed','partial')
+                AND "transactionDate" IS NOT NULL
+                AND to_char("createdAt" + interval '7 hours', 'YYYY-MM')
+                 <> to_char("transactionDate" + interval '7 hours', 'YYYY-MM')
+              GROUP BY 1, 2
+              ORDER BY tien DESC`), null)
+
+        if (lech === null) {
+            /* Không đọc được thì nói là không đọc được. Im lặng ở đây khiến
+             * người dùng tin mọi kỳ đều khớp, đúng kiểu ngược lại với sự thật. */
+            muc.push({
+                ma: 'ky-ghi-so-lech-ky-ban', ten: 'Kỳ ghi sổ so với kỳ bán', muc: 'vua',
+                so: null,
+                anhHuong: 'Chưa đọc được để đối chiếu ngày bán với ngày ghi sổ. Đây KHÔNG phải kết luận là có lệch.',
+                canLam: 'Thử lại sau; nếu vẫn không đọc được thì báo kỹ thuật.',
+            })
+        } else {
+            const tongTien = lech.reduce((s, r) => s + (Number(r.tien) || 0), 0)
+            const tongSo = lech.reduce((s, r) => s + (Number(r.so) || 0), 0)
+            muc.push({
+                ma: 'ky-ghi-so-lech-ky-ban',
+                ten: 'Kỳ ghi sổ so với kỳ bán',
+                /* Nặng khi số tiền lệch đủ lớn để đổi kết quả một kỳ thuế. */
+                muc: tongSo === 0 ? 'on' : tongTien >= 100_000_000 ? 'nang' : 'vua',
+                so: tongSo === 0 ? 'không có đơn nào lệch kỳ'
+                    : `${tongSo.toLocaleString('vi-VN')} đơn · ${tien(tongTien)} nằm sai kỳ`,
+                anhHuong: tongSo === 0
+                    ? 'Ngày bán và ngày ghi sổ nằm cùng một tháng ở mọi đơn.'
+                    : 'Những đơn này có NGÀY BÁN ở tháng khác với tháng ghi vào phần mềm — thường gặp khi nhập lịch sử từ phần mềm cũ. Mọi báo cáo theo kỳ, KỂ CẢ TỜ KHAI THUẾ, đang tính doanh thu theo tháng ghi sổ, nên tháng nhập bị phồng lên còn các tháng bán thật hiện thiếu hoặc bằng 0. Đây là cách phần mềm đang tính, KHÔNG phải cửa hàng khai sai.',
+                canLam: tongSo === 0
+                    ? 'Không cần làm gì.'
+                    : 'Đối chiếu doanh thu từng tháng với sổ của phần mềm cũ trước khi nộp tờ khai. Kỳ nào đã nộp theo số cũ thì cân nhắc khai bổ sung. Muốn phần mềm cắt kỳ theo ngày bán thì báo để đổi — đổi xong số của các kỳ đã nộp sẽ khác đi.',
+                viDu: lech.slice(0, 5).map((r: any) => ({
+                    nhan: `Bán tháng ${r.thangBan} nhưng ghi sổ tháng ${r.thangGhiSo}`,
+                    phu: `${r.so} đơn · ${tien(Number(r.tien) || 0)}`,
+                })),
+            })
+        }
+    }
+
     /* Điểm: mỗi mục nặng trừ 25, vừa trừ 10. Không phải thang khoa học — chỉ để
      * xếp thứ tự ưu tiên và cho người dùng thấy tiến bộ khi dọn dần. */
     const diem = Math.max(0, 100 - muc.reduce((s, m) => s + (m.muc === 'nang' ? 25 : m.muc === 'vua' ? 10 : 0), 0))
