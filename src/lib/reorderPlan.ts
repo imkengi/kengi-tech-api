@@ -160,7 +160,7 @@ export async function keHoachDatHang(
                         SUM(COALESCE(NULLIF(ti."baseQuantity", 0), ti.quantity))::float8 AS q
                  FROM "TransactionItem" ti
                  JOIN "Transaction" t ON t.id = ti."transactionId"
-                 WHERE t.status = 'completed' AND t."createdAt" >= $1
+                 WHERE t.status IN ('completed', 'partial') AND t."createdAt" >= $1
                  GROUP BY 1, 2
              ) s
              GROUP BY 1`,

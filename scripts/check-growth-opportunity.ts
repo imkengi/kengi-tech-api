@@ -27,6 +27,16 @@ const KY = {
 
 interface Kho { transactions: any[]; products: any[] }
 
+/** Khớp `status` cho cả hai dạng: chuỗi trần và { in: [...] }.
+ *  Prisma giả phải theo ĐÚNG hình dạng truy vấn thật, nếu không nó sẽ "đạt" cho
+ *  một truy vấn mà production không chạy nổi — hoặc ngược lại, kêu hỏng khi mã
+ *  nguồn vừa được sửa cho đúng. */
+const khopTrangThai = (giaTri: any, dieuKien: any) => {
+    if (dieuKien === undefined) return true
+    if (dieuKien && Array.isArray(dieuKien.in)) return dieuKien.in.includes(giaTri)
+    return giaTri === dieuKien
+}
+
 function fakePrisma(k: Kho, hong?: { transaction?: boolean; product?: boolean }) {
     const trongKhoang = (v: any, w: any) => {
         if (!w) return true
@@ -41,7 +51,7 @@ function fakePrisma(k: Kho, hong?: { transaction?: boolean; product?: boolean })
                 if (hong?.transaction) throw new Error('The table `Transaction` does not exist')
                 let ds = k.transactions.filter(t =>
                     trongKhoang(t.createdAt, where?.createdAt) &&
-                    (!where?.status || t.status === where.status))
+                    khopTrangThai(t.status, where?.status))
                 if (take) ds = ds.slice(0, take)
                 return ds
             },

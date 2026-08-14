@@ -40,6 +40,16 @@ interface Kho {
     expenses?: any[]
 }
 
+/** Khớp `status` cho cả hai dạng: chuỗi trần và { in: [...] }.
+ *  Prisma giả phải theo ĐÚNG hình dạng truy vấn thật, nếu không nó sẽ "đạt" cho
+ *  một truy vấn mà production không chạy nổi — hoặc ngược lại, kêu hỏng khi mã
+ *  nguồn vừa được sửa cho đúng. */
+const khopTrangThai = (giaTri: any, dieuKien: any) => {
+    if (dieuKien === undefined) return true
+    if (dieuKien && Array.isArray(dieuKien.in)) return dieuKien.in.includes(giaTri)
+    return giaTri === dieuKien
+}
+
 function fakePrisma(k: Kho, loi?: Record<string, boolean>) {
     const trongNgay = (v: any, w: any) => {
         if (!w) return true
@@ -62,7 +72,7 @@ function fakePrisma(k: Kho, loi?: Record<string, boolean>) {
             findMany: async ({ where }: any) => {
                 no('transaction')
                 return (k.transactions || []).filter(t =>
-                    trongNgay(t.createdAt, where?.createdAt) && (!where?.status || t.status === where.status))
+                    trongNgay(t.createdAt, where?.createdAt) && khopTrangThai(t.status, where?.status))
             },
         },
         onlineOrder: {
@@ -138,6 +148,29 @@ async function main() {
     ok('không dựng rủi ro "chưa xuất hoá đơn"', !sach.ruiRo.some(r => r.ma === 'chua-xuat-hoa-don'))
     ok('không dựng rủi ro "hoá đơn vượt sổ"', !sach.ruiRo.some(r => r.ma === 'hoa-don-vuot-so'))
     ok('tỷ lệ xuất hoá đơn đạt 100%', sach.lech.tyLeXuatHoaDon === 100, sach.lech.tyLeXuatHoaDon)
+
+    /* ĐƠN GHI NỢ PHẢI ĐƯỢC TÍNH VÀO SỔ.
+     *
+     * Đơn bán chịu mang status 'partial'. Nó vẫn là bán thật, vẫn trừ kho, vẫn
+     * được xuất hoá đơn. Bỏ nó ra khỏi sổ thì hoá đơn của chính nó trở thành
+     * "hoá đơn vượt sổ" — chiều lệch NẶNG NHẤT, tức là phần mềm tố cửa hàng xuất
+     * hoá đơn khống trong khi họ bán chịu bình thường.
+     *
+     * Đã xảy ra thật ngày 14/08/2026: một cửa hàng bị báo lệch ảo 677 triệu. */
+    const ghiNo = await doiChieuBaChieu(fakePrisma({
+        transactions: [gd(1, 1_000_000), gd(2, 3_000_000, '2026-07-11', { status: 'partial' })],
+        invoices: [hd('001', 1_000_000, { transactionId: 'T1' }), hd('002', 3_000_000, { transactionId: 'T2' })],
+    }), KY)
+    ok('đơn ghi nợ (partial) được tính vào sổ', ghiNo.soSach.tong === 4_000_000, ghiNo.soSach.tong)
+    ok('… nên KHÔNG bị tố "hoá đơn vượt sổ"',
+        ghiNo.lech.hoaDonVuotSo === 0 && !ghiNo.ruiRo.some(r => r.ma === 'hoa-don-vuot-so'), ghiNo.lech)
+
+    /* Đơn ĐÃ TRẢ / đã huỷ thì ngược lại: không được tính vào sổ. */
+    const daHuy = await doiChieuBaChieu(fakePrisma({
+        transactions: [gd(1, 1_000_000), gd(2, 9_000_000, '2026-07-11', { status: 'cancelled' })],
+        invoices: [hd('001', 1_000_000, { transactionId: 'T1' })],
+    }), KY)
+    ok('đơn huỷ KHÔNG được tính vào sổ', daHuy.soSach.tong === 1_000_000, daHuy.soSach.tong)
 
     console.log('\n▶ Bán mà chưa xuất hoá đơn — PHẢI báo\n')
 

@@ -209,7 +209,13 @@ export async function coHoiTangTruong(
     let donHang: any[] = []
     try {
         donHang = await prisma.transaction.findMany({
-            where: { createdAt: { gte: ky.tu, lte: ky.den }, status: 'completed' },
+/* Đơn GHI NỢ mang status 'partial' — nó vẫn là bán thật, vẫn trừ kho, vẫn được
+ * xuất hoá đơn. Chỉ đếm 'completed' là bỏ sót chúng khỏi sổ, và hậu quả không
+ * phải "thiếu số" mà là VU OAN: hoá đơn của đơn ghi nợ trở thành "hoá đơn vượt
+ * sổ" — chiều lệch nặng nhất. Đã gặp thật ngày 14/08/2026 ở một cửa hàng: lệch
+ * ảo 677 triệu. Mọi module thuế khác trong repo đều dùng ['completed','partial'].
+ */
+        where: { createdAt: { gte: ky.tu, lte: ky.den }, status: { in: ['completed', 'partial'] } },
             select: {
                 id: true, createdAt: true, total: true, customerId: true,
                 items: { select: { productId: true, productName: true, quantity: true, unitPrice: true, lineTotal: true } },

@@ -138,7 +138,7 @@ export async function duBaoDongTien(
                     COUNT(DISTINCT (t."createdAt" + interval '7 hours')::date)::int AS "soNgay"
              FROM "Payment" p
              JOIN "Transaction" t ON t.id = p."transactionId"
-             WHERE t.status = 'completed' AND t."createdAt" >= $1`,
+             WHERE t.status IN ('completed', 'partial') AND t."createdAt" >= $1`,
             tuDo,
         )
         /* Dùng PHIẾU THU chứ không dùng tổng đơn: đơn ghi nợ chưa mang tiền về,
