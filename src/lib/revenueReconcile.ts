@@ -192,14 +192,32 @@ export async function doiChieuBaChieu(
     }), [] as any[])
 
     const tienQuay = giaoDich.reduce((s: number, t: any) => s + (Number(t.total) || 0), 0)
-    const tienSan = donSan.reduce((s: number, o: any) => s + (Number(o.total) || 0), 0)
 
-    /* Đơn tại quầy có channel 'online' là đơn sàn đã được đẩy về thành giao dịch
-     * bán — cộng cả hai nguồn sẽ tính đôi. Trừ ra ở đây thay vì im lặng. */
-    const quayLaSan = giaoDich.filter((t: any) => String(t.channel || '') === 'online')
-    const tienTrung = quayLaSan.reduce((s: number, t: any) => s + (Number(t.total) || 0), 0)
-    if (tienTrung > 0) {
-        ghiChu.push(`Có ${quayLaSan.length} giao dịch tại quầy gắn cờ kênh "online" (${lam(tienTrung).toLocaleString('vi-VN')}đ) — phần mềm chỉ đếm MỘT lần để không thổi phồng doanh thu.`)
+    /* CHỐNG ĐẾM TRÙNG — phải nối ĐÍCH DANH, tuyệt đối không trừ áng chừng.
+     *
+     * Đơn sàn khi đồng bộ về sẽ sinh một phiếu bán có receiptNumber dạng
+     * 'ONLINE-<mã đơn>' và channel='online'. Nếu cộng cả hai nguồn thì phần đó
+     * bị tính hai lần.
+     *
+     * Bản đầu tiên trừ THẲNG toàn bộ phiếu có channel='online', với giả định số
+     * đó chắc chắn đã nằm bên đơn sàn. Giả định đó SAI khi đơn sàn tương ứng
+     * không lọt vào tập đang đếm — khác trạng thái, hoặc ngày tạo rơi ngoài kỳ.
+     * Khi ấy doanh thu không bị trừ trùng mà BIẾN MẤT HẲN.
+     *
+     * Hậu quả đo được trên dữ liệu thật ngày 14/08/2026 (cửa hàng KENGISTORE,
+     * tháng 7): sổ có 9.523 phiếu / 5,0 tỷ nhưng bộ đối chiếu chỉ thấy 3 triệu,
+     * rồi kết luận ngược hoàn toàn với sự thật — báo "hoá đơn vượt sổ 677 triệu"
+     * trong khi thực tế là còn 4,3 tỷ doanh thu CHƯA xuất hoá đơn.
+     *
+     * Cách đúng: lấy trọn phiếu bán làm sổ, rồi chỉ CỘNG THÊM những đơn sàn chưa
+     * có phiếu tương ứng. Không phép trừ nào cả, nên không có gì rơi mất. */
+    const maPhieu = new Set(giaoDich.map((t: any) => String(t.receiptNumber || '')))
+    const sanChuaCoPhieu = donSan.filter((o: any) => !maPhieu.has(`ONLINE-${String(o.orderNumber || '')}`))
+    const tienSanThem = sanChuaCoPhieu.reduce((s: number, o: any) => s + (Number(o.total) || 0), 0)
+
+    const soDonSanDaCoPhieu = donSan.length - sanChuaCoPhieu.length
+    if (soDonSanDaCoPhieu > 0) {
+        ghiChu.push(`${soDonSanDaCoPhieu} đơn sàn đã có phiếu bán tương ứng trong sổ — chỉ đếm MỘT lần để không thổi phồng doanh thu.`)
     }
 
     const soSach: ChieuSoSach = {
@@ -207,10 +225,10 @@ export async function doiChieuBaChieu(
         lyDo: (giaoDich.length === 0 && donSan.length === 0)
             ? 'Kỳ này chưa có giao dịch bán nào trong phần mềm — không có gì để đối chiếu.'
             : undefined,
-        tong: lam(tienQuay + tienSan - tienTrung),
-        soChungTu: giaoDich.length + donSan.length,
-        taiQuay: lam(tienQuay - tienTrung),
-        donSan: lam(tienSan),
+        tong: lam(tienQuay + tienSanThem),
+        soChungTu: giaoDich.length + sanChuaCoPhieu.length,
+        taiQuay: lam(tienQuay),
+        donSan: lam(tienSanThem),
     }
 
     // ---- Chiều 2: hoá đơn điện tử --------------------------------------
@@ -314,8 +332,11 @@ export async function doiChieuBaChieu(
         o[khoa] += tien
         bangNgay.set(ng, o)
     }
-    for (const t of giaoDich) if (String(t.channel || '') !== 'online') cong(ngayVN(t.createdAt), 'so', Number(t.total) || 0)
-    for (const o of donSan) cong(ngayVN(o.createdAt), 'so', Number(o.total) || 0)
+    /* Dùng ĐÚNG tập đã dựng ở chiều 1: mọi phiếu bán, cộng thêm đơn sàn chưa có
+     * phiếu. Nếu chỗ này đếm khác chiều 1 thì tổng và bảng ngày sẽ chỏi nhau, và
+     * người dùng không biết tin con số nào. */
+    for (const t of giaoDich) cong(ngayVN(t.createdAt), 'so', Number(t.total) || 0)
+    for (const o of sanChuaCoPhieu) cong(ngayVN(o.createdAt), 'so', Number(o.total) || 0)
     for (const h of conHieuLuc) cong(String(h.invoiceDate || ''), 'hd', dauCua(h) * (Number(h.totalAmount) || 0))
 
     const theoNgay: NgayLech[] = Array.from(bangNgay.entries())

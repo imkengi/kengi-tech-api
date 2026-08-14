@@ -295,12 +295,44 @@ async function main() {
 
     console.log('\n▶ Đơn sàn đẩy về quầy — không được đếm hai lần\n')
 
+    /* Đơn sàn đồng bộ về sinh phiếu bán mang mã 'ONLINE-<mã đơn>' — đó là sợi
+     * dây nối đích danh giữa hai nguồn. */
     const trungDon = await doiChieuBaChieu(fakePrisma({
-        transactions: [gd(1, 5_000_000, '2026-07-10', { channel: 'online' })],
+        transactions: [gd(1, 5_000_000, '2026-07-10', { channel: 'online', receiptNumber: 'ONLINE-SPX1' })],
         onlineOrders: [{ id: 'O1', orderNumber: 'SPX1', total: 5_000_000, createdAt: new Date('2026-07-10T10:00:00+07:00'), status: 'delivered', platform: 'shopee' }],
     }), KY)
     ok('doanh thu sổ chỉ đếm một lần', trungDon.soSach.tong === 5_000_000, trungDon.soSach)
-    ok('… và nói rõ đã trừ trùng', trungDon.ghiChu.some(g => /MỘT lần/.test(g)), trungDon.ghiChu)
+    ok('… và nói rõ đã gộp về một lần', trungDon.ghiChu.some(g => /MỘT lần/.test(g)), trungDon.ghiChu)
+
+    /* CA GÂY SỰ CỐ THẬT (KENGISTORE, tháng 7/2026).
+     *
+     * Phiếu bán mang kênh 'online' nhưng đơn sàn tương ứng KHÔNG nằm trong tập
+     * đang đếm (khác trạng thái, hoặc ngày tạo ngoài kỳ). Bản cũ trừ thẳng mọi
+     * phiếu kênh 'online' nên 5 tỷ doanh thu biến mất, rồi kết luận NGƯỢC hoàn
+     * toàn: báo "hoá đơn vượt sổ" trong khi thật ra còn cả đống doanh thu chưa
+     * xuất hoá đơn. Doanh thu không được phép rơi mất chỉ vì gắn cờ kênh. */
+    const sanKhongKhop = await doiChieuBaChieu(fakePrisma({
+        transactions: [
+            gd(1, 3_000_000_000, '2026-07-10', { channel: 'online', receiptNumber: 'ONLINE-A1' }),
+            gd(2, 2_000_000_000, '2026-07-11', { channel: 'online', receiptNumber: 'ONLINE-A2' }),
+        ],
+        // Đơn sàn ở trạng thái không được đếm → không nối được với phiếu nào
+        onlineOrders: [{ id: 'O9', orderNumber: 'B9', total: 1_000, createdAt: new Date('2026-07-10T10:00:00+07:00'), status: 'shipping', platform: 'shopee' }],
+        invoices: [hd('001', 700_000_000, { transactionId: 'T1' })],
+    }), KY)
+    ok('phiếu kênh online không nối được đơn sàn → VẪN tính đủ vào sổ',
+        sanKhongKhop.soSach.tong === 5_000_000_000, sanKhongKhop.soSach)
+    ok('… nên kết luận đúng chiều: còn doanh thu CHƯA xuất hoá đơn',
+        sanKhongKhop.lech.chuaXuatHoaDon === 4_300_000_000 && sanKhongKhop.lech.hoaDonVuotSo === 0,
+        sanKhongKhop.lech)
+    ok('… và KHÔNG tố ngược "hoá đơn vượt sổ"',
+        !sanKhongKhop.ruiRo.some(r => r.ma === 'hoa-don-vuot-so'), sanKhongKhop.ruiRo.map(r => r.ma))
+
+    /* Bảng lệch theo ngày phải đếm CÙNG một tập với tổng — hai chỗ đếm khác nhau
+     * thì người dùng không biết tin con số nào. */
+    const tongTheoNgay = sanKhongKhop.theoNgay.reduce((s, n) => s + n.soSach, 0)
+    ok('bảng theo ngày cộng lại đúng bằng tổng sổ',
+        tongTheoNgay === sanKhongKhop.soSach.tong, [tongTheoNgay, sanKhongKhop.soSach.tong])
 
     console.log('\n▶ Chưa dùng hoá đơn điện tử — cảnh báo về DỮ LIỆU, không phải kết tội\n')
 
