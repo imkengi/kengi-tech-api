@@ -424,7 +424,27 @@ export async function keHoachDatHang(
      * không biết một phần đến từ lệch sổ sách thì sẽ đi mua thật. */
     const soTonAm = tatCa.filter(m => m.tonHienTai < 0).length
     if (soTonAm > 0) {
-        ghiChu.push(`${soTonAm} mã đang có tồn ÂM. Đó gần như luôn là lệch sổ sách (bán không trừ kho, nhập chưa ghi, đồng bộ sót) chứ không phải hàng đang thiếu — số đề xuất đặt ở đây đã BỎ QUA phần âm để không bảo bạn mua thừa đúng bằng phần lệch. Việc cần làm với nhóm này là soát kho, không phải đặt hàng.`)
+        /* ĐỌC CỜ TRƯỚC RỒI MỚI NÓI NGUYÊN NHÂN.
+         *
+         * StoreSettings.allowNegativeStock là lựa chọn thật: cửa hàng bán trước
+         * rồi hàng mới về thì bật cờ đó. Với họ tồn âm là cố ý, không phải lệch
+         * sổ sách — khẳng định ngược lại là buộc tội oan đúng cái họ chủ động
+         * chọn, và lần sau họ bỏ qua luôn cảnh báo thật.
+         *
+         * Cảnh báo ở TỪNG MÃ đã sửa theo hướng này; ghi chú tổng phải nói cùng
+         * một điều, nếu không cùng một màn hình lại nói hai kiểu. */
+        /* try/catch chứ KHÔNG chỉ .catch(): nếu client không có model
+         * storeSettings thì `prisma.storeSettings` là undefined và lỗi xảy ra
+         * NGAY khi truy cập .findFirst — .catch() không đỡ được, cả báo cáo đặt
+         * hàng sập vì một dòng ghi chú. Chính bộ test bắt được điều này. */
+        let choBanAm = false
+        try {
+            const cd = await prisma.storeSettings.findFirst({ select: { allowNegativeStock: true } })
+            choBanAm = cd?.allowNegativeStock === true
+        } catch { /* không đọc được cài đặt → nói kiểu không khẳng định nguyên nhân */ }
+        ghiChu.push(choBanAm
+            ? `${soTonAm} mã đang có tồn ÂM. Cửa hàng đang bật "cho phép bán khi hết tồn" nên đây là bán trước, hàng về sẽ bù — không phải lỗi dữ liệu. Số đề xuất đặt đã BỎ QUA phần âm để không cộng dồn phần chưa về vào lượng cần mua.`
+            : `${soTonAm} mã đang có tồn ÂM, trong khi cửa hàng KHÔNG bật cho phép bán âm — nên đây là lệch sổ sách (bán không trừ kho, nhập chưa ghi, đồng bộ sót) chứ không phải hàng đang thiếu. Số đề xuất đặt đã BỎ QUA phần âm để không bảo bạn mua thừa đúng bằng phần lệch. Việc cần làm với nhóm này là soát kho, không phải đặt hàng.`)
     }
 
     ghiChu.push(`Tồn an toàn tính theo mức phục vụ ${Math.round(mucPhucVu * 100)}%: cứ 100 lần đặt hàng thì khoảng ${Math.round(mucPhucVu * 100)} lần không bị hụt giữa lúc chờ hàng. Muốn chắc hơn thì nâng mức này lên, đổi lại vốn nằm trong kho dày hơn.`)

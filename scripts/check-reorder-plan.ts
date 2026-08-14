@@ -28,9 +28,10 @@ interface Kho {
     cho?: Record<string, number[]>
     /** productId → số lượng đang về */
     dangVe?: Record<string, number>
+    choBanAm?: boolean
 }
 
-function fakePrisma(k: Kho, loi?: { ban?: boolean; hang?: boolean; dangVe?: boolean }) {
+function fakePrisma(k: Kho, loi?: { ban?: boolean; hang?: boolean; dangVe?: boolean; caiDat?: boolean }) {
     return {
         $queryRawUnsafe: async (sql: string) => {
             if (/FROM "TransactionItem"/.test(sql)) {
@@ -55,6 +56,14 @@ function fakePrisma(k: Kho, loi?: { ban?: boolean; hang?: boolean; dangVe?: bool
             findMany: async () => {
                 if (loi?.hang) throw new Error('relation "Product" does not exist')
                 return k.hang
+            },
+        },
+        /* Cài đặt kho: cửa hàng có CỐ Ý cho bán khi hết tồn không. Mặc định
+         * không — để các ca cũ giữ nguyên hành vi. */
+        storeSettings: {
+            findFirst: async () => {
+                if (loi?.caiDat) throw new Error('The table `StoreSettings` does not exist')
+                return { allowNegativeStock: k.choBanAm ?? false }
             },
         },
         purchaseOrder: {
@@ -246,6 +255,31 @@ async function main() {
         !!mA && mA.canhBao.some(c => /lệch sổ sách/.test(c)), mA?.canhBao)
     ok('ghi chú tổng bảo đi SOÁT KHO chứ không phải đặt hàng',
         tonAm.ghiChu.some(g => /soát kho, không phải đặt hàng/.test(g)), tonAm.ghiChu)
+    ok('… và nói rõ vì sao: cửa hàng KHÔNG bật cho bán âm',
+        tonAm.ghiChu.some(g => /KHÔNG bật cho phép bán âm/.test(g)), tonAm.ghiChu)
+
+    /* Cửa hàng CỐ Ý cho bán khi hết tồn: tồn âm là bán trước, không phải lệch sổ.
+     * Ghi chú tổng phải nói cùng điều với cảnh báo từng mã — nếu không thì cùng
+     * một màn hình lại nói hai kiểu. */
+    const tonAmCoY = await keHoachDatHang(fakePrisma({
+        ban: { A1: Array.from({ length: 90 }, () => 5) },
+        hang: [{ id: 'A1', name: 'Hàng tồn âm', sku: 'A1', stock: -500, costPrice: 100_000, sellingPrice: 150_000, categoryId: null }],
+        choBanAm: true,
+    }))
+    ok('cửa hàng cho bán âm → KHÔNG gọi là lệch sổ sách',
+        !tonAmCoY.ghiChu.some(g => /lệch sổ sách/.test(g)), tonAmCoY.ghiChu)
+    ok('… mà nói là bán trước, hàng về sẽ bù',
+        tonAmCoY.ghiChu.some(g => /hàng về sẽ bù/.test(g)), tonAmCoY.ghiChu)
+    ok('… vẫn bỏ qua phần âm khi tính số nên đặt',
+        [...tonAmCoY.hetHang, ...tonAmCoY.canDat].find(m => m.productId === 'A1')!.nenDat < 200)
+
+    /* Không đọc được cài đặt thì KHÔNG được sập cả báo cáo — một dòng ghi chú
+     * không đáng để mất toàn bộ bảng đặt hàng. */
+    const hongCaiDat = await keHoachDatHang(fakePrisma({
+        ban: { A1: Array.from({ length: 90 }, () => 5) },
+        hang: [{ id: 'A1', name: 'Hàng tồn âm', sku: 'A1', stock: -500, costPrice: 100_000, sellingPrice: 150_000, categoryId: null }],
+    }, { caiDat: true }))
+    ok('đọc hỏng cài đặt kho → báo cáo vẫn chạy', hongCaiDat.tomTat.soMaXet > 0, hongCaiDat.tomTat)
 
     const tonDuong = await keHoachDatHang(fakePrisma({
         ban: { B1: Array.from({ length: 90 }, () => 5) },
