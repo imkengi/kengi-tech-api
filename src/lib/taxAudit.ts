@@ -315,6 +315,43 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
      * ở phép đối chiếu sổ với hoá đơn bên dưới. Đặt cờ ngay cạnh nơi tính dtSo
      * để mọi phép dùng dtSo đều nhìn thấy nó. */
     const soChuaGhiDoanhThu = ps511.co === 0 && ps511.no === 0
+
+    /* ── LỊCH SỬ NHẬP HÀNG CÓ NGẮN HƠN LỊCH SỬ BÁN KHÔNG? ────────────────────
+     *
+     * Cửa hàng chuyển từ phần mềm cũ sang thường nhập được lịch sử BÁN (sàn và
+     * phần mềm cũ đều xuất ra được) nhưng KHÔNG nhập lịch sử NHẬP HÀNG. Khi đó
+     * hàng bán ra không có phiếu nhập tương ứng, và hai phép soát nặng nhất của
+     * cả bộ — "tồn kho âm" và "bán vượt hoá đơn đầu vào" — nổ ra hàng loạt.
+     *
+     * Đo trên KENGISTORE: bán 11.230 giao dịch trải 147 ngày (21/03→14/08),
+     * nhập chỉ 42 phiếu trải 44 ngày (02/07→14/08). Tồn âm 235 mã / 541 triệu
+     * và "bán vượt hoá đơn vào" 50 mã là hệ quả bắt buộc của khoảng trống đó,
+     * chứ không phải bằng chứng mua hàng trôi nổi.
+     *
+     * Không đọc được thì để `null` và giữ nguyên cách cảnh báo cũ — không được
+     * lấy "không đọc được" ra làm cớ hạ nhẹ một cảnh báo thật. */
+    let soNgayBanTruocKhiCoNhap: number | null = null
+    let ngayNhapDauTien: string | null = null
+    try {
+        const r: any[] = await prisma.$queryRawUnsafe(
+            `SELECT (SELECT MIN(COALESCE(t."transactionDate", t."createdAt"))
+                       FROM "Transaction" t WHERE t.status IN ('completed','partial')) AS "banDau",
+                    (SELECT MIN(COALESCE(i."transactionDate", i."createdAt"))
+                       FROM "ImportReceipt" i WHERE i.status <> 'cancelled') AS "nhapDau"`)
+        const bd = r?.[0]?.banDau ? new Date(r[0].banDau) : null
+        const nd = r?.[0]?.nhapDau ? new Date(r[0].nhapDau) : null
+        if (bd && nd) {
+            soNgayBanTruocKhiCoNhap = Math.round((nd.getTime() - bd.getTime()) / 86400_000)
+            ngayNhapDauTien = ngayISO(nd)
+        }
+    } catch { /* không đọc được — giữ nguyên cách cảnh báo cũ */ }
+
+    /* 30 ngày: đủ dài để loại nhiễu (một phiếu nhập trễ, cửa hàng mới mở bán
+     * hết hàng cũ trước khi nhập lô đầu) mà vẫn bắt được khoảng trống thật. */
+    const lichSuNhapNgan = (soNgayBanTruocKhiCoNhap ?? 0) >= 30
+    const cauKhoangTrongNhap = lichSuNhapNgan
+        ? `Lưu ý trước khi giải trình: phần mềm chỉ có phiếu nhập từ ${ngayNhapDauTien}, trong khi lịch sử bán bắt đầu sớm hơn ${soNgayBanTruocKhiCoNhap} ngày. Hàng bán trong quãng trống đó chắc chắn không có phiếu nhập tương ứng trong phần mềm — đây gần như luôn là do chưa nhập lịch sử mua hàng từ phần mềm cũ, không phải mua hàng trôi nổi. Hãy nhập bổ sung phiếu nhập của quãng đó rồi soát lại; nếu lịch sử nhập ĐÃ đầy đủ thì cảnh báo này giữ nguyên trọng lượng ban đầu. `
+        : ''
     const vatRaSo = Math.round(ps3331.co - ps3331.no)
     const vatVaoSo = Math.round(ps133.no - ps133.co)
 
@@ -571,7 +608,10 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
         if (am.length > 0) {
             const giaTri = am.reduce((s: number, p: any) => s + Math.abs(p.stock || 0) * (p.costPrice || 0), 0)
             canhBao.push({
-                code: 'ton-kho-am', muc: 'cao',
+                /* Khoảng trống lịch sử nhập hàng là cách giải thích KHẢ DĨ
+                 * NHẤT khi nó tồn tại, và nó không phải lỗi của cửa hàng — hạ
+                 * xuống mức vừa và nói ra, thay vì để nguyên mức cao. */
+                code: 'ton-kho-am', muc: lichSuNhapNgan ? 'vua' : 'cao',
                 tieuDe: `${am.length} mặt hàng đang có tồn kho ÂM`,
                 /* HAI khả năng, không phải một — và cách chữa khác hẳn nhau.
                  *
@@ -585,7 +625,7 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
                  * đúng MỘT nguyên nhân trong khi có hai là đẩy người dùng đi giải
                  * trình sai chỗ — và nếu họ vô can thì họ mất luôn niềm tin vào
                  * cả bản soát. */
-                chiTiet: `Giá trị tương ứng khoảng ${vnd(giaTri)} ₫. Bán ra nhiều hơn số đã nhập trong kỳ có hai khả năng: (1) mua hàng không có hóa đơn đầu vào, hoặc (2) bán trước khi hàng về nên phiếu nhập rơi sang kỳ sau — sai kỳ ghi nhận. Cả hai đều là điểm cơ quan thuế bắt bẻ được: Điều 50 cho phép ấn định khi sổ sách không khớp chứng từ.`,
+                chiTiet: cauKhoangTrongNhap + `Giá trị tương ứng khoảng ${vnd(giaTri)} ₫. Bán ra nhiều hơn số đã nhập trong kỳ có hai khả năng: (1) mua hàng không có hóa đơn đầu vào, hoặc (2) bán trước khi hàng về nên phiếu nhập rơi sang kỳ sau — sai kỳ ghi nhận. Cả hai đều là điểm cơ quan thuế bắt bẻ được: Điều 50 cho phép ấn định khi sổ sách không khớp chứng từ.`,
                 canCu: 'Điều 50 Luật Quản lý thuế 38/2019 — ấn định thuế; Điều 14 NĐ 125/2020 — xử phạt hành vi khai sai.',
                 canLam: 'Xác định thuộc khả năng nào trước: nếu hàng ĐÃ về mà chưa nhập phiếu thì nhập bổ sung kèm hóa đơn đầu vào và ghi đúng ngày hàng về; nếu hàng chưa về thì đó là sai kỳ ghi nhận, cần khớp lại ngày bán với ngày nhập; nếu là sai sót kiểm kê thì lập biên bản kiểm kê và điều chỉnh trước khi khóa sổ.',
                 tienRuiRo: Math.round(giaTri),
@@ -1011,9 +1051,13 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
         if (rows && rows.length > 0) {
             const tongThieu = rows.reduce((s: number, r: any) => s + Number(r.thieu || 0), 0)
             canhBao.push({
-                code: 'ban-vuot-hoa-don-vao', muc: 'cao',
+                code: 'ban-vuot-hoa-don-vao', muc: lichSuNhapNgan ? 'vua' : 'cao',
                 tieuDe: `${rows.length} mã bán ra nhiều hơn lượng nhập có hóa đơn`,
-                chiTiet: `Tổng chênh khoảng ${Math.round(tongThieu).toLocaleString('vi-VN')} đơn vị. Phần bán vượt này không có hóa đơn đầu vào tương ứng — đoàn thanh tra thường coi đây là bằng chứng mua hàng trôi nổi và có thể ấn định cả doanh thu lẫn chi phí.`,
+                chiTiet: cauKhoangTrongNhap
+                    + `Tổng chênh khoảng ${Math.round(tongThieu).toLocaleString('vi-VN')} đơn vị. Phần bán vượt này không có hóa đơn đầu vào tương ứng`
+                    + (lichSuNhapNgan
+                        ? ' trong dữ liệu hiện có. Nếu sau khi nhập đủ lịch sử mua hàng mà vẫn còn chênh thì mới là vấn đề: đoàn thanh tra coi phần đó là bằng chứng mua hàng trôi nổi và có thể ấn định cả doanh thu lẫn chi phí.'
+                        : ' — đoàn thanh tra thường coi đây là bằng chứng mua hàng trôi nổi và có thể ấn định cả doanh thu lẫn chi phí.'),
                 canCu: 'Điều 50 Luật Quản lý thuế 38/2019 — ấn định thuế; Điều 14 Luật Thuế GTGT 48/2024 — điều kiện khấu trừ.',
                 canLam: 'Bổ sung hóa đơn đầu vào cho phần hàng đã bán; mã nào không có nguồn hóa đơn thì chuẩn bị phương án giải trình và tính trước phần thuế có thể bị truy thu.',
                 tienRuiRo: null, soLuong: rows.length,

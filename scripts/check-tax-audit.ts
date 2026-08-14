@@ -87,8 +87,18 @@ function fakePrisma(k: Kho) {
             }),
         },
         taxDeadline: { findMany: async () => k.deadlines },
-        // SQL thô cho phép soát "bán vượt hóa đơn đầu vào" — mặc định không có mã nào
-        $queryRawUnsafe: async () => (k as any).banVuot ?? [],
+        /* SQL thô. Phải phân nhánh theo câu truy vấn: một prisma giả trả cùng
+         * một shape cho mọi câu SQL sẽ khiến phép soát mới im lặng "đạt" mà
+         * không hề chạy qua nó. */
+        $queryRawUnsafe: async (sql?: string) => {
+            if (/banDau/.test(String(sql || ''))) {
+                return [{
+                    banDau: (k as any).banDauTien ?? null,
+                    nhapDau: (k as any).nhapDauTien ?? null,
+                }]
+            }
+            return (k as any).banVuot ?? []
+        },
         payrollPeriod: { findMany: async ({ where }: any = {}) => k.payrollPeriods.filter(p => !where?.year || p.year === where.year) },
         payrollEntry: {
             findMany: async ({ where }: any = {}) => k.payrollEntries.filter(e =>
@@ -1098,6 +1108,57 @@ async function main() {
         kiemTra('Sổ có ghi doanh thu mà lệch hoá đơn thì vẫn kêu',
             co(h, 'dt-so-vs-hoadon'), JSON.stringify(lay(h, 'dt-so-vs-hoadon')?.tienRuiRo))
         kiemTra('… và không kèm cảnh báo "chưa ghi sổ"', !co(h, 'chua-ghi-so-doanh-thu'))
+    }
+
+    // ── 41c. Lịch sử nhập hàng ngắn hơn lịch sử bán ────────────────────────
+    /* Cửa hàng chuyển từ phần mềm cũ thường nhập được lịch sử BÁN nhưng không
+     * nhập lịch sử NHẬP HÀNG. Khi đó tồn âm và "bán vượt hoá đơn vào" nổ ra
+     * hàng loạt như hệ quả bắt buộc của khoảng trống, không phải mua chui.
+     * Ca thật KENGISTORE: bán trải 147 ngày, nhập chỉ 44 ngày. */
+    {
+        const k = khoSach() as any
+        k.products = [{ name: 'Nồi', sku: 'N1', stock: -50, costPrice: 1_000_000 }]
+        k.banDauTien = '2026-03-21T00:00:00.000Z'
+        k.nhapDauTien = '2026-07-02T00:00:00.000Z'   // muộn hơn 103 ngày
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const c = lay(h, 'ton-kho-am')
+        kiemTra('Lịch sử nhập ngắn hơn bán → tồn âm hạ xuống mức vừa',
+            !!c && c.muc === 'vua', JSON.stringify(c?.muc))
+        kiemTra('… nêu đúng khoảng trống và ngày phiếu nhập sớm nhất',
+            !!c && /chỉ có phiếu nhập từ 2026-07-02/.test(c.chiTiet) && /sớm hơn 103 ngày/.test(c.chiTiet),
+            c?.chiTiet?.slice(0, 160))
+        kiemTra('… nói rõ gần như luôn là do chưa nhập lịch sử mua hàng',
+            !!c && /chưa nhập lịch sử mua hàng từ phần mềm cũ/.test(c.chiTiet))
+        kiemTra('… và vẫn giữ đường lùi: nhập đủ rồi mà còn lệch thì giữ nguyên trọng lượng',
+            !!c && /nếu lịch sử nhập ĐÃ đầy đủ thì cảnh báo này giữ nguyên/.test(c.chiTiet))
+    }
+    {
+        // Lịch sử nhập đầy đủ thì tồn âm vẫn là mức cao — không được nới nhầm
+        const k = khoSach() as any
+        k.products = [{ name: 'Nồi', sku: 'N1', stock: -50, costPrice: 1_000_000 }]
+        k.banDauTien = '2026-03-21T00:00:00.000Z'
+        k.nhapDauTien = '2026-03-25T00:00:00.000Z'   // chỉ lệch 4 ngày
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const c = lay(h, 'ton-kho-am')
+        kiemTra('Lịch sử nhập đầy đủ → tồn âm vẫn mức CAO',
+            !!c && c.muc === 'cao', JSON.stringify(c?.muc))
+        kiemTra('… và không chèn câu về khoảng trống nhập hàng',
+            !!c && !/chỉ có phiếu nhập từ/.test(c.chiTiet))
+    }
+    {
+        // Không đọc được thì giữ nguyên mức cao — không lấy cớ hạ nhẹ
+        const k = khoSach() as any
+        k.products = [{ name: 'Nồi', sku: 'N1', stock: -50, costPrice: 1_000_000 }]
+        const p: any = fakePrisma(k)
+        const goc = p.$queryRawUnsafe
+        p.$queryRawUnsafe = async (sql: string) => {
+            if (/banDau/.test(String(sql || ''))) throw new Error('không đọc được')
+            return goc(sql)
+        }
+        const h = await kiemTraThue(p, KY)
+        const c = lay(h, 'ton-kho-am')
+        kiemTra('Không đo được hai mốc thì tồn âm giữ nguyên mức cao',
+            !!c && c.muc === 'cao', JSON.stringify(c?.muc))
     }
 
     // ── 42. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
