@@ -6,6 +6,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { Tool, ToolCtx, ToolError } from '../lib/mcpTypes'
+import { coHoiTangTruong } from '../lib/growthOpportunity'
 
 const VN_OFFSET_MS = 7 * 60 * 60 * 1000
 
@@ -32,6 +33,36 @@ function khoangNgay(from?: string, to?: string, macDinhNgay = 30): { tu: Date; d
 }
 
 export const REPORT_TOOLS: Tool[] = [
+    {
+        name: 'growth_opportunity',
+        description:
+            'BỐN HƯỚNG CHIẾN LƯỢC tính từ giao dịch thật, dùng khi được hỏi "nên bán sỉ hay lẻ", ' +
+            '"nên làm combo gì", "nên dồn vào mặt hàng nào", "mùa nào bán mạnh", hoặc khi cần tư vấn chiến lược có căn cứ:\n' +
+            '1) SỈ vs LẺ — tách hai nhóm theo ngưỡng suy từ chính dữ liệu cửa hàng, so doanh thu và BIÊN LÃI từng nhóm;\n' +
+            '2) BÁN KÈM — cặp mặt hàng đi cùng nhau nhiều hơn mức ngẫu nhiên (lift), kèm số đơn còn bỏ lỡ và tiềm năng quy ra tiền;\n' +
+            '3) TẬP TRUNG — bao nhiêu mã hàng tạo 80% lợi nhuận, chỉ số HHI, mức phụ thuộc vào ít khách lớn;\n' +
+            '4) MÙA VỤ — nhịp theo giờ / theo thứ / theo tháng, xu hướng nửa đầu so nửa sau, mặt hàng có tính mùa rõ.\n' +
+            'Phần nào thiếu dữ liệu sẽ trả duocKetLuan=false kèm lý do — KHÔNG được diễn giải thành "cửa hàng không có" hay "làm sai".',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                from: { type: 'string', description: 'Từ ngày, dạng 2026-05-01 (giờ VN). Bỏ trống = 90 ngày gần nhất.' },
+                to: { type: 'string', description: 'Đến ngày, dạng 2026-07-31 (giờ VN). Bỏ trống = hôm nay.' },
+                tyLeChuyenDoi: { type: 'number', description: 'Giả định bao nhiêu phần khách sẽ mua thêm món kèm khi được gợi ý, 0.01–1. Mặc định 0.15 (thận trọng).' },
+                nguongSoLuongSi: { type: 'number', description: 'Mua từ bao nhiêu đơn vị trở lên thì coi là đơn sỉ. Mặc định 10.' },
+            },
+            additionalProperties: false,
+        },
+        run: async (a, { prisma }: ToolCtx) => {
+            /* Mặc định 90 ngày chứ không 30: mùa vụ và combo cần đủ mẫu, cửa sổ
+             * một tháng gần như luôn trả về "chưa đủ dữ liệu để kết luận". */
+            const ky = khoangNgay(a?.from, a?.to, 90)
+            return await coHoiTangTruong(prisma, ky, {
+                tyLeChuyenDoi: a?.tyLeChuyenDoi !== undefined ? Number(a.tyLeChuyenDoi) : undefined,
+                nguongSoLuongSi: a?.nguongSoLuongSi !== undefined ? Number(a.nguongSoLuongSi) : undefined,
+            })
+        },
+    },
     {
         name: 'swot_data',
         description:
