@@ -127,7 +127,32 @@ export async function tinhChuyenDoiHKD(
         thieu.push(`Không đọc được đơn sàn: ${String(e?.message || e).slice(0, 140)}`)
     }
 
+    /* DỮ LIỆU CÓ PHỦ HẾT KỲ KHÔNG?
+     *
+     * Cả con số thuế phải nộp cả năm dựng trên doanh thu của kỳ này. Nếu cửa
+     * hàng mới nhập dữ liệu vào phần mềm được vài tháng thì tổng đó KHÔNG phải
+     * doanh thu một năm — mà module vẫn ghi "kỳ đủ dài nên dùng thẳng doanh thu
+     * thực tế" và đưa ra một con số nộp thuế nghe rất chắc chắn.
+     *
+     * Đo trên dữ liệu thật 14/08/2026: một cửa hàng có 5,76 tỷ trong cửa sổ 365
+     * ngày, nhưng gần như toàn bộ nằm trong 90 ngày cuối — phần đầu năm chưa
+     * từng được nhập vào hệ thống. Nói ra để người dùng biết con số này là SÀN,
+     * không phải mức đúng. */
+    let soNgayCoBan = 0
+    try {
+        const r: any[] = await prisma.$queryRawUnsafe(
+            `SELECT COUNT(DISTINCT (t."createdAt" + interval '7 hours')::date)::int AS n
+             FROM "Transaction" t
+             WHERE t.status IN ('completed','partial') AND t."createdAt" >= $1 AND t."createdAt" <= $2`,
+            ky.tu, ky.den,
+        )
+        soNgayCoBan = Number(r?.[0]?.n) || 0
+    } catch { /* đếm được thì tốt, không đếm được thì thôi — không chặn báo cáo */ }
+
     const soNgay = Math.max(1, Math.round((ky.den.getTime() - ky.tu.getTime()) / 86400_000))
+    if (soNgayCoBan > 0 && soNgayCoBan < soNgay * 0.6) {
+        ghiChu.push(`Trong ${soNgay} ngày của kỳ chỉ có ${soNgayCoBan} ngày phát sinh bán trên phần mềm. Nếu cửa hàng đã bán cả kỳ mà mới nhập dữ liệu gần đây thì doanh thu ở đây THẤP HƠN thực tế, và số thuế tính ra chỉ là mức sàn — không phải mức đúng.`)
+    }
     const daQuyNam = soNgay < 350
     const quyNam = daQuyNam ? doanhThuKy * (365 / soNgay) : doanhThuKy
 

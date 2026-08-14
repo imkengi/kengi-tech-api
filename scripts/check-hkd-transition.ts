@@ -19,8 +19,12 @@ function ok(ten: string, dk: boolean, thucTe?: any) {
 const KY_NAM = { tu: new Date('2026-01-01T00:00:00+07:00'), den: new Date('2026-12-31T23:59:59+07:00') }
 const KY_QUY = { tu: new Date('2026-01-01T00:00:00+07:00'), den: new Date('2026-03-31T23:59:59+07:00') }
 
-function fake(doanhThu: number, donSan = 0, loi?: { tx?: boolean; san?: boolean }) {
+function fake(doanhThu: number, donSan = 0, loi?: { tx?: boolean; san?: boolean; soNgayCoBan?: number }) {
     return {
+        /* Đếm số ngày thực sự có phát sinh bán. Mặc định coi như phủ kín kỳ để
+         * các ca cũ không đổi hành vi; ca nào muốn thử dữ liệu thưa thì truyền
+         * soNgayCoBan. */
+        $queryRawUnsafe: async () => [{ n: loi?.soNgayCoBan ?? 400 }],
         transaction: {
             aggregate: async () => {
                 if (loi?.tx) throw new Error('The table `Transaction` does not exist')
@@ -117,6 +121,22 @@ async function main() {
         tren.viecPhaiLam.every(v => v.canCu && v.canCu.length > 15),
         tren.viecPhaiLam.filter(v => !v.canCu || v.canCu.length <= 15).map(v => v.ma))
     ok('mọi việc đều có hạn chót', tren.viecPhaiLam.every(v => !!v.hanChot))
+
+    console.log('\n▶ Dữ liệu chỉ phủ một phần kỳ — phải nói ra, đừng đưa số nghe chắc chắn\n')
+
+    /* Ca lộ ra khi chạy trên dữ liệu thật 14/08/2026: cửa hàng có 5,76 tỷ trong
+     * cửa sổ 365 ngày nhưng gần như toàn bộ nằm trong 90 ngày cuối — phần đầu
+     * năm chưa từng được nhập vào phần mềm. Cả con số thuế cả năm dựng trên đó,
+     * mà module vẫn ghi "kỳ đủ dài nên dùng thẳng doanh thu thực tế". */
+    const thua = await tinhChuyenDoiHKD(fake(5_000_000_000, 0, { soNgayCoBan: 90 }), KY_NAM, { nam: 2026 })
+    ok('dữ liệu chỉ phủ 90/365 ngày → có nói ra',
+        thua.ghiChu.some(g => /chỉ có 90 ngày phát sinh bán/.test(g)), thua.ghiChu)
+    ok('… và nói rõ số thuế chỉ là MỨC SÀN',
+        thua.ghiChu.some(g => /mức sàn/.test(g)), thua.ghiChu)
+
+    const dayDu = await tinhChuyenDoiHKD(fake(5_000_000_000, 0, { soNgayCoBan: 320 }), KY_NAM, { nam: 2026 })
+    ok('dữ liệu phủ kín kỳ → KHÔNG dựng ghi chú thừa',
+        !dayDu.ghiChu.some(g => /phát sinh bán trên phần mềm/.test(g)), dayDu.ghiChu)
 
     console.log('\n▶ Đọc hỏng dữ liệu — ghi nhận, không im lặng tính bằng 0\n')
 
