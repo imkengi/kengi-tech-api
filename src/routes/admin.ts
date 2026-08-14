@@ -4518,6 +4518,78 @@ router.post('/einvoice-fkey-repair', async (req: Request, res: Response) => {
     }
 })
 
+/**
+ * GET /api/admin/opportunity-probe?store=CODE&from&to
+ *
+ * Chạy cỗ máy CƠ HỘI TĂNG TRƯỞNG trên dữ liệu THẬT của một cửa hàng và trả về
+ * bản tóm tắt gọn, không kèm bảng chi tiết dài.
+ *
+ * Vì sao cần: cỗ máy đó có 48 ca test nhưng toàn trên dữ liệu mẫu do chính mình
+ * dựng. Dữ liệu mẫu chỉ chứa những tình huống mình NGHĨ RA — hai lỗi nặng nhất
+ * hôm nay (doanh thu biến mất vì phép trừ, hoá đơn kẹt vì trùng khoá) đều lọt
+ * qua hàng chục ca test và chỉ lộ ra khi chạm dữ liệu thật.
+ *
+ * CHỈ ĐỌC.
+ */
+router.get('/opportunity-probe', async (req: Request, res: Response) => {
+    try {
+        const { coHoiTangTruong } = await import('../lib/growthOpportunity')
+        const q = req.query as any
+        const ma = String(q.store || '').trim()
+        if (!ma) return res.status(400).json({ success: false, error: 'Thiếu ?store=<mã cửa hàng>' })
+        const store: any = await registryPrisma.store.findFirst({ where: { code: ma }, select: { name: true, schema: true, code: true } })
+        if (!store) return res.status(404).json({ success: false, error: `Không có cửa hàng mã "${ma}"` })
+
+        const hopLe = (s: any) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''))
+        const den = hopLe(q.to) ? new Date(`${q.to}T23:59:59+07:00`) : new Date()
+        const tu = hopLe(q.from) ? new Date(`${q.from}T00:00:00+07:00`) : new Date(den.getTime() - 90 * 86400_000)
+        const nhan = (d: Date) => new Date(d.getTime() + 7 * 3600_000).toISOString().slice(0, 10)
+
+        const t0 = Date.now()
+        const kq: any = await coHoiTangTruong(getStorePrisma(store.schema), { tu, den, moTa: `${nhan(tu)} → ${nhan(den)}` })
+        const giay = Math.round((Date.now() - t0) / 100) / 10
+
+        res.json({
+            success: true,
+            data: {
+                cuaHang: store.name, ma: store.code, ky: kq.ky, chayHet: `${giay}s`,
+                quyMo: kq.quyMo,
+                siLe: { duocKetLuan: kq.siLe.duocKetLuan, lyDo: kq.siLe.lyDo, nguongSi: kq.siLe.nguongSi, nhom: kq.siLe.nhom },
+                banKem: {
+                    duocKetLuan: kq.banKem.duocKetLuan, lyDo: kq.banKem.lyDo,
+                    soDonNhieuMon: kq.banKem.soDonNhieuMon, tyLeDonNhieuMon: kq.banKem.tyLeDonNhieuMon,
+                    soCap: kq.banKem.cap.length,
+                    top3: kq.banKem.cap.slice(0, 3).map((c: any) => ({ a: c.tenA, b: c.tenB, lift: c.lift, doi: c.soDonCoCa2, tiemNang: c.tiemNangLoiNhuan })),
+                },
+                tapTrung: {
+                    duocKetLuan: kq.tapTrung.duocKetLuan, lyDo: kq.tapTrung.lyDo,
+                    soMaHang: kq.tapTrung.soMaHang, soMaTao80: kq.tapTrung.soMaTao80LaiSuat,
+                    tyLeMaTao80: kq.tapTrung.tyLeMaTao80, hhi: kq.tapTrung.hhiHang,
+                    topKhachChiemTyLe: kq.tapTrung.topKhachChiemTyLe, soCanhBao: kq.tapTrung.canhBao.length,
+                },
+                muaVu: {
+                    duocKetLuan: kq.muaVu.duocKetLuan, lyDo: kq.muaVu.lyDo,
+                    gioVang: kq.muaVu.gioVang, ngayVang: kq.muaVu.ngayVang,
+                    xuHuong: kq.muaVu.xuHuong, soMatHangTheoMua: kq.muaVu.matHangTheoMua.length,
+                    gioCoBan: kq.muaVu.theoGio.map((g: any) => g.gio),
+                },
+                doNhayGia: {
+                    duocKetLuan: kq.doNhayGia.duocKetLuan, lyDo: kq.doNhayGia.lyDo,
+                    soMaDaXet: kq.doNhayGia.soMaDaXet, soMaDoDuoc: kq.doNhayGia.soMaDoDuoc,
+                    top3: kq.doNhayGia.matHang.slice(0, 3).map((m: any) => ({
+                        ten: m.ten, doCoGian: m.doCoGian, doTinCay: m.doTinCay, nhay: m.nhay, tang5: m.tang5,
+                    })),
+                },
+                khuyenNghi: kq.khuyenNghi.map((k: any) => ({ ma: k.ma, tieuDe: k.tieuDe, uocTinh: k.uocTinh })),
+                ghiChu: kq.ghiChu, thieu: kq.thieu,
+            },
+        })
+    } catch (err: any) {
+        console.error('GET /admin/opportunity-probe error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
 // POST /api/admin/run-reconcile — chạy ngay vòng đối chiếu ba chiều tháng trước
 router.post('/run-reconcile', async (req: Request, res: Response) => {
     try {
