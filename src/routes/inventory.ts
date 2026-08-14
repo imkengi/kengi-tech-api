@@ -277,6 +277,27 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 })
 
 // GET /api/inventory/transactions
+/**
+ * GET /api/inventory/trace/:productId
+ *
+ * Truy vết tồn kho một mã: dòng thời gian mọi chuyển động, cộng dồn, và ĐÚNG
+ * chứng từ đầu tiên kéo tồn xuống dưới 0.
+ *
+ * Vì sao cần: bảng đặt hàng bảo "234 mã tồn âm, đi soát kho" — nhưng "soát kho"
+ * là câu vô nghĩa nếu không biết mở phiếu nào, ngày nào. Với 234 mã thì lời
+ * khuyên đó tương đương không nói gì.
+ */
+router.get('/trace/:productId', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const { truyVetTonKho } = await import('../lib/stockTrace')
+        const kq = await truyVetTonKho(req.storePrisma!, String(req.params.productId))
+        res.json({ success: true, data: kq })
+    } catch (err) {
+        console.error('GET /inventory/trace error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
 router.get('/transactions', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
