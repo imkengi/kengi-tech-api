@@ -8,6 +8,7 @@
 import { Tool, ToolCtx, ToolError } from '../lib/mcpTypes'
 import { coHoiTangTruong } from '../lib/growthOpportunity'
 import { keHoachDatHang } from '../lib/reorderPlan'
+import { duBaoDongTien } from '../lib/cashForecast'
 
 const VN_OFFSET_MS = 7 * 60 * 60 * 1000
 
@@ -93,6 +94,34 @@ export const REPORT_TOOLS: Tool[] = [
                 soNgayChoMacDinh: a?.soNgayChoMacDinh !== undefined ? Number(a.soNgayChoMacDinh) : undefined,
                 chuKyDat: a?.chuKyDat !== undefined ? Number(a.chuKyDat) : undefined,
                 soMaToiDa: 40,
+            })
+        },
+    },
+    {
+        name: 'cash_forecast',
+        description:
+            'LỊCH TIỀN TỚI — dùng khi được hỏi "có đủ tiền không", "khi nào hết tiền", "tháng này trả nợ nổi không", ' +
+            '"có nên nhập lô hàng lớn bây giờ". Xếp mọi khoản đã biết lên trục thời gian rồi cộng dồn số dư: ' +
+            'nợ nhà cung cấp đến hạn và mốc thuế (CHẮC CHẮN, có chứng từ và ngày), tiền bán hàng và chi phí vận hành ' +
+            '(ƯỚC TÍNH từ 60 ngày qua). Trả về ngày tiền chạm đáy và ngày tiền chạm âm nếu có. ' +
+            'BA ĐIỀU BẮT BUỘC KHI DIỄN GIẢI: ' +
+            '(1) coSoDuDau=false nghĩa là cửa hàng CHƯA NHẬP số dư tài khoản; đường số dư khi đó chỉ là chênh lệch vào-ra, ' +
+            'TUYỆT ĐỐI không được nói "cửa hàng sắp hết tiền". ' +
+            '(2) Công nợ khách KHÔNG nằm trên lịch vì sổ không lưu hạn thu từng khoản — nó ở trường noKhachChuaCoHan, ' +
+            'là tiền có thể thu nếu đi đòi, không phải tiền chắc chắn về. ' +
+            '(3) Mốc thuế chưa lập tờ khai đang tính bằng 0, nên số dư thật sẽ THẤP HƠN đường vẽ.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                soNgay: { type: 'number', description: 'Nhìn trước bao nhiêu ngày, 14–180. Mặc định 90.' },
+                tienMatDauKy: { type: 'number', description: 'Tiền mặt tại quầy nếu người dùng nói ra. Hệ thống không có sổ quỹ tiền mặt thời gian thực nên không tự biết.' },
+            },
+            additionalProperties: false,
+        },
+        run: async (a, { prisma }: ToolCtx) => {
+            return await duBaoDongTien(prisma, {
+                soNgay: a?.soNgay !== undefined ? Number(a.soNgay) : undefined,
+                tienMatDauKy: a?.tienMatDauKy !== undefined ? Number(a.tienMatDauKy) : undefined,
             })
         },
     },

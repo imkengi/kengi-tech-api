@@ -2,6 +2,7 @@ import express, { Response } from 'express'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { coHoiTangTruong } from '../lib/growthOpportunity'
 import { keHoachDatHang } from '../lib/reorderPlan'
+import { duBaoDongTien } from '../lib/cashForecast'
 
 const router = express.Router()
 
@@ -80,6 +81,30 @@ router.get('/reorder', authMiddleware, async (req: AuthRequest, res: Response) =
         res.json({ success: true, data: kq })
     } catch (err) {
         console.error('GET /strategy/reorder error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+/**
+ * GET /api/strategy/cash-forecast?soNgay=90&tienMatDauKy=...
+ *
+ * Lịch tiền tới: xếp mọi khoản đã biết lên trục thời gian rồi cộng dồn số dư,
+ * để trả lời "ngày nào tiền chạm đáy". Khoản CHẮC CHẮN (nợ NCC, mốc thuế) và
+ * khoản ƯỚC TÍNH (bán hàng, chi phí vận hành) được đánh dấu riêng.
+ *
+ * tienMatDauKy: tiền mặt tại quầy do người dùng tự nhập — hệ thống không có
+ * sổ quỹ tiền mặt thời gian thực nên không tự suy được.
+ */
+router.get('/cash-forecast', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const q = req.query as any
+        const kq = await duBaoDongTien(req.storePrisma!, {
+            soNgay: q.soNgay !== undefined && q.soNgay !== '' ? Number(q.soNgay) : undefined,
+            tienMatDauKy: q.tienMatDauKy !== undefined && q.tienMatDauKy !== '' ? Number(q.tienMatDauKy) : undefined,
+        })
+        res.json({ success: true, data: kq })
+    } catch (err) {
+        console.error('GET /strategy/cash-forecast error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
     }
 })
