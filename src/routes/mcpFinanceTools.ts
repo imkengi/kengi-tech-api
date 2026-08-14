@@ -688,6 +688,50 @@ export const FINANCE_TOOLS: Tool[] = [
         },
     },
     {
+        /* Trợ lý AI đọc được điểm sẵn sàng thanh tra nhưng KHÔNG thấy bảng sức
+         * khoẻ dữ liệu — nên nó trình bày mọi con số như sự thật, trong khi
+         * chính bảng kia đang nói "7.113 đơn nằm sai kỳ" hoặc "thiếu lịch sử
+         * nhập hàng". Thiếu tool này thì AI nói lại đúng những cáo buộc mà giao
+         * diện web đã học cách không nói. */
+        name: 'data_health_check',
+        description: 'SỨC KHOẺ DỮ LIỆU — trả lời "số liệu của tôi có đủ tin để đọc báo cáo chưa": dữ liệu bán có phủ hết kỳ không, tồn kho âm, hoá đơn phát hành hỏng, chi phí ghi sổ quá mỏng, phiếu nhập trùng số hoá đơn, số dư ngân hàng, và chứng từ nằm SAI KỲ do nhập từ phần mềm cũ. GỌI TOOL NÀY TRƯỚC khi kết luận từ bất kỳ báo cáo theo kỳ nào — mỗi mục nói rõ nó làm sai báo cáo nào và vì sao. CHỈ ĐỌC.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                from: { type: 'string', description: 'Ngày bắt đầu YYYY-MM-DD (mặc định 90 ngày gần nhất)' },
+                to: { type: 'string', description: 'Ngày kết thúc YYYY-MM-DD' },
+            },
+            additionalProperties: false,
+        },
+        run: async (a, { prisma }: ToolCtx) => {
+            const { sucKhoeDuLieu } = await import('../lib/dataHealth')
+            const nay = new Date(Date.now() + 7 * 3600_000)
+            const to = String(a?.to || '').slice(0, 10) || nay.toISOString().slice(0, 10)
+            const from = String(a?.from || '').slice(0, 10)
+                || new Date(new Date(`${to}T00:00:00+07:00`).getTime() - 90 * 86400_000).toISOString().slice(0, 10)
+            if (from > to) throw new ToolError('Ngày bắt đầu phải trước ngày kết thúc')
+            const kq = await sucKhoeDuLieu(prisma, {
+                from, to,
+                start: new Date(`${from}T00:00:00+07:00`),
+                end: new Date(new Date(`${to}T00:00:00+07:00`).getTime() + 86400_000),
+            })
+            return {
+                ky: kq.ky,
+                diem: kq.diem,
+                xepLoai: kq.xepLoai,
+                /* Giữ nguyên `anhHuong` và `canLam`: đó là chỗ chứa câu phân biệt
+                 * "chưa đọc được" với "không có", và "chưa nhập lịch sử" với "làm
+                 * sai". Cắt bớt là AI mất đúng phần cẩn trọng. */
+                muc: kq.muc.map(m => ({
+                    ma: m.ma, ten: m.ten, mucDo: m.muc, soLieu: m.so,
+                    anhHuongToiBaoCao: m.anhHuong, viecCanLam: m.canLam, viDu: m.viDu,
+                })),
+                chuaDocDuoc: kq.thieu,
+                ghiChu: 'Mục nào ở mức "nang" thì đừng kết luận từ báo cáo theo kỳ trước khi xử lý nó. Con số để trống nghĩa là CHƯA ĐỌC ĐƯỢC, không phải bằng 0.',
+            }
+        },
+    },
+    {
         name: 'tax_audit_check',
         description: 'KIỂM TRA TRƯỚC THANH TRA THUẾ: đối chiếu ba nguồn doanh thu (sổ kế toán / tờ khai GTGT / hóa đơn điện tử), tìm dấu hiệu bị ấn định thuế và các khoản sẽ bị loại khi quyết toán, kèm ước tính tiền truy thu + phạt + chậm nộp. Gọi khi chủ shop hỏi "sổ sách có vấn đề gì không", "có rủi ro thuế gì", "bị thanh tra thì mất bao nhiêu". CHỈ ĐỌC, không sửa gì.',
         inputSchema: {
