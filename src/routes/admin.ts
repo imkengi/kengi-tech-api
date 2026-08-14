@@ -4643,6 +4643,21 @@ router.get('/engine-probe', async (req: Request, res: Response) => {
                     mauCanDat: (datHang?.canDat || []).slice(0, 3),
                 },
                 dongTien: loiTien ? { loi: loiTien } : { chayHet: `${giay2}s`, ...tien },
+                sucKhoe: await (async () => {
+                    try {
+                        const { sucKhoeDuLieu } = await import('../lib/dataHealth')
+                        const nay2 = new Date(Date.now() + 7 * 3600_000)
+                        const to2 = nay2.toISOString().slice(0, 10)
+                        const from2 = new Date(nay2.getTime() - 90 * 86400_000).toISOString().slice(0, 10)
+                        return await sucKhoeDuLieu(prisma, {
+                            from: from2, to: to2,
+                            start: new Date(`${from2}T00:00:00+07:00`),
+                            end: new Date(new Date(`${to2}T00:00:00+07:00`).getTime() + 86400_000),
+                        })
+                    } catch (e: any) {
+                        return { loi: String(e?.message || e).slice(0, 300) }
+                    }
+                })(),
                 hkd: await (async () => {
                     /* Chuyển đổi hộ kinh doanh 2026 — cỗ máy nói những câu rất
                      * nặng ("sang năm bạn nộp bao nhiêu"), càng phải soi trên số
