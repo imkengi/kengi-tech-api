@@ -4029,6 +4029,88 @@ router.post('/run-tax-deadline-reminder', async (_req: Request, res: Response) =
     }
 })
 
+/**
+ * POST /api/admin/backfill-loyalty?apply=1
+ *
+ * Tính lại điểm tích luỹ từ lịch sử đơn hàng, bù cho quãng thời gian phép cộng
+ * điểm ném lỗi âm thầm (ghi nhầm cột `loyaltyTier` thay vì `tier`).
+ *
+ * Mặc định CHẠY THỬ — chỉ báo sẽ đổi gì. Thêm ?apply=1 mới ghi thật.
+ *
+ * Chỉ CỘNG THÊM, không bao giờ trừ: một số khách đã được chỉnh điểm tay, và lấy
+ * lại điểm khách đang có là chuyện không thể giải thích ở quầy. Lấy giá trị lớn
+ * hơn giữa điểm hiện tại và điểm tính từ lịch sử.
+ */
+router.post('/backfill-loyalty', async (req: Request, res: Response) => {
+    try {
+        const ghiThat = String((req.query as any)?.apply || '') === '1'
+        const stores = await registryPrisma.store.findMany({ where: { status: 'active' } as any }) as any[]
+        const ketQua: any[] = []
+
+        // Tuần tự từng cửa hàng — pool mỗi store rất nhỏ.
+        for (const store of stores) {
+            const sp: any = getStorePrisma(store.schema)
+            try {
+                /* Gộp bằng SQL, KHÔNG kéo hết đơn về Node: floor theo TỪNG đơn
+                 * (đúng luật "1 điểm mỗi 1.000đ của một đơn"), không phải floor
+                 * của tổng — hai cách ra số khác nhau. */
+                const rows: any[] = await sp.$queryRawUnsafe(
+                    `SELECT t."customerId" AS id,
+                            COALESCE(SUM(FLOOR(t.total / 1000)), 0)::int AS diem
+                     FROM "Transaction" t
+                     WHERE t."customerId" IS NOT NULL
+                       AND t.status IN ('completed', 'partial')
+                     GROUP BY 1`,
+                )
+                const theoKhach = new Map<string, number>()
+                for (const r of rows) theoKhach.set(String(r.id), Number(r.diem) || 0)
+
+                const khach = await sp.customer.findMany({
+                    where: { id: { in: [...theoKhach.keys()] } },
+                    select: { id: true, name: true, loyaltyPoints: true, tier: true, totalPurchases: true },
+                })
+
+                let soDoi = 0, tongThem = 0
+                const vd: any[] = []
+                for (const k of khach) {
+                    const nen = theoKhach.get(String(k.id)) || 0
+                    const dangCo = Number(k.loyaltyPoints) || 0
+                    const moi = Math.max(dangCo, nen)
+
+                    const luy = Number(k.totalPurchases) || 0
+                    const hang = luy >= 50_000_000 ? 'vip' : luy >= 20_000_000 ? 'gold' : luy >= 5_000_000 ? 'silver' : 'bronze'
+
+                    if (moi === dangCo && hang === k.tier) continue
+                    soDoi++
+                    tongThem += moi - dangCo
+                    if (vd.length < 5) vd.push({ ten: k.name, diemCu: dangCo, diemMoi: moi, hangCu: k.tier, hangMoi: hang })
+                    if (ghiThat) {
+                        await sp.customer.update({
+                            where: { id: k.id },
+                            data: { loyaltyPoints: moi, tier: hang },
+                        }).catch(() => { })
+                    }
+                }
+                ketQua.push({ store: store.name, soKhachCoDon: khach.length, soKhachDoi: soDoi, tongDiemThem: tongThem, viDu: vd })
+            } catch (e: any) {
+                ketQua.push({ store: store.name, loi: String(e?.message || e).slice(0, 200) })
+            }
+        }
+
+        res.json({
+            success: true,
+            chayThat: ghiThat,
+            message: ghiThat
+                ? 'Đã ghi điểm tích luỹ bù cho các cửa hàng'
+                : 'CHẠY THỬ — chưa ghi gì. Thêm ?apply=1 để ghi thật.',
+            ketQua,
+        })
+    } catch (err: any) {
+        console.error('backfill-loyalty error:', err)
+        res.status(500).json({ success: false, error: err?.message })
+    }
+})
+
 // POST /api/admin/run-weekly-brief — chạy ngay vòng bản tin đầu tuần
 router.post('/run-weekly-brief', async (req: Request, res: Response) => {
     try {
