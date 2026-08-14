@@ -325,11 +325,18 @@ export async function doiChieuBaChieu(
     const tongCoThue = conHieuLuc.reduce((s: number, h: any) => s + dauCua(h) * (Number(h.totalAmount) || 0), 0)
     const tongThue = conHieuLuc.reduce((s: number, h: any) => s + dauCua(h) * (Number(h.vatAmount) || 0), 0)
 
+    /* Kỳ nằm trước tờ phát hành được đầu tiên → KHÔNG kết luận được, dùng chính
+     * cờ `duocKetLuan` sẵn có thay vì thêm cờ mới: mọi nơi tiêu thụ kết quả
+     * (bảng quét admin, giao diện) đều đã tôn trọng cờ này và sẽ hiện "—" kèm lý
+     * do. Nếu chỉ chặn ở phần rủi ro thì cùng một màn hình vừa nói "chưa có lịch
+     * sử hoá đơn" vừa hiện ô "chưa xuất 865 triệu" — hai câu chuyện. */
     const hoaDon: ChieuHoaDon = {
-        duocKetLuan: hoaDonRaw.length > 0,
+        duocKetLuan: hoaDonRaw.length > 0 && !kyTruocKhiCoHoaDon,
         lyDo: hoaDonRaw.length === 0
             ? 'Kỳ này chưa có hoá đơn điện tử nào trong phần mềm. Nếu cửa hàng phát hành hoá đơn bằng phần mềm khác thì đối chiếu ở đây không phản ánh đúng — hãy nhập hoặc đồng bộ hoá đơn về trước khi kết luận.'
-            : undefined,
+            : kyTruocKhiCoHoaDon
+                ? `Kỳ này nằm trước tờ hoá đơn phát hành được đầu tiên (${hoaDonDauTien}). Những tờ có trong kỳ đều chưa phát hành xong, nên không đối chiếu được — không kết luận là cửa hàng chưa xuất hoá đơn.`
+                : undefined,
         tong: lam(tongChuaThue),
         tongCoThue: lam(tongCoThue),
         thueGtgt: lam(tongThue),
