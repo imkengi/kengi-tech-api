@@ -178,6 +178,20 @@ async function main() {
     ok('… nói rõ tỷ lệ phủ hoá đơn đang bị báo thấp hơn thực tế',
         /THẤP HƠN thực tế/.test(mHd.anhHuong), mHd.anhHuong)
 
+    /* Menu "Hóa Đơn VAT" có cờ companyOnly — hộ kinh doanh KHÔNG vào được, trong
+     * khi từ 2026 họ vẫn phải dùng hoá đơn điện tử và vẫn nhận cảnh báo này.
+     * Nguyên nhân phải hiện NGAY tại đây, nếu không cảnh báo đi nửa đường. */
+    ok('kèm nguyên nhân ngay tại chỗ (hộ kinh doanh không vào được trang hoá đơn)',
+        (mHd.viDu?.length ?? 0) === 2, mHd.viDu)
+    ok('… gom theo nguyên nhân kèm số tờ',
+        /40 tờ/.test(mHd.viDu?.[0]?.phu || ''), mHd.viDu?.[0])
+    ok('… nhóm nhiều tờ nhất xếp trước',
+        /Fkey/.test(mHd.viDu?.[0]?.nhan || ''), mHd.viDu?.[0]?.nhan)
+
+    const khongHong = await sucKhoeDuLieu(fake({ ...SACH, hoaDonHong: [] }), KY)
+    ok('không có tờ hỏng → không kèm danh sách thừa',
+        (lay(khongHong, 'hoa-don-hong').viDu?.length ?? 0) === 0)
+
     console.log('\n▶ Chi phí ghi sổ quá mỏng\n')
 
     const cp = await sucKhoeDuLieu(fake({ ...SACH, doanhThu: 1_000_000_000, chiPhi: 4_000_000 }), KY)

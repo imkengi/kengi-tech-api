@@ -176,7 +176,28 @@ export async function sucKhoeDuLieu(
         select: { totalAmount: true, errorMessage: true },
     }), [])
     const soTrungKhoa = hong.filter(h => /fkey/i.test(String(h.errorMessage || '')) && /đã được sử dụng|already/i.test(String(h.errorMessage || ''))).length
+
+    /* NGUYÊN NHÂN PHẢI HIỆN NGAY TẠI ĐÂY, không chỉ ở trang Hoá Đơn VAT.
+     *
+     * Menu "Hóa Đơn VAT" có cờ companyOnly — hộ kinh doanh KHÔNG thấy nó, trong
+     * khi từ 2026 họ vẫn phải dùng hoá đơn điện tử máy tính tiền (NĐ 70/2025) và
+     * vẫn nhận được cảnh báo này. Chỉ họ sang một trang họ không vào được là
+     * cảnh báo đi nửa đường — tương đương không có cảnh báo.
+     *
+     * Trang Sẵn Sàng Thanh Tra (nơi đặt bảng sức khoẻ) thì mọi loại hình đều mở
+     * được, nên gom nguyên nhân về đây là đủ cho cả hai nhóm. */
+    const nhomLoi = new Map<string, number>()
+    for (const h of hong) {
+        const k = String(h.errorMessage || '(không ghi lý do)')
+            .replace(/\d+/g, '#').replace(/\s+/g, ' ').trim().slice(0, 90)
+        nhomLoi.set(k, (nhomLoi.get(k) || 0) + 1)
+    }
+
     muc.push({
+        viDu: Array.from(nhomLoi.entries())
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([lyDo, n]) => ({ nhan: lyDo, phu: `${n} tờ` })),
         ma: 'hoa-don-hong',
         ten: 'Hoá đơn phát hành hỏng',
         muc: hong.length === 0 ? 'on' : hong.length > 20 ? 'nang' : 'vua',
