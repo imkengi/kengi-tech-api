@@ -4643,6 +4643,37 @@ router.get('/engine-probe', async (req: Request, res: Response) => {
                     mauCanDat: (datHang?.canDat || []).slice(0, 3),
                 },
                 dongTien: loiTien ? { loi: loiTien } : { chayHet: `${giay2}s`, ...tien },
+                soatThue: await (async () => {
+                    /* Bộ soát sẵn sàng thanh tra là cỗ máy nói nặng nhất trong cả
+                     * phần mềm — nó chấm điểm và ước tính tiền phạt. Cửa hàng
+                     * chưa có dữ liệu mà bị chấm điểm thấp kèm số tiền phạt là
+                     * doạ người chưa làm gì sai. */
+                    try {
+                        const { kiemTraThue } = await import('../lib/taxAudit')
+                        const nay3 = new Date(Date.now() + 7 * 3600_000)
+                        const y = nay3.getUTCFullYear()
+                        const m = nay3.getUTCMonth() + 1
+                        const p2 = (n: number) => String(n).padStart(2, '0')
+                        const cuoi = new Date(Date.UTC(y, m, 0)).getUTCDate()
+                        const from3 = `${y}-${p2(m)}-01`
+                        const to3 = `${y}-${p2(m)}-${p2(cuoi)}`
+                        const k: any = await kiemTraThue(prisma, {
+                            from: from3, to: to3,
+                            start: new Date(`${from3}T00:00:00.000Z`),
+                            end: new Date(new Date(`${to3}T23:59:59.999Z`).getTime() + 7 * 3600_000),
+                            maKy: `${y}-${p2(m)}`, nhan: `tháng ${m}/${y}`,
+                        })
+                        return {
+                            ky: k.ky, diem: k.diem, xepLoai: k.xepLoai,
+                            soCanhBao: (k.canhBao || []).length,
+                            canhBaoNang: (k.canhBao || []).filter((c: any) => c.muc === 'cao').map((c: any) => c.code),
+                            uocTinhPhat: k.uocTinhPhat?.tong ?? null,
+                            doanhThu: k.doanhThu,
+                        }
+                    } catch (e: any) {
+                        return { loi: String(e?.message || e).slice(0, 300) }
+                    }
+                })(),
                 sucKhoe: await (async () => {
                     try {
                         const { sucKhoeDuLieu } = await import('../lib/dataHealth')
