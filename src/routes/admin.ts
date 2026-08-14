@@ -3978,4 +3978,15 @@ router.post('/run-tax-deadline-reminder', async (_req: Request, res: Response) =
     }
 })
 
+// POST /api/admin/run-reconcile — chạy ngay vòng đối chiếu ba chiều tháng trước
+router.post('/run-reconcile', async (_req: Request, res: Response) => {
+    try {
+        const { chayDoiChieuNgay } = await import('../cron/reconcileCron')
+        chayDoiChieuNgay().catch(e => console.error('run-reconcile lỗi:', e))
+        res.json({ success: true, message: 'Đã kích hoạt vòng đối chiếu ba chiều — xem tiến độ trong log' })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err?.message })
+    }
+})
+
 export default router
