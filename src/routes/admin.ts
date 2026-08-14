@@ -4168,6 +4168,78 @@ router.post('/run-weekly-brief', async (req: Request, res: Response) => {
     }
 })
 
+/**
+ * GET /api/admin/reconcile-sweep?from=YYYY-MM-DD&to=YYYY-MM-DD
+ *
+ * Soát đối chiếu ba chiều cho TOÀN BỘ cửa hàng và trả về một bảng gọn — để
+ * người vận hành nhìn một phát biết cửa hàng nào đang lệch thật, thay vì mở
+ * từng cửa hàng một.
+ *
+ * CHỈ ĐỌC, không ghi gì, không gửi thông báo cho ai. Chạy TUẦN TỰ từng cửa hàng
+ * vì mỗi lượt đối chiếu là vài truy vấn nặng — bắn song song cả cụm là cạn pool.
+ *
+ * Cột `duocKetLuan` quan trọng hơn cột số: `false` nghĩa là THIẾU DỮ LIỆU (chưa
+ * nhập sao kê, chưa dùng hoá đơn điện tử trên phần mềm), tuyệt đối không đọc
+ * thành "cửa hàng này làm sai".
+ */
+router.get('/reconcile-sweep', async (req: Request, res: Response) => {
+    try {
+        const { doiChieuBaChieu } = await import('../lib/revenueReconcile')
+        const q = req.query as any
+        const hopLe = (s: any) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''))
+
+        let from: string, to: string
+        if (hopLe(q.from) && hopLe(q.to)) { from = String(q.from); to = String(q.to) }
+        else {
+            const nay = new Date(Date.now() + 7 * 3600_000)
+            from = new Date(Date.UTC(nay.getUTCFullYear(), nay.getUTCMonth() - 1, 1)).toISOString().slice(0, 10)
+            to = new Date(Date.UTC(nay.getUTCFullYear(), nay.getUTCMonth(), 0)).toISOString().slice(0, 10)
+        }
+
+        const stores = await registryPrisma.store.findMany({ select: { name: true, schema: true, code: true } }) as any[]
+        const bang: any[] = []
+
+        for (const store of stores) {
+            try {
+                const kq: any = await doiChieuBaChieu(getStorePrisma(store.schema), {
+                    from, to,
+                    start: new Date(`${from}T00:00:00+07:00`),
+                    end: new Date(new Date(`${to}T00:00:00+07:00`).getTime() + 86400_000),
+                    nhan: `${from} → ${to}`,
+                })
+                bang.push({
+                    cuaHang: store.name, ma: store.code,
+                    doanhThuSo: kq.soSach.tong,
+                    soChungTu: kq.soSach.soChungTu,
+                    hoaDonDaXuat: kq.hoaDon.tongCoThue,
+                    soHoaDon: kq.hoaDon.soHoaDon,
+                    tyLeXuatHoaDon: kq.lech.tyLeXuatHoaDon,
+                    chuaXuatHoaDon: kq.lech.chuaXuatHoaDon,
+                    hoaDonVuotSo: kq.lech.hoaDonVuotSo,
+                    tienVaoChuaGiaiTrinh: kq.dongTien.duocKetLuan ? kq.dongTien.chuaGiaiThich : null,
+                    chiTienMatLon: kq.chiTienMatLon.danhSach.length,
+                    duocKetLuan: {
+                        soSach: kq.soSach.duocKetLuan,
+                        hoaDon: kq.hoaDon.duocKetLuan,
+                        dongTien: kq.dongTien.duocKetLuan,
+                    },
+                    ruiRo: kq.ruiRo.map((r: any) => ({ ma: r.ma, muc: r.muc, soTien: r.soTien })),
+                    chuaDocDuoc: kq.thieu,
+                })
+            } catch (e: any) {
+                /* Một cửa hàng hỏng không được làm hỏng cả bảng — và phải ghi rõ
+                 * là LỖI ĐỌC, không được để trống rồi bị hiểu thành "sạch". */
+                bang.push({ cuaHang: store.name, ma: store.code, loi: String(e?.message || e).slice(0, 200) })
+            }
+        }
+
+        res.json({ success: true, data: { ky: { from, to }, soCuaHang: bang.length, bang } })
+    } catch (err: any) {
+        console.error('GET /admin/reconcile-sweep error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
 // POST /api/admin/run-reconcile — chạy ngay vòng đối chiếu ba chiều tháng trước
 router.post('/run-reconcile', async (req: Request, res: Response) => {
     try {
