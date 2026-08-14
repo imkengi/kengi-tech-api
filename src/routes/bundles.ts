@@ -40,11 +40,27 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         const where: any = {}
         if (active === 'true') where.active = true
         if (active === 'false') where.active = false
+
+        /* HẠN DÙNG và GIỚI HẠN LƯỢT trước giờ chỉ được HIỂN THỊ, không ai áp
+         * dụng: combo hết hạn từ tháng trước vẫn bán bình thường ở POS, và giới
+         * hạn "chỉ 50 lượt" không bao giờ dừng ở lượt thứ 51.
+         *
+         * Chỉ lọc khi bên gọi xin danh sách combo ĐANG BÁN (active=true — chính
+         * là POS). Trang quản lý vẫn phải thấy combo hết hạn, nếu không thì
+         * không ai gia hạn hay sửa được nó nữa. */
+        const chiConBanDuoc = active === 'true'
+        if (chiConBanDuoc) {
+            where.OR = [{ validUntil: null }, { validUntil: { gte: new Date() } }]
+        }
         if (category && category !== 'all') where.category = category
         if (search) where.name = { contains: String(search) }
 
         const bundles = await prisma.bundle.findMany({ where, orderBy: { createdAt: 'desc' } })
-        const daDoc = bundles.map(b => ({ ...b, items: docItems(b.items) }))
+        /* Giới hạn lượt phải so soldCount với maxUsage — hai CỘT với nhau, Prisma
+         * không lọc thẳng được nên lọc ở đây. Danh sách combo luôn nhỏ nên không
+         * đáng để viết SQL thô. */
+        const conLuot = (b: any) => !chiConBanDuoc || !b.maxUsage || (b.soldCount ?? 0) < b.maxUsage
+        const daDoc = bundles.filter(conLuot).map(b => ({ ...b, items: docItems(b.items) }))
 
         /* GIÁ VỐN COMBO — thiếu nó thì màn hình combo chỉ khoe "khách tiết kiệm
          * bao nhiêu" mà không ai thấy CỬA HÀNG còn lại bao nhiêu. Đặt giá combo
