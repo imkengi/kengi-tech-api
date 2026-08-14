@@ -19,6 +19,25 @@ const router = express.Router()
 
 const CHUA_CO_BANG = 'chua-co-bang'
 
+/**
+ * AI HỎI GÌ LÀ VIỆC RIÊNG CỦA NGƯỜI HỎI.
+ *
+ * Trước khi có bảng lưu, hội thoại bay hơi theo tab nên không ai đọc được của
+ * ai. Lưu lại mà không phân quyền là tự tạo ra rò rỉ: một thu ngân sẽ đọc được
+ * chủ shop hỏi gì về lương, về công nợ, về việc cắt mặt hàng nào.
+ *
+ * Quản lý xem được tất cả (họ vốn đã xem được mọi báo cáo); người khác chỉ xem
+ * hội thoại của chính mình.
+ */
+const VAI_QUAN_LY = ['admin', 'manager', 'superadmin', 'owner']
+const laQuanLy = (r?: string) => !!r && VAI_QUAN_LY.includes(r)
+
+/** Lọc theo người tạo cho tài khoản không phải quản lý. */
+export function loTheoNguoi(req: AuthRequest, goc: any = {}): any {
+    if (laQuanLy(req.user?.role)) return goc
+    return { ...goc, createdBy: req.user?.userId || '__khong-co__' }
+}
+
 /** Store cũ chưa chạy migrate thì bảng chưa tồn tại — nói rõ thay vì trả 500. */
 function laThieuBang(e: any): boolean {
     const m = String(e?.message || e)
@@ -34,7 +53,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma! as any
         const q = req.query as any
-        const where: any = {}
+        const where: any = loTheoNguoi(req)
         if (q.loai) where.loai = String(q.loai)
 
         const ds = await prisma.aiReport.findMany({
@@ -58,7 +77,9 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma! as any
-        const bao = await prisma.aiReport.findUnique({ where: { id: String(req.params.id) } })
+        const bao = await prisma.aiReport.findFirst({ where: loTheoNguoi(req, { id: String(req.params.id) }) })
+        /* Không phân biệt "không tồn tại" với "không phải của bạn": nói ra là
+         * tiết lộ có tồn tại một bản của người khác. */
         if (!bao) return res.status(404).json({ success: false, error: 'Không tìm thấy bản phân tích' })
         res.json({ success: true, data: bao })
     } catch (err: any) {
@@ -109,7 +130,8 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma! as any
-        await prisma.aiReport.delete({ where: { id: String(req.params.id) } })
+        const xoa = await prisma.aiReport.deleteMany({ where: loTheoNguoi(req, { id: String(req.params.id) }) })
+        if (xoa.count === 0) return res.status(404).json({ success: false, error: 'Không tìm thấy bản phân tích' })
         res.json({ success: true })
     } catch (err: any) {
         if (laThieuBang(err)) return res.status(404).json({ success: false, error: 'Không tìm thấy bản phân tích' })
@@ -133,6 +155,7 @@ router.get('/chats/list', authMiddleware, async (req: AuthRequest, res: Response
     try {
         const prisma = req.storePrisma! as any
         const ds = await prisma.aiChat.findMany({
+            where: loTheoNguoi(req),
             select: { id: true, tieuDe: true, soLuot: true, createdByName: true, updatedAt: true },
             orderBy: { updatedAt: 'desc' },
             take: Math.min(60, Math.max(1, Number((req.query as any).limit) || 30)),
@@ -149,7 +172,7 @@ router.get('/chats/list', authMiddleware, async (req: AuthRequest, res: Response
 router.get('/chats/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma! as any
-        const c = await prisma.aiChat.findUnique({ where: { id: String(req.params.id) } })
+        const c = await prisma.aiChat.findFirst({ where: loTheoNguoi(req, { id: String(req.params.id) }) })
         if (!c) return res.status(404).json({ success: false, error: 'Không tìm thấy hội thoại' })
         res.json({ success: true, data: c })
     } catch (err: any) {
@@ -185,6 +208,12 @@ router.post('/chats', authMiddleware, async (req: AuthRequest, res: Response) =>
         }
 
         const id = String(b.id || '')
+        if (id) {
+            /* Ghi đè phải kiểm chủ sở hữu: nếu không, gửi id của người khác là
+             * xoá trắng hội thoại của họ bằng nội dung của mình. */
+            const cu = await prisma.aiChat.findFirst({ where: loTheoNguoi(req, { id }), select: { id: true } })
+            if (!cu) return res.status(404).json({ success: false, error: 'Không tìm thấy hội thoại' })
+        }
         const c = id
             ? await prisma.aiChat.upsert({ where: { id }, update: { noiDung, soLuot: luot.length }, create: { id, ...dulieu }, select: { id: true } })
             : await prisma.aiChat.create({ data: dulieu, select: { id: true } })
@@ -202,7 +231,8 @@ router.post('/chats', authMiddleware, async (req: AuthRequest, res: Response) =>
 router.delete('/chats/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma! as any
-        await prisma.aiChat.delete({ where: { id: String(req.params.id) } })
+        const xoa = await prisma.aiChat.deleteMany({ where: loTheoNguoi(req, { id: String(req.params.id) }) })
+        if (xoa.count === 0) return res.status(404).json({ success: false, error: 'Không tìm thấy hội thoại' })
         res.json({ success: true })
     } catch (err: any) {
         if (laThieuBang(err)) return res.status(404).json({ success: false, error: 'Không tìm thấy hội thoại' })
