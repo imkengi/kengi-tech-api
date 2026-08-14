@@ -4409,6 +4409,111 @@ router.get('/einvoice-error-sweep', async (req: Request, res: Response) => {
     }
 })
 
+/**
+ * POST /api/admin/einvoice-fkey-repair?store=CODE&from&to&apply=1
+ *
+ * Ghi bù hàng loạt cho hoá đơn kẹt ở trạng thái ERROR vì "Fkey đã được sử dụng".
+ *
+ * Câu đó nghĩa là hoá đơn ĐÃ phát hành thành công bên VNPT — lần gửi trước tới
+ * đích nhưng phản hồi không về. Bản vá ở tầng phát hành chỉ cứu được các lần
+ * SẮP TỚI; những tờ đã kẹt vẫn nằm im và mọi báo cáo vẫn thiếu chúng.
+ *
+ * MẶC ĐỊNH CHẠY THỬ, KHÔNG GHI GÌ. Phải truyền apply=1 mới thật sự cập nhật.
+ * Đây là ghi vào sổ hoá đơn — thứ không có nút hoàn tác — nên phải nhìn kết quả
+ * chạy thử trước rồi mới quyết định.
+ *
+ * Chỉ điền phần CÒN TRỐNG (số hoá đơn, mã tra cứu) và chỉ chuyển sang SENT khi
+ * VNPT xác nhận cơ quan thuế đã cấp mã. Không ghi đè dữ liệu đang có.
+ */
+router.post('/einvoice-fkey-repair', async (req: Request, res: Response) => {
+    try {
+        const q = req.query as any
+        const ma = String(q.store || '').trim()
+        if (!ma) return res.status(400).json({ success: false, error: 'Thiếu ?store=<mã cửa hàng>' })
+        const apply = String(q.apply || '') === '1'
+        const hopLe = (s: any) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''))
+        const nay = new Date(Date.now() + 7 * 3600_000)
+        const from = hopLe(q.from) ? String(q.from)
+            : new Date(Date.UTC(nay.getUTCFullYear(), nay.getUTCMonth() - 3, 1)).toISOString().slice(0, 10)
+        const to = hopLe(q.to) ? String(q.to) : nay.toISOString().slice(0, 10)
+        const tran = Math.min(300, Math.max(1, Number(q.limit) || 200))
+
+        const store: any = await registryPrisma.store.findFirst({ where: { code: ma }, select: { name: true, schema: true, code: true } })
+        if (!store) return res.status(404).json({ success: false, error: `Không có cửa hàng mã "${ma}"` })
+        const prisma: any = getStorePrisma(store.schema)
+
+        const { getActiveConfig } = await import('./einvoice')
+        const cfgRow: any = await getActiveConfig(prisma).catch(() => null)
+        if (!cfgRow) return res.status(400).json({ success: false, error: 'Cửa hàng chưa cấu hình nhà cung cấp hoá đơn điện tử' })
+
+        const { VnptProvider, vnptFkey } = await import('../services/einvoice/vnpt')
+        const vnpt: any = new (VnptProvider as any)()
+
+        const ds: any[] = await prisma.eInvoice.findMany({
+            where: { invoiceDate: { gte: from, lte: to }, status: 'ERROR' },
+            select: {
+                id: true, invoiceDate: true, totalAmount: true, errorMessage: true, transactionId: true,
+                invoiceNumber: true, lookupCode: true, invoiceType: true,
+                adjustsInvoiceId: true, replacesInvoiceId: true,
+            },
+            orderBy: { invoiceDate: 'asc' },
+            take: tran,
+        })
+        const ungVien = ds.filter(h => /fkey/i.test(String(h.errorMessage || '')) && /đã được sử dụng|already/i.test(String(h.errorMessage || '')))
+
+        const ketQua: any[] = []
+        let suaDuoc = 0, khongThay = 0
+        for (const h of ungVien) {
+            // Fkey theo loại hoá đơn — cùng công thức với luồng phát hành
+            const fkey = h.invoiceType === 'ADJUSTMENT' && h.adjustsInvoiceId ? vnptFkey(`${h.adjustsInvoiceId}A`)
+                : h.invoiceType === 'REPLACEMENT' && h.replacesInvoiceId ? vnptFkey(`${h.replacesInvoiceId}R`)
+                    : vnptFkey(h.transactionId || h.id)
+            let kq: any
+            try { kq = await vnpt.findByFkey(cfgRow, fkey) } catch (e: any) { kq = { found: false, loi: String(e?.message || e) } }
+
+            if (!kq?.found || !kq.invoiceNumber) {
+                khongThay++
+                ketQua.push({ id: h.id, ngay: h.invoiceDate, tien: Math.round(Number(h.totalAmount) || 0), fkey, ketQua: 'VNPT không trả về hoá đơn' })
+                continue
+            }
+            const data: any = {}
+            if (kq.invoiceNumber && !h.invoiceNumber) data.invoiceNumber = kq.invoiceNumber
+            if (kq.lookupCode && !h.lookupCode) data.lookupCode = kq.lookupCode
+            if (kq.sent) { data.status = 'SENT'; data.sentAt = new Date(); data.errorMessage = null }
+
+            if (apply && Object.keys(data).length) {
+                await prisma.eInvoice.update({ where: { id: h.id }, data }).catch(() => { })
+            }
+            suaDuoc++
+            ketQua.push({
+                id: h.id, ngay: h.invoiceDate, tien: Math.round(Number(h.totalAmount) || 0), fkey,
+                soHoaDon: kq.invoiceNumber, maCQT: kq.lookupCode || null, daGuiCQT: !!kq.sent,
+                seCapNhat: Object.keys(data),
+                ketQua: apply ? 'đã ghi' : 'sẽ ghi (chạy thử)',
+            })
+        }
+
+        res.json({
+            success: true,
+            data: {
+                cuaHang: store.name, ma: store.code, ky: { from, to },
+                chayThat: apply,
+                soHoaDonLoi: ds.length,
+                soUngVienTrungFkey: ungVien.length,
+                traRaHoaDon: suaDuoc,
+                khongTraRa: khongThay,
+                chiTiet: ketQua.slice(0, 100),
+                ghiChu: apply
+                    ? 'Đã ghi bù. Chạy lại báo cáo hoá đơn hỏng để xác nhận.'
+                    : 'ĐANG CHẠY THỬ — chưa ghi gì. Xem kỹ rồi thêm apply=1 nếu đồng ý.',
+            },
+        })
+    } catch (err: any) {
+        console.error('POST /admin/einvoice-fkey-repair error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
 // POST /api/admin/run-reconcile — chạy ngay vòng đối chiếu ba chiều tháng trước
 router.post('/run-reconcile', async (req: Request, res: Response) => {
     try {
