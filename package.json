@@ -26,7 +26,8 @@
     "check:ketoan": "npx tsx scripts/check-auto-journal.ts && npx tsx scripts/check-reconcile.ts && npx tsx scripts/check-remediation.ts && npx tsx scripts/check-growth-opportunity.ts && npx tsx scripts/check-reorder-plan.ts && npx tsx scripts/check-cash-forecast.ts && npx tsx scripts/check-weekly-brief.ts && npx tsx scripts/check-ai-scope.ts",
     "check:fields": "npx tsx scripts/check-prisma-fields.ts",
     "check:api": "npx tsx scripts/check-api-contract.ts",
-    "check:all": "npm run check:fields && npm run check:mcp && npm run check:tax && npm run check:ketoan"
+    "check:all": "npm run check:fields && npm run check:doanhthu && npm run check:mcp && npm run check:tax && npm run check:ketoan",
+    "check:doanhthu": "npx tsx scripts/check-revenue-status.ts"
   },
   "dependencies": {
     "@google-cloud/bigquery": "^8.1.1",

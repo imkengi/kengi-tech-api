@@ -111,8 +111,11 @@ export const FINANCE_TOOLS: Tool[] = [
         run: async (a, { prisma }: ToolCtx) => {
             const { tu, den, moTa } = khoangNgay(a?.from, a?.to, 30)
 
+            /* Đơn GHI NỢ ('partial') là đơn bán thật: hàng đã giao, kho đã trừ,
+             * doanh thu đã phát sinh — chỉ chưa thu đủ tiền. Bỏ nó ra là báo lãi
+             * hụt mà không hề có lỗi nào hiện lên. */
             const donHang = await prisma.transaction.aggregate({
-                where: { status: 'completed', createdAt: { gte: tu, lte: den } },
+                where: { status: { in: ['completed', 'partial'] }, createdAt: { gte: tu, lte: den } },
                 _count: true, _sum: { total: true, discount: true },
             })
 
@@ -131,7 +134,7 @@ export const FINANCE_TOOLS: Tool[] = [
                  FROM "TransactionItem" ti
                  JOIN "Transaction" t ON t.id = ti."transactionId"
                  JOIN "Product" p ON p.id = ti."productId"
-                 WHERE t.status = 'completed' AND t."createdAt" >= $1 AND t."createdAt" <= $2`,
+                 WHERE t.status IN ('completed','partial') AND t."createdAt" >= $1 AND t."createdAt" <= $2`,
                 tu, den,
             )
             const giaVon = Number(cogsRows?.[0]?.cogs) || 0
@@ -144,7 +147,7 @@ export const FINANCE_TOOLS: Tool[] = [
                      FROM "TransactionItem" ti
                      JOIN "Transaction" t ON t.id = ti."transactionId"
                      JOIN "Product" p ON p.id = ti."productId"
-                     WHERE t.status = 'completed' AND t."createdAt" >= $1 AND t."createdAt" <= $2
+                     WHERE t.status IN ('completed','partial') AND t."createdAt" >= $1 AND t."createdAt" <= $2
                        AND COALESCE(p."costPrice", 0) = 0
                      LIMIT 10`,
                     tu, den,
@@ -481,7 +484,7 @@ export const FINANCE_TOOLS: Tool[] = [
                         COALESCE((SELECT SUM(COALESCE(NULLIF(ti."baseQuantity",0), ti.quantity))
                                   FROM "TransactionItem" ti
                                   JOIN "Transaction" t ON t.id = ti."transactionId"
-                                  WHERE ti."productId" = mh.id AND t.status = 'completed'), 0)::float AS da_ban,
+                                  WHERE ti."productId" = mh.id AND t.status IN ('completed','partial')), 0)::float AS da_ban,
                         -- Đã nhập qua PHIẾU NHẬP (trừ phần đã trả lại NCC)
                         COALESCE((SELECT SUM(ri.quantity - ri."returnedQuantity")
                                   FROM "ImportReceiptItem" ri

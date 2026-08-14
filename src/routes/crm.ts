@@ -558,7 +558,7 @@ router.get('/overview', authMiddleware, requirePermission('customers.view'), asy
                         COALESCE(SUM(total), 0)::float8 AS revenue,
                         COUNT(*)::int AS orders
                  FROM "Transaction"
-                 WHERE status = 'completed' AND "createdAt" >= $1
+                 WHERE status IN ('completed','partial') AND "createdAt" >= $1
                  GROUP BY 1 ORDER BY 1`, from),
             prisma.customer.findMany({
                 orderBy: { totalPurchases: 'desc' }, take: 8,

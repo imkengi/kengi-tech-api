@@ -2590,7 +2590,7 @@ router.get('/store-health', async (req: Request, res: Response) => {
                 FROM "ReturnOrder" ro
                 JOIN "OnlineOrder" o ON o."orderNumber" = ro."originalInvoice"
                 JOIN "Transaction" t ON t."receiptNumber" = ('ONLINE-' || o."orderNumber")
-                WHERE ${OPEN} AND t.status IN ('completed','returned')
+                WHERE ${OPEN} AND t.status IN ('completed','partial','returned')
                   AND NOT EXISTS (SELECT 1 FROM "EInvoice" e WHERE e."transactionId" = t.id AND e.status IN ('issued','SENT'))`),
         ])
         res.json({

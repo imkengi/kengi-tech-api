@@ -410,6 +410,10 @@ router.post('/transactions/auto-reconcile', authMiddleware, requireRole('admin',
             if (t.type === 'credit') {
                 // Khớp với đơn bán hàng theo tổng tiền + ngày.
                 const sales = await prisma.transaction.findMany({
+                    /* loc-trang-thai-co-y: doi soat tien vao chi khop don DA THU DU.
+                     * Don ghi no tra no di duong pay-debt, so tien ve thuong khac
+                     * tong don — khop theo tong don se ghep sai cap va sinh but
+                     * toan sai, kho lan ra hon la khong khop duoc. */
                     where: { total: amount, status: 'completed' },
                     orderBy: { createdAt: 'desc' }, take: 50,
                 }).catch(() => [])
@@ -664,6 +668,10 @@ router.post('/reconcile/auto', authMiddleware, requireRole('admin', 'manager', '
             let matchedExpenseId: string | null = null
             if (t.type === 'credit') {
                 const sales = await prisma.transaction.findMany({
+                    /* loc-trang-thai-co-y: doi soat tien vao chi khop don DA THU DU.
+                     * Don ghi no tra no di duong pay-debt, so tien ve thuong khac
+                     * tong don — khop theo tong don se ghep sai cap va sinh but
+                     * toan sai, kho lan ra hon la khong khop duoc. */
                     where: { total: amount, status: 'completed' },
                     orderBy: { createdAt: 'desc' }, take: 50,
                 }).catch(() => [])

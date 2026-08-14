@@ -190,6 +190,7 @@ export const REPORT_TOOLS: Tool[] = [
 
             // Ghi nợ
             const soDonNo = await prisma.transaction.count({
+                // loc-trang-thai-co-y: dem RIENG don ghi no, dung nghia chi so nay
                 where: { status: 'partial', createdAt: { gte: tu, lte: den } },
             })
 
