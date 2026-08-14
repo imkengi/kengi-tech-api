@@ -729,6 +729,7 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
          * Không đọc được cái nào thì KHÔNG tách — giữ nguyên như cũ, vì tách
          * dựa trên một mốc không biết còn tệ hơn không tách. */
         let ngayCoMat: string | null = null
+        let docDuocDauVet = false     // ít nhất một bảng ĐỌC ĐƯỢC (dù rỗng)
         const somHon = (d: string | null) => {
             if (d && (!ngayCoMat || d < ngayCoMat)) ngayCoMat = d
         }
@@ -736,14 +737,24 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
             const gd = await prisma.transaction.findFirst({
                 orderBy: { createdAt: 'asc' }, select: { createdAt: true },
             })
+            docDuocDauVet = true
             somHon(gd?.createdAt ? ngayISO(new Date(gd.createdAt)) : null)
         } catch { /* không đọc được — bỏ qua */ }
         try {
             const pn = await prisma.importReceipt.findFirst({
                 orderBy: { createdAt: 'asc' }, select: { createdAt: true },
             })
+            docDuocDauVet = true
             somHon(pn?.createdAt ? ngayISO(new Date(pn.createdAt)) : null)
         } catch { /* không đọc được — bỏ qua */ }
+
+        /* Phân biệt "KHÔNG ĐỌC ĐƯỢC" với "ĐỌC ĐƯỢC, KHÔNG CÓ GÌ" — gộp hai cái
+         * này là lỗi kinh điển của cả mảng soát thuế. Bảng đọc được mà rỗng
+         * nghĩa là cửa hàng CHƯA TỪNG ghi một lần mua hay bán nào; khi đó mọi
+         * kỳ đã qua đều nằm trước lúc cửa hàng có dữ liệu, và phần mềm không có
+         * cơ sở nào để nói họ chậm nộp. Còn không đọc được thì đúng là không
+         * biết, giữ nguyên cách báo cũ. */
+        if (!ngayCoMat && docDuocDauVet) ngayCoMat = homNay
 
         const treTrongTam = ngayCoMat ? treHan.filter((d: any) => String(d.dueDate) >= ngayCoMat!) : treHan
         const treTruocKhiDung = ngayCoMat ? treHan.filter((d: any) => String(d.dueDate) < ngayCoMat!) : []
@@ -761,7 +772,10 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
         if (treTruocKhiDung.length > 0) canhBao.push({
             code: 'to-khai-tre-han-truoc-khi-dung', muc: 'vua',
             tieuDe: `${treTruocKhiDung.length} kỳ trước ngày cửa hàng có dữ liệu — cần tự xác nhận`,
-            chiTiet: `Lịch nghĩa vụ được lập cho cả năm, nhưng dữ liệu sớm nhất trong phần mềm chỉ từ ${ngayCoMat}. Phần mềm KHÔNG biết cửa hàng có nghĩa vụ khai với các kỳ trước đó hay không, nên không kết luận là chậm nộp. Nếu đã đăng ký thuế từ trước thì các kỳ này vẫn phải khai; nếu mới thành lập/mới chuyển sang phần mềm thì bỏ qua hoặc xóa mốc.`,
+            chiTiet: (ngayCoMat === homNay
+                ? 'Lịch nghĩa vụ được lập cho cả năm, nhưng cửa hàng chưa ghi một lần mua hay bán nào trong phần mềm.'
+                : `Lịch nghĩa vụ được lập cho cả năm, nhưng dữ liệu sớm nhất trong phần mềm chỉ từ ${ngayCoMat}.`)
+                + ' Phần mềm KHÔNG biết cửa hàng có nghĩa vụ khai với các kỳ trước đó hay không, nên không kết luận là chậm nộp. Nếu đã đăng ký thuế từ trước thì các kỳ này vẫn phải khai; nếu mới thành lập hoặc mới chuyển sang phần mềm thì bỏ qua hoặc xóa mốc cho sạch danh sách.',
             canCu: 'Điều 44 Luật Quản lý thuế 38/2019 — nghĩa vụ khai tính từ khi đăng ký thuế, không tính từ ngày dùng phần mềm.',
             canLam: 'Đối chiếu với ngày ghi trên giấy đăng ký kinh doanh / đăng ký thuế. Kỳ nào thuộc trách nhiệm thì nộp bổ sung; kỳ nào chưa phát sinh nghĩa vụ thì mở Thuế → Báo Cáo Thuế xóa mốc cho sạch danh sách.',
             tienRuiRo: null, soLuong: treTruocKhiDung.length,

@@ -301,8 +301,13 @@ async function main() {
     }
 
     // ── 13. Hồ sơ khai thuế quá hạn ────────────────────────────────────────
+    /* Cửa hàng phải CÓ hoạt động từ đầu năm thì mới nói được chuyện chậm nộp:
+     * store chưa ghi lần mua bán nào sẽ rơi vào nhánh "trước khi dùng" (ca 13c).
+     * Đây là điểm khác giữa "chưa đến lượt bị soi" và "làm sai". */
+    const HOAT_DONG_DAU_NAM = [{ createdAt: '2026-01-05T02:00:00.000Z', total: 5_000_000, status: 'completed' }] as any[]
     {
         const k = khoSach()
+        k.transactions = HOAT_DONG_DAU_NAM
         k.deadlines = [
             { taxType: 'GTGT', period: '2026-06', dueDate: '2026-07-20', status: 'pending' },
             { taxType: 'GTGT', period: '2026-07', dueDate: '2026-08-20', status: 'filed' },
@@ -329,6 +334,7 @@ async function main() {
     }
     {
         const k = khoSach()
+        k.transactions = HOAT_DONG_DAU_NAM
         k.deadlines = [
             { taxType: 'GTGT', period: '2026-05', dueDate: '2026-06-20', status: 'submitted' },
             { taxType: 'GTGT', period: '2026-06', dueDate: '2026-07-20', status: 'overdue' },
@@ -416,6 +422,25 @@ async function main() {
         kiemTra('Không biết cửa hàng có mặt từ bao giờ thì giữ nguyên cách báo cũ',
             lay(h, 'to-khai-tre-han')?.soLuong === 1 && !co(h, 'to-khai-tre-han-truoc-khi-dung'),
             JSON.stringify(lay(h, 'to-khai-tre-han')?.soLuong))
+    }
+    {
+        /* ĐỌC ĐƯỢC nhưng RỖNG là chuyện khác hẳn KHÔNG ĐỌC ĐƯỢC: cửa hàng chưa
+         * từng ghi lần mua bán nào thì không có cơ sở nói họ chậm nộp. */
+        const k = khoSach()
+        k.transactions = []
+        k.imports = []
+        k.deadlines = [
+            { taxType: 'GTGT', period: '2026-01', dueDate: '2026-02-20', status: 'pending' },
+            { taxType: 'GTGT', period: '2026-06', dueDate: '2026-07-20', status: 'pending' },
+        ]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const vua = lay(h, 'to-khai-tre-han-truoc-khi-dung')
+        kiemTra('Cửa hàng chưa mua bán gì thì KHÔNG bị kết luận chậm nộp',
+            !co(h, 'to-khai-tre-han'), JSON.stringify(lay(h, 'to-khai-tre-han')?.viDu))
+        kiemTra('Vẫn nêu đủ các kỳ để chủ cửa hàng tự xác nhận',
+            !!vua && vua.soLuong === 2, JSON.stringify(vua?.soLuong))
+        kiemTra('Câu chữ nói đúng lý do: chưa ghi lần mua bán nào',
+            !!vua && vua.chiTiet.includes('chưa ghi một lần mua hay bán nào'), vua?.chiTiet?.slice(0, 80))
     }
 
     // ── 14. Hóa đơn hủy nhiều bất thường ───────────────────────────────────
