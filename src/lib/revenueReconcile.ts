@@ -241,6 +241,34 @@ export async function doiChieuBaChieu(
         ghiChu.push(`${soDonSanDaCoPhieu} đơn sàn đã có phiếu bán tương ứng trong sổ — chỉ đếm MỘT lần để không thổi phồng doanh thu.`)
     }
 
+    /* ── HOÁ ĐƠN ĐIỆN TỬ BẮT ĐẦU MUỘN HƠN LỊCH SỬ BÁN ───────────────────────
+     *
+     * Cửa hàng chuyển sang phần mềm này giữa chừng thường nhập được lịch sử BÁN
+     * nhưng KHÔNG có hoá đơn điện tử của quãng trước — hồi đó họ phát hành qua
+     * hệ thống khác. Sau khi vế sổ được cắt đúng theo ngày bán (sửa ở trên), các
+     * kỳ cũ bỗng có doanh thu mà không có tờ hoá đơn nào, và phép đối chiếu sẽ
+     * kết luận "toàn bộ doanh thu kỳ này chưa xuất hoá đơn" — đúng cái cáo buộc
+     * nặng nhất của module, dựng trên một khoảng trống dữ liệu.
+     *
+     * Đo trên KENGISTORE: hoá đơn điện tử sớm nhất nằm ở tháng 7/2026, trong khi
+     * bán từ 21/03. Nếu không chặn, riêng tháng 3–6 sẽ thành hơn 4 tỷ "chưa xuất
+     * hoá đơn".
+     *
+     * Không đọc được thì để `null` và giữ nguyên cách kết luận cũ. */
+    let hoaDonDauTien: string | null = null
+    {
+        const r: any[] | null = await thu('eInvoice.dauTien', thieu, () => prisma.eInvoice.findFirst({
+            where: { invoiceType: { not: 'PURCHASE' } },
+            orderBy: { invoiceDate: 'asc' },
+            select: { invoiceDate: true },
+        }).then((x: any) => x ? [x] : []), null as any)
+        const v = r?.[0]?.invoiceDate
+        if (v) hoaDonDauTien = String(v).slice(0, 10)
+    }
+    /* Kỳ đang soát nằm TRỌN trước tờ hoá đơn đầu tiên → không có gì để đối
+     * chiếu, và tuyệt đối không được gọi đó là "chưa xuất hoá đơn". */
+    const kyTruocKhiCoHoaDon = !!hoaDonDauTien && ky.to < hoaDonDauTien
+
     const soSach: ChieuSoSach = {
         duocKetLuan: giaoDich.length > 0 || donSan.length > 0,
         lyDo: (giaoDich.length === 0 && donSan.length === 0)
@@ -416,7 +444,24 @@ export async function doiChieuBaChieu(
     // ---- Xếp rủi ro -----------------------------------------------------
     const ruiRo: RuiRoDoiChieu[] = []
 
-    if (hoaDon.duocKetLuan && soSach.duocKetLuan && lech.chuaXuatHoaDon > 0) {
+    /* Kỳ nằm trọn trước tờ hoá đơn đầu tiên: nêu ra nhưng KHÔNG gọi là chưa xuất
+     * hoá đơn — phần mềm không có hoá đơn của quãng đó, chứ không biết cửa hàng
+     * có phát hành hay không. Xem khối giải thích ở chỗ đo `hoaDonDauTien`. */
+    if (kyTruocKhiCoHoaDon && lech.chuaXuatHoaDon > 0) {
+        ruiRo.push({
+            ma: 'chua-co-lich-su-hoa-don',
+            muc: 'vua',
+            tieuDe: `Kỳ này chưa có hoá đơn điện tử nào trong phần mềm`,
+            vaSao: `Sổ bán hàng ghi ${soSach.tong.toLocaleString('vi-VN')}đ, nhưng tờ hoá đơn điện tử sớm nhất trong phần mềm là ngày ${hoaDonDauTien}. Cửa hàng bắt đầu dùng phần mềm này sau kỳ đang soát, nên KHÔNG kết luận được là chưa xuất hoá đơn — rất có thể hồi đó phát hành qua hệ thống khác.`,
+            canCu: 'Điều 90 Luật Quản lý thuế 38/2019 — nghĩa vụ lập hoá đơn tính theo lần bán, không phụ thuộc phần mềm nào đang dùng.',
+            canLam: `Đối chiếu với hệ thống hoá đơn cũ của kỳ này. Nếu quãng đó thật sự chưa xuất hoá đơn thì mới cần xuất bù; nếu đã xuất qua hệ thống khác thì nhập lại vào đây để các kỳ sau đối chiếu được.`,
+            /* KHÔNG ước truy thu: chưa biết cửa hàng có xuất hoá đơn hồi đó hay
+             * không thì gắn một con số truy thu vào là doạ người bằng số bịa. */
+            soTien: lech.chuaXuatHoaDon,
+        })
+    }
+
+    if (!kyTruocKhiCoHoaDon && hoaDon.duocKetLuan && soSach.duocKetLuan && lech.chuaXuatHoaDon > 0) {
         const tyLe = lech.tyLeXuatHoaDon ?? 0
         ruiRo.push({
             ma: 'chua-xuat-hoa-don',

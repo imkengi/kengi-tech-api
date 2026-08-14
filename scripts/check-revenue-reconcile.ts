@@ -100,6 +100,15 @@ function fakePrisma(k: Kho, loi?: Record<string, boolean>) {
                 no('eInvoice')
                 return (k.invoices || []).filter(h => trongChuoi(String(h.invoiceDate || ''), where?.invoiceDate))
             },
+            /* Tờ hoá đơn bán ra SỚM NHẤT của cả cửa hàng, không giới hạn kỳ —
+             * dùng để biết cửa hàng bắt đầu phát hành trong phần mềm từ bao giờ. */
+            findFirst: async () => {
+                no('eInvoice')
+                const ds = (k.invoices || [])
+                    .filter(h => h.invoiceType !== 'PURCHASE')
+                    .sort((a, b) => String(a.invoiceDate).localeCompare(String(b.invoiceDate)))
+                return ds[0] ?? null
+            },
         },
         bankTransaction: {
             findMany: async ({ where }: any) => {
@@ -448,6 +457,42 @@ async function main() {
         const n3 = r.theoNgay.find(n => n.ngay === '2026-07-03')
         ok('bảng theo ngày xếp đơn vào đúng ngày bán', !!n3 && n3.soSach === 60_000_000, r.theoNgay)
         ok('… và khớp hoá đơn cùng ngày, không lệch', !!n3 && n3.lech === 0, n3)
+    }
+
+    console.log('\n▶ Kỳ nằm trước tờ hoá đơn điện tử đầu tiên\n')
+    /* Sửa cắt kỳ theo ngày bán làm lộ ra hệ quả: cửa hàng chuyển phần mềm giữa
+     * chừng có doanh thu ở các kỳ cũ mà không có tờ hoá đơn nào trong hệ thống —
+     * hồi đó họ phát hành qua chỗ khác. Nếu không chặn, chính bản sửa lại đẻ ra
+     * cáo buộc mới. Đo thật: KENGISTORE có hoá đơn sớm nhất tháng 7/2026 trong
+     * khi bán từ 21/03 — riêng tháng 3–6 sẽ thành hơn 4 tỷ "chưa xuất hoá đơn". */
+    {
+        const r = await doiChieuBaChieu(fakePrisma({
+            transactions: [gd(9, 200_000_000, '2026-07-10')],
+            // Hoá đơn sớm nhất nằm ở tháng 9, tức SAU kỳ đang soát (tháng 7)
+            invoices: [hd('Z1', 5_000_000, { invoiceDate: '2026-09-02' })],
+        }), KY)
+        const cu = r.ruiRo.find(x => x.ma === 'chua-xuat-hoa-don')
+        const moi = r.ruiRo.find(x => x.ma === 'chua-co-lich-su-hoa-don')
+        ok('kỳ trước tờ hoá đơn đầu tiên → KHÔNG kết luận "chưa xuất hoá đơn"', !cu, cu?.tieuDe)
+        ok('… mà nói đúng việc: chưa có lịch sử hoá đơn, mức vừa',
+            !!moi && moi.muc === 'vua', moi?.muc)
+        ok('… nêu ngày tờ hoá đơn sớm nhất để đối chiếu được',
+            !!moi && /2026-09-02/.test(moi.vaSao), moi?.vaSao?.slice(0, 120))
+        ok('… nói rõ rất có thể đã phát hành qua hệ thống khác',
+            !!moi && /hệ thống khác/.test(moi.vaSao))
+        ok('… KHÔNG gắn số truy thu cho việc chưa biết',
+            !!moi && moi.uocTruyThu === undefined, moi?.uocTruyThu)
+    }
+    {
+        // Kỳ NẰM SAU tờ hoá đơn đầu tiên thì vẫn kết luận như cũ — không nới nhầm
+        const r = await doiChieuBaChieu(fakePrisma({
+            transactions: [gd(10, 200_000_000, '2026-07-10')],
+            invoices: [hd('Z2', 5_000_000, { invoiceDate: '2026-07-02' })],
+        }), KY)
+        ok('kỳ đã có lịch sử hoá đơn thì vẫn kêu "chưa xuất hoá đơn"',
+            r.ruiRo.some(x => x.ma === 'chua-xuat-hoa-don'), r.ruiRo.map(x => x.ma))
+        ok('… và không kèm cảnh báo "chưa có lịch sử hoá đơn"',
+            !r.ruiRo.some(x => x.ma === 'chua-co-lich-su-hoa-don'))
     }
 
     console.log(`\n${dat}/${dat + hong} ca đạt`)
