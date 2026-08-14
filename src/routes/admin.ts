@@ -4717,6 +4717,10 @@ router.get('/engine-probe', async (req: Request, res: Response) => {
                             ky: k.ky, diem: k.diem, xepLoai: k.xepLoai,
                             soCanhBao: (k.canhBao || []).length,
                             canhBaoNang: (k.canhBao || []).filter((c: any) => c.muc === 'cao').map((c: any) => c.code),
+                            chiTietNang: (k.canhBao || []).filter((c: any) => c.muc === 'cao').map((c: any) => ({
+                                code: c.code, tieuDe: c.tieuDe, tienRuiRo: c.tienRuiRo,
+                                chiTiet: String(c.chiTiet || '').slice(0, 400),
+                            })),
                             uocTinhPhat: k.uocTinhPhat?.tong ?? null,
                             doanhThu: k.doanhThu,
                         }
