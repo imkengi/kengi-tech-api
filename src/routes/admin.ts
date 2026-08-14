@@ -1830,6 +1830,18 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "AiChat_updatedAt_idx" ON "AiChat"("updatedAt")`)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "AiChat_createdBy_idx" ON "AiChat"("createdBy")`)
 
+                /* Ma dong hang ben san (2026-08-14).
+                 * Webhook GHI cot nay tu lau nhung schema chua bao gio co no:
+                 * ca lenh tao don nem loi "Unknown argument externalItemId" —
+                 * 152 don tu webhook trong 7 ngay khong luu duoc. returnSync
+                 * cung DOC chinh cot nay de khop hang tra, nen doi chieu tra
+                 * hang khong bao gio khop. */
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineOrderItem" ADD COLUMN IF NOT EXISTS "externalItemId" TEXT`)
+
+                /* Repair.customerId — co trong schema nhung log production bao
+                 * "does not exist in the current database" o mot so cua hang. */
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "customerId" TEXT`)
+
                 storeResults.push(`${store.name}: OK`)
             } catch (e: any) {
                 storeResults.push(`${store.name}: ${e.message}`)

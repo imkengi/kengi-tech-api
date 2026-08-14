@@ -1844,6 +1844,9 @@ model OnlineOrderItem {
   id            String  @id @default(cuid())
   onlineOrderId String
   productId     String?
+  /// Ma dong hang ben san (Shopee item_id / TikTok order_line_id / Lazada order_item_id).
+  /// Webhook va returnSync deu dua vao no de khop dong hang tra ve dung san pham.
+  externalItemId String?
   productName   String
   sku           String?
   quantity      Int

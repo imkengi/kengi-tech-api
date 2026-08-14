@@ -41,15 +41,64 @@ function docSchema(file: string): Map<string, Set<string>> {
 const schemaStore = docSchema(path.join(GOC, 'prisma/schema-store.prisma'))
 const schemaRegistry = docSchema(path.join(GOC, 'prisma/schema.prisma'))
 
+/**
+ * Bản đồ QUAN HỆ: "OnlineOrder.items" → "OnlineOrderItem".
+ *
+ * Cần để soi được khối ghi LỒNG: `data: { items: { create: [{ … }] } }`. Các
+ * khoá bên trong đó thuộc model KHÁC, và đó chính là kẽ hở đã để lọt
+ * `OnlineOrderItem.externalItemId` — cột không tồn tại, làm 152 đơn từ webhook
+ * trong 7 ngày không lưu được.
+ */
+function docQuanHe(file: string): Map<string, string> {
+    const ra = new Map<string, string>()
+    let noiDung: string
+    try { noiDung = fs.readFileSync(file, 'utf8') } catch { return ra }
+    for (const m of noiDung.matchAll(/^model\s+(\w+)\s*\{([\s\S]*?)^\}/gm)) {
+        for (const dong of m[2].split('\n')) {
+            const t = dong.trim()
+            if (!t || t.startsWith('//') || t.startsWith('@@')) continue
+            /* Trường quan hệ: tên kiểu bắt đầu bằng CHỮ HOA (Product, Item[]…).
+             * Kiểu vô hướng (String, Int, Float…) cũng viết hoa nên phải loại
+             * bằng danh sách kiểu gốc của Prisma. */
+            const f = t.match(/^(\w+)\s+(\w+)(\[\])?/)
+            if (!f) continue
+            const kieu = f[2]
+            if (/^(String|Int|Float|Boolean|DateTime|Json|Decimal|BigInt|Bytes)$/.test(kieu)) continue
+            if (!/^[A-Z]/.test(kieu)) continue
+            ra.set(`${m[1]}.${f[1]}`, kieu)
+        }
+    }
+    return ra
+}
+
+const quanHe = new Map<string, string>([
+    ...docQuanHe(path.join(GOC, 'prisma/schema-store.prisma')),
+    ...docQuanHe(path.join(GOC, 'prisma/schema.prisma')),
+])
+
 /** prisma.taxDeclaration → TaxDeclaration */
 function tenModel(bien: string): string {
     return bien.charAt(0).toUpperCase() + bien.slice(1)
 }
 
-function truongCua(bien: string): Set<string> | null {
+/**
+ * Chọn schema theo BIẾN CLIENT đứng trước, không phải cứ thử store rồi tới registry.
+ *
+ * Cả hai schema đều có một model tên `Store`, và bản trong schema-store KHÔNG có
+ * các cờ chỉ tồn tại ở sổ đăng ký (hasAiJobs, hasFanpages…). Tra store trước thì
+ * `registryPrisma.store.updateMany({ data: { hasAiJobs } })` bị báo oan — bản đầu
+ * của phép soát này cho ra đúng 6 lỗi oan như vậy.
+ */
+function truongCua(bien: string, truoc = ''): Set<string> | null {
     const ten = tenModel(bien)
-    return schemaStore.get(ten) || schemaRegistry.get(ten) || null
+    const laRegistry = /registryPrisma|registry\s*as\s*any/i.test(truoc)
+    return laRegistry
+        ? (schemaRegistry.get(ten) || schemaStore.get(ten) || null)
+        : (schemaStore.get(ten) || schemaRegistry.get(ten) || null)
 }
+
+/** Đoạn mã ngay trước vị trí `i` — dùng để nhận ra client nào đang gọi. */
+const nhinLui = (s: string, i: number) => s.slice(Math.max(0, i - 40), i)
 
 // ── 2. Cắt khối ngoặc cân bằng ───────────────────────────────────────────────
 /** Trả nội dung bên trong cặp ngoặc bắt đầu tại vị trí mo (ký tự '{') */
@@ -168,9 +217,9 @@ let soKiem = 0
 
 for (const file of quet(path.join(GOC, 'src'))) {
     const s = boRuotChuoi(fs.readFileSync(file, 'utf8'))
-    for (const m of s.matchAll(/\bprisma\.(\w+)\.(findMany|findFirst|findUnique|count|aggregate|groupBy)\s*\(/g)) {
+    for (const m of s.matchAll(/\b(?:\w+\.)?(\w+)\.(findMany|findFirst|findUnique|count|aggregate|groupBy)\s*\(/g)) {
         const bien = m[1]
-        const truong = truongCua(bien)
+        const truong = truongCua(bien, nhinLui(s, m.index!))
         if (!truong) continue                        // không phải model → bỏ qua
 
         const mo = s.indexOf('{', m.index! + m[0].length - 1)
@@ -222,11 +271,73 @@ interface LoiGhi { file: string; dong: number; model: string; truong: string; go
 const loiGhi: LoiGhi[] = []
 let soKiemGhi = 0
 
+/**
+ * Soi một khối ghi, và ĐI XUỐNG các khối ghi lồng theo quan hệ.
+ *
+ * `data: { items: { create: [{ … }] } }` — các khoá bên trong thuộc model của
+ * quan hệ `items`, không phải model gốc. Không đi xuống thì bỏ sót đúng lớp lỗi
+ * đã làm 152 đơn webhook không lưu được.
+ *
+ * Quan hệ không tra được model đích thì DỪNG, không đoán — thà bỏ sót còn hơn
+ * báo oan.
+ */
+function soatKhoiGhi(
+    noiDung: string, model: string, file: string, dong: number,
+    sau = 0, laRegistry = false,
+) {
+    if (sau > 3) return                       // chặn lồng quá sâu, gần như luôn là dữ liệu JSON
+    const truong = laRegistry
+        ? (schemaRegistry.get(model) || schemaStore.get(model))
+        : (schemaStore.get(model) || schemaRegistry.get(model))
+    if (!truong) return
+
+    for (const cot of khoaCapNgoai(noiDung)) {
+        if (TU_KHOA.has(cot)) continue
+        soKiemGhi++
+        if (truong.has(cot)) continue
+        const goiY = [...truong].filter(t =>
+            t.toLowerCase().includes(cot.toLowerCase().slice(0, 5)) ||
+            cot.toLowerCase().includes(t.toLowerCase().slice(0, 5)))
+        loiGhi.push({ file: path.relative(GOC, file), dong, model, truong: cot, goiY: goiY.slice(0, 4) })
+    }
+
+    /* Đi xuống: với mỗi khoá là QUAN HỆ, tìm khối create/update/upsert bên trong
+     * rồi soi tiếp bằng model đích. */
+    for (const cot of khoaCapNgoai(noiDung)) {
+        const dich = quanHe.get(`${model}.${cot}`)
+        if (!dich) continue
+        const viTri = noiDung.search(new RegExp(`(^|[\\s,{])${cot}\\s*:\\s*\\{`))
+        if (viTri < 0) continue
+        const moCon = noiDung.indexOf('{', viTri + cot.length)
+        const khoiCon = khoiTai(noiDung, moCon)
+        if (!khoiCon) continue
+        for (const lenh of ['create', 'update', 'upsert', 'createMany']) {
+            /* KHÔNG đòi ngay sau dấu hai chấm phải là `{` hoặc `[`: mã thật hay
+             * viết `create: don.items.map(i => ({ … }))` — một lời gọi hàm. Lấy
+             * dấu `{` ĐẦU TIÊN sau đó là tới đúng thân đối tượng, dù nó nằm sau
+             * `[`, sau `(` hay sau cả một chuỗi phương thức.
+             *
+             * Mảng nhiều phần tử thì soi phần tử đầu là đủ — chúng cùng hình
+             * dạng vì đều do một phép map sinh ra. */
+            const m2 = khoiCon.noiDung.search(new RegExp(`(^|[\\s,{])${lenh}\\s*:`))
+            if (m2 < 0) continue
+            const moThat = khoiCon.noiDung.indexOf('{', m2 + lenh.length)
+            if (moThat < 0) continue
+            const khoiGhiCon = khoiTai(khoiCon.noiDung, moThat)
+            if (khoiGhiCon) soatKhoiGhi(khoiGhiCon.noiDung, dich, file, dong, sau + 1, laRegistry)
+        }
+    }
+}
+
 for (const file of quet(path.join(GOC, 'src'))) {
     const s = boRuotChuoi(fs.readFileSync(file, 'utf8'))
-    for (const m of s.matchAll(new RegExp(`\\b(?:prisma|tx)\\.(\\w+)\\.(?:${LENH_GHI})\\s*\\(`, 'g'))) {
+    /* Nhận MỌI biến giữ client, không chỉ `prisma`/`tx`: mã thật còn dùng
+     * `storePrisma`, `sp`, `registryPrisma`… Bản đầu chỉ khớp hai tên nên bỏ qua
+     * trọn file webhooks.ts — đúng chỗ giấu lỗi 152 đơn không lưu được.
+     * Tên model không tra được thì bỏ qua, nên nới rộng thế này không báo oan. */
+    for (const m of s.matchAll(new RegExp(`\\b(?:\\w+\\.)?(\\w+)\\.(?:${LENH_GHI})\\s*\\(`, 'g'))) {
         const bien = m[1]
-        const truong = truongCua(bien)
+        const truong = truongCua(bien, nhinLui(s, m.index!))
         if (!truong) continue
 
         const mo = s.indexOf('{', m.index! + m[0].length - 1)
@@ -249,19 +360,11 @@ for (const file of quet(path.join(GOC, 'src'))) {
 
                 const khoiGhi = khoiTai(khoi.noiDung, i + k[0].length - 1)
                 if (!khoiGhi) break
-                for (const cot of khoaCapNgoai(khoiGhi.noiDung)) {
-                    if (TU_KHOA.has(cot)) continue
-                    soKiemGhi++
-                    if (truong.has(cot)) continue
-                    const dong = s.slice(0, m.index).split('\n').length
-                    const goiY = [...truong].filter(t =>
-                        t.toLowerCase().includes(cot.toLowerCase().slice(0, 5)) ||
-                        cot.toLowerCase().includes(t.toLowerCase().slice(0, 5)))
-                    loiGhi.push({
-                        file: path.relative(GOC, file), dong,
-                        model: tenModel(bien), truong: cot, goiY: goiY.slice(0, 4),
-                    })
-                }
+                soatKhoiGhi(
+                    khoiGhi.noiDung, tenModel(bien), file,
+                    s.slice(0, m.index).split('\n').length,
+                    0, /registryPrisma|registry\s*as\s*any/i.test(nhinLui(s, m.index!)),
+                )
                 break
             }
         }
