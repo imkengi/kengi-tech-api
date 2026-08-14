@@ -78,6 +78,9 @@ const PHAN_CONG: Record<string, { aiLam: NguoiLam; congSuc: CongSuc }> = {
     'thieu-to-khai': { aiLam: 'ke-toan', congSuc: 'nhanh' },
     'to-khai-tre-han': { aiLam: 'ke-toan', congSuc: 'nhanh' },
     'to-khai-tre-han-uoc': { aiLam: 'ke-toan', congSuc: 'nhanh' },
+    /* Việc này là ĐỐI CHIẾU giấy đăng ký kinh doanh chứ không phải nộp tờ khai,
+     * nên giao cho chủ cửa hàng — kế toán không cầm giấy tờ pháp lý đó. */
+    'to-khai-tre-han-truoc-khi-dung': { aiLam: 'chu-cua-hang', congSuc: 'nhanh' },
     'hoa-don-nhay-so': { aiLam: 'ke-toan', congSuc: 'trung-binh' },
     'hoa-don-trung-so': { aiLam: 'ke-toan', congSuc: 'nhanh' },
     'hoa-don-lui-ngay': { aiLam: 'thu-ngan', congSuc: 'nhanh' },

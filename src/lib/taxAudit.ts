@@ -712,14 +712,60 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
          * chỗ nào ghi cho bảng này, nên mốc người dùng đã đánh dấu 'submitted'
          * vẫn bị tính quá hạn ở mức cao và không cách nào gỡ. */
         const treHan = (dl || []).filter((d: any) => mocChuaXong(d.status) && String(d.dueDate) < homNay)
-        if (treHan.length > 0) canhBao.push({
+
+        /* Lịch nghĩa vụ được gieo cho CẢ NĂM, nên một cửa hàng mới mở tháng 8
+         * vẫn có mốc tháng 1..7 và tất cả lập tức thành "quá hạn". Phần mềm
+         * KHÔNG có ngày đăng ký kinh doanh, nên không thể biết cửa hàng có
+         * nghĩa vụ với những kỳ đó hay không: có thể hộ đã đăng ký từ tháng 1
+         * và khai ngoài hệ thống, cũng có thể tháng 8 mới thành lập. Hai tình
+         * huống này cách xử lý khác hẳn nhau, nên tách làm hai cảnh báo thay vì
+         * gộp vào một câu khẳng định.
+         *
+         * Mốc "có mặt trong phần mềm" = sớm nhất trong (giao dịch bán đầu tiên,
+         * phiếu nhập hàng đầu tiên). Phải có phiếu nhập: cửa hàng thường mua
+         * hàng vài tháng trước khi bán được đồng nào, lấy mỗi ngày bán đầu tiên
+         * sẽ bỏ qua quãng đó và tha oan mấy kỳ lẽ ra phải khai.
+         *
+         * Không đọc được cái nào thì KHÔNG tách — giữ nguyên như cũ, vì tách
+         * dựa trên một mốc không biết còn tệ hơn không tách. */
+        let ngayCoMat: string | null = null
+        const somHon = (d: string | null) => {
+            if (d && (!ngayCoMat || d < ngayCoMat)) ngayCoMat = d
+        }
+        try {
+            const gd = await prisma.transaction.findFirst({
+                orderBy: { createdAt: 'asc' }, select: { createdAt: true },
+            })
+            somHon(gd?.createdAt ? ngayISO(new Date(gd.createdAt)) : null)
+        } catch { /* không đọc được — bỏ qua */ }
+        try {
+            const pn = await prisma.importReceipt.findFirst({
+                orderBy: { createdAt: 'asc' }, select: { createdAt: true },
+            })
+            somHon(pn?.createdAt ? ngayISO(new Date(pn.createdAt)) : null)
+        } catch { /* không đọc được — bỏ qua */ }
+
+        const treTrongTam = ngayCoMat ? treHan.filter((d: any) => String(d.dueDate) >= ngayCoMat!) : treHan
+        const treTruocKhiDung = ngayCoMat ? treHan.filter((d: any) => String(d.dueDate) < ngayCoMat!) : []
+
+        if (treTrongTam.length > 0) canhBao.push({
             code: 'to-khai-tre-han', muc: 'cao',
-            tieuDe: `${treHan.length} hồ sơ khai thuế đã quá hạn`,
-            chiTiet: `Quá hạn lâu nhất: ${treHan.map((d: any) => d.dueDate).sort()[0]}. Chậm nộp hồ sơ bị phạt riêng, độc lập với tiền thuế; chậm nộp tiền thuế còn tính thêm 0,03%/ngày.`,
+            tieuDe: `${treTrongTam.length} hồ sơ khai thuế đã quá hạn`,
+            chiTiet: `Quá hạn lâu nhất: ${treTrongTam.map((d: any) => d.dueDate).sort()[0]}. Chậm nộp hồ sơ bị phạt riêng, độc lập với tiền thuế; chậm nộp tiền thuế còn tính thêm 0,03%/ngày.`,
             canCu: 'Điều 13 NĐ 125/2020 — phạt chậm nộp hồ sơ khai thuế; Điều 59 Luật Quản lý thuế 38/2019 — tiền chậm nộp.',
-            canLam: 'Nộp ngay hồ sơ còn thiếu; nộp trước khi cơ quan thuế lập biên bản thì mức phạt nhẹ hơn đáng kể.',
-            tienRuiRo: null, soLuong: treHan.length,
-            viDu: treHan.slice(0, 5).map((d: any) => `${d.taxType} kỳ ${d.period} · hạn ${d.dueDate}`),
+            canLam: 'Nộp ngay hồ sơ còn thiếu; nộp trước khi cơ quan thuế lập biên bản thì mức phạt nhẹ hơn đáng kể. Kỳ nào đã nộp rồi thì mở Thuế → Báo Cáo Thuế đánh dấu lại để không bị tính nữa.',
+            tienRuiRo: null, soLuong: treTrongTam.length,
+            viDu: treTrongTam.slice(0, 5).map((d: any) => `${d.taxType} kỳ ${d.period} · hạn ${d.dueDate}`),
+        })
+
+        if (treTruocKhiDung.length > 0) canhBao.push({
+            code: 'to-khai-tre-han-truoc-khi-dung', muc: 'vua',
+            tieuDe: `${treTruocKhiDung.length} kỳ trước ngày cửa hàng có dữ liệu — cần tự xác nhận`,
+            chiTiet: `Lịch nghĩa vụ được lập cho cả năm, nhưng dữ liệu sớm nhất trong phần mềm chỉ từ ${ngayCoMat}. Phần mềm KHÔNG biết cửa hàng có nghĩa vụ khai với các kỳ trước đó hay không, nên không kết luận là chậm nộp. Nếu đã đăng ký thuế từ trước thì các kỳ này vẫn phải khai; nếu mới thành lập/mới chuyển sang phần mềm thì bỏ qua hoặc xóa mốc.`,
+            canCu: 'Điều 44 Luật Quản lý thuế 38/2019 — nghĩa vụ khai tính từ khi đăng ký thuế, không tính từ ngày dùng phần mềm.',
+            canLam: 'Đối chiếu với ngày ghi trên giấy đăng ký kinh doanh / đăng ký thuế. Kỳ nào thuộc trách nhiệm thì nộp bổ sung; kỳ nào chưa phát sinh nghĩa vụ thì mở Thuế → Báo Cáo Thuế xóa mốc cho sạch danh sách.',
+            tienRuiRo: null, soLuong: treTruocKhiDung.length,
+            viDu: treTruocKhiDung.slice(0, 5).map((d: any) => `${d.taxType} kỳ ${d.period} · hạn ${d.dueDate}`),
         })
     } catch { /* bỏ qua */ }
 

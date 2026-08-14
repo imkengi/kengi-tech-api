@@ -57,13 +57,25 @@ function fakePrisma(k: Kho) {
         },
         eInvoice: { findMany: async ({ where }: any = {}) => k.invoices.filter(i => chuoi(i.invoiceDate, where?.invoiceDate)) },
         expense: { findMany: async ({ where }: any = {}) => k.expenses.filter(e => ngay(e.date, where?.date)) },
-        importReceipt: { findMany: async ({ where }: any = {}) => k.imports.filter(i => ngay(i.createdAt, where?.createdAt)) },
+        importReceipt: {
+            findFirst: async () => {
+                const ds = [...k.imports].sort((a, b) =>
+                    new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+                return ds[0] ?? null
+            },
+            findMany: async ({ where }: any = {}) => k.imports.filter(i => ngay(i.createdAt, where?.createdAt)),
+        },
         product: {
             findMany: async ({ where }: any = {}) => where?.stock?.lt !== undefined
                 ? k.products.filter(p => (p.stock ?? 0) < where.stock.lt)
                 : k.products,
         },
         transaction: {
+            findFirst: async () => {
+                const ds = [...k.transactions].sort((a, b) =>
+                    new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+                return ds[0] ?? null
+            },
             findMany: async ({ where }: any = {}) => k.transactions.filter(t => ngay(t.createdAt, where?.createdAt)),
             // Dùng cho đường lùi khi sổ doanh thu HKD nhập tay còn rỗng
             aggregate: async ({ where }: any = {}) => ({
@@ -337,6 +349,73 @@ async function main() {
         const h = await kiemTraThue(fakePrisma(k), KY)
         kiemTra('Trạng thái lạ thì không kết luận quá hạn',
             !co(h, 'to-khai-tre-han'), JSON.stringify(lay(h, 'to-khai-tre-han')?.soLuong))
+    }
+
+    // ── 13b. Kỳ trước ngày cửa hàng có dữ liệu ─────────────────────────────
+    /* Lịch gieo cho cả năm nên cửa hàng mở tháng 8 vẫn có mốc tháng 1..7 và tất
+     * cả lập tức "quá hạn". Phần mềm không có ngày đăng ký kinh doanh nên không
+     * được khẳng định — tách ra cảnh báo riêng, mức vừa. */
+    {
+        const k = khoSach()
+        k.transactions = [{ createdAt: '2026-08-01T02:00:00.000Z', total: 1_000_000, status: 'completed' }] as any
+        k.deadlines = [
+            { taxType: 'GTGT', period: '2026-01', dueDate: '2026-02-20', status: 'pending' },
+            { taxType: 'GTGT', period: '2026-02', dueDate: '2026-03-20', status: 'pending' },
+            { taxType: 'GTGT', period: '2026-07', dueDate: '2026-08-20', status: 'pending' },
+        ]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const cao = lay(h, 'to-khai-tre-han')
+        const vua = lay(h, 'to-khai-tre-han-truoc-khi-dung')
+        kiemTra('Kỳ trước ngày có dữ liệu KHÔNG bị kết luận chậm nộp', !cao, JSON.stringify(cao?.viDu))
+        kiemTra('Nhưng vẫn nêu ra để chủ cửa hàng tự xác nhận, mức vừa',
+            !!vua && vua.muc === 'vua' && vua.soLuong === 2, JSON.stringify(vua?.soLuong))
+        kiemTra('Câu chữ nói rõ phần mềm KHÔNG biết, không phải cửa hàng làm sai',
+            !!vua && vua.chiTiet.includes('KHÔNG biết'), vua?.chiTiet?.slice(0, 60))
+    }
+    {
+        // Mốc nằm TRONG quãng cửa hàng đã hoạt động thì vẫn nói thẳng, mức cao
+        const k = khoSach()
+        k.transactions = [{ createdAt: '2026-01-05T02:00:00.000Z', total: 1_000_000, status: 'completed' }] as any
+        k.deadlines = [
+            { taxType: 'GTGT', period: '2026-06', dueDate: '2026-07-20', status: 'pending' },
+        ]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const cao = lay(h, 'to-khai-tre-han')
+        kiemTra('Cửa hàng đã hoạt động từ đầu năm thì kỳ quá hạn vẫn báo mức cao',
+            !!cao && cao.muc === 'cao' && cao.soLuong === 1, JSON.stringify(cao?.soLuong))
+        kiemTra('Không kèm cảnh báo "trước khi dùng" khi không có kỳ nào như vậy',
+            !co(h, 'to-khai-tre-han-truoc-khi-dung'))
+    }
+    {
+        /* Mua hàng TRƯỚC khi bán được đồng nào — mốc phải lấy từ phiếu nhập,
+         * nếu chỉ nhìn ngày bán đầu tiên thì tha oan mấy kỳ lẽ ra phải khai. */
+        const k = khoSach() as any
+        k.transactions = [{ createdAt: '2026-08-01T02:00:00.000Z', total: 1_000_000, status: 'completed' }]
+        k.imports = [{ createdAt: '2026-03-01T02:00:00.000Z', totalCost: 5_000_000, status: 'completed' }]
+        k.deadlines = [
+            { taxType: 'GTGT', period: '2026-01', dueDate: '2026-02-20', status: 'pending' },
+            { taxType: 'GTGT', period: '2026-04', dueDate: '2026-05-20', status: 'pending' },
+        ]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        kiemTra('Lấy mốc sớm nhất giữa giao dịch bán đầu và phiếu nhập đầu',
+            lay(h, 'to-khai-tre-han')?.soLuong === 1
+            && lay(h, 'to-khai-tre-han-truoc-khi-dung')?.soLuong === 1,
+            JSON.stringify([lay(h, 'to-khai-tre-han')?.soLuong, lay(h, 'to-khai-tre-han-truoc-khi-dung')?.soLuong]))
+    }
+    {
+        // Không đọc được mốc nào thì KHÔNG tách — giữ nguyên hành vi cũ
+        const k = khoSach()
+        k.transactions = []
+        const p: any = fakePrisma(k)
+        p.transaction.findFirst = async () => { throw new Error('mất bảng') }
+        p.importReceipt.findFirst = async () => { throw new Error('mất bảng') }
+        k.deadlines = [
+            { taxType: 'GTGT', period: '2026-01', dueDate: '2026-02-20', status: 'pending' },
+        ]
+        const h = await kiemTraThue(p, KY)
+        kiemTra('Không biết cửa hàng có mặt từ bao giờ thì giữ nguyên cách báo cũ',
+            lay(h, 'to-khai-tre-han')?.soLuong === 1 && !co(h, 'to-khai-tre-han-truoc-khi-dung'),
+            JSON.stringify(lay(h, 'to-khai-tre-han')?.soLuong))
     }
 
     // ── 14. Hóa đơn hủy nhiều bất thường ───────────────────────────────────
