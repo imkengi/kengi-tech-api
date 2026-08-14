@@ -227,6 +227,33 @@ async function main() {
     ok('tổng vốn kẹt vào bảng tóm tắt', rDong.tomTat.vonKetODongHang === 6_000_000, rDong.tomTat.vonKetODongHang)
     ok('KHÔNG đề xuất đặt thêm hàng đọng', dong?.nenDat === 0, dong?.nenDat)
 
+    console.log('\n▶ Tồn ÂM — lệch sổ sách, không phải nhu cầu chưa đáp ứng\n')
+
+    /* Ca lộ ra khi chạy trên dữ liệu thật 14/08/2026: một cửa hàng có 286 mã tồn
+     * âm, sâu nhất -557, và bảng đề xuất báo "cần bỏ ngay 2,5 TỶ" vì công thức
+     * `canCo - ton - ve` cộng thẳng phần âm vào lượng đặt — như thể có 557 khách
+     * đang xếp hàng chờ. */
+    const tonAm = await keHoachDatHang(fakePrisma({
+        ban: { A1: Array.from({ length: 90 }, () => 5) },
+        hang: [{ id: 'A1', name: 'Hàng tồn âm', sku: 'A1', stock: -500, costPrice: 100_000, sellingPrice: 150_000, categoryId: null }],
+    }))
+    const mA = [...tonAm.hetHang, ...tonAm.canDat, ...tonAm.tonDong].find(m => m.productId === 'A1')
+    ok('tồn âm KHÔNG bị cộng vào lượng nên đặt', !!mA && mA.nenDat < 200, mA?.nenDat)
+    ok('… nên tiền cần bỏ không bị thổi lên', tonAm.tomTat.tienCanBoNgay < 20_000_000, tonAm.tomTat.tienCanBoNgay)
+    ok('đếm riêng số mã tồn âm', tonAm.tomTat.soMaTonAm === 1, tonAm.tomTat.soMaTonAm)
+    ok('… và tổng phần âm', tonAm.tomTat.tongTonAm === -500, tonAm.tomTat.tongTonAm)
+    ok('cảnh báo tại mã nói rõ là lệch sổ sách',
+        !!mA && mA.canhBao.some(c => /lệch sổ sách/.test(c)), mA?.canhBao)
+    ok('ghi chú tổng bảo đi SOÁT KHO chứ không phải đặt hàng',
+        tonAm.ghiChu.some(g => /soát kho, không phải đặt hàng/.test(g)), tonAm.ghiChu)
+
+    const tonDuong = await keHoachDatHang(fakePrisma({
+        ban: { B1: Array.from({ length: 90 }, () => 5) },
+        hang: [{ id: 'B1', name: 'Hàng bình thường', sku: 'B1', stock: 10, costPrice: 100_000, sellingPrice: 150_000, categoryId: null }],
+    }))
+    ok('không có tồn âm → KHÔNG dựng ghi chú thừa',
+        tonDuong.tomTat.soMaTonAm === 0 && !tonDuong.ghiChu.some(g => /soát kho, không phải đặt hàng/.test(g)))
+
     console.log('\n▶ Đọc hỏng bảng — không được biến thành "hàng không bán được"\n')
 
     const rHong = await keHoachDatHang(fakePrisma({

@@ -292,6 +292,20 @@ export async function duBaoDongTien(
     }
     const ngayCanTien = ngay.find(n => n.soDu < 0)?.ngay ?? null
 
+    /* CHI PHÍ GHI SỔ QUÁ MỎNG SO VỚI TIỀN THU → đường số dư đang lạc quan giả.
+     *
+     * Đo trên dữ liệu thật 14/08/2026: một cửa hàng thu ước 95,6 triệu/ngày mà
+     * chi phí vận hành ghi sổ chỉ 400 nghìn/ngày — 0,4%. Không cửa hàng nào vận
+     * hành với chi phí bằng 0,4% doanh thu; nghĩa là tiền thuê, lương, điện nước
+     * chưa được ghi. Lịch tiền khi đó vẽ ra một đường đi lên rất đẹp và sai.
+     *
+     * Ngưỡng 5% đặt rất rộng để không làm phiền cửa hàng có biên lãi mỏng thật;
+     * dưới mức đó gần như chắc chắn là CHƯA GHI ĐỦ chứ không phải chi ít. */
+    if (thuMoiNgay > 0 && chiVanHanhMoiNgay >= 0 && chiVanHanhMoiNgay < thuMoiNgay * 0.05) {
+        const tyLe = Math.round((chiVanHanhMoiNgay / thuMoiNgay) * 1000) / 10
+        canhBao.push(`Chi phí vận hành đã ghi sổ chỉ bằng ${tyLe}% tiền thu (${lam(chiVanHanhMoiNgay).toLocaleString('vi-VN')}đ so với ${lam(thuMoiNgay).toLocaleString('vi-VN')}đ mỗi ngày). Nhiều khả năng tiền thuê, lương, điện nước chưa được ghi vào sổ chi phí — nếu vậy thì số dư thật sẽ THẤP HƠN đường vẽ ở đây khá nhiều.`)
+    }
+
     if (!coSoDuDau) {
         canhBao.push('Chưa có số dư tài khoản để làm điểm xuất phát, nên đường số dư dưới đây chỉ cho thấy TIỀN VÀO RA CHÊNH NHAU bao nhiêu, không phải số dư thật. Nhập số dư ngân hàng ở mục Tài khoản để lịch này dùng được.')
     } else if (ngayCanTien) {

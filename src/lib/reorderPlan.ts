@@ -74,6 +74,9 @@ export interface KetQuaDatHang {
         soMaCanDat: number
         soMaTonDong: number
         soMaChuaDuLichSu: number
+        /** Ma dang co ton AM — dau hieu lech so sach, phai soat kho chu khong phai dat hang. */
+        soMaTonAm: number
+        tongTonAm: number
         tienCanBoNgay: number
         matMoiNgayDoHetHang: number
         vonKetODongHang: number
@@ -339,7 +342,23 @@ export async function keHoachDatHang(
              * quãng chờ thì hàng vừa về đã lại chạm điểm đặt, tuần nào cũng phải
              * đặt gấp. */
             const canCo = Math.ceil(mu * (cho + chuKyDat) + tonAnToan)
-            nenDat = Math.max(0, canCo - ton - ve)
+            /* TỒN ÂM KHÔNG PHẢI NHU CẦU CHƯA ĐÁP ỨNG.
+             *
+             * Công thức `canCo - ton - ve` với ton = -557 sẽ cộng thêm 557 cái
+             * vào lượng đề xuất đặt, như thể có 557 khách đang xếp hàng chờ.
+             * Thực tế tồn âm gần như luôn là LỆCH SỔ SÁCH (bán không trừ kho,
+             * nhập chưa ghi, đồng bộ sót) — đặt hàng theo nó là mua thừa bằng
+             * đúng phần lệch.
+             *
+             * Đo trên dữ liệu thật 14/08/2026: một cửa hàng có 286 mã tồn âm,
+             * sâu nhất -557, và bảng đề xuất báo "cần bỏ ngay 2,5 TỶ". Chốt tồn
+             * về 0 khi tính, rồi nói riêng chỗ tồn âm để người dùng đi soát kho
+             * — đó mới là việc cần làm, không phải đi mua hàng. */
+            const tonDeTinh = Math.max(0, ton)
+            nenDat = Math.max(0, canCo - tonDeTinh - ve)
+            if (ton < 0) {
+                canhBao.push(`Tồn đang ÂM ${Math.abs(lam(ton))} — gần như chắc chắn là lệch sổ sách, không phải hàng đang thiếu. Soát lại kho trước khi đặt; số đề xuất ở đây đã bỏ qua phần âm.`)
+            }
 
             if (ton <= 0) co = 'het-hang'
             else if (ton + ve <= diemDatHang) co = 'can-dat-ngay'
@@ -397,6 +416,14 @@ export async function keHoachDatHang(
     if (hetHang.length > 0 || canDat.length > 0) {
         ghiChu.push('Sức bán đo được ở mã từng hết hàng LUÔN thấp hơn nhu cầu thật — ngày hết hàng bán bằng 0 không phải vì không ai muốn mua. Hệ thống chưa lưu lịch sử tồn nên không bù lại được phần này.')
     }
+    /* Tồn âm phải NÓI RA ở cấp tổng, không chỉ nằm trong cảnh báo từng mã: nó
+     * đổi bản chất của cả bảng đề xuất. Người đọc thấy "cần bỏ ngay X tỷ" mà
+     * không biết một phần đến từ lệch sổ sách thì sẽ đi mua thật. */
+    const soTonAm = tatCa.filter(m => m.tonHienTai < 0).length
+    if (soTonAm > 0) {
+        ghiChu.push(`${soTonAm} mã đang có tồn ÂM. Đó gần như luôn là lệch sổ sách (bán không trừ kho, nhập chưa ghi, đồng bộ sót) chứ không phải hàng đang thiếu — số đề xuất đặt ở đây đã BỎ QUA phần âm để không bảo bạn mua thừa đúng bằng phần lệch. Việc cần làm với nhóm này là soát kho, không phải đặt hàng.`)
+    }
+
     ghiChu.push(`Tồn an toàn tính theo mức phục vụ ${Math.round(mucPhucVu * 100)}%: cứ 100 lần đặt hàng thì khoảng ${Math.round(mucPhucVu * 100)} lần không bị hụt giữa lúc chờ hàng. Muốn chắc hơn thì nâng mức này lên, đổi lại vốn nằm trong kho dày hơn.`)
 
     return {
@@ -408,6 +435,8 @@ export async function keHoachDatHang(
             soMaCanDat: canDat.length,
             soMaTonDong: tonDong.length,
             soMaChuaDuLichSu: tatCa.filter(m => m.co === 'chua-du-lich-su').length,
+            soMaTonAm: tatCa.filter(m => m.tonHienTai < 0).length,
+            tongTonAm: lam(tatCa.reduce((s2, m) => s2 + Math.min(0, m.tonHienTai), 0)),
             tienCanBoNgay: lam([...hetHang, ...canDat].reduce((s, m) => s + m.tienCanBo, 0)),
             matMoiNgayDoHetHang: lam(hetHang.reduce((s, m) => s + m.matMoiNgay, 0)),
             vonKetODongHang: lam(tonDong.reduce((s, m) => s + m.vonKet, 0)),
