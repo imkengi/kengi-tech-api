@@ -161,17 +161,31 @@ export async function keHoachDatHang(
                     COALESCE(SUM(s.q), 0)::float8      AS tong,
                     COALESCE(SUM(s.q * s.q), 0)::float8 AS "tongBinhPhuong",
                     COUNT(*)::int                      AS "soNgayCoBan",
-                    /* Giao dịch đầu tiên của cả cửa hàng, để biết cửa sổ lịch sử
-                     * có thật sự dài bằng số ngày mình đang chia hay không. MIN
-                     * trên cột có @@index([createdAt]) đọc thẳng chỉ mục. */
-                    (SELECT MIN(t2."createdAt") FROM "Transaction" t2) AS "banDauTien"
+                    /* Ngày bán ĐẦU TIÊN của cả cửa hàng, để biết cửa sổ lịch sử
+                     * có thật sự dài bằng số ngày mình đang chia hay không. */
+                    (SELECT MIN(COALESCE(t2."transactionDate", t2."createdAt"))
+                       FROM "Transaction" t2) AS "banDauTien"
              FROM (
                  SELECT ti."productId" AS "productId",
-                        (t."createdAt" + interval '7 hours')::date AS ngay,
+                        (COALESCE(t."transactionDate", t."createdAt") + interval '7 hours')::date AS ngay,
                         SUM(COALESCE(NULLIF(ti."baseQuantity", 0), ti.quantity))::float8 AS q
                  FROM "TransactionItem" ti
                  JOIN "Transaction" t ON t.id = ti."transactionId"
-                 WHERE t.status IN ('completed', 'partial') AND t."createdAt" >= $1
+                 /* NGÀY BÁN, không phải ngày tạo dòng dữ liệu.
+                  *
+                  * Cửa hàng nhập lịch sử từ phần mềm cũ (kiotvietSync ghi
+                  * transactionDate = ngày bán thật, createdAt = lúc chạy nhập)
+                  * sẽ có toàn bộ nhiều tháng bán hàng mang cùng một khoảng
+                  * createdAt vài tuần. Cắt kỳ theo createdAt là dồn cả 5 tháng
+                  * vào một cửa sổ ngắn: mức bán mỗi ngày phồng lên nhiều lần và
+                  * đề xuất đặt hàng theo đó là bảo người ta ôm kho.
+                  *
+                  * Đo trên KENGISTORE: 11.229 giao dịch, ngày tạo trải đúng 32
+                  * ngày (15/07–14/08) trong khi ngày bán trải 147 ngày
+                  * (21/03–14/08). COALESCE giữ nguyên hành vi cũ cho cửa hàng
+                  * bán tại chỗ, vì ở đó transactionDate để trống. */
+                 WHERE t.status IN ('completed', 'partial')
+                   AND COALESCE(t."transactionDate", t."createdAt") >= $1
                  GROUP BY 1, 2
              ) s
              GROUP BY 1`,

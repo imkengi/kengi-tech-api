@@ -147,18 +147,25 @@ export async function duBaoDongTien(
     try {
         const tuDo = new Date(Date.now() - NGAY_DO * 86400_000)
         const rows: any[] = await prisma.$queryRawUnsafe(
+            /* NGÀY BÁN, không phải ngày tạo dòng. Cửa hàng nhập lịch sử từ phần
+             * mềm cũ có nhiều tháng bán hàng mang cùng một khoảng createdAt vài
+             * tuần — cắt theo createdAt là dồn hết vào cửa sổ ngắn và tốc độ thu
+             * phồng lên nhiều lần. Bảng Payment không có cột ngày riêng nên phải
+             * lấy theo giao dịch. COALESCE giữ nguyên hành vi cho cửa hàng bán
+             * tại chỗ (transactionDate để trống). */
             `SELECT COALESCE(SUM(p.amount), 0)::float8 AS tien,
-                    COUNT(DISTINCT (t."createdAt" + interval '7 hours')::date)::int AS "soNgay",
+                    COUNT(DISTINCT (COALESCE(t."transactionDate", t."createdAt") + interval '7 hours')::date)::int AS "soNgay",
                     /* Cố ý KHÔNG join sang Payment ở đây: chỉ cần một cận dưới
-                     * cho tuổi cửa hàng, mà MIN trên cột có @@index([createdAt])
-                     * đọc thẳng chỉ mục, còn join cả bảng Payment thì quét nặng
+                     * cho tuổi cửa hàng, còn join cả bảng Payment thì quét nặng
                      * trên cửa hàng nhiều dữ liệu. Đơn hàng đầu tiên luôn có
                      * trước hoặc cùng lúc với lần thu tiền đầu tiên, nên mẫu số
                      * ra lớn hơn hoặc bằng — lệch về phía thận trọng. */
-                    (SELECT MIN(t2."createdAt") FROM "Transaction" t2) AS "lanThuDauTien"
+                    (SELECT MIN(COALESCE(t2."transactionDate", t2."createdAt"))
+                       FROM "Transaction" t2) AS "lanThuDauTien"
              FROM "Payment" p
              JOIN "Transaction" t ON t.id = p."transactionId"
-             WHERE t.status IN ('completed', 'partial') AND t."createdAt" >= $1`,
+             WHERE t.status IN ('completed', 'partial')
+               AND COALESCE(t."transactionDate", t."createdAt") >= $1`,
             tuDo,
         )
         /* Dùng PHIẾU THU chứ không dùng tổng đơn: đơn ghi nợ chưa mang tiền về,
