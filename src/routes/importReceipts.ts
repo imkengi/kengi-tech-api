@@ -129,16 +129,48 @@ router.get('/duplicates', authMiddleware, async (req: AuthRequest, res: Response
             }))
             .sort((a, b) => b.tienGhiThua - a.tienGhiThua)
 
+        /* HUỶ PHIẾU TRÙNG LÀM TỒN GIẢM THÊM — phải nói trước khi người ta bấm.
+         *
+         * Phiếu nhập cộng tồn, nên huỷ nó là trừ lại. Với mã ĐANG ÂM thì sau khi
+         * huỷ nó âm sâu hơn, và người dùng dễ tưởng mình vừa làm hỏng thêm rồi
+         * hoảng — trong khi con số mới mới là con số đúng: phần dương giả từ
+         * phiếu trùng vốn đang che bớt độ âm thật.
+         *
+         * Đo trên dữ liệu thật 14/08/2026: mã SHD4038 vừa nằm trong phiếu trùng
+         * (+10) vừa đang tồn -557. Huỷ xong sẽ thành -567. */
+        let soMaSeAmThem = 0
+        if (cap.length > 0) {
+            const idThua = cap.flatMap(c => c.phieu.filter((p: any) => !p.laPhieuGoc).map((p: any) => p.id))
+            if (idThua.length > 0) {
+                const dong: any[] = await prisma.importReceiptItem.findMany({
+                    where: { receiptId: { in: idThua } },
+                    select: { productId: true },
+                    take: 2000,
+                }).catch(() => [])
+                const idHang = Array.from(new Set(dong.map((d: any) => String(d.productId)).filter(Boolean)))
+                if (idHang.length > 0) {
+                    const am: any = await prisma.product.count({
+                        where: { id: { in: idHang }, stock: { lt: 0 } },
+                    }).catch(() => 0)
+                    soMaSeAmThem = Number(am) || 0
+                }
+            }
+        }
+
         res.json({
             success: true,
             data: {
                 soThang: thang,
                 soCap: cap.length,
                 tongGhiThua: cap.reduce((s, c) => s + c.tienGhiThua, 0),
+                soMaSeAmThem,
                 cap,
                 ghiChu: cap.length === 0
                     ? 'Không có phiếu nhập nào trùng số hoá đơn.'
-                    : 'Giữ phiếu ĐẦU TIÊN, huỷ phiếu sau. Huỷ phiếu nhập sẽ tự trừ lại tồn kho và đảo bút toán tương ứng.',
+                    : 'Giữ phiếu ĐẦU TIÊN, huỷ phiếu sau. Huỷ phiếu nhập sẽ tự trừ lại tồn kho và đảo bút toán tương ứng.'
+                        + (soMaSeAmThem > 0
+                            ? ` Lưu ý: ${soMaSeAmThem} mã trong nhóm này ĐANG ÂM, nên huỷ xong chúng sẽ âm sâu hơn. Đó là con số ĐÚNG — phần dương giả từ phiếu trùng đang che bớt độ âm thật. Kiểm kê nhóm mã đó sau khi huỷ.`
+                            : ''),
             },
         })
     } catch (err) {
