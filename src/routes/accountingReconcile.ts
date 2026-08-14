@@ -68,6 +68,29 @@ router.post('/reconcile/fix', authMiddleware, async (req: AuthRequest, res: Resp
         const userId = req.user?.userId || null
         const daTao: Array<{ type: string; ref: string; amount: number }> = []
 
+        /* ── CHẠY THEO LÔ, KHÔNG ÔM HẾT MỘT LƯỢT ────────────────────────────
+         *
+         * Cloud Run cắt request ở 300 giây. Ghi bù cho một cửa hàng thiếu hàng
+         * nghìn bút toán thì chắc chắn vượt: mỗi phiếu bán sinh 3–4 bút toán,
+         * ghi tuần tự vì pool Prisma mỗi cửa hàng chỉ vài kết nối. Đo trên HUTI
+         * ngày 14/08/2026: sổ mới ghi 1,2% doanh thu, tức còn gần như toàn bộ.
+         *
+         * Trước bản này, người dùng bấm Ghi bù rồi nhận đúng một dòng "Ghi bù
+         * thất bại: timeout" — trong khi máy chủ ĐÃ ghi được hàng trăm bút toán
+         * và chạy lại sẽ đi tiếp. Họ kết luận tính năng hỏng và bỏ luôn, đúng
+         * cái cửa hàng cần nó nhất.
+         *
+         * Phép ghi vốn đã idempotent (bỏ qua ref đã có) nên chia lô là an toàn:
+         * mỗi lượt xử một phần rồi báo phần còn lại. */
+        const MOI_LO = Math.max(50, Math.min(2000, Number((req.body || {}).soChungTuMoiLo) || 400))
+        let conLai = 0
+        const conNguyen = <T,>(ds: T[], daXong: (x: T) => boolean, dung: number): T[] => {
+            const chuaGhi = ds.filter(x => !daXong(x))
+            conLai += Math.max(0, chuaGhi.length - dung)
+            return chuaGhi.slice(0, dung)
+        }
+        let quota = MOI_LO
+
         const cu: Array<{ reference: string | null }> = await prisma.journalEntry.findMany({
             where: { date: { gte: from, lte: to } }, select: { reference: true },
         })
@@ -83,8 +106,9 @@ router.post('/reconcile/fix', authMiddleware, async (req: AuthRequest, res: Resp
             where: { status: { in: ['completed', 'partial'] }, createdAt: { gte: start, lte: end } },
             include: { payments: true, items: { include: { product: { select: { costPrice: true } } } } },
         })
-        for (const t of txs) {
-            if (daGhi(`SALE-${t.receiptNumber}`)) continue
+        const txsLo = conNguyen(txs, (t: any) => daGhi(`SALE-${t.receiptNumber}`), quota)
+        quota -= txsLo.length
+        for (const t of txsLo) {
             const r = await createJournalEntriesForTransaction(prisma, t as any, { branchId: t.branchId ?? null, userId, skipDupCheck: true })
             daTao.push(...r.created)
         }
@@ -93,17 +117,20 @@ router.post('/reconcile/fix', authMiddleware, async (req: AuthRequest, res: Resp
         const imps = await prisma.importReceipt.findMany({
             where: { status: 'completed', createdAt: { gte: start, lte: end } },
         })
-        for (const i of imps) {
-            if (daGhi(`IMP-${i.code}`)) continue
+        const impsLo = conNguyen(imps, (i: any) => daGhi(`IMP-${i.code}`), Math.max(0, quota))
+        quota -= impsLo.length
+        for (const i of impsLo) {
             const r = await postImportReceiptJournal(prisma, i as any, { branchId: i.branchId ?? null, userId, vatKhauTru })
             daTao.push(...r.created)
         }
 
         // Chi phí
         const exps = await prisma.expense.findMany({ where: { date: { gte: start, lte: end } } })
-        for (const e of exps) {
-            if (e.status === 'cancelled' || e.status === 'pending') continue
-            if (daGhi(`EXP-${e.id}`)) continue
+        const expsLo = conNguyen(
+            exps.filter((e: any) => e.status !== 'cancelled' && e.status !== 'pending'),
+            (e: any) => daGhi(`EXP-${e.id}`), Math.max(0, quota))
+        quota -= expsLo.length
+        for (const e of expsLo) {
             const r = await postExpenseJournal(prisma, e as any, { branchId: e.branchId ?? null, userId, vatKhauTru })
             daTao.push(...r.created)
         }
@@ -113,8 +140,9 @@ router.post('/reconcile/fix', authMiddleware, async (req: AuthRequest, res: Resp
             where: { status: { in: ['refunded', 'exchanged'] }, createdAt: { gte: start, lte: end } },
             include: { items: true },
         })
-        for (const ret of rets) {
-            if (daGhi(`RET-${ret.code}`)) continue
+        const retsLo = conNguyen(rets, (r: any) => daGhi(`RET-${r.code}`), Math.max(0, quota))
+        quota -= retsLo.length
+        for (const ret of retsLo) {
             let giaVon = 0
             for (const it of (ret as any).items ?? []) {
                 if (!it.productId || !it.restocked) continue
@@ -160,6 +188,12 @@ router.post('/reconcile/fix', authMiddleware, async (req: AuthRequest, res: Resp
                 soButToan: daTao.length,
                 tongTien: daTao.reduce((s, e) => s + (e.amount || 0), 0),
                 theoLoai: daTao.reduce((m: Record<string, number>, e) => { m[e.type] = (m[e.type] ?? 0) + 1; return m }, {}),
+                /* Còn bao nhiêu chứng từ chưa ghi sau lượt này. Giao diện dựa
+                 * vào đây để nói "bấm lại để tiếp" thay vì để người dùng tưởng
+                 * đã xong hoặc tưởng hỏng. */
+                conLai,
+                xong: conLai === 0,
+                soChungTuMoiLo: MOI_LO,
             },
         })
     } catch (err) {
