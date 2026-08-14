@@ -68,6 +68,28 @@ export interface MatHangMua {
     bienDo: number
 }
 
+export interface MatHangNhayGia {
+    productId: string
+    ten: string
+    /** Số ngày có bán, dùng làm số quan sát cho phép hồi quy. */
+    soNgay: number
+    giaThapNhat: number
+    giaCaoNhat: number
+    giaHienTai: number
+    /** Độ co giãn: giá tăng 1% thì lượng bán đổi bao nhiêu %. Âm là bình thường. */
+    doCoGian: number
+    /** Phép hồi quy giải thích được bao nhiêu phần biến động lượng bán, 0–1. */
+    doTinCay: number
+    nhay: 'ít nhạy' | 'nhạy'
+    bienLai: number | null
+    /** Nếu tăng giá 5%: lượng bán, doanh thu, lợi nhuận đổi bao nhiêu phần trăm. */
+    tang5: { luong: number; doanhThu: number; loiNhuan: number | null }
+    /** Nếu giảm giá 5%. */
+    giam5: { luong: number; doanhThu: number; loiNhuan: number | null }
+    /** Hướng nên thử, viết bằng lời. */
+    goiY: string
+}
+
 export interface KetQuaCoHoi {
     ky: { tu: string; den: string; moTa: string }
     quyMo: { soDon: number; soDongHang: number; doanhThu: number; loiNhuan: number; daCatBot: boolean }
@@ -119,6 +141,15 @@ export interface KetQuaCoHoi {
         xuHuong: { nuaDau: number; nuaSau: number; thayDoi: number; nhan: string } | null
         matHangTheoMua: MatHangMua[]
         nhanXet: string
+    }
+
+    doNhayGia: {
+        duocKetLuan: boolean
+        lyDo?: string
+        soMaDoDuoc: number
+        soMaDaXet: number
+        matHang: MatHangNhayGia[]
+        canhBao: string
     }
 
     khuyenNghi: { ma: string; tieuDe: string; viSao: string; lamGi: string; danhDoi: string; uocTinh: number | null }[]
@@ -249,8 +280,11 @@ export async function coHoiTangTruong(
     // ══════════════════════════════════════════════════ 4. MÙA VỤ
     const muaVu = phanTichMuaVu(don, donHang, tenHang, ky)
 
+    // ══════════════════════════════════════════════════ 5. ĐỘ NHẠY GIÁ
+    const doNhayGia = phanTichDoNhayGia(donHang, tenHang, giaVon, coGiaVon)
+
     // ══════════════════════════════════════════════════ Khuyến nghị
-    const khuyenNghi = dungKhuyenNghi(siLe, banKem, tapTrung, muaVu)
+    const khuyenNghi = dungKhuyenNghi(siLe, banKem, tapTrung, muaVu, doNhayGia)
 
     ghiChu.push('Mọi con số "tiềm năng" là ước tính dựa trên giả định ghi ngay cạnh nó, không phải cam kết kết quả.')
     if (!coGiaVon) ghiChu.push('Thiếu giá vốn nên mọi kết luận về LÃI ở trang này chưa dùng được — chỉ đọc phần doanh thu.')
@@ -259,7 +293,7 @@ export async function coHoiTangTruong(
     return {
         ky: { tu: nhan(ky.tu), den: nhan(ky.den), moTa: ky.moTa },
         quyMo: { soDon: don.length, soDongHang: tongDong, doanhThu: lam(tongDoanhThu), loiNhuan: coGiaVon ? lam(tongLai) : 0, daCatBot },
-        siLe, banKem, tapTrung, muaVu, khuyenNghi, ghiChu, thieu,
+        siLe, banKem, tapTrung, muaVu, doNhayGia, khuyenNghi, ghiChu, thieu,
     }
 }
 
@@ -665,13 +699,172 @@ function phanTichMuaVu(don: any[], donHang: any[], tenHang: Map<string, string>,
     }
 }
 
+/* ══════════════════════════════════════════════════ 5. ĐỘ NHẠY GIÁ
+
+ * Đo bằng chính lịch sử bán: gom theo NGÀY để có (giá bán bình quân, số lượng
+ * bán), rồi hồi quy ln(lượng) theo ln(giá). Hệ số góc chính là độ co giãn —
+ * giá tăng 1% thì lượng đổi bao nhiêu phần trăm.
+ *
+ * Vì sao gom theo ngày chứ không theo từng dòng bán: từng dòng chỉ nói "một
+ * khách mua 2 cái", không nói gì về phản ứng của thị trường. Phải có một khoảng
+ * thời gian ở một mức giá rồi so với khoảng khác ở mức giá khác.
+ *
+ * GIỚI HẠN PHẢI NÓI THẲNG: đây là tương quan, không phải nhân quả. Cửa hàng
+ * thường giảm giá đúng lúc hàng ế hoặc đúng dịp lễ, nên một phần biến động
+ * lượng bán là do dịp chứ không do giá. Vì vậy kết quả ở đây là GỢI Ý THỬ
+ * NGHIỆM, không phải lệnh đổi giá.
+ */
+
+function phanTichDoNhayGia(
+    donHang: any[], tenHang: Map<string, string>, giaVon: Map<string, number>, coGiaVon: boolean,
+): KetQuaCoHoi['doNhayGia'] {
+    // productId → ngày → { tiền, lượng }
+    const bang = new Map<string, Map<string, { tien: number; luong: number }>>()
+    for (const d of donHang) {
+        const ngay = vn(d.createdAt).ngay
+        for (const i of (d.items || [])) {
+            const id = String(i.productId)
+            const sl = so(i.quantity)
+            if (sl <= 0) continue
+            if (!bang.has(id)) bang.set(id, new Map())
+            const m = bang.get(id)!
+            const o = m.get(ngay) || { tien: 0, luong: 0 }
+            o.tien += so(i.lineTotal)
+            o.luong += sl
+            m.set(ngay, o)
+        }
+    }
+
+    const ra: MatHangNhayGia[] = []
+    let daXet = 0
+    /* Đếm riêng từng lý do bị loại. Gộp hết vào một câu "giá không đổi" là
+     * khẳng định một nguyên nhân mình chưa hề kiểm — đúng cái lỗi mà cả bộ
+     * thư viện này đang cố tránh. */
+    let loaiViGiaKhongDoi = 0
+    let loaiViDoYeu = 0
+
+    for (const [id, theoNgay] of bang) {
+        if (theoNgay.length !== undefined) { /* Map không có length — giữ chỗ cho ts */ }
+        const diem = Array.from(theoNgay.entries())
+            .map(([ngay, v]) => ({ ngay, gia: v.tien / v.luong, luong: v.luong }))
+            .filter(p => p.gia > 0 && p.luong > 0)
+        if (diem.length < 10) continue
+        daXet++
+
+        const gia = diem.map(p => p.gia)
+        const gTb = gia.reduce((s, v) => s + v, 0) / gia.length
+        const doLech = Math.sqrt(gia.reduce((s, v) => s + (v - gTb) ** 2, 0) / gia.length)
+        const heSoBienThien = gTb > 0 ? doLech / gTb : 0
+        const mucGia = new Set(gia.map(g => Math.round(g / 100) * 100)).size
+
+        /* Không đổi giá bao giờ thì không đo được — và đó là câu trả lời đúng,
+         * không phải lý do để nới ngưỡng xuống cho ra một con số nào đó. */
+        if (heSoBienThien < 0.03 || mucGia < 3) { loaiViGiaKhongDoi++; continue }
+
+        // Hồi quy bình phương nhỏ nhất trên thang log.
+        const X = diem.map(p => Math.log(p.gia))
+        const Y = diem.map(p => Math.log(p.luong))
+        const n = X.length
+        const xTb = X.reduce((s, v) => s + v, 0) / n
+        const yTb = Y.reduce((s, v) => s + v, 0) / n
+        let sxy = 0, sxx = 0, syy = 0
+        for (let i = 0; i < n; i++) {
+            sxy += (X[i] - xTb) * (Y[i] - yTb)
+            sxx += (X[i] - xTb) ** 2
+            syy += (Y[i] - yTb) ** 2
+        }
+        if (sxx <= 0 || syy <= 0) { loaiViGiaKhongDoi++; continue }
+        const b = sxy / sxx
+        const r2 = (sxy * sxy) / (sxx * syy)
+
+        /* Bỏ qua khi phép đo quá yếu, hoặc khi hệ số DƯƠNG (giá tăng mà bán
+         * nhiều hơn) — dấu dương gần như luôn là do mùa vụ hoặc đợt sỉ chen vào,
+         * đem nó đi khuyên tăng giá là nguy hiểm. */
+        if (r2 < 0.3 || b >= 0) { loaiViDoYeu++; continue }
+
+        const giaCuoi = diem[diem.length - 1].gia
+        const gv = giaVon.get(id)
+        const bienLai = coGiaVon && gv !== undefined && giaCuoi > 0
+            ? Math.round(((giaCuoi - gv) / giaCuoi) * 1000) / 10
+            : null
+
+        /* Với độ co giãn không đổi: lượng mới = lượng cũ × m^b, doanh thu mới =
+         * cũ × m^(1+b). Lợi nhuận phải tính qua giá vốn chứ không suy từ doanh thu. */
+        const moPhong = (m: number) => {
+            const luong = (Math.pow(m, b) - 1) * 100
+            const doanhThu = (Math.pow(m, 1 + b) - 1) * 100
+            let loiNhuan: number | null = null
+            if (coGiaVon && gv !== undefined && giaCuoi > gv) {
+                const cu = giaCuoi - gv
+                const moi = (giaCuoi * m - gv) * Math.pow(m, b)
+                loiNhuan = Math.round(((moi - cu) / cu) * 1000) / 10
+            }
+            return { luong: Math.round(luong * 10) / 10, doanhThu: Math.round(doanhThu * 10) / 10, loiNhuan }
+        }
+        const tang5 = moPhong(1.05)
+        const giam5 = moPhong(0.95)
+        const itNhay = b > -1
+
+        ra.push({
+            productId: id,
+            ten: tenHang.get(id) || id,
+            soNgay: n,
+            giaThapNhat: lam(Math.min(...gia)),
+            giaCaoNhat: lam(Math.max(...gia)),
+            giaHienTai: lam(giaCuoi),
+            doCoGian: Math.round(b * 100) / 100,
+            doTinCay: Math.round(r2 * 100) / 100,
+            nhay: itNhay ? 'ít nhạy' : 'nhạy',
+            bienLai,
+            tang5, giam5,
+            goiY: itNhay
+                ? `Khách ít phản ứng với giá (giá lên 1% chỉ mất ${Math.abs(b).toFixed(2)}% lượng bán). Thử nâng 5% trên một chi nhánh trong 2 tuần: ước tính doanh thu ${tang5.doanhThu >= 0 ? '+' : ''}${tang5.doanhThu}%${tang5.loiNhuan !== null ? `, lợi nhuận ${tang5.loiNhuan >= 0 ? '+' : ''}${tang5.loiNhuan}%` : ''}.`
+                : `Khách phản ứng mạnh với giá (giá lên 1% mất ${Math.abs(b).toFixed(2)}% lượng bán). Đừng tăng giá mặt hàng này; nếu biên lãi còn dày thì thử giảm 5% để lấy lượng: ước tính doanh thu ${giam5.doanhThu >= 0 ? '+' : ''}${giam5.doanhThu}%${giam5.loiNhuan !== null ? `, lợi nhuận ${giam5.loiNhuan >= 0 ? '+' : ''}${giam5.loiNhuan}%` : ''}.`,
+        })
+    }
+
+    ra.sort((a, b2) => b2.doTinCay - a.doTinCay)
+    const top = ra.slice(0, 12)
+
+    return {
+        duocKetLuan: top.length > 0,
+        lyDo: top.length === 0
+            ? (daXet === 0
+                ? 'Chưa mặt hàng nào bán đủ 10 ngày trong kỳ để đo phản ứng của khách với giá. Kéo dài khoảng ngày rồi xem lại.'
+                : loaiViDoYeu > loaiViGiaKhongDoi
+                    ? `Đã xét ${daXet} mặt hàng, giá có dao động nhưng lượng bán không đi theo giá một cách rõ ràng — biến động phần lớn đến từ thứ khác (dịp lễ, hàng về, khách sỉ). Không đủ căn cứ để nói khách nhạy giá đến đâu.`
+                    : `Đã xét ${daXet} mặt hàng bán đủ ngày nhưng giá gần như không đổi trong kỳ, nên không có gì để so. Muốn biết khách nhạy giá đến đâu thì phải thực sự thử đổi giá một mặt hàng trong vài tuần rồi đo.`)
+            : undefined,
+        soMaDoDuoc: top.length,
+        soMaDaXet: daXet,
+        matHang: top,
+        canhBao: 'Đây là TƯƠNG QUAN, không phải nhân quả: cửa hàng thường giảm giá đúng lúc hàng ế hoặc đúng dịp lễ, nên một phần biến động lượng bán là do dịp chứ không do giá. Hãy coi đây là gợi ý để THỬ NGHIỆM có kiểm soát (một chi nhánh, hai tuần, giữ nguyên mọi thứ khác), không phải lệnh đổi giá.',
+    }
+}
+
 /* ══════════════════════════════════════════════════ Khuyến nghị */
 
 function dungKhuyenNghi(
     siLe: KetQuaCoHoi['siLe'], banKem: KetQuaCoHoi['banKem'],
     tapTrung: KetQuaCoHoi['tapTrung'], muaVu: KetQuaCoHoi['muaVu'],
+    doNhayGia: KetQuaCoHoi['doNhayGia'],
 ): KetQuaCoHoi['khuyenNghi'] {
     const ra: KetQuaCoHoi['khuyenNghi'] = []
+
+    /* Đòn bẩy giá đứng đầu danh sách khi đo được: nó không tốn thêm đồng vốn
+     * nào, khác hẳn combo (tốn công gợi ý) hay mùa vụ (tốn vốn nhập trước). */
+    const itNhay = doNhayGia.matHang.filter(m => m.nhay === 'ít nhạy' && (m.tang5.loiNhuan ?? 0) > 0)
+    if (itNhay.length > 0) {
+        const m = itNhay[0]
+        ra.push({
+            ma: 'gia',
+            tieuDe: `Thử nâng giá ${m.ten} 5%`,
+            viSao: `Đo trên ${m.soNgay} ngày bán thật: giá mặt hàng này lên 1% thì lượng bán chỉ giảm ${Math.abs(m.doCoGian).toFixed(2)}% — khách ít phản ứng với giá. Giá trong kỳ đã dao động từ ${m.giaThapNhat.toLocaleString('vi-VN')}đ đến ${m.giaCaoNhat.toLocaleString('vi-VN')}đ nên phép đo có cơ sở để so.`,
+            lamGi: `Nâng 5% ở MỘT chi nhánh (hoặc một kênh) trong 2 tuần, giữ nguyên mọi thứ khác, rồi so lượng bán với chi nhánh đối chứng. Ước tính lợi nhuận mặt hàng này +${m.tang5.loiNhuan}%.`,
+            danhDoi: 'Đây là tương quan chứ chưa phải nhân quả — có thể lượng bán biến động do dịp lễ hay hàng ế chứ không do giá. Thử trên diện hẹp trước, và nhớ rằng khách quen nhận ra giá tăng có thể mất thiện cảm dù vẫn mua.',
+            uocTinh: null,
+        })
+    }
 
     if (banKem.duocKetLuan && banKem.cap.length > 0) {
         const c = banKem.cap[0]

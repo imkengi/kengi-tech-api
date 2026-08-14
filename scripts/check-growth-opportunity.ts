@@ -199,6 +199,38 @@ async function main() {
         r.khuyenNghi.filter(k => !k.danhDoi || k.danhDoi.length <= 20).map(k => k.ma))
     ok('mọi khuyến nghị đều nói vì sao', r.khuyenNghi.every(k => k.viSao && k.viSao.length > 20))
 
+    console.log('\n▶ Độ nhạy giá — chỉ được kết luận khi giá THỰC SỰ có đổi\n')
+
+    /* Kho khoDay bán mọi thứ ở một mức giá cố định → không có gì để so, phải
+     * nói thẳng là không đo được thay vì trả một con số cho có. */
+    ok('giá không đổi → KHÔNG kết luận độ nhạy giá', !r.doNhayGia.duocKetLuan, r.doNhayGia.matHang.map(m => m.ten))
+    ok('… và lý do nói rõ phải thử đổi giá mới đo được',
+        !!r.doNhayGia.lyDo && /đổi giá|không đổi/.test(r.doNhayGia.lyDo), r.doNhayGia.lyDo)
+
+    /* Kho có đổi giá thật: giá đi từ 100k xuống 80k, lượng bán tăng theo đúng
+     * quan hệ co giãn -0,5 (ít nhạy). Lib phải đo lại đúng dấu và đúng nhóm. */
+    const khoDoiGia: Kho = { transactions: [], products: [{ id: 'E1', name: 'Hàng thử giá', costPrice: 50_000 }] }
+    for (let i = 0; i < 28; i++) {
+        const gia = 100_000 - (i % 5) * 5_000            // 100k, 95k, 90k, 85k, 80k
+        /* Sản lượng nền phải LỚN: nếu để 10 cái/ngày thì phép làm tròn nuốt hết
+         * tín hiệu (10 hay 11 cái) và phép đo sẽ không thấy gì — đúng như lần
+         * dựng fixture đầu tiên đã dính. */
+        const luong = Math.max(1, Math.round(200 * Math.pow(gia / 100_000, -0.5)))
+        const ngay = `2026-05-${String(i + 1).padStart(2, '0')}`
+        khoDoiGia.transactions.push(don(ngay, 10, [['E1', luong, gia]]))
+    }
+    const rGia = await coHoiTangTruong(fakePrisma(khoDoiGia), KY)
+    ok('có đổi giá → đo được độ nhạy', rGia.doNhayGia.duocKetLuan, rGia.doNhayGia.lyDo)
+    const e1 = rGia.doNhayGia.matHang.find(m => m.productId === 'E1')
+    ok('độ co giãn mang dấu ÂM (giá lên thì bán ít đi)', !!e1 && e1.doCoGian < 0, e1?.doCoGian)
+    ok('đo ra xấp xỉ -0,5 đúng như dữ liệu dựng', !!e1 && Math.abs(e1.doCoGian + 0.5) < 0.25, e1?.doCoGian)
+    ok('xếp đúng nhóm "ít nhạy"', e1?.nhay === 'ít nhạy', e1?.nhay)
+    ok('mặt hàng ít nhạy → tăng giá 5% thì doanh thu tăng', (e1?.tang5.doanhThu ?? -1) > 0, e1?.tang5)
+    ok('… và lợi nhuận tăng mạnh hơn doanh thu (vì giá vốn không đổi)',
+        (e1?.tang5.loiNhuan ?? 0) > (e1?.tang5.doanhThu ?? 0), [e1?.tang5.loiNhuan, e1?.tang5.doanhThu])
+    ok('luôn kèm cảnh báo tương quan ≠ nhân quả', /tương quan/i.test(rGia.doNhayGia.canhBao), rGia.doNhayGia.canhBao)
+    ok('khuyến nghị giá có nêu đánh đổi', rGia.khuyenNghi.filter(k => k.ma === 'gia').every(k => k.danhDoi.length > 30))
+
     console.log('\n▶ Truy vấn hỏng — KHÔNG được quy thành "cửa hàng không có gì"\n')
 
     const hongTx = await coHoiTangTruong(fakePrisma(khoDay(), { transaction: true }), KY)
