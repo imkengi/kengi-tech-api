@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express'
 import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
+import { chayTheoDot } from '../lib/poolGuard'
 import { requireRole } from '../middleware/roleMiddleware'
 import { validate } from '../middleware/validate'
 import { CreateSupplierSchema, UpdateSupplierSchema } from '../schemas'
@@ -116,14 +117,14 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
         if (!supplier) return res.status(404).json({ success: false, error: 'Not found' })
 
         // Compute dynamic stats from BOTH PurchaseOrder AND ImportReceipt
-        const [poCount, poSum, irCount, irSum] = await Promise.all([
-            prisma.purchaseOrder.count({ where: { supplierId: supplier.id } }),
-            prisma.purchaseOrder.aggregate({
+        const [poCount, poSum, irCount, irSum] = await chayTheoDot([
+            () => prisma.purchaseOrder.count({ where: { supplierId: supplier.id } }),
+            () => prisma.purchaseOrder.aggregate({
                 where: { supplierId: supplier.id },
                 _sum: { totalAmount: true },
             }),
-            prisma.importReceipt.count({ where: { supplierId: supplier.id } }),
-            prisma.importReceipt.aggregate({
+            () => prisma.importReceipt.count({ where: { supplierId: supplier.id } }),
+            () => prisma.importReceipt.aggregate({
                 where: { supplierId: supplier.id },
                 _sum: { totalCost: true },
             }),

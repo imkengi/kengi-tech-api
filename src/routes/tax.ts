@@ -4092,12 +4092,15 @@ router.get('/hkd/s2-summary', authMiddleware, async (req: AuthRequest, res: Resp
         const orDate = (s: Date, e: Date): any => ({
             OR: [{ transactionDate: { gte: s, lte: e } }, { transactionDate: null, createdAt: { gte: s, lte: e } }]
         })
-        const [prevImports, prevSales, kyImports, kySales] = await Promise.all([
-            p.importReceipt.findMany({ where: { createdAt: { gte: veryOldStart, lte: dauKyEnd } }, include: { items: true } }),
-            p.transaction.findMany({ where: { status: { in: ['completed', 'partial'] }, ...orDate(veryOldStart, dauKyEnd) }, include: { items: { include: { product: true } } } }),
-            p.importReceipt.findMany({ where: { createdAt: { gte: kyStart, lte: kyEnd } }, include: { items: true } }),
-            p.transaction.findMany({ where: { status: { in: ['completed', 'partial'] }, ...orDate(kyStart, kyEnd) }, include: { items: { include: { product: true } } } }),
-        ])
+        /* Bốn truy vấn này đều KÉO CẢ DÒNG HÀNG (include items + product) từ đầu
+         * lịch sử tới nay — nặng nhất trong cả file. Bắn cùng lúc là một lượt xem
+         * sổ S2 chiếm 4 kết nối trong pool chỉ 3-8 của cửa hàng. */
+        const [prevImports, prevSales, kyImports, kySales] = await chayTheoDot([
+            () => p.importReceipt.findMany({ where: { createdAt: { gte: veryOldStart, lte: dauKyEnd } }, include: { items: true } }),
+            () => p.transaction.findMany({ where: { status: { in: ['completed', 'partial'] }, ...orDate(veryOldStart, dauKyEnd) }, include: { items: { include: { product: true } } } }),
+            () => p.importReceipt.findMany({ where: { createdAt: { gte: kyStart, lte: kyEnd } }, include: { items: true } }),
+            () => p.transaction.findMany({ where: { status: { in: ['completed', 'partial'] }, ...orDate(kyStart, kyEnd) }, include: { items: { include: { product: true } } } }),
+        ], 2)
         // ImportReceiptItem key: productSku. TransactionItem key: sku
         const itemKey = (item: any) => item.productSku || item.sku || (item.productId ? item.productId.slice(-8).toUpperCase() : item.productName || '—')
         const ensure = (map: Record<string, any>, item: any) => {

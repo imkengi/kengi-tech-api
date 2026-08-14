@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { errorDetail } from '../lib/errorResponse'
 import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
+import { chayTheoDot } from '../lib/poolGuard'
 import { requirePermission } from '../middleware/permissionMiddleware'
 import { requireRole } from '../middleware/roleMiddleware'
 import { validate } from '../middleware/validate'
@@ -121,14 +122,14 @@ router.get('/segments-live', authMiddleware, requirePermission('customers.view')
          * Chỉ owner/admin thấy (cùng cổng với lợi nhuận đơn online).
          */
         const laChuCua = ['owner', 'admin'].includes(String((req as any).user?.role || '').toLowerCase())
-        const [customers, grp, nam12, gan90, vonRows] = await Promise.all([
-            prisma.customer.findMany({
+        const [customers, grp, nam12, gan90, vonRows] = await chayTheoDot([
+            () => prisma.customer.findMany({
                 select: {
                     id: true, code: true, name: true, phone: true, debt: true,
                     createdAt: true, lastPurchaseDate: true,
                 },
             }),
-            prisma.transaction.groupBy({
+            () => prisma.transaction.groupBy({
                 by: ['customerId'],
                 where: { customerId: { not: null }, status: { notIn: ['voided', 'returned'] } },
                 _count: { _all: true },
@@ -138,7 +139,7 @@ router.get('/segments-live', authMiddleware, requirePermission('customers.view')
             // CỬA SỔ 12 THÁNG: xếp hạng theo bình quân tháng gần đây, không phải
             // tổng trọn đời — mua một cục năm ngoái rồi biến mất mà vẫn Kim cương
             // là xếp sai (người dùng chỉnh 11/08/2026, ca 'Mỹ Duyên')
-            prisma.transaction.groupBy({
+            () => prisma.transaction.groupBy({
                 by: ['customerId'],
                 where: {
                     customerId: { not: null }, status: { notIn: ['voided', 'returned'] },
@@ -147,7 +148,7 @@ router.get('/segments-live', authMiddleware, requirePermission('customers.view')
                 _count: { _all: true }, _sum: { total: true },
             }),
             // ĐỘ ĐỀU ĐẶN: số đơn 90 ngày gần đây — VIP mà lâu không mua phải lộ ra
-            prisma.transaction.groupBy({
+            () => prisma.transaction.groupBy({
                 by: ['customerId'],
                 where: {
                     customerId: { not: null }, status: { notIn: ['voided', 'returned'] },

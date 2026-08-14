@@ -2571,17 +2571,17 @@ router.get('/store-health', async (req: Request, res: Response) => {
         const sp = getStorePrisma(store.schema)
 
         const OPEN = `LOWER(ro.status) IN ('pending','approved','processing','refunded')`
-        const [channels, refundedNotReversed, invoicedButReturned, openInQueue] = await Promise.all([
-            sp.$queryRawUnsafe(`
+        const [channels, refundedNotReversed, invoicedButReturned, openInQueue] = await chayTheoDot([
+            () => sp.$queryRawUnsafe(`
                 SELECT name, platform, status,
                        to_char("lastSyncAt",'YYYY-MM-DD HH24:MI') AS "lastSyncAt",
                        to_char("tokenExpiresAt" + interval '7 hours','YYYY-MM-DD') AS "tokenExpiresAt"
                 FROM "OnlineChannel" ORDER BY platform, name`),
-            sp.$queryRawUnsafe(`
+            () => sp.$queryRawUnsafe(`
                 SELECT COUNT(*)::int AS n
                 FROM "ReturnOrder" ro JOIN "OnlineOrder" o ON o."orderNumber" = ro."originalInvoice"
                 WHERE LOWER(ro.status) = 'refunded' AND o.status NOT IN ('returned','cancelled','CANCELLED')`),
-            sp.$queryRawUnsafe(`
+            () => sp.$queryRawUnsafe(`
                 SELECT ro.code, ro.status, o."orderNumber", o.platform,
                        ro."totalRefund"::float8 AS refund, e."invoiceNumber"
                 FROM "ReturnOrder" ro
@@ -2589,7 +2589,7 @@ router.get('/store-health', async (req: Request, res: Response) => {
                 JOIN "Transaction" t ON t."receiptNumber" = ('ONLINE-' || o."orderNumber")
                 JOIN "EInvoice" e ON e."transactionId" = t.id AND e.status IN ('issued','SENT')
                 WHERE ${OPEN} ORDER BY ro."createdAt" DESC LIMIT 50`),
-            sp.$queryRawUnsafe(`
+            () => sp.$queryRawUnsafe(`
                 SELECT COUNT(DISTINCT o.id)::int AS n
                 FROM "ReturnOrder" ro
                 JOIN "OnlineOrder" o ON o."orderNumber" = ro."originalInvoice"

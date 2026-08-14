@@ -1,6 +1,7 @@
 import { Router, Response } from 'express'
 import { errorDetail } from '../lib/errorResponse'
 import { authMiddleware, AuthRequest, getBranchFilter, getBranchId } from '../middleware/auth'
+import { chayTheoDot } from '../lib/poolGuard'
 import { requireRole } from '../middleware/roleMiddleware'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { nextCode } from '../lib/codeGenerator'
@@ -260,11 +261,11 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         const cached = await cacheGet(cacheKey)
         if (cached) return res.json(cached)
 
-        const [totalProducts, lowStock, outOfStock, agg] = await Promise.all([
-            prisma.product.count({ where: { productType: { not: 'service' } } }),
-            prisma.product.count({ where: { productType: { not: 'service' }, stock: { gt: 0, lte: 10 } } }),
-            prisma.product.count({ where: { productType: { not: 'service' }, stock: { lte: 0 } } }),
-            prisma.product.aggregate({ where: { productType: { not: 'service' } }, _sum: { stock: true } }),
+        const [totalProducts, lowStock, outOfStock, agg] = await chayTheoDot([
+            () => prisma.product.count({ where: { productType: { not: 'service' } } }),
+            () => prisma.product.count({ where: { productType: { not: 'service' }, stock: { gt: 0, lte: 10 } } }),
+            () => prisma.product.count({ where: { productType: { not: 'service' }, stock: { lte: 0 } } }),
+            () => prisma.product.aggregate({ where: { productType: { not: 'service' } }, _sum: { stock: true } }),
         ])
         const response = { success: true, data: { totalProducts, lowStock, outOfStock, totalStock: agg._sum.stock || 0 } }
         await cacheSet(cacheKey, response, 300)

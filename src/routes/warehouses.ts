@@ -1,6 +1,7 @@
 import { Router, Response } from 'express'
 import { errorDetail } from '../lib/errorResponse'
 import { authMiddleware, AuthRequest, getBranchFilter, getBranchId } from '../middleware/auth'
+import { chayTheoDot } from '../lib/poolGuard'
 import { requireRole } from '../middleware/roleMiddleware'
 import { validate } from '../middleware/validate'
 import {
@@ -100,11 +101,11 @@ async function dedupDefaultWarehouses(prisma: any, branchId: string | null | und
             // Count references per candidate
             const enriched: Array<{ wh: any; stockCount: number; refCount: number }> = []
             for (const wh of candidates) {
-                const [stockCount, fromCount, toCount, tripCount] = await Promise.all([
-                    prisma.warehouseStock.count({ where: { warehouseId: wh.id } }).catch(() => 0),
-                    prisma.stockTransfer.count({ where: { fromWarehouseId: wh.id } }).catch(() => 0),
-                    prisma.stockTransfer.count({ where: { toWarehouseId: wh.id } }).catch(() => 0),
-                    prisma.salesTrip.count({ where: { warehouseId: wh.id } }).catch(() => 0),
+                const [stockCount, fromCount, toCount, tripCount] = await chayTheoDot([
+                    () => prisma.warehouseStock.count({ where: { warehouseId: wh.id } }).catch(() => 0),
+                    () => prisma.stockTransfer.count({ where: { fromWarehouseId: wh.id } }).catch(() => 0),
+                    () => prisma.stockTransfer.count({ where: { toWarehouseId: wh.id } }).catch(() => 0),
+                    () => prisma.salesTrip.count({ where: { warehouseId: wh.id } }).catch(() => 0),
                 ])
                 enriched.push({ wh, stockCount, refCount: fromCount + toCount + tripCount })
             }
