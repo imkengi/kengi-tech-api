@@ -199,7 +199,7 @@ export async function keHoachDatHang(
             `SELECT DISTINCT ON (iri."productId")
                     iri."productId" AS "productId", ir."supplierId" AS "supplierId"
              FROM "ImportReceiptItem" iri
-             JOIN "ImportReceipt" ir ON ir.id = iri."importReceiptId"
+             JOIN "ImportReceipt" ir ON ir.id = iri."receiptId"
              WHERE ir."supplierId" IS NOT NULL
              ORDER BY iri."productId", ir."createdAt" DESC`,
         )
