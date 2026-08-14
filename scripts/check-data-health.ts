@@ -83,6 +83,36 @@ async function main() {
     ok('… nói rõ mọi con số cả kỳ là MỨC SÀN', /MỨC SÀN|MỨC SÀN|mức sàn/i.test(mPhu.anhHuong), mPhu.anhHuong)
     ok('… nêu đúng tỷ lệ', /20\/90/.test(mPhu.so || ''), mPhu.so)
 
+    /* Ca thật 14/08/2026: một cửa hàng có 31/91 ngày nhưng dữ liệu LIÊN TỤC từ
+     * 15/07 — họ mới bắt đầu dùng phần mềm, không sót ngày nào. Gắn cờ "phải
+     * sửa" cho họ là buộc tội oan, và lần sau họ bỏ qua luôn cảnh báo thật. */
+    const batDauMuon = await sucKhoeDuLieu({
+        ...fake({ ...SACH, soNgayCoBan: 30 }),
+        $queryRawUnsafe: async () => [{
+            soNgay: 30,
+            somNhat: new Date('2026-07-15T00:00:00Z'),
+            muonNhat: new Date('2026-08-13T00:00:00Z'),
+        }],
+    } as any, KY)
+    const mMuon = lay(batDauMuon, 'pham-vi-du-lieu')
+    ok('dữ liệu liên tục từ giữa kỳ → KHÔNG phải mức nặng', mMuon.muc === 'vua', mMuon.muc)
+    ok('… gọi đúng tên: bắt đầu từ giữa kỳ', /bắt đầu từ giữa kỳ/.test(mMuon.ten), mMuon.ten)
+    ok('… nói rõ KHÔNG PHẢI lỗi dữ liệu', /Không phải lỗi dữ liệu/.test(mMuon.anhHuong), mMuon.anhHuong)
+    ok('… và chỉ cách đọc: từ ngày bắt đầu trở đi', /2026-07-15 trở đi/.test(mMuon.canLam), mMuon.canLam)
+
+    /* Ngược lại: cùng 30 ngày nhưng rải rác suốt kỳ thì đúng là thiếu dữ liệu. */
+    const raiRac = await sucKhoeDuLieu({
+        ...fake({ ...SACH, soNgayCoBan: 30 }),
+        $queryRawUnsafe: async () => [{
+            soNgay: 30,
+            somNhat: new Date('2026-05-16T00:00:00Z'),
+            muonNhat: new Date('2026-08-13T00:00:00Z'),
+        }],
+    } as any, KY)
+    const mRai = lay(raiRac, 'pham-vi-du-lieu')
+    ok('cùng 30 ngày nhưng rải rác cả kỳ → mức NẶNG', mRai.muc === 'nang', mRai.muc)
+    ok('… nói rõ thiếu quãng giữa kỳ', /rải rác|thiếu nhiều quãng/.test(mRai.anhHuong), mRai.anhHuong)
+
     console.log('\n▶ Tồn âm\n')
 
     const ta = await sucKhoeDuLieu(fake({ ...SACH, tonAm: { so: 262, tong: -4077 } }), KY)

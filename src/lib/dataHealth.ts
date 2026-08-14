@@ -73,17 +73,43 @@ export async function sucKhoeDuLieu(
     const soNgayCoBan = Number(phu?.[0]?.soNgay) || 0
     const somNhat = phu?.[0]?.somNhat ? new Date(phu[0].somNhat).toISOString().slice(0, 10) : null
     const tyLePhu = Math.round((soNgayCoBan / soNgayKy) * 100)
+
+    /* MỚI BẮT ĐẦU DÙNG PHẦN MỀM ≠ THIẾU DỮ LIỆU.
+     *
+     * Đo trên dữ liệu thật 14/08/2026: một cửa hàng có 31/91 ngày, nhưng dữ liệu
+     * LIÊN TỤC từ 15/07 tới nay — họ mới bắt đầu dùng phần mềm, không hề bỏ sót
+     * ngày nào. Gắn cờ "phải sửa" cho họ là buộc tội oan, và họ sẽ bỏ qua luôn
+     * những cảnh báo thật ở lần sau.
+     *
+     * Phân biệt bằng tính LIÊN TỤC: nếu số ngày có bán xấp xỉ số ngày kể từ lần
+     * bán đầu tiên thì không có lỗ hổng nào — chỉ là bắt đầu muộn. Còn thưa thớt
+     * rải rác giữa kỳ mới là dữ liệu bị thiếu thật. */
+    const ngaySomNhat = phu?.[0]?.somNhat ? new Date(phu[0].somNhat).getTime() : null
+    const soNgayTuLucBatDau = ngaySomNhat
+        ? Math.max(1, Math.round((ky.end.getTime() - ngaySomNhat) / 86400_000))
+        : soNgayKy
+    const lienTuc = soNgayCoBan > 0 && soNgayCoBan >= soNgayTuLucBatDau * 0.85
+    const batDauMuon = lienTuc && soNgayCoBan < soNgayKy * 0.85
+
     muc.push({
         ma: 'pham-vi-du-lieu',
-        ten: 'Dữ liệu bán phủ được bao nhiêu kỳ',
-        muc: soNgayCoBan === 0 ? 'nang' : tyLePhu < 60 ? 'nang' : tyLePhu < 85 ? 'vua' : 'on',
+        ten: batDauMuon ? 'Dữ liệu bán bắt đầu từ giữa kỳ' : 'Dữ liệu bán phủ được bao nhiêu kỳ',
+        muc: soNgayCoBan === 0 ? 'nang' : batDauMuon ? 'vua' : tyLePhu < 60 ? 'nang' : tyLePhu < 85 ? 'vua' : 'on',
         so: soNgayCoBan === 0 ? 'không có ngày nào' : `${soNgayCoBan}/${soNgayKy} ngày (${tyLePhu}%)${somNhat ? ` · sớm nhất ${somNhat}` : ''}`,
-        anhHuong: tyLePhu < 60
-            ? 'Mọi con số "cả kỳ" đang tính trên phần dữ liệu có sẵn, nên chúng là MỨC SÀN chứ không phải mức đúng: doanh thu, thuế phải nộp, sức bán để tính điểm đặt hàng đều thấp hơn thực tế.'
-            : 'Dữ liệu phủ gần trọn kỳ nên các báo cáo theo kỳ dùng được.',
-        canLam: tyLePhu < 60
-            ? 'Nhập nốt dữ liệu bán của quãng còn thiếu, hoặc chỉ đọc báo cáo trong khoảng đã có dữ liệu.'
-            : 'Không cần làm gì.',
+        anhHuong: soNgayCoBan === 0
+            ? 'Kỳ này không có giao dịch bán nào — mọi báo cáo theo kỳ đều rỗng.'
+            : batDauMuon
+                ? `Dữ liệu LIÊN TỤC từ ${somNhat} tới nay, không sót ngày nào — nhiều khả năng cửa hàng bắt đầu dùng phần mềm từ ngày đó. Không phải lỗi dữ liệu. Nhưng các con số "cả kỳ" vẫn chỉ tính phần từ ${somNhat}, nên đừng đem so với một kỳ trọn vẹn.`
+                : tyLePhu < 60
+                    ? 'Ngày có bán nằm rải rác, thiếu nhiều quãng giữa kỳ. Mọi con số "cả kỳ" đang tính trên phần dữ liệu có sẵn, nên chúng là MỨC SÀN chứ không phải mức đúng: doanh thu, thuế phải nộp, sức bán để tính điểm đặt hàng đều thấp hơn thực tế.'
+                    : 'Dữ liệu phủ gần trọn kỳ nên các báo cáo theo kỳ dùng được.',
+        canLam: soNgayCoBan === 0
+            ? 'Kiểm tra lại khoảng ngày đang chọn.'
+            : batDauMuon
+                ? `Đọc báo cáo trong khoảng từ ${somNhat} trở đi. Nếu cửa hàng đã bán trước ngày đó thì nhập bổ sung phần cũ.`
+                : tyLePhu < 60
+                    ? 'Nhập nốt dữ liệu bán của những quãng còn thiếu, hoặc chỉ đọc báo cáo trong khoảng đã có dữ liệu.'
+                    : 'Không cần làm gì.',
     })
 
     // ── 2. Tồn kho âm ────────────────────────────────────────────────────
