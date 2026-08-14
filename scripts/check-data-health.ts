@@ -33,6 +33,7 @@ interface Kho {
     chiPhi?: number
     taiKhoan?: any[]
     phieuNhap?: any[]
+    choBanAm?: boolean
 }
 
 function fake(k: Kho, loi?: Record<string, boolean>) {
@@ -53,6 +54,7 @@ function fake(k: Kho, loi?: Record<string, boolean>) {
         expense: { aggregate: async () => { no('expense'); return { _sum: { amount: k.chiPhi ?? 0 } } } },
         bankAccount: { findMany: async () => { no('bankAccount'); return k.taiKhoan ?? [] } },
         importReceipt: { findMany: async () => { no('importReceipt'); return k.phieuNhap ?? [] } },
+        storeSettings: { findFirst: async () => { no('storeSettings'); return { allowNegativeStock: k.choBanAm ?? false } } },
     }
 }
 
@@ -122,6 +124,18 @@ async function main() {
     ok('262 mã tồn âm → mức NẶNG', mTon.muc === 'nang', mTon.muc)
     ok('… nói rõ làm bảng đặt hàng đòi mua thừa', /mua thừa/.test(mTon.anhHuong), mTon.anhHuong)
     ok('… việc cần làm là KIỂM KÊ, không phải đặt hàng', /[Kk]iểm kê/.test(mTon.canLam), mTon.canLam)
+    ok('… nói rõ cửa hàng KHÔNG bật cho bán âm nên đây là lệch sổ',
+        /KHÔNG bật cho phép bán âm/.test(mTon.anhHuong), mTon.anhHuong)
+
+    /* Cửa hàng CỐ Ý bật "cho phép bán khi hết tồn": tồn âm là bán trước, hàng về
+     * sẽ bù. Nói "lệch sổ sách" ở đây là buộc tội oan đúng cái họ chủ động chọn,
+     * và lần sau họ bỏ qua luôn cảnh báo thật. */
+    const banAm = await sucKhoeDuLieu(fake({ ...SACH, tonAm: { so: 262, tong: -4077 }, choBanAm: true }), KY)
+    const mBanAm = lay(banAm, 'ton-am')
+    ok('cửa hàng cho bán âm → KHÔNG phải mức nặng', mBanAm.muc === 'vua', mBanAm.muc)
+    ok('… nói rõ KHÔNG phải lỗi dữ liệu', /KHÔNG phải lỗi dữ liệu/.test(mBanAm.anhHuong), mBanAm.anhHuong)
+    ok('… và KHÔNG gọi là lệch sổ sách', !/lệch sổ sách/.test(mBanAm.anhHuong), mBanAm.anhHuong)
+    ok('… việc cần làm đổi thành nhập bù', /nhập bù/i.test(mBanAm.canLam), mBanAm.canLam)
 
     console.log('\n▶ Hoá đơn hỏng — tách riêng nhóm trùng khoá\n')
 

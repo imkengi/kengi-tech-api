@@ -357,7 +357,10 @@ export async function keHoachDatHang(
             const tonDeTinh = Math.max(0, ton)
             nenDat = Math.max(0, canCo - tonDeTinh - ve)
             if (ton < 0) {
-                canhBao.push(`Tồn đang ÂM ${Math.abs(lam(ton))} — gần như chắc chắn là lệch sổ sách, không phải hàng đang thiếu. Soát lại kho trước khi đặt; số đề xuất ở đây đã bỏ qua phần âm.`)
+                /* Không khẳng định nguyên nhân: cửa hàng bật "cho phép bán khi
+                 * hết tồn" thì tồn âm là bán trước, hoàn toàn cố ý. Nói chắc
+                 * "lệch sổ sách" là buộc tội oan đúng cái họ chủ động chọn. */
+                canhBao.push(`Tồn đang ÂM ${Math.abs(lam(ton))} — hoặc là đã bán trước khi hàng về, hoặc là lệch sổ sách. Dù là gì thì số đề xuất ở đây cũng đã BỎ QUA phần âm, để không bảo bạn mua thừa đúng bằng phần đang âm.`)
             }
 
             if (ton <= 0) co = 'het-hang'

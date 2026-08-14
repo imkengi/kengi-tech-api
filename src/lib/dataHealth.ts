@@ -113,6 +113,21 @@ export async function sucKhoeDuLieu(
     })
 
     // ── 2. Tồn kho âm ────────────────────────────────────────────────────
+    /* CỬA HÀNG CÓ THỂ ĐANG CỐ Ý CHO BÁN ÂM.
+     *
+     * StoreSettings.allowNegativeStock là một lựa chọn thật: nhiều cửa hàng bán
+     * trước rồi hàng mới về, và họ bật cờ đó để POS không chặn. Với những cửa
+     * hàng ấy, tồn âm KHÔNG phải lệch sổ sách — nói "gần như luôn là lệch sổ" là
+     * buộc tội oan đúng cái họ chủ động chọn, và lần sau họ bỏ qua luôn cảnh báo
+     * thật.
+     *
+     * Vẫn phải nhắc, vì tồn âm dù cố ý vẫn làm bảng đặt hàng và giá vốn lệch —
+     * nhưng nhắc bằng lời khác và ở mức nhẹ hơn. */
+    const chapNhanAm: any = await thu('caiDatKho', thieu, () => prisma.storeSettings.findFirst({
+        select: { allowNegativeStock: true },
+    }), null)
+    const choBanAm = chapNhanAm?.allowNegativeStock === true
+
     const tonAm: any = await thu('tonAm', thieu, () => prisma.product.aggregate({
         where: { stock: { lt: 0 } }, _count: true, _sum: { stock: true },
     }), null)
@@ -120,13 +135,19 @@ export async function sucKhoeDuLieu(
         const so = Number(tonAm?._count) || 0
         muc.push({
             ma: 'ton-am',
-            ten: 'Mã hàng có tồn âm',
-            muc: so === 0 ? 'on' : so > 50 ? 'nang' : 'vua',
+            ten: choBanAm ? 'Mã hàng có tồn âm (cửa hàng cho bán âm)' : 'Mã hàng có tồn âm',
+            muc: so === 0 ? 'on' : choBanAm ? 'vua' : so > 50 ? 'nang' : 'vua',
             so: so === 0 ? 'không có' : `${so} mã · tổng ${lam(tonAm?._sum?.stock)}`,
             anhHuong: so === 0
                 ? 'Tồn kho khớp sổ.'
-                : 'Tồn âm gần như luôn là lệch sổ sách (bán không trừ kho, nhập chưa ghi, đồng bộ sót) chứ không phải hàng đang thiếu. Nó làm bảng đề xuất đặt hàng đòi mua thừa đúng bằng phần lệch, và làm giá vốn hàng bán sai.',
-            canLam: so === 0 ? 'Không cần làm gì.' : 'Kiểm kê nhóm mã này rồi chỉnh tồn về đúng thực tế; xong thì chạy lại đối chiếu kho.',
+                : choBanAm
+                    ? 'Cửa hàng đang bật "cho phép bán khi hết tồn", nên tồn âm ở đây là bán trước — hàng về sẽ bù. KHÔNG phải lỗi dữ liệu. Nhưng trong lúc còn âm thì bảng đề xuất đặt hàng và giá vốn hàng bán vẫn tính trên số âm đó.'
+                    : 'Cửa hàng KHÔNG bật cho phép bán âm, nên tồn âm ở đây là lệch sổ sách (bán không trừ kho, nhập chưa ghi, đồng bộ sót) chứ không phải bán trước. Nó làm bảng đề xuất đặt hàng đòi mua thừa đúng bằng phần lệch, và làm giá vốn hàng bán sai.',
+            canLam: so === 0
+                ? 'Không cần làm gì.'
+                : choBanAm
+                    ? 'Nhập bù cho những mã đang âm sâu nhất; mã nào âm lâu mà hàng không về thì kiểm kê lại.'
+                    : 'Kiểm kê nhóm mã này rồi chỉnh tồn về đúng thực tế; xong thì chạy lại đối chiếu kho.',
         })
     }
 
