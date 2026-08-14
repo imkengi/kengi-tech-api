@@ -257,8 +257,17 @@ export async function doiChieuBaChieu(
      * Không đọc được thì để `null` và giữ nguyên cách kết luận cũ. */
     let hoaDonDauTien: string | null = null
     {
+        /* Tờ PHÁT HÀNH ĐƯỢC sớm nhất, không phải tờ sớm nhất bất kể trạng thái.
+         * Hoá đơn DRAFT/ERROR chưa có số và chưa gửi cơ quan thuế, nên chúng
+         * không chứng minh được cửa hàng đã bắt đầu phát hành. Đo thật trên
+         * KENGISTORE: 4 tờ đầu tiên (27–28/07) đều ERROR, phát hành thật bắt
+         * đầu 29/07 — lấy tờ ERROR làm mốc thì chốt chặn tưởng đã phát hành từ
+         * 27/07 và bỏ lọt đúng quãng cần được bảo vệ. */
         const r: any[] | null = await thu('eInvoice.dauTien', thieu, () => prisma.eInvoice.findFirst({
-            where: { invoiceType: { not: 'PURCHASE' } },
+            where: {
+                invoiceType: { not: 'PURCHASE' },
+                status: { notIn: ['DRAFT', 'ERROR'] },
+            },
             orderBy: { invoiceDate: 'asc' },
             select: { invoiceDate: true },
         }).then((x: any) => x ? [x] : []), null as any)

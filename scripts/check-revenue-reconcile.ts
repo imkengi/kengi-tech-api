@@ -105,7 +105,8 @@ function fakePrisma(k: Kho, loi?: Record<string, boolean>) {
             findFirst: async () => {
                 no('eInvoice')
                 const ds = (k.invoices || [])
-                    .filter(h => h.invoiceType !== 'PURCHASE')
+                    .filter(h => h.invoiceType !== 'PURCHASE'
+                        && !['DRAFT', 'ERROR'].includes(String(h.status || '').toUpperCase()))
                     .sort((a, b) => String(a.invoiceDate).localeCompare(String(b.invoiceDate)))
                 return ds[0] ?? null
             },
@@ -482,6 +483,22 @@ async function main() {
             !!moi && /hệ thống khác/.test(moi.vaSao))
         ok('… KHÔNG gắn số truy thu cho việc chưa biết',
             !!moi && moi.uocTruyThu === undefined, moi?.uocTruyThu)
+    }
+    {
+        /* Hoá đơn DRAFT/ERROR chưa có số và chưa gửi cơ quan thuế nên KHÔNG
+         * chứng minh được cửa hàng đã bắt đầu phát hành. Đo thật trên
+         * KENGISTORE: 4 tờ đầu (27–28/07) đều ERROR, phát hành thật từ 29/07. */
+        const r = await doiChieuBaChieu(fakePrisma({
+            transactions: [gd(11, 200_000_000, '2026-07-10')],
+            invoices: [
+                hd('E1', 110_000, { invoiceDate: '2026-07-05', status: 'ERROR' }),
+                hd('Z3', 5_000_000, { invoiceDate: '2026-09-02' }),
+            ],
+        }), KY)
+        ok('tờ ERROR không được coi là mốc bắt đầu phát hành',
+            !r.ruiRo.some(x => x.ma === 'chua-xuat-hoa-don')
+            && r.ruiRo.some(x => x.ma === 'chua-co-lich-su-hoa-don'),
+            r.ruiRo.map(x => x.ma))
     }
     {
         // Kỳ NẰM SAU tờ hoá đơn đầu tiên thì vẫn kết luận như cũ — không nới nhầm
