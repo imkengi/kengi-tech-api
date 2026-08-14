@@ -4590,6 +4590,62 @@ router.get('/opportunity-probe', async (req: Request, res: Response) => {
     }
 })
 
+/**
+ * GET /api/admin/engine-probe?store=CODE
+ *
+ * Chạy hai cỗ máy ĐIỂM ĐẶT HÀNG và LỊCH TIỀN TỚI trên dữ liệu THẬT, trả bản tóm
+ * tắt gọn. Cùng lý do với opportunity-probe: cả hai đều mới, đều có test đầy đủ
+ * trên dữ liệu mẫu, và đều CHƯA từng chạm dữ liệu thật.
+ *
+ * Hôm nay đã ba lần dữ liệu thật lộ ra lỗi mà hàng chục ca test không thấy —
+ * dữ liệu mẫu chỉ chứa những tình huống mình nghĩ ra được.
+ *
+ * CHỈ ĐỌC.
+ */
+router.get('/engine-probe', async (req: Request, res: Response) => {
+    try {
+        const q = req.query as any
+        const ma = String(q.store || '').trim()
+        if (!ma) return res.status(400).json({ success: false, error: 'Thiếu ?store=<mã cửa hàng>' })
+        const store: any = await registryPrisma.store.findFirst({ where: { code: ma }, select: { name: true, schema: true, code: true } })
+        if (!store) return res.status(404).json({ success: false, error: `Không có cửa hàng mã "${ma}"` })
+        const prisma = getStorePrisma(store.schema)
+
+        const { keHoachDatHang } = await import('../lib/reorderPlan')
+        const { duBaoDongTien } = await import('../lib/cashForecast')
+
+        const t1 = Date.now()
+        let datHang: any = null, loiDatHang: string | null = null
+        try { datHang = await keHoachDatHang(prisma, { soMaToiDa: 5 }) }
+        catch (e: any) { loiDatHang = String(e?.message || e).slice(0, 300) }
+        const giay1 = Math.round((Date.now() - t1) / 100) / 10
+
+        const t2 = Date.now()
+        let tien: any = null, loiTien: string | null = null
+        try { tien = await duBaoDongTien(prisma, {}) }
+        catch (e: any) { loiTien = String(e?.message || e).slice(0, 300) }
+        const giay2 = Math.round((Date.now() - t2) / 100) / 10
+
+        res.json({
+            success: true,
+            data: {
+                cuaHang: store.name, ma: store.code,
+                datHang: loiDatHang ? { loi: loiDatHang } : {
+                    chayHet: `${giay1}s`,
+                    ky: datHang?.ky, thamSo: datHang?.thamSo, tomTat: datHang?.tomTat,
+                    thieuChinh: datHang?.thieuChinh,
+                    mauHetHang: (datHang?.hetHang || []).slice(0, 3),
+                    mauCanDat: (datHang?.canDat || []).slice(0, 3),
+                },
+                dongTien: loiTien ? { loi: loiTien } : { chayHet: `${giay2}s`, ...tien },
+            },
+        })
+    } catch (err: any) {
+        console.error('GET /admin/engine-probe error:', err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
 // POST /api/admin/run-reconcile — chạy ngay vòng đối chiếu ba chiều tháng trước
 router.post('/run-reconcile', async (req: Request, res: Response) => {
     try {
