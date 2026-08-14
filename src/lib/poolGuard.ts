@@ -22,16 +22,39 @@
  *       () => prisma.$queryRawUnsafe(...),
  *   ])
  */
-export async function chayTheoDot<T = any>(
-    cac: Array<() => PromiseLike<T>>,
+/**
+ * Kiểu trả về giữ nguyên BỘ (tuple) chứ không dẹp thành mảng `any[]`.
+ *
+ * Nếu trả `any[]` thì mỗi lần đổi từ `Promise.all` sang hàm này là mất hết kiểm
+ * tra kiểu ở chỗ destructuring — đọc nhầm cột hay đảo thứ tự biến sẽ không ai
+ * bắt được. Mất kiểu là cái giá quá đắt cho một tiện ích về hiệu năng, và nó
+ * biến thành lý do chính đáng để không ai dùng hàm này.
+ */
+/* Suy kiểu từ CHÍNH giá trị trả về của thunk rồi mới bóc Promise, chứ không
+ * khớp thẳng với `PromiseLike<infer R>`.
+ *
+ * Lý do: `req.storePrisma` mang kiểu `any`, nên thunk là `() => any`. Khớp `any`
+ * với `PromiseLike<infer R>` cho ra `unknown` (TypeScript trả hợp của cả hai
+ * nhánh khi gặp `any`), và mọi biến destructuring thành `unknown` — hỏng build ở
+ * hàng loạt chỗ. Bóc bằng `Awaited<R>` thì `any` vẫn là `any`. */
+type KetQua<T extends readonly (() => PromiseLike<any>)[]> = {
+    -readonly [K in keyof T]: T[K] extends () => infer R ? Awaited<R> : never
+}
+
+/* `const T` (TS 5.0+) bắt buộc phải có: thiếu nó thì mảng truyền vào bị suy
+ * thành MẢNG ĐỒNG NHẤT (mọi phần tử mang kiểu hợp của cả bộ) thay vì bộ có thứ
+ * tự — và người dùng nhận về `{total} | {amount} | {totalCost}` cho MỌI biến,
+ * hỏng build ở hàng loạt chỗ. */
+export async function chayTheoDot<const T extends readonly (() => PromiseLike<any>)[]>(
+    cac: T,
     coToiDa = 3,
-): Promise<T[]> {
+): Promise<KetQua<T>> {
     const n = Math.max(1, Math.floor(coToiDa))
-    const ra: T[] = []
+    const ra: any[] = []
     for (let i = 0; i < cac.length; i += n) {
         const dot = cac.slice(i, i + n).map(f => f())
         // pool-co-y: đây CHÍNH LÀ chỗ giới hạn số kết nối — mỗi đợt tối đa n cái
         ra.push(...await Promise.all(dot))
     }
-    return ra
+    return ra as KetQua<T>
 }

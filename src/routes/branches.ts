@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express'
 import { authMiddleware, AuthRequest, getBranchFilter } from '../middleware/auth'
+import { chayTheoDot } from '../lib/poolGuard'
 import { requireRole } from '../middleware/roleMiddleware'
 import { errMsg } from '../lib/errorResponse'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
@@ -224,29 +225,29 @@ router.get('/:id/detail', authMiddleware, async (req: AuthRequest, res: Response
             expenseStats,
             customerCount,
             recentTransactions,
-        ] = await Promise.all([
+        ] = await chayTheoDot([
             // Employees belonging to this branch
-            prisma.user.count({ where: { branchId } }).catch(() => 0),
+            () => prisma.user.count({ where: { branchId } }).catch(() => 0),
             // Transaction stats (30 days)
-            prisma.transaction.aggregate({
+            () => prisma.transaction.aggregate({
                 where: { branchId, createdAt: { gte: thirtyDaysAgo }, status: { not: 'voided' } },
                 _count: true,
                 _sum: { total: true },
             }).catch(() => ({ _count: 0, _sum: { total: 0 } })),
             // Expense stats (30 days)
-            prisma.expense.aggregate({
+            () => prisma.expense.aggregate({
                 where: { branchId, date: { gte: thirtyDaysAgo } },
                 _count: true,
                 _sum: { amount: true },
             }).catch(() => ({ _count: 0, _sum: { amount: 0 } })),
             // Unique customers who bought at this branch
-            prisma.transaction.findMany({
+            () => prisma.transaction.findMany({
                 where: { branchId, customerId: { not: null } },
                 select: { customerId: true },
                 distinct: ['customerId'],
             }).then((r: any[]) => r.length).catch(() => 0),
             // Recent 10 transactions
-            prisma.transaction.findMany({
+            () => prisma.transaction.findMany({
                 where: { branchId },
                 orderBy: { createdAt: 'desc' },
                 take: 10,

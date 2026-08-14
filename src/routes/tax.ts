@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { errMsg } from '../lib/errorResponse'
 import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
+import { chayTheoDot } from '../lib/poolGuard'
 import { createJournalEntriesForTransaction, AUTO_JOURNAL_REF_TYPES, PLATFORM_AR } from '../lib/autoJournal'
 import { postImportReceiptJournal, postExpenseJournal, postReturnJournal } from '../lib/autoJournalPurchase'
 import { COA_SEED, accountName } from '../lib/chartOfAccounts'
@@ -1215,12 +1216,12 @@ router.get('/summary', authMiddleware, async (req: AuthRequest, res: Response) =
         const prevStart = new Date(year - 1, 0, 1), prevEnd = new Date(year - 1, 11, 31, 23, 59, 59, 999)
 
         // Current year data
-        const [txs, expenses, prevTxs, prevExpenses, imports] = await Promise.all([
-            prisma.transaction.findMany({ where: { status: { in: ['completed', 'partial'] }, createdAt: { gte: start, lte: end } }, select: { total: true, tax: true, subtotal: true, discount: true }, }),
-            prisma.expense.findMany({ where: { date: { gte: start, lte: end } }, select: { amount: true } }),
-            prisma.transaction.findMany({ where: { status: { in: ['completed', 'partial'] }, createdAt: { gte: prevStart, lte: prevEnd } }, select: { total: true } }).catch(() => []),
-            prisma.expense.findMany({ where: { date: { gte: prevStart, lte: prevEnd } }, select: { amount: true } }).catch(() => []),
-            prisma.importReceipt.findMany({ where: { status: { not: 'draft' }, createdAt: { gte: start, lte: end } }, select: { totalCost: true } }).catch(() => []),
+        const [txs, expenses, prevTxs, prevExpenses, imports] = await chayTheoDot([
+            () => prisma.transaction.findMany({ where: { status: { in: ['completed', 'partial'] }, createdAt: { gte: start, lte: end } }, select: { total: true, tax: true, subtotal: true, discount: true }, }),
+            () => prisma.expense.findMany({ where: { date: { gte: start, lte: end } }, select: { amount: true } }),
+            () => prisma.transaction.findMany({ where: { status: { in: ['completed', 'partial'] }, createdAt: { gte: prevStart, lte: prevEnd } }, select: { total: true } }).catch(() => []),
+            () => prisma.expense.findMany({ where: { date: { gte: prevStart, lte: prevEnd } }, select: { amount: true } }).catch(() => []),
+            () => prisma.importReceipt.findMany({ where: { status: { not: 'draft' }, createdAt: { gte: start, lte: end } }, select: { totalCost: true } }).catch(() => []),
         ])
 
         let journalEntries: any[] = []

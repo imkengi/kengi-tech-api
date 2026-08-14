@@ -32,12 +32,14 @@ const GOC = join(__dirname, '..')
 const THU_MUC = ['src/routes', 'src/lib', 'src/cron', 'src/services']
 /* HAI MỨC, chứ không một.
  *
- * Repo đang có ~27 chỗ bắn từ 3 truy vấn — chặn hết ngay thì bộ kiểm đỏ vĩnh
- * viễn, mà bộ kiểm đỏ mãi thì người ta thôi đọc nó, và lúc đó nó vô dụng hơn cả
- * việc không có. Nên: CHẶN cái thật sự nguy hiểm, LIỆT KÊ cái cần dọn dần.
+ * Repo từng có 27 chỗ bắn từ 3 truy vấn (nặng nhất là 13) — chặn hết ngay thì
+ * bộ kiểm đỏ vĩnh viễn, mà bộ kiểm đỏ mãi thì người ta thôi đọc nó, lúc đó nó vô
+ * dụng hơn cả việc không có. Nên: CHẶN cái thật sự nguy hiểm, LIỆT KÊ cái cần
+ * dọn dần.
  *
- * Hạ dần ngưỡng chặn khi danh sách ngắn lại. */
-const NGUONG_CHAN = 6
+ * Lịch sử hạ ngưỡng: 6 (14/08/2026, sau khi dọn 13 và 11) → 5 (sau khi dọn hết
+ * nhóm 5). Hạ tiếp xuống 4 sẽ chặn 8 chỗ — dọn xong nhóm đó thì hạ. */
+const NGUONG_CHAN = 5
 const NGUONG_NHAC = 3
 const CHO_PHEP_BO_QUA = 'pool-co-y'
 

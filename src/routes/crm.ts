@@ -1,5 +1,6 @@
 import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
+import { chayTheoDot } from '../lib/poolGuard'
 import { requirePermission } from '../middleware/permissionMiddleware'
 import { errMsg } from '../lib/errorResponse'
 
@@ -464,25 +465,25 @@ router.get('/notifications', authMiddleware, requirePermission('customers.view')
         const endOfToday = new Date(now); endOfToday.setHours(23, 59, 59, 999)
         const in7d = new Date(now.getTime() + 7 * 86400000)
 
-        const [overdue, dueToday, replies, bigDebt, closingDeals] = await Promise.all([
-            prisma.crmTask.findMany({
+        const [overdue, dueToday, replies, bigDebt, closingDeals] = await chayTheoDot([
+            () => prisma.crmTask.findMany({
                 where: { status: { not: 'done' }, dueDate: { lt: now } },
                 orderBy: { dueDate: 'asc' }, take: 20,
             }),
-            prisma.crmTask.findMany({
+            () => prisma.crmTask.findMany({
                 where: { status: { not: 'done' }, dueDate: { gte: now, lte: endOfToday } },
                 orderBy: { dueDate: 'asc' }, take: 20,
             }),
-            prisma.crmEmailLog.findMany({
+            () => prisma.crmEmailLog.findMany({
                 where: { repliedAt: { not: null } },
                 orderBy: { repliedAt: 'desc' }, take: 20,
             }),
-            prisma.customer.findMany({
+            () => prisma.customer.findMany({
                 where: { debt: { gt: 0 } },
                 orderBy: { debt: 'desc' }, take: 5,
                 select: { id: true, name: true, debt: true },
             }),
-            prisma.crmDeal.findMany({
+            () => prisma.crmDeal.findMany({
                 where: { stage: { notIn: ['won', 'lost'] }, expectedCloseDate: { gte: now, lte: in7d } },
                 orderBy: { expectedCloseDate: 'asc' }, take: 10,
             }),

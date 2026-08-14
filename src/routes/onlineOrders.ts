@@ -2,6 +2,7 @@ import { khoangNgayVN } from '../lib/vnTime'
 import { Router, Response, NextFunction } from 'express'
 import { errMsg } from '../lib/errorResponse'
 import { authMiddleware, AuthRequest, getBranchFilter } from '../middleware/auth'
+import { chayTheoDot } from '../lib/poolGuard'
 import { requirePermission } from '../middleware/permissionMiddleware'
 import { nextCode } from '../lib/codeGenerator'
 import { reverseOnlineOrderEffects, isReversalStatus } from '../services/onlineOrderReversal'
@@ -3743,12 +3744,12 @@ router.get('/returns/stats', authMiddleware, async (req: AuthRequest, res: Respo
                 ],
             ...(statChannelId && statChannelId !== 'all' ? { channelId: statChannelId } : {}),
         }
-        const [total, pending, approved, rejected, totalRefunded] = await Promise.all([
-            prisma.returnOrder.count({ where: onlineCode }),
-            prisma.returnOrder.count({ where: { ...onlineCode, status: 'pending' } }),
-            prisma.returnOrder.count({ where: { ...onlineCode, status: { in: ['approved', 'refunded'] } } }),
-            prisma.returnOrder.count({ where: { ...onlineCode, status: 'rejected' } }),
-            prisma.returnOrder.aggregate({
+        const [total, pending, approved, rejected, totalRefunded] = await chayTheoDot([
+            () => prisma.returnOrder.count({ where: onlineCode }),
+            () => prisma.returnOrder.count({ where: { ...onlineCode, status: 'pending' } }),
+            () => prisma.returnOrder.count({ where: { ...onlineCode, status: { in: ['approved', 'refunded'] } } }),
+            () => prisma.returnOrder.count({ where: { ...onlineCode, status: 'rejected' } }),
+            () => prisma.returnOrder.aggregate({
                 where: { ...onlineCode, status: { in: ['approved', 'refunded'] } },
                 _sum: { totalRefund: true },
             }),

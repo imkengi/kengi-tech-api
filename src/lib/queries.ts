@@ -6,6 +6,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { PrismaClient as StorePrisma } from '../generated/store-client'
+import { chayTheoDot } from './poolGuard'
 
 // ─── Dashboard Stats (single parallel call) ─────────────────────────────────
 
@@ -92,8 +93,8 @@ export async function getDashboardStats(
     // Product + Customer don't have branchId, so they use a single aggregate.
     const branchId: string | null = (branchFilter && (branchFilter as any).branchId) || null
 
-    const [txRows, productRows, customerRows, expenseRows, cogsRows] = await Promise.all([
-        prisma.$queryRawUnsafe<any[]>(
+    const [txRows, productRows, customerRows, expenseRows, cogsRows] = await chayTheoDot([
+        () => prisma.$queryRawUnsafe<any[]>(
             `SELECT
                 COALESCE(SUM(total) FILTER (WHERE status NOT IN ('voided', 'returned')), 0) AS total_revenue,
                 COALESCE(SUM(total) FILTER (WHERE status NOT IN ('voided', 'returned') AND "createdAt" >= $1), 0) AS today_revenue,
@@ -110,14 +111,14 @@ export async function getDashboardStats(
              WHERE ($5::text IS NULL OR "branchId" = $5)`,
             todayStart, monthStart, lastMonthStart, lastMonthEnd, branchId, pStart, pEnd, prevStart, prevEnd,
         ),
-        prisma.$queryRawUnsafe<any[]>(
+        () => prisma.$queryRawUnsafe<any[]>(
             `SELECT
                 COUNT(*) AS total_products,
                 COUNT(*) FILTER (WHERE stock > 0 AND stock <= 10) AS low_stock,
                 COUNT(*) FILTER (WHERE stock <= 0) AS out_of_stock
              FROM "Product"`,
         ),
-        prisma.$queryRawUnsafe<any[]>(
+        () => prisma.$queryRawUnsafe<any[]>(
             `SELECT
                 COUNT(*) AS total_customers,
                 COUNT(*) FILTER (WHERE "createdAt" >= $1) AS new_this_month,
@@ -126,7 +127,7 @@ export async function getDashboardStats(
              FROM "Customer"`,
             monthStart, lastMonthStart, lastMonthEnd,
         ),
-        prisma.$queryRawUnsafe<any[]>(
+        () => prisma.$queryRawUnsafe<any[]>(
             `SELECT
                 COALESCE(SUM(amount) FILTER (WHERE date >= $1), 0) AS this_month_expenses,
                 COALESCE(SUM(amount) FILTER (WHERE date >= $2 AND date <= $3), 0) AS last_month_expenses
@@ -135,7 +136,7 @@ export async function getDashboardStats(
             monthStart, lastMonthStart, lastMonthEnd, branchId,
         ),
         // COGS theo kỳ (+ kỳ liền trước) cho thẻ Lợi nhuận gộp — giá vốn hiện tại
-        prisma.$queryRawUnsafe<any[]>(
+        () => prisma.$queryRawUnsafe<any[]>(
             `SELECT
                 COALESCE(SUM(ti.quantity * COALESCE(p."costPrice", 0)) FILTER (WHERE t."createdAt" >= $1 AND t."createdAt" <= $2), 0) AS period_cogs,
                 COALESCE(SUM(ti.quantity * COALESCE(p."costPrice", 0)) FILTER (WHERE t."createdAt" >= $3 AND t."createdAt" <= $4), 0) AS prev_period_cogs

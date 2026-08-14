@@ -3,6 +3,7 @@ import crypto from 'crypto'
 import jwt from 'jsonwebtoken'
 import { errMsg } from '../lib/errorResponse'
 import { registryPrisma, getStorePrisma, dropStoreSchema, mapWithConcurrency, syncBranchSchemaTables } from '../lib/prisma'
+import { chayTheoDot } from '../lib/poolGuard'
 import { invalidateStoreStatus } from '../lib/storeStatusCache'
 
 const router = Router()
@@ -81,12 +82,12 @@ router.get('/stats', async (_req: Request, res: Response) => {
         const now = new Date()
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
 
-        const [totalStores, activeStores, suspendedStores, newStoresThisMonth, allStores] = await Promise.all([
-            prisma.store.count(),
-            prisma.store.count({ where: { status: 'active' } }),
-            prisma.store.count({ where: { status: { in: ['suspended', 'inactive'] } } }),
-            prisma.store.count({ where: { createdAt: { gte: startOfMonth } } }),
-            prisma.store.findMany({ select: { schema: true } }),
+        const [totalStores, activeStores, suspendedStores, newStoresThisMonth, allStores] = await chayTheoDot([
+            () => prisma.store.count(),
+            () => prisma.store.count({ where: { status: 'active' } }),
+            () => prisma.store.count({ where: { status: { in: ['suspended', 'inactive'] } } }),
+            () => prisma.store.count({ where: { createdAt: { gte: startOfMonth } } }),
+            () => prisma.store.findMany({ select: { schema: true } }),
         ])
 
         // Count users + branches across all store schemas
@@ -910,12 +911,15 @@ router.post('/cleanup-orphan-warehouses', async (req: Request, res: Response) =>
                 const chiTiet: any[] = []
                 for (const w of moCoi) {
                     // Đếm MỌI thứ đang trỏ tới kho này trước khi động vào
-                    const [soTon, tonKhac0, chuyenTu, chuyenDen, chuyenDi] = await Promise.all([
-                        sp.warehouseStock.count({ where: { warehouseId: w.id } }),
-                        sp.warehouseStock.count({ where: { warehouseId: w.id, quantity: { not: 0 } } }),
-                        sp.stockTransfer.count({ where: { fromWarehouseId: w.id } }).catch(() => 0),
-                        sp.stockTransfer.count({ where: { toWarehouseId: w.id } }).catch(() => 0),
-                        sp.salesTrip.count({ where: { warehouseId: w.id } }).catch(() => 0),
+                    /* Vòng lặp này chạy cho TỪNG kho mồ côi của TỪNG cửa hàng —
+                     * bắn 5 truy vấn một lượt ở đây là nhân lên rất nhanh. Chia
+                     * đợt để tối đa 3 kết nối bất kể có bao nhiêu kho. */
+                    const [soTon, tonKhac0, chuyenTu, chuyenDen, chuyenDi] = await chayTheoDot([
+                        () => sp.warehouseStock.count({ where: { warehouseId: w.id } }),
+                        () => sp.warehouseStock.count({ where: { warehouseId: w.id, quantity: { not: 0 } } }),
+                        () => sp.stockTransfer.count({ where: { fromWarehouseId: w.id } }).catch(() => 0),
+                        () => sp.stockTransfer.count({ where: { toWarehouseId: w.id } }).catch(() => 0),
+                        () => sp.salesTrip.count({ where: { warehouseId: w.id } }).catch(() => 0),
                     ])
                     // Chi nhánh chính đã có kho main riêng chưa? Chưa thì kho mồ côi
                     // này ĐANG được dùng thật — tuyệt đối không đụng.
