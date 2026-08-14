@@ -32,6 +32,7 @@ interface Kho {
     doanhThu?: number
     chiPhi?: number
     taiKhoan?: any[]
+    phieuNhap?: any[]
 }
 
 function fake(k: Kho, loi?: Record<string, boolean>) {
@@ -51,6 +52,7 @@ function fake(k: Kho, loi?: Record<string, boolean>) {
         transaction: { aggregate: async () => { no('transaction'); return { _sum: { total: k.doanhThu ?? 0 } } } },
         expense: { aggregate: async () => { no('expense'); return { _sum: { amount: k.chiPhi ?? 0 } } } },
         bankAccount: { findMany: async () => { no('bankAccount'); return k.taiKhoan ?? [] } },
+        importReceipt: { findMany: async () => { no('importReceipt'); return k.phieuNhap ?? [] } },
     }
 }
 
@@ -146,6 +148,38 @@ async function main() {
 
     const cpOk = await sucKhoeDuLieu(fake({ ...SACH, doanhThu: 1_000_000_000, chiPhi: 200_000_000 }), KY)
     ok('chi 20% doanh thu → ổn, không làm phiền', lay(cpOk, 'chi-phi-ghi-so').muc === 'on')
+
+    console.log('\n▶ Phiếu nhập trùng số hoá đơn\n')
+
+    /* Ca thật 14/08/2026: một cửa hàng có 4 cặp trùng, 138,7 triệu ghi hai lần —
+     * ba cặp là nhập lại đúng những phiếu đã nhập tuần trước. */
+    const nhapTrung = await sucKhoeDuLieu(fake({
+        ...SACH,
+        phieuNhap: [
+            { code: 'NH-001', vatInvoiceNo: '00002586', supplierId: 'ncc1', supplierName: 'Hưng Tín', totalCost: 25_480_759 },
+            { code: 'NH-002', vatInvoiceNo: '00002586', supplierId: 'ncc1', supplierName: 'Hưng Tín', totalCost: 25_480_759 },
+            { code: 'NH-003', vatInvoiceNo: '00002596', supplierId: 'ncc1', supplierName: 'Hưng Tín', totalCost: 28_770_898 },
+            { code: 'NH-004', vatInvoiceNo: '00002596', supplierId: 'ncc1', supplierName: 'Hưng Tín', totalCost: 28_770_898 },
+        ],
+    }), KY)
+    const mNhap = lay(nhapTrung, 'phieu-nhap-trung')
+    ok('2 cặp trùng → mức NẶNG', mNhap.muc === 'nang', mNhap.muc)
+    ok('… đếm đúng số cặp, không đếm số phiếu', /2 cặp/.test(mNhap.so || ''), mNhap.so)
+    ok('… tiền thừa chỉ tính phiếu SAU, không cộng cả nhóm',
+        /54\.251\.657/.test(mNhap.so || ''), mNhap.so)
+    ok('… chỉ rõ giữ phiếu đầu, huỷ phiếu sau', /giữ phiếu ĐẦU TIÊN/.test(mNhap.canLam), mNhap.canLam)
+    ok('… nói rõ huỷ sẽ tự trừ lại tồn kho', /trừ lại tồn kho/.test(mNhap.canLam))
+
+    /* Trùng số ở HAI nhà cung cấp khác nhau là bình thường — mỗi bên một dải số. */
+    const khacNcc = await sucKhoeDuLieu(fake({
+        ...SACH,
+        phieuNhap: [
+            { code: 'NH-001', vatInvoiceNo: '000123', supplierId: 'ncc1', supplierName: 'A', totalCost: 1_000_000 },
+            { code: 'NH-002', vatInvoiceNo: '000123', supplierId: 'ncc2', supplierName: 'B', totalCost: 2_000_000 },
+        ],
+    }), KY)
+    ok('cùng số nhưng khác nhà cung cấp → KHÔNG báo trùng',
+        lay(khacNcc, 'phieu-nhap-trung').muc === 'on', lay(khacNcc, 'phieu-nhap-trung').so)
 
     console.log('\n▶ Số dư ngân hàng\n')
 

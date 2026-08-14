@@ -177,7 +177,52 @@ export async function sucKhoeDuLieu(
         })
     }
 
-    // ── 5. Số dư ngân hàng đã nhập chưa ──────────────────────────────────
+    /* ── 5. Phiếu nhập trùng số hoá đơn cùng một nhà cung cấp ─────────────
+     *
+     * Mỗi phiếu nhập cộng tồn kho, tính lại giá vốn, ghi công nợ nhà cung cấp và
+     * sinh bút toán. Nhập trùng là sai đủ BỐN chỗ cùng lúc, cộng thêm khai trùng
+     * chi phí được trừ khi quyết toán.
+     *
+     * Đo trên dữ liệu thật 14/08/2026: một cửa hàng có 4 cặp trùng, 138,7 triệu
+     * chi phí ghi hai lần — ba cặp là do nhập lại đúng những phiếu đã nhập tuần
+     * trước, số tiền giống hệt tới từng đồng.
+     *
+     * Chỉ gom theo nhà cung cấp: trùng số ở HAI nhà cung cấp khác nhau là bình
+     * thường vì mỗi bên có dải số riêng. */
+    const phieuNhap: any[] = await thu('phieuNhapTrung', thieu, () => prisma.importReceipt.findMany({
+        where: { createdAt: { gte: ky.start, lt: ky.end }, status: { not: 'cancelled' }, vatInvoiceNo: { not: null } },
+        select: { code: true, vatInvoiceNo: true, supplierId: true, supplierName: true, totalCost: true },
+        take: 3000,
+    }), [])
+    if (phieuNhap.length > 0 || !thieu.some(t => t.startsWith('phieuNhapTrung'))) {
+        const chuan = (v: any) => String(v || '').replace(/\s+/g, '').toLowerCase()
+        const nhom = new Map<string, any[]>()
+        for (const r of phieuNhap) {
+            const so = chuan(r.vatInvoiceNo)
+            const ncc = r.supplierId || chuan(r.supplierName)
+            if (!so || !ncc) continue
+            const k = `${ncc}|${so}`
+            if (!nhom.has(k)) nhom.set(k, [])
+            nhom.get(k)!.push(r)
+        }
+        const trung = Array.from(nhom.values()).filter(v => v.length > 1)
+        // Tiền ghi thừa = các phiếu SAU trong mỗi nhóm; phiếu đầu mới là phiếu thật.
+        const tienThua = trung.reduce((s, v) => s + v.slice(1).reduce((s2: number, r: any) => s2 + (Number(r.totalCost) || 0), 0), 0)
+        muc.push({
+            ma: 'phieu-nhap-trung',
+            ten: 'Phiếu nhập trùng số hoá đơn',
+            muc: trung.length === 0 ? 'on' : 'nang',
+            so: trung.length === 0 ? 'không có' : `${trung.length} cặp · ghi thừa ${tien(tienThua)}`,
+            anhHuong: trung.length === 0
+                ? 'Mỗi số hoá đơn chỉ dùng một lần cho mỗi nhà cung cấp.'
+                : 'Mỗi phiếu nhập cộng tồn kho, tính lại giá vốn, ghi công nợ nhà cung cấp và sinh bút toán — nhập trùng là sai đủ bốn chỗ cùng lúc. Khi quyết toán còn thành khai trùng chi phí được trừ, mà bên bán chỉ phát hành một tờ cho mỗi số.',
+            canLam: trung.length === 0
+                ? 'Không cần làm gì.'
+                : 'Mở Nhập hàng, lọc theo số hoá đơn ở danh sách bên dưới, giữ phiếu ĐẦU TIÊN và huỷ phiếu nhập sau — huỷ sẽ tự trừ lại tồn kho và đảo bút toán.',
+        })
+    }
+
+    // ── 6. Số dư ngân hàng đã nhập chưa ──────────────────────────────────
     const tk: any[] = await thu('taiKhoan', thieu, () => prisma.bankAccount.findMany({
         select: { balance: true },
     }), [])
