@@ -4660,10 +4660,34 @@ router.get('/engine-probe', async (req: Request, res: Response) => {
                              WHERE status IN ('completed', 'partial')`)
                         const x = r?.[0] || {}
                         const d = (v: any) => v ? new Date(v).toISOString().slice(0, 10) : null
+                        /* Lệch giữa hai cách cắt kỳ, theo từng tháng. Đây là con
+                         * số quyết định có nên đổi cách cắt kỳ ở mảng thuế hay
+                         * không — đổi là thay đổi doanh thu đã kê khai, nên phải
+                         * đo chứ không suy. */
+                        const theoThang: any[] = await prisma.$queryRawUnsafe(
+                            `SELECT thang,
+                                    SUM(CASE WHEN nguon = 'tao' THEN tien ELSE 0 END)::float8 AS "theoNgayTao",
+                                    SUM(CASE WHEN nguon = 'ban' THEN tien ELSE 0 END)::float8 AS "theoNgayBan"
+                             FROM (
+                                 SELECT to_char("createdAt" + interval '7 hours', 'YYYY-MM') AS thang,
+                                        'tao' AS nguon, total AS tien
+                                 FROM "Transaction" WHERE status IN ('completed','partial')
+                                 UNION ALL
+                                 SELECT to_char(COALESCE("transactionDate","createdAt") + interval '7 hours', 'YYYY-MM') AS thang,
+                                        'ban' AS nguon, total AS tien
+                                 FROM "Transaction" WHERE status IN ('completed','partial')
+                             ) z
+                             GROUP BY thang ORDER BY thang`)
                         return {
                             tongGiaoDich: x.tong, soCoNgayBan: x.coNgayBan,
                             ngayTao: { tu: d(x.taoMin), den: d(x.taoMax), soNgayKhacNhau: x.soNgayTao },
                             ngayBan: { tu: d(x.banMin), den: d(x.banMax), soNgayKhacNhau: x.soNgayBan },
+                            lechTheoThang: theoThang.map((m: any) => ({
+                                thang: m.thang,
+                                theoNgayTao: Math.round(Number(m.theoNgayTao) || 0),
+                                theoNgayBan: Math.round(Number(m.theoNgayBan) || 0),
+                                lech: Math.round((Number(m.theoNgayTao) || 0) - (Number(m.theoNgayBan) || 0)),
+                            })),
                         }
                     } catch (e: any) {
                         return { loi: String(e?.message || e).slice(0, 300) }
