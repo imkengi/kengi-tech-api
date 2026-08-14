@@ -458,6 +458,25 @@ async function calculate01GTGT(prisma: any, req: any, periodType: string, year: 
 }
 
 // ── Helper: calculate 01/CNKD data (Household / Individual business) ────────
+/**
+ * Doanh thu LŨY KẾ TỪ ĐẦU NĂM tới hết ngày `denNgay` — dùng để xét ngưỡng chịu
+ * thuế của hộ kinh doanh.
+ *
+ * Tách riêng vì hai nơi lập tờ khai 01/CNKD (cả kỳ và theo giao dịch được chọn)
+ * đều cần; để mỗi nơi tự tính thì sớm muộn hai bên ra hai kết quả khác nhau —
+ * mà đây là con số quyết định hộ có phải nộp thuế hay không.
+ */
+async function doanhThuLuyKeNam(prisma: any, year: number, denNgay: Date): Promise<number> {
+    const agg = await prisma.transaction.aggregate({
+        where: {
+            status: { in: ['completed', 'partial'] },
+            createdAt: { gte: new Date(year, 0, 1), lte: denNgay },
+        },
+        _sum: { total: true },
+    }).catch(() => null)
+    return Number(agg?._sum?.total || 0)
+}
+
 async function calculate01CNKD(prisma: any, periodType: string, year: number, month?: number, quarter?: number) {
     const { startDate, endDate } = getPeriodDateRange(periodType, year, month, quarter)
 
@@ -474,17 +493,31 @@ async function calculate01CNKD(prisma: any, periodType: string, year: number, mo
     const cnkdPitRate = 0.5
     const cnkdThreshold = nguongChiuThueHKD(year)
 
-    // Annualized revenue for threshold check (estimate)
-    const monthsInPeriod = periodType === 'quarter' ? 3 : 1
-    const annualizedRevenue = cnkdRevenue * (12 / monthsInPeriod)
+    /* NGƯỠNG CHỊU THUẾ XÉT THEO DOANH THU THẬT CỦA NĂM, KHÔNG SUY RA TỪ MỘT KỲ.
+     *
+     * Bản trước lấy doanh thu kỳ nhân 12 (hoặc nhân 4 với quý) rồi so ngưỡng.
+     * Cách đó quyết định SAI ở cả hai hướng và hướng nào cũng tốn tiền thật:
+     *   - tháng Tết bán gấp ba ngày thường bị quy đổi thành cả năm vượt ngưỡng →
+     *     tính thuế cho hộ đáng lẽ được miễn;
+     *   - tháng ế bị quy đổi thành dưới ngưỡng → bỏ thuế của hộ đã vượt, tới cuối
+     *     năm bị truy thu kèm tiền chậm nộp.
+     *
+     * Luật xét theo doanh thu của NĂM DƯƠNG LỊCH (Thông tư 40/2021; ngưỡng nâng
+     * lên 200 triệu từ 01/01/2026 theo Luật Thuế GTGT 48/2024). Nên cộng doanh
+     * thu thật từ đầu năm tới hết kỳ đang khai — số đã biết chắc, không dự báo. */
+    const doanhThuNam = (await doanhThuLuyKeNam(prisma, year, endDate)) || cnkdRevenue
 
-    // If annualized revenue below threshold → no tax
-    const isAboveThreshold = annualizedRevenue > cnkdThreshold
+    const isAboveThreshold = doanhThuNam > cnkdThreshold
     const cnkdVatAmount = isAboveThreshold ? cnkdRevenue * (cnkdVatRate / 100) : 0
     const cnkdPitAmount = isAboveThreshold ? cnkdRevenue * (cnkdPitRate / 100) : 0
     const cnkdTotalTax = cnkdVatAmount + cnkdPitAmount
 
-    return { cnkdRevenue, cnkdVatRate, cnkdVatAmount, cnkdPitRate, cnkdPitAmount, cnkdTotalTax, cnkdThreshold }
+    return {
+        cnkdRevenue, cnkdVatRate, cnkdVatAmount, cnkdPitRate, cnkdPitAmount, cnkdTotalTax, cnkdThreshold,
+        nguonDoanhThu: isAboveThreshold
+            ? `Doanh thu lũy kế từ đầu năm ${Math.round(doanhThuNam).toLocaleString('vi-VN')}đ đã vượt ngưỡng ${Math.round(cnkdThreshold).toLocaleString('vi-VN')}đ/năm — kỳ này phải nộp thuế`
+            : `Doanh thu lũy kế từ đầu năm ${Math.round(doanhThuNam).toLocaleString('vi-VN')}đ, chưa vượt ngưỡng ${Math.round(cnkdThreshold).toLocaleString('vi-VN')}đ/năm — kỳ này chưa phát sinh thuế, nhưng vượt ngưỡng vào tháng nào thì từ đó phải nộp`,
+    }
 }
 
 // ── XML builder helpers ─────────────────────────────────────────────────────
@@ -700,10 +733,24 @@ router.post('/declarations', authMiddleware, async (req: AuthRequest, res: Respo
             } else {
                 const cnkdRevenue = selectedTx.reduce((s, t) => s + (t.total || 0), 0)
                 const cnkdVatRate = 1, cnkdPitRate = 0.5
-                const cnkdVatAmount = cnkdRevenue * (cnkdVatRate / 100)
-                const cnkdPitAmount = cnkdRevenue * (cnkdPitRate / 100)
+                const nguong = nguongChiuThueHKD(year)
+
+                /* Nhánh này TRƯỚC ĐÂY tính thuế vô điều kiện, không xét ngưỡng —
+                 * trong khi nhánh lập cả kỳ thì có xét. Hộ kinh doanh chưa tới
+                 * ngưỡng mà chọn vài giao dịch để lập tờ khai là bị tính thuế
+                 * không phải nộp. Dùng chung một phép xét cho cả hai nhánh. */
+                const { endDate: cuoiKy } = getPeriodDateRange(periodType, year, month, quarter)
+                const dtNam = (await doanhThuLuyKeNam(prisma, year, cuoiKy)) || cnkdRevenue
+                const vuotNguong = dtNam > nguong
+
+                const cnkdVatAmount = vuotNguong ? cnkdRevenue * (cnkdVatRate / 100) : 0
+                const cnkdPitAmount = vuotNguong ? cnkdRevenue * (cnkdPitRate / 100) : 0
                 const cnkdTotalTax = cnkdVatAmount + cnkdPitAmount
-                calculated = { cnkdRevenue, cnkdVatRate, cnkdVatAmount, cnkdPitRate, cnkdPitAmount, cnkdTotalTax, cnkdThreshold: nguongChiuThueHKD(year) }
+                calculated = {
+                    cnkdRevenue, cnkdVatRate, cnkdVatAmount, cnkdPitRate, cnkdPitAmount,
+                    cnkdTotalTax, cnkdThreshold: nguong,
+                    nguonDoanhThu: `Giao dịch được chọn; ngưỡng xét theo doanh thu lũy kế từ đầu năm ${Math.round(dtNam).toLocaleString('vi-VN')}đ`,
+                }
             }
         } else {
             // Fallback: calculate from all transactions in period
