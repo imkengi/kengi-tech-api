@@ -1786,6 +1786,30 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                  * trong hai duong. */
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "ReturnItem" ADD COLUMN IF NOT EXISTS "disposed" BOOLEAN NOT NULL DEFAULT false`)
 
+                /* Ban phan tich AI da luu (2026-08-14).
+                 * Moi luot chay tro ly ton 30-60 giay cho va ton han muc Gemini
+                 * cua chinh cua hang; truoc day ket qua chi nam trong bo nho
+                 * trinh duyet, doi tab la mat va phai chay lai tu dau. */
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "AiReport" (
+                        "id" TEXT NOT NULL,
+                        "loai" TEXT NOT NULL DEFAULT 'khac',
+                        "ky" TEXT NOT NULL DEFAULT '',
+                        "tuNgay" TEXT,
+                        "denNgay" TEXT,
+                        "tieuDe" TEXT NOT NULL,
+                        "noiDung" TEXT NOT NULL,
+                        "toolCalls" TEXT,
+                        "createdBy" TEXT,
+                        "createdByName" TEXT,
+                        "branchId" TEXT,
+                        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "AiReport_pkey" PRIMARY KEY ("id")
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "AiReport_loai_idx" ON "AiReport"("loai")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "AiReport_createdAt_idx" ON "AiReport"("createdAt")`)
+
                 storeResults.push(`${store.name}: OK`)
             } catch (e: any) {
                 storeResults.push(`${store.name}: ${e.message}`)

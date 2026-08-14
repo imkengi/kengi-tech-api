@@ -3118,3 +3118,28 @@ model PrintTemplate {
 
   @@index([type])
 }
+
+/// BAN PHAN TICH AI DA LUU.
+/// Moi lan chay tro ly AI ton thoi gian cho va ton han muc Gemini cua cua hang;
+/// truoc day ket qua chi nam trong bo nho trinh duyet, doi tab la mat. Luu lai de
+/// doc lai, so hai ky voi nhau, va in ra cho ke toan.
+model AiReport {
+  id            String   @id @default(cuid())
+  /// 'chien-luoc' | 'swot' | 'khac' — de loc theo tung noi sinh ra ban phan tich
+  loai          String   @default("khac")
+  /// Nhan ky cho nguoi doc, vi du "90 ngay qua"
+  ky            String   @default("")
+  tuNgay        String?
+  denNgay       String?
+  tieuDe        String
+  noiDung       String
+  /// JSON mang ten tool ma AI da goi — de biet ban phan tich dua tren nhung gi
+  toolCalls     String?
+  createdBy     String?
+  createdByName String?
+  branchId      String?
+  createdAt     DateTime @default(now())
+
+  @@index([loai])
+  @@index([createdAt])
+}

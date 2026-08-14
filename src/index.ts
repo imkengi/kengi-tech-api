@@ -82,6 +82,7 @@ import financialStatementRoutes from './routes/financialStatements'
 import taxDeclarationRoutes from './routes/taxDeclarations'
 import taxAuditRoutes from './routes/taxAudit'
 import strategyRoutes from './routes/strategy'
+import aiReportRoutes from './routes/aiReports'
 import fanpageRoutes from './routes/fanpage'
 import aiJobRoutes from './routes/aiJobs'
 import { cacheDisconnect, cacheHealth } from './lib/cache'
@@ -258,6 +259,7 @@ app.use('/api/tax', taxDeclarationRoutes) // BCTC phase-2 tax forms (no path ove
 // Kiểm tra trước thanh tra thuế — /audit-check, không trùng path nào của taxRoutes
 app.use('/api/tax', taxAuditRoutes)
 app.use('/api/strategy', strategyRoutes)
+app.use('/api/ai-reports', aiReportRoutes)
 app.use('/api/tax', taxRoutes)
 app.use('/api/segments', segmentRoutes)
 app.use('/api/currencies', currencyRoutes)
