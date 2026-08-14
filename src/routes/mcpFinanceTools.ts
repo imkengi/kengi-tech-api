@@ -10,6 +10,7 @@ import { truyVetChungTu } from '../lib/auditPack'
 import { moPhongThanhTra } from '../lib/auditDrill'
 import { moPhongAnDinh } from '../lib/taxAssessment'
 import { doiChieuBaChieu } from '../lib/revenueReconcile'
+import { tinhChuyenDoiHKD } from '../lib/hkdTransition'
 import { lapKeHoachKhacPhuc } from '../lib/remediationPlan'
 import { quyetToanTndn, layLaiLoTheoNam, layThueDaTamNop } from '../lib/citAdjustment'
 
@@ -604,6 +605,46 @@ export const FINANCE_TOOLS: Tool[] = [
                 })),
                 ghiChu: 'Tồn tổng của hàng LUÔN bằng tồn ở kho chính — các kho khác (lỗi, bảo hành, xe) tách riêng.',
             }
+        },
+    },
+    {
+        name: 'hkd_bo_thue_khoan_2026',
+        description:
+            'BỎ THUẾ KHOÁN TỪ 2026 — hộ kinh doanh sang kê khai phải nộp bao nhiêu. ' +
+            'Dùng khi được hỏi "sang năm đóng thuế bao nhiêu", "bỏ thuế khoán ảnh hưởng gì", ' +
+            '"có phải dùng hoá đơn máy tính tiền không". ' +
+            'Lấy doanh thu THẬT (gồm cả đơn sàn đã giao) rồi tính GTGT + TNCN theo tỷ lệ ngành (TT 40/2021), ' +
+            'lệ phí môn bài theo bậc, so với mức khoán đang đóng nếu người dùng cho biết, ' +
+            'và liệt kê việc phải làm kèm căn cứ và hạn chót.\n' +
+            'BA ĐIỀU KHI DIỄN GIẢI: (1) NGÀNH quyết định số tiền — dịch vụ chịu gấp hơn bốn lần phân phối, ' +
+            'nếu người dùng chưa nói ngành thì HỎI, đừng để mặc định. ' +
+            '(2) Không biết mức khoán thì soVoiKhoan.coSoSanh = false — KHÔNG được coi mức khoán bằng 0. ' +
+            '(3) doanhThu.daQuyNam = true nghĩa là số đã QUY RA NĂM từ một kỳ ngắn, phải nói rõ khi trích dẫn.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                year: { type: 'number', description: 'Năm tính, mặc định năm hiện tại.' },
+                nganh: {
+                    type: 'string',
+                    enum: ['phan-phoi', 'dich-vu', 'san-xuat', 'khac'],
+                    description: 'Ngành theo TT 40/2021. phan-phoi = bán lẻ hàng hoá (1%+0,5%); dich-vu (5%+2%); san-xuat (3%+1,5%); khac (2%+1%).',
+                },
+                khoanMoiThang: { type: 'number', description: 'Mức thuế khoán đang đóng mỗi tháng, nếu người dùng cho biết. Bỏ trống thì không so sánh.' },
+                from: { type: 'string', description: 'Từ ngày 2026-01-01 — bỏ trống thì lấy trọn năm.' },
+                to: { type: 'string', description: 'Đến ngày 2026-12-31.' },
+            },
+            additionalProperties: false,
+        },
+        run: async (a, { prisma }: ToolCtx) => {
+            const nam = num(a?.year, new Date(Date.now() + VN_OFFSET_MS).getUTCFullYear())
+            const tu = a?.from ? new Date(`${String(a.from).slice(0, 10)}T00:00:00+07:00`) : new Date(`${nam}-01-01T00:00:00+07:00`)
+            const den = a?.to ? new Date(`${String(a.to).slice(0, 10)}T23:59:59+07:00`) : new Date(`${nam}-12-31T23:59:59+07:00`)
+            if (tu > den) throw new ToolError('Ngày bắt đầu phải trước ngày kết thúc')
+            return await tinhChuyenDoiHKD(prisma, { tu, den }, {
+                nam,
+                nganh: a?.nganh,
+                khoanMoiThang: a?.khoanMoiThang !== undefined ? Number(a.khoanMoiThang) : undefined,
+            })
         },
     },
     {

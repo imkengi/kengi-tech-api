@@ -18,6 +18,7 @@ import { kiemTraThue, type KhoangKy } from '../lib/taxAudit'
 import { boHoSoThanhTra, sangCsv, truyVetChungTu } from '../lib/auditPack'
 import { moPhongThanhTra } from '../lib/auditDrill'
 import { doiChieuBaChieu } from '../lib/revenueReconcile'
+import { tinhChuyenDoiHKD } from '../lib/hkdTransition'
 import { moPhongAnDinh, TY_LE_TT40 } from '../lib/taxAssessment'
 import { lapKeHoachKhacPhuc } from '../lib/remediationPlan'
 import { quyetToanTndn, layLaiLoTheoNam, layThueDaTamNop, THUE_SUAT_TNDN } from '../lib/citAdjustment'
@@ -111,6 +112,36 @@ router.get('/reconcile-3way', authMiddleware, async (req: AuthRequest, res: Resp
         res.json({ success: true, data: kq })
     } catch (err) {
         console.error('GET /tax/reconcile-3way error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+/**
+ * GET /api/tax/hkd-transition?year=2026&nganh=phan-phoi&khoanMoiThang=300000
+ *
+ * Bỏ thuế khoán từ 2026 (NQ 198/2025): hộ kinh doanh phải nộp bao nhiêu theo
+ * kê khai, và chênh bao nhiêu so với mức khoán đang đóng.
+ */
+router.get('/hkd-transition', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const q = req.query as any
+        const nam = Number(q.year) || new Date(Date.now() + 7 * 3600_000).getUTCFullYear()
+        /* Mặc định lấy trọn năm đang xem. Kỳ ngắn vẫn tính được nhưng lib sẽ quy
+         * năm và nói rõ — không im lặng nhân lên. */
+        const tu = q.from ? new Date(`${String(q.from).slice(0, 10)}T00:00:00+07:00`) : new Date(`${nam}-01-01T00:00:00+07:00`)
+        const den = q.to ? new Date(`${String(q.to).slice(0, 10)}T23:59:59+07:00`) : new Date(`${nam}-12-31T23:59:59+07:00`)
+        if (isNaN(tu.getTime()) || isNaN(den.getTime()) || tu > den) {
+            return res.status(400).json({ success: false, error: 'Khoảng ngày không hợp lệ' })
+        }
+
+        const kq = await tinhChuyenDoiHKD(req.storePrisma!, { tu, den }, {
+            nam,
+            nganh: q.nganh || undefined,
+            khoanMoiThang: q.khoanMoiThang !== undefined && q.khoanMoiThang !== '' ? Number(q.khoanMoiThang) : undefined,
+        })
+        res.json({ success: true, data: kq })
+    } catch (err) {
+        console.error('GET /tax/hkd-transition error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
     }
 })
