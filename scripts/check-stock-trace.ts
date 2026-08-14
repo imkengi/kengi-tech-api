@@ -110,6 +110,56 @@ async function main() {
     ok('… nhưng không khẳng định lệch khi chưa biết tồn thật',
         r6.sanPham === null, r6.sanPham)
 
+    console.log('\n▶ Dòng thời gian xếp theo NGÀY NGHIỆP VỤ, không theo ngày nhập liệu\n')
+    /* Cửa hàng nhập lịch sử từ phần mềm cũ: mọi chuyển động được ghi vào sổ
+     * trong cùng vài ngày, nhưng ngày nghiệp vụ trải nhiều tháng. Truy vấn xếp
+     * theo createdAt còn mỗi bước hiển thị transactionDate → dòng thời gian
+     * nhảy loạn, và số dư chạy cộng theo đúng thứ tự sai đó. */
+    {
+        const nhapLieu = (ngay: string, ghiLuc: string, type: string, sl: number) => ({
+            ...B(type, sl, ngay), createdAt: new Date(`${ghiLuc}T10:00:00+07:00`),
+        })
+        // Ghi sổ ngược thứ tự: bán trước được nhập sau
+        const r = await truyVetTonKho(fake([
+            nhapLieu('2026-06-10', '2026-08-03', 'sale', 5),
+            nhapLieu('2026-03-01', '2026-08-01', 'import', 10),
+            nhapLieu('2026-05-05', '2026-08-02', 'sale', 3),
+        ], 2), 'P1')
+        // `ngay` có kèm giờ nên so bằng tiền tố ngày
+        const ngay = r.buoc.map(b => String(b.ngay).slice(0, 10))
+        ok('các bước xếp tăng dần theo ngày nghiệp vụ',
+            JSON.stringify(ngay) === JSON.stringify(['2026-03-01', '2026-05-05', '2026-06-10']), ngay)
+        ok('số dư chạy tính theo đúng thứ tự đó',
+            JSON.stringify(r.buoc.map(b => b.conLai)) === JSON.stringify([10, 7, 2]),
+            r.buoc.map(b => b.conLai))
+        ok('nhập trước bán sau nên KHÔNG có bước nào âm',
+            !r.buoc.some(b => b.batDauAm), r.buoc.filter(b => b.batDauAm).map(b => b.ngay))
+    }
+    {
+        /* Chiều ngược: nếu xếp theo ngày nhập liệu thì ca này sẽ báo âm sai chỗ.
+         * Bán 03/2026 rồi mới nhập 05/2026 → đúng là có lúc âm thật. */
+        const nhapLieu = (ngay: string, ghiLuc: string, type: string, sl: number) => ({
+            ...B(type, sl, ngay), createdAt: new Date(`${ghiLuc}T10:00:00+07:00`),
+        })
+        const r = await truyVetTonKho(fake([
+            nhapLieu('2026-05-05', '2026-08-01', 'import', 10),
+            nhapLieu('2026-03-01', '2026-08-02', 'sale', 4),
+        ], 6), 'P1')
+        const dauAm = r.buoc.find(b => b.batDauAm)
+        ok('bước làm tồn tụt xuống âm được chỉ đúng ngày nghiệp vụ',
+            !!dauAm && String(dauAm.ngay).slice(0, 10) === '2026-03-01', dauAm?.ngay)
+    }
+    {
+        // Hai chuyển động CÙNG ngày nghiệp vụ giữ đúng thứ tự ghi sổ
+        const r = await truyVetTonKho(fake([
+            { ...B('sale', 2, '2026-07-01'), createdAt: new Date('2026-08-02T10:00:00+07:00') },
+            { ...B('import', 9, '2026-07-01'), createdAt: new Date('2026-08-01T10:00:00+07:00') },
+        ], 7), 'P1')
+        ok('cùng ngày thì xếp theo thứ tự ghi sổ',
+            JSON.stringify(r.buoc.map(b => b.thayDoi)) === JSON.stringify([9, -2]),
+            r.buoc.map(b => b.thayDoi))
+    }
+
     console.log(`\n${dat}/${dat + hong} ca đạt`)
     if (hong) process.exit(1)
 }

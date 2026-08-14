@@ -100,6 +100,23 @@ export async function truyVetTonKho(
         thieu.push(`Không đọc được sổ chuyển động kho: ${String(e?.message || e).slice(0, 120)}`)
     }
 
+    /* SẮP LẠI THEO NGÀY NGHIỆP VỤ.
+     *
+     * Truy vấn xếp theo `createdAt` (cột có chỉ mục), nhưng mỗi bước lại HIỂN THỊ
+     * `transactionDate` — cửa hàng nhập lịch sử từ phần mềm cũ sẽ thấy dòng thời
+     * gian nhảy loạn: ngày 21/03 nằm dưới ngày 14/08. Tệ hơn, số dư chạy `conLai`
+     * cộng theo đúng thứ tự sai đó, nên câu trả lời quan trọng nhất của cả công
+     * cụ — "bước nào làm tồn tụt xuống âm" — chỉ đúng cho cửa hàng nhập liệu
+     * ngay lúc bán.
+     *
+     * Sắp trong Node chứ không trong SQL: Prisma không orderBy được biểu thức
+     * COALESCE, và danh sách đã bị chặn ở `tran` (tối đa 1000 dòng) nên sắp lại
+     * ở đây rẻ. Giữ `createdAt` làm khoá phụ để hai chuyển động cùng ngày vẫn
+     * đứng đúng thứ tự ghi. */
+    const moc = (r: any) => new Date(r.transactionDate || r.createdAt).getTime()
+    ds = [...ds].sort((a, b) => (moc(a) - moc(b))
+        || (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()))
+
     let con = 0
     let dauAm: BuocKho | null = null
     const buoc: BuocKho[] = ds.map((r: any) => {
