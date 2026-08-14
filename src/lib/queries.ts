@@ -235,44 +235,61 @@ export async function getRevenueByDays(prisma: StorePrisma, days: number = 7, br
     const since = new Date()
     since.setDate(since.getDate() - safetyDays)
     since.setHours(0, 0, 0, 0)
+    const branchId = (branchFilter as any)?.branchId ?? null
 
-    const transactions = await prisma.transaction.findMany({
-        where: {
-            ...branchFilter,
-            createdAt: { gte: since },
-            status: { notIn: ['voided', 'returned'] },
-        },
-        select: { total: true, subtotal: true, discount: true, createdAt: true },
-        orderBy: { createdAt: 'asc' },
-    })
+    /* Loi nhuan tren bieu do phai tinh tu GIA VON THAT.
+     *
+     * Ban truoc uoc "gia von = 70% doanh thu thuan" roi ve len bieu do. Ngay ben
+     * canh, the Loi Nhuan Gop lai lay gia von that tu san pham — nen mot man hinh
+     * hien HAI so loi nhuan khac nhau cho cung mot ky, va khong so nao noi ro no
+     * la uoc luong. Chu cua hang doc bieu do de quyet dinh gia ban.
+     *
+     * Gop luon theo GIO VN (+7h): may chu chay UTC, nhom theo ngay UTC thi don
+     * ban buoi toi bi day sang ngay hom sau.
+     */
+    const rows: any[] = await (prisma as any).$queryRawUnsafe(
+        `SELECT to_char((t."createdAt" + interval '7 hours')::date, 'DD/MM') AS ngay,
+                COALESCE(SUM(t.total), 0)::float8 AS doanh_thu,
+                COUNT(DISTINCT t.id)::int AS so_don,
+                COALESCE((
+                    SELECT SUM(ti.quantity * COALESCE(p."costPrice", 0))
+                    FROM "TransactionItem" ti
+                    LEFT JOIN "Product" p ON p.id = ti."productId"
+                    WHERE ti."transactionId" IN (
+                        SELECT t2.id FROM "Transaction" t2
+                        WHERE (t2."createdAt" + interval '7 hours')::date = (t."createdAt" + interval '7 hours')::date
+                          AND t2."createdAt" >= $1
+                          AND t2.status NOT IN ('voided', 'returned')
+                          AND ($2::text IS NULL OR t2."branchId" = $2)
+                    )
+                ), 0)::float8 AS gia_von
+         FROM "Transaction" t
+         WHERE t."createdAt" >= $1
+           AND t.status NOT IN ('voided', 'returned')
+           AND ($2::text IS NULL OR t."branchId" = $2)
+         GROUP BY 1, (t."createdAt" + interval '7 hours')::date
+         ORDER BY (t."createdAt" + interval '7 hours')::date`,
+        since, branchId,
+    ).catch(() => [])
 
-    // Group by date in memory
-    const byDate = new Map<string, { revenue: number; orders: number; profit: number }>()
+    const theoNgay = new Map<string, { revenue: number; orders: number; profit: number }>()
+    for (const r of rows || []) {
+        theoNgay.set(String(r.ngay), {
+            revenue: Math.round(Number(r.doanh_thu) || 0),
+            orders: Number(r.so_don) || 0,
+            profit: Math.round((Number(r.doanh_thu) || 0) - (Number(r.gia_von) || 0)),
+        })
+    }
 
-    // Initialize all days
+    // Ngay khong ban duoc gi van phai co trong bieu do, khong duoc bo trong
+    const ra: RevenueDataPoint[] = []
     for (let i = safetyDays - 1; i >= 0; i--) {
-        const d = new Date()
-        d.setDate(d.getDate() - i)
-        const key = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
-        byDate.set(key, { revenue: 0, orders: 0, profit: 0 })
+        const d = new Date(Date.now() + 7 * 3600 * 1000)
+        d.setUTCDate(d.getUTCDate() - i)
+        const key = `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+        ra.push({ date: key, ...(theoNgay.get(key) ?? { revenue: 0, orders: 0, profit: 0 }) })
     }
-
-    // Fill with actual data
-    for (const tx of transactions) {
-        const d = tx.createdAt
-        const key = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
-        const entry = byDate.get(key)
-        if (entry) {
-            entry.revenue += tx.total
-            entry.orders += 1
-            entry.profit += tx.total - (tx.subtotal - tx.discount) * 0.7 // rough estimate
-        }
-    }
-
-    return Array.from(byDate.entries()).map(([date, data]) => ({
-        date,
-        ...data,
-    }))
+    return ra
 }
 
 // ─── Top Products ───────────────────────────────────────────────────────────

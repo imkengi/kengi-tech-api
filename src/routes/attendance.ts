@@ -41,6 +41,16 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
             const end = new Date(d); end.setHours(23, 59, 59, 999)
             where.date = { gte: start, lte: end }
         }
+        /* Khoảng ngày — để vẽ được biểu đồ xu hướng bằng MỘT lượt gọi.
+         * Trước đây chỉ lọc được đúng một ngày, nên màn hình chấm công vẽ xu
+         * hướng 7 ngày bằng Math.random() cho những ngày không phải hôm nay. */
+        const { from, to } = req.query as any
+        if (from || to) {
+            const range: any = {}
+            if (from) { const d = new Date(String(from)); d.setHours(0, 0, 0, 0); range.gte = d }
+            if (to) { const d = new Date(String(to)); d.setHours(23, 59, 59, 999); range.lte = d }
+            where.date = range
+        }
         const data = await prisma.attendance.findMany({ where, orderBy: { date: 'desc' } })
         const _response = { success: true, data }
         await cacheSet(cacheKey, _response, 300)
