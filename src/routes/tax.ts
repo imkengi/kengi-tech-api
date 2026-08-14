@@ -307,8 +307,13 @@ async function calculate01GTGT(prisma: any, req: any, periodType: string, year: 
     })
     const imports = await prisma.importReceipt.findMany({
         where: { status: 'completed', createdAt: { gte: startDate, lte: endDate } },
-        select: { totalCost: true },
+        select: { totalCost: true, vatAmount: true, hasVatInvoice: true },
     })
+    // Chi phí có hóa đơn cũng phát sinh thuế GTGT đầu vào được khấu trừ
+    const chiPhiKy = await prisma.expense.findMany({
+        where: { date: { gte: startDate, lte: endDate } },
+        select: { amount: true, vatAmount: true, invoiceNo: true, status: true },
+    }).catch(() => [])
     const taxConfigs = await prisma.taxConfig.findMany({ where: { ...getBranchFilter(req as any), status: 'active' } })
     const defaultRate = taxConfigs.find((t: any) => t.isDefault)?.rate ?? 10
 
@@ -336,9 +341,35 @@ async function calculate01GTGT(prisma: any, req: any, periodType: string, year: 
 
     const ct29 = ct21 + ct22 + ct23 + ct25 + ct27
     const ct30 = ct24 + ct26 + ct28
-    const totalImportCost = imports.reduce((s: number, i: any) => s + (i.totalCost || 0), 0)
-    const ct31 = totalImportCost
-    const ct32 = totalImportCost * (defaultRate / 100)
+
+    /* THUẾ GTGT ĐẦU VÀO PHẢI LẤY SỐ THẬT TRÊN HÓA ĐƠN.
+     *
+     * Bản trước tính: giá trị mua vào = tổng giá nhập, thuế đầu vào = tổng giá
+     * nhập × 10%. Ba chỗ sai cùng lúc:
+     *   1. Nhân với thuế suất BÁN RA của cửa hàng, không phải thuế suất ghi trên
+     *      hóa đơn mua vào (hàng 5%, 8%, không chịu thuế đều bị nhân 10%).
+     *   2. Không nhìn `hasVatInvoice` — lô hàng mua KHÔNG có hóa đơn cũng được
+     *      tính khấu trừ, tức là kê khai khấu trừ số thuế không tồn tại.
+     *   3. `totalCost` đã BAO GỒM thuế, nhân tiếp 10% là cộng thuế trên thuế.
+     *
+     * Đây không phải sai lệch hiển thị: khai khấu trừ thừa là nộp thiếu thuế,
+     * và khi cơ quan thuế đối chiếu dữ liệu hóa đơn toàn quốc thì ra ngay.
+     *
+     * Nay cộng đúng `vatAmount` của những phiếu CÓ hóa đơn, và gộp cả chi phí có
+     * hóa đơn (điện, nước, thuê mặt bằng…) — chúng cũng là thuế đầu vào được
+     * khấu trừ mà bản trước bỏ sót hoàn toàn. */
+    const nhapCoHoaDon = imports.filter((i: any) => i.hasVatInvoice)
+    const vatNhap = nhapCoHoaDon.reduce((s: number, i: any) => s + (i.vatAmount || 0), 0)
+    const giaTriNhap = nhapCoHoaDon.reduce(
+        (s: number, i: any) => s + Math.max(0, (i.totalCost || 0) - (i.vatAmount || 0)), 0)
+
+    const chiCoHoaDon = (chiPhiKy || []).filter((c: any) => c.invoiceNo && c.status !== 'cancelled')
+    const vatChi = chiCoHoaDon.reduce((s: number, c: any) => s + (c.vatAmount || 0), 0)
+    const giaTriChi = chiCoHoaDon.reduce(
+        (s: number, c: any) => s + Math.max(0, (c.amount || 0) - (c.vatAmount || 0)), 0)
+
+    const ct31 = Math.round(giaTriNhap + giaTriChi)
+    const ct32 = Math.round(vatNhap + vatChi)
     const ct33 = ct32
     const ct34 = 0
     const ct35 = ct30 - ct33 - ct34
@@ -540,13 +571,18 @@ router.post('/declarations', authMiddleware, async (req: AuthRequest, res: Respo
             // Calculate from selected transactions only
             const selectedTx = await prisma.transaction.findMany({
                 where: { id: { in: transactionIds }, status: { in: ['completed', 'partial'] } },
-                select: { subtotal: true, tax: true, total: true, discount: true },
+                select: { subtotal: true, tax: true, total: true, discount: true, discountType: true },
             })
 
             if (formType === '01_GTGT') {
                 const taxConfigs = await prisma.taxConfig.findMany({ where: { ...getBranchFilter(req as any), status: 'active' } })
                 const defaultRate = taxConfigs.find(t => t.isDefault)?.rate ?? 10
-                const totalSubtotal = selectedTx.reduce((s, t) => s + (t.subtotal || 0), 0)
+                // Doanh thu kê khai là doanh thu THUẦN — trừ giảm giá, và `discount`
+                // có thể là phần trăm tùy `discountType` (xem chú thích ở nhánh cả kỳ)
+                const totalSubtotal = selectedTx.reduce((s, t: any) => s + (t.subtotal || 0)
+                    - (String(t.discountType || '') === 'percent'
+                        ? Math.round((t.subtotal || 0) * (t.discount || 0) / 100)
+                        : Math.round(t.discount || 0)), 0)
                 const totalTax = selectedTx.reduce((s, t) => s + (t.tax || 0), 0)
                 let ct21 = 0, ct22 = 0, ct23 = 0, ct24 = 0, ct25 = 0, ct26 = 0, ct27 = 0, ct28 = 0
                 if (defaultRate === 0) { ct22 = totalSubtotal }
@@ -556,14 +592,30 @@ router.post('/declarations', authMiddleware, async (req: AuthRequest, res: Respo
                 const ct29 = ct21 + ct22 + ct23 + ct25 + ct27
                 const ct30 = ct24 + ct26 + ct28
 
-                // Input VAT from imports in the same period
+                /* Thuế GTGT đầu vào — lấy SỐ THẬT trên hóa đơn, giống nhánh tính
+                 * cả kỳ. Bản trước ở đây nhân tổng giá nhập với thuế suất BÁN RA
+                 * của cửa hàng và không nhìn `hasVatInvoice`, tức là kê khai khấu
+                 * trừ cả số thuế không tồn tại; `totalCost` lại đã gồm thuế nên
+                 * còn cộng thuế trên thuế. */
                 const { startDate, endDate } = getPeriodDateRange(periodType, year, month, quarter)
                 const imports = await prisma.importReceipt.findMany({
                     where: { status: 'completed', createdAt: { gte: startDate, lte: endDate } },
-                    select: { totalCost: true },
+                    select: { totalCost: true, vatAmount: true, hasVatInvoice: true },
                 })
-                const totalImportCost = imports.reduce((s, i) => s + (i.totalCost || 0), 0)
-                const ct31 = totalImportCost, ct32 = totalImportCost * (defaultRate / 100), ct33 = ct32
+                const chiKy = await prisma.expense.findMany({
+                    where: { date: { gte: startDate, lte: endDate } },
+                    select: { amount: true, vatAmount: true, invoiceNo: true, status: true },
+                }).catch(() => [] as any[])
+
+                const nhapCoHd = imports.filter((i: any) => i.hasVatInvoice)
+                const chiCoHd = (chiKy as any[]).filter(c => c.invoiceNo && c.status !== 'cancelled')
+                const ct31 = Math.round(
+                    nhapCoHd.reduce((s: number, i: any) => s + Math.max(0, (i.totalCost || 0) - (i.vatAmount || 0)), 0)
+                    + chiCoHd.reduce((s: number, c: any) => s + Math.max(0, (c.amount || 0) - (c.vatAmount || 0)), 0))
+                const ct32 = Math.round(
+                    nhapCoHd.reduce((s: number, i: any) => s + (i.vatAmount || 0), 0)
+                    + chiCoHd.reduce((s: number, c: any) => s + (c.vatAmount || 0), 0))
+                const ct33 = ct32
                 const ct34 = 0, ct35 = ct30 - ct33 - ct34
                 const ct36 = 0, ct37 = 0
                 const ct38 = ct35 > 0 ? ct35 + ct36 - ct37 : 0
