@@ -422,6 +422,30 @@ async function main() {
             !co(h, 'hkd-vuot-nguong-chiu-thue') && !co(h, 'hkd-phai-ket-noi-pos'))
     }
 
+    /* ── 22c. Không đọc được bảng lương thì KHÔNG kết luận là thiếu ──────────
+     *
+     * Store cũ chưa migrate thì bảng PayrollPeriod không tồn tại, truy vấn ném
+     * lỗi. Nếu coi lỗi đó là "không có bảng lương nào" thì phép soát buộc tội
+     * cửa hàng trả lương ngoài sổ — trong khi thực tế chỉ là ta không đọc được.
+     */
+    {
+        const k = khoSach()
+        k.payrollPeriods = []
+        k.payrollEntries = []
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        kiemTra('Đọc được bảng lương và thấy trống → có kêu thiếu bảng lương',
+            co(h, 'thieu-bang-luong'))
+    }
+    {
+        const k = khoSach()
+        const px: any = fakePrisma(k)
+        px.payrollPeriod = { findMany: async () => { throw new Error('The table `PayrollPeriod` does not exist') } }
+        const h = await kiemTraThue(px, KY)
+        kiemTra('KHÔNG đọc được bảng lương → im, không buộc tội',
+            !co(h, 'thieu-bang-luong'),
+            h.canhBao.map((c: any) => c.code).join(','))
+    }
+
     // ── 23. Doanh nghiệp thì KHÔNG áp luật hộ kinh doanh ───────────────────
     {
         const k = khoSach()

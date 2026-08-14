@@ -250,6 +250,18 @@ async function main() {
     const chiuLoi = await moPhongThanhTra(hong2, KY)
     ok('một truy vấn hỏng không làm sập cả buổi mô phỏng', chiuLoi.cauHoi.length >= 14, chiuLoi.cauHoi.length)
 
+    /* Không đọc được bảng tờ khai KHÁC với chưa lập tờ khai. Gộp hai thứ lại thì
+     * mỗi lần truy vấn hỏng, câu "đã nộp tờ khai chưa" trả lời "CHƯA có tờ khai"
+     * ở mức nguy hiểm — buộc tội trong khi thực tế chỉ là ta không đọc được. */
+    const hongToKhai: any = fakePrisma(khoSach())
+    hongToKhai.taxDeclaration = { findFirst: async () => { throw new Error('The table `TaxDeclaration` does not exist') } }
+    const kqHong = await moPhongThanhTra(hongToKhai, KY)
+    const cauNop = tim(kqHong.cauHoi, 'nv-nop-dung-han')
+    ok('không đọc được tờ khai → KHÔNG kết luận là chưa nộp',
+        cauNop.muc === 'khong-du-lieu' && !/CHƯA có tờ khai/.test(cauNop.traLoi), cauNop)
+    ok('vẫn chỉ ra việc cần làm: kiểm tra thủ công trên cổng thuế',
+        /thuedientu/.test(String(cauNop.canLam)), cauNop.canLam)
+
     console.log(`\n${dat}/${dat + hong} ca đạt`)
     if (hong) process.exit(1)
 }

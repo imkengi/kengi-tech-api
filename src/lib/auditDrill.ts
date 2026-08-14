@@ -118,10 +118,15 @@ export async function moPhongThanhTra(
             vatInvoiceNo: true, supplierName: true, paidAmount: true,
         },
     }), [])
-    const toKhai: any = await an(() => prisma.taxDeclaration.findFirst({
+    /* Phải phân biệt "chưa lập tờ khai" với "không đọc được bảng tờ khai".
+     * Gộp hai thứ này lại thì mỗi lần truy vấn hỏng, phần dưới trả lời "CHƯA có
+     * tờ khai kỳ này" ở mức nguy hiểm — buộc tội trong khi thực tế chỉ là ta
+     * không đọc được. Đây đúng là lỗi đã mắc ở phép soát tờ khai quá hạn. */
+    let khongDocDuocToKhai = false
+    const toKhai: any = await prisma.taxDeclaration.findFirst({
         where: { period: maKy },
         select: { ct29: true, ct30: true, ct33: true, ct40a: true, status: true, filedAt: true },
-    }), null)
+    }).catch(() => { khongDocDuocToKhai = true; return null })
     const cauHinh: any = await an(() => prisma.storeSettings.findFirst({
         select: { businessType: true, taxCode: true },
     }), null)
@@ -507,15 +512,20 @@ export async function moPhongThanhTra(
         nhom: NHOM_NV,
         cauHoi: `Tờ khai kỳ ${maKy} nộp ngày nào? Có kỳ nào nộp muộn không?`,
         vaSao: 'Nộp muộn bị phạt hành chính riêng (NĐ 125/2020) và là tình tiết tăng nặng khi xét các lỗi khác.',
-        traLoi: !toKhai
-            ? `CHƯA có tờ khai kỳ ${maKy} trong hệ thống.`
-            : toKhai.filedAt
-                ? `Tờ khai kỳ ${maKy} trạng thái "${toKhai.status}", ghi nhận nộp ngày ${new Date(toKhai.filedAt).toISOString().slice(0, 10)}.`
-                : `Tờ khai kỳ ${maKy} đã lập, trạng thái "${toKhai.status}" nhưng CHƯA ghi nhận ngày nộp.`,
-        muc: !toKhai ? 'nguy-hiem' : toKhai.filedAt ? 'an-toan' : 'can-chuan-bi',
+        traLoi: khongDocDuocToKhai
+            ? 'Không đọc được dữ liệu tờ khai của cửa hàng nên chưa kết luận được — phải mở sổ tờ khai kiểm tra trực tiếp.'
+            : !toKhai
+                ? `CHƯA có tờ khai kỳ ${maKy} trong hệ thống.`
+                : toKhai.filedAt
+                    ? `Tờ khai kỳ ${maKy} trạng thái "${toKhai.status}", ghi nhận nộp ngày ${new Date(toKhai.filedAt).toISOString().slice(0, 10)}.`
+                    : `Tờ khai kỳ ${maKy} đã lập, trạng thái "${toKhai.status}" nhưng CHƯA ghi nhận ngày nộp.`,
+        muc: khongDocDuocToKhai ? 'khong-du-lieu'
+            : !toKhai ? 'nguy-hiem' : toKhai.filedAt ? 'an-toan' : 'can-chuan-bi',
         chungTu: ['Thông báo tiếp nhận hồ sơ khai thuế', 'Tờ khai đã ký gửi'],
-        canLam: !toKhai ? `Lập và nộp tờ khai kỳ ${maKy} ngay.`
-            : !toKhai.filedAt ? 'Cập nhật ngày nộp và lưu thông báo tiếp nhận của cơ quan thuế.' : undefined,
+        canLam: khongDocDuocToKhai
+            ? `Kiểm tra thủ công tờ khai kỳ ${maKy} trên thuedientu.gdt.gov.vn.`
+            : !toKhai ? `Lập và nộp tờ khai kỳ ${maKy} ngay.`
+                : !toKhai.filedAt ? 'Cập nhật ngày nộp và lưu thông báo tiếp nhận của cơ quan thuế.' : undefined,
     })
 
     if (laHkd) {

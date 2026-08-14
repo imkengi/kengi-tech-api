@@ -867,14 +867,18 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
      * Nhóm bị soi nhiều thứ hai sau GTGT: chi lương vào chi phí thì phải chứng
      * minh được đã khấu trừ và kê khai TNCN, và người lao động phải có MST. */
     try {
-        const kyLuong = await prisma.payrollPeriod.findMany({
+        /* null = KHÔNG ĐỌC ĐƯỢC bảng lương (store cũ thiếu bảng), khác hẳn mảng
+         * rỗng = đọc được nhưng kỳ này chưa lập lương. Gộp hai trường hợp lại thì
+         * khi truy vấn hỏng, phần dưới kết luận "kỳ có doanh thu mà không có bảng
+         * lương" — một lời buộc tội trong khi thực tế là ta không đọc được. */
+        const kyLuong: any[] | null = await prisma.payrollPeriod.findMany({
             where: { year: Number(maKy.slice(0, 4)) },
             select: { id: true, month: true, year: true, status: true, totalGross: true },
-        }).catch(() => [])
+        }).catch(() => null)
         const thangKy = /^\d{4}-(\d{2})$/.exec(maKy)
-        const ky = thangKy
-            ? (kyLuong as any[]).filter(p => p.month === Number(thangKy[1]))
-            : (kyLuong as any[])
+        const ky = kyLuong === null ? [] : (thangKy
+            ? kyLuong.filter(p => p.month === Number(thangKy[1]))
+            : kyLuong)
         if (ky.length > 0) {
             const dsEntry = await prisma.payrollEntry.findMany({
                 where: { periodId: { in: ky.map((p: any) => p.id) } },
@@ -913,8 +917,9 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
                 tienRuiRo: null, soLuong: thieuMst.length,
                 viDu: thieuMst.slice(0, 5).map((n: any) => n.name || n.id),
             })
-        } else if (dtSo > 0) {
-            // Có doanh thu mà không có bảng lương nào trong kỳ
+        } else if (dtSo > 0 && kyLuong !== null) {
+            // Có doanh thu mà không có bảng lương nào trong kỳ — chỉ kết luận khi
+            // ĐỌC ĐƯỢC bảng lương và thấy trống, không phải khi truy vấn hỏng
             canhBao.push({
                 code: 'thieu-bang-luong', muc: 'thap',
                 tieuDe: 'Kỳ có doanh thu nhưng không có bảng lương',

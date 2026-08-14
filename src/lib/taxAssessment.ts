@@ -114,10 +114,14 @@ export async function moPhongAnDinh(
         where: { status: { in: ['completed', 'partial'] }, createdAt: { gte: start, lte: end } },
         select: { id: true, total: true },
     }), [])
-    const toKhai: any = await an(() => prisma.taxDeclaration.findFirst({
+    /* "Chưa lập tờ khai" và "không đọc được bảng tờ khai" phải tách bạch: dựng
+     * căn cứ ấn định "rõ ràng" từ một truy vấn hỏng là buộc tội oan, mà đây lại
+     * là căn cứ nặng nhất — nó nói cơ quan thuế có quyền bỏ qua toàn bộ sổ sách. */
+    let khongDocDuocToKhai = false
+    const toKhai: any = await prisma.taxDeclaration.findFirst({
         where: { period: maKy },
         select: { ct29: true, ct30: true, ct33: true, ct40a: true },
-    }), null)
+    }).catch(() => { khongDocDuocToKhai = true; return null })
     const cauHinh: any = await an(() => prisma.storeSettings.findFirst({
         select: { businessType: true },
     }), null)
@@ -155,7 +159,7 @@ export async function moPhongAnDinh(
     // ── Căn cứ ấn định thật sự có trong dữ liệu ──────────────────────────────
     const canCu: CanCuAnDinh[] = []
 
-    if (!toKhai) {
+    if (!toKhai && !khongDocDuocToKhai) {
         canCu.push({
             ma: 'khong-nop-to-khai',
             muc: 'ro-rang',

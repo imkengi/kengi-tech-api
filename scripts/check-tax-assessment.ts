@@ -202,6 +202,19 @@ async function main() {
     const chiuLoi = await moPhongAnDinh(hongDb, KY)
     ok('truy vấn hỏng không làm sập', chiuLoi.kichBan.length > 0)
 
+    /* Căn cứ "chưa nộp tờ khai" là căn cứ ấn định NẶNG NHẤT — nó nói cơ quan
+     * thuế có quyền bỏ qua toàn bộ sổ sách. Dựng nó từ một truy vấn hỏng là
+     * buộc tội oan ở mức cao nhất. */
+    const hongToKhai: any = fakePrisma(khoSach())
+    hongToKhai.taxDeclaration = { findFirst: async () => { throw new Error('The table `TaxDeclaration` does not exist') } }
+    const kqHong = await moPhongAnDinh(hongToKhai, KY)
+    ok('không đọc được tờ khai → KHÔNG dựng căn cứ "chưa nộp tờ khai"',
+        !kqHong.canCu.some(c => c.ma === 'khong-nop-to-khai'),
+        kqHong.canCu.map(c => c.ma))
+    ok('cũng không suy ra căn cứ "số liệu không trung thực" từ số rỗng',
+        !kqHong.canCu.some(c => c.ma === 'so-lieu-khong-trung-thuc'),
+        kqHong.canCu.map(c => c.ma))
+
     console.log(`\n${dat}/${dat + hong} ca đạt`)
     if (hong) process.exit(1)
 }
