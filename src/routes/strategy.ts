@@ -1,6 +1,7 @@
 import express, { Response } from 'express'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { coHoiTangTruong } from '../lib/growthOpportunity'
+import { keHoachDatHang } from '../lib/reorderPlan'
 
 const router = express.Router()
 
@@ -48,6 +49,37 @@ router.get('/opportunity', authMiddleware, async (req: AuthRequest, res: Respons
         res.json({ success: true, data: kq })
     } catch (err) {
         console.error('GET /strategy/opportunity error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+/**
+ * GET /api/strategy/reorder
+ *
+ * Điểm đặt hàng tính từ sức bán thật + độ dao động + thời gian chờ đo được từ
+ * lịch sử đặt hàng, thay cho ô "tồn tối thiểu" gõ tay.
+ *
+ * Tham số tuỳ chọn:
+ *   soNgayLichSu     14–365  cửa sổ đo sức bán (mặc định 90)
+ *   mucPhucVu        0.8–0.99 muốn bao nhiêu phần lần đặt không bị hụt (mặc định 0.95)
+ *   soNgayChoMacDinh 1–90    dùng khi chưa đủ lịch sử của nhà cung cấp (mặc định 7)
+ *   chuKyDat         1–60    bao lâu đặt hàng một lần (mặc định 7)
+ */
+router.get('/reorder', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const q = req.query as any
+        const soHoacUndefined = (v: any) => (v === undefined || v === '' ? undefined : Number(v))
+        const kq = await keHoachDatHang(prisma, {
+            soNgayLichSu: soHoacUndefined(q.soNgayLichSu),
+            mucPhucVu: soHoacUndefined(q.mucPhucVu),
+            soNgayChoMacDinh: soHoacUndefined(q.soNgayChoMacDinh),
+            chuKyDat: soHoacUndefined(q.chuKyDat),
+            soMaToiDa: soHoacUndefined(q.soMaToiDa),
+        })
+        res.json({ success: true, data: kq })
+    } catch (err) {
+        console.error('GET /strategy/reorder error:', err)
         res.status(500).json({ success: false, error: 'Internal server error' })
     }
 })

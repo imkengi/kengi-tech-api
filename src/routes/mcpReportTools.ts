@@ -7,6 +7,7 @@
 
 import { Tool, ToolCtx, ToolError } from '../lib/mcpTypes'
 import { coHoiTangTruong } from '../lib/growthOpportunity'
+import { keHoachDatHang } from '../lib/reorderPlan'
 
 const VN_OFFSET_MS = 7 * 60 * 60 * 1000
 
@@ -60,6 +61,38 @@ export const REPORT_TOOLS: Tool[] = [
             return await coHoiTangTruong(prisma, ky, {
                 tyLeChuyenDoi: a?.tyLeChuyenDoi !== undefined ? Number(a.tyLeChuyenDoi) : undefined,
                 nguongSoLuongSi: a?.nguongSoLuongSi !== undefined ? Number(a.nguongSoLuongSi) : undefined,
+            })
+        },
+    },
+    {
+        name: 'reorder_plan',
+        description:
+            'ĐIỂM ĐẶT HÀNG TÍNH TỪ SỨC BÁN THẬT — dùng khi được hỏi "cần nhập hàng gì", "sắp hết hàng nào", ' +
+            '"hàng nào đang đọng vốn", "nên đặt bao nhiêu". Khác hẳn ô "tồn tối thiểu" gõ tay: ' +
+            'điểm đặt hàng = bán trung bình mỗi ngày × số ngày chờ + tồn an toàn, trong đó tồn an toàn tính theo ' +
+            'ĐỘ DAO ĐỘNG của sức bán (mã bán thất thường phải trữ dày hơn mã bán đều dù cùng mức bán trung bình), ' +
+            'và số ngày chờ ĐO TỪ lịch sử đặt hàng của chính nhà cung cấp đó. ' +
+            'Trả về ba nhóm: đang hết hàng (kèm ước tính lãi mất mỗi ngày), cần đặt ngay (kèm số nên đặt và tiền cần bỏ), ' +
+            'và hàng đọng vốn (kèm số vốn đang kẹt). ' +
+            'LƯU Ý khi diễn giải: mã có cờ "chua-du-lich-su" là CHƯA ĐỦ DỮ LIỆU để tính, không phải hàng ế. ' +
+            'Sức bán đo được ở mã từng hết hàng luôn THẤP HƠN nhu cầu thật.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                soNgayLichSu: { type: 'number', description: 'Cửa sổ đo sức bán, 14–365 ngày. Mặc định 90.' },
+                mucPhucVu: { type: 'number', description: 'Muốn bao nhiêu phần lần đặt hàng không bị hụt giữa chừng, 0.8–0.99. Mặc định 0.95. Cao hơn = trữ dày hơn = kẹt vốn nhiều hơn.' },
+                soNgayChoMacDinh: { type: 'number', description: 'Số ngày chờ dùng khi chưa đủ lịch sử đặt hàng của nhà cung cấp. Mặc định 7.' },
+                chuKyDat: { type: 'number', description: 'Bao lâu đặt hàng một lần, ngày. Mặc định 7.' },
+            },
+            additionalProperties: false,
+        },
+        run: async (a, { prisma }: ToolCtx) => {
+            return await keHoachDatHang(prisma, {
+                soNgayLichSu: a?.soNgayLichSu !== undefined ? Number(a.soNgayLichSu) : undefined,
+                mucPhucVu: a?.mucPhucVu !== undefined ? Number(a.mucPhucVu) : undefined,
+                soNgayChoMacDinh: a?.soNgayChoMacDinh !== undefined ? Number(a.soNgayChoMacDinh) : undefined,
+                chuKyDat: a?.chuKyDat !== undefined ? Number(a.chuKyDat) : undefined,
+                soMaToiDa: 40,
             })
         },
     },
