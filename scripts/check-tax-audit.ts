@@ -624,6 +624,17 @@ async function main() {
         const c = lay(h, 'hoa-don-nhay-so')
         kiemTra('Bắt số hóa đơn bị khuyết (hóa đơn HỦY vẫn tính là có số)',
             !!c && c.soLuong === 1 && c.viDu[0].includes('số 3'), JSON.stringify(c?.viDu))
+
+        /* Rất nhiều cửa hàng phát hành một phần hoá đơn ở phần mềm khác của nhà
+         * cung cấp HĐĐT — dữ liệu thật 14/08/2026 có cửa hàng doanh thu hàng tỷ
+         * mà phần mềm này không giữ tờ nào. Nói thẳng "dấu hiệu có hoá đơn không
+         * được ghi nhận" là kết tội cả nhóm dùng song song hai hệ thống. */
+        kiemTra('Nêu khả năng phát hành ở PHẦN MỀM KHÁC, không kết tội ngay',
+            !!c && /phần mềm khác/.test(c.chiTiet), c?.chiTiet)
+        kiemTra('… nhưng vẫn nói rõ sổ chưa khớp cổng hoá đơn',
+            !!c && /chưa khớp cổng hóa đơn/.test(c.chiTiet), c?.chiTiet)
+        kiemTra('Việc cần làm phân nhánh theo kết quả tra cổng',
+            !!c && /Có trên cổng/.test(c.canLam) && /không có trên cổng/i.test(c.canLam), c?.canLam)
     }
     {
         const k = khoSach()

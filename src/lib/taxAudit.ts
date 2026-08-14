@@ -752,9 +752,20 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
         if (tongThieu > 0) canhBao.push({
             code: 'hoa-don-nhay-so', muc: 'cao',
             tieuDe: `${tongThieu} số hóa đơn bị thiếu trong dải đã phát hành`,
-            chiTiet: 'Hóa đơn phải liên tục theo ký hiệu; hóa đơn hủy vẫn giữ số nên vẫn phải có mặt. Số bị khuyết là dấu hiệu có hóa đơn không được ghi nhận vào hệ thống.',
+            /* KHUYẾT SỐ CHƯA CHẮC LÀ GIẤU HOÁ ĐƠN.
+             *
+             * Rất nhiều cửa hàng phát hành một phần hoá đơn ở phần mềm khác của
+             * nhà cung cấp HĐĐT — soát dữ liệu thật 14/08/2026 thấy có cửa hàng
+             * doanh thu hàng tỷ mà phần mềm này không giữ tờ nào. Với họ, dải số
+             * khuyết là chuyện đương nhiên, không phải giấu doanh thu.
+             *
+             * Vẫn cảnh báo, vì dù nguyên nhân nào thì sổ ở đây cũng không khớp
+             * cổng hoá đơn và đoàn thanh tra sẽ hỏi. Nhưng nói thẳng "dấu hiệu
+             * có hoá đơn không được ghi nhận" là kết tội một nửa số cửa hàng
+             * dùng song song hai phần mềm. */
+            chiTiet: 'Hóa đơn phải liên tục theo ký hiệu; hóa đơn hủy vẫn giữ số nên vẫn phải có mặt. Số khuyết có hai khả năng: (1) hóa đơn phát hành ở phần mềm khác nên phần mềm này không có bản ghi — phổ biến khi dùng song song hai hệ thống; (2) hóa đơn đã phát hành nhưng không được ghi nhận vào sổ. Dù là khả năng nào thì sổ ở đây cũng chưa khớp cổng hóa đơn điện tử, và đoàn thanh tra sẽ hỏi đúng chỗ này.',
             canCu: 'Điều 10 NĐ 123/2020 — ký hiệu và số hóa đơn liên tục theo thứ tự; Điều 19 NĐ 123/2020 — xử lý hóa đơn sai sót.',
-            canLam: 'Tra cứu các số bị khuyết trên cổng hóa đơn điện tử, tải về và nhập lại vào hệ thống; số nào thực sự chưa dùng thì lập biên bản ghi nhận.',
+            canLam: 'Tra cứu các số bị khuyết trên cổng hóa đơn điện tử. Có trên cổng mà thiếu ở đây thì tải về nhập lại (thường là do phát hành ở phần mềm khác); không có trên cổng thì lập biên bản ghi nhận số chưa dùng.',
             tienRuiRo: null, soLuong: tongThieu, viDu: thieuSo,
         })
         if (trungSo.length > 0) canhBao.push({
