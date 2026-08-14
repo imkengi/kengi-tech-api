@@ -29,6 +29,8 @@ interface Kho {
     /** productId → số lượng đang về */
     dangVe?: Record<string, number>
     choBanAm?: boolean
+    /** Cửa hàng bán lần đầu cách đây bao nhiêu ngày (null = lâu hơn kỳ đang xét). */
+    tuoiCuaHang?: number | null
 }
 
 function fakePrisma(k: Kho, loi?: { ban?: boolean; hang?: boolean; dangVe?: boolean; caiDat?: boolean }) {
@@ -41,6 +43,10 @@ function fakePrisma(k: Kho, loi?: { ban?: boolean; hang?: boolean; dangVe?: bool
                     tong: ds.reduce((s, v) => s + v, 0),
                     tongBinhPhuong: ds.reduce((s, v) => s + v * v, 0),
                     soNgayCoBan: ds.filter(v => v > 0).length,
+                    /* Giao dịch đầu tiên của CẢ cửa hàng — cùng giá trị trên mọi
+                     * dòng, đúng như scalar subquery bên SQL thật. */
+                    banDauTien: k.tuoiCuaHang == null ? null
+                        : new Date(Date.now() - k.tuoiCuaHang * 86400_000).toISOString(),
                 }))
             }
             if (/FROM "ImportReceiptItem"/.test(sql)) {
@@ -354,6 +360,52 @@ async function main() {
         const m = r.canDat[0] || r.hetHang[0]
         ok('dao động nhẹ quanh mức trung bình không bị coi là giật cục',
             !!m && m.nhuCauGiatCuc === false, m && [m.banMoiNgay, m.doDaoDong])
+    }
+
+    console.log('\n▶ Cửa sổ lịch sử có thật — không chia cho ngày cửa hàng chưa tồn tại\n')
+    {
+        /* Bán 10 cái/ngày suốt 30 ngày, cửa hàng mới mở 30 ngày. Chia cho 90
+         * ngày của kỳ sẽ ra 3,33 cái/ngày — hụt 2/3 — rồi đặt thiếu hàng. */
+        const ban30 = [...Array(N - 30).fill(0), ...deu(10, 30)]
+        const r = await keHoachDatHang(fakePrisma({
+            ban: { P1: ban30 },
+            hang: [hangMau('P1', { stock: 5 })],
+            tuoiCuaHang: 30,
+        }), { soNgayLichSu: N, soNgayChoMacDinh: 7, chuKyDat: 7 })
+        const m = r.canDat[0] || r.hetHang[0]
+        ok('mức bán chia theo số ngày cửa hàng thật sự có dữ liệu',
+            !!m && Math.abs(m.banMoiNgay - 10) < 0.35, m?.banMoiNgay)
+        ok('trả về số ngày có dữ liệu để đối chiếu được',
+            r.ky.soNgayCoDuLieu === 30 && r.ky.soNgay === N, [r.ky.soNgayCoDuLieu, r.ky.soNgay])
+        ok('ghi chú nói rõ vì sao không chia cho cả kỳ',
+            r.ghiChu.some(g => /chỉ mới có dữ liệu bán khoảng 30 ngày/.test(g)), r.ghiChu)
+        ok('bán đều mỗi ngày thì KHÔNG bị xếp là giật cục dù kỳ dài 90 ngày',
+            !!m && m.nhuCauGiatCuc === false, [m?.nhuCauGiatCuc, m?.banMoiNgay, m?.doDaoDong])
+    }
+    {
+        // Cửa hàng lâu năm thì giữ nguyên mẫu số của kỳ
+        const r = await keHoachDatHang(fakePrisma({
+            ban: { P1: deu(10, N) },
+            hang: [hangMau('P1', { stock: 5 })],
+            tuoiCuaHang: null,
+        }), { soNgayLichSu: N, soNgayChoMacDinh: 7, chuKyDat: 7 })
+        ok('cửa hàng có dữ liệu dài hơn kỳ thì giữ mẫu số của kỳ',
+            r.ky.soNgayCoDuLieu === N && !r.ghiChu.some(g => /chỉ mới có dữ liệu/.test(g)),
+            r.ky.soNgayCoDuLieu)
+    }
+    {
+        /* Cửa hàng mới hơn kỳ NHƯNG bán giật cục thật thì vẫn phải bắt được —
+         * sửa mẫu số không được làm mất phép phát hiện giật cục. */
+        // 6 ngày có bán trong 30 ngày — vừa đủ qua ngưỡng 5 ngày tối thiểu
+        const ds = Array.from({ length: N }, (_, i) => (i < N - 30 ? 0 : (i % 5 === 0 ? 60 : 0)))
+        const r = await keHoachDatHang(fakePrisma({
+            ban: { P1: ds },
+            hang: [hangMau('P1', { stock: 5 })],
+            tuoiCuaHang: 30,
+        }), { soNgayLichSu: N, soNgayChoMacDinh: 7, chuKyDat: 7 })
+        const m = r.canDat[0] || r.hetHang[0]
+        ok('cửa hàng mới mà bán giật cục thật thì vẫn bị bắt',
+            !!m && m.nhuCauGiatCuc === true, [m?.banMoiNgay, m?.doDaoDong])
     }
 
     console.log(`\n${dat}/${dat + hong} ca đạt`)

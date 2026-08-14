@@ -63,7 +63,7 @@ export interface MatHangDatHang {
 }
 
 export interface KetQuaDatHang {
-    ky: { tuNgay: string; soNgay: number }
+    ky: { tuNgay: string; soNgay: number; soNgayCoDuLieu: number }
     thamSo: {
         mucPhucVu: number
         heSoZ: number
@@ -160,7 +160,11 @@ export async function keHoachDatHang(
             `SELECT s."productId"                      AS "productId",
                     COALESCE(SUM(s.q), 0)::float8      AS tong,
                     COALESCE(SUM(s.q * s.q), 0)::float8 AS "tongBinhPhuong",
-                    COUNT(*)::int                      AS "soNgayCoBan"
+                    COUNT(*)::int                      AS "soNgayCoBan",
+                    /* Giao dịch đầu tiên của cả cửa hàng, để biết cửa sổ lịch sử
+                     * có thật sự dài bằng số ngày mình đang chia hay không. MIN
+                     * trên cột có @@index([createdAt]) đọc thẳng chỉ mục. */
+                    (SELECT MIN(t2."createdAt") FROM "Transaction" t2) AS "banDauTien"
              FROM (
                  SELECT ti."productId" AS "productId",
                         (t."createdAt" + interval '7 hours')::date AS ngay,
@@ -182,6 +186,31 @@ export async function keHoachDatHang(
         ban.set(String(r.productId), {
             tong: so(r.tong), tongBp: so(r.tongBinhPhuong), soNgay: Number(r.soNgayCoBan) || 0,
         })
+    }
+
+    /* ── CỬA SỔ LỊCH SỬ CÓ THẬT ────────────────────────────────────────────
+     * Mọi phép trung bình dưới đây chia cho `soNgayLichSu` (mặc định 90). Cửa
+     * hàng mới dùng phần mềm 32 ngày mà vẫn chia cho 90 thì mức bán mỗi ngày
+     * hụt gần 2/3 — hệ quả kép và cả hai đều tệ:
+     *   - đề xuất đặt THIẾU, đúng lúc cửa hàng đang lớn nhanh nhất;
+     *   - ADI (số ngày kỳ / số ngày có bán) bị thổi lên, nên gần như MỌI mã bị
+     *     xếp vào nhóm "bán giật cục" và bị chặn tồn an toàn oan.
+     * Đo trên KENGISTORE: 90 ngày kỳ nhưng dữ liệu chỉ từ 32 ngày trước, và
+     * 53/53 mã cần đặt đều bị gắn nhãn giật cục — tỷ lệ đó tự nó là dấu hiệu
+     * ngưỡng đang bị méo chứ không phải cửa hàng bán lạ đến vậy. */
+    let soNgayHieuLuc = soNgayLichSu
+    let cuaSoBiCatNgan = false
+    {
+        const bd = banRows?.[0]?.banDauTien
+        const banDauTien = bd ? new Date(bd) : null
+        if (banDauTien && banDauTien.getTime() > tuNgay.getTime()) {
+            const songDuoc = Math.round((Date.now() - banDauTien.getTime()) / 86400_000)
+            soNgayHieuLuc = Math.min(soNgayLichSu, Math.max(1, songDuoc))
+            cuaSoBiCatNgan = soNgayHieuLuc < soNgayLichSu
+        }
+    }
+    if (cuaSoBiCatNgan) {
+        ghiChu.push(`Cửa hàng chỉ mới có dữ liệu bán khoảng ${soNgayHieuLuc} ngày nên mọi mức trung bình lấy theo ${soNgayHieuLuc} ngày đó, không chia cho ${soNgayLichSu} ngày của kỳ — chia cho ${soNgayLichSu} sẽ làm mức bán mỗi ngày thấp hơn thực tế và đề xuất đặt thiếu hàng.`)
     }
 
     // ── Hàng hoá đang bán ────────────────────────────────────────────────
@@ -296,11 +325,11 @@ export async function keHoachDatHang(
         const choDo = nccId ? choTheoNcc.get(nccId) : undefined
         const cho = choDo ?? soNgayChoMacDinh
 
-        const mu = b.tong / soNgayLichSu
+        const mu = b.tong / soNgayHieuLuc
         /* Phương sai tính trên TOÀN kỳ: những ngày không bán đóng góp 0 vào tổng
          * bình phương nhưng vẫn nằm ở mẫu số. Chia cho riêng số ngày có bán sẽ
          * làm mọi mã bán thưa trông như bán rất đều. */
-        const phuongSai = Math.max(0, b.tongBp / soNgayLichSu - mu * mu)
+        const phuongSai = Math.max(0, b.tongBp / soNgayHieuLuc - mu * mu)
         const sigma = Math.sqrt(phuongSai)
 
         const canhBao: string[] = []
@@ -337,7 +366,7 @@ export async function keHoachDatHang(
              * điểm đặt hàng — nhưng vẫn báo nếu đang hết sạch mà có người mua. */
             co = ton <= 0 ? 'het-hang' : 'chua-du-lich-su'
             if (co === 'chua-du-lich-su') {
-                canhBao.push(`Mới có ${b.soNgay} ngày phát sinh bán trong ${soNgayLichSu} ngày — chưa đủ để tính điểm đặt hàng.`)
+                canhBao.push(`Mới có ${b.soNgay} ngày phát sinh bán trong ${soNgayHieuLuc} ngày — chưa đủ để tính điểm đặt hàng.`)
             }
         } else {
             /* ── NHU CẦU GIẬT CỤC LÀM CÔNG THỨC TỒN AN TOÀN VÔ NGHĨA ─────────
@@ -358,7 +387,7 @@ export async function keHoachDatHang(
              * bình — vẫn có đệm, nhưng không để một cú sỉ quyết định cả đơn
              * hàng. Và phải NÓI RA là đã chặn, kèm con số công thức gốc đòi,
              * để người biết hàng của mình tự quyết. */
-            const adi = b.soNgay > 0 ? soNgayLichSu / b.soNgay : Infinity
+            const adi = b.soNgay > 0 ? soNgayHieuLuc / b.soNgay : Infinity
             const cv2 = mu > 0 ? (sigma / mu) ** 2 : 0
             giatCuc = adi >= 1.32 && cv2 >= 0.49
 
@@ -368,7 +397,7 @@ export async function keHoachDatHang(
                 tonAnToan = Math.min(theoCongThuc, chan)
                 if (theoCongThuc > chan) {
                     canhBao.push(
-                        `Nhu cầu giật cục: ${b.soNgay} ngày có bán trong ${soNgayLichSu} ngày, mức dao động gấp ${(sigma / mu).toFixed(1)} lần mức bán trung bình — gần như chắc chắn do vài đơn sỉ lớn chứ không phải bán đều. `
+                        `Nhu cầu giật cục: ${b.soNgay} ngày có bán trong ${soNgayHieuLuc} ngày, mức dao động gấp ${(sigma / mu).toFixed(1)} lần mức bán trung bình — gần như chắc chắn do vài đơn sỉ lớn chứ không phải bán đều. `
                         + `Công thức tồn an toàn đòi trữ ${theoCongThuc}; đã chặn xuống ${tonAnToan} (bằng một quãng chờ ${cho} ngày) để một cú sỉ không quyết định cả đơn hàng. `
                         + `Nếu biết chắc sắp có đơn sỉ nữa thì đặt thêm theo đơn đó, đừng dựa vào con số này.`)
                 }
@@ -417,7 +446,7 @@ export async function keHoachDatHang(
             canhBao.push('Đang hết hàng — con số "bán mỗi ngày" đo được đã bị kéo xuống bởi chính những ngày hết hàng, nhu cầu thật cao hơn.')
         }
         if (co === 'ton-dong' && ton > 0) {
-            canhBao.push(`Không bán được món nào trong ${soNgayLichSu} ngày qua.`)
+            canhBao.push(`Không bán được món nào trong ${soNgayHieuLuc} ngày qua.`)
         }
         if (!choDo && nccId) {
             canhBao.push(`Chưa đủ lịch sử đặt hàng của nhà cung cấp này, đang tạm dùng ${soNgayChoMacDinh} ngày chờ.`)
@@ -506,7 +535,7 @@ export async function keHoachDatHang(
     }
 
     return {
-        ky: { tuNgay: tuNgay.toISOString().slice(0, 10), soNgay: soNgayLichSu },
+        ky: { tuNgay: tuNgay.toISOString().slice(0, 10), soNgay: soNgayLichSu, soNgayCoDuLieu: soNgayHieuLuc },
         thamSo: { mucPhucVu, heSoZ: z, soNgayChoMacDinh, chuKyDat },
         tomTat: {
             soMaXet: tatCa.length,
