@@ -4643,6 +4643,33 @@ router.get('/engine-probe', async (req: Request, res: Response) => {
                     mauCanDat: (datHang?.canDat || []).slice(0, 3),
                 },
                 dongTien: loiTien ? { loi: loiTien } : { chayHet: `${giay2}s`, ...tien },
+                truyVetMaAmSau: await (async () => {
+                    /* Truy vết đúng mã âm sâu nhất: đây là công cụ người dùng mở
+                     * để hiểu tồn âm, nên phải soi trên dữ liệu thật xem dòng
+                     * thời gian có xếp đúng theo ngày nghiệp vụ không. */
+                    try {
+                        const sp = await prisma.product.findFirst({
+                            where: { stock: { lt: 0 } }, orderBy: { stock: 'asc' },
+                            select: { id: true, sku: true, name: true, stock: true },
+                        })
+                        if (!sp) return { khong: 'không có mã nào tồn âm' }
+                        const { truyVetTonKho } = await import('../lib/stockTrace')
+                        const tv: any = await truyVetTonKho(prisma, String(sp.id), { soBuocToiDa: 400 })
+                        const ngay = (tv.buoc || []).map((b: any) => String(b.ngay).slice(0, 10))
+                        const tangDan = ngay.every((v: string, i: number) => i === 0 || v >= ngay[i - 1])
+                        return {
+                            sku: sp.sku, ton: sp.stock, soBuoc: tv.soBuoc,
+                            xepTangDanTheoNgay: tangDan,
+                            ngayDau: ngay[0] ?? null, ngayCuoi: ngay[ngay.length - 1] ?? null,
+                            khopSo: tv.khopSo, lech: tv.lech,
+                            buocDauTienAm: tv.buocDauTienAm
+                                ? { ngay: tv.buocDauTienAm.ngay, conLai: tv.buocDauTienAm.conLai, chungTu: tv.buocDauTienAm.chungTu }
+                                : null,
+                        }
+                    } catch (e: any) {
+                        return { loi: String(e?.message || e).slice(0, 300) }
+                    }
+                })(),
                 dauVetThoiGian: await (async () => {
                     /* "Cửa hàng mới 31 ngày" và "dữ liệu được nhập vào 31 ngày
                      * trước" cho ra cùng một MIN(createdAt) nhưng ý nghĩa ngược
