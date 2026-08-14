@@ -39,6 +39,9 @@ interface Kho {
     lechKy?: Array<{ thangGhiSo: string; thangBan: string; so: number; tien: number }>
     /** Phiếu nhập có ngày hoá đơn khác tháng với ngày ghi sổ. */
     lechKyNhap?: Array<{ thangGhiSo: string; thangNhap: string; so: number; tien: number }>
+    /** Mốc bán / nhập đầu tiên của cả cửa hàng, để đo khoảng trống lịch sử nhập. */
+    banDauTien?: string | null
+    nhapDauTien?: string | null
 }
 
 function fake(k: Kho, loi?: Record<string, boolean>) {
@@ -48,6 +51,10 @@ function fake(k: Kho, loi?: Record<string, boolean>) {
             /* Phân nhánh theo câu SQL. Bản trước trả cùng một shape cho MỌI truy
              * vấn, nên phép soát mới im lặng báo "on" và test xanh mà không hề
              * chạy qua nó — prisma giả quá dễ dãi thì test thành vô hiệu. */
+            if (/banDau/.test(String(sql || ''))) {
+                no('mocBanNhap')
+                return [{ banDau: k.banDauTien ?? null, nhapDau: k.nhapDauTien ?? null }]
+            }
             if (/thangNhap/.test(String(sql || ''))) {
                 no('lechKyNhap')
                 return k.lechKyNhap ?? []
@@ -289,6 +296,38 @@ async function main() {
     ok('mục NẶNG xếp trước mục ổn', nhieu.muc[0].muc === 'nang', nhieu.muc.map((m: any) => m.muc))
     ok('điểm tụt theo số vấn đề', nhieu.diem < 60, nhieu.diem)
     ok('xếp loại "chưa tin được"', nhieu.xepLoai === 'chưa tin được', nhieu.xepLoai)
+
+    console.log('\n▶ Tồn âm do thiếu lịch sử nhập hàng — phải nói giống bộ soát thuế\n')
+    {
+        /* Bộ soát Sẵn Sàng Thanh Tra đã nhận ra nguyên nhân này; bảng sức khoẻ
+         * nằm CÙNG MỘT TRANG nên không được nói khác đi. Trước khi sửa, nó
+         * khẳng định "tồn âm ở đây là lệch sổ sách" và bảo đi kiểm kê 235 mã. */
+        const r = await sucKhoeDuLieu(fake({
+            ...SACH, tonAm: { so: 235, tong: -2772 },
+            banDauTien: '2026-03-21T00:00:00.000Z',
+            nhapDauTien: '2026-07-02T00:00:00.000Z',
+        }), KY)
+        const m = lay(r, 'ton-am')
+        ok('tồn âm do khoảng trống nhập hàng → hạ xuống mức vừa', m.muc === 'vua', m.muc)
+        ok('… tên mục nói luôn nguyên nhân', /thiếu lịch sử nhập hàng/.test(m.ten), m.ten)
+        ok('… KHÔNG còn khẳng định là lệch sổ sách',
+            !/là lệch sổ sách/.test(m.anhHuong), m.anhHuong.slice(0, 90))
+        ok('… nêu đúng ngày phiếu nhập sớm nhất và độ dài khoảng trống',
+            /từ 2026-07-02/.test(m.anhHuong) && /sớm hơn 103 ngày/.test(m.anhHuong), m.anhHuong.slice(0, 140))
+        ok('… và can ngăn việc kiểm kê vô ích',
+            /công vô ích/.test(m.canLam), m.canLam)
+    }
+    {
+        // Lịch sử nhập đầy đủ thì giữ nguyên kết luận cũ, không nới nhầm
+        const r = await sucKhoeDuLieu(fake({
+            ...SACH, tonAm: { so: 235, tong: -2772 },
+            banDauTien: '2026-03-21T00:00:00.000Z',
+            nhapDauTien: '2026-03-25T00:00:00.000Z',
+        }), KY)
+        const m = lay(r, 'ton-am')
+        ok('lịch sử nhập đầy đủ → tồn âm vẫn mức NẶNG', m.muc === 'nang', m.muc)
+        ok('… và vẫn gọi đúng tên là lệch sổ sách', /là lệch sổ sách/.test(m.anhHuong))
+    }
 
     console.log('\n▶ Điểm: đổi sang trừ theo tỷ lệ mà KHÔNG đổi nhãn xếp loại\n')
     /* Cách cũ trừ tuyến tính rồi kẹp sàn 0 nên bão hoà: 5 mục nặng + 2 vừa và

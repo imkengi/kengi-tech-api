@@ -164,6 +164,28 @@ export async function sucKhoeDuLieu(
         }), [])
         : []
 
+    /* ── LỊCH SỬ NHẬP HÀNG CÓ NGẮN HƠN LỊCH SỬ BÁN KHÔNG? ────────────────────
+     * Cửa hàng chuyển từ phần mềm cũ thường nhập được lịch sử BÁN nhưng không
+     * nhập lịch sử NHẬP HÀNG; hàng bán ra không có phiếu nhập tương ứng nên tồn
+     * âm hàng loạt. Bộ soát Sẵn Sàng Thanh Tra đã nói đúng điều này rồi — bảng
+     * này nằm CÙNG MỘT TRANG với nó, nên không được nói khác đi.
+     *
+     * Đo trên KENGISTORE: bán trải 147 ngày, nhập chỉ 42 phiếu trải 44 ngày. */
+    let khoangTrongNhap: { soNgay: number; tuNgay: string } | null = null
+    {
+        const r: any[] | null = await thu<any[] | null>('moc BanNhap', thieu, () => prisma.$queryRawUnsafe(
+            `SELECT (SELECT MIN(COALESCE(t."transactionDate", t."createdAt"))
+                       FROM "Transaction" t WHERE t.status IN ('completed','partial')) AS "banDau",
+                    (SELECT MIN(COALESCE(i."transactionDate", i."createdAt"))
+                       FROM "ImportReceipt" i WHERE i.status <> 'cancelled') AS "nhapDau"`), null)
+        const bd = r?.[0]?.banDau ? new Date(r[0].banDau) : null
+        const nd = r?.[0]?.nhapDau ? new Date(r[0].nhapDau) : null
+        if (bd && nd) {
+            const cach = Math.round((nd.getTime() - bd.getTime()) / 86400_000)
+            if (cach >= 30) khoangTrongNhap = { soNgay: cach, tuNgay: nd.toISOString().slice(0, 10) }
+        }
+    }
+
     if (tonAm) {
         const so = Number(tonAm?._count) || 0
         muc.push({
@@ -173,19 +195,24 @@ export async function sucKhoeDuLieu(
                 phu: `tồn ${lam(p.stock)}`,
             })),
             ma: 'ton-am',
-            ten: choBanAm ? 'Mã hàng có tồn âm (cửa hàng cho bán âm)' : 'Mã hàng có tồn âm',
-            muc: so === 0 ? 'on' : choBanAm ? 'vua' : so > 50 ? 'nang' : 'vua',
+            ten: choBanAm ? 'Mã hàng có tồn âm (cửa hàng cho bán âm)'
+                : khoangTrongNhap ? 'Mã hàng có tồn âm (thiếu lịch sử nhập hàng)' : 'Mã hàng có tồn âm',
+            muc: so === 0 ? 'on' : (choBanAm || khoangTrongNhap) ? 'vua' : so > 50 ? 'nang' : 'vua',
             so: so === 0 ? 'không có' : `${so} mã · tổng ${lam(tonAm?._sum?.stock)}`,
             anhHuong: so === 0
                 ? 'Tồn kho khớp sổ.'
                 : choBanAm
                     ? 'Cửa hàng đang bật "cho phép bán khi hết tồn", nên tồn âm ở đây là bán trước — hàng về sẽ bù. KHÔNG phải lỗi dữ liệu. Nhưng trong lúc còn âm thì bảng đề xuất đặt hàng và giá vốn hàng bán vẫn tính trên số âm đó.'
-                    : 'Cửa hàng KHÔNG bật cho phép bán âm, nên tồn âm ở đây là lệch sổ sách (bán không trừ kho, nhập chưa ghi, đồng bộ sót) chứ không phải bán trước. Nó làm bảng đề xuất đặt hàng đòi mua thừa đúng bằng phần lệch, và làm giá vốn hàng bán sai.',
+                    : khoangTrongNhap
+                        ? `Phần mềm chỉ có phiếu nhập từ ${khoangTrongNhap.tuNgay}, trong khi lịch sử bán bắt đầu sớm hơn ${khoangTrongNhap.soNgay} ngày. Hàng bán trong quãng trống đó không có phiếu nhập tương ứng nên tồn tụt xuống âm — gần như luôn là do CHƯA NHẬP lịch sử mua hàng từ phần mềm cũ, chứ không phải bán không trừ kho. Trong lúc còn âm thì bảng đề xuất đặt hàng và giá vốn hàng bán vẫn tính trên số âm đó.`
+                        : 'Cửa hàng KHÔNG bật cho phép bán âm, nên tồn âm ở đây là lệch sổ sách (bán không trừ kho, nhập chưa ghi, đồng bộ sót) chứ không phải bán trước. Nó làm bảng đề xuất đặt hàng đòi mua thừa đúng bằng phần lệch, và làm giá vốn hàng bán sai.',
             canLam: so === 0
                 ? 'Không cần làm gì.'
                 : choBanAm
                     ? 'Nhập bù cho những mã đang âm sâu nhất; mã nào âm lâu mà hàng không về thì kiểm kê lại.'
-                    : 'Kiểm kê nhóm mã này rồi chỉnh tồn về đúng thực tế; xong thì chạy lại đối chiếu kho.',
+                    : khoangTrongNhap
+                        ? `Nhập bổ sung phiếu nhập của quãng trước ${khoangTrongNhap.tuNgay} rồi soát lại — làm việc này trước sẽ tự hết phần lớn số mã âm. Kiểm kê ${so} mã ngay bây giờ là công vô ích nếu nguyên nhân chỉ là thiếu lịch sử nhập.`
+                        : 'Kiểm kê nhóm mã này rồi chỉnh tồn về đúng thực tế; xong thì chạy lại đối chiếu kho.',
         })
     }
 
