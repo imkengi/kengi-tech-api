@@ -3713,7 +3713,11 @@ router.get('/hkd/s1', authMiddleware, async (req: AuthRequest, res: Response) =>
             const CHUNK = 2000
             for (let i = 0; i < ids.length; i += CHUNK) {
                 const invs = await p.eInvoice.findMany({
-                    where: { transactionId: { in: ids.slice(i, i + CHUNK) }, status: { in: ['issued', 'SENT'] } },
+                    // 'issued' KHÔNG phải trạng thái hệ thống từng ghi — bộ phát hành
+                    // đặt SIGNED rồi SENT (xem schema: DRAFT|SIGNED|SENT|CANCELLED|…).
+                    // Lọc nhầm khiến hóa đơn đã ký nhưng chưa gửi bị coi là chưa xuất,
+                    // và sổ doanh thu hộ kinh doanh ghi sai cả cột số hóa đơn.
+                    where: { transactionId: { in: ids.slice(i, i + CHUNK) }, status: { in: ['SIGNED', 'SENT'] } },
                     select: { transactionId: true, invoiceNumber: true, invoiceSymbol: true, issuedAt: true },
                     orderBy: { issuedAt: 'asc' },
                 })
@@ -3792,7 +3796,11 @@ router.get('/hkd/s2', authMiddleware, async (req: AuthRequest, res: Response) =>
             const CHUNK = 2000
             for (let i = 0; i < ids.length; i += CHUNK) {
                 const invs = await p.eInvoice.findMany({
-                    where: { transactionId: { in: ids.slice(i, i + CHUNK) }, status: { in: ['issued', 'SENT'] } },
+                    // 'issued' KHÔNG phải trạng thái hệ thống từng ghi — bộ phát hành
+                    // đặt SIGNED rồi SENT (xem schema: DRAFT|SIGNED|SENT|CANCELLED|…).
+                    // Lọc nhầm khiến hóa đơn đã ký nhưng chưa gửi bị coi là chưa xuất,
+                    // và sổ doanh thu hộ kinh doanh ghi sai cả cột số hóa đơn.
+                    where: { transactionId: { in: ids.slice(i, i + CHUNK) }, status: { in: ['SIGNED', 'SENT'] } },
                     select: { transactionId: true },
                 })
                 for (const iv of invs) if (iv.transactionId) hdSet.add(iv.transactionId)
