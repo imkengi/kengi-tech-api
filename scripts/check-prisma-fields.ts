@@ -105,6 +105,44 @@ function khoaCapNgoai(khoi: string): string[] {
     return ra
 }
 
+/**
+ * Xoá RUỘT mọi chuỗi (', ", `) khỏi mã nguồn, giữ nguyên độ dài và xuống dòng.
+ *
+ * Vì sao cần: `details: \`Token obtained, shop: ${x}\`` khiến bộ tách khoá đọc
+ * "shop" thành một tên cột và báo oan. Bản đầu tiên của phép soát khối ghi cho
+ * ra 11 "lỗi" mà 10 cái là chữ nằm trong chuỗi.
+ *
+ * Giữ nguyên độ dài để số dòng báo ra vẫn đúng; giữ nguyên ngoặc để phép đếm
+ * ngoặc cân bằng không lệch.
+ */
+function boRuotChuoi(s: string): string {
+    const ra = s.split('')
+    let i = 0
+    while (i < ra.length) {
+        const c = ra[i]
+        if (c !== `'` && c !== '"' && c !== '`') { i++; continue }
+        const mo = c
+        let j = i + 1
+        let sauNgoac = 0
+        while (j < ra.length) {
+            const d = ra[j]
+            if (d === '\\') { j += 2; continue }
+            /* Trong template, ${...} là MÃ chứ không phải chữ — nhưng để đơn giản
+             * và an toàn, xoá luôn cả nó: mã trong đó không bao giờ là tên cột ở
+             * cấp ngoài cùng của khối data. */
+            if (mo === '`' && d === '$' && ra[j + 1] === '{') { sauNgoac++; j += 2; continue }
+            if (mo === '`' && d === '}' && sauNgoac > 0) { sauNgoac--; j++; continue }
+            if (d === mo && sauNgoac === 0) break
+            j++
+        }
+        for (let k = i + 1; k < Math.min(j, ra.length); k++) {
+            if (ra[k] !== '\n') ra[k] = ' '
+        }
+        i = Math.min(j + 1, ra.length)
+    }
+    return ra.join('')
+}
+
 // ── 3. Quét mã nguồn ─────────────────────────────────────────────────────────
 function quet(dir: string, ra: string[] = []): string[] {
     for (const m of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -129,7 +167,7 @@ const loi: Loi[] = []
 let soKiem = 0
 
 for (const file of quet(path.join(GOC, 'src'))) {
-    const s = fs.readFileSync(file, 'utf8')
+    const s = boRuotChuoi(fs.readFileSync(file, 'utf8'))
     for (const m of s.matchAll(/\bprisma\.(\w+)\.(findMany|findFirst|findUnique|count|aggregate|groupBy)\s*\(/g)) {
         const bien = m[1]
         const truong = truongCua(bien)
@@ -165,6 +203,67 @@ for (const file of quet(path.join(GOC, 'src'))) {
                 file: path.relative(GOC, file), dong,
                 model: tenModel(bien), truong: k, goiY: goiY.slice(0, 4),
             })
+        }
+    }
+}
+
+// ── 3b. Quét khối GHI (data / create / update) ───────────────────────────────
+/**
+ * `select` chỉ là nửa câu chuyện: gõ sai tên cột khi GHI còn tệ hơn, vì Prisma
+ * ném lỗi ngay và chỗ gọi thường có try/catch "non-critical" nuốt mất.
+ *
+ * Đã xảy ra thật ngày 14/08/2026: `Customer.loyaltyTier` (cột thật là `tier`)
+ * làm ĐIỂM TÍCH LUỸ CHƯA TỪNG ĐƯỢC CỘNG cho khách nào — mỗi lần bán đều ném
+ * lỗi, và log chỉ ghi "[Loyalty] Points update failed (non-critical)".
+ */
+const LENH_GHI = 'create|createMany|update|updateMany|upsert'
+
+interface LoiGhi { file: string; dong: number; model: string; truong: string; goiY: string[] }
+const loiGhi: LoiGhi[] = []
+let soKiemGhi = 0
+
+for (const file of quet(path.join(GOC, 'src'))) {
+    const s = boRuotChuoi(fs.readFileSync(file, 'utf8'))
+    for (const m of s.matchAll(new RegExp(`\\b(?:prisma|tx)\\.(\\w+)\\.(?:${LENH_GHI})\\s*\\(`, 'g'))) {
+        const bien = m[1]
+        const truong = truongCua(bien)
+        if (!truong) continue
+
+        const mo = s.indexOf('{', m.index! + m[0].length - 1)
+        if (mo < 0 || mo > m.index! + m[0].length + 5) continue
+        const khoi = khoiTai(s, mo)
+        if (!khoi) continue
+
+        /* Chỉ soi khối `data` / `create` / `update` Ở CẤP NGOÀI CÙNG. Khối lồng
+         * bên trong là trường của model KHÁC (quan hệ), soi vào là báo oan. */
+        for (const ten of ['data', 'create', 'update']) {
+            const re = new RegExp(`^${ten}\\s*:\\s*\\{`)
+            let sau = 0
+            for (let i = 0; i < khoi.noiDung.length; i++) {
+                const c = khoi.noiDung[i]
+                if (c === '{' || c === '[' || c === '(') { sau++; continue }
+                if (c === '}' || c === ']' || c === ')') { sau--; continue }
+                if (sau !== 0) continue
+                const k = khoi.noiDung.slice(i).match(re)
+                if (!k || (i > 0 && !/[\s,{]/.test(khoi.noiDung[i - 1]))) continue
+
+                const khoiGhi = khoiTai(khoi.noiDung, i + k[0].length - 1)
+                if (!khoiGhi) break
+                for (const cot of khoaCapNgoai(khoiGhi.noiDung)) {
+                    if (TU_KHOA.has(cot)) continue
+                    soKiemGhi++
+                    if (truong.has(cot)) continue
+                    const dong = s.slice(0, m.index).split('\n').length
+                    const goiY = [...truong].filter(t =>
+                        t.toLowerCase().includes(cot.toLowerCase().slice(0, 5)) ||
+                        cot.toLowerCase().includes(t.toLowerCase().slice(0, 5)))
+                    loiGhi.push({
+                        file: path.relative(GOC, file), dong,
+                        model: tenModel(bien), truong: cot, goiY: goiY.slice(0, 4),
+                    })
+                }
+                break
+            }
         }
     }
 }
@@ -205,7 +304,9 @@ function doiSoDau(s: string, moNgoac: number): string {
 }
 
 for (const file of quet(path.join(GOC, 'src'))) {
-    const s = fs.readFileSync(file, 'utf8')
+    /* SQL thô NẰM TRONG template literal, nên phần này phải đọc bản GỐC —
+         * dùng bản đã xoá ruột chuỗi thì không còn câu SQL nào để soi. */
+        const s = fs.readFileSync(file, 'utf8')
     for (const m of s.matchAll(/\$(?:queryRaw|queryRawUnsafe|executeRaw|executeRawUnsafe)\s*[(`]/g)) {
         const moNgoac = s.indexOf('(', m.index!)
         if (moNgoac < 0) continue
@@ -244,7 +345,19 @@ for (const file of quet(path.join(GOC, 'src'))) {
 console.log(`\nSoát tên trường Prisma`)
 console.log(`  ${schemaStore.size} model cửa hàng + ${schemaRegistry.size} model sổ đăng ký`)
 console.log(`  Đã đối chiếu ${soKiem} tên trường trong các khối select`)
+console.log(`  Đã đối chiếu ${soKiemGhi} tên cột trong khối ghi (data/create/update)`)
 console.log(`  Đã đối chiếu ${soKiemSql} tên cột trong SQL thô\n`)
+
+if (loiGhi.length > 0) {
+    console.log(`❌ ${loiGhi.length} tên cột trong khối GHI không có trong schema:\n`)
+    for (const l of loiGhi) {
+        console.log(`  ✗ ${l.model}.${l.truong}  (data/create/update)`)
+        console.log(`      ${l.file}:${l.dong}`)
+        if (l.goiY.length) console.log(`      ý bạn là: ${l.goiY.join(', ')}?`)
+    }
+    console.log('\n  Ghi sai tên cột nổ NGAY khi chạy, và chỗ gọi thường có try/catch')
+    console.log('  "non-critical" nuốt mất — tính năng chết âm thầm.\n')
+}
 
 if (loiSql.length > 0) {
     console.log(`❌ ${loiSql.length} tên cột trong SQL THÔ không có trong schema:\n`)
@@ -257,8 +370,8 @@ if (loiSql.length > 0) {
     console.log('  chỗ gọi bắt vào mảng "thiếu", rồi cả tính năng im lặng.\n')
 }
 
-if (loi.length === 0 && loiSql.length === 0) {
-    console.log('✅ Mọi tên trường trong select và SQL thô đều có trong schema.\n')
+if (loi.length === 0 && loiSql.length === 0 && loiGhi.length === 0) {
+    console.log('✅ Mọi tên cột trong select, khối ghi và SQL thô đều có trong schema.\n')
     process.exit(0)
 }
 /* Chỉ sai ở SQL thô thì phần lỗi đã in ở trên rồi — thoát luôn, đừng in tiếp

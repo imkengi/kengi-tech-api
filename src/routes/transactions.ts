@@ -893,11 +893,17 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
                         else if (cumulative >= 5_000_000) newTier = 'silver'
                         else newTier = 'bronze'
 
+                        /* Cột hạng khách tên là `tier`, KHÔNG phải `loyaltyTier`.
+                         * Viết sai tên làm cả lệnh update ném lỗi, catch bên dưới
+                         * nuốt mất và chỉ log "non-critical" — hậu quả là ĐIỂM
+                         * TÍCH LUỸ CHƯA TỪNG ĐƯỢC CỘNG cho khách nào, suốt thời
+                         * gian dài, mà không ai biết. Xác nhận trên log
+                         * production ngày 14/08/2026. */
                         await (prisma as any).customer.update({
                             where: { id: txData.customerId },
                             data: {
                                 loyaltyPoints: newPoints,
-                                loyaltyTier: newTier,
+                                tier: newTier,
                             },
                         })
                         console.log(`[Loyalty] Customer ${customer.name}: +${earnedPoints} pts → ${newPoints} (tier: ${newTier})`)

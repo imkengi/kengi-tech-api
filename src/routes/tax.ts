@@ -7070,7 +7070,10 @@ router.post('/deadlines/:id/submit', authMiddleware, async (req: AuthRequest, re
         if (!existing) return res.status(404).json({ success: false, error: 'Không tìm thấy hạn nộp' })
         const data = await prisma.taxDeadline.update({
             where: { id },
-            data: { status: 'submitted', submittedAt: new Date() },
+            /* Cột thật là `filedAt`, KHÔNG phải `submittedAt` — viết sai làm cả
+             * lệnh update ném lỗi, tức là bấm "đã nộp" cho một hạn nộp thuế
+             * chưa bao giờ ăn thua. Cùng lớp lỗi với Customer.loyaltyTier. */
+            data: { status: 'submitted', filedAt: new Date() },
         })
         res.json({ success: true, data })
     } catch (err: any) {
