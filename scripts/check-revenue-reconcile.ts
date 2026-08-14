@@ -280,6 +280,39 @@ async function main() {
     ok('… và nói rõ phần mềm SUY RA từ việc phiếu chi không gắn tài khoản',
         chiTienMat.ghiChu.some(g => /gắn tài khoản/.test(g)), chiTienMat.ghiChu)
 
+    console.log('\n▶ Hoá đơn phát hành HỎNG — phải nói ra, không được im lặng bỏ qua\n')
+
+    /* Tờ ERROR bị loại khỏi phần "đã xuất" là đúng (chưa có số, chưa gửi cơ quan
+     * thuế), nhưng loại IM LẶNG thì cửa hàng thấy tỷ lệ phủ tụt mà không hiểu vì
+     * sao rồi đi tìm nhầm chỗ. Thực tế 14/08/2026: một cửa hàng có 115 tờ hỏng,
+     * trong đó 66 tờ THẬT RA đã phát hành thành công. */
+    const coLoi = await doiChieuBaChieu(fakePrisma({
+        transactions: [gd(1, 10_000_000)],
+        invoices: [
+            hd('001', 6_000_000, { transactionId: 'T1' }),
+            hd('', 3_000_000, { status: 'ERROR' }),
+            hd('', 1_000_000, { status: 'ERROR' }),
+        ],
+    }), KY)
+    ok('đếm riêng số tờ hỏng', coLoi.hoaDon.soLoi === 2, coLoi.hoaDon.soLoi)
+    ok('… và tổng tiền của chúng', coLoi.hoaDon.tienLoi === 4_000_000, coLoi.hoaDon.tienLoi)
+    ok('KHÔNG cộng tờ hỏng vào phần đã xuất', coLoi.hoaDon.tongCoThue === 6_000_000, coLoi.hoaDon.tongCoThue)
+    const rLoi = coLoi.ruiRo.find(r => r.ma === 'hoa-don-phat-hanh-loi')
+    ok('có dựng cảnh báo riêng cho tờ hỏng', !!rLoi)
+    ok('… nói rõ tỷ lệ phủ đang THẤP HƠN thực tế',
+        coLoi.ghiChu.some(g => /THẤP HƠN thực tế/.test(g)), coLoi.ghiChu)
+    ok('… và chỉ đúng cách xử lý tờ trùng khoá (ghi bù, không xuất lại)',
+        !!rLoi && /ghi bù/.test(rLoi.canLam), rLoi?.canLam)
+    ok('tờ hỏng KHÔNG bị gộp chung vào "chưa xuất hoá đơn" — hai việc chữa khác nhau',
+        coLoi.ruiRo.filter(r => r.ma === 'hoa-don-phat-hanh-loi').length === 1)
+
+    const sachKhongLoi = await doiChieuBaChieu(fakePrisma({
+        transactions: [gd(1, 1_000_000)],
+        invoices: [hd('001', 1_000_000, { transactionId: 'T1' })],
+    }), KY)
+    ok('không có tờ hỏng → KHÔNG dựng cảnh báo thừa',
+        !sachKhongLoi.ruiRo.some(r => r.ma === 'hoa-don-phat-hanh-loi') && sachKhongLoi.hoaDon.soLoi === 0)
+
     console.log('\n▶ Đọc hỏng bảng — KHÔNG được quy thành "cửa hàng không có"\n')
 
     const hongHd = await doiChieuBaChieu(fakePrisma({

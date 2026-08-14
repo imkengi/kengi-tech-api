@@ -88,6 +88,9 @@ export interface ChieuHoaDon {
     soHoaDon: number
     soHuy: number
     soDieuChinh: number
+    /** Hoá đơn phát hành HỎNG — chưa tính vào phần đã xuất, phải nói ra. */
+    soLoi: number
+    tienLoi: number
 }
 
 export interface ChieuDongTien {
@@ -245,6 +248,12 @@ export async function doiChieuBaChieu(
         return st !== 'CANCELLED' && st !== 'REPLACED' && st !== 'DRAFT' && st !== 'ERROR'
     })
     const huy = hoaDonRaw.filter((h: any) => String(h.status || '').toUpperCase() === 'CANCELLED')
+    /* Hoá đơn PHÁT HÀNH HỎNG bị loại khỏi phần "đã xuất" — đúng, vì chúng chưa
+     * có số và chưa gửi cơ quan thuế. Nhưng loại IM LẶNG là sai: cửa hàng sẽ
+     * thấy tỷ lệ phủ hoá đơn tụt mà không hiểu vì sao, rồi đi tìm nhầm chỗ.
+     * Đếm riêng và nói ra. */
+    const loi = hoaDonRaw.filter((h: any) => String(h.status || '').toUpperCase() === 'ERROR')
+    const tienLoi = loi.reduce((s: number, h: any) => s + (Number(h.totalAmount) || 0), 0)
     const dieuChinh = conHieuLuc.filter((h: any) => {
         const lo = String(h.invoiceType || '').toUpperCase()
         return lo === 'RETURN' || lo === 'ADJUSTMENT'
@@ -272,6 +281,8 @@ export async function doiChieuBaChieu(
         soHoaDon: conHieuLuc.length,
         soHuy: huy.length,
         soDieuChinh: dieuChinh.length,
+        soLoi: loi.length,
+        tienLoi: lam(tienLoi),
     }
 
     // ---- Chiều 3: dòng tiền ngân hàng ----------------------------------
@@ -443,6 +454,23 @@ export async function doiChieuBaChieu(
             soTien: chiTienMatLon.tongTien,
             uocTruyThu: chiTienMatLon.tongVatMat || undefined,
         })
+    }
+
+    if (hoaDon.soLoi > 0) {
+        /* Tờ hỏng đứng RIÊNG, không gộp vào "chưa xuất hoá đơn": hai thứ này
+         * chữa khác hẳn nhau. Chưa xuất thì đi xuất; hỏng thì phải xem vì sao
+         * hỏng — và một phần trong đó thật ra ĐÃ phát hành thành công, xuất lại
+         * là hỏng tiếp. */
+        ruiRo.push({
+            ma: 'hoa-don-phat-hanh-loi',
+            muc: hoaDon.tienLoi > 0 && soSach.tong > 0 && hoaDon.tienLoi / soSach.tong > 0.02 ? 'vua' : 'thap',
+            tieuDe: `${hoaDon.soLoi} hoá đơn phát hành hỏng (${lam(hoaDon.tienLoi).toLocaleString('vi-VN')}đ)`,
+            vaSao: 'Những tờ này chưa có số hoá đơn nên KHÔNG được tính vào phần đã xuất ở trên — tỷ lệ phủ hoá đơn vì thế thấp hơn thực tế. Về mặt thuế, hoá đơn hỏng giống như chưa lập hoá đơn.',
+            canCu: 'Điều 90 Luật Quản lý thuế 38/2019: bán hàng phải lập hoá đơn. Hoá đơn chưa phát hành được thì nghĩa vụ vẫn còn nguyên.',
+            canLam: 'Mở Hoá Đơn VAT → bảng "hoá đơn phát hành hỏng" để xem nguyên nhân từng nhóm. Lưu ý nhóm báo trùng khoá: đó là hoá đơn ĐÃ phát hành thành công, phải ghi bù chứ không được xuất lại.',
+            soTien: hoaDon.tienLoi,
+        })
+        ghiChu.push(`${hoaDon.soLoi} hoá đơn ở trạng thái phát hành hỏng chưa được tính vào phần đã xuất — con số "đã xuất hoá đơn" ở trên vì thế THẤP HƠN thực tế.`)
     }
 
     if (!hoaDon.duocKetLuan && soSach.duocKetLuan && soSach.tong > 0) {
