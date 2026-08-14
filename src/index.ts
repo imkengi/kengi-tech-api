@@ -94,6 +94,7 @@ import { startWebhookCron, stopWebhookCron } from './cron/webhookCron'
 import { startTaxAuditCron, stopTaxAuditCron } from './cron/taxAuditCron'
 import { startTaxDeadlineCron, stopTaxDeadlineCron } from './cron/taxDeadlineCron'
 import { startReconcileCron, stopReconcileCron } from './cron/reconcileCron'
+import { startWeeklyBriefCron, stopWeeklyBriefCron } from './cron/weeklyBriefCron'
 import { startEmailReplyCron, stopEmailReplyCron } from './cron/emailReplyCron'
 import webhookEndpointRoutes from './routes/webhookEndpoints'
 import { setupWebSocket, getWebSocketStats } from './lib/websocket'
@@ -1513,6 +1514,7 @@ if (!process.env.PASSENGER_BASE_URI) {
                 startTaxAuditCron()
                 startTaxDeadlineCron()
                 startReconcileCron()
+                startWeeklyBriefCron()
             })
         })
 
@@ -1530,6 +1532,7 @@ if (!process.env.PASSENGER_BASE_URI) {
         stopTaxAuditCron()
         stopTaxDeadlineCron()
         stopReconcileCron()
+        stopWeeklyBriefCron()
         process.exit(0)
     }
     process.on('SIGTERM', shutdown)
