@@ -652,7 +652,7 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
 
     /* ── 9. Hồ sơ khai thuế quá hạn ──────────────────────────────────────────
      * Đọc bảng TaxDeadline NHƯNG không phụ thuộc vào việc bảng đã được seed:
-     * bảng này chỉ được sinh khi ai đó mở trang Lịch thuế, nên nếu chưa ai mở,
+     * bảng này chỉ được sinh khi ai đó mở Báo Cáo Thuế, nên nếu chưa ai mở,
      * phép kiểm tra sẽ câm lặng — đúng lúc cần nó nhất. Vì vậy khi bảng rỗng,
      * tự dựng hạn nộp trong bộ nhớ theo Điều 44 Luật Quản lý thuế 38/2019. */
     try {
@@ -696,7 +696,10 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
                 tieuDe: `${treTuDung.length} kỳ có thể đã quá hạn khai thuế`,
                 chiTiet: `Hệ thống chưa có lịch thuế nên tự dựng theo quy định: quá hạn sớm nhất là ${treTuDung.map(d => d.dueDate).sort()[0]}. Danh sách này dựa trên việc CHƯA thấy tờ khai trong phần mềm — nếu đã nộp ngoài hệ thống thì nhập lại để đối chiếu.`,
                 canCu: 'Điều 44 Luật Quản lý thuế 38/2019 — thời hạn nộp hồ sơ khai thuế; Điều 13 NĐ 125/2020 — phạt chậm nộp.',
-                canLam: 'Mở trang Lịch thuế để hệ thống lập lịch chính thức, rồi đánh dấu các kỳ đã nộp.',
+                /* KHÔNG có trang nào tên "Lịch thuế" trong menu. Lịch nghĩa vụ
+                 * nằm trong Thuế → Báo Cáo Thuế. Chỉ tới một trang không tồn tại
+                 * thì người dùng đi tìm mỏi mắt rồi bỏ, và cảnh báo thành vô ích. */
+                canLam: 'Mở Thuế → Báo Cáo Thuế để hệ thống lập lịch nghĩa vụ chính thức, rồi đánh dấu các kỳ đã nộp.',
                 tienRuiRo: null, soLuong: treTuDung.length,
                 viDu: treTuDung.slice(0, 5).map(d => `${d.taxType} kỳ ${d.period} · hạn ${d.dueDate}`),
             })
