@@ -122,6 +122,20 @@ async function main() {
     ok('cùng 30 ngày nhưng rải rác cả kỳ → mức NẶNG', mRai.muc === 'nang', mRai.muc)
     ok('… nói rõ thiếu quãng giữa kỳ', /rải rác|thiếu nhiều quãng/.test(mRai.anhHuong), mRai.anhHuong)
 
+    /* Cửa hàng mới lập / dùng thử / chọn nhầm khoảng ngày đều ra "không có ngày
+     * nào" mà chẳng có gì phải sửa. Doạ họ ngay từ ngày đầu là dạy họ bỏ qua
+     * bảng này. Thực tế 14/08/2026: hai cửa hàng chưa bán bị chấm "cần dọn". */
+    const chuaBan = await sucKhoeDuLieu({
+        ...fake({ ...SACH, soNgayCoBan: 0 }),
+        $queryRawUnsafe: async () => [{ soNgay: 0, somNhat: null, muonNhat: null }],
+    } as any, KY)
+    const mChuaBan = lay(chuaBan, 'pham-vi-du-lieu')
+    ok('chưa bán gì trong kỳ → KHÔNG phải "phải sửa"', mChuaBan.muc === 'vua', mChuaBan.muc)
+    ok('… nói rõ KHÔNG phải lỗi dữ liệu', /KHÔNG phải lỗi dữ liệu/.test(mChuaBan.anhHuong), mChuaBan.anhHuong)
+    ok('… nêu cả hai khả năng: chưa bán, hoặc chọn nhầm ngày',
+        /chưa bắt đầu bán/.test(mChuaBan.anhHuong) && /ngoài quãng có dữ liệu/.test(mChuaBan.anhHuong),
+        mChuaBan.anhHuong)
+
     console.log('\n▶ Tồn âm\n')
 
     const ta = await sucKhoeDuLieu(fake({ ...SACH, tonAm: { so: 262, tong: -4077 } }), KY)

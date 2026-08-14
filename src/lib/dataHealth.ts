@@ -97,10 +97,19 @@ export async function sucKhoeDuLieu(
     muc.push({
         ma: 'pham-vi-du-lieu',
         ten: batDauMuon ? 'Dữ liệu bán bắt đầu từ giữa kỳ' : 'Dữ liệu bán phủ được bao nhiêu kỳ',
-        muc: soNgayCoBan === 0 ? 'nang' : batDauMuon ? 'vua' : tyLePhu < 60 ? 'nang' : tyLePhu < 85 ? 'vua' : 'on',
+        /* KHÔNG BÁN GÌ TRONG KỲ ≠ DỮ LIỆU HỎNG.
+         *
+         * Cửa hàng mới lập, cửa hàng dùng thử, hoặc người dùng chọn nhầm khoảng
+         * ngày — cả ba đều ra "không có ngày nào" mà chẳng có gì phải sửa. Gắn
+         * cờ "phải sửa" ở đây là doạ một cửa hàng chưa làm gì sai, và họ sẽ học
+         * cách bỏ qua bảng này ngay từ ngày đầu tiên.
+         *
+         * Đo trên dữ liệu thật 14/08/2026: hai cửa hàng chưa phát sinh bán bị
+         * chấm 65/100 "cần dọn" trong khi không có gì để dọn. */
+        muc: soNgayCoBan === 0 ? 'vua' : batDauMuon ? 'vua' : tyLePhu < 60 ? 'nang' : tyLePhu < 85 ? 'vua' : 'on',
         so: soNgayCoBan === 0 ? 'không có ngày nào' : `${soNgayCoBan}/${soNgayKy} ngày (${tyLePhu}%)${somNhat ? ` · sớm nhất ${somNhat}` : ''}`,
         anhHuong: soNgayCoBan === 0
-            ? 'Kỳ này không có giao dịch bán nào — mọi báo cáo theo kỳ đều rỗng.'
+            ? 'Kỳ này không có giao dịch bán nào nên mọi báo cáo theo kỳ đều rỗng. Đây KHÔNG phải lỗi dữ liệu: có thể cửa hàng chưa bắt đầu bán, hoặc khoảng ngày đang chọn nằm ngoài quãng có dữ liệu.'
             : batDauMuon
                 ? `Dữ liệu LIÊN TỤC từ ${somNhat} tới nay, không sót ngày nào — nhiều khả năng cửa hàng bắt đầu dùng phần mềm từ ngày đó. Không phải lỗi dữ liệu. Nhưng các con số "cả kỳ" vẫn chỉ tính phần từ ${somNhat}, nên đừng đem so với một kỳ trọn vẹn.`
                 : tyLePhu < 60
