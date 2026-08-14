@@ -169,14 +169,101 @@ for (const file of quet(path.join(GOC, 'src'))) {
     }
 }
 
+// ── 4. Quét SQL THÔ ──────────────────────────────────────────────────────────
+/**
+ * Khối `select` của Prisma không phải chỗ duy nhất gõ sai tên cột được. SQL thô
+ * trong `$queryRawUnsafe` cũng gõ tay, cũng không được TypeScript kiểm, và hỏng
+ * còn kín tiếng hơn: nó ném lỗi lúc chạy, chỗ gọi bắt vào mảng "thiếu", rồi cả
+ * tính năng im lặng.
+ *
+ * Đã xảy ra thật ngày 14/08/2026: `ImportReceiptItem."importReceiptId"` (cột
+ * thật là `receiptId`) làm bản tin đầu tuần của CẢ 9 CỬA HÀNG không gửi được,
+ * mà log chỉ nói "chưa đọc được dữ liệu".
+ *
+ * Nguyên tắc để không báo oan: CHỈ kiểm `bí_danh."cột"` khi bí danh đó ánh xạ
+ * được về một model có thật. Bí danh của truy vấn con hay CTE thì bỏ qua — thà
+ * bỏ sót còn hơn báo oan, vì công cụ báo oan sẽ bị người ta tắt.
+ */
+const TU_KHOA_SQL = new Set([
+    'ON', 'WHERE', 'AS', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'JOIN', 'GROUP', 'ORDER',
+    'LIMIT', 'HAVING', 'UNION', 'SET', 'VALUES', 'USING', 'CROSS', 'FULL', 'NATURAL',
+])
+
+interface LoiSql { file: string; dong: number; model: string; truong: string; goiY: string[] }
+const loiSql: LoiSql[] = []
+let soKiemSql = 0
+
+/** Cắt đối số đầu tiên của lời gọi bắt đầu ngay sau dấu '(' */
+function doiSoDau(s: string, moNgoac: number): string {
+    let sau = 0
+    for (let i = moNgoac; i < s.length; i++) {
+        const c = s[i]
+        if (c === '(') sau++
+        else if (c === ')') { sau--; if (sau === 0) return s.slice(moNgoac + 1, i) }
+    }
+    return ''
+}
+
+for (const file of quet(path.join(GOC, 'src'))) {
+    const s = fs.readFileSync(file, 'utf8')
+    for (const m of s.matchAll(/\$(?:queryRaw|queryRawUnsafe|executeRaw|executeRawUnsafe)\s*[(`]/g)) {
+        const moNgoac = s.indexOf('(', m.index!)
+        if (moNgoac < 0) continue
+        const sql = doiSoDau(s, moNgoac)
+        if (!sql || !/\b(FROM|JOIN|UPDATE|INSERT\s+INTO)\b/i.test(sql)) continue
+
+        // bí danh → model
+        const biDanh = new Map<string, string>()
+        for (const t of sql.matchAll(/\b(?:FROM|JOIN|UPDATE|INTO)\s+"(\w+)"(?:\s+(?:AS\s+)?(\w+))?/gi)) {
+            const model = t[1]
+            if (!schemaStore.has(model) && !schemaRegistry.has(model)) continue
+            biDanh.set(model, model)
+            const bd = t[2]
+            if (bd && !TU_KHOA_SQL.has(bd.toUpperCase())) biDanh.set(bd, model)
+        }
+        if (biDanh.size === 0) continue
+
+        for (const c of sql.matchAll(/(?:"(\w+)"|\b(\w+))\."(\w+)"/g)) {
+            const bd = c[1] || c[2]
+            const cot = c[3]
+            const model = biDanh.get(bd)
+            if (!model) continue                       // truy vấn con / CTE → bỏ qua
+            const truong = schemaStore.get(model) || schemaRegistry.get(model)
+            if (!truong) continue
+            soKiemSql++
+            if (truong.has(cot)) continue
+            const dong = s.slice(0, m.index! + (c.index || 0)).split('\n').length
+            const goiY = [...truong].filter(t =>
+                t.toLowerCase().includes(cot.toLowerCase().slice(0, 5)) ||
+                cot.toLowerCase().includes(t.toLowerCase().slice(0, 5)))
+            loiSql.push({ file: path.relative(GOC, file), dong, model, truong: cot, goiY: goiY.slice(0, 4) })
+        }
+    }
+}
+
 console.log(`\nSoát tên trường Prisma`)
 console.log(`  ${schemaStore.size} model cửa hàng + ${schemaRegistry.size} model sổ đăng ký`)
-console.log(`  Đã đối chiếu ${soKiem} tên trường trong các khối select\n`)
+console.log(`  Đã đối chiếu ${soKiem} tên trường trong các khối select`)
+console.log(`  Đã đối chiếu ${soKiemSql} tên cột trong SQL thô\n`)
 
-if (loi.length === 0) {
-    console.log('✅ Mọi tên trường trong select đều có trong schema.\n')
+if (loiSql.length > 0) {
+    console.log(`❌ ${loiSql.length} tên cột trong SQL THÔ không có trong schema:\n`)
+    for (const l of loiSql) {
+        console.log(`  ✗ ${l.model}."${l.truong}"`)
+        console.log(`      ${l.file}:${l.dong}`)
+        if (l.goiY.length) console.log(`      ý bạn là: ${l.goiY.join(', ')}?`)
+    }
+    console.log('\n  SQL thô hỏng còn kín tiếng hơn select sai: nó ném lỗi lúc chạy,')
+    console.log('  chỗ gọi bắt vào mảng "thiếu", rồi cả tính năng im lặng.\n')
+}
+
+if (loi.length === 0 && loiSql.length === 0) {
+    console.log('✅ Mọi tên trường trong select và SQL thô đều có trong schema.\n')
     process.exit(0)
 }
+/* Chỉ sai ở SQL thô thì phần lỗi đã in ở trên rồi — thoát luôn, đừng in tiếp
+ * tiêu đề "0 tên trường KHÔNG có trong schema" gây rối. */
+if (loi.length === 0) process.exit(1)
 
 console.log(`❌ ${loi.length} tên trường KHÔNG có trong schema:\n`)
 for (const l of loi) {
