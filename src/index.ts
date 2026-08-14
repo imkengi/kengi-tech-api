@@ -74,6 +74,7 @@ import cashReceiptRoutes from './routes/cashReceipts'
 import bankAccountRoutes from './routes/bankAccounts'
 import accountRoutes from './routes/accounts'
 import accountingRoutes from './routes/accounting'
+import printTemplateRoutes from './routes/printTemplates'
 import accountingReportRoutes from './routes/accountingReports'
 import accountingReconcileRoutes from './routes/accountingReconcile'
 import complianceRoutes from './routes/compliance'
@@ -301,6 +302,7 @@ app.use('/api/bank-accounts', bankAccountRoutes)
 // the bookkeeping reports. accountingReportRoutes mounts at /api/reports AFTER
 // /api/reports/financial (mounted above) so the more specific prefix wins.
 app.use('/api/accounts', accountRoutes)
+app.use('/api/print-templates', printTemplateRoutes)
 app.use('/api/accounting', accountingRoutes)
 // Đối chiếu sổ sách — mount SAU accountingRoutes, đường dẫn /reconcile* không
 // trùng với /lock-status, /close-period, /carry-forward nên không che nhau.

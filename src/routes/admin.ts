@@ -1759,6 +1759,26 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MisaSyncLog_status_idx" ON "MisaSyncLog"("status")`)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MisaSyncLog_startedAt_idx" ON "MisaSyncLog"("startedAt")`)
 
+                /* Mau in dong bo giua cac may (2026-08-14).
+                 * Truoc day mau in chi nam trong localStorage cua tung trinh
+                 * duyet: sua tren may tinh thi may POS van in mau cu, va xoa du
+                 * lieu trinh duyet la mat sach. */
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "PrintTemplate" (
+                        "id" TEXT NOT NULL,
+                        "name" TEXT NOT NULL,
+                        "type" TEXT NOT NULL,
+                        "htmlSource" TEXT NOT NULL,
+                        "linkedPrinter" TEXT NOT NULL DEFAULT '',
+                        "isDefault" BOOLEAN NOT NULL DEFAULT false,
+                        "isBuiltIn" BOOLEAN NOT NULL DEFAULT false,
+                        "daSuaTay" BOOLEAN NOT NULL DEFAULT false,
+                        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "PrintTemplate_pkey" PRIMARY KEY ("id")
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "PrintTemplate_type_idx" ON "PrintTemplate"("type")`)
+
                 storeResults.push(`${store.name}: OK`)
             } catch (e: any) {
                 storeResults.push(`${store.name}: ${e.message}`)

@@ -3093,3 +3093,25 @@ model MisaSyncLog {
   @@index([status])
   @@index([startedAt])
 }
+
+/// Mẫu in của cửa hàng — đồng bộ giữa các máy.
+///
+/// Trước đây mẫu in chỉ nằm trong localStorage của từng trình duyệt: sửa trên
+/// máy tính thì máy POS vẫn in mẫu cũ, và xoá dữ liệu trình duyệt là mất sạch.
+/// Bảng này là bản có thẩm quyền; trình duyệt vẫn giữ một bản để in được khi mất
+/// mạng, nhưng khi hai bên lệch thì lấy bản có updatedAt mới hơn.
+model PrintTemplate {
+  /// Trùng id ở phía client ('tpl-receipt', 'tpl-invoice-a4', id tự sinh…)
+  id            String   @id
+  name          String
+  type          String
+  htmlSource    String
+  linkedPrinter String   @default("")
+  isDefault     Boolean  @default(false)
+  isBuiltIn     Boolean  @default(false)
+  /// Người dùng đã sửa tay — chặn mọi bước nâng cấp ghi đè về mẫu mặc định
+  daSuaTay      Boolean  @default(false)
+  updatedAt     DateTime @default(now())
+
+  @@index([type])
+}
