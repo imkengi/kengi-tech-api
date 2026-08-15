@@ -19,7 +19,9 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
             return
         }
 
+        // Ưu tiên key "API Secret" của màn Cài đặt; key có tên (tab MCP) xem ở /list
         const key = await prisma.apiKey.findFirst({
+            where: { name: 'API Secret' },
             orderBy: { createdAt: 'desc' },
             select: {
                 id: true,
@@ -52,8 +54,11 @@ router.post('/regenerate', authMiddleware, async (req: AuthRequest, res: Respons
             return
         }
 
-        // Delete ALL existing keys
-        await prisma.apiKey.deleteMany({})
+        // Chỉ thay key "API Secret" cũ của màn Cài đặt — KHÔNG đụng key có tên
+        // tạo ở tab "Nối AI ngoài (MCP)" (fanpage-manager). Trước 15/08/2026 chỗ
+        // này deleteMany({}) → bấm "Tạo mới" ở dashboard là rụng sạch key của
+        // mọi AI đang nối.
+        await prisma.apiKey.deleteMany({ where: { name: 'API Secret' } })
 
         // Generate new key
         const keyId = 'ak_' + crypto.randomBytes(12).toString('hex')

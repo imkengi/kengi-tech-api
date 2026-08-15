@@ -17,7 +17,7 @@ Gửi kèm **mọi** request, chọn 1 trong 2 cách:
 | API key per-store | `X-API-Key: <secret>` + `x-store-code: <MÃ STORE>` | theo scope của key (`read` / `write`) |
 | Admin nội bộ | `x-admin-key: <admin key>` + `x-store-code: <MÃ STORE>` | full |
 
-API key tạo ở **Dashboard → Cài đặt → API Keys**. Mọi tool chỉ chạy trong phạm vi **một store** — store nào do header `x-store-code` quyết định.
+API key tạo ở **kengi.vn/fanpage-manager → Trợ lý AI → Nối AI ngoài (MCP)** (nhiều key có tên + scope `read` / `read,write`, thu hồi từng cái — `GET /api/api-keys/list`, `POST /api/api-keys`, `DELETE /api/api-keys/:id`), hoặc **Dashboard → Cài đặt → API Keys** (đường cũ: 1 key scope admin, tạo mới = xoá hết key cũ). Key kiểu mới có dạng `ak_xxx.<random>` — auth tra thẳng theo `keyId` trước dấu chấm nên không tốn bcrypt cho mọi key. Mọi tool chỉ chạy trong phạm vi **một store** — store nào do header `x-store-code` quyết định.
 
 Tool có cột `ghi` đòi scope chứa `write`; key chỉ `read` gọi vào sẽ bị từ chối.
 
