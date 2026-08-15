@@ -6,6 +6,7 @@ import { createJournalEntriesForTransaction, postDebtCollectionJournal } from '.
 import { Tool, ToolCtx, ToolError } from '../lib/mcpTypes'
 import { FANPAGE_TOOLS } from './mcpFanpageTools'
 import { FINANCE_TOOLS } from './mcpFinanceTools'
+import { MARKETING_TOOLS } from './mcpMarketingTools'
 import { REPORT_TOOLS } from './mcpReportTools'
 
 // Re-export để mcpAgent.ts (và code cũ) vẫn `import { ToolError, ToolCtx } from './mcp'`
@@ -127,7 +128,9 @@ export const TOOLS: Tool[] = [
             const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0)
             const [tx, productCount, pendingOnline, lowStock] = await Promise.all([
                 prisma.transaction.aggregate({
-                    where: { createdAt: { gte: startOfDay }, status: 'completed' },
+                    // Don GHI NO ('partial') cung la ban that — bo ra la tra lai
+                    // chu shop mot con so doanh thu hut ma khong bao loi gi.
+                    where: { createdAt: { gte: startOfDay }, status: { in: ['completed', 'partial'] } },
                     _count: true, _sum: { total: true },
                 }),
                 prisma.product.count(),
@@ -284,7 +287,7 @@ export const TOOLS: Tool[] = [
             const to = a?.to ? new Date(String(a.to) + 'T23:59:59') : new Date()
             const from = a?.from ? new Date(String(a.from) + 'T00:00:00') : new Date(to.getTime() - 7 * 86400_000)
             if (isNaN(from.getTime()) || isNaN(to.getTime())) return errContentThrow('Ngày không hợp lệ (dùng YYYY-MM-DD)')
-            const whereTx = { createdAt: { gte: from, lte: to }, status: 'completed' }
+            const whereTx = { createdAt: { gte: from, lte: to }, status: { in: ['completed', 'partial'] } }
             const [agg, top] = await Promise.all([
                 prisma.transaction.aggregate({ where: whereTx, _count: true, _sum: { total: true, discount: true } }),
                 prisma.transactionItem.groupBy({
@@ -318,7 +321,7 @@ export const TOOLS: Tool[] = [
         },
         run: async (a, { prisma }) => {
             const rows = await prisma.$queryRawUnsafe(
-                `SELECT to_char(COALESCE("transactionDate","createdAt")::date,'YYYY-MM-DD') AS ngay,
+                `SELECT to_char((COALESCE("transactionDate","createdAt") + interval '7 hours')::date,'YYYY-MM-DD') AS ngay,
                         COUNT(*)::int AS "soPhieu",
                         SUM(total)::float8 AS "doanhThu",
                         COUNT(*) FILTER (WHERE channel='online')::int AS "phieuOnline",
@@ -334,6 +337,56 @@ export const TOOLS: Tool[] = [
         },
     },
     {
+        name: 'sales_by_salesperson',
+        description: 'Doanh số theo NHÂN VIÊN BÁN HÀNG trong khoảng (gom theo người được ghi công trên phiếu, KHÔNG phải người bấm máy). Trả kèm dòng "chưa ghi tên nhân viên" và tỷ lệ của nó — nếu tỷ lệ đó cao thì bảng xếp hạng chưa đáng tin, phải nói rõ điều đó trước khi nhận xét.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                from: { type: 'string', description: 'YYYY-MM-DD' },
+                to: { type: 'string', description: 'YYYY-MM-DD' },
+            },
+            required: ['from', 'to'],
+        },
+        run: async (a, { prisma }) => {
+            /* Gom theo `salespersonId`, KHÔNG theo `createdBy`: `createdBy` là
+             * người bấm máy. Đo 15/08/2026 — HUTI bán 20+ đơn/ngày, 14 tỷ doanh
+             * thu mà chỉ có ĐÚNG 2 tài khoản, cả cửa hàng chung một login. */
+            const rows: any[] = await prisma.$queryRawUnsafe(
+                `SELECT "salespersonId" AS "nhanVienId",
+                        MAX("salespersonName") AS "tenNhanVien",
+                        COUNT(*)::int AS "soPhieu",
+                        SUM(total)::float8 AS "doanhThu",
+                        SUM(total - COALESCE(tax,0))::float8 AS "doanhThuTruocThue"
+                 FROM "Transaction"
+                 WHERE status IN ('completed','partial')
+                   AND COALESCE("transactionDate","createdAt") >= $1::date
+                   AND COALESCE("transactionDate","createdAt") < ($2::date + interval '1 day')
+                 GROUP BY 1 ORDER BY 4 DESC NULLS LAST`,
+                String(a.from), String(a.to)
+            )
+            const tong = rows.reduce((s, r) => s + (Number(r.doanhThu) || 0), 0)
+            const chua = rows.find(r => !r.nhanVienId)
+            return {
+                tuNgay: a.from, denNgay: a.to,
+                tongDoanhThu: tong,
+                soNhanVienCoDoanhSo: rows.filter(r => r.nhanVienId).length,
+                /* Phiếu chưa ghi tên phải NÓI RA, không được lặng lẽ bỏ: bỏ đi
+                 * thì tổng các dòng không bằng doanh thu thật, người đọc cộng
+                 * lại thấy thiếu mà không hiểu vì sao. Toàn bộ phiếu cũ trước
+                 * ngày 15/08/2026 đều nằm ở dòng này. */
+                chuaGhiTen: chua ? {
+                    doanhThu: Number(chua.doanhThu) || 0,
+                    soPhieu: Number(chua.soPhieu) || 0,
+                    tyLePhanTram: tong > 0 ? Math.round(((Number(chua.doanhThu) || 0) / tong) * 1000) / 10 : 0,
+                } : null,
+                danhSach: rows.map(r => ({
+                    ...r,
+                    tenNhanVien: r.tenNhanVien || (r.nhanVienId ? '(nhân viên đã xoá)' : 'Chưa ghi tên nhân viên'),
+                })),
+            }
+        },
+    },
+    {
         name: 'online_orders_by_day',
         description: 'Đếm đơn ONLINE theo từng ngày (ngày đặt trên sàn): tổng đơn, đơn đã chuyển thành phiếu bán, đơn chưa chuyển. Dùng soi khâu nào thiếu: đơn không nhập về, hay nhập rồi mà chưa chuyển phiếu.',
         inputSchema: {
@@ -346,7 +399,7 @@ export const TOOLS: Tool[] = [
         },
         run: async (a, { prisma }) => {
             const rows = await prisma.$queryRawUnsafe(
-                `SELECT to_char(o."createdAt"::date,'YYYY-MM-DD') AS ngay,
+                `SELECT to_char((o."createdAt" + interval '7 hours')::date,'YYYY-MM-DD') AS ngay,
                         COUNT(*)::int AS "tongDon",
                         COUNT(t.id)::int AS "daChuyenPhieu",
                         (COUNT(*) - COUNT(t.id))::int AS "chuaChuyen",
@@ -770,6 +823,9 @@ export const TOOLS: Tool[] = [
     ...FANPAGE_TOOLS,
     // Tài chính & mua hàng — lãi lỗ, chi phí, công nợ NCC, nhập hàng, tồn theo kho
     ...FINANCE_TOOLS,
+    // AI marketing — lên kế hoạch nội dung, soạn bài vào hàng đợi CHỜ DUYỆT.
+    // Không tool nào ở đây đẩy ra ngoài: chủ shop duyệt thì bài mới lên Facebook.
+    ...MARKETING_TOOLS,
     // Báo cáo tổng thể — swot_data gom sẵn nguyên liệu phân tích SWOT một lần gọi
     ...REPORT_TOOLS,
 ]

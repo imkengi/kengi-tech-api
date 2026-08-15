@@ -326,6 +326,15 @@ model Transaction {
   status              String    @default("completed")
   createdBy           String
   createdByName       String?
+  /// NHÂN VIÊN ĐƯỢC TÍNH DOANH SỐ — khác `createdBy` (người bấm máy).
+  /// Đo 15/08/2026: HUTI bán 20+ đơn/ngày, 14 tỷ doanh thu, mà chỉ có ĐÚNG 2
+  /// tài khoản — cả cửa hàng ghi chung một login, nên `createdBy` không tách
+  /// được ai bán. Hai vai này phải là hai cột: `createdBy` giữ dấu vết kiểm
+  /// toán, cột này giữ công bán hàng.
+  /// KHÔNG đặt khoá ngoại: xoá nhân viên nghỉ việc không được làm hỏng lịch sử
+  /// doanh số. Tên lưu kèm để báo cáo cũ vẫn đọc được sau khi hồ sơ bị xoá.
+  salespersonId       String?
+  salespersonName     String?
   notes               String?
   returnedAt          DateTime?
   returnReason        String?
@@ -349,6 +358,7 @@ model Transaction {
   @@index([status])
   @@index([customerId])
   @@index([createdBy])
+  @@index([salespersonId])
 }
 
 model TransactionItem {

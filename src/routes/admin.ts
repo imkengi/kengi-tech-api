@@ -1001,6 +1001,18 @@ router.post('/migrate', async (_req: Request, res: Response) => {
         for (const store of stores) {
             try {
                 const sp = getStorePrisma(store.schema)
+
+                /* NHÂN VIÊN ĐƯỢC TÍNH DOANH SỐ trên phiếu bán (2026-08-15).
+                 * Tách hẳn khỏi `createdBy` (người bấm máy): đo thấy HUTI bán
+                 * 20+ đơn/ngày, 14 tỷ doanh thu mà chỉ có ĐÚNG 2 tài khoản, cả
+                 * cửa hàng ghi chung một login nên `createdBy` không tách được
+                 * ai bán. Không đặt khoá ngoại — nhân viên nghỉ việc bị xoá thì
+                 * lịch sử doanh số vẫn phải còn; tên lưu kèm để báo cáo cũ đọc
+                 * được sau khi hồ sơ đã xoá. */
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Transaction" ADD COLUMN IF NOT EXISTS "salespersonId" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Transaction" ADD COLUMN IF NOT EXISTS "salespersonName" TEXT`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Transaction_salespersonId_idx" ON "Transaction"("salespersonId")`)
+
                 // Platform fees (existing)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineOrder" ADD COLUMN IF NOT EXISTS "platformFee" DOUBLE PRECISION NOT NULL DEFAULT 0`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineOrder" ADD COLUMN IF NOT EXISTS "platformFeeRate" DOUBLE PRECISION NOT NULL DEFAULT 0`)
@@ -4975,6 +4987,54 @@ router.post('/run-reconcile', async (req: Request, res: Response) => {
 type DemSucKhoe = { luc: number; du: any }
 let demSucKhoeHeThong: DemSucKhoe | null = null
 const TTL_SUC_KHOE = 3 * 60_000
+
+/**
+ * GET /admin/store-staff?store=CODE — ai đang làm ở cửa hàng này.
+ *
+ * Hai danh sách KHÁC NHAU mà rất dễ tưởng là một:
+ *   - `User`     = tài khoản ĐĂNG NHẬP được (vận hành POS).
+ *   - `Employee` = hồ sơ NHÂN SỰ cho bảng lương, không đăng nhập được, không
+ *                  nối gì với User.
+ *
+ * Đo 15/08/2026: HUTI bán 20+ đơn/ngày, 14 tỷ doanh thu, mà chỉ có ĐÚNG 2 tài
+ * khoản (admin + manager) — nghĩa là người bán thật không hề có tài khoản, cả
+ * cửa hàng ghi chung một login. Muốn tính doanh số theo nhân viên thì phải lấy
+ * từ hồ sơ nhân sự, không thể lấy từ danh sách tài khoản.
+ */
+router.get('/store-staff', async (req: Request, res: Response) => {
+    try {
+        const ma = String(req.query.store || '').trim()
+        const store: any = await registryPrisma.store.findFirst({
+            where: { code: ma }, select: { name: true, schema: true, code: true },
+        })
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const sp: any = getStorePrisma(store.schema)
+
+        // Tuần tự — pool mỗi cửa hàng chỉ 5 kết nối.
+        const nhanSu = await sp.employee.findMany({
+            select: { id: true, code: true, name: true, position: true, status: true, branchId: true },
+            orderBy: { name: 'asc' }, take: 200,
+        }).catch(() => null)
+        const taiKhoan = await sp.user.findMany({
+            select: { id: true, name: true, role: true, isActive: true },
+            orderBy: { name: 'asc' }, take: 200,
+        }).catch(() => null)
+
+        res.json({
+            success: true,
+            data: {
+                cuaHang: store.code,
+                /* null = KHÔNG ĐỌC ĐƯỢC (bảng chưa migrate chẳng hạn), khác hẳn
+                 * mảng rỗng = đọc được và đúng là chưa có ai. */
+                nhanSu, soNhanSu: nhanSu?.length ?? null,
+                soNhanSuDangLam: nhanSu ? nhanSu.filter((e: any) => e.status === 'active').length : null,
+                taiKhoan, soTaiKhoan: taiKhoan?.length ?? null,
+            },
+        })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: String(e?.message || e) })
+    }
+})
 
 // Không khai guard riêng: `router.use(adminKeyAuth)` phía trên đã chặn hết.
 // Tên là `/health-overview` chứ KHÔNG phải `/store-health`: tên kia đã có chủ

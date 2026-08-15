@@ -370,6 +370,92 @@ router.get('/stats', authMiddleware, requirePermission('pos.view'), async (req: 
     }
 })
 
+/**
+ * GET /api/transactions/by-salesperson?from=&to=  — doanh số theo nhân viên bán
+ *
+ * ⚠ PHẢI KHAI TRƯỚC `/:id`, nếu không Express nuốt luôn thành id.
+ *
+ * Gom theo `salespersonId` chứ KHÔNG theo `createdBy`: `createdBy` là người bấm
+ * máy. Đo 15/08/2026 thấy HUTI bán 20+ đơn/ngày, 14 tỷ doanh thu mà chỉ có
+ * ĐÚNG 2 tài khoản — cả cửa hàng ghi chung một login, nên gom theo `createdBy`
+ * chỉ ra hai dòng và không nói được ai bán.
+ *
+ * PHIẾU CHƯA GHI TÊN AI được gom vào một dòng riêng thay vì bỏ đi im lặng:
+ * bỏ đi thì tổng các dòng KHÔNG bằng doanh thu thật, người xem cộng lại thấy
+ * thiếu mà không hiểu vì sao. Toàn bộ dữ liệu trước hôm nay đều nằm ở dòng đó.
+ */
+router.get('/by-salesperson', authMiddleware, requirePermission('pos.view'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const { from, to } = req.query as any
+        if (!from || !to) {
+            res.status(400).json({ success: false, error: 'Thiếu khoảng ngày (from, to)' }); return
+        }
+        // Cắt kỳ theo GIỜ VN: DB lưu UTC, cắt thẳng là lệch 7 tiếng ở hai đầu kỳ.
+        const start = new Date(`${String(from).slice(0, 10)}T00:00:00+07:00`)
+        const end = new Date(new Date(`${String(to).slice(0, 10)}T00:00:00+07:00`).getTime() + 86400_000)
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+            res.status(400).json({ success: false, error: 'Khoảng ngày không hợp lệ' }); return
+        }
+
+        /* Lọc theo NGÀY BÁN, không theo ngày ghi dòng: cửa hàng nhập lịch sử từ
+         * phần mềm cũ có `createdAt` là lúc chạy nhập, cắt theo nó thì doanh số
+         * dồn hết vào sai kỳ. Xem [[ngay-ban-vs-ngay-tao-dong]]. */
+        const where: any = {
+            ...getBranchFilter(req as any),
+            // Đơn ghi nợ là 'partial' — lọc mỗi 'completed' là hụt doanh thu.
+            status: { in: ['completed', 'partial'] },
+            OR: [
+                { transactionDate: { gte: start, lt: end } },
+                { transactionDate: null, createdAt: { gte: start, lt: end } },
+            ],
+        }
+
+        const rows = await prisma.transaction.groupBy({
+            by: ['salespersonId', 'salespersonName'],
+            where,
+            _sum: { total: true, tax: true },
+            _count: { _all: true },
+        })
+
+        const ds = rows.map((r: any) => {
+            const tong = Number(r._sum?.total) || 0
+            const thue = Number(r._sum?.tax) || 0
+            return {
+                nhanVienId: r.salespersonId || null,
+                tenNhanVien: r.salespersonName || (r.salespersonId ? '(nhân viên đã xoá)' : 'Chưa ghi tên nhân viên'),
+                soPhieu: Number(r._count?._all) || 0,
+                // `Transaction.total` ĐÃ GỒM thuế — trừ ra mới so được với doanh thu thuần
+                doanhThu: tong,
+                doanhThuTruocThue: tong - thue,
+            }
+        }).sort((a: any, b: any) => b.doanhThu - a.doanhThu)
+
+        const tongDoanhThu = ds.reduce((s: number, x: any) => s + x.doanhThu, 0)
+        const chuaGhi = ds.find((x: any) => !x.nhanVienId)
+        res.json({
+            success: true,
+            data: {
+                ky: { from: String(from).slice(0, 10), to: String(to).slice(0, 10) },
+                tongDoanhThu,
+                soNhanVienCoDoanhSo: ds.filter((x: any) => x.nhanVienId).length,
+                /* Nói thẳng phần chưa ghi tên chiếm bao nhiêu. Bảng xếp hạng mà
+                 * 90% doanh thu nằm ở "chưa ghi tên" thì thứ hạng vô nghĩa —
+                 * người xem phải biết điều đó trước khi tin bảng. */
+                chuaGhiTen: chuaGhi ? {
+                    doanhThu: chuaGhi.doanhThu,
+                    soPhieu: chuaGhi.soPhieu,
+                    tyLePhanTram: tongDoanhThu > 0 ? Math.round((chuaGhi.doanhThu / tongDoanhThu) * 1000) / 10 : 0,
+                } : null,
+                danhSach: ds,
+            },
+        })
+    } catch (err) {
+        console.error('Get sales by salesperson error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
 // GET /api/transactions/:id
 router.get('/:id', authMiddleware, requirePermission('pos.view'), async (req: AuthRequest, res: Response) => {
     try {
@@ -435,6 +521,28 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
 
         // Get user info
         const user = await prisma.user.findUnique({ where: { id: req.user!.userId } })
+
+        /* NHÂN VIÊN ĐƯỢC TÍNH DOANH SỐ.
+         *
+         * Phải TRA LẠI trong DB, không dùng tên client gửi lên — nếu tin thẳng
+         * thì ai cũng sửa được doanh số của người khác bằng cách đổi payload.
+         * Chọn phải là nhân viên CÒN LÀM: gán doanh số cho người đã nghỉ là
+         * đường để lách chỉ tiêu.
+         *
+         * Không chọn thì mặc định chính người đang bấm máy — cửa hàng nhỏ một
+         * người vừa bán vừa thu tiền vẫn có số liệu đúng mà không phải thao tác
+         * gì thêm. Chạy TUẦN TỰ, pool mỗi cửa hàng chỉ 5 kết nối. */
+        let nvBan: { id: string; name: string } | null =
+            user ? { id: user.id, name: user.name } : null
+        const nvBanId = String(txData.salespersonId || '').trim()
+        if (nvBanId && nvBanId !== req.user!.userId) {
+            const nv = await prisma.user.findFirst({
+                where: { id: nvBanId, employeeStatus: 'active' },
+                select: { id: true, name: true },
+            }).catch(() => null)
+            // Không tìm thấy / đã nghỉ → GIỮ mặc định, không ghi id rác vào sổ
+            if (nv) nvBan = nv
+        }
 
         // Generate receipt number
         const count = await prisma.transaction.count()
@@ -538,6 +646,11 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
             status: txData.status || 'completed',
             createdBy: req.user!.userId,
             createdByName: user?.name || 'Admin',
+            /* NHÂN VIÊN ĐƯỢC TÍNH DOANH SỐ — do POS chọn, mặc định là chính
+             * người đang bấm máy. Tên lấy TỪ DATABASE chứ không lấy tên client
+             * gửi lên: client gửi gì cũng tin thì doanh số ai cũng sửa được. */
+            salespersonId: nvBan?.id || null,
+            salespersonName: nvBan?.name || null,
             notes: txData.notes || null,
             transactionDate: txData.transactionDate ? new Date(txData.transactionDate) : null,
             branchId: branchId || null,
