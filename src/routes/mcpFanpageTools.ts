@@ -958,7 +958,8 @@ export const FANPAGE_TOOLS: Tool[] = [
             const camps = await wrapAds(() => svc.listCampaigns(acct))
             const withIns = a?.with_insights !== false
             const out: any[] = []
-            for (const c of camps.slice(0, 50)) {           // tuần tự — pool Prisma nhỏ, và Graph rate limit
+            const TOI_DA = withIns ? 25 : 100                 // mỗi insight là 1 call Graph tuần tự (~0.3-0.5s)
+            for (const c of camps.slice(0, TOI_DA)) {        // tuần tự — Graph rate limit
                 const ins = withIns ? await svc.getAdInsights(c.id).catch(() => null) : null
                 out.push({
                     campaign_id: c.id, ten: c.name, mucTieu: c.objective, trangThai: c.effective_status || c.status,
@@ -970,7 +971,7 @@ export const FANPAGE_TOOLS: Tool[] = [
                     } : null,
                 })
             }
-            return { ad_account_id: acct, soChienDich: camps.length, ...(camps.length > 50 ? { ghiChu: 'Chỉ trả 50 chiến dịch đầu' } : {}), chienDich: out }
+            return { ad_account_id: acct, soChienDich: camps.length, ...(camps.length > TOI_DA ? { ghiChu: `Chỉ trả ${TOI_DA} chiến dịch đầu (đặt with_insights=false để lấy tới 100)` } : {}), chienDich: out }
         },
     },
     {
