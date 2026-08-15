@@ -898,6 +898,18 @@ router.get('/webhooks', async (req: Request, res: Response) => {
                 daDangKy: rows,
                 // Loại nào Kengi CHƯA nhận được — đây là thứ cần bấm đăng ký
                 conThieu: WEBHOOK_TYPES.filter(t => !rows.some((w: any) => w.cuaKengi && w.type === t && w.isActive)),
+                /* TÁCH RIÊNG "ĐÃ ĐĂNG KÝ NHƯNG ĐANG TẮT".
+                 *
+                 * Gộp chung vào `conThieu` thì giao diện giải thích bằng câu
+                 * chuyện xung đột n8n — sai hướng hoàn toàn khi webhook vốn đã
+                 * trỏ về Kengi và chỉ bị KiotViet tắt đi (nó tự tắt sau nhiều
+                 * lần giao hỏng). Hai nguyên nhân, hai cách chữa: một bên là
+                 * giành lấy loại sự kiện, một bên là bật lại.
+                 *
+                 * Đo thật 15/08/2026 ở HUTI: invoice.update / order.update /
+                 * stock.update đều trỏ Kengi mà đang TẮT — đơn hàng ngừng về
+                 * suốt một ngày mà không ai biết vì sao. */
+                dangTat: rows.filter((w: any) => w.cuaKengi && !w.isActive).map((w: any) => w.type),
                 loaiHopLe: WEBHOOK_TYPES,
             },
         })
