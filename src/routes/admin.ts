@@ -5085,6 +5085,76 @@ router.get('/errors', async (req: Request, res: Response) => {
 })
 
 /**
+ * POST /admin/lien-ket-listing — nối listing sàn sang hàng kho hàng loạt.
+ * Body: { store: 'CODE', capNoi: [{ listingId, productId }] }
+ *
+ * Người dùng DUYỆT rồi mới gọi — bộ gợi ý không bao giờ tự nối.
+ *
+ * BA CHỐT CHẶN, vì nối sai là doanh thu và trừ kho chạy vào nhầm mặt hàng:
+ *   1. Cả listing lẫn hàng kho phải THUỘC ĐÚNG cửa hàng đang thao tác.
+ *   2. KHÔNG ĐÈ listing đã nối sẵn — chỉ nối cái đang trống. Đè lên một liên
+ *      kết người dùng đã tự đặt là âm thầm đổi chỗ doanh thu của họ.
+ *   3. Trả về từng dòng bỏ qua kèm LÝ DO, không im lặng nuốt.
+ *
+ * Nối là việc ĐẢO NGƯỢC ĐƯỢC (đặt localProductId về null), nên không cần xác
+ * nhận hai lớp — nhưng vẫn phải nói rõ đã làm gì.
+ */
+router.post('/lien-ket-listing', async (req: Request, res: Response) => {
+    try {
+        const b = req.body || {}
+        const ma = String(b.store || '').trim()
+        const capNoi: any[] = Array.isArray(b.capNoi) ? b.capNoi.slice(0, 500) : []
+        if (!ma || !capNoi.length) {
+            res.status(400).json({ success: false, error: 'Thiếu store hoặc danh sách capNoi' }); return
+        }
+        const store: any = await registryPrisma.store.findFirst({
+            where: { code: ma }, select: { schema: true, code: true },
+        })
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const sp: any = getStorePrisma(store.schema)
+
+        const daNoi: any[] = []
+        const boQua: any[] = []
+        // TUẦN TỰ — pool mỗi cửa hàng chỉ 5 kết nối, và đây là vòng ghi.
+        for (const c of capNoi) {
+            const listingId = String(c?.listingId || '')
+            const productId = String(c?.productId || '')
+            if (!listingId || !productId) { boQua.push({ listingId, lyDo: 'thiếu id' }); continue }
+            try {
+                const lt = await sp.onlineProduct.findUnique({
+                    where: { id: listingId }, select: { id: true, name: true, localProductId: true },
+                })
+                if (!lt) { boQua.push({ listingId, lyDo: 'không có listing này trong cửa hàng' }); continue }
+                if (lt.localProductId) {
+                    boQua.push({ listingId, ten: lt.name, lyDo: 'listing ĐÃ nối sẵn — không đè' }); continue
+                }
+                const hk = await sp.product.findUnique({ where: { id: productId }, select: { id: true, name: true } })
+                if (!hk) { boQua.push({ listingId, lyDo: 'không có hàng kho này trong cửa hàng' }); continue }
+
+                await sp.onlineProduct.update({ where: { id: listingId }, data: { localProductId: productId } })
+                daNoi.push({ listingId, tenListing: lt.name, productId, tenHangKho: hk.name })
+            } catch (e: any) {
+                boQua.push({ listingId, lyDo: String(e?.message || e).slice(0, 150) })
+            }
+        }
+
+        res.json({
+            success: true,
+            data: {
+                soDaNoi: daNoi.length,
+                soBoQua: boQua.length,
+                daNoi: daNoi.slice(0, 200),
+                boQua: boQua.slice(0, 200),
+                /* Nhắc luôn điều người dùng cần biết nhất sau khi bấm. */
+                ghiChu: 'Đơn đang kẹt sẽ tự lên phiếu ở lượt đồng bộ kênh kế tiếp — không cần vá tay.',
+            },
+        })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: String(e?.message || e) })
+    }
+})
+
+/**
  * GET /admin/goi-y-lien-ket?store=CODE — GỢI Ý nối listing sàn ↔ hàng kho.
  *
  * Đo KENGISTORE 15/08/2026: 641 listing, 0 cái được nối — và đó là gốc rễ của
