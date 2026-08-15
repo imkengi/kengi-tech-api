@@ -10,7 +10,7 @@
  * không có chuông (xem [[khong-buoc-toi-oan]]).
  */
 
-import { tinhTinhTrangDon } from '../src/lib/kiotvietDonHang'
+import { tinhTinhTrangDon, laHoaDon } from '../src/lib/kiotvietDonHang'
 
 let dat = 0, hong = 0
 function ok(ten: string, dk: boolean, thucTe?: any) {
@@ -83,6 +83,20 @@ function main() {
 
     // 11 — số đơn lượt cuối phải bê đúng, giao diện còn khoe "tạo 22"
     ok('11. giữ đúng số đơn của lượt cuối', t3.soDonLanCuoi === 22, t3.soDonLanCuoi)
+
+    /* 12 — CHUỖI ENTITY GỘP (suýt gây báo oan)
+     * Nút "đồng bộ tất cả" ghi entity thành một chuỗi nối dấu phẩy — có thật
+     * trong log HUTI. So bằng `=== 'invoices'` là trượt, và cửa hàng nào chỉ
+     * dùng nút tổng sẽ bị vu là "chưa từng đồng bộ hoá đơn". */
+    const gop = 'products,customers,suppliers,invoices,returns,purchaseOrders,cashflow'
+    ok('12. nhận ra hoá đơn trong chuỗi entity gộp', laHoaDon(gop), gop)
+    const t12 = tinhTinhTrangDon([dong('customer.update', 1), dong(gop, 3, 'manual', 40)], BAY_GIO)!
+    ok('12b. đồng bộ tổng 3h trước → KHÔNG kêu là mất đơn',
+        t12.muc === 'nhac' && !/không có hoá đơn/.test(t12.loi || ''), { muc: t12.muc, loi: t12.loi })
+
+    // 13 — CHIỀU NGƯỢC: đừng nhận bừa chữ có "invoice" nằm trong từ khác
+    ok('13. không nhận nhầm entity không phải hoá đơn',
+        !laHoaDon('customer.update') && !laHoaDon('products,customers'), 'nhan nham')
 
     console.log(`\n${dat}/${dat + hong} ca đạt`)
     if (hong) process.exit(1)

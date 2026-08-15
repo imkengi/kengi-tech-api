@@ -28,8 +28,20 @@ export interface TinhTrangDon {
     soDongDaSoi: number
 }
 
-/** Dòng nhật ký hoá đơn: `invoices` là bấm tay, `invoice.*` là webhook dội về. */
-const laHoaDon = (e: string) => e === 'invoices' || e.startsWith('invoice.')
+/**
+ * Dòng nhật ký hoá đơn: `invoices` là bấm tay, `invoice.*` là webhook dội về.
+ *
+ * PHẢI TÁCH DẤU PHẨY. Nút "đồng bộ tất cả" ghi entity thành một chuỗi gộp
+ * `products,customers,suppliers,invoices,returns,purchaseOrders,cashflow`
+ * (có thật trong log HUTI). So bằng `=== 'invoices'` là trượt hết, và cửa
+ * hàng nào chỉ dùng nút tổng sẽ bị vu là "chưa từng đồng bộ hoá đơn".
+ */
+export const laHoaDon = (e: string) =>
+    String(e || '').split(',').some(t => {
+        const s = t.trim()
+        return s === 'invoices' || s.startsWith('invoice.')
+    })
+
 const quaWebhook = (r: any) => String(r?.entity || '').startsWith('invoice.')
 
 /**

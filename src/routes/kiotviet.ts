@@ -1035,8 +1035,11 @@ router.get('/logs', async (req: Request, res: Response) => {
          * KHÔNG chứa dòng hoá đơn nào (đo HUTI: 2/100). Hỏi riêng một câu để
          * kết luận không phụ thuộc người dùng đang xem bao nhiêu dòng.
          * Chạy TUẦN TỰ — pool mỗi cửa hàng chỉ 3 kết nối. */
+        /* `contains` chứ không `= 'invoices'`: nút "đồng bộ tất cả" ghi entity
+         * gộp `products,customers,…,invoices,…`. Lọc chính xác lại bằng
+         * laHoaDon() — chuỗi gộp phải tách dấu phẩy mới nhận ra. */
         const dongHoaDon = await store.sp.kiotVietSyncLog.findFirst({
-            where: { OR: [{ entity: 'invoices' }, { entity: { startsWith: 'invoice.' } }] },
+            where: { entity: { contains: 'invoice' } },
             orderBy: { startedAt: 'desc' },
         }).catch(() => null)
         const dongWebhook = await store.sp.kiotVietSyncLog.findFirst({
