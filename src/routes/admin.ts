@@ -5124,6 +5124,47 @@ router.get('/don-ket', async (req: Request, res: Response) => {
              LIMIT ${gioiHan}`,
         ).catch((e: any) => { throw new Error(String(e?.message || e).slice(0, 200)) })
 
+        /* SKU NÀO ĐANG CHẶN — đây mới là thứ hành động được.
+         *
+         * Đã đo và LOẠI giả thuyết "đơn không có dòng hàng": 100/100 đơn kẹt đều
+         * có dòng. Gốc rễ nằm ở orderSync: lệnh push dòng hàng nằm TRONG
+         * `if (product)`, nên item không khớp được hàng kho thì không được thêm
+         * gì cả, `transactionItems` rỗng và đơn không bao giờ lên phiếu.
+         * (Chú thích "still add to transaction without productId" ngay dưới đó
+         * mô tả SAI mã hiện tại.)
+         *
+         * Gom theo SKU để biết cần ánh xạ bao nhiêu mã — nếu vài mã chặn hàng
+         * trăm đơn thì đó là việc làm trong mươi phút, không phải dự án. */
+        const theoSku: any[] = await sp.$queryRawUnsafe(
+            `SELECT COALESCE(i.sku, '(không có SKU)') AS sku,
+                    MAX(i."productName") AS "tenTrenSan",
+                    COUNT(DISTINCT o.id)::int AS "soDon",
+                    COALESCE(SUM(o.total), 0)::float8 AS "tien"
+             FROM "OnlineOrder" o
+             JOIN "OnlineOrderItem" i ON i."onlineOrderId" = o.id
+             LEFT JOIN "Transaction" t ON t."receiptNumber" = 'ONLINE-' || o."orderNumber"
+             WHERE t.id IS NULL
+               AND i."productId" IS NULL
+               AND o."createdAt" < now() - interval '2 days'
+               AND o.status IN ('confirmed','processing','shipping','completed','delivered',
+                                'READY_TO_SHIP','PROCESSED','SHIPPED','COMPLETED',
+                                'AWAITING_SHIPMENT','AWAITING_COLLECTION','PARTIALLY_SHIPPING',
+                                'IN_TRANSIT','DELIVERED')
+             GROUP BY 1 ORDER BY 3 DESC LIMIT 30`,
+        ).catch(() => [])
+
+        /* LISTING ĐÃ NỐI SANG HÀNG KHO CHƯA — bước cuối của chuỗi chẩn đoán.
+         *
+         * Với đơn KHÔNG CÓ SKU (chiếm ~98% giá trị kẹt ở KENGISTORE), orderSync
+         * chỉ còn một đường: dò `OnlineProduct` của kênh theo TÊN trùng khít,
+         * và chỉ nhận listing đã có `localProductId`. Listing chưa nối thì đơn
+         * không bao giờ khớp được hàng nào. */
+        const lk: any[] = await sp.$queryRawUnsafe(
+            `SELECT COUNT(*)::int AS tong,
+                    COUNT("localProductId")::int AS "daNoi"
+             FROM "OnlineProduct"`,
+        ).catch(() => [])
+
         const khongCoDong = dong.filter(d => Number(d.soDongHang) === 0)
         res.json({
             success: true,
@@ -5134,6 +5175,17 @@ router.get('/don-ket', async (req: Request, res: Response) => {
                  * dòng hàng cần đồng bộ lại từ sàn, đơn CÓ dòng mà vẫn kẹt là
                  * bệnh khác và phải mở ra xem. */
                 soDonKhongCoDongHang: khongCoDong.length,
+                /* Danh sách SKU cần ánh xạ — mở "Ánh xạ SKU" nối sang hàng kho
+                 * là các đơn này tự lên phiếu ở lượt đồng bộ kế tiếp. */
+                lienKetListing: lk?.[0] ? {
+                    tong: Number(lk[0].tong) || 0,
+                    daNoi: Number(lk[0].daNoi) || 0,
+                    chuaNoi: (Number(lk[0].tong) || 0) - (Number(lk[0].daNoi) || 0),
+                } : null,
+                skuDangChan: theoSku.map(x => ({
+                    sku: x.sku, tenTrenSan: x.tenTrenSan,
+                    soDon: Number(x.soDon) || 0, tien: Number(x.tien) || 0,
+                })),
                 tienDonKhongCoDongHang: khongCoDong.reduce((a, b) => a + (Number(b.total) || 0), 0),
                 donHang: dong.map(d => ({
                     maDon: d.orderNumber, san: d.platform, trangThai: d.status,

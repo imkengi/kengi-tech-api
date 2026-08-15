@@ -208,8 +208,20 @@ export async function convertOnlineOrderToTransaction(prisma: StorePrisma, order
                 quantity: baseQty,
             })
         } else {
-            // Product not found in system — still add to transaction without productId
-            // Skip inventory deduction for unmatched items
+            /* ⚠ CHÚ THÍCH CŨ Ở ĐÂY GHI "still add to transaction without productId"
+             * — SAI, mã KHÔNG hề thêm gì. Lệnh push nằm trong `if (product)` ở
+             * trên, nên item không khớp được hàng kho thì bị bỏ hẳn; đơn nào
+             * mọi item đều không khớp sẽ có `transactionItems` rỗng và thoát ở
+             * nhánh "No matching products", KHÔNG BAO GIỜ lên phiếu.
+             *
+             * Đo KENGISTORE 15/08/2026: 777 đơn (373.148.233đ, bằng 9,1% doanh
+             * thu đã ghi sổ cùng kỳ) kẹt đúng vì lý do này. 100/100 đơn kiểm
+             * đều CÓ dòng hàng — vấn đề là SKU sàn chưa ánh xạ sang hàng kho.
+             *
+             * Chưa đổi hành vi ở đây: ghi phiếu mà không có productId thì có
+             * doanh thu nhưng không có giá vốn và không trừ kho — đó là đánh
+             * đổi của chủ shop, không phải quyết định của mã. Xem danh sách SKU
+             * đang chặn ở GET /admin/don-ket. */
             console.log(`[OrderSync] SKU "${item.sku}" not found in inventory for order ${order.orderNumber}`)
         }
     }
