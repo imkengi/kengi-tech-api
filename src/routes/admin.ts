@@ -5085,6 +5085,70 @@ router.get('/errors', async (req: Request, res: Response) => {
 })
 
 /**
+ * GET /admin/don-ket?store=CODE&limit=50 — ĐƠN SÀN ĐÃ BÁN MÀ CHƯA LÊN PHIẾU.
+ *
+ * Đo 15/08/2026: KENGISTORE có 777 đơn (373.148.233đ, bằng 9,1% doanh thu đã
+ * ghi sổ cùng kỳ) ở trạng thái đáng lẽ phải lên phiếu mà vẫn không có phiếu.
+ *
+ * Endpoint này vừa để CHẨN ĐOÁN vừa để XỬ LÝ: trả kèm `soDongHang` vì nghi
+ * nguyên nhân là đơn không có dòng hàng nào — `convertOnlineOrderToTransaction`
+ * thoát ở nhánh `transactionItems.length === 0` và chỉ ghi console.log rồi nuốt,
+ * nên nó thử lại mỗi lượt đồng bộ và thất bại mỗi lần, im lặng (log
+ * "No matching products for order …" chạm trần 100 dòng chỉ trong 6 giờ).
+ *
+ * Đếm dòng hàng bằng MỘT truy vấn gộp, không N+1: pool mỗi cửa hàng chỉ 5.
+ */
+router.get('/don-ket', async (req: Request, res: Response) => {
+    try {
+        const ma = String(req.query.store || '').trim()
+        const gioiHan = Math.min(200, Math.max(1, Number(req.query.limit) || 50))
+        const store: any = await registryPrisma.store.findFirst({
+            where: { code: ma }, select: { name: true, schema: true, code: true },
+        })
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const sp: any = getStorePrisma(store.schema)
+
+        const dong: any[] = await sp.$queryRawUnsafe(
+            `SELECT o."orderNumber", o.status, o.total::float8 AS total, o.platform,
+                    o."createdAt",
+                    (SELECT COUNT(*)::int FROM "OnlineOrderItem" i WHERE i."onlineOrderId" = o.id) AS "soDongHang"
+             FROM "OnlineOrder" o
+             LEFT JOIN "Transaction" t ON t."receiptNumber" = 'ONLINE-' || o."orderNumber"
+             WHERE t.id IS NULL
+               AND o."createdAt" < now() - interval '2 days'
+               AND o.status IN ('confirmed','processing','shipping','completed','delivered',
+                                'READY_TO_SHIP','PROCESSED','SHIPPED','COMPLETED',
+                                'AWAITING_SHIPMENT','AWAITING_COLLECTION','PARTIALLY_SHIPPING',
+                                'IN_TRANSIT','DELIVERED')
+             ORDER BY o."createdAt" DESC
+             LIMIT ${gioiHan}`,
+        ).catch((e: any) => { throw new Error(String(e?.message || e).slice(0, 200)) })
+
+        const khongCoDong = dong.filter(d => Number(d.soDongHang) === 0)
+        res.json({
+            success: true,
+            data: {
+                cuaHang: store.code,
+                soDonLayVe: dong.length,
+                /* Chia đôi theo NGUYÊN NHÂN, không đổ một đống: đơn không có
+                 * dòng hàng cần đồng bộ lại từ sàn, đơn CÓ dòng mà vẫn kẹt là
+                 * bệnh khác và phải mở ra xem. */
+                soDonKhongCoDongHang: khongCoDong.length,
+                tienDonKhongCoDongHang: khongCoDong.reduce((a, b) => a + (Number(b.total) || 0), 0),
+                donHang: dong.map(d => ({
+                    maDon: d.orderNumber, san: d.platform, trangThai: d.status,
+                    tien: Number(d.total) || 0,
+                    soDongHang: Number(d.soDongHang) || 0,
+                    ngay: d.createdAt,
+                })),
+            },
+        })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: String(e?.message || e) })
+    }
+})
+
+/**
  * GET /admin/store-staff?store=CODE — ai đang làm ở cửa hàng này.
  *
  * Hai danh sách KHÁC NHAU mà rất dễ tưởng là một:

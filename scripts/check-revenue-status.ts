@@ -111,9 +111,32 @@ function soatSql(file: string, src: string, viPham: ViPham[]): void {
         // Chỉ xét câu SQL đang đụng bảng đơn bán — nhìn quanh 600 ký tự.
         const quanh = src.slice(Math.max(0, m.index - 600), m.index + 200)
         if (!/"Transaction"|"TransactionItem"/.test(quanh)) continue
-        // Bí danh phải là của bảng đơn bán, không phải phiếu nhập/hoá đơn.
+        /* BÍ DANH PHẢI THUỘC BẢNG ĐƠN BÁN.
+         *
+         * Không đủ khi chỉ nhìn "câu này có nhắc Transaction không": một câu
+         * FROM "OnlineOrder" o LEFT JOIN "Transaction" t ... mà lọc o.status
+         * thì status đó là trạng thái đơn SÀN (READY_TO_SHIP, DELIVERED...),
+         * hoàn toàn không có khái niệm bán chịu. Bản trước báo nhầm đúng kiểu
+         * này HAI lần trong ngày 15/08/2026, và chữa bằng cách rắc thêm dấu bỏ
+         * qua ở từng chỗ chỉ làm bộ dò rỗng dần.
+         *
+         * Nay: lấy bí danh đứng ngay trước status, rồi tra xem trong câu nó
+         * được gắn vào BẢNG NÀO. Không phải bảng đơn bán thì bỏ qua. */
         const truoc = src.slice(Math.max(0, m.index - 12), m.index)
-        if (/\b(r|e|adj|a2|ro|i)\.\s*$/.test(truoc)) continue
+        const biDanh = /\b([a-z][a-z0-9_]{0,3})\.\s*$/.exec(truoc)?.[1]
+        if (biDanh) {
+            /* Quet MOI cap "Bang" bi_danh trong cau roi tra dung bi danh dang
+             * xet. Dung regex nguyen khoi thay vi noi chuoi: noi chuoi thi \s
+             * va  trong dau nhay don bi hieu thanh chu s va ky tu backspace
+             * — chinh toi dinh luc 15/08/2026. */
+            let gan: string | undefined
+            for (const g of quanh.matchAll(/"([A-Za-z]+)"\s+([a-z][a-z0-9_]{0,3})\b/g)) {
+                if (g[2] === biDanh) { gan = g[1]; break }
+            }
+            if (gan && !/^Transaction/.test(gan)) continue
+            // Danh sách cũ giữ cho câu không khai bí danh trong tầm nhìn
+            if (!gan && /^(r|e|adj|a2|ro|i)$/.test(biDanh)) continue
+        }
 
         const ds = m[1] ? [m[1]] : Array.from(m[2].matchAll(/'([^']+)'/g)).map(x => x[1])
         const coDoanhThu = ds.some(s => DOANH_THU.includes(s))

@@ -383,11 +383,6 @@ export async function sucKhoeDuLieu(
          WHERE t.id IS NULL
            AND o."createdAt" >= $1 AND o."createdAt" < $2
            AND o."createdAt" < now() - interval '${NGAY_BO_QUA} days'
-           -- loc-trang-thai-co-y: day la OnlineOrder.status (trang thai don SAN:
-           -- READY_TO_SHIP, DELIVERED...), KHONG phai Transaction.status. Luat
-           -- "phai co 'partial'" chi ap cho don ban; o day khong co khai niem
-           -- ban chiu. Bang "Transaction" chi xuat hien o LEFT JOIN de biet don
-           -- da len phieu chua.
            AND o.status IN ('confirmed','processing','shipping','completed','delivered',
                             'READY_TO_SHIP','PROCESSED','SHIPPED','COMPLETED',
                             'AWAITING_SHIPMENT','AWAITING_COLLECTION','PARTIALLY_SHIPPING',
