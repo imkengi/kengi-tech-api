@@ -124,6 +124,20 @@ function main() {
     ], BAY_GIO)!
     ok('15. có lượt ghi được trong 48h → vẫn xanh', t15.muc === 'on' && t15.loi === null, { muc: t15.muc, loi: t15.loi })
 
+    /* 16 — DỰNG LẠI ĐÚNG BÁO ĐỘNG GIẢ 15/08/2026 10:01
+     * Webhook hoá đơn dội dày tới mức cửa sổ "100 dòng gần nhất" chỉ còn phủ
+     * 12 PHÚT, toàn dòng ghi 0. Lượt bấm tay ghi 22 phiếu lúc 09:26 rơi ra
+     * ngoài. Bản thiếu dòng neo đã kêu oan "48h qua chưa phiếu nào vào sổ"
+     * trong khi vừa ghi 22 phiếu nửa tiếng trước. */
+    const luLut = Array.from({ length: 38 }, (_, i) => dong('invoice.update.9', 0.05 + i * 0.005, 'webhook', 0))
+    const thieuNeo = tinhTinhTrangDon(luLut, BAY_GIO)!
+    ok('16. thiếu dòng neo → đúng là sẽ kêu oan (ghi lại để nhớ hợp đồng)',
+        thieuNeo.muc === 'nhac', thieuNeo.muc)
+    const dongNeoGhiDuoc = dong('invoices', 0.6, 'manual', 22)   // người gọi PHẢI chèn
+    const duNeo = tinhTinhTrangDon([dongNeoGhiDuoc, ...luLut], BAY_GIO)!
+    ok('16b. chèn đủ dòng neo → im, vì thật sự vừa ghi 22 phiếu',
+        duNeo.muc === 'on' && duNeo.loi === null, { muc: duNeo.muc, loi: duNeo.loi })
+
     console.log(`\n${dat}/${dat + hong} ca đạt`)
     if (hong) process.exit(1)
 }

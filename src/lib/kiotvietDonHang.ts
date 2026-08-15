@@ -46,7 +46,19 @@ export const laHoaDon = (e: string) =>
 const quaWebhook = (r: any) => String(r?.entity || '').startsWith('invoice.')
 
 /**
- * @param logs  các dòng kiotVietSyncLog, MỚI NHẤT TRƯỚC
+ * ⚠ HỢP ĐỒNG VỚI NGƯỜI GỌI: `logs` PHẢI được chèn sẵn ba dòng neo, mỗi dòng
+ * lấy bằng một truy vấn riêng — KHÔNG được đưa vào mỗi "N dòng gần nhất":
+ *   1. dòng hoá đơn gần nhất            (bất kể ghi được gì không)
+ *   2. dòng hoá đơn gần nhất qua webhook
+ *   3. dòng hoá đơn gần nhất GHI ĐƯỢC phiếu (created + updated > 0)
+ *
+ * Hàm này chỉ nhìn thấy những gì được đưa vào, nên thiếu neo là nó kết luận
+ * sai mà vẫn rất tự tin. Đo thật 15/08/2026 lúc 10:01: webhook hoá đơn dội về
+ * dày tới mức 100 dòng gần nhất chỉ phủ 12 PHÚT — lượt bấm tay ghi 22 phiếu
+ * lúc 09:26 rơi ra ngoài, và bản thiếu neo đã kêu oan "48h qua chưa phiếu nào
+ * vào sổ" trong khi vừa ghi 22 phiếu nửa tiếng trước.
+ *
+ * @param logs  các dòng kiotVietSyncLog, MỚI NHẤT TRƯỚC, đã chèn ba dòng neo
  * @param bayGio mốc thời gian coi là "bây giờ" (để test cố định được)
  */
 export function tinhTinhTrangDon(logs: any[], bayGio: number = Date.now()): TinhTrangDon | null {

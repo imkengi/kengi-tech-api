@@ -1046,8 +1046,20 @@ router.get('/logs', async (req: Request, res: Response) => {
             where: { entity: { startsWith: 'invoice.' } },
             orderBy: { startedAt: 'desc' },
         }).catch(() => null)
+        /* Lượt hoá đơn gần nhất THẬT SỰ ghi được phiếu. Cũng phải hỏi riêng, và
+         * vì đúng lý do trên: đo 15/08/2026 lúc 10:01, webhook hoá đơn dội về
+         * dày tới mức 100 dòng gần nhất chỉ còn phủ 12 PHÚT (38 dòng hoá đơn,
+         * ghi 0 hết). Lượt bấm tay ghi 22 phiếu lúc 09:26 rơi ra ngoài cửa sổ →
+         * suy từ danh sách sẽ kêu oan "48h qua chưa phiếu nào vào sổ". */
+        const dongGhiDuoc = await store.sp.kiotVietSyncLog.findFirst({
+            where: {
+                entity: { contains: 'invoice' },
+                OR: [{ created: { gt: 0 } }, { updated: { gt: 0 } }],
+            },
+            orderBy: { startedAt: 'desc' },
+        }).catch(() => null)
 
-        const mau = [dongHoaDon, dongWebhook, ...logs].filter(Boolean)
+        const mau = [dongHoaDon, dongWebhook, dongGhiDuoc, ...logs].filter(Boolean)
         res.json({ success: true, data: logs, donHang: tinhTinhTrangDon(mau) })
     } catch (e: any) {
         res.status(500).json({ success: false, error: errMsg(e) })
