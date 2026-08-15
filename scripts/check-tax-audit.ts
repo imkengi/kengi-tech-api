@@ -1269,6 +1269,38 @@ async function main() {
             !co(h, 'so-thieu-doanh-thu-thuc-te'))
     }
 
+    {
+        /* Hộ kinh doanh KHÔNG bắt buộc sổ kép (Điều 3 TT 88/2021). Bảo họ "chạy
+         * ghi bù bút toán" là chỉ sai việc, và xếp mức cao là doạ vì một nghĩa
+         * vụ không tồn tại — nhưng vẫn phải nói ra, vì con số dựng trên sổ vẫn
+         * nhỏ hơn mức thật bất kể loại hình. */
+        const k = khoSach()
+        k.settings = { businessType: 'household' }
+        k.transactions = [
+            { createdAt: '2026-08-05T02:00:00.000Z', total: 1_100_000_000, tax: 100_000_000, status: 'completed' },
+        ] as any
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const c = lay(h, 'so-thieu-doanh-thu-thuc-te')
+        kiemTra('Hộ kinh doanh vẫn được báo sổ ghi thiếu', !!c, JSON.stringify(c?.tieuDe))
+        kiemTra('… nhưng ở mức vừa, không phải cao', !!c && c.muc === 'vua', c?.muc)
+        kiemTra('… và chỉ đúng việc: nhập Sổ Doanh Thu, không bắt ghi bút toán',
+            !!c && /không bắt buộc sổ kép/.test(c.canLam) && /Sổ Doanh Thu/.test(c.canLam),
+            c?.canLam?.slice(0, 110))
+    }
+    {
+        // Doanh nghiệp thì vẫn mức cao và vẫn chỉ sang ghi bù bút toán
+        const k = khoSach()
+        k.settings = { businessType: 'company' }
+        k.transactions = [
+            { createdAt: '2026-08-05T02:00:00.000Z', total: 1_100_000_000, tax: 100_000_000, status: 'completed' },
+        ] as any
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const c = lay(h, 'so-thieu-doanh-thu-thuc-te')
+        kiemTra('Doanh nghiệp: sổ ghi dưới một nửa → mức CAO', !!c && c.muc === 'cao', c?.muc)
+        kiemTra('… và chỉ sang ghi bù bút toán',
+            !!c && /ghi bù bút toán/.test(c.canLam), c?.canLam?.slice(0, 90))
+    }
+
     // ── 42. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────
     {
         const h = await kiemTraThue(fakePrisma(khoSach()), KY)

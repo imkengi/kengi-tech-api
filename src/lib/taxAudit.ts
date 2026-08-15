@@ -454,6 +454,16 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
      * đọc yên tâm rồi không làm gì.
      *
      * Không đọc được phiếu bán thì để null và im — không suy đoán. */
+    /* Hộ kinh doanh KHÔNG bắt buộc sổ kép (Điều 3 TT 88/2021) — họ chỉ cần sổ
+     * doanh thu. Bảo họ "chạy ghi bù bút toán" là chỉ sai việc, và xếp mức cao
+     * là doạ vì một nghĩa vụ không tồn tại. Nhưng vẫn phải nói ra, vì mọi con số
+     * dựng trên sổ đều nhỏ hơn mức thật bất kể loại hình nào. */
+    let laHoKinhDoanh = false
+    try {
+        const cd = await layCauHinh()
+        laHoKinhDoanh = cd?.businessType === 'household' || cd?.businessType === 'individual'
+    } catch { /* không đọc được thì coi như doanh nghiệp — không nới lỏng vì thiếu tin */ }
+
     let dtThucTe: number | null = null
     try {
         const txs = (await layGiaoDich()) || []
@@ -478,11 +488,13 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
          * một sự việc, và "sổ chỉ ghi nhận 0%" là câu đọc rất kỳ. */
         if (!soChuaGhiDoanhThu && thieu > NGUONG_LECH_BO_QUA && tyLeGhi < 80) canhBao.push({
             code: 'so-thieu-doanh-thu-thuc-te',
-            muc: tyLeGhi < 50 ? 'cao' : 'vua',
+            muc: laHoKinhDoanh ? 'vua' : tyLeGhi < 50 ? 'cao' : 'vua',
             tieuDe: `Sổ chỉ ghi nhận ${tyLeGhi}% doanh thu thực tế`,
             chiTiet: `Phiếu bán trong kỳ cộng lại ${vnd(dtThucTe)} ₫ nhưng sổ kế toán chỉ ghi ${vnd(dtSo)} ₫ — thiếu ${vnd(thieu)} ₫. Mọi con số dựng trên sổ (lệch với tờ khai, lệch với hoá đơn, lãi lỗ) đều đang tính trên phần đã ghi, nên chúng NHỎ HƠN mức thật. Nghĩa vụ lập hoá đơn và kê khai gắn với doanh thu thực tế, không gắn với phần đã ghi sổ.`,
             canCu: 'Điều 90 Luật Quản lý thuế 38/2019 — lập hoá đơn theo từng lần bán; Điều 50 — ấn định khi sổ sách không phản ánh đầy đủ.',
-            canLam: 'Mở Kế Toán → Đối Chiếu Sổ Sách, chạy ghi bù bút toán cho các phiếu bán còn thiếu, rồi soát lại kỳ này.',
+            canLam: laHoKinhDoanh
+                ? 'Hộ kinh doanh không bắt buộc sổ kép (Điều 3 TT 88/2021) nên không cần ghi bù bút toán — nhưng phải nhập Sổ Doanh Thu trong phần Thuế cho đủ, vì đó mới là sổ bắt buộc và là căn cứ kê khai. Muốn có thêm báo cáo lãi lỗ theo chuẩn kế toán thì mở Kế Toán → Đối Chiếu Sổ Sách chạy ghi bù.'
+                : 'Mở Kế Toán → Đối Chiếu Sổ Sách, chạy ghi bù bút toán cho các phiếu bán còn thiếu, rồi soát lại kỳ này.',
             tienRuiRo: thieu, soLuong: 0, viDu: [],
         })
     }
