@@ -94,6 +94,13 @@ export async function convertOnlineOrderToTransaction(prisma: StorePrisma, order
 
     for (const item of order.items) {
         let product = null
+        /* SKU từ sàn có thể dính ký tự trắng vô hình. Đo thật 15/08/2026: một
+         * đơn Shopee mang sku "	
+08L" trong khi kho có đúng "08L" — mọi phép
+         * so đều trượt và đơn kẹt vĩnh viễn, còn route tạo SkuMapping thì luôn
+         * trim nên không tạo nổi ánh xạ "bẩn" để chữa. Làm sạch MỘT LẦN ở đây
+         * cho cả ba đường khớp; bản ghi gốc trên OnlineOrderItem giữ nguyên. */
+        const skuSach = String(item.sku || '').trim() || null
         // Hệ số quy đổi của ánh xạ SKU: phân loại trên sàn là VỈ nhưng kho đếm
         // theo CÁI → 1 vỉ phải trừ 10 cái.
         let mapRate = 1
@@ -104,8 +111,8 @@ export async function convertOnlineOrderToTransaction(prisma: StorePrisma, order
         }
 
         // Try matching by SKU
-        if (!product && item.sku) {
-            product = await prisma.product.findFirst({ where: { sku: item.sku } })
+        if (!product && skuSach) {
+            product = await prisma.product.findFirst({ where: { sku: skuSach } })
 
             // If found, link the productId for future syncs
             if (product) {
@@ -119,10 +126,10 @@ export async function convertOnlineOrderToTransaction(prisma: StorePrisma, order
         // Bảng ÁNH XẠ SKU sàn → kho (user tự map ở màn "Ánh xạ SKU"). Đơn TikTok/
         // Shopee hay dùng mã riêng ("Ct30plus", "cs24"…) không trùng SKU kho →
         // trước đây đơn bị bỏ qua, không lên phiếu ⇒ không xuất được hoá đơn.
-        if (!product && item.sku) {
+        if (!product && skuSach) {
             const map = await prisma.skuMapping.findFirst({
                 where: {
-                    platformSku: { equals: item.sku, mode: 'insensitive' },
+                    platformSku: { equals: skuSach, mode: 'insensitive' },
                     OR: [{ platform: null }, { platform: order.platform || undefined }],
                 },
             }).catch(() => null)
@@ -152,7 +159,7 @@ export async function convertOnlineOrderToTransaction(prisma: StorePrisma, order
                     channelId: order.channelId,
                     localProductId: { not: null },
                     OR: [
-                        ...(item.sku ? [{ sku: item.sku }] : []),
+                        ...(skuSach ? [{ sku: skuSach }] : []),
                         { name: item.productName },
                     ],
                 },
