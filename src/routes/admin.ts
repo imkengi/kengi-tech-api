@@ -5293,6 +5293,31 @@ router.get('/don-ket', async (req: Request, res: Response) => {
              FROM "OnlineProduct"`,
         ).catch(() => [])
 
+        /* DỰ BÁO TRUNG THỰC: nối hết listing thì bao nhiêu đơn kẹt sẽ về?
+         *
+         * Đường khớp của orderSync với đơn không SKU là TÊN hàng trùng khít với
+         * listing CÙNG KÊNH. Đơn nào tên không khớp listing nào (listing đã đổi
+         * tên / bị xoá) thì nối mấy cũng không cứu — phải nói rõ nhóm đó thay
+         * vì hứa "nối xong là về hết". */
+        const duBao: any[] = await sp.$queryRawUnsafe(
+            `SELECT
+                COUNT(DISTINCT o.id) FILTER (WHERE op.id IS NOT NULL AND op."localProductId" IS NOT NULL)::int AS "seVeChuKyToi",
+                COUNT(DISTINCT o.id) FILTER (WHERE op.id IS NOT NULL AND op."localProductId" IS NULL)::int  AS "veSauKhiNoi",
+                COUNT(DISTINCT o.id) FILTER (WHERE op.id IS NULL)::int AS "moCoi",
+                COALESCE(SUM(o.total) FILTER (WHERE op.id IS NULL), 0)::float8 AS "tienMoCoi"
+             FROM "OnlineOrder" o
+             JOIN "OnlineOrderItem" i ON i."onlineOrderId" = o.id
+             LEFT JOIN "Transaction" t ON t."receiptNumber" = 'ONLINE-' || o."orderNumber"
+             LEFT JOIN "OnlineProduct" op ON op."channelId" = o."channelId" AND op.name = i."productName"
+             WHERE t.id IS NULL
+               AND i."productId" IS NULL
+               AND o."createdAt" < now() - interval '2 days'
+               AND o.status IN ('confirmed','processing','shipping','completed','delivered',
+                                'READY_TO_SHIP','PROCESSED','SHIPPED','COMPLETED',
+                                'AWAITING_SHIPMENT','AWAITING_COLLECTION','PARTIALLY_SHIPPING',
+                                'IN_TRANSIT','DELIVERED')`,
+        ).catch(() => [])
+
         const khongCoDong = dong.filter(d => Number(d.soDongHang) === 0)
         res.json({
             success: true,
@@ -5305,6 +5330,16 @@ router.get('/don-ket', async (req: Request, res: Response) => {
                 soDonKhongCoDongHang: khongCoDong.length,
                 /* Danh sách SKU cần ánh xạ — mở "Ánh xạ SKU" nối sang hàng kho
                  * là các đơn này tự lên phiếu ở lượt đồng bộ kế tiếp. */
+                /* seVeChuKyToi: item khớp listing ĐÃ nối — chỉ là chưa tới lượt.
+                 * veSauKhiNoi: khớp listing CHƯA nối — nối là về.
+                 * moCoi: KHÔNG khớp listing nào — nối mấy cũng không cứu, phải
+                 * xử tay (đổi tên listing / thêm SkuMapping). */
+                duBaoThuHoi: duBao?.[0] ? {
+                    seVeChuKyToi: Number(duBao[0].seVeChuKyToi) || 0,
+                    veSauKhiNoi: Number(duBao[0].veSauKhiNoi) || 0,
+                    moCoi: Number(duBao[0].moCoi) || 0,
+                    tienMoCoi: Number(duBao[0].tienMoCoi) || 0,
+                } : null,
                 lienKetListing: lk?.[0] ? {
                     tong: Number(lk[0].tong) || 0,
                     daNoi: Number(lk[0].daNoi) || 0,
