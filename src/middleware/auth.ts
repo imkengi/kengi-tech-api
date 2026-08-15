@@ -159,7 +159,11 @@ export const authMiddleware = async (req: AuthRequest, res: Response, next: Next
         // KHÔNG được thực hiện thao tác ghi (POST/PUT/PATCH/DELETE).
         const scopes = String((req as any).apiKeyScopes || 'read')
         const writeAllowed = /admin|write|\*/i.test(scopes)
-        const isWrite = !['GET', 'HEAD', 'OPTIONS'].includes(req.method)
+        // MCP (/api/mcp) là JSON-RPC nên LUÔN POST kể cả khi chỉ đọc; quyền ghi ở
+        // đó do chính mcp.ts kiểm theo cờ tool.write + scope — không chặn ở đây,
+        // nếu không key chỉ-đọc không gọi được bất kỳ tool nào (đo thật 15/08).
+        const laMcp = /^\/api\/mcp\/?$/.test(req.originalUrl.split('?')[0])
+        const isWrite = !['GET', 'HEAD', 'OPTIONS'].includes(req.method) && !laMcp
         if (isWrite && !writeAllowed) {
             res.status(403).json({ success: false, error: 'API key chỉ có quyền đọc — không thể ghi/sửa/xóa (scope=read)' })
             return
