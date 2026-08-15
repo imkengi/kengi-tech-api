@@ -104,7 +104,18 @@ const fileFE = quetFile(path.join(FE_DIR, 'src'), ['.ts', '.tsx'])
 const goiFE: Array<{ method: string; duong: string; file: string; raw: string }> = []
 for (const f of fileFE) {
     const noiDung = fs.readFileSync(f, 'utf8')
-    for (const m of noiDung.matchAll(/apiClient\.(get|post|put|patch|delete)\(\s*[`'"]([^`'"]*)[`'"]/g)) {
+    /* Nhận CẢ `apiClient`, `adminApi` và `api`.
+     *
+     * Bản đầu chỉ dò `apiClient`, nên TOÀN BỘ trang quản trị nằm ngoài tầm
+     * kiểm: nó nhận instance axios qua prop và gọi bằng tên `api`/`adminApi`.
+     * Đo 15/08/2026: 37 lời gọi thật (admin/page.tsx 20, KiotVietTab 10,
+     * MisaTab 6, SucKhoeTab 1) chưa từng được đối chiếu route nào. Phát hiện
+     * ra khi bẻ hỏng đường dẫn một lời gọi mới mà bộ soát vẫn báo xanh —
+     * "hợp đồng sạch" khi ấy chỉ là sạch ở nửa mình chịu nhìn.
+     *
+     * `api` có dính 4 chuỗi MINH HOẠ ở trang tài liệu API (`/products?limit=10`),
+     * nhưng chúng trỏ vào route có thật nên không đẻ báo động giả — đã đo. */
+    for (const m of noiDung.matchAll(/\b(?:apiClient|adminApi|api)\.(get|post|put|patch|delete)\(\s*[`'"]([^`'"]*)[`'"]/g)) {
         const raw = m[2]
         if (!raw.startsWith('/')) continue          // đường ghép động — không đọc được
         goiFE.push({ method: m[1].toUpperCase(), duong: chuanHoa(raw), file: path.relative(FE_DIR, f), raw })
@@ -149,6 +160,48 @@ console.log(`  Frontend: ${goiFE.length} lời gọi đọc được trong ${fil
 if (!routeBE.length || !goiFE.length) {
     console.log('⚠️  Không đọc được dữ liệu hai bên — kiểm tra lại đường dẫn repo frontend.')
     process.exit(0)
+}
+
+/* ── 3b. ROUTE TRÙNG TÊN ─────────────────────────────────────────────────────
+ * Express lấy route KHAI TRƯỚC. Khai trùng một đường đã có nghĩa là route thứ
+ * hai không bao giờ chạy — mã chết HOÀN TOÀN IM LẶNG, không cảnh báo lúc dựng,
+ * không lỗi lúc chạy, chỉ là gọi ra thì nhận về dữ liệu của route khác.
+ *
+ * Phép soát ở trên KHÔNG bắt được: với nó đường đó "có tồn tại", khớp đẹp.
+ * Dính thật 15/08/2026 — thêm `/admin/store-health` cho màn hình sức khoẻ toàn
+ * hệ thống, gọi ra lại nhận danh sách kênh sàn của KENGISTORE, vì tên đó đã có
+ * chủ từ ~2500 dòng phía trên.
+ *
+ * CHỈ TÍNH KHAI Ở CỘT 0. Bản đầu quét mọi dòng và ra 2/3 báo nhầm — tỉ lệ đó
+ * thì người ta bỏ qua cả bộ dò:
+ *   - `einvoice.ts:2140` là CHÚ THÍCH nhắc tới `router.get('/:id')`, không phải
+ *     khai thật.
+ *   - `admin.ts:585/604` là `/reset-db` khai trong `if (development) … else …`,
+ *     nên lúc chạy chỉ một bản đăng ký. Hợp lệ.
+ * Cả hai đều THỤT LỀ, còn khai thật ở file này luôn nằm sát lề trái. Luật hẹp
+ * mà đo được 0 báo nhầm thì hơn luật rộng bắt bừa. */
+const theoDuong = new Map<string, Array<{ file: string }>>()
+for (const { tienTo, file } of mount) {
+    const p = path.join(BE_DIR, 'src/routes', file + '.ts')
+    let noiDung: string
+    try { noiDung = fs.readFileSync(p, 'utf8') } catch { continue }
+    for (const dong of noiDung.split('\n')) {
+        const m = /^router\.(get|post|put|patch|delete)\(\s*'([^']*)'/.exec(dong)
+        if (!m) continue
+        const duong = (tienTo + (m[2] === '/' ? '' : m[2])).replace(/^\/api/, '')
+        const khoa = `${m[1].toUpperCase()} ${duong}`
+        if (!theoDuong.has(khoa)) theoDuong.set(khoa, [])
+        theoDuong.get(khoa)!.push({ file })
+    }
+}
+const trung = [...theoDuong.entries()].filter(([, v]) => v.length > 1)
+
+if (trung.length) {
+    console.log(`⚠️  ${trung.length} đường bị khai TRÙNG — bản khai sau không bao giờ chạy:\n`)
+    for (const [khoa, ds] of trung) {
+        console.log(`  ✗ ${khoa}  (${ds.length} lần, file: ${[...new Set(ds.map(d => d.file))].join(', ')})`)
+    }
+    console.log('\n  Express lấy bản khai TRƯỚC. Đổi tên bản sau, hoặc gộp lại.\n')
 }
 
 if (thieu.length === 0) {

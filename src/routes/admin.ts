@@ -1994,38 +1994,18 @@ router.put('/upgrade-requests/:storeCode/:id/reject', async (req: Request, res: 
         res.status(500).json({ success: false, error: 'Internal server error' })
     }
 })
-// ─── POST /admin/sync-schemas ─────────────────────────────────────────────────
-// Push latest Prisma schema to all existing store databases (adds missing tables)
-router.post('/sync-schemas', async (_req: Request, res: Response) => {
-    try {
-        const stores = await prisma.store.findMany({ select: { id: true, name: true, schema: true, code: true } })
-        const results: { store: string; schema: string; status: string }[] = []
-
-        for (const store of stores) {
-            // Schema names come from the registry and are restricted to safe identifier
-            // chars by createBranchSchema; this guard is belt-and-suspenders before
-            // interpolating into raw DDL.
-            if (!/^[a-z0-9_]+$/i.test(store.schema)) {
-                results.push({ store: store.code, schema: store.schema, status: 'error: invalid schema name' })
-                continue
-            }
-            try {
-                await prisma.$executeRawUnsafe(`ALTER TABLE "${store.schema}"."SalesTripItem" ADD COLUMN IF NOT EXISTS "actualQty" INTEGER NOT NULL DEFAULT 0`)
-                await prisma.$executeRawUnsafe(`ALTER TABLE "${store.schema}"."SalesTripItem" ADD COLUMN IF NOT EXISTS "damagedQty" INTEGER NOT NULL DEFAULT 0`)
-                results.push({ store: store.code, schema: store.schema, status: 'ok' })
-                console.log(`✅ Schema synced: ${store.code} (${store.schema})`)
-            } catch (err: any) {
-                results.push({ store: store.code, schema: store.schema, status: `error: ${err?.message?.slice(0, 200)}` })
-                console.error(`❌ Schema sync failed: ${store.code}`, err?.message?.slice(0, 400))
-            }
-        }
-
-        res.json({ success: true, synced: results.filter(r => r.status === 'ok').length, total: stores.length, results })
-    } catch (err) {
-        console.error('Sync schemas error:', err)
-        res.status(500).json({ success: false, error: 'Internal server error' })
-    }
-})
+/* ĐÃ GỠ: bản khai TRÙNG thứ hai của `POST /admin/sync-schemas`.
+ *
+ * Nó nằm sau bản ở dòng ~613 nên Express KHÔNG BAO GIỜ gọi tới — mã chết hoàn
+ * toàn im lặng suốt thời gian qua. Việc nó định làm là thêm hai cột
+ * `SalesTripItem.actualQty` và `.damagedQty` bằng ALTER thô; đã kiểm prod
+ * 15/08/2026, hai cột đó CÓ THẬT (không dòng log P2022 nào trong 7 ngày) nên
+ * gỡ đi không mất gì — chúng đã vào bằng đường khác.
+ *
+ * Phát hiện nhờ phép dò route trùng mới thêm vào scripts/check-api-contract.ts,
+ * sau khi chính tôi đặt trùng tên `/admin/store-health` và mất một lúc mới hiểu
+ * vì sao gọi ra lại nhận dữ liệu kênh sàn của KENGISTORE.
+ */
 
 // ─── POST /admin/seed-coa ─────────────────────────────────────────────────────
 // (Re)seed the full Vietnamese chart of accounts (TT99/2025, có dấu) into EVERY
@@ -4970,6 +4950,116 @@ router.post('/run-reconcile', async (req: Request, res: Response) => {
         })
     } catch (err: any) {
         res.status(500).json({ success: false, error: err?.message })
+    }
+})
+
+// ════════════════════════════════════════════════════════════════════════════
+// SỨC KHOẺ TOÀN HỆ THỐNG — một chỗ nhìn ra cửa hàng nào đang có vấn đề
+// ════════════════════════════════════════════════════════════════════════════
+/**
+ * Ngày 15/08/2026 HUTI mất đơn nguyên ngày mà không ai biết, tới khi chủ shop
+ * tự phát hiện. Người quản trị 9 cửa hàng KHÔNG có chỗ nào nhìn ra điều đó:
+ * tám thẻ hiện có đều là cấu hình và vận hành, không thẻ nào trả lời "cửa hàng
+ * nào đang hỏng". Muốn biết thì phải mở từng cửa hàng một.
+ *
+ * Endpoint này chạy cỗ máy `sucKhoeDuLieu` cho mọi cửa hàng rồi gom lại.
+ *
+ * TUẦN TỰ QUA TỪNG CỬA HÀNG, không Promise.all: mỗi cửa hàng đã tốn vài truy
+ * vấn, bắn song song 9 cửa hàng là cạn pool đúng lúc người ta đang bán hàng —
+ * xem [[prisma-pool-promiseall-trap]]. Chậm hơn nhưng đây là màn hình quản
+ * trị, mở vài lần một ngày.
+ *
+ * ĐỆM 3 PHÚT vì cùng lý do: mở đi mở lại thẻ không được phép nện vào pool của
+ * 9 cửa hàng đang bán. Thêm `?moi=1` để ép chạy lại khi đang xử lý sự cố.
+ */
+type DemSucKhoe = { luc: number; du: any }
+let demSucKhoeHeThong: DemSucKhoe | null = null
+const TTL_SUC_KHOE = 3 * 60_000
+
+// Không khai guard riêng: `router.use(adminKeyAuth)` phía trên đã chặn hết.
+// Tên là `/health-overview` chứ KHÔNG phải `/store-health`: tên kia đã có chủ
+// từ dòng ~2566 (soi sâu MỘT cửa hàng). Express lấy route khai trước, nên đặt
+// trùng tên là route này thành mã chết im lặng — đã dính thật 15/08/2026, gọi
+// ra thì nhận dữ liệu kênh của KENGISTORE. Bộ soát hợp đồng cũ không bắt được
+// vì với nó cả hai đường đều "có tồn tại"; nay đã thêm phép dò trùng.
+router.get('/health-overview', async (req: Request, res: Response) => {
+    try {
+        const chiMot = String(req.query.store || '').trim().toUpperCase()
+        const epMoi = String(req.query.moi || '') === '1'
+        const soNgay = Math.min(365, Math.max(7, Number(req.query.ngay) || 90))
+
+        // Đệm chỉ dùng cho lượt xem TOÀN BỘ; soi riêng một cửa hàng thì luôn tươi.
+        if (!chiMot && !epMoi && demSucKhoeHeThong && Date.now() - demSucKhoeHeThong.luc < TTL_SUC_KHOE) {
+            res.json({ success: true, data: { ...demSucKhoeHeThong.du, tuDem: true } })
+            return
+        }
+
+        const tatCa = await registryPrisma.store.findMany({
+            select: { name: true, schema: true, code: true, status: true },
+            orderBy: { code: 'asc' },
+        }) as any[]
+        const stores = chiMot ? tatCa.filter(s => String(s.code).toUpperCase() === chiMot) : tatCa
+        if (!stores.length) {
+            res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return
+        }
+
+        const { sucKhoeDuLieu } = await import('../lib/dataHealth')
+        const nay = new Date(Date.now() + 7 * 3600_000)
+        const to = nay.toISOString().slice(0, 10)
+        const from = new Date(nay.getTime() - soNgay * 86400_000).toISOString().slice(0, 10)
+        const ky = {
+            from, to,
+            start: new Date(`${from}T00:00:00+07:00`),
+            end: new Date(new Date(`${to}T00:00:00+07:00`).getTime() + 86400_000),
+        }
+
+        const cuaHang: any[] = []
+        for (const s of stores) {
+            /* Một cửa hàng hỏng KHÔNG được làm hỏng cả bảng — đó chính là kiểu
+             * im lặng mà màn hình này sinh ra để phá. Ghi lỗi vào đúng dòng của
+             * nó rồi đi tiếp. */
+            try {
+                const sp: any = getStorePrisma(s.schema)
+                const kq = await sucKhoeDuLieu(sp, ky)
+                const nang = (kq.muc || []).filter((m: any) => m.muc === 'nang')
+                const vua = (kq.muc || []).filter((m: any) => m.muc === 'vua')
+                cuaHang.push({
+                    code: s.code, name: s.name, trangThai: s.status,
+                    diem: kq.diem, xepLoai: kq.xepLoai,
+                    soNang: nang.length, soVua: vua.length,
+                    // Chỉ gửi phần NẶNG kèm chi tiết; phần vừa gửi tên thôi cho nhẹ
+                    nang: nang.map((m: any) => ({ ma: m.ma, ten: m.ten, so: m.so, canLam: m.canLam })),
+                    vua: vua.map((m: any) => ({ ma: m.ma, ten: m.ten, so: m.so })),
+                    /* `thieu` = phép soát KHÔNG ĐỌC ĐƯỢC. Phải hiện tách hẳn khỏi
+                     * "không có vấn đề" — gộp hai thứ đó là trấn an sai. */
+                    chuaDocDuoc: (kq.thieu || []).length,
+                })
+            } catch (e: any) {
+                cuaHang.push({
+                    code: s.code, name: s.name, trangThai: s.status,
+                    loi: String(e?.message || e).slice(0, 200),
+                })
+            }
+        }
+
+        // Nặng trước, rồi tới điểm thấp — người quản trị nhìn dòng đầu là biết lo gì
+        cuaHang.sort((a, b) =>
+            (b.loi ? 1 : 0) - (a.loi ? 1 : 0) ||
+            (b.soNang || 0) - (a.soNang || 0) ||
+            (a.diem ?? 999) - (b.diem ?? 999))
+
+        const du = {
+            ky: { from, to, soNgay },
+            soCuaHang: cuaHang.length,
+            soCanLo: cuaHang.filter(c => c.loi || (c.soNang || 0) > 0).length,
+            soDocHong: cuaHang.filter(c => c.loi).length,
+            cuaHang,
+            chayLuc: new Date().toISOString(),
+        }
+        if (!chiMot) demSucKhoeHeThong = { luc: Date.now(), du }
+        res.json({ success: true, data: { ...du, tuDem: false } })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: String(e?.message || e) })
     }
 })
 

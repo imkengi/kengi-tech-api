@@ -27,7 +27,7 @@
     "check:fields": "npx tsx scripts/check-prisma-fields.ts",
     "check:api": "npx tsx scripts/check-api-contract.ts",
     "check:kiotviet": "npx tsx scripts/check-kiotviet-don-hang.ts && npx tsx scripts/check-kiotviet-dem-tuychon.ts",
-    "check:all": "npm run check:fields && npm run check:doanhthu && npm run check:muigio && npm run check:pool && npm run check:mcp && npm run check:tax && npm run check:ketoan && npm run check:chiduong && npm run check:prismagia && npm run check:kiotviet",
+    "check:all": "npm run check:fields && npm run check:doanhthu && npm run check:muigio && npm run check:pool && npm run check:mcp && npm run check:tax && npm run check:ketoan && npm run check:chiduong && npm run check:prismagia && npm run check:kiotviet && npm run check:api",
     "check:doanhthu": "npx tsx scripts/check-revenue-status.ts",
     "check:muigio": "npx tsx scripts/check-timezone.ts",
     "check:pool": "npx tsx scripts/check-pool.ts",
