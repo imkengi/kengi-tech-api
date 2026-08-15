@@ -27,7 +27,7 @@ import {
     newCounters, syncProducts, syncCustomers, syncSuppliers, syncInvoices,
     parseWebhookPayload, verifyWebhookSignature,
 } from '../services/kiotvietSync'
-import { buildOptions, runSync, STALE_MS, SYNC_ENTITIES } from '../services/kiotvietRunner'
+import { buildOptions, boDemTuyChon, runSync, STALE_MS, SYNC_ENTITIES } from '../services/kiotvietRunner'
 
 const router = Router()
 
@@ -370,6 +370,10 @@ router.put('/config', async (req: Request, res: Response) => {
                 },
             })
         }
+        /* Đổi kho/nhóm đích thì bỏ đệm tuỳ chọn ngay, đừng bắt chờ hết TTL —
+         * người dùng vừa đổi mà đợt đồng bộ kế tiếp vẫn đổ vào kho cũ thì rất
+         * khó hiểu và mất công gỡ. */
+        boDemTuyChon(store.sp)
         res.json({ success: true, data: publicConfig(cfg, String(b.storeCode), baseUrlOf(req)) })
     } catch (e: any) {
         res.status(500).json({ success: false, error: errMsg(e) })

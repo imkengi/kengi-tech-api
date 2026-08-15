@@ -127,28 +127,83 @@ export async function resumeStalledSyncs(): Promise<void> {
     }
 }
 
+/**
+ * ĐỆM BA THỨ TRA ĐI TRA LẠI CỦA buildOptions — kho mặc định, nhóm hàng mặc
+ * định, user hệ thống. Cả ba là dữ liệu CẤU TRÚC, hàng tháng không đổi.
+ *
+ * Vì sao đáng: buildOptions chạy MỘT LẦN MỖI THÔNG BÁO WEBHOOK. Đo HUTI
+ * 15/08/2026: 161 webhook trong 6 giờ, đỉnh 114 trong một giờ; cửa hàng này
+ * chưa chọn nhóm hàng mặc định nên mỗi lượt tốn 2 truy vấn pool CỬA HÀNG chỉ
+ * để dựng tuỳ chọn, trước khi làm việc thật. Pool cửa hàng chỉ có 5 (từng là
+ * 3) nên đây là phần lãng phí đáng bỏ — xem [[prisma-pool-promiseall-trap]].
+ *
+ * Khoá theo ĐỐI TƯỢNG prisma bằng WeakMap: `getStorePrisma(schema)` trả về
+ * cùng một client cho mỗi schema, nên định danh đối tượng chính là định danh
+ * cửa hàng — và WeakMap thì client bị thu hồi là mục đệm tự rụng theo.
+ *
+ * KHÔNG ĐỆM GIÁ TRỊ null. Cửa hàng mới tinh chưa có kho/nhóm/user nào sẽ tra
+ * ra null; đệm null lại là suốt TTL nó vẫn tưởng không có, dù người dùng vừa
+ * tạo xong — họ sẽ thấy "tạo kho rồi mà đồng bộ vẫn báo thiếu kho".
+ *
+ * ⚠ CHỐT CHẶN THẬT NẰM Ở PHÍA ĐỌC: `if (dem.warehouseId)` — kiểm truthiness,
+ * nên null có lỡ lọt vào đệm cũng vô hại. Đừng "gọn hoá" thành `'warehouseId'
+ * in dem`: đo bằng phép thử đột biến 15/08/2026, đổi sang `in` là ca 4 và 5
+ * của scripts/check-kiotviet-dem-tuychon.ts đỏ ngay. Guard lúc ghi chỉ là lớp
+ * thứ hai cho chắc.
+ */
+const TTL_TUY_CHON = 5 * 60_000
+type TuyChonDem = { warehouseId?: string; categoryId?: string; userId?: string; hetHan: number }
+const demTuyChon = new WeakMap<object, TuyChonDem>()
+
+function layDem(sp: any): TuyChonDem {
+    const cu = demTuyChon.get(sp)
+    if (cu && cu.hetHan > Date.now()) return cu
+    const moi: TuyChonDem = { hetHan: Date.now() + TTL_TUY_CHON }
+    demTuyChon.set(sp, moi)
+    return moi
+}
+
+/** Cấu hình đổi (đổi kho/nhóm đích) thì bỏ đệm ngay, đừng chờ hết TTL. */
+export function boDemTuyChon(sp: any): void {
+    demTuyChon.delete(sp)
+}
+
 // ─── Tuỳ chọn đồng bộ dùng chung cho cả chạy tay lẫn webhook ────────────────
 export async function buildOptions(sp: any, cfg: any, apply: boolean): Promise<SyncOptions> {
+    const dem = layDem(sp)
+
     // Kho đích: ưu tiên kho đã chọn, không có thì lấy kho main mặc định
     let warehouseId: string | null = cfg?.defaultWarehouseId || null
     if (!warehouseId) {
-        const wh = await sp.warehouse.findFirst({
-            where: { type: 'main', isActive: true },
-            orderBy: { isDefault: 'desc' }, select: { id: true },
-        }).catch(() => null)
-        warehouseId = wh?.id || null
+        if (dem.warehouseId) warehouseId = dem.warehouseId
+        else {
+            const wh = await sp.warehouse.findFirst({
+                where: { type: 'main', isActive: true },
+                orderBy: { isDefault: 'desc' }, select: { id: true },
+            }).catch(() => null)
+            warehouseId = wh?.id || null
+            if (warehouseId) dem.warehouseId = warehouseId
+        }
     }
     // Nhóm hàng mặc định cho sản phẩm mới
     let categoryId: string | null = cfg?.defaultCategoryId || null
     if (!categoryId) {
-        const cat = await sp.category.findFirst({ select: { id: true }, orderBy: { createdAt: 'asc' } }).catch(() => null)
-        categoryId = cat?.id || null
+        if (dem.categoryId) categoryId = dem.categoryId
+        else {
+            const cat = await sp.category.findFirst({ select: { id: true }, orderBy: { createdAt: 'asc' } }).catch(() => null)
+            categoryId = cat?.id || null
+            if (categoryId) dem.categoryId = categoryId
+        }
     }
     // Transaction.createdBy là khoá ngoại bắt buộc → phải có một user thật
-    const user = await sp.user.findFirst({
-        where: { role: { in: ['admin', 'owner', 'manager'] } }, select: { id: true },
-        orderBy: { createdAt: 'asc' },
-    }).catch(() => null)
+    let user: { id: string } | null = dem.userId ? { id: dem.userId } : null
+    if (!user) {
+        user = await sp.user.findFirst({
+            where: { role: { in: ['admin', 'owner', 'manager'] } }, select: { id: true },
+            orderBy: { createdAt: 'asc' },
+        }).catch(() => null)
+        if (user?.id) dem.userId = user.id
+    }
 
     let branchIds: number[] | undefined
     try { branchIds = cfg?.branchIds ? JSON.parse(cfg.branchIds) : undefined } catch { branchIds = undefined }
