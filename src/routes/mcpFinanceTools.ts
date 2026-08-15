@@ -183,6 +183,39 @@ export const FINANCE_TOOLS: Tool[] = [
                         ghiChu: 'Các mặt hàng này CHƯA có giá vốn nên bị loại khỏi phép tính (không tính bằng 0) → lãi thực tế THẤP HƠN số trên. Cập nhật giá vốn để báo cáo đúng.',
                     }
                     : null,
+                /* ── CHỨNG TỪ NẰM SAI KỲ ────────────────────────────────────
+                 * Báo cáo này cắt kỳ theo NGÀY GHI SỔ. Cửa hàng nhập lịch sử từ
+                 * phần mềm cũ có nhiều tháng bán hàng mang cùng một khoảng ngày
+                 * ghi sổ vài tuần, nên "lãi tháng 7" có thể gộp cả 5 tháng. Đo
+                 * thật trên KENGISTORE: tháng 7 trả 5.008.923.223 ₫ doanh thu
+                 * trong khi bán thật tháng đó là 975.813.049 ₫.
+                 *
+                 * CỐ Ý không đổi cách cắt kỳ ở đây — đổi là thay đổi mọi con số
+                 * lịch sử người dùng đã nhìn, việc đó phải do họ quyết. Nhưng
+                 * con số cũng KHÔNG được đi ra trần trụi: trợ lý AI đọc tool này
+                 * nhiều nhất, và một con số không kèm cảnh báo sẽ được trình bày
+                 * như sự thật đã chắc. */
+                canhBaoLechKy: await (async () => {
+                    try {
+                        const r: any[] = await prisma.$queryRawUnsafe(
+                            `SELECT COUNT(*)::int AS so, COALESCE(SUM(total), 0)::float8 AS tien
+                               FROM "Transaction"
+                              WHERE status IN ('completed','partial')
+                                AND "transactionDate" IS NOT NULL
+                                AND "createdAt" >= $1 AND "createdAt" <= $2
+                                AND to_char("createdAt" + interval '7 hours', 'YYYY-MM')
+                                 <> to_char("transactionDate" + interval '7 hours', 'YYYY-MM')`,
+                            tu, den)
+                        const so = Number(r?.[0]?.so) || 0
+                        if (so === 0) return null
+                        const tien = Math.round(Number(r?.[0]?.tien) || 0)
+                        return {
+                            soDon: so,
+                            doanhThuNamSaiKy: tien,
+                            ghiChu: `${so.toLocaleString('vi-VN')} đơn trong kỳ này có NGÀY BÁN ở tháng khác với tháng ghi sổ (tổng ${tien.toLocaleString('vi-VN')} ₫) — thường gặp khi nhập lịch sử từ phần mềm cũ. Báo cáo cắt kỳ theo ngày ghi sổ, nên doanh thu và lãi ở trên KHÔNG phải của riêng kỳ này. Gọi data_health_check để xem lệch bao nhiêu theo từng tháng trước khi kết luận.`,
+                        }
+                    } catch { return null }
+                })(),
             }
         },
     },
