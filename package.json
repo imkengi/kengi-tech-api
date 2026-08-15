@@ -26,7 +26,7 @@
     "check:ketoan": "npx tsx scripts/check-auto-journal.ts && npx tsx scripts/check-reconcile.ts && npx tsx scripts/check-remediation.ts && npx tsx scripts/check-growth-opportunity.ts && npx tsx scripts/check-reorder-plan.ts && npx tsx scripts/check-cash-forecast.ts && npx tsx scripts/check-weekly-brief.ts && npx tsx scripts/check-ai-scope.ts && npx tsx scripts/check-import-dup-invoice.ts && npx tsx scripts/check-stock-trace.ts",
     "check:fields": "npx tsx scripts/check-prisma-fields.ts",
     "check:api": "npx tsx scripts/check-api-contract.ts",
-    "check:kiotviet": "npx tsx scripts/check-kiotviet-don-hang.ts && npx tsx scripts/check-kiotviet-dem-tuychon.ts && npx tsx scripts/check-gom-loi.ts && npx tsx scripts/check-tong-hop-suc-khoe.ts",
+    "check:kiotviet": "npx tsx scripts/check-kiotviet-don-hang.ts && npx tsx scripts/check-kiotviet-dem-tuychon.ts && npx tsx scripts/check-gom-loi.ts && npx tsx scripts/check-tong-hop-suc-khoe.ts && npx tsx scripts/check-goi-y-lien-ket.ts",
     "check:all": "npm run check:fields && npm run check:doanhthu && npm run check:muigio && npm run check:pool && npm run check:mcp && npm run check:tax && npm run check:ketoan && npm run check:chiduong && npm run check:prismagia && npm run check:kiotviet && npm run check:api",
     "check:doanhthu": "npx tsx scripts/check-revenue-status.ts",
     "check:muigio": "npx tsx scripts/check-timezone.ts",

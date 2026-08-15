@@ -5085,6 +5085,64 @@ router.get('/errors', async (req: Request, res: Response) => {
 })
 
 /**
+ * GET /admin/goi-y-lien-ket?store=CODE — GỢI Ý nối listing sàn ↔ hàng kho.
+ *
+ * Đo KENGISTORE 15/08/2026: 641 listing, 0 cái được nối — và đó là gốc rễ của
+ * ~740 triệu đơn đã bán mà không lên phiếu. Nối tay 641 cái là việc rất nản.
+ *
+ * CHỈ GỢI Ý, TUYỆT ĐỐI KHÔNG TỰ NỐI. Nối sai là doanh thu và trừ kho chạy vào
+ * nhầm mặt hàng — sai âm thầm và khó lần hơn hẳn việc chưa nối. Người dùng
+ * nhìn rồi mới bấm, và endpoint này không có đường ghi nào.
+ */
+router.get('/goi-y-lien-ket', async (req: Request, res: Response) => {
+    try {
+        const ma = String(req.query.store || '').trim()
+        const store: any = await registryPrisma.store.findFirst({
+            where: { code: ma }, select: { name: true, schema: true, code: true },
+        })
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const sp: any = getStorePrisma(store.schema)
+
+        // Tuần tự — pool mỗi cửa hàng chỉ 5 kết nối.
+        const listings = await sp.onlineProduct.findMany({
+            where: { localProductId: null },
+            select: { id: true, name: true, sku: true },
+            take: 1000,
+        }).catch(() => null)
+        if (!listings) {
+            res.json({ success: true, data: { docDuoc: false, viSao: 'Không đọc được bảng OnlineProduct' } })
+            return
+        }
+        const hangKho = await sp.product.findMany({
+            select: { id: true, name: true, sku: true },
+            take: 5000,
+        }).catch(() => [])
+
+        const { goiYLienKet } = await import('../lib/goiYLienKet')
+        const gy = goiYLienKet(listings, hangKho)
+        const dem = (m: string) => gy.filter(x => x.mucTinCay === m).length
+
+        res.json({
+            success: true,
+            data: {
+                docDuoc: true,
+                cuaHang: store.code,
+                soListingChuaNoi: listings.length,
+                soHangKho: hangKho.length,
+                soGoiYDuoc: gy.length,
+                theoTinCay: { cao: dem('cao'), vua: dem('vua'), thap: dem('thap') },
+                /* Nói thẳng phần KHÔNG gợi được: người dùng cần biết còn bao
+                 * nhiêu cái phải tự tìm, chứ không chỉ thấy phần máy làm hộ. */
+                soKhongGoiDuoc: listings.length - gy.length,
+                goiY: gy.slice(0, 300),
+            },
+        })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: String(e?.message || e) })
+    }
+})
+
+/**
  * GET /admin/don-ket?store=CODE&limit=50 — ĐƠN SÀN ĐÃ BÁN MÀ CHƯA LÊN PHIẾU.
  *
  * Đo 15/08/2026: KENGISTORE có 777 đơn (373.148.233đ, bằng 9,1% doanh thu đã
