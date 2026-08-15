@@ -481,9 +481,14 @@ export async function sucKhoeDuLieu(
                     ? 'Hoá đơn từ KiotViet vẫn đang về bình thường.'
                     : `Đã ${soGio} giờ không có đợt đồng bộ hoá đơn nào từ KiotViet. Nếu cửa hàng vẫn bán thì doanh thu, tồn kho và mọi báo cáo theo kỳ đang THIẾU phần bán qua KiotViet — không phải cửa hàng bán ít đi.`
                     + (kv[0].mode === 'manual' ? ' Đợt gần nhất là CHẠY TAY, tức webhook không mang hoá đơn về: nhiều khả năng webhook invoice.update đang bị tắt ở phía KiotViet.' : ''),
+                /* CÂU CHỈ ĐƯỜNG PHẢI ĐI ĐƯỢC.
+                 * Cấu hình KiotViet KHÔNG nằm trong menu cửa hàng — nó ở trang
+                 * quản trị /admin, thẻ "KiotViet", mà chủ cửa hàng thường không
+                 * có quyền vào. Viết "Mở Cài đặt → KiotViet" là chỉ tới chỗ họ
+                 * tìm mỏi mắt không thấy. Nói thẳng nó nằm ở đâu và cần ai. */
                 canLam: soGio < 24
                     ? 'Không cần làm gì.'
-                    : 'Mở Cài đặt → KiotViet, bấm "Đồng bộ" để kéo đơn còn thiếu. Sau đó kiểm mục webhook trên trang đó: loại invoice.update phải đang BẬT và trỏ về Kengi — KiotViet tự tắt webhook sau nhiều lần giao hỏng.',
+                    : 'Việc này làm ở TRANG QUẢN TRỊ (kengi.vn/admin) → thẻ "KiotViet" — cần tài khoản quản trị, không mở được từ menu cửa hàng. Ở đó: bấm "Đồng bộ" để kéo đơn còn thiếu, rồi xem khối webhook — loại invoice.update phải đang BẬT và trỏ về Kengi. KiotViet tự tắt webhook sau nhiều lần giao hỏng; tắt nó thì đơn ngừng về mà không báo gì.',
             })
         }
     }

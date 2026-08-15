@@ -443,6 +443,11 @@ async function main() {
             /webhook invoice.update đang bị tắt/.test(m.anhHuong), m.anhHuong.slice(-120))
         ok('… việc cần làm nhắc kiểm webhook có BẬT không',
             /invoice.update phải đang BẬT/.test(m.canLam), m.canLam.slice(-120))
+        /* Cấu hình KiotViet KHÔNG nằm trong menu cửa hàng mà ở trang quản trị
+         * /admin — viết "Mở Cài đặt → KiotViet" là chỉ tới chỗ không tồn tại. */
+        ok('… chỉ đúng nơi thật: trang quản trị, không phải menu cửa hàng',
+            /kengi\.vn\/admin/.test(m.canLam) && !/Cài đặt → KiotViet/.test(m.canLam),
+            m.canLam.slice(0, 110))
     }
     {
         const r = await sucKhoeDuLieu(fake({ ...SACH, dongBoKV: [{ startedAt: gioTruoc(60), mode: 'webhook', created: 0, updated: 0, fetched: 0 }] }), KY)
