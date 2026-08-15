@@ -3740,6 +3740,35 @@ router.get('/repair-trace', async (req: Request, res: Response) => {
     }
 })
 
+/* GET /admin/kiotviet-log?store=HUTI&limit=30 — đọc nhật ký đồng bộ KiotViet.
+ *
+ * Webhook ghi MỘT dòng cho mọi thông báo nhận được (kể cả loại chưa đồng bộ),
+ * nên bảng này là chỗ duy nhất trả lời được "webhook có tới mà sao không ra
+ * đơn". Log Cloud Run không đủ: handler trả 200 rồi xử lý ngầm, thành công thì
+ * im lặng hoàn toàn. */
+router.get('/kiotviet-log', async (req: Request, res: Response) => {
+    try {
+        const code = String(req.query.store || '')
+        const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 30))
+        if (!code) return res.status(400).json({ success: false, error: 'Cần ?store=' })
+        const store = await registryPrisma.store.findFirst({ where: { code } })
+        if (!store) return res.status(404).json({ success: false, error: 'Không thấy cửa hàng' })
+        const sp = getStorePrisma(store.schema)
+        const rows = await sp.kiotVietSyncLog.findMany({
+            orderBy: { startedAt: 'desc' }, take: limit,
+            select: {
+                entity: true, mode: true, status: true, fetched: true, created: true,
+                updated: true, skipped: true, failed: true, errors: true, details: true,
+                startedAt: true, finishedAt: true,
+            },
+        })
+        res.json({ success: true, data: { cuaHang: code, so: rows.length, dong: rows } })
+    } catch (err: any) {
+        console.error('kiotviet-log error:', err)
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 300) })
+    }
+})
+
 // ─── POST /admin/tidy-kiotviet-2026?storeCode=&apply= ──────────────────────
 /**
  * DỌN SỔ VỀ TỪ 2026 + BỎ GHI CHÚ NGUỒN (người dùng chốt 12/08/2026):
