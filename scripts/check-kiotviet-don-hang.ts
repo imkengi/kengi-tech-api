@@ -98,6 +98,32 @@ function main() {
     ok('13. không nhận nhầm entity không phải hoá đơn',
         !laHoaDon('customer.update') && !laHoaDon('products,customers'), 'nhan nham')
 
+    /* 14 — ỐNG THÔNG NHƯNG KHÔNG CÓ NƯỚC CHẢY
+     * Đo thật trên HUTI 15/08/2026: 6 webhook invoice.update về đủ, `success`
+     * cả 6, nhưng "lấy 1 · tạo 0 · sửa 0" — không phiếu nào vào sổ. Hôm đó là
+     * lành (Shopee còn Processing), nhưng chuông không được phép chấm xanh chỉ
+     * vì webhook có dội: đó đúng là cái bẫy nó sinh ra để chặn. */
+    const roiKhongGhi = Array.from({ length: 6 }, (_, i) => dong('invoice.update.9', 1 + i * 0.2, 'webhook', 0))
+    const t14 = tinhTinhTrangDon([dong('customer.update', 0.5), ...roiKhongGhi], BAY_GIO)!
+    ok('14. webhook về đều mà 0 phiếu vào sổ → KHÔNG được chấm xanh', t14.muc !== 'on', t14.muc)
+    ok('14b. nói đúng bệnh: về được nhưng chưa vào sổ',
+        /chưa phiếu nào vào sổ/.test(t14.loi || ''), t14.loi)
+    /* 14c — CHỈ SAI ĐƯỜNG CÒN TAI HẠI HƠN IM.
+     * Ở ca này webhook đang chạy ngon, bệnh nằm ở khâu ghi. Bảo đi "đăng ký
+     * lại webhook" là người dùng bấm xong vẫn y nguyên rồi mất lòng tin. */
+    ok('14c. KHÔNG xui đăng ký lại webhook khi webhook vẫn chạy',
+        !/Đăng ký webhook/.test(t14.loi || ''), t14.loi)
+    ok('14d. tiêu đề khớp đúng bệnh, không dùng nhãn "phải bấm tay"',
+        /không phiếu nào vào sổ/.test(t14.tieu), t14.tieu)
+
+    /* 15 — CHIỀU IM của luật 14: có ghi được thì tuyệt đối đừng kêu.
+     * Đúng trạng thái HUTI lúc 09:52 — webhook rỗng, nhưng lượt bấm tay 09:26
+     * đã ghi 22 phiếu. */
+    const t15 = tinhTinhTrangDon([
+        ...roiKhongGhi, dong('invoices', 2.5, 'manual', 22),
+    ], BAY_GIO)!
+    ok('15. có lượt ghi được trong 48h → vẫn xanh', t15.muc === 'on' && t15.loi === null, { muc: t15.muc, loi: t15.loi })
+
     console.log(`\n${dat}/${dat + hong} ca đạt`)
     if (hong) process.exit(1)
 }

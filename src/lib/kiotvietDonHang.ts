@@ -19,6 +19,7 @@ export type MucDonHang = 'on' | 'nhac' | 'vua' | 'nang'
 
 export interface TinhTrangDon {
     muc: MucDonHang
+    tieu: string
     loi: string | null
     lanCuoi: string | null
     kieuLanCuoi: string | null
@@ -53,37 +54,67 @@ export function tinhTinhTrangDon(logs: any[], bayGio: number = Date.now()): Tinh
 
     const moiNhat = logs.find(r => laHoaDon(String(r?.entity || '')))
     const webhookGanNhat = logs.find(quaWebhook)
+    /* Lượt hoá đơn gần nhất THẬT SỰ ghi được phiếu vào sổ. "Dội về" và "vào
+     * sổ" là hai chuyện khác nhau — xem nhánh dùng biến này ở dưới. */
+    const ghiGanNhat = logs.find(r =>
+        laHoaDon(String(r?.entity || '')) && (Number(r?.created) || 0) + (Number(r?.updated) || 0) > 0)
 
     const soGio = moiNhat ? (bayGio - new Date(moiNhat.startedAt).getTime()) / 3_600_000 : null
 
     let muc: MucDonHang = 'on'
     let loi = ''
+    /* Tiêu đề đi kèm LÝ DO chứ không đi theo mức. Mức 'nhac' có hai bệnh khác
+     * hẳn nhau (phải bấm tay / về mà không vào sổ); để giao diện tự đoán tiêu
+     * đề theo mức là chắc chắn có lúc gắn nhãn sai bệnh. */
+    let tieu = 'Đơn đang tự về'
+    let machBatWebhook = true
 
     if (!moiNhat) {
         muc = 'vua'
+        tieu = 'Chưa từng đồng bộ hoá đơn'
         loi = `Chưa thấy lượt đồng bộ hoá đơn nào trong ${logs.length} dòng gần nhất.`
     } else if (soGio! >= 48) {
         muc = 'nang'
+        tieu = 'Đơn đã ngừng về'
         loi = `${Math.floor(soGio! / 24)} ngày rồi không có hoá đơn nào về.`
     } else if (soGio! >= 24) {
         muc = 'vua'
+        tieu = 'Lâu rồi không có đơn nào về'
         loi = `${Math.floor(soGio!)} giờ rồi không có hoá đơn nào về.`
     } else if (!webhookGanNhat) {
+        tieu = 'Đơn về được, nhưng phải bấm tay'
         // Vừa có hoá đơn, nhưng do BẤM TAY. Chưa chứng minh được webhook còn sống.
         muc = 'nhac'
         loi = 'Hoá đơn đang chỉ về khi bấm đồng bộ tay — chưa lần nào tự về qua webhook.'
+    } else if (!ghiGanNhat || (bayGio - new Date(ghiGanNhat.startedAt).getTime()) / 3_600_000 >= 48) {
+        /* ỐNG THÔNG NHƯNG KHÔNG CÓ NƯỚC CHẢY.
+         * Webhook dội về đều mà KHÔNG phiếu nào vào sổ thì đơn vẫn không về —
+         * chấm "on" ở đây là dựng lại đúng cái bẫy chuông này sinh ra để chặn,
+         * chỉ dịch lên một tầng. Repo từng dính 08/08/2026: invoice.update vào
+         * mà ghi 0, chỉ thấy "lấy 1 · tạo 0".
+         * Bình thường vẫn có lúc ghi 0 (đơn Shopee còn Processing, phiếu đã
+         * huỷ) nên KHÔNG kêu ngay — chờ hết 48h không ghi được gì mới nhắc,
+         * và chỉ ở mức 'nhac' vì cửa hàng vắng khách cũng ra hình này. */
+        muc = 'nhac'
+        tieu = 'Webhook về được nhưng không phiếu nào vào sổ'
+        loi = 'Webhook hoá đơn vẫn dội về nhưng 48 giờ qua chưa phiếu nào vào sổ — mở lịch sử xem lý do bỏ qua.'
+        machBatWebhook = false      // webhook đang chạy tốt, xem ghi chú dưới
     }
 
-    /* Mách nước cho MỌI mức có vấn đề — kể cả khi lượt cuối đến qua webhook.
-     * Bản đầu tôi chỉ mách khi lượt cuối là bấm tay, nhưng "từng về qua webhook
-     * rồi tắt ngóm" ĐÚNG LÀ kịch bản KiotViet tự tắt; chặn ở đó là giấu lời
-     * khuyên đúng vào lúc cần nhất. Mức 'on' đã loại sẵn nên không chỉ sai đường. */
-    if (muc !== 'on') {
+    /* Mách nước cho mọi mức có vấn đề VỀ ĐƯỜNG TRUYỀN — kể cả khi lượt cuối đến
+     * qua webhook, vì "từng về qua webhook rồi tắt ngóm" ĐÚNG LÀ kịch bản
+     * KiotViet tự tắt.
+     *
+     * TRỪ nhánh "về được nhưng không vào sổ": ở đó webhook đang chạy ngon,
+     * bệnh nằm ở khâu ghi. Bảo người dùng đi đăng ký lại webhook là chỉ sai
+     * đường — họ bấm xong vẫn y nguyên rồi mất lòng tin vào cảnh báo. */
+    if (muc !== 'on' && machBatWebhook) {
         loi += ' KiotViet tự tắt webhook sau nhiều lần giao hỏng — bấm "Đăng ký webhook" để bật lại.'
     }
 
     return {
         muc,
+        tieu,
         loi: loi || null,
         lanCuoi: moiNhat?.startedAt || null,
         kieuLanCuoi: moiNhat?.mode || null,          // manual = do người bấm
