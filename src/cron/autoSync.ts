@@ -529,18 +529,53 @@ async function runCleanup() {
             try {
                 const storePrisma = getStorePrisma(store.schema)
 
-                // Lấy danh sách id đơn cũ cần xóa
+                // Lấy danh sách id đơn cũ ỨNG VIÊN xoá
                 const oldOrders = await storePrisma.onlineOrder.findMany({
                     where: {
                         status:    { in: cleanStatuses },
                         updatedAt: { lt: cutoff },
                     },
-                    select: { id: true, orderNumber: true },
+                    select: { id: true, orderNumber: true, status: true },
                 })
 
                 if (oldOrders.length === 0) continue
 
-                const ids = oldOrders.map((o: any) => o.id)
+                /* ⚠ ĐƠN ĐÃ BÁN MÀ CHƯA LÊN PHIẾU THÌ TUYỆT ĐỐI KHÔNG ĐƯỢC XOÁ.
+                 *
+                 * Bản trước xoá theo trạng thái + tuổi, không hề hỏi đơn đã vào
+                 * sổ chưa. Hậu quả đo được 15/08/2026: KENGISTORE có 644 đơn
+                 * COMPLETED chưa lên phiếu (353,7 triệu) vì listing sàn chưa nối
+                 * — và cron này đang xoá dần chúng, 3 đơn chỉ trong buổi sáng
+                 * (SPE-260728TTKAQS95, SPE-260728TMMN2U6G, SPE-260728TMHC6XGV).
+                 * Mỗi đơn bị xoá là mất luôn dòng hàng và mọi khả năng thu hồi:
+                 * doanh thu đó biến mất khỏi sổ VĨNH VIỄN, không dấu vết.
+                 *
+                 * Xoá chỉ an toàn khi đơn ĐÃ có phiếu bán (dữ liệu đã vào sổ,
+                 * bảng OnlineOrder chỉ còn là bản sao) hoặc khi đơn HUỶ/TRẢ —
+                 * loại này không bao giờ lên phiếu nên giữ lại vô nghĩa.
+                 *
+                 * Đơn không rơi vào hai nhóm trên thì GIỮ, kể cả đã rất cũ:
+                 * đĩa rẻ hơn doanh thu mất trắng. */
+                const { chonDonDuocXoa, maPhieuCuaDon, TRANG_THAI_DA_BAN } = await import('../lib/donDuocXoa')
+                const canHoi = oldOrders.filter((o: any) =>
+                    (TRANG_THAI_DA_BAN as readonly string[]).includes(String(o.status)))
+                const daCoPhieu = new Set<string>()
+                // Chạy theo lô để không nhét hàng nghìn phần tử vào một câu IN
+                for (let i = 0; i < canHoi.length; i += 500) {
+                    const lo = canHoi.slice(i, i + 500)
+                    const co = await storePrisma.transaction.findMany({
+                        where: { receiptNumber: { in: lo.map((o: any) => maPhieuCuaDon(o.orderNumber)) } },
+                        select: { receiptNumber: true },
+                    })
+                    for (const t of co) daCoPhieu.add(String(t.receiptNumber))
+                }
+                const { duocXoa, giuLai } = chonDonDuocXoa(oldOrders as any, daCoPhieu)
+                if (giuLai.length > 0) {
+                    console.log(`[Cleanup] ${store.name}: GIỮ ${giuLai.length} đơn đã bán mà chưa lên phiếu (không xoá)`)
+                }
+                if (duocXoa.length === 0) continue
+
+                const ids = duocXoa.map((o: any) => o.id)
 
                 // Xóa items trước (cascade nếu DB không tự xóa)
                 await storePrisma.onlineOrderItem.deleteMany({
@@ -553,7 +588,7 @@ async function runCleanup() {
                 })
 
                 totalDeleted += result.count
-                console.log(`[Cleanup] ${store.name}: xóa ${result.count} đơn cũ (>${CLEANUP_DAYS} ngày): ${oldOrders.slice(0, 5).map((o: any) => o.orderNumber).join(', ')}${oldOrders.length > 5 ? '...' : ''}`)
+                console.log(`[Cleanup] ${store.name}: xóa ${result.count} đơn cũ (>${CLEANUP_DAYS} ngày): ${duocXoa.slice(0, 5).map((o: any) => o.orderNumber).join(', ')}${duocXoa.length > 5 ? '...' : ''}`)
 
                 // Cập nhật lại stats kênh
                 const channels = await storePrisma.onlineChannel.findMany({ select: { id: true } })
