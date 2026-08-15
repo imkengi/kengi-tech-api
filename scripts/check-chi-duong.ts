@@ -32,11 +32,12 @@ const DUOC_DUYET: Array<{ duong: string; ai: string }> = [
     { duong: 'Thuế → Báo Cáo Thuế', ai: 'CHỈ doanh nghiệp (companyOnly)' },
     { duong: 'Thuế → S2b - Doanh Thu', ai: 'CHỈ hộ kinh doanh (hkdOnly)' },
     { duong: 'Vận Hành → Chi Phí', ai: 'mọi loại hình (permission expenses.view)' },
+    { duong: 'Bán Hàng Online → Đơn Hàng Online', ai: 'mọi loại hình (permission online_orders.view)' },
 ]
 
 /* Tên nhóm menu cấp 1. Dò `Nhóm → ` sau khi đã gỡ hết đường đã duyệt ra —
  * nếu còn sót nghĩa là có một đường chưa ai kiểm. */
-const NHOM = /(Thuế|Kế Toán|Vận Hành|Cài đặt|Nhập Hàng|Kho|Báo Cáo|Bán Hàng|Hàng Hoá|Khách Hàng) → /
+const NHOM = /(Thuế|Kế Toán|Vận Hành|Cài đặt|Nhập Hàng|Kho|Báo Cáo|Bán Hàng Online|Bán Hàng|Hàng Hoá|Khách Hàng) → /
 
 let dat = 0, hong = 0
 function ok(ten: string, dk: boolean, thucTe?: any) {

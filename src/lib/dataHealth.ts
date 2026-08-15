@@ -383,6 +383,11 @@ export async function sucKhoeDuLieu(
          WHERE t.id IS NULL
            AND o."createdAt" >= $1 AND o."createdAt" < $2
            AND o."createdAt" < now() - interval '${NGAY_BO_QUA} days'
+           -- loc-trang-thai-co-y: day la OnlineOrder.status (trang thai don SAN:
+           -- READY_TO_SHIP, DELIVERED...), KHONG phai Transaction.status. Luat
+           -- "phai co 'partial'" chi ap cho don ban; o day khong co khai niem
+           -- ban chiu. Bang "Transaction" chi xuat hien o LEFT JOIN de biet don
+           -- da len phieu chua.
            AND o.status IN ('confirmed','processing','shipping','completed','delivered',
                             'READY_TO_SHIP','PROCESSED','SHIPPED','COMPLETED',
                             'AWAITING_SHIPMENT','AWAITING_COLLECTION','PARTIALLY_SHIPPING',
@@ -408,7 +413,7 @@ export async function sucKhoeDuLieu(
                 : 'Những đơn này đã bán và đã giao nhưng KHÔNG có phiếu bán, nên doanh thu, giá vốn và tồn kho đều thiếu đúng phần đó — và vì không có phiếu nên cũng không vào hàng đợi xuất hoá đơn.',
             canLam: soDon === 0
                 ? 'Không cần làm gì.'
-                : 'Mở Bán Hàng → Đơn Online, lọc đơn chưa tạo phiếu và bấm đồng bộ lại kênh; đơn nào vẫn không lên thì mở ra xem trạng thái có nằm ngoài danh sách được chuyển không.',
+                : 'Mở Bán Hàng Online → Đơn Hàng Online, lọc đơn chưa tạo phiếu và bấm đồng bộ lại kênh; đơn nào vẫn không lên thì mở ra xem trạng thái có nằm ngoài danh sách được chuyển không.',
         })
     }
 
