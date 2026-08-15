@@ -391,7 +391,7 @@ async function main() {
          * companyOnly — hộ kinh doanh KHÔNG mở được dù vẫn nhận cảnh báo này.
          * Chỉ họ vào đó xoá mốc là chỉ tới trang họ không vào nổi. */
         kiemTra('Doanh nghiệp được chỉ đúng chỗ xoá mốc',
-            !!vua && /Báo Cáo Thuế, tab Hạn nộp/.test(vua.canLam), vua?.canLam?.slice(-90))
+            !!vua && /Lịch Hạn Nộp/.test(vua.canLam), vua?.canLam?.slice(-90))
     }
     {
         const k = khoSach() as any
@@ -1345,7 +1345,7 @@ async function main() {
         const h = await kiemTraThue(fakePrisma(k), KY)
         const c = lay(h, 'to-khai-tre-han')
         kiemTra('Doanh nghiệp được chỉ đúng tab Hạn nộp',
-            !!c && /Báo Cáo Thuế, tab Hạn nộp/.test(c.canLam), c?.canLam?.slice(-90))
+            !!c && /Lịch Hạn Nộp/.test(c.canLam), c?.canLam?.slice(-90))
     }
     {
         // "Sổ Doanh Thu" không phải nhãn menu — phải là "S2b - Doanh Thu"

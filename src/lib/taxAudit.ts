@@ -914,7 +914,7 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
              * tìm mỏi mắt. */
             canLam: laHoKinhDoanh
                 ? 'Nộp ngay hồ sơ còn thiếu; nộp trước khi cơ quan thuế lập biên bản thì mức phạt nhẹ hơn đáng kể. Lưu ý: phần mềm chưa có màn hình đánh dấu "đã nộp" cho hộ kinh doanh, nên kỳ nào đã nộp rồi thì mục này vẫn còn hiện — đối chiếu với biên lai của mình.'
-                : 'Nộp ngay hồ sơ còn thiếu; nộp trước khi cơ quan thuế lập biên bản thì mức phạt nhẹ hơn đáng kể. Kỳ nào đã nộp rồi thì mở Thuế → Báo Cáo Thuế, tab Hạn nộp, đánh dấu lại để không bị tính nữa.',
+                : 'Nộp ngay hồ sơ còn thiếu; nộp trước khi cơ quan thuế lập biên bản thì mức phạt nhẹ hơn đáng kể. Kỳ nào đã nộp rồi thì mở Thuế → Báo Cáo Thuế → tab “Lịch Hạn Nộp” (mở thẳng: /dashboard-tax-report?view=deadlines) và đánh dấu lại để không bị tính nữa.',
             tienRuiRo: null, soLuong: treTrongTam.length,
             viDu: treTrongTam.slice(0, 5).map((d: any) => `${d.taxType} kỳ ${d.period} · hạn ${d.dueDate}`),
         })
@@ -937,7 +937,7 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
              * (Nút xoá mốc mới thêm cũng nằm đúng trang đó.) */
             canLam: laHoKinhDoanh
                 ? 'Đối chiếu với ngày ghi trên giấy đăng ký kinh doanh / đăng ký thuế. Kỳ nào thuộc trách nhiệm thì nộp bổ sung; kỳ nào cửa hàng chưa tồn tại thì bỏ qua mục này.'
-                : 'Đối chiếu với ngày ghi trên giấy đăng ký kinh doanh / đăng ký thuế. Kỳ nào thuộc trách nhiệm thì nộp bổ sung; kỳ nào chưa phát sinh nghĩa vụ thì mở Thuế → Báo Cáo Thuế, tab Hạn nộp, bấm nút thùng rác ở mốc đó để xoá khỏi danh sách.',
+                : 'Đối chiếu với ngày ghi trên giấy đăng ký kinh doanh / đăng ký thuế. Kỳ nào thuộc trách nhiệm thì nộp bổ sung; kỳ nào chưa phát sinh nghĩa vụ thì mở Thuế → Báo Cáo Thuế → tab “Lịch Hạn Nộp” (mở thẳng: /dashboard-tax-report?view=deadlines), bấm nút thùng rác ở mốc đó để xoá khỏi danh sách.',
             tienRuiRo: null, soLuong: treTruocKhiDung.length,
             viDu: treTruocKhiDung.slice(0, 5).map((d: any) => `${d.taxType} kỳ ${d.period} · hạn ${d.dueDate}`),
         })
