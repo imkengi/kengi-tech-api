@@ -97,6 +97,81 @@ router.post('/regenerate', authMiddleware, async (req: AuthRequest, res: Respons
     }
 })
 
+// ═══════════════════════════════════════════════════════════════════════════════
+//  NHIỀU KEY CÓ TÊN + SCOPE (2026-08-15) — cho từng AI/ứng dụng một key riêng,
+//  thu hồi từng cái mà không làm rụng cái khác. /regenerate ở trên vẫn giữ để
+//  màn cài đặt cũ không hỏng (nó XOÁ HẾT key — kể cả key tạo ở đây).
+//  Secret dạng "<keyId>.<random>" để authMiddleware tra thẳng theo keyId.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const QUAN_LY = ['admin', 'manager', 'owner', 'superadmin']
+const SCOPE_HOP_LE = ['read', 'read,write', 'admin']
+
+// GET /api/api-keys/list — mọi key đang có (không lộ secret)
+router.get('/list', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        if (!QUAN_LY.includes(req.user!.role)) { res.status(403).json({ success: false, error: 'Chỉ admin/manager mới có quyền' }); return }
+        const keys = await req.storePrisma!.apiKey.findMany({
+            orderBy: { createdAt: 'desc' },
+            select: {
+                id: true, name: true, keyId: true, lastFour: true, scopes: true, isActive: true,
+                lastUsedAt: true, expiresAt: true, createdAt: true,
+                user: { select: { id: true, name: true, email: true } },
+            },
+        })
+        res.json({ success: true, data: keys })
+    } catch (err) {
+        console.error('List API keys error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// POST /api/api-keys  { name, scopes: 'read' | 'read,write' }  → trả secret MỘT LẦN
+router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        if (!QUAN_LY.includes(req.user!.role)) { res.status(403).json({ success: false, error: 'Chỉ admin/manager mới có quyền' }); return }
+        const prisma = req.storePrisma!
+        const name = String(req.body?.name || '').trim().slice(0, 80) || 'API key'
+        const scopes = SCOPE_HOP_LE.includes(String(req.body?.scopes)) ? String(req.body.scopes) : 'read'
+        const soKey = await prisma.apiKey.count({ where: { isActive: true } })
+        if (soKey >= 20) { res.status(400).json({ success: false, error: 'Đã có 20 key đang hoạt động — thu hồi bớt trước khi tạo thêm' }); return }
+
+        const keyId = 'ak_' + crypto.randomBytes(9).toString('hex')
+        const secret = `${keyId}.${crypto.randomBytes(24).toString('hex')}`
+        const rec = await prisma.apiKey.create({
+            data: {
+                name, keyId, scopes,
+                secretHash: await bcrypt.hash(secret, 10),
+                lastFour: secret.slice(-4),
+                userId: req.user!.userId,
+            },
+            select: { id: true, name: true, keyId: true, lastFour: true, scopes: true, isActive: true, createdAt: true },
+        })
+        await cacheDel(`${req.user?.storeSchema || 'default'}:apiKeys:{}`).catch(() => { })
+        res.json({ success: true, data: { ...rec, secret } })
+    } catch (err) {
+        console.error('Create API key error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+// DELETE /api/api-keys/:id — thu hồi một key
+router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        if (!QUAN_LY.includes(req.user!.role)) { res.status(403).json({ success: false, error: 'Chỉ admin/manager mới có quyền' }); return }
+        const prisma = req.storePrisma!
+        const id = String(req.params.id)
+        const key = await prisma.apiKey.findUnique({ where: { id } })
+        if (!key) { res.status(404).json({ success: false, error: 'Không tìm thấy key' }); return }
+        await prisma.apiKey.delete({ where: { id } })
+        await cacheDel(`${req.user?.storeSchema || 'default'}:apiKeys:{}`).catch(() => { })
+        res.json({ success: true, data: { id, name: key.name } })
+    } catch (err) {
+        console.error('Delete API key error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
 // ─── POST /api/api-keys/test — Test a key (via X-API-Key header) ────────────
 // Cần authMiddleware: (a) storePrisma do middleware inject — thiếu là 500 ngay;
 // (b) endpoint bcrypt-compare qua mọi key nên không được để public cho spam.

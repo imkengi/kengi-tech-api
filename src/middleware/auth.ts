@@ -74,8 +74,14 @@ async function tryApiKeyAuth(req: AuthRequest): Promise<boolean> {
 
     try {
         const storePrisma = getStorePrisma(schema)
+        // Key kiểu mới (2026-08-15) có dạng "<keyId>.<secret>" → tra thẳng theo keyId,
+        // chỉ bcrypt-compare MỘT bản ghi thay vì quét hết (mỗi compare ~50-100ms;
+        // store có nhiều key cho nhiều AI thì quét hết là chậm dần). Key cũ không
+        // có dấu chấm vẫn đi đường quét như trước.
+        const dot = apiKey.indexOf('.')
+        const keyIdHint = dot > 0 ? apiKey.slice(0, dot) : null
         const keys = await storePrisma.apiKey.findMany({
-            where: { isActive: true },
+            where: keyIdHint ? { isActive: true, keyId: keyIdHint } : { isActive: true },
             include: { user: true },
         })
 
