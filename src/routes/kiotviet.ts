@@ -953,7 +953,28 @@ router.post('/webhooks/register', async (req: Request, res: Response) => {
         for (const t of types) {
             const dangCo = hienCo.find((w: any) => w.type === t)
             const laCuaKengi = dangCo && String(dangCo.url || '').includes('/api/kiotviet/webhook/')
-            if (dangCo && laCuaKengi) { ok.push(`${t} (đã có sẵn)`); continue }
+            /* PHẢI XÉT CẢ isActive.
+             *
+             * Bản trước bỏ qua mọi webhook của Kengi bất kể đang bật hay tắt, nên
+             * với webhook BỊ TẮT nó báo "đã có sẵn" rồi không làm gì — đúng cái
+             * nút mà cảnh báo bảo người dùng bấm lại vô dụng với đúng ca đang
+             * hỏng. Đo thật 15/08/2026 ở HUTI: invoice.update / order.update /
+             * stock.update đều trỏ Kengi mà isActive=false, đơn hàng ngừng về
+             * suốt một ngày; bấm nút này sẽ báo thành công mà không đổi gì.
+             *
+             * KiotViet không có API bật lại, nên cách duy nhất là xoá rồi tạo
+             * mới — an toàn vì bản ghi đó vốn đã là của Kengi. */
+            if (dangCo && laCuaKengi && dangCo.isActive) { ok.push(`${t} (đã có sẵn)`); continue }
+            if (dangCo && laCuaKengi && !dangCo.isActive) {
+                try {
+                    await KV.deleteWebhook(creds, dangCo.id)
+                    await KV.createWebhook(creds, t, myUrl, `Kengi ${storeCode}`)
+                    ok.push(`${t} (bật lại — KiotViet đã tự tắt)`)
+                } catch (e: any) {
+                    loi.push(`${t} (bật lại): ${kvErr(e).slice(0, 250)}`)
+                }
+                continue
+            }
 
             if (dangCo && !thayThe) {
                 viMatKhac.push({ type: t, url: String(dangCo.url || ''), id: dangCo.id })
