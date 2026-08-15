@@ -1241,6 +1241,77 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "FbAutoReplyLog_pageId_idx" ON "FbAutoReplyLog"("pageId")`)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "FbAutoReplyLog_createdAt_idx" ON "FbAutoReplyLog"("createdAt")`)
 
+                // Content AI (2026-08-15): hồ sơ thương hiệu · kế hoạch · bài nháp
+                // chờ duyệt — khớp 3 model FbBrandProfile/FbContentPlan/FbContentDraft.
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "FbBrandProfile" (
+                        "id" TEXT NOT NULL,
+                        "brandName" TEXT NOT NULL DEFAULT '',
+                        "industry" TEXT NOT NULL DEFAULT '',
+                        "audience" TEXT NOT NULL DEFAULT '',
+                        "toneOfVoice" TEXT NOT NULL DEFAULT 'than-thien',
+                        "usp" TEXT NOT NULL DEFAULT '',
+                        "cta" TEXT NOT NULL DEFAULT '',
+                        "hashtags" TEXT NOT NULL DEFAULT '[]',
+                        "bannedWords" TEXT NOT NULL DEFAULT '[]',
+                        "emojiLevel" TEXT NOT NULL DEFAULT 'vua',
+                        "postsPerWeek" INTEGER NOT NULL DEFAULT 5,
+                        "bestHours" TEXT NOT NULL DEFAULT '[]',
+                        "pillarMix" TEXT NOT NULL DEFAULT '{}',
+                        "notes" TEXT NOT NULL DEFAULT '',
+                        "createdBy" TEXT,
+                        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "FbBrandProfile_pkey" PRIMARY KEY ("id")
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "FbContentPlan" (
+                        "id" TEXT NOT NULL,
+                        "pageId" TEXT NOT NULL,
+                        "title" TEXT NOT NULL,
+                        "goal" TEXT NOT NULL DEFAULT '',
+                        "fromDate" TIMESTAMP(3) NOT NULL,
+                        "toDate" TIMESTAMP(3) NOT NULL,
+                        "status" TEXT NOT NULL DEFAULT 'active',
+                        "summary" TEXT,
+                        "createdBy" TEXT,
+                        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "FbContentPlan_pkey" PRIMARY KEY ("id")
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "FbContentPlan_pageId_status_idx" ON "FbContentPlan"("pageId", "status")`)
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "FbContentDraft" (
+                        "id" TEXT NOT NULL,
+                        "planId" TEXT,
+                        "pageId" TEXT NOT NULL,
+                        "pillar" TEXT NOT NULL DEFAULT 'khac',
+                        "title" TEXT NOT NULL DEFAULT '',
+                        "hook" TEXT NOT NULL DEFAULT '',
+                        "message" TEXT NOT NULL,
+                        "hashtags" TEXT NOT NULL DEFAULT '[]',
+                        "mediaIdea" TEXT NOT NULL DEFAULT '',
+                        "mediaUrls" TEXT NOT NULL DEFAULT '[]',
+                        "linkUrl" TEXT,
+                        "productIds" TEXT NOT NULL DEFAULT '[]',
+                        "suggestedAt" TIMESTAMP(3),
+                        "status" TEXT NOT NULL DEFAULT 'pending',
+                        "rejectReason" TEXT,
+                        "scheduledPostId" TEXT,
+                        "fbPostId" TEXT,
+                        "source" TEXT NOT NULL DEFAULT 'ai',
+                        "createdBy" TEXT,
+                        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "FbContentDraft_pkey" PRIMARY KEY ("id"),
+                        CONSTRAINT "FbContentDraft_planId_fkey" FOREIGN KEY ("planId") REFERENCES "FbContentPlan"("id") ON DELETE SET NULL ON UPDATE CASCADE
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "FbContentDraft_pageId_status_idx" ON "FbContentDraft"("pageId", "status")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "FbContentDraft_suggestedAt_idx" ON "FbContentDraft"("suggestedAt")`)
+
                 // Trợ lý AI tự động theo lịch (2026-07-27). db push là no-op ở prod
                 // nên phải tạo bằng raw SQL như các bảng Fb* ở trên.
                 await (sp as any).$executeRawUnsafe(`
