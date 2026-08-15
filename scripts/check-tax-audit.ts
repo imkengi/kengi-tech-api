@@ -387,6 +387,25 @@ async function main() {
             !!vua && vua.muc === 'vua' && vua.soLuong === 2, JSON.stringify(vua?.soLuong))
         kiemTra('Câu chữ nói rõ phần mềm KHÔNG biết, không phải cửa hàng làm sai',
             !!vua && vua.chiTiet.includes('KHÔNG biết'), vua?.chiTiet?.slice(0, 60))
+        /* Danh sách hạn nộp nằm trong Thuế → Báo Cáo Thuế, mục menu có cờ
+         * companyOnly — hộ kinh doanh KHÔNG mở được dù vẫn nhận cảnh báo này.
+         * Chỉ họ vào đó xoá mốc là chỉ tới trang họ không vào nổi. */
+        kiemTra('Doanh nghiệp được chỉ đúng chỗ xoá mốc',
+            !!vua && /Báo Cáo Thuế, tab Hạn nộp/.test(vua.canLam), vua?.canLam?.slice(-90))
+    }
+    {
+        const k = khoSach() as any
+        k.settings = { businessType: 'household' }
+        k.transactions = [{ createdAt: '2026-08-01T02:00:00.000Z', total: 1_000_000, status: 'completed' }]
+        k.deadlines = [
+            { taxType: 'GTGT', period: '2026-01', dueDate: '2026-02-20', status: 'pending' },
+        ]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const vua = lay(h, 'to-khai-tre-han-truoc-khi-dung')
+        kiemTra('Hộ kinh doanh KHÔNG bị chỉ sang trang họ không mở được',
+            !!vua && !/Báo Cáo Thuế/.test(vua.canLam), vua?.canLam)
+        kiemTra('… mà chỉ bảo đối chiếu giấy tờ rồi bỏ qua',
+            !!vua && /bỏ qua mục này/.test(vua.canLam), vua?.canLam?.slice(-70))
     }
     {
         // Mốc nằm TRONG quãng cửa hàng đã hoạt động thì vẫn nói thẳng, mức cao

@@ -7143,6 +7143,49 @@ router.get('/deadlines/overdue', authMiddleware, async (req: AuthRequest, res: R
     }
 })
 
+/* DELETE /api/tax/deadlines/:id — xoá một mốc nghĩa vụ không thuộc về cửa hàng.
+ *
+ * Vì sao cần: lịch nghĩa vụ được gieo cho CẢ NĂM, nên cửa hàng mở giữa năm có
+ * hàng loạt mốc của những kỳ họ chưa tồn tại. Bộ soát thuế đã học cách không gọi
+ * đó là chậm nộp (cảnh báo `to-khai-tre-han-truoc-khi-dung`) và bảo người dùng
+ * "xoá mốc cho sạch danh sách" — nhưng trước bản này KHÔNG có đường nào xoá cả,
+ * tức là chỉ đúng bệnh rồi bỏ người ta giữa đường.
+ *
+ * CHỐT AN TOÀN: chỉ xoá mốc CHƯA AI ĐỘNG TỚI — trạng thái pending, chưa gắn tờ
+ * khai, chưa có ngày nộp, chưa có ghi chú. Mốc đã đánh dấu nộp hay đã gắn tờ
+ * khai là bằng chứng công việc; xoá nó là xoá dấu vết tuân thủ, và người dùng
+ * bấm nhầm thì không dựng lại được. Cùng bộ điều kiện với `mocCanDon`. */
+router.delete('/deadlines/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
+
+        const moc = await prisma.taxDeadline.findUnique({ where: { id } })
+        if (!moc) {
+            return res.status(404).json({ success: false, error: 'Không tìm thấy mốc nghĩa vụ này' })
+        }
+        const daDongToi = moc.status !== 'pending' || !!moc.filedAt || !!moc.declarationId || !!moc.notes
+        if (daDongToi) {
+            return res.status(400).json({
+                success: false,
+                error: 'Mốc này đã được đánh dấu hoặc đã gắn tờ khai nên không xoá được — đó là bằng chứng đã làm. Nếu muốn bỏ theo dõi, hãy sửa ghi chú thay vì xoá.',
+            })
+        }
+
+        await prisma.taxDeadline.delete({ where: { id } })
+        await logTaxAction(prisma, req, {
+            action: 'deadline.delete',
+            entityType: 'TaxDeadline',
+            entityId: id,
+            changes: { taxType: moc.taxType, period: moc.period, dueDate: moc.dueDate },
+        })
+        res.json({ success: true, data: { id, taxType: moc.taxType, period: moc.period } })
+    } catch (err: any) {
+        console.error('DELETE /deadlines/:id error:', err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
 // PUT /api/tax/deadlines/:id - mark as submitted (or other status update)
 router.put('/deadlines/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {

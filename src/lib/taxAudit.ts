@@ -918,7 +918,17 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
                 : `Lịch nghĩa vụ được lập cho cả năm, nhưng dữ liệu sớm nhất trong phần mềm chỉ từ ${ngayCoMat}.`)
                 + ' Phần mềm KHÔNG biết cửa hàng có nghĩa vụ khai với các kỳ trước đó hay không, nên không kết luận là chậm nộp. Nếu đã đăng ký thuế từ trước thì các kỳ này vẫn phải khai; nếu mới thành lập hoặc mới chuyển sang phần mềm thì bỏ qua hoặc xóa mốc cho sạch danh sách.',
             canCu: 'Điều 44 Luật Quản lý thuế 38/2019 — nghĩa vụ khai tính từ khi đăng ký thuế, không tính từ ngày dùng phần mềm.',
-            canLam: 'Đối chiếu với ngày ghi trên giấy đăng ký kinh doanh / đăng ký thuế. Kỳ nào thuộc trách nhiệm thì nộp bổ sung; kỳ nào chưa phát sinh nghĩa vụ thì mở Thuế → Báo Cáo Thuế xóa mốc cho sạch danh sách.',
+            /* CÂU CHỈ ĐƯỜNG PHẢI ĐI ĐƯỢC.
+             *
+             * Danh sách hạn nộp nằm trong Thuế → Báo Cáo Thuế, mà mục menu đó có
+             * cờ `companyOnly` — HỘ KINH DOANH không mở được, dù cảnh báo này
+             * vẫn kêu cho họ. Bảo họ vào đó xoá mốc là chỉ tới một trang họ
+             * không vào nổi. Với hộ thì danh sách kia cũng không hiện ra nên
+             * "dọn cho sạch" chẳng phải việc của họ — chỉ cần đối chiếu giấy tờ.
+             * (Nút xoá mốc mới thêm cũng nằm đúng trang đó.) */
+            canLam: laHoKinhDoanh
+                ? 'Đối chiếu với ngày ghi trên giấy đăng ký kinh doanh / đăng ký thuế. Kỳ nào thuộc trách nhiệm thì nộp bổ sung; kỳ nào cửa hàng chưa tồn tại thì bỏ qua mục này.'
+                : 'Đối chiếu với ngày ghi trên giấy đăng ký kinh doanh / đăng ký thuế. Kỳ nào thuộc trách nhiệm thì nộp bổ sung; kỳ nào chưa phát sinh nghĩa vụ thì mở Thuế → Báo Cáo Thuế, tab Hạn nộp, bấm nút thùng rác ở mốc đó để xoá khỏi danh sách.',
             tienRuiRo: null, soLuong: treTruocKhiDung.length,
             viDu: treTruocKhiDung.slice(0, 5).map((d: any) => `${d.taxType} kỳ ${d.period} · hạn ${d.dueDate}`),
         })
