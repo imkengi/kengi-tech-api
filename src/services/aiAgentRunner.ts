@@ -27,6 +27,13 @@ export const TOOL_NHAY_CAM = new Set([
     'fanpage_reply_comment',
     'fanpage_hide_comment',
     'fanpage_manage_scheduled_post',
+    // Thêm 2026-08-15: sửa/xoá công khai + tiêu tiền quảng cáo
+    'fanpage_edit_post',
+    'fanpage_delete_post',
+    'fanpage_delete_comment',
+    'fanpage_like_comment',
+    'fanpage_ads_set_campaign_status',
+    'fanpage_boost_post',
 ])
 
 export type KetQuaChay = {

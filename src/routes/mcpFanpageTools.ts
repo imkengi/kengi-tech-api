@@ -87,6 +87,55 @@ const PAGE_ID_PROP = {
     page_id: { type: 'string', description: 'Facebook Page ID. Bỏ trống nếu store chỉ có 1 fanpage.' },
 } as const
 
+/**
+ * Service cho Marketing API (quảng cáo) — PHẢI là USER token có ads_management,
+ * page token không gọi được /me/adaccounts. Store nối bằng cách dán page token
+ * (không OAuth) sẽ không có FbUserToken → báo rõ để agent không mò.
+ */
+async function resolveAdsService(prisma: any): Promise<FacebookService> {
+    const tok = await prisma.fbUserToken.findFirst({ orderBy: { updatedAt: 'desc' } })
+    if (!tok) {
+        throw new ToolError(
+            'Store chưa kết nối TÀI KHOẢN Facebook (chỉ dán token fanpage). Quảng cáo cần đăng nhập Facebook ' +
+            'ở kengi.vn/fanpage-manager → Kết nối Facebook để có user token kèm quyền ads_management.')
+    }
+    return new FacebookService(tok.accessToken)
+}
+
+/** Gói lỗi Graph cho tool ads — token user hỏng không đánh dấu page, chỉ báo. */
+async function wrapAds<T>(fn: () => Promise<T>): Promise<T> {
+    try {
+        return await fn()
+    } catch (e: any) {
+        if ((e as FbGraphError)?.isTokenError) {
+            throw new ToolError('Token tài khoản Facebook đã hết hạn/thiếu quyền ads_management — chủ shop cần vào kengi.vn/fanpage-manager kết nối lại Facebook.')
+        }
+        throw new ToolError(`Facebook Ads báo lỗi: ${e?.message || 'không rõ'}`)
+    }
+}
+
+/** Ad account: tham số > adAccountId mặc định của page > lỗi kèm hướng dẫn. */
+async function resolveAdAccount(prisma: any, svc: FacebookService, adAccountId?: string, pageId?: string): Promise<string> {
+    let acct = String(adAccountId || '').trim()
+    if (!acct && pageId) {
+        const p = await prisma.fbPage.findFirst({ where: { pageId: String(pageId) }, select: { adAccountId: true } })
+        acct = p?.adAccountId || ''
+    }
+    if (!acct) {
+        const list = await wrapAds(() => svc.listAdAccounts())
+        if (list.length === 1) acct = list[0].id
+        else {
+            throw new ToolError(
+                list.length
+                    ? `Phải nói rõ ad_account_id. Đang có: ${list.map((x: any) => `${x.name} (${x.id})`).join(', ')}`
+                    : 'Tài khoản Facebook này không có tài khoản quảng cáo nào.')
+        }
+    }
+    return acct.startsWith('act_') ? acct : `act_${acct}`
+}
+
+const vnd = (v: any) => (v == null || v === '' ? null : Number(v))
+
 // ─── Tools ───────────────────────────────────────────────────────────────────
 
 export const FANPAGE_TOOLS: Tool[] = [
@@ -640,6 +689,286 @@ export const FANPAGE_TOOLS: Tool[] = [
                 soQuyTacDangBat: soQuyTac,
                 canhBao: enabled && !soQuyTac ? 'Chưa có quy tắc nào đang bật — tạo bằng fanpage_create_rule thì mới có tác dụng.' : null,
                 tocDo: page.webhookSubscribed ? 'Nhận bình luận tức thì (webhook đã bật)' : 'Quét lại mỗi 5 phút (webhook chưa bật)',
+            }
+        },
+    },
+
+    // ═══ QUẢN LÝ BÀI ĐÃ ĐĂNG + BÌNH LUẬN THEO BÀI ═════════════════════════════
+    {
+        name: 'fanpage_post_comments',
+        description: 'Toàn bộ bình luận của MỘT bài cụ thể (kể cả đã trả lời). Lấy post_id từ fanpage_list_posts. Dùng khi cần đọc hết phản hồi dưới một bài (mini game, bài bán hàng đang hot…).',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                post_id: { type: 'string', description: 'ID bài viết (từ fanpage_list_posts)' },
+                ...PAGE_ID_PROP,
+                limit: { type: 'number', description: 'Số bình luận tối đa (mặc định 50, tối đa 200)' },
+            },
+            required: ['post_id'],
+            additionalProperties: false,
+        },
+        run: async (a, { prisma }: ToolCtx) => {
+            const postId = String(a?.post_id || '').trim()
+            if (!postId) throw new ToolError('Thiếu post_id')
+            const { page, svc } = await resolvePage(prisma, a?.page_id)
+            const limit = clamp(num(a?.limit, 50), 1, 200)
+            const list = await wrapGraph(prisma, page.pageId, () => svc.getPostComments(postId, limit))
+            const daTraLoi = new Set(
+                (await prisma.fbAutoReplyLog.findMany({
+                    where: { pageId: page.pageId, commentId: { in: list.map((c: any) => c.id) }, success: true },
+                    select: { commentId: true },
+                })).map((r: any) => r.commentId),
+            )
+            return {
+                fanpage: page.name, post_id: postId, soBinhLuan: list.length,
+                binhLuan: list.map((c: any) => ({
+                    comment_id: c.id, nguoi: c.from?.name || '(ẩn — thiếu quyền pages_read_user_content)',
+                    laFanpage: c.from?.id === page.pageId, noiDung: c.message, luc: c.createdTime,
+                    daTraLoiTuDong: daTraLoi.has(c.id), soLike: c.likeCount ?? undefined, daAn: !!c.isHidden,
+                })),
+            }
+        },
+    },
+    {
+        name: 'fanpage_edit_post',
+        description: 'Sửa NỘI DUNG chữ của một bài đã đăng hoặc đã lên lịch (không đổi ảnh/video). Lấy post_id từ fanpage_list_posts, hoặc id bài hẹn từ fanpage_list_scheduled.',
+        write: true,
+        inputSchema: {
+            type: 'object',
+            properties: {
+                post_id: { type: 'string', description: 'ID bài trên Facebook (từ fanpage_list_posts) HOẶC id bài hẹn nội bộ (từ fanpage_list_scheduled)' },
+                message: { type: 'string', description: 'Nội dung mới thay thế toàn bộ' },
+                ...PAGE_ID_PROP,
+            },
+            required: ['post_id', 'message'],
+            additionalProperties: false,
+        },
+        run: async (a, { prisma }: ToolCtx) => {
+            const raw = String(a?.post_id || '').trim()
+            const message = String(a?.message || '').trim()
+            if (!raw) throw new ToolError('Thiếu post_id')
+            if (!message) throw new ToolError('Nội dung mới không được để trống')
+            // Cho phép truyền id mirror nội bộ → tra ra fbPostId
+            const mirror = await prisma.fbScheduledPost.findFirst({ where: { OR: [{ id: raw }, { fbPostId: raw }] } })
+            const fbPostId = mirror?.fbPostId || raw
+            const { page, svc } = await resolvePage(prisma, a?.page_id || mirror?.pageId)
+            await wrapGraph(prisma, page.pageId, () => svc.editScheduledPost(fbPostId, { message }))
+            if (mirror) await prisma.fbScheduledPost.update({ where: { id: mirror.id }, data: { message } }).catch(() => { })
+            return { ketQua: 'Đã sửa nội dung bài', fanpage: page.name, fb_post_id: fbPostId }
+        },
+    },
+    {
+        name: 'fanpage_delete_post',
+        description: 'XOÁ VĨNH VIỄN một bài đã đăng trên fanpage (không khôi phục được). Chỉ dùng khi chủ shop yêu cầu rõ; với bài chưa đăng hãy dùng fanpage_manage_scheduled_post action=cancel.',
+        write: true,
+        inputSchema: {
+            type: 'object',
+            properties: {
+                post_id: { type: 'string', description: 'ID bài trên Facebook (từ fanpage_list_posts)' },
+                ...PAGE_ID_PROP,
+                confirm: { type: 'boolean', description: 'Phải là true — xác nhận chủ shop đã đồng ý xoá' },
+            },
+            required: ['post_id', 'confirm'],
+            additionalProperties: false,
+        },
+        run: async (a, { prisma }: ToolCtx) => {
+            const postId = String(a?.post_id || '').trim()
+            if (!postId) throw new ToolError('Thiếu post_id')
+            if (a?.confirm !== true) throw new ToolError('Xoá bài là thao tác không hoàn tác — hỏi lại chủ shop rồi gọi với confirm=true.')
+            const { page, svc } = await resolvePage(prisma, a?.page_id)
+            await wrapGraph(prisma, page.pageId, () => svc.deletePost(postId))
+            await prisma.fbScheduledPost.updateMany({ where: { fbPostId: postId }, data: { status: 'cancelled' } }).catch(() => { })
+            return { ketQua: 'Đã xoá bài khỏi fanpage', fanpage: page.name, fb_post_id: postId }
+        },
+    },
+    {
+        name: 'fanpage_like_comment',
+        description: 'Thả tim (like) hoặc bỏ like một bình luận bằng danh nghĩa fanpage — cách rẻ để ghi nhận khách khen mà không cần trả lời.',
+        write: true,
+        inputSchema: {
+            type: 'object',
+            properties: {
+                comment_id: { type: 'string', description: 'ID bình luận' },
+                like: { type: 'boolean', description: 'true = like (mặc định), false = bỏ like' },
+                ...PAGE_ID_PROP,
+            },
+            required: ['comment_id'],
+            additionalProperties: false,
+        },
+        run: async (a, { prisma }: ToolCtx) => {
+            const commentId = String(a?.comment_id || '').trim()
+            if (!commentId) throw new ToolError('Thiếu comment_id')
+            const like = a?.like !== false
+            const { page, svc } = await resolvePage(prisma, a?.page_id)
+            await wrapGraph(prisma, page.pageId, () => svc.likeComment(commentId, like))
+            return { ketQua: like ? 'Đã like bình luận' : 'Đã bỏ like', fanpage: page.name, comment_id: commentId }
+        },
+    },
+    {
+        name: 'fanpage_delete_comment',
+        description: 'XOÁ hẳn một bình luận (spam, lừa đảo, lộ số điện thoại khách). Không hoàn tác được — bình luận tiêu cực bình thường nên dùng fanpage_hide_comment thay vì xoá.',
+        write: true,
+        inputSchema: {
+            type: 'object',
+            properties: {
+                comment_id: { type: 'string', description: 'ID bình luận' },
+                ...PAGE_ID_PROP,
+            },
+            required: ['comment_id'],
+            additionalProperties: false,
+        },
+        run: async (a, { prisma }: ToolCtx) => {
+            const commentId = String(a?.comment_id || '').trim()
+            if (!commentId) throw new ToolError('Thiếu comment_id')
+            const { page, svc } = await resolvePage(prisma, a?.page_id)
+            await wrapGraph(prisma, page.pageId, () => svc.deleteComment(commentId))
+            await prisma.fbAutoReplyLog.upsert({
+                where: { pageId_commentId: { pageId: page.pageId, commentId } },
+                create: { pageId: page.pageId, commentId, action: 'delete_mcp', success: true },
+                update: { action: 'delete_mcp', success: true },
+            }).catch(() => { })
+            return { ketQua: 'Đã xoá bình luận', fanpage: page.name, comment_id: commentId }
+        },
+    },
+
+    // ═══ QUẢNG CÁO (Marketing API — cần user token ads_management) ═════════════
+    {
+        name: 'fanpage_ads_accounts',
+        description: 'Danh sách tài khoản quảng cáo Facebook của store: tên, trạng thái, tiền tệ, đã chi. Gọi trước các tool fanpage_ads_* khác để lấy ad_account_id.',
+        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+        run: async (_a, { prisma }: ToolCtx) => {
+            const svc = await resolveAdsService(prisma)
+            const list = await wrapAds(() => svc.listAdAccounts())
+            const STATUS: Record<number, string> = { 1: 'hoạt động', 2: 'bị vô hiệu', 3: 'chưa thanh toán', 7: 'đang xét duyệt', 9: 'thời gian gia hạn', 100: 'chờ đóng', 101: 'đã đóng' }
+            return {
+                soTaiKhoan: list.length,
+                taiKhoan: list.map((x: any) => ({
+                    ad_account_id: x.id, ten: x.name, trangThai: STATUS[x.account_status] || String(x.account_status),
+                    tienTe: x.currency, daChi: vnd(x.amount_spent), soDu: vnd(x.balance), tranChi: vnd(x.spend_cap),
+                })),
+            }
+        },
+    },
+    {
+        name: 'fanpage_ads_campaigns',
+        description: 'Danh sách chiến dịch quảng cáo trong một tài khoản ads kèm hiệu quả 30 ngày (chi tiêu, hiển thị, tiếp cận, click, CTR/CPC). Dùng để rà chiến dịch nào tốn tiền mà kém.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                ad_account_id: { type: 'string', description: 'act_… (từ fanpage_ads_accounts). Bỏ trống nếu chỉ có 1 tài khoản hoặc page đã gán tài khoản mặc định.' },
+                ...PAGE_ID_PROP,
+                with_insights: { type: 'boolean', description: 'Kèm số liệu 30 ngày từng chiến dịch (mặc định true, chậm hơn)' },
+            },
+            additionalProperties: false,
+        },
+        run: async (a, { prisma }: ToolCtx) => {
+            const svc = await resolveAdsService(prisma)
+            const acct = await resolveAdAccount(prisma, svc, a?.ad_account_id, a?.page_id)
+            const camps = await wrapAds(() => svc.listCampaigns(acct))
+            const withIns = a?.with_insights !== false
+            const out: any[] = []
+            for (const c of camps.slice(0, 50)) {           // tuần tự — pool Prisma nhỏ, và Graph rate limit
+                const ins = withIns ? await svc.getAdInsights(c.id).catch(() => null) : null
+                out.push({
+                    campaign_id: c.id, ten: c.name, mucTieu: c.objective, trangThai: c.effective_status || c.status,
+                    nganSachNgay: vnd(c.daily_budget), nganSachTronDoi: vnd(c.lifetime_budget),
+                    batDau: c.start_time, ketThuc: c.stop_time,
+                    hieuQua30Ngay: ins ? {
+                        chiTieu: vnd(ins.spend), hienThi: vnd(ins.impressions), tiepCan: vnd(ins.reach),
+                        click: vnd(ins.clicks), ctr: vnd(ins.ctr), cpc: vnd(ins.cpc), cpm: vnd(ins.cpm),
+                    } : null,
+                })
+            }
+            return { ad_account_id: acct, soChienDich: camps.length, ...(camps.length > 50 ? { ghiChu: 'Chỉ trả 50 chiến dịch đầu' } : {}), chienDich: out }
+        },
+    },
+    {
+        name: 'fanpage_ads_insights',
+        description: 'Số liệu quảng cáo của một đối tượng bất kỳ: cả tài khoản (act_…), một chiến dịch, adset hoặc ad. Chọn khoảng thời gian bằng date_preset.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                object_id: { type: 'string', description: 'act_<id> | campaign_id | adset_id | ad_id' },
+                date_preset: { type: 'string', enum: ['today', 'yesterday', 'last_7d', 'last_14d', 'last_30d', 'this_month', 'last_month', 'maximum'], description: 'Khoảng thời gian (mặc định last_30d)' },
+            },
+            required: ['object_id'],
+            additionalProperties: false,
+        },
+        run: async (a, { prisma }: ToolCtx) => {
+            const objectId = String(a?.object_id || '').trim()
+            if (!objectId) throw new ToolError('Thiếu object_id')
+            const svc = await resolveAdsService(prisma)
+            const ins = await wrapAds(() => svc.getAdInsights(objectId, a?.date_preset || 'last_30d'))
+            if (!ins) return { object_id: objectId, ghiChu: 'Không có số liệu trong khoảng này (chưa chạy hoặc chưa phát sinh)' }
+            const actions = Object.fromEntries((ins.actions || []).map((x: any) => [x.action_type, Number(x.value)]))
+            const values = Object.fromEntries((ins.action_values || []).map((x: any) => [x.action_type, Number(x.value)]))
+            return {
+                object_id: objectId, khoang: a?.date_preset || 'last_30d',
+                chiTieu: vnd(ins.spend), hienThi: vnd(ins.impressions), tiepCan: vnd(ins.reach), click: vnd(ins.clicks),
+                ctr: vnd(ins.ctr), cpc: vnd(ins.cpc), cpm: vnd(ins.cpm),
+                hanhDong: actions, giaTriHanhDong: values,
+            }
+        },
+    },
+    {
+        name: 'fanpage_ads_set_campaign_status',
+        description: 'BẬT (ACTIVE) hoặc TẠM DỪNG (PAUSED) một chiến dịch quảng cáo. Bật = bắt đầu tiêu tiền thật — chỉ làm khi chủ shop yêu cầu rõ.',
+        write: true,
+        inputSchema: {
+            type: 'object',
+            properties: {
+                campaign_id: { type: 'string', description: 'ID chiến dịch (từ fanpage_ads_campaigns hoặc kết quả fanpage_boost_post)' },
+                status: { type: 'string', enum: ['ACTIVE', 'PAUSED'], description: 'ACTIVE = chạy, PAUSED = tạm dừng' },
+            },
+            required: ['campaign_id', 'status'],
+            additionalProperties: false,
+        },
+        run: async (a, { prisma }: ToolCtx) => {
+            const id = String(a?.campaign_id || '').trim()
+            if (!id) throw new ToolError('Thiếu campaign_id')
+            const status = a?.status === 'ACTIVE' ? 'ACTIVE' : 'PAUSED'
+            const svc = await resolveAdsService(prisma)
+            await wrapAds(() => svc.setCampaignStatus(id, status))
+            return { ketQua: status === 'ACTIVE' ? 'Đã BẬT chiến dịch — bắt đầu tiêu ngân sách' : 'Đã TẠM DỪNG chiến dịch', campaign_id: id }
+        },
+    },
+    {
+        name: 'fanpage_boost_post',
+        description: 'Tạo quảng cáo BOOST cho một bài đã đăng (campaign + adset + ad). Tạo ở trạng thái TẠM DỪNG để chủ shop duyệt; muốn chạy thì gọi fanpage_ads_set_campaign_status ACTIVE. Ngân sách tính VND/ngày.',
+        write: true,
+        inputSchema: {
+            type: 'object',
+            properties: {
+                post_id: { type: 'string', description: 'ID bài đã đăng (từ fanpage_list_posts)' },
+                daily_budget_vnd: { type: 'number', description: 'Ngân sách mỗi ngày (VND), tối thiểu ~30000' },
+                days: { type: 'number', description: 'Số ngày chạy (mặc định 7, tối đa 90)' },
+                ad_account_id: { type: 'string', description: 'act_… Bỏ trống nếu chỉ có 1 tài khoản hoặc page đã gán mặc định.' },
+                ...PAGE_ID_PROP,
+                age_min: { type: 'number', description: 'Tuổi tối thiểu (mặc định 18)' },
+                age_max: { type: 'number', description: 'Tuổi tối đa (mặc định 65)' },
+                countries: { type: 'array', items: { type: 'string' }, description: 'Mã quốc gia nhắm tới (mặc định ["VN"])' },
+            },
+            required: ['post_id', 'daily_budget_vnd'],
+            additionalProperties: false,
+        },
+        run: async (a, { prisma }: ToolCtx) => {
+            const postId = String(a?.post_id || '').trim()
+            if (!postId) throw new ToolError('Thiếu post_id')
+            const budget = Math.round(num(a?.daily_budget_vnd, 0))
+            if (budget < 10000) throw new ToolError('daily_budget_vnd quá nhỏ — Facebook thường yêu cầu tối thiểu ~30.000đ/ngày')
+            const days = clamp(Math.round(num(a?.days, 7)), 1, 90)
+            const { page } = await resolvePage(prisma, a?.page_id)
+            const svc = await resolveAdsService(prisma)
+            const acct = await resolveAdAccount(prisma, svc, a?.ad_account_id, page.pageId)
+            const objectStoryId = postId.includes('_') ? postId : `${page.pageId}_${postId}`
+            const countries = Array.isArray(a?.countries) && a.countries.length ? a.countries.map(String) : ['VN']
+            const targeting = { geo_locations: { countries }, age_min: clamp(num(a?.age_min, 18), 13, 65), age_max: clamp(num(a?.age_max, 65), 13, 65) }
+            const r = await wrapAds(() => svc.boostPost({ adAccountId: acct, pageId: page.pageId, postId: objectStoryId, dailyBudgetVnd: budget, days, targeting }))
+            return {
+                ketQua: 'Đã tạo quảng cáo boost ở trạng thái TẠM DỪNG — chưa tiêu tiền',
+                fanpage: page.name, ad_account_id: acct, ...r,
+                nganSach: `${budget.toLocaleString('vi-VN')}đ/ngày × ${days} ngày ≈ ${(budget * days).toLocaleString('vi-VN')}đ`,
+                buocTiep: `Chủ shop duyệt xong thì gọi fanpage_ads_set_campaign_status(campaign_id="${r.campaignId}", status="ACTIVE")`,
             }
         },
     },

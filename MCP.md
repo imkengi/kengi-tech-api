@@ -27,7 +27,7 @@ Tool có cột `ghi` đòi scope chứa `write`; key chỉ `read` gọi vào s�
 claude mcp add --transport http kengi-retail https://api.kengi.vn/api/mcp --header "X-API-Key: <secret>" --header "x-store-code: KENGISTORE"
 ```
 
-## Danh sách công cụ (40)
+## Danh sách công cụ (77 — 40 bán lẻ/tài chính + 26 fanpage + 11 marketing)
 
 Tham số **in đậm** là bắt buộc.
 
@@ -73,6 +73,30 @@ Tham số **in đậm** là bắt buộc.
 | `fanpage_delete_rule` | ghi | Xoá hẳn một quy tắc. | **id** |
 | `fanpage_subscribe_webhook` | ghi | Bật webhook để bình luận về server tức thì. | page_id |
 | `fanpage_set_auto_reply` | ghi | Bật / tắt engine auto-reply cho fanpage. | **enabled**, page_id |
+
+### Fanpage — bài đã đăng & bình luận theo bài (thêm 2026-08-15)
+
+| Tool | Loại | Việc | Tham số |
+|---|---|---|---|
+| `fanpage_post_comments` | đọc | Toàn bộ bình luận của MỘT bài (kể cả đã trả lời, kèm cờ đã trả lời tự động / đã ẩn). | **post_id**, page_id, limit |
+| `fanpage_edit_post` | ghi | Sửa nội dung chữ bài đã đăng hoặc đã hẹn (nhận fb post id hoặc id bài hẹn nội bộ). | **post_id**, **message**, page_id |
+| `fanpage_delete_post` | ghi | Xoá vĩnh viễn bài đã đăng — bắt buộc `confirm=true`. | **post_id**, **confirm**, page_id |
+| `fanpage_like_comment` | ghi | Like / bỏ like bình luận bằng danh nghĩa page. | **comment_id**, like, page_id |
+| `fanpage_delete_comment` | ghi | Xoá hẳn bình luận (spam/lừa đảo). Tiêu cực thường → dùng hide. | **comment_id**, page_id |
+
+### Fanpage — quảng cáo (Marketing API; cần **user token** có `ads_management` — store chỉ dán page token sẽ bị báo rõ)
+
+| Tool | Loại | Việc | Tham số |
+|---|---|---|---|
+| `fanpage_ads_accounts` | đọc | Tài khoản quảng cáo: trạng thái, tiền tệ, đã chi, số dư. | — |
+| `fanpage_ads_campaigns` | đọc | Chiến dịch trong 1 tài khoản + hiệu quả 30 ngày (tuần tự, tối đa 50). Bỏ trống `ad_account_id` nếu chỉ có 1 hoặc page đã gán mặc định. | ad_account_id, page_id, with_insights |
+| `fanpage_ads_insights` | đọc | Số liệu 1 đối tượng (act_/campaign/adset/ad) theo `date_preset`. | **object_id**, date_preset |
+| `fanpage_ads_set_campaign_status` | ghi | ACTIVE / PAUSED một chiến dịch — ACTIVE = tiêu tiền thật. | **campaign_id**, **status** |
+| `fanpage_boost_post` | ghi | Tạo boost (campaign+adset+ad) ở trạng thái PAUSED để duyệt; bật bằng tool trên. | **post_id**, **daily_budget_vnd**, days, ad_account_id, page_id, age_min, age_max, countries |
+
+Các tool `fanpage_edit_post / delete_post / delete_comment / like_comment / ads_set_campaign_status / boost_post` nằm trong `TOOL_NHAY_CAM` — tác vụ tự động phải khai đích danh mới được dùng.
+
+**Lấy API key + cấu hình nối Claude/Cursor:** kengi.vn/fanpage-manager → Trợ lý AI → tab **"Nối AI ngoài (MCP)"** (tạo key, chép config, nút kiểm tra kết nối gọi thẳng `tools/list`).
 
 ## Quy ước quan trọng
 
