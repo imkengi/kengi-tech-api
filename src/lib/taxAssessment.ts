@@ -195,7 +195,7 @@ export async function moPhongAnDinh(
             dauHieu: `Đã có tờ khai nhưng sổ kế toán chưa ghi bút toán doanh thu nào`,
             dieuKhoan: 'Điều 3 TT 88/2021 (hộ kinh doanh) / chế độ kế toán đang áp dụng (doanh nghiệp)',
             chiTiet: 'Không đối chiếu được sổ với tờ khai vì sổ chưa có số. Đây KHÔNG phải dấu hiệu khai không trung thực — hộ kinh doanh không bắt buộc ghi sổ kép, và doanh nghiệp có thể chưa chạy ghi sổ. Nhưng khi thanh tra hỏi "căn cứ tính thuế đâu" thì phải có sổ để trình.',
-            caiThenao: 'Hộ kinh doanh: nhập Sổ Doanh Thu trong phần Thuế. Doanh nghiệp: chạy ghi sổ tự động ở Kế Toán cho kỳ này rồi đối chiếu lại.',
+            caiThenao: 'Hộ kinh doanh: nhập sổ doanh thu ở Thuế → S2b - Doanh Thu. Doanh nghiệp: chạy ghi sổ tự động ở Kế Toán → Đối Chiếu Sổ Sách cho kỳ này rồi đối chiếu lại.',
         })
     }
 

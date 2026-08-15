@@ -1108,7 +1108,7 @@ async function main() {
         kiemTra('… không gán số tiền rủi ro cho việc chưa ghi sổ',
             !!c && c.tienRuiRo === null, JSON.stringify(c?.tienRuiRo))
         kiemTra('… chỉ đúng đường cho cả hộ kinh doanh lẫn doanh nghiệp',
-            !!c && /Sổ Doanh Thu/.test(c.canLam) && /Kế Toán/.test(c.canLam), c?.canLam)
+            !!c && /S2b - Doanh Thu/.test(c.canLam) && /Kế Toán/.test(c.canLam), c?.canLam)
     }
     {
         // Sổ trống mà có tờ khai thì cũng không được đem 0 ra so với tờ khai
@@ -1302,8 +1302,8 @@ async function main() {
         const c = lay(h, 'so-thieu-doanh-thu-thuc-te')
         kiemTra('Hộ kinh doanh vẫn được báo sổ ghi thiếu', !!c, JSON.stringify(c?.tieuDe))
         kiemTra('… nhưng ở mức vừa, không phải cao', !!c && c.muc === 'vua', c?.muc)
-        kiemTra('… và chỉ đúng việc: nhập Sổ Doanh Thu, không bắt ghi bút toán',
-            !!c && /không bắt buộc sổ kép/.test(c.canLam) && /Sổ Doanh Thu/.test(c.canLam),
+        kiemTra('… và chỉ đúng việc: chỉ sang S2b - Doanh Thu, không bắt ghi bút toán',
+            !!c && /không bắt buộc sổ kép/.test(c.canLam) && /S2b - Doanh Thu/.test(c.canLam),
             c?.canLam?.slice(0, 110))
     }
     {
@@ -1318,6 +1318,46 @@ async function main() {
         kiemTra('Doanh nghiệp: sổ ghi dưới một nửa → mức CAO', !!c && c.muc === 'cao', c?.muc)
         kiemTra('… và chỉ sang ghi bù bút toán',
             !!c && /ghi bù bút toán/.test(c.canLam), c?.canLam?.slice(0, 90))
+    }
+
+    // ── 41f. Câu chỉ đường phải đi được với TỪNG loại hình ─────────────────
+    /* Màn hình đánh dấu hạn nộp nằm trong Thuế → Báo Cáo Thuế, mục menu có cờ
+     * companyOnly — hộ kinh doanh KHÔNG mở được. Chỉ họ vào đó là chỉ tới trang
+     * họ không vào nổi. Và "Sổ Doanh Thu" không phải nhãn menu nào cả: sổ doanh
+     * thu của hộ nằm ở Thuế → S2b - Doanh Thu. */
+    {
+        const k = khoSach() as any
+        k.settings = { businessType: 'household' }
+        k.transactions = [{ createdAt: '2026-01-05T02:00:00.000Z', total: 5_000_000, status: 'completed' }]
+        k.deadlines = [{ taxType: 'GTGT', period: '2026-06', dueDate: '2026-07-20', status: 'pending' }]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const c = lay(h, 'to-khai-tre-han')
+        kiemTra('Hộ kinh doanh KHÔNG bị chỉ sang Báo Cáo Thuế (trang companyOnly)',
+            !!c && !/Báo Cáo Thuế/.test(c.canLam), c?.canLam?.slice(-90))
+        kiemTra('… mà nói thẳng phần mềm chưa có màn hình đánh dấu cho họ',
+            !!c && /chưa có màn hình đánh dấu/.test(c.canLam), c?.canLam?.slice(-110))
+    }
+    {
+        const k = khoSach() as any
+        k.settings = { businessType: 'company' }
+        k.transactions = [{ createdAt: '2026-01-05T02:00:00.000Z', total: 5_000_000, status: 'completed' }]
+        k.deadlines = [{ taxType: 'GTGT', period: '2026-06', dueDate: '2026-07-20', status: 'pending' }]
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const c = lay(h, 'to-khai-tre-han')
+        kiemTra('Doanh nghiệp được chỉ đúng tab Hạn nộp',
+            !!c && /Báo Cáo Thuế, tab Hạn nộp/.test(c.canLam), c?.canLam?.slice(-90))
+    }
+    {
+        // "Sổ Doanh Thu" không phải nhãn menu — phải là "S2b - Doanh Thu"
+        const k = khoSach() as any
+        k.settings = { businessType: 'household' }
+        k.journal = k.journal.filter((b: any) => b.debitAccount !== '511' && b.creditAccount !== '511')
+        k.declarations = []
+        const h = await kiemTraThue(fakePrisma(k), KY)
+        const c = lay(h, 'chua-ghi-so-doanh-thu')
+        kiemTra('Chỉ đúng nhãn menu thật: S2b - Doanh Thu',
+            !!c && /S2b - Doanh Thu/.test(c.canLam) && !/nhập Sổ Doanh Thu trong phần Thuế/.test(c.canLam),
+            c?.canLam)
     }
 
     // ── 42. Hồ sơ cần chuẩn bị luôn có mặt ─────────────────────────────────

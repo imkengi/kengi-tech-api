@@ -279,8 +279,10 @@ async function main() {
             !!c && /CHƯA đối chiếu được ba nguồn/.test(c.traLoi), c?.traLoi?.slice(0, 90))
         ok('… và nói rõ đây không phải là lệch',
             !!c && /không phải là lệch/.test(c.traLoi))
+        /* Chỉ đúng NHÃN MENU thật: sổ doanh thu của hộ nằm ở "S2b - Doanh Thu",
+         * không có mục nào tên "Sổ Doanh Thu". */
         ok('… việc cần làm là ghi sổ, không phải soạn giải trình',
-            !!c && /Sổ Doanh Thu/.test(c.canLam || '') && !/giải trình/.test(c.canLam || ''), c?.canLam)
+            !!c && /S2b - Doanh Thu/.test(c.canLam || '') && !/giải trình/.test(c.canLam || ''), c?.canLam)
     }
     {
         // Chiều ngược: sổ CÓ ghi mà lệch thật thì vẫn phải xếp nguy hiểm

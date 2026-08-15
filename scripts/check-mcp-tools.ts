@@ -72,10 +72,11 @@ for (const t of TOOLS) {
 
 // ─── Kết quả ─────────────────────────────────────────────────────────────────
 const soFanpage = ten.filter(n => n.startsWith('fanpage_')).length
+const soMarketing = ten.filter(n => n.startsWith('marketing_')).length
 if (loi.length) {
     console.error(`\n❌ ${loi.length} vấn đề trong ${TOOLS.length} tool MCP:\n`)
     for (const l of loi) console.error(`   • [${l.tool}] ${l.duong} — ${l.vanDe}`)
     console.error('\nSửa xong hãy deploy: một schema hỏng làm Gemini từ chối CẢ mảng → chết trợ lý AI dashboard.\n')
     process.exit(1)
 }
-console.log(`✅ ${TOOLS.length} tool MCP hợp lệ (${TOOLS.length - soFanpage} bán lẻ + ${soFanpage} fanpage), schema Gemini chuyển đổi sạch.`)
+console.log(`✅ ${TOOLS.length} tool MCP hợp lệ (${TOOLS.length - soFanpage - soMarketing} bán lẻ + ${soFanpage} fanpage + ${soMarketing} marketing), schema Gemini chuyển đổi sạch.`)

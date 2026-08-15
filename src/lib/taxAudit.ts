@@ -493,7 +493,7 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
             chiTiet: `Phiếu bán trong kỳ cộng lại ${vnd(dtThucTe)} ₫ nhưng sổ kế toán chỉ ghi ${vnd(dtSo)} ₫ — thiếu ${vnd(thieu)} ₫. Mọi con số dựng trên sổ (lệch với tờ khai, lệch với hoá đơn, lãi lỗ) đều đang tính trên phần đã ghi, nên chúng NHỎ HƠN mức thật. Nghĩa vụ lập hoá đơn và kê khai gắn với doanh thu thực tế, không gắn với phần đã ghi sổ.`,
             canCu: 'Điều 90 Luật Quản lý thuế 38/2019 — lập hoá đơn theo từng lần bán; Điều 50 — ấn định khi sổ sách không phản ánh đầy đủ.',
             canLam: laHoKinhDoanh
-                ? 'Hộ kinh doanh không bắt buộc sổ kép (Điều 3 TT 88/2021) nên không cần ghi bù bút toán — nhưng phải nhập Sổ Doanh Thu trong phần Thuế cho đủ, vì đó mới là sổ bắt buộc và là căn cứ kê khai. Muốn có thêm báo cáo lãi lỗ theo chuẩn kế toán thì mở Kế Toán → Đối Chiếu Sổ Sách chạy ghi bù.'
+                ? 'Hộ kinh doanh không bắt buộc sổ kép (Điều 3 TT 88/2021) nên không cần ghi bù bút toán — nhưng phải nhập sổ doanh thu ở Thuế → S2b - Doanh Thu cho đủ, vì đó mới là sổ bắt buộc và là căn cứ kê khai. Muốn có thêm báo cáo lãi lỗ theo chuẩn kế toán thì mở Kế Toán → Đối Chiếu Sổ Sách chạy ghi bù.'
                 : 'Mở Kế Toán → Đối Chiếu Sổ Sách, chạy ghi bù bút toán cho các phiếu bán còn thiếu, rồi soát lại kỳ này.',
             tienRuiRo: thieu, soLuong: 0, viDu: [],
         })
@@ -514,7 +514,7 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
             tieuDe: 'Chưa ghi bút toán doanh thu vào sổ kế toán',
             chiTiet: `Kỳ ${nhan}: sổ kế toán chưa có bút toán doanh thu nào (tài khoản 511)${dtThucTe !== null ? `, trong khi phiếu bán cộng lại ${vnd(dtThucTe)} ₫` : ''}. Vì vậy KHÔNG kết luận được là lệch sổ: chưa ghi sổ khác hẳn với bán mà giấu doanh thu. Mọi phép đối chiếu "sổ với hóa đơn" và "sổ với tờ khai" của kỳ này đều chưa dùng được.${cauHoaDon}`,
             canCu: 'Điều 3 TT 88/2021 — hộ kinh doanh nộp thuế theo kê khai chỉ bắt buộc sổ doanh thu, không bắt buộc sổ kép; doanh nghiệp thì theo chế độ kế toán đang áp dụng.',
-            canLam: 'Nếu là doanh nghiệp: chạy ghi sổ tự động ở Kế Toán để sinh bút toán doanh thu cho kỳ. Nếu là hộ kinh doanh: nhập Sổ Doanh Thu trong phần Thuế — không cần sổ kép.',
+            canLam: 'Nếu là doanh nghiệp: chạy ghi sổ tự động ở Kế Toán → Đối Chiếu Sổ Sách để sinh bút toán doanh thu cho kỳ. Nếu là hộ kinh doanh: nhập sổ doanh thu ở Thuế → S2b - Doanh Thu — không cần sổ kép.',
             tienRuiRo: null, soLuong: 0, viDu: [],
         })
     }
@@ -842,7 +842,9 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
                 /* KHÔNG có trang nào tên "Lịch thuế" trong menu. Lịch nghĩa vụ
                  * nằm trong Thuế → Báo Cáo Thuế. Chỉ tới một trang không tồn tại
                  * thì người dùng đi tìm mỏi mắt rồi bỏ, và cảnh báo thành vô ích. */
-                canLam: 'Mở Thuế → Báo Cáo Thuế để hệ thống lập lịch nghĩa vụ chính thức, rồi đánh dấu các kỳ đã nộp.',
+                canLam: laHoKinhDoanh
+                    ? 'Đối chiếu với biên lai nộp thuế của mình. Phần mềm chưa có màn hình lập lịch nghĩa vụ cho hộ kinh doanh nên danh sách này là ước tính theo quy định, không phải lịch chính thức.'
+                    : 'Mở Thuế → Báo Cáo Thuế để hệ thống lập lịch nghĩa vụ chính thức, rồi đánh dấu các kỳ đã nộp.',
                 tienRuiRo: null, soLuong: treTuDung.length,
                 viDu: treTuDung.slice(0, 5).map(d => `${d.taxType} kỳ ${d.period} · hạn ${d.dueDate}`),
             })
@@ -905,7 +907,14 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
             tieuDe: `${treTrongTam.length} hồ sơ khai thuế đã quá hạn`,
             chiTiet: `Quá hạn lâu nhất: ${treTrongTam.map((d: any) => d.dueDate).sort()[0]}. Chậm nộp hồ sơ bị phạt riêng, độc lập với tiền thuế; chậm nộp tiền thuế còn tính thêm 0,03%/ngày.`,
             canCu: 'Điều 13 NĐ 125/2020 — phạt chậm nộp hồ sơ khai thuế; Điều 59 Luật Quản lý thuế 38/2019 — tiền chậm nộp.',
-            canLam: 'Nộp ngay hồ sơ còn thiếu; nộp trước khi cơ quan thuế lập biên bản thì mức phạt nhẹ hơn đáng kể. Kỳ nào đã nộp rồi thì mở Thuế → Báo Cáo Thuế đánh dấu lại để không bị tính nữa.',
+            /* Màn hình đánh dấu hạn nộp nằm trong Thuế → Báo Cáo Thuế, mà mục
+             * menu đó có cờ `companyOnly` — HỘ KINH DOANH không mở được. Chỉ họ
+             * vào đó là chỉ tới trang họ không vào nổi, và tệ hơn: họ không có
+             * đường nào gỡ cảnh báo này. Nói thẳng giới hạn đó thay vì để họ đi
+             * tìm mỏi mắt. */
+            canLam: laHoKinhDoanh
+                ? 'Nộp ngay hồ sơ còn thiếu; nộp trước khi cơ quan thuế lập biên bản thì mức phạt nhẹ hơn đáng kể. Lưu ý: phần mềm chưa có màn hình đánh dấu "đã nộp" cho hộ kinh doanh, nên kỳ nào đã nộp rồi thì mục này vẫn còn hiện — đối chiếu với biên lai của mình.'
+                : 'Nộp ngay hồ sơ còn thiếu; nộp trước khi cơ quan thuế lập biên bản thì mức phạt nhẹ hơn đáng kể. Kỳ nào đã nộp rồi thì mở Thuế → Báo Cáo Thuế, tab Hạn nộp, đánh dấu lại để không bị tính nữa.',
             tienRuiRo: null, soLuong: treTrongTam.length,
             viDu: treTrongTam.slice(0, 5).map((d: any) => `${d.taxType} kỳ ${d.period} · hạn ${d.dueDate}`),
         })

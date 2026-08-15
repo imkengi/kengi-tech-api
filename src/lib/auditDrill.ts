@@ -171,7 +171,7 @@ export async function moPhongThanhTra(
                 : baNguonKhop ? 'an-toan' : 'nguy-hiem',
         chungTu: ['Sổ cái TK 511', 'Tờ khai 01/GTGT kỳ ' + maKy, 'Bảng kê hóa đơn bán ra'],
         canLam: soChuaGhiDoanhThu
-            ? 'Hộ kinh doanh: nhập Sổ Doanh Thu trong phần Thuế. Doanh nghiệp: chạy ghi sổ tự động ở Kế Toán cho kỳ này rồi soát lại — có sổ mới đối chiếu được.'
+            ? 'Hộ kinh doanh: nhập sổ doanh thu ở Thuế → S2b - Doanh Thu. Doanh nghiệp: chạy ghi sổ tự động ở Kế Toán → Đối Chiếu Sổ Sách cho kỳ này rồi soát lại — có sổ mới đối chiếu được.'
             : dtToKhai === null ? `Lập tờ khai kỳ ${maKy} rồi soát lại.`
                 : !baNguonKhop
                     ? 'Tìm nguyên nhân lệch từng khoản và chuẩn bị bản giải trình có số liệu đối chiếu, trước khi đoàn tự kết luận.'

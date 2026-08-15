@@ -233,7 +233,7 @@ async function main() {
         ok('… nói rõ KHÔNG phải dấu hiệu khai không trung thực',
             !!c && /KHÔNG phải dấu hiệu khai không trung thực/.test(c.chiTiet), c?.chiTiet?.slice(0, 80))
         ok('… chỉ đường cho cả hộ kinh doanh lẫn doanh nghiệp',
-            !!c && /Sổ Doanh Thu/.test(c.caiThenao) && /Kế Toán/.test(c.caiThenao), c?.caiThenao)
+            !!c && /S2b - Doanh Thu/.test(c.caiThenao) && /Kế Toán/.test(c.caiThenao), c?.caiThenao)
     }
     {
         /* Chiều ngược: sổ CÓ ghi doanh thu mà lệch tờ khai thật thì vẫn phải
