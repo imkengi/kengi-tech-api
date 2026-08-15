@@ -553,8 +553,23 @@ router.get('/imported-summary', async (req: Request, res: Response) => {
         if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
         const sp = store.sp
 
-        const q = (sql: string) => sp.$queryRawUnsafe(sql).catch((e: any) => [{ loi: e?.message?.slice(0, 120) }])
-        const [tx, po, ret, cash, exp, prod] = await Promise.all([
+        /* q() trả về THUNK chứ không chạy ngay: nhét q(...) vào mảng là promise
+         * khởi động tức thì, vòng lặp await phía dưới chỉ chờ theo thứ tự chứ
+         * không hề làm chúng tuần tự. */
+        const q = (sql: string) => () => sp.$queryRawUnsafe(sql).catch((e: any) => [{ loi: e?.message?.slice(0, 120) }])
+        /* CHẠY TUẦN TỰ, không Promise.all.
+         *
+         * Pool Prisma MỖI CỬA HÀNG chỉ 5 kết nối. Sáu câu này đều quét bảng
+         * (LIKE '%KiotViet%' không dùng được index) trên Transaction /
+         * ImportReceipt / PurchaseOrder / ReturnOrder / CashReceipt / Expense /
+         * Product — bắn song song là chiếm trọn 5/5 kết nối của chính cửa hàng
+         * đang bán, webhook và POS xếp hàng phía sau. Đây là màn hình quản trị
+         * mở vài lần một ngày; chậm thêm vài trăm ms không đáng gì so với việc
+         * làm nghẽn quầy.
+         *
+         * `check-pool.ts` KHÔNG nhìn thấy chỗ này vì các lời gọi đi qua hàm bọc
+         * q() chứ không phải $queryRawUnsafe trực tiếp. */
+        const cauTx = [
             q(`SELECT COUNT(*)::int AS tong,
                       COUNT(*) FILTER (WHERE "status" <> 'completed')::int AS khongHoanThanh,
                       COUNT(*) FILTER (WHERE DATE("createdAt") = DATE("transactionDate"))::int AS dungNgay,
@@ -582,12 +597,15 @@ router.get('/imported-summary', async (req: Request, res: Response) => {
                       COUNT(*) FILTER (WHERE "brandId" IS NOT NULL)::int AS coThuongHieu
                FROM "Product" p
                WHERE EXISTS (SELECT 1 FROM "KiotVietMap" m WHERE m."entity"='product' AND m."localId"=p."id")`),
-        ])
+        ]
+        const ketQua: any[] = []
+        for (const chay of cauTx) ketQua.push(await chay())
+        const [tx, po, ret, cash, exp, prod] = ketQua
 
         // CÔNG NỢ: tách rõ phần ĐẾN TỪ KIOTVIET và phần vốn CÓ SẴN trên Kengi.
         // Không tách thì thấy tổng lệch là đổ ngay cho đồng bộ, trong khi có thể
         // là nợ cửa hàng tự ghi từ trước.
-        const [noKhach, noNcc] = await Promise.all([
+        const cauNo = [
             q(`SELECT
                  COUNT(*) FILTER (WHERE c."debt" > 0)::int AS soKhachCoNo,
                  COALESCE(SUM(c."debt") FILTER (WHERE c."debt" > 0),0)::float8 AS tongNo,
@@ -602,12 +620,14 @@ router.get('/imported-summary', async (req: Request, res: Response) => {
                  COUNT(*) FILTER (WHERE s."payable" > 0)::int AS soNccCoNo,
                  COALESCE(SUM(s."payable") FILTER (WHERE s."payable" > 0),0)::float8 AS tongPhaiTra
                FROM "Supplier" s`),
-        ])
+        ]
+        const ketQuaNo: any[] = []
+        for (const chay of cauNo) ketQuaNo.push(await chay())
+        const [noKhach, noNcc] = ketQuaNo
 
         // Sổ công nợ: bút toán thu nợ đã vào chưa, và còn bao nhiêu phiếu thu
         // đang nằm nhầm bên sổ quỹ
-        const [soCongNo] = await Promise.all([
-            q(`SELECT
+        const soCongNo = await q(`SELECT
                  (SELECT COUNT(*) FROM "DebtEntry" WHERE "type"='payment')::int AS tongButToanThu,
                  (SELECT COUNT(*) FROM "DebtEntry" WHERE "description" LIKE '%KiotViet%')::int AS tuKiotViet,
                  (SELECT COALESCE(SUM("amount"),0) FROM "DebtEntry" WHERE "description" LIKE '%KiotViet%')::float8 AS tienTuKiotViet,
@@ -615,8 +635,7 @@ router.get('/imported-summary', async (req: Request, res: Response) => {
                  -- Đừng đọc con số này thành "còn nằm nhầm": sau khi sửa, phiếu
                  -- thu của khách đã sang sổ công nợ, phần còn lại ở đây là thu khác.
                  (SELECT COUNT(*) FROM "KiotVietMap" WHERE "entity"='cashReceipt')::int AS phieuThuKhac,
-                 (SELECT COUNT(*) FROM "KiotVietMap" WHERE "entity"='debtPayment')::int AS daVaoSoCongNo`),
-        ])
+                 (SELECT COUNT(*) FROM "KiotVietMap" WHERE "entity"='debtPayment')::int AS daVaoSoCongNo`)()
 
         res.json({
             success: true,

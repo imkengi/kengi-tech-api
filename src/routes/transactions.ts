@@ -84,10 +84,32 @@ router.get('/', authMiddleware, requirePermission('pos.view'), async (req: AuthR
             ]
         }
 
+        /* Cắt ngày theo GIỜ VN, và bao TRỌN ngày kết thúc.
+         *
+         * `new Date('2026-08-15')` là nửa đêm UTC = 07:00 giờ VN. Bản trước
+         * dùng thẳng nó cho `lte`, nên lọc "đến 15/08" mất sạch giao dịch từ 7
+         * giờ sáng 15/08 trở đi — 17 tiếng cuối ngày biến khỏi danh sách và
+         * khỏi mọi con số tính từ danh sách đó. Đầu kỳ hụt 7 tiếng theo chiều
+         * ngược lại.
+         *
+         * Chuỗi có kèm giờ thì tôn trọng nguyên trạng, chỉ nắn dạng YYYY-MM-DD. */
         if (startDate || endDate) {
+            const chiNgay = (v: any) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ''))
             where.createdAt = {}
-            if (startDate) where.createdAt.gte = new Date(startDate as string)
-            if (endDate) where.createdAt.lte = new Date(endDate as string)
+            if (startDate) {
+                where.createdAt.gte = chiNgay(startDate)
+                    ? new Date(`${startDate}T00:00:00+07:00`)
+                    : new Date(startDate as string)
+            }
+            if (endDate) {
+                if (chiNgay(endDate)) {
+                    // Nửa mở: < đầu ngày HÔM SAU → bao trọn ngày kết thúc
+                    where.createdAt.lt = new Date(
+                        new Date(`${endDate}T00:00:00+07:00`).getTime() + 86400_000)
+                } else {
+                    where.createdAt.lte = new Date(endDate as string)
+                }
+            }
         }
 
         if (status && status !== 'all') {
