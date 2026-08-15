@@ -42,6 +42,8 @@ interface Kho {
     /** Mốc bán / nhập đầu tiên của cả cửa hàng, để đo khoảng trống lịch sử nhập. */
     banDauTien?: string | null
     nhapDauTien?: string | null
+    /** Đợt đồng bộ hoá đơn KiotViet gần nhất. */
+    dongBoKV?: Array<{ startedAt: string | Date; mode: string; created: number; updated: number; fetched: number }>
 }
 
 function fake(k: Kho, loi?: Record<string, boolean>) {
@@ -82,6 +84,7 @@ function fake(k: Kho, loi?: Record<string, boolean>) {
         bankAccount: { findMany: async () => { no('bankAccount'); return k.taiKhoan ?? [] } },
         importReceipt: { findMany: async () => { no('importReceipt'); return k.phieuNhap ?? [] } },
         storeSettings: { findFirst: async () => { no('storeSettings'); return { allowNegativeStock: k.choBanAm ?? false } } },
+        kiotVietSyncLog: { findMany: async () => { no('kiotVietSyncLog'); return k.dongBoKV ?? [] } },
     }
 }
 
@@ -418,6 +421,43 @@ async function main() {
         ok('… nói thẳng đây không phải kết luận có lệch',
             !!m && /KHÔNG phải kết luận là có lệch/.test(m.anhHuong), m?.anhHuong)
         ok('… và để trống con số thay vì bịa 0', !!m && m.so === null, m?.so)
+    }
+
+    console.log('\n▶ Đồng bộ KiotViet ngừng mang hoá đơn về\n')
+    /* Ca thật 15/08/2026 ở HUTI: webhook invoice.update bị TẮT phía KiotViet nên
+     * đơn chỉ về khi có người bấm tay. Hôm trước ai đó bấm → 23 phiếu; hôm sau
+     * không ai bấm → KHÔNG CÓ ĐƠN NÀO và không một dòng log nào báo động. */
+    const gioTruoc = (h: number) => new Date(Date.now() - h * 3600_000).toISOString()
+    {
+        const r = await sucKhoeDuLieu(fake({ ...SACH, dongBoKV: [{ startedAt: gioTruoc(2), mode: 'webhook', created: 5, updated: 1, fetched: 6 }] }), KY)
+        const m = lay(r, 'dong-bo-kiotviet')
+        ok('mới đồng bộ 2 giờ trước → ổn', m.muc === 'on', m.muc)
+    }
+    {
+        const r = await sucKhoeDuLieu(fake({ ...SACH, dongBoKV: [{ startedAt: gioTruoc(30), mode: 'manual', created: 23, updated: 317, fetched: 4262 }] }), KY)
+        const m = lay(r, 'dong-bo-kiotviet')
+        ok('30 giờ không có đợt nào → mức vừa', m.muc === 'vua', m.muc)
+        ok('… nói rõ doanh thu đang THIẾU chứ không phải bán ít đi',
+            /không phải cửa hàng bán ít đi/.test(m.anhHuong), m.anhHuong.slice(0, 90))
+        ok('… nhận ra đợt cuối là chạy tay nên nghi webhook tắt',
+            /webhook invoice.update đang bị tắt/.test(m.anhHuong), m.anhHuong.slice(-120))
+        ok('… việc cần làm nhắc kiểm webhook có BẬT không',
+            /invoice.update phải đang BẬT/.test(m.canLam), m.canLam.slice(-120))
+    }
+    {
+        const r = await sucKhoeDuLieu(fake({ ...SACH, dongBoKV: [{ startedAt: gioTruoc(60), mode: 'webhook', created: 0, updated: 0, fetched: 0 }] }), KY)
+        const m = lay(r, 'dong-bo-kiotviet')
+        ok('quá 48 giờ → mức NẶNG', m.muc === 'nang', m.muc)
+        ok('… đợt cuối là webhook thì KHÔNG đổ cho webhook tắt',
+            !/webhook invoice.update đang bị tắt/.test(m.anhHuong))
+    }
+    {
+        // Cửa hàng không nối KiotViet: im hẳn, không thêm mục, không ghi "chưa đọc được"
+        const r = await sucKhoeDuLieu(fake(SACH), KY)
+        ok('cửa hàng chưa từng đồng bộ KiotViet → không hiện mục này',
+            !lay(r, 'dong-bo-kiotviet'), r.muc.map((m: any) => m.ma).join(','))
+        ok('… và không ghi vào mục "chưa đọc được"',
+            !r.thieu.some((t: string) => /kiotViet/i.test(t)), r.thieu)
     }
 
     console.log(`\n${dat}/${dat + hong} ca đạt`)

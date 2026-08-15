@@ -440,6 +440,54 @@ export async function sucKhoeDuLieu(
         }
     }
 
+    /* ── 8. Đồng bộ KiotViet có còn mang hoá đơn về không ────────────────
+     *
+     * Đo thật ngày 15/08/2026 ở HUTI: webhook `invoice.update` bị TẮT phía
+     * KiotViet (customer/product vẫn bật), nên đơn hàng chỉ về khi có người bấm
+     * đồng bộ tay. Hôm 14/08 ai đó bấm → 23 phiếu; hôm 15/08 không ai bấm →
+     * KHÔNG CÓ ĐƠN NÀO, và không một dòng log nào báo động.
+     *
+     * Đây là kiểu hỏng tệ nhất: im lặng. Người dùng chỉ phát hiện khi tự thấy
+     * "hôm nay chưa có đơn nào". Phép soát này biến nó thành một dòng đỏ.
+     *
+     * Chỉ soát khi cửa hàng CÓ dùng KiotViet — không có bảng hoặc chưa từng
+     * đồng bộ thì im, không phải cửa hàng nào cũng nối KiotViet. */
+    {
+        /* try/catch chứ KHÔNG dùng `thu()`: cửa hàng không nối KiotViet là
+         * chuyện bình thường, ghi nó vào mục "chưa đọc được" là thêm một dòng
+         * nhiễu cho mọi cửa hàng không dùng tính năng này. */
+        let kv: any[] | null = null
+        try {
+            kv = await prisma.kiotVietSyncLog.findMany({
+                where: { entity: { contains: 'invoice' } },
+                orderBy: { startedAt: 'desc' }, take: 1,
+                select: { startedAt: true, mode: true, created: true, updated: true, fetched: true },
+            })
+        } catch { kv = null }
+
+        // null = không đọc được (store chưa có bảng) → im hẳn, đây không phải lỗi.
+        if (kv !== null && kv.length > 0) {
+            const lanCuoi = new Date(kv[0].startedAt)
+            const soGio = Math.floor((Date.now() - lanCuoi.getTime()) / 3600_000)
+            const ngayVN = new Date(lanCuoi.getTime() + 7 * 3600_000).toISOString().slice(0, 16).replace('T', ' ')
+            muc.push({
+                ma: 'dong-bo-kiotviet',
+                ten: 'Đồng bộ hoá đơn từ KiotViet',
+                /* 24 giờ: một ngày bán không có đơn nào về là đủ để nghi. Dưới
+                 * mốc đó thì có thể chỉ là cửa hàng chưa bán, không nên kêu. */
+                muc: soGio >= 48 ? 'nang' : soGio >= 24 ? 'vua' : 'on',
+                so: `lần cuối ${ngayVN} (${soGio} giờ trước) · ${kv[0].mode === 'manual' ? 'chạy tay' : 'webhook'} · tạo ${kv[0].created}`,
+                anhHuong: soGio < 24
+                    ? 'Hoá đơn từ KiotViet vẫn đang về bình thường.'
+                    : `Đã ${soGio} giờ không có đợt đồng bộ hoá đơn nào từ KiotViet. Nếu cửa hàng vẫn bán thì doanh thu, tồn kho và mọi báo cáo theo kỳ đang THIẾU phần bán qua KiotViet — không phải cửa hàng bán ít đi.`
+                    + (kv[0].mode === 'manual' ? ' Đợt gần nhất là CHẠY TAY, tức webhook không mang hoá đơn về: nhiều khả năng webhook invoice.update đang bị tắt ở phía KiotViet.' : ''),
+                canLam: soGio < 24
+                    ? 'Không cần làm gì.'
+                    : 'Mở Cài đặt → KiotViet, bấm "Đồng bộ" để kéo đơn còn thiếu. Sau đó kiểm mục webhook trên trang đó: loại invoice.update phải đang BẬT và trỏ về Kengi — KiotViet tự tắt webhook sau nhiều lần giao hỏng.',
+            })
+        }
+    }
+
     /* Điểm: mỗi mục nặng cắt 28% phần CÒN LẠI, vừa cắt 10%. Không phải thang
      * khoa học — mục đích là xếp thứ tự ưu tiên và **cho người dùng thấy tiến
      * bộ khi dọn dần**, nên trừ theo tỷ lệ chứ không trừ thẳng rồi kẹp sàn.
