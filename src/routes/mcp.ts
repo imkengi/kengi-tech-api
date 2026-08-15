@@ -288,8 +288,12 @@ export const TOOLS: Tool[] = [
             },
         },
         run: async (a, { prisma }) => {
-            const to = a?.to ? new Date(String(a.to) + 'T23:59:59') : new Date()
-            const from = a?.from ? new Date(String(a.from) + 'T00:00:00') : new Date(to.getTime() - 7 * 86400_000)
+            /* Mốc theo GIỜ VN, không theo giờ máy.
+             * `new Date('2026-03-01T00:00:00')` không có hậu tố múi giờ nên JS
+             * hiểu là giờ máy — trên Cloud Run là UTC, tức 07:00 giờ VN. Kỳ bị
+             * hụt 7 tiếng đầu ngày và thừa 7 tiếng của ngày kế. */
+            const to = a?.to ? new Date(String(a.to) + 'T23:59:59+07:00') : new Date()
+            const from = a?.from ? new Date(String(a.from) + 'T00:00:00+07:00') : new Date(to.getTime() - 7 * 86400_000)
             if (isNaN(from.getTime()) || isNaN(to.getTime())) return errContentThrow('Ngày không hợp lệ (dùng YYYY-MM-DD)')
             /* Cắt kỳ theo NGÀY BÁN, không theo ngày ghi dòng.
              *
@@ -350,8 +354,8 @@ export const TOOLS: Tool[] = [
                         COUNT(*) FILTER (WHERE channel<>'online')::int AS "phieuTrucTiep"
                  FROM "Transaction"
                  WHERE status IN ('completed','partial')
-                   AND COALESCE("transactionDate","createdAt") >= $1::date
-                   AND COALESCE("transactionDate","createdAt") < ($2::date + interval '1 day')
+                   AND (COALESCE("transactionDate","createdAt") + interval '7 hours') >= $1::date
+                   AND (COALESCE("transactionDate","createdAt") + interval '7 hours') < ($2::date + interval '1 day')
                  GROUP BY 1 ORDER BY 1`,
                 String(a.from), String(a.to)
             )
@@ -381,8 +385,8 @@ export const TOOLS: Tool[] = [
                         SUM(total - COALESCE(tax,0))::float8 AS "doanhThuTruocThue"
                  FROM "Transaction"
                  WHERE status IN ('completed','partial')
-                   AND COALESCE("transactionDate","createdAt") >= $1::date
-                   AND COALESCE("transactionDate","createdAt") < ($2::date + interval '1 day')
+                   AND (COALESCE("transactionDate","createdAt") + interval '7 hours') >= $1::date
+                   AND (COALESCE("transactionDate","createdAt") + interval '7 hours') < ($2::date + interval '1 day')
                  GROUP BY 1 ORDER BY 4 DESC NULLS LAST`,
                 String(a.from), String(a.to)
             )
@@ -450,7 +454,8 @@ export const TOOLS: Tool[] = [
                         SUM(o.total)::float8 AS "tongTien"
                  FROM "OnlineOrder" o
                  LEFT JOIN "Transaction" t ON t."receiptNumber" = 'ONLINE-' || o."orderNumber"
-                 WHERE o."createdAt" >= $1::date AND o."createdAt" < ($2::date + interval '1 day')
+                 WHERE (o."createdAt" + interval '7 hours') >= $1::date
+                   AND (o."createdAt" + interval '7 hours') < ($2::date + interval '1 day')
                  GROUP BY 1 ORDER BY 1`,
                 String(a.from), String(a.to)
             )
