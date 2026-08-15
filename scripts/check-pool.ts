@@ -78,6 +78,20 @@ function layKhoi(s: string, i: number): string {
     return ''
 }
 
+/* ⚠ ĐIỂM MÙ ĐÃ BIẾT: bộ dò này đòi `prisma.` / `sp.` / `$queryRaw*` xuất hiện
+ * TRỰC TIẾP trong khối Promise.all. Lời gọi đi qua HÀM BỌC thì lọt lưới.
+ *
+ * Dính thật 15/08/2026: `GET /kiotviet/imported-summary` bọc SQL trong `q()`
+ * rồi bắn 9 câu quét bảng song song vào pool cửa hàng chỉ 5 kết nối — bộ dò
+ * báo xanh suốt, tới khi có người đọc mã mới thấy.
+ *
+ * ĐÃ THỬ VÀ BỎ một luật mở rộng (đếm `ten(\`SELECT` trong Promise.all): đo trên
+ * toàn repo ra 4 khối — 3 khối thật ra là `$queryRawUnsafe` gọi trực tiếp (bộ
+ * dò cũ đã bắt), khối còn lại là `queryBQ` của BigQuery, KHÔNG đụng pool Prisma
+ * nên là báo nhầm. Tức luật đó cho 0 phát hiện thật và 1 báo nhầm — thêm vào
+ * chỉ dạy người ta bỏ qua cảnh báo.
+ *
+ * Nên: viết hàm bọc SQL thì tự nhớ chạy tuần tự, đừng trông vào bộ dò này. */
 const TRUY_VAN = /(?:prisma|storePrisma|sp|p|tx|db)\s*\.\s*(?:[a-zA-Z]+\s*\.\s*(?:findMany|findFirst|findUnique|aggregate|groupBy|count|updateMany|deleteMany)|\$queryRaw|\$queryRawUnsafe|\$executeRaw)/g
 
 /** Tên hàm/route gần nhất phía trên — để người đọc biết ngay chỗ nào. */
