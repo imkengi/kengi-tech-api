@@ -629,6 +629,57 @@ router.get('/pages/:pageId/auto-reply-log', authMiddleware, async (req: AuthRequ
 })
 
 // ═══════════════════════════════════════════════════════════════════════════════
+//  MESSENGER INBOX — page token cần pages_messaging (thêm 2026-08-15, cùng
+//  FacebookService với 3 tool MCP fanpage_list_conversations/read/send)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// GET /api/fanpage/pages/:pageId/conversations?limit=20&unread=1
+router.get('/pages/:pageId/conversations', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const pageId = String(req.params.pageId)
+        const ctx = await getPageService(prisma, pageId)
+        if (!ctx) return res.status(404).json({ success: false, error: 'Page chưa kết nối' })
+        try {
+            let list = await ctx.svc.listConversations(pageId, Math.min(Number(req.query.limit) || 20, 50))
+            if (req.query.unread === '1') list = list.filter(c => c.unreadCount > 0)
+            res.json({ success: true, data: list })
+        } catch (e: any) {
+            if ((e as FbGraphError)?.isTokenError) await markTokenExpired(prisma, pageId)
+            sendGraphError(res, e)
+        }
+    } catch { res.status(500).json({ success: false, error: 'Internal server error' }) }
+})
+
+// GET /api/fanpage/conversations/:id/messages?pageId=…&limit=25
+router.get('/conversations/:id/messages', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const pageId = String(req.query.pageId || '')
+        const svc = await svcFromPage(prisma, pageId)
+        if (!svc) return res.status(404).json({ success: false, error: 'Page chưa kết nối (thiếu pageId?)' })
+        const msgs = await svc.listMessages(String(req.params.id), Math.min(Number(req.query.limit) || 25, 100))
+        res.json({ success: true, data: msgs })
+    } catch (e: any) { sendGraphError(res, e) }
+})
+
+// POST /api/fanpage/pages/:pageId/messages  { recipientId, message, tag? }
+router.post('/pages/:pageId/messages', authMiddleware, requireRole('admin', 'manager', 'superadmin'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const pageId = String(req.params.pageId)
+        const { recipientId, message, tag } = req.body || {}
+        if (!recipientId || !String(message || '').trim()) {
+            return res.status(400).json({ success: false, error: 'Thiếu recipientId/message' })
+        }
+        const svc = await svcFromPage(prisma, pageId)
+        if (!svc) return res.status(404).json({ success: false, error: 'Page chưa kết nối' })
+        const r = await svc.sendMessage(pageId, String(recipientId), String(message).trim(), tag ? String(tag) : undefined)
+        res.json({ success: true, data: r })
+    } catch (e: any) { sendGraphError(res, e) }
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
 //  ADS (Marketing API) — cần USER token có ads_management + App Review
 // ═══════════════════════════════════════════════════════════════════════════════
 

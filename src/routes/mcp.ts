@@ -49,6 +49,7 @@ const INSTRUCTIONS =
     'Đăng bài: fanpage_create_post (bỏ scheduled_at = đăng ngay; có thì phải cách hiện tại ≥ 10 phút), quản lý bài đã hẹn bằng fanpage_manage_scheduled_post. ' +
     'Trả lời tự động 24/7: fanpage_create_rule rồi fanpage_set_auto_reply để bật. Tool fanpage_* ghi cũng cần scope write. ' +
     'Bài đã đăng: fanpage_post_comments (đọc hết bình luận 1 bài), fanpage_edit_post (sửa chữ), fanpage_delete_post (xoá — phải confirm=true), fanpage_like_comment / fanpage_delete_comment. ' +
+    'MESSENGER: fanpage_list_conversations (only_unread=true để tìm khách chờ) → fanpage_read_conversation → fanpage_send_message (ngoài 24h cần tag). ' +
     'QUẢNG CÁO: fanpage_ads_accounts → fanpage_ads_campaigns (hiệu quả 30 ngày) → fanpage_ads_insights; fanpage_boost_post tạo boost ở trạng thái TẠM DỪNG, chỉ tiêu tiền khi gọi fanpage_ads_set_campaign_status ACTIVE theo yêu cầu rõ của chủ shop. ' +
     'LÊN CONTENT: marketing_get_brand + marketing_content_material để lấy chất liệu, marketing_suggest_slots chọn giờ, marketing_save_draft đưa vào hàng đợi duyệt (không đăng thẳng). ' +
     'PHÂN TÍCH TỔNG THỂ / SWOT: gọi swot_data(from,to) — MỘT lần gọi gom đủ doanh thu, biên lãi, đà kỳ, khách quay lại, ghi nợ, hàng sắp hết/đã hết, vốn tồn, hàng chết, cơ cấu thanh toán; nhận định dựa trên số đó. ' +

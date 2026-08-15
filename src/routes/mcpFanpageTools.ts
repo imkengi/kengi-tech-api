@@ -831,6 +831,97 @@ export const FANPAGE_TOOLS: Tool[] = [
         },
     },
 
+    // ═══ MESSENGER INBOX ══════════════════════════════════════════════════════
+    {
+        name: 'fanpage_list_conversations',
+        description: 'Hộp thư Messenger của fanpage: hội thoại mới nhất, số tin chưa đọc, đoạn trích tin cuối, tên khách. Dùng để tìm khách đang chờ trả lời. Trả về conversation_id + customer_id để đọc/trả lời.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                ...PAGE_ID_PROP,
+                limit: { type: 'number', description: 'Số hội thoại (mặc định 20, tối đa 50)' },
+                only_unread: { type: 'boolean', description: 'Chỉ lấy hội thoại có tin chưa đọc (mặc định false)' },
+            },
+            additionalProperties: false,
+        },
+        run: async (a, { prisma }: ToolCtx) => {
+            const { page, svc } = await resolvePage(prisma, a?.page_id)
+            const limit = clamp(num(a?.limit, 20), 1, 50)
+            let list = await wrapGraph(prisma, page.pageId, () => svc.listConversations(page.pageId, limit))
+            if (a?.only_unread) list = list.filter(c => c.unreadCount > 0)
+            return {
+                fanpage: page.name, soHoiThoai: list.length,
+                hoiThoai: list.map(c => {
+                    const khach = c.participants.find(p => p.id !== page.pageId)
+                    return {
+                        conversation_id: c.id, customer_id: khach?.id || null, khach: khach?.name || '(không rõ)',
+                        tinCuoi: c.snippet.slice(0, 200), capNhatLuc: c.updatedTime,
+                        chuaDoc: c.unreadCount, traLoiDuoc: c.canReply,
+                    }
+                }),
+            }
+        },
+    },
+    {
+        name: 'fanpage_read_conversation',
+        description: 'Đọc các tin nhắn trong MỘT hội thoại Messenger (mới nhất trước) để hiểu khách đang hỏi gì trước khi trả lời. Lấy conversation_id từ fanpage_list_conversations.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                conversation_id: { type: 'string', description: 'ID hội thoại (từ fanpage_list_conversations)' },
+                ...PAGE_ID_PROP,
+                limit: { type: 'number', description: 'Số tin (mặc định 25, tối đa 100)' },
+            },
+            required: ['conversation_id'],
+            additionalProperties: false,
+        },
+        run: async (a, { prisma }: ToolCtx) => {
+            const convId = String(a?.conversation_id || '').trim()
+            if (!convId) throw new ToolError('Thiếu conversation_id')
+            const { page, svc } = await resolvePage(prisma, a?.page_id)
+            const msgs = await wrapGraph(prisma, page.pageId, () => svc.listMessages(convId, clamp(num(a?.limit, 25), 1, 100)))
+            const khach = msgs.find(m => m.from?.id && m.from.id !== page.pageId)?.from
+            const tinKhachCuoi = msgs.find(m => m.from?.id && m.from.id !== page.pageId)
+            const gioTinKhachCuoi = tinKhachCuoi ? new Date(tinKhachCuoi.createdTime).getTime() : 0
+            const trong24h = gioTinKhachCuoi > 0 && Date.now() - gioTinKhachCuoi < 24 * 3600_000
+            return {
+                fanpage: page.name, conversation_id: convId,
+                customer_id: khach?.id || null, khach: khach?.name || null,
+                conTraLoiDuoc: trong24h,
+                ghiChu: trong24h ? null : 'Tin cuối của khách đã quá 24h — Facebook chỉ cho gửi tiếp nếu kèm tag hợp lệ (fanpage_send_message tag=…).',
+                tinNhan: msgs.map(m => ({
+                    id: m.id, tu: m.from?.id === page.pageId ? 'FANPAGE' : (m.from?.name || 'khách'),
+                    noiDung: m.message, luc: m.createdTime, ...(m.attachments ? { soTepDinhKem: m.attachments } : {}),
+                })),
+            }
+        },
+    },
+    {
+        name: 'fanpage_send_message',
+        description: 'Gửi tin nhắn Messenger cho khách bằng danh nghĩa fanpage. Lấy customer_id từ fanpage_list_conversations / fanpage_read_conversation. Chỉ gửi được trong 24h kể từ tin cuối của khách, ngoài 24h phải có tag (CONFIRMED_EVENT_UPDATE / POST_PURCHASE_UPDATE / ACCOUNT_UPDATE) đúng mục đích.',
+        write: true,
+        inputSchema: {
+            type: 'object',
+            properties: {
+                customer_id: { type: 'string', description: 'PSID của khách (customer_id)' },
+                message: { type: 'string', description: 'Nội dung tin nhắn' },
+                ...PAGE_ID_PROP,
+                tag: { type: 'string', enum: ['CONFIRMED_EVENT_UPDATE', 'POST_PURCHASE_UPDATE', 'ACCOUNT_UPDATE'], description: 'Chỉ dùng khi đã quá 24h và nội dung đúng loại (VD POST_PURCHASE_UPDATE = cập nhật đơn hàng đã mua). Không được dùng để quảng cáo.' },
+            },
+            required: ['customer_id', 'message'],
+            additionalProperties: false,
+        },
+        run: async (a, { prisma }: ToolCtx) => {
+            const to = String(a?.customer_id || '').trim()
+            const message = String(a?.message || '').trim()
+            if (!to) throw new ToolError('Thiếu customer_id')
+            if (!message) throw new ToolError('Nội dung tin nhắn không được để trống')
+            const { page, svc } = await resolvePage(prisma, a?.page_id)
+            const r = await wrapGraph(prisma, page.pageId, () => svc.sendMessage(page.pageId, to, message, a?.tag))
+            return { ketQua: 'Đã gửi tin nhắn', fanpage: page.name, customer_id: to, message_id: r.id }
+        },
+    },
+
     // ═══ QUẢNG CÁO (Marketing API — cần user token ads_management) ═════════════
     {
         name: 'fanpage_ads_accounts',

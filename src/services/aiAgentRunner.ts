@@ -34,6 +34,7 @@ export const TOOL_NHAY_CAM = new Set([
     'fanpage_like_comment',
     'fanpage_ads_set_campaign_status',
     'fanpage_boost_post',
+    'fanpage_send_message',
 ])
 
 export type KetQuaChay = {

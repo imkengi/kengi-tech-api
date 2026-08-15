@@ -27,7 +27,7 @@ Tool có cột `ghi` đòi scope chứa `write`; key chỉ `read` gọi vào s�
 claude mcp add --transport http kengi-retail https://api.kengi.vn/api/mcp --header "X-API-Key: <secret>" --header "x-store-code: KENGISTORE"
 ```
 
-## Danh sách công cụ (77 — 40 bán lẻ/tài chính + 26 fanpage + 11 marketing)
+## Danh sách công cụ (80 — 40 bán lẻ/tài chính + 29 fanpage + 11 marketing)
 
 Tham số **in đậm** là bắt buộc.
 
@@ -84,6 +84,16 @@ Tham số **in đậm** là bắt buộc.
 | `fanpage_like_comment` | ghi | Like / bỏ like bình luận bằng danh nghĩa page. | **comment_id**, like, page_id |
 | `fanpage_delete_comment` | ghi | Xoá hẳn bình luận (spam/lừa đảo). Tiêu cực thường → dùng hide. | **comment_id**, page_id |
 
+### Fanpage — Messenger inbox (page token cần `pages_messaging`)
+
+| Tool | Loại | Việc | Tham số |
+|---|---|---|---|
+| `fanpage_list_conversations` | đọc | Hội thoại mới nhất: khách, tin cuối, số chưa đọc; trả `conversation_id` + `customer_id`. | page_id, limit, only_unread |
+| `fanpage_read_conversation` | đọc | Tin nhắn trong 1 hội thoại + cờ còn trong cửa sổ 24h không. | **conversation_id**, page_id, limit |
+| `fanpage_send_message` | ghi | Gửi tin cho khách (PSID). Ngoài 24h phải kèm `tag` đúng mục đích. | **customer_id**, **message**, page_id, tag |
+
+REST tương ứng: `GET /api/fanpage/pages/:pageId/conversations`, `GET /api/fanpage/conversations/:id/messages?pageId=`, `POST /api/fanpage/pages/:pageId/messages`.
+
 ### Fanpage — quảng cáo (Marketing API; cần **user token** có `ads_management` — store chỉ dán page token sẽ bị báo rõ)
 
 | Tool | Loại | Việc | Tham số |
@@ -94,7 +104,7 @@ Tham số **in đậm** là bắt buộc.
 | `fanpage_ads_set_campaign_status` | ghi | ACTIVE / PAUSED một chiến dịch — ACTIVE = tiêu tiền thật. | **campaign_id**, **status** |
 | `fanpage_boost_post` | ghi | Tạo boost (campaign+adset+ad) ở trạng thái PAUSED để duyệt; bật bằng tool trên. | **post_id**, **daily_budget_vnd**, days, ad_account_id, page_id, age_min, age_max, countries |
 
-Các tool `fanpage_edit_post / delete_post / delete_comment / like_comment / ads_set_campaign_status / boost_post` nằm trong `TOOL_NHAY_CAM` — tác vụ tự động phải khai đích danh mới được dùng.
+Các tool `fanpage_edit_post / delete_post / delete_comment / like_comment / send_message / ads_set_campaign_status / boost_post` nằm trong `TOOL_NHAY_CAM` — tác vụ tự động phải khai đích danh mới được dùng.
 
 **Lấy API key + cấu hình nối Claude/Cursor:** kengi.vn/fanpage-manager → Trợ lý AI → tab **"Nối AI ngoài (MCP)"** (tạo key, chép config, nút kiểm tra kết nối gọi thẳng `tools/list`).
 

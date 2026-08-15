@@ -377,6 +377,55 @@ export class FacebookService {
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
+    //  MESSENGER (INBOX) — page token cần pages_messaging (+ pages_read_engagement)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    /** Hội thoại Messenger của page, mới nhất trước. `participants` gồm cả page. */
+    async listConversations(pageId: string, limit = 20): Promise<Array<{
+        id: string; updatedTime: string; unreadCount: number; snippet: string; canReply: boolean
+        participants: Array<{ id: string; name: string }>
+    }>> {
+        const data = await this.get(`${pageId}/conversations`, {
+            fields: 'id,updated_time,unread_count,snippet,can_reply,participants',
+            limit,
+        })
+        return (data.data || []).map((c: any) => ({
+            id: c.id, updatedTime: c.updated_time, unreadCount: c.unread_count || 0,
+            snippet: c.snippet || '', canReply: c.can_reply !== false,
+            participants: (c.participants?.data || []).map((p: any) => ({ id: p.id, name: p.name })),
+        }))
+    }
+
+    /** Tin nhắn trong 1 hội thoại, mới nhất trước. */
+    async listMessages(conversationId: string, limit = 25): Promise<Array<{
+        id: string; message: string; createdTime: string; from: { id: string; name?: string }; attachments: number
+    }>> {
+        const data = await this.get(`${conversationId}/messages`, {
+            fields: 'id,message,created_time,from,attachments{mime_type}',
+            limit,
+        })
+        return (data.data || []).map((m: any) => ({
+            id: m.id, message: m.message || '', createdTime: m.created_time,
+            from: m.from || { id: '' }, attachments: m.attachments?.data?.length || 0,
+        }))
+    }
+
+    /**
+     * Gửi tin nhắn cho 1 người (PSID) qua Send API. Ngoài cửa sổ 24h kể từ tin
+     * cuối của khách phải kèm tag (mặc định không tag → FB từ chối, ta báo lỗi).
+     */
+    async sendMessage(pageId: string, recipientId: string, text: string, tag?: string): Promise<{ id: string }> {
+        const params: Record<string, any> = {
+            recipient: { id: recipientId },
+            message: { text },
+            messaging_type: tag ? 'MESSAGE_TAG' : 'RESPONSE',
+        }
+        if (tag) params.tag = tag
+        const r = await this.post(`${pageId}/messages`, params)
+        return { id: r.message_id || r.id }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
     //  MARKETING API (ADS) — token instance phải là USER token có ads_management
     // ═══════════════════════════════════════════════════════════════════════════
 
