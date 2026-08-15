@@ -105,7 +105,7 @@ router.post('/regenerate', authMiddleware, async (req: AuthRequest, res: Respons
 // ═══════════════════════════════════════════════════════════════════════════════
 //  NHIỀU KEY CÓ TÊN + SCOPE (2026-08-15) — cho từng AI/ứng dụng một key riêng,
 //  thu hồi từng cái mà không làm rụng cái khác. /regenerate ở trên vẫn giữ để
-//  màn cài đặt cũ không hỏng (nó XOÁ HẾT key — kể cả key tạo ở đây).
+//  màn cài đặt cũ không hỏng (từ 15/08 nó chỉ thay key tên 'API Secret').
 //  Secret dạng "<keyId>.<random>" để authMiddleware tra thẳng theo keyId.
 // ═══════════════════════════════════════════════════════════════════════════════
 
