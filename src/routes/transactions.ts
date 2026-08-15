@@ -1410,8 +1410,34 @@ router.put('/:id/return', authMiddleware, requirePermission('pos.create_order'),
         // Determine return quantities (from returnItems or use full qty)
         const returnQtyMap = new Map<string, number>()
         if (returnItems && Array.isArray(returnItems) && returnItems.length > 0) {
+            /* ⚠ KHÔNG ĐƯỢC TIN SỐ LƯỢNG TRẢ TỪ CLIENT.
+             *
+             * Bản trước nhận thẳng `ri.quantity`, không kẹp theo số đã bán trên
+             * dòng hàng — mà cả tiền hoàn lẫn tồn kho hoàn lại đều nhân theo tỷ
+             * lệ qty/item.quantity. Gửi quantity:100 cho món bán 1 cái giá
+             * 200.000đ là sinh phiếu trả 20.000.000đ, cộng khống 99 cái vào kho,
+             * và trừ 20 triệu khỏi Customer.totalPurchases (âm). Chỉ cần quyền
+             * pos.create_order, không có ràng buộc nào chặn.
+             *
+             * TỪ CHỐI chứ không kẹp âm thầm: kẹp thì người bấm tưởng đã trả 100
+             * trong khi hệ chỉ ghi 1, và chênh lệch đó không ai phát hiện ra. */
             for (const ri of returnItems) {
-                returnQtyMap.set(ri.productId, ri.quantity || existing.items.find(i => i.productId === ri.productId)?.quantity || 0)
+                const dong = existing.items.find(i => i.productId === ri.productId)
+                if (!dong) continue
+                const xin = Number(ri.quantity)
+                if (Number.isFinite(xin) && xin > dong.quantity) {
+                    res.status(400).json({
+                        success: false,
+                        error: `Số lượng trả (${xin}) vượt quá số đã bán (${dong.quantity}) của "${dong.productName}"`,
+                    })
+                    return
+                }
+                if (Number.isFinite(xin) && xin < 0) {
+                    res.status(400).json({ success: false, error: 'Số lượng trả không được âm' })
+                    return
+                }
+                // Bỏ trống / 0 → hiểu là trả trọn dòng, giữ nguyên nếp cũ
+                returnQtyMap.set(ri.productId, (Number.isFinite(xin) && xin > 0) ? xin : dong.quantity)
             }
         } else {
             for (const item of itemsToReturn) {

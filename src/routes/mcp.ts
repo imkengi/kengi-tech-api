@@ -802,14 +802,46 @@ export const TOOLS: Tool[] = [
             },
             required: ['order_number', 'status'],
         },
-        run: async (a, { prisma }) => {
+        run: async (a, { prisma, userId }) => {
             const order = await prisma.onlineOrder.findFirst({ where: { orderNumber: String(a.order_number) } })
             if (!order) return errContentThrow(`Không tìm thấy đơn online "${a.order_number}"`)
             const updated = await prisma.onlineOrder.update({
                 where: { id: order.id }, data: { status: String(a.status) },
-                select: { orderNumber: true, status: true, platform: true },
+                include: { items: true, channel: true },
             })
-            return { daCapNhat: true, maDon: updated.orderNumber, trangThaiMoi: updated.status, san: updated.platform }
+
+            /* ĐỔI SANG HUỶ/TRẢ THÌ PHẢI ĐẢO HIỆU ỨNG, không chỉ đổi chữ.
+             *
+             * Bản trước chỉ ghi `status` rồi trả về. Đơn đã được orderSync chuyển
+             * thành phiếu bán sẽ hiện "đã huỷ" trên màn hình trong khi doanh thu
+             * vẫn nằm trong sổ và báo cáo thuế, hàng vẫn bị trừ kho
+             * (`stockDeducted` vẫn true nên lần đảo sau cũng không hoàn), bút
+             * toán 511/632 không được đảo. Hai đường ghi trạng thái còn lại —
+             * PUT /api/online-orders/:id/status và returnSync — đều đã gọi
+             * reverseOnlineOrderEffects; riêng đường MCP bị bỏ sót, nên AI agent
+             * có scope write huỷ đơn là để lại doanh thu ma.
+             *
+             * Đảo là idempotent nên webhook sàn gọi lại sau đó vẫn vô hại. */
+            let daDao = false
+            const { isReversalStatus, reverseOnlineOrderEffects } = await import('../services/onlineOrderReversal')
+            if (isReversalStatus(updated.status)) {
+                try {
+                    await reverseOnlineOrderEffects(prisma, updated as any, { userId })
+                    daDao = true
+                } catch (e: any) {
+                    /* Đảo hỏng mà vẫn báo thành công là tệ nhất: người dùng tin
+                     * đơn đã huỷ sạch trong khi sổ vẫn còn doanh thu. Nói thẳng. */
+                    return errContentThrow(
+                        `Đã đổi trạng thái "${updated.orderNumber}" sang ${updated.status} NHƯNG KHÔNG đảo được `
+                        + `phiếu bán/kho/bút toán: ${String(e?.message || e).slice(0, 200)}. `
+                        + 'Doanh thu của đơn này vẫn đang nằm trong sổ — cần xử lý tay.')
+                }
+            }
+            return {
+                daCapNhat: true, maDon: updated.orderNumber, trangThaiMoi: updated.status,
+                san: updated.platform,
+                daDaoHieuUng: daDao,
+            }
         },
     },
     {
