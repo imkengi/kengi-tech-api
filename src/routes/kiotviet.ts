@@ -21,6 +21,7 @@ import crypto from 'crypto'
 import jwt from 'jsonwebtoken'
 import { registryPrisma, getStorePrisma } from '../lib/prisma'
 import { errMsg } from '../lib/errorResponse'
+import { tinhTinhTrangDon } from '../lib/kiotvietDonHang'
 import { KV, testConnection, clearTokenCache, type KiotVietCreds } from '../services/kiotviet'
 import {
     newCounters, syncProducts, syncCustomers, syncSuppliers, syncInvoices,
@@ -1029,7 +1030,22 @@ router.get('/logs', async (req: Request, res: Response) => {
         const logs = await store.sp.kiotVietSyncLog.findMany({
             orderBy: { startedAt: 'desc' }, take: limit,
         }).catch(() => [])
-        res.json({ success: true, data: logs })
+
+        /* Hoá đơn thưa hơn hẳn customer.update, nên `limit` dòng đầu rất dễ
+         * KHÔNG chứa dòng hoá đơn nào (đo HUTI: 2/100). Hỏi riêng một câu để
+         * kết luận không phụ thuộc người dùng đang xem bao nhiêu dòng.
+         * Chạy TUẦN TỰ — pool mỗi cửa hàng chỉ 3 kết nối. */
+        const dongHoaDon = await store.sp.kiotVietSyncLog.findFirst({
+            where: { OR: [{ entity: 'invoices' }, { entity: { startsWith: 'invoice.' } }] },
+            orderBy: { startedAt: 'desc' },
+        }).catch(() => null)
+        const dongWebhook = await store.sp.kiotVietSyncLog.findFirst({
+            where: { entity: { startsWith: 'invoice.' } },
+            orderBy: { startedAt: 'desc' },
+        }).catch(() => null)
+
+        const mau = [dongHoaDon, dongWebhook, ...logs].filter(Boolean)
+        res.json({ success: true, data: logs, donHang: tinhTinhTrangDon(mau) })
     } catch (e: any) {
         res.status(500).json({ success: false, error: errMsg(e) })
     }
