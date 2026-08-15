@@ -138,6 +138,28 @@ function main() {
     ok('16b. chèn đủ dòng neo → im, vì thật sự vừa ghi 22 phiếu',
         duNeo.muc === 'on' && duNeo.loi === null, { muc: duNeo.muc, loi: duNeo.loi })
 
+    /* 17 — WEBHOOK CHẾT TỪ LÂU MÀ VẪN CÒN DẤU VẾT CŨ.
+     * Bản đầu xét `!webhookGanNhat` (sự TỒN TẠI), nên cửa hàng nhận webhook một
+     * lần rồi bị KiotViet tắt sẽ KHÔNG BAO GIỜ kêu — dòng webhook cũ nằm đó
+     * vĩnh viễn, mà route còn chèn dòng neo bằng findFirst không giới hạn thời
+     * gian. Đúng ca 14/08/2026 mà chuông này sinh ra để bắt. */
+    const webhookChet = [
+        dong('customer.update', 0.5),
+        dong('invoices', 2, 'manual', 22),                 // hôm nay có người bấm tay
+        dong('invoice.update.7', 24 * 30, 'webhook', 3),   // webhook cuối: 30 ngày trước
+    ]
+    const t17 = tinhTinhTrangDon(webhookChet, BAY_GIO)!
+    ok('17. webhook chết 30 ngày, chỉ còn bấm tay → PHẢI kêu', t17.muc === 'nhac', t17.muc)
+    ok('17b. nói rõ webhook lần cuối đã bao lâu', /30 ngày trước/.test(t17.loi || ''), t17.loi)
+    ok('17c. vẫn mách bật lại webhook', /Đăng ký webhook/.test(t17.loi || ''), t17.loi)
+
+    // 18 — CHIỀU IM: webhook còn mới thì đừng kêu
+    const t18 = tinhTinhTrangDon([
+        dong('customer.update', 0.5),
+        dong('invoice.update.7', 3, 'webhook', 2),
+    ], BAY_GIO)!
+    ok('18. webhook mới 3h → vẫn "on"', t18.muc === 'on' && t18.loi === null, { muc: t18.muc, loi: t18.loi })
+
     console.log(`\n${dat}/${dat + hong} ca đạt`)
     if (hong) process.exit(1)
 }

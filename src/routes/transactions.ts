@@ -433,19 +433,49 @@ router.get('/by-salesperson', authMiddleware, requirePermission('pos.view'), asy
             ],
         }
 
+        /* GOM THEO `salespersonId` THÔI, không gom kèm tên.
+         *
+         * `salespersonName` là ẢNH CHỤP lúc bán. Gom theo cả hai thì một người
+         * đổi tên trong hồ sơ (sửa chính tả, thêm họ) bị XÉ THÀNH NHIỀU DÒNG —
+         * phiếu cũ mang tên cũ, phiếu mới mang tên mới, bảng xếp hạng chia đôi
+         * doanh số của cùng một người và không ai hiểu vì sao. */
         const rows = await prisma.transaction.groupBy({
-            by: ['salespersonId', 'salespersonName'],
+            by: ['salespersonId'],
             where,
             _sum: { total: true, tax: true },
             _count: { _all: true },
         })
+
+        /* Tên hiển thị lấy từ hồ sơ HIỆN TẠI để bảng luôn gọi đúng tên người ta
+         * đang dùng; ai đã xoá khỏi hồ sơ thì lùi về tên đã lưu trên phiếu gần
+         * nhất — mất hồ sơ không được làm mất luôn dòng doanh số. Chạy TUẦN TỰ,
+         * pool mỗi cửa hàng chỉ 5 kết nối. */
+        const cacId = rows.map((r: any) => r.salespersonId).filter(Boolean) as string[]
+        const tenHienTai: Record<string, string> = {}
+        if (cacId.length) {
+            const nv = await prisma.user.findMany({
+                where: { id: { in: cacId } }, select: { id: true, name: true },
+            }).catch(() => [])
+            for (const u of nv) tenHienTai[u.id] = u.name
+        }
+        const tenTrenPhieu: Record<string, string> = {}
+        for (const id of cacId) {
+            if (tenHienTai[id]) continue
+            const p = await prisma.transaction.findFirst({
+                where: { ...where, salespersonId: id, salespersonName: { not: null } },
+                orderBy: { createdAt: 'desc' }, select: { salespersonName: true },
+            }).catch(() => null)
+            if (p?.salespersonName) tenTrenPhieu[id] = p.salespersonName
+        }
 
         const ds = rows.map((r: any) => {
             const tong = Number(r._sum?.total) || 0
             const thue = Number(r._sum?.tax) || 0
             return {
                 nhanVienId: r.salespersonId || null,
-                tenNhanVien: r.salespersonName || (r.salespersonId ? '(nhân viên đã xoá)' : 'Chưa ghi tên nhân viên'),
+                tenNhanVien: r.salespersonId
+                    ? (tenHienTai[r.salespersonId] || tenTrenPhieu[r.salespersonId] || '(nhân viên đã xoá)')
+                    : 'Chưa ghi tên nhân viên',
                 soPhieu: Number(r._count?._all) || 0,
                 // `Transaction.total` ĐÃ GỒM thuế — trừ ra mới so được với doanh thu thuần
                 doanhThu: tong,

@@ -984,6 +984,62 @@ router.post('/cleanup-orphan-warehouses', async (req: Request, res: Response) =>
     }
 })
 
+/* POST /admin/migrate-tarot — CHỈ tạo 2 bảng của trang tarot.
+ *
+ * Tách khỏi /migrate vì /migrate quét TOÀN BỘ schema cửa hàng: hàng trăm câu
+ * ALTER (dù no-op vẫn xin khoá ACCESS EXCLUSIVE) chạy trên pool 5 kết nối. Bật
+ * tính năng cho một trang xem tarot không đáng để đụng vào dữ liệu bán hàng của
+ * 9 cửa hàng lúc 18–20h. Hai bảng này nằm ở registry, không liên quan cửa hàng
+ * nào — chạy riêng gọn hơn nhiều. */
+router.post('/migrate-tarot', async (_req: Request, res: Response) => {
+    try {
+        const cauLenh = [
+            `CREATE TABLE IF NOT EXISTS "TarotUser" (
+                "id" TEXT NOT NULL,
+                "googleSub" TEXT NOT NULL,
+                "email" TEXT NOT NULL,
+                "name" TEXT,
+                "picture" TEXT,
+                "locale" TEXT,
+                "lastLoginAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT "TarotUser_pkey" PRIMARY KEY ("id")
+            )`,
+            `CREATE UNIQUE INDEX IF NOT EXISTS "TarotUser_googleSub_key" ON "TarotUser"("googleSub")`,
+            `CREATE INDEX IF NOT EXISTS "TarotUser_email_idx" ON "TarotUser"("email")`,
+            `CREATE TABLE IF NOT EXISTS "TarotReading" (
+                "id" TEXT NOT NULL,
+                "userId" TEXT NOT NULL,
+                "question" TEXT NOT NULL,
+                "readerName" TEXT,
+                "topic" TEXT,
+                "spread" TEXT NOT NULL DEFAULT 'three',
+                "cards" TEXT NOT NULL,
+                "summary" TEXT,
+                "aiAnswer" TEXT,
+                "aiReading" TEXT,
+                "aiModel" TEXT,
+                "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT "TarotReading_pkey" PRIMARY KEY ("id")
+            )`,
+            `CREATE INDEX IF NOT EXISTS "TarotReading_userId_createdAt_idx" ON "TarotReading"("userId", "createdAt")`,
+        ]
+        for (const sql of cauLenh) await (prisma as any).$executeRawUnsafe(sql)
+
+        // Đọc lại từ information_schema để trả bằng chứng bảng đã có thật.
+        const bang: any[] = await (prisma as any).$queryRawUnsafe(
+            `SELECT table_name FROM information_schema.tables
+             WHERE table_schema = 'public' AND table_name IN ('TarotUser','TarotReading')
+             ORDER BY table_name`
+        )
+        res.json({ success: true, data: { tables: bang.map(r => r.table_name) } })
+    } catch (err: any) {
+        console.error('[admin] migrate-tarot:', err?.message)
+        res.status(500).json({ success: false, error: errMsg(err, 'Không tạo được bảng tarot') })
+    }
+})
+
 router.post('/migrate', async (_req: Request, res: Response) => {
     try {
         // Registry migrations
@@ -1001,6 +1057,42 @@ router.post('/migrate', async (_req: Request, res: Response) => {
          * schema.prisma — client biết cột trước khi mọi store migrate là mọi
          * truy vấn Store sập (kể cả đăng nhập). */
         await (prisma as any).$executeRawUnsafe(`ALTER TABLE "Store" ADD COLUMN IF NOT EXISTS "isDemo" BOOLEAN NOT NULL DEFAULT false`)
+
+        /* NGUYỆT CÁC TAROT (2026-08-15) — bảng registry cho kengi.vn/tarot.
+         * Hệ tài khoản đứng riêng (đăng nhập Google), không dính tài khoản cửa
+         * hàng, nên đặt ở schema public chứ không phải schema cửa hàng. */
+        await (prisma as any).$executeRawUnsafe(`
+            CREATE TABLE IF NOT EXISTS "TarotUser" (
+                "id" TEXT NOT NULL,
+                "googleSub" TEXT NOT NULL,
+                "email" TEXT NOT NULL,
+                "name" TEXT,
+                "picture" TEXT,
+                "locale" TEXT,
+                "lastLoginAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT "TarotUser_pkey" PRIMARY KEY ("id")
+            )`)
+        await (prisma as any).$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "TarotUser_googleSub_key" ON "TarotUser"("googleSub")`)
+        await (prisma as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "TarotUser_email_idx" ON "TarotUser"("email")`)
+        await (prisma as any).$executeRawUnsafe(`
+            CREATE TABLE IF NOT EXISTS "TarotReading" (
+                "id" TEXT NOT NULL,
+                "userId" TEXT NOT NULL,
+                "question" TEXT NOT NULL,
+                "readerName" TEXT,
+                "topic" TEXT,
+                "spread" TEXT NOT NULL DEFAULT 'three',
+                "cards" TEXT NOT NULL,
+                "summary" TEXT,
+                "aiAnswer" TEXT,
+                "aiReading" TEXT,
+                "aiModel" TEXT,
+                "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT "TarotReading_pkey" PRIMARY KEY ("id")
+            )`)
+        await (prisma as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "TarotReading_userId_createdAt_idx" ON "TarotReading"("userId", "createdAt")`)
 
         // Store schema migrations — platform fees + geocode
         const stores = await prisma.store.findMany({ select: { schema: true, name: true } }) as any[]
@@ -5062,7 +5154,10 @@ router.post('/run-reconcile', async (req: Request, res: Response) => {
  * ĐỆM 3 PHÚT vì cùng lý do: mở đi mở lại thẻ không được phép nện vào pool của
  * 9 cửa hàng đang bán. Thêm `?moi=1` để ép chạy lại khi đang xử lý sự cố.
  */
-type DemSucKhoe = { luc: number; du: any }
+/* `soNgay` PHẢI nằm trong khoá đệm. Bản đầu chỉ xét thời hạn, nên đổi bộ lọc
+ * kỳ trong vòng 3 phút là nhận lại số liệu của kỳ CŨ — mọi con số bên trong
+ * (kể cả "đơn sàn chưa vào sổ") thuộc kỳ khác hẳn cái người dùng đang chọn. */
+type DemSucKhoe = { luc: number; soNgay: number; du: any }
 let demSucKhoeHeThong: DemSucKhoe | null = null
 const TTL_SUC_KHOE = 3 * 60_000
 
@@ -5549,7 +5644,8 @@ router.get('/health-overview', async (req: Request, res: Response) => {
         const soNgay = Math.min(365, Math.max(7, Number(req.query.ngay) || 90))
 
         // Đệm chỉ dùng cho lượt xem TOÀN BỘ; soi riêng một cửa hàng thì luôn tươi.
-        if (!chiMot && !epMoi && demSucKhoeHeThong && Date.now() - demSucKhoeHeThong.luc < TTL_SUC_KHOE) {
+        if (!chiMot && !epMoi && demSucKhoeHeThong && demSucKhoeHeThong.soNgay === soNgay
+            && Date.now() - demSucKhoeHeThong.luc < TTL_SUC_KHOE) {
             res.json({ success: true, data: { ...demSucKhoeHeThong.du, tuDem: true } })
             return
         }
@@ -5618,7 +5714,7 @@ router.get('/health-overview', async (req: Request, res: Response) => {
             cuaHang: daXep,
             chayLuc: new Date().toISOString(),
         }
-        if (!chiMot) demSucKhoeHeThong = { luc: Date.now(), du }
+        if (!chiMot) demSucKhoeHeThong = { luc: Date.now(), soNgay, du }
         res.json({ success: true, data: { ...du, tuDem: false } })
     } catch (e: any) {
         res.status(500).json({ success: false, error: String(e?.message || e) })

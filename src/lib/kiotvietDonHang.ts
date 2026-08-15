@@ -72,6 +72,12 @@ export function tinhTinhTrangDon(logs: any[], bayGio: number = Date.now()): Tinh
         laHoaDon(String(r?.entity || '')) && (Number(r?.created) || 0) + (Number(r?.updated) || 0) > 0)
 
     const soGio = moiNhat ? (bayGio - new Date(moiNhat.startedAt).getTime()) / 3_600_000 : null
+    /* Webhook cũ hơn ngưỡng này thì coi như KHÔNG còn sống — bằng ngưỡng 'nặng'
+     * của mục dưới, để hai nhánh không mâu thuẫn nhau. */
+    const NGUONG_WEBHOOK_CU = 48
+    const gioWebhook = webhookGanNhat
+        ? (bayGio - new Date(webhookGanNhat.startedAt).getTime()) / 3_600_000
+        : null
 
     let muc: MucDonHang = 'on'
     let loi = ''
@@ -93,11 +99,20 @@ export function tinhTinhTrangDon(logs: any[], bayGio: number = Date.now()): Tinh
         muc = 'vua'
         tieu = 'Lâu rồi không có đơn nào về'
         loi = `${Math.floor(soGio!)} giờ rồi không có hoá đơn nào về.`
-    } else if (!webhookGanNhat) {
+    } else if (gioWebhook === null || gioWebhook >= NGUONG_WEBHOOK_CU) {
+        /* XÉT ĐỘ MỚI, KHÔNG XÉT SỰ TỒN TẠI.
+         *
+         * Bản đầu viết `!webhookGanNhat` — chỉ hỏi "đã từng có webhook chưa".
+         * Cửa hàng nhận webhook một lần rồi bị KiotViet tắt sẽ KHÔNG BAO GIỜ
+         * kêu nữa, vì dòng webhook cũ vẫn nằm đó; mà route còn chèn dòng neo
+         * bằng findFirst không giới hạn thời gian nên nó tồn tại vĩnh viễn.
+         * Đúng ca 14/08/2026 mà chuông này sinh ra để bắt: webhook chết, hoá
+         * đơn chỉ về khi có người bấm, mà bảng vẫn báo "đơn đang tự về". */
         tieu = 'Đơn về được, nhưng phải bấm tay'
-        // Vừa có hoá đơn, nhưng do BẤM TAY. Chưa chứng minh được webhook còn sống.
         muc = 'nhac'
-        loi = 'Hoá đơn đang chỉ về khi bấm đồng bộ tay — chưa lần nào tự về qua webhook.'
+        loi = gioWebhook === null
+            ? 'Hoá đơn đang chỉ về khi bấm đồng bộ tay — chưa lần nào tự về qua webhook.'
+            : `Hoá đơn đang chỉ về khi bấm đồng bộ tay — webhook lần cuối tự về đã ${Math.floor(gioWebhook / 24)} ngày trước.`
     } else if (!ghiGanNhat || (bayGio - new Date(ghiGanNhat.startedAt).getTime()) / 3_600_000 >= 48) {
         /* ỐNG THÔNG NHƯNG KHÔNG CÓ NƯỚC CHẢY.
          * Webhook dội về đều mà KHÔNG phiếu nào vào sổ thì đơn vẫn không về —
