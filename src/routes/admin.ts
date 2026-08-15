@@ -5198,18 +5198,16 @@ router.get('/health-overview', async (req: Request, res: Response) => {
             }
         }
 
-        // Nặng trước, rồi tới điểm thấp — người quản trị nhìn dòng đầu là biết lo gì
-        cuaHang.sort((a, b) =>
-            (b.loi ? 1 : 0) - (a.loi ? 1 : 0) ||
-            (b.soNang || 0) - (a.soNang || 0) ||
-            (a.diem ?? 999) - (b.diem ?? 999))
+        /* Xếp và đếm nằm ở src/lib/tongHopSucKhoe.ts để kiểm được — hai chỗ
+         * sai im lặng nhất của màn hình giám sát. Xem scripts/check-tong-hop-
+         * suc-khoe.ts (14 ca). */
+        const { xepCuaHang, tomTatSucKhoe } = await import('../lib/tongHopSucKhoe')
+        const daXep = xepCuaHang(cuaHang)
 
         const du = {
             ky: { from, to, soNgay },
-            soCuaHang: cuaHang.length,
-            soCanLo: cuaHang.filter(c => c.loi || (c.soNang || 0) > 0).length,
-            soDocHong: cuaHang.filter(c => c.loi).length,
-            cuaHang,
+            ...tomTatSucKhoe(daXep),
+            cuaHang: daXep,
             chayLuc: new Date().toISOString(),
         }
         if (!chiMot) demSucKhoeHeThong = { luc: Date.now(), du }
