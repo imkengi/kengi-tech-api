@@ -291,7 +291,25 @@ export const TOOLS: Tool[] = [
             const to = a?.to ? new Date(String(a.to) + 'T23:59:59') : new Date()
             const from = a?.from ? new Date(String(a.from) + 'T00:00:00') : new Date(to.getTime() - 7 * 86400_000)
             if (isNaN(from.getTime()) || isNaN(to.getTime())) return errContentThrow('Ngày không hợp lệ (dùng YYYY-MM-DD)')
-            const whereTx = { createdAt: { gte: from, lte: to }, status: { in: ['completed', 'partial'] } }
+            /* Cắt kỳ theo NGÀY BÁN, không theo ngày ghi dòng.
+             *
+             * `createdAt` là lúc bản ghi được tạo; với cửa hàng nhập lịch sử từ
+             * phần mềm khác thì nó là NGÀY CHẠY NHẬP, còn `transactionDate` mới
+             * là ngày bán thật (kiotvietSync và orderSync đều ghi như vậy). Cắt
+             * theo createdAt thì hỏi tháng 3 trả 0đ cho tháng có vài trăm triệu,
+             * còn hỏi đúng ngày chạy nhập lại gộp cả tỷ vào một ngày — trong khi
+             * revenue_by_day, dataHealth và /transactions đều dùng COALESCE nên
+             * CÙNG MỘT CÂU HỎI ra hai con số khác hẳn.
+             *
+             * Prisma không có COALESCE trong where nên diễn đạt bằng OR: ưu tiên
+             * transactionDate, dòng nào chưa có thì mới xét createdAt. */
+            const whereTx = {
+                status: { in: ['completed', 'partial'] },
+                OR: [
+                    { transactionDate: { gte: from, lte: to } },
+                    { transactionDate: null, createdAt: { gte: from, lte: to } },
+                ],
+            }
             const [agg, top] = await Promise.all([
                 prisma.transaction.aggregate({ where: whereTx, _count: true, _sum: { total: true, discount: true } }),
                 prisma.transactionItem.groupBy({
