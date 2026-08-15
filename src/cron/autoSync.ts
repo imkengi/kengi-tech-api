@@ -264,10 +264,33 @@ async function syncChannel(storePrisma: any, channel: any): Promise<{ imported: 
     return { imported, updated, errors }
 }
 
+/* CHỐNG CHẠY CHỒNG.
+ *
+ * setInterval(runAutoSync, 10') không đợi lượt trước xong. Một lượt kéo lịch sử
+ * (khung 14 ngày × 80 trang, trần 20.000 đơn) thừa sức vượt 10 phút, khi đó hai
+ * lượt chạy song song trên cùng một kênh và cùng làm mới access token bằng MỘT
+ * refresh_token — sàn thường cho dùng một lần, lượt thứ hai hỏng và có thể làm
+ * chết kết nối kênh. Chưa kể hai lượt cùng chuyển đơn thành phiếu.
+ *
+ * VAN AN TOÀN: quá TRAN_TREO thì cho chạy lại, để một lượt treo (mạng chết
+ * giữa chừng, promise không bao giờ resolve) không khoá đồng bộ vĩnh viễn —
+ * đổi lỗi chồng lấn lấy lỗi đứng hẳn thì còn tệ hơn. */
+let dangChayAutoSync: number | null = null
+const TRAN_TREO = 60 * 60_000
+
 /**
  * Run auto-sync for all stores with connected channels
  */
 async function runAutoSync() {
+    if (dangChayAutoSync !== null) {
+        const troi = Date.now() - dangChayAutoSync
+        if (troi < TRAN_TREO) {
+            console.log(`[AutoSync] Lượt trước chạy ${Math.round(troi / 60_000)} phút chưa xong — bỏ lượt này`)
+            return
+        }
+        console.warn(`[AutoSync] Lượt trước treo ${Math.round(troi / 60_000)} phút — chạy lại`)
+    }
+    dangChayAutoSync = Date.now()
     try {
         // Chỉ store CÓ kênh online (cờ registry) — KHÔNG quét toàn bộ + mở client per-store
         // (đó là nguyên nhân cạn kết nối Cloud SQL). Cờ set khi kết nối kênh.
@@ -404,6 +427,8 @@ async function runAutoSync() {
         }
     } catch (err: any) {
         console.error("[AutoSync] Fatal error:", fmtErr(err))
+    } finally {
+        dangChayAutoSync = null
     }
 }
 

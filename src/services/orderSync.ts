@@ -50,6 +50,11 @@ export async function convertOnlineOrderToTransaction(prisma: StorePrisma, order
 
     // Match online order items to products by SKU
     const transactionItems: any[] = []
+    /* Dòng KHÔNG khớp được hàng kho — ghi lại để NÓI RA trên phiếu.
+     * Khách đã trả trọn `order.total` nên ghi doanh thu 100% là ĐÚNG; cái thiếu
+     * là giá vốn và trừ kho của mấy dòng này. Im lặng thì lãi bị báo cao hơn
+     * thực tế mà trên phiếu không có một dấu vết nào. */
+    const dongKhongKhop: string[] = []
     const inventoryUpdates: { productId: string; productName: string; productSku: string; quantity: number }[] = []
 
     // COMBO: 1 dòng đơn = nhiều mặt hàng. Bung thành từng thành phần → kho trừ
@@ -230,6 +235,7 @@ export async function convertOnlineOrderToTransaction(prisma: StorePrisma, order
              * đổi của chủ shop, không phải quyết định của mã. Xem danh sách SKU
              * đang chặn ở GET /admin/don-ket. */
             console.log(`[OrderSync] SKU "${item.sku}" not found in inventory for order ${order.orderNumber}`)
+            dongKhongKhop.push(`${item.sku || '(không SKU)'} ×${item.quantity}`)
         }
     }
 
@@ -257,7 +263,10 @@ export async function convertOnlineOrderToTransaction(prisma: StorePrisma, order
             channel: 'online',
             createdBy: systemUser.id,
             createdByName: 'Hệ thống',
-            notes: `Đơn online ${order.platform || 'Shopee'} - ${order.orderNumber}`,
+            notes: `Đơn online ${order.platform || 'Shopee'} - ${order.orderNumber}`
+                + (dongKhongKhop.length
+                    ? ` — ⚠ ${dongKhongKhop.length} dòng chưa nối được hàng kho (${dongKhongKhop.slice(0, 5).join(', ')}${dongKhongKhop.length > 5 ? '…' : ''}): phiếu có ĐỦ doanh thu nhưng THIẾU giá vốn và không trừ kho phần này.`
+                    : ''),
             transactionDate: order.createdAt,
             items: {
                 create: transactionItems,
