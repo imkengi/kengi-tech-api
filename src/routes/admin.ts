@@ -5012,18 +5012,6 @@ type DemLoi = { luc: number; gio: number; du: any }
 let demLoi: DemLoi | null = null
 const TTL_LOI = 2 * 60_000
 
-/** Bỏ phần biến thiên để hai lần lỗi cùng bệnh gom về một nhóm. */
-function chuKyLoi(msg: string): string {
-    return String(msg || '')
-        .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, '<uuid>')
-        .replace(/\bc[a-z0-9]{24,}\b/gi, '<id>')            // cuid
-        .replace(/\b\d{4}-\d{2}-\d{2}T[\d:.]+Z?\b/g, '<thoi-gian>')
-        .replace(/\b\d{5,}\b/g, '<so>')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .slice(0, 220)
-}
-
 router.get('/errors', async (req: Request, res: Response) => {
     try {
         const gio = Math.min(72, Math.max(1, Number(req.query.gio) || 6))
@@ -5072,42 +5060,10 @@ router.get('/errors', async (req: Request, res: Response) => {
         }
 
         const dong: any[] = Array.isArray(r?.entries) ? r.entries : []
-        const nhom = new Map<string, any>()
-        const theoDuong = new Map<string, number>()
-        let so5xx = 0
+        const { gomLoi } = await import('../lib/gomLoi')
+        const { nhom, duongLoi, so5xx } = gomLoi(dong)
 
-        for (const e of dong) {
-            const url = e?.httpRequest?.requestUrl
-            const status = Number(e?.httpRequest?.status) || 0
-            if (status >= 500) {
-                so5xx++
-                if (url) {
-                    const duong = String(url).replace(/^https?:\/\/[^/]+/, '').split('?')[0]
-                        .replace(/\/c[a-z0-9]{20,}/gi, '/:id').replace(/\/\d{3,}/g, '/:id')
-                    theoDuong.set(duong, (theoDuong.get(duong) || 0) + 1)
-                }
-            }
-            const msg = e?.textPayload
-                || e?.jsonPayload?.message
-                || (status >= 500 ? `HTTP ${status} ${url || ''}` : null)
-            if (!msg) continue
-            const ky = chuKyLoi(msg)
-            if (!ky) continue
-            const cu = nhom.get(ky)
-            if (cu) {
-                cu.so++
-                if (e.timestamp < cu.somNhat) cu.somNhat = e.timestamp
-                if (e.timestamp > cu.muonNhat) cu.muonNhat = e.timestamp
-            } else {
-                nhom.set(ky, {
-                    chuKy: ky, so: 1,
-                    mau: String(msg).slice(0, 400),
-                    somNhat: e.timestamp, muonNhat: e.timestamp,
-                })
-            }
-        }
-
-        const ds = [...nhom.values()].sort((a, b) => b.so - a.so).slice(0, 30)
+        const ds = nhom.slice(0, 30)
         const du = {
             docDuoc: true,
             ky: { gio, tu },
@@ -5115,10 +5071,9 @@ router.get('/errors', async (req: Request, res: Response) => {
              * Không nói ra thì con số hiện trên màn hình trông như tổng số thật. */
             soDongDoc: dong.length,
             chamTran: dong.length >= 1000,
-            soNhom: nhom.size,
+            soNhom: nhom.length,
             so5xx,
-            duongLoi: [...theoDuong.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12)
-                .map(([duong, so]) => ({ duong, so })),
+            duongLoi: duongLoi.slice(0, 12),
             nhom: ds,
             chayLuc: new Date().toISOString(),
         }
