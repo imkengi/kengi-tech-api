@@ -357,6 +357,61 @@ export async function sucKhoeDuLieu(
         })
     }
 
+    /* ── 5b. ĐƠN SÀN ĐÃ BÁN MÀ CHƯA VÀO SỔ ────────────────────────────────
+     *
+     * Đơn online tự chuyển thành phiếu bán khi trạng thái cho thấy đã bán
+     * (orderSync.convertibleStatuses). Chuyển hụt là hàng đã giao, tiền đã thu,
+     * mà doanh thu KHÔNG hề có trong sổ — không một thông báo nào.
+     *
+     * PHẢI TÁCH ĐƠN HUỶ RA. Đo KENGISTORE 30 ngày 15/08/2026: đếm thô kiểu
+     * "đơn chưa có phiếu" ra 430 đơn (12%), nhưng lọc đúng trạng thái đáng lẽ
+     * phải lên phiếu thì chỉ còn 53 — số thô phồng gấp 8 lần và không kết luận
+     * được gì. Đơn huỷ đương nhiên không lên phiếu, đó không phải lỗi.
+     *
+     * BỎ QUA ĐƠN MỚI 2 NGÀY: đơn vừa về đang chờ lượt đồng bộ kế tiếp là bình
+     * thường; kêu ngay là ngày nào cũng kêu rồi người dùng tắt não bỏ qua. Đo
+     * thật: 48/53 đơn kẹt là từ hơn 2 ngày trước, chỉ 5 đơn thuộc 2 ngày gần
+     * nhất — nên ngưỡng này cắt đúng chỗ.
+     */
+    const NGAY_BO_QUA = 2
+    const kep: any[] | null = await thu<any[] | null>('donChuaVaoSo', thieu, () => prisma.$queryRawUnsafe(
+        `SELECT COUNT(*)::int AS "soDon",
+                COALESCE(SUM(o.total), 0)::float8 AS "tien",
+                MIN(o."createdAt") AS "cuNhat"
+         FROM "OnlineOrder" o
+         LEFT JOIN "Transaction" t ON t."receiptNumber" = 'ONLINE-' || o."orderNumber"
+         WHERE t.id IS NULL
+           AND o."createdAt" >= $1 AND o."createdAt" < $2
+           AND o."createdAt" < now() - interval '${NGAY_BO_QUA} days'
+           AND o.status IN ('confirmed','processing','shipping','completed','delivered',
+                            'READY_TO_SHIP','PROCESSED','SHIPPED','COMPLETED',
+                            'AWAITING_SHIPMENT','AWAITING_COLLECTION','PARTIALLY_SHIPPING',
+                            'IN_TRANSIT','DELIVERED')`,
+        ky.start, ky.end,
+    ), null)
+
+    /* `null` = KHÔNG ĐỌC ĐƯỢC (bảng chưa có chẳng hạn) → im hẳn, khác với đọc
+     * được và đúng là 0 đơn kẹt. Cửa hàng không bán sàn cũng rơi vào nhánh 0
+     * và không bị làm phiền. */
+    if (kep) {
+        const soDon = Number(kep?.[0]?.soDon) || 0
+        const tienKep = Number(kep?.[0]?.tien) || 0
+        const cuNhat = kep?.[0]?.cuNhat ? new Date(kep[0].cuNhat).toISOString().slice(0, 10) : null
+        muc.push({
+            ma: 'don-san-chua-vao-so',
+            ten: 'Đơn sàn đã bán mà chưa vào sổ',
+            muc: soDon === 0 ? 'on' : tienKep >= 5_000_000 || soDon >= 20 ? 'nang' : 'vua',
+            so: soDon === 0 ? 'không có đơn nào kẹt'
+                : `${soDon} đơn · ${tien(tienKep)}${cuNhat ? ` · cũ nhất ${cuNhat}` : ''}`,
+            anhHuong: soDon === 0
+                ? 'Đơn sàn đang vào sổ đầy đủ.'
+                : 'Những đơn này đã bán và đã giao nhưng KHÔNG có phiếu bán, nên doanh thu, giá vốn và tồn kho đều thiếu đúng phần đó — và vì không có phiếu nên cũng không vào hàng đợi xuất hoá đơn.',
+            canLam: soDon === 0
+                ? 'Không cần làm gì.'
+                : 'Mở Bán Hàng → Đơn Online, lọc đơn chưa tạo phiếu và bấm đồng bộ lại kênh; đơn nào vẫn không lên thì mở ra xem trạng thái có nằm ngoài danh sách được chuyển không.',
+        })
+    }
+
     // ── 6. Số dư ngân hàng đã nhập chưa ──────────────────────────────────
     const tk: any[] = await thu('taiKhoan', thieu, () => prisma.bankAccount.findMany({
         select: { balance: true },

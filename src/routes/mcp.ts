@@ -403,6 +403,28 @@ export const TOOLS: Tool[] = [
                         COUNT(*)::int AS "tongDon",
                         COUNT(t.id)::int AS "daChuyenPhieu",
                         (COUNT(*) - COUNT(t.id))::int AS "chuaChuyen",
+                        /* TÁCH ĐƠN HUỶ RA KHỎI "CHƯA CHUYỂN".
+                         * Bản trước đếm COUNT(*) trừ COUNT(t.id) trên MỌI đơn,
+                         * nên đơn huỷ — thứ đương nhiên không lên phiếu — cũng
+                         * bị gộp vào. Đo KENGISTORE 30 ngày: 428/3580 (12%)
+                         * "chưa chuyển", con số đó không kết luận được gì.
+                         * Chỉ đơn ở trạng thái ĐÁNG LẼ PHẢI LÊN PHIẾU (khớp
+                         * convertibleStatuses của orderSync.ts) mà thiếu phiếu
+                         * mới là khoảng trống doanh thu thật. */
+                        COUNT(*) FILTER (
+                          WHERE t.id IS NULL
+                            AND o.status IN ('confirmed','processing','shipping','completed','delivered',
+                                             'READY_TO_SHIP','PROCESSED','SHIPPED','COMPLETED',
+                                             'AWAITING_SHIPMENT','AWAITING_COLLECTION','PARTIALLY_SHIPPING',
+                                             'IN_TRANSIT','DELIVERED')
+                        )::int AS "thieuPhieuThatSu",
+                        COALESCE(SUM(o.total) FILTER (
+                          WHERE t.id IS NULL
+                            AND o.status IN ('confirmed','processing','shipping','completed','delivered',
+                                             'READY_TO_SHIP','PROCESSED','SHIPPED','COMPLETED',
+                                             'AWAITING_SHIPMENT','AWAITING_COLLECTION','PARTIALLY_SHIPPING',
+                                             'IN_TRANSIT','DELIVERED')
+                        ), 0)::float8 AS "tienThieuPhieu",
                         SUM(o.total)::float8 AS "tongTien"
                  FROM "OnlineOrder" o
                  LEFT JOIN "Transaction" t ON t."receiptNumber" = 'ONLINE-' || o."orderNumber"
@@ -410,7 +432,18 @@ export const TOOLS: Tool[] = [
                  GROUP BY 1 ORDER BY 1`,
                 String(a.from), String(a.to)
             )
-            return { tuNgay: a.from, denNgay: a.to, theoNgay: rows }
+            const r: any[] = rows as any[]
+            const tong = (k: string) => r.reduce((x, y) => x + (Number(y[k]) || 0), 0)
+            return {
+                tuNgay: a.from, denNgay: a.to,
+                tongDon: tong('tongDon'),
+                /* `chuaChuyen` GỒM CẢ đơn huỷ — đừng dùng con số này để kết
+                 * luận mất doanh thu. Dùng `thieuPhieuThatSu`. */
+                chuaChuyen: tong('chuaChuyen'),
+                thieuPhieuThatSu: tong('thieuPhieuThatSu'),
+                tienThieuPhieu: tong('tienThieuPhieu'),
+                theoNgay: rows,
+            }
         },
     },
     {

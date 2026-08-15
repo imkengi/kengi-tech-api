@@ -53,6 +53,16 @@ function fake(k: Kho, loi?: Record<string, boolean>) {
             /* Phân nhánh theo câu SQL. Bản trước trả cùng một shape cho MỌI truy
              * vấn, nên phép soát mới im lặng báo "on" và test xanh mà không hề
              * chạy qua nó — prisma giả quá dễ dãi thì test thành vô hiệu. */
+            if (/OnlineOrder/.test(String(sql || ''))) {
+                no('donChuaVaoSo')
+                // `null` = khong doc duoc (khac han doc duoc va ra 0 don)
+                if (k.donKep === null) throw new Error('bang OnlineOrder chua co')
+                return [{
+                    soDon: k.donKep?.soDon ?? 0,
+                    tien: k.donKep?.tien ?? 0,
+                    cuNhat: k.donKep?.cuNhat ?? null,
+                }]
+            }
             if (/banDau/.test(String(sql || ''))) {
                 no('mocBanNhap')
                 return [{ banDau: k.banDauTien ?? null, nhapDau: k.nhapDauTien ?? null }]
@@ -280,6 +290,35 @@ async function main() {
     }), KY)
     ok('chờ duyệt quá ít (0,5%) → không hạ mức, vẫn NẶNG',
         lay(cpItQua, 'chi-phi-ghi-so')?.muc === 'nang', lay(cpItQua, 'chi-phi-ghi-so')?.muc)
+
+    console.log('\n▶ Đơn sàn đã bán mà chưa vào sổ\n')
+
+    /* Đo thật KENGISTORE 30 ngày 15/08/2026: đếm thô "đơn chưa có phiếu" ra 430
+     * (12%), nhưng lọc đúng trạng thái đáng lẽ phải lên phiếu thì còn 53 — thô
+     * phồng gấp 8 lần. Phép soát này phải đếm theo nhánh đã lọc. */
+    const kep = await sucKhoeDuLieu(fake({ ...SACH, donKep: { soDon: 53, tien: 19_832_720, cuNhat: '2026-07-16' } }), KY)
+    const mKep = lay(kep, 'don-san-chua-vao-so')
+    ok('53 đơn kẹt · 19,8tr → mức NẶNG', mKep?.muc === 'nang', mKep?.muc)
+    ok('… nói rõ số đơn, số tiền và đơn cũ nhất',
+        /53 đơn/.test(mKep?.so || '') && /19\.832\.720/.test(mKep?.so || '') && /2026-07-16/.test(mKep?.so || ''), mKep?.so)
+    ok('… nói đúng hậu quả: không có phiếu nên không vào hàng đợi hoá đơn',
+        /hàng đợi xuất hoá đơn/.test(mKep?.anhHuong || ''), mKep?.anhHuong)
+
+    const kepNhe = await sucKhoeDuLieu(fake({ ...SACH, donKep: { soDon: 2, tien: 300_000 } }), KY)
+    ok('2 đơn · 300k → chỉ mức vừa, không doạ', lay(kepNhe, 'don-san-chua-vao-so')?.muc === 'vua',
+        lay(kepNhe, 'don-san-chua-vao-so')?.muc)
+
+    const kepSach = await sucKhoeDuLieu(fake({ ...SACH, donKep: { soDon: 0, tien: 0 } }), KY)
+    ok('không đơn nào kẹt → "on", không làm phiền', lay(kepSach, 'don-san-chua-vao-so')?.muc === 'on',
+        lay(kepSach, 'don-san-chua-vao-so')?.muc)
+
+    /* KHÔNG ĐỌC ĐƯỢC ≠ KHÔNG CÓ ĐƠN KẸT. Cửa hàng chưa có bảng OnlineOrder thì
+     * phải IM HẲN, không được hiện thành "on" — trấn an sai đúng kiểu đã gỡ
+     * nhiều lần trong ngày. */
+    const kepHong = await sucKhoeDuLieu(fake({ ...SACH, donKep: null }), KY)
+    ok('không đọc được → KHÔNG đẩy mục nào ra', !lay(kepHong, 'don-san-chua-vao-so'),
+        lay(kepHong, 'don-san-chua-vao-so')?.muc)
+    ok('… và ghi vào danh sách "chưa đọc được"', kepHong.thieu.some(x => /donChuaVaoSo/.test(x)), kepHong.thieu)
 
     console.log('\n▶ Phiếu nhập trùng số hoá đơn\n')
 
