@@ -266,21 +266,49 @@ export async function sucKhoeDuLieu(
     const cp: any = await thu('chiPhi', thieu, () => prisma.expense.aggregate({
         where: { date: { gte: ky.start, lt: ky.end }, status: 'active' }, _sum: { amount: true },
     }), null)
+    /* CHI PHÍ CHỜ DUYỆT LÀ CHUYỆN KHÁC HẲN VỚI KHÔNG CÓ CHI PHÍ.
+     *
+     * Đồng bộ sổ quỹ KiotViet ghi mọi khoản chi với `status: 'pending'` (xem
+     * kiotvietSync.ts — "CHỜ DUYỆT — chưa vào thống kê"), nên cửa hàng nối
+     * KiotViet luôn hiện 0đ chi phí dù đã có đầy đủ phiếu chi. Bản trước gộp
+     * hai trường hợp làm một và phán "0đ chi phí trên 14,4 tỷ doanh thu" ở mức
+     * NẶNG — buộc tội oan, và tệ hơn là chỉ sai việc: bảo họ đi "ghi các khoản
+     * chi cố định" trong khi việc thật là VÀO DUYỆT chỗ đã có sẵn.
+     *
+     * Nghi ra nhờ nhìn ngang 9 cửa hàng: cả 4 cửa hàng bị kêu đều ~0%. Bốn lần
+     * cùng một hình dạng thường là lỗi phép đo, không phải bốn cửa hàng cùng
+     * sai sổ. */
+    const cpCho: any = await thu('chiPhiChoDuyet', thieu, () => prisma.expense.aggregate({
+        where: { date: { gte: ky.start, lt: ky.end }, status: 'pending' }, _sum: { amount: true },
+    }), null)
     if (dt && cp) {
         const doanhThu = Number(dt?._sum?.total) || 0
         const chiPhi = Number(cp?._sum?.amount) || 0
+        const choDuyet = Number(cpCho?._sum?.amount) || 0
         const tyLe = doanhThu > 0 ? Math.round((chiPhi / doanhThu) * 1000) / 10 : null
+        const thap = doanhThu > 0 && (tyLe ?? 0) < 5
+        // Chờ duyệt đủ nhiều để lấp chỗ trống → bệnh là "chưa duyệt", không phải "chưa ghi"
+        const doChoDuyet = thap && choDuyet > 0 &&
+            Math.round(((chiPhi + choDuyet) / doanhThu) * 1000) / 10 >= 5
+
         muc.push({
-            ma: 'chi-phi-ghi-so',
-            ten: 'Chi phí đã ghi sổ so với doanh thu',
-            muc: doanhThu === 0 ? 'on' : (tyLe ?? 0) < 5 ? 'nang' : (tyLe ?? 0) < 10 ? 'vua' : 'on',
-            so: doanhThu === 0 ? 'chưa có doanh thu để so' : `${tyLe}% (${tien(chiPhi)} trên ${tien(doanhThu)})`,
-            anhHuong: doanhThu > 0 && (tyLe ?? 0) < 5
-                ? 'Không cửa hàng nào vận hành với chi phí dưới 5% doanh thu — nhiều khả năng tiền thuê, lương, điện nước chưa được ghi. Khi đó lãi đang bị báo CAO HƠN thực tế và lịch tiền vẽ ra một đường đi lên không có thật.'
-                : 'Chi phí ghi sổ ở mức hợp lý so với doanh thu.',
-            canLam: doanhThu > 0 && (tyLe ?? 0) < 5
-                ? 'Ghi các khoản chi cố định hằng tháng vào sổ chi phí (thuê mặt bằng, lương, điện nước, vận chuyển).'
-                : 'Không cần làm gì.',
+            ma: doChoDuyet ? 'chi-phi-cho-duyet' : 'chi-phi-ghi-so',
+            ten: doChoDuyet ? 'Chi phí đã ghi nhưng còn chờ duyệt' : 'Chi phí đã ghi sổ so với doanh thu',
+            // Chờ duyệt là việc bấm vài nút, không phải sổ sách sai → hạ xuống 'vua'
+            muc: doanhThu === 0 ? 'on' : doChoDuyet ? 'vua' : thap ? 'nang' : (tyLe ?? 0) < 10 ? 'vua' : 'on',
+            so: doanhThu === 0 ? 'chưa có doanh thu để so'
+                : doChoDuyet ? `${tien(choDuyet)} đang chờ duyệt (đã duyệt mới ${tien(chiPhi)} trên ${tien(doanhThu)})`
+                    : `${tyLe}% (${tien(chiPhi)} trên ${tien(doanhThu)})`,
+            anhHuong: doChoDuyet
+                ? 'Các khoản chi ĐÃ có trong hệ thống nhưng chưa duyệt nên chưa vào thống kê — báo cáo lãi lỗ và lịch tiền đang bỏ sót đúng phần này. Đồng bộ sổ quỹ KiotViet luôn đổ vào trạng thái chờ duyệt.'
+                : thap
+                    ? 'Không cửa hàng nào vận hành với chi phí dưới 5% doanh thu — nhiều khả năng tiền thuê, lương, điện nước chưa được ghi. Khi đó lãi đang bị báo CAO HƠN thực tế và lịch tiền vẽ ra một đường đi lên không có thật.'
+                    : 'Chi phí ghi sổ ở mức hợp lý so với doanh thu.',
+            canLam: doChoDuyet
+                ? 'Mở Vận Hành → Chi Phí, lọc trạng thái "chờ duyệt" và duyệt các khoản đã kiểm.'
+                : thap
+                    ? 'Ghi các khoản chi cố định hằng tháng vào sổ chi phí (thuê mặt bằng, lương, điện nước, vận chuyển).'
+                    : 'Không cần làm gì.',
         })
     }
 

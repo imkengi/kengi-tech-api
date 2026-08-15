@@ -80,7 +80,18 @@ function fake(k: Kho, loi?: Record<string, boolean>) {
         },
         eInvoice: { findMany: async () => { no('eInvoice'); return k.hoaDonHong ?? [] } },
         transaction: { aggregate: async () => { no('transaction'); return { _sum: { total: k.doanhThu ?? 0 } } } },
-        expense: { aggregate: async () => { no('expense'); return { _sum: { amount: k.chiPhi ?? 0 } } } },
+        /* PHẢI phân nhánh theo `status`: lib hỏi HAI câu (đã duyệt / chờ duyệt).
+         * Trả cùng một số cho cả hai là ca test "chờ duyệt" nhận nhầm số của
+         * "đã duyệt" và luôn đạt mà không kiểm gì — đúng bẫy prisma giả dễ dãi
+         * mà scripts/check-prisma-gia.ts sinh ra để chặn. */
+        expense: {
+            aggregate: async (arg: any) => {
+                no('expense')
+                const st = arg?.where?.status
+                if (st === 'pending') return { _sum: { amount: k.chiPhiChoDuyet ?? 0 } }
+                return { _sum: { amount: k.chiPhi ?? 0 } }
+            },
+        },
         bankAccount: { findMany: async () => { no('bankAccount'); return k.taiKhoan ?? [] } },
         importReceipt: { findMany: async () => { no('importReceipt'); return k.phieuNhap ?? [] } },
         storeSettings: { findFirst: async () => { no('storeSettings'); return { allowNegativeStock: k.choBanAm ?? false } } },
@@ -240,6 +251,35 @@ async function main() {
 
     const cpOk = await sucKhoeDuLieu(fake({ ...SACH, doanhThu: 1_000_000_000, chiPhi: 200_000_000 }), KY)
     ok('chi 20% doanh thu → ổn, không làm phiền', lay(cpOk, 'chi-phi-ghi-so').muc === 'on')
+
+    /* CHI PHÍ CHỜ DUYỆT ≠ KHÔNG CÓ CHI PHÍ.
+     * Đồng bộ sổ quỹ KiotViet ghi mọi khoản chi với status 'pending' nên cửa
+     * hàng nối KiotViet luôn hiện 0đ. Bản trước phán "0đ trên 14,4 tỷ doanh
+     * thu" ở mức NẶNG cho HUTI — buộc tội oan, và chỉ sai việc: bảo họ đi ghi
+     * chi phí trong khi việc thật là vào DUYỆT chỗ đã có sẵn. Nghi ra nhờ nhìn
+     * ngang 9 cửa hàng thấy cả 4 cửa hàng bị kêu đều ~0%. */
+    const cpCho = await sucKhoeDuLieu(fake({
+        ...SACH, doanhThu: 1_000_000_000, chiPhi: 0, chiPhiChoDuyet: 150_000_000,
+    }), KY)
+    const mCho = lay(cpCho, 'chi-phi-cho-duyet')
+    ok('có 150tr chờ duyệt → KHÔNG phán "chưa ghi chi phí"', !!mCho, Object.keys(cpCho.muc.map(m => m.ma)))
+    ok('… hạ xuống mức vừa, vì chỉ là chưa bấm duyệt', mCho?.muc === 'vua', mCho?.muc)
+    ok('… chỉ đúng việc: đi DUYỆT, không phải đi ghi', /duyệt các khoản/.test(mCho?.canLam || ''), mCho?.canLam)
+    ok('… không còn nói "chưa được ghi"', !/chưa được ghi/.test(mCho?.anhHuong || ''), mCho?.anhHuong)
+
+    // CHIỀU NGƯỢC: không có gì chờ duyệt thì vẫn phải kêu NẶNG như cũ
+    const cpTrong = await sucKhoeDuLieu(fake({
+        ...SACH, doanhThu: 1_000_000_000, chiPhi: 4_000_000, chiPhiChoDuyet: 0,
+    }), KY)
+    ok('không có khoản chờ duyệt nào → vẫn NẶNG như cũ',
+        lay(cpTrong, 'chi-phi-ghi-so')?.muc === 'nang', lay(cpTrong, 'chi-phi-ghi-so')?.muc)
+
+    // Và chờ duyệt quá ít để lấp chỗ trống thì cũng không được hạ mức
+    const cpItQua = await sucKhoeDuLieu(fake({
+        ...SACH, doanhThu: 1_000_000_000, chiPhi: 0, chiPhiChoDuyet: 5_000_000,
+    }), KY)
+    ok('chờ duyệt quá ít (0,5%) → không hạ mức, vẫn NẶNG',
+        lay(cpItQua, 'chi-phi-ghi-so')?.muc === 'nang', lay(cpItQua, 'chi-phi-ghi-so')?.muc)
 
     console.log('\n▶ Phiếu nhập trùng số hoá đơn\n')
 
