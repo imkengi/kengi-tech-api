@@ -994,6 +994,13 @@ router.post('/migrate', async (_req: Request, res: Response) => {
         await (prisma as any).$executeRawUnsafe(`ALTER TABLE "Store" ADD COLUMN IF NOT EXISTS "hasOnlineChannels" BOOLEAN NOT NULL DEFAULT false`)
         await (prisma as any).$executeRawUnsafe(`ALTER TABLE "Store" ADD COLUMN IF NOT EXISTS "hasFanpages" BOOLEAN NOT NULL DEFAULT false`)
         await (prisma as any).$executeRawUnsafe(`ALTER TABLE "Store" ADD COLUMN IF NOT EXISTS "hasAiJobs" BOOLEAN NOT NULL DEFAULT false`)
+        /* Cửa hàng DEMO (2026-08-15): loại khỏi màn hình giám sát + báo cáo gộp,
+         * KHÔNG xoá dữ liệu. KENGIONLINE có ngày 19/07 "bán" 31 iPhone = 1,005
+         * tỷ — chủ shop xác nhận là demo; để lẫn thì bảng sức khoẻ kêu oan và
+         * doanh thu gộp phồng 1,15 tỷ. Cột chỉ dùng qua SQL thô, KHÔNG thêm vào
+         * schema.prisma — client biết cột trước khi mọi store migrate là mọi
+         * truy vấn Store sập (kể cả đăng nhập). */
+        await (prisma as any).$executeRawUnsafe(`ALTER TABLE "Store" ADD COLUMN IF NOT EXISTS "isDemo" BOOLEAN NOT NULL DEFAULT false`)
 
         // Store schema migrations — platform fees + geocode
         const stores = await prisma.store.findMany({ select: { schema: true, name: true } }) as any[]
@@ -5155,6 +5162,25 @@ router.post('/lien-ket-listing', async (req: Request, res: Response) => {
 })
 
 /**
+ * POST /admin/danh-dau-demo — { store: 'CODE', laDemo: true|false }
+ * Đánh dấu cửa hàng demo để màn hình giám sát bỏ qua. Đảo ngược được.
+ */
+router.post('/danh-dau-demo', async (req: Request, res: Response) => {
+    try {
+        const ma = String(req.body?.store || '').trim()
+        const laDemo = !!req.body?.laDemo
+        if (!ma) { res.status(400).json({ success: false, error: 'Thiếu store' }); return }
+        const n: number = await (registryPrisma as any).$executeRawUnsafe(
+            `UPDATE "Store" SET "isDemo" = $1 WHERE code = $2`, laDemo, ma,
+        )
+        if (!n) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        res.json({ success: true, data: { store: ma, laDemo } })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: String(e?.message || e) })
+    }
+})
+
+/**
  * GET /admin/goi-y-lien-ket?store=CODE — GỢI Ý nối listing sàn ↔ hàng kho.
  *
  * Đo KENGISTORE 15/08/2026: 641 listing, 0 cái được nối — và đó là gốc rễ của
@@ -5318,6 +5344,28 @@ router.get('/don-ket', async (req: Request, res: Response) => {
                                 'IN_TRANSIT','DELIVERED')`,
         ).catch(() => [])
 
+        /* 15 ĐƠN MỒ CÔI LÀ ĐƠN NÀO — con số không xử tay được, danh sách mới
+         * xử được. Kèm tên hàng trên đơn để người dùng biết phải tạo SkuMapping
+         * hay đổi tên listing nào. */
+        const moCoiDs: any[] = await sp.$queryRawUnsafe(
+            `SELECT o."orderNumber", o.platform, o.total::float8 AS total,
+                    o."createdAt", i."productName", i.sku
+             FROM "OnlineOrder" o
+             JOIN "OnlineOrderItem" i ON i."onlineOrderId" = o.id
+             LEFT JOIN "Transaction" t ON t."receiptNumber" = 'ONLINE-' || o."orderNumber"
+             LEFT JOIN "OnlineProduct" op ON op."channelId" = o."channelId" AND op.name = i."productName"
+             WHERE t.id IS NULL
+               AND i."productId" IS NULL
+               AND op.id IS NULL
+               AND o."createdAt" < now() - interval '2 days'
+               AND o.status IN ('confirmed','processing','shipping','completed','delivered',
+                                'READY_TO_SHIP','PROCESSED','SHIPPED','COMPLETED',
+                                'AWAITING_SHIPMENT','AWAITING_COLLECTION','PARTIALLY_SHIPPING',
+                                'IN_TRANSIT','DELIVERED')
+             ORDER BY o.total DESC
+             LIMIT 50`,
+        ).catch(() => [])
+
         const khongCoDong = dong.filter(d => Number(d.soDongHang) === 0)
         res.json({
             success: true,
@@ -5334,6 +5382,12 @@ router.get('/don-ket', async (req: Request, res: Response) => {
                  * veSauKhiNoi: khớp listing CHƯA nối — nối là về.
                  * moCoi: KHÔNG khớp listing nào — nối mấy cũng không cứu, phải
                  * xử tay (đổi tên listing / thêm SkuMapping). */
+                donMoCoi: moCoiDs.map(m => ({
+                    maDon: m.orderNumber, san: m.platform,
+                    tien: Number(m.total) || 0,
+                    tenHang: m.productName, sku: m.sku,
+                    ngay: m.createdAt,
+                })),
                 duBaoThuHoi: duBao?.[0] ? {
                     seVeChuKyToi: Number(duBao[0].seVeChuKyToi) || 0,
                     veSauKhiNoi: Number(duBao[0].veSauKhiNoi) || 0,
@@ -5429,10 +5483,14 @@ router.get('/health-overview', async (req: Request, res: Response) => {
             return
         }
 
-        const tatCa = await registryPrisma.store.findMany({
-            select: { name: true, schema: true, code: true, status: true },
-            orderBy: { code: 'asc' },
-        }) as any[]
+        /* Đọc bằng SQL thô vì cột isDemo cố ý KHÔNG có trong schema.prisma
+         * (xem ghi chú ở /admin/migrate). COALESCE để chạy được cả trước khi
+         * migrate thêm cột. */
+        const tatCa: any[] = await (registryPrisma as any).$queryRawUnsafe(
+            `SELECT name, schema, code, status,
+                    COALESCE((to_jsonb("Store") ->> 'isDemo')::boolean, false) AS "laDemo"
+             FROM "Store" ORDER BY code ASC`,
+        )
         const stores = chiMot ? tatCa.filter(s => String(s.code).toUpperCase() === chiMot) : tatCa
         if (!stores.length) {
             res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return
@@ -5459,7 +5517,7 @@ router.get('/health-overview', async (req: Request, res: Response) => {
                 const nang = (kq.muc || []).filter((m: any) => m.muc === 'nang')
                 const vua = (kq.muc || []).filter((m: any) => m.muc === 'vua')
                 cuaHang.push({
-                    code: s.code, name: s.name, trangThai: s.status,
+                    code: s.code, name: s.name, trangThai: s.status, laDemo: !!s.laDemo,
                     diem: kq.diem, xepLoai: kq.xepLoai,
                     soNang: nang.length, soVua: vua.length,
                     // Chỉ gửi phần NẶNG kèm chi tiết; phần vừa gửi tên thôi cho nhẹ
@@ -5471,7 +5529,7 @@ router.get('/health-overview', async (req: Request, res: Response) => {
                 })
             } catch (e: any) {
                 cuaHang.push({
-                    code: s.code, name: s.name, trangThai: s.status,
+                    code: s.code, name: s.name, trangThai: s.status, laDemo: !!s.laDemo,
                     loi: String(e?.message || e).slice(0, 200),
                 })
             }

@@ -84,6 +84,27 @@ function main() {
     xepCuaHang(goc)
     ok('8. xếp không làm xáo mảng gốc', goc.map(x => x.code).join(',') === truoc, goc.map(x => x.code))
 
+    /* 9 — CUA HANG DEMO (them 15/08/2026, sau khi chu shop xac nhan
+     * KENGIONLINE la demo voi ngay "ban" 31 iPhone = 1,005 ty).
+     * Demo KHONG duoc tinh can lo — mot dong do demo day nguoi ta bo qua dong
+     * do that — nhung van dem rieng de khong giau su ton tai. */
+    const t9 = tomTatSucKhoe([
+        ch('THAT', { soNang: 2 }),
+        ch('DEMO', { laDemo: true, soNang: 4, diem: 10 }),
+        ch('DEMO2', { laDemo: true, loi: 'timeout' }),
+    ])
+    ok('9. demo có nặng/lỗi → KHÔNG tính cần lo', t9.soCanLo === 1, t9)
+    ok('9b. demo đọc hỏng → không tính docHong', t9.soDocHong === 0, t9)
+    ok('9c. vẫn đếm riêng soDemo', t9.soDemo === 2, t9)
+
+    // 10 — demo xuống đáy bảng dù điểm tệ nhất
+    const xep10 = xepCuaHang([
+        ch('DEMO', { laDemo: true, soNang: 9, diem: 1 }),
+        ch('TOT', { diem: 95 }),
+        ch('NANG', { soNang: 3, diem: 20 }),
+    ])
+    ok('10. demo nằm cuối bảng dù "cháy" nhất', xep10[2]?.code === 'DEMO', xep10.map(x => x.code))
+
     console.log(`\n${dat}/${dat + hong} ca đạt`)
     if (hong) process.exit(1)
 }

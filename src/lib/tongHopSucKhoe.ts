@@ -15,6 +15,8 @@
 
 export interface HangSucKhoe {
     code: string
+    /** Cửa hàng demo: hiện mờ cuối bảng, KHÔNG tính vào "cần lo". */
+    laDemo?: boolean
     name: string
     trangThai?: string
     diem?: number
@@ -36,6 +38,8 @@ export interface HangSucKhoe {
  */
 export function xepCuaHang<T extends HangSucKhoe>(ds: T[]): T[] {
     return [...ds].sort((a, b) =>
+        // Demo xuống ĐÁY, bất kể lỗi gì — dữ liệu bịa thì "cháy" cũng không cần lo
+        (a.laDemo ? 1 : 0) - (b.laDemo ? 1 : 0) ||
         (b.loi ? 1 : 0) - (a.loi ? 1 : 0) ||
         (b.soNang || 0) - (a.soNang || 0) ||
         (a.diem ?? 999) - (b.diem ?? 999))
@@ -45,6 +49,7 @@ export interface TomTatSucKhoe {
     soCuaHang: number
     soCanLo: number
     soDocHong: number
+    soDemo: number
 }
 
 /**
@@ -53,9 +58,13 @@ export interface TomTatSucKhoe {
  * hàng chết hẳn (soát hỏng, không có soNang) lại được đếm là bình thường.
  */
 export function tomTatSucKhoe(ds: HangSucKhoe[]): TomTatSucKhoe {
+    /* Demo bị loại khỏi CẢ soCanLo lẫn soDocHong: dữ liệu bịa thì hỏng cũng
+     * không phải việc phải lo, và một dòng đỏ demo sẽ dạy người ta bỏ qua
+     * dòng đỏ thật. Nhưng vẫn đếm riêng soDemo để không giấu sự tồn tại. */
     return {
         soCuaHang: ds.length,
-        soCanLo: ds.filter(c => c.loi || (c.soNang || 0) > 0).length,
-        soDocHong: ds.filter(c => c.loi).length,
+        soCanLo: ds.filter(c => !c.laDemo && (c.loi || (c.soNang || 0) > 0)).length,
+        soDocHong: ds.filter(c => !c.laDemo && c.loi).length,
+        soDemo: ds.filter(c => c.laDemo).length,
     }
 }
