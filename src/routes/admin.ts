@@ -4988,6 +4988,147 @@ type DemSucKhoe = { luc: number; du: any }
 let demSucKhoeHeThong: DemSucKhoe | null = null
 const TTL_SUC_KHOE = 3 * 60_000
 
+// ════════════════════════════════════════════════════════════════════════════
+// TRUNG TÂM LỖI — prod đang hỏng chỗ nào, gom thành nhóm đọc được
+// ════════════════════════════════════════════════════════════════════════════
+/**
+ * GET /admin/errors?gio=6 — lỗi production trong N giờ gần nhất.
+ *
+ * Ngày 15/08/2026 tôi phải chạy `gcloud logging read` hàng chục lần mới trả lời
+ * được "hệ thống đang hỏng gì" — người quản trị không có cửa đó, nên thực tế
+ * không ai biết cho tới khi khách phàn nàn.
+ *
+ * GIÁ TRỊ NẰM Ở CHỖ GOM NHÓM, không phải ở việc hiện log thô. 500 dòng
+ * "Timed out fetching a new connection" là MỘT vấn đề, không phải 500 vấn đề;
+ * đổ nguyên log ra màn hình thì vẫn không ai đọc. Chuẩn hoá chữ ký (bỏ id, số,
+ * ngày giờ) rồi đếm — đúng thao tác tay đã dùng cả ngày hôm nay.
+ *
+ * Đọc Cloud Logging bằng ADC của service account Cloud Run (đang có
+ * roles/editor). Không có quyền / gọi hỏng thì nói THẲNG là không đọc được,
+ * tuyệt đối không trả mảng rỗng — "không đọc được" mà hiện thành "không có
+ * lỗi" là trấn an sai, đúng thứ tệ nhất với một màn hình giám sát.
+ */
+type DemLoi = { luc: number; gio: number; du: any }
+let demLoi: DemLoi | null = null
+const TTL_LOI = 2 * 60_000
+
+/** Bỏ phần biến thiên để hai lần lỗi cùng bệnh gom về một nhóm. */
+function chuKyLoi(msg: string): string {
+    return String(msg || '')
+        .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, '<uuid>')
+        .replace(/\bc[a-z0-9]{24,}\b/gi, '<id>')            // cuid
+        .replace(/\b\d{4}-\d{2}-\d{2}T[\d:.]+Z?\b/g, '<thoi-gian>')
+        .replace(/\b\d{5,}\b/g, '<so>')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 220)
+}
+
+router.get('/errors', async (req: Request, res: Response) => {
+    try {
+        const gio = Math.min(72, Math.max(1, Number(req.query.gio) || 6))
+        const epMoi = String(req.query.moi || '') === '1'
+        if (!epMoi && demLoi && demLoi.gio === gio && Date.now() - demLoi.luc < TTL_LOI) {
+            res.json({ success: true, data: { ...demLoi.du, tuDem: true } }); return
+        }
+
+        const { GoogleAuth } = await import('google-auth-library').catch(() => ({ GoogleAuth: null }))
+        if (!GoogleAuth) {
+            res.json({ success: true, data: { docDuoc: false, viSao: 'Không nạp được google-auth-library' } }); return
+        }
+        const auth = new (GoogleAuth as any)({ scopes: ['https://www.googleapis.com/auth/logging.read'] })
+        const client = await auth.getClient()
+        const token = await client.getAccessToken()
+        const accessToken = token?.token || token
+
+        // Khai tại chỗ: hai hằng này là biến cục bộ của route thống kê Cloud Run
+        const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT_ID || 'kengi-tech'
+        const SERVICE_NAME = process.env.CLOUD_RUN_SERVICE_NAME || 'kengi-tech-api'
+
+        const tu = new Date(Date.now() - gio * 3600_000).toISOString()
+        const loc = `resource.type="cloud_run_revision" AND resource.labels.service_name="${SERVICE_NAME}"`
+            + ` AND timestamp>="${tu}" AND (severity>=ERROR OR httpRequest.status>=500)`
+
+        const r: any = await fetch('https://logging.googleapis.com/v2/entries:list', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                resourceNames: [`projects/${PROJECT_ID}`],
+                filter: loc,
+                orderBy: 'timestamp desc',
+                pageSize: 1000,
+            }),
+        }).then(x => x.json()).catch((e: any) => ({ _loi: String(e?.message || e) }))
+
+        if (r?._loi || r?.error) {
+            res.json({
+                success: true,
+                data: {
+                    docDuoc: false,
+                    viSao: String(r?.error?.message || r?._loi || 'Cloud Logging trả lỗi').slice(0, 300),
+                },
+            })
+            return
+        }
+
+        const dong: any[] = Array.isArray(r?.entries) ? r.entries : []
+        const nhom = new Map<string, any>()
+        const theoDuong = new Map<string, number>()
+        let so5xx = 0
+
+        for (const e of dong) {
+            const url = e?.httpRequest?.requestUrl
+            const status = Number(e?.httpRequest?.status) || 0
+            if (status >= 500) {
+                so5xx++
+                if (url) {
+                    const duong = String(url).replace(/^https?:\/\/[^/]+/, '').split('?')[0]
+                        .replace(/\/c[a-z0-9]{20,}/gi, '/:id').replace(/\/\d{3,}/g, '/:id')
+                    theoDuong.set(duong, (theoDuong.get(duong) || 0) + 1)
+                }
+            }
+            const msg = e?.textPayload
+                || e?.jsonPayload?.message
+                || (status >= 500 ? `HTTP ${status} ${url || ''}` : null)
+            if (!msg) continue
+            const ky = chuKyLoi(msg)
+            if (!ky) continue
+            const cu = nhom.get(ky)
+            if (cu) {
+                cu.so++
+                if (e.timestamp < cu.somNhat) cu.somNhat = e.timestamp
+                if (e.timestamp > cu.muonNhat) cu.muonNhat = e.timestamp
+            } else {
+                nhom.set(ky, {
+                    chuKy: ky, so: 1,
+                    mau: String(msg).slice(0, 400),
+                    somNhat: e.timestamp, muonNhat: e.timestamp,
+                })
+            }
+        }
+
+        const ds = [...nhom.values()].sort((a, b) => b.so - a.so).slice(0, 30)
+        const du = {
+            docDuoc: true,
+            ky: { gio, tu },
+            /* `chamTran` = đã lấy đủ 1000 dòng, tức CÒN NỮA mà không đọc hết.
+             * Không nói ra thì con số hiện trên màn hình trông như tổng số thật. */
+            soDongDoc: dong.length,
+            chamTran: dong.length >= 1000,
+            soNhom: nhom.size,
+            so5xx,
+            duongLoi: [...theoDuong.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12)
+                .map(([duong, so]) => ({ duong, so })),
+            nhom: ds,
+            chayLuc: new Date().toISOString(),
+        }
+        demLoi = { luc: Date.now(), gio, du }
+        res.json({ success: true, data: { ...du, tuDem: false } })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: String(e?.message || e) })
+    }
+})
+
 /**
  * GET /admin/store-staff?store=CODE — ai đang làm ở cửa hàng này.
  *
