@@ -740,7 +740,13 @@ router.get('/sku-mappings', skuAuth, async (req: AuthRequest, res: Response) => 
 })
 
 // POST /sku-mappings {platformSku, productId, platform?, note?} — tạo/cập nhật
-router.post('/sku-mappings', skuAuth, async (req: AuthRequest, res: Response) => {
+/* Route GHI phải kiểm quyền như mọi route ghi khác trong file.
+ * skuAuth chỉ xác THỰC (admin-key hoặc JWT) chứ không xét QUYỀN — nên trước đây
+ * tài khoản role cashier/staff/driver đăng nhập POS bình thường vẫn tạo/xoá
+ * được ánh xạ SKU và bắt chuyển lại đơn, tức đổi được đường doanh thu và trừ
+ * kho chạy vào mặt hàng nào. Đường admin-key không bị ảnh hưởng: skuAuth gán
+ * role 'admin', mà admin có '*' trong bảng quyền. */
+router.post('/sku-mappings', skuAuth, requirePermission('online_orders.manage', 'orders.edit'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const platformSku = String(req.body?.platformSku || '').trim()
@@ -764,7 +770,7 @@ router.post('/sku-mappings', skuAuth, async (req: AuthRequest, res: Response) =>
 })
 
 // DELETE /sku-mappings/:id
-router.delete('/sku-mappings/:id', skuAuth, async (req: AuthRequest, res: Response) => {
+router.delete('/sku-mappings/:id', skuAuth, requirePermission('online_orders.manage', 'orders.edit'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         await prisma.skuMapping.delete({ where: { id: String(req.params.id) } })
@@ -830,7 +836,7 @@ router.get('/unmatched-skus', skuAuth, async (req: AuthRequest, res: Response) =
 
 // POST /reconvert {days?} — chạy lại chuyển phiếu cho đơn đã đủ điều kiện nhưng
 // chưa có phiếu (sau khi vừa map SKU). Idempotent: đơn đã có phiếu sẽ bị bỏ qua.
-router.post('/reconvert', skuAuth, async (req: AuthRequest, res: Response) => {
+router.post('/reconvert', skuAuth, requirePermission('online_orders.manage', 'orders.edit'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const days = Math.min(365, Math.max(1, Number(req.body?.days) || 90))

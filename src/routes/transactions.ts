@@ -1691,7 +1691,11 @@ router.put('/:id', authMiddleware, requirePermission('pos.create_order'), async 
 })
 
 // PUT /api/transactions/:id/vat — Issue or update VAT invoice info
-router.put('/:id/vat', authMiddleware, async (req: AuthRequest, res: Response) => {
+/* Sửa thông tin hoá đơn VAT — PHẢI có quyền như mọi route ghi khác trong file.
+ * Bản trước chỉ có authMiddleware: bất kỳ tài khoản đăng nhập nào (tài xế, nhân
+ * viên bảo hành...) cũng sửa/xoá được số hoá đơn VAT của MỌI chi nhánh, vì hàm
+ * tra phiếu ở dưới cũng không kiểm chi nhánh. */
+router.put('/:id/vat', authMiddleware, requirePermission('pos.create_order'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const branchId = getBranchId(req)
@@ -1700,6 +1704,10 @@ router.put('/:id/vat', authMiddleware, async (req: AuthRequest, res: Response) =
 
         const existing = await prisma.transaction.findUnique({ where: { id } })
         if (!existing) {
+            return res.status(404).json({ success: false, error: 'Transaction not found' })
+        }
+        // Chi nhánh khác thì coi như không tồn tại — cùng nếp với /void, /return
+        if (!canAccessBranch(req, existing.branchId)) {
             return res.status(404).json({ success: false, error: 'Transaction not found' })
         }
 
