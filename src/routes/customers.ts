@@ -156,8 +156,19 @@ router.get('/segments-live', authMiddleware, requirePermission('customers.view')
                 },
                 _count: { _all: true },
             }),
+            /* PHẢI LÀ HÀM, không phải promise.
+             *
+             * `chayTheoDot` gọi `f()` trên từng phần tử để tự giới hạn số truy
+             * vấn chạy cùng lúc. Bốn phần tử trên đều là `() => prisma...`,
+             * riêng phần tử này trước đây là PROMISE (gọi thẳng $queryRawUnsafe
+             * rồi .catch) → gọi promise như hàm → `TypeError: f is not a
+             * function`, và endpoint 500 với MỌI request. Trang Phân Khúc vì
+             * thế trắng ở mọi cửa hàng dù dữ liệu bên dưới vẫn đủ.
+             *
+             * TypeScript không bắt được vì `(prisma as any)` làm biểu thức
+             * thành `any`, mà `any` gán được vào kiểu hàm. */
             laChuCua
-                ? (prisma as any).$queryRawUnsafe(
+                ? () => (prisma as any).$queryRawUnsafe(
                     `SELECT t."customerId" AS cid,
                             SUM(i."lineTotal")::float AS rev,
                             SUM(i."quantity" * COALESCE(p."costPrice", 0))::float AS von,
@@ -170,7 +181,7 @@ router.get('/segments-live', authMiddleware, requirePermission('customers.view')
                        AND t."status" NOT IN ('voided', 'returned')
                      GROUP BY t."customerId"`,
                 ).catch((e: any) => { console.error('segments-live von:', e?.message); return [] })
-                : Promise.resolve([]),
+                : () => Promise.resolve([]),
         ])
         const agg = new Map(grp.map((g: any) => [g.customerId as string, g]))
         /**
