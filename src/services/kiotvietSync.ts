@@ -1037,6 +1037,16 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                     },
                 })
                 await saveMap(sp, 'invoice', kvId, code, created.id)
+                /* Tổng mua của khách là số TỔNG HỢP SẴN mà chỉ đường POS duy
+                 * trì — đồng bộ KiotViet trước nay không đụng tới, nên cửa hàng
+                 * nhập bán từ KiotViet có khách mua hàng tỷ mà danh sách hiện
+                 * "0 đơn · 0đ" (đo HUTI 16/08/2026). TÍNH LẠI chứ không cộng
+                 * dồn: đồng bộ chạy lại hay lỗi giữa chừng thì cộng dồn sai
+                 * vĩnh viễn, còn tính lại chạy bao nhiêu lần cũng một kết quả. */
+                if (customerId) {
+                    const { tinhLaiChoKhach } = await import('../lib/tinhLaiTongMuaKhach')
+                    await tinhLaiChoKhach(sp, customerId)
+                }
                 await lamTuoiNoKhach(sp, opts, kv?.customerId)
                 await ganPhieuSuaChuaKhiSync(sp, opts, customerId, created.id, code, when)
                 /**

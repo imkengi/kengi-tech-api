@@ -984,6 +984,359 @@ router.post('/cleanup-orphan-warehouses', async (req: Request, res: Response) =>
     }
 })
 
+/* GET /admin/tarot-readings — soi các lượt gần nhất.
+ *
+ * Dựng để truy một báo lỗi "chưa lật lá nào đã thấy trong lịch sử": đọc code
+ * thấy saveHistory() chỉ chạy khi lá cuối được lật, nên cần nhìn dữ liệu thật
+ * (khoảng cách thời gian giữa các lượt, có luận giải AI kèm chưa) mới biết là
+ * ghi thừa hay chỉ là hiểu nhầm khi lịch sử nạp lại từ máy chủ. */
+router.get('/tarot-readings', async (req: Request, res: Response) => {
+    try {
+        const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 100)
+        const rows: any[] = await (prisma as any).tarotReading.findMany({
+            orderBy: { createdAt: 'desc' },
+            take: limit,
+            select: {
+                id: true, userId: true, tool: true, question: true, spread: true,
+                readerName: true, cards: true, aiAnswer: true, aiModel: true, createdAt: true, ip: true,
+            },
+        })
+
+        /* Tên người xem: tài khoản thật thì tra hồ sơ Google (một lượt cho tất
+         * cả id, không tra từng dòng); khách vãng lai thì lấy tên họ tự gõ, không
+         * có thì ghi "Khách". */
+        const idThat = [...new Set(rows.map(r => r.userId).filter((u: string) => u && !u.startsWith('guest:')))]
+        const hoSo = new Map<string, any>()
+        if (idThat.length) {
+            const us: any[] = await (prisma as any).tarotUser.findMany({
+                where: { id: { in: idThat } },
+                select: { id: true, name: true, email: true, picture: true },
+            })
+            us.forEach(u => hoSo.set(u.id, u))
+        }
+
+        res.json({
+            success: true,
+            data: rows.map(r => {
+                let soLa = 0
+                try { soLa = (JSON.parse(r.cards) || []).length } catch { soLa = 0 }
+                const laKhach = !r.userId || r.userId.startsWith('guest:')
+                const u = hoSo.get(r.userId)
+                return {
+                    id: r.id,
+                    laKhach,
+                    /* HAI TÊN KHÁC NHAU, đừng gộp:
+                     *  • tenTrenLaSo = người ĐƯỢC xem (chủ lá số / tên người xem
+                     *    bài) — một tài khoản xem cho nhiều người là chuyện thường
+                     *  • taiKhoan    = ai đang đăng nhập lúc bấm */
+                    tenTrenLaSo: r.readerName || '(không ghi tên)',
+                    taiKhoan: laKhach ? 'Khách (chưa đăng nhập)' : (u?.name || u?.email || '(không rõ)'),
+                    email: laKhach ? '' : (u?.email || ''),
+                    anh: laKhach ? '' : (u?.picture || ''),
+                    tool: r.tool || 'tarot',
+                    question: r.question,
+                    spread: r.spread,
+                    ip: r.ip || '',
+                    soLa,
+                    coAi: !!r.aiAnswer,
+                    aiModel: r.aiModel || '',
+                    createdAt: r.createdAt,
+                }
+            }),
+        })
+    } catch (err: any) {
+        if (err?.code === 'P2021' || /does not exist/i.test(String(err?.message || ''))) {
+            res.status(503).json({ success: false, error: 'Chưa tạo bảng tarot.', code: 'CHUA_MIGRATE' })
+            return
+        }
+        console.error('[admin] tarot-readings:', err?.message)
+        res.status(500).json({ success: false, error: errMsg(err, 'Không đọc được danh sách lượt') })
+    }
+})
+
+/* GET /admin/tarot-visits — ai vào trang, lúc nào, từ IP nào.
+ *
+ * Tách khỏi /tarot-readings vì hai thứ khác nhau: vào trang rồi thoát cũng là
+ * một lượt truy cập, nhưng KHÔNG phải một lượt xem bài. */
+router.get('/tarot-visits', async (req: Request, res: Response) => {
+    try {
+        const limit = Math.min(Math.max(Number(req.query.limit) || 30, 1), 200)
+        const rows: any[] = await (prisma as any).tarotVisit.findMany({
+            orderBy: { createdAt: 'desc' },
+            take: limit,
+        })
+
+        const idThat = [...new Set(rows.map(r => r.userId).filter((u: string) => u && !u.startsWith('guest:')))]
+        const hoSo = new Map<string, any>()
+        if (idThat.length) {
+            const us: any[] = await (prisma as any).tarotUser.findMany({
+                where: { id: { in: idThat } },
+                select: { id: true, name: true, email: true },
+            })
+            us.forEach(u => hoSo.set(u.id, u))
+        }
+
+        res.json({
+            success: true,
+            data: rows.map(r => {
+                const laKhach = !r.userId || String(r.userId).startsWith('guest:')
+                const u = hoSo.get(r.userId)
+                return {
+                    id: r.id,
+                    laKhach,
+                    taiKhoan: laKhach ? 'Khách' : (u?.name || u?.email || '(không rõ)'),
+                    email: laKhach ? '' : (u?.email || ''),
+                    // Mã máy rút gọn để nhận ra cùng một trình duyệt quay lại.
+                    maMay: laKhach && r.userId ? String(r.userId).replace('guest:', '').slice(0, 8) : '',
+                    ip: r.ip || '',
+                    tool: r.tool || 'tarot',
+                    thietBi: /Mobile|Android|iPhone/i.test(String(r.userAgent || '')) ? 'Điện thoại' : 'Máy tính',
+                    createdAt: r.createdAt,
+                }
+            }),
+        })
+    } catch (err: any) {
+        if (err?.code === 'P2021' || /does not exist/i.test(String(err?.message || ''))) {
+            res.status(503).json({ success: false, error: 'Chưa tạo bảng lượt truy cập.', code: 'CHUA_MIGRATE' })
+            return
+        }
+        console.error('[admin] tarot-visits:', err?.message)
+        res.status(500).json({ success: false, error: errMsg(err, 'Không đọc được lượt truy cập') })
+    }
+})
+
+/* GET /admin/tarot-config — cấu hình AI của trang tarot.
+ *
+ * KHÔNG trả khoá thật ra ngoài, chỉ trả 4 ký tự cuối để người quản trị nhận ra
+ * mình đang dùng khoá nào. Đọc được khoá qua API admin là biến một lần lộ token
+ * admin thành một lần lộ khoá OpenAI. */
+router.get('/tarot-config', async (_req: Request, res: Response) => {
+    try {
+        const cf = await (prisma as any).tarotSetting.findUnique({ where: { id: 'default' } })
+        res.json({
+            success: true,
+            data: {
+                provider: cf?.provider || 'openai',
+                coKhoa: !!cf?.openaiApiKey,
+                duoiKhoa: cf?.openaiApiKey ? `••••${String(cf.openaiApiKey).slice(-4)}` : '',
+                model: cf?.model || 'gpt-5.6-terra',
+                reasoningEffort: cf?.reasoningEffort || 'medium',
+                aiDailyLimit: cf?.aiDailyLimit ?? 20,
+                aiDailyLimitIp: cf?.aiDailyLimitIp ?? 60,
+                requireLogin: !!cf?.requireLogin,
+                updatedAt: cf?.updatedAt || null,
+            },
+        })
+    } catch (err: any) {
+        if (err?.code === 'P2021' || /does not exist/i.test(String(err?.message || ''))) {
+            res.status(503).json({ success: false, error: 'Chưa tạo bảng tarot.', code: 'CHUA_MIGRATE' })
+            return
+        }
+        console.error('[admin] tarot-config GET:', err?.message)
+        res.status(500).json({ success: false, error: errMsg(err, 'Không đọc được cấu hình tarot') })
+    }
+})
+
+/* PUT /admin/tarot-config — nhập/đổi khoá OpenAI, model, mức suy luận, trần lượt.
+ * Gửi openaiApiKey = chuỗi rỗng để XOÁ khoá (tắt AI). Không gửi trường nào thì
+ * giữ nguyên trường đó. */
+router.put('/tarot-config', async (req: Request, res: Response) => {
+    try {
+        const MUC = ['none', 'low', 'medium', 'high', 'xhigh', 'max']
+        const NHA = ['openai', 'deepseek']
+        const data: any = {}
+
+        if (req.body?.provider !== undefined) {
+            const p = String(req.body.provider || '').trim().toLowerCase()
+            if (!NHA.includes(p)) {
+                res.status(400).json({ success: false, error: `Nhà cung cấp phải là: ${NHA.join(' hoặc ')}` })
+                return
+            }
+            data.provider = p
+        }
+
+        if (req.body?.openaiApiKey !== undefined) {
+            const key = String(req.body.openaiApiKey || '').trim()
+            // Ô nhập hiển thị khoá đã che; người dùng bấm Lưu mà không sửa thì
+            // đừng ghi đè khoá thật bằng mấy dấu chấm.
+            if (key.startsWith('••')) {
+                /* bỏ qua */
+            } else if (!key) {
+                data.openaiApiKey = null
+            } else if (key.length < 20) {
+                res.status(400).json({ success: false, error: 'Khoá OpenAI trông không hợp lệ (quá ngắn).' })
+                return
+            } else {
+                data.openaiApiKey = key
+            }
+        }
+        if (req.body?.model !== undefined) data.model = String(req.body.model || '').trim().slice(0, 80) || 'gpt-5.6-terra'
+        if (req.body?.reasoningEffort !== undefined) {
+            const m = String(req.body.reasoningEffort || '').trim()
+            if (!MUC.includes(m)) {
+                res.status(400).json({ success: false, error: `Mức suy luận phải là một trong: ${MUC.join(', ')}` })
+                return
+            }
+            data.reasoningEffort = m
+        }
+        if (req.body?.aiDailyLimit !== undefined) {
+            const n = Number(req.body.aiDailyLimit)
+            if (!Number.isFinite(n) || n < 0 || n > 1000) {
+                res.status(400).json({ success: false, error: 'Trần lượt AI mỗi ngày phải trong khoảng 0–1000 (0 = không giới hạn).' })
+                return
+            }
+            data.aiDailyLimit = Math.floor(n)
+        }
+        if (req.body?.aiDailyLimitIp !== undefined) {
+            const n = Number(req.body.aiDailyLimitIp)
+            if (!Number.isFinite(n) || n < 0 || n > 5000) {
+                res.status(400).json({ success: false, error: 'Trần lượt AI theo IP phải trong khoảng 0–5000 (0 = không giới hạn).' })
+                return
+            }
+            data.aiDailyLimitIp = Math.floor(n)
+        }
+        if (req.body?.requireLogin !== undefined) data.requireLogin = !!req.body.requireLogin
+
+        const cf = await (prisma as any).tarotSetting.upsert({
+            where: { id: 'default' },
+            create: { id: 'default', ...data },
+            update: data,
+        })
+        res.json({
+            success: true,
+            data: {
+                provider: cf.provider || 'openai',
+                coKhoa: !!cf.openaiApiKey,
+                duoiKhoa: cf.openaiApiKey ? `••••${String(cf.openaiApiKey).slice(-4)}` : '',
+                model: cf.model,
+                reasoningEffort: cf.reasoningEffort,
+                aiDailyLimit: cf.aiDailyLimit,
+                aiDailyLimitIp: cf.aiDailyLimitIp ?? 60,
+                requireLogin: !!cf.requireLogin,
+                updatedAt: cf.updatedAt,
+            },
+        })
+    } catch (err: any) {
+        if (err?.code === 'P2021' || /does not exist/i.test(String(err?.message || ''))) {
+            res.status(503).json({ success: false, error: 'Chưa tạo bảng tarot.', code: 'CHUA_MIGRATE' })
+            return
+        }
+        console.error('[admin] tarot-config PUT:', err?.message)
+        res.status(500).json({ success: false, error: errMsg(err, 'Không lưu được cấu hình tarot') })
+    }
+})
+
+/* GET /admin/tarot-stats — lượt xem tarot ở studio.kengi.vn.
+ *
+ * Trang tarot đứng ngoài hệ bán lẻ nên không có chỗ nào trong dashboard cửa
+ * hàng đếm hộ. Số liệu lấy thẳng từ 2 bảng registry: mỗi lần lật đủ bài là một
+ * dòng TarotReading, mỗi người đăng nhập Google là một dòng TarotUser.
+ *
+ * Trả cả mốc ngày để trang admin vẽ được cột 14 ngày mà không phải gọi nhiều lần. */
+router.get('/tarot-stats', async (_req: Request, res: Response) => {
+    try {
+        const p = prisma as any
+        const now = new Date()
+        const dauNgay = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        const bay = new Date(dauNgay.getTime() - 6 * 86400000)
+        const bamuoi = new Date(dauNgay.getTime() - 29 * 86400000)
+
+        /* Chạy TUẦN TỰ chứ không Promise.all: pool prod chỉ 5 kết nối, trang
+         * admin còn nhiều thẻ khác gọi song song. */
+        const soNguoi = await p.tarotUser.count()
+        // Khách vãng lai: userId dạng 'guest:<mã>', đếm số mã khác nhau.
+        let soKhach = 0
+        try {
+            const r: any[] = await p.$queryRawUnsafe(
+                `SELECT COUNT(DISTINCT "userId")::int AS so FROM "TarotReading" WHERE "userId" LIKE 'guest:%'`
+            )
+            soKhach = Number(r?.[0]?.so ?? 0)
+        } catch { /* bảng chưa có cột/dữ liệu */ }
+        const soLuot = await p.tarotReading.count()
+        const luotHomNay = await p.tarotReading.count({ where: { createdAt: { gte: dauNgay } } })
+        const luot7Ngay = await p.tarotReading.count({ where: { createdAt: { gte: bay } } })
+        const luot30Ngay = await p.tarotReading.count({ where: { createdAt: { gte: bamuoi } } })
+        const nguoiMoi7Ngay = await p.tarotUser.count({ where: { createdAt: { gte: bay } } })
+        const dangHoatDong7Ngay = await p.tarotUser.count({ where: { lastLoginAt: { gte: bay } } })
+
+        // Cột theo ngày (14 ngày gần nhất) — gộp ở DB cho nhẹ.
+        const moc = new Date(dauNgay.getTime() - 13 * 86400000)
+        const theoNgay: any[] = await p.$queryRawUnsafe(
+            `SELECT to_char("createdAt" AT TIME ZONE 'Asia/Ho_Chi_Minh', 'YYYY-MM-DD') AS ngay,
+                    COUNT(*)::int AS soLuot
+             FROM "TarotReading"
+             WHERE "createdAt" >= $1
+             GROUP BY 1 ORDER BY 1`,
+            moc
+        )
+
+        // Ai xem nhiều nhất — để biết là người thật hay một máy bấm liên tục.
+        const topNguoi: any[] = await p.$queryRawUnsafe(
+            `SELECT u."email", u."name", COUNT(r.*)::int AS "soLuot", MAX(r."createdAt") AS "lanCuoi"
+             FROM "TarotUser" u LEFT JOIN "TarotReading" r ON r."userId" = u."id"
+             GROUP BY u."id", u."email", u."name"
+             ORDER BY COUNT(r.*) DESC, MAX(r."createdAt") DESC NULLS LAST
+             LIMIT 10`
+        )
+
+        /* Lượt TRUY CẬP (mở trang) — khác hẳn lượt xem bài. Bảng mới nên có thể
+         * chưa tồn tại ở môi trường chưa migrate. */
+        let truyCap = { tong: 0, homNay: 0, ngay7: 0 }
+        try {
+            truyCap = {
+                tong: await p.tarotVisit.count(),
+                homNay: await p.tarotVisit.count({ where: { createdAt: { gte: dauNgay } } }),
+                ngay7: await p.tarotVisit.count({ where: { createdAt: { gte: bay } } }),
+            }
+        } catch { /* chưa tạo bảng TarotVisit */ }
+
+        const ganNhat = await p.tarotReading.findFirst({
+            orderBy: { createdAt: 'desc' },
+            select: { createdAt: true, question: true, spread: true },
+        })
+
+        /* Tách theo công cụ: tarot, thần số học, tử vi, bản đồ sao. Cột `tool`
+         * mới có sau nên bảng cũ chưa migrate thì coi như tất cả là tarot. */
+        let theoCongCu: { tool: string; soLuot: number }[] = []
+        try {
+            const rows: any[] = await p.$queryRawUnsafe(
+                `SELECT COALESCE("tool", 'tarot') AS tool, COUNT(*)::int AS so
+                 FROM "TarotReading" GROUP BY 1 ORDER BY 2 DESC`
+            )
+            theoCongCu = rows.map(r => ({ tool: r.tool, soLuot: Number(r.so ?? 0) }))
+        } catch { /* chưa có cột tool */ }
+
+        res.json({
+            success: true,
+            data: {
+                soNguoi, soKhach, soLuot, luotHomNay, luot7Ngay, luot30Ngay,
+                nguoiMoi7Ngay, dangHoatDong7Ngay,
+                ganNhat, theoCongCu, truyCap,
+                theoNgay: theoNgay.map(r => ({ ngay: r.ngay, soLuot: Number(r.soluot ?? r.soLuot ?? 0) })),
+                topNguoi: topNguoi.map(r => ({
+                    email: r.email,
+                    name: r.name || '',
+                    soLuot: Number(r.soLuot ?? 0),
+                    lanCuoi: r.lanCuoi || null,
+                })),
+            },
+        })
+    } catch (err: any) {
+        // Bảng chưa tạo (chưa chạy /admin/migrate-tarot) thì nói thẳng, đừng để
+        // thẻ trên trang admin hiện "lỗi máy chủ" chung chung.
+        if (err?.code === 'P2021' || /does not exist/i.test(String(err?.message || ''))) {
+            res.status(503).json({
+                success: false,
+                error: 'Chưa tạo bảng tarot. Gọi POST /api/admin/migrate-tarot một lần.',
+                code: 'CHUA_MIGRATE',
+            })
+            return
+        }
+        console.error('[admin] tarot-stats:', err?.message)
+        res.status(500).json({ success: false, error: errMsg(err, 'Không đọc được số liệu tarot') })
+    }
+})
+
 /* POST /admin/migrate-tarot — CHỈ tạo 2 bảng của trang tarot.
  *
  * Tách khỏi /migrate vì /migrate quét TOÀN BỘ schema cửa hàng: hàng trăm câu
@@ -1024,13 +1377,48 @@ router.post('/migrate-tarot', async (_req: Request, res: Response) => {
                 CONSTRAINT "TarotReading_pkey" PRIMARY KEY ("id")
             )`,
             `CREATE INDEX IF NOT EXISTS "TarotReading_userId_createdAt_idx" ON "TarotReading"("userId", "createdAt")`,
+            // Cấu hình AI — một dòng duy nhất id='default', khoá OpenAI nhập ở trang admin.
+            `CREATE TABLE IF NOT EXISTS "TarotSetting" (
+                "id" TEXT NOT NULL DEFAULT 'default',
+                "provider" TEXT NOT NULL DEFAULT 'openai',
+                "openaiApiKey" TEXT,
+                "model" TEXT NOT NULL DEFAULT 'gpt-5.6-terra',
+                "reasoningEffort" TEXT NOT NULL DEFAULT 'medium',
+                "aiDailyLimit" INTEGER NOT NULL DEFAULT 20,
+                "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT "TarotSetting_pkey" PRIMARY KEY ("id")
+            )`,
+            // Bảng có từ trước các bản thêm cột thì bổ sung cho đủ.
+            `ALTER TABLE "TarotSetting" ADD COLUMN IF NOT EXISTS "aiDailyLimit" INTEGER NOT NULL DEFAULT 20`,
+            `ALTER TABLE "TarotSetting" ADD COLUMN IF NOT EXISTS "provider" TEXT NOT NULL DEFAULT 'openai'`,
+            // Phân biệt lượt tarot với lượt "xem chi tiết" của thần số học/tử vi/bản đồ sao.
+            `ALTER TABLE "TarotReading" ADD COLUMN IF NOT EXISTS "tool" TEXT NOT NULL DEFAULT 'tarot'`,
+            `CREATE INDEX IF NOT EXISTS "TarotReading_tool_createdAt_idx" ON "TarotReading"("tool", "createdAt")`,
+            // Khách vãng lai (không đăng nhập) — userId dạng 'guest:<uuid>', ip để chặn đốt hạn mức AI.
+            `ALTER TABLE "TarotReading" ADD COLUMN IF NOT EXISTS "ip" TEXT`,
+            `CREATE INDEX IF NOT EXISTS "TarotReading_ip_createdAt_idx" ON "TarotReading"("ip", "createdAt")`,
+            `ALTER TABLE "TarotSetting" ADD COLUMN IF NOT EXISTS "aiDailyLimitIp" INTEGER NOT NULL DEFAULT 60`,
+            `ALTER TABLE "TarotSetting" ADD COLUMN IF NOT EXISTS "requireLogin" BOOLEAN NOT NULL DEFAULT false`,
+            // Lượt truy cập trang — bảng RIÊNG, không trộn vào TarotReading kẻo
+            // phồng con số "lượt xem bài".
+            `CREATE TABLE IF NOT EXISTS "TarotVisit" (
+                "id" TEXT NOT NULL,
+                "userId" TEXT,
+                "ip" TEXT,
+                "tool" TEXT NOT NULL DEFAULT 'tarot',
+                "userAgent" TEXT,
+                "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT "TarotVisit_pkey" PRIMARY KEY ("id")
+            )`,
+            `CREATE INDEX IF NOT EXISTS "TarotVisit_createdAt_idx" ON "TarotVisit"("createdAt")`,
+            `CREATE INDEX IF NOT EXISTS "TarotVisit_userId_idx" ON "TarotVisit"("userId")`,
         ]
         for (const sql of cauLenh) await (prisma as any).$executeRawUnsafe(sql)
 
         // Đọc lại từ information_schema để trả bằng chứng bảng đã có thật.
         const bang: any[] = await (prisma as any).$queryRawUnsafe(
             `SELECT table_name FROM information_schema.tables
-             WHERE table_schema = 'public' AND table_name IN ('TarotUser','TarotReading')
+             WHERE table_schema = 'public' AND table_name IN ('TarotUser','TarotReading','TarotSetting')
              ORDER BY table_name`
         )
         res.json({ success: true, data: { tables: bang.map(r => r.table_name) } })
@@ -5624,6 +6012,65 @@ router.get('/store-staff', async (req: Request, res: Response) => {
                 nhanSu, soNhanSu: nhanSu?.length ?? null,
                 soNhanSuDangLam: nhanSu ? nhanSu.filter((e: any) => e.status === 'active').length : null,
                 taiKhoan, soTaiKhoan: taiKhoan?.length ?? null,
+            },
+        })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: String(e?.message || e) })
+    }
+})
+
+/**
+ * POST /admin/tinh-lai-tong-mua?store=CODE — dựng lại tổng mua cho khách cũ.
+ *
+ * Ba trường `totalPurchases` / `totalOrders` / `lastPurchaseDate` chỉ được
+ * đường POS duy trì; đồng bộ KiotViet trước nay không đụng tới, nên dữ liệu cũ
+ * đứng ở 0 hết. Đo HUTI 16/08/2026: 187 khách có định danh, 125 khách quay lại,
+ * mà tổng mua của MỌI khách đều bằng 0 — trang Khách Hàng trông như trống trong
+ * khi trang Phân Khúc (tính sống từ phiếu) vẫn ra số.
+ *
+ * TÍNH LẠI, KHÔNG CỘNG DỒN — chạy bao nhiêu lần cũng ra một kết quả, nên bấm
+ * nhầm hai lần không hỏng gì.
+ *
+ * Chạy TUẦN TỰ từng khách: pool mỗi cửa hàng chỉ 2 kết nối, và Cloud SQL
+ * db-f1-micro chỉ có 50 slot cho tất cả instance cộng lại (xem
+ * [[prisma-pool-promiseall-trap]]). Chậm hơn nhưng không làm nghẽn quầy.
+ */
+router.post('/tinh-lai-tong-mua', async (req: Request, res: Response) => {
+    try {
+        const ma = String(req.query.store || '').trim()
+        const store: any = await registryPrisma.store.findFirst({
+            where: { code: ma }, select: { name: true, schema: true, code: true },
+        })
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const sp: any = getStorePrisma(store.schema)
+        const { tinhLaiChoKhach } = await import('../lib/tinhLaiTongMuaKhach')
+
+        // Chỉ khách CÓ phiếu — quét cả danh bạ là tốn công cho những người chưa mua
+        const coPhieu: any[] = await sp.transaction.groupBy({
+            by: ['customerId'],
+            where: { customerId: { not: null }, status: { in: ['completed', 'partial'] } },
+        }).catch(() => [])
+
+        let xong = 0, hong = 0
+        const viDu: any[] = []
+        for (const r of coPhieu) {
+            const kq = await tinhLaiChoKhach(sp, String(r.customerId))
+            if (kq) {
+                xong++
+                if (viDu.length < 5) viDu.push({ khach: r.customerId, ...kq })
+            } else hong++
+        }
+
+        res.json({
+            success: true,
+            data: {
+                cuaHang: store.code,
+                soKhachCoPhieu: coPhieu.length,
+                daTinhLai: xong,
+                /* `khongGhiDuoc` tách riêng chứ không gộp vào "xong": không ghi
+                 * được mà báo thành công là đúng kiểu trấn an sai. */
+                khongGhiDuoc: hong,
+                viDu,
             },
         })
     } catch (e: any) {
