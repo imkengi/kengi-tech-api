@@ -111,6 +111,40 @@ function getStorePrisma(schemaName: string): StorePrisma {
     return client
 }
 
+/* ─── THẢI CLIENT NHÀN RỖI ────────────────────────────────────────────────────
+ *
+ * Trước đây client CHỈ bị thải khi map chạm `MAX_BRANCH_CLIENTS` (50) — với 9
+ * cửa hàng thì không bao giờ. Cửa hàng ngồi im cả ngày vẫn ôm nguyên
+ * `connection_limit` kết nối, và Cloud SQL db-f1-micro chỉ có 50 slot cho TẤT
+ * CẢ instance cộng lại.
+ *
+ * Đo 16/08/2026: nền ~25 kết nối (một instance ấm), đỉnh 45–48 khi có hai
+ * instance; chạm trần lúc 10:30 và 13:34 — mỗi lần là
+ * `FATAL: remaining connection slots are reserved…`, tức ĐĂNG NHẬP SẬP CHO MỌI
+ * CỬA HÀNG chứ không riêng tính năng nào.
+ *
+ * Thải theo thời gian nhàn rỗi trả kết nối về DB trong lúc vắng khách mà KHÔNG
+ * giảm năng lực phục vụ: cửa hàng quay lại chỉ tốn một lần nối lại. Ngưỡng đặt
+ * đủ dài để cửa hàng đang bán không bao giờ bị thải giữa chừng.
+ */
+const NHAN_ROI_MS = parseInt(process.env.PRISMA_IDLE_EVICT_MS || String(10 * 60_000), 10)
+
+function thaiClientNhanRoi(): void {
+    const nay = Date.now()
+    for (const [schema, val] of branchClients) {
+        if (nay - val.lastUsed < NHAN_ROI_MS) continue
+        branchClients.delete(schema)
+        val.client.$disconnect().catch(() => { })
+    }
+}
+
+/* Quét mỗi 2 phút. `unref()` để tiến trình không bị giữ sống chỉ vì hẹn giờ này
+ * — thiếu nó thì container không thoát được lúc Cloud Run thu hồi. */
+if (NHAN_ROI_MS > 0) {
+    const hen = setInterval(thaiClientNhanRoi, 2 * 60_000)
+    if (typeof hen.unref === 'function') hen.unref()
+}
+
 // ─── Schema Management ──────────────────────────────────────────────────────
 
 /**
