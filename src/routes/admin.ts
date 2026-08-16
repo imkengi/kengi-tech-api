@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express'
 import crypto from 'crypto'
 import jwt from 'jsonwebtoken'
 import { errMsg } from '../lib/errorResponse'
-import { registryPrisma, getStorePrisma, dropStoreSchema, mapWithConcurrency, syncBranchSchemaTables } from '../lib/prisma'
+import { registryPrisma, getStorePrisma, dropStoreSchema, mapWithConcurrency, syncBranchSchemaTables, dangGiuClient, traClient } from '../lib/prisma'
 import { chayTheoDot } from '../lib/poolGuard'
 import { invalidateStoreStatus } from '../lib/storeStatusCache'
 
@@ -6125,6 +6125,15 @@ router.get('/health-overview', async (req: Request, res: Response) => {
             /* Một cửa hàng hỏng KHÔNG được làm hỏng cả bảng — đó chính là kiểu
              * im lặng mà màn hình này sinh ra để phá. Ghi lỗi vào đúng dòng của
              * nó rồi đi tiếp. */
+            /* Quét xong TRẢ LẠI client mà chính lượt quét này tạo ra.
+             *
+             * Không trả thì mỗi lần mở trang quản trị là để lại 9 client ấm =
+             * 18 kết nối trên instance phục vụ nó — mà thanh tình trạng gọi
+             * endpoint này ở MỌI lần mở trang. Cloud SQL db-f1-micro chỉ có 50
+             * slot cho tất cả instance cộng lại, đo 16/08 đỉnh chạm 48/50.
+             * Cửa hàng nào VỐN đã ấm (đang bán) thì giữ nguyên — đóng client
+             * của quầy đang bán là mỗi request của họ phải nối lại. */
+            const vonAm = dangGiuClient(s.schema)
             try {
                 const sp: any = getStorePrisma(s.schema)
                 const kq = await sucKhoeDuLieu(sp, ky)
@@ -6146,6 +6155,8 @@ router.get('/health-overview', async (req: Request, res: Response) => {
                     code: s.code, name: s.name, trangThai: s.status, laDemo: !!s.laDemo,
                     loi: String(e?.message || e).slice(0, 200),
                 })
+            } finally {
+                if (!vonAm) traClient(s.schema)
             }
         }
 

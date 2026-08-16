@@ -281,6 +281,30 @@ async function disconnectAll(): Promise<void> {
     branchClients.clear()
 }
 
+/**
+ * Client cho schema này ĐANG được giữ sẵn chưa?
+ *
+ * Dùng cho các lượt QUÉT TOÀN BỘ CỬA HÀNG (vd /admin/health-overview): quét
+ * xong thì trả lại đúng những client mà chính lượt quét đã tạo, đừng để lại 9
+ * client ấm chỉ vì có người mở trang quản trị.
+ */
+function dangGiuClient(schemaName: string): boolean {
+    return branchClients.has(schemaName)
+}
+
+/**
+ * Trả client của schema này về (đóng kết nối). Không có thì thôi.
+ *
+ * Chỉ dùng cho lượt quét toàn bộ — ĐỪNG gọi trên đường phục vụ request thường,
+ * cửa hàng đang bán mà bị đóng client là mỗi request phải nối lại.
+ */
+function traClient(schemaName: string): void {
+    const c = branchClients.get(schemaName)
+    if (!c) return
+    branchClients.delete(schemaName)
+    c.client.$disconnect().catch(() => { })
+}
+
 // ─── Concurrency helper ─────────────────────────────────────────────────────
 // Cap concurrent fan-out across stores so we don't blow past Postgres
 // max_connections or evict every entry in the LRU cache.
@@ -320,6 +344,8 @@ export {
     syncBranchSchemaTables,
     dropBranchSchema,
     disconnectAll,
+    dangGiuClient,
+    traClient,
     mapWithConcurrency,
     STORE_FANOUT_CONCURRENCY,
 }
