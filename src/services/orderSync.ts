@@ -351,7 +351,19 @@ export async function processNewOrders(prisma: StorePrisma, channelId: string): 
             const success = await convertOnlineOrderToTransaction(prisma, order.id)
             if (success) converted++
         } catch (err: any) {
-            console.error(`[OrderSync] Error converting order ${order.orderNumber}:`, err.message)
+            /* GHI ĐỦ ĐỂ LẦN RA, đừng chỉ ghi `.message`.
+             *
+             * Lỗi Prisma thường để nội dung ở `code` (P2002, P2022…) và `meta`,
+             * còn `.message` có thể RỖNG — đo 16/08/2026: 82 lần chuyển đơn hỏng
+             * trong 6 giờ mà log chỉ ra `Error converting order X:` cụt lủn và
+             * một dòng `prisma:error` trống, không lần nào biết vì sao. Đếm được
+             * mà không chẩn được thì cũng như không thấy. */
+            const chiTiet = [
+                err?.code && `code=${err.code}`,
+                err?.message || err?.name || String(err),
+                err?.meta && `meta=${JSON.stringify(err.meta).slice(0, 200)}`,
+            ].filter(Boolean).join(' | ')
+            console.error(`[OrderSync] Error converting order ${order.orderNumber}: ${chiTiet}`)
         }
     }
 
