@@ -1523,6 +1523,22 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 // Transaction sales channel tracking (2026-05-13)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Transaction" ADD COLUMN IF NOT EXISTS "channel" TEXT NOT NULL DEFAULT 'direct'`)
 
+                /**
+                 * INDEX HÀM cho các join dùng LOWER(TRIM(sku)) (2026-08-18).
+                 * Product.sku có unique index thường, nhưng đối chiếu tồn kho thuế
+                 * join bằng LOWER(TRIM(p.sku)) = k nên index đó VÔ DỤNG: mỗi mã
+                 * trong danh sách phải quét lại cả bảng Product. Đo thật trên
+                 * /einvoice/tax-stock-gap: thời gian tăng tuyến tính ~50–70ms mỗi
+                 * mã (12 mã 0,9s → 279 mã 19s). Pool mỗi cửa hàng chỉ 1 kết nối
+                 * nên suốt lúc đó mọi tính năng khác của cửa hàng phải xếp hàng,
+                 * quá 30s là pool_timeout → 500 hàng loạt.
+                 */
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Product_sku_lower_idx" ON "Product" (LOWER(TRIM("sku")))`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "TransactionItem_sku_lower_idx" ON "TransactionItem" (LOWER(TRIM("sku")))`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ImportReceiptItem_sku_lower_idx" ON "ImportReceiptItem" (LOWER(TRIM("productSku")))`)
+                // Hàng đợi xuất HĐ join Transaction ⇄ OnlineOrder qua chuỗi ghép
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "OnlineOrder_online_receipt_idx" ON "OnlineOrder" (('ONLINE-' || "orderNumber"))`)
+
                 // Repair ↔ hoá đơn bán + nối khách theo id (2026-08-13)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "customerId" TEXT`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "transactionId" TEXT`)
