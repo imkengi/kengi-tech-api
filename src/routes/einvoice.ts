@@ -1230,6 +1230,28 @@ router.get('/tax-stock-gap', einvoiceAuth, async (req: AuthRequest, res: Respons
                  WHERE LOWER(TRIM(sku)) = ANY($1::text[])`, skus) : []
             const meta = new Map((prods as any[]).map((p: any) => [p.k, p]))
 
+            /**
+             * NẠP TRƯỚC combo + mã đích THEO LÔ — vòng lặp dưới trước đây gọi
+             * findUnique CHO TỪNG DÒNG, mỗi lượt một vòng đi-về DB. Pool của mỗi
+             * cửa hàng chỉ có 1 kết nối (PRISMA_POOL_SIZE=1) nên chúng xếp hàng
+             * tuần tự: đo thật 117 mã = 5,2s; cửa hàng nhiều mã = 88–100s. Suốt
+             * thời gian đó MỌI request khác của cửa hàng phải chờ, chạm 30s là
+             * pool_timeout → 500 hàng loạt (18/08/2026: tab Tồn kho thuế chết
+             * đúng 30,004s ba lần liền, tab Đối chiếu quay mãi). Còn ĐÚNG 2 truy vấn.
+             */
+            const bundleIds = [...new Set((prods as any[]).map((p: any) => p.bundleId).filter(Boolean))]
+            const mergedIds = [...new Set((prods as any[]).map((p: any) => p.mergedIntoId).filter(Boolean))]
+            const [bundleRows, mergedRows] = await Promise.all([
+                bundleIds.length
+                    ? prisma.bundle.findMany({ where: { id: { in: bundleIds } } }).catch(() => [])
+                    : Promise.resolve([]),
+                mergedIds.length
+                    ? prisma.product.findMany({ where: { id: { in: mergedIds } }, select: { id: true, sku: true, name: true } }).catch(() => [])
+                    : Promise.resolve([]),
+            ])
+            const bundleById = new Map((bundleRows as any[]).map((b: any) => [b.id, b]))
+            const mergedById = new Map((mergedRows as any[]).map((p: any) => [p.id, p]))
+
             // gom nhu cầu theo mã hiệu lực
             const need = new Map<string, { canXuat: number; orders: number; name: string }>()
             const addNeed = (sku: string, qty: number, orders: number, name: string) => {
@@ -1242,7 +1264,7 @@ router.get('/tax-stock-gap', einvoiceAuth, async (req: AuthRequest, res: Respons
             for (const r of list) {
                 const m: any = meta.get(String(r.sku))
                 if (m?.bundleId) {
-                    const b = await prisma.bundle.findUnique({ where: { id: m.bundleId } }).catch(() => null)
+                    const b = bundleById.get(m.bundleId) || null
                     let comps: any[] = []
                     try { comps = JSON.parse((b as any)?.items || '[]') } catch { comps = [] }
                     if (comps.length > 0) {
@@ -1254,7 +1276,7 @@ router.get('/tax-stock-gap', einvoiceAuth, async (req: AuthRequest, res: Respons
                     }
                 }
                 if (m?.mergedIntoId) {
-                    const tgt = await prisma.product.findUnique({ where: { id: m.mergedIntoId }, select: { sku: true, name: true } }).catch(() => null)
+                    const tgt: any = mergedById.get(m.mergedIntoId) || null
                     if (tgt?.sku) { addNeed(tgt.sku, Number(r.canXuat) * (Number(m.mergedRate) || 1), r.orders, tgt.name); continue }
                 }
                 addNeed(String(r.sku), Number(r.canXuat), r.orders, r.name)
