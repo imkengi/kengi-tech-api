@@ -35,6 +35,7 @@ import { requireRole } from '../middleware/roleMiddleware'
 import { getProvider, PROVIDERS } from '../services/einvoice'
 import { sendNotification, sendPushToStore } from './notifications'
 import type { EInvoiceProviderConfig, EInvoiceData } from '../services/einvoice'
+import { moTaLoi } from '../lib/gomLoi'
 
 const router = Router()
 
@@ -121,6 +122,10 @@ export async function ensureEInvoiceTablesFor(prisma: any, key: string): Promise
             // Điều chỉnh ≠ thay thế: HĐ gốc vẫn hiệu lực nên KHÔNG dùng chung
             // replacedByInvoiceId (cờ đó nghĩa là "gốc đã bị vô hiệu").
             ['adjustsInvoiceId', 'TEXT'], ['adjustedByInvoiceId', 'TEXT'],
+            // Mã phiếu trả đã dùng để lập bản điều chỉnh — khoá nối ĐÍCH DANH khi
+            // hoàn tồn kho thuế. Một đơn sàn có thể có NHIỀU phiếu trả; nối lỏng
+            // qua mã đơn sẽ cộng lại cả phiếu chưa điều chỉnh → thừa tồn thuế.
+            ['adjustReturnCode', 'TEXT'],
             ['cancelReason', 'TEXT'], ['notes', 'TEXT'], ['branchId', 'TEXT'],
             ['createdBy', 'TEXT'], ['createdByName', 'TEXT'],
             ['issuedAt', 'TIMESTAMP(3)'], ['signedAt', 'TIMESTAMP(3)'], ['sentAt', 'TIMESTAMP(3)'],
@@ -703,7 +708,23 @@ export async function issueInvoiceForTransaction(
     const provider = getProvider((config.provider || '').toLowerCase())
     if (!provider) return { success: false, error: `NCC ${config.provider} không hỗ trợ qua API trực tiếp` }
 
-    const existing = await prisma.eInvoice.findFirst({ where: { transactionId: txId, status: { in: ['ISSUING', 'issued', 'SENT'] } } }).catch(() => null)
+    /* Chốt chặn xuất trùng hóa đơn cho cùng một giao dịch.
+     *
+     * Danh sách cũ là ['ISSUING','issued','SENT'] — hai giá trị đầu KHÔNG có nơi
+     * nào trong hệ thống ghi ra, còn 'SIGNED' thì bị thiếu. Ký xong mà bước gửi
+     * lỗi là bản ghi nằm ở SIGNED; lần xuất sau không thấy nó và cấp tiếp một số
+     * hóa đơn thứ hai cho cùng một giao dịch — lỗi rất khó gỡ vì hóa đơn đã lên
+     * cơ quan thuế thì phải lập biên bản hủy.
+     *
+     * Chỉ chặn khi bản ghi ĐÃ CÓ SỐ: có số nghĩa là hóa đơn đã tồn tại thật.
+     * Bản ghi dở dang chưa có số thì cho xuất lại, vì đó mới là lúc cần thử lại. */
+    const existing = await prisma.eInvoice.findFirst({
+        where: {
+            transactionId: txId,
+            status: { in: ['ISSUING', 'issued', 'SIGNED', 'SENT'] },
+            invoiceNumber: { not: null },
+        },
+    }).catch(() => null)
     if (existing) return { success: true, skipped: true, invoiceNumber: existing.invoiceNumber, error: `Đã xuất HĐ số ${existing.invoiceNumber}` }
 
     const tx = await prisma.transaction.findUnique({
@@ -896,7 +917,7 @@ export async function issueInvoiceForTransaction(
                 }).catch(() => { })
                 if (!mail.success) console.warn(`[einvoice] email HĐ ${result.invoiceNumber} → ${emailTo} lỗi: ${mail.errorMessage}`)
             } catch (e: any) {
-                console.warn(`[einvoice] email HĐ lỗi: ${e?.message}`)
+                console.warn(`[einvoice] email HĐ lỗi: ${moTaLoi(e)}`)
             }
         }
     }
@@ -956,7 +977,7 @@ const HAS_RETURN_EXPR = `(o.status = ANY($4) OR t.status = 'returned' OR ${OPEN_
 const QUEUE_FROM = `FROM "Transaction" t
          JOIN "OnlineOrder" o ON ('ONLINE-' || o."orderNumber") = t."receiptNumber"
          LEFT JOIN "Customer" c ON c.id = t."customerId"
-         WHERE t.channel = 'online' AND t.status IN ('completed', 'returned')
+         WHERE t.channel = 'online' AND t.status IN ('completed', 'partial', 'returned')
            AND (o.status = ANY($1) OR o."deliveredAt" IS NOT NULL)
            AND COALESCE(o."deliveredAt", o."createdAt") >= $2
            AND COALESCE(o."deliveredAt", o."createdAt") <= $3
@@ -1040,13 +1061,119 @@ async function expandComboItems(prisma: any, items: any[]): Promise<any[]> {
     return out
 }
 
+/**
+ * HÀNG TRẢ LẠI ĐÃ ĐIỀU CHỈNH HOÁ ĐƠN → CỘNG LẠI TỒN KHO THUẾ.
+ * Bán 1 cái + xuất HĐ = trừ 1 khỏi tồn thuế. Khách trả cái đó về, mình đã lập
+ * HĐ điều chỉnh giảm (hoặc thay thế) gửi thuế → doanh thu đã hoàn, nên phần
+ * hàng ấy phải quay lại tồn kho thuế; không cộng lại thì mã đó "hết tồn thuế"
+ * oan và lần bán sau bị chặn xuất hoá đơn.
+ * CHỈ cộng khi ĐÃ có hoá đơn điều chỉnh/thay thế phát hành — trả hàng suông mà
+ * chưa điều chỉnh HĐ thì thuế vẫn ghi nhận doanh thu, chưa được cộng.
+ * ($1 = mảng SKU chữ thường; bỏ điều kiện đó khi quét toàn bộ.)
+ */
+/* ĐÃ THAY BẰNG CÁCH ĐỌC THẲNG DÒNG HÀNG TRÊN HOÁ ĐƠN ĐIỀU CHỈNH (bên dưới).
+   Giữ lại để đối chiếu lịch sử: bản cũ đi từ ReturnItem rồi phải dò ngược ra
+   hoá đơn điều chỉnh qua notes — mà notes do người lập gõ tay, hai hoá đơn thực
+   tế đã bị cắt mất mã phiếu nên cộng hụt (đo 06/08/2026: 1/3 mã được cộng).
+const TRA_LAI_CU = `
+    SELECT LOWER(TRIM(COALESCE(
+               NULLIF(TRIM(pm.sku), ''),
+               NULLIF(TRIM(p.sku), ''),
+               NULLIF(TRIM(ti.sku), ''),
+               ri.sku
+           ))) AS k,
+           -- QUY VỀ ĐƠN VỊ GỐC: nhánh bán trừ theo baseQuantity (1 vỉ = 10 cái),
+           -- nên trả lại cũng phải nhân đúng tỉ lệ đó, không thì mỗi lần trả hàng
+           -- đóng gói là tồn kho thuế hụt phần lẻ và mã đó bị chặn xuất HĐ oan.
+           COALESCE(SUM(ri.quantity * CASE
+               WHEN ti.quantity IS NOT NULL AND ti.quantity > 0
+                   THEN COALESCE(NULLIF(ti."baseQuantity", 0), ti.quantity)::float8 / ti.quantity
+               ELSE 1 END), 0)::float8 AS q,
+           MIN(ri."productName") AS any_name
+    FROM "ReturnItem" ri
+    JOIN "ReturnOrder" ro ON ro.id = ri."returnOrderId"
+    LEFT JOIN "Product" p ON p.id = ri."productId"
+    LEFT JOIN "Product" pm ON pm.id = p."mergedIntoId"
+    -- Dòng bán tương ứng trên HĐ GỐC: lấy tỉ lệ quy đổi + mã kho chuẩn.
+    -- LATERAL + LIMIT 1 để KHÔNG nhân bản dòng trả khi khớp nhiều dòng bán.
+    LEFT JOIN LATERAL (
+        SELECT ti2.sku, ti2.quantity, ti2."baseQuantity"
+        FROM "TransactionItem" ti2
+        JOIN "EInvoice" g2 ON g2."transactionId" = ti2."transactionId"
+        JOIN "EInvoice" a2 ON a2."adjustsInvoiceId" = g2.id
+             AND a2.status IN ('issued','SENT')
+             AND (a2."adjustReturnCode" = ro.code
+                  OR (a2."adjustReturnCode" IS NULL AND a2.notes LIKE '%' || ro.code || '%'))
+        WHERE (ti2."productId" IS NOT NULL AND ti2."productId" = ri."productId")
+           OR LOWER(TRIM(ti2.sku)) = LOWER(TRIM(COALESCE(p.sku, ri.sku, '')))
+        LIMIT 1
+    ) ti ON TRUE
+    WHERE ro.status IN ('approved','refunded','exchanged','processing','completed')
+      -- Còn mã nào dùng được là tính (mã kho / mã dòng bán / mã trên phiếu)
+      AND NULLIF(TRIM(COALESCE(pm.sku, p.sku, ti.sku, ri.sku, '')), '') IS NOT NULL
+      AND EXISTS (
+          -- Nối ĐÍCH DANH phiếu trả ↔ bản điều chỉnh đã phát hành.
+          -- KHÔNG nối qua mã đơn sàn: một đơn có thể có nhiều phiếu trả, nối lỏng
+          -- sẽ cộng lại cả phiếu CHƯA điều chỉnh hoá đơn → thừa tồn kho thuế
+          -- (đã dính: mã SHD1364 cộng nhầm phiếu RTN-SH-26072108EHX2B9D).
+          --   • HĐ mới: cột adjustReturnCode lưu thẳng mã phiếu.
+          --   • HĐ cũ (trước 06/08/2026): dò mã phiếu trong notes — chuỗi mặc định
+          --     là "…Khách trả hàng/hoàn tiền — phiếu RTN-…".
+          SELECT 1 FROM "EInvoice" adj
+          WHERE adj.status IN ('issued','SENT')
+            AND adj."adjustsInvoiceId" IS NOT NULL
+            AND (
+                adj."adjustReturnCode" = ro.code
+                OR (adj."adjustReturnCode" IS NULL AND adj.notes LIKE '%' || ro.code || '%')
+            )
+      )`
+*/
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  HOÀN TỒN KHO THUẾ = ĐỌC THẲNG DÒNG HÀNG TRÊN HOÁ ĐƠN ĐIỀU CHỈNH
+//  Đây là nguồn sự thật duy nhất: hoá đơn điều chỉnh giảm đã ghi rõ MẶT HÀNG và
+//  SỐ LƯỢNG được giảm trừ, và nó là thứ đã gửi cơ quan thuế. Không phải dò phiếu
+//  trả, không phụ thuộc notes người lập gõ tay, không phụ thuộc transactionId của
+//  phiếu trả (đơn sàn luôn null) — ba thứ từng làm cộng hụt/cộng nhầm.
+//  Quy đổi về ĐƠN VỊ GỐC bằng tỉ lệ của dòng bán tương ứng trên HĐ gốc
+//  (baseQuantity/quantity), vì nhánh "đã bán" trừ theo đơn vị gốc.
+// ═══════════════════════════════════════════════════════════════════════════════
+const TRA_LAI_SELECT = `
+    SELECT LOWER(TRIM(COALESCE(NULLIF(TRIM(ti.sku), ''), NULLIF(TRIM(p.sku), ''), ''))) AS k,
+           COALESCE(SUM(ABS(ai.quantity) * CASE
+               WHEN ti.quantity IS NOT NULL AND ti.quantity > 0
+                   THEN COALESCE(NULLIF(ti."baseQuantity", 0), ti.quantity)::float8 / ti.quantity
+               ELSE 1 END), 0)::float8 AS q,
+           MIN(ai."itemName") AS any_name
+    FROM "EInvoice" adj
+    JOIN "EInvoiceItem" ai ON ai."eInvoiceId" = adj.id
+    JOIN "EInvoice" goc ON goc.id = adj."adjustsInvoiceId"
+    -- Dòng bán tương ứng trên HĐ gốc: khớp theo TÊN HÀNG (dòng điều chỉnh được
+    -- dựng từ chính tên trên HĐ gốc) để lấy mã kho + tỉ lệ quy đổi đơn vị
+    LEFT JOIN LATERAL (
+        SELECT ti2.sku, ti2.quantity, ti2."baseQuantity", ti2."productId"
+        FROM "TransactionItem" ti2
+        WHERE ti2."transactionId" = goc."transactionId"
+          AND LOWER(TRIM(ti2."productName")) = LOWER(TRIM(ai."itemName"))
+        LIMIT 1
+    ) ti ON TRUE
+    LEFT JOIN "Product" p ON p.id = ti."productId"
+    WHERE adj."invoiceType" = 'ADJUSTMENT'
+      AND adj.status IN ('issued','SENT')
+      AND adj."adjustsInvoiceId" IS NOT NULL
+      AND NULLIF(TRIM(COALESCE(ti.sku, p.sku, '')), '') IS NOT NULL`
+
+const TRA_LAI_SQL = `${TRA_LAI_SELECT}
+      AND LOWER(TRIM(COALESCE(NULLIF(TRIM(ti.sku),''), NULLIF(TRIM(p.sku),''), ''))) = ANY($1::text[])
+    GROUP BY 1`
+
 async function taxStockShortages(
     prisma: any,
     items: { sku?: string | null; productName?: string | null; quantity?: number | null }[]
 ): Promise<{ sku: string; name: string; thieu: number }[]> {
     const skus = [...new Set(items.map(i => String(i.sku || '').trim().toLowerCase()).filter(Boolean))]
     if (skus.length === 0) return []
-    const [inRows, outRows] = await Promise.all([
+    const [inRows, outRows, backRows] = await Promise.all([
         prisma.$queryRawUnsafe(
             // CHỈ tính phiếu nhập CÓ HOÁ ĐƠN VAT (hasVatInvoice=true) — nhập trôi
             // nổi không hoá đơn KHÔNG được tính vào tồn kho thuế.
@@ -1062,9 +1189,11 @@ async function taxStockShortages(
              WHERE t.status IN ('completed','partial','returned')
                AND EXISTS (SELECT 1 FROM "EInvoice" e WHERE e."transactionId" = t.id AND e.status IN ('issued','SENT'))
                AND LOWER(TRIM(i.sku)) = ANY($1::text[]) GROUP BY 1`, skus),
+        prisma.$queryRawUnsafe(TRA_LAI_SQL, skus),
     ])
     const imp: Record<string, number> = Object.fromEntries((inRows as any[]).map((r: any) => [r.k, Number(r.q)]))
     const out: Record<string, number> = Object.fromEntries((outRows as any[]).map((r: any) => [r.k, Number(r.q)]))
+    const back: Record<string, number> = Object.fromEntries((backRows as any[]).map((r: any) => [r.k, Number(r.q)]))
     // Nhu cầu của CHÍNH phiếu đang xuất (gộp theo mã)
     const need: Record<string, { qty: number; sku: string; name: string }> = {}
     for (const it of items) {
@@ -1077,11 +1206,85 @@ async function taxStockShortages(
     }
     const shortages: { sku: string; name: string; thieu: number }[] = []
     for (const [k, n] of Object.entries(need)) {
-        const conLai = (imp[k] || 0) - (out[k] || 0) // tồn kho thuế khả dụng
+        // tồn kho thuế khả dụng = nhập có HĐ VAT − đã bán (đã xuất HĐ) + trả lại (đã điều chỉnh HĐ)
+        const conLai = (imp[k] || 0) - (out[k] || 0) + (back[k] || 0)
         if (conLai < n.qty) shortages.push({ sku: n.sku, name: n.name, thieu: n.qty - conLai })
     }
     return shortages
 }
+
+// GET /einvoice/tax-stock-debug?sku=… — MỔ XẺ tồn kho thuế của MỘT mã: từng
+// thành phần nhập/xuất/trả và LÝ DO một phiếu trả không được cộng lại (thiếu
+// transactionId, sku rỗng, chưa có HĐ điều chỉnh…). Chỉ đọc.
+router.get('/tax-stock-debug', einvoiceAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const sku = String(req.query.sku || '').trim().toLowerCase()
+        if (!sku) return res.status(400).json({ success: false, error: 'Thiếu sku' })
+
+        const [nhap, xuat, tra, phieuTra] = await Promise.all([
+            prisma.$queryRawUnsafe(
+                `SELECT COALESCE(SUM(ii.quantity - COALESCE(ii."returnedQuantity",0)),0)::float8 AS q
+                 FROM "ImportReceiptItem" ii JOIN "ImportReceipt" r ON r.id = ii."receiptId"
+                 WHERE r."hasVatInvoice" = true AND r.status = 'completed'
+                   AND LOWER(TRIM(ii."productSku")) = $1`, sku),
+            prisma.$queryRawUnsafe(
+                `SELECT COALESCE(SUM(COALESCE(NULLIF(ti."baseQuantity",0), ti.quantity)),0)::float8 AS q
+                 FROM "TransactionItem" ti JOIN "Transaction" t ON t.id = ti."transactionId"
+                 WHERE t.status IN ('completed','partial','returned')
+                   AND EXISTS (SELECT 1 FROM "EInvoice" e WHERE e."transactionId" = t.id AND e.status IN ('issued','SENT'))
+                   AND LOWER(TRIM(ti.sku)) = $1`, sku),
+            // Dùng chung TRA_LAI_SQL (đã lọc theo mã đã phân giải) — trước đây tự
+            // viết filter theo ri.sku, mà nguồn dữ liệu giờ là dòng hoá đơn điều
+            // chỉnh chứ không còn bảng ReturnItem → SQL nổ 500.
+            prisma.$queryRawUnsafe(TRA_LAI_SQL, [sku]),
+            // MỌI dòng trả của mã này + vì sao được/không được cộng
+            prisma.$queryRawUnsafe(
+                `SELECT ro.code, ro.status, ro."transactionId", ri.sku, ri.quantity,
+                        EXISTS (
+                            SELECT 1 FROM "EInvoice" adj
+                            WHERE adj.status IN ('issued','SENT') AND adj."adjustsInvoiceId" IS NOT NULL
+                              AND (adj."adjustReturnCode" = ro.code
+                                   OR (adj."adjustReturnCode" IS NULL AND adj.notes LIKE '%' || ro.code || '%'))
+                        ) AS "coHDDieuChinh",
+                        EXISTS (
+                            SELECT 1 FROM "EInvoice" e
+                            JOIN "Transaction" t2 ON t2.id = e."transactionId"
+                            LEFT JOIN "OnlineOrder" o2 ON ('ONLINE-' || o2."orderNumber") = t2."receiptNumber"
+                            WHERE e.status IN ('issued','SENT')
+                              AND ((ro."transactionId" IS NOT NULL AND ro."transactionId" = e."transactionId")
+                                   OR (o2."orderNumber" IS NOT NULL AND (ro."originalInvoice" = o2."orderNumber" OR o2."orderNumber" LIKE '%-' || ro."originalInvoice")))
+                        ) AS "gocDaXuatHD"
+                 FROM "ReturnItem" ri JOIN "ReturnOrder" ro ON ro.id = ri."returnOrderId"
+                 WHERE LOWER(TRIM(ri.sku)) = $1 OR LOWER(TRIM(COALESCE(ri."productName",''))) LIKE '%' || $1 || '%'
+                 ORDER BY ro."createdAt" DESC LIMIT 20`, sku),
+        ])
+        res.json({
+            success: true,
+            data: {
+                sku,
+                nhapVat: Number((nhap as any[])[0]?.q || 0),
+                daXuat: Number((xuat as any[])[0]?.q || 0),
+                traLai: Number((tra as any[])[0]?.q || 0),
+                ton: Number((nhap as any[])[0]?.q || 0) - Number((xuat as any[])[0]?.q || 0) + Number((tra as any[])[0]?.q || 0),
+                /* Bốn con số trần trụi rất dễ đọc nhầm — chính tôi đã đọc nhầm
+                 * `daXuat` thành "tổng đã bán" rồi kết luận nhầm là dữ liệu lệch
+                 * mã (16/08/2026). Nói thẳng ý nghĩa ngay trong câu trả lời. */
+                ghiChu: {
+                    congThuc: 'ton = nhapVat − daXuat + traLai',
+                    nhapVat: 'Số đã nhập, CHỈ tính phiếu nhập có hoá đơn GTGT (hasVatInvoice) và đã hoàn thành',
+                    daXuat: 'CHỈ tính hàng ĐÃ XUẤT HOÁ ĐƠN (EInvoice issued/SENT) — KHÔNG phải mọi hàng đã bán',
+                    traLai: 'Hàng trả đã lập hoá đơn điều chỉnh (được cộng lại vào tồn)',
+                    canhBao: 'nhapVat=0 và daXuat=0 nghĩa là chưa có chứng từ VAT và chưa xuất HĐ nào cho mã này — KHÔNG phải dấu hiệu lệch mã',
+                },
+                dongTraLien: phieuTra,
+            },
+        })
+    } catch (err: any) {
+        console.error('[tax-stock-debug]', err?.message || err)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
 
 // GET /einvoice/tax-stock?q=&limit= — bảng TỒN KHO THUẾ theo từng SKU, tính Y HỆT
 // công thức chặn xuất HĐ: nhập có hoá đơn VAT (hasVatInvoice) − đã bán (phiếu
@@ -1093,36 +1296,50 @@ router.get('/tax-stock', einvoiceAuth, async (req: AuthRequest, res: Response) =
         const limit = Math.min(Math.max(1, Number(req.query.limit) || 300), 1000)
         const qFilter = q ? `WHERE x.sku LIKE '%' || $1 || '%' OR LOWER(COALESCE(p.name,'')) LIKE '%' || $1 || '%'` : ''
         const params: any[] = q ? [q] : []
+        // Gộp 3 nguồn bằng UNION ALL (thay FULL OUTER JOIN 2 nhánh): nhập có HĐ
+        // VAT (+), đã bán & đã xuất HĐ (−), HÀNG TRẢ LẠI đã điều chỉnh HĐ (+).
+        // Thiếu nhánh trả lại thì mã từng bị trả hàng sẽ báo hết tồn thuế oan và
+        // chặn xuất hoá đơn lần bán sau.
         const rows = await prisma.$queryRawUnsafe(`
             SELECT x.sku, COALESCE(p.name, x.any_name, '') AS name,
                    x.nhap::float8 AS "nhapVat", x.xuat::float8 AS xuat,
-                   (x.nhap - x.xuat)::float8 AS ton
+                   x.tra::float8 AS "traLai",
+                   (x.nhap - x.xuat + x.tra)::float8 AS ton
             FROM (
-                SELECT COALESCE(i.k, s.k) AS sku,
-                       COALESCE(i.q, 0) AS nhap, COALESCE(s.q, 0) AS xuat,
-                       COALESCE(i.any_name, s.any_name) AS any_name
+                SELECT sku,
+                       SUM(nhap) AS nhap, SUM(xuat) AS xuat, SUM(tra) AS tra,
+                       MIN(any_name) AS any_name
                 FROM (
-                    SELECT LOWER(TRIM(ii."productSku")) AS k,
-                           SUM(ii.quantity - COALESCE(ii."returnedQuantity",0)) AS q, MIN(ii."productName") AS any_name
+                    SELECT LOWER(TRIM(ii."productSku")) AS sku,
+                           SUM(ii.quantity - COALESCE(ii."returnedQuantity",0)) AS nhap,
+                           0 AS xuat, 0 AS tra, MIN(ii."productName") AS any_name
                     FROM "ImportReceiptItem" ii JOIN "ImportReceipt" r ON r.id = ii."receiptId"
                     WHERE r."hasVatInvoice" = true AND r.status = 'completed'
                       AND NULLIF(TRIM(ii."productSku"),'') IS NOT NULL
                     GROUP BY 1
-                ) i
-                FULL OUTER JOIN (
+
+                    UNION ALL
                     -- CHỈ trừ phần ĐÃ XUẤT HOÁ ĐƠN (khớp công thức chặn — bán chưa
                     -- xuất HĐ thì chưa trừ tồn kho thuế)
-                    SELECT LOWER(TRIM(ti.sku)) AS k, SUM(COALESCE(NULLIF(ti."baseQuantity",0), ti.quantity)) AS q, MIN(ti."productName") AS any_name
+                    SELECT LOWER(TRIM(ti.sku)) AS sku, 0 AS nhap,
+                           SUM(COALESCE(NULLIF(ti."baseQuantity",0), ti.quantity)) AS xuat,
+                           0 AS tra, MIN(ti."productName") AS any_name
                     FROM "TransactionItem" ti JOIN "Transaction" t ON t.id = ti."transactionId"
                     WHERE t.status IN ('completed','partial','returned')
                       AND EXISTS (SELECT 1 FROM "EInvoice" e WHERE e."transactionId" = t.id AND e.status IN ('issued','SENT'))
                       AND NULLIF(TRIM(ti.sku),'') IS NOT NULL
                     GROUP BY 1
-                ) s ON s.k = i.k
+
+                    UNION ALL
+                    -- HÀNG TRẢ LẠI đã lập HĐ điều chỉnh/thay thế → hoàn tồn kho thuế
+                    SELECT k AS sku, 0 AS nhap, 0 AS xuat, q AS tra, any_name
+                    FROM ( ${TRA_LAI_SELECT} GROUP BY 1 ) tl
+                ) u
+                GROUP BY sku
             ) x
             LEFT JOIN "Product" p ON LOWER(TRIM(p.sku)) = x.sku
             ${qFilter}
-            ORDER BY (x.nhap - x.xuat) ASC, x.xuat DESC
+            ORDER BY (x.nhap - x.xuat + x.tra) ASC, x.xuat DESC
             LIMIT ${limit}
         `, ...params)
         const tongThieu = (rows as any[]).filter((r: any) => r.ton < 0).length
@@ -1189,20 +1406,25 @@ router.get('/tax-stock-gap', einvoiceAuth, async (req: AuthRequest, res: Respons
                   AND EXISTS (SELECT 1 FROM "EInvoice" e WHERE e."transactionId" = t.id AND e.status IN ('issued','SENT'))
                   AND NULLIF(TRIM(ti.sku),'') IS NOT NULL
                 GROUP BY 1
-            )
+            ),
+            -- HÀNG TRẢ LẠI đã lập HĐ điều chỉnh/thay thế → cộng lại tồn kho thuế
+            -- (phải khớp công thức của /tax-stock và hàm chặn xuất HĐ)
+            back AS ( ${TRA_LAI_SELECT} GROUP BY 1 )
             SELECT n.k AS sku, COALESCE(p.name, n.any_name, '') AS name,
                    n.q AS "canXuat", n.orders,
                    COALESCE(i.q,0) AS "nhapVat", COALESCE(s.q,0) AS "daXuat",
-                   (COALESCE(i.q,0) - COALESCE(s.q,0)) AS ton,
-                   (n.q - (COALESCE(i.q,0) - COALESCE(s.q,0))) AS thieu,
+                   COALESCE(b.q,0) AS "traLai",
+                   (COALESCE(i.q,0) - COALESCE(s.q,0) + COALESCE(b.q,0)) AS ton,
+                   (n.q - (COALESCE(i.q,0) - COALESCE(s.q,0) + COALESCE(b.q,0))) AS thieu,
                    COALESCE(p."costPrice",0)::float8 AS "costPrice",
                    COALESCE(p.stock,0)::int AS "tonThuc"
             FROM need n
             LEFT JOIN imp i ON i.k = n.k
             LEFT JOIN sold s ON s.k = n.k
+            LEFT JOIN back b ON b.k = n.k
             LEFT JOIN "Product" p ON LOWER(TRIM(p.sku)) = n.k
-            ${onlyShort ? 'WHERE (n.q - (COALESCE(i.q,0) - COALESCE(s.q,0))) > 0' : ''}
-            ORDER BY (n.q - (COALESCE(i.q,0) - COALESCE(s.q,0))) DESC, n.q DESC
+            ${onlyShort ? 'WHERE (n.q - (COALESCE(i.q,0) - COALESCE(s.q,0) + COALESCE(b.q,0))) > 0' : ''}
+            ORDER BY (n.q - (COALESCE(i.q,0) - COALESCE(s.q,0) + COALESCE(b.q,0))) DESC, n.q DESC
             LIMIT 2000
         `, ...params)
 
@@ -1230,6 +1452,28 @@ router.get('/tax-stock-gap', einvoiceAuth, async (req: AuthRequest, res: Respons
                  WHERE LOWER(TRIM(sku)) = ANY($1::text[])`, skus) : []
             const meta = new Map((prods as any[]).map((p: any) => [p.k, p]))
 
+            /**
+             * NẠP TRƯỚC combo + mã đích THEO LÔ — trước đây vòng lặp dưới gọi
+             * findUnique CHO TỪNG DÒNG, mỗi lượt một vòng đi-về DB. Pool của
+             * mỗi cửa hàng chỉ có 1 kết nối (PRISMA_POOL_SIZE=1) nên chúng xếp
+             * hàng tuần tự: 117 mã ≈ 5s, cửa hàng nhiều mã ≈ 90–100s. Suốt thời
+             * gian đó MỌI request khác của cửa hàng đó phải chờ, tới 30s là
+             * pool_timeout → 500 hàng loạt (đo 18/08/2026: tab Tồn kho thuế và
+             * Đối chiếu cần nhập cùng chết). Gom lại còn ĐÚNG 2 truy vấn.
+             */
+            const bundleIds = [...new Set((prods as any[]).map((p: any) => p.bundleId).filter(Boolean))]
+            const mergedIds = [...new Set((prods as any[]).map((p: any) => p.mergedIntoId).filter(Boolean))]
+            const [bundleRows, mergedRows] = await Promise.all([
+                bundleIds.length
+                    ? prisma.bundle.findMany({ where: { id: { in: bundleIds } } }).catch(() => [])
+                    : Promise.resolve([]),
+                mergedIds.length
+                    ? prisma.product.findMany({ where: { id: { in: mergedIds } }, select: { id: true, sku: true, name: true } }).catch(() => [])
+                    : Promise.resolve([]),
+            ])
+            const bundleById = new Map((bundleRows as any[]).map((b: any) => [b.id, b]))
+            const mergedById = new Map((mergedRows as any[]).map((p: any) => [p.id, p]))
+
             // gom nhu cầu theo mã hiệu lực
             const need = new Map<string, { canXuat: number; orders: number; name: string }>()
             const addNeed = (sku: string, qty: number, orders: number, name: string) => {
@@ -1242,7 +1486,7 @@ router.get('/tax-stock-gap', einvoiceAuth, async (req: AuthRequest, res: Respons
             for (const r of list) {
                 const m: any = meta.get(String(r.sku))
                 if (m?.bundleId) {
-                    const b = await prisma.bundle.findUnique({ where: { id: m.bundleId } }).catch(() => null)
+                    const b = bundleById.get(m.bundleId) || null
                     let comps: any[] = []
                     try { comps = JSON.parse((b as any)?.items || '[]') } catch { comps = [] }
                     if (comps.length > 0) {
@@ -1254,7 +1498,7 @@ router.get('/tax-stock-gap', einvoiceAuth, async (req: AuthRequest, res: Respons
                     }
                 }
                 if (m?.mergedIntoId) {
-                    const tgt = await prisma.product.findUnique({ where: { id: m.mergedIntoId }, select: { sku: true, name: true } }).catch(() => null)
+                    const tgt: any = mergedById.get(m.mergedIntoId) || null
                     if (tgt?.sku) { addNeed(tgt.sku, Number(r.canXuat) * (Number(m.mergedRate) || 1), r.orders, tgt.name); continue }
                 }
                 addNeed(String(r.sku), Number(r.canXuat), r.orders, r.name)
@@ -1263,7 +1507,8 @@ router.get('/tax-stock-gap', einvoiceAuth, async (req: AuthRequest, res: Respons
             // tính lại tồn kho thuế cho ĐÚNG tập mã hiệu lực
             const keys = [...need.keys()]
             const stockRows = keys.length ? await prisma.$queryRawUnsafe(`
-                SELECT k, COALESCE(i.q,0) - COALESCE(s.q,0) AS ton, COALESCE(i.q,0) AS nhap, COALESCE(s.q,0) AS xuat,
+                SELECT k, COALESCE(i.q,0) - COALESCE(s.q,0) + COALESCE(b.q,0) AS ton,
+                       COALESCE(i.q,0) AS nhap, COALESCE(s.q,0) AS xuat, COALESCE(b.q,0) AS tra,
                        COALESCE(p.name,'') AS name, COALESCE(p."costPrice",0)::float8 AS cost, COALESCE(p.stock,0)::int AS tonthuc
                 FROM unnest($1::text[]) AS k
                 LEFT JOIN (
@@ -1280,6 +1525,10 @@ router.get('/tax-stock-gap', einvoiceAuth, async (req: AuthRequest, res: Respons
                       AND EXISTS (SELECT 1 FROM "EInvoice" e WHERE e."transactionId" = t.id AND e.status IN ('issued','SENT'))
                     GROUP BY 1
                 ) s ON s.kk = k
+                LEFT JOIN (
+                    -- hàng trả lại đã điều chỉnh HĐ → hoàn tồn kho thuế
+                    SELECT k AS kk, q FROM ( ${TRA_LAI_SELECT} GROUP BY 1 ) tl
+                ) b ON b.kk = k
                 LEFT JOIN "Product" p ON LOWER(TRIM(p.sku)) = k`, keys) : []
             const stockMap = new Map((stockRows as any[]).map((r: any) => [r.k, r]))
 
@@ -1291,6 +1540,7 @@ router.get('/tax-stock-gap', einvoiceAuth, async (req: AuthRequest, res: Respons
                     sku: k, name: st.name || n.name || '',
                     canXuat: n.canXuat, orders: n.orders,
                     nhapVat: Number(st.nhap) || 0, daXuat: Number(st.xuat) || 0,
+                    traLai: Number(st.tra) || 0,
                     ton, thieu: n.canXuat - ton,
                     costPrice: Number(st.cost) || 0, tonThuc: Number(st.tonthuc) || 0,
                 }
@@ -1918,6 +2168,73 @@ router.post('/from-sale/:saleId', einvoiceAuth, requireRole('admin', 'manager', 
     }
 })
 
+// GET /api/einvoice/vnpt-raw?fkey=… — CHỈ ĐỌC: trả NGUYÊN VĂN phản hồi
+// portal/get-pos-by-fkey của VNPT (số hoá đơn, trạng thái ký, trạng thái CQT).
+// PHẢI khai TRƯỚC router.get('/:id') — nếu không Express nuốt luôn thành id.
+router.get('/vnpt-raw', einvoiceAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const fkey = String(req.query.fkey || '').trim()
+        if (!fkey) return res.status(400).json({ success: false, error: 'Thiếu fkey' })
+        const cfgRow: any = await getActiveConfig(prisma).catch(() => null)
+        if (!cfgRow) return res.status(400).json({ success: false, error: 'Chưa cấu hình nhà cung cấp HĐĐT' })
+        const { VnptProvider } = await import('../services/einvoice/vnpt')
+        const vnpt: any = new VnptProvider()
+        const kq = await vnpt.findByFkey(cfgRow, fkey)
+        return res.json({ success: true, data: kq })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err?.message })
+    }
+})
+
+// POST /api/einvoice/:id/sync-vnpt — kéo SỐ HOÁ ĐƠN + MÃ CQT thật từ VNPT về
+// cho bản ghi đang thiếu (hoá đơn đã phát hành nhưng lúc lưu bị lỗi/thiếu số).
+// CHỈ ĐỌC bên VNPT rồi cập nhật bản ghi — KHÔNG phát hành gì thêm.
+router.post('/:id/sync-vnpt', einvoiceAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        await ensureTables(req)
+        const prisma = req.storePrisma! as any
+        const inv = await prisma.eInvoice.findUnique({ where: { id: String(req.params.id) } })
+        if (!inv) return res.status(404).json({ success: false, error: 'Không tìm thấy hóa đơn' })
+        const cfgRow: any = await getActiveConfig(prisma).catch(() => null)
+        if (!cfgRow) return res.status(400).json({ success: false, error: 'Chưa cấu hình nhà cung cấp HĐĐT' })
+
+        const { VnptProvider, vnptFkey } = await import('../services/einvoice/vnpt')
+        const vnpt = new VnptProvider()
+        // Fkey theo loại hoá đơn: điều chỉnh '<id gốc>A', thay thế '<id gốc>R', bán = transactionId
+        const fkey = inv.invoiceType === 'ADJUSTMENT' && inv.adjustsInvoiceId
+            ? vnptFkey(`${inv.adjustsInvoiceId}A`)
+            : inv.invoiceType === 'REPLACEMENT' && inv.replacesInvoiceId
+                ? vnptFkey(`${inv.replacesInvoiceId}R`)
+                : vnptFkey(inv.transactionId || inv.id)
+        const kq: any = await vnpt.findByFkey(cfgRow, fkey)
+        if (!kq.found) return res.status(404).json({ success: false, error: `VNPT không có hoá đơn nào theo khoá ${fkey}` })
+
+        const data: any = {}
+        if (kq.invoiceNumber && !inv.invoiceNumber) data.invoiceNumber = kq.invoiceNumber
+        if (kq.lookupCode && !inv.lookupCode) data.lookupCode = kq.lookupCode
+        // Có mã CQT = cơ quan thuế đã cấp mã → hoá đơn hợp lệ
+        if (kq.sent && inv.status !== 'SENT') { data.status = 'SENT'; data.sentAt = new Date() }
+        const updated = Object.keys(data).length
+            ? await prisma.eInvoice.update({ where: { id: inv.id }, data })
+            : inv
+        return res.json({
+            success: true,
+            data: {
+                fkey,
+                capNhat: Object.keys(data),
+                invoiceNumber: updated.invoiceNumber,
+                lookupCode: updated.lookupCode,
+                status: updated.status,
+                vnpt: { soHoaDon: kq.invoiceNumber, maCQT: kq.lookupCode, maThongDiep: kq.messageCode, daGuiCQT: kq.sent },
+            },
+        })
+    } catch (err: any) {
+        console.error('POST /einvoice/:id/sync-vnpt error:', err?.message || err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
 // GET /api/einvoice — list with filters + pagination
 router.get('/', einvoiceAuth, async (req: AuthRequest, res: Response) => {
     try {
@@ -2356,6 +2673,157 @@ router.post('/:id/replace', einvoiceAuth, requireRole('admin', 'manager'), async
     }
 })
 
+// ═══════════════════════════════════════════════════════════════════════════════
+//  DỰNG DÒNG ĐIỀU CHỈNH TỪ PHIẾU TRẢ
+//  Nguyên tắc kế toán: điều chỉnh giảm phải ghi ĐÚNG MẶT HÀNG, ĐÚNG ĐƠN GIÁ và
+//  ĐÚNG THUẾ SUẤT như trên hoá đơn gốc — bán món nào giá nào thì điều chỉnh món
+//  đó giá đó, số lượng = số lượng khách trả. KHÔNG gom thành một dòng "giảm X
+//  đồng" (cơ quan thuế không đối chiếu được, và mất luôn dấu vết mặt hàng).
+//  Trả về cả phần lệch so với tiền hoàn thực tế để người lập tự quyết.
+// ═══════════════════════════════════════════════════════════════════════════════
+function chuanHoaTen(s: any): string {
+    return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim()
+}
+async function dungDongDieuChinh(prisma: any, original: any, returnCode: string) {
+    const ro = await prisma.returnOrder.findFirst({
+        where: { code: returnCode },
+        include: { items: true },
+    })
+    if (!ro) return { loi: `Không tìm thấy phiếu trả ${returnCode}` }
+
+    // Thuế suất mặc định suy từ tổng HĐ gốc (dùng khi không khớp được dòng nào)
+    const goc = Number(original.totalBeforeVat || 0)
+    const rateGoc = Number(original.vatAmount || 0) > 0 && goc > 0
+        ? Math.round(Number(original.vatAmount) * 100 / goc) : 0
+    const lam = (n: number) => Math.round(n)
+
+    // Dòng hàng của HĐ gốc để tra đơn giá/ĐVT/thuế suất.
+    // KHỚP THEO productId LÀ CHÍNH: tên trên phiếu trả đơn sàn là tên Shopee/TikTok
+    // ("[Freeship Toàn Quốc] Máy Xay Sinh Tố Đa Năng … 12 Tháng") còn hoá đơn ghi
+    // tên rút gọn trong kho ("Máy xay sinh tố Sunhouse SHD5114") → so tên trần
+    // luôn trượt. EInvoiceItem không lưu productId nên đi vòng qua giao dịch gốc.
+    const dongGoc: any[] = original.items || []
+    const txGoc = original.transactionId
+        ? await prisma.transaction.findUnique({
+            where: { id: original.transactionId },
+            include: { items: true },
+        }).catch(() => null)
+        : null
+    const txItems: any[] = txGoc?.items || []
+
+    /** Tên rút gọn để so mờ: bỏ phần trong ngoặc, ký tự lạ, chỉ giữ chữ + số. */
+    const rutGon = (s: any) => chuanHoaTen(s)
+        .replace(/\[[^\]]*\]/g, ' ')
+        .replace(/\([^)]*\)/g, ' ')
+        .replace(/[^a-z0-9à-ỹ\s]/gi, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+
+    const timDongGoc = (it: any) => {
+        // 1) Qua productId: phiếu trả → dòng giao dịch gốc → dòng hoá đơn cùng tên
+        if (it.productId) {
+            const tx = txItems.find((t: any) => t.productId === it.productId)
+            if (tx) {
+                const g = dongGoc.find((d: any) => chuanHoaTen(d.itemName) === chuanHoaTen(tx.productName))
+                if (g) return g
+            }
+        }
+        // 2) Trùng tên tuyệt đối
+        const bangTen = dongGoc.find((g: any) => chuanHoaTen(g.itemName) === chuanHoaTen(it.productName))
+        if (bangTen) return bangTen
+        // 3) Hoá đơn chỉ có ĐÚNG MỘT dòng → chính là nó
+        if (dongGoc.length === 1) return dongGoc[0]
+        // 4) So mờ: tên này chứa tên kia (sau khi bỏ ngoặc/ký tự lạ)
+        const a = rutGon(it.productName)
+        if (a) {
+            const mo = dongGoc.find((g: any) => {
+                const b = rutGon(g.itemName)
+                return !!b && (a.includes(b) || b.includes(a))
+            })
+            if (mo) return mo
+        }
+        return null
+    }
+
+    const items = (ro.items || []).map((it: any) => {
+        const g = timDongGoc(it)
+        // Đơn giá LẤY TỪ HĐ GỐC (giá đã xuất hoá đơn), không lấy giá ghi trên
+        // phiếu trả — hai số này lệch nhau khi bán có khuyến mãi/làm tròn.
+        const donGia = g ? Number(g.unitPrice || 0) : Number(it.unitPrice || 0)
+        const sl = Number(it.quantity || 1)
+        const thanhTien = lam(sl * donGia)
+        const rate = g ? Number(g.vatRate ?? rateGoc) : rateGoc
+        return {
+            itemName: g?.itemName || it.productName,
+            unitName: g?.unitName || 'Cái',
+            quantity: sl,
+            unitPrice: donGia,
+            amount: thanhTien,
+            vatRate: rate,
+            vatAmount: lam(thanhTien * rate / 100),
+            // Thông tin phụ cho màn xem trước (không gửi sang VNPT)
+            _khopHoaDonGoc: !!g,
+            _sku: it.sku || null,
+        }
+    })
+
+    if (items.length === 0) {
+        // Phiếu trả không có dòng hàng (hoàn tiền thuần) → buộc phải ghi 1 dòng tổng
+        const tien = lam(Number(ro.totalRefund || ro.refundAmount || 0))
+        items.push({
+            itemName: `Điều chỉnh giảm theo phiếu trả ${ro.code}`,
+            unitName: 'Lần', quantity: 1, unitPrice: tien, amount: tien,
+            vatRate: rateGoc, vatAmount: lam(tien * rateGoc / 100),
+            _khopHoaDonGoc: false, _sku: null,
+        })
+    }
+
+    const tongTruocThue = items.reduce((s: number, i: any) => s + i.amount, 0)
+    const tongThue = items.reduce((s: number, i: any) => s + (i.vatAmount || 0), 0)
+    const tienHoanThucTe = lam(Number(ro.totalRefund || ro.refundAmount || 0))
+    return {
+        items,
+        returnCode: ro.code,
+        tongTruocThue,
+        tongThue,
+        tongCong: tongTruocThue + tongThue,
+        tienHoanThucTe,
+        // >0 nghĩa là dòng hàng cộng lại KHÁC số tiền đã hoàn cho khách
+        lech: (tongTruocThue + tongThue) - tienHoanThucTe,
+    }
+}
+
+// GET /api/einvoice/vnpt-raw?fkey=… — CHỈ ĐỌC: trả NGUYÊN VĂN phản hồi
+// portal/get-pos-by-fkey của VNPT. Dùng để soi tên trường thật (số hoá đơn,
+// trạng thái ký, trạng thái CQT) khi bản ghi bên mình thiếu thông tin.
+// GET /api/einvoice/:id/adjust-preview?returnCode=… — xem trước CÁC MỤC sẽ ghi
+// trên hoá đơn điều chỉnh (để người lập kiểm tra/sửa trước khi phát hành thật).
+router.get('/:id/adjust-preview', einvoiceAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        await ensureTables(req)
+        const prisma = req.storePrisma! as any
+        const original = await getInvoiceWithItems(prisma, String(req.params.id))
+        if (!original) return res.status(404).json({ success: false, error: 'Không tìm thấy hóa đơn' })
+        const returnCode = String(req.query.returnCode || '').trim()
+        if (!returnCode) return res.status(400).json({ success: false, error: 'Thiếu returnCode' })
+        const kq: any = await dungDongDieuChinh(prisma, original, returnCode)
+        if (kq.loi) return res.status(404).json({ success: false, error: kq.loi })
+        return res.json({
+            success: true,
+            data: {
+                ...kq,
+                hoaDonGoc: {
+                    id: original.id, invoiceSymbol: original.invoiceSymbol, invoiceNumber: original.invoiceNumber,
+                    totalAmount: original.totalAmount, items: original.items || [],
+                },
+            },
+        })
+    } catch (err: any) {
+        console.error('GET /einvoice/:id/adjust-preview error:', err?.message || err)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
 // POST /api/einvoice/:id/adjust — hoá đơn ĐIỀU CHỈNH (giảm) cho trả hàng MỘT PHẦN.
 // Khác /replace: HĐ gốc VẪN HIỆU LỰC (không đổi status), bản điều chỉnh chỉ ghi
 // phần chênh. Quy định hiện hành không cho huỷ HĐ đã phát hành — chỉ điều chỉnh
@@ -2382,32 +2850,15 @@ router.post('/:id/adjust', einvoiceAuth, requireRole('admin', 'manager'), async 
         // từ phiếu trả (màn needs-adjust chỉ có mã phiếu, không có dòng hàng).
         let rawItems: any[] | null = Array.isArray(b.items) && b.items.length ? b.items : null
         if (!rawItems && bStr(b.returnCode)) {
-            const ro = await prisma.returnOrder.findFirst({
-                where: { code: bStr(b.returnCode) },
-                include: { items: true },
-            })
-            if (!ro) return res.status(404).json({ success: false, error: `Không tìm thấy phiếu trả ${bStr(b.returnCode)}` })
-            // Thuế suất kế thừa từ HĐ gốc (điều chỉnh giảm phải cùng thuế suất
-            // với phần doanh thu bị giảm, không được mặc định 0)
-            const goc = Number(original.totalBeforeVat || 0)
-            const rate = Number(original.vatAmount || 0) > 0 && goc > 0
-                ? Math.round(Number(original.vatAmount) * 100 / goc) : 0
-            const lam = (n: number) => Math.round(n)
-            rawItems = (ro.items?.length ? ro.items : null)?.map((it: any) => {
-                const amount = lam((it.quantity || 1) * (it.unitPrice || 0))
-                return {
-                    itemName: `Điều chỉnh giảm: ${it.productName}`,
-                    unitName: 'Cái', quantity: it.quantity || 1, unitPrice: it.unitPrice || 0,
-                    amount, vatRate: rate, vatAmount: lam(amount * rate / 100),
-                }
-            }) || [{
-                itemName: `Điều chỉnh giảm theo phiếu trả ${ro.code}`,
-                unitName: 'Lần', quantity: 1,
-                unitPrice: lam(Number(ro.totalRefund || ro.refundAmount || 0)),
-                amount: lam(Number(ro.totalRefund || ro.refundAmount || 0)),
-                vatRate: rate, vatAmount: lam(Number(ro.totalRefund || ro.refundAmount || 0) * rate / 100),
-            }]
+            // Dựng từ phiếu trả theo ĐÚNG mặt hàng/đơn giá/thuế suất của HĐ gốc
+            // (cùng hàm với /adjust-preview → cái người lập nhìn thấy chính là
+            // cái được phát hành, không có bản dựng thứ hai lệch nhau).
+            const kq: any = await dungDongDieuChinh(prisma, original, bStr(b.returnCode))
+            if (kq.loi) return res.status(404).json({ success: false, error: kq.loi })
+            rawItems = kq.items
         }
+        // Bỏ field phụ dành cho màn xem trước trước khi tính toán/gửi VNPT
+        if (rawItems) rawItems = rawItems.map(({ _khopHoaDonGoc, _sku, ...giu }: any) => giu)
         if (!rawItems || rawItems.length === 0) {
             return res.status(400).json({ success: false, error: 'Thiếu dòng điều chỉnh — truyền items hoặc returnCode của phiếu trả' })
         }
@@ -2457,9 +2908,18 @@ router.post('/:id/adjust', einvoiceAuth, requireRole('admin', 'manager'), async 
         const originalFkey = original.invoiceType === 'REPLACEMENT' && original.replacesInvoiceId
             ? vnptFkey(`${original.replacesInvoiceId}R`)
             : vnptFkey(original.transactionId)
-        const result = await vnpt.adjustInvoice(cfgRow, originalFkey, adjData as any)
+        let result = await vnpt.adjustInvoice(cfgRow, originalFkey, adjData as any)
         if (!result.success) {
-            return res.status(502).json({ success: false, error: result.errorMessage || 'Điều chỉnh bên VNPT thất bại' })
+            // CỨU bản đã phát hành: lần trước gọi VNPT xong nhưng lưu DB hỏng →
+            // hoá đơn có thật bên thuế, phát hành lại bị chặn vì trùng Fkey.
+            // Tra theo Fkey của bản điều chỉnh; có thật thì đi tiếp để ghi bản ghi.
+            const daCo = await vnpt.findByFkey(cfgRow, vnptFkey(adjData.transactionId))
+            if (daCo.found) {
+                console.warn(`[adjust] HĐ điều chỉnh đã tồn tại bên VNPT (số ${daCo.invoiceNumber}) — ghi bản ghi bù thay vì phát hành lại`)
+                result = { success: true, invoiceNumber: daCo.invoiceNumber, lookupCode: daCo.lookupCode } as any
+            } else {
+                return res.status(502).json({ success: false, error: result.errorMessage || 'Điều chỉnh bên VNPT thất bại' })
+            }
         }
 
         const adjustment = await prisma.eInvoice.create({
@@ -2475,14 +2935,29 @@ router.post('/:id/adjust', einvoiceAuth, requireRole('admin', 'manager'), async 
                 issuedAt: new Date(), sentAt: new Date(),
                 sellerName: adjData.sellerName, sellerTaxCode: adjData.sellerTaxCode, sellerAddress: adjData.sellerAddress,
                 buyerName: adjData.buyerName, buyerTaxCode: adjData.buyerTaxCode, buyerAddress: adjData.buyerAddress,
-                totalBeforeVat: subtotal, vatAmount, totalAmount, currency: 'VND',
+                // LƯU SỐ ÂM: bản ghi phải phản ánh đúng hoá đơn đã phát hành
+                // (điều chỉnh giảm ghi tiền âm) — báo cáo doanh thu/thuế cộng dồn
+                // thẳng là ra số đã trừ, không phải bỏ riêng ADJUSTMENT ra tính tay.
+                totalBeforeVat: -Math.abs(subtotal),
+                vatAmount: -Math.abs(vatAmount),
+                totalAmount: -Math.abs(totalAmount),
+                currency: 'VND',
                 paymentMethod: adjData.paymentMethod,
                 notes: `Điều chỉnh giảm HĐ ${original.invoiceSymbol || ''} số ${original.invoiceNumber || ''}${b.reason ? `: ${b.reason}` : ''}`,
                 adjustsInvoiceId: original.id,
+                // Khoá nối đích danh để hoàn tồn kho thuế đúng phiếu trả
+                adjustReturnCode: bStr(b.returnCode) || null,
                 branchId: original.branchId || req.user?.branchId || null,
                 createdBy: req.user?.userId || null,
                 createdByName: (req.user as any)?.email || null,
-                items: { create: computed.items },
+                // Dòng hàng cũng ghi âm cho khớp hoá đơn đã phát hành
+                items: {
+                    create: computed.items.map((it: any) => ({
+                        ...it,
+                        amount: -Math.abs(Number(it.amount) || 0),
+                        vatAmount: -Math.abs(Number(it.vatAmount) || 0),
+                    })),
+                },
             },
             include: { items: true },
         })
