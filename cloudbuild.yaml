@@ -69,9 +69,17 @@ steps:
       - '--session-affinity'
       - '--add-cloudsql-instances'
       - '${_CLOUD_SQL_INSTANCE}'
+      # ⚠ --set-env-vars THAY TOÀN BỘ danh sách env. Biến nào chỉnh tay bằng
+      # `gcloud run services update --update-env-vars` mà không có ở dòng dưới
+      # thì LẦN DEPLOY SAU LÀ MẤT SẠCH — im lặng, không báo lỗi.
+      # PRISMA_POOL_SIZE dính đúng bẫy này hai lần (29/07 và 18/08/2026): đặt tay
+      # =1 để tránh cạn slot Cloud SQL, deploy kế tiếp xoá mất, prod chạy lại mặc
+      # định 3. Với db-f1-micro (max_connections=50) thì pool 3 × 9 cửa hàng ×
+      # nhiều instance là chạm trần → "FATAL: remaining connection slots" →
+      # đăng nhập lỗi và ĐƠN SÀN KHÔNG VÀO SỔ. Ghim thẳng vào đây để hết mất.
       - '--set-env-vars'
       - >-
-        NODE_ENV=production,DATABASE_URL=postgresql://${_DB_USER}:${_DB_PASSWORD}@localhost/${_DB_NAME}?host=/cloudsql/${_CLOUD_SQL_INSTANCE},CORS_ORIGIN=*,APP_BASE_URL=https://kengi.vn,REDIS_URL=${_REDIS_URL},LIVESTREAM_STUDIO_TOKEN=${_LIVESTREAM_TOKEN},SHOPEE_FORWARD_PROXY=https://kengi.vn/ai-livestream/shopee-forward.php,SHOPEE_FORWARD_SECRET=${_SHOPEE_FORWARD_SECRET},ADMIN_PANEL_USER=${_ADMIN_PANEL_USER},ADMIN_PANEL_PASS=${_ADMIN_PANEL_PASS},PRISMA_POOL_TIMEOUT=30,FB_APP_ID=${_FB_APP_ID},FB_APP_SECRET=${_FB_APP_SECRET},FB_WEBHOOK_VERIFY_TOKEN=${_FB_WEBHOOK_VERIFY_TOKEN}
+        NODE_ENV=production,DATABASE_URL=postgresql://${_DB_USER}:${_DB_PASSWORD}@localhost/${_DB_NAME}?host=/cloudsql/${_CLOUD_SQL_INSTANCE},CORS_ORIGIN=*,APP_BASE_URL=https://kengi.vn,REDIS_URL=${_REDIS_URL},LIVESTREAM_STUDIO_TOKEN=${_LIVESTREAM_TOKEN},SHOPEE_FORWARD_PROXY=https://kengi.vn/ai-livestream/shopee-forward.php,SHOPEE_FORWARD_SECRET=${_SHOPEE_FORWARD_SECRET},ADMIN_PANEL_USER=${_ADMIN_PANEL_USER},ADMIN_PANEL_PASS=${_ADMIN_PANEL_PASS},PRISMA_POOL_TIMEOUT=30,PRISMA_POOL_SIZE=1,FB_APP_ID=${_FB_APP_ID},FB_APP_SECRET=${_FB_APP_SECRET},FB_WEBHOOK_VERIFY_TOKEN=${_FB_WEBHOOK_VERIFY_TOKEN}
 
   # Step 4: Force 100% traffic onto the just-deployed revision.
   # When the service's traffic has ever been pinned to a *named* revision (rather
