@@ -4292,9 +4292,9 @@ router.get('/online-status-probe', async (req: Request, res: Response) => {
         // mẫu 3 đơn cũ nhất của mỗi nhóm CHƯA kết thúc
         const ketThuc = ['COMPLETED','CANCELLED','completed','cancelled','TO_RETURN','returned']
         const mau: any[] = await sp.$queryRawUnsafe(`
-            SELECT * FROM (
+            SELECT platform, status, "externalStatus", "orderNumber", "createdAt", "updatedAt", "deliveredAt" FROM (
               SELECT o.platform, o.status, o."externalStatus", o."orderNumber", o."createdAt", o."updatedAt", o."deliveredAt",
-                     ROW_NUMBER() OVER (PARTITION BY o.platform, o.status ORDER BY o."createdAt") AS rn
+                     ROW_NUMBER() OVER (PARTITION BY o.platform, o.status ORDER BY o."createdAt")::int AS rn
               FROM "OnlineOrder" o
               WHERE NOT (o.status = ANY($1)) AND o."createdAt" < now() - interval '7 days'
             ) t WHERE rn <= 3 ORDER BY platform, status, "createdAt"`, ketThuc)
