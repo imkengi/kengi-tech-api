@@ -338,11 +338,16 @@ router.get('/stats', authMiddleware, requirePermission('pos.view'), async (req: 
             })
         }
 
-        // Payment method breakdown
+        // Payment method breakdown — tiền + SỐ ĐƠN theo phương thức (19/08/2026:
+        // "chỗ này nên hiện số đơn"). Một đơn chia 2 cách trả thì đếm vào cả hai.
+        // Gồm cả đơn 'partial' (ghi nợ một phần) — phần đã thu cũng là thanh toán.
         const paymentBreakdown: Record<string, number> = {}
-        for (const t of completed) {
+        const paymentOrders: Record<string, number> = {}
+        for (const t of revenueTx) {
+            const seen = new Set<string>()
             for (const p of t.payments) {
                 paymentBreakdown[p.type] = (paymentBreakdown[p.type] || 0) + p.amount
+                if (!seen.has(p.type)) { seen.add(p.type); paymentOrders[p.type] = (paymentOrders[p.type] || 0) + 1 }
             }
         }
 
@@ -396,6 +401,7 @@ router.get('/stats', authMiddleware, requirePermission('pos.view'), async (req: 
                 byHour,
                 byDay,
                 paymentBreakdown,
+                paymentOrders,
                 topProducts,
                 cashiers,
             },
