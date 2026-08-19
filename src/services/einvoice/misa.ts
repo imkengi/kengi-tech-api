@@ -54,6 +54,8 @@ export class MisaProvider implements IEInvoiceProvider {
                 BuyerAddress: data.buyerAddress || '',
                 BuyerPhoneNumber: data.buyerPhone || '',
                 BuyerEmail: data.buyerEmail || '',
+                // CCCD người mua cho HĐ cá nhân (MISA meInvoice: BuyerCitizenIdentification)
+                BuyerCitizenIdentification: String(data.buyerIdNo || '').trim(),
                 InvoiceTemplateName: config.templateId || '',
                 InvoiceSerialName: config.serialNo || '',
                 TotalAmount: data.subtotal,

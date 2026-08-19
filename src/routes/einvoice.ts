@@ -419,7 +419,8 @@ function generateInvoiceXml(inv: any, items: any[]): string {
       <NMua>
         <DChi>${escXml(inv.buyerAddress || '')}</DChi>
         <HVTNMHang>${escXml(tenNguoiMua(inv.buyerName, inv.buyerTaxCode))}</HVTNMHang>
-      </NMua>
+${inv.buyerIdNo ? `        <CCCDan>${escXml(inv.buyerIdNo)}</CCCDan>
+` : ''}      </NMua>
       <DSHHDVu>
 ${items.map((it: any) => `        <HHDVu>
           <TChat>1</TChat>
@@ -792,6 +793,9 @@ export async function issueInvoiceForTransaction(
             buyerAddress: _clean(bStr(body.buyerAddress) || bStr(_vbi.address) || tx.customer?.address || ''),
             buyerPhone: _clean(bStr(body.buyerPhone) || tx.customer?.phone || ''),
             buyerEmail: _clean(bStr(body.buyerEmail) || bStr(_vbi.email) || tx.customer?.email || ''),
+            // CCCD người mua cho HĐ cá nhân — Shopee VN trả `national_id` (từ 28/07/2026),
+            // đổ vào vatBuyerInfo.nationalId qua /shopee-buyer-info; người dùng gõ tay cũng được
+            buyerIdNo: _clean(bStr(body.buyerIdNo) || bStr(_vbi.nationalId) || ''),
             templateId: config.templateId || undefined,
             serialNo: config.serialNo || undefined,
             paymentMethod: tx.paymentMethod || 'TM/CK',
@@ -1866,6 +1870,56 @@ router.post('/cancel/:invoiceId', einvoiceAuth, requireRole('admin', 'manager'),
 // ═════════════════════════════════════════════════════════════════════════════
 
 // POST /api/einvoice/from-sale/:saleId — auto-create DRAFT from a Transaction
+/**
+ * POST /einvoice/shopee-buyer-info/:transactionId — kéo THÔNG TIN XUẤT HĐ khách
+ * khai trên Shopee (get_buyer_invoice_info) về phiếu: ghi vào Transaction.vatBuyerInfo
+ * {type, name, taxCode, address, email, nationalId, companyName…}. Từ 28/07/2026
+ * Shopee VN trả `national_id` cho HĐ cá nhân → luồng xuất tự đưa vào <CCCDan>.
+ * Chỉ ĐỌC từ sàn + ghi lên phiếu; không xuất HĐ ở đây.
+ */
+router.post('/shopee-buyer-info/:transactionId', einvoiceAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const txId = String(req.params.transactionId)
+        const tx = await prisma.transaction.findUnique({ where: { id: txId } })
+        if (!tx) return res.status(404).json({ success: false, error: 'Không thấy phiếu' })
+        const rn = String(tx.receiptNumber || '')
+        if (!rn.startsWith('ONLINE-')) return res.status(400).json({ success: false, error: 'Không phải đơn sàn' })
+        const oo = await prisma.onlineOrder.findFirst({
+            where: { orderNumber: rn.replace(/^ONLINE-/, '') }, include: { channel: true },
+        })
+        if (!oo || String(oo.channel?.platform).toLowerCase() !== 'shopee') {
+            return res.status(400).json({ success: false, error: 'Chỉ hỗ trợ đơn Shopee (Lazada/TikTok không có API thông tin HĐ người mua)' })
+        }
+        const { getPlatformService } = await import('../services/platforms')
+        const ch = oo.channel
+        const svc: any = getPlatformService('shopee', {
+            apiKey: ch.apiKey || '', apiSecret: ch.apiSecret || '',
+            accessToken: ch.accessToken || undefined, refreshToken: ch.refreshToken || undefined,
+            shopId: ch.shopId || undefined,
+        } as any)
+        const sn = String(oo.externalOrderId || oo.orderNumber).replace(/^SPE-/i, '')
+        const info = await svc.getBuyerInvoiceInfo(sn)
+        if (!info) return res.json({ success: true, data: null, message: 'Khách không khai thông tin xuất hoá đơn trên Shopee cho đơn này' })
+        const laCongTy = info.invoiceType === 'company'
+        const vbi = {
+            source: 'shopee', fetchedAt: new Date().toISOString(),
+            type: info.invoiceType,
+            name: laCongTy ? (info.companyName || info.name || '') : (info.name || ''),
+            taxCode: laCongTy ? (info.companyTaxId || '') : (info.taxId || ''),
+            address: laCongTy ? (info.companyAddress || info.address || '') : (info.address || ''),
+            email: laCongTy ? (info.companyEmail || info.email || '') : (info.email || ''),
+            phone: info.phone || '',
+            nationalId: info.nationalId || '',
+        }
+        await prisma.transaction.update({ where: { id: txId }, data: { vatBuyerInfo: JSON.stringify(vbi) } as any })
+        res.json({ success: true, data: vbi })
+    } catch (err: any) {
+        console.error('[shopee-buyer-info]', err?.message || err)
+        res.status(502).json({ success: false, error: err?.message || 'Không lấy được thông tin từ Shopee' })
+    }
+})
+
 router.post('/from-sale/:saleId', einvoiceAuth, requireRole('admin', 'manager', 'cashier'), async (req: AuthRequest, res: Response) => {
     try {
         await ensureTables(req)

@@ -240,6 +240,41 @@ export class ShopeeService extends PlatformService {
         return detail ? this.mapOrder(detail) : null
     }
 
+    /**
+     * THÔNG TIN XUẤT HOÁ ĐƠN người mua khai trên Shopee (v2.order.get_buyer_invoice_info,
+     * VN/TH/PH). Từ 28/07/2026 Shopee VN trả thêm `national_id` (CCCD) cho hoá đơn
+     * cá nhân — cần cho HĐĐT cá nhân theo TT78. Trả null nếu khách không khai.
+     * Dữ liệu có thể bị che (A****b) tuỳ trạng thái đơn — giữ nguyên, không tự đoán.
+     */
+    async getBuyerInvoiceInfo(orderSn: string): Promise<{
+        invoiceType: string
+        name?: string; email?: string; phone?: string; taxId?: string; address?: string
+        nationalId?: string
+        companyName?: string; companyTaxId?: string; companyAddress?: string; companyEmail?: string
+        raw: any
+    } | null> {
+        const url = this.apiUrl('/api/v2/order/get_buyer_invoice_info')
+        const data = await this.httpPost(url, { queries: [{ order_sn: orderSn }] })
+        if (data?.error) throw new Error(`Shopee ${data.error}: ${data.message || ''}`)
+        const row = data?.invoice_info_list?.[0]
+        if (!row || row.error || !row.invoice_detail) return null
+        const d = row.invoice_detail || {}
+        const t = String(row.invoice_type || '').toLowerCase()
+        // Loại HĐ có thể trả dạng số {1: personal, 2: company, 3: household} hoặc chữ
+        const invoiceType = t === '1' ? 'personal' : t === '2' ? 'company' : t === '3' ? 'household' : t
+        const s = (v: any) => (v === undefined || v === null) ? undefined : String(v).trim() || undefined
+        return {
+            invoiceType,
+            name: s(d.name), email: s(d.email), phone: s(d.phone_number), taxId: s(d.tax_id),
+            address: s(d.address) || s(d.household_address_breakdown?.household_full_address) || s(d.address_breakdown?.full_address),
+            nationalId: s(d.national_id),
+            companyName: s(d.company_name), companyTaxId: s(d.company_tax_id),
+            companyAddress: s(d.company_address) || s(d.company_address_breakdown?.company_full_address),
+            companyEmail: s(d.company_email),
+            raw: row,
+        }
+    }
+
     async testConnection(): Promise<{ success: boolean; shopName?: string; error?: string }> {
         try {
             const path = '/api/v2/shop/get_shop_info'

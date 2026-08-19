@@ -213,6 +213,8 @@ export class VnptProvider implements IEInvoiceProvider {
                 TGVCHDTu: null,
                 TGVCHDDen: null,
                 DChi: data.buyerAddress || '',
+                // CCCD người mua (HĐ cá nhân, TT78 khuyến nghị) — Shopee VN cấp qua national_id
+                CCCDan: String(data.buyerIdNo || '').trim(),
                 MKHang: '',
                 SDThoai: data.buyerPhone || '',
                 DCTDTu: data.buyerEmail || ex.sellerEmail || '',
