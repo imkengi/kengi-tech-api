@@ -4262,6 +4262,54 @@ router.get('/debt-trace', async (req: Request, res: Response) => {
  * gần nhất (kèm mốc ghi kho), thẻ kho referenceType='repair', và các dòng
  * tồn của kho hư hỏng (kể cả ÂM — di sản chiều sai trước 10/08).
  */
+/**
+ * GET /admin/online-status-probe?storeCode=  — CHỈ ĐỌC.
+ * Soi đơn online "kẹt" trạng thái: gom theo (sàn, trạng thái Kengi) × tuổi đơn,
+ * kèm mẫu đơn cũ nhất mỗi nhóm để đối chiếu với sàn. Đơn chưa kết thúc mà
+ * quá 7–14 ngày là dấu hiệu Kengi lệch sàn (webhook trượt / trạng thái lạ
+ * không có trong bảng map). Dùng để đo trước khi sửa (19/08/2026).
+ */
+router.get('/online-status-probe', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || '').trim()
+        if (!storeCode) return res.status(400).json({ success: false, error: 'Thiếu storeCode' })
+        const store = await prisma.store.findFirst({
+            where: { code: { equals: storeCode, mode: 'insensitive' } }, select: { schema: true },
+        })
+        if (!store) return res.status(404).json({ success: false, error: 'Không thấy cửa hàng' })
+        const sp: any = getStorePrisma(store.schema)
+        const rows: any[] = await sp.$queryRawUnsafe(`
+            SELECT o.platform, o.status,
+                   COUNT(*)::int AS tong,
+                   COUNT(*) FILTER (WHERE o."createdAt" < now() - interval '7 days')::int  AS qua7,
+                   COUNT(*) FILTER (WHERE o."createdAt" < now() - interval '14 days')::int AS qua14,
+                   COUNT(*) FILTER (WHERE o."createdAt" < now() - interval '30 days')::int AS qua30,
+                   MIN(o."createdAt") AS cuNhat,
+                   MAX(o."updatedAt") AS capNhatMoiNhat
+            FROM "OnlineOrder" o
+            GROUP BY o.platform, o.status
+            ORDER BY o.platform, tong DESC`)
+        // mẫu 3 đơn cũ nhất của mỗi nhóm CHƯA kết thúc
+        const ketThuc = ['COMPLETED','CANCELLED','completed','cancelled','TO_RETURN','returned']
+        const mau: any[] = await sp.$queryRawUnsafe(`
+            SELECT * FROM (
+              SELECT o.platform, o.status, o."externalStatus", o."orderNumber", o."createdAt", o."updatedAt", o."deliveredAt",
+                     ROW_NUMBER() OVER (PARTITION BY o.platform, o.status ORDER BY o."createdAt") AS rn
+              FROM "OnlineOrder" o
+              WHERE NOT (o.status = ANY($1)) AND o."createdAt" < now() - interval '7 days'
+            ) t WHERE rn <= 3 ORDER BY platform, status, "createdAt"`, ketThuc)
+        // externalStatus (mã gốc sàn) nào KHÔNG khớp status đã map — nghi map thiếu
+        const lech: any[] = await sp.$queryRawUnsafe(`
+            SELECT o.platform, o."externalStatus", o.status, COUNT(*)::int AS tong
+            FROM "OnlineOrder" o
+            WHERE o."externalStatus" IS NOT NULL AND o."externalStatus" <> o.status
+            GROUP BY 1,2,3 ORDER BY tong DESC LIMIT 40`)
+        res.json({ success: true, theoTrangThai: rows, mauDonCu: mau, maGocKhacMap: lech })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err?.message || String(err) })
+    }
+})
+
 router.get('/repair-trace', async (req: Request, res: Response) => {
     try {
         const storeCode = String(req.query.storeCode || '').trim()
