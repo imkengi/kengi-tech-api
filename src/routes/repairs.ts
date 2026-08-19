@@ -296,7 +296,7 @@ router.put('/:id', authMiddleware, requirePermission('repairs.edit'), validate(U
         }
         const { status, cost, notes, completedDate, productId, quantity, source,
             customerId, customerName, customerPhone, transactionId, soldReceiptNumber,
-            supplierId, supplierName, supplierBatchCode } = req.body
+            supplierId, supplierName, supplierBatchCode, queuedForSupplier } = req.body
         const data: any = {}
         if (status) data.status = status
         if (cost !== undefined) data.cost = Number(cost)
@@ -317,6 +317,10 @@ router.put('/:id', authMiddleware, requirePermission('repairs.edit'), validate(U
         if (supplierName !== undefined) data.supplierName = supplierName || null
         if (supplierBatchCode !== undefined) data.supplierBatchCode = supplierBatchCode || null
         if (status === 'sent_to_supplier' && !existing.sentToSupplierAt) data.sentToSupplierAt = new Date()
+        // Rổ chờ gửi NCC: bấm tay đưa vào / rút ra. Gửi lô xong thì rổ tự trống
+        // (điều kiện chờ gửi có "chưa có sentToSupplierAt").
+        if (queuedForSupplier === true && !existing.queuedForSupplierAt) data.queuedForSupplierAt = new Date()
+        if (queuedForSupplier === false) data.queuedForSupplierAt = null
         /**
          * Link sang hoá đơn bán: POS gửi kèm lúc chuyển 'returned' sau khi thu
          * tiền — "phiếu sửa xong mà không biết thu ở hoá đơn nào" (13/08/2026).

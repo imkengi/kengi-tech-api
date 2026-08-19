@@ -705,6 +705,8 @@ model Repair {
   supplierName      String?
   supplierBatchCode String?
   sentToSupplierAt  DateTime?
+  // Đưa vào RỔ CHỜ GỬI NCC (bấm tay) — hàng hỏng gom lại chờ đủ lô mới đi
+  queuedForSupplierAt DateTime?
 
   // Dấu mốc để mỗi lần ghi kho CHỈ CHẠY MỘT LẦN. Không có chúng thì bấm đổi
   // trạng thái hai lần là trừ tồn hai lần, và không cách nào biết phiếu nào đã

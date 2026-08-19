@@ -183,6 +183,8 @@ export const CreateRepairSchema = z.object({
     supplierId: z.string().optional().nullable(),
     supplierName: z.string().max(200).optional().nullable(),
     supplierBatchCode: z.string().max(50).optional().nullable(),
+    // true = đưa vào rổ chờ gửi NCC; false = rút khỏi rổ
+    queuedForSupplier: z.boolean().optional(),
 })
 
 export const UpdateRepairSchema = CreateRepairSchema.partial()
