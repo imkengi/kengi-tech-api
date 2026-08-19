@@ -1588,11 +1588,12 @@ router.put('/queue/receipt/:txId/buyer', einvoiceAuth, async (req: AuthRequest, 
         const txId = String(req.params.txId)
         const b = req.body || {}
         const s = (v: any) => (v === undefined || v === null ? '' : String(v).trim())
-        const info = { name: s(b.name), taxCode: s(b.taxCode), address: s(b.address), email: s(b.email) }
+        // nationalId: CCCD người mua cho HĐ cá nhân (Shopee national_id hoặc gõ tay)
+        const info = { name: s(b.name), taxCode: s(b.taxCode), address: s(b.address), email: s(b.email), nationalId: s(b.nationalId) }
         if (info.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(info.email)) {
             res.status(400).json({ success: false, error: 'Email không hợp lệ' }); return
         }
-        const has = info.name || info.taxCode || info.address || info.email
+        const has = info.name || info.taxCode || info.address || info.email || info.nationalId
         const tx = await prisma.transaction.update({
             where: { id: txId },
             data: { vatBuyerInfo: has ? JSON.stringify(info) : null },
