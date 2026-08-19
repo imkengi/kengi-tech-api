@@ -11,6 +11,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { registryPrisma, getStorePrisma } from '../lib/prisma'
+import { chayNeuLanhDao } from '../lib/leaderLock'
 import { chayAgent } from '../services/aiAgentRunner'
 import { tinhLanChayKe, SYSTEM_PROMPT_TU_DONG } from '../services/aiAgentSchedule'
 import { ToolCtx } from '../lib/mcpTypes'
@@ -151,7 +152,10 @@ export function startAiAgentCron(): void {
     if (timer) return
     console.log(`⏰ AI agent cron started (every ${CHU_KY / 60000} minutes)`)
     // Trễ 90s để không đụng đợt khởi động cùng các cron khác
-    setTimeout(() => { quet(); timer = setInterval(quet, CHU_KY) }, 90_000)
+    // Chỉ một bản chạy mỗi nhịp — job AI có nextRunAt riêng nên chạy trùng trên
+    // 2–3 bản là nguy cơ chạy job đúp, ngoài chuyện đốt kết nối (19/08/2026)
+    const chay = () => chayNeuLanhDao('ai-agent', CHU_KY - 30_000, quet)
+    setTimeout(() => { chay(); timer = setInterval(chay, CHU_KY) }, 90_000)
 }
 
 export function stopAiAgentCron(): void {

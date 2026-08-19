@@ -61,7 +61,28 @@ export async function resumeStalledSyncs(): Promise<void> {
         }) as any[]
     } catch { return }
 
+    /**
+     * LỌC TRƯỚC BẰNG MỘT TRUY VẤN TRÊN REGISTRY (19/08/2026): watchdog cũ mở
+     * client Prisma cho TẤT CẢ cửa hàng chỉ để hỏi "có đợt nào đang chạy
+     * không" — 9 cửa hàng × mọi bản Cloud Run × mỗi 90 giây, trong khi thường
+     * KHÔNG có đợt nào. Đó là nguồn giữ kết nối DB suốt đêm. Giờ hỏi thẳng
+     * từng schema qua registry client (1 kết nối) bằng tên schema tường minh;
+     * chỉ mở client cửa hàng khi THẬT SỰ có đợt 'running'. Schema chưa có bảng
+     * KiotVietSyncLog (chưa từng nối KV) → lỗi → bỏ qua, coi như không có.
+     */
+    const coDotChay: any[] = []
     for (const store of stores) {
+        const schema = String(store.schema || '').replace(/[^A-Za-z0-9_]/g, '')
+        if (!schema) continue
+        try {
+            const rows: any[] = await registryPrisma.$queryRawUnsafe(
+                `SELECT 1 FROM "${schema}"."KiotVietSyncLog" WHERE mode = 'manual' AND status = 'running' LIMIT 1`,
+            )
+            if (rows.length) coDotChay.push(store)
+        } catch { /* schema không có bảng KV → không nối KiotViet */ }
+    }
+
+    for (const store of coDotChay) {
         try {
             const sp = getStorePrisma(store.schema) as any
             const log = await sp.kiotVietSyncLog.findFirst({
