@@ -20,7 +20,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         if (status && status !== 'all') where.status = String(status)
         if (search) {
             const q = String(search)
-            where.OR = [{ productName: { contains: q } }, { customerName: { contains: q } }, { code: { contains: q } }, { serialNumber: { contains: q } }]
+            where.OR = [{ productName: { contains: q, mode: 'insensitive' } }, { customerName: { contains: q, mode: 'insensitive' } }, { code: { contains: q, mode: 'insensitive' } }, { serialNumber: { contains: q, mode: 'insensitive' } }]
         }
         const data = await prisma.warranty.findMany({ where, orderBy: { createdAt: 'desc' } })
         const _response = { success: true, data }

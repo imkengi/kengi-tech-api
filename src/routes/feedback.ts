@@ -33,7 +33,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         const where: any = {}
         if (type && type !== 'all') where.type = type
         if (status && status !== 'all') where.status = status
-        if (search) { const q = String(search); where.OR = [{ message: { contains: q } }, { customerName: { contains: q } }] }
+        if (search) { const q = String(search); where.OR = [{ message: { contains: q, mode: 'insensitive' } }, { customerName: { contains: q, mode: 'insensitive' } }] }
         const data = await prisma.feedback.findMany({ where, orderBy: { createdAt: 'desc' } })
         const _response = { success: true, data }
         await cacheSet(cacheKey, _response, 300)

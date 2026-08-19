@@ -35,7 +35,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         else if (archived === 'false' || !archived) where.archived = false
         if (search) {
             const q = String(search)
-            where.OR = [{ title: { contains: q } }, { content: { contains: q } }]
+            where.OR = [{ title: { contains: q, mode: 'insensitive' } }, { content: { contains: q, mode: 'insensitive' } }]
         }
         const data = await prisma.announcement.findMany({ where, orderBy: [{ pinned: 'desc' }, { createdAt: 'desc' }] })
         const _response = { success: true, data }

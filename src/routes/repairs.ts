@@ -157,7 +157,7 @@ router.get('/', authMiddleware, requirePermission('repairs.view'), async (req: A
         if (transactionId) where.transactionId = String(transactionId)
         if (search) {
             const q = String(search)
-            where.OR = [{ productName: { contains: q } }, { customerName: { contains: q } }, { code: { contains: q } }]
+            where.OR = [{ productName: { contains: q, mode: 'insensitive' } }, { customerName: { contains: q, mode: 'insensitive' } }, { code: { contains: q, mode: 'insensitive' } }]
         }
         const data = await prisma.repair.findMany({ where, orderBy: { createdAt: 'desc' } })
         res.json({ success: true, data })

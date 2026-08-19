@@ -50,8 +50,8 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         if (search) {
             const q = String(search)
             where.OR = [
-                { code: { contains: q } },
-                { supplierName: { contains: q } },
+                { code: { contains: q, mode: 'insensitive' } },
+                { supplierName: { contains: q, mode: 'insensitive' } },
             ]
         }
         const orders = await prisma.purchaseOrder.findMany({

@@ -598,7 +598,7 @@ export const TOOLS: Tool[] = [
             if (a.customer_query) {
                 const q = String(a.customer_query)
                 customer = await prisma.customer.findFirst({
-                    where: { OR: [{ phone: { contains: q } }, { code: { equals: q, mode: 'insensitive' } }, { name: { contains: q, mode: 'insensitive' } }] },
+                    where: { OR: [{ phone: { contains: q, mode: 'insensitive' } }, { code: { equals: q, mode: 'insensitive' } }, { name: { contains: q, mode: 'insensitive' } }] },
                 })
                 if (!customer) return errContentThrow(`Không tìm thấy khách "${q}" — tạo trước bằng create_customer hoặc bỏ trống để bán khách lẻ`)
             }
@@ -747,7 +747,7 @@ export const TOOLS: Tool[] = [
                 where: {
                     OR: [
                         { code: { equals: q, mode: 'insensitive' } },
-                        { phone: { contains: q } },
+                        { phone: { contains: q, mode: 'insensitive' } },
                         { name: { contains: q, mode: 'insensitive' } },
                     ],
                 },

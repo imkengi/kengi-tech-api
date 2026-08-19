@@ -57,10 +57,10 @@ router.get('/', authMiddleware, requirePermission('employees.view'), async (req:
         if (search) {
             const q = String(search)
             where.OR = [
-                { name: { contains: q } },
-                { code: { contains: q } },
-                { phone: { contains: q } },
-                { email: { contains: q } },
+                { name: { contains: q, mode: 'insensitive' } },
+                { code: { contains: q, mode: 'insensitive' } },
+                { phone: { contains: q, mode: 'insensitive' } },
+                { email: { contains: q, mode: 'insensitive' } },
             ]
         }
         const users = await prisma.user.findMany({ where, orderBy: { createdAt: 'desc' }, include: { branch: { select: { id: true, name: true, code: true, isMainBranch: true } } } })

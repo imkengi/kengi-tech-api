@@ -15,7 +15,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         const { productId, search } = req.query
         const where: any = {}
         if (productId) where.productId = productId
-        if (search) { const q = String(search); where.OR = [{ productName: { contains: q } }, { productSku: { contains: q } }] }
+        if (search) { const q = String(search); where.OR = [{ productName: { contains: q, mode: 'insensitive' } }, { productSku: { contains: q, mode: 'insensitive' } }] }
         const data = await prisma.priceHistory.findMany({ where, orderBy: { createdAt: 'desc' }, take: 200 })
         const _response = { success: true, data }
         await cacheSet(cacheKey, _response, 300)

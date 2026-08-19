@@ -82,11 +82,11 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         if (search) {
             const q = String(search)
             where.OR = [
-                { name: { contains: q } },
-                { code: { contains: q } },
-                { licensePlate: { contains: q } },
-                { brand: { contains: q } },
-                { assignedDriverName: { contains: q } },
+                { name: { contains: q, mode: 'insensitive' } },
+                { code: { contains: q, mode: 'insensitive' } },
+                { licensePlate: { contains: q, mode: 'insensitive' } },
+                { brand: { contains: q, mode: 'insensitive' } },
+                { assignedDriverName: { contains: q, mode: 'insensitive' } },
             ]
         }
         const data = await prisma.vehicle.findMany({
