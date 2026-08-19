@@ -1541,6 +1541,11 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "customerId" TEXT`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "transactionId" TEXT`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "soldReceiptNumber" TEXT`)
+                // Gửi NCC theo lô + chọn NCC (2026-08-19)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "supplierId" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "supplierName" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "supplierBatchCode" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "sentToSupplierAt" TIMESTAMP(3)`)
 
                 // SalesTrip pause support (2026-05-13)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "SalesTrip" ADD COLUMN IF NOT EXISTS "pausedAt" TIMESTAMP`)

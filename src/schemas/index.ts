@@ -179,6 +179,10 @@ export const CreateRepairSchema = z.object({
     // Link sang hoá đơn bán đã thu tiền phiếu này — POS gửi lúc chuyển 'returned'
     transactionId: z.string().optional().nullable(),
     soldReceiptNumber: z.string().max(50).optional().nullable(),
+    // Gửi NCC: NCC nhận hàng + mã lô (nhiều phiếu chung một lần gửi)
+    supplierId: z.string().optional().nullable(),
+    supplierName: z.string().max(200).optional().nullable(),
+    supplierBatchCode: z.string().max(50).optional().nullable(),
 })
 
 export const UpdateRepairSchema = CreateRepairSchema.partial()
