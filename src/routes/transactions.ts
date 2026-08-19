@@ -256,8 +256,18 @@ router.get('/stats', authMiddleware, requirePermission('pos.view'), async (req: 
         if (cachedStats) return res.json(cachedStats)
 
         const now = new Date()
-        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        /**
+         * GIỜ VIỆT NAM, KHÔNG PHẢI GIỜ MÁY CHỦ (19/08/2026). Cloud Run chạy UTC nên
+         * "hôm nay" bắt đầu lúc 7h sáng VN: đơn 0h–7h bị đếm sang hôm qua, và
+         * biểu đồ theo giờ vẽ lệch 7 tiếng (đơn 14h nằm ở cột 7h). Tính mốc ngày
+         * bằng cách dịch +7h rồi cắt về nửa đêm UTC.
+         */
+        const VN_MS = 7 * 3600_000
+        const vnNow = new Date(now.getTime() + VN_MS)
+        const todayStart = new Date(Date.UTC(vnNow.getUTCFullYear(), vnNow.getUTCMonth(), vnNow.getUTCDate()) - VN_MS)
         const yesterdayStart = new Date(todayStart.getTime() - 86400_000)
+        const vnHourNow = vnNow.getUTCHours()
+        const vnHourOf = (d: Date) => new Date(d.getTime() + VN_MS).getUTCHours()
 
         // Use provided date range or default to 30 days
         const rangeStart = startDate ? new Date(startDate as string) : new Date(now.getTime() - 30 * 86400_000)
@@ -291,16 +301,22 @@ router.get('/stats', authMiddleware, requirePermission('pos.view'), async (req: 
         const voidedCount = voided.length
         const returnedCount = returned.length
 
-        // Today vs yesterday
-        const todayTx = revenueTx.filter(t => t.createdAt >= todayStart)
-        const yesterdayTx = revenueTx.filter(t => t.createdAt >= yesterdayStart && t.createdAt < todayStart)
+        // Today vs yesterday — ĐỘC LẬP với bộ lọc ngày của trang: trang đang lọc
+        // "Hôm nay" thì `recent` không có đơn hôm qua → ô Hôm qua luôn 0đ dù có
+        // 22 đơn thật (19/08/2026). Tra riêng hai ngày này, cùng điều kiện doanh thu.
+        const hqTx = await prisma.transaction.findMany({
+            where: { ...branchFilter, status: { in: ['completed', 'partial'] }, createdAt: { gte: yesterdayStart, lt: new Date(todayStart.getTime() + 86400_000) } },
+            select: { total: true, createdAt: true },
+        })
+        const todayTx = hqTx.filter(t => t.createdAt >= todayStart)
+        const yesterdayTx = hqTx.filter(t => t.createdAt >= yesterdayStart && t.createdAt < todayStart)
         const revenueToday = todayTx.reduce((s, t) => s + t.total, 0)
         const revenueYesterday = yesterdayTx.reduce((s, t) => s + t.total, 0)
 
         // Revenue by hour (today)
         const byHour: { hour: number; revenue: number; count: number }[] = []
-        for (let h = 0; h <= now.getHours(); h++) {
-            const hourTx = todayTx.filter(t => t.createdAt.getHours() === h)
+        for (let h = 0; h <= vnHourNow; h++) {
+            const hourTx = todayTx.filter(t => vnHourOf(t.createdAt) === h)
             byHour.push({
                 hour: h,
                 revenue: hourTx.reduce((s, t) => s + t.total, 0),
@@ -311,12 +327,12 @@ router.get('/stats', authMiddleware, requirePermission('pos.view'), async (req: 
         // Revenue by day (last 30 days)
         const byDay: { date: string; revenue: number; count: number }[] = []
         for (let d = 29; d >= 0; d--) {
-            const dayStart = new Date(now.getTime() - d * 86400_000)
-            dayStart.setHours(0, 0, 0, 0)
+            // Mốc ngày theo giờ VN (todayStart đã là 0h VN)
+            const dayStart = new Date(todayStart.getTime() - d * 86400_000)
             const dayEnd = new Date(dayStart.getTime() + 86400_000)
             const dayTx = revenueTx.filter(t => t.createdAt >= dayStart && t.createdAt < dayEnd)
             byDay.push({
-                date: dayStart.toISOString().slice(0, 10),
+                date: new Date(dayStart.getTime() + VN_MS).toISOString().slice(0, 10),
                 revenue: dayTx.reduce((s, t) => s + t.total, 0),
                 count: dayTx.length,
             })
