@@ -4310,6 +4310,45 @@ router.get('/online-status-probe', async (req: Request, res: Response) => {
     }
 })
 
+/**
+ * GET /admin/online-live-check?storeCode=&orderNumber=  — CHỈ ĐỌC, không ghi.
+ * Hỏi SÀN trạng thái hiện tại của một đơn (getOrderDetail bằng token của kênh)
+ * rồi đặt cạnh trạng thái Kengi đang lưu — để phân biệt "Kengi lệch sàn" với
+ * "sàn thật sự còn để trạng thái đó" trước khi sửa (19/08/2026).
+ */
+router.get('/online-live-check', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || '').trim()
+        const orderNumber = String(req.query.orderNumber || '').trim()
+        if (!storeCode || !orderNumber) return res.status(400).json({ success: false, error: 'Thiếu storeCode/orderNumber' })
+        const store = await prisma.store.findFirst({
+            where: { code: { equals: storeCode, mode: 'insensitive' } }, select: { schema: true },
+        })
+        if (!store) return res.status(404).json({ success: false, error: 'Không thấy cửa hàng' })
+        const sp: any = getStorePrisma(store.schema)
+        const o = await sp.onlineOrder.findFirst({ where: { orderNumber }, include: { channel: true } })
+        if (!o) return res.status(404).json({ success: false, error: 'Không thấy đơn' })
+        const { getPlatformService } = await import('../services/platforms')
+        const ch = o.channel
+        const svc: any = getPlatformService(ch.platform, {
+            apiKey: ch.apiKey || '', apiSecret: ch.apiSecret || '',
+            accessToken: ch.accessToken || undefined, refreshToken: ch.refreshToken || undefined,
+            shopId: ch.shopId || undefined, shopCipher: (ch as any).shopCipher || undefined,
+        } as any)
+        if (!svc) return res.status(400).json({ success: false, error: 'Sàn không hỗ trợ' })
+        const eid = String(o.externalOrderId || '').replace(/^(SPE-|TIK-|LAZ-)/i, '')
+        const live = await svc.getOrderDetail(eid)
+        res.json({
+            success: true,
+            kengi: { status: o.status, externalStatus: o.externalStatus, updatedAt: o.updatedAt, deliveredAt: o.deliveredAt, syncedAt: (o as any).syncedAt },
+            san: live ? { status: live.status, externalStatus: live.externalStatus, deliveredAt: live.deliveredAt, shippedAt: live.shippedAt } : null,
+            lech: live ? live.status !== o.status : null,
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err?.message || String(err) })
+    }
+})
+
 router.get('/repair-trace', async (req: Request, res: Response) => {
     try {
         const storeCode = String(req.query.storeCode || '').trim()
