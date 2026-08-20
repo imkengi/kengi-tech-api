@@ -1641,6 +1641,81 @@ router.put('/queue/receipt/:txId/buyer', einvoiceAuth, async (req: AuthRequest, 
     }
 })
 
+// ─── Thông tin xuất HĐ theo MÃ ĐƠN SÀN ──────────────────────────────────────
+// Khách nhắn xin hoá đơn thì nhân viên đang đứng ở trang ĐƠN HÀNG ONLINE, tay
+// cầm mã đơn — không phải tab hàng đợi xuất HĐ với txId. Cho đọc/ghi thẳng theo
+// orderNumber; Transaction của đơn sàn có receiptNumber = 'ONLINE-' + orderNumber.
+async function timTxTheoMaDon(prisma: any, orderNumber: string) {
+    const ma = String(orderNumber || '').trim()
+    if (!ma) return null
+    // Đơn cũ trước quy ước ONLINE- có thể mang receipt trần (TIK-xxx) — thử cả hai.
+    return await prisma.transaction.findFirst({
+        where: { receiptNumber: { in: [`ONLINE-${ma}`, ma] } },
+        select: { id: true, receiptNumber: true, total: true, vatBuyerInfo: true },
+    })
+}
+
+router.get('/buyer/by-order/:orderNumber', einvoiceAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        await ensureTables(req)
+        const prisma = req.storePrisma! as any
+        const tx = await timTxTheoMaDon(prisma, req.params.orderNumber)
+        if (!tx) {
+            res.status(404).json({ success: false, error: 'Đơn chưa có phiếu bán trong hệ thống (chưa đồng bộ xong)' })
+            return
+        }
+        let info: any = null
+        try { info = tx.vatBuyerInfo ? JSON.parse(tx.vatBuyerInfo) : null } catch { }
+        // Đã có hoá đơn phát hành chưa — có rồi thì thông tin mới chỉ dùng được
+        // cho hoá đơn THAY THẾ, phải nói rõ để nhân viên khỏi chờ auto vô ích.
+        const issued = await prisma.eInvoice.findFirst({
+            where: { transactionId: tx.id, status: { in: ['ISSUING', 'issued', 'SIGNED', 'SENT'] } },
+            select: { id: true, invoiceNumber: true, invoiceSymbol: true, status: true },
+            orderBy: { createdAt: 'desc' },
+        }).catch(() => null)
+        res.json({
+            success: true,
+            data: { txId: tx.id, receiptNumber: tx.receiptNumber, total: tx.total, vatBuyerInfo: info, issuedInvoice: issued },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// Cùng luật ghi với PUT /queue/receipt/:txId/buyer (email hợp lệ, toàn trường
+// rỗng = gỡ yêu cầu) — chỉ khác cách tìm phiếu.
+router.put('/buyer/by-order/:orderNumber', einvoiceAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        await ensureTables(req)
+        const prisma = req.storePrisma! as any
+        const tx = await timTxTheoMaDon(prisma, req.params.orderNumber)
+        if (!tx) {
+            res.status(404).json({ success: false, error: 'Đơn chưa có phiếu bán trong hệ thống (chưa đồng bộ xong)' })
+            return
+        }
+        const b = req.body || {}
+        const sv = (v: any) => (v === undefined || v === null ? '' : String(v).trim())
+        const info = { name: sv(b.name), taxCode: sv(b.taxCode), address: sv(b.address), email: sv(b.email), nationalId: sv(b.nationalId) }
+        if (info.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(info.email)) {
+            res.status(400).json({ success: false, error: 'Email không hợp lệ' })
+            return
+        }
+        if (info.nationalId && !/^\d{9,12}$/.test(info.nationalId)) {
+            res.status(400).json({ success: false, error: 'CCCD phải là 9–12 chữ số' })
+            return
+        }
+        const has = info.name || info.taxCode || info.address || info.email || info.nationalId
+        const saved = await prisma.transaction.update({
+            where: { id: tx.id },
+            data: { vatBuyerInfo: has ? JSON.stringify(info) : null },
+            select: { id: true, vatBuyerInfo: true },
+        })
+        res.json({ success: true, data: { txId: saved.id, vatBuyerInfo: has ? info : null } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
 // GET /einvoice/needs-adjust — HOÁ ĐƠN ĐÃ PHÁT HÀNH nhưng đơn phát sinh TRẢ
 // HÀNG / HOÀN TIỀN → phải lập hoá đơn ĐIỀU CHỈNH (trả một phần) hoặc THAY THẾ /
 // huỷ (trả toàn bộ). Chưa xử lý = còn rủi ro kê khai thừa doanh thu với CQT.
