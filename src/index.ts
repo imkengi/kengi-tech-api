@@ -9,6 +9,7 @@ import productRoutes from './routes/products'
 import categoryRoutes from './routes/categories'
 import brandRoutes from './routes/brands'
 import customerRoutes from './routes/customers'
+import customerFinancialHealthRoutes from './routes/customerFinancialHealth'
 import customerGroupRoutes from './routes/customerGroups'
 import crmEmailRoutes from './routes/crmEmail'
 import mailboxRoutes from './routes/mailbox'
@@ -234,6 +235,7 @@ app.use('/api/api-keys', apiKeyRoutes)
 app.use('/api/products', productRoutes)
 app.use('/api/categories', categoryRoutes)
 app.use('/api/brands', brandRoutes)
+app.use('/api/customers', customerFinancialHealthRoutes) // TRƯỚC customerRoutes: '/:id' bên đó sẽ nuốt '/financial-overview'
 app.use('/api/customers', customerRoutes)
 app.use('/api/customer-groups', customerGroupRoutes)
 app.use('/api/crm', crmEmailRoutes)
