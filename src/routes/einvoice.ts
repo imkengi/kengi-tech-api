@@ -346,16 +346,53 @@ function computeItems(rawItems: any[]) {
     }
 }
 
+/**
+ * Mã đơn hàng để ghi kèm tên người mua trên hoá đơn bán lẻ.
+ * receiptNumber đơn sàn có dạng "ONLINE-TIK-585573796595926789" — bỏ tiền tố
+ * kỹ thuật, chỉ giữ mã đơn thật để tra ngược được bên sàn. Đơn bán trực tiếp
+ * (HD030373) không có tiền tố nên giữ nguyên.
+ */
+export function maDonTuReceipt(receiptNumber: any): string {
+    return String(receiptNumber || '')
+        .trim()
+        .replace(/^ONLINE-/i, '')
+        .replace(/^(TIK|SPE|LZD|SHOPEE|TIKTOK|LAZADA)-/i, '')
+        .trim()
+}
+
+/**
+ * Tên người mua ghi lên hoá đơn THẬT.
+ *
+ * Khách sàn không cho tên thật: sàn hoặc che bằng dấu * ("D******n"), hoặc
+ * mình tự điền tên thay thế lúc đồng bộ ("Khách TikTok" — xem
+ * services/platforms/tiktok.ts). CẢ HAI đều không phải tên người, đưa lên
+ * chứng từ thuế là sai — đã ra tới 37 hoá đơn đã ký của KENGISTORE
+ * (15–19/08/2026) ghi "Khách TikTok" trước khi phát hiện.
+ *
+ * Bản trước chỉ chặn dấu "*" nên tên "Khách <sàn>" lọt hết. Giờ chặn cả hai,
+ * và ghi kèm mã đơn để đối chiếu ngược được đơn nào ra hoá đơn nào.
+ *
+ * Có MST = khách CHỦ ĐỘNG lấy hoá đơn → giữ nguyên tên họ khai.
+ */
+export function tenNguoiMuaHD(name: any, taxCode: any, receiptNumber?: any): string {
+    const t = String(name || '').trim()
+    const mst = String(taxCode || '').trim()
+    if (mst) return t || 'Bán cho người tiêu dùng'
+    const voDanh = !t || t.includes('*') || /^kh[áa]ch\s/i.test(t)
+    if (!voDanh) return t
+    const maDon = maDonTuReceipt(receiptNumber)
+    return maDon ? `Bán cho người tiêu dùng (${maDon})` : 'Bán cho người tiêu dùng'
+}
+
 // ─── TT78/2021 XML generation ────────────────────────────────────────────────
 // Tên khách do SÀN che ("T******g", "H*******h") KHÔNG phải tên người thật —
 // đưa vào hoá đơn thuế là vô nghĩa, CQT không chấp nhận. Coi như không có tên →
 // "Bán cho người tiêu dùng" (đúng nghiệp vụ khách không lấy hoá đơn).
 function tenNguoiMua(name: any, taxCode: any): string {
-    const t = String(name || '').trim()
-    const biChe = !t || t.includes('*') || /^kh[áa]ch\s/i.test(t)
-    // Có mã số thuế = khách LẤY hoá đơn → giữ nguyên tên dù trông lạ
-    if (String(taxCode || '').trim()) return t || 'Bán cho người tiêu dùng'
-    return biChe ? 'Bán cho người tiêu dùng' : t
+    // Một luật duy nhất cho mọi đường — xem tenNguoiMuaHD ở trên. Ở đây không
+    // có receiptNumber (chỉ render lại từ bản ghi EInvoice đã lưu), nên tên đã
+    // kèm mã đơn từ lúc phát hành sẽ đi qua nguyên vẹn.
+    return tenNguoiMuaHD(name, taxCode)
 }
 
 function generateInvoiceXml(inv: any, items: any[]): string {
@@ -787,8 +824,7 @@ export async function issueInvoiceForTransaction(
     const invoiceData: EInvoiceData = {
             sellerTaxCode: config.taxCode || '',
             sellerName: config.companyName || '',
-            buyerName: (!_rawBuyerName || (_masked(_rawBuyerName) && !_rawBuyerTax))
-                ? 'Bán cho người tiêu dùng' : _rawBuyerName,
+            buyerName: tenNguoiMuaHD(_rawBuyerName, _rawBuyerTax, tx.receiptNumber),
             buyerTaxCode: _clean(_rawBuyerTax),
             buyerAddress: _clean(bStr(body.buyerAddress) || bStr(_vbi.address) || tx.customer?.address || ''),
             buyerPhone: _clean(bStr(body.buyerPhone) || tx.customer?.phone || ''),
@@ -1971,7 +2007,7 @@ router.post('/from-sale/:saleId', einvoiceAuth, requireRole('admin', 'manager', 
                 status: 'DRAFT',
                 invoiceDate: todayISO(),
                 ...seller,
-                buyerName: tx.customer?.name || tx.customerName || 'Khách lẻ',
+                buyerName: tenNguoiMuaHD(tx.customer?.name || tx.customerName, tx.customer?.taxCode || req.body?.buyerTaxCode, tx.receiptNumber),
                 buyerTaxCode: tx.customer?.taxCode || req.body?.buyerTaxCode || '',
                 buyerAddress: tx.customer?.address || req.body?.buyerAddress || '',
                 totalBeforeVat: computed.totalBeforeVat,
@@ -2290,6 +2326,11 @@ router.post('/:id/replace', einvoiceAuth, requireRole('admin', 'manager'), async
         const id = String(req.params.id)
         const original = await getInvoiceWithItems(prisma, id)
         if (!original) return res.status(404).json({ success: false, error: 'Không tìm thấy hóa đơn' })
+        const _maDonGoc = original.transactionId
+            ? ((await prisma.transaction.findUnique({
+                where: { id: original.transactionId }, select: { receiptNumber: true },
+            }).catch(() => null))?.receiptNumber || '')
+            : ''
         if (!['SIGNED', 'SENT', 'CANCELLED'].includes(original.status)) {
             return res.status(400).json({ success: false, error: `Chỉ thay thế hóa đơn đã ký/gửi/hủy. Trạng thái hiện tại: ${original.status}` })
         }
@@ -2331,7 +2372,7 @@ router.post('/:id/replace', einvoiceAuth, requireRole('admin', 'manager'), async
                 // số 2). Tên dính '*' không kèm MST thì ép về người tiêu dùng.
                 buyerName: (() => {
                     const n = bStr(b.buyerName) || original.buyerName || ''
-                    return (!n || (n.includes('*') && !bStr(b.buyerTaxCode))) ? 'Bán cho người tiêu dùng' : n
+                    return tenNguoiMuaHD(n, b.buyerTaxCode, _maDonGoc)
                 })(),
                 buyerTaxCode: bStr(b.buyerTaxCode) || '',
                 buyerAddress: (bStr(b.buyerAddress) || '').includes('*') ? '' : (bStr(b.buyerAddress) || ''),
@@ -2446,6 +2487,11 @@ router.post('/:id/adjust', einvoiceAuth, requireRole('admin', 'manager'), async 
         const id = String(req.params.id)
         const original = await getInvoiceWithItems(prisma, id)
         if (!original) return res.status(404).json({ success: false, error: 'Không tìm thấy hóa đơn' })
+        const _maDonGoc = original.transactionId
+            ? ((await prisma.transaction.findUnique({
+                where: { id: original.transactionId }, select: { receiptNumber: true },
+            }).catch(() => null))?.receiptNumber || '')
+            : ''
         if (!['SIGNED', 'SENT'].includes(original.status)) {
             return res.status(400).json({ success: false, error: `Chỉ điều chỉnh hóa đơn đã ký/phát hành. Trạng thái hiện tại: ${original.status}` })
         }
@@ -2509,7 +2555,7 @@ router.post('/:id/adjust', einvoiceAuth, requireRole('admin', 'manager'), async 
             sellerAddress: cfgRow.companyAddress || original.sellerAddress || '',
             buyerName: (() => {
                 const n = bStr(b.buyerName) || original.buyerName || ''
-                return (!n || (n.includes('*') && !bStr(b.buyerTaxCode) && !bStr(original.buyerTaxCode))) ? 'Bán cho người tiêu dùng' : n
+                return tenNguoiMuaHD(n, bStr(b.buyerTaxCode) || bStr(original.buyerTaxCode), _maDonGoc)
             })(),
             buyerTaxCode: bStr(b.buyerTaxCode) || bStr(original.buyerTaxCode) || '',
             buyerAddress: (bStr(b.buyerAddress) || bStr(original.buyerAddress) || '').includes('*') ? '' : (bStr(b.buyerAddress) || bStr(original.buyerAddress) || ''),
