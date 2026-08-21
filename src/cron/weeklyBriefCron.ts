@@ -143,6 +143,15 @@ export function ghepBanTin(tien_: any, kho: any, sucKhoe?: any): BanTin | null {
  * Dùng để kiểm hai phép tính nặng này trên dữ liệu thật mà không làm phiền cửa
  * hàng nào — chạy thử trên dữ liệu giả không bắt được lỗi truy vấn.
  */
+/* Bảng Notification chưa có ở store cũ (P2021) thì coi như "chưa nhắc" — đúng. Nhưng lỗi ĐỌC khác
+ * mà cũng nuốt thì chốt chống nhắc trùng tự mở: mỗi lượt cron lại gửi thêm một thông báo cho cùng
+ * một kỳ, và chủ shop mất lòng tin vào thông báo (20/08/2026). */
+const chuaCoBang = (e: any): null => {
+    const ma = String(e?.code || '')
+    if (ma === 'P2021' || ma === 'P2022' || /does not exist/i.test(String(e?.message || ''))) return null
+    throw e
+}
+
 export async function banTinChoStore(
     prisma: any, tenStore: string, tuanMa: string, chayThu = false,
 ): Promise<boolean> {
@@ -151,7 +160,7 @@ export async function banTinChoStore(
     const daGui = chayThu ? null : await prisma.notification.findFirst({
         where: { type: LOAI_TB, message: { contains: tuanMa } },
         select: { id: true },
-    }).catch(() => null)
+    }).catch(chuaCoBang)
     if (daGui) return false
 
     // Tuần tự: hai phép tính đều nặng, chạy song song là hút cạn pool của cửa hàng.
@@ -160,6 +169,14 @@ export async function banTinChoStore(
 
     /* Đọc hỏng dữ liệu thì im hẳn. Gửi bản tin dựng trên số rỗng là vừa sai vừa
      * làm mất lòng tin vào mọi bản tin sau. */
+    /* `null` = cả phép tính NÉM LỖI (khác với chạy xong nhưng thiếu vài mảnh — đã có `thieuChinh`).
+     * Bản cũ chỉ chặn theo `thieuChinh`, nên lỗi nặng lại lọt: bản tin vẫn gửi, chỉ MẤT HẲN mục
+     * tiền vì `ghepBanTin` dùng optional chaining. Chủ shop đọc "tuần này không có cảnh báo tiền"
+     * thành tin mừng (20/08/2026). Cùng nguyên tắc đã ghi ngay dưới: đọc hỏng thì im hẳn. */
+    if (tien_ === null || kho === null) {
+        console.log(`📋 [${tenStore}] bỏ qua bản tin tuần — một phép tính NÉM LỖI (tiền: ${tien_ === null}, kho: ${kho === null})`)
+        return false
+    }
     if (tien_?.thieuChinh?.length || kho?.thieuChinh?.length) {
         /* In ra ĐÚNG truy vấn nào hỏng. Log kiểu "chưa đọc được dữ liệu" chung
          * chung từng làm mất một buổi: cả 9 cửa hàng đều im mà không biết vì sao,

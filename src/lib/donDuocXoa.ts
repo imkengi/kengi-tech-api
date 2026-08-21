@@ -16,8 +16,41 @@
  * Ngoài hai nhóm đó thì GIỮ, kể cả đã rất cũ. Đĩa rẻ hơn doanh thu mất trắng.
  */
 
-/** Trạng thái nghĩa là ĐÃ BÁN — nhóm bắt buộc phải có phiếu mới được xoá. */
-export const TRANG_THAI_DA_BAN = ['COMPLETED', 'completed'] as const
+/**
+ * TRẠNG THÁI ĐƠN CÒN CÓ THỂ LÊN PHIẾU BÁN — MỘT nguồn sự thật duy nhất.
+ *
+ * `convertOnlineOrderToTransaction` nhập chính hằng này để quyết có chuyển hay
+ * không. Trước đây nó giữ một mảng CỤC BỘ riêng, còn file này giữ một mảng khác
+ * (`['COMPLETED','completed']`) để quyết đơn nào được XOÁ VĨNH VIỄN — hai danh
+ * sách ở hai file, khớp nhau bằng niềm tin.
+ *
+ * ⚠ Lệch một chiều là thảm hoạ: chỉ cần thêm `DELIVERED` vào danh sách quét của
+ * cron dọn dẹp (`cleanStatuses` trong autoSync.ts) mà quên thêm vào danh sách
+ * "đã bán" ở đây, thì đơn ĐÃ GIAO nhưng CHƯA lên phiếu rơi vào nhánh xoá vô
+ * điều kiện — đúng thảm hoạ mà hàng rào này sinh ra để chặn, tái diễn im lặng.
+ * Đặt hằng ở tầng `lib` (không phụ thuộc gì) để cả hai bên cùng nhập.
+ */
+export const TRANG_THAI_LEN_PHIEU = [
+    // lowercase (nội bộ, sau khi mapStatus)
+    'confirmed', 'processing', 'shipping', 'completed', 'delivered',
+    // Shopee UPPERCASE (đề phòng lưu thẳng từ API)
+    'READY_TO_SHIP', 'PROCESSED', 'SHIPPED', 'COMPLETED',
+    // TikTok giữ nguyên trạng thái gốc (mapStatus từ 2026-06-11) — TRƯỚC ĐÂY
+    // THIẾU ở đây nên đơn TikTok kể cả DELIVERED bị chặn, không lên phiếu ⇒
+    // không vào hàng đợi xuất HĐ (tháng 7 chỉ 5/≥50 đơn đã giao vào được).
+    'AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'PARTIALLY_SHIPPING',
+    'IN_TRANSIT', 'DELIVERED',
+] as const
+
+/**
+ * Trạng thái nghĩa là ĐÃ BÁN — nhóm bắt buộc phải có phiếu mới được xoá.
+ *
+ * SUY RA từ danh sách trên chứ không gõ tay: định nghĩa đúng của "đã bán" chính
+ * là "đơn còn có thể lên phiếu". Suy ra như vậy luôn CHẶT HƠN HOẶC BẰNG danh
+ * sách cứng cũ (`COMPLETED`/`completed` là tập con), tức sai số nghiêng về phía
+ * GIỮ đơn — đúng hướng an toàn cho một đường xoá vĩnh viễn.
+ */
+export const TRANG_THAI_DA_BAN = TRANG_THAI_LEN_PHIEU
 
 export interface DonUngVien {
     id: string

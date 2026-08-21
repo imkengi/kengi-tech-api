@@ -116,7 +116,27 @@ export async function runDriveVideoCleanup(): Promise<void> {
             }).catch(() => null)
             if (daChayGanDay) continue
 
-            const drive = getDriveWrite()
+            // ĐÃ BIẾT KHÔNG XOÁ ĐƯỢC thì thôi nhắc mỗi ngày: file My Drive chỉ chủ
+            // sở hữu xoá được — chừng nào chủ shop chưa cài Apps Script thì lần
+            // chạy nào cũng y hệt lỗi đó. Nhắc lại 7 NGÀY/LẦN cho đỡ phiền, thay
+            // vì dội thông báo "lỗi" hằng đêm cho việc mình không tự sửa được.
+            const nhacGanDay = await sp.notification.findFirst({
+                where: {
+                    title: { startsWith: '🎬 Dọn video' },
+                    message: { contains: 'chỉ chủ sở hữu xoá được' },
+                    createdAt: { gte: new Date(Date.now() - 7 * 24 * 3600_000) },
+                },
+                select: { id: true },
+            }).catch(() => null)
+            const boQuaNhac = !!nhacGanDay
+
+            // Ưu tiên TÀI KHOẢN CHỦ SHOP đã kết nối (OAuth) — chỉ chủ sở hữu mới
+            // xoá được file My Drive; chưa kết nối thì rơi về service account
+            // (chỉ dọn được file do chính SA sở hữu).
+            const { getStoreDriveWriter } = await import('../lib/driveOAuth')
+            const writer = await getStoreDriveWriter(sp).catch(() => null)
+            const drive = writer?.drive || getDriveWrite()
+            const dungChuShop = writer?.nguon === 'chu-shop'
             const folders = [folderId, ...await listSubfolderIds(drive, folderId)]
             const keep = await openDisputeTrackings(sp)
 
@@ -158,6 +178,11 @@ export async function runDriveVideoCleanup(): Promise<void> {
                 } while (pageToken)
             }
 
+            // Chỉ toàn lỗi quyền + vừa nhắc trong 7 ngày → im lặng, khỏi dội thông báo
+            const chiLoiQuyen = trashed === 0 && failed > 0 &&
+                /insufficient permissions|does not have sufficient/i.test(firstErr)
+            if (chiLoiQuyen && boQuaNhac) continue
+
             if (trashed > 0 || failed > 0 || kept > 0) {
                 console.log(`[VideoCleanup] ${store.name}: đưa vào thùng rác ${trashed} video >${RETENTION_DAYS} ngày` +
                     `${kept > 0 ? `, giữ ${kept} video còn dính khiếu nại mở` : ''}` +
@@ -166,11 +191,19 @@ export async function runDriveVideoCleanup(): Promise<void> {
                 await sp.notification.create({
                     data: {
                         type: 'system',
-                        title: `🎬 Dọn video đóng hàng: ${trashed} video quá ${RETENTION_DAYS} ngày vào thùng rác Drive`,
+                        // Toàn lỗi quyền thì đây KHÔNG phải báo lỗi hệ thống mà là
+                        // việc cần chủ shop làm một lần — đặt tiêu đề cho đúng bản chất.
+                        title: chiLoiQuyen
+                            ? `🎬 Dọn video đóng hàng: cần cài script một lần (Google chặn xoá hộ)`
+                            : `🎬 Dọn video đóng hàng: ${trashed} video quá ${RETENTION_DAYS} ngày vào thùng rác Drive`,
                         message: `${kept > 0 ? `Giữ lại ${kept} video thuộc khiếu nại đang mở. ` : ''}` +
                             // KHÔNG khuyên "kiểm tra quyền Editor" — file My Drive chỉ CHỦ SỞ HỮU
                             // xoá được, Editor cũng bị Google chặn (đo 04/08: 300/300 lỗi).
-                            `${failed > 0 ? `${failed} video xoá lỗi — file My Drive chỉ chủ sở hữu xoá được. Cài script dọn tự động vào tài khoản Google của bạn (hỏi Kengi lấy file drive-video-cleanup.gs). Lỗi gốc: ${firstErr.slice(0, 120)}` : 'Video trong thùng rác còn khôi phục được 30 ngày.'}`,
+                            `${failed > 0
+                                ? (dungChuShop
+                                    ? `${failed} video chưa dọn được dù đã kết nối tài khoản Google (${writer?.email || ''}). Kiểm tra: tài khoản đó có phải CHỦ SỞ HỮU thư mục video không? Lỗi gốc: ${firstErr.slice(0, 140)}`
+                                    : `${failed} video chưa dọn được: Google chỉ cho CHỦ SỞ HỮU xoá file trong My Drive — máy chủ được chia sẻ quyền Chỉnh sửa vẫn bị chặn, đây không phải lỗi hệ thống. Cách xử lý MỘT LẦN: vào Cài đặt → "Kết nối Google Drive", đăng nhập tài khoản chứa thư mục video. Sau đó app tự dọn hằng đêm dưới danh nghĩa của bạn. Nhắc lại sau 7 ngày nếu chưa kết nối.`)
+                                : 'Video trong thùng rác còn khôi phục được 30 ngày.'}`,
                     },
                 }).catch(() => { })
             }

@@ -122,10 +122,21 @@ router.post('/', authMiddleware, requireRole('admin', 'manager'), enforcePeriodL
             receipt = await prisma.$transaction(async (tx: any) => {
                 const created = await tx.cashReceipt.create({ data: receiptData })
                 if (reduction > 0) {
-                    await tx.customer.update({
+                    /* GHI TƯƠNG ĐỐI, không ghi đè bằng số đọc TRƯỚC transaction (20/08/2026).
+                     * `debt: currentDebt - reduction` là "lost update" kinh điển: hai phiếu thu
+                     * cùng lúc (hoặc một lần đồng bộ KiotViet chen giữa) thì bản ghi sau ĐÈ bản
+                     * trước — đúng họ với sự cố ghi 0 đè nợ thật hôm nay. `decrement` là phép
+                     * cộng trừ nguyên tử ở DB, rồi kẹp ≥ 0 ngay trong cùng transaction. */
+                    const sauTru = await tx.customer.update({
                         where: { id: customer.id },
-                        data: { debt: currentDebt - reduction },
+                        data: { debt: { decrement: reduction } },
+                        select: { debt: true },
                     })
+                    let noConLai = Number(sauTru?.debt) || 0
+                    if (noConLai < 0) {
+                        await tx.customer.update({ where: { id: customer.id }, data: { debt: 0 } })
+                        noConLai = 0
+                    }
                     await tx.debtEntry.create({
                         data: {
                             customerId: customer.id,
@@ -134,7 +145,7 @@ router.post('/', authMiddleware, requireRole('admin', 'manager'), enforcePeriodL
                             type: 'payment',
                             amount: reduction,
                             description: `Thu nợ - phiếu thu ${created.id}`,
-                            balance: currentDebt - reduction,
+                            balance: noConLai,
                         },
                     })
                     // Bút toán giảm phải thu: Nợ 111/112 / Có 131
@@ -160,7 +171,10 @@ router.post('/', authMiddleware, requireRole('admin', 'manager'), enforcePeriodL
             await prisma.bankTransaction.create({
                 data: {
                     bankAccountId,
-                    type: 'deposit',
+                    /* 'deposit' hôm nay CHẠY ĐÚNG nhưng chỉ nhờ may: `signed()` mặc định mọi type
+                     * khác 'debit' là tiền vào. Dùng đúng từ vựng của module ('credit') để nếu mai
+                     * kia ai đổi mặc định thì không lật hướng trong im lặng (20/08/2026). */
+                    type: 'credit',
                     amount: Number(amount),
                     description: String(description).trim(),
                     reference: reference?.trim() || `CR-${receipt.id}`,
@@ -240,7 +254,9 @@ router.post('/:id/cancel', authMiddleware, requireRole('admin', 'manager'), asyn
             await prisma.bankTransaction.create({
                 data: {
                     bankAccountId: existing.bankAccountId,
-                    type: 'withdraw',
+                    // 'withdraw' bị module ngân hàng đọc thành TIỀN VÀO ⇒ huỷ phiếu thu lại làm
+                    // số dư TĂNG. Xem ghi chú dài ở routes/expenses.ts (20/08/2026).
+                    type: 'debit',
                     amount: existing.amount,
                     description: `Hủy phiếu thu: ${existing.description}`,
                     reference: `CR-CANCEL-${existing.id}`,

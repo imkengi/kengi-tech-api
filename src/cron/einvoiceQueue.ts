@@ -1,4 +1,6 @@
-import { registryPrisma, getStorePrisma } from '../lib/prisma'
+import { registryPrisma, getStorePrisma, giuClient } from '../lib/prisma'
+import { moTaLoi } from '../lib/gomLoi'
+import { gomThieuTonThue, moTaThieuTonThue } from '../lib/gomThieuTonThue'
 import {
     ensureEInvoiceTablesFor, getActiveConfig, parseConfigExtra,
     findInvoiceQueue, issueInvoiceForTransaction,
@@ -62,30 +64,49 @@ async function runQueueForStore(schema: string, storeName: string): Promise<void
 
     let issued = 0, failed = 0
     const errors: string[] = []
+    /* Giữ TOÀN BỘ lỗi để gộp theo mã hàng. `errors` chỉ giữ 3 cái làm ví dụ, mà
+     * ba ví dụ không cho biết rốt cuộc phải nhập chứng từ cho mã nào — đo tối
+     * 16/08/2026: KENGISTORE hỏng 59/119 phiếu, chủ shop chỉ thấy 3 dòng. */
+    const tatCaLoi: string[] = []
     for (const r of rows) {
         try {
             const rs = await issueInvoiceForTransaction(prisma, r.id, {}, schema)
             if (rs.success && !rs.skipped) issued++
             else if (!rs.success) {
                 failed++
+                tatCaLoi.push(moTaLoi(rs.error))
                 if (errors.length < 3) errors.push(`${r.receiptNumber}: ${rs.error}`)
             }
         } catch (e: any) {
             failed++
-            if (errors.length < 3) errors.push(`${r.receiptNumber}: ${e?.message || e}`)
+            tatCaLoi.push(moTaLoi(e))
+            if (errors.length < 3) errors.push(`${r.receiptNumber}: ${moTaLoi(e)}`)
         }
         // Nhẹ tay với API NCC hoá đơn
         await new Promise((r2) => setTimeout(r2, 300))
     }
+    /* Gộp theo MÃ HÀNG: 59 dòng lỗi rối rắm co về vài mã cần mua chứng từ đầu
+     * vào — đó mới là việc chủ shop làm được. Ví dụ rời vẫn giữ để lần dấu. */
+    const gomLai = gomThieuTonThue(tatCaLoi)
+    const tomTat = moTaThieuTonThue(gomLai)
+    /* Chỉ được BỎ ví dụ khi bản gộp thật sự nói ra được VIỆC PHẢI LÀM, tức có
+     * danh sách mã. Bản gộp cũng trả chuỗi không rỗng khi chỉ có "N lỗi khác" —
+     * lúc đó bỏ ví dụ đi là chủ shop mất sạch chi tiết, tệ hơn trước khi vá. */
+    const gopDuDung = gomLai.theoSku.length > 0
     console.log(`[EInvoiceQueue] ${storeName}: ${rows.length} phiếu đủ điều kiện → xuất ${issued}, lỗi ${failed}` +
-        (errors.length ? ` | ${errors.join('; ')}` : ''))
+        (tomTat ? ` | ${tomTat}` : '') +
+        (errors.length ? ` | vd: ${errors.join('; ')}` : ''))
     // Thông báo tổng kết đêm (web + app Android đọc chung GET /notifications)
     if (issued > 0 || failed > 0) {
         await (prisma as any).notification.create({
             data: {
                 type: 'einvoice',
                 title: `🧾 Tự động xuất hoá đơn: ${issued} thành công${failed ? `, ${failed} lỗi` : ''}`,
-                message: `Cron 20:30 xử lý ${rows.length} phiếu đủ điều kiện.` + (errors.length ? ` Lỗi: ${errors.join('; ')}`.slice(0, 300) : ''),
+                /* Ưu tiên bản gộp theo mã trong thông báo — nó nói ĐƯỢC VIỆC PHẢI LÀM,
+                 * còn ba mã phiếu ví dụ thì chủ shop không tra ngược ra hàng hoá. */
+                message: (`Cron 20:30 xử lý ${rows.length} phiếu đủ điều kiện.`
+                    + (tomTat ? ` ${tomTat}` : '')
+                    + (!gopDuDung && errors.length ? ` · Lỗi: ${errors.join('; ')}` : '')).slice(0, 500),
             },
         }).catch(() => { })
     }
@@ -102,12 +123,16 @@ async function runQueue(): Promise<void> {
             where: { status: 'active', hasOnlineChannels: true } as any,
         }) as any[]
         for (const store of stores) {
+            // Giữ client suốt lượt (119 phiếu × 300ms + gọi VNPT có thể vượt 10 phút) — xem giuClient().
+            const nhaClient = giuClient(store.schema)
             try {
                 await runQueueForStore(store.schema, store.name)
             } catch (e: any) {
                 if (!String(e?.message || '').includes('does not exist')) {
                     console.error(`[EInvoiceQueue] Lỗi store ${store.name}:`, e?.message || e)
                 }
+            } finally {
+                nhaClient()
             }
         }
     } catch (e: any) {

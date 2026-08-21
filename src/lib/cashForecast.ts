@@ -25,6 +25,8 @@
  */
 
 import { TRANG_THAI_MOC_DA_XONG } from './taxCalendar'
+import { conLaiPhieu } from './congNoNcc'
+import { tinhHanTraTheoQuyTac, quyTacTuSupplier } from './dieuKhoanThanhToan'
 
 export interface DongTienMuc {
     ngay: string
@@ -214,30 +216,49 @@ export async function duBaoDongTien(
     const muc: DongTienMuc[] = []
     let noNccDenHan = 0
     try {
+        /* CÙNG LUẬT với trang Hạn Thanh Toán (18/08/2026): chỉ phiếu đã nhận hàng (completed) còn nợ; hạn trả
+         * lấy trên phiếu, không có thì SUY SỐNG từ điều khoản NCC theo ngày chứng từ — bản cũ chỉ xếp phiếu có
+         * dueDate ghi sẵn nên 10 phiếu Sunhouse-TBNB đã quá hạn (HUTI) không hiện áp lực tiền nào. Phiếu
+         * không suy được hạn thì không rải lên lịch (không bịa ngày) — đếm vào ghi chú. */
+        // Tuần tự (pool prod = 1, quy ước dự án)
+        const TRAN_PHIEU = 5000
         const phieu = await prisma.importReceipt.findMany({
-            where: {
-                paymentStatus: { in: ['unpaid', 'partial'] },
-                dueDate: { not: null, lte: new Date(Date.now() + soNgay * 86400_000) },
-            },
-            select: { code: true, supplierName: true, totalCost: true, paidAmount: true, dueDate: true },
+            where: { paymentStatus: { in: ['unpaid', 'partial'] }, status: 'completed' } as any,
+            select: { code: true, supplierId: true, supplierName: true, totalCost: true, paidAmount: true, paymentStatus: true, dueDate: true, createdAt: true, transactionDate: true } as any,
+            take: TRAN_PHIEU,
         })
-        for (const p of phieu) {
-            const conNo = so(p.totalCost) - so(p.paidAmount)
+        /* Chạm trần = lịch tiền THIẾU phiếu, mà thiếu ở đây làm áp lực trả nợ trông nhẹ đi —
+         * đúng kiểu "cắt ngầm" nguy hiểm. Không im lặng: ghi thẳng vào phần thiếu chính xác. */
+        if (phieu.length >= TRAN_PHIEU) {
+            thieuChinh.push(`Chỉ đọc ${TRAN_PHIEU.toLocaleString('vi-VN')} phiếu nhập còn nợ đầu tiên — lịch tiền có thể thiếu phiếu, áp lực trả nợ thực tế cao hơn`)
+        }
+        // Không đọc được điều khoản NCC (thiếu bảng/mock) thì vẫn chạy phần phiếu — chỉ mất khả năng suy hạn
+        const nccs: any[] = await Promise.resolve().then(() => (prisma as any).supplier?.findMany?.({ select: { id: true, paymentTermType: true, paymentTermDays: true, paymentTermDom: true, paymentTermMonthOffset: true } }) ?? []).catch(() => [] as any[])
+        const nccTheoId = new Map<string, any>((nccs as any[]).map(n => [n.id, n]))
+        const denHanCuoi = new Date(Date.now() + soNgay * 86400_000)
+        let phieuKhongHan = 0, tienKhongHan = 0
+        for (const p of phieu as any[]) {
+            const conNo = conLaiPhieu(p)
             if (conNo <= 0) continue
+            const hanNgay = tinhHanTraTheoQuyTac(p.transactionDate || p.createdAt, p.dueDate, quyTacTuSupplier(p.supplierId ? nccTheoId.get(p.supplierId) : null))
+            if (!hanNgay) { phieuKhongHan++; tienKhongHan += conNo; continue }
+            if (hanNgay.getTime() > denHanCuoi.getTime()) continue
+            const hanSuy = !p.dueDate
             /* Khoản đã quá hạn dồn vào NGÀY MAI chứ không để ở ngày cũ: nó vẫn
              * đang phải trả, và bỏ nó ra ngoài cửa sổ là giấu mất áp lực tiền
              * sát nhất. */
-            const han = ngayVN(p.dueDate)
+            const han = ngayVN(hanNgay)
             const ngayXep = han < homNay ? ngayVN(Date.now() + 86400_000) : han
             muc.push({
                 ngay: ngayXep,
                 loai: 'chi', nhom: 'no-ncc',
-                moTa: `Trả ${p.supplierName || 'nhà cung cấp'} — phiếu ${p.code}${han < homNay ? ` (đã quá hạn ${han})` : ''}`,
+                moTa: `Trả ${p.supplierName || 'nhà cung cấp'} — phiếu ${p.code}${han < homNay ? ` (đã quá hạn ${han})` : ''}${hanSuy ? ' (hạn suy từ điều khoản NCC)' : ''}`,
                 soTien: lam(conNo),
                 chacChan: true,
             })
             noNccDenHan += conNo
         }
+        if (phieuKhongHan > 0) ghiChu.push(`${phieuKhongHan} phiếu nhập còn nợ ${lam(tienKhongHan).toLocaleString('vi-VN')}đ chưa có hạn trả (NCC chưa đặt điều khoản) — KHÔNG rải lên lịch, nhưng vẫn là tiền phải trả.`)
     } catch (e: any) {
         thieuChinh.push(`Không đọc được công nợ nhà cung cấp: ${moTaLoi(e)}`)
     }

@@ -322,8 +322,10 @@ function computeEntry(emp: any, opts: { workDays?: number; standardDays?: number
     }
 }
 
-async function recalcPeriodTotals(prisma: any, periodId: string) {
-    const entries = await prisma.payrollEntry.findMany({ where: { periodId } }).catch(() => [])
+export async function recalcPeriodTotals(prisma: any, periodId: string) {
+    /* Tổng kỳ lương GHI ĐÈ vào PayrollPeriod. Nuốt lỗi ⇒ entries rỗng ⇒ ghi tổng lương = 0 đè
+   * lên số đúng — sai vĩnh viễn cho tới khi ai đó tính lại (20/08/2026). */
+    const entries = await prisma.payrollEntry.findMany({ where: { periodId } })
     let totalGross = 0, totalDeductions = 0, totalNet = 0
     for (const e of entries) {
         totalGross += Number(e.grossSalary) || 0
@@ -362,7 +364,9 @@ router.post('/employees', authMiddleware, requireRole('admin', 'manager', 'super
         const b = req.body || {}
         if (!b.name) return res.status(400).json({ success: false, error: 'Tên nhân viên (name) là bắt buộc' })
         const code = (b.code || `NV${Date.now().toString().slice(-6)}`).toString().trim()
-        const existing = await prisma.employee.findFirst({ where: { code } }).catch(() => null)
+        /* Employee.code chỉ có @@index, KHÔNG @unique — chốt này là thứ DUY NHẤT chặn nhân viên
+         * trùng mã, mà nhân viên đôi kéo theo dòng lương đôi (20/08/2026). */
+        const existing = await prisma.employee.findFirst({ where: { code } })
         if (existing) return res.status(409).json({ success: false, error: `Mã nhân viên "${code}" đã tồn tại` })
         const data = await prisma.employee.create({
             data: {
@@ -411,7 +415,7 @@ router.put('/employees/:id', authMiddleware, requireRole('admin', 'manager', 'su
         if (b.baseSalary !== undefined) data.baseSalary = pround(b.baseSalary)
         if (b.dependents !== undefined) data.dependents = Number(b.dependents) || 0
         if (b.code !== undefined && b.code !== emp.code) {
-            const dup = await prisma.employee.findFirst({ where: { code: String(b.code) } }).catch(() => null)
+            const dup = await prisma.employee.findFirst({ where: { code: String(b.code) } })   // xem ghi chú chốt trùng ở trên
             if (dup) return res.status(409).json({ success: false, error: `Mã nhân viên "${b.code}" đã tồn tại` })
             data.code = String(b.code)
         }
@@ -467,7 +471,8 @@ router.post('/periods', authMiddleware, requireRole('admin', 'manager', 'superad
         if (!month || month < 1 || month > 12) return res.status(400).json({ success: false, error: 'month (1-12) là bắt buộc' })
         if (!year) return res.status(400).json({ success: false, error: 'year là bắt buộc' })
         const branchId = getBranchId(req) || null
-        const existing = await prisma.payrollPeriod.findFirst({ where: { month, year, ...(branchId ? { branchId } : {}) } }).catch(() => null)
+        /* Chốt trùng KỲ LƯƠNG: nuốt lỗi ⇒ tạo kỳ thứ hai cho cùng tháng ⇒ chi phí lương đôi. */
+        const existing = await prisma.payrollPeriod.findFirst({ where: { month, year, ...(branchId ? { branchId } : {}) } })
         if (existing) return res.status(409).json({ success: false, error: `Kỳ lương T${month}/${year} đã tồn tại`, data: existing })
         const data = await prisma.payrollPeriod.create({
             data: { month, year, status: 'draft', notes: b.notes ?? null, branchId, createdBy: req.user?.userId || null },
@@ -549,7 +554,13 @@ router.post('/periods/:id/calculate', authMiddleware, requireRole('admin', 'mana
         const overrides = b.overrides || {}
         const employees = await prisma.employee.findMany({ where: { status: 'active', ...getBranchFilter(req) } })
         if (employees.length === 0) return res.status(400).json({ success: false, error: 'Không có nhân viên đang làm việc để tính lương' })
-        await prisma.payrollEntry.deleteMany({ where: { periodId: id } }).catch(() => {})
+        /* KHÔNG nuốt lỗi ở lệnh XOÁ này (21/08/2026).
+         * Route "tính lại" cố ý chạy được nhiều lần: xoá dòng cũ rồi tạo dòng mới. Nếu lệnh xoá
+         * hỏng mà bị nuốt, vòng dưới vẫn tạo dòng mới ĐÈ LÊN dòng cũ ⇒ **kỳ lương có bản ghi TRÙNG**,
+         * và `recalcPeriodTotals` cộng cả hai ⇒ tổng lương/BHXH/TNCN **nhân đôi**, mà API vẫn báo
+         * thành công. `deleteMany` không ném khi không có gì để xoá (trả count 0), nên ném ở đây
+         * nghĩa là lỗi thật — phải dừng, đừng tạo trùng. */
+        await prisma.payrollEntry.deleteMany({ where: { periodId: id } })
         const created: any[] = []
         for (const emp of employees) {
             const ov = overrides[emp.id] || {}
@@ -597,27 +608,37 @@ router.post('/periods/:id/pay', authMiddleware, requireRole('admin', 'manager', 
         if (period.status !== 'confirmed') return res.status(400).json({ success: false, error: `Chỉ chi trả được kỳ lương đã xác nhận. Trạng thái: ${period.status}` })
         await recalcPeriodTotals(prisma, id)
         const refreshed = await prisma.payrollPeriod.findUnique({ where: { id } })
+        /* `findUnique` trả `T | null` — phải chặn (21/08/2026). Đây là đường CHI TRẢ LƯƠNG: kỳ lương
+         * biến mất giữa chừng (ai đó xoá, hoặc đọc hỏng) thì `refreshed.totalNet` ném TypeError,
+         * route 500 giữa lúc đang chi. Lỗi này TypeScript thấy ngay khi bỏ `as any` — nó bị che vì
+         * cả file ép `any`. Xem `DE-XUAT-bo-as-any.md`. */
+        if (!refreshed) return res.status(409).json({ success: false, error: 'Kỳ lương vừa bị thay đổi hoặc xoá — tải lại rồi thử lại' })
         const totalNet = pround(refreshed.totalNet)
         const branchId = getBranchId(req) || null
         const userId = req.user?.userId || null
         const monthLabel = `T${period.month}/${period.year}`
         const payDate = new Date(period.year, period.month, 0).toISOString().slice(0, 10) // last day of month
         const ref = `PAYROLL-${period.year}-${String(period.month).padStart(2, '0')}`
+        /* GHI SỔ VÀ ĐÁNH DẤU "ĐÃ CHI" PHẢI ĐI CÙNG NHAU (20/08/2026). Bản cũ: bút toán hỏng thì chỉ
+         * `console.error` rồi VẪN đặt status='paid' — kỳ lương báo đã chi trong khi sổ không có
+         * đồng nào chi lương. Đúng cơ chế làm "sổ kế toán không phản ánh" (xem memory cùng tên). */
         const created: any[] = []
-        if (totalNet > 0) {
-            // Chi lương: Nợ 334 (Phải trả người LĐ) / Có 112 (Tiền gửi ngân hàng)
-            const entry = await prisma.journalEntry.create({
-                data: {
-                    date: payDate, description: `Chi lương ${monthLabel}`,
-                    debitAccount: '334', debitAccountName: 'Phải trả người lao động',
-                    creditAccount: '112', creditAccountName: 'Tiền gửi ngân hàng',
-                    amount: totalNet, reference: `${ref}-PAY`, referenceType: 'payroll',
-                    branchId, createdBy: userId,
-                },
-            }).catch((e: any) => { console.error('payroll journal error:', e?.message); return null })
-            if (entry) created.push(entry)
-        }
-        const updated = await prisma.payrollPeriod.update({ where: { id }, data: { status: 'paid', paidAt: new Date() } })
+        const updated = await prisma.$transaction(async (t: any) => {
+            if (totalNet > 0) {
+                // Chi lương: Nợ 334 (Phải trả người LĐ) / Có 112 (Tiền gửi ngân hàng)
+                const entry = await t.journalEntry.create({
+                    data: {
+                        date: payDate, description: `Chi lương ${monthLabel}`,
+                        debitAccount: '334', debitAccountName: 'Phải trả người lao động',
+                        creditAccount: '112', creditAccountName: 'Tiền gửi ngân hàng',
+                        amount: totalNet, reference: `${ref}-PAY`, referenceType: 'payroll',
+                        branchId, createdBy: userId,
+                    },
+                })
+                created.push(entry)
+            }
+            return t.payrollPeriod.update({ where: { id }, data: { status: 'paid', paidAt: new Date() } })
+        })
         res.json({ success: true, data: { period: updated, journalEntries: created, totalPaid: totalNet } })
     } catch (err: any) {
         console.error('POST /payroll/periods/:id/pay error:', err)

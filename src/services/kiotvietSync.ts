@@ -26,6 +26,7 @@
 
 import crypto from 'crypto'
 import { KV } from './kiotviet'
+import { tongPhieuChuaTraTheoNcc, soDuDauKyTuKV } from '../lib/congNoNcc'
 
 export interface SyncCounters {
     fetched: number
@@ -161,6 +162,30 @@ export interface SyncOptions {
     creds?: any
     /** Khách đã làm tươi trong lượt này — khỏi hỏi KV trùng */
     daTuoiNo?: Set<string>
+    /**
+     * Bản ghi đến từ WEBHOOK — payload customer/supplier.update của KiotViet KHÔNG mang
+     * Debt (18/08/2026). Bật cờ này là KHÔNG BAO GIỜ lấy công nợ từ payload (kể cả khi
+     * họ gửi `Debt: 0` cho có) — khách thì hỏi lại KV bằng lamTuoiNoKhach, NCC để cron
+     * đối chiếu 24h. Đường REST (danh sách mang debt thật) không bật cờ.
+     */
+    tuWebhook?: boolean
+}
+
+/**
+ * ĐỌC CÔNG NỢ TỪ MỘT BẢN GHI KIOTVIET — THIẾU ≠ 0.
+ *
+ * Trả về số khi bản ghi có `debt` hữu hạn; trả về null khi KHÔNG có (undefined/
+ * null/không phải số). Bản cũ viết `Number(kv?.debt) || 0` — biến "không biết"
+ * thành "0", và webhook customer.update/supplier.update của KiotViet KHÔNG mang
+ * Debt, nên mỗi lần khách được sửa hồ sơ bên KV là Kengi ghi đè 0 lên nợ thật
+ * (bắt quả tang 18/08/2026, HUTI: 7 khách về 0 đúng mili-giây webhook; gốc của
+ * 39 khách / 857,7tr giấu nợ). Bên gọi: null → KHÔNG đụng debt/payable.
+ */
+export function docCongNoKV(kv: any): number | null {
+    const raw = kv?.debt ?? kv?.data?.debt
+    if (raw === undefined || raw === null || raw === '') return null
+    const n = Number(raw)
+    return Number.isFinite(n) ? n : null
 }
 
 /** Đập nhịp mỗi 25 bản ghi — đủ dày để thấy tiến độ, đủ thưa để không nghẽn DB. */
@@ -209,21 +234,54 @@ async function findMap(sp: any, entity: string, kvId: string | number): Promise<
  * thiếu hoá đơn cũ nên cộng trừ theo chứng từ ăn dần công nợ về 0).
  * KV lỗi thì giữ số cũ, không đoán.
  */
-async function lamTuoiNoKhach(sp: any, opts: SyncOptions, kvCustomerId: any) {
+/** Key KiotViet nào đã từng trả `debt` cho một khách trong tiến trình này — bằng chứng key có quyền xem
+ *  công nợ. Có nó thì bản ghi khách BỎ TRỐNG debt được hiểu là 0 (KV bỏ khoá khi = 0, đo 18/08/2026), để
+ *  khách trả hết không bị treo nợ cũ mãi; chưa có thì giữ số cũ (không đoán). */
+const keyDaThayDebt = new Set<string>()
+
+export async function lamTuoiNoKhach(sp: any, opts: SyncOptions, kvCustomerId: any) {
     const key = String(kvCustomerId || '')
     if (!key || !opts.creds || !opts.apply) return
     if (!opts.daTuoiNo) opts.daTuoiNo = new Set()
     if (opts.daTuoiNo.has(key)) return
     opts.daTuoiNo.add(key)
     try {
-        const kvCus: any = await KV.customerById(opts.creds, key)
-        const debt = Number(kvCus?.debt ?? kvCus?.data?.debt)
-        if (!Number.isFinite(debt)) return
+        /* Thử lại MỘT lần sau 600ms: KiotViet hay hụt một nhịp; hụt là khách kẹt số cũ
+         * cho tới chứng từ kế tiếp — mà khách ít mua thì "kế tiếp" là hàng tuần. */
+        let kvCus: any
+        try { kvCus = await KV.customerById(opts.creds, key) }
+        catch (e1) { await new Promise(r => setTimeout(r, 600)); kvCus = await KV.customerById(opts.creds, key) }
+        let debt = docCongNoKV(kvCus)
+        const keyId = String(opts.creds?.clientId || opts.creds?.retailer || '')
+        if (debt !== null) keyDaThayDebt.add(keyId)
         const localId = await findMap(sp, 'customer', key)
-        if (localId) {
-            await sp.customer.update({ where: { id: localId }, data: { debt } }).catch(() => { })
+        if (!localId) return
+        if (debt === null && kvCus && typeof kvCus === 'object' && kvCus.id !== undefined && keyDaThayDebt.has(keyId)) {
+            // Bản ghi khách thật, key có quyền thấy debt, mà bỏ trống ⇒ KV nói 0 (khách đã trả hết).
+            // Bảo hiểm: nếu sổ Kengi đang ≠ 0 thì hỏi KV LẦN HAI — bỏ trống thoáng qua không được phép xoá nợ thật.
+            const hienTai = await sp.customer.findUnique({ where: { id: localId }, select: { debt: true } }).catch(() => null)
+            if (!hienTai) return   // đọc sổ hỏng ≠ sổ đang 0 — giữ nguyên, không ghi 0 (rà soát 19/08)
+            if (Math.round(Number(hienTai.debt) || 0) !== 0) {
+                await new Promise(r => setTimeout(r, 600))
+                const kv2 = await KV.customerById(opts.creds, key).catch(() => null)
+                const d2 = docCongNoKV(kv2)
+                if (d2 !== null) debt = d2
+                else if (kv2 && typeof kv2 === 'object' && kv2.id !== undefined) debt = 0   // hai lần đều trống → 0
+                else return   // lần hai lỗi/không phải khách → giữ số cũ, không đoán
+            } else debt = 0
         }
-    } catch { /* giữ số cũ */ }
+        if (debt === null) return   // KV bỏ trống mà chưa có bằng chứng key thấy debt = không biết, giữ số cũ
+        /* KHÔNG nuốt lỗi ở lệnh GHI này (21/08/2026): `.catch(() => {})` cũ khiến `catch` bên dưới
+         * KHÔNG BAO GIỜ chạy, tức là **chống lại đúng ý định ghi trong chú thích của chính nó**
+         * ("giữ số cũ — nhưng PHẢI ĐỂ DẤU VẾT"). Ghi nợ hỏng thì lặng thinh, khách kẹt số cũ mà
+         * không một dòng log — đúng ca Phúc Hải mô tả ngay dưới. Nay để ném, `catch` ghi cảnh báo. */
+        await sp.customer.update({ where: { id: localId }, data: { debt } })
+    } catch (e: any) {
+        /* Giữ số cũ — nhưng PHẢI ĐỂ DẤU VẾT. Bản đầu nuốt im lặng: Phúc Hải (HUTI, HN73)
+         * kẹt 0 trong khi KiotViet nói 220 triệu, không một dòng log nào để lần
+         * (phát hiện 18/08/2026 nhờ hỏi thẳng KiotViet qua /admin/kiotviet-no-khach). */
+        console.warn(`[KiotViet] làm tươi nợ khách kvId=${key} thất bại — giữ số cũ: ${String(e?.message || e).slice(0, 160)}`)
+    }
 }
 
 /**
@@ -286,11 +344,37 @@ async function saveMap(sp: any, entity: string, kvId: string | number, kvCode: s
  */
 const DRYRUN_CATEGORY = '__CHAY_THU_SE_TAO_NHOM__'
 
-/** Lấy/ tạo Category theo tên KiotViet. Có bộ nhớ đệm trong một đợt đồng bộ. */
+/**
+ * Lấy/tạo Category cho một mặt hàng KiotViet. Có bộ nhớ đệm trong một đợt đồng bộ.
+ *
+ * THỨ TỰ TRA CÓ Ý NGHĨA — **mã KiotViet trước, TÊN sau**:
+ *
+ * KiotViet để danh mục **3 cấp**, mà bản trước chỉ đọc `categoryName` (một chuỗi phẳng) nên
+ * cây bị ép về 1 cấp. Nay `dongBoCayDanhMuc()` dựng lại cây và ghi ánh xạ `KiotVietMap`
+ * (`entity='category'`), nên tra theo **`categoryId`** là bám đúng nhánh lá — kể cả khi hai
+ * nhánh khác nhau có cùng tên lá ("Bình 12kg" nằm dưới cả "Gas" lẫn "Vỏ bình" chẳng hạn).
+ * Tra theo tên chỉ còn là đường lùi cho cửa hàng chưa chạy đồng bộ danh mục.
+ */
 async function resolveCategory(
     sp: any, name: string | undefined, fallbackId: string | null | undefined,
-    cache: Map<string, string>, apply: boolean,
+    cache: Map<string, string>, apply: boolean, kvCategoryId?: any,
 ): Promise<string | null> {
+    // 1) Theo mã KiotViet — chắc chắn nhất, phân biệt được lá trùng tên khác nhánh
+    const kvId = String(kvCategoryId ?? '').trim()
+    if (kvId) {
+        const dem = `#kv:${kvId}`
+        if (cache.has(dem)) return cache.get(dem)!
+        const anhXa = await sp.kiotVietMap.findUnique({
+            where: { entity_kvId: { entity: 'category', kvId } },
+            select: { localId: true },
+        }).catch(() => null)
+        if (anhXa?.localId) {
+            const con = await sp.category.findUnique({ where: { id: anhXa.localId }, select: { id: true } }).catch(() => null)
+            if (con) { cache.set(dem, con.id); return con.id }   // ánh xạ có thể trỏ danh mục đã xoá
+        }
+    }
+
+    // 2) Đường lùi: theo tên (hành vi cũ, giữ nguyên cho cửa hàng chưa đồng bộ cây danh mục)
     const key = (name || '').trim() || 'Nhập từ KiotViet'
     if (cache.has(key)) return cache.get(key)!
 
@@ -411,7 +495,10 @@ export async function syncProducts(sp: any, items: any[], opts: SyncOptions, c: 
                     if (bId && bId !== existing.brandId) data.brandId = bId
                 }
 
-                const stockChanged = opts.overwriteStock && onHand !== existing.stock
+                // Thiếu ≠ 0 (cùng bài công nợ 18/08/2026): bản ghi KHÔNG mang `inventories` thì
+                // onHand=0 chỉ là "không biết" — không được coi là hết hàng mà ghi đè tồn.
+                const coTonKho = Array.isArray(kv?.inventories)
+                const stockChanged = coTonKho && opts.overwriteStock && onHand !== existing.stock
 
                 if (!Object.keys(data).length && !stockChanged) {
                     c.skipped++
@@ -431,7 +518,7 @@ export async function syncProducts(sp: any, items: any[], opts: SyncOptions, c: 
                 c.updated++
                 noteSample(c, { sku: code, name, hanhDong: 'cập nhật', truong: Object.keys(data), tonCu: existing.stock, tonMoi: stockChanged ? onHand : existing.stock })
             } else {
-                const categoryId = await resolveCategory(sp, kv?.categoryName, opts.defaultCategoryId, catCache, opts.apply)
+                const categoryId = await resolveCategory(sp, kv?.categoryName, opts.defaultCategoryId, catCache, opts.apply, kv?.categoryId)
                 if (!categoryId) {
                     noteError(c, `Mã ${code}: chưa có nhóm hàng mặc định để gán`)
                     continue
@@ -485,10 +572,13 @@ async function applyStock(sp: any, product: any, target: number, opts: SyncOptio
 
     await sp.$transaction(async (tx: any) => {
         if (whId) {
+            /* Tồn hiện tại đọc hỏng KHÔNG được coi là 0: newQty sẽ thành đúng `delta`, tức là
+             * GHI ĐÈ tồn kho bằng một con số bịa. Trong transaction nên ném là an toàn — cả lượt
+             * bị huỷ, tồn giữ nguyên (20/08/2026). */
             const cur = await tx.warehouseStock.findUnique({
                 where: { warehouseId_productId: { warehouseId: whId, productId: product.id } },
                 select: { quantity: true },
-            }).catch(() => null)
+            })
             const newQty = (Number(cur?.quantity) || 0) + delta
             await tx.warehouseStock.upsert({
                 where: { warehouseId_productId: { warehouseId: whId, productId: product.id } },
@@ -558,7 +648,19 @@ export async function syncCustomers(sp: any, items: any[], opts: SyncOptions, c:
             // Chỉ ĐIỀN khi bên Kengi đang là 0 (chưa ai đụng tới), hoặc khi
             // người dùng bật ghi đè giá/công nợ. Đè bừa là xoá mất khoản thu nợ
             // mà cửa hàng đã ghi trên Kengi.
-            const kvDebt = Number(kv?.debt) || 0
+            //
+            // ⛔ THỦ PHẠM GIẤU NỢ (bắt quả tang 18/08/2026, HUTI): payload webhook
+            // customer.update KHÔNG mang Debt → bản cũ `Number(kv.debt) || 0` = 0 →
+            // với overwritePrices bật là ghi đè 0 lên nợ thật. 7 khách vừa được đối
+            // chiếu về đúng số lúc 08:56Z (HN06 96,6tr, HN01 64,1tr…) bị về 0 lại đúng
+            // mili-giây các webhook 09:12–09:19Z (updatedAt ↔ log). Đây cũng là gốc
+            // của 39 khách / 857,7tr "Kengi giấu nợ" đo buổi sáng — không phải
+            // lamTuoiNoKhach hụt nhịp như đoán ban đầu.
+            // Luật mới: KHÔNG có debt hữu hạn trong bản ghi → KHÔNG đụng debt (thiếu
+            // ≠ 0). Có creds (đường webhook) thì hỏi lại KV số dư thật ngay sau.
+            const noKV = opts.tuWebhook ? null : docCongNoKV(kv)   // webhook: không tin debt trong payload
+            const coDebt = noKV !== null
+            const kvDebt = noKV ?? 0
 
             if (existing) {
                 const data: any = {}
@@ -566,11 +668,12 @@ export async function syncCustomers(sp: any, items: any[], opts: SyncOptions, c:
                 if (!existing.phone && phone) data.phone = phone
                 if (!existing.address && kv?.address) data.address = String(kv.address).slice(0, 500)
                 if (!existing.email && kv?.email) data.email = String(kv.email)
-                if (kvDebt !== existing.debt && (!existing.debt || opts.overwritePrices)) data.debt = kvDebt
+                if (coDebt && kvDebt !== existing.debt && (!existing.debt || opts.overwritePrices)) data.debt = kvDebt
 
                 if (!Object.keys(data).length) {
                     c.skipped++
                     if (opts.apply) await saveMap(sp, 'customer', kvId, code, existing.id)
+                    if (!coDebt && opts.tuWebhook) await lamTuoiNoKhach(sp, opts, kvId)   // webhook không mang debt → hỏi KV. REST bỏ trống debt: KHÔNG ghi 0 ở đây (cron đối chiếu đêm xử với gác hai lượt)
                     continue
                 }
                 if (opts.apply) {
@@ -579,6 +682,7 @@ export async function syncCustomers(sp: any, items: any[], opts: SyncOptions, c:
                 }
                 c.updated++
                 noteSample(c, { code, name, hanhDong: 'cập nhật', truong: Object.keys(data) })
+                if (!coDebt && opts.tuWebhook) await lamTuoiNoKhach(sp, opts, kvId)   // REST thiếu debt = nợ rỗng, khỏi hỏi lại
             } else {
                 // code là @unique — thiếu thì tự sinh để không đụng bản ghi khác
                 const finalCode = code || `KV${kvId}`
@@ -598,9 +702,11 @@ export async function syncCustomers(sp: any, items: any[], opts: SyncOptions, c:
                     await saveMap(sp, 'customer', kvId, finalCode, created.id)
                     // Đánh dấu để bước hoá đơn KHÔNG cộng nợ lần nữa — xem SyncOptions
                     opts.seededCustomerIds?.add(created.id)
+                    // Khách mới từ webhook (payload không mang debt) → seed 0 rồi hỏi KV số dư thật
+                    if (!coDebt && opts.tuWebhook) await lamTuoiNoKhach(sp, opts, kvId)   // REST thiếu debt = nợ rỗng, khỏi hỏi lại
                 }
                 c.created++
-                noteSample(c, { code: finalCode, name, phone, congNo: kvDebt, hanhDong: 'tạo mới' })
+                noteSample(c, { code: finalCode, name, phone, congNo: coDebt ? kvDebt : 'không có trong payload', hanhDong: 'tạo mới' })
             }
         } catch (e: any) {
             noteError(c, `Khách ${kv?.code || kv?.id}: ${e?.message || e}`)
@@ -631,7 +737,11 @@ export async function syncSuppliers(sp: any, items: any[], opts: SyncOptions, c:
             // CÔNG NỢ PHẢI TRẢ + tổng đã mua, lấy từ KiotViet (nguồn gốc dữ liệu).
             // Cùng quy tắc với công nợ khách: chỉ điền khi Kengi đang là 0, hoặc
             // khi người dùng bật ghi đè giá/công nợ.
-            const kvPayable = Number(kv?.debt) || 0
+            // Thiếu ≠ 0: webhook supplier.update không mang Debt (cùng bệnh giấu nợ khách, 18/08/2026)
+            // → không đụng payable; danh sách REST mang debt thì so như cũ.
+            const noNccKV = opts.tuWebhook ? null : docCongNoKV(kv)   // webhook: không tin debt trong payload
+            const coPayable = noNccKV !== null
+            const kvPayable = noNccKV ?? 0
             const kvBought = Number(kv?.totalInvoiced) || 0
 
             if (existing) {
@@ -641,7 +751,19 @@ export async function syncSuppliers(sp: any, items: any[], opts: SyncOptions, c:
                 if (!existing.address && kv?.address) data.address = String(kv.address).slice(0, 500)
                 if (!existing.taxCode && kv?.taxCode) data.taxCode = String(kv.taxCode)
                 if (!existing.email && kv?.email) data.email = String(kv.email)
-                if (kvPayable !== existing.payable && (!existing.payable || opts.overwritePrices)) data.payable = kvPayable
+                /* payable = SỐ DƯ ĐẦU KỲ (app cộng thêm Σ phiếu chưa trả khi hiển thị). kv.debt là TỔNG nợ
+                 * hiện tại đã gồm các PO đã thành phiếu ⇒ phải ghi PHẦN DƯ = kv.debt − Σ phiếu chưa trả,
+                 * nếu không là đếm đôi (HUTI 18/08/2026: hiện 40,49 tỷ trong khi KV nói 20,15). lib/congNoNcc.ts */
+                if (coPayable) {
+                    // Không đọc được phiếu ⇒ KHÔNG ghi payable (không đọc được ≠ 0) — chỉ noteError, các trường khác vẫn cập nhật
+                    let phieu: number | null = null
+                    try { phieu = (await tongPhieuChuaTraTheoNcc(sp, [existing.id])).get(existing.id)?.tong || 0 }
+                    catch (e: any) { noteError(c, `NCC ${code}: không đọc được phiếu chưa trả — giữ payable cũ (${e?.message || e})`) }
+                    if (phieu !== null) {
+                        const soDuDauKy = soDuDauKyTuKV(kvPayable, phieu)
+                        if (soDuDauKy !== existing.payable && (!existing.payable || opts.overwritePrices)) data.payable = soDuDauKy
+                    }
+                }
                 if (kvBought && kvBought !== existing.totalValue && (!existing.totalValue || opts.overwritePrices)) data.totalValue = kvBought
 
                 if (!Object.keys(data).length) {
@@ -713,7 +835,8 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                 const daCo = await sp.transaction.findUnique({
                     where: { receiptNumber: code },
                     select: { id: true, status: true, customerId: true, total: true, amountReceived: true },
-                }).catch(() => null)
+                })   // đọc hỏng ⇒ tưởng không có phiếu ⇒ BỎ QUA lệnh huỷ: hoá đơn đã huỷ bên KV
+                     // vẫn nằm trong doanh thu Kengi (20/08/2026)
                 if (daCo && daCo.status !== 'voided') {
                     if (opts.apply) {
                         await sp.transaction.update({ where: { id: daCo.id }, data: { status: 'voided' } })
@@ -742,7 +865,10 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                 if (p?.code) opts.invoicePaymentCodes?.add(String(p.code))
             }
 
-            const existing = await sp.transaction.findUnique({ where: { receiptNumber: code } }).catch(() => null)
+            /* Đây là CHỐT CHỐNG TRÙNG. Nuốt lỗi đọc thành null ⇒ tưởng hoá đơn chưa có ⇒ tạo thêm
+             * một phiếu nữa cho cùng mã KiotViet ⇒ doanh thu đếm đôi, đúng họ với vụ 40 tỷ NCC.
+             * Đọc không được thì để lượt đồng bộ sau làm lại (20/08/2026). */
+            const existing = await sp.transaction.findUnique({ where: { receiptNumber: code } })
             if (existing) {
                 if (opts.apply) {
                     await saveMap(sp, 'invoice', kvId, code, existing.id)
@@ -852,7 +978,13 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                     // Dựng lại phiếu thu cho khớp KiotViet. XOÁ TRƯỚC, kể cả khi
                     // KiotViet không còn phiếu nào — phiếu thu bị huỷ bên đó mà
                     // Kengi vẫn giữ thì sổ quỹ tiếp tục đếm tiền không có thật.
-                    await sp.payment.deleteMany({ where: { transactionId: existing.id } }).catch(() => { })
+                    /* KHÔNG nuốt lỗi ở lệnh XOÁ (21/08/2026) — chính chú thích ngay trên đã nói vì
+                     * sao phải xoá. Xoá hỏng mà bị nuốt thì `createMany` bên dưới **cộng thêm** dòng
+                     * mới vào dòng cũ ⇒ **phiếu thu bị TRÙNG**, và từ 21/08 sổ quỹ tiền mặt S6 tính
+                     * tiền THẲNG TỪ bảng `Payment` ⇒ **tiền mặt trong sổ nhân đôi**.
+                     * Ném ra là đúng: vòng ngoài đã có `catch` ghi `noteError(c, 'HĐ …')`, nên hỏng
+                     * thì chỉ hoá đơn đó bị bỏ qua VÀ ĐƯỢC GHI LẠI, không im lặng. */
+                    await sp.payment.deleteMany({ where: { transactionId: existing.id } })
                     const rows = kvPayments
                         .filter((p: any) => Number(p?.status) !== 1 && (Number(p?.amount) || 0) > 0)
                         .map((p: any) => ({
@@ -861,7 +993,8 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                             amount: Number(p.amount) || 0,
                             reference: p?.code ? String(p.code) : null,
                         }))
-                    if (rows.length) await sp.payment.createMany({ data: rows }).catch(() => { })
+                    // Cùng lý do: tạo hỏng mà nuốt thì hoá đơn mất phiếu thu, sổ quỹ hụt tiền.
+                    if (rows.length) await sp.payment.createMany({ data: rows })
                     /**
                      * Phiếu thu từng nhập ĐỘC LẬP qua sổ quỹ (webhook sổ quỹ tới
                      * trước) nay gắn vào hoá đơn: xoá bản độc lập + map của nó,
@@ -1115,8 +1248,26 @@ export async function syncPurchaseOrders(sp: any, items: any[], opts: SyncOption
             const code = String(kv?.code || '').trim()
             if (!kvId || !code) { c.skipped++; continue }
 
-            const existing = await sp.importReceipt.findUnique({ where: { code } }).catch(() => null)
+            const existing = await sp.importReceipt.findUnique({ where: { code }, select: { id: true, supplierId: true, totalCost: true, paidAmount: true, paymentStatus: true } })   // chốt chống trùng: nuốt lỗi đọc ⇒ tạo bản ghi thứ hai (20/08/2026)
             if (existing) {
+                /* PHIẾU ĐÃ CÓ: bản đầu bỏ qua hoàn toàn ⇒ paidAmount/paymentStatus chỉ ghi lúc tạo, phiếu HUTI đã
+                 * trả bên KV vẫn "chưa trả" mãi trên Hạn Thanh Toán / MCP / Lịch tiền (rà soát độc lập 19/08/2026).
+                 * Nay: KV `totalPayment` khác paidAmount → cập nhật đúng hai trường thanh toán (không đụng dòng
+                 * hàng/tổng), rồi làm tươi phần dư payable của NCC để sổ = KV. Thiếu ≠ 0: KV bỏ trống totalPayment thì
+                 * không đụng. */
+                const kvDaTra = kv?.totalPayment
+                if (kvDaTra !== undefined && kvDaTra !== null && Number.isFinite(Number(kvDaTra))) {
+                    const daTraMoi = Number(kvDaTra)
+                    const tong = Number(existing.totalCost) || 0
+                    const ttMoi = daTraMoi >= tong ? 'paid' : daTraMoi > 0 ? 'partial' : 'unpaid'
+                    if (Math.round(daTraMoi) !== Math.round(Number(existing.paidAmount) || 0) || ttMoi !== existing.paymentStatus) {
+                        if (opts.apply) await sp.importReceipt.update({ where: { id: existing.id }, data: { paidAmount: daTraMoi, paymentStatus: ttMoi } })
+                        c.updated++
+                        noteSample(c, { code, hanhDong: 'cập nhật thanh toán', daTraCu: existing.paidAmount, daTraMoi, paymentStatus: ttMoi })
+                        if (opts.apply) await saveMap(sp, 'purchaseOrder', kvId, code, existing.id)
+                        continue
+                    }
+                }
                 c.skipped++
                 if (opts.apply) await saveMap(sp, 'purchaseOrder', kvId, code, existing.id)
                 continue
@@ -1226,7 +1377,7 @@ export async function syncReturns(sp: any, items: any[], opts: SyncOptions, c: S
             // Chỉ nhận phiếu đã trả xong
             if (Number(kv?.status) !== 1) { c.skipped++; continue }
 
-            const existing = await sp.returnOrder.findUnique({ where: { code } }).catch(() => null)
+            const existing = await sp.returnOrder.findUnique({ where: { code } })   // chốt chống trùng: nuốt lỗi đọc ⇒ tạo bản ghi thứ hai (20/08/2026)
             if (existing) {
                 c.skipped++
                 if (opts.apply) await saveMap(sp, 'return', kvId, code, existing.id)
@@ -1413,7 +1564,7 @@ export async function syncCashflow(sp: any, items: any[], opts: SyncOptions, c: 
             }
 
             if (dir === 'in') {
-                const dup = await sp.cashReceipt.findFirst({ where: { reference: code } }).catch(() => null)
+                const dup = await sp.cashReceipt.findFirst({ where: { reference: code } })   // chốt chống trùng: nuốt lỗi đọc ⇒ tạo bản ghi thứ hai (20/08/2026)
                 if (dup) { c.skipped++; if (opts.apply) await saveMap(sp, entity, kvId, code, dup.id); continue }
                 if (opts.apply) {
                     const created = await sp.cashReceipt.create({
@@ -1428,7 +1579,7 @@ export async function syncCashflow(sp: any, items: any[], opts: SyncOptions, c: 
                     await saveMap(sp, entity, kvId, code, created.id)
                 }
             } else {
-                const dup = await sp.expense.findFirst({ where: { sourceRef: `KV|${code}` } }).catch(() => null)
+                const dup = await sp.expense.findFirst({ where: { sourceRef: `KV|${code}` } })   // chốt chống trùng: nuốt lỗi đọc ⇒ tạo bản ghi thứ hai (20/08/2026)
                 if (dup) { c.skipped++; if (opts.apply) await saveMap(sp, entity, kvId, code, dup.id); continue }
                 if (opts.apply) {
                     const created = await sp.expense.create({

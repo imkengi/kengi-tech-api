@@ -332,6 +332,8 @@ exports.Prisma.TransactionScalarFieldEnum = {
   status: 'status',
   createdBy: 'createdBy',
   createdByName: 'createdByName',
+  salespersonId: 'salespersonId',
+  salespersonName: 'salespersonName',
   notes: 'notes',
   returnedAt: 'returnedAt',
   returnReason: 'returnReason',
@@ -466,6 +468,11 @@ exports.Prisma.SupplierScalarFieldEnum = {
   status: 'status',
   notes: 'notes',
   payable: 'payable',
+  paymentTermDays: 'paymentTermDays',
+  paymentTerms: 'paymentTerms',
+  paymentTermType: 'paymentTermType',
+  paymentTermDom: 'paymentTermDom',
+  paymentTermMonthOffset: 'paymentTermMonthOffset',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -582,6 +589,23 @@ exports.Prisma.RepairScalarFieldEnum = {
   estimatedDate: 'estimatedDate',
   completedDate: 'completedDate',
   notes: 'notes',
+  source: 'source',
+  productId: 'productId',
+  productSku: 'productSku',
+  quantity: 'quantity',
+  branchId: 'branchId',
+  customerId: 'customerId',
+  transactionId: 'transactionId',
+  soldReceiptNumber: 'soldReceiptNumber',
+  stockMovedAt: 'stockMovedAt',
+  replacedStockAt: 'replacedStockAt',
+  supplierId: 'supplierId',
+  supplierName: 'supplierName',
+  supplierBatchCode: 'supplierBatchCode',
+  sentToSupplierAt: 'sentToSupplierAt',
+  queuedForSupplierAt: 'queuedForSupplierAt',
+  supplierReturnedAt: 'supplierReturnedAt',
+  newUnitIssuedAt: 'newUnitIssuedAt',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -971,7 +995,8 @@ exports.Prisma.ReturnItemScalarFieldEnum = {
   unitPrice: 'unitPrice',
   returnReason: 'returnReason',
   condition: 'condition',
-  restocked: 'restocked'
+  restocked: 'restocked',
+  disposed: 'disposed'
 };
 
 exports.Prisma.DebtEntryScalarFieldEnum = {
@@ -1439,6 +1464,7 @@ exports.Prisma.OnlineOrderItemScalarFieldEnum = {
   id: 'id',
   onlineOrderId: 'onlineOrderId',
   productId: 'productId',
+  externalItemId: 'externalItemId',
   productName: 'productName',
   sku: 'sku',
   quantity: 'quantity',
@@ -2267,8 +2293,11 @@ exports.Prisma.MisaConfigScalarFieldEnum = {
   overwriteNames: 'overwriteNames',
   overwritePrices: 'overwritePrices',
   overwriteStock: 'overwriteStock',
+  overwriteDebt: 'overwriteDebt',
+  negateDebt: 'negateDebt',
   defaultCategoryId: 'defaultCategoryId',
   defaultWarehouseId: 'defaultWarehouseId',
+  lastSyncTime: 'lastSyncTime',
   lastSyncAt: 'lastSyncAt',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
@@ -2301,6 +2330,104 @@ exports.Prisma.MisaSyncLogScalarFieldEnum = {
   heartbeatAt: 'heartbeatAt',
   attempts: 'attempts',
   finishedAt: 'finishedAt'
+};
+
+exports.Prisma.PrintTemplateScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  type: 'type',
+  htmlSource: 'htmlSource',
+  linkedPrinter: 'linkedPrinter',
+  isDefault: 'isDefault',
+  isBuiltIn: 'isBuiltIn',
+  daSuaTay: 'daSuaTay',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.AiReportScalarFieldEnum = {
+  id: 'id',
+  loai: 'loai',
+  ky: 'ky',
+  tuNgay: 'tuNgay',
+  denNgay: 'denNgay',
+  tieuDe: 'tieuDe',
+  noiDung: 'noiDung',
+  toolCalls: 'toolCalls',
+  createdBy: 'createdBy',
+  createdByName: 'createdByName',
+  branchId: 'branchId',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.AiChatScalarFieldEnum = {
+  id: 'id',
+  tieuDe: 'tieuDe',
+  noiDung: 'noiDung',
+  soLuot: 'soLuot',
+  createdBy: 'createdBy',
+  createdByName: 'createdByName',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.MisaImportBatchScalarFieldEnum = {
+  id: 'id',
+  loai: 'loai',
+  tenFile: 'tenFile',
+  kyBaoCao: 'kyBaoCao',
+  tongDong: 'tongDong',
+  docDuoc: 'docDuoc',
+  boQua: 'boQua',
+  soChungTu: 'soChungTu',
+  tongTien: 'tongTien',
+  tongThue: 'tongThue',
+  chiTiet: 'chiTiet',
+  apply: 'apply',
+  userId: 'userId',
+  userName: 'userName',
+  createdAt: 'createdAt'
+};
+
+exports.Prisma.MisaSaleDocScalarFieldEnum = {
+  id: 'id',
+  soChungTu: 'soChungTu',
+  soHoaDon: 'soHoaDon',
+  ngayChungTu: 'ngayChungTu',
+  ngayHachToan: 'ngayHachToan',
+  ngayHoaDon: 'ngayHoaDon',
+  maKhach: 'maKhach',
+  tenKhach: 'tenKhach',
+  nguonTenKhach: 'nguonTenKhach',
+  dienGiai: 'dienGiai',
+  customerId: 'customerId',
+  tongDoanhSo: 'tongDoanhSo',
+  tongThue: 'tongThue',
+  tongChietKhau: 'tongChietKhau',
+  tongTra: 'tongTra',
+  thieuGiaVon: 'thieuGiaVon',
+  batchId: 'batchId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.MisaSaleLineScalarFieldEnum = {
+  id: 'id',
+  docId: 'docId',
+  maHang: 'maHang',
+  tenHang: 'tenHang',
+  dvt: 'dvt',
+  soLuong: 'soLuong',
+  donGia: 'donGia',
+  doanhSo: 'doanhSo',
+  chietKhau: 'chietKhau',
+  soLuongTra: 'soLuongTra',
+  giaTriTra: 'giaTriTra',
+  giamGia: 'giamGia',
+  thueGtgt: 'thueGtgt',
+  tkThueGtgt: 'tkThueGtgt',
+  giaVon: 'giaVon',
+  productId: 'productId',
+  dongSo: 'dongSo'
 };
 
 exports.Prisma.SortOrder = {
@@ -2447,7 +2574,13 @@ exports.Prisma.ModelName = {
   KiotVietSyncLog: 'KiotVietSyncLog',
   MisaConfig: 'MisaConfig',
   MisaMap: 'MisaMap',
-  MisaSyncLog: 'MisaSyncLog'
+  MisaSyncLog: 'MisaSyncLog',
+  PrintTemplate: 'PrintTemplate',
+  AiReport: 'AiReport',
+  AiChat: 'AiChat',
+  MisaImportBatch: 'MisaImportBatch',
+  MisaSaleDoc: 'MisaSaleDoc',
+  MisaSaleLine: 'MisaSaleLine'
 };
 
 /**

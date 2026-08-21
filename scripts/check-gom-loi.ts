@@ -13,7 +13,7 @@
  * Dữ liệu mẫu lấy từ log thật ngày 14–15/08/2026.
  */
 
-import { chuKyLoi, chuanHoaDuong, gomLoi } from '../src/lib/gomLoi'
+import { chuKyLoi, chuanHoaDuong, gomLoi, moTaLoi } from '../src/lib/gomLoi'
 
 let dat = 0, hong = 0
 function ok(ten: string, dk: boolean, thucTe?: any) {
@@ -105,6 +105,55 @@ function main() {
     ok('11. chữ ký bị cắt ngắn', chuKyLoi(dai).length <= 220, chuKyLoi(dai).length)
     ok('11b. mẫu gốc vẫn giữ nhiều hơn chữ ký (để bấm xem chi tiết)',
         (gomLoi([{ textPayload: dai, timestamp: 'T' }]).nhom[0]?.mau.length ?? 0) > 220)
+
+    /* ── moTaLoi: KHÔNG BAO GIỜ ĐƯỢC TRẢ CHUỖI RỖNG ────────────────────────
+     * Ca sinh tử là lỗi rỗng cả `name` lẫn `message`: `String(err)` gọi
+     * Error.prototype.toString(), name rỗng thì trả về message — cũng rỗng.
+     * Đã đẻ ra 8 dòng log dài đúng 55 ký tự lúc 13:52 UTC ngày 16/08. */
+    const loiRong = new Error(''); loiRong.name = ''
+    const taRong = moTaLoi(loiRong)
+    ok('M1. lỗi rỗng name+message → VẪN mô tả được', taRong.length > 0, taRong)
+    ok('M1b. nói rõ là lỗi rỗng chứ không bịa', /RỖNG/.test(taRong), taRong)
+    ok('M1c. giữ được khung gọi từ stack để lần ra chỗ ném', /tại /.test(taRong), taRong)
+
+    /* M1d — CA ĐÃ QUA MẶT BẢN ĐẦU TIÊN: message chỉ là ký tự xuống dòng.
+     * `"\n"` là truthy nên hàm trả về "\n", Cloud Logging cắt xuống dòng ở cuối
+     * ⇒ dòng log ra ĐÚNG 55 ký tự, không phân biệt được với mã chưa vá. Đã làm
+     * tôi đi nghi Cloud Build đẩy nguồn cũ suốt một vòng dài. */
+    const xuongDong: any = new Error('\n'); xuongDong.name = ''
+    const taXD = moTaLoi(xuongDong)
+    ok('M1d. message chỉ có xuống dòng → KHÔNG được coi là có nội dung',
+        taXD.trim().length > 0 && /RỖNG/.test(taXD), JSON.stringify(taXD))
+    const khoangTrang: any = new Error('   '); khoangTrang.name = '  '
+    ok('M1e. message/name toàn khoảng trắng → cũng vậy',
+        /RỖNG/.test(moTaLoi(khoangTrang)), JSON.stringify(moTaLoi(khoangTrang)))
+    ok('M1f. kết quả KHÔNG BAO GIỜ chứa xuống dòng (một dòng log là một dòng)',
+        !/\n/.test(taXD), JSON.stringify(taXD))
+
+    /* M1g — LỖI PRISMA THẬT: thông báo nhiều dòng. Để nguyên xuống dòng là một
+     * lỗi vỡ thành nhiều bản ghi rời trong Cloud Logging, mất luôn liên hệ với
+     * mã đơn ở đầu dòng — chính thứ làm 4 ngày không chẩn được. */
+    const nhieuDong: any = new Error('\nInvalid `prisma.onlineOrder.findMany()` invocation:\n\n  Timed out fetching a new connection\n')
+    nhieuDong.code = 'P2024'
+    const taND = moTaLoi(nhieuDong)
+    ok('M1g. thông báo nhiều dòng → gộp về MỘT dòng', !/\n/.test(taND), JSON.stringify(taND).slice(0, 120))
+    ok('M1g2. vẫn giữ nguyên nội dung và mã lỗi',
+        /P2024/.test(taND) && /Timed out fetching/.test(taND), taND.slice(0, 90))
+
+    // M2 — lỗi Prisma thường: code là thứ quan trọng nhất, phải đứng đầu
+    const pri: any = new Error(''); pri.code = 'P2024'; pri.meta = { limit: 1 }
+    const taPri = moTaLoi(pri)
+    ok('M2. giữ code Prisma', /code=P2024/.test(taPri), taPri)
+    ok('M2b. giữ meta', /meta=/.test(taPri), taPri)
+
+    // M3 — lỗi thường thì đừng làm ồn, chỉ trả message
+    ok('M3. lỗi thường → đúng message', moTaLoi(new Error('hỏng rồi')) === 'hỏng rồi', moTaLoi(new Error('hỏng rồi')))
+
+    // M4 — CHIỀU IM của kiểu dữ liệu méo: null/undefined/chuỗi không được nổ
+    ok('M4. null → vẫn ra chữ', moTaLoi(null).length > 0, moTaLoi(null))
+    ok('M4b. undefined → vẫn ra chữ', moTaLoi(undefined).length > 0, moTaLoi(undefined))
+    ok('M4c. ném chuỗi rỗng → vẫn ra chữ', moTaLoi('').length > 0, moTaLoi(''))
+    ok('M4d. ném chuỗi thường → giữ nguyên', moTaLoi('sập' as any) === 'sập', moTaLoi('sập' as any))
 
     console.log(`\n${dat}/${dat + hong} ca đạt`)
     if (hong) process.exit(1)

@@ -15,6 +15,8 @@
 import { Router, Request, Response, NextFunction } from 'express'
 import crypto from 'crypto'
 import jwt from 'jsonwebtoken'
+import multer from 'multer'
+import * as XLSX from 'xlsx'
 import { registryPrisma, getStorePrisma } from '../lib/prisma'
 import { errMsg } from '../lib/errorResponse'
 import {
@@ -25,6 +27,7 @@ import {
     newMisaCounters, syncMisaProducts, syncMisaPartners, syncMisaWarehouses, syncMisaStock,
     syncMisaDebt, syncMisaDeleted, type MisaOptions,
 } from '../services/misaSync'
+import { doBanHangMisa, tomTatDeGhiLog } from '../services/misaImportBanHang'
 
 const router = Router()
 
@@ -50,6 +53,9 @@ export const MISA_ENTITY_LABEL: Record<string, string> = {
     debtCustomer: 'Công nợ phải thu',
     debtSupplier: 'Công nợ phải trả',
     deleted: 'Danh mục đã xoá bên MISA',
+    // Đổ từ Excel — không phải thực thể đồng bộ được, nhưng dùng chung nhật ký nên cần nhãn
+    salesExcel: 'Bán hàng (đổ Excel)',
+    purchasesExcel: 'Mua hàng (đổ Excel)',
 }
 
 function safeEqual(a: string, b: string): boolean {
@@ -507,6 +513,276 @@ router.get('/logs', async (req: Request, res: Response) => {
         const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20))
         const logs = await store.sp.misaSyncLog.findMany({ orderBy: { startedAt: 'desc' }, take: limit }).catch(() => [])
         res.json({ success: true, data: logs })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ĐỔ EXCEL — mua hàng & bán hàng MISA KHÔNG có API, chỉ xuất Excel được.
+   Cửa hàng lấy từ `storeCode` gửi lên, KHÔNG gắn cứng cửa hàng nào.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/** Trong bộ nhớ, 10MB — theo đúng khuôn `importData.ts` đang dùng. */
+const uploadExcel = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } })
+
+/**
+ * POST /api/misa/import-sales   (multipart: file, storeCode, apply)
+ *
+ * MẶC ĐỊNH CHẠY THỬ. Phải gửi `apply=true` mới ghi — giống `/sync`. Chạy thử trả về
+ * ĐÚNG những con số mà lượt ghi thật sẽ tạo ra, để người bấm nhìn trước rồi mới quyết.
+ */
+router.post('/import-sales', uploadExcel.single('file'), async (req: Request, res: Response) => {
+    try {
+        const b: any = req.body || {}
+        const store = await resolveStore(String(b.storeCode || ''))
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        if (!req.file?.buffer?.length) {
+            res.status(400).json({ success: false, error: 'Chưa chọn file Excel' }); return
+        }
+
+        // codepage 65001: file MISA có dấu tiếng Việt, đọc sai bảng mã là hỏng hết tên hàng/tên khách
+        let rows: any[][]
+        let tenSheet = ''
+        try {
+            const wb = XLSX.read(req.file.buffer, { type: 'buffer', codepage: 65001, raw: false })
+            tenSheet = wb.SheetNames[0] || ''
+            if (!tenSheet) throw new Error('file không có sheet nào')
+            rows = XLSX.utils.sheet_to_json<any[]>(wb.Sheets[tenSheet]!, { header: 1, raw: false, defval: '' })
+        } catch (e: any) {
+            // Hỏng khi MỞ file khác hẳn với "file không có dữ liệu" — đừng gộp hai thứ làm một.
+            res.status(400).json({ success: false, error: `Không mở được file Excel: ${errMsg(e)}` }); return
+        }
+
+        const apply = b.apply === true || b.apply === 'true'
+        const kq = await doBanHangMisa(store.sp, rows, {
+            tenFile: req.file.originalname || 'không rõ tên',
+            apply,
+            userId: (req as any).user?.userId || null,
+            userName: (req as any).user?.email || 'admin-panel',
+        })
+
+        // Ghi nhật ký chung với các lượt đồng bộ khác, để một chỗ xem được cả hai đường.
+        await store.sp.misaSyncLog.create({
+            data: {
+                entity: 'salesExcel',
+                mode: 'excel',
+                dryRun: !apply,
+                // Đọc hỏng file phải ra 'error', KHÔNG phải 'success' với 0 dòng.
+                status: kq.tieuDeThieu.length ? 'error' : 'success',
+                errors: kq.tieuDeThieu.length
+                    ? `Thiếu cột bắt buộc: ${kq.tieuDeThieu.join(', ')}`
+                    : (kq.canhBao.length ? kq.canhBao.join(' · ').slice(0, 4000) : null),
+                fetched: kq.tongDong,
+                created: kq.chungTuMoi,
+                updated: kq.chungTuCapNhat,
+                skipped: kq.boQua,
+                failed: kq.tieuDeThieu.length ? 1 : 0,
+                details: JSON.stringify(tomTatDeGhiLog(kq)),
+                startedAt: new Date(),
+                finishedAt: new Date(),
+            },
+        }).catch(() => { /* nhật ký hỏng không được làm hỏng lượt đổ */ })
+
+        res.json({ success: true, sheet: tenSheet, store: store.name, ...kq })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+/** GET /api/misa/import-batches?storeCode=&loai=sales — các lượt đã đổ, mới nhất trước. */
+router.get('/import-batches', async (req: Request, res: Response) => {
+    try {
+        const store = await resolveStore(String(req.query.storeCode || ''))
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const loai = String(req.query.loai || '') || undefined
+        const items = await store.sp.misaImportBatch.findMany({
+            where: loai ? { loai } : {},
+            orderBy: { createdAt: 'desc' },
+            take: Math.min(Number(req.query.limit) || 30, 100),
+        })
+        res.json({ success: true, items })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+/**
+ * GET /api/misa/sales?storeCode=&from=&to=  — đọc lại sổ MISA đã đổ.
+ *
+ * Kèm `doPhu`: đọc được bao nhiêu / bỏ bao nhiêu của lượt đổ gần nhất. Con số tổng mà
+ * không kèm độ phủ thì không dùng để kết luận được — đó là bài học của cả tháng này.
+ */
+router.get('/sales', async (req: Request, res: Response) => {
+    try {
+        const store = await resolveStore(String(req.query.storeCode || ''))
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+
+        const where: any = {}
+        if (req.query.from) where.ngayChungTu = { gte: new Date(`${req.query.from}T00:00:00+07:00`) }
+        if (req.query.to) {
+            where.ngayChungTu = { ...(where.ngayChungTu || {}), lte: new Date(`${req.query.to}T23:59:59+07:00`) }
+        }
+
+        const items = await store.sp.misaSaleDoc.findMany({
+            where,
+            orderBy: { ngayChungTu: 'desc' },
+            take: Math.min(Number(req.query.limit) || 200, 1000),
+            include: req.query.chiTiet === 'true' ? { lines: true } : undefined,
+        })
+        const tong = await store.sp.misaSaleDoc.aggregate({
+            where, _sum: { tongDoanhSo: true, tongThue: true }, _count: true,
+        })
+        const lanCuoi = await store.sp.misaImportBatch.findFirst({
+            where: { loai: 'sales', apply: true }, orderBy: { createdAt: 'desc' },
+        })
+
+        res.json({
+            success: true,
+            items,
+            tongChungTu: tong._count,
+            tongDoanhSo: tong._sum.tongDoanhSo || 0,
+            tongThue: tong._sum.tongThue || 0,
+            doPhu: lanCuoi
+                ? {
+                    tenFile: lanCuoi.tenFile, kyBaoCao: lanCuoi.kyBaoCao, luc: lanCuoi.createdAt,
+                    docDuoc: lanCuoi.docDuoc, tongDong: lanCuoi.tongDong, boQua: lanCuoi.boQua,
+                }
+                : null,
+        })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+/**
+ * GET /api/misa/doi-chieu?storeCode=&from=&to=  — SO SỔ MISA VỚI SỔ KENGI
+ *
+ * Đây mới là lý do đổ Excel: có hai sổ rồi thì phải so được. Ba cái bẫy đã cài sẵn cách tránh,
+ * đừng gỡ ra:
+ *
+ *  1. **Bẫy VAT.** Cột "Doanh số bán" của MISA là **TRƯỚC thuế**; `Transaction.total` của Kengi
+ *     là **ĐÃ GỒM thuế**. So thẳng hai số đó là so nhầm đơn vị — trên mẫu 21/08 lệch giả
+ *     đúng 114.770.032đ. Ở đây quy cả hai về **trước thuế** rồi mới trừ.
+ *  2. **Bẫy đơn bán chịu.** Đơn ghi nợ có status `'partial'`. Lọc mỗi `'completed'` là hụt doanh
+ *     thu âm thầm — từng tố oan 677tr (xem [[revenue-includes-credit-sales]]).
+ *  3. **Bẫy ngày.** `transactionDate` là ngày bán thật, `createdAt` là lúc nhập dòng; KENGISTORE
+ *     nhập từ KiotViet nên hai cái lệch nhau. Trả về CẢ HAI cách cắt kỳ để nhìn thấy độ lệch
+ *     thay vì chọn hộ một cái rồi giấu cái kia.
+ */
+router.get('/doi-chieu', async (req: Request, res: Response) => {
+    try {
+        const store = await resolveStore(String(req.query.storeCode || ''))
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const from = String(req.query.from || ''), to = String(req.query.to || '')
+        if (!from || !to) { res.status(400).json({ success: false, error: 'Thiếu from/to (YYYY-MM-DD)' }); return }
+        const dau = new Date(`${from}T00:00:00+07:00`), cuoi = new Date(`${to}T23:59:59+07:00`)
+
+        // ── Vế MISA ──
+        const misa = await store.sp.misaSaleDoc.aggregate({
+            where: { ngayChungTu: { gte: dau, lte: cuoi } },
+            _sum: { tongDoanhSo: true, tongThue: true }, _count: true,
+        })
+        const misaTruocThue = misa._sum.tongDoanhSo || 0
+        const misaThue = misa._sum.tongThue || 0
+
+        // ── Vế Kengi ──
+        // COALESCE(transactionDate, createdAt): phiếu chưa có ngày bán thì lấy ngày tạo, chứ
+        // KHÔNG loại khỏi phép cộng — loại đi là doanh thu tự bốc hơi mà không ai thấy.
+        const q = async (cot: string) => {
+            const r: any[] = await store.sp.$queryRawUnsafe(
+                // ::float8 — SUM() của Postgres trả `numeric`, qua Prisma thành Decimal chứ không phải số
+                `SELECT COUNT(*)::int AS so,
+                        COALESCE(SUM("total"),0)::float8 AS tong,
+                        COALESCE(SUM("tax"),0)::float8 AS thue
+                   FROM "Transaction"
+                  WHERE "status" IN ('completed','partial') AND ${cot} BETWEEN $1 AND $2`,
+                dau, cuoi,
+            )
+            const x = r[0] || {}
+            return { so: Number(x.so || 0), tong: Number(x.tong || 0), thue: Number(x.thue || 0) }
+        }
+        const theoNgayBan = await q(`COALESCE("transactionDate","createdAt")`)
+        const theoNgayNhap = await q(`"createdAt"`)
+
+        // Độ phủ: bao nhiêu phiếu chưa có ngày bán thật ⇒ hai cách cắt kỳ lệch nhau vì cái này.
+        const thieuNgayBan: any[] = await store.sp.$queryRawUnsafe(
+            `SELECT COUNT(*)::int AS so FROM "Transaction"
+              WHERE "status" IN ('completed','partial') AND "transactionDate" IS NULL
+                AND "createdAt" BETWEEN $1 AND $2`,
+            dau, cuoi,
+        )
+
+        const kengiTruocThue = theoNgayBan.tong - theoNgayBan.thue
+        const lech = kengiTruocThue - misaTruocThue
+
+        /*
+         * TÁCH THEO NGÀY — một con số tổng nói "có lệch" nhưng không nói lệch ở ĐÂU.
+         * 20 ngày thì không ai dò tay được, mà thường lệch chỉ nằm ở vài ngày.
+         *
+         * `+ interval '7 hours'` rồi mới `to_char`: cắt ngày phải theo giờ Việt Nam, không thì
+         * mọi giao dịch trước 7h sáng rơi nhầm sang ngày hôm trước (bộ soát check:ngay bắt cái này).
+         */
+        const ngayMisa: any[] = await store.sp.$queryRawUnsafe(
+            `SELECT to_char("ngayChungTu" + interval '7 hours','YYYY-MM-DD') AS ngay,
+                    COUNT(*)::int AS so,
+                    COALESCE(SUM("tongDoanhSo"),0)::float8 AS tien
+               FROM "MisaSaleDoc"
+              WHERE "ngayChungTu" BETWEEN $1 AND $2
+              GROUP BY 1`,
+            dau, cuoi,
+        )
+        const ngayKengi: any[] = await store.sp.$queryRawUnsafe(
+            `SELECT to_char(COALESCE("transactionDate","createdAt") + interval '7 hours','YYYY-MM-DD') AS ngay,
+                    COUNT(*)::int AS so,
+                    COALESCE(SUM("total" - "tax"),0)::float8 AS tien
+               FROM "Transaction"
+              WHERE "status" IN ('completed','partial')
+                AND COALESCE("transactionDate","createdAt") BETWEEN $1 AND $2
+              GROUP BY 1`,
+            dau, cuoi,
+        )
+        const gomNgay = new Map<string, { ngay: string; misa: number; misaSo: number; kengi: number; kengiSo: number }>()
+        const oNgay = (n: string) => {
+            let x = gomNgay.get(n)
+            if (!x) { x = { ngay: n, misa: 0, misaSo: 0, kengi: 0, kengiSo: 0 }; gomNgay.set(n, x) }
+            return x
+        }
+        for (const r of ngayMisa) { const x = oNgay(String(r.ngay)); x.misa = Number(r.tien || 0); x.misaSo = Number(r.so || 0) }
+        for (const r of ngayKengi) { const x = oNgay(String(r.ngay)); x.kengi = Number(r.tien || 0); x.kengiSo = Number(r.so || 0) }
+        const theoNgay = [...gomNgay.values()]
+            .map(x => ({ ...x, lech: x.kengi - x.misa }))
+            .sort((a, b) => a.ngay.localeCompare(b.ngay))
+        // Ngày lệch quá 1.000đ mới coi là lệch — dưới nữa là làm tròn, không đáng gọi tên
+        const ngayLech = theoNgay.filter(x => Math.abs(x.lech) >= 1000)
+
+        res.json({
+            success: true,
+            store: store.name,
+            tuNgay: from, denNgay: to,
+            misa: {
+                soChungTu: misa._count,
+                truocThue: misaTruocThue,
+                thue: misaThue,
+                gomThue: misaTruocThue + misaThue,
+            },
+            kengi: {
+                soPhieu: theoNgayBan.so,
+                truocThue: kengiTruocThue,
+                thue: theoNgayBan.thue,
+                gomThue: theoNgayBan.tong,
+                // Cắt kỳ theo ngày NHẬP DÒNG — để nhìn thấy chênh lệch, không phải để dùng thay
+                theoNgayNhap: { soPhieu: theoNgayNhap.so, gomThue: theoNgayNhap.tong },
+                phieuThieuNgayBan: Number(thieuNgayBan[0]?.so || 0),
+            },
+            // Quy về CÙNG một mốc: trước thuế. Dương = Kengi bán nhiều hơn sổ MISA khai.
+            lechTruocThue: lech,
+            tyLeSoVoiKengi: kengiTruocThue > 0 ? misaTruocThue / kengiTruocThue : null,
+            theoNgay,
+            soNgayLech: ngayLech.length,
+            soNgay: theoNgay.length,
+            ghiChu: 'Đã quy cả hai vế về TRƯỚC THUẾ. Doanh thu Kengi gồm cả đơn bán chịu (status partial).',
+        })
     } catch (e: any) {
         res.status(500).json({ success: false, error: errMsg(e) })
     }

@@ -538,7 +538,7 @@ router.get('/shopee/messages/:conversationId', chatAuth, async (req: AuthRequest
         const { shopee, channel } = await getShopeeServiceForChannel(prisma, channelId as string)
 
         const result = await withTokenRefresh(prisma, channel, shopee, () =>
-            shopee.getMessages(conversationId, {
+            shopee.getMessages(String(conversationId || ''), {
                 pageSize: parseInt(String(pageSize) || '25') || 25,
                 offset: offset ? String(offset) : undefined,
             })

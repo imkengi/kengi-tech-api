@@ -141,6 +141,12 @@ export const CreateSupplierSchema = z.object({
     taxCode: z.string().max(20).optional().nullable(),
     contactPerson: z.string().max(200).optional().nullable(),
     paymentTerms: z.string().max(200).optional().nullable(),
+    // Số ngày được nợ, 0 = trả ngay. Không gửi mà có nhãn thì server tự suy từ nhãn.
+    paymentTermDays: z.number().int().min(0).max(365).optional().nullable(),
+    // Kiểu điều khoản đầy đủ (18/08/2026): net | dom | eom + tham số
+    paymentTermType: z.enum(['net', 'dom', 'eom']).optional().nullable(),
+    paymentTermDom: z.number().int().min(1).max(31).optional().nullable(),
+    paymentTermMonthOffset: z.number().int().min(0).max(12).optional().nullable(),
     note: z.string().max(1000).optional().nullable(),
     payable: z.number().min(0).optional().default(0),
     status: z.enum(['active', 'inactive']).default('active'),
@@ -179,6 +185,12 @@ export const CreateRepairSchema = z.object({
     // Link sang hoá đơn bán đã thu tiền phiếu này — POS gửi lúc chuyển 'returned'
     transactionId: z.string().optional().nullable(),
     soldReceiptNumber: z.string().max(50).optional().nullable(),
+    // Gửi NCC: NCC nhận hàng + mã lô (nhiều phiếu chung một lần gửi) — ghép lại từ prod 21/08
+    supplierId: z.string().optional().nullable(),
+    supplierName: z.string().max(200).optional().nullable(),
+    supplierBatchCode: z.string().max(50).optional().nullable(),
+    // true = đưa vào rổ chờ gửi NCC; false = rút khỏi rổ
+    queuedForSupplier: z.boolean().optional(),
 })
 
 export const UpdateRepairSchema = CreateRepairSchema.partial()

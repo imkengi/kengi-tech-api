@@ -142,10 +142,17 @@ export async function adjustSellableStock(
     })
     // 2) Mirror sang kho main của chi nhánh (best-effort — không chặn nghiệp vụ
     //    chính nếu bảng kho chưa migrate ở schema cũ)
+    /* Chỉ tha lỗi BẢNG CHƯA MIGRATE (P2021/P2022). Bản cũ `catch {}` nuốt MỌI lỗi, kể cả mất kết
+     * nối — mà bất biến của dự án là WarehouseStock[kho main] LUÔN = Product.stock. Nuốt hết nghĩa
+     * là bất biến gãy trong im lặng, phải chạy /inventory/reindex mới phát hiện (20/08/2026). */
     try {
         const wh = await getOrCreateDefaultWarehouse(client, branchId ?? null)
         if (wh?.id) await updateWarehouseStock(client, wh.id, productId, delta)
-    } catch { /* schema chưa có bảng Warehouse — Product.stock vẫn đúng */ }
+    } catch (e: any) {
+        const ma = String(e?.code || '')
+        const thieuBang = ma === 'P2021' || ma === 'P2022' || /does not exist/i.test(String(e?.message || ''))
+        if (!thieuBang) throw e
+    }
     // 3) Webhook đầu ra (đã chốt chặn nhanh bên trong; await để chạy trong tx nếu có)
     await emitStockChanged(client, {
         productId, sku: updated?.sku, name: updated?.name,

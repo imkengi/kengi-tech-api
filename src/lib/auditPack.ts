@@ -270,6 +270,7 @@ export async function boHoSoThanhTra(
             })
         })
 
+    let loiDocSo: string | null = null
     // ── 03. Sổ nhật ký chung ─────────────────────────────────────────────────
     const butToan: any[] = await prisma.journalEntry.findMany({
         where: { date: { gte: from, lte: to } },
@@ -278,13 +279,18 @@ export async function boHoSoThanhTra(
             creditAccount: true, creditAccountName: true, amount: true,
             reference: true, referenceType: true,
         },
-    }).catch(() => [])
+    }).catch((e: any) => { loiDocSo = String(e?.message || e).slice(0, 120); return [] })
+    /* "Đọc hỏng" KHÁC "sổ trống" (20/08/2026). Bản cũ nuốt lỗi thành mảng rỗng ⇒ ba tài liệu
+     * dưới đây rơi vào nhánh `return null` ⇒ hồ sơ thanh tra ghi lý do "Kỳ này không có số liệu",
+     * tức là tự tố cửa hàng không ghi sổ. Có lỗi thì phải NÉM, để lý do ghi đúng là không đọc được. */
+    const kiemSo = () => { if (loiDocSo) throw new Error('Không đọc được sổ nhật ký chung: ' + loiDocSo) }
     const butToanSap = [...(butToan || [])].sort((a, b) =>
         String(a.date).localeCompare(String(b.date)) ||
         String(a.reference || '').localeCompare(String(b.reference || '')))
 
     await them('03-nhat-ky-chung', 'Sổ nhật ký chung',
         'Sổ kế toán tổng hợp — bắt buộc phải có', async () => {
+            kiemSo()
             if (!butToanSap.length) return null
             const cot: CotBang[] = [
                 { khoa: 'ngay', nhan: 'Ngày ghi sổ', kieu: 'ngay' },
@@ -315,11 +321,14 @@ export async function boHoSoThanhTra(
     // ── 04. Sổ cái tổng hợp ──────────────────────────────────────────────────
     await them('04-so-cai', 'Sổ cái các tài khoản (tổng hợp phát sinh)',
         'Sổ kế toán tổng hợp', async () => {
+            kiemSo()
             if (!butToanSap.length) return null
+            /* Số dư đầu kỳ đọc hỏng ⇒ mọi tài khoản khởi đầu 0 ⇒ bảng cân đối phát sinh sai từ
+             * dòng đầu mà vẫn cân, không ai nhìn ra (20/08/2026). Ném lỗi để `them()` ghi lý do thật. */
             const truoc: any[] = await prisma.journalEntry.findMany({
                 where: { date: { lt: from } },
                 select: { debitAccount: true, creditAccount: true, amount: true },
-            }).catch(() => null) || []
+            }).catch((e: any) => { throw new Error('Không đọc được số dư đầu kỳ: ' + String(e?.message || e).slice(0, 120)) })
             const map = new Map<string, { ten: string; duNo: number; duCo: number; psNo: number; psCo: number }>()
             const lay = (tk: string, ten?: string) => {
                 if (!map.has(tk)) map.set(tk, { ten: ten || '', duNo: 0, duCo: 0, psNo: 0, psCo: 0 })
@@ -375,10 +384,13 @@ export async function boHoSoThanhTra(
     // ── 05 & 06. Sổ quỹ tiền mặt / sổ tiền gửi ───────────────────────────────
     const soTien = (tienTo: '111' | '112', ma: string, ten: string, mau: string) =>
         them(ma, ten, 'Sổ quỹ / sao kê ngân hàng', async () => {
+            kiemSo()
+            /* Số dư đầu kỳ đọc hỏng cũng không được coi là 0: sổ quỹ sẽ khởi đầu sai từ dòng một
+             * rồi sai suốt kỳ, mà nhìn vào không thấy dấu hiệu gì (20/08/2026). */
             const truoc: any[] = await prisma.journalEntry.findMany({
                 where: { date: { lt: from } },
                 select: { debitAccount: true, creditAccount: true, amount: true },
-            }).catch(() => null) || []
+            }).catch((e: any) => { throw new Error('Không đọc được số dư đầu kỳ: ' + String(e?.message || e).slice(0, 120)) })
             let duDau = 0
             for (const b of truoc) {
                 if (String(b.debitAccount || '').startsWith(tienTo)) duDau += b.amount
@@ -472,7 +484,12 @@ export async function boHoSoThanhTra(
                     dueDate: true, transactionDate: true, createdAt: true,
                 },
             })
-            if (!nhap?.length) return null
+            /* SỐ DƯ ĐẦU KỲ từng NCC (Supplier.payable — nhập tay / đồng bộ KiotViet, phần KV nói nợ mà phiếu
+             * chưa giải thích; ÂM = đã trả chưa gắn phiếu). Không có dòng này thì tổng sổ chi tiết = Σ phiếu
+             * (HUTI 20,46 tỷ) không khớp danh sách NCC / KV (20,15 tỷ) — đúng cái "phải khớp dư Có 331" mà
+             * chính tài liệu này đòi. Cùng công thức lib/congNoNcc.ts (18/08/2026). */
+            const nccDauKy: any[] = await Promise.resolve().then(() => (prisma as any).supplier?.findMany?.({ where: { payable: { not: 0 } }, select: { code: true, name: true, payable: true, createdAt: true } }) ?? []).catch(() => [])
+            if (!nhap?.length && !nccDauKy.length) return null
             const cot: CotBang[] = [
                 { khoa: 'maPhieu', nhan: 'Số phiếu nhập' },
                 { khoa: 'ngay', nhan: 'Ngày nhập', kieu: 'ngay' },
@@ -489,15 +506,26 @@ export async function boHoSoThanhTra(
                 canCu: 'Thông tư 133/2016/TT-BTC',
                 vaiTro: 'Tổng còn nợ phải khớp dư Có 331; khoản treo quá lâu bị hỏi có phải nợ khống không.',
                 cot,
-                dong: nhap.map((n: any) => ({
-                    maPhieu: n.code,
-                    ngay: ngayCua(n, 'transactionDate', 'createdAt'),
-                    ncc: n.supplierName || '',
-                    phaiTra: r0(n.totalCost),
-                    daTra: r0(n.paidAmount),
-                    conNo: r0((n.totalCost || 0) - (n.paidAmount || 0)),
-                    hanTra: ngayCua(n, 'dueDate'),
-                })),
+                dong: [
+                    ...nccDauKy.map((n: any) => ({
+                        maPhieu: `SDĐK-${n.code || ''}`,
+                        ngay: ngayCua(n, 'createdAt'),
+                        ncc: `${n.name || ''}${(Number(n.payable) || 0) < 0 ? ' (số dư đầu kỳ ÂM — đã trả chưa gắn phiếu)' : ' (số dư đầu kỳ)'}`,
+                        phaiTra: r0(Math.max(0, Number(n.payable) || 0)),
+                        daTra: r0(Math.max(0, -(Number(n.payable) || 0))),
+                        conNo: r0(Number(n.payable) || 0),
+                        hanTra: null,
+                    })),
+                    ...nhap.map((n: any) => ({
+                        maPhieu: n.code,
+                        ngay: ngayCua(n, 'transactionDate', 'createdAt'),
+                        ncc: n.supplierName || '',
+                        phaiTra: r0(n.totalCost),
+                        daTra: r0(n.paidAmount),
+                        conNo: r0((n.totalCost || 0) - (n.paidAmount || 0)),
+                        hanTra: ngayCua(n, 'dueDate'),
+                    })),
+                ],
             })
         })
 
@@ -878,6 +906,10 @@ export async function truyVetChungTu(prisma: any, maTim: string): Promise<KetQua
 async function truyVetBanHang(
     prisma: any, gd: any, moc: MocTruyVet[], canhBao: string[], ma: string,
 ): Promise<KetQuaTruyVet> {
+    /* "Không đọc được" KHÁC "chưa lập" (20/08/2026). Bản cũ nuốt lỗi thành null ⇒ mốc 3 ghi
+     * "Chưa lập hóa đơn điện tử" kèm cảnh báo Điều 90 Luật Quản lý thuế — tức là tố cửa hàng vi
+     * phạm dựa trên một nguồn CHƯA ĐỌC ĐƯỢC. Kiểu 'khong-kiem-duoc' có sẵn cho đúng tình huống này. */
+    let loiDocHd = false, loiDocBt = false
     const ngayBan = ngayCua(gd, 'transactionDate', 'createdAt')
 
     moc.push({
@@ -909,7 +941,7 @@ async function truyVetBanHang(
             totalBeforeVat: true, vatAmount: true, totalAmount: true, lookupCode: true,
             buyerName: true, buyerTaxCode: true,
         },
-    }).catch(() => null)
+    }).catch(() => { loiDocHd = true; return null })
 
     if (hd) {
         const daKy = ['SIGNED', 'SENT'].includes(String(hd.status))
@@ -929,6 +961,14 @@ async function truyVetBanHang(
         if (lechTien > 1000) {
             canhBao.push(`Tổng hóa đơn lệch phiếu bán ${lechTien.toLocaleString('vi-VN')}đ.`)
         }
+    } else if (loiDocHd) {
+        moc.push({
+            buoc: 3,
+            ten: 'Hóa đơn điện tử',
+            trangThai: 'khong-kiem-duoc',
+            chiTiet: 'Không đọc được dữ liệu hóa đơn điện tử — CHƯA kết luận được là có hay không.',
+            cauHoi: 'Thử lại sau; nếu vẫn lỗi thì báo kỹ thuật trước khi kết luận.',
+        })
     } else {
         moc.push({
             buoc: 3,
@@ -943,19 +983,20 @@ async function truyVetBanHang(
     const bt = await prisma.journalEntry.findMany({
         where: { reference: { in: [`SALE-${gd.receiptNumber}`, `VAT-${gd.receiptNumber}`, `COGS-${gd.receiptNumber}`, `DISC-${gd.receiptNumber}`, `COLLECT-${gd.receiptNumber}`] } },
         select: { reference: true, debitAccount: true, creditAccount: true, amount: true, date: true, description: true },
-    }).catch(() => [])
+    }).catch(() => { loiDocBt = true; return [] })
     const co = (tienTo: string) => (bt || []).find((b: any) => String(b.reference).startsWith(tienTo))
     const btDt = co('SALE-'), btVat = co('VAT-'), btGv = co('COGS-')
 
     moc.push({
         buoc: 4,
         ten: 'Bút toán ghi sổ',
-        trangThai: btDt ? 'co' : 'thieu',
+        trangThai: btDt ? 'co' : loiDocBt ? 'khong-kiem-duoc' : 'thieu',
         chiTiet: btDt
             ? `Doanh thu ${r0(btDt.amount).toLocaleString('vi-VN')}đ (${btDt.debitAccount}/${btDt.creditAccount})` +
             (btVat ? `; thuế GTGT ${r0(btVat.amount).toLocaleString('vi-VN')}đ` : '; CHƯA có bút toán thuế') +
             (btGv ? `; giá vốn ${r0(btGv.amount).toLocaleString('vi-VN')}đ` : '; CHƯA có bút toán giá vốn')
-            : 'Chưa ghi sổ doanh thu cho phiếu bán này.',
+            : loiDocBt ? 'Không đọc được sổ — CHƯA kết luận được là đã ghi hay chưa.'
+                : 'Chưa ghi sổ doanh thu cho phiếu bán này.',
         cauHoi: 'Doanh thu này vào sổ ngày nào, định khoản ra sao?',
         dulieu: bt,
     })

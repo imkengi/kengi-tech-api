@@ -12,6 +12,9 @@ export interface EInvoiceData {
     buyerAddress?: string
     buyerPhone?: string
     buyerEmail?: string
+    /** CCCD/CMND người mua — HĐ cá nhân (TT78 <CCCDan>). Shopee VN trả qua national_id.
+     *  Ghép lại từ bản đang chạy trên prod 21/08 — cây này ra đời trước nên thiếu. */
+    buyerIdNo?: string
 
     // Invoice details
     templateId?: string

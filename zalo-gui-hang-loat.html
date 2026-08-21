@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kengi — Gửi tin chào hàng hàng loạt qua Zalo</title>
+<style>
+  :root{
+    --bg:#0b1220; --panel:#131c2e; --panel2:#1a2540; --line:#26334f;
+    --text:#e6ecf7; --muted:#8fa0bd; --accent:#4f8cff; --accent2:#22c55e;
+    --warn:#f59e0b; --danger:#ef4444; --violet:#a78bfa;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui,sans-serif; min-height:100vh; font-size:14px;}
+  .wrap{max-width:1280px; margin:0 auto; padding:20px 20px 60px;}
+  header{display:flex; align-items:center; gap:12px; margin-bottom:6px; flex-wrap:wrap;}
+  header h1{font-size:20px; font-weight:700;}
+  header .badge{font-size:11px; background:var(--accent); padding:3px 8px; border-radius:99px;}
+  .sub{color:var(--muted); font-size:13px; margin-bottom:18px;}
+  .panel{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:16px;}
+  .panel > h2{font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:12px; display:flex; align-items:center; gap:8px;}
+  .step{display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:99px; background:var(--accent); color:#fff; font-size:11px; font-weight:700;}
+  label{display:block; font-size:12px; color:var(--muted); margin:10px 0 4px;}
+  input[type=text], input[type=password], input[type=number], select, textarea{
+    width:100%; background:var(--panel2); border:1px solid var(--line); color:var(--text);
+    border-radius:8px; padding:8px 10px; font-size:14px; outline:none; font-family:inherit;
+  }
+  textarea{resize:vertical; line-height:1.5;}
+  input:focus, select:focus, textarea:focus{border-color:var(--accent);}
+  select{appearance:none; background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%); background-position:calc(100% - 16px) 15px,calc(100% - 11px) 15px; background-size:5px 5px,5px 5px; background-repeat:no-repeat; padding-right:30px;}
+  button{background:var(--panel2); border:1px solid var(--line); color:var(--text); border-radius:8px; padding:8px 14px; font-size:13px; cursor:pointer; font-family:inherit;}
+  button:hover{border-color:var(--accent);}
+  button:disabled{opacity:.45; cursor:not-allowed;}
+  button.primary{background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600;}
+  button.go{background:var(--accent2); border-color:var(--accent2); color:#04120a; font-weight:700;}
+  button.danger{background:transparent; border-color:var(--danger); color:#ff9a9a;}
+  button.sm{padding:4px 9px; font-size:12px;}
+  .row{display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;}
+  .row > *{flex:1; min-width:150px;}
+  .row.tight{align-items:center;}
+  .cols{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+  @media(max-width:900px){.cols{grid-template-columns:1fr;}}
+  .hint{font-size:12px; color:var(--muted); line-height:1.6; margin-top:6px;}
+  .hint code{background:var(--panel2); padding:1px 5px; border-radius:4px; color:var(--violet);}
+  .chips{display:flex; gap:6px; flex-wrap:wrap; margin:8px 0;}
+  .chip{background:var(--panel2); border:1px solid var(--line); border-radius:99px; padding:3px 10px; font-size:12px; cursor:pointer; color:var(--violet); font-family:ui-monospace,Consolas,monospace;}
+  .chip:hover{border-color:var(--violet);}
+  .tabs{display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap;}
+  .tab{padding:7px 14px; border-radius:8px 8px 0 0; background:var(--panel2); border:1px solid var(--line); border-bottom:none; cursor:pointer; font-size:13px;}
+  .tab.active{background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600;}
+  .tab.off{opacity:.5;}
+  table{width:100%; border-collapse:collapse; font-size:13px;}
+  th,td{padding:6px 8px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top;}
+  th{color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.4px; position:sticky; top:0; background:var(--panel); z-index:1;}
+  .tbl-scroll{max-height:460px; overflow:auto; border:1px solid var(--line); border-radius:8px;}
+  .num{text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap;}
+  .mono{font-family:ui-monospace,Consolas,monospace; font-size:12px;}
+  .tag{display:inline-block; padding:1px 7px; border-radius:99px; font-size:11px; font-weight:600; white-space:nowrap;}
+  .t-a{background:rgba(34,197,94,.16); color:#7ee2a8;}
+  .t-b{background:rgba(245,158,11,.16); color:#fbc76a;}
+  .t-c{background:rgba(167,139,250,.16); color:#c6b3ff;}
+  .t-ok{background:rgba(34,197,94,.16); color:#7ee2a8;}
+  .t-err{background:rgba(239,68,68,.16); color:#ff9a9a;}
+  .t-warn{background:rgba(245,158,11,.16); color:#fbc76a;}
+  .t-idle{background:rgba(143,160,189,.14); color:var(--muted);}
+  .t-run{background:rgba(79,140,255,.2); color:#9dc0ff;}
+  .stats{display:flex; gap:8px; flex-wrap:wrap; margin:12px 0;}
+  .stat{background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:8px 14px; min-width:96px;}
+  .stat b{display:block; font-size:19px; font-variant-numeric:tabular-nums;}
+  .stat span{font-size:11px; color:var(--muted);}
+  .bar{height:8px; background:var(--panel2); border-radius:99px; overflow:hidden; margin:10px 0;}
+  .bar > div{height:100%; background:var(--accent2); width:0; transition:width .2s;}
+  .alert{border-radius:8px; padding:10px 12px; font-size:13px; line-height:1.6; margin:10px 0; border:1px solid;}
+  .alert.warn{background:rgba(245,158,11,.09); border-color:rgba(245,158,11,.4); color:#f5d08a;}
+  .alert.err{background:rgba(239,68,68,.09); border-color:rgba(239,68,68,.4); color:#ffb4b4;}
+  .alert.info{background:rgba(79,140,255,.09); border-color:rgba(79,140,255,.35); color:#bcd4ff;}
+  .switchbox{display:flex; gap:8px; align-items:center; font-size:13px; color:var(--text); cursor:pointer; user-select:none;}
+  .switchbox input{width:16px; height:16px; accent-color:var(--accent); cursor:pointer;}
+  .mode{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;}
+  .mode label{margin:0; flex:1; min-width:220px; border:1px solid var(--line); border-radius:10px; padding:10px 12px; cursor:pointer; color:var(--text); font-size:13px; background:var(--panel2);}
+  .mode label.on{border-color:var(--accent); background:rgba(79,140,255,.1);}
+  .mode label.on.hot{border-color:var(--danger); background:rgba(239,68,68,.1);}
+  .mode small{display:block; color:var(--muted); font-size:11px; margin-top:3px;}
+  .preview{background:#0f1626; border:1px solid var(--line); border-radius:10px; padding:12px; white-space:pre-wrap; word-break:break-word; line-height:1.55; max-height:300px; overflow:auto; font-size:13.5px;}
+  .gal{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;}
+  .gal .ph{position:relative; width:92px; height:92px; border-radius:8px; overflow:hidden; border:1px solid var(--line); background:var(--panel2);}
+  .gal .ph img{width:100%; height:100%; object-fit:cover; display:block;}
+  .gal .ph .bad{display:flex; width:100%; height:100%; align-items:center; justify-content:center; font-size:11px; color:#ff9a9a; text-align:center; padding:4px;}
+  .gal .ph i{position:absolute; left:0; bottom:0; background:rgba(0,0,0,.6); color:#fff; font-size:10px; font-style:normal; padding:1px 5px;}
+  details{border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-top:10px; background:var(--panel2);}
+  summary{cursor:pointer; font-size:13px; color:var(--muted); font-weight:600;}
+  details[open] summary{margin-bottom:10px;}
+  ol,ul{padding-left:20px; line-height:1.75;}
+  .big-current{background:#0f1626; border:1px solid var(--line); border-radius:10px; padding:14px;}
+  .toast{position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--panel2); border:1px solid var(--accent); border-radius:10px; padding:10px 18px; font-size:13px; z-index:99; opacity:0; pointer-events:none; transition:opacity .2s;}
+  .toast.on{opacity:1;}
+  .sticky-run{position:sticky; bottom:0; background:linear-gradient(180deg,rgba(19,28,46,0),var(--panel) 22%); padding-top:14px; margin-top:6px;}
+  .maprow{display:flex; gap:8px; align-items:center; margin-bottom:6px; flex-wrap:wrap;}
+  .maprow b{min-width:150px; font-weight:600; font-size:13px;}
+  .maprow select{max-width:220px;}
+  .maprow span{color:var(--muted); font-size:12px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Gửi tin chào hàng hàng loạt qua Zalo</h1>
+  <span class="badge">Kengi</span>
+</header>
+<div class="sub">Dán danh sách khách → soạn tin kèm ảnh sản phẩm → gửi lần lượt, giãn nhịp ngẫu nhiên. Dựng từ workflow n8n sẵn có.</div>
+
+<div class="alert info">
+  <b>Trình duyệt không gửi thẳng Zalo được</b> (API Zalo cá nhân cần cookie/imei và chặn CORS). Tool gửi qua <b>Webhook n8n</b> — dùng lại đúng credential Zalo bạn đang có, tool sinh sẵn workflow để import. Không bật n8n thì dùng <b>chế độ thủ công</b>: tool soạn sẵn từng tin + ảnh, bạn dán vào Zalo.
+</div>
+<div class="alert warn">
+  <b>Zalo cá nhân rất dễ bị khoá vì spam.</b> Chỉ chào hàng tới khách đã từng nhắn tin với bạn, giữ nhịp thưa (mặc định 8–20 giây/tin, nghỉ dài sau mỗi 20 tin), và bật xoay vòng nhiều mẫu để tin không giống hệt nhau.
+</div>
+
+<!-- ══════════ 1. DỮ LIỆU ══════════ -->
+<div class="panel">
+  <h2><span class="step">1</span> Danh sách khách hàng</h2>
+  <div class="row tight" style="margin-bottom:8px">
+    <button class="sm" id="btnPasteDemo" style="flex:0 0 auto">Dán dữ liệu mẫu</button>
+    <label style="flex:0 0 auto; margin:0">
+      <input type="file" id="fileCsv" accept=".csv,.tsv,.txt" style="display:none">
+      <button class="sm" onclick="document.getElementById('fileCsv').click()">Chọn file CSV…</button>
+    </label>
+    <label class="switchbox" style="flex:0 0 auto; margin:0"><input type="checkbox" id="chkHeader" checked> Dòng đầu là tiêu đề cột</label>
+    <button class="sm danger" id="btnClearData" style="flex:0 0 auto">Xoá dữ liệu</button>
+  </div>
+  <textarea id="rawData" rows="6" placeholder="Bôi đen vùng dữ liệu trong Google Sheets / Excel rồi Ctrl+C, bấm vào đây Ctrl+V.&#10;Ví dụ:&#10;TÊN KHÁCH&#9;GROUP ID&#9;NHÓM&#9;KHU VỰC&#10;Cửa hàng Minh Anh&#9;1234567890123&#9;Sỉ&#9;Miền Tây"></textarea>
+  <div class="hint">Nhận dán từ Sheets (tab) lẫn CSV (phẩy/chấm phẩy). Bắt buộc có cột <b>ID hội thoại Zalo</b> (GROUP ID / user ID). Mọi cột khác đều dùng được làm biến trong tin nhắn.</div>
+
+  <div id="mapWrap" style="display:none">
+    <div class="row" style="margin-top:14px">
+      <div><label>Cột TÊN khách (để xưng hô)</label><select id="mapName"></select></div>
+      <div><label>Cột ID hội thoại Zalo *</label><select id="mapThread"></select></div>
+      <div><label>Cột ẢNH riêng theo khách</label><select id="mapImg"></select><div class="hint">Có giá trị thì dùng thay ảnh của mẫu</div></div>
+      <div><label>Cột LOẠI hội thoại</label><select id="mapType"></select><div class="hint">nhóm / cá nhân — trống thì theo cài đặt chung</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ 2. NỘI DUNG ══════════ -->
+<div class="panel">
+  <h2><span class="step">2</span> Nội dung chào hàng (tin + ảnh)</h2>
+
+  <div class="row" style="margin-bottom:12px">
+    <div style="flex:0 0 260px">
+      <label>Cách chọn mẫu cho từng khách</label>
+      <select id="ruleMode">
+        <option value="one">Chỉ dùng mẫu A cho tất cả</option>
+        <option value="rotate">Xoay vòng đều các mẫu đang bật</option>
+        <option value="column">Chia theo giá trị một cột</option>
+      </select>
+    </div>
+    <div id="ruleColWrap" style="flex:0 0 220px; display:none">
+      <label>Cột dùng để chia</label><select id="ruleCol"></select>
+    </div>
+    <div style="flex:1"><div class="hint" id="ruleHint"></div></div>
+  </div>
+  <div id="ruleMapBox" style="display:none; margin-bottom:12px"></div>
+
+  <div class="tabs" id="tplTabs">
+    <div class="tab active" data-tpl="A">Mẫu A</div>
+    <div class="tab" data-tpl="B">Mẫu B</div>
+    <div class="tab" data-tpl="C">Mẫu C</div>
+  </div>
+  <div class="cols">
+    <div>
+      <label class="switchbox" style="margin-bottom:8px"><input type="checkbox" id="tplOn"> Bật mẫu này</label>
+      <div class="chips" id="varChips"></div>
+      <textarea id="tplText" rows="12" placeholder="Nội dung tin chào hàng…"></textarea>
+      <label>Ảnh gửi kèm — mỗi dòng một URL</label>
+      <textarea id="tplImgs" rows="3" placeholder="https://.../anh-san-pham-1.jpg&#10;https://.../bang-gia.jpg"></textarea>
+      <div class="hint">Ảnh phải là <b>link công khai</b> (postimg, imgur, Drive đã chia sẻ dạng link ảnh trực tiếp, hoặc <code>kengi.vn/...</code>). n8n tải ảnh từ link này rồi đính vào tin.</div>
+      <div id="tplWarn"></div>
+    </div>
+    <div>
+      <label>Xem thử với khách</label>
+      <select id="previewPick"></select>
+      <div class="preview" id="previewBox" style="margin-top:8px">Chưa có dữ liệu.</div>
+      <div class="gal" id="previewGal"></div>
+      <div class="hint" id="previewMeta"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ 3. KÊNH GỬI ══════════ -->
+<div class="panel">
+  <h2><span class="step">3</span> Kênh gửi</h2>
+  <div class="mode" id="modeBox">
+    <label data-mode="webhook" class="on"><input type="radio" name="mode" value="webhook" checked> Tự động qua Webhook n8n<small>n8n cầm credential Zalo và bắn tin. Không phải ngồi canh.</small></label>
+    <label data-mode="manual"><input type="radio" name="mode" value="manual"> Thủ công — copy từng tin<small>Tool soạn sẵn tin + ảnh, bạn dán vào Zalo. Không cần n8n.</small></label>
+  </div>
+
+  <div id="webhookCfg">
+    <div class="row">
+      <div style="flex:3"><label>Webhook URL (bản Production của n8n)</label><input type="text" id="hookUrl" placeholder="https://n8n-cua-ban.com/webhook/xxxxxxxx"></div>
+      <div style="flex:0 0 160px"><label>Loại hội thoại mặc định</label><select id="threadType"><option value="1">1 — Nhóm</option><option value="0">0 — Cá nhân</option></select></div>
+      <div style="flex:0 0 120px"><label>urgency</label><input type="number" id="urgency" value="1"><div class="hint">Workflow cũ dùng 1</div></div>
+    </div>
+    <div class="row">
+      <div><label>Thử lại khi lỗi</label><input type="number" id="retries" value="1" min="0" max="5"></div>
+      <div><label>Hết giờ mỗi tin (giây)</label><input type="number" id="timeout" value="45" min="5"></div>
+    </div>
+    <details>
+      <summary>Header thêm cho webhook (nếu bạn đặt khoá bảo vệ)</summary>
+      <div class="row">
+        <div><label>Tên header</label><input type="text" id="hdrName" placeholder="x-api-key"></div>
+        <div><label>Giá trị</label><input type="password" id="hdrVal"></div>
+      </div>
+      <label class="switchbox" style="margin-top:10px"><input type="checkbox" id="chkNoCors"> Gửi kiểu no-cors (dùng khi n8n chặn CORS — đánh đổi: không đọc được kết quả, tin sẽ ghi “không rõ”)</label>
+    </details>
+    <details>
+      <summary>Chưa có webhook? Lấy workflow n8n nhận tin ở đây</summary>
+      <ol>
+        <li>Bấm <b>Sao chép workflow</b> bên dưới.</li>
+        <li>Trong n8n: <b>Workflows → Import from Clipboard</b> → dán.</li>
+        <li>Mở node <b>Gửi Zalo</b>, chọn lại credential <i>Zalo Huti</i> (credential không đi kèm file import).</li>
+        <li><b>Save</b> rồi bật <b>Active</b>, copy <b>Production URL</b> của node Webhook dán vào ô trên.</li>
+      </ol>
+      <div class="alert warn" style="margin-bottom:0">URL <b>Test</b> chỉ nhận đúng 1 lần bấm “Listen for test event”. Gửi hàng loạt bắt buộc dùng <b>Production URL</b> và workflow phải <b>Active</b>.</div>
+      <div style="margin-top:10px"><button class="sm" id="btnCopyWf">Sao chép workflow n8n</button></div>
+    </details>
+    <div class="row tight" style="margin-top:12px">
+      <div style="flex:0 0 260px"><label>Gửi thử 1 tin vào ID này</label><input type="text" id="testThread" placeholder="ID nhóm/khách nội bộ của bạn"></div>
+      <div style="flex:0 0 auto"><button class="sm" id="btnTest">Gửi thử</button></div>
+      <div style="flex:1"><div class="hint" id="testOut">Bắn thử vào nhóm nội bộ để kiểm ảnh có lên không, rồi hãy chạy cả danh sách.</div></div>
+    </div>
+  </div>
+
+  <div id="manualCfg" style="display:none">
+    <div class="hint">Chế độ thủ công: bảng ở bước 4 hiện nút <b>Chép</b> cho từng khách. Chép nội dung → dán vào Zalo → gửi kèm ảnh → bấm <b>Đã gửi</b>. Tool nhớ khách nào xong rồi.</div>
+    <div class="row tight" style="margin-top:10px">
+      <button class="sm" id="btnDlTxt" style="flex:0 0 auto">Tải tất cả nội dung (.txt)</button>
+      <button class="sm" id="btnDlCsv" style="flex:0 0 auto">Tải danh sách + nội dung (.csv)</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ 4. CHẠY ══════════ -->
+<div class="panel">
+  <h2><span class="step">4</span> Nhịp gửi, kiểm tra &amp; chạy</h2>
+
+  <div class="row">
+    <div style="flex:0 0 190px"><label>Nghỉ giữa 2 tin — từ (giây)</label><input type="number" id="delayMin" value="8" min="0" step="1"></div>
+    <div style="flex:0 0 190px"><label>đến (giây)</label><input type="number" id="delayMax" value="20" min="0" step="1"></div>
+    <div style="flex:0 0 190px"><label>Cứ mỗi … tin thì nghỉ dài</label><input type="number" id="batchN" value="20" min="0"></div>
+    <div style="flex:0 0 190px"><label>Nghỉ dài (phút)</label><input type="number" id="batchPause" value="3" min="0" step="0.5"></div>
+    <div style="flex:1"><div class="hint">Nhịp đều tăm tắp là dấu hiệu máy gửi. Khoảng ngẫu nhiên + nghỉ dài giúp tài khoản đỡ bị soi.</div></div>
+  </div>
+
+  <div class="row tight" style="margin-top:12px; margin-bottom:10px">
+    <div style="flex:0 0 220px"><label>Tên chiến dịch (để nhớ đã gửi ai)</label><input type="text" id="campaign" value="chao-hang"></div>
+    <div style="flex:0 0 auto; padding-bottom:2px"><label class="switchbox"><input type="checkbox" id="chkSkipSent" checked> Bỏ qua khách đã gửi ở lượt trước</label></div>
+    <div style="flex:0 0 auto; padding-bottom:2px"><button class="sm danger" id="btnResetCampaign">Xoá lịch sử chiến dịch</button></div>
+    <div style="flex:0 0 160px"><label>Chỉ gửi tối đa (0 = tất cả)</label><input type="number" id="limitN" value="0" min="0"></div>
+  </div>
+
+  <div class="mode" id="runModeBox">
+    <label data-run="dry" class="on"><input type="radio" name="runmode" value="dry" checked> Chạy thử — KHÔNG gửi<small>Diễn tập toàn bộ, không gọi mạng. Xem trước ai nhận mẫu nào.</small></label>
+    <label data-run="real"><input type="radio" name="runmode" value="real"> GỬI THẬT tới khách<small>Tin đã gửi không thu hồi hàng loạt được. Kiểm lại danh sách trước.</small></label>
+  </div>
+
+  <div id="issues"></div>
+  <div class="stats" id="stats"></div>
+  <div class="bar"><div id="progBar"></div></div>
+  <div class="hint" id="progText">Chưa chạy.</div>
+
+  <div class="sticky-run">
+    <div class="row tight">
+      <button class="go" id="btnRun" style="flex:0 0 auto">Bắt đầu chạy thử</button>
+      <button id="btnStop" style="flex:0 0 auto" disabled>Dừng</button>
+      <button class="sm" id="btnRetryErr" style="flex:0 0 auto">Gửi lại các dòng lỗi</button>
+      <button class="sm" id="btnExport" style="flex:0 0 auto">Xuất kết quả .csv</button>
+    </div>
+  </div>
+
+  <div id="manualNow" style="display:none; margin-top:14px"></div>
+
+  <div class="tbl-scroll" style="margin-top:14px">
+    <table>
+      <thead><tr>
+        <th style="width:28px"><input type="checkbox" id="chkAll" checked></th>
+        <th style="width:34px">#</th><th>Tên khách</th><th>ID hội thoại</th>
+        <th style="width:60px">Loại</th><th style="width:46px">Ảnh</th><th style="width:50px">Mẫu</th>
+        <th style="width:150px">Trạng thái</th><th style="width:110px"></th>
+      </tr></thead>
+      <tbody id="tbody"><tr><td colspan="9" style="color:var(--muted); padding:16px">Chưa có dữ liệu — dán danh sách ở bước 1.</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Ghi chú</h2>
+  <ul style="color:var(--muted); font-size:13px">
+    <li>Trạng thái <b>không rõ</b> = đã bắn đi nhưng chế độ no-cors không cho đọc kết quả. Không chắc Zalo đã nhận.</li>
+    <li>Trùng ID hội thoại = 2 dòng chung một cuộc chat → chat đó nhận 2 tin. Tool cảnh báo, gửi hay không tuỳ bạn.</li>
+    <li>Lịch sử “đã gửi” lưu trong localStorage của chính máy này. Đổi máy/trình duyệt là mất → sẽ gửi lại từ đầu.</li>
+    <li>Ảnh gửi qua n8n là <b>URL</b>, không phải file trong máy. Ảnh trong máy thì upload lên host trước (postimg, kengi.vn/public…).</li>
+    <li>Mọi thiết lập, mẫu tin và link ảnh tự lưu trên máy, đóng tab mở lại vẫn còn.</li>
+  </ul>
+</div>
+
+</div>
+<div class="toast" id="toast"></div>
+
+<script type="text/plain" id="seedA">Dạ em chào anh/chị {{ten}} ạ 🌸
+Em là … bên shop mình. Em xin phép gửi anh/chị bảng hàng mới về tuần này ạ:
+
+• Mặt hàng 1 — giá … / thùng
+• Mặt hàng 2 — giá … / thùng
+• Mặt hàng 3 — giá … / thùng
+
+🎁 Lấy từ … thùng tặng thêm …
+🚚 Giao trong ngày khu vực nội thành, đơn từ … miễn phí ship.
+
+Anh/chị xem giúp em, cần mẫu nào em gửi thêm hình chi tiết ạ. Em cảm ơn anh/chị nhiều! 🙏</script>
+
+<script type="text/plain" id="seedB">Em chào anh/chị {{ten}} ạ!
+Bên em vừa về lô hàng mới, em gửi anh/chị vài hình tham khảo ạ 👇
+
+Giá sỉ tháng này em giữ nguyên như đợt trước, có mặt hàng còn mềm hơn.
+Anh/chị cần báo giá chi tiết mặt hàng nào nhắn em nhé, em gửi ngay ạ.
+
+Cảm ơn anh/chị đã ủng hộ shop! 💚</script>
+
+<script type="text/plain" id="seedC">Chào anh/chị {{ten}},
+Em gửi anh/chị chương trình tháng này của bên em ạ 🎉
+
+Anh/chị ngó qua giúp em, có gì cần tư vấn cứ nhắn em nha. Em cảm ơn ạ!</script>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const LS = 'kengi_zalo_chaohang_v1';
+const TPLS = ['A', 'B', 'C'];
+
+/* ─────────── tiện ích ─────────── */
+const norm = s => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '')
+  .replace(/[đĐ]/g, 'd').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('on');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('on'), 2200);
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+async function copyText(txt) {
+  try { await navigator.clipboard.writeText(txt); return true; }
+  catch (e) {
+    const ta = document.createElement('textarea');
+    ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    let ok = false; try { ok = document.execCommand('copy'); } catch (_) {}
+    document.body.removeChild(ta); return ok;
+  }
+}
+function download(name, text, mime) {
+  const blob = new Blob([text], { type: (mime || 'text/plain') + ';charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+function uuid() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = crypto.getRandomValues(new Uint8Array(1))[0] % 16;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+function splitUrls(s) {
+  return String(s == null ? '' : s).split(/[\s,;]+/).map(x => x.trim()).filter(x => /^https?:\/\//i.test(x));
+}
+
+/* ─────────── tách bảng dán vào ─────────── */
+function splitLine(line, d) {
+  const out = []; let cur = '', q = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (q) {
+      if (ch === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else q = false; }
+      else cur += ch;
+    } else if (ch === '"') q = true;
+    else if (ch === d) { out.push(cur); cur = ''; }
+    else cur += ch;
+  }
+  out.push(cur);
+  return out.map(s => s.trim());
+}
+function parseTable(text) {
+  const clean = String(text).replace(/^﻿/, '').replace(/\r\n?/g, '\n');
+  const lines = clean.split('\n').filter(l => l.trim() !== '');
+  if (!lines.length) return { headers: [], rows: [] };
+  const probe = lines[0];
+  const d = probe.indexOf('\t') >= 0 ? '\t' : (probe.split(';').length > probe.split(',').length ? ';' : ',');
+  const grid = lines.map(l => splitLine(l, d));
+  const width = Math.max.apply(null, grid.map(r => r.length));
+  grid.forEach(r => { while (r.length < width) r.push(''); });
+  let headers, rows;
+  if ($('chkHeader').checked) { headers = grid[0].map((h, i) => h || ('Cột ' + (i + 1))); rows = grid.slice(1); }
+  else { headers = grid[0].map((_, i) => 'Cột ' + (i + 1)); rows = grid; }
+  return { headers: headers, rows: rows };
+}
+function guessHeader(text) {
+  const first = String(text).replace(/\r/g, '').split('\n').find(l => l.trim());
+  if (!first) return true;
+  const keys = ['code', 'ma', 'makhachhang', 'ten', 'tenkhachhang', 'name', 'groupid', 'group', 'threadid',
+    'thread', 'sdt', 'dienthoai', 'phone', 'khachhang', 'nhom', 'zalo', 'anh', 'hinh', 'image', 'khuvuc', 'loai'];
+  const cells = first.indexOf('\t') >= 0 ? first.split('\t') : first.split(/[;,]/);
+  return cells.some(c => keys.indexOf(norm(c)) >= 0);
+}
+
+/* ─────────── trạng thái ─────────── */
+const S = {
+  headers: [], rows: [], recs: [], tab: 'A',
+  tpl: { A: { on: true, text: '', imgs: '' }, B: { on: false, text: '', imgs: '' }, C: { on: false, text: '', imgs: '' } },
+  ruleMap: {}, running: false, stop: false, manualIdx: -1, manualQueue: []
+};
+const MAPS = {
+  name: ['ten', 'tenkhachhang', 'tenkh', 'khachhang', 'name', 'customername', 'hoten', 'tenkhach', 'tennhom'],
+  thread: ['groupid', 'group', 'idnhom', 'threadid', 'thread', 'zaloid', 'idzalo', 'nhom', 'idgroup', 'zalogroupid', 'idhoithoai', 'userid'],
+  img: ['anh', 'hinh', 'anhsanpham', 'image', 'img', 'photo', 'linkanh', 'urlanh', 'hinhanh'],
+  type: ['loai', 'loaihoithoai', 'threadtype', 'kieu', 'type']
+};
+
+/* ─────────── chọn cột ─────────── */
+function fillMapSelects() {
+  ['mapName', 'mapThread', 'mapImg', 'mapType'].forEach(id => {
+    const sel = $(id), cur = sel.value;
+    sel.innerHTML = '<option value="-1">— không có —</option>' +
+      S.headers.map((h, i) => '<option value="' + i + '">' + esc(h) + '</option>').join('');
+    if (cur !== '' && sel.querySelector('option[value="' + cur + '"]')) sel.value = cur;
+  });
+  const rc = $('ruleCol'), cur = rc.value;
+  rc.innerHTML = S.headers.map((h, i) => '<option value="' + i + '">' + esc(h) + '</option>').join('');
+  if (cur !== '' && rc.querySelector('option[value="' + cur + '"]')) rc.value = cur;
+}
+function autoMap() {
+  const n = S.headers.map(norm);
+  const pick = keys => { for (let i = 0; i < n.length; i++) if (keys.indexOf(n[i]) >= 0) return i; return -1; };
+  const loose = keys => {
+    for (let i = 0; i < n.length; i++) for (const k of keys) if (k.length >= 3 && n[i].indexOf(k) >= 0) return i;
+    return -1;
+  };
+  const set = (id, key) => { const v = pick(MAPS[key]); $(id).value = String(v >= 0 ? v : loose(MAPS[key])); };
+  set('mapName', 'name'); set('mapThread', 'thread'); set('mapImg', 'img'); set('mapType', 'type');
+}
+const colIdx = id => { const x = parseInt($(id).value, 10); return isNaN(x) || x < 0 ? -1 : x; };
+
+/* ─────────── dựng bản ghi ─────────── */
+function varsOf(row, i) {
+  const v = {};
+  S.headers.forEach((h, k) => { const key = norm(h); if (key) v[key] = row[k] == null ? '' : row[k]; });
+  const cn = colIdx('mapName'), ct = colIdx('mapThread');
+  v.ten = cn >= 0 ? (row[cn] || '') : '';
+  v.thread = ct >= 0 ? String(row[ct] || '').replace(/\s/g, '') : '';
+  v.stt = String(i + 1);
+  v.tong = String(S.rows.length);
+  return v;
+}
+function onTpls() { return TPLS.filter(t => S.tpl[t].on && S.tpl[t].text.trim()); }
+function rowType(row) {
+  const ci = colIdx('mapType');
+  const def = Number($('threadType').value);
+  if (ci < 0) return def;
+  const raw = norm(row[ci]);
+  if (!raw) return def;
+  if (raw === '1' || raw.indexOf('nhom') >= 0 || raw.indexOf('group') >= 0) return 1;
+  if (raw === '0' || raw.indexOf('canhan') >= 0 || raw.indexOf('user') >= 0 || raw.indexOf('khach') >= 0) return 0;
+  return def;
+}
+function distinctRuleVals() {
+  const ci = parseInt($('ruleCol').value, 10);
+  if (isNaN(ci) || ci < 0) return [];
+  const seen = [];
+  S.rows.forEach(r => { const v = String(r[ci] == null ? '' : r[ci]).trim() || '(trống)'; if (seen.indexOf(v) < 0) seen.push(v); });
+  return seen;
+}
+function pickTpl(rec, i) {
+  const on = onTpls();
+  if (!on.length) return null;
+  const mode = $('ruleMode').value;
+  if (mode === 'one') return on.indexOf('A') >= 0 ? 'A' : on[0];
+  if (mode === 'rotate') return on[i % on.length];
+  const ci = parseInt($('ruleCol').value, 10);
+  if (isNaN(ci) || ci < 0) return on[0];
+  const val = String(S.rows[rec.i][ci] == null ? '' : S.rows[rec.i][ci]).trim() || '(trống)';
+  const t = S.ruleMap[val];
+  if (t === '-') return null;
+  return t && on.indexOf(t) >= 0 ? t : null;
+}
+function build() {
+  const sentLog = loadCampaign();
+  const threadCount = {};
+  const ciImg = colIdx('mapImg');
+  const recs = S.rows.map((row, i) => {
+    const v = varsOf(row, i);
+    const old = S.recs[i];
+    const rec = {
+      i: i, v: v, key: v.thread + '|' + (v.ten || i), sentBefore: sentLog[v.thread + '|' + (v.ten || i)] || null,
+      type: rowType(row), include: old ? old.include : true,
+      status: old && old.status !== 'idle' ? old.status : 'idle', note: old ? old.note : '', bad: '', msg: '', imgs: []
+    };
+    threadCount[v.thread] = (threadCount[v.thread] || 0) + 1;
+    return rec;
+  });
+  recs.forEach((r, i) => {
+    r.tpl = pickTpl(r, i);
+    if (!r.v.thread) r.bad = 'Thiếu ID hội thoại';
+    else if (!r.tpl) r.bad = 'Không có mẫu nào áp cho khách này';
+    if (r.tpl) {
+      r.msg = render(S.tpl[r.tpl].text, r.v);
+      const own = ciImg >= 0 ? splitUrls(S.rows[r.i][ciImg]) : [];
+      r.imgs = own.length ? own : splitUrls(S.tpl[r.tpl].imgs);
+      if (!r.msg.trim() && !r.imgs.length) r.bad = 'Tin trống, không có gì để gửi';
+    }
+    if (r.v.thread && threadCount[r.v.thread] > 1) r.dup = true;
+  });
+  S.recs = recs;
+}
+function render(tpl, v) {
+  return String(tpl).replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (m, k) => {
+    const key = k.toLowerCase();
+    return Object.prototype.hasOwnProperty.call(v, key) ? String(v[key]) : m;
+  });
+}
+function usedVars(tpl) {
+  const out = []; const re = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g; let m;
+  while ((m = re.exec(String(tpl)))) if (out.indexOf(m[1].toLowerCase()) < 0) out.push(m[1].toLowerCase());
+  return out;
+}
+function availVars() {
+  const base = ['ten', 'stt', 'tong'];
+  S.headers.forEach(h => { const k = norm(h); if (k && base.indexOf(k) < 0) base.push(k); });
+  return base;
+}
+
+/* ─────────── lịch sử chiến dịch ─────────── */
+const campKey = () => LS + '_camp_' + norm($('campaign').value || 'mac-dinh');
+function loadCampaign() { try { return JSON.parse(localStorage.getItem(campKey()) || '{}'); } catch (e) { return {}; } }
+function markSent(rec, how) {
+  const log = loadCampaign();
+  log[rec.key] = { at: new Date().toISOString(), tpl: rec.tpl, how: how };
+  try { localStorage.setItem(campKey(), JSON.stringify(log)); } catch (e) {}
+  rec.sentBefore = log[rec.key];
+}
+
+/* ─────────── vẽ giao diện ─────────── */
+const STATUS_TXT = {
+  idle: ['Chờ', 't-idle'], sending: ['Đang gửi…', 't-run'], sent: ['Đã gửi', 't-ok'],
+  dry: ['Thử OK', 't-ok'], unverified: ['Không rõ', 't-warn'], error: ['Lỗi', 't-err'],
+  skipped: ['Bỏ qua', 't-idle']
+};
+function renderTable() {
+  const tb = $('tbody');
+  if (!S.recs.length) { tb.innerHTML = '<tr><td colspan="9" style="color:var(--muted); padding:16px">Chưa có dữ liệu — dán danh sách ở bước 1.</td></tr>'; return; }
+  const manual = document.querySelector('input[name=mode]:checked').value === 'manual';
+  tb.innerHTML = S.recs.map(r => {
+    const st = STATUS_TXT[r.status] || STATUS_TXT.idle;
+    const note = r.bad || r.note || (r.sentBefore ? 'đã gửi ' + new Date(r.sentBefore.at).toLocaleString('vi-VN') : '');
+    const tplTag = r.tpl ? '<span class="tag t-' + r.tpl.toLowerCase() + '">' + r.tpl + '</span>' : '<span class="tag t-err">—</span>';
+    const act = manual && r.tpl
+      ? '<button class="sm" data-copy="' + r.i + '">Chép</button> <button class="sm" data-done="' + r.i + '">Đã gửi</button>'
+      : '<button class="sm" data-view="' + r.i + '">Xem</button>';
+    return '<tr>' +
+      '<td><input type="checkbox" data-inc="' + r.i + '"' + (r.include ? ' checked' : '') + '></td>' +
+      '<td class="mono">' + (r.i + 1) + '</td>' +
+      '<td>' + esc(r.v.ten || '(trống)') + (r.dup ? ' <span class="tag t-warn">trùng</span>' : '') + '</td>' +
+      '<td class="mono">' + esc(r.v.thread || '—') + '</td>' +
+      '<td>' + (r.type === 1 ? 'Nhóm' : 'Cá nhân') + '</td>' +
+      '<td class="num">' + (r.imgs.length || '') + '</td>' +
+      '<td>' + tplTag + '</td>' +
+      '<td><span class="tag ' + st[1] + '">' + st[0] + '</span>' + (note ? '<div class="hint" style="margin:2px 0 0">' + esc(note) + '</div>' : '') + '</td>' +
+      '<td>' + act + '</td></tr>';
+  }).join('');
+}
+function renderStats() {
+  const q = queue();
+  const done = S.recs.filter(r => r.status === 'sent' || r.status === 'unverified').length;
+  const err = S.recs.filter(r => r.status === 'error').length;
+  const bad = S.recs.filter(r => r.bad).length;
+  const withImg = S.recs.filter(r => r.imgs.length).length;
+  const box = [
+    ['Tổng dòng', S.recs.length, ''], ['Sẽ gửi lượt này', q.length, 'color:var(--accent2)'],
+    ['Có ảnh kèm', withImg, ''], ['Không gửi được', bad, bad ? 'color:var(--danger)' : ''],
+    ['Đã gửi', done, ''], ['Lỗi', err, err ? 'color:var(--danger)' : '']
+  ];
+  onTpls().forEach(t => box.splice(2, 0, ['Mẫu ' + t, S.recs.filter(r => r.tpl === t).length, '']));
+  $('stats').innerHTML = box.map(x => '<div class="stat"><b style="' + x[2] + '">' + x[1] + '</b><span>' + x[0] + '</span></div>').join('');
+
+  const msgs = [];
+  if (!onTpls().length) msgs.push(['err', 'Chưa có mẫu nào được bật và có nội dung.']);
+  const noThread = S.recs.filter(r => !r.v.thread).length;
+  if (noThread) msgs.push(['err', noThread + ' dòng thiếu ID hội thoại Zalo → không gửi được. Kiểm lại cột đã chọn ở bước 1.']);
+  const noTpl = S.recs.filter(r => r.v.thread && !r.tpl).length;
+  if (noTpl) msgs.push(['warn', noTpl + ' dòng chưa được gán mẫu nào (xem quy tắc chia mẫu ở bước 2).']);
+  const dup = S.recs.filter(r => r.dup).length;
+  if (dup) msgs.push(['warn', dup + ' dòng dùng chung ID hội thoại với dòng khác → cuộc chat đó sẽ nhận nhiều tin.']);
+  const noImg = S.recs.filter(r => r.tpl && !r.imgs.length).length;
+  if (noImg) msgs.push(['info', noImg + ' khách sẽ nhận tin không kèm ảnh.']);
+  const badImg = S.recs.some(r => {
+    const ci = colIdx('mapImg');
+    return r.tpl && ci >= 0 && String(S.rows[r.i][ci] || '').trim() && !splitUrls(S.rows[r.i][ci]).length;
+  });
+  if (badImg) msgs.push(['warn', 'Có dòng ghi ảnh riêng nhưng không phải link http(s) → đã bỏ qua, dùng ảnh của mẫu.']);
+  const skipped = $('chkSkipSent').checked ? S.recs.filter(r => r.sentBefore).length : 0;
+  if (skipped) msgs.push(['info', skipped + ' khách đã gửi ở lượt trước, đang được bỏ qua.']);
+  onTpls().forEach(t => {
+    const un = usedVars(S.tpl[t].text).filter(v => availVars().indexOf(v) < 0);
+    if (un.length) msgs.push(['err', 'Mẫu ' + t + ' dùng biến không có trong dữ liệu: ' + un.map(x => '{{' + x + '}}').join(', ') + ' — tin sẽ gửi nguyên chữ đó cho khách.']);
+  });
+  const blankVar = [];
+  S.recs.forEach(r => {
+    if (!r.tpl) return;
+    usedVars(S.tpl[r.tpl].text).forEach(v => {
+      if (availVars().indexOf(v) >= 0 && String(r.v[v] || '').trim() === '' && blankVar.indexOf(v) < 0) blankVar.push(v);
+    });
+  });
+  if (blankVar.length) msgs.push(['warn', 'Có khách bị trống biến ' + blankVar.map(x => '{{' + x + '}}').join(', ') + ' → tin sẽ hụt chỗ đó.']);
+  $('issues').innerHTML = msgs.map(m => '<div class="alert ' + m[0] + '">' + esc(m[1]) + '</div>').join('');
+}
+function queue() {
+  const skipSent = $('chkSkipSent').checked;
+  let q = S.recs.filter(r => r.include && r.tpl && !r.bad && r.v.thread
+    && r.status !== 'sent' && r.status !== 'unverified'
+    && !(skipSent && r.sentBefore));
+  const lim = parseInt($('limitN').value, 10) || 0;
+  if (lim > 0) q = q.slice(0, lim);
+  return q;
+}
+function refresh() { build(); renderTable(); renderStats(); renderPreviewPick(); renderPreview(); syncRunBtn(); }
+
+/* ─────────── quy tắc chia mẫu ─────────── */
+function renderRule() {
+  const mode = $('ruleMode').value;
+  $('ruleColWrap').style.display = mode === 'column' ? 'block' : 'none';
+  $('ruleMapBox').style.display = mode === 'column' ? 'block' : 'none';
+  const on = onTpls();
+  $('ruleHint').textContent = mode === 'one'
+    ? 'Mọi khách nhận cùng một tin.'
+    : mode === 'rotate'
+      ? 'Khách 1 nhận mẫu ' + (on[0] || '?') + ', khách 2 nhận mẫu tiếp theo… quay vòng ' + on.length + ' mẫu đang bật. Tin không giống hệt nhau nên đỡ bị đánh dấu spam.'
+      : 'Mỗi giá trị trong cột được gán một mẫu riêng (ví dụ Sỉ → mẫu A, Lẻ → mẫu B).';
+  if (mode !== 'column') return;
+  const vals = distinctRuleVals();
+  $('ruleMapBox').innerHTML = vals.length
+    ? vals.map(v => {
+      const cur = S.ruleMap[v] || (on[0] || '-');
+      const cnt = S.rows.filter(r => (String(r[parseInt($('ruleCol').value, 10)] || '').trim() || '(trống)') === v).length;
+      return '<div class="maprow"><b>' + esc(v) + '</b>' +
+        '<select data-rv="' + esc(v) + '">' +
+        TPLS.map(t => '<option value="' + t + '"' + (cur === t ? ' selected' : '') + (S.tpl[t].on ? '' : ' disabled') + '>Mẫu ' + t + (S.tpl[t].on ? '' : ' (đang tắt)') + '</option>').join('') +
+        '<option value="-"' + (cur === '-' ? ' selected' : '') + '>Không gửi</option></select>' +
+        '<span>' + cnt + ' khách</span></div>';
+    }).join('')
+    : '<div class="hint">Chưa có dữ liệu để chia.</div>';
+}
+
+/* ─────────── mẫu tin ─────────── */
+function loadTpl() {
+  const t = S.tpl[S.tab];
+  $('tplText').value = t.text; $('tplImgs').value = t.imgs; $('tplOn').checked = t.on;
+  document.querySelectorAll('#tplTabs .tab').forEach(el => {
+    el.classList.toggle('active', el.dataset.tpl === S.tab);
+    el.classList.toggle('off', !S.tpl[el.dataset.tpl].on);
+  });
+  $('varChips').innerHTML = availVars().map(v => '<span class="chip" data-v="' + v + '">{{' + v + '}}</span>').join('');
+  renderPreview();
+}
+function renderPreviewPick() {
+  const sel = $('previewPick'), cur = sel.value;
+  sel.innerHTML = S.recs.length
+    ? S.recs.map(r => '<option value="' + r.i + '">' + esc((r.i + 1) + '. ' + (r.v.ten || 'dòng ' + (r.i + 1)) + (r.tpl ? ' — mẫu ' + r.tpl : ' — không gửi')) + '</option>').join('')
+    : '<option value="-1">(chưa có dữ liệu)</option>';
+  if (cur && sel.querySelector('option[value="' + cur + '"]')) sel.value = cur;
+}
+function galHtml(urls) {
+  if (!urls.length) return '<div class="hint">Không có ảnh kèm.</div>';
+  return urls.map((u, i) => '<div class="ph"><img src="' + esc(u) + '" alt="" ' +
+    'onerror="this.parentNode.innerHTML=\'<div class=&quot;bad&quot;>không tải được ảnh</div><i>' + (i + 1) + '</i>\'">' +
+    '<i>' + (i + 1) + '</i></div>').join('');
+}
+function renderPreview() {
+  const box = $('previewBox'), meta = $('previewMeta');
+  const idx = parseInt($('previewPick').value, 10);
+  const rec = S.recs.find(r => r.i === idx);
+  const text = S.tpl[S.tab].text;
+  let imgs = splitUrls(S.tpl[S.tab].imgs);
+  if (!rec) {
+    box.textContent = text || '(mẫu trống)';
+    meta.textContent = text.length + ' ký tự · chưa có dữ liệu khách để thay biến.';
+  } else {
+    const out = render(text, rec.v);
+    box.textContent = out || '(mẫu trống)';
+    if (rec.tpl === S.tab && rec.imgs.length) imgs = rec.imgs;
+    meta.innerHTML = out.length + ' ký tự · khách này nhận <b>mẫu ' + (rec.tpl || '—') + '</b> · ' +
+      (rec.type === 1 ? 'nhóm' : 'cá nhân') + (rec.bad ? ' · <span style="color:var(--danger)">' + esc(rec.bad) + '</span>' : '');
+  }
+  $('previewGal').innerHTML = galHtml(imgs);
+}
+
+/* ─────────── gửi ─────────── */
+function payloadOf(rec) {
+  return {
+    threadId: rec.v.thread,
+    threadType: rec.type,
+    message: rec.msg,
+    attachmentsUrls: rec.imgs.join(','),
+    urgency: Number($('urgency').value) || 0,
+    name: rec.v.ten, template: rec.tpl
+  };
+}
+async function postHook(payload) {
+  const url = $('hookUrl').value.trim();
+  if (!url) throw new Error('Chưa điền Webhook URL');
+  if (!/^https?:\/\//i.test(url)) throw new Error('Webhook URL phải bắt đầu bằng http:// hoặc https://');
+  const noCors = $('chkNoCors').checked;
+  const ctl = new AbortController();
+  const to = setTimeout(() => ctl.abort(), (parseFloat($('timeout').value) || 45) * 1000);
+  try {
+    const opt = { method: 'POST', signal: ctl.signal, body: JSON.stringify(payload) };
+    if (noCors) { opt.mode = 'no-cors'; opt.headers = { 'Content-Type': 'text/plain;charset=UTF-8' }; }
+    else {
+      opt.headers = { 'Content-Type': 'application/json' };
+      const hn = $('hdrName').value.trim();
+      if (hn) opt.headers[hn] = $('hdrVal').value;
+    }
+    const res = await fetch(url, opt);
+    if (noCors) return { verified: false };
+    if (!res.ok) {
+      let body = '';
+      try { body = (await res.text()).slice(0, 200); } catch (e) {}
+      throw new Error('HTTP ' + res.status + (body ? ' — ' + body : ''));
+    }
+    let data = null;
+    try { data = JSON.parse(await res.text()); } catch (e) {}
+    if (data && data.ok === false) throw new Error(String(data.error || 'n8n báo gửi thất bại'));
+    return { verified: true };
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error('Quá thời gian chờ');
+    if (e instanceof TypeError) throw new Error('Không gọi được webhook (sai URL, n8n chưa Active, hoặc bị chặn CORS)');
+    throw e;
+  } finally { clearTimeout(to); }
+}
+function setStatus(rec, st, note) {
+  rec.status = st; rec.note = note || '';
+  renderTable(); renderStats();
+}
+async function sendOne(rec, dry) {
+  setStatus(rec, 'sending');
+  if (dry) { await sleep(120); setStatus(rec, 'dry', 'chạy thử — chưa gửi'); return true; }
+  const tries = (parseInt($('retries').value, 10) || 0) + 1;
+  for (let k = 1; k <= tries; k++) {
+    try {
+      const r = await postHook(payloadOf(rec));
+      markSent(rec, r.verified ? 'hook' : 'hook-nocors');
+      setStatus(rec, r.verified ? 'sent' : 'unverified', r.verified ? '' : 'no-cors: không đọc được kết quả');
+      return true;
+    } catch (e) {
+      if (k === tries) { setStatus(rec, 'error', e.message); return false; }
+      setStatus(rec, 'sending', 'lỗi, thử lại lần ' + (k + 1) + '…');
+      await waitable(1500 * k);
+    }
+  }
+  return false;
+}
+async function waitable(ms, tick) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    if (S.stop) return false;
+    if (tick) tick(Math.ceil((end - Date.now()) / 1000));
+    await sleep(Math.min(250, Math.max(0, end - Date.now())));
+  }
+  return true;
+}
+function randDelay() {
+  let a = parseFloat($('delayMin').value); let b = parseFloat($('delayMax').value);
+  if (isNaN(a) || a < 0) a = 0; if (isNaN(b) || b < a) b = a;
+  return (a + Math.random() * (b - a)) * 1000;
+}
+function syncRunBtn() {
+  const dry = document.querySelector('input[name=runmode]:checked').value === 'dry';
+  const manual = document.querySelector('input[name=mode]:checked').value === 'manual';
+  const n = queue().length;
+  const btn = $('btnRun');
+  if (manual) { btn.textContent = 'Bắt đầu soạn tin (' + n + ' khách)'; btn.className = 'primary'; }
+  else { btn.textContent = (dry ? 'Bắt đầu chạy thử' : '⚠ GỬI THẬT') + ' (' + n + ' khách)'; btn.className = dry ? 'go' : 'primary'; }
+  btn.disabled = S.running || n === 0;
+  document.querySelectorAll('#runModeBox label').forEach(l => {
+    l.classList.toggle('on', l.dataset.run === (dry ? 'dry' : 'real'));
+    l.classList.toggle('hot', l.dataset.run === 'real');
+  });
+  document.querySelectorAll('#modeBox label').forEach(l => l.classList.toggle('on', l.dataset.mode === (manual ? 'manual' : 'webhook')));
+}
+async function runAll(list) {
+  const dry = document.querySelector('input[name=runmode]:checked').value === 'dry';
+  if (!dry) {
+    const per = onTpls().map(t => 'Mẫu ' + t + ': ' + list.filter(r => r.tpl === t).length).join('\n');
+    if (!confirm('GỬI THẬT tin chào hàng tới ' + list.length + ' cuộc trò chuyện Zalo.\n\n' + per +
+      '\n\nTin đã gửi không thu hồi hàng loạt được. Chắc chưa?')) return;
+  }
+  S.running = true; S.stop = false;
+  $('btnStop').disabled = false; syncRunBtn();
+  const batchN = parseInt($('batchN').value, 10) || 0;
+  const batchMs = (parseFloat($('batchPause').value) || 0) * 60000;
+  const t0 = Date.now();
+  let done = 0, fail = 0;
+  for (let i = 0; i < list.length; i++) {
+    if (S.stop) break;
+    const ok = await sendOne(list[i], dry);
+    done++; if (!ok) fail++;
+    const pct = Math.round(done / list.length * 100);
+    $('progBar').style.width = pct + '%';
+    const avg = (parseFloat($('delayMin').value) + parseFloat($('delayMax').value)) / 2 || 0;
+    const left = Math.round((list.length - done) * (dry ? 0.2 : avg));
+    $('progText').textContent = (dry ? 'Chạy thử: ' : 'Đang gửi: ') + done + '/' + list.length +
+      ' · lỗi ' + fail + ' · còn ~' + Math.floor(left / 60) + 'p' + (left % 60) + 's';
+    if (i >= list.length - 1) break;
+    if (!dry && batchN > 0 && batchMs > 0 && done % batchN === 0) {
+      await waitable(batchMs, s => {
+        $('progText').textContent = 'Nghỉ dài chống spam: còn ' + Math.floor(s / 60) + 'p' + (s % 60) + 's · đã gửi ' + done + '/' + list.length;
+      });
+    } else if (!S.stop) {
+      const d = dry ? 60 : randDelay();
+      await waitable(d, s => {
+        if (!dry) $('progText').textContent = 'Đã gửi ' + done + '/' + list.length + ' · chờ ' + s + 's cho tin kế tiếp';
+      });
+    }
+  }
+  S.running = false; $('btnStop').disabled = true; syncRunBtn();
+  $('progText').textContent = (S.stop ? 'Đã dừng. ' : 'Xong. ') + done + '/' + list.length + ' dòng, lỗi ' + fail + '.' + (dry ? ' (chạy thử — chưa gửi gì cả)' : '');
+  toast(S.stop ? 'Đã dừng' : (dry ? 'Chạy thử xong' : 'Gửi xong ' + (done - fail) + '/' + list.length));
+}
+
+/* ─────────── chế độ thủ công ─────────── */
+function manualStart(list) {
+  if (!list.length) return;
+  S.manualQueue = list; S.manualIdx = 0; manualShow();
+  $('manualNow').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+function manualShow() {
+  const box = $('manualNow');
+  const rec = S.manualQueue && S.manualQueue[S.manualIdx];
+  if (!rec) { box.style.display = 'none'; $('progText').textContent = 'Đã soạn hết danh sách.'; return; }
+  box.style.display = 'block';
+  box.innerHTML =
+    '<div class="big-current">' +
+    '<div style="margin-bottom:8px"><b>' + esc(rec.v.ten || 'Khách ' + (rec.i + 1)) + '</b> ' +
+    '<span class="tag t-' + rec.tpl.toLowerCase() + '">mẫu ' + rec.tpl + '</span>' +
+    '<div class="hint">ID hội thoại: <span class="mono">' + esc(rec.v.thread) + '</span> · ' +
+    (rec.type === 1 ? 'nhóm' : 'cá nhân') + ' · ' + (S.manualIdx + 1) + '/' + S.manualQueue.length + '</div></div>' +
+    '<div class="preview">' + esc(rec.msg) + '</div>' +
+    '<div class="gal">' + galHtml(rec.imgs) + '</div>' +
+    (rec.imgs.length ? '<div class="hint">Mở ảnh để lưu về rồi kéo vào Zalo: ' +
+      rec.imgs.map((u, i) => '<a href="' + esc(u) + '" target="_blank" rel="noopener" style="color:var(--accent)">ảnh ' + (i + 1) + '</a>').join(' · ') + '</div>' : '') +
+    '<div class="row tight" style="margin-top:10px">' +
+    '<button class="primary" id="mCopy" style="flex:0 0 auto">Sao chép nội dung</button>' +
+    '<button class="go" id="mDone" style="flex:0 0 auto">Đã gửi → khách tiếp theo</button>' +
+    '<button class="sm" id="mSkip" style="flex:0 0 auto">Bỏ qua</button>' +
+    '</div></div>';
+  $('mCopy').onclick = async () => { toast(await copyText(rec.msg) ? 'Đã chép, dán vào Zalo' : 'Chép lỗi — bôi đen thủ công'); };
+  $('mDone').onclick = () => { markSent(rec, 'manual'); setStatus(rec, 'sent', 'gửi tay'); S.manualIdx++; manualShow(); };
+  $('mSkip').onclick = () => { setStatus(rec, 'skipped', 'bỏ qua'); S.manualIdx++; manualShow(); };
+}
+
+/* ─────────── workflow n8n nhận tin ─────────── */
+function n8nWorkflow() {
+  const path = uuid();
+  return {
+    name: 'Zalo — nhận tin chào hàng từ tool HTML (Kengi)',
+    nodes: [
+      {
+        parameters: { httpMethod: 'POST', path: path, responseMode: 'responseNode', options: { allowedOrigins: '*' } },
+        type: 'n8n-nodes-base.webhook', typeVersion: 2, position: [0, 0], id: uuid(), name: 'Nhận yêu cầu', webhookId: path
+      },
+      {
+        parameters: {
+          threadId: '={{ $json.body.threadId }}',
+          message: '={{ $json.body.message }}',
+          threadType: '={{ Number($json.body.threadType) }}',
+          attachmentsUrls: '={{ $json.body.attachmentsUrls }}',
+          urgency: '={{ Number($json.body.urgency) }}'
+        },
+        type: 'n8n-nodes-social-zalo.zaloUserInteract', typeVersion: 1, position: [220, 0], id: uuid(),
+        name: 'Gửi Zalo', onError: 'continueRegularOutput'
+      },
+      {
+        parameters: {
+          respondWith: 'json',
+          responseBody: '={{ JSON.stringify({ ok: !$json.error, error: $json.error ? String($json.error.message || $json.error) : null }) }}',
+          options: {}
+        },
+        type: 'n8n-nodes-base.respondToWebhook', typeVersion: 1.1, position: [440, 0], id: uuid(), name: 'Trả kết quả'
+      }
+    ],
+    connections: {
+      'Nhận yêu cầu': { main: [[{ node: 'Gửi Zalo', type: 'main', index: 0 }]] },
+      'Gửi Zalo': { main: [[{ node: 'Trả kết quả', type: 'main', index: 0 }]] }
+    },
+    pinData: {}, settings: { executionOrder: 'v1' }
+  };
+}
+
+/* ─────────── lưu thiết lập ─────────── */
+function saveSettings() {
+  const s = {
+    tpl: S.tpl, ruleMode: $('ruleMode').value, ruleCol: $('ruleCol').value, ruleMap: S.ruleMap,
+    hook: $('hookUrl').value, tt: $('threadType').value, urg: $('urgency').value,
+    retries: $('retries').value, timeout: $('timeout').value, hdrName: $('hdrName').value,
+    dmin: $('delayMin').value, dmax: $('delayMax').value, bn: $('batchN').value, bp: $('batchPause').value,
+    camp: $('campaign').value, skipSent: $('chkSkipSent').checked, noCors: $('chkNoCors').checked,
+    testThread: $('testThread').value
+  };
+  try { localStorage.setItem(LS, JSON.stringify(s)); } catch (e) {}
+}
+function loadSettings() {
+  let s = null;
+  try { s = JSON.parse(localStorage.getItem(LS) || 'null'); } catch (e) {}
+  S.tpl.A.text = $('seedA').textContent;
+  S.tpl.B.text = $('seedB').textContent;
+  S.tpl.C.text = $('seedC').textContent;
+  if (!s) return;
+  if (s.tpl) TPLS.forEach(t => { if (s.tpl[t]) S.tpl[t] = { on: !!s.tpl[t].on, text: s.tpl[t].text || '', imgs: s.tpl[t].imgs || '' }; });
+  S.ruleMap = s.ruleMap || {};
+  const set = (id, v, chk) => { if (v === undefined || v === null) return; if (chk) $(id).checked = !!v; else $(id).value = v; };
+  set('ruleMode', s.ruleMode); set('hookUrl', s.hook); set('threadType', s.tt); set('urgency', s.urg);
+  set('retries', s.retries); set('timeout', s.timeout); set('hdrName', s.hdrName);
+  set('delayMin', s.dmin); set('delayMax', s.dmax); set('batchN', s.bn); set('batchPause', s.bp);
+  set('campaign', s.camp); set('chkSkipSent', s.skipSent, true); set('chkNoCors', s.noCors, true);
+  set('testThread', s.testThread);
+  S._ruleCol = s.ruleCol;
+}
+
+/* ─────────── nối sự kiện ─────────── */
+function onData() {
+  const txt = $('rawData').value;
+  if (!txt.trim()) { S.headers = []; S.rows = []; S.recs = []; $('mapWrap').style.display = 'none'; renderRule(); refresh(); loadTpl(); return; }
+  const t = parseTable(txt);
+  S.headers = t.headers; S.rows = t.rows; S.recs = [];
+  $('mapWrap').style.display = 'block';
+  fillMapSelects();
+  if (S._ruleCol !== undefined && $('ruleCol').querySelector('option[value="' + S._ruleCol + '"]')) { $('ruleCol').value = S._ruleCol; S._ruleCol = undefined; }
+  if (!onData._mapped) { autoMap(); onData._mapped = true; }
+  renderRule(); refresh(); loadTpl();
+}
+$('rawData').addEventListener('input', () => { $('chkHeader').checked = guessHeader($('rawData').value); onData._mapped = false; onData(); });
+$('chkHeader').addEventListener('change', () => { onData._mapped = false; onData(); });
+['mapName', 'mapThread', 'mapImg', 'mapType'].forEach(id => $(id).addEventListener('change', () => { refresh(); saveSettings(); }));
+['chkSkipSent', 'limitN', 'campaign', 'threadType'].forEach(id => $(id).addEventListener('change', () => { refresh(); saveSettings(); }));
+['hookUrl', 'urgency', 'retries', 'timeout', 'hdrName', 'hdrVal', 'chkNoCors', 'testThread',
+  'delayMin', 'delayMax', 'batchN', 'batchPause'].forEach(id => $(id).addEventListener('change', saveSettings));
+
+$('ruleMode').addEventListener('change', () => { renderRule(); refresh(); saveSettings(); });
+$('ruleCol').addEventListener('change', () => { S.ruleMap = {}; renderRule(); refresh(); saveSettings(); });
+$('ruleMapBox').addEventListener('change', e => {
+  const sel = e.target.closest('select[data-rv]'); if (!sel) return;
+  S.ruleMap[sel.dataset.rv] = sel.value; refresh(); saveSettings();
+});
+
+$('fileCsv').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => { $('rawData').value = r.result; $('chkHeader').checked = guessHeader(r.result); onData._mapped = false; onData(); toast('Đã nạp ' + f.name); };
+  r.readAsText(f, 'utf-8');
+});
+$('btnPasteDemo').onclick = () => {
+  $('rawData').value = 'TÊN KHÁCH\tGROUP ID\tNHÓM\tLOẠI\n' +
+    'Cửa hàng Minh Anh\t1234567890123456\tSỉ\tNhóm\n' +
+    'Tạp hoá Bảy Hùng\t2234567890123456\tLẻ\tNhóm\n' +
+    'Đại lý Phú Cường\t3234567890123456\tSỉ\tNhóm\n' +
+    'Chị Lan Chợ Mới\t4234567890123456\tLẻ\tCá nhân\n';
+  $('chkHeader').checked = true; onData._mapped = false; onData(); toast('Đã dán dữ liệu mẫu');
+};
+$('btnClearData').onclick = () => { if (confirm('Xoá dữ liệu đang dán?')) { $('rawData').value = ''; onData(); } };
+
+document.querySelectorAll('#tplTabs .tab').forEach(t => t.onclick = () => { S.tab = t.dataset.tpl; loadTpl(); });
+$('tplOn').addEventListener('change', () => { S.tpl[S.tab].on = $('tplOn').checked; loadTpl(); renderRule(); refresh(); saveSettings(); });
+$('tplText').addEventListener('input', () => { S.tpl[S.tab].text = $('tplText').value; build(); renderPreview(); renderStats(); syncRunBtn(); saveSettings(); });
+$('tplImgs').addEventListener('input', () => { S.tpl[S.tab].imgs = $('tplImgs').value; build(); renderPreview(); renderTable(); renderStats(); saveSettings(); });
+$('varChips').addEventListener('click', e => {
+  const c = e.target.closest('.chip'); if (!c) return;
+  const ta = $('tplText'), tag = '{{' + c.dataset.v + '}}';
+  const p = ta.selectionStart;
+  ta.value = ta.value.slice(0, p) + tag + ta.value.slice(ta.selectionEnd);
+  ta.focus(); ta.selectionStart = ta.selectionEnd = p + tag.length;
+  S.tpl[S.tab].text = ta.value; build(); renderPreview(); renderStats(); saveSettings();
+});
+$('previewPick').addEventListener('change', renderPreview);
+
+document.querySelectorAll('input[name=mode]').forEach(r => r.onchange = () => {
+  const manual = document.querySelector('input[name=mode]:checked').value === 'manual';
+  $('webhookCfg').style.display = manual ? 'none' : 'block';
+  $('manualCfg').style.display = manual ? 'block' : 'none';
+  $('manualNow').style.display = 'none';
+  renderTable(); syncRunBtn();
+});
+document.querySelectorAll('input[name=runmode]').forEach(r => r.onchange = syncRunBtn);
+
+$('tbody').addEventListener('click', async e => {
+  const t = e.target;
+  if (t.dataset.inc !== undefined) { S.recs[+t.dataset.inc].include = t.checked; renderStats(); syncRunBtn(); return; }
+  if (t.dataset.copy !== undefined) {
+    const r = S.recs[+t.dataset.copy];
+    toast(await copyText(r.msg) ? 'Đã chép tin của ' + (r.v.ten || 'khách') : 'Chép lỗi');
+    return;
+  }
+  if (t.dataset.done !== undefined) {
+    const r = S.recs[+t.dataset.done]; markSent(r, 'manual'); setStatus(r, 'sent', 'gửi tay'); syncRunBtn(); return;
+  }
+  if (t.dataset.view !== undefined) {
+    const r = S.recs[+t.dataset.view];
+    $('previewPick').value = String(r.i);
+    if (r.tpl) { S.tab = r.tpl; loadTpl(); } else renderPreview();
+    $('previewBox').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+});
+$('chkAll').onchange = e => { S.recs.forEach(r => r.include = e.target.checked); renderTable(); renderStats(); syncRunBtn(); };
+
+$('btnRun').onclick = () => {
+  const list = queue();
+  if (!list.length) { toast('Không có khách nào để gửi'); return; }
+  if (document.querySelector('input[name=mode]:checked').value === 'manual') manualStart(list);
+  else runAll(list);
+};
+$('btnStop').onclick = () => { S.stop = true; toast('Đang dừng…'); };
+$('btnRetryErr').onclick = () => {
+  const list = S.recs.filter(r => r.status === 'error');
+  if (!list.length) { toast('Không có dòng lỗi'); return; }
+  list.forEach(r => r.status = 'idle');
+  if (document.querySelector('input[name=mode]:checked').value === 'manual') manualStart(list); else runAll(list);
+};
+$('btnResetCampaign').onclick = () => {
+  if (!confirm('Xoá lịch sử đã gửi của chiến dịch "' + $('campaign').value + '"?\nLượt sau sẽ gửi lại từ đầu.')) return;
+  try { localStorage.removeItem(campKey()); } catch (e) {}
+  S.recs.forEach(r => { r.sentBefore = null; r.status = 'idle'; r.note = ''; });
+  refresh(); toast('Đã xoá lịch sử');
+};
+$('btnTest').onclick = async () => {
+  const tid = $('testThread').value.trim();
+  if (!tid) { $('testOut').innerHTML = '<span style="color:var(--danger)">Điền ID hội thoại để gửi thử.</span>'; return; }
+  const src = S.recs.find(r => r.tpl && !r.bad);
+  const tpl = src ? src.tpl : S.tab;
+  const fake = {
+    v: { thread: tid, ten: src ? src.v.ten : 'anh/chị' },
+    tpl: tpl, type: Number($('threadType').value),
+    msg: '[GỬI THỬ] ' + (src ? src.msg : render(S.tpl[tpl].text, { ten: 'anh/chị', stt: '1', tong: '1' })),
+    imgs: src && src.imgs.length ? src.imgs : splitUrls(S.tpl[tpl].imgs)
+  };
+  $('testOut').textContent = 'Đang gửi thử…';
+  try {
+    const r = await postHook(payloadOf(fake));
+    $('testOut').innerHTML = r.verified
+      ? '<span style="color:var(--accent2)">Webhook nhận OK — mở Zalo xem tin và ảnh đã tới chưa.</span>'
+      : '<span style="color:var(--warn)">Đã bắn đi kiểu no-cors, không đọc được kết quả. Kiểm tra Zalo và log n8n.</span>';
+  } catch (e) { $('testOut').innerHTML = '<span style="color:var(--danger)">Lỗi: ' + esc(e.message) + '</span>'; }
+};
+$('btnCopyWf').onclick = async () => {
+  const ok = await copyText(JSON.stringify(n8nWorkflow(), null, 2));
+  toast(ok ? 'Đã chép workflow — vào n8n: Import from Clipboard' : 'Chép lỗi');
+};
+$('btnExport').onclick = () => {
+  const rows = [['STT', 'Ten', 'ThreadId', 'Loai', 'Mau', 'SoAnh', 'TrangThai', 'GhiChu', 'NoiDung', 'Anh']];
+  S.recs.forEach(r => rows.push([r.i + 1, r.v.ten, r.v.thread, r.type === 1 ? 'Nhom' : 'Ca nhan',
+    r.tpl || '', r.imgs.length, (STATUS_TXT[r.status] || STATUS_TXT.idle)[0], r.bad || r.note || '', r.msg, r.imgs.join(' ')]));
+  const csv = '﻿' + rows.map(r => r.map(c => '"' + String(c == null ? '' : c).replace(/"/g, '""') + '"').join(',')).join('\r\n');
+  download('ket-qua-chao-hang-zalo.csv', csv, 'text/csv');
+};
+$('btnDlTxt').onclick = () => {
+  const txt = S.recs.filter(r => r.tpl).map(r =>
+    '════ ' + (r.i + 1) + '. ' + (r.v.ten || '(không tên)') + ' · ID: ' + r.v.thread + ' · mẫu ' + r.tpl + ' ════\n' +
+    r.msg + '\n' + (r.imgs.length ? 'Ảnh: ' + r.imgs.join('\n     ') + '\n' : '')
+  ).join('\n');
+  if (!txt) { toast('Chưa có tin nào'); return; }
+  download('noi-dung-chao-hang-zalo.txt', txt);
+};
+$('btnDlCsv').onclick = () => $('btnExport').click();
+
+/* ─────────── khởi động ─────────── */
+loadSettings();
+renderRule();
+onData();
+loadTpl();
+syncRunBtn();
+</script>
+</body>
+</html>

@@ -4,6 +4,7 @@ import { chayTheoDot } from '../lib/poolGuard'
 import { requireRole } from '../middleware/roleMiddleware'
 import { validate } from '../middleware/validate'
 import { CreateSupplierSchema, UpdateSupplierSchema } from '../schemas'
+import { suySoNgayTuNhan, nhanQuyTac, type QuyTacDieuKhoan } from '../lib/dieuKhoanThanhToan'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { nextCode } from '../lib/codeGenerator'
 import { emitEntityEvent } from '../lib/webhookDispatch'
@@ -355,8 +356,10 @@ router.get('/:id/debt-history', authMiddleware, async (req: AuthRequest, res: Re
                 id: `${supplierId}-opening`,
                 code: 'SDĐK',
                 date: history[0]?.date || ((supplier as any).createdAt || new Date(0)).toISOString(),
-                type: 'purchase',
-                label: 'Số dư đầu kỳ',
+                // payable ÂM (từ 18/08/2026, lib/congNoNcc.ts): KiotViet nói nợ ÍT hơn Σ phiếu chưa trả ⇒ có
+                // khoản đã trả chưa gắn phiếu — là dòng TRẢ, không phải mua hàng âm.
+                type: openingPayable < 0 ? 'payment' : 'purchase',
+                label: openingPayable < 0 ? 'Số dư đầu kỳ (đã trả chưa gắn phiếu)' : 'Số dư đầu kỳ',
                 amount: openingPayable,
                 balance: openingPayable,
             })
@@ -380,6 +383,39 @@ router.get('/:id/debt-history', authMiddleware, async (req: AuthRequest, res: Re
     }
 })
 
+/**
+ * Đọc điều khoản thanh toán từ body — MỘT chỗ cho cả POST lẫn PUT.
+ *
+ * Trả về {} khi body KHÔNG đụng tới điều khoản (PUT không gửi → giữ nguyên).
+ * Có `paymentTermType` (client mới) → dùng kiểu + tham số, nhãn tự sinh nếu client
+ * không gửi. Không có type (client cũ chỉ gửi days/nhãn) → giữ hành vi cũ và đặt
+ * type = "net" khi có số ngày, để phiếu nhập suy được hạn.
+ *
+ * Ba trạng thái của days vẫn phân biệt: KHÔNG GỬI → suy từ nhãn; GỬI NULL → xoá;
+ * GỬI SỐ → dùng số (bài học sáng 18/08 với `??`).
+ */
+function docDieuKhoanTuBody(b: any): Record<string, any> {
+    const dung = ['paymentTermType', 'paymentTermDays', 'paymentTermDom', 'paymentTermMonthOffset', 'paymentTerms'].some(k => b[k] !== undefined)
+    if (!dung) return {}
+    const type: QuyTacDieuKhoan['type'] | null = b.paymentTermType ?? null
+    if (type === 'dom' || type === 'eom') {
+        const q: QuyTacDieuKhoan = { type, days: null, dom: type === 'dom' ? (b.paymentTermDom ?? null) : null, monthOffset: b.paymentTermMonthOffset ?? 0 }
+        return { paymentTermType: type, paymentTermDays: null, paymentTermDom: q.dom, paymentTermMonthOffset: q.monthOffset,
+            paymentTerms: b.paymentTerms || nhanQuyTac(q) }
+    }
+    if (type === 'net') {
+        const days = b.paymentTermDays === undefined ? suySoNgayTuNhan(b.paymentTerms) : b.paymentTermDays
+        return { paymentTermType: days === null || days === undefined ? null : 'net', paymentTermDays: days ?? null, paymentTermDom: null, paymentTermMonthOffset: null,
+            paymentTerms: b.paymentTerms || nhanQuyTac({ type: 'net', days }) }
+    }
+    // Client cũ / xoá: chỉ có days + nhãn (hoặc gửi type=null để xoá)
+    const days = b.paymentTermDays === undefined ? suySoNgayTuNhan(b.paymentTerms) : b.paymentTermDays
+    const xoaHet = b.paymentTermType === null && (b.paymentTermDays === null || b.paymentTermDays === undefined) && !b.paymentTerms
+    return { paymentTermType: xoaHet ? null : (days === null || days === undefined ? null : 'net'),
+        paymentTermDays: days ?? null, paymentTermDom: null, paymentTermMonthOffset: null,
+        paymentTerms: b.paymentTerms || null }   // rỗng → null, cùng chuẩn với create cũ
+}
+
 // POST /api/suppliers
 router.post('/', authMiddleware, requireRole('admin', 'manager'), validate(CreateSupplierSchema), async (req: AuthRequest, res: Response) => {
     try {
@@ -387,8 +423,14 @@ router.post('/', authMiddleware, requireRole('admin', 'manager'), validate(Creat
         const { name, contactName, phone, email, address, taxCode, status, notes, payable } = req.body
         if (!name?.trim()) return res.status(400).json({ success: false, error: 'Name required' })
         const code = await nextCode(prisma, 'supplierCodeSeq', 'NCC', 3, '-', 'Supplier', 'code')
+        /* Điều khoản thanh toán: nhận số ngày tường minh; chỉ có nhãn thì suy
+         * ("Sau 30 ngày" → 30). Không có gì → null (chưa thoả thuận ≠ trả ngay). */
+        /* Ba trạng thái phải phân biệt: KHÔNG GỬI (undefined) → suy từ nhãn;
+         * GỬI NULL → người dùng cố ý xoá, giữ null dù nhãn còn; GỬI SỐ → dùng số.
+         * `??` gộp undefined với null nên client xoá số mà còn nhãn sẽ bị suy lại. */
         const supplier = await prisma.supplier.create({
-            data: { code, name: name.trim(), contactName, phone, email, address, taxCode, status: status || 'active', notes, payable: payable ?? 0 },
+            data: { code, name: name.trim(), contactName, phone, email, address, taxCode, status: status || 'active', notes, payable: payable ?? 0,
+                    ...docDieuKhoanTuBody(req.body) },
         })
         cacheDel(`${req.user?.storeSchema || 'default'}:suppliers:*`).catch(() => { })
         res.status(201).json({ success: true, data: supplier })
@@ -406,7 +448,8 @@ router.put('/:id', authMiddleware, requireRole('admin', 'manager'), validate(Upd
         const { name, contactName, phone, email, address, taxCode, status, notes, payable } = req.body
         const supplier = await prisma.supplier.update({
             where: { id: String(req.params.id) },
-            data: { name, contactName, phone, email, address, taxCode, status, notes, payable },
+            data: { name, contactName, phone, email, address, taxCode, status, notes, payable,
+                    ...docDieuKhoanTuBody(req.body) },
         })
         res.json({ success: true, data: supplier })
         emitEntityEvent(prisma, 'supplier.updated', supplierPayload(supplier), req.user?.storeSchema).catch(() => { })

@@ -163,33 +163,37 @@ router.get('/summary', authMiddleware, async (req: AuthRequest, res: Response) =
             }
         }
 
-        // Add any DebtEntry customers not yet in the map
+        /* KHÁCH SỔ = 0 NHƯNG CÓ CHỨNG TỪ TREO (bút toán cũ / hoá đơn chưa gắn phiếu thu — KiotViet
+         * thu gộp): sổ (Customer.debt) là nguồn sự thật, chứng từ treo là nguồn PHỤ — không được lấy nó
+         * làm "tổng nợ". Bản cũ gán totalDebt = Σ chứng từ ⇒ HUTI 18/08/2026: trang Công Nợ đếm 175 khách /
+         * 4,79 tỷ trong khi sổ (và KiotViet, và trang Khách Hàng) nói 170 / 4,76 tỷ — 5 khách sổ 0 (Yến Hồng
+         * Hưng 29,2tr, Tuấn Phú 4,2tr…) bị dán nợ oan, đúng ca "phiếu treo ≠ nợ" của trang Sức khoẻ. Nay:
+         * totalDebt = 0, số dư đầu kỳ âm để sổ chi tiết vẫn cân về 0, kèm `phieuTreo` để ai cần thì thấy. */
+        const themKhachSoKhong = (custId: string, ten: string, sdt: string, ds: any[]) => {
+            const dsSap = [...ds].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+            const net = dsSap.reduce((s2, e) => s2 + (e.type === 'payment' ? -e.amount : e.amount), 0)
+            let running = -net
+            for (const e of dsSap) { running += e.type === 'payment' ? -e.amount : e.amount; e.balance = running }
+            summaryMap[custId] = {
+                customerId: custId, customerName: ten, phone: sdt,
+                totalDebt: 0, openingBalance: -net, entries: dsSap,
+                ...({ phieuTreo: Math.max(0, net), phieuTreoKhongPhaiNo: true } as any),
+            }
+        }
+        // DebtEntry customers not yet in the map (sổ 0)
         for (const [custId, custEntries] of Object.entries(entryMap)) {
             if (!summaryMap[custId]) {
                 const last = custEntries[custEntries.length - 1]
-                summaryMap[custId] = {
-                    customerId: custId,
-                    customerName: last.customerName,
-                    phone: last.phone || '',
-                    totalDebt: last.balance,
-                    openingBalance: 0,
-                    entries: custEntries,
-                }
+                // cùng bộ lọc với nhánh chính: phiếu thu + ghi nợ tay (bỏ bút toán điều chỉnh/huỷ) + hoá đơn chưa thu
+                const chon = custEntries.filter(e => e.type === 'payment' || (e.type === 'debt' && !isAdjustmentDesc(e.description)))
+                themKhachSoKhong(custId, last.customerName, last.phone || '', [...chon, ...(txEntryMap[custId] || [])])
             }
         }
-
-        // Add tx-only customers not yet in the map
+        // tx-only customers not yet in the map (sổ 0)
         for (const [custId, txEntries] of Object.entries(txEntryMap)) {
             if (!summaryMap[custId] && txEntries.length > 0) {
                 const cust = customersWithDebt.find(c => c.id === custId)
-                summaryMap[custId] = {
-                    customerId: custId,
-                    customerName: cust?.name || txEntries[0].customerName || 'Khách lẻ',
-                    phone: cust?.phone || '',
-                    totalDebt: txEntries.reduce((s: number, e: any) => s + e.amount, 0),
-                    openingBalance: 0,
-                    entries: txEntries,
-                }
+                themKhachSoKhong(custId, cust?.name || txEntries[0].customerName || 'Khách lẻ', cust?.phone || '', txEntries)
             }
         }
 
@@ -229,6 +233,22 @@ router.post('/', authMiddleware, requireRole('admin', 'manager', 'superadmin'), 
         const newBalance = type === 'payment' ? currentBalance - entryAmount : currentBalance + entryAmount
 
         const entry = await prisma.$transaction(async (tx) => {
+            /* CỘNG/TRỪ NGUYÊN TỬ, không ghi đè bằng số đọc TRƯỚC transaction (20/08/2026):
+             * `debt: newBalance` với newBalance tính từ lần đọc bên ngoài là "lost update" —
+             * hai thao tác cùng lúc thì cái sau đè cái trước. Cập nhật nợ TRƯỚC để lấy số dư
+             * thật, rồi mới ghi DebtEntry với đúng số đó. */
+            const sau = await tx.customer.update({
+                where: { id: customer.id },
+                data: type === 'payment'
+                    ? { debt: { decrement: entryAmount } }
+                    : { debt: { increment: entryAmount } },
+                select: { debt: true },
+            })
+            let soDu = Number(sau?.debt) || 0
+            if (soDu < 0) {
+                await tx.customer.update({ where: { id: customer.id }, data: { debt: 0 } })
+                soDu = 0
+            }
             const created = await tx.debtEntry.create({
                 data: {
                     customerId: customer.id,
@@ -237,12 +257,8 @@ router.post('/', authMiddleware, requireRole('admin', 'manager', 'superadmin'), 
                     type: type || 'debt',
                     amount: entryAmount,
                     description: description?.trim() || (type === 'payment' ? 'Trả nợ' : 'Ghi nợ'),
-                    balance: newBalance,
+                    balance: soDu,
                 },
-            })
-            await tx.customer.update({
-                where: { id: customer.id },
-                data: { debt: newBalance },
             })
             // Thu nợ phải có bút toán giảm phải thu: Nợ 111/112 / Có 131.
             // refKey xác định theo DebtEntry vừa tạo — idempotent khi retry
@@ -288,16 +304,18 @@ router.delete('/:id', authMiddleware, requireRole('admin', 'manager', 'superadmi
                 select: { debt: true },
             })
             if (!customer) return // customer already deleted — nothing to adjust
-            const currentDebt = Math.max(0, customer.debt ?? 0)
-            // Deleting a 'debt' entry removes that debt; deleting a 'payment'/'return'
-            // entry restores it. Clamp so the balance never goes negative.
-            const newDebt = entry.type === 'debt'
-                ? Math.max(0, currentDebt - entry.amount)
-                : currentDebt + entry.amount
-            await tx.customer.update({
+            /* Xoá dòng 'debt' thì bớt nợ, xoá 'payment'/'return' thì trả nợ lại. Dùng cộng/trừ
+             * nguyên tử rồi kẹp ≥ 0 — cùng lý do với đường tạo dòng ở trên. */
+            const sau = await tx.customer.update({
                 where: { id: entry.customerId },
-                data: { debt: newDebt },
+                data: entry.type === 'debt'
+                    ? { debt: { decrement: entry.amount } }
+                    : { debt: { increment: entry.amount } },
+                select: { debt: true },
             })
+            if ((Number(sau?.debt) || 0) < 0) {
+                await tx.customer.update({ where: { id: entry.customerId }, data: { debt: 0 } })
+            }
         })
 
         res.json({ success: true })

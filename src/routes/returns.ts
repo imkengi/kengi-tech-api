@@ -1,5 +1,6 @@
 import { Router, Response } from 'express'
 import { errorDetail } from '../lib/errorResponse'
+import { moTaLoi } from '../lib/gomLoi'
 import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
 import { validate } from '../middleware/validate'
 import { requirePermission } from '../middleware/permissionMiddleware'
@@ -224,27 +225,42 @@ router.post('/', authMiddleware, requirePermission('returns.create'), validate(C
                         const refundAmt = Number(totalRefund) || 0
                         const debtReduction = Math.min(refundAmt, customer.debt)
                         if (debtReduction > 0) {
-                            await prisma.customer.update({
-                                where: { id: customer.id },
-                                data: { debt: { decrement: debtReduction } },
-                            })
-                            await prisma.debtEntry.create({
-                                data: {
-                                    customerId: customer.id,
-                                    customerName: customer.name,
-                                    phone: customer.phone || '',
-                                    type: 'return',
-                                    amount: debtReduction,
-                                    description: `Trả hàng - phiếu ${returnCode} (${originalInvoice})`,
-                                    balance: Math.max(0, customer.debt - debtReduction),
-                                },
+                            /* Trừ nợ và ghi DebtEntry phải CÙNG MỘT KHỐI (20/08/2026): quy ước dự
+                             * án là mọi thay đổi Customer.debt đều có dòng sổ (xem memory
+                             * debt-ledger-conventions). Tách hai lệnh thì lệnh sau hỏng là nợ giảm
+                             * mà sổ không có dòng nào giải thích. `balance` cũng phải là số dư
+                             * THẬT sau khi trừ, không phải số tính từ lần đọc trước. */
+                            await prisma.$transaction(async (tx: any) => {
+                                const sau = await tx.customer.update({
+                                    where: { id: customer.id },
+                                    data: { debt: { decrement: debtReduction } },
+                                    select: { debt: true },
+                                })
+                                let soDu = Number(sau?.debt) || 0
+                                if (soDu < 0) {
+                                    await tx.customer.update({ where: { id: customer.id }, data: { debt: 0 } })
+                                    soDu = 0
+                                }
+                                await tx.debtEntry.create({
+                                    data: {
+                                        customerId: customer.id,
+                                        customerName: customer.name,
+                                        phone: customer.phone || '',
+                                        type: 'return',
+                                        amount: debtReduction,
+                                        description: `Trả hàng - phiếu ${returnCode} (${originalInvoice})`,
+                                        balance: soDu,
+                                    },
+                                })
                             })
                             console.log(`📦 Debt reduced by ${debtReduction} for ${customer.name} (return ${returnCode})`)
                         }
                     }
                 }
             } catch (debtErr) {
-                console.error('Auto debt reduction on return creation failed (non-fatal):', debtErr)
+                /* Giữ "non-fatal" (phiếu trả vẫn phải lập được), nhưng nói RÕ hậu quả trong log để
+                 * còn đi sửa tay: nợ khách chưa được giảm dù đã nhận hàng trả về. */
+                console.error(`[tra-hang] KHÔNG giảm được nợ khách cho phiếu ${returnCode} — khách vẫn đang bị ghi nợ phần đã trả:`, moTaLoi(debtErr))
             }
         }
 
@@ -435,21 +451,28 @@ router.post('/:id/process-refund', authMiddleware, requirePermission('returns.ed
                         // Reduce debt by refund amount (max = current debt)
                         const debtReduction = Math.min(amount, customer.debt)
                         if (debtReduction > 0) {
-                            await prisma.customer.update({
-                                where: { id: customer.id },
-                                data: { debt: { decrement: debtReduction } },
-                            })
-                            // Create DebtEntry for tracking
-                            await prisma.debtEntry.create({
-                                data: {
-                                    customerId: customer.id,
-                                    customerName: customer.name,
-                                    phone: customer.phone || '',
-                                    type: 'payment',
-                                    amount: debtReduction,
-                                    description: `Giảm nợ do trả hàng - phiếu ${returnOrder.code}`,
-                                    balance: Math.max(0, customer.debt - debtReduction),
-                                },
+                            /* GIẢM NỢ và GHI SỔ phải CÙNG một transaction (21/08/2026).
+                             * Trước đây là hai lệnh rời trên client toàn cục, không có `catch`:
+                             * nếu `debtEntry.create` ném thì nợ ĐÃ bị trừ rồi mà không có dòng sổ,
+                             * route trả 500 — người dùng bấm lại là **trừ nợ lần hai** cho cùng
+                             * một phiếu trả hàng. Nay hỏng thì cả hai cùng lùi, bấm lại an toàn.
+                             * Chỉ 2 lệnh nên transaction giữ kết nối rất ngắn (prod pool = 1). */
+                            await prisma.$transaction(async (tx) => {
+                                await tx.customer.update({
+                                    where: { id: customer.id },
+                                    data: { debt: { decrement: debtReduction } },
+                                })
+                                await tx.debtEntry.create({
+                                    data: {
+                                        customerId: customer.id,
+                                        customerName: customer.name,
+                                        phone: customer.phone || '',
+                                        type: 'payment',
+                                        amount: debtReduction,
+                                        description: `Giảm nợ do trả hàng - phiếu ${returnOrder.code}`,
+                                        balance: Math.max(0, customer.debt - debtReduction),
+                                    },
+                                })
                             })
                             console.log(`💰 Debt reduced by ${debtReduction} for customer ${customer.name} (return ${returnOrder.code})`)
                         }

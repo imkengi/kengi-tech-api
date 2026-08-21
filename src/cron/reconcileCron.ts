@@ -1,4 +1,4 @@
-import { registryPrisma, getStorePrisma } from '../lib/prisma'
+import { registryPrisma, getStorePrisma, giuClient } from '../lib/prisma'
 import { doiChieuBaChieu } from '../lib/revenueReconcile'
 
 /**
@@ -122,6 +122,15 @@ export function dungLoiNhac(kq: any): { tieuDe: string; noiDung: string } | null
  * Bài học ngày 14/08/2026: một câu SQL sai tên khoá ngoại làm cả 9 cửa hàng im
  * lặng trong khi toàn bộ test vẫn xanh.
  */
+/* Bảng Notification chưa có ở store cũ (P2021) thì coi như "chưa nhắc" — đúng. Nhưng lỗi ĐỌC khác
+ * mà cũng nuốt thì chốt chống nhắc trùng tự mở: mỗi lượt cron lại gửi thêm một thông báo cho cùng
+ * một kỳ, và chủ shop mất lòng tin vào thông báo (20/08/2026). */
+const chuaCoBang = (e: any): null => {
+    const ma = String(e?.code || '')
+    if (ma === 'P2021' || ma === 'P2022' || /does not exist/i.test(String(e?.message || ''))) return null
+    throw e
+}
+
 export async function doiChieuChoStore(
     prisma: any, tenStore: string, homNay: string, chayThu = false,
 ): Promise<boolean> {
@@ -132,7 +141,7 @@ export async function doiChieuChoStore(
     const daNhac = chayThu ? null : await prisma.notification.findFirst({
         where: { type: LOAI_TB, message: { contains: ky.nhan } },
         select: { id: true },
-    }).catch(() => null)
+    }).catch(chuaCoBang)
     if (daNhac) return false
 
     const kq = await doiChieuBaChieu(prisma, {
@@ -183,10 +192,13 @@ async function runDoiChieu(chayThu = false): Promise<void> {
         // Tuần tự từng cửa hàng: mỗi lượt đối chiếu là vài truy vấn nặng, chạy
         // song song nhiều store sẽ đụng trần kết nối của cả cụm.
         for (const store of stores) {
+            const nhaClient = giuClient(store.schema)   // lý do: xem giuClient() ở lib/prisma.ts
             try {
                 await doiChieuChoStore(getStorePrisma(store.schema), store.name, homNay, chayThu)
             } catch (e: any) {
                 console.error(`Đối chiếu ba chiều lỗi ở store ${store.name}:`, e?.message || e)
+            } finally {
+                nhaClient()
             }
         }
     } catch (e: any) {

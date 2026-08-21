@@ -22,6 +22,16 @@ export interface HoSoThueCuaHang {
  * doanh thu năm trước so với ngưỡng 50 tỷ (Điều 9 NĐ 126/2020). Không biết gì
  * thì mặc định quý: sinh ít mốc hơn và không đẻ ra loạt "quá hạn" giả.
  */
+/* Bảng chưa migrate (P2021/P2022) thì coi như chưa có dữ liệu — đúng. Nhưng lỗi ĐỌC khác mà cũng
+ * nuốt thì hồ sơ thuế của cửa hàng bị SUY SAI trong im lặng: `businessType` hỏng ⇒ mặc định
+ * 'company' ⇒ hộ kinh doanh bị dựng lịch quyết toán TNDN + báo cáo tài chính (thứ họ không phải
+ * nộp); bút toán năm trước hỏng ⇒ suy nhầm kỳ kê khai tháng/quý (20/08/2026). */
+const rongNeuChuaCoBang = (e: any): any => {
+    const ma = String(e?.code || '')
+    if (ma === 'P2021' || ma === 'P2022' || /does not exist/i.test(String(e?.message || ''))) return null
+    throw e
+}
+
 export async function suyHoSoThue(
     prisma: any,
     year: number,
@@ -29,7 +39,7 @@ export async function suyHoSoThue(
 ): Promise<HoSoThueCuaHang> {
     const cauHinh = await prisma.storeSettings.findFirst({
         select: { businessType: true },
-    }).catch(() => null)
+    }).catch(rongNeuChuaCoBang)
     const loaiHinh: LoaiHinh = cauHinh?.businessType === 'household' ? 'household' : 'company'
 
     let kyKeKhai: KyKeKhai
@@ -41,7 +51,7 @@ export async function suyHoSoThue(
             select: { periodType: true },
             take: 24,
             orderBy: { createdAt: 'desc' },
-        }).catch(() => [])
+        }).catch((e: any) => rongNeuChuaCoBang(e) ?? [])
         if (daKhai.length > 0) {
             const soThang = daKhai.filter(d => d.periodType === 'month').length
             kyKeKhai = soThang > daKhai.length / 2 ? 'month' : 'quarter'

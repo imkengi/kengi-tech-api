@@ -141,9 +141,11 @@ function monthlyDepreciation(asset: any, beginningValue: number): number {
 
 // Tạo bút toán khấu hao + cập nhật TSCĐ + ghi DepreciationEntry cho 1 kỳ.
 // Trả về { entry, journal } hoặc { skipped } nếu đã khấu hao kỳ này / đã hết KH.
-async function depreciateAssetForPeriod(prisma: any, asset: any, month: number, year: number, branchId: string | null, userId: string | null) {
+export async function depreciateAssetForPeriod(prisma: any, asset: any, month: number, year: number, branchId: string | null, userId: string | null) {
     if (asset.status !== 'active') return { skipped: true, reason: `Tài sản ở trạng thái ${asset.status}` }
-    const existing = await prisma.depreciationEntry.findFirst({ where: { assetId: asset.id, month, year } }).catch(() => null)
+    /* Chốt "đã khấu hao kỳ này chưa" — nuốt lỗi ⇒ khấu hao hai lần cùng một tháng, chi phí và
+     * giá trị còn lại đều sai, mà bảng khấu hao nhìn vẫn bình thường (20/08/2026). */
+    const existing = await prisma.depreciationEntry.findFirst({ where: { assetId: asset.id, month, year } })
     if (existing) return { skipped: true, reason: `Đã khấu hao T${month}/${year}`, entry: existing }
 
     const beginningValue = netBook(asset)
@@ -333,7 +335,8 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         await ensureTables(req)
         const prisma = req.storePrisma! as any
-        const asset = await prisma.fixedAsset.findUnique({ where: { id: String(req.params.id) } }).catch(() => null)
+        // Đọc hỏng ≠ không tìm thấy: 404 làm người dùng tưởng tài sản đã bị xoá khỏi sổ.
+        const asset = await prisma.fixedAsset.findUnique({ where: { id: String(req.params.id) } })
         if (!asset) return res.status(404).json({ success: false, error: 'Không tìm thấy tài sản' })
         const depreciationEntries = await prisma.depreciationEntry.findMany({
             where: { assetId: asset.id }, orderBy: [{ year: 'desc' }, { month: 'desc' }], take: 24,
@@ -351,7 +354,7 @@ router.put('/:id', authMiddleware, requireRole('admin', 'manager', 'superadmin')
         await ensureTables(req)
         const prisma = req.storePrisma! as any
         const id = String(req.params.id)
-        const asset = await prisma.fixedAsset.findUnique({ where: { id } }).catch(() => null)
+        const asset = await prisma.fixedAsset.findUnique({ where: { id } })
         if (!asset) return res.status(404).json({ success: false, error: 'Không tìm thấy tài sản' })
         const b = req.body || {}
         const data: any = {}
@@ -386,7 +389,7 @@ router.delete('/:id', authMiddleware, requireRole('admin', 'manager', 'superadmi
         await ensureTables(req)
         const prisma = req.storePrisma! as any
         const id = String(req.params.id)
-        const asset = await prisma.fixedAsset.findUnique({ where: { id } }).catch(() => null)
+        const asset = await prisma.fixedAsset.findUnique({ where: { id } })
         if (!asset) return res.status(404).json({ success: false, error: 'Không tìm thấy tài sản' })
         await prisma.depreciationEntry.deleteMany({ where: { assetId: id } }).catch(() => {})
         await prisma.fixedAsset.delete({ where: { id } })
@@ -402,7 +405,8 @@ router.post('/:id/depreciate', authMiddleware, requireRole('admin', 'manager', '
     try {
         await ensureTables(req)
         const prisma = req.storePrisma! as any
-        const asset = await prisma.fixedAsset.findUnique({ where: { id: String(req.params.id) } }).catch(() => null)
+        // Đọc hỏng ≠ không tìm thấy (cùng lý do với đường lịch khấu hao ở trên).
+        const asset = await prisma.fixedAsset.findUnique({ where: { id: String(req.params.id) } })
         if (!asset) return res.status(404).json({ success: false, error: 'Không tìm thấy tài sản' })
         const now = new Date()
         const month = Number(req.query.month ?? req.body?.month) || (now.getMonth() + 1)
@@ -423,7 +427,7 @@ router.get('/:id/depreciation-schedule', authMiddleware, async (req: AuthRequest
     try {
         await ensureTables(req)
         const prisma = req.storePrisma! as any
-        const asset = await prisma.fixedAsset.findUnique({ where: { id: String(req.params.id) } }).catch(() => null)
+        const asset = await prisma.fixedAsset.findUnique({ where: { id: String(req.params.id) } })
         if (!asset) return res.status(404).json({ success: false, error: 'Không tìm thấy tài sản' })
 
         const cost = Number(asset.acquisitionCost ?? asset.originalCost) || 0
@@ -458,7 +462,7 @@ router.post('/:id/dispose', authMiddleware, requireRole('admin', 'manager', 'sup
         await ensureTables(req)
         const prisma = req.storePrisma! as any
         const id = String(req.params.id)
-        const asset = await prisma.fixedAsset.findUnique({ where: { id } }).catch(() => null)
+        const asset = await prisma.fixedAsset.findUnique({ where: { id } })
         if (!asset) return res.status(404).json({ success: false, error: 'Không tìm thấy tài sản' })
         if (asset.status === 'disposed') return res.status(400).json({ success: false, error: 'Tài sản đã được thanh lý' })
 

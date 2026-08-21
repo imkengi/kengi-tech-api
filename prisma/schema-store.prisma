@@ -512,21 +512,33 @@ model Promotion {
 // ─── Suppliers ─────────────────────────────────────────────────────────────────
 
 model Supplier {
-  id          String   @id @default(cuid())
-  code        String   @unique
-  name        String
-  contactName String?
-  phone       String?
-  email       String?
-  address     String?
-  taxCode     String?
-  totalOrders Int      @default(0)
-  totalValue  Float    @default(0)
-  status      String   @default("active")
-  notes       String?
-  payable     Float    @default(0) // công nợ phải trả NCC (số dư đầu kỳ + phát sinh)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                     String   @id @default(cuid())
+  code                   String   @unique
+  name                   String
+  contactName            String?
+  phone                  String?
+  email                  String?
+  address                String?
+  taxCode                String?
+  totalOrders            Int      @default(0)
+  totalValue             Float    @default(0)
+  status                 String   @default("active")
+  notes                  String?
+  payable                Float    @default(0) // công nợ phải trả NCC (số dư đầu kỳ + phát sinh)
+  // ĐIỀU KHOẢN THANH TOÁN mặc định của NCC (thêm 18/08/2026). Phiếu nhập mới
+  // không ghi dueDate thì tự suy = ngày nhập + paymentTermDays. Trước đây FE đã
+  // gửi `paymentTerms` và schema zod đã nhận, nhưng route KHÔNG ghi và model
+  // KHÔNG có cột → rơi im lặng.
+  paymentTermDays        Int? // số ngày được nợ (0 = trả ngay, null = chưa đặt)
+  paymentTerms           String? // nhãn hiển thị, vd "Sau 30 ngày", "Cuối tháng sau"
+  // KIỂU điều khoản đầy đủ (18/08/2026 chiều — "thêm nhiều option như lúc nhập hàng"):
+  // net = sau paymentTermDays ngày; dom = ngày paymentTermDom của tháng (+offset);
+  // eom = cuối tháng (+offset). null = bản ghi cũ chỉ có paymentTermDays → hiểu là net.
+  paymentTermType        String? // "net" | "dom" | "eom"
+  paymentTermDom         Int? // dom: ngày trong tháng 1..31
+  paymentTermMonthOffset Int? // dom/eom: 0 = tháng này, 1 = tháng sau, …
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 
   purchaseOrders PurchaseOrder[]
 }
@@ -534,24 +546,24 @@ model Supplier {
 // ─── Purchase Orders ───────────────────────────────────────────────────────────
 
 model PurchaseOrder {
-  id           String    @id @default(cuid())
-  code         String    @unique
-  supplierId   String?
-  supplierName String
-  status       String    @default("draft")
-  totalAmount  Float     @default(0)
-  notes        String?
-  expectedDate DateTime?
-  receivedDate DateTime?
+  id            String    @id @default(cuid())
+  code          String    @unique
+  supplierId    String?
+  supplierName  String
+  status        String    @default("draft")
+  totalAmount   Float     @default(0)
+  notes         String?
+  expectedDate  DateTime?
+  receivedDate  DateTime?
   // Cổng kiểm hàng (2026-08-04): hàng về ở trạng thái "checking", NGƯỜI KIỂM
   // chấp nhận phiếu (→received) thì kho mới được ghi. Ai duyệt phải để lại tên.
   checkedBy     String?
   checkedByName String?
   checkedAt     DateTime?
   rejectReason  String?
-  branchId     String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  branchId      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   supplier Supplier?           @relation(fields: [supplierId], references: [id])
   items    PurchaseOrderItem[]
@@ -573,17 +585,17 @@ model PurchaseOrderItem {
 // ─── Expenses ──────────────────────────────────────────────────────────────────
 
 model Expense {
-  id            String    @id @default(cuid())
-  description   String
-  amount        Float
-  category      String
-  date          DateTime  @default(now())
-  paidBy        String?
-  recurring     Boolean   @default(false)
-  bankAccountId String?
+  id               String    @id @default(cuid())
+  description      String
+  amount           Float
+  category         String
+  date             DateTime  @default(now())
+  paidBy           String?
+  recurring        Boolean   @default(false)
+  bankAccountId    String?
   // "pending" = bóc tự động từ email HĐĐT, CHỜ DUYỆT — thống kê chỉ tính
   // "active" nên phiếu chờ không lọt vào sổ trước khi người dùng xem (2026-08-05)
-  status        String    @default("active") // "active" | "pending" | "cancelled"
+  status           String    @default("active") // "active" | "pending" | "cancelled"
   // ─── Hoá đơn đầu vào (VAT khấu trừ) ───────────────────────────────────────
   // Mất số hoá đơn / MST người bán là mất quyền khấu trừ, nên giữ đủ ngay từ
   // lúc bóc thư, không để người dùng nhập lại tay.
@@ -596,11 +608,11 @@ model Expense {
   lookupCode       String? // mã tra cứu trên cổng HĐĐT của NCC
   taxAuthorityCode String? // mã của cơ quan thuế
   sourceRef        String? // khoá chống trùng: MST bán|ký hiệu|số HĐ
-  cancelledAt   DateTime?
-  cancelReason  String?
-  branchId      String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  cancelledAt      DateTime?
+  cancelReason     String?
+  branchId         String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   @@index([branchId])
   @@index([status])
@@ -683,11 +695,11 @@ model Repair {
   //              bao giờ là tài sản của cửa hàng.
   // "internal" = chuyển kho nội bộ: hàng của shop để lâu bị hư → rời kho bán
   //              được, sang kho hàng hư hỏng.
-  source    String  @default("customer")
-  productId String? // bắt buộc khi source = internal, và khi muốn đổi mới
+  source     String  @default("customer")
+  productId  String? // bắt buộc khi source = internal, và khi muốn đổi mới
   productSku String?
-  quantity  Int     @default(1)
-  branchId  String? // quyết định lấy kho chính / kho hư hỏng của chi nhánh nào
+  quantity   Int     @default(1)
+  branchId   String? // quyết định lấy kho chính / kho hư hỏng của chi nhánh nào
 
   // ─── Nối khách & hoá đơn bán ─────────────────────────────────────────────
   // customerId: auto-gắn ở POS dò theo id khách, không lệ thuộc gõ tên trùng
@@ -701,10 +713,19 @@ model Repair {
   // Dấu mốc để mỗi lần ghi kho CHỈ CHẠY MỘT LẦN. Không có chúng thì bấm đổi
   // trạng thái hai lần là trừ tồn hai lần, và không cách nào biết phiếu nào đã
   // đụng kho để hoàn lại khi xoá.
-  stockMovedAt       DateTime? // đã chuyển kho chính → kho hư hỏng (internal)
-  replacedStockAt    DateTime? // đã xuất máy mới cho khách (đổi mới)
-  supplierReturnedAt DateTime? // NCC đã trả hàng, đã cộng lại kho chính
-  newUnitIssuedAt    DateTime? // Đã xuất máy mới giao khách (kho chính −n) — đổi mới của khách
+  stockMovedAt        DateTime? // đã chuyển kho chính → kho hư hỏng (internal)
+  replacedStockAt     DateTime? // đã xuất máy mới cho khách (đổi mới)
+  // ─── Gửi NCC (ghép lại từ bản đang chạy trên prod, 21/08) ───────────────
+  // supplierId/supplierName: NCC nhận hàng (chọn lúc gửi). supplierBatchCode:
+  // mã lô — nhiều phiếu gửi cùng lượt chung một mã, in MỘT phiếu bàn giao.
+  supplierId          String?
+  supplierName        String?
+  supplierBatchCode   String?
+  sentToSupplierAt    DateTime?
+  // Đưa vào RỔ CHỜ GỬI NCC (bấm tay) — hàng hỏng gom chờ đủ lô mới đem đi.
+  queuedForSupplierAt DateTime?
+  supplierReturnedAt  DateTime? // NCC đã trả hàng, đã cộng lại kho chính
+  newUnitIssuedAt     DateTime? // Đã xuất máy mới giao khách (kho chính −n) — đổi mới của khách
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1513,7 +1534,7 @@ model StoreSettings {
   notifyLowStock     Boolean @default(true)
 
   // SMTP email công ty cho CRM gửi email chào hàng — JSON {host,port,user,pass,fromName,secure}
-  smtpConfig String?
+  smtpConfig    String?
   // Hộp thư Gmail RIÊNG để check trong app (04/08/2026) — TÁCH khỏi smtpConfig
   // (mail gửi CRM là tài khoản khác). JSON {user, pass, host?}
   mailboxConfig String?
@@ -1546,7 +1567,7 @@ model StoreSettings {
   dailyOrderTarget     Int?
 
   // Google Drive folder ID for packing/return-unbox videos
-  driveFolderId String?
+  driveFolderId   String?
   // Kết nối Google Drive BẰNG TÀI KHOẢN CHỦ SHOP (OAuth). Cần vì file trong
   // My Drive chỉ CHỦ SỞ HỮU xoá được — service account dù có quyền Editor vẫn
   // bị Google chặn, nên dọn video tự động phải chạy dưới danh nghĩa chính chủ.
@@ -1851,18 +1872,18 @@ model OnlineProduct {
 // ─── Online Order Items ─────────────────────────────────────────────────────
 
 model OnlineOrderItem {
-  id            String  @id @default(cuid())
-  onlineOrderId String
-  productId     String?
+  id             String  @id @default(cuid())
+  onlineOrderId  String
+  productId      String?
   /// Ma dong hang ben san (Shopee item_id / TikTok order_line_id / Lazada order_item_id).
   /// Webhook va returnSync deu dua vao no de khop dong hang tra ve dung san pham.
   externalItemId String?
-  productName   String
-  sku           String?
-  quantity      Int
-  unitPrice     Float
-  discount      Float   @default(0)
-  lineTotal     Float
+  productName    String
+  sku            String?
+  quantity       Int
+  unitPrice      Float
+  discount       Float   @default(0)
+  lineTotal      Float
 
   onlineOrder OnlineOrder @relation(fields: [onlineOrderId], references: [id], onDelete: Cascade)
   product     Product?    @relation(fields: [productId], references: [id])
@@ -2957,13 +2978,13 @@ model AiAgentRun {
 // các nguyên tắc an toàn (chạy thử mặc định, không ghi đè, bất biến tồn kho).
 
 model KiotVietConfig {
-  id           String  @id @default("default")
-  clientId     String
-  clientSecret String
-  retailer     String // tên gian hàng, đi trong header `Retailer`
+  id              String  @id @default("default")
+  clientId        String
+  clientSecret    String
+  retailer        String // tên gian hàng, đi trong header `Retailer`
   // Token 32 byte ngẫu nhiên nằm trong ĐƯỜNG DẪN webhook — đây là lớp bảo vệ
   // CHÍNH của cổng nhận, vì công thức chữ ký của KiotViet không được công bố.
-  webhookToken String  @unique
+  webhookToken    String  @unique
   webhookSecret   String?
   strictSignature Boolean @default(false) // bật khi đã chốt được công thức ký
 
@@ -3017,17 +3038,17 @@ model KiotVietSyncLog {
   skipped Int @default(0)
   failed  Int @default(0)
 
-  status     String    @default("running") // running | success | partial | failed
-  errors     String?
-  details    String? // JSON kết quả theo từng loại dữ liệu
-  startedAt  DateTime  @default(now())
+  status      String    @default("running") // running | success | partial | failed
+  errors      String?
+  details     String? // JSON kết quả theo từng loại dữ liệu
+  startedAt   DateTime  @default(now())
   // Dấu "còn sống" đóng liên tục trong lúc chạy. Thiếu nó thì đợt chạy nền chết
   // giữa chừng vẫn hiện "đang chạy" mãi mãi, không ai biết nên chờ hay bấm lại.
   heartbeatAt DateTime?
   // Số lần watchdog đã tự chạy tiếp sau khi đứt (Cloud Run thay máy mỗi lần
   // deploy). Chạm trần thì dừng, đừng quay vòng ăn hết hạn mức API.
   attempts    Int       @default(0)
-  finishedAt DateTime?
+  finishedAt  DateTime?
 
   @@index([mode])
   @@index([status])
@@ -3045,11 +3066,11 @@ model MisaConfig {
   orgCompanyCode String
   baseUrl        String? // để trống = https://actapp.misa.vn
 
-  enabled       Boolean @default(false)
-  syncProducts  Boolean @default(true)
-  syncPartners  Boolean @default(true) // khách hàng + NCC (MISA gộp chung)
-  syncStocks    Boolean @default(true) // danh mục kho
-  syncBalance   Boolean @default(false) // tồn kho — đụng tồn thật nên mặc định TẮT
+  enabled      Boolean @default(false)
+  syncProducts Boolean @default(true)
+  syncPartners Boolean @default(true) // khách hàng + NCC (MISA gộp chung)
+  syncStocks   Boolean @default(true) // danh mục kho
+  syncBalance  Boolean @default(false) // tồn kho — đụng tồn thật nên mặc định TẮT
 
   overwriteNames  Boolean @default(false)
   overwritePrices Boolean @default(false)
@@ -3174,4 +3195,111 @@ model AiChat {
 
   @@index([updatedAt])
   @@index([createdBy])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MISA — ĐỔ TỪ EXCEL (mua hàng & bán hàng KHÔNG có API, chỉ xuất Excel được)
+//
+// Ba bảng này giữ NGUYÊN VĂN sổ MISA, KHÔNG đẻ ra đơn bán trong Kengi.
+// Vì sao tách riêng thay vì tạo Transaction: POS đã ghi đơn bán thật rồi. Đổ thêm
+// một bộ đơn nữa từ MISA là ĐẾM TRÙNG doanh thu — mà đếm trùng thì không ai thấy,
+// vì mỗi bản ghi đều trông hợp lệ. Để riêng hai sổ mới đối chiếu được chúng với nhau.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Một lượt đổ file. Giữ ĐỘ PHỦ (đọc được bao nhiêu / bỏ bao nhiêu) để về sau còn
+/// biết kết luận đứng trên mấy phần dữ liệu — "không thấy lỗi" mà không kèm độ phủ
+/// thì vô nghĩa.
+model MisaImportBatch {
+  id        String  @id @default(cuid())
+  loai      String // sales | purchases
+  tenFile   String
+  kyBaoCao  String?
+  tongDong  Int     @default(0)
+  docDuoc   Int     @default(0)
+  boQua     Int     @default(0)
+  soChungTu Int     @default(0)
+  tongTien  Float   @default(0)
+  tongThue  Float   @default(0)
+  /// JSON: danh sách dòng bỏ qua kèm lý do + cảnh báo. Không nén, không cắt.
+  chiTiet   String?
+  /// false = mới chạy thử, chưa ghi gì
+  apply     Boolean @default(false)
+
+  userId    String?
+  userName  String?
+  createdAt DateTime @default(now())
+
+  docs MisaSaleDoc[]
+
+  @@index([loai, createdAt])
+}
+
+/// Một chứng từ bán hàng MISA (BH00394) — gộp từ nhiều dòng hàng trong Excel.
+model MisaSaleDoc {
+  id           String    @id @default(cuid())
+  /// Khoá chống trùng: đổ lại cùng một file thì cập nhật, không nhân đôi.
+  soChungTu    String    @unique
+  soHoaDon     String?
+  ngayChungTu  DateTime?
+  ngayHachToan DateTime?
+  ngayHoaDon   DateTime?
+
+  maKhach       String?
+  tenKhach      String?
+  /// cot | dienGiai | khong — tên khách lấy từ đâu. 'dienGiai' = vớt được, kém chắc hơn.
+  nguonTenKhach String? @default("cot")
+  dienGiai      String?
+  /// Nối sang Customer của Kengi khi khớp được. null = chưa khớp, KHÔNG phải khách lẻ.
+  customerId    String?
+
+  tongDoanhSo   Float   @default(0)
+  tongThue      Float   @default(0)
+  tongChietKhau Float   @default(0)
+  tongTra       Float   @default(0)
+  /// true = MISA không xuất giá vốn cho chứng từ này ⇒ CẤM tính lãi/lỗ từ nó.
+  thieuGiaVon   Boolean @default(true)
+
+  batchId   String?
+  batch     MisaImportBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  lines     MisaSaleLine[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@index([ngayChungTu])
+  @@index([soHoaDon])
+  @@index([customerId])
+  @@index([batchId])
+}
+
+/// Một dòng hàng trong chứng từ bán hàng MISA.
+model MisaSaleLine {
+  id    String      @id @default(cuid())
+  docId String
+  doc   MisaSaleDoc @relation(fields: [docId], references: [id], onDelete: Cascade)
+
+  maHang  String
+  tenHang String?
+  dvt     String?
+
+  soLuong    Float   @default(0)
+  donGia     Float   @default(0)
+  doanhSo    Float   @default(0)
+  chietKhau  Float   @default(0)
+  soLuongTra Float   @default(0)
+  giaTriTra  Float   @default(0)
+  giamGia    Float   @default(0)
+  thueGtgt   Float   @default(0)
+  tkThueGtgt String?
+
+  /// null = MISA KHÔNG xuất giá vốn. Tuyệt đối không mặc định 0 — 0 nghĩa là
+  /// "bán không tốn đồng nào", tức lãi bằng đúng doanh thu.
+  giaVon    Float?
+  /// Nối sang Product của Kengi theo SKU (cột "Mã hàng"). null = chưa khớp.
+  productId String?
+  /// Dòng thứ mấy trong file gốc — để truy ngược khi số liệu đáng ngờ.
+  dongSo    Int?
+
+  @@index([docId])
+  @@index([maHang])
+  @@index([productId])
 }

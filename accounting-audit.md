@@ -319,6 +319,39 @@
 
 ---
 
+## 11. BỔ SUNG 18/08/2026 — Sức khoẻ tài chính khách, điều khoản & hạn trả NCC, đối chiếu công nợ KiotViet
+
+> Cùng nguyên tắc: chỉ ghi cái có trong code, kèm đường dẫn. Kiểm bằng `npm run check:ketoan` (16 bộ) và `check:kiotviet`.
+
+### 11.1. Sức khoẻ tài chính khách hàng — điểm 0–100
+- **Chuỗi tính dùng chung** `src/lib/diemSucKhoeKhach.ts:240` `tinhTronBo()` → hồ sơ FIFO neo `Customer.debt` (`sucKhoeTaiChinhKhach.ts`) + gom tháng + chỉ số mở rộng (`chiSoKhachMoRong.ts`) + điểm (`tinhDiemSucKhoe`, :105).
+- **Điểm** = 4 thành phần × 25 (gánh nợ, tuổi nợ, xu hướng & nhịp, mua chịu trong kỳ), luôn tính trên **12 tháng** (`KY_CHAM_DIEM_THANG`) dù kỳ hiển thị khác; **nén vào dải theo cảnh báo nợ** (`SAN_/TRAN_THEO_XEP_HANG`: rủi ro 0–39, theo dõi 40–59) — điểm không cãi nhãn nhưng giữ thứ tự trong nhóm; hạng A≥80/B≥60/C≥40/D; `doTinCay` theo số đơn; có nợ mà không neo được tuổi / chưa thấy mua → chấm **trung tính** (không đọc được ≠ tốt).
+- **Endpoints:** `GET /api/customers/:id/financial-health` (`src/routes/customers.ts:820`, trả `hoSo/theoThang/moRong/diem`), `GET /api/customers/financial-overview` (`:328`, mọi khách có mua 12 tháng hoặc có nợ, cùng chuỗi tính, ~1–1,5 s/300 khách).
+- Kiểm: `scripts/check-diem-suc-khoe.ts` (35 ca), `check-suc-khoe-tai-chinh.ts` (40), `check-chi-so-mo-rong.ts` (20).
+
+### 11.2. Điều khoản thanh toán NCC & hạn trả
+- **Model:** `Supplier.paymentTermType` (`net|dom|eom`) + `paymentTermDays` + `paymentTermDom` + `paymentTermMonthOffset` + nhãn `paymentTerms` (`prisma/schema-store.prisma`; migrate raw qua `/admin/migrate`).
+- **Thư viện** `src/lib/dieuKhoanThanhToan.ts`: `tinhHanTraTheoQuyTac()` (:92, giờ VN, dom quá số ngày tháng → cuối tháng), `quyTacTuSupplier()`, `nhanQuyTac()`, `mucHanTra()` (:155, `qua-han|sap-den|chua-den|khong-han`, ngưỡng sắp đến mặc định 7 ngày). Ngưỡng/màu tính ở BE, FE chỉ tô.
+- **Endpoints:** `POST/PUT /api/suppliers` đọc điều khoản qua `docDieuKhoanTuBody()` (`src/routes/suppliers.ts`); `GET /api/import-receipts/payment-due?sapDen=&supplierId=` (`src/routes/importReceipts.ts:196`): phiếu `completed` chưa trả đủ, **suy hạn sống** từ điều khoản NCC theo ngày chứng từ khi phiếu không ghi hạn (`hanSuy`), lọc chi nhánh bằng `getBranchFilter` (chính thấy hết), kèm `theoNcc` = công nợ theo NCC (mục 11.3) và `tomTat`.
+- Kiểm: `scripts/check-dieu-khoan-thanh-toan.ts` (37 ca).
+
+### 11.3. Công nợ phải trả NCC — MỘT công thức
+- `src/lib/congNoNcc.ts`: `conLaiPhieu()` (:21, `paid` = trả đủ dù paidAmount 0), `soDuDauKyTuKV()`, `congNoChuaKep()/congNoHienThi()` = **payable (số dư đầu kỳ) + Σ phiếu chưa trả (+ PO chưa nhận), kẹp ≥ 0** — dùng ở `GET /suppliers`, `debt-history`, `payment-due`, đối chiếu KV.
+- Với NCC đồng bộ KiotViet/MISA: `payable` phải là **phần dư** `kv.debt − Σ phiếu chưa trả` (có thể âm = đã trả chưa gắn phiếu) — `syncSuppliers` (`kiotvietSync.ts`), `doiChieuNoNcc` (`kiotvietRunner.ts:573`), `misaSync.ts`; runner làm tươi phần dư ngay sau bước đơn nhập. Trước 18/08 ghi `payable = kv.debt` ⇒ đếm đôi (HUTI 40,49 tỷ vs KV 20,15 tỷ).
+- Kiểm: `scripts/check-cong-no-ncc.ts` (15 ca).
+
+### 11.4. Đối chiếu công nợ với KiotViet
+- **Thiếu ≠ 0:** `docCongNoKV()` (`src/services/kiotvietSync.ts:184`) — bản ghi không mang `debt` hữu hạn → `null` → không đụng `debt/payable`. Webhook `customer/supplier.update` **không mang Debt** → cờ `opts.tuWebhook` không bao giờ tin debt trong payload, khách được hỏi lại KV (`lamTuoiNoKhach`). Khách thật bỏ trống `debt` được hiểu là 0 *chỉ khi* cùng key đã thấy debt ở khách khác (khách trả hết không treo nợ mãi).
+- **Hàm chung** `doiChieuNoKhach()` (`kiotvietRunner.ts:499`, hỏi `KV.customerById` từng khách, nghỉ 120 ms) và `doiChieuNoNcc()` (:573, một lượt danh sách, so công nợ hiển thị chưa kẹp với `kv.debt`).
+- **Admin (x-admin-key):** `GET /admin/kiotviet-no-khach?storeCode=&code=|customerId=|all=1[&apply=1]` (`admin.ts:4290`, trả `caiDat`, `mauKhongDebt`, `mauLoiKV`), `GET /admin/kiotviet-no-ncc?storeCode=[&apply=1]` (`:4262`).
+- **Cron** `src/cron/doiChieuNoKiotViet.ts:13` theo nhịp cleanup của `autoSync`, bọc `giuClient()`, ghi `KiotVietSyncLog{entity:'doi-chieu-no'}`, **bỏ qua nếu lần success gần nhất < 20 h**.
+- Kiểm: `scripts/check-doc-cong-no-kv.ts` (20 ca).
+
+### 11.5. Tuổi nợ 131/331 — FIFO phân bổ (18/08/2026)
+- `GET /api/tax/debt-aging?type=receivable|payable` (`src/routes/tax.ts`) dùng `src/lib/tuoiNoFifo.ts` `phanBoTuoiNoFifo()`: chứng từ mới → cũ, cắt từng phần vào rổ (current ≤7 · 8–30 · 31–60 · 61–90 · >90) tới khi cạn số dư sổ; dư đầu kỳ không chứng từ → >90 kèm `duDauKyKhongChungTu`. Bản cũ dồn cả nợ vào một rổ theo ngày mua cuối. Phải trả: sổ NCC = payable + Σ phiếu chưa trả (mục 11.3), FIFO trên phiếu; phiếu không gắn NCC từng dòng. Kiểm: `scripts/check-tuoi-no-fifo.ts` (13 ca).
+- `GET /api/debts/summary` (`src/routes/debts.ts`): khách sổ 0 nhưng có chứng từ treo → `totalDebt 0` + `phieuTreo` (không dán nợ theo nguồn phụ).
+
+---
 ## TÓM TẮT ĐỘ PHỦ (Coverage)
 
 | Nhóm | Trạng thái | Ghi chú |
@@ -333,6 +366,7 @@
 | **Tiền mặt/Ngân hàng** (phiếu thu/chi, sổ quỹ) | ✅ Có | mirror BankTransaction tự động |
 | **TSCĐ + khấu hao** | ✅ Có | straight-line + declining-balance, post 214 |
 | **Công nợ + tuổi nợ** | ✅ Có | buckets 0/30/60/90/>90, phải thu & phải trả |
+| **Sức khoẻ tài chính khách (điểm 0–100) · điều khoản & hạn trả NCC · đối chiếu công nợ KiotViet** | ✅ Có (18/08/2026) | mục 11; `check:ketoan` 16 bộ |
 | **Hóa đơn điện tử** | ⚠️ Một phần | **Chỉ MISA tích hợp thật**; FPT/BKAV/VNPT/EasyInvoice/Viettel là stub |
 | **Đối soát ngân hàng (bank reconciliation)** | ❌ Không có | chỉ có sổ + mirror, không có import/matching sao kê |
 | **Frontend (pages/components)** | ❌ Không có trong repo | repo là backend-only |

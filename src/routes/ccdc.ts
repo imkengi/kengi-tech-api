@@ -87,9 +87,11 @@ async function ensureTables(req: AuthRequest): Promise<void> {
 }
 
 // Phân bổ 1 tháng cho 1 CCDC. Trả về { allocation, journal } hoặc { skipped }.
-async function allocateForPeriod(prisma: any, ccdc: any, month: number, year: number, branchId: string | null, userId: string | null) {
+export async function allocateForPeriod(prisma: any, ccdc: any, month: number, year: number, branchId: string | null, userId: string | null) {
     if (ccdc.status !== 'allocating') return { skipped: true, reason: `CCDC ở trạng thái ${ccdc.status}` }
-    const existing = await prisma.cCDCAllocation.findFirst({ where: { ccdcId: ccdc.id, month, year } }).catch(() => null)
+    /* Chốt "đã phân bổ kỳ này chưa". Nuốt lỗi đọc ⇒ tưởng chưa ⇒ phân bổ CCDC lần hai cho cùng
+     * tháng: chi phí đội lên và remainingAmount bị trừ hai lần (20/08/2026). */
+    const existing = await prisma.cCDCAllocation.findFirst({ where: { ccdcId: ccdc.id, month, year } })
     if (existing) return { skipped: true, reason: `Đã phân bổ T${month}/${year}`, allocation: existing }
 
     const remaining = Number(ccdc.remainingAmount) || 0

@@ -16,6 +16,7 @@
 import { PrismaClient } from '@prisma/client'
 import { PrismaClient as StorePrisma } from '../generated/store-client'
 import { execSync } from 'child_process'
+import { chonClientDeThai } from './thaiClientNhanRoi'
 
 const POOL_SIZE = parseInt(process.env.PRISMA_POOL_SIZE || '3', 10)
 const POOL_TIMEOUT = parseInt(process.env.PRISMA_POOL_TIMEOUT || '10', 10)
@@ -33,6 +34,8 @@ const registryPrisma = new PrismaClient({
 interface CachedClient {
     client: StorePrisma
     lastUsed: number
+    /** Số lượt chạy dài đang GIỮ client này (cron đồng bộ, quét toàn bộ). >0 = cấm thải. */
+    dangBan: number
 }
 
 const branchClients = new Map<string, CachedClient>()
@@ -107,7 +110,7 @@ function getStorePrisma(schemaName: string): StorePrisma {
     // Stash schema name để tiện tra ngược (vd webhook dispatch fast-path).
     ;(client as any).__schema = schemaName
 
-    branchClients.set(schemaName, { client, lastUsed: Date.now() })
+    branchClients.set(schemaName, { client, lastUsed: Date.now(), dangBan: 0 })
     return client
 }
 
@@ -130,9 +133,13 @@ function getStorePrisma(schemaName: string): StorePrisma {
 const NHAN_ROI_MS = parseInt(process.env.PRISMA_IDLE_EVICT_MS || String(10 * 60_000), 10)
 
 function thaiClientNhanRoi(): void {
-    const nay = Date.now()
-    for (const [schema, val] of branchClients) {
-        if (nay - val.lastUsed < NHAN_ROI_MS) continue
+    /* Phần QUYẾT ĐỊNH nằm ở lib/thaiClientNhanRoi.ts (thuần, có bộ kiểm riêng);
+     * ở đây chỉ thi hành. Client đang có lượt chạy dài giữ (dangBan > 0) KHÔNG
+     * bị thải — xem giuClient(). */
+    const danhSach = [...branchClients.entries()].map(([schema, v]) => ({ schema, lastUsed: v.lastUsed, dangBan: v.dangBan }))
+    for (const schema of chonClientDeThai(danhSach, Date.now(), NHAN_ROI_MS)) {
+        const val = branchClients.get(schema)
+        if (!val) continue
         branchClients.delete(schema)
         val.client.$disconnect().catch(() => { })
     }
@@ -301,8 +308,46 @@ function dangGiuClient(schemaName: string): boolean {
 function traClient(schemaName: string): void {
     const c = branchClients.get(schemaName)
     if (!c) return
+    // Lượt chạy dài khác đang giữ → để yên, họ sẽ nhả sau.
+    if (c.dangBan > 0) return
     branchClients.delete(schemaName)
     c.client.$disconnect().catch(() => { })
+}
+
+/**
+ * GIỮ client cho một lượt chạy dài, trả về hàm NHẢ. Dùng dạng:
+ *
+ *     const nha = giuClient(schema)
+ *     try { …chạy hàng chục phút… } finally { nha() }
+ *
+ * ⚠ VÌ SAO PHẢI CÓ (sự cố đêm 17→18/08/2026): bộ thải nhàn rỗi chỉ nhìn
+ * `lastUsed`, mà `lastUsed` chỉ được chạm khi ai đó gọi getStorePrisma().
+ * Cron đồng bộ gọi hàm đó MỘT LẦN đầu lượt rồi giữ tham chiếu client suốt cả
+ * lượt — một lượt kéo lịch sử có thể dài hàng chục phút. Đến phút thứ 10 bộ
+ * thải coi client là nhàn rỗi và $disconnect() NGAY DƯỚI CHÂN cron đang chạy.
+ *
+ * Hậu quả đo được: container tự tắt/khởi động lại 12 lần từ 01:00 đến 06:46,
+ * 563 lần "connection limit: 1", 575 lần "Engine is not yet connected" riêng
+ * giờ 06h, và 289 đơn chuyển hỏng cùng một phút. Ban ngày không lộ vì request
+ * người dùng liên tục chạm client nên lastUsed luôn tươi; BAN ĐÊM chỉ còn cron
+ * dùng nên nó chết. Đây là hồi quy do chính cơ chế thải nhàn rỗi thêm ngày
+ * 16/08 gây ra — nó đúng ở nửa "cửa hàng ngồi im", sai ở nửa "cron chạy dài".
+ *
+ * Nhả bằng bộ đếm chứ không phải cờ, vì cùng lúc có thể có nhiều lượt giữ
+ * (autoSync + feeSync + reconcile cùng một schema).
+ */
+function giuClient(schemaName: string): () => void {
+    getStorePrisma(schemaName)               // đảm bảo tồn tại + chạm lastUsed
+    const c = branchClients.get(schemaName)
+    if (!c) return () => { }
+    c.dangBan++
+    let daNha = false
+    return () => {
+        if (daNha) return                    // gọi nhả hai lần không được trừ hai
+        daNha = true
+        const cc = branchClients.get(schemaName)
+        if (cc && cc.dangBan > 0) { cc.dangBan--; cc.lastUsed = Date.now() }
+    }
 }
 
 // ─── Concurrency helper ─────────────────────────────────────────────────────
@@ -346,6 +391,7 @@ export {
     disconnectAll,
     dangGiuClient,
     traClient,
+    giuClient,
     mapWithConcurrency,
     STORE_FANOUT_CONCURRENCY,
 }

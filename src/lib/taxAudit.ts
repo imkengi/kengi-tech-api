@@ -237,7 +237,9 @@ export interface KhoangKy {
     nhan: string
 }
 
-export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> {
+/* `homNay` tiêm được để ca kiểm không MỤC RUỖNG THEO LỊCH: 21/08/2026 một ca kiểm đỏ chỉ vì nửa
+ * đêm trôi qua mốc hạn ghi cứng trong fixture, dù hàm này chạy đúng. Mặc định vẫn là hôm nay. */
+export async function kiemTraThue(prisma: any, ky: KhoangKy, opts?: { homNay?: string }): Promise<HoSoThue> {
     const { from, to, start, end, maKy, nhan } = ky
     const canhBao: CanhBaoThue[] = []
 
@@ -799,7 +801,7 @@ export async function kiemTraThue(prisma: any, ky: KhoangKy): Promise<HoSoThue> 
      * phép kiểm tra sẽ câm lặng — đúng lúc cần nó nhất. Vì vậy khi bảng rỗng,
      * tự dựng hạn nộp trong bộ nhớ theo Điều 44 Luật Quản lý thuế 38/2019. */
     try {
-        const homNay = ngayISO(new Date())
+        const homNay = opts?.homNay || ngayISO(new Date())
         const dl = await prisma.taxDeadline.findMany({
             select: { taxType: true, period: true, dueDate: true, status: true },
         })

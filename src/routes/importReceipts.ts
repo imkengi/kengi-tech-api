@@ -1,11 +1,14 @@
 import { Router, Request, Response } from 'express'
 import { errorDetail } from '../lib/errorResponse'
+import { moTaLoi } from '../lib/gomLoi'
 import { authMiddleware, getBranchFilter, AuthRequest, getBranchId, canAccessBranch } from '../middleware/auth'
 import { calculateCostPrice, getCostPriceMethod } from '../lib/costPrice'
 import { nextCode } from '../lib/codeGenerator'
 import { getOrCreateDefaultWarehouse, updateWarehouseStock, adjustSellableStock } from '../lib/warehouseHelper'
 import { emitStockChanged, emitEntityEvent, webhooksActive } from '../lib/webhookDispatch'
 import { postImportReceiptJournal, postExpenseJournal, refsOfImport, reverseJournalRefs } from '../lib/autoJournalPurchase'
+import { tinhHanTraTheoQuyTac, quyTacTuSupplier, nhanQuyTac, mucHanTra } from '../lib/dieuKhoanThanhToan'
+import { tongPhieuChuaTraTheoNcc, congNoHienThi } from '../lib/congNoNcc'
 
 /**
  * MỘT SỐ HOÁ ĐƠN CHỈ ĐƯỢC DÙNG MỘT LẦN CHO MỘT NHÀ CUNG CẤP.
@@ -91,6 +94,7 @@ router.get('/duplicates', authMiddleware, async (req: AuthRequest, res: Response
         const tu = new Date(Date.now() - thang * 30 * 86400_000)
         const chuan = (v: any) => String(v || '').replace(/\s+/g, '').toLowerCase()
 
+        const TRAN_DS = 5000
         const ds: any[] = await prisma.importReceipt.findMany({
             where: { createdAt: { gte: tu }, status: { not: 'cancelled' }, vatInvoiceNo: { not: null } },
             select: {
@@ -98,8 +102,11 @@ router.get('/duplicates', authMiddleware, async (req: AuthRequest, res: Response
                 totalCost: true, vatAmount: true, createdAt: true, transactionDate: true, status: true,
             },
             orderBy: { createdAt: 'asc' },
-            take: 5000,
+            take: TRAN_DS,
         })
+        /* Chạm trần = CHƯA soi hết. "Không thấy trùng" lúc đó không đồng nghĩa "không có trùng" —
+         * đừng để câu trấn an đứng trên một phép soi dở dang (20/08/2026). */
+        const catDs = ds.length >= TRAN_DS
 
         const nhom = new Map<string, any[]>()
         for (const r of ds) {
@@ -139,6 +146,9 @@ router.get('/duplicates', authMiddleware, async (req: AuthRequest, res: Response
          * Đo trên dữ liệu thật 14/08/2026: mã SHD4038 vừa nằm trong phiếu trùng
          * (+10) vừa đang tồn -557. Huỷ xong sẽ thành -567. */
         let soMaSeAmThem = 0
+        /* Không đếm được ≠ không có mã nào sẽ âm. Mất câu cảnh báo này thì người dùng huỷ phiếu
+         * trùng xong mới phát hiện tồn âm sâu hơn (20/08/2026). */
+        let khongDemDuocAm = false
         if (cap.length > 0) {
             const idThua = cap.flatMap(c => c.phieu.filter((p: any) => !p.laPhieuGoc).map((p: any) => p.id))
             if (idThua.length > 0) {
@@ -146,12 +156,12 @@ router.get('/duplicates', authMiddleware, async (req: AuthRequest, res: Response
                     where: { receiptId: { in: idThua } },
                     select: { productId: true },
                     take: 2000,
-                }).catch(() => [])
+                }).catch(() => { khongDemDuocAm = true; return [] })
                 const idHang = Array.from(new Set(dong.map((d: any) => String(d.productId)).filter(Boolean)))
                 if (idHang.length > 0) {
                     const am: any = await prisma.product.count({
                         where: { id: { in: idHang }, stock: { lt: 0 } },
-                    }).catch(() => 0)
+                    }).catch(() => { khongDemDuocAm = true; return 0 })
                     soMaSeAmThem = Number(am) || 0
                 }
             }
@@ -165,9 +175,16 @@ router.get('/duplicates', authMiddleware, async (req: AuthRequest, res: Response
                 tongGhiThua: cap.reduce((s, c) => s + c.tienGhiThua, 0),
                 soMaSeAmThem,
                 cap,
+                biCat: catDs,
+                soPhieuDaSoi: ds.length,
                 ghiChu: cap.length === 0
-                    ? 'Không có phiếu nhập nào trùng số hoá đơn.'
+                    ? (catDs
+                        ? `Chưa thấy phiếu trùng trong ${ds.length.toLocaleString('vi-VN')} phiếu ĐẦU TIÊN — đã chạm trần nên CHƯA soi hết ${thang} tháng. Thu hẹp khoảng tháng để soi đủ.`
+                        : 'Không có phiếu nhập nào trùng số hoá đơn.')
                     : 'Giữ phiếu ĐẦU TIÊN, huỷ phiếu sau. Huỷ phiếu nhập sẽ tự trừ lại tồn kho và đảo bút toán tương ứng.'
+                        + (khongDemDuocAm
+                            ? ' Lưu ý: CHƯA đếm được số mã đang âm trong nhóm này (đọc dữ liệu lỗi) — đừng hiểu là không có mã nào âm.'
+                            : '')
                         + (soMaSeAmThem > 0
                             ? ` Lưu ý: ${soMaSeAmThem} mã trong nhóm này ĐANG ÂM, nên huỷ xong chúng sẽ âm sâu hơn. Đó là con số ĐÚNG — phần dương giả từ phiếu trùng đang che bớt độ âm thật. Kiểm kê nhóm mã đó sau khi huỷ.`
                             : ''),
@@ -179,6 +196,118 @@ router.get('/duplicates', authMiddleware, async (req: AuthRequest, res: Response
     }
 })
 
+
+/**
+ * GET /import-receipts/payment-due — HẠN THANH TOÁN NHÀ CUNG CẤP (18/08/2026).
+ *
+ * Yêu cầu chủ shop: "các mốc thời gian trả tiền cho NCC, từ gần đến xa; quá hạn
+ * đỏ, gần tới hạn vàng, chưa tới hạn xanh". Mỗi dòng = một phiếu nhập CHƯA trả
+ * đủ (paymentStatus ≠ paid — phiếu cũ mặc định paid nên không lọt vào đây).
+ * Mức màu (muc) tính MỘT chỗ ở BE bằng mucHanTra(); FE chỉ tô. Phiếu không có
+ * hạn xếp cuối, nhóm riêng — không bịa hạn.
+ *
+ * ?sapDen=N — ngưỡng "sắp đến hạn" tính bằng ngày (mặc định 7); ?supplierId=.
+ */
+router.get('/payment-due', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        /* Cùng luật với GET / (getBranchFilter): chi nhánh CHÍNH thấy hết. Bản đầu dùng getBranchId → phiếu
+         * đồng bộ KiotViet (branchId null) bị lọc mất → HUTI thấy 0 phiếu trong khi có 293 (18/08/2026). */
+        const branchId = getBranchFilter(req).branchId as string | undefined
+        const sapDenNgay = Math.max(1, Math.min(60, Number(req.query.sapDen) || 7))
+        /* CHỈ phiếu đã hoàn thành (đã nhận hàng) mới là nợ phải trả — cùng định nghĩa với
+         * sổ đối chiếu (lib/reconcile.ts) và hồ sơ kiểm toán (lib/auditPack.ts). Bản đầu lấy
+         * ≠ cancelled nên gồm cả phiếu NHÁP chưa nhận hàng — hai màn hình sẽ ra hai số. */
+        const where: any = { paymentStatus: { in: ['unpaid', 'partial'] }, status: 'completed' }
+        if (branchId) where.branchId = branchId
+        if (req.query.supplierId) where.supplierId = String(req.query.supplierId)
+        /* Ba cái trần dưới đây trước để trần trụi trong code. Chạm trần thì màn hình HỤT phiếu/NCC
+         * mà không nói gì — nợ phải trả trông nhẹ đi. Nay khai thẳng trong `tomTat.biCat` để giao
+         * diện nói ra (20/08/2026 — cùng họ với Dạng 16 "cắt ngầm"). */
+        const TRAN_PHIEU = 1000, TRAN_NCC = 2000, TRAN_HIEN_NCC = 300
+        const rows: any[] = await (prisma as any).importReceipt.findMany({
+            where,
+            select: { id: true, code: true, supplierId: true, supplierName: true, totalCost: true, paidAmount: true, paymentStatus: true, dueDate: true, paymentTerm: true, createdAt: true, transactionDate: true, status: true },
+            orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }],
+            take: TRAN_PHIEU,
+        })
+        /* Hồ sơ NCC đọc hỏng ⇒ mất điều khoản thanh toán ⇒ mọi phiếu không suy được hạn và rơi
+         * hết vào nhóm "chưa có hạn": màn hình trông như cửa hàng chẳng nợ ai đến hạn cả. */
+        let loiDocNcc = false
+        const nccWhere: any = {}
+        if (req.query.supplierId) nccWhere.id = String(req.query.supplierId)
+        // Tuần tự (pool prod = 1, quy ước dự án), không Promise.all
+        const nccAll: any[] = await (prisma as any).supplier.findMany({ where: nccWhere, take: TRAN_NCC,
+            select: { id: true, code: true, name: true, payable: true, paymentTerms: true, paymentTermType: true, paymentTermDays: true, paymentTermDom: true, paymentTermMonthOffset: true } }).catch(() => { loiDocNcc = true; return [] })
+        const phieuTheoNcc: Map<string, { tong: number; so: number }> = await tongPhieuChuaTraTheoNcc(prisma, req.query.supplierId ? [String(req.query.supplierId)] : undefined)
+        const nccTheoId = new Map<string, any>(nccAll.map((x: any) => [x.id, x]))
+        const homNay = new Date()
+        const items = rows.map(r => {
+            const conLai = Math.max(0, (Number(r.totalCost) || 0) - (Number(r.paidAmount) || 0))
+            /* Phiếu không ghi hạn → SUY SỐNG từ điều khoản NCC hiện tại (theo ngày chứng từ). Phiếu tạo trước
+             * khi đặt điều khoản (HUTI: 310 phiếu) nhờ vậy vẫn lên mốc đỏ/vàng/xanh ngay khi chủ shop đặt
+             * điều khoản; hanSuy=true để FE ghi rõ "hạn suy từ điều khoản NCC", không giả vờ phiếu tự ghi. */
+            const ncc = r.supplierId ? nccTheoId.get(r.supplierId) : null
+            const han = tinhHanTraTheoQuyTac(r.transactionDate || r.createdAt, r.dueDate, quyTacTuSupplier(ncc))
+            const hanSuy = !r.dueDate && !!han
+            const muc = mucHanTra(han, homNay, sapDenNgay)
+            const soNgay = han ? Math.ceil((han.getTime() - homNay.getTime()) / 86_400_000) : null
+            return { id: r.id, code: r.code, supplierId: r.supplierId, supplierName: r.supplierName,
+                tong: Math.round(Number(r.totalCost) || 0), daTra: Math.round(Number(r.paidAmount) || 0), conLai: Math.round(conLai),
+                paymentStatus: r.paymentStatus, dueDate: han, hanSuy, paymentTerm: r.paymentTerm || (hanSuy ? nhanQuyTac(quyTacTuSupplier(ncc)) : null), ngayNhap: r.transactionDate || r.createdAt,
+                muc, soNgayConLai: soNgay }   // âm = đã quá hạn bấy nhiêu ngày
+        })
+        // Có hạn trước (gần → xa), không hạn xếp cuối
+        items.sort((a, b) => (a.dueDate ? a.dueDate.getTime() : Infinity) - (b.dueDate ? b.dueDate.getTime() : Infinity))
+        const gom = (m: string) => items.filter(x => x.muc === m)
+        const tong = (xs: any[]) => xs.reduce((s2, x) => s2 + x.conLai, 0)
+        /* CÔNG NỢ THEO NCC — cùng công thức với GET /suppliers (lib/congNoNcc.ts): payable (số dư đầu kỳ)
+         * + Σ phiếu chưa trả, kẹp ≥ 0. HUTI 18/08/2026: KiotViet ghi PO chưa trả, nợ NCC 20,15 tỷ; danh sách
+         * NCC từng hiện 40,49 tỷ vì payable bị ghi = tổng nợ KV rồi cộng phiếu lần nữa (đã sửa ở đồng bộ +
+         * đối chiếu). Ở đây hiện MỘT số/NCC là số danh sách NCC hiển thị, tách rõ "sổ" và "phiếu";
+         * phần dư ÂM = có khoản đã trả chưa gắn vào phiếu (phiếu treo ≠ nợ, như bên khách). Không bịa hạn. */
+        const theoNccDay = nccAll.map(sn => {
+            const soDuSo = Math.round(Number(sn.payable) || 0)
+            const ph = phieuTheoNcc.get(sn.id) || { tong: 0, so: 0 }
+            return { supplierId: sn.id, code: sn.code, name: sn.name,
+                soDuSo, phieuChuaTra: Math.round(ph.tong), soPhieuChuaTra: ph.so,
+                congNo: congNoHienThi(soDuSo, ph.tong),
+                daTraChuaGanPhieu: soDuSo < 0 ? -soDuSo : 0,   // KV nói nợ ít hơn Σ phiếu ⇒ có khoản trả chưa gắn
+                dieuKhoan: sn.paymentTerms || nhanQuyTac(quyTacTuSupplier(sn)) || null }
+        }).filter(x => x.congNo > 0 || x.phieuChuaTra > 0).sort((a, b) => b.congNo - a.congNo)
+        const theoNcc = theoNccDay.slice(0, TRAN_HIEN_NCC)
+        res.json({ success: true, data: {
+            items,
+            theoNcc,
+            tomTat: {
+                soPhieu: items.length, tongConLai: tong(items),
+                quaHan: { so: gom('qua-han').length, tien: tong(gom('qua-han')) },
+                sapDen: { so: gom('sap-den').length, tien: tong(gom('sap-den')), trongNgay: sapDenNgay },
+                chuaDen: { so: gom('chua-den').length, tien: tong(gom('chua-den')) },
+                khongHan: { so: gom('khong-han').length, tien: tong(gom('khong-han')) },
+                khongDocDuocNcc: loiDocNcc,
+                biCat: {
+                    phieu: rows.length >= TRAN_PHIEU,
+                    ncc: nccAll.length >= TRAN_NCC,
+                    nccHienThi: theoNccDay.length > TRAN_HIEN_NCC,
+                    soNccBoBot: Math.max(0, theoNccDay.length - TRAN_HIEN_NCC),
+                    /* Gửi luôn CON SỐ trần, đừng để giao diện tự viết cứng (21/08/2026).
+                     * Trang đang in "1.000 phiếu / 2.000 NCC / 300 dòng" bằng chữ viết tay — hôm nay
+                     * khớp, nhưng sửa trần ở đây một cái là **lời khai bị cắt trở thành lời khai
+                     * SAI**, mà lại là loại sai rất khó thấy: vẫn có cảnh báo, chỉ là sai số.
+                     * Cùng một hằng số nằm hai nơi thì sớm muộn cũng lệch. */
+                    tranPhieu: TRAN_PHIEU,
+                    tranNcc: TRAN_NCC,
+                    tranHienNcc: TRAN_HIEN_NCC,
+                },
+                theoNcc: { soNcc: theoNcc.length, tongCongNo: theoNcc.reduce((s2, x) => s2 + x.congNo, 0), daTraChuaGanPhieu: theoNcc.reduce((s2, x) => s2 + x.daTraChuaGanPhieu, 0) },
+            },
+        } })
+    } catch (err: any) {
+        console.error('[payment-due]', err?.message || err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
 
 // GET /api/import-receipts
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
@@ -413,6 +542,25 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         }
         const totalItems = items.reduce((sum: number, item: any) => sum + item.quantity, 0)
 
+        // Điều khoản thanh toán mặc định của NCC — chỉ tra khi phiếu KHÔNG tự ghi hạn.
+        let hanTraTuNcc: Date | null = receiptData.dueDate ? new Date(receiptData.dueDate) : null
+        let nhanDieuKhoanNcc: string | null = null
+        if (!hanTraTuNcc && receiptData.supplierId) {
+            const ncc = await (prisma as any).supplier.findUnique({
+                where: { id: String(receiptData.supplierId) },
+                select: { paymentTermType: true, paymentTermDays: true, paymentTermDom: true, paymentTermMonthOffset: true, paymentTerms: true },
+            }).catch(() => null)
+            /* Quy tắc ĐẦY ĐỦ của NCC (net/dom/eom, 18/08/2026 chiều) — bản ghi cũ chỉ có
+             * paymentTermDays được hiểu là net. Ngày tính theo GIỜ VN. Không quy tắc → trống. */
+            const quyTac = quyTacTuSupplier(ncc)
+            // Tính từ NGÀY CHỨNG TỪ của phiếu (importDate/transactionDate), không phải lúc bấm lưu — phiếu nhập
+            // lùi ngày (hàng nhận 01/08, ghi 18/08, NCC net-30) phải ra hạn 31/08 chứ không phải 17/09; cùng luật
+            // với /payment-due suy sống (rà soát độc lập 19/08/2026).
+            const ngayChungTu = receiptData.importDate ? new Date(receiptData.importDate) : (receiptData.transactionDate ? new Date(receiptData.transactionDate) : new Date())
+            hanTraTuNcc = tinhHanTraTheoQuyTac(isNaN(ngayChungTu.getTime()) ? new Date() : ngayChungTu, null, quyTac)
+            nhanDieuKhoanNcc = ncc?.paymentTerms || nhanQuyTac(quyTac) || null
+        }
+
         // Công nợ NCC: client gửi paidAmount (số đã trả NCC). Không gửi → coi như
         // trả đủ (giữ nguyên hành vi cũ, không phát sinh nợ ảo).
         const paidAmount = receiptData.paidAmount !== undefined && receiptData.paidAmount !== null
@@ -429,8 +577,11 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
                 status: receiptData.status || 'draft',
                 paidAmount,
                 paymentStatus,
-                dueDate: receiptData.dueDate ? new Date(receiptData.dueDate) : null,
-                paymentTerm: receiptData.paymentTerm || null,
+                /* Hạn trả: phiếu tự ghi thì giữ; không ghi mà NCC có điều khoản
+                 * (Supplier.paymentTermDays) thì suy = ngày nhập + số ngày; cả hai
+                 * đều không có thì để trống. Xem lib/dieuKhoanThanhToan.ts. */
+                dueDate: hanTraTuNcc,
+                paymentTerm: receiptData.paymentTerm || nhanDieuKhoanNcc || null,
                 // Có hoá đơn VAT đầu vào → mới tính vào tồn kho thuế. Client gửi cờ;
                 // không gửi thì suy từ có tiền thuế GTGT (vatAmount > 0).
                 hasVatInvoice: receiptData.hasVatInvoice !== undefined
@@ -598,7 +749,10 @@ router.put('/:id/complete', authMiddleware, async (req: AuthRequest, res: Respon
         // như đường tạo phiếu. VAT: chỉ HKD/cá nhân mới tính vào giá vốn; công ty
         // kê khai khấu trừ thì VAT tách riêng (TK 1331), không vào giá vốn.
         const rAny: any = receipt
-        const _bt2 = (await prisma.storeSettings.findFirst({ select: { businessType: true } }).catch(() => null))?.businessType || 'company'
+        /* Đọc hỏng KHÔNG được mặc định 'company': hộ kinh doanh mà rơi nhầm nhánh này thì VAT
+         * không vào giá vốn ⇒ giá vốn thấp giả, và con số đó được GHI CỨNG vào tồn kho, sai vĩnh
+         * viễn cho tới khi ai đó phát hiện. Thà hỏng lộ ra ngay (20/08/2026). */
+        const _bt2 = (await prisma.storeSettings.findFirst({ select: { businessType: true } }))?.businessType || 'company'
         const _vatIntoCost2 = _bt2 === 'household' || _bt2 === 'individual'
         const cExtra = (_vatIntoCost2 ? (Number(rAny.vatAmount) || 0) : 0)
             + (Number(rAny.shippingFee) || 0)
@@ -813,25 +967,35 @@ router.put('/:id/pay', authMiddleware, async (req: AuthRequest, res: Response) =
         // category 'supplier_payment' → auto-journal ghi Nợ 331/Có 11x (giảm phải
         // trả), KHÔNG vào chi phí 6428. paidBy quyết định vế Có 111 (cash) hay 112.
         const payBy = String(req.body?.paidBy || req.body?.method || 'cash').toLowerCase()
-        const phieuChi = await (prisma as any).expense.create({
-            data: {
-                description: `Trả tiền NCC ${receipt.supplierName || ''} - phiếu nhập ${receipt.code}`.trim(),
-                amount: payAmount,
-                category: 'supplier_payment',
-                paidBy: payBy === 'bank' || payBy === 'transfer' ? 'bank' : 'cash',
-                date: new Date(),
-                branchId: receipt.branchId || null,
-            },
-        }).catch((e: any) => { console.error('Expense mirror failed:', e.message); return null })
-
-        /* Ghi sổ ngay cho phiếu chi vừa tạo (Nợ 331 / Có 111|112 vì category là
-         * supplier_payment). CHỈ ghi qua đường phiếu chi này — thêm một bút toán
-         * PAYSUP-* nữa là ghi trùng, vì backfill cũng ghi theo EXP-<id>. */
-        if (phieuChi) {
-            await postExpenseJournal(prisma, phieuChi as any, {
-                branchId: receipt.branchId || null,
-                userId: (req as any).user?.userId || (req as any).user?.id || null,
-            }).catch(() => { })
+        /* PHIẾU CHI + BÚT TOÁN đi cùng nhau (20/08/2026). Bản cũ tạo phiếu chi rồi ghi sổ ở lệnh
+         * riêng với `.catch(() => { })` RỖNG: phiếu nhập ghi "đã trả", có phiếu chi, mà sổ không
+         * có bút toán giảm 331 nào — sổ và kho tiền lệch nhau trong im lặng.
+         * Vẫn để NGOÀI transaction thanh toán (khối đó dùng khoá lạc quan riêng), nhưng hỏng thì
+         * phải kêu: phiếu nhập đã ghi trả rồi, người ta cần biết mà bù sổ. */
+        let phieuChi: any = null
+        try {
+            phieuChi = await (prisma as any).$transaction(async (t: any) => {
+                const pc = await t.expense.create({
+                    data: {
+                        description: `Trả tiền NCC ${receipt.supplierName || ''} - phiếu nhập ${receipt.code}`.trim(),
+                        amount: payAmount,
+                        category: 'supplier_payment',
+                        paidBy: payBy === 'bank' || payBy === 'transfer' ? 'bank' : 'cash',
+                        date: new Date(),
+                        branchId: receipt.branchId || null,
+                    },
+                })
+                /* Ghi sổ ngay cho phiếu chi vừa tạo (Nợ 331 / Có 111|112 vì category là
+                 * supplier_payment). CHỈ ghi qua đường phiếu chi này — thêm một bút toán
+                 * PAYSUP-* nữa là ghi trùng, vì backfill cũng ghi theo EXP-<id>. */
+                await postExpenseJournal(t, pc as any, {
+                    branchId: receipt.branchId || null,
+                    userId: (req as any).user?.userId || (req as any).user?.id || null,
+                })
+                return pc
+            })
+        } catch (e: any) {
+            console.error(`[tra-ncc] Phiếu nhập ${receipt.code} ĐÃ ghi trả ${payAmount} nhưng KHÔNG tạo được phiếu chi + bút toán — sổ đang thiếu khoản chi này:`, moTaLoi(e))
         }
 
         // Audit log (best-effort)

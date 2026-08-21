@@ -1,6 +1,7 @@
 import { Router, Response, Request } from 'express'
 import { authMiddleware, sseAuthMiddleware, AuthRequest } from '../middleware/auth'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
+import { registryPrisma, getStorePrisma } from '../lib/prisma'
 
 const router = Router()
 
@@ -205,7 +206,13 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         let duePaymentNotifs: any[] = []
         try {
             const now = new Date()
-            const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+            /* ĐẦU NGÀY THEO GIỜ VIỆT NAM, không theo giờ máy chủ.
+             * Cloud Run chạy UTC nên `now.getFullYear()` cho mốc 00:00 UTC = 07:00 giờ VN ⇒
+             * từ 0h đến 7h sáng, phiếu đến hạn HÔM NAY bị xếp nhầm thành QUÁ HẠN, và cửa sổ
+             * 3 ngày lệch theo. Cùng lỗi đã sửa ở thống kê giao dịch (21/08). */
+            const VN_MS = 7 * 3600_000
+            const vnNow = new Date(now.getTime() + VN_MS)
+            const startToday = new Date(Date.UTC(vnNow.getUTCFullYear(), vnNow.getUTCMonth(), vnNow.getUTCDate()) - VN_MS)
             const lead = new Date(startToday.getTime() + 3 * 86400_000 + 86399_999) // hết ngày (hôm nay + 3)
             const duePayments = await prisma.importReceipt.findMany({
                 where: {
@@ -268,18 +275,51 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 // trả ok để client tự xử lý local.
 // POST /notifications/device-token — app Android đăng ký token FCM (upsert).
 // Gửi {token: ''} kèm oldToken để gỡ khi logout (tuỳ chọn).
+//
+// MỘT TOKEN = MỘT CỬA HÀNG: cùng một máy đăng nhập lần lượt nhiều store sẽ để
+// token rơi rớt ở schema của TẤT CẢ các store từng vào → máy đang ở store B vẫn
+// ăn push của store A ("thông báo cửa hàng khác đẩy về"). Mỗi lần đăng ký,
+// quét gỡ token này khỏi mọi store khác — app cũ không cần cập nhật, mở app
+// lên là tự dọn.
 router.post('/device-token', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma! as any
         await ensureDeviceTokenTable(prisma)
         const token = String(req.body?.token || '').trim()
+        const oldToken = String(req.body?.oldToken || '').trim()
+        // Logout: chỉ gỡ oldToken khỏi store hiện tại, không đăng ký gì thêm
+        if (!token && oldToken) {
+            await prisma.$executeRawUnsafe(`DELETE FROM "DeviceToken" WHERE token = $1`, oldToken).catch(() => { })
+            res.json({ success: true }); return
+        }
         if (!token || token.length < 20) { res.status(400).json({ success: false, error: 'token?' }); return }
         await prisma.$executeRawUnsafe(
             `INSERT INTO "DeviceToken"(token, platform, "userId", "updatedAt")
              VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
              ON CONFLICT (token) DO UPDATE SET "userId" = $3, "updatedAt" = CURRENT_TIMESTAMP`,
             token, String(req.body?.platform || 'android'), req.user?.userId || null)
+        if (oldToken && oldToken !== token) {
+            await prisma.$executeRawUnsafe(`DELETE FROM "DeviceToken" WHERE token = $1`, oldToken).catch(() => { })
+        }
+
+        // Trả response NGAY rồi mới quét các store khác — vòng quét đi qua từng
+        // schema, không bắt app chờ (push là phụ, đăng nhập là chính).
         res.json({ success: true })
+
+        const currentSchema = req.user?.storeSchema
+        setImmediate(async () => {
+            try {
+                const stores = await registryPrisma.store.findMany({ select: { schema: true } })
+                for (const s of stores) {
+                    if (!s.schema || s.schema === currentSchema) continue
+                    try {
+                        const other = getStorePrisma(s.schema) as any
+                        // Bảng có thể chưa tồn tại ở store chưa từng đăng ký token → nuốt lỗi
+                        await other.$executeRawUnsafe(`DELETE FROM "DeviceToken" WHERE token = $1`, token)
+                    } catch { /* schema thiếu bảng / lỗi lẻ — bỏ qua */ }
+                }
+            } catch { /* quét dọn là best-effort */ }
+        })
     } catch (err: any) {
         res.status(500).json({ success: false, error: err?.message })
     }

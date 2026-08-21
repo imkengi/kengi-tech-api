@@ -6,6 +6,7 @@ import { TikTokService } from '../services/platforms/tiktok'
 import { convertOnlineOrderToTransaction } from '../services/orderSync'
 import { syncChannelReturns } from '../services/returnSync'
 import { reverseOnlineOrderEffects, isReversalStatus } from '../services/onlineOrderReversal'
+import { moTaLoi } from '../lib/gomLoi'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { publishEvent } from '../lib/pubsub'
 import { processComment } from '../services/fanpageAutoReply'
@@ -444,7 +445,7 @@ router.post('/tiktok', async (req: Request, res: Response) => {
                     orderDetail = await refreshedTiktok.getOrderDetail(orderId)
                 }
             } catch (refreshErr: any) {
-                console.error(`[TikTok Webhook] Token refresh failed: ${refreshErr.message}`)
+                console.error(`[TikTok Webhook] Token refresh failed: ${moTaLoi(refreshErr)}`)
             }
         }
 
@@ -488,7 +489,9 @@ router.post('/tiktok', async (req: Request, res: Response) => {
             try {
                 await convertOnlineOrderToTransaction(storePrisma, existing.id)
             } catch (convErr: any) {
-                console.warn(`[TikTok Webhook] Order conversion failed for ${orderId}: ${convErr.message}`)
+                /* `${convErr.message}` RỖNG với lỗi Prisma (nội dung ở code/meta) — mà đây
+                 * là đường cập nhật CHÍNH của TikTok, hỏng ở đây là đơn không vào sổ. */
+                console.warn(`[TikTok Webhook] Order conversion failed for ${orderId}: ${moTaLoi(convErr)}`)
             }
         } else {
             const newOrder = await storePrisma.onlineOrder.create({
@@ -539,7 +542,9 @@ router.post('/tiktok', async (req: Request, res: Response) => {
             try {
                 await convertOnlineOrderToTransaction(storePrisma, newOrder.id)
             } catch (convErr: any) {
-                console.warn(`[TikTok Webhook] Order conversion failed for ${orderId}: ${convErr.message}`)
+                /* `${convErr.message}` RỖNG với lỗi Prisma (nội dung ở code/meta) — mà đây
+                 * là đường cập nhật CHÍNH của TikTok, hỏng ở đây là đơn không vào sổ. */
+                console.warn(`[TikTok Webhook] Order conversion failed for ${orderId}: ${moTaLoi(convErr)}`)
             }
         }
 

@@ -122,10 +122,13 @@ const signed = (type: string, amount: number) => (type === 'debit' ? -1 : 1) * (
 
 // Cập nhật số dư tài khoản.
 async function applyToBalance(prisma: any, bankAccountId: string, delta: number) {
-    const acc = await prisma.bankAccount.findUnique({ where: { id: bankAccountId } }).catch(() => null)
+    /* Số dư cũ đọc hỏng ⇒ hàm lặng lẽ trả null ⇒ giao dịch VẪN được ghi nhưng SỐ DƯ KHÔNG ĐỔI:
+     * sổ ngân hàng trôi dần khỏi chính các giao dịch của nó, không có dấu hiệu nào. Ghi hỏng cũng
+     * vậy. Cả hai đều phải nổi lên để bên gọi biết mà xử (20/08/2026). */
+    const acc = await prisma.bankAccount.findUnique({ where: { id: bankAccountId } })
     if (!acc) return null
     const balance = round2((Number(acc.balance) || 0) + delta)
-    return prisma.bankAccount.update({ where: { id: bankAccountId }, data: { balance } }).catch(() => null)
+    return prisma.bankAccount.update({ where: { id: bankAccountId }, data: { balance } })
 }
 
 const sameDay = (a: Date, b: Date) =>
@@ -185,9 +188,9 @@ router.get('/accounts/:id', authMiddleware, async (req: AuthRequest, res: Respon
     try {
         await ensureTables(req)
         const prisma = req.storePrisma! as any
-        const acc = await prisma.bankAccount.findUnique({ where: { id: String(req.params.id) } }).catch(() => null)
+        const acc = await prisma.bankAccount.findUnique({ where: { id: String(req.params.id) } })
         if (!acc) return res.status(404).json({ success: false, error: 'Không tìm thấy tài khoản' })
-        const txCount = await prisma.bankTransaction.count({ where: { bankAccountId: acc.id } }).catch(() => 0)
+        const txCount = await prisma.bankTransaction.count({ where: { bankAccountId: acc.id } })
         res.json({ success: true, data: { ...acc, transactionCount: txCount } })
     } catch (err: any) {
         console.error('GET /ebanking/accounts/:id error:', err)
@@ -201,7 +204,8 @@ router.put('/accounts/:id', authMiddleware, requireRole('admin', 'manager', 'sup
         await ensureTables(req)
         const prisma = req.storePrisma! as any
         const id = String(req.params.id)
-        const acc = await prisma.bankAccount.findUnique({ where: { id } }).catch(() => null)
+        // Đọc hỏng ≠ không tìm thấy.
+        const acc = await prisma.bankAccount.findUnique({ where: { id } })
         if (!acc) return res.status(404).json({ success: false, error: 'Không tìm thấy tài khoản' })
         const b = req.body || {}
         if (b.isDefault) await prisma.bankAccount.updateMany({ data: { isDefault: false } }).catch(() => {})
@@ -224,9 +228,12 @@ router.delete('/accounts/:id', authMiddleware, requireRole('admin', 'manager', '
         await ensureTables(req)
         const prisma = req.storePrisma! as any
         const id = String(req.params.id)
-        const acc = await prisma.bankAccount.findUnique({ where: { id } }).catch(() => null)
+        // Đọc hỏng ≠ không tìm thấy.
+        const acc = await prisma.bankAccount.findUnique({ where: { id } })
         if (!acc) return res.status(404).json({ success: false, error: 'Không tìm thấy tài khoản' })
-        const txCount = await prisma.bankTransaction.count({ where: { bankAccountId: id } }).catch(() => 0)
+        /* ĐẾM HỎNG ⇒ 0 ⇒ chốt "còn giao dịch thì không cho xoá" TỰ MỞ, và tài khoản ngân hàng
+         * kèm lịch sử bị xoá thật (20/08/2026). Đếm không được thì không xoá. */
+        const txCount = await prisma.bankTransaction.count({ where: { bankAccountId: id } })
         if (txCount > 0) return res.status(400).json({ success: false, error: `Không thể xóa: tài khoản còn ${txCount} giao dịch` })
         await prisma.bankAccount.delete({ where: { id } })
         res.json({ success: true, data: { id, deleted: true } })
@@ -242,10 +249,11 @@ router.get('/accounts/:id/balance', authMiddleware, async (req: AuthRequest, res
         await ensureTables(req)
         const prisma = req.storePrisma! as any
         const id = String(req.params.id)
-        const acc = await prisma.bankAccount.findUnique({ where: { id } }).catch(() => null)
+        const acc = await prisma.bankAccount.findUnique({ where: { id } })
         if (!acc) return res.status(404).json({ success: false, error: 'Không tìm thấy tài khoản' })
-        // Số dư tính lại từ giao dịch (đối chiếu với số dư lưu trữ).
-        const txns = await prisma.bankTransaction.findMany({ where: { bankAccountId: id } }).catch(() => [])
+        /* Số dư tính lại từ giao dịch (đối chiếu với số dư lưu trữ). Nuốt lỗi ⇒ tính ra 0 ⇒ màn
+         * hình báo "lệch toàn bộ số dư" — một cảnh báo giả trên tiền ngân hàng. */
+        const txns = await prisma.bankTransaction.findMany({ where: { bankAccountId: id } })
         const computed = round2(txns.reduce((s: number, t: any) => s + signed(t.type, t.amount), 0))
         res.json({
             success: true,
@@ -279,8 +287,9 @@ router.get('/accounts/:id/transactions', authMiddleware, async (req: AuthRequest
         const page = Math.max(1, Number(req.query.page) || 1)
         const pageSize = Math.min(500, Math.max(1, Number(req.query.pageSize) || 100))
         const [total, data] = await Promise.all([
-            prisma.bankTransaction.count({ where }).catch(() => 0),
-            prisma.bankTransaction.findMany({ where, orderBy: { date: 'desc' }, skip: (page - 1) * pageSize, take: pageSize }).catch(() => []),
+            // Nuốt lỗi ⇒ "0 giao dịch" trên sao kê một tài khoản đang có tiền chạy qua.
+            prisma.bankTransaction.count({ where }),
+            prisma.bankTransaction.findMany({ where, orderBy: { date: 'desc' }, skip: (page - 1) * pageSize, take: pageSize }),
         ])
         res.json({ success: true, data, pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) } })
     } catch (err: any) {
@@ -303,21 +312,27 @@ router.post('/accounts/:id/transactions', authMiddleware, requireRole('admin', '
         if (amount <= 0) return res.status(400).json({ success: false, error: 'Số tiền (amount) phải > 0' })
         const when = b.transactionDate ? new Date(b.transactionDate) : new Date()
 
-        const tx = await prisma.bankTransaction.create({
-            data: {
-                bankAccountId: id, type, amount,
-                description: b.description || (type === 'credit' ? 'Tiền vào' : 'Tiền ra'),
-                transactionDate: when, date: when,
-                reference: b.referenceNo || b.reference || null,
-                referenceNo: b.referenceNo || b.reference || null,
-                counterpartyName: b.counterpartyName ?? null,
-                counterpartyAccount: b.counterpartyAccount ?? null,
-                isReconciled: false,
-                notes: b.notes ?? null,
-                branchId: acc.branchId || getBranchId(req) || null,
-            },
+        /* Ghi giao dịch và cộng số dư phải CÙNG SỐNG CÙNG CHẾT (20/08/2026): trước đây tạo giao
+         * dịch xong mới cộng số dư ở lệnh riêng — cộng hỏng thì giao dịch vẫn nằm đó còn số dư
+         * đứng yên, sổ ngân hàng lệch dần mà không ai biết. */
+        const { tx, account } = await prisma.$transaction(async (t: any) => {
+            const tx = await t.bankTransaction.create({
+                data: {
+                    bankAccountId: id, type, amount,
+                    description: b.description || (type === 'credit' ? 'Tiền vào' : 'Tiền ra'),
+                    transactionDate: when, date: when,
+                    reference: b.referenceNo || b.reference || null,
+                    referenceNo: b.referenceNo || b.reference || null,
+                    counterpartyName: b.counterpartyName ?? null,
+                    counterpartyAccount: b.counterpartyAccount ?? null,
+                    isReconciled: false,
+                    notes: b.notes ?? null,
+                    branchId: acc.branchId || getBranchId(req) || null,
+                },
+            })
+            const account = await applyToBalance(t, id, signed(type, amount))
+            return { tx, account }
         })
-        const account = await applyToBalance(prisma, id, signed(type, amount))
         res.status(201).json({ success: true, data: { transaction: tx, account } })
     } catch (err: any) {
         console.error('POST /ebanking/accounts/:id/transactions error:', err)
@@ -364,21 +379,27 @@ router.post('/accounts/:id/import-csv', authMiddleware, requireRole('admin', 'ma
             const type = (rawType.includes('debit') || rawType.includes('ra') || rawType === '-' || amount < 0) ? 'debit' : 'credit'
             const when = r.transactionDate ? new Date(r.transactionDate) : new Date()
             const validDate = isNaN(when.getTime()) ? new Date() : when
-            await prisma.bankTransaction.create({
-                data: {
-                    bankAccountId: id, type, amount: Math.abs(amount),
-                    description: r.description || 'Giao dịch nhập từ CSV',
-                    transactionDate: validDate, date: validDate,
-                    reference: r.referenceNo || null, referenceNo: r.referenceNo || null,
-                    counterpartyName: r.counterpartyName || null,
-                    isReconciled: false,
-                    branchId: acc.branchId || getBranchId(req) || null,
-                },
+            /* MỖI DÒNG một transaction nhỏ, KHÔNG ôm cả file trong một transaction: prod chỉ có
+             * 1 kết nối Prisma, ôm cả file nghĩa là khoá API suốt lúc nhập. Đổi lại mỗi dòng đã
+             * ghi thì số dư của nó cũng đã cộng — nhập dở chừng vẫn nhất quán (20/08/2026). */
+            await prisma.$transaction(async (t: any) => {
+                await t.bankTransaction.create({
+                    data: {
+                        bankAccountId: id, type, amount: Math.abs(amount),
+                        description: r.description || 'Giao dịch nhập từ CSV',
+                        transactionDate: validDate, date: validDate,
+                        reference: r.referenceNo || null, referenceNo: r.referenceNo || null,
+                        counterpartyName: r.counterpartyName || null,
+                        isReconciled: false,
+                        branchId: acc.branchId || getBranchId(req) || null,
+                    },
+                })
+                await applyToBalance(t, id, signed(type, Math.abs(amount)))
             })
             imported++
             balanceDelta += signed(type, Math.abs(amount))
         }
-        const account = await applyToBalance(prisma, id, balanceDelta)
+        const account = await prisma.bankAccount.findUnique({ where: { id } })
         await prisma.bankAccount.update({ where: { id }, data: { lastSyncAt: new Date() } }).catch(() => {})
         res.json({ success: true, data: { imported, skipped, errors: errors.slice(0, 20), account } })
     } catch (err: any) {
@@ -397,7 +418,9 @@ router.post('/transactions/auto-reconcile', authMiddleware, requireRole('admin',
         const bankAccountId = req.query.bankAccountId || req.body?.bankAccountId
         const where: any = { isReconciled: false }
         if (bankAccountId) where.bankAccountId = String(bankAccountId)
-        const txns = await prisma.bankTransaction.findMany({ where, take: 1000 }).catch(() => [])
+        /* Cũng bỏ `.catch(() => [])`: đọc hỏng mà trả rỗng thì đối soát tự động báo "khớp 0 giao
+         * dịch" y như khi thật sự không có gì để khớp. */
+        const txns = await prisma.bankTransaction.findMany({ where, take: 1000 })
 
         let matched = 0
         const results: any[] = []
@@ -545,7 +568,8 @@ router.get('/transactions', authMiddleware, async (req: AuthRequest, res: Respon
     try {
         await ensureTables(req)
         const prisma = req.storePrisma! as any
-        const accounts = await prisma.bankAccount.findMany({ where: { ...getBranchFilter(req) } }).catch(() => [])
+        // Cùng lý do với /summary: tổng số dư 0đ do đọc hỏng là trấn an sai trên tiền ngân hàng.
+        const accounts = await prisma.bankAccount.findMany({ where: { ...getBranchFilter(req) } })
         const accNameById = new Map<string, string>(accounts.map((a: any) => [a.id, a.accountName || a.bankName || '']))
 
         const where: any = {}
@@ -562,8 +586,12 @@ router.get('/transactions', authMiddleware, async (req: AuthRequest, res: Respon
             }
         }
 
-        const data = await prisma.bankTransaction.findMany({ where, orderBy: { date: 'desc' }, take: 1000 }).catch(() => [])
-        res.json({ success: true, data: data.map((t: any) => toFeTxn(t, accNameById)) })
+        /* KHÔNG `.catch(() => [])` (20/08/2026): ensureTables() đã tạo bảng nếu thiếu, nên lỗi đọc
+         * ở đây là lỗi thật. Nuốt nó thành mảng rỗng + HTTP 200 nghĩa là màn hình sao kê hiện
+         * "chưa có giao dịch nào" — trình duyệt không có cách nào biết là hỏng. Thà 500. */
+        const TRAN_SAO_KE = 1000
+        const data = await prisma.bankTransaction.findMany({ where, orderBy: { date: 'desc' }, take: TRAN_SAO_KE })
+        res.json({ success: true, daCatBot: data.length >= TRAN_SAO_KE, data: data.map((t: any) => toFeTxn(t, accNameById)) })
     } catch (err: any) {
         console.error('GET /ebanking/transactions error:', err)
         res.status(500).json({ success: false, error: errMsg(err) })
@@ -586,18 +614,22 @@ router.post('/transactions', authMiddleware, requireRole('admin', 'manager', 'su
         if (amount <= 0) return res.status(400).json({ success: false, error: 'Số tiền phải khác 0' })
         const when = b.date ? new Date(b.date) : new Date()
 
-        const tx = await prisma.bankTransaction.create({
-            data: {
-                bankAccountId: accountId, type, amount,
-                description: b.description || (type === 'credit' ? 'Tiền vào' : 'Tiền ra'),
-                transactionDate: when, date: when,
-                reference: b.reference || null, referenceNo: b.reference || null,
-                counterpartyName: b.counterparty || null,
-                isReconciled: false,
-                branchId: acc.branchId || getBranchId(req) || null,
-            },
+        // Cùng luật với POST /accounts/:id/transactions: ghi giao dịch và cộng số dư cùng một khối.
+        const tx = await prisma.$transaction(async (t: any) => {
+            const row = await t.bankTransaction.create({
+                data: {
+                    bankAccountId: accountId, type, amount,
+                    description: b.description || (type === 'credit' ? 'Tiền vào' : 'Tiền ra'),
+                    transactionDate: when, date: when,
+                    reference: b.reference || null, referenceNo: b.reference || null,
+                    counterpartyName: b.counterparty || null,
+                    isReconciled: false,
+                    branchId: acc.branchId || getBranchId(req) || null,
+                },
+            })
+            await applyToBalance(t, accountId, signed(type, amount))
+            return row
         })
-        await applyToBalance(prisma, accountId, signed(type, amount))
         res.status(201).json({ success: true, data: toFeTxn(tx) })
     } catch (err: any) {
         console.error('POST /ebanking/transactions error:', err)
@@ -626,22 +658,30 @@ router.post('/transactions/import', authMiddleware, requireRole('admin', 'manage
             const amount = round2(Math.abs(raw))
             const when = new Date(r.transactionDate || r.date || Date.now())
             const validDate = isNaN(when.getTime()) ? new Date() : when
-            await prisma.bankTransaction.create({
-                data: {
-                    bankAccountId: accountId, type, amount,
-                    description: r.description || 'Giao dịch nhập từ CSV',
-                    transactionDate: validDate, date: validDate,
-                    reference: r.referenceNo || r.reference || null,
-                    referenceNo: r.referenceNo || r.reference || null,
-                    counterpartyName: r.counterpartyName || r.counterparty || null,
-                    isReconciled: false,
-                    branchId: acc.branchId || getBranchId(req) || null,
-                },
-            }).catch(() => { skipped++; imported-- })
-            imported++
-            balanceDelta += signed(type, amount)
+            /* Bản cũ có hai lỗi: (1) ghi hỏng thì `.catch` chỉ đếm skipped, nhưng `balanceDelta`
+             * VẪN cộng ⇒ số dư tính cả dòng chưa hề ghi được; (2) số dư cộng một lần ở cuối, hỏng
+             * là cả file có giao dịch mà không có số dư. Nay mỗi dòng một transaction nhỏ, và chỉ
+             * dòng nào ghi được mới cộng (20/08/2026). */
+            try {
+                await prisma.$transaction(async (t: any) => {
+                    await t.bankTransaction.create({
+                        data: {
+                            bankAccountId: accountId, type, amount,
+                            description: r.description || 'Giao dịch nhập từ CSV',
+                            transactionDate: validDate, date: validDate,
+                            reference: r.referenceNo || r.reference || null,
+                            referenceNo: r.referenceNo || r.reference || null,
+                            counterpartyName: r.counterpartyName || r.counterparty || null,
+                            isReconciled: false,
+                            branchId: acc.branchId || getBranchId(req) || null,
+                        },
+                    })
+                    await applyToBalance(t, accountId, signed(type, amount))
+                })
+                imported++
+                balanceDelta += signed(type, amount)
+            } catch { skipped++ }
         }
-        await applyToBalance(prisma, accountId, balanceDelta)
         await prisma.bankAccount.update({ where: { id: accountId }, data: { lastSyncAt: new Date() } }).catch(() => { })
         res.json({ success: true, data: { imported, skipped } })
     } catch (err: any) {
@@ -705,12 +745,13 @@ router.get('/overview', authMiddleware, async (req: AuthRequest, res: Response) 
     try {
         await ensureTables(req)
         const prisma = req.storePrisma! as any
-        const accounts = await prisma.bankAccount.findMany({ where: { ...getBranchFilter(req) } }).catch(() => [])
+        // /overview: nuốt lỗi ⇒ tổng số dư 0đ + biểu đồ 6 tháng phẳng lì, trông như không có tiền.
+        const accounts = await prisma.bankAccount.findMany({ where: { ...getBranchFilter(req) } })
         const totalBalance = round2(accounts.reduce((s: number, a: any) => s + (Number(a.balance) || 0), 0))
         const accIds = accounts.map((a: any) => a.id)
         const txWhere: any = accIds.length ? { bankAccountId: { in: accIds } } : {}
 
-        const unrec = await prisma.bankTransaction.findMany({ where: { ...txWhere, isReconciled: false }, select: { amount: true } }).catch(() => [])
+        const unrec = await prisma.bankTransaction.findMany({ where: { ...txWhere, isReconciled: false }, select: { amount: true } })
         const unreconciledAmount = round2(unrec.reduce((s: number, t: any) => s + Math.abs(Number(t.amount) || 0), 0))
 
         // Series 6 tháng gần nhất: tổng tiền vào/ra theo tháng
@@ -719,7 +760,7 @@ router.get('/overview', authMiddleware, async (req: AuthRequest, res: Response) 
         const txns = await prisma.bankTransaction.findMany({
             where: { ...txWhere, date: { gte: seriesStart } },
             select: { amount: true, type: true, date: true },
-        }).catch(() => [])
+        })
         const buckets = new Map<string, { inflow: number; outflow: number }>()
         for (let i = 0; i < 6; i++) {
             const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1)
@@ -759,14 +800,16 @@ router.get('/dashboard', authMiddleware, async (req: AuthRequest, res: Response)
         await ensureTables(req)
         const prisma = req.storePrisma! as any
         const filter = getBranchFilter(req)
-        const accounts = await prisma.bankAccount.findMany({ where: { ...filter } }).catch(() => [])
+        /* Bảng tổng ngân hàng: nuốt lỗi ⇒ "tổng số dư 0đ, 0 giao dịch chưa đối soát" — trấn an
+         * sai trên tiền mặt trong ngân hàng (20/08/2026). */
+        const accounts = await prisma.bankAccount.findMany({ where: { ...filter } })
         const totalBalance = round2(accounts.reduce((s: number, a: any) => s + (Number(a.balance) || 0), 0))
 
         const accIds = accounts.map((a: any) => a.id)
         const txWhere: any = accIds.length ? { bankAccountId: { in: accIds } } : {}
         const [unreconciled, recent] = await Promise.all([
-            prisma.bankTransaction.count({ where: { ...txWhere, isReconciled: false } }).catch(() => 0),
-            prisma.bankTransaction.findMany({ where: txWhere, orderBy: { date: 'desc' }, take: 10 }).catch(() => []),
+            prisma.bankTransaction.count({ where: { ...txWhere, isReconciled: false } }),
+            prisma.bankTransaction.findMany({ where: txWhere, orderBy: { date: 'desc' }, take: 10 }),
         ])
 
         // Tổng tiền vào/ra trong tháng hiện tại.
@@ -774,7 +817,7 @@ router.get('/dashboard', authMiddleware, async (req: AuthRequest, res: Response)
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
         const monthTxns = await prisma.bankTransaction.findMany({
             where: { ...txWhere, date: { gte: monthStart } },
-        }).catch(() => [])
+        })
         let monthCredit = 0, monthDebit = 0
         for (const t of monthTxns) {
             if (t.type === 'debit') monthDebit += Number(t.amount) || 0

@@ -1,4 +1,5 @@
 import { registryPrisma, getStorePrisma } from '../lib/prisma'
+import { chayNeuLanhDao } from '../lib/leaderLock'
 import { checkRepliesForStore } from '../routes/crmEmail'
 
 // Quét IMAP tìm phản hồi email chào hàng — 15 phút/lần, chỉ store có smtpConfig
@@ -39,9 +40,11 @@ async function tick() {
 
 export function startEmailReplyCron() {
     if (timer) return
-    timer = setInterval(tick, INTERVAL_MS)
+    // Chỉ một bản chạy mỗi nhịp (khoá Redis) — tránh trả lời email đúp (19/08/2026)
+    const chay = () => chayNeuLanhDao('email-reply', INTERVAL_MS - 30_000, tick)
+    timer = setInterval(chay, INTERVAL_MS)
     // Lần đầu chạy sau 2 phút để không dồn lúc khởi động
-    setTimeout(tick, 2 * 60 * 1000)
+    setTimeout(chay, 2 * 60 * 1000)
     console.log('📬 [EmailReplyCron] started (15m interval)')
 }
 

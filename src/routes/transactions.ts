@@ -9,6 +9,7 @@ import { createJournalEntriesForTransaction, postDebtCollectionJournal, reverseJ
 import { nextCode } from '../lib/codeGenerator'
 import { getOrCreateDefaultWarehouse, updateWarehouseStock, adjustSellableStock } from '../lib/warehouseHelper'
 import { emitStockChanged, webhooksActive, emitEntityEvent } from '../lib/webhookDispatch'
+import { moTaLoi } from '../lib/gomLoi'
 
 const router = Router()
 
@@ -256,7 +257,15 @@ router.get('/stats', authMiddleware, requirePermission('pos.view'), async (req: 
         if (cachedStats) return res.json(cachedStats)
 
         const now = new Date()
-        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        /* CẮT NGÀY THEO GIỜ VIỆT NAM, không theo giờ máy chủ.
+         * Cloud Run chạy UTC nên `now.getFullYear()/getHours()` cho mốc sang ngày rơi vào
+         * 07:00 giờ VN ⇒ mọi phiếu bán 0h–7h sáng bị đếm sang HÔM TRƯỚC. Ghép lại từ bản
+         * đang chạy trên prod (21/08). */
+        const VN_MS = 7 * 3600_000
+        const vnNow = new Date(now.getTime() + VN_MS)
+        const vnHourNow = vnNow.getUTCHours()
+        const vnHourOf = (d: Date) => new Date(d.getTime() + VN_MS).getUTCHours()
+        const todayStart = new Date(Date.UTC(vnNow.getUTCFullYear(), vnNow.getUTCMonth(), vnNow.getUTCDate()) - VN_MS)
         const yesterdayStart = new Date(todayStart.getTime() - 86400_000)
 
         // Use provided date range or default to 30 days
@@ -299,8 +308,8 @@ router.get('/stats', authMiddleware, requirePermission('pos.view'), async (req: 
 
         // Revenue by hour (today)
         const byHour: { hour: number; revenue: number; count: number }[] = []
-        for (let h = 0; h <= now.getHours(); h++) {
-            const hourTx = todayTx.filter(t => t.createdAt.getHours() === h)
+        for (let h = 0; h <= vnHourNow; h++) {
+            const hourTx = todayTx.filter(t => vnHourOf(t.createdAt) === h)
             byHour.push({
                 hour: h,
                 revenue: hourTx.reduce((s, t) => s + t.total, 0),
@@ -311,8 +320,8 @@ router.get('/stats', authMiddleware, requirePermission('pos.view'), async (req: 
         // Revenue by day (last 30 days)
         const byDay: { date: string; revenue: number; count: number }[] = []
         for (let d = 29; d >= 0; d--) {
-            const dayStart = new Date(now.getTime() - d * 86400_000)
-            dayStart.setHours(0, 0, 0, 0)
+            // Cùng lý do: chốt đầu ngày theo giờ VN chứ không theo giờ máy chủ
+            const dayStart = new Date(todayStart.getTime() - d * 86400_000)
             const dayEnd = new Date(dayStart.getTime() + 86400_000)
             const dayTx = revenueTx.filter(t => t.createdAt >= dayStart && t.createdAt < dayEnd)
             byDay.push({
@@ -1245,7 +1254,11 @@ router.put('/:id/void', authMiddleware, requirePermission('pos.create_order'), a
 
         // ĐẢO BÚT TOÁN doanh thu 511/VAT 3331/giảm giá 521/giá vốn 632/thu nợ đã post
         // lúc bán (#4, #7) — post-commit, best-effort (GL tách khỏi tồn/công nợ).
-        await reverseJournalEntriesForTransaction(prisma, existing.receiptNumber, { branchId: existing.branchId ?? null, userId: req.user!.userId }).catch(() => { })
+        await reverseJournalEntriesForTransaction(prisma, existing.receiptNumber, { branchId: existing.branchId ?? null, userId: req.user!.userId })
+            /* Giữ nguyên thiết kế "post-commit, không chặn" (GL tách khỏi tồn/công nợ), nhưng KHÔNG
+             * im lặng: hỏng ở đây nghĩa là sổ vẫn còn doanh thu của một phiếu ĐÃ HUỶ. Ghi ERROR để
+             * lên Nhật ký lỗi của trang quản trị mà còn đi sửa (20/08/2026). */
+            .catch((e: any) => console.error(`[huy-phieu] Đảo bút toán HỎNG cho ${existing.receiptNumber} — sổ còn doanh thu của phiếu đã huỷ:`, moTaLoi(e)))
 
         // Webhook stock.changed do hoàn kho (post-commit, không chặn)
         for (const s of stockEmits) {
@@ -1567,7 +1580,7 @@ router.put('/:id/return', authMiddleware, requirePermission('pos.create_order'),
                 },
             })
         } catch (roErr: any) {
-            console.warn(`⚠️ ReturnOrder table not ready: ${roErr.message} — returning without ReturnOrder record`)
+            console.warn(`⚠️ ReturnOrder table not ready: ${moTaLoi(roErr)} — returning without ReturnOrder record`)
         }
 
         // Restore stock for returned items + create inventory records.
@@ -1946,7 +1959,11 @@ router.post('/:id/revise', authMiddleware, requirePermission('pos.create_order')
 
         // Đảo bút toán hóa đơn CŨ (#4): revise = hủy đơn cũ + tạo đơn mới. Đơn mới đã
         // post bút toán riêng; đơn cũ phải đảo để GL không cộng dồn 2 lần.
-        await reverseJournalEntriesForTransaction(prisma, existing.receiptNumber, { branchId: existing.branchId ?? null, userId: req.user!.userId }).catch(() => { })
+        await reverseJournalEntriesForTransaction(prisma, existing.receiptNumber, { branchId: existing.branchId ?? null, userId: req.user!.userId })
+            /* Giữ nguyên thiết kế "post-commit, không chặn" (GL tách khỏi tồn/công nợ), nhưng KHÔNG
+             * im lặng: hỏng ở đây nghĩa là sổ vẫn còn doanh thu của một phiếu ĐÃ HUỶ. Ghi ERROR để
+             * lên Nhật ký lỗi của trang quản trị mà còn đi sửa (20/08/2026). */
+            .catch((e: any) => console.error(`[huy-phieu] Đảo bút toán HỎNG cho ${existing.receiptNumber} — sổ còn doanh thu của phiếu đã huỷ:`, moTaLoi(e)))
 
         // Publish realtime event
         publishEvent(req.user?.storeSchema, 'transaction:revised', {

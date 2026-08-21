@@ -145,9 +145,18 @@ export class VnptProvider implements IEInvoiceProvider {
     }
 
     /** EInvoiceData → 1 phần tử HDons của posinvoice/create-and-publish. */
-    private buildHDon(config: EInvoiceProviderConfig, data: EInvoiceData): any {
+    /**
+     * [giamTru] = hoá đơn ĐIỀU CHỈNH GIẢM → mọi giá trị TIỀN ghi SỐ ÂM (thành
+     * tiền, tiền thuế, các dòng tổng). Đây là cách ghi chuẩn của hoá đơn điều
+     * chỉnh giảm: kỳ kê khai cộng dồn thẳng là ra doanh thu/thuế đã trừ, không
+     * phải diễn giải bằng lời. Số lượng và đơn giá GIỮ DƯƠNG (hàng vẫn là 1 cái,
+     * giá vẫn là giá đó — chỉ chiều tiền là âm).
+     */
+    private buildHDon(config: EInvoiceProviderConfig, data: EInvoiceData, giamTru = false): any {
         const ex = parseExtra(config.extra)
         const taxed = Number(data.vatRate) > 0
+        const dau = giamTru ? -1 : 1
+        const tien = (n: number) => dau * Math.abs(Math.round(Number(n) || 0))
         const items = (data.items || []).map((it, idx) => {
             const line: any = {
                 STT: idx + 1,
@@ -155,11 +164,14 @@ export class VnptProvider implements IEInvoiceProvider {
                 MHHDVu: '',
                 THHDVu: it.name,
                 DVTinh: it.unit || 'Cái',
-                SLuong: it.quantity,
-                DGia: it.unitPrice,
+                // Điều chỉnh giảm: SỐ LƯỢNG ghi ÂM (−1), ĐƠN GIÁ giữ nguyên dương
+                // → số lượng âm × đơn giá dương = thành tiền âm, nhất quán và
+                // đọc đúng nghĩa "trả lại 1 cái với giá đã bán".
+                SLuong: dau * Math.abs(Number(it.quantity) || 0),
+                DGia: Math.abs(Number(it.unitPrice) || 0),
                 TLCKhau: 0,
-                STCKhau: Math.round(it.discount || 0),
-                ThTien: Math.round(it.amount),
+                STCKhau: tien(it.discount || 0),
+                ThTien: tien(it.amount),
                 ExtTGTKCThue: 0,
                 GThue: false,
                 ExtTGThue: 0,
@@ -169,20 +181,20 @@ export class VnptProvider implements IEInvoiceProvider {
             if (taxed) {
                 const rate = Number(it.vatRate ?? data.vatRate)
                 line.TSuat = String(rate)
-                line.TThue = Math.round(it.vatAmount || (it.amount * rate) / 100)
-                line.ExtThTienSThue = Math.round(it.amount) + line.TThue
+                line.TThue = tien(it.vatAmount || (Math.abs(it.amount) * rate) / 100)
+                line.ExtThTienSThue = line.ThTien + line.TThue
             } else {
-                line.ExtThTienSThue = Math.round(it.amount)
+                line.ExtThTienSThue = line.ThTien
             }
             return line
         })
 
         const tToan: any = {
             TTCKTMai: 0,
-            TgTCThue: Math.round(data.subtotal || data.total),
+            TgTCThue: tien(data.subtotal || data.total),
             ExtTgTienPhi: 0,
-            TgTThue: Math.round(data.vatAmount || 0),
-            TgTTTBSo: Math.round(data.total),
+            TgTThue: tien(data.vatAmount || 0),
+            TgTTTBSo: tien(data.total),
             TgTTTBChu: data.totalInWords || '',
             TGTKCThue: 0,
             TGTKhac: 0,
@@ -213,6 +225,9 @@ export class VnptProvider implements IEInvoiceProvider {
                 TGVCHDTu: null,
                 TGVCHDDen: null,
                 DChi: data.buyerAddress || '',
+                // CCCD người mua (HĐ cá nhân, TT78 khuyến nghị) — Shopee VN cấp qua national_id.
+                // Ghép lại từ bản đang chạy trên prod 21/08; cây này ra đời trước nên thiếu.
+                CCCDan: String(data.buyerIdNo || '').trim(),
                 MKHang: '',
                 SDThoai: data.buyerPhone || '',
                 DCTDTu: data.buyerEmail || ex.sellerEmail || '',
@@ -291,6 +306,40 @@ export class VnptProvider implements IEInvoiceProvider {
             const ok = r.status < 300 && String(r.json?.err_code ?? '1') === '0'
             if (!ok) {
                 const msg = r.json?.message || r.json?.data?.message || r.raw.slice(0, 250)
+
+                /* "Fkey đã được sử dụng" KHÔNG PHẢI LỖI — nó là VNPT nói rằng hoá
+                 * đơn NÀY ĐÃ PHÁT HÀNH RỒI. Fkey là khoá chống trùng theo giao
+                 * dịch, nên trùng Fkey nghĩa là lần gửi trước đã tới đích (chỉ
+                 * phản hồi về không tới, hoặc lưu DB hỏng giữa chừng).
+                 *
+                 * Ghi ERROR ở đây là sai kép: hoá đơn có thật bên cơ quan thuế mà
+                 * hệ thống coi như chưa có, mọi báo cáo đều thiếu tờ đó, và bấm
+                 * "Xuất lại" sẽ hỏng mãi mãi vì Fkey vẫn trùng.
+                 *
+                 * Đo trên dữ liệu thật 14/08/2026 (KENGISTORE): 66 tờ kẹt kiểu
+                 * này, riêng nửa đầu tháng 8 đã 26 tờ — nhiều nhất trong mọi
+                 * nguyên nhân hỏng.
+                 *
+                 * findByFkey đã có sẵn và viết đúng cho tình huống này; chỉ thiếu
+                 * mỗi việc gọi nó ở đây. */
+                if (/fkey/i.test(String(msg)) && /đã được sử dụng|da duoc su dung|already/i.test(String(msg))) {
+                    const daCo = await this.findByFkey(config, vnptFkey(data.transactionId))
+                    if (daCo.found && daCo.invoiceNumber) {
+                        return {
+                            success: true,
+                            invoiceNumber: daCo.invoiceNumber,
+                            lookupCode: daCo.lookupCode || '',
+                            pdfUrl: '',
+                        }
+                    }
+                    /* Tra không ra thì phải nói đúng bản chất, đừng để nguyên câu
+                     * của VNPT — người đọc sẽ tưởng lỗi dữ liệu và sửa nhầm chỗ. */
+                    return {
+                        success: false,
+                        errorMessage: 'Hoá đơn này đã phát hành trước đó bên VNPT (trùng Fkey) nhưng tra lại không lấy được số. Dùng chức năng tra theo Fkey để ghi bù, KHÔNG phát hành lại — phát hành lại sẽ hỏng tiếp.',
+                    }
+                }
+
                 return { success: false, errorMessage: `Phát hành HĐ MTT lỗi (HTTP ${r.status}): ${String(msg).slice(0, 300)}` }
             }
             // data có thể là mảng kết quả từng hoá đơn hoặc object — đọc phòng thủ
@@ -368,7 +417,10 @@ export class VnptProvider implements IEInvoiceProvider {
                 Fkey: originalFkey,
                 KHMSHDon: Number(String(config.templateId || '').split('/')[0]) || 2,
                 KHHDon: String(config.serialNo || '').trim(),
-                HDon: this.buildHDon(config, data),
+                // TCHDon=2 (điều chỉnh) trong hệ này LUÔN là điều chỉnh GIẢM
+                // (phát sinh từ trả hàng/hoàn tiền) → ghi tiền âm.
+                // Thay thế (TCHDon=1) là hoá đơn mới thay hẳn HĐ cũ nên vẫn dương.
+                HDon: this.buildHDon(config, data, tchd === 2),
             }
             const r = await this.posApi(s, 'invoice-adjustment/save-and-publish', body)
             const ok = r.status < 300 && String(r.json?.err_code ?? '1') === '0'
@@ -391,6 +443,48 @@ export class VnptProvider implements IEInvoiceProvider {
     /** Gửi email hoá đơn cho khách qua VNPT: tra id hoá đơn theo Fkey rồi gọi
      * posinvoice/send-email. Lỗi email KHÔNG được làm hỏng luồng phát hành —
      * caller tự catch/log. */
+    /**
+     * Tra hoá đơn ĐÃ PHÁT HÀNH bên VNPT theo Fkey.
+     * Dùng để cứu trường hợp phát hành sang VNPT xong nhưng lưu DB hỏng: hoá đơn
+     * có thật bên thuế mà hệ thống trắng thông tin, phát hành lại thì VNPT chặn
+     * vì trùng Fkey → tra về rồi ghi bản ghi cho khớp.
+     */
+    async findByFkey(config: EInvoiceProviderConfig, fkey: string): Promise<{ found: boolean; invoiceNumber?: string; lookupCode?: string; messageCode?: string; sent?: boolean; raw?: any }> {
+        try {
+            const s = await this.login(config)
+            const det = await this.posApi(s, 'portal/get-pos-by-fkey', { fkey })
+            const d = det.json?.data
+            if (!d || (!d.id && !d.shdon && !d.SHDon)) return { found: false }
+            // Tên trường số hoá đơn/mã CQT khác nhau tuỳ endpoint của VNPT —
+            // quét mọi biến thể đã gặp thay vì đoán một cái (bản ghi bù từng
+            // lưu số RỖNG vì chỉ dò SHDon/shdon/no).
+            const lay = (...keys: string[]) => {
+                for (const k of keys) {
+                    const v = (d as any)[k]
+                    if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim()
+                }
+                return ''
+            }
+            // Tên trường THẬT của portal/get-pos-by-fkey (soi từ prod 06/08/2026):
+            //   sHDon = "00002162"  ← chữ s thường, dò 'SHDon' hoa là trượt
+            //   mCCQT = "M2-26-HA3TS-00100002162" (mã cơ quan thuế đã cấp)
+            //   mTDiep = mã thông điệp gửi thuế · statusSend = 1 khi đã gửi
+            const soRaw = lay('sHDon', 'SHDon', 'shdon', 'no', 'invoiceNo', 'invoice_no', 'soHoaDon', 'number')
+            return {
+                found: true,
+                // Bỏ số 0 đệm đầu ("00002162" → "2162") cho khớp cách lưu của hệ thống
+                invoiceNumber: soRaw.replace(/^0+/, '') || soRaw,
+                lookupCode: lay('mCCQT', 'MCCQT', 'mccqt', 'maCQT', 'ma_cqt', 'lookupCode'),
+                messageCode: lay('mTDiep', 'MTDiep', 'mtdiep'),
+                // 1 = đã gửi cơ quan thuế
+                sent: String((d as any).statusSend ?? '') === '1' || !!lay('mCCQT', 'MCCQT', 'mccqt'),
+                raw: d,
+            } as any
+        } catch {
+            return { found: false }
+        }
+    }
+
     async sendInvoiceEmail(config: EInvoiceProviderConfig, fkey: string, sendTo: string): Promise<{ success: boolean; errorMessage?: string }> {
         try {
             const s = await this.login(config)

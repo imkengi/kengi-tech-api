@@ -1,7 +1,9 @@
-import { registryPrisma, getStorePrisma } from '../lib/prisma'
+import { registryPrisma, getStorePrisma, giuClient } from '../lib/prisma'
+import { chayNeuLanhDao } from '../lib/leaderLock'
 import { getPlatformService, TikTokService, type PlatformOrder } from '../services/platforms'
 import { processNewOrders } from '../services/orderSync'
 import { syncChannelReturns } from '../services/returnSync'
+import { choXong } from '../lib/choXong'
 
 /**
  * Diễn giải lỗi cho log. `err.message` rỗng là chuyện thường xuyên xảy ra: lỗi
@@ -298,6 +300,11 @@ async function runAutoSync() {
         let totalSynced = 0
 
         for (const store of stores) {
+            /* GIỮ client suốt lượt của cửa hàng này. Một lượt kéo lịch sử có thể
+             * dài hàng chục phút mà không ai chạm getStorePrisma() lần nữa → bộ
+             * thải nhàn rỗi coi là rỗi và $disconnect() ngay dưới chân — đó là
+             * nguyên nhân container chập chờn 12 lần đêm 17→18/08 (xem giuClient). */
+            const nhaClient = giuClient(store.schema)
             try {
                 const storePrisma = getStorePrisma(store.schema)
 
@@ -419,6 +426,8 @@ async function runAutoSync() {
                 if (!err.message?.includes('does not exist')) {
                     console.error(`[AutoSync] Error processing store ${store.name}:`, fmtErr(err))
                 }
+            } finally {
+                nhaClient()
             }
         }
 
@@ -455,6 +464,9 @@ async function runFeeSync() {
         let tongCapNhat = 0
         for (const store of stores) {
             if (Date.now() - batDau > FEE_DEADLINE_MS) break
+            // Giữ client suốt lượt cửa hàng này — lý do xem giuClient() ở lib/prisma.ts.
+            const nhaClient = giuClient(store.schema)
+            try {
             const sp = getStorePrisma(store.schema) as any
             let channels: any[] = []
             try {
@@ -533,6 +545,9 @@ async function runFeeSync() {
                         `${loiDauTien ? ` — lỗi đầu: ${loiDauTien}` : ''}`)
                 }
             }
+            } finally {
+                nhaClient()
+            }
         }
         if (tongCapNhat > 0) {
             console.log(`[FeeSync] Xong: ${tongCapNhat} đơn, ${Math.round((Date.now() - batDau) / 1000)}s`)
@@ -551,6 +566,7 @@ async function runCleanup() {
         let totalDeleted = 0
 
         for (const store of stores) {
+            const nhaClient = giuClient(store.schema)   // lý do: xem giuClient() ở lib/prisma.ts
             try {
                 const storePrisma = getStorePrisma(store.schema)
 
@@ -632,6 +648,8 @@ async function runCleanup() {
                 if (!err.message?.includes('does not exist')) {
                     console.error(`[Cleanup] Error on store ${store.name}:`, fmtErr(err))
                 }
+            } finally {
+                nhaClient()
             }
         }
 
@@ -651,9 +669,15 @@ export function startAutoSync() {
     console.log(`⏰ Auto-sync started (every ${SYNC_INTERVAL / 60000} minutes)`)
 
     // Run first sync after 30 seconds (let server warm up)
+    /* CHỈ MỘT BẢN CHẠY MỖI NHỊP (khoá Redis — xem lib/leaderLock.ts).
+     * Cloud Run nhân 2–3 bản lúc đông, mỗi bản một bộ hẹn giờ riêng nên cùng một
+     * lượt quét chạy 2–3 lần song song; mỗi lượt mở client tới đủ 9 cửa hàng mà
+     * pool mỗi cửa hàng chỉ 1 kết nối. Đo 12–18/08/2026: đỉnh 51/50 kết nối.
+     * KHÔNG có Redis thì hàm trả true (chạy như cũ) — hỏng thì MỞ, không chặn. */
+    const chayLuot = () => chayNeuLanhDao('auto-sync', SYNC_INTERVAL - 30_000, runAutoSync)
     setTimeout(() => {
-        runAutoSync()
-        syncTimer = setInterval(runAutoSync, SYNC_INTERVAL)
+        chayLuot()
+        syncTimer = setInterval(chayLuot, SYNC_INTERVAL)
     }, 30_000)
 
     // WATCHDOG KIOTVIET: mỗi 90 giây dò đợt đồng bộ mất nhịp tim rồi CHẠY TIẾP
@@ -661,11 +685,10 @@ export function startAutoSync() {
     // giữa chừng — không có cái này thì người dùng phải tự bấm lại (2026-08-06).
     // Đợi 45 giây cho máy khởi động xong rồi mới bắt đầu dò.
     setTimeout(() => {
-        const tick = () => {
+        const tick = () => chayNeuLanhDao('kiotviet-watchdog', 4 * 60_000, () =>
             import('../services/kiotvietRunner')
                 .then(m => m.resumeStalledSyncs())
-                .catch(e => console.error('[KiotViet watchdog]', e?.message || e))
-        }
+                .catch(e => console.error('[KiotViet watchdog]', e?.message || e)))
         tick()
         setInterval(tick, 90_000)
     }, 45_000)
@@ -676,18 +699,26 @@ export function startAutoSync() {
         // Video cleanup tự bọc lỗi từng store — không cho nó làm đổ cleanup đơn.
         const runAllCleanup = () => {
             runCleanup()
+            /* ĐỐI CHIẾU NỢ KHÁCH VỚI KIOTVIET mỗi 24h — lưới an toàn cho lamTuoiNoKhach.
+             * 18/08/2026: 39/593 khách HUTI kẹt debt=0 trong khi KV nói > 0 (857,7 triệu).
+             * Chạy nền, tự bọc lỗi từng cửa hàng, không được làm đổ cleanup. */
+            import('./doiChieuNoKiotViet')
+                .then(m => m.runDoiChieuNoKiotViet())
+                .catch(e => console.error('[DoiChieuNoKV] không chạy được:', e?.message || e))
             import('./driveVideoCleanup')
                 .then(m => m.runDriveVideoCleanup())
                 .catch(e => console.error('[VideoCleanup] không chạy được:', e?.message || e))
         }
         runAllCleanup()
-        cleanupTimer = setInterval(runAllCleanup, CLEANUP_INTERVAL)
+        const chayDon = () => chayNeuLanhDao('auto-cleanup', 60 * 60_000, runAllCleanup)
+        cleanupTimer = setInterval(chayDon, CLEANUP_INTERVAL)
     }, 5 * 60_000)
 
     // Đối soát phí sàn: lần đầu sau 10 phút, sau đó mỗi 6 tiếng
     setTimeout(() => {
         runFeeSync()
-        feeTimer = setInterval(runFeeSync, FEE_INTERVAL)
+        const chayPhi = () => chayNeuLanhDao('fee-sync', 60 * 60_000, runFeeSync)
+        feeTimer = setInterval(chayPhi, FEE_INTERVAL)
     }, 10 * 60_000)
 
     console.log(`🧹 Auto-cleanup started (every 24h, orders >${CLEANUP_DAYS} days old)`)
@@ -697,6 +728,20 @@ export function startAutoSync() {
 /**
  * Stop the auto-sync cron
  */
+/**
+ * Chờ lượt autoSync đang chạy kết thúc, TỐI ĐA `tranMs`. Dùng lúc tắt container.
+ *
+ * Vì sao (đo 02:01 UTC 18/08/2026): thứ tự tắt cũ là `disconnectAll()` TRƯỚC
+ * `stopAutoSync()` — đóng engine DB trong khi vòng lặp chuyển đơn còn chạy →
+ * 286 ms sau SIGTERM có 20 lỗi "Engine is not yet connected", 11 đơn chuyển
+ * hỏng (tự lành lượt sau). Cloud Run chỉ cho ~10 s sau SIGTERM rồi kill cứng,
+ * nên KHÔNG chờ vô hạn — quá trần thì cứ đóng, mất vài đơn còn hơn bị kill.
+ */
+export async function choAutoSyncXong(tranMs = 6_000): Promise<boolean> {
+    // Logic chờ ở lib/choXong.ts (thuần, có bộ kiểm 3 nhánh); đây chỉ nối trạng thái thật vào.
+    return choXong(() => dangChayAutoSync !== null, tranMs)
+}
+
 export function stopAutoSync() {
     if (syncTimer) {
         clearInterval(syncTimer)

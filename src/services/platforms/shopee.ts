@@ -1,5 +1,6 @@
 import { PlatformService, PlatformCredentials, PlatformOrder, PlatformOrderItem, PlatformProduct, TokenResponse } from './base'
 import { proxyCircuitOpen, proxyCircuitError, noteProxySuccess, noteProxyFailure } from '../../lib/proxyBreaker'
+import { moTaLoi } from '../../lib/gomLoi'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  SHOPEE OPEN PLATFORM v2.0
@@ -8,6 +9,14 @@ import { proxyCircuitOpen, proxyCircuitError, noteProxySuccess, noteProxyFailure
 
 const SHOPEE_HOST = 'https://partner.shopeemobile.com'
 const SHOPEE_API = `${SHOPEE_HOST}/api/v2`
+
+// Kênh HỎA TỐC (Instant Delivery — giao ≤4h): get_channel_list đánh dấu bằng
+// service_type_identifier='instant'. Cache theo shop vì fetchOrders chạy mỗi
+// trang mỗi lượt cron mà danh sách kênh gần như không bao giờ đổi; lỗi thì
+// cache RỖNG ngắn hạn để không dội API — đơn chỉ tạm thiếu cờ, lượt sau vá.
+const INSTANT_CACHE_OK_MS = 6 * 3600 * 1000
+const INSTANT_CACHE_ERR_MS = 30 * 60 * 1000
+const instantChannelCache = new Map<string, { ids: Set<number>; at: number; ttl: number }>()
 
 export class ShopeeService extends PlatformService {
     get platformName() { return 'shopee' }
@@ -84,7 +93,7 @@ export class ShopeeService extends PlatformService {
                 const timedOut = e?.name === 'AbortError'
                 // Đợi tăng dần: proxy nghẽn vì bị bắn dồn thì thử lại ngay chỉ làm nghẽn thêm.
                 if (i < ShopeeService.FETCH_RETRIES - 1) {
-                    console.warn(`[Shopee fetch] lần ${i + 1} ${timedOut ? 'quá hạn' : 'lỗi'} (${e?.message}) — thử lại`)
+                    console.warn(`[Shopee fetch] lần ${i + 1} ${timedOut ? 'quá hạn' : 'lỗi'} (${moTaLoi(e)}) — thử lại`)
                     await sleep(1000 * 2 ** i)
                 }
             }
@@ -211,13 +220,14 @@ export class ShopeeService extends PlatformService {
             const detailPath = '/api/v2/order/get_order_detail'
             const detailUrl = this.apiUrl(detailPath) +
                 `&order_sn_list=${orderIds}` +
-                `&response_optional_fields=buyer_user_id,buyer_username,estimated_shipping_fee,recipient_address,actual_shipping_fee,item_list,pay_time,ship_by_date,total_amount,order_chargeable_weight,tracking_no,shipping_carrier`
+                `&response_optional_fields=buyer_user_id,buyer_username,estimated_shipping_fee,recipient_address,actual_shipping_fee,item_list,pay_time,ship_by_date,pickup_done_time,package_list,total_amount,order_chargeable_weight,tracking_no,shipping_carrier`
 
             const detailData = await this.httpGet(detailUrl)
             const details = detailData.response?.order_list || []
 
+            const instantIds = await this.getInstantChannelIdsSafe()
             for (const d of details) {
-                orders.push(this.mapOrder(d))
+                orders.push(this.mapOrder(d, instantIds))
             }
         }
 
@@ -233,11 +243,11 @@ export class ShopeeService extends PlatformService {
         const path = '/api/v2/order/get_order_detail'
         const url = this.apiUrl(path) +
             `&order_sn_list=${externalOrderId}` +
-            `&response_optional_fields=buyer_user_id,buyer_username,estimated_shipping_fee,recipient_address,actual_shipping_fee,item_list,pay_time,total_amount,tracking_no,shipping_carrier`
+            `&response_optional_fields=buyer_user_id,buyer_username,estimated_shipping_fee,recipient_address,actual_shipping_fee,item_list,pay_time,ship_by_date,pickup_done_time,package_list,total_amount,tracking_no,shipping_carrier`
 
         const data = await this.httpGet(url)
         const detail = data.response?.order_list?.[0]
-        return detail ? this.mapOrder(detail) : null
+        return detail ? this.mapOrder(detail, await this.getInstantChannelIdsSafe()) : null
     }
 
     async testConnection(): Promise<{ success: boolean; shopName?: string; error?: string }> {
@@ -328,7 +338,68 @@ export class ShopeeService extends PlatformService {
 
     // ─── Mappers ─────────────────────────────────────────────────────────────────
 
-    private mapOrder(d: any): PlatformOrder {
+    /** Danh sách logistics_channel_id HỎA TỐC của shop (service_type_identifier
+     *  ='instant'). Lỗi API → Set rỗng: đơn chỉ thiếu cờ isInstant tạm thời,
+     *  KHÔNG được làm gãy cả lượt sync đơn. */
+    private async getInstantChannelIdsSafe(): Promise<Set<number>> {
+        const key = String(this.credentials.shopId || '')
+        const hit = instantChannelCache.get(key)
+        if (hit && Date.now() - hit.at < hit.ttl) return hit.ids
+        try {
+            const data = await this.httpGet(this.apiUrl('/api/v2/logistics/get_channel_list'))
+            if (data.error) throw new Error(`${data.error} - ${data.message}`)
+            const ids = new Set<number>()
+            for (const c of (data.response?.logistics_channel_list || [])) {
+                if (String(c.service_type_identifier || '').toLowerCase() === 'instant') {
+                    ids.add(Number(c.logistics_channel_id))
+                }
+            }
+            instantChannelCache.set(key, { ids, at: Date.now(), ttl: INSTANT_CACHE_OK_MS })
+            return ids
+        } catch (e: any) {
+            console.warn(`[Shopee] get_channel_list lỗi (shop ${key}) — tạm bỏ cờ hỏa tốc:`, String(e?.message || e))
+            const ids = hit?.ids || new Set<number>()
+            instantChannelCache.set(key, { ids, at: Date.now(), ttl: INSTANT_CACHE_ERR_MS })
+            return ids
+        }
+    }
+
+    /**
+     * THÔNG TIN XUẤT HOÁ ĐƠN người mua khai trên Shopee (v2.order.get_buyer_invoice_info,
+     * VN/TH/PH). Từ 28/07/2026 Shopee VN trả thêm `national_id` (CCCD) cho hoá đơn
+     * cá nhân — cần cho HĐĐT cá nhân theo TT78. Trả null nếu khách không khai.
+     * Dữ liệu có thể bị che (A****b) tuỳ trạng thái đơn — giữ nguyên, không tự đoán.
+     */
+    async getBuyerInvoiceInfo(orderSn: string): Promise<{
+        invoiceType: string
+        name?: string; email?: string; phone?: string; taxId?: string; address?: string
+        nationalId?: string
+        companyName?: string; companyTaxId?: string; companyAddress?: string; companyEmail?: string
+        raw: any
+    } | null> {
+        const url = this.apiUrl('/api/v2/order/get_buyer_invoice_info')
+        const data = await this.httpPost(url, { queries: [{ order_sn: orderSn }] })
+        if (data?.error) throw new Error(`Shopee ${data.error}: ${data.message || ''}`)
+        const row = data?.invoice_info_list?.[0]
+        if (!row || row.error || !row.invoice_detail) return null
+        const d = row.invoice_detail || {}
+        const t = String(row.invoice_type || '').toLowerCase()
+        // Loại HĐ có thể trả dạng số {1: personal, 2: company, 3: household} hoặc chữ
+        const invoiceType = t === '1' ? 'personal' : t === '2' ? 'company' : t === '3' ? 'household' : t
+        const s = (v: any) => (v === undefined || v === null) ? undefined : String(v).trim() || undefined
+        return {
+            invoiceType,
+            name: s(d.name), email: s(d.email), phone: s(d.phone_number), taxId: s(d.tax_id),
+            address: s(d.address) || s(d.household_address_breakdown?.household_full_address) || s(d.address_breakdown?.full_address),
+            nationalId: s(d.national_id),
+            companyName: s(d.company_name), companyTaxId: s(d.company_tax_id),
+            companyAddress: s(d.company_address) || s(d.company_address_breakdown?.company_full_address),
+            companyEmail: s(d.company_email),
+            raw: row,
+        }
+    }
+
+    private mapOrder(d: any, instantIds?: Set<number>): PlatformOrder {
         const addr = d.recipient_address || {}
         const items: PlatformOrderItem[] = (d.item_list || []).map((item: any) => ({
             externalItemId: String(item.item_id),
@@ -363,8 +434,23 @@ export class ShopeeService extends PlatformService {
             items,
             createdAt: new Date((d.create_time || 0) * 1000).toISOString(),
             paidAt: d.pay_time ? new Date(d.pay_time * 1000).toISOString() : undefined,
-            shippedAt: d.ship_by_date ? new Date(d.ship_by_date * 1000).toISOString() : undefined,
+            // pickup_done_time = ĐVVC đã lấy hàng (ngày gửi thật). ship_by_date là
+            // HẠN bàn giao — trước đây bị map nhầm vào shippedAt, giờ đi cột riêng.
+            shippedAt: d.pickup_done_time ? new Date(d.pickup_done_time * 1000).toISOString() : undefined,
+            shipByDate: d.ship_by_date ? new Date(d.ship_by_date * 1000).toISOString() : undefined,
+            isInstant: this.isInstantOrder(d, instantIds),
         }
+    }
+
+    /** Đơn hỏa tốc? So logistics_channel_id của đơn (nằm trong package_list, một
+     *  số shop trả top-level) với danh sách kênh instant. Không dữ liệu → false. */
+    private isInstantOrder(d: any, instantIds?: Set<number>): boolean {
+        if (!instantIds || instantIds.size === 0) return false
+        const channelIds: number[] = [
+            ...((d.package_list || []).map((p: any) => Number(p.logistics_channel_id))),
+            Number(d.logistics_channel_id),
+        ].filter(n => Number.isFinite(n) && n > 0)
+        return channelIds.some(id => instantIds.has(id))
     }
 
     /** Lỗi thuộc về KÊNH (token/quyền/IP) chứ không phải về một đơn cụ thể —
@@ -391,13 +477,19 @@ export class ShopeeService extends PlatformService {
             return null
         }
         if (data?.error) {
-            const err = String(data.error)
+            /* `maLoi` là MÃ LỖI DẠNG CHUỖI do Shopee trả về, KHÔNG phải đối
+             * tượng ngoại lệ — trước đây đặt tên `err` nên vừa gây hiểu nhầm khi
+             * đọc, vừa bị `check:logloi` bắt oan (luật đó nhận diện theo tên
+             * biến để tha `data.message` của sàn). Đổi tên là đúng bản chất và
+             * hết báo oan; đừng bọc `moTaLoi()` quanh nó, hàm đó dành cho lỗi
+             * ném ra. */
+            const maLoi = String(data.error)
             const detail = data.message ? ` - ${data.message}` : ''
-            if (ShopeeService.isChannelAuthError(err)) {
-                throw new Error(`Shopee từ chối kênh: ${err}${detail}`)
+            if (ShopeeService.isChannelAuthError(maLoi)) {
+                throw new Error(`Shopee từ chối kênh: ${maLoi}${detail}`)
             }
             // vd. đơn chưa tới bước được cấp mã → không phải lỗi, chỉ là chưa có
-            console.warn(`[Shopee tracking] ${orderSn}: ${err}${detail}`)
+            console.warn(`[Shopee tracking] ${orderSn}: ${maLoi}${detail}`)
             return null
         }
         return data.response?.tracking_number || data.response?.first_mile_tracking_number || null

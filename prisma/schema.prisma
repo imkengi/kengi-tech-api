@@ -58,6 +58,87 @@ model RefreshToken {
   @@index([expiresAt])
 }
 
+// ─── Nguyệt Các Tarot (kengi.vn/tarot) ───────────────────────────────────────
+// Công cụ xem tarot đứng RIÊNG, không dính gì tới tài khoản cửa hàng: người dùng
+// đăng nhập bằng Google, lịch sử trải bài lưu ở đây thay vì localStorage của
+// trình duyệt (đổi máy/xoá cache là mất sạch). Đặt ở registry (schema public) vì
+// người xem bài không thuộc cửa hàng nào.
+
+model TarotUser {
+  id          String   @id @default(cuid())
+  googleSub   String   @unique     // 'sub' trong ID token Google — định danh bền, email có thể đổi
+  email       String
+  name        String?
+  picture     String?
+  locale      String?
+  lastLoginAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([email])
+}
+
+model TarotReading {
+  id         String   @id @default(cuid())
+  /* TarotUser.id với người đã đăng nhập, hoặc "guest:<uuid>" với khách vãng lai.
+   * Không đặt khoá ngoại: khách không có hồ sơ, và xoá tài khoản thì dọn tay.
+   * Tiền tố "guest:" là KHOÁ QUY ƯỚC — đổi nó là gãy chỗ gộp lịch sử khi khách
+   * đăng nhập và gãy cả phần đếm khách ở trang admin. */
+  userId     String
+  ip         String?                // để chặn một máy đốt hết hạn mức AI, không dùng cho việc khác
+  tool       String   @default("tarot") // tarot | numerology | tuvi | birth-chart
+  question   String
+  readerName String?
+  topic      String?
+  spread     String   @default("three")
+  cards      String                 // JSON: [{cardId, name, vi, position, reversed, keys}]
+  summary    String?                // tóm tắt hiển thị ở danh sách lịch sử
+  aiAnswer   String?                // bản luận giải AI dạng văn xuôi
+  aiReading  String?                // JSON có cấu trúc của luận giải AI
+  aiModel    String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+// Lượt TRUY CẬP trang — tách hẳn khỏi TarotReading.
+// Trộn chung là hỏng con số "lượt xem bài": mở trang rồi thoát cũng thành một
+// lượt xem, số liệu phồng lên mà không ai biết.
+model TarotVisit {
+    id        String   @id @default(cuid())
+    userId    String? // TarotUser.id hoặc 'guest:<mã>' — có thể trống nếu chặn cookie
+    ip        String?
+    tool      String   @default("tarot") // tab đang mở lúc vào
+    userAgent String?
+    createdAt DateTime @default(now())
+
+    @@index([createdAt])
+    @@index([userId])
+}
+
+// Cấu hình AI của trang tarot — MỘT dòng duy nhất (id = 'default').
+// Khoá OpenAI nhập ở kengi.vn/admin → tab Tarot, không nằm trong env/repo để đổi
+// khoá không phải deploy lại.
+model TarotSetting {
+    id              String   @id @default("default")
+    provider        String   @default("openai") // openai | deepseek
+    openaiApiKey    String? // khoá của nhà cung cấp đang chọn
+    model           String   @default("gpt-5.6-terra")
+    reasoningEffort String   @default("medium") // chỉ OpenAI dùng
+    aiDailyLimit    Int      @default(20) // trần lượt AI mỗi người (hoặc mỗi khách) một ngày
+    aiDailyLimitIp  Int      @default(60) // trần theo IP — khách xoá localStorage là có danh tính mới, cái này chặn
+
+    /* KHOÁ RIÊNG CHO PHẦN NHÌN ẢNH (xem chỉ tay).
+     * Tách khỏi khoá chữ vì DeepSeek KHÔNG nhìn được ảnh — chủ trang có thể để
+     * DeepSeek lo phần chữ (rẻ) và chỉ cắm thêm một khoá OpenAI/Gemini cho phần
+     * ảnh. Trống thì tính năng xem chỉ tay bằng AI tự tắt. */
+    visionProvider  String   @default("openai") // openai | gemini
+    visionApiKey    String?
+    visionModel     String   @default("gpt-5.6-terra")
+    requireLogin    Boolean  @default(false) // bật thì phải đăng nhập mới dùng được AI
+    updatedAt       DateTime @updatedAt
+}
+
 // ─── Pending 2FA Store (persistent, survives server restarts) ─────────────────
 // Holds the partially-authenticated login state between /login (password OK,
 // 2FA required) and /verify-2fa. Stored in PostgreSQL instead of an in-memory

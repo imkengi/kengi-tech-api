@@ -656,6 +656,48 @@ export type MisaMap = $Result.DefaultSelection<Prisma.$MisaMapPayload>
  * 
  */
 export type MisaSyncLog = $Result.DefaultSelection<Prisma.$MisaSyncLogPayload>
+/**
+ * Model PrintTemplate
+ * Mẫu in của cửa hàng — đồng bộ giữa các máy.
+ * 
+ * Trước đây mẫu in chỉ nằm trong localStorage của từng trình duyệt: sửa trên
+ * máy tính thì máy POS vẫn in mẫu cũ, và xoá dữ liệu trình duyệt là mất sạch.
+ * Bảng này là bản có thẩm quyền; trình duyệt vẫn giữ một bản để in được khi mất
+ * mạng, nhưng khi hai bên lệch thì lấy bản có updatedAt mới hơn.
+ */
+export type PrintTemplate = $Result.DefaultSelection<Prisma.$PrintTemplatePayload>
+/**
+ * Model AiReport
+ * BAN PHAN TICH AI DA LUU.
+ * Moi lan chay tro ly AI ton thoi gian cho va ton han muc Gemini cua cua hang;
+ * truoc day ket qua chi nam trong bo nho trinh duyet, doi tab la mat. Luu lai de
+ * doc lai, so hai ky voi nhau, va in ra cho ke toan.
+ */
+export type AiReport = $Result.DefaultSelection<Prisma.$AiReportPayload>
+/**
+ * Model AiChat
+ * HOI THOAI VOI TRO LY AI DA LUU.
+ * Truoc day toan bo cuoc tro chuyen chi nam trong useState: bam F5 la mat sach,
+ * ke ca nhung cau tra loi ton han muc Gemini va vai chuc giay cho.
+ */
+export type AiChat = $Result.DefaultSelection<Prisma.$AiChatPayload>
+/**
+ * Model MisaImportBatch
+ * Một lượt đổ file. Giữ ĐỘ PHỦ (đọc được bao nhiêu / bỏ bao nhiêu) để về sau còn
+ * biết kết luận đứng trên mấy phần dữ liệu — "không thấy lỗi" mà không kèm độ phủ
+ * thì vô nghĩa.
+ */
+export type MisaImportBatch = $Result.DefaultSelection<Prisma.$MisaImportBatchPayload>
+/**
+ * Model MisaSaleDoc
+ * Một chứng từ bán hàng MISA (BH00394) — gộp từ nhiều dòng hàng trong Excel.
+ */
+export type MisaSaleDoc = $Result.DefaultSelection<Prisma.$MisaSaleDocPayload>
+/**
+ * Model MisaSaleLine
+ * Một dòng hàng trong chứng từ bán hàng MISA.
+ */
+export type MisaSaleLine = $Result.DefaultSelection<Prisma.$MisaSaleLinePayload>
 
 /**
  * ##  Prisma Client ʲˢ
@@ -2054,6 +2096,66 @@ export class PrismaClient<
     * ```
     */
   get misaSyncLog(): Prisma.MisaSyncLogDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.printTemplate`: Exposes CRUD operations for the **PrintTemplate** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more PrintTemplates
+    * const printTemplates = await prisma.printTemplate.findMany()
+    * ```
+    */
+  get printTemplate(): Prisma.PrintTemplateDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.aiReport`: Exposes CRUD operations for the **AiReport** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more AiReports
+    * const aiReports = await prisma.aiReport.findMany()
+    * ```
+    */
+  get aiReport(): Prisma.AiReportDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.aiChat`: Exposes CRUD operations for the **AiChat** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more AiChats
+    * const aiChats = await prisma.aiChat.findMany()
+    * ```
+    */
+  get aiChat(): Prisma.AiChatDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.misaImportBatch`: Exposes CRUD operations for the **MisaImportBatch** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more MisaImportBatches
+    * const misaImportBatches = await prisma.misaImportBatch.findMany()
+    * ```
+    */
+  get misaImportBatch(): Prisma.MisaImportBatchDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.misaSaleDoc`: Exposes CRUD operations for the **MisaSaleDoc** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more MisaSaleDocs
+    * const misaSaleDocs = await prisma.misaSaleDoc.findMany()
+    * ```
+    */
+  get misaSaleDoc(): Prisma.MisaSaleDocDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.misaSaleLine`: Exposes CRUD operations for the **MisaSaleLine** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more MisaSaleLines
+    * const misaSaleLines = await prisma.misaSaleLine.findMany()
+    * ```
+    */
+  get misaSaleLine(): Prisma.MisaSaleLineDelegate<ExtArgs, ClientOptions>;
 }
 
 export namespace Prisma {
@@ -2622,7 +2724,13 @@ export namespace Prisma {
     KiotVietSyncLog: 'KiotVietSyncLog',
     MisaConfig: 'MisaConfig',
     MisaMap: 'MisaMap',
-    MisaSyncLog: 'MisaSyncLog'
+    MisaSyncLog: 'MisaSyncLog',
+    PrintTemplate: 'PrintTemplate',
+    AiReport: 'AiReport',
+    AiChat: 'AiChat',
+    MisaImportBatch: 'MisaImportBatch',
+    MisaSaleDoc: 'MisaSaleDoc',
+    MisaSaleLine: 'MisaSaleLine'
   };
 
   export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -2641,7 +2749,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "branch" | "user" | "apiKey" | "webhookEndpoint" | "webhookDelivery" | "salesCheckin" | "category" | "brand" | "product" | "productSerial" | "unitConversion" | "productImage" | "customerGroup" | "customer" | "transaction" | "transactionItem" | "payment" | "inventoryTransaction" | "importReceipt" | "importReceiptItem" | "promotion" | "supplier" | "purchaseOrder" | "purchaseOrderItem" | "expense" | "cashReceipt" | "notification" | "warranty" | "repair" | "quotation" | "auditLog" | "priceHistory" | "shippingOrder" | "driver" | "vehicle" | "vehicleMaintenance" | "crmEmailLog" | "vehicleFuelLog" | "vehicleDocument" | "deliveryRoute" | "deliveryStop" | "taxConfig" | "bankAccount" | "bankTransaction" | "bankConnectionConfig" | "taxDeclaration" | "customerSegment" | "currency" | "feedback" | "schedule" | "returnOrder" | "returnItem" | "debtEntry" | "bundle" | "salesOrder" | "salesOrderItem" | "priceList" | "priceListItem" | "priceRule" | "announcement" | "attendance" | "loyaltyMember" | "loyaltyTransaction" | "review" | "skuMapping" | "hkdRevenueEntry" | "storeSettings" | "store" | "branchRequest" | "branchDeleteRequest" | "payrollRecord" | "employee" | "payrollPeriod" | "payrollEntry" | "onlineChannel" | "onlineOrder" | "onlineProduct" | "onlineOrderItem" | "syncLog" | "journalEntry" | "fixedAsset" | "depreciationEntry" | "cCDC" | "cCDCAllocation" | "eInvoiceConfig" | "eInvoice" | "eInvoiceItem" | "adjustmentInvoice" | "adjustmentInvoiceItem" | "hKDRevenueEntry" | "warehouse" | "warehouseStock" | "stockTransfer" | "stockTransferItem" | "salesTrip" | "salesTripItem" | "salesTripLog" | "inventoryCount" | "inventoryCountItem" | "zReport" | "storageFile" | "chartOfAccount" | "periodLock" | "exchangeRate" | "taxDeadline" | "taxAuditLog" | "taxBudget" | "fbUserToken" | "fbPage" | "fbScheduledPost" | "fbCommentRule" | "fbAutoReplyLog" | "fbBrandProfile" | "fbContentPlan" | "fbContentDraft" | "crmTask" | "crmDeal" | "crmActivity" | "crmZaloLog" | "crmCampaign" | "aiAgentJob" | "aiAgentRun" | "kiotVietConfig" | "kiotVietMap" | "kiotVietSyncLog" | "misaConfig" | "misaMap" | "misaSyncLog"
+      modelProps: "branch" | "user" | "apiKey" | "webhookEndpoint" | "webhookDelivery" | "salesCheckin" | "category" | "brand" | "product" | "productSerial" | "unitConversion" | "productImage" | "customerGroup" | "customer" | "transaction" | "transactionItem" | "payment" | "inventoryTransaction" | "importReceipt" | "importReceiptItem" | "promotion" | "supplier" | "purchaseOrder" | "purchaseOrderItem" | "expense" | "cashReceipt" | "notification" | "warranty" | "repair" | "quotation" | "auditLog" | "priceHistory" | "shippingOrder" | "driver" | "vehicle" | "vehicleMaintenance" | "crmEmailLog" | "vehicleFuelLog" | "vehicleDocument" | "deliveryRoute" | "deliveryStop" | "taxConfig" | "bankAccount" | "bankTransaction" | "bankConnectionConfig" | "taxDeclaration" | "customerSegment" | "currency" | "feedback" | "schedule" | "returnOrder" | "returnItem" | "debtEntry" | "bundle" | "salesOrder" | "salesOrderItem" | "priceList" | "priceListItem" | "priceRule" | "announcement" | "attendance" | "loyaltyMember" | "loyaltyTransaction" | "review" | "skuMapping" | "hkdRevenueEntry" | "storeSettings" | "store" | "branchRequest" | "branchDeleteRequest" | "payrollRecord" | "employee" | "payrollPeriod" | "payrollEntry" | "onlineChannel" | "onlineOrder" | "onlineProduct" | "onlineOrderItem" | "syncLog" | "journalEntry" | "fixedAsset" | "depreciationEntry" | "cCDC" | "cCDCAllocation" | "eInvoiceConfig" | "eInvoice" | "eInvoiceItem" | "adjustmentInvoice" | "adjustmentInvoiceItem" | "hKDRevenueEntry" | "warehouse" | "warehouseStock" | "stockTransfer" | "stockTransferItem" | "salesTrip" | "salesTripItem" | "salesTripLog" | "inventoryCount" | "inventoryCountItem" | "zReport" | "storageFile" | "chartOfAccount" | "periodLock" | "exchangeRate" | "taxDeadline" | "taxAuditLog" | "taxBudget" | "fbUserToken" | "fbPage" | "fbScheduledPost" | "fbCommentRule" | "fbAutoReplyLog" | "fbBrandProfile" | "fbContentPlan" | "fbContentDraft" | "crmTask" | "crmDeal" | "crmActivity" | "crmZaloLog" | "crmCampaign" | "aiAgentJob" | "aiAgentRun" | "kiotVietConfig" | "kiotVietMap" | "kiotVietSyncLog" | "misaConfig" | "misaMap" | "misaSyncLog" | "printTemplate" | "aiReport" | "aiChat" | "misaImportBatch" | "misaSaleDoc" | "misaSaleLine"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -12117,6 +12225,450 @@ export namespace Prisma {
           }
         }
       }
+      PrintTemplate: {
+        payload: Prisma.$PrintTemplatePayload<ExtArgs>
+        fields: Prisma.PrintTemplateFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.PrintTemplateFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PrintTemplatePayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.PrintTemplateFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PrintTemplatePayload>
+          }
+          findFirst: {
+            args: Prisma.PrintTemplateFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PrintTemplatePayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.PrintTemplateFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PrintTemplatePayload>
+          }
+          findMany: {
+            args: Prisma.PrintTemplateFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PrintTemplatePayload>[]
+          }
+          create: {
+            args: Prisma.PrintTemplateCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PrintTemplatePayload>
+          }
+          createMany: {
+            args: Prisma.PrintTemplateCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.PrintTemplateCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PrintTemplatePayload>[]
+          }
+          delete: {
+            args: Prisma.PrintTemplateDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PrintTemplatePayload>
+          }
+          update: {
+            args: Prisma.PrintTemplateUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PrintTemplatePayload>
+          }
+          deleteMany: {
+            args: Prisma.PrintTemplateDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.PrintTemplateUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.PrintTemplateUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PrintTemplatePayload>[]
+          }
+          upsert: {
+            args: Prisma.PrintTemplateUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PrintTemplatePayload>
+          }
+          aggregate: {
+            args: Prisma.PrintTemplateAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregatePrintTemplate>
+          }
+          groupBy: {
+            args: Prisma.PrintTemplateGroupByArgs<ExtArgs>
+            result: $Utils.Optional<PrintTemplateGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.PrintTemplateCountArgs<ExtArgs>
+            result: $Utils.Optional<PrintTemplateCountAggregateOutputType> | number
+          }
+        }
+      }
+      AiReport: {
+        payload: Prisma.$AiReportPayload<ExtArgs>
+        fields: Prisma.AiReportFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.AiReportFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiReportPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.AiReportFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiReportPayload>
+          }
+          findFirst: {
+            args: Prisma.AiReportFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiReportPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.AiReportFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiReportPayload>
+          }
+          findMany: {
+            args: Prisma.AiReportFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiReportPayload>[]
+          }
+          create: {
+            args: Prisma.AiReportCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiReportPayload>
+          }
+          createMany: {
+            args: Prisma.AiReportCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.AiReportCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiReportPayload>[]
+          }
+          delete: {
+            args: Prisma.AiReportDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiReportPayload>
+          }
+          update: {
+            args: Prisma.AiReportUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiReportPayload>
+          }
+          deleteMany: {
+            args: Prisma.AiReportDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.AiReportUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.AiReportUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiReportPayload>[]
+          }
+          upsert: {
+            args: Prisma.AiReportUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiReportPayload>
+          }
+          aggregate: {
+            args: Prisma.AiReportAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateAiReport>
+          }
+          groupBy: {
+            args: Prisma.AiReportGroupByArgs<ExtArgs>
+            result: $Utils.Optional<AiReportGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.AiReportCountArgs<ExtArgs>
+            result: $Utils.Optional<AiReportCountAggregateOutputType> | number
+          }
+        }
+      }
+      AiChat: {
+        payload: Prisma.$AiChatPayload<ExtArgs>
+        fields: Prisma.AiChatFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.AiChatFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiChatPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.AiChatFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiChatPayload>
+          }
+          findFirst: {
+            args: Prisma.AiChatFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiChatPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.AiChatFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiChatPayload>
+          }
+          findMany: {
+            args: Prisma.AiChatFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiChatPayload>[]
+          }
+          create: {
+            args: Prisma.AiChatCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiChatPayload>
+          }
+          createMany: {
+            args: Prisma.AiChatCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.AiChatCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiChatPayload>[]
+          }
+          delete: {
+            args: Prisma.AiChatDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiChatPayload>
+          }
+          update: {
+            args: Prisma.AiChatUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiChatPayload>
+          }
+          deleteMany: {
+            args: Prisma.AiChatDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.AiChatUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.AiChatUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiChatPayload>[]
+          }
+          upsert: {
+            args: Prisma.AiChatUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$AiChatPayload>
+          }
+          aggregate: {
+            args: Prisma.AiChatAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateAiChat>
+          }
+          groupBy: {
+            args: Prisma.AiChatGroupByArgs<ExtArgs>
+            result: $Utils.Optional<AiChatGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.AiChatCountArgs<ExtArgs>
+            result: $Utils.Optional<AiChatCountAggregateOutputType> | number
+          }
+        }
+      }
+      MisaImportBatch: {
+        payload: Prisma.$MisaImportBatchPayload<ExtArgs>
+        fields: Prisma.MisaImportBatchFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.MisaImportBatchFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaImportBatchPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.MisaImportBatchFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaImportBatchPayload>
+          }
+          findFirst: {
+            args: Prisma.MisaImportBatchFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaImportBatchPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.MisaImportBatchFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaImportBatchPayload>
+          }
+          findMany: {
+            args: Prisma.MisaImportBatchFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaImportBatchPayload>[]
+          }
+          create: {
+            args: Prisma.MisaImportBatchCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaImportBatchPayload>
+          }
+          createMany: {
+            args: Prisma.MisaImportBatchCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.MisaImportBatchCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaImportBatchPayload>[]
+          }
+          delete: {
+            args: Prisma.MisaImportBatchDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaImportBatchPayload>
+          }
+          update: {
+            args: Prisma.MisaImportBatchUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaImportBatchPayload>
+          }
+          deleteMany: {
+            args: Prisma.MisaImportBatchDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.MisaImportBatchUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.MisaImportBatchUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaImportBatchPayload>[]
+          }
+          upsert: {
+            args: Prisma.MisaImportBatchUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaImportBatchPayload>
+          }
+          aggregate: {
+            args: Prisma.MisaImportBatchAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateMisaImportBatch>
+          }
+          groupBy: {
+            args: Prisma.MisaImportBatchGroupByArgs<ExtArgs>
+            result: $Utils.Optional<MisaImportBatchGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.MisaImportBatchCountArgs<ExtArgs>
+            result: $Utils.Optional<MisaImportBatchCountAggregateOutputType> | number
+          }
+        }
+      }
+      MisaSaleDoc: {
+        payload: Prisma.$MisaSaleDocPayload<ExtArgs>
+        fields: Prisma.MisaSaleDocFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.MisaSaleDocFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaSaleDocPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.MisaSaleDocFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaSaleDocPayload>
+          }
+          findFirst: {
+            args: Prisma.MisaSaleDocFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaSaleDocPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.MisaSaleDocFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaSaleDocPayload>
+          }
+          findMany: {
+            args: Prisma.MisaSaleDocFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaSaleDocPayload>[]
+          }
+          create: {
+            args: Prisma.MisaSaleDocCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaSaleDocPayload>
+          }
+          createMany: {
+            args: Prisma.MisaSaleDocCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.MisaSaleDocCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaSaleDocPayload>[]
+          }
+          delete: {
+            args: Prisma.MisaSaleDocDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaSaleDocPayload>
+          }
+          update: {
+            args: Prisma.MisaSaleDocUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaSaleDocPayload>
+          }
+          deleteMany: {
+            args: Prisma.MisaSaleDocDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.MisaSaleDocUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.MisaSaleDocUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaSaleDocPayload>[]
+          }
+          upsert: {
+            args: Prisma.MisaSaleDocUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaSaleDocPayload>
+          }
+          aggregate: {
+            args: Prisma.MisaSaleDocAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateMisaSaleDoc>
+          }
+          groupBy: {
+            args: Prisma.MisaSaleDocGroupByArgs<ExtArgs>
+            result: $Utils.Optional<MisaSaleDocGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.MisaSaleDocCountArgs<ExtArgs>
+            result: $Utils.Optional<MisaSaleDocCountAggregateOutputType> | number
+          }
+        }
+      }
+      MisaSaleLine: {
+        payload: Prisma.$MisaSaleLinePayload<ExtArgs>
+        fields: Prisma.MisaSaleLineFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.MisaSaleLineFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaSaleLinePayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.MisaSaleLineFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaSaleLinePayload>
+          }
+          findFirst: {
+            args: Prisma.MisaSaleLineFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaSaleLinePayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.MisaSaleLineFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaSaleLinePayload>
+          }
+          findMany: {
+            args: Prisma.MisaSaleLineFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaSaleLinePayload>[]
+          }
+          create: {
+            args: Prisma.MisaSaleLineCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaSaleLinePayload>
+          }
+          createMany: {
+            args: Prisma.MisaSaleLineCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.MisaSaleLineCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaSaleLinePayload>[]
+          }
+          delete: {
+            args: Prisma.MisaSaleLineDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaSaleLinePayload>
+          }
+          update: {
+            args: Prisma.MisaSaleLineUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaSaleLinePayload>
+          }
+          deleteMany: {
+            args: Prisma.MisaSaleLineDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.MisaSaleLineUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.MisaSaleLineUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaSaleLinePayload>[]
+          }
+          upsert: {
+            args: Prisma.MisaSaleLineUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaSaleLinePayload>
+          }
+          aggregate: {
+            args: Prisma.MisaSaleLineAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateMisaSaleLine>
+          }
+          groupBy: {
+            args: Prisma.MisaSaleLineGroupByArgs<ExtArgs>
+            result: $Utils.Optional<MisaSaleLineGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.MisaSaleLineCountArgs<ExtArgs>
+            result: $Utils.Optional<MisaSaleLineCountAggregateOutputType> | number
+          }
+        }
+      }
     }
   } & {
     other: {
@@ -12341,6 +12893,12 @@ export namespace Prisma {
     misaConfig?: MisaConfigOmit
     misaMap?: MisaMapOmit
     misaSyncLog?: MisaSyncLogOmit
+    printTemplate?: PrintTemplateOmit
+    aiReport?: AiReportOmit
+    aiChat?: AiChatOmit
+    misaImportBatch?: MisaImportBatchOmit
+    misaSaleDoc?: MisaSaleDocOmit
+    misaSaleLine?: MisaSaleLineOmit
   }
 
   /* Types for Logging */
@@ -13666,6 +14224,68 @@ export namespace Prisma {
    */
   export type AiAgentJobCountOutputTypeCountRunsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: AiAgentRunWhereInput
+  }
+
+
+  /**
+   * Count Type MisaImportBatchCountOutputType
+   */
+
+  export type MisaImportBatchCountOutputType = {
+    docs: number
+  }
+
+  export type MisaImportBatchCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    docs?: boolean | MisaImportBatchCountOutputTypeCountDocsArgs
+  }
+
+  // Custom InputTypes
+  /**
+   * MisaImportBatchCountOutputType without action
+   */
+  export type MisaImportBatchCountOutputTypeDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaImportBatchCountOutputType
+     */
+    select?: MisaImportBatchCountOutputTypeSelect<ExtArgs> | null
+  }
+
+  /**
+   * MisaImportBatchCountOutputType without action
+   */
+  export type MisaImportBatchCountOutputTypeCountDocsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: MisaSaleDocWhereInput
+  }
+
+
+  /**
+   * Count Type MisaSaleDocCountOutputType
+   */
+
+  export type MisaSaleDocCountOutputType = {
+    lines: number
+  }
+
+  export type MisaSaleDocCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    lines?: boolean | MisaSaleDocCountOutputTypeCountLinesArgs
+  }
+
+  // Custom InputTypes
+  /**
+   * MisaSaleDocCountOutputType without action
+   */
+  export type MisaSaleDocCountOutputTypeDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSaleDocCountOutputType
+     */
+    select?: MisaSaleDocCountOutputTypeSelect<ExtArgs> | null
+  }
+
+  /**
+   * MisaSaleDocCountOutputType without action
+   */
+  export type MisaSaleDocCountOutputTypeCountLinesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: MisaSaleLineWhereInput
   }
 
 
@@ -30719,6 +31339,8 @@ export namespace Prisma {
     status: string | null
     createdBy: string | null
     createdByName: string | null
+    salespersonId: string | null
+    salespersonName: string | null
     notes: string | null
     returnedAt: Date | null
     returnReason: string | null
@@ -30750,6 +31372,8 @@ export namespace Prisma {
     status: string | null
     createdBy: string | null
     createdByName: string | null
+    salespersonId: string | null
+    salespersonName: string | null
     notes: string | null
     returnedAt: Date | null
     returnReason: string | null
@@ -30781,6 +31405,8 @@ export namespace Prisma {
     status: number
     createdBy: number
     createdByName: number
+    salespersonId: number
+    salespersonName: number
     notes: number
     returnedAt: number
     returnReason: number
@@ -30832,6 +31458,8 @@ export namespace Prisma {
     status?: true
     createdBy?: true
     createdByName?: true
+    salespersonId?: true
+    salespersonName?: true
     notes?: true
     returnedAt?: true
     returnReason?: true
@@ -30863,6 +31491,8 @@ export namespace Prisma {
     status?: true
     createdBy?: true
     createdByName?: true
+    salespersonId?: true
+    salespersonName?: true
     notes?: true
     returnedAt?: true
     returnReason?: true
@@ -30894,6 +31524,8 @@ export namespace Prisma {
     status?: true
     createdBy?: true
     createdByName?: true
+    salespersonId?: true
+    salespersonName?: true
     notes?: true
     returnedAt?: true
     returnReason?: true
@@ -31012,6 +31644,8 @@ export namespace Prisma {
     status: string
     createdBy: string
     createdByName: string | null
+    salespersonId: string | null
+    salespersonName: string | null
     notes: string | null
     returnedAt: Date | null
     returnReason: string | null
@@ -31062,6 +31696,8 @@ export namespace Prisma {
     status?: boolean
     createdBy?: boolean
     createdByName?: boolean
+    salespersonId?: boolean
+    salespersonName?: boolean
     notes?: boolean
     returnedAt?: boolean
     returnReason?: boolean
@@ -31098,6 +31734,8 @@ export namespace Prisma {
     status?: boolean
     createdBy?: boolean
     createdByName?: boolean
+    salespersonId?: boolean
+    salespersonName?: boolean
     notes?: boolean
     returnedAt?: boolean
     returnReason?: boolean
@@ -31131,6 +31769,8 @@ export namespace Prisma {
     status?: boolean
     createdBy?: boolean
     createdByName?: boolean
+    salespersonId?: boolean
+    salespersonName?: boolean
     notes?: boolean
     returnedAt?: boolean
     returnReason?: boolean
@@ -31164,6 +31804,8 @@ export namespace Prisma {
     status?: boolean
     createdBy?: boolean
     createdByName?: boolean
+    salespersonId?: boolean
+    salespersonName?: boolean
     notes?: boolean
     returnedAt?: boolean
     returnReason?: boolean
@@ -31178,7 +31820,7 @@ export namespace Prisma {
     createdAt?: boolean
   }
 
-  export type TransactionOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "receiptNumber" | "customerId" | "customerName" | "customerPhone" | "branchId" | "subtotal" | "discount" | "discountType" | "tax" | "total" | "amountReceived" | "change" | "status" | "createdBy" | "createdByName" | "notes" | "returnedAt" | "returnReason" | "transactionDate" | "vatInvoiceNumber" | "vatIssuedAt" | "vatStatus" | "vatBuyerInfo" | "revisionOfId" | "appliedPromotionIds" | "channel" | "createdAt", ExtArgs["result"]["transaction"]>
+  export type TransactionOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "receiptNumber" | "customerId" | "customerName" | "customerPhone" | "branchId" | "subtotal" | "discount" | "discountType" | "tax" | "total" | "amountReceived" | "change" | "status" | "createdBy" | "createdByName" | "salespersonId" | "salespersonName" | "notes" | "returnedAt" | "returnReason" | "transactionDate" | "vatInvoiceNumber" | "vatIssuedAt" | "vatStatus" | "vatBuyerInfo" | "revisionOfId" | "appliedPromotionIds" | "channel" | "createdAt", ExtArgs["result"]["transaction"]>
   export type TransactionInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     creator?: boolean | UserDefaultArgs<ExtArgs>
     customer?: boolean | Transaction$customerArgs<ExtArgs>
@@ -31220,6 +31862,17 @@ export namespace Prisma {
       status: string
       createdBy: string
       createdByName: string | null
+      /**
+       * NHÂN VIÊN ĐƯỢC TÍNH DOANH SỐ — khác `createdBy` (người bấm máy).
+       * Đo 15/08/2026: HUTI bán 20+ đơn/ngày, 14 tỷ doanh thu, mà chỉ có ĐÚNG 2
+       * tài khoản — cả cửa hàng ghi chung một login, nên `createdBy` không tách
+       * được ai bán. Hai vai này phải là hai cột: `createdBy` giữ dấu vết kiểm
+       * toán, cột này giữ công bán hàng.
+       * KHÔNG đặt khoá ngoại: xoá nhân viên nghỉ việc không được làm hỏng lịch sử
+       * doanh số. Tên lưu kèm để báo cáo cũ vẫn đọc được sau khi hồ sơ bị xoá.
+       */
+      salespersonId: string | null
+      salespersonName: string | null
       notes: string | null
       returnedAt: Date | null
       returnReason: string | null
@@ -31675,6 +32328,8 @@ export namespace Prisma {
     readonly status: FieldRef<"Transaction", 'String'>
     readonly createdBy: FieldRef<"Transaction", 'String'>
     readonly createdByName: FieldRef<"Transaction", 'String'>
+    readonly salespersonId: FieldRef<"Transaction", 'String'>
+    readonly salespersonName: FieldRef<"Transaction", 'String'>
     readonly notes: FieldRef<"Transaction", 'String'>
     readonly returnedAt: FieldRef<"Transaction", 'DateTime'>
     readonly returnReason: FieldRef<"Transaction", 'String'>
@@ -39584,12 +40239,18 @@ export namespace Prisma {
     totalOrders: number | null
     totalValue: number | null
     payable: number | null
+    paymentTermDays: number | null
+    paymentTermDom: number | null
+    paymentTermMonthOffset: number | null
   }
 
   export type SupplierSumAggregateOutputType = {
     totalOrders: number | null
     totalValue: number | null
     payable: number | null
+    paymentTermDays: number | null
+    paymentTermDom: number | null
+    paymentTermMonthOffset: number | null
   }
 
   export type SupplierMinAggregateOutputType = {
@@ -39606,6 +40267,11 @@ export namespace Prisma {
     status: string | null
     notes: string | null
     payable: number | null
+    paymentTermDays: number | null
+    paymentTerms: string | null
+    paymentTermType: string | null
+    paymentTermDom: number | null
+    paymentTermMonthOffset: number | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -39624,6 +40290,11 @@ export namespace Prisma {
     status: string | null
     notes: string | null
     payable: number | null
+    paymentTermDays: number | null
+    paymentTerms: string | null
+    paymentTermType: string | null
+    paymentTermDom: number | null
+    paymentTermMonthOffset: number | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -39642,6 +40313,11 @@ export namespace Prisma {
     status: number
     notes: number
     payable: number
+    paymentTermDays: number
+    paymentTerms: number
+    paymentTermType: number
+    paymentTermDom: number
+    paymentTermMonthOffset: number
     createdAt: number
     updatedAt: number
     _all: number
@@ -39652,12 +40328,18 @@ export namespace Prisma {
     totalOrders?: true
     totalValue?: true
     payable?: true
+    paymentTermDays?: true
+    paymentTermDom?: true
+    paymentTermMonthOffset?: true
   }
 
   export type SupplierSumAggregateInputType = {
     totalOrders?: true
     totalValue?: true
     payable?: true
+    paymentTermDays?: true
+    paymentTermDom?: true
+    paymentTermMonthOffset?: true
   }
 
   export type SupplierMinAggregateInputType = {
@@ -39674,6 +40356,11 @@ export namespace Prisma {
     status?: true
     notes?: true
     payable?: true
+    paymentTermDays?: true
+    paymentTerms?: true
+    paymentTermType?: true
+    paymentTermDom?: true
+    paymentTermMonthOffset?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -39692,6 +40379,11 @@ export namespace Prisma {
     status?: true
     notes?: true
     payable?: true
+    paymentTermDays?: true
+    paymentTerms?: true
+    paymentTermType?: true
+    paymentTermDom?: true
+    paymentTermMonthOffset?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -39710,6 +40402,11 @@ export namespace Prisma {
     status?: true
     notes?: true
     payable?: true
+    paymentTermDays?: true
+    paymentTerms?: true
+    paymentTermType?: true
+    paymentTermDom?: true
+    paymentTermMonthOffset?: true
     createdAt?: true
     updatedAt?: true
     _all?: true
@@ -39815,6 +40512,11 @@ export namespace Prisma {
     status: string
     notes: string | null
     payable: number
+    paymentTermDays: number | null
+    paymentTerms: string | null
+    paymentTermType: string | null
+    paymentTermDom: number | null
+    paymentTermMonthOffset: number | null
     createdAt: Date
     updatedAt: Date
     _count: SupplierCountAggregateOutputType | null
@@ -39852,6 +40554,11 @@ export namespace Prisma {
     status?: boolean
     notes?: boolean
     payable?: boolean
+    paymentTermDays?: boolean
+    paymentTerms?: boolean
+    paymentTermType?: boolean
+    paymentTermDom?: boolean
+    paymentTermMonthOffset?: boolean
     createdAt?: boolean
     updatedAt?: boolean
     purchaseOrders?: boolean | Supplier$purchaseOrdersArgs<ExtArgs>
@@ -39872,6 +40579,11 @@ export namespace Prisma {
     status?: boolean
     notes?: boolean
     payable?: boolean
+    paymentTermDays?: boolean
+    paymentTerms?: boolean
+    paymentTermType?: boolean
+    paymentTermDom?: boolean
+    paymentTermMonthOffset?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["supplier"]>
@@ -39890,6 +40602,11 @@ export namespace Prisma {
     status?: boolean
     notes?: boolean
     payable?: boolean
+    paymentTermDays?: boolean
+    paymentTerms?: boolean
+    paymentTermType?: boolean
+    paymentTermDom?: boolean
+    paymentTermMonthOffset?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["supplier"]>
@@ -39908,11 +40625,16 @@ export namespace Prisma {
     status?: boolean
     notes?: boolean
     payable?: boolean
+    paymentTermDays?: boolean
+    paymentTerms?: boolean
+    paymentTermType?: boolean
+    paymentTermDom?: boolean
+    paymentTermMonthOffset?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type SupplierOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "code" | "name" | "contactName" | "phone" | "email" | "address" | "taxCode" | "totalOrders" | "totalValue" | "status" | "notes" | "payable" | "createdAt" | "updatedAt", ExtArgs["result"]["supplier"]>
+  export type SupplierOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "code" | "name" | "contactName" | "phone" | "email" | "address" | "taxCode" | "totalOrders" | "totalValue" | "status" | "notes" | "payable" | "paymentTermDays" | "paymentTerms" | "paymentTermType" | "paymentTermDom" | "paymentTermMonthOffset" | "createdAt" | "updatedAt", ExtArgs["result"]["supplier"]>
   export type SupplierInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     purchaseOrders?: boolean | Supplier$purchaseOrdersArgs<ExtArgs>
     _count?: boolean | SupplierCountOutputTypeDefaultArgs<ExtArgs>
@@ -39939,6 +40661,11 @@ export namespace Prisma {
       status: string
       notes: string | null
       payable: number
+      paymentTermDays: number | null
+      paymentTerms: string | null
+      paymentTermType: string | null
+      paymentTermDom: number | null
+      paymentTermMonthOffset: number | null
       createdAt: Date
       updatedAt: Date
     }, ExtArgs["result"]["supplier"]>
@@ -40378,6 +41105,11 @@ export namespace Prisma {
     readonly status: FieldRef<"Supplier", 'String'>
     readonly notes: FieldRef<"Supplier", 'String'>
     readonly payable: FieldRef<"Supplier", 'Float'>
+    readonly paymentTermDays: FieldRef<"Supplier", 'Int'>
+    readonly paymentTerms: FieldRef<"Supplier", 'String'>
+    readonly paymentTermType: FieldRef<"Supplier", 'String'>
+    readonly paymentTermDom: FieldRef<"Supplier", 'Int'>
+    readonly paymentTermMonthOffset: FieldRef<"Supplier", 'Int'>
     readonly createdAt: FieldRef<"Supplier", 'DateTime'>
     readonly updatedAt: FieldRef<"Supplier", 'DateTime'>
   }
@@ -47789,10 +48521,12 @@ export namespace Prisma {
 
   export type RepairAvgAggregateOutputType = {
     cost: number | null
+    quantity: number | null
   }
 
   export type RepairSumAggregateOutputType = {
     cost: number | null
+    quantity: number | null
   }
 
   export type RepairMinAggregateOutputType = {
@@ -47807,6 +48541,23 @@ export namespace Prisma {
     estimatedDate: Date | null
     completedDate: Date | null
     notes: string | null
+    source: string | null
+    productId: string | null
+    productSku: string | null
+    quantity: number | null
+    branchId: string | null
+    customerId: string | null
+    transactionId: string | null
+    soldReceiptNumber: string | null
+    stockMovedAt: Date | null
+    replacedStockAt: Date | null
+    supplierId: string | null
+    supplierName: string | null
+    supplierBatchCode: string | null
+    sentToSupplierAt: Date | null
+    queuedForSupplierAt: Date | null
+    supplierReturnedAt: Date | null
+    newUnitIssuedAt: Date | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -47823,6 +48574,23 @@ export namespace Prisma {
     estimatedDate: Date | null
     completedDate: Date | null
     notes: string | null
+    source: string | null
+    productId: string | null
+    productSku: string | null
+    quantity: number | null
+    branchId: string | null
+    customerId: string | null
+    transactionId: string | null
+    soldReceiptNumber: string | null
+    stockMovedAt: Date | null
+    replacedStockAt: Date | null
+    supplierId: string | null
+    supplierName: string | null
+    supplierBatchCode: string | null
+    sentToSupplierAt: Date | null
+    queuedForSupplierAt: Date | null
+    supplierReturnedAt: Date | null
+    newUnitIssuedAt: Date | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -47839,6 +48607,23 @@ export namespace Prisma {
     estimatedDate: number
     completedDate: number
     notes: number
+    source: number
+    productId: number
+    productSku: number
+    quantity: number
+    branchId: number
+    customerId: number
+    transactionId: number
+    soldReceiptNumber: number
+    stockMovedAt: number
+    replacedStockAt: number
+    supplierId: number
+    supplierName: number
+    supplierBatchCode: number
+    sentToSupplierAt: number
+    queuedForSupplierAt: number
+    supplierReturnedAt: number
+    newUnitIssuedAt: number
     createdAt: number
     updatedAt: number
     _all: number
@@ -47847,10 +48632,12 @@ export namespace Prisma {
 
   export type RepairAvgAggregateInputType = {
     cost?: true
+    quantity?: true
   }
 
   export type RepairSumAggregateInputType = {
     cost?: true
+    quantity?: true
   }
 
   export type RepairMinAggregateInputType = {
@@ -47865,6 +48652,23 @@ export namespace Prisma {
     estimatedDate?: true
     completedDate?: true
     notes?: true
+    source?: true
+    productId?: true
+    productSku?: true
+    quantity?: true
+    branchId?: true
+    customerId?: true
+    transactionId?: true
+    soldReceiptNumber?: true
+    stockMovedAt?: true
+    replacedStockAt?: true
+    supplierId?: true
+    supplierName?: true
+    supplierBatchCode?: true
+    sentToSupplierAt?: true
+    queuedForSupplierAt?: true
+    supplierReturnedAt?: true
+    newUnitIssuedAt?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -47881,6 +48685,23 @@ export namespace Prisma {
     estimatedDate?: true
     completedDate?: true
     notes?: true
+    source?: true
+    productId?: true
+    productSku?: true
+    quantity?: true
+    branchId?: true
+    customerId?: true
+    transactionId?: true
+    soldReceiptNumber?: true
+    stockMovedAt?: true
+    replacedStockAt?: true
+    supplierId?: true
+    supplierName?: true
+    supplierBatchCode?: true
+    sentToSupplierAt?: true
+    queuedForSupplierAt?: true
+    supplierReturnedAt?: true
+    newUnitIssuedAt?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -47897,6 +48718,23 @@ export namespace Prisma {
     estimatedDate?: true
     completedDate?: true
     notes?: true
+    source?: true
+    productId?: true
+    productSku?: true
+    quantity?: true
+    branchId?: true
+    customerId?: true
+    transactionId?: true
+    soldReceiptNumber?: true
+    stockMovedAt?: true
+    replacedStockAt?: true
+    supplierId?: true
+    supplierName?: true
+    supplierBatchCode?: true
+    sentToSupplierAt?: true
+    queuedForSupplierAt?: true
+    supplierReturnedAt?: true
+    newUnitIssuedAt?: true
     createdAt?: true
     updatedAt?: true
     _all?: true
@@ -48000,6 +48838,23 @@ export namespace Prisma {
     estimatedDate: Date | null
     completedDate: Date | null
     notes: string | null
+    source: string
+    productId: string | null
+    productSku: string | null
+    quantity: number
+    branchId: string | null
+    customerId: string | null
+    transactionId: string | null
+    soldReceiptNumber: string | null
+    stockMovedAt: Date | null
+    replacedStockAt: Date | null
+    supplierId: string | null
+    supplierName: string | null
+    supplierBatchCode: string | null
+    sentToSupplierAt: Date | null
+    queuedForSupplierAt: Date | null
+    supplierReturnedAt: Date | null
+    newUnitIssuedAt: Date | null
     createdAt: Date
     updatedAt: Date
     _count: RepairCountAggregateOutputType | null
@@ -48035,6 +48890,23 @@ export namespace Prisma {
     estimatedDate?: boolean
     completedDate?: boolean
     notes?: boolean
+    source?: boolean
+    productId?: boolean
+    productSku?: boolean
+    quantity?: boolean
+    branchId?: boolean
+    customerId?: boolean
+    transactionId?: boolean
+    soldReceiptNumber?: boolean
+    stockMovedAt?: boolean
+    replacedStockAt?: boolean
+    supplierId?: boolean
+    supplierName?: boolean
+    supplierBatchCode?: boolean
+    sentToSupplierAt?: boolean
+    queuedForSupplierAt?: boolean
+    supplierReturnedAt?: boolean
+    newUnitIssuedAt?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["repair"]>
@@ -48051,6 +48923,23 @@ export namespace Prisma {
     estimatedDate?: boolean
     completedDate?: boolean
     notes?: boolean
+    source?: boolean
+    productId?: boolean
+    productSku?: boolean
+    quantity?: boolean
+    branchId?: boolean
+    customerId?: boolean
+    transactionId?: boolean
+    soldReceiptNumber?: boolean
+    stockMovedAt?: boolean
+    replacedStockAt?: boolean
+    supplierId?: boolean
+    supplierName?: boolean
+    supplierBatchCode?: boolean
+    sentToSupplierAt?: boolean
+    queuedForSupplierAt?: boolean
+    supplierReturnedAt?: boolean
+    newUnitIssuedAt?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["repair"]>
@@ -48067,6 +48956,23 @@ export namespace Prisma {
     estimatedDate?: boolean
     completedDate?: boolean
     notes?: boolean
+    source?: boolean
+    productId?: boolean
+    productSku?: boolean
+    quantity?: boolean
+    branchId?: boolean
+    customerId?: boolean
+    transactionId?: boolean
+    soldReceiptNumber?: boolean
+    stockMovedAt?: boolean
+    replacedStockAt?: boolean
+    supplierId?: boolean
+    supplierName?: boolean
+    supplierBatchCode?: boolean
+    sentToSupplierAt?: boolean
+    queuedForSupplierAt?: boolean
+    supplierReturnedAt?: boolean
+    newUnitIssuedAt?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["repair"]>
@@ -48083,11 +48989,28 @@ export namespace Prisma {
     estimatedDate?: boolean
     completedDate?: boolean
     notes?: boolean
+    source?: boolean
+    productId?: boolean
+    productSku?: boolean
+    quantity?: boolean
+    branchId?: boolean
+    customerId?: boolean
+    transactionId?: boolean
+    soldReceiptNumber?: boolean
+    stockMovedAt?: boolean
+    replacedStockAt?: boolean
+    supplierId?: boolean
+    supplierName?: boolean
+    supplierBatchCode?: boolean
+    sentToSupplierAt?: boolean
+    queuedForSupplierAt?: boolean
+    supplierReturnedAt?: boolean
+    newUnitIssuedAt?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type RepairOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "code" | "productName" | "customerName" | "customerPhone" | "issue" | "status" | "cost" | "estimatedDate" | "completedDate" | "notes" | "createdAt" | "updatedAt", ExtArgs["result"]["repair"]>
+  export type RepairOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "code" | "productName" | "customerName" | "customerPhone" | "issue" | "status" | "cost" | "estimatedDate" | "completedDate" | "notes" | "source" | "productId" | "productSku" | "quantity" | "branchId" | "customerId" | "transactionId" | "soldReceiptNumber" | "stockMovedAt" | "replacedStockAt" | "supplierId" | "supplierName" | "supplierBatchCode" | "sentToSupplierAt" | "queuedForSupplierAt" | "supplierReturnedAt" | "newUnitIssuedAt" | "createdAt" | "updatedAt", ExtArgs["result"]["repair"]>
 
   export type $RepairPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     name: "Repair"
@@ -48104,6 +49027,23 @@ export namespace Prisma {
       estimatedDate: Date | null
       completedDate: Date | null
       notes: string | null
+      source: string
+      productId: string | null
+      productSku: string | null
+      quantity: number
+      branchId: string | null
+      customerId: string | null
+      transactionId: string | null
+      soldReceiptNumber: string | null
+      stockMovedAt: Date | null
+      replacedStockAt: Date | null
+      supplierId: string | null
+      supplierName: string | null
+      supplierBatchCode: string | null
+      sentToSupplierAt: Date | null
+      queuedForSupplierAt: Date | null
+      supplierReturnedAt: Date | null
+      newUnitIssuedAt: Date | null
       createdAt: Date
       updatedAt: Date
     }, ExtArgs["result"]["repair"]>
@@ -48540,6 +49480,23 @@ export namespace Prisma {
     readonly estimatedDate: FieldRef<"Repair", 'DateTime'>
     readonly completedDate: FieldRef<"Repair", 'DateTime'>
     readonly notes: FieldRef<"Repair", 'String'>
+    readonly source: FieldRef<"Repair", 'String'>
+    readonly productId: FieldRef<"Repair", 'String'>
+    readonly productSku: FieldRef<"Repair", 'String'>
+    readonly quantity: FieldRef<"Repair", 'Int'>
+    readonly branchId: FieldRef<"Repair", 'String'>
+    readonly customerId: FieldRef<"Repair", 'String'>
+    readonly transactionId: FieldRef<"Repair", 'String'>
+    readonly soldReceiptNumber: FieldRef<"Repair", 'String'>
+    readonly stockMovedAt: FieldRef<"Repair", 'DateTime'>
+    readonly replacedStockAt: FieldRef<"Repair", 'DateTime'>
+    readonly supplierId: FieldRef<"Repair", 'String'>
+    readonly supplierName: FieldRef<"Repair", 'String'>
+    readonly supplierBatchCode: FieldRef<"Repair", 'String'>
+    readonly sentToSupplierAt: FieldRef<"Repair", 'DateTime'>
+    readonly queuedForSupplierAt: FieldRef<"Repair", 'DateTime'>
+    readonly supplierReturnedAt: FieldRef<"Repair", 'DateTime'>
+    readonly newUnitIssuedAt: FieldRef<"Repair", 'DateTime'>
     readonly createdAt: FieldRef<"Repair", 'DateTime'>
     readonly updatedAt: FieldRef<"Repair", 'DateTime'>
   }
@@ -74883,6 +75840,7 @@ export namespace Prisma {
     returnReason: string | null
     condition: string | null
     restocked: boolean | null
+    disposed: boolean | null
   }
 
   export type ReturnItemMaxAggregateOutputType = {
@@ -74896,6 +75854,7 @@ export namespace Prisma {
     returnReason: string | null
     condition: string | null
     restocked: boolean | null
+    disposed: boolean | null
   }
 
   export type ReturnItemCountAggregateOutputType = {
@@ -74909,6 +75868,7 @@ export namespace Prisma {
     returnReason: number
     condition: number
     restocked: number
+    disposed: number
     _all: number
   }
 
@@ -74934,6 +75894,7 @@ export namespace Prisma {
     returnReason?: true
     condition?: true
     restocked?: true
+    disposed?: true
   }
 
   export type ReturnItemMaxAggregateInputType = {
@@ -74947,6 +75908,7 @@ export namespace Prisma {
     returnReason?: true
     condition?: true
     restocked?: true
+    disposed?: true
   }
 
   export type ReturnItemCountAggregateInputType = {
@@ -74960,6 +75922,7 @@ export namespace Prisma {
     returnReason?: true
     condition?: true
     restocked?: true
+    disposed?: true
     _all?: true
   }
 
@@ -75060,6 +76023,7 @@ export namespace Prisma {
     returnReason: string | null
     condition: string | null
     restocked: boolean
+    disposed: boolean
     _count: ReturnItemCountAggregateOutputType | null
     _avg: ReturnItemAvgAggregateOutputType | null
     _sum: ReturnItemSumAggregateOutputType | null
@@ -75092,6 +76056,7 @@ export namespace Prisma {
     returnReason?: boolean
     condition?: boolean
     restocked?: boolean
+    disposed?: boolean
     returnOrder?: boolean | ReturnOrderDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["returnItem"]>
 
@@ -75106,6 +76071,7 @@ export namespace Prisma {
     returnReason?: boolean
     condition?: boolean
     restocked?: boolean
+    disposed?: boolean
     returnOrder?: boolean | ReturnOrderDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["returnItem"]>
 
@@ -75120,6 +76086,7 @@ export namespace Prisma {
     returnReason?: boolean
     condition?: boolean
     restocked?: boolean
+    disposed?: boolean
     returnOrder?: boolean | ReturnOrderDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["returnItem"]>
 
@@ -75134,9 +76101,10 @@ export namespace Prisma {
     returnReason?: boolean
     condition?: boolean
     restocked?: boolean
+    disposed?: boolean
   }
 
-  export type ReturnItemOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "returnOrderId" | "productId" | "productName" | "sku" | "quantity" | "unitPrice" | "returnReason" | "condition" | "restocked", ExtArgs["result"]["returnItem"]>
+  export type ReturnItemOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "returnOrderId" | "productId" | "productName" | "sku" | "quantity" | "unitPrice" | "returnReason" | "condition" | "restocked" | "disposed", ExtArgs["result"]["returnItem"]>
   export type ReturnItemInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     returnOrder?: boolean | ReturnOrderDefaultArgs<ExtArgs>
   }
@@ -75163,6 +76131,7 @@ export namespace Prisma {
       returnReason: string | null
       condition: string | null
       restocked: boolean
+      disposed: boolean
     }, ExtArgs["result"]["returnItem"]>
     composites: {}
   }
@@ -75597,6 +76566,7 @@ export namespace Prisma {
     readonly returnReason: FieldRef<"ReturnItem", 'String'>
     readonly condition: FieldRef<"ReturnItem", 'String'>
     readonly restocked: FieldRef<"ReturnItem", 'Boolean'>
+    readonly disposed: FieldRef<"ReturnItem", 'Boolean'>
   }
     
 
@@ -106199,6 +107169,7 @@ export namespace Prisma {
     id: string | null
     onlineOrderId: string | null
     productId: string | null
+    externalItemId: string | null
     productName: string | null
     sku: string | null
     quantity: number | null
@@ -106211,6 +107182,7 @@ export namespace Prisma {
     id: string | null
     onlineOrderId: string | null
     productId: string | null
+    externalItemId: string | null
     productName: string | null
     sku: string | null
     quantity: number | null
@@ -106223,6 +107195,7 @@ export namespace Prisma {
     id: number
     onlineOrderId: number
     productId: number
+    externalItemId: number
     productName: number
     sku: number
     quantity: number
@@ -106251,6 +107224,7 @@ export namespace Prisma {
     id?: true
     onlineOrderId?: true
     productId?: true
+    externalItemId?: true
     productName?: true
     sku?: true
     quantity?: true
@@ -106263,6 +107237,7 @@ export namespace Prisma {
     id?: true
     onlineOrderId?: true
     productId?: true
+    externalItemId?: true
     productName?: true
     sku?: true
     quantity?: true
@@ -106275,6 +107250,7 @@ export namespace Prisma {
     id?: true
     onlineOrderId?: true
     productId?: true
+    externalItemId?: true
     productName?: true
     sku?: true
     quantity?: true
@@ -106374,6 +107350,7 @@ export namespace Prisma {
     id: string
     onlineOrderId: string
     productId: string | null
+    externalItemId: string | null
     productName: string
     sku: string | null
     quantity: number
@@ -106405,6 +107382,7 @@ export namespace Prisma {
     id?: boolean
     onlineOrderId?: boolean
     productId?: boolean
+    externalItemId?: boolean
     productName?: boolean
     sku?: boolean
     quantity?: boolean
@@ -106419,6 +107397,7 @@ export namespace Prisma {
     id?: boolean
     onlineOrderId?: boolean
     productId?: boolean
+    externalItemId?: boolean
     productName?: boolean
     sku?: boolean
     quantity?: boolean
@@ -106433,6 +107412,7 @@ export namespace Prisma {
     id?: boolean
     onlineOrderId?: boolean
     productId?: boolean
+    externalItemId?: boolean
     productName?: boolean
     sku?: boolean
     quantity?: boolean
@@ -106447,6 +107427,7 @@ export namespace Prisma {
     id?: boolean
     onlineOrderId?: boolean
     productId?: boolean
+    externalItemId?: boolean
     productName?: boolean
     sku?: boolean
     quantity?: boolean
@@ -106455,7 +107436,7 @@ export namespace Prisma {
     lineTotal?: boolean
   }
 
-  export type OnlineOrderItemOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "onlineOrderId" | "productId" | "productName" | "sku" | "quantity" | "unitPrice" | "discount" | "lineTotal", ExtArgs["result"]["onlineOrderItem"]>
+  export type OnlineOrderItemOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "onlineOrderId" | "productId" | "externalItemId" | "productName" | "sku" | "quantity" | "unitPrice" | "discount" | "lineTotal", ExtArgs["result"]["onlineOrderItem"]>
   export type OnlineOrderItemInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     onlineOrder?: boolean | OnlineOrderDefaultArgs<ExtArgs>
     product?: boolean | OnlineOrderItem$productArgs<ExtArgs>
@@ -106479,6 +107460,11 @@ export namespace Prisma {
       id: string
       onlineOrderId: string
       productId: string | null
+      /**
+       * Ma dong hang ben san (Shopee item_id / TikTok order_line_id / Lazada order_item_id).
+       * Webhook va returnSync deu dua vao no de khop dong hang tra ve dung san pham.
+       */
+      externalItemId: string | null
       productName: string
       sku: string | null
       quantity: number
@@ -106913,6 +107899,7 @@ export namespace Prisma {
     readonly id: FieldRef<"OnlineOrderItem", 'String'>
     readonly onlineOrderId: FieldRef<"OnlineOrderItem", 'String'>
     readonly productId: FieldRef<"OnlineOrderItem", 'String'>
+    readonly externalItemId: FieldRef<"OnlineOrderItem", 'String'>
     readonly productName: FieldRef<"OnlineOrderItem", 'String'>
     readonly sku: FieldRef<"OnlineOrderItem", 'String'>
     readonly quantity: FieldRef<"OnlineOrderItem", 'Int'>
@@ -163110,8 +164097,11 @@ export namespace Prisma {
     overwriteNames: boolean | null
     overwritePrices: boolean | null
     overwriteStock: boolean | null
+    overwriteDebt: boolean | null
+    negateDebt: boolean | null
     defaultCategoryId: string | null
     defaultWarehouseId: string | null
+    lastSyncTime: string | null
     lastSyncAt: Date | null
     createdAt: Date | null
     updatedAt: Date | null
@@ -163131,8 +164121,11 @@ export namespace Prisma {
     overwriteNames: boolean | null
     overwritePrices: boolean | null
     overwriteStock: boolean | null
+    overwriteDebt: boolean | null
+    negateDebt: boolean | null
     defaultCategoryId: string | null
     defaultWarehouseId: string | null
+    lastSyncTime: string | null
     lastSyncAt: Date | null
     createdAt: Date | null
     updatedAt: Date | null
@@ -163152,8 +164145,11 @@ export namespace Prisma {
     overwriteNames: number
     overwritePrices: number
     overwriteStock: number
+    overwriteDebt: number
+    negateDebt: number
     defaultCategoryId: number
     defaultWarehouseId: number
+    lastSyncTime: number
     lastSyncAt: number
     createdAt: number
     updatedAt: number
@@ -163175,8 +164171,11 @@ export namespace Prisma {
     overwriteNames?: true
     overwritePrices?: true
     overwriteStock?: true
+    overwriteDebt?: true
+    negateDebt?: true
     defaultCategoryId?: true
     defaultWarehouseId?: true
+    lastSyncTime?: true
     lastSyncAt?: true
     createdAt?: true
     updatedAt?: true
@@ -163196,8 +164195,11 @@ export namespace Prisma {
     overwriteNames?: true
     overwritePrices?: true
     overwriteStock?: true
+    overwriteDebt?: true
+    negateDebt?: true
     defaultCategoryId?: true
     defaultWarehouseId?: true
+    lastSyncTime?: true
     lastSyncAt?: true
     createdAt?: true
     updatedAt?: true
@@ -163217,8 +164219,11 @@ export namespace Prisma {
     overwriteNames?: true
     overwritePrices?: true
     overwriteStock?: true
+    overwriteDebt?: true
+    negateDebt?: true
     defaultCategoryId?: true
     defaultWarehouseId?: true
+    lastSyncTime?: true
     lastSyncAt?: true
     createdAt?: true
     updatedAt?: true
@@ -163311,8 +164316,11 @@ export namespace Prisma {
     overwriteNames: boolean
     overwritePrices: boolean
     overwriteStock: boolean
+    overwriteDebt: boolean
+    negateDebt: boolean
     defaultCategoryId: string | null
     defaultWarehouseId: string | null
+    lastSyncTime: string | null
     lastSyncAt: Date | null
     createdAt: Date
     updatedAt: Date
@@ -163349,8 +164357,11 @@ export namespace Prisma {
     overwriteNames?: boolean
     overwritePrices?: boolean
     overwriteStock?: boolean
+    overwriteDebt?: boolean
+    negateDebt?: boolean
     defaultCategoryId?: boolean
     defaultWarehouseId?: boolean
+    lastSyncTime?: boolean
     lastSyncAt?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -163370,8 +164381,11 @@ export namespace Prisma {
     overwriteNames?: boolean
     overwritePrices?: boolean
     overwriteStock?: boolean
+    overwriteDebt?: boolean
+    negateDebt?: boolean
     defaultCategoryId?: boolean
     defaultWarehouseId?: boolean
+    lastSyncTime?: boolean
     lastSyncAt?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -163391,8 +164405,11 @@ export namespace Prisma {
     overwriteNames?: boolean
     overwritePrices?: boolean
     overwriteStock?: boolean
+    overwriteDebt?: boolean
+    negateDebt?: boolean
     defaultCategoryId?: boolean
     defaultWarehouseId?: boolean
+    lastSyncTime?: boolean
     lastSyncAt?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -163412,14 +164429,17 @@ export namespace Prisma {
     overwriteNames?: boolean
     overwritePrices?: boolean
     overwriteStock?: boolean
+    overwriteDebt?: boolean
+    negateDebt?: boolean
     defaultCategoryId?: boolean
     defaultWarehouseId?: boolean
+    lastSyncTime?: boolean
     lastSyncAt?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type MisaConfigOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "appId" | "accessCode" | "orgCompanyCode" | "baseUrl" | "enabled" | "syncProducts" | "syncPartners" | "syncStocks" | "syncBalance" | "overwriteNames" | "overwritePrices" | "overwriteStock" | "defaultCategoryId" | "defaultWarehouseId" | "lastSyncAt" | "createdAt" | "updatedAt", ExtArgs["result"]["misaConfig"]>
+  export type MisaConfigOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "appId" | "accessCode" | "orgCompanyCode" | "baseUrl" | "enabled" | "syncProducts" | "syncPartners" | "syncStocks" | "syncBalance" | "overwriteNames" | "overwritePrices" | "overwriteStock" | "overwriteDebt" | "negateDebt" | "defaultCategoryId" | "defaultWarehouseId" | "lastSyncTime" | "lastSyncAt" | "createdAt" | "updatedAt", ExtArgs["result"]["misaConfig"]>
 
   export type $MisaConfigPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     name: "MisaConfig"
@@ -163438,8 +164458,11 @@ export namespace Prisma {
       overwriteNames: boolean
       overwritePrices: boolean
       overwriteStock: boolean
+      overwriteDebt: boolean
+      negateDebt: boolean
       defaultCategoryId: string | null
       defaultWarehouseId: string | null
+      lastSyncTime: string | null
       lastSyncAt: Date | null
       createdAt: Date
       updatedAt: Date
@@ -163879,8 +164902,11 @@ export namespace Prisma {
     readonly overwriteNames: FieldRef<"MisaConfig", 'Boolean'>
     readonly overwritePrices: FieldRef<"MisaConfig", 'Boolean'>
     readonly overwriteStock: FieldRef<"MisaConfig", 'Boolean'>
+    readonly overwriteDebt: FieldRef<"MisaConfig", 'Boolean'>
+    readonly negateDebt: FieldRef<"MisaConfig", 'Boolean'>
     readonly defaultCategoryId: FieldRef<"MisaConfig", 'String'>
     readonly defaultWarehouseId: FieldRef<"MisaConfig", 'String'>
+    readonly lastSyncTime: FieldRef<"MisaConfig", 'String'>
     readonly lastSyncAt: FieldRef<"MisaConfig", 'DateTime'>
     readonly createdAt: FieldRef<"MisaConfig", 'DateTime'>
     readonly updatedAt: FieldRef<"MisaConfig", 'DateTime'>
@@ -166464,6 +167490,7129 @@ export namespace Prisma {
 
 
   /**
+   * Model PrintTemplate
+   */
+
+  export type AggregatePrintTemplate = {
+    _count: PrintTemplateCountAggregateOutputType | null
+    _min: PrintTemplateMinAggregateOutputType | null
+    _max: PrintTemplateMaxAggregateOutputType | null
+  }
+
+  export type PrintTemplateMinAggregateOutputType = {
+    id: string | null
+    name: string | null
+    type: string | null
+    htmlSource: string | null
+    linkedPrinter: string | null
+    isDefault: boolean | null
+    isBuiltIn: boolean | null
+    daSuaTay: boolean | null
+    updatedAt: Date | null
+  }
+
+  export type PrintTemplateMaxAggregateOutputType = {
+    id: string | null
+    name: string | null
+    type: string | null
+    htmlSource: string | null
+    linkedPrinter: string | null
+    isDefault: boolean | null
+    isBuiltIn: boolean | null
+    daSuaTay: boolean | null
+    updatedAt: Date | null
+  }
+
+  export type PrintTemplateCountAggregateOutputType = {
+    id: number
+    name: number
+    type: number
+    htmlSource: number
+    linkedPrinter: number
+    isDefault: number
+    isBuiltIn: number
+    daSuaTay: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type PrintTemplateMinAggregateInputType = {
+    id?: true
+    name?: true
+    type?: true
+    htmlSource?: true
+    linkedPrinter?: true
+    isDefault?: true
+    isBuiltIn?: true
+    daSuaTay?: true
+    updatedAt?: true
+  }
+
+  export type PrintTemplateMaxAggregateInputType = {
+    id?: true
+    name?: true
+    type?: true
+    htmlSource?: true
+    linkedPrinter?: true
+    isDefault?: true
+    isBuiltIn?: true
+    daSuaTay?: true
+    updatedAt?: true
+  }
+
+  export type PrintTemplateCountAggregateInputType = {
+    id?: true
+    name?: true
+    type?: true
+    htmlSource?: true
+    linkedPrinter?: true
+    isDefault?: true
+    isBuiltIn?: true
+    daSuaTay?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type PrintTemplateAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which PrintTemplate to aggregate.
+     */
+    where?: PrintTemplateWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of PrintTemplates to fetch.
+     */
+    orderBy?: PrintTemplateOrderByWithRelationInput | PrintTemplateOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: PrintTemplateWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` PrintTemplates from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` PrintTemplates.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned PrintTemplates
+    **/
+    _count?: true | PrintTemplateCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: PrintTemplateMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: PrintTemplateMaxAggregateInputType
+  }
+
+  export type GetPrintTemplateAggregateType<T extends PrintTemplateAggregateArgs> = {
+        [P in keyof T & keyof AggregatePrintTemplate]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregatePrintTemplate[P]>
+      : GetScalarType<T[P], AggregatePrintTemplate[P]>
+  }
+
+
+
+
+  export type PrintTemplateGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: PrintTemplateWhereInput
+    orderBy?: PrintTemplateOrderByWithAggregationInput | PrintTemplateOrderByWithAggregationInput[]
+    by: PrintTemplateScalarFieldEnum[] | PrintTemplateScalarFieldEnum
+    having?: PrintTemplateScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: PrintTemplateCountAggregateInputType | true
+    _min?: PrintTemplateMinAggregateInputType
+    _max?: PrintTemplateMaxAggregateInputType
+  }
+
+  export type PrintTemplateGroupByOutputType = {
+    id: string
+    name: string
+    type: string
+    htmlSource: string
+    linkedPrinter: string
+    isDefault: boolean
+    isBuiltIn: boolean
+    daSuaTay: boolean
+    updatedAt: Date
+    _count: PrintTemplateCountAggregateOutputType | null
+    _min: PrintTemplateMinAggregateOutputType | null
+    _max: PrintTemplateMaxAggregateOutputType | null
+  }
+
+  type GetPrintTemplateGroupByPayload<T extends PrintTemplateGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<PrintTemplateGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof PrintTemplateGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], PrintTemplateGroupByOutputType[P]>
+            : GetScalarType<T[P], PrintTemplateGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type PrintTemplateSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    name?: boolean
+    type?: boolean
+    htmlSource?: boolean
+    linkedPrinter?: boolean
+    isDefault?: boolean
+    isBuiltIn?: boolean
+    daSuaTay?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["printTemplate"]>
+
+  export type PrintTemplateSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    name?: boolean
+    type?: boolean
+    htmlSource?: boolean
+    linkedPrinter?: boolean
+    isDefault?: boolean
+    isBuiltIn?: boolean
+    daSuaTay?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["printTemplate"]>
+
+  export type PrintTemplateSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    name?: boolean
+    type?: boolean
+    htmlSource?: boolean
+    linkedPrinter?: boolean
+    isDefault?: boolean
+    isBuiltIn?: boolean
+    daSuaTay?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["printTemplate"]>
+
+  export type PrintTemplateSelectScalar = {
+    id?: boolean
+    name?: boolean
+    type?: boolean
+    htmlSource?: boolean
+    linkedPrinter?: boolean
+    isDefault?: boolean
+    isBuiltIn?: boolean
+    daSuaTay?: boolean
+    updatedAt?: boolean
+  }
+
+  export type PrintTemplateOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "type" | "htmlSource" | "linkedPrinter" | "isDefault" | "isBuiltIn" | "daSuaTay" | "updatedAt", ExtArgs["result"]["printTemplate"]>
+
+  export type $PrintTemplatePayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "PrintTemplate"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      /**
+       * Trùng id ở phía client ('tpl-receipt', 'tpl-invoice-a4', id tự sinh…)
+       */
+      id: string
+      name: string
+      type: string
+      htmlSource: string
+      linkedPrinter: string
+      isDefault: boolean
+      isBuiltIn: boolean
+      /**
+       * Người dùng đã sửa tay — chặn mọi bước nâng cấp ghi đè về mẫu mặc định
+       */
+      daSuaTay: boolean
+      updatedAt: Date
+    }, ExtArgs["result"]["printTemplate"]>
+    composites: {}
+  }
+
+  type PrintTemplateGetPayload<S extends boolean | null | undefined | PrintTemplateDefaultArgs> = $Result.GetResult<Prisma.$PrintTemplatePayload, S>
+
+  type PrintTemplateCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<PrintTemplateFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: PrintTemplateCountAggregateInputType | true
+    }
+
+  export interface PrintTemplateDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['PrintTemplate'], meta: { name: 'PrintTemplate' } }
+    /**
+     * Find zero or one PrintTemplate that matches the filter.
+     * @param {PrintTemplateFindUniqueArgs} args - Arguments to find a PrintTemplate
+     * @example
+     * // Get one PrintTemplate
+     * const printTemplate = await prisma.printTemplate.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends PrintTemplateFindUniqueArgs>(args: SelectSubset<T, PrintTemplateFindUniqueArgs<ExtArgs>>): Prisma__PrintTemplateClient<$Result.GetResult<Prisma.$PrintTemplatePayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one PrintTemplate that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {PrintTemplateFindUniqueOrThrowArgs} args - Arguments to find a PrintTemplate
+     * @example
+     * // Get one PrintTemplate
+     * const printTemplate = await prisma.printTemplate.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends PrintTemplateFindUniqueOrThrowArgs>(args: SelectSubset<T, PrintTemplateFindUniqueOrThrowArgs<ExtArgs>>): Prisma__PrintTemplateClient<$Result.GetResult<Prisma.$PrintTemplatePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first PrintTemplate that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PrintTemplateFindFirstArgs} args - Arguments to find a PrintTemplate
+     * @example
+     * // Get one PrintTemplate
+     * const printTemplate = await prisma.printTemplate.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends PrintTemplateFindFirstArgs>(args?: SelectSubset<T, PrintTemplateFindFirstArgs<ExtArgs>>): Prisma__PrintTemplateClient<$Result.GetResult<Prisma.$PrintTemplatePayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first PrintTemplate that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PrintTemplateFindFirstOrThrowArgs} args - Arguments to find a PrintTemplate
+     * @example
+     * // Get one PrintTemplate
+     * const printTemplate = await prisma.printTemplate.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends PrintTemplateFindFirstOrThrowArgs>(args?: SelectSubset<T, PrintTemplateFindFirstOrThrowArgs<ExtArgs>>): Prisma__PrintTemplateClient<$Result.GetResult<Prisma.$PrintTemplatePayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more PrintTemplates that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PrintTemplateFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all PrintTemplates
+     * const printTemplates = await prisma.printTemplate.findMany()
+     * 
+     * // Get first 10 PrintTemplates
+     * const printTemplates = await prisma.printTemplate.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const printTemplateWithIdOnly = await prisma.printTemplate.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends PrintTemplateFindManyArgs>(args?: SelectSubset<T, PrintTemplateFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PrintTemplatePayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a PrintTemplate.
+     * @param {PrintTemplateCreateArgs} args - Arguments to create a PrintTemplate.
+     * @example
+     * // Create one PrintTemplate
+     * const PrintTemplate = await prisma.printTemplate.create({
+     *   data: {
+     *     // ... data to create a PrintTemplate
+     *   }
+     * })
+     * 
+     */
+    create<T extends PrintTemplateCreateArgs>(args: SelectSubset<T, PrintTemplateCreateArgs<ExtArgs>>): Prisma__PrintTemplateClient<$Result.GetResult<Prisma.$PrintTemplatePayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many PrintTemplates.
+     * @param {PrintTemplateCreateManyArgs} args - Arguments to create many PrintTemplates.
+     * @example
+     * // Create many PrintTemplates
+     * const printTemplate = await prisma.printTemplate.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends PrintTemplateCreateManyArgs>(args?: SelectSubset<T, PrintTemplateCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many PrintTemplates and returns the data saved in the database.
+     * @param {PrintTemplateCreateManyAndReturnArgs} args - Arguments to create many PrintTemplates.
+     * @example
+     * // Create many PrintTemplates
+     * const printTemplate = await prisma.printTemplate.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many PrintTemplates and only return the `id`
+     * const printTemplateWithIdOnly = await prisma.printTemplate.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends PrintTemplateCreateManyAndReturnArgs>(args?: SelectSubset<T, PrintTemplateCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PrintTemplatePayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a PrintTemplate.
+     * @param {PrintTemplateDeleteArgs} args - Arguments to delete one PrintTemplate.
+     * @example
+     * // Delete one PrintTemplate
+     * const PrintTemplate = await prisma.printTemplate.delete({
+     *   where: {
+     *     // ... filter to delete one PrintTemplate
+     *   }
+     * })
+     * 
+     */
+    delete<T extends PrintTemplateDeleteArgs>(args: SelectSubset<T, PrintTemplateDeleteArgs<ExtArgs>>): Prisma__PrintTemplateClient<$Result.GetResult<Prisma.$PrintTemplatePayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one PrintTemplate.
+     * @param {PrintTemplateUpdateArgs} args - Arguments to update one PrintTemplate.
+     * @example
+     * // Update one PrintTemplate
+     * const printTemplate = await prisma.printTemplate.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends PrintTemplateUpdateArgs>(args: SelectSubset<T, PrintTemplateUpdateArgs<ExtArgs>>): Prisma__PrintTemplateClient<$Result.GetResult<Prisma.$PrintTemplatePayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more PrintTemplates.
+     * @param {PrintTemplateDeleteManyArgs} args - Arguments to filter PrintTemplates to delete.
+     * @example
+     * // Delete a few PrintTemplates
+     * const { count } = await prisma.printTemplate.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends PrintTemplateDeleteManyArgs>(args?: SelectSubset<T, PrintTemplateDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more PrintTemplates.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PrintTemplateUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many PrintTemplates
+     * const printTemplate = await prisma.printTemplate.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends PrintTemplateUpdateManyArgs>(args: SelectSubset<T, PrintTemplateUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more PrintTemplates and returns the data updated in the database.
+     * @param {PrintTemplateUpdateManyAndReturnArgs} args - Arguments to update many PrintTemplates.
+     * @example
+     * // Update many PrintTemplates
+     * const printTemplate = await prisma.printTemplate.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more PrintTemplates and only return the `id`
+     * const printTemplateWithIdOnly = await prisma.printTemplate.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends PrintTemplateUpdateManyAndReturnArgs>(args: SelectSubset<T, PrintTemplateUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PrintTemplatePayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one PrintTemplate.
+     * @param {PrintTemplateUpsertArgs} args - Arguments to update or create a PrintTemplate.
+     * @example
+     * // Update or create a PrintTemplate
+     * const printTemplate = await prisma.printTemplate.upsert({
+     *   create: {
+     *     // ... data to create a PrintTemplate
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the PrintTemplate we want to update
+     *   }
+     * })
+     */
+    upsert<T extends PrintTemplateUpsertArgs>(args: SelectSubset<T, PrintTemplateUpsertArgs<ExtArgs>>): Prisma__PrintTemplateClient<$Result.GetResult<Prisma.$PrintTemplatePayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of PrintTemplates.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PrintTemplateCountArgs} args - Arguments to filter PrintTemplates to count.
+     * @example
+     * // Count the number of PrintTemplates
+     * const count = await prisma.printTemplate.count({
+     *   where: {
+     *     // ... the filter for the PrintTemplates we want to count
+     *   }
+     * })
+    **/
+    count<T extends PrintTemplateCountArgs>(
+      args?: Subset<T, PrintTemplateCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], PrintTemplateCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a PrintTemplate.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PrintTemplateAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends PrintTemplateAggregateArgs>(args: Subset<T, PrintTemplateAggregateArgs>): Prisma.PrismaPromise<GetPrintTemplateAggregateType<T>>
+
+    /**
+     * Group by PrintTemplate.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PrintTemplateGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends PrintTemplateGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: PrintTemplateGroupByArgs['orderBy'] }
+        : { orderBy?: PrintTemplateGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, PrintTemplateGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetPrintTemplateGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the PrintTemplate model
+   */
+  readonly fields: PrintTemplateFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for PrintTemplate.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__PrintTemplateClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the PrintTemplate model
+   */
+  interface PrintTemplateFieldRefs {
+    readonly id: FieldRef<"PrintTemplate", 'String'>
+    readonly name: FieldRef<"PrintTemplate", 'String'>
+    readonly type: FieldRef<"PrintTemplate", 'String'>
+    readonly htmlSource: FieldRef<"PrintTemplate", 'String'>
+    readonly linkedPrinter: FieldRef<"PrintTemplate", 'String'>
+    readonly isDefault: FieldRef<"PrintTemplate", 'Boolean'>
+    readonly isBuiltIn: FieldRef<"PrintTemplate", 'Boolean'>
+    readonly daSuaTay: FieldRef<"PrintTemplate", 'Boolean'>
+    readonly updatedAt: FieldRef<"PrintTemplate", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * PrintTemplate findUnique
+   */
+  export type PrintTemplateFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PrintTemplate
+     */
+    select?: PrintTemplateSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PrintTemplate
+     */
+    omit?: PrintTemplateOmit<ExtArgs> | null
+    /**
+     * Filter, which PrintTemplate to fetch.
+     */
+    where: PrintTemplateWhereUniqueInput
+  }
+
+  /**
+   * PrintTemplate findUniqueOrThrow
+   */
+  export type PrintTemplateFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PrintTemplate
+     */
+    select?: PrintTemplateSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PrintTemplate
+     */
+    omit?: PrintTemplateOmit<ExtArgs> | null
+    /**
+     * Filter, which PrintTemplate to fetch.
+     */
+    where: PrintTemplateWhereUniqueInput
+  }
+
+  /**
+   * PrintTemplate findFirst
+   */
+  export type PrintTemplateFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PrintTemplate
+     */
+    select?: PrintTemplateSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PrintTemplate
+     */
+    omit?: PrintTemplateOmit<ExtArgs> | null
+    /**
+     * Filter, which PrintTemplate to fetch.
+     */
+    where?: PrintTemplateWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of PrintTemplates to fetch.
+     */
+    orderBy?: PrintTemplateOrderByWithRelationInput | PrintTemplateOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for PrintTemplates.
+     */
+    cursor?: PrintTemplateWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` PrintTemplates from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` PrintTemplates.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of PrintTemplates.
+     */
+    distinct?: PrintTemplateScalarFieldEnum | PrintTemplateScalarFieldEnum[]
+  }
+
+  /**
+   * PrintTemplate findFirstOrThrow
+   */
+  export type PrintTemplateFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PrintTemplate
+     */
+    select?: PrintTemplateSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PrintTemplate
+     */
+    omit?: PrintTemplateOmit<ExtArgs> | null
+    /**
+     * Filter, which PrintTemplate to fetch.
+     */
+    where?: PrintTemplateWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of PrintTemplates to fetch.
+     */
+    orderBy?: PrintTemplateOrderByWithRelationInput | PrintTemplateOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for PrintTemplates.
+     */
+    cursor?: PrintTemplateWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` PrintTemplates from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` PrintTemplates.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of PrintTemplates.
+     */
+    distinct?: PrintTemplateScalarFieldEnum | PrintTemplateScalarFieldEnum[]
+  }
+
+  /**
+   * PrintTemplate findMany
+   */
+  export type PrintTemplateFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PrintTemplate
+     */
+    select?: PrintTemplateSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PrintTemplate
+     */
+    omit?: PrintTemplateOmit<ExtArgs> | null
+    /**
+     * Filter, which PrintTemplates to fetch.
+     */
+    where?: PrintTemplateWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of PrintTemplates to fetch.
+     */
+    orderBy?: PrintTemplateOrderByWithRelationInput | PrintTemplateOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing PrintTemplates.
+     */
+    cursor?: PrintTemplateWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` PrintTemplates from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` PrintTemplates.
+     */
+    skip?: number
+    distinct?: PrintTemplateScalarFieldEnum | PrintTemplateScalarFieldEnum[]
+  }
+
+  /**
+   * PrintTemplate create
+   */
+  export type PrintTemplateCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PrintTemplate
+     */
+    select?: PrintTemplateSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PrintTemplate
+     */
+    omit?: PrintTemplateOmit<ExtArgs> | null
+    /**
+     * The data needed to create a PrintTemplate.
+     */
+    data: XOR<PrintTemplateCreateInput, PrintTemplateUncheckedCreateInput>
+  }
+
+  /**
+   * PrintTemplate createMany
+   */
+  export type PrintTemplateCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many PrintTemplates.
+     */
+    data: PrintTemplateCreateManyInput | PrintTemplateCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * PrintTemplate createManyAndReturn
+   */
+  export type PrintTemplateCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PrintTemplate
+     */
+    select?: PrintTemplateSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the PrintTemplate
+     */
+    omit?: PrintTemplateOmit<ExtArgs> | null
+    /**
+     * The data used to create many PrintTemplates.
+     */
+    data: PrintTemplateCreateManyInput | PrintTemplateCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * PrintTemplate update
+   */
+  export type PrintTemplateUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PrintTemplate
+     */
+    select?: PrintTemplateSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PrintTemplate
+     */
+    omit?: PrintTemplateOmit<ExtArgs> | null
+    /**
+     * The data needed to update a PrintTemplate.
+     */
+    data: XOR<PrintTemplateUpdateInput, PrintTemplateUncheckedUpdateInput>
+    /**
+     * Choose, which PrintTemplate to update.
+     */
+    where: PrintTemplateWhereUniqueInput
+  }
+
+  /**
+   * PrintTemplate updateMany
+   */
+  export type PrintTemplateUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update PrintTemplates.
+     */
+    data: XOR<PrintTemplateUpdateManyMutationInput, PrintTemplateUncheckedUpdateManyInput>
+    /**
+     * Filter which PrintTemplates to update
+     */
+    where?: PrintTemplateWhereInput
+    /**
+     * Limit how many PrintTemplates to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * PrintTemplate updateManyAndReturn
+   */
+  export type PrintTemplateUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PrintTemplate
+     */
+    select?: PrintTemplateSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the PrintTemplate
+     */
+    omit?: PrintTemplateOmit<ExtArgs> | null
+    /**
+     * The data used to update PrintTemplates.
+     */
+    data: XOR<PrintTemplateUpdateManyMutationInput, PrintTemplateUncheckedUpdateManyInput>
+    /**
+     * Filter which PrintTemplates to update
+     */
+    where?: PrintTemplateWhereInput
+    /**
+     * Limit how many PrintTemplates to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * PrintTemplate upsert
+   */
+  export type PrintTemplateUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PrintTemplate
+     */
+    select?: PrintTemplateSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PrintTemplate
+     */
+    omit?: PrintTemplateOmit<ExtArgs> | null
+    /**
+     * The filter to search for the PrintTemplate to update in case it exists.
+     */
+    where: PrintTemplateWhereUniqueInput
+    /**
+     * In case the PrintTemplate found by the `where` argument doesn't exist, create a new PrintTemplate with this data.
+     */
+    create: XOR<PrintTemplateCreateInput, PrintTemplateUncheckedCreateInput>
+    /**
+     * In case the PrintTemplate was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<PrintTemplateUpdateInput, PrintTemplateUncheckedUpdateInput>
+  }
+
+  /**
+   * PrintTemplate delete
+   */
+  export type PrintTemplateDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PrintTemplate
+     */
+    select?: PrintTemplateSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PrintTemplate
+     */
+    omit?: PrintTemplateOmit<ExtArgs> | null
+    /**
+     * Filter which PrintTemplate to delete.
+     */
+    where: PrintTemplateWhereUniqueInput
+  }
+
+  /**
+   * PrintTemplate deleteMany
+   */
+  export type PrintTemplateDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which PrintTemplates to delete
+     */
+    where?: PrintTemplateWhereInput
+    /**
+     * Limit how many PrintTemplates to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * PrintTemplate without action
+   */
+  export type PrintTemplateDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PrintTemplate
+     */
+    select?: PrintTemplateSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the PrintTemplate
+     */
+    omit?: PrintTemplateOmit<ExtArgs> | null
+  }
+
+
+  /**
+   * Model AiReport
+   */
+
+  export type AggregateAiReport = {
+    _count: AiReportCountAggregateOutputType | null
+    _min: AiReportMinAggregateOutputType | null
+    _max: AiReportMaxAggregateOutputType | null
+  }
+
+  export type AiReportMinAggregateOutputType = {
+    id: string | null
+    loai: string | null
+    ky: string | null
+    tuNgay: string | null
+    denNgay: string | null
+    tieuDe: string | null
+    noiDung: string | null
+    toolCalls: string | null
+    createdBy: string | null
+    createdByName: string | null
+    branchId: string | null
+    createdAt: Date | null
+  }
+
+  export type AiReportMaxAggregateOutputType = {
+    id: string | null
+    loai: string | null
+    ky: string | null
+    tuNgay: string | null
+    denNgay: string | null
+    tieuDe: string | null
+    noiDung: string | null
+    toolCalls: string | null
+    createdBy: string | null
+    createdByName: string | null
+    branchId: string | null
+    createdAt: Date | null
+  }
+
+  export type AiReportCountAggregateOutputType = {
+    id: number
+    loai: number
+    ky: number
+    tuNgay: number
+    denNgay: number
+    tieuDe: number
+    noiDung: number
+    toolCalls: number
+    createdBy: number
+    createdByName: number
+    branchId: number
+    createdAt: number
+    _all: number
+  }
+
+
+  export type AiReportMinAggregateInputType = {
+    id?: true
+    loai?: true
+    ky?: true
+    tuNgay?: true
+    denNgay?: true
+    tieuDe?: true
+    noiDung?: true
+    toolCalls?: true
+    createdBy?: true
+    createdByName?: true
+    branchId?: true
+    createdAt?: true
+  }
+
+  export type AiReportMaxAggregateInputType = {
+    id?: true
+    loai?: true
+    ky?: true
+    tuNgay?: true
+    denNgay?: true
+    tieuDe?: true
+    noiDung?: true
+    toolCalls?: true
+    createdBy?: true
+    createdByName?: true
+    branchId?: true
+    createdAt?: true
+  }
+
+  export type AiReportCountAggregateInputType = {
+    id?: true
+    loai?: true
+    ky?: true
+    tuNgay?: true
+    denNgay?: true
+    tieuDe?: true
+    noiDung?: true
+    toolCalls?: true
+    createdBy?: true
+    createdByName?: true
+    branchId?: true
+    createdAt?: true
+    _all?: true
+  }
+
+  export type AiReportAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which AiReport to aggregate.
+     */
+    where?: AiReportWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of AiReports to fetch.
+     */
+    orderBy?: AiReportOrderByWithRelationInput | AiReportOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: AiReportWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` AiReports from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` AiReports.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned AiReports
+    **/
+    _count?: true | AiReportCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: AiReportMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: AiReportMaxAggregateInputType
+  }
+
+  export type GetAiReportAggregateType<T extends AiReportAggregateArgs> = {
+        [P in keyof T & keyof AggregateAiReport]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateAiReport[P]>
+      : GetScalarType<T[P], AggregateAiReport[P]>
+  }
+
+
+
+
+  export type AiReportGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: AiReportWhereInput
+    orderBy?: AiReportOrderByWithAggregationInput | AiReportOrderByWithAggregationInput[]
+    by: AiReportScalarFieldEnum[] | AiReportScalarFieldEnum
+    having?: AiReportScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: AiReportCountAggregateInputType | true
+    _min?: AiReportMinAggregateInputType
+    _max?: AiReportMaxAggregateInputType
+  }
+
+  export type AiReportGroupByOutputType = {
+    id: string
+    loai: string
+    ky: string
+    tuNgay: string | null
+    denNgay: string | null
+    tieuDe: string
+    noiDung: string
+    toolCalls: string | null
+    createdBy: string | null
+    createdByName: string | null
+    branchId: string | null
+    createdAt: Date
+    _count: AiReportCountAggregateOutputType | null
+    _min: AiReportMinAggregateOutputType | null
+    _max: AiReportMaxAggregateOutputType | null
+  }
+
+  type GetAiReportGroupByPayload<T extends AiReportGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<AiReportGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof AiReportGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], AiReportGroupByOutputType[P]>
+            : GetScalarType<T[P], AiReportGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type AiReportSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    loai?: boolean
+    ky?: boolean
+    tuNgay?: boolean
+    denNgay?: boolean
+    tieuDe?: boolean
+    noiDung?: boolean
+    toolCalls?: boolean
+    createdBy?: boolean
+    createdByName?: boolean
+    branchId?: boolean
+    createdAt?: boolean
+  }, ExtArgs["result"]["aiReport"]>
+
+  export type AiReportSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    loai?: boolean
+    ky?: boolean
+    tuNgay?: boolean
+    denNgay?: boolean
+    tieuDe?: boolean
+    noiDung?: boolean
+    toolCalls?: boolean
+    createdBy?: boolean
+    createdByName?: boolean
+    branchId?: boolean
+    createdAt?: boolean
+  }, ExtArgs["result"]["aiReport"]>
+
+  export type AiReportSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    loai?: boolean
+    ky?: boolean
+    tuNgay?: boolean
+    denNgay?: boolean
+    tieuDe?: boolean
+    noiDung?: boolean
+    toolCalls?: boolean
+    createdBy?: boolean
+    createdByName?: boolean
+    branchId?: boolean
+    createdAt?: boolean
+  }, ExtArgs["result"]["aiReport"]>
+
+  export type AiReportSelectScalar = {
+    id?: boolean
+    loai?: boolean
+    ky?: boolean
+    tuNgay?: boolean
+    denNgay?: boolean
+    tieuDe?: boolean
+    noiDung?: boolean
+    toolCalls?: boolean
+    createdBy?: boolean
+    createdByName?: boolean
+    branchId?: boolean
+    createdAt?: boolean
+  }
+
+  export type AiReportOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "loai" | "ky" | "tuNgay" | "denNgay" | "tieuDe" | "noiDung" | "toolCalls" | "createdBy" | "createdByName" | "branchId" | "createdAt", ExtArgs["result"]["aiReport"]>
+
+  export type $AiReportPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "AiReport"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      /**
+       * 'chien-luoc' | 'swot' | 'khac' — de loc theo tung noi sinh ra ban phan tich
+       */
+      loai: string
+      /**
+       * Nhan ky cho nguoi doc, vi du "90 ngay qua"
+       */
+      ky: string
+      tuNgay: string | null
+      denNgay: string | null
+      tieuDe: string
+      noiDung: string
+      /**
+       * JSON mang ten tool ma AI da goi — de biet ban phan tich dua tren nhung gi
+       */
+      toolCalls: string | null
+      createdBy: string | null
+      createdByName: string | null
+      branchId: string | null
+      createdAt: Date
+    }, ExtArgs["result"]["aiReport"]>
+    composites: {}
+  }
+
+  type AiReportGetPayload<S extends boolean | null | undefined | AiReportDefaultArgs> = $Result.GetResult<Prisma.$AiReportPayload, S>
+
+  type AiReportCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<AiReportFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: AiReportCountAggregateInputType | true
+    }
+
+  export interface AiReportDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['AiReport'], meta: { name: 'AiReport' } }
+    /**
+     * Find zero or one AiReport that matches the filter.
+     * @param {AiReportFindUniqueArgs} args - Arguments to find a AiReport
+     * @example
+     * // Get one AiReport
+     * const aiReport = await prisma.aiReport.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends AiReportFindUniqueArgs>(args: SelectSubset<T, AiReportFindUniqueArgs<ExtArgs>>): Prisma__AiReportClient<$Result.GetResult<Prisma.$AiReportPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one AiReport that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {AiReportFindUniqueOrThrowArgs} args - Arguments to find a AiReport
+     * @example
+     * // Get one AiReport
+     * const aiReport = await prisma.aiReport.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends AiReportFindUniqueOrThrowArgs>(args: SelectSubset<T, AiReportFindUniqueOrThrowArgs<ExtArgs>>): Prisma__AiReportClient<$Result.GetResult<Prisma.$AiReportPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first AiReport that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AiReportFindFirstArgs} args - Arguments to find a AiReport
+     * @example
+     * // Get one AiReport
+     * const aiReport = await prisma.aiReport.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends AiReportFindFirstArgs>(args?: SelectSubset<T, AiReportFindFirstArgs<ExtArgs>>): Prisma__AiReportClient<$Result.GetResult<Prisma.$AiReportPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first AiReport that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AiReportFindFirstOrThrowArgs} args - Arguments to find a AiReport
+     * @example
+     * // Get one AiReport
+     * const aiReport = await prisma.aiReport.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends AiReportFindFirstOrThrowArgs>(args?: SelectSubset<T, AiReportFindFirstOrThrowArgs<ExtArgs>>): Prisma__AiReportClient<$Result.GetResult<Prisma.$AiReportPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more AiReports that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AiReportFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all AiReports
+     * const aiReports = await prisma.aiReport.findMany()
+     * 
+     * // Get first 10 AiReports
+     * const aiReports = await prisma.aiReport.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const aiReportWithIdOnly = await prisma.aiReport.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends AiReportFindManyArgs>(args?: SelectSubset<T, AiReportFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$AiReportPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a AiReport.
+     * @param {AiReportCreateArgs} args - Arguments to create a AiReport.
+     * @example
+     * // Create one AiReport
+     * const AiReport = await prisma.aiReport.create({
+     *   data: {
+     *     // ... data to create a AiReport
+     *   }
+     * })
+     * 
+     */
+    create<T extends AiReportCreateArgs>(args: SelectSubset<T, AiReportCreateArgs<ExtArgs>>): Prisma__AiReportClient<$Result.GetResult<Prisma.$AiReportPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many AiReports.
+     * @param {AiReportCreateManyArgs} args - Arguments to create many AiReports.
+     * @example
+     * // Create many AiReports
+     * const aiReport = await prisma.aiReport.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends AiReportCreateManyArgs>(args?: SelectSubset<T, AiReportCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many AiReports and returns the data saved in the database.
+     * @param {AiReportCreateManyAndReturnArgs} args - Arguments to create many AiReports.
+     * @example
+     * // Create many AiReports
+     * const aiReport = await prisma.aiReport.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many AiReports and only return the `id`
+     * const aiReportWithIdOnly = await prisma.aiReport.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends AiReportCreateManyAndReturnArgs>(args?: SelectSubset<T, AiReportCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$AiReportPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a AiReport.
+     * @param {AiReportDeleteArgs} args - Arguments to delete one AiReport.
+     * @example
+     * // Delete one AiReport
+     * const AiReport = await prisma.aiReport.delete({
+     *   where: {
+     *     // ... filter to delete one AiReport
+     *   }
+     * })
+     * 
+     */
+    delete<T extends AiReportDeleteArgs>(args: SelectSubset<T, AiReportDeleteArgs<ExtArgs>>): Prisma__AiReportClient<$Result.GetResult<Prisma.$AiReportPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one AiReport.
+     * @param {AiReportUpdateArgs} args - Arguments to update one AiReport.
+     * @example
+     * // Update one AiReport
+     * const aiReport = await prisma.aiReport.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends AiReportUpdateArgs>(args: SelectSubset<T, AiReportUpdateArgs<ExtArgs>>): Prisma__AiReportClient<$Result.GetResult<Prisma.$AiReportPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more AiReports.
+     * @param {AiReportDeleteManyArgs} args - Arguments to filter AiReports to delete.
+     * @example
+     * // Delete a few AiReports
+     * const { count } = await prisma.aiReport.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends AiReportDeleteManyArgs>(args?: SelectSubset<T, AiReportDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more AiReports.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AiReportUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many AiReports
+     * const aiReport = await prisma.aiReport.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends AiReportUpdateManyArgs>(args: SelectSubset<T, AiReportUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more AiReports and returns the data updated in the database.
+     * @param {AiReportUpdateManyAndReturnArgs} args - Arguments to update many AiReports.
+     * @example
+     * // Update many AiReports
+     * const aiReport = await prisma.aiReport.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more AiReports and only return the `id`
+     * const aiReportWithIdOnly = await prisma.aiReport.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends AiReportUpdateManyAndReturnArgs>(args: SelectSubset<T, AiReportUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$AiReportPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one AiReport.
+     * @param {AiReportUpsertArgs} args - Arguments to update or create a AiReport.
+     * @example
+     * // Update or create a AiReport
+     * const aiReport = await prisma.aiReport.upsert({
+     *   create: {
+     *     // ... data to create a AiReport
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the AiReport we want to update
+     *   }
+     * })
+     */
+    upsert<T extends AiReportUpsertArgs>(args: SelectSubset<T, AiReportUpsertArgs<ExtArgs>>): Prisma__AiReportClient<$Result.GetResult<Prisma.$AiReportPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of AiReports.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AiReportCountArgs} args - Arguments to filter AiReports to count.
+     * @example
+     * // Count the number of AiReports
+     * const count = await prisma.aiReport.count({
+     *   where: {
+     *     // ... the filter for the AiReports we want to count
+     *   }
+     * })
+    **/
+    count<T extends AiReportCountArgs>(
+      args?: Subset<T, AiReportCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], AiReportCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a AiReport.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AiReportAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends AiReportAggregateArgs>(args: Subset<T, AiReportAggregateArgs>): Prisma.PrismaPromise<GetAiReportAggregateType<T>>
+
+    /**
+     * Group by AiReport.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AiReportGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends AiReportGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: AiReportGroupByArgs['orderBy'] }
+        : { orderBy?: AiReportGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, AiReportGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetAiReportGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the AiReport model
+   */
+  readonly fields: AiReportFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for AiReport.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__AiReportClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the AiReport model
+   */
+  interface AiReportFieldRefs {
+    readonly id: FieldRef<"AiReport", 'String'>
+    readonly loai: FieldRef<"AiReport", 'String'>
+    readonly ky: FieldRef<"AiReport", 'String'>
+    readonly tuNgay: FieldRef<"AiReport", 'String'>
+    readonly denNgay: FieldRef<"AiReport", 'String'>
+    readonly tieuDe: FieldRef<"AiReport", 'String'>
+    readonly noiDung: FieldRef<"AiReport", 'String'>
+    readonly toolCalls: FieldRef<"AiReport", 'String'>
+    readonly createdBy: FieldRef<"AiReport", 'String'>
+    readonly createdByName: FieldRef<"AiReport", 'String'>
+    readonly branchId: FieldRef<"AiReport", 'String'>
+    readonly createdAt: FieldRef<"AiReport", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * AiReport findUnique
+   */
+  export type AiReportFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiReport
+     */
+    select?: AiReportSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiReport
+     */
+    omit?: AiReportOmit<ExtArgs> | null
+    /**
+     * Filter, which AiReport to fetch.
+     */
+    where: AiReportWhereUniqueInput
+  }
+
+  /**
+   * AiReport findUniqueOrThrow
+   */
+  export type AiReportFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiReport
+     */
+    select?: AiReportSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiReport
+     */
+    omit?: AiReportOmit<ExtArgs> | null
+    /**
+     * Filter, which AiReport to fetch.
+     */
+    where: AiReportWhereUniqueInput
+  }
+
+  /**
+   * AiReport findFirst
+   */
+  export type AiReportFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiReport
+     */
+    select?: AiReportSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiReport
+     */
+    omit?: AiReportOmit<ExtArgs> | null
+    /**
+     * Filter, which AiReport to fetch.
+     */
+    where?: AiReportWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of AiReports to fetch.
+     */
+    orderBy?: AiReportOrderByWithRelationInput | AiReportOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for AiReports.
+     */
+    cursor?: AiReportWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` AiReports from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` AiReports.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of AiReports.
+     */
+    distinct?: AiReportScalarFieldEnum | AiReportScalarFieldEnum[]
+  }
+
+  /**
+   * AiReport findFirstOrThrow
+   */
+  export type AiReportFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiReport
+     */
+    select?: AiReportSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiReport
+     */
+    omit?: AiReportOmit<ExtArgs> | null
+    /**
+     * Filter, which AiReport to fetch.
+     */
+    where?: AiReportWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of AiReports to fetch.
+     */
+    orderBy?: AiReportOrderByWithRelationInput | AiReportOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for AiReports.
+     */
+    cursor?: AiReportWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` AiReports from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` AiReports.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of AiReports.
+     */
+    distinct?: AiReportScalarFieldEnum | AiReportScalarFieldEnum[]
+  }
+
+  /**
+   * AiReport findMany
+   */
+  export type AiReportFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiReport
+     */
+    select?: AiReportSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiReport
+     */
+    omit?: AiReportOmit<ExtArgs> | null
+    /**
+     * Filter, which AiReports to fetch.
+     */
+    where?: AiReportWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of AiReports to fetch.
+     */
+    orderBy?: AiReportOrderByWithRelationInput | AiReportOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing AiReports.
+     */
+    cursor?: AiReportWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` AiReports from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` AiReports.
+     */
+    skip?: number
+    distinct?: AiReportScalarFieldEnum | AiReportScalarFieldEnum[]
+  }
+
+  /**
+   * AiReport create
+   */
+  export type AiReportCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiReport
+     */
+    select?: AiReportSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiReport
+     */
+    omit?: AiReportOmit<ExtArgs> | null
+    /**
+     * The data needed to create a AiReport.
+     */
+    data: XOR<AiReportCreateInput, AiReportUncheckedCreateInput>
+  }
+
+  /**
+   * AiReport createMany
+   */
+  export type AiReportCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many AiReports.
+     */
+    data: AiReportCreateManyInput | AiReportCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * AiReport createManyAndReturn
+   */
+  export type AiReportCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiReport
+     */
+    select?: AiReportSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiReport
+     */
+    omit?: AiReportOmit<ExtArgs> | null
+    /**
+     * The data used to create many AiReports.
+     */
+    data: AiReportCreateManyInput | AiReportCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * AiReport update
+   */
+  export type AiReportUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiReport
+     */
+    select?: AiReportSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiReport
+     */
+    omit?: AiReportOmit<ExtArgs> | null
+    /**
+     * The data needed to update a AiReport.
+     */
+    data: XOR<AiReportUpdateInput, AiReportUncheckedUpdateInput>
+    /**
+     * Choose, which AiReport to update.
+     */
+    where: AiReportWhereUniqueInput
+  }
+
+  /**
+   * AiReport updateMany
+   */
+  export type AiReportUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update AiReports.
+     */
+    data: XOR<AiReportUpdateManyMutationInput, AiReportUncheckedUpdateManyInput>
+    /**
+     * Filter which AiReports to update
+     */
+    where?: AiReportWhereInput
+    /**
+     * Limit how many AiReports to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * AiReport updateManyAndReturn
+   */
+  export type AiReportUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiReport
+     */
+    select?: AiReportSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiReport
+     */
+    omit?: AiReportOmit<ExtArgs> | null
+    /**
+     * The data used to update AiReports.
+     */
+    data: XOR<AiReportUpdateManyMutationInput, AiReportUncheckedUpdateManyInput>
+    /**
+     * Filter which AiReports to update
+     */
+    where?: AiReportWhereInput
+    /**
+     * Limit how many AiReports to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * AiReport upsert
+   */
+  export type AiReportUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiReport
+     */
+    select?: AiReportSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiReport
+     */
+    omit?: AiReportOmit<ExtArgs> | null
+    /**
+     * The filter to search for the AiReport to update in case it exists.
+     */
+    where: AiReportWhereUniqueInput
+    /**
+     * In case the AiReport found by the `where` argument doesn't exist, create a new AiReport with this data.
+     */
+    create: XOR<AiReportCreateInput, AiReportUncheckedCreateInput>
+    /**
+     * In case the AiReport was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<AiReportUpdateInput, AiReportUncheckedUpdateInput>
+  }
+
+  /**
+   * AiReport delete
+   */
+  export type AiReportDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiReport
+     */
+    select?: AiReportSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiReport
+     */
+    omit?: AiReportOmit<ExtArgs> | null
+    /**
+     * Filter which AiReport to delete.
+     */
+    where: AiReportWhereUniqueInput
+  }
+
+  /**
+   * AiReport deleteMany
+   */
+  export type AiReportDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which AiReports to delete
+     */
+    where?: AiReportWhereInput
+    /**
+     * Limit how many AiReports to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * AiReport without action
+   */
+  export type AiReportDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiReport
+     */
+    select?: AiReportSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiReport
+     */
+    omit?: AiReportOmit<ExtArgs> | null
+  }
+
+
+  /**
+   * Model AiChat
+   */
+
+  export type AggregateAiChat = {
+    _count: AiChatCountAggregateOutputType | null
+    _avg: AiChatAvgAggregateOutputType | null
+    _sum: AiChatSumAggregateOutputType | null
+    _min: AiChatMinAggregateOutputType | null
+    _max: AiChatMaxAggregateOutputType | null
+  }
+
+  export type AiChatAvgAggregateOutputType = {
+    soLuot: number | null
+  }
+
+  export type AiChatSumAggregateOutputType = {
+    soLuot: number | null
+  }
+
+  export type AiChatMinAggregateOutputType = {
+    id: string | null
+    tieuDe: string | null
+    noiDung: string | null
+    soLuot: number | null
+    createdBy: string | null
+    createdByName: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type AiChatMaxAggregateOutputType = {
+    id: string | null
+    tieuDe: string | null
+    noiDung: string | null
+    soLuot: number | null
+    createdBy: string | null
+    createdByName: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type AiChatCountAggregateOutputType = {
+    id: number
+    tieuDe: number
+    noiDung: number
+    soLuot: number
+    createdBy: number
+    createdByName: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type AiChatAvgAggregateInputType = {
+    soLuot?: true
+  }
+
+  export type AiChatSumAggregateInputType = {
+    soLuot?: true
+  }
+
+  export type AiChatMinAggregateInputType = {
+    id?: true
+    tieuDe?: true
+    noiDung?: true
+    soLuot?: true
+    createdBy?: true
+    createdByName?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type AiChatMaxAggregateInputType = {
+    id?: true
+    tieuDe?: true
+    noiDung?: true
+    soLuot?: true
+    createdBy?: true
+    createdByName?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type AiChatCountAggregateInputType = {
+    id?: true
+    tieuDe?: true
+    noiDung?: true
+    soLuot?: true
+    createdBy?: true
+    createdByName?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type AiChatAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which AiChat to aggregate.
+     */
+    where?: AiChatWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of AiChats to fetch.
+     */
+    orderBy?: AiChatOrderByWithRelationInput | AiChatOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: AiChatWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` AiChats from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` AiChats.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned AiChats
+    **/
+    _count?: true | AiChatCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: AiChatAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: AiChatSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: AiChatMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: AiChatMaxAggregateInputType
+  }
+
+  export type GetAiChatAggregateType<T extends AiChatAggregateArgs> = {
+        [P in keyof T & keyof AggregateAiChat]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateAiChat[P]>
+      : GetScalarType<T[P], AggregateAiChat[P]>
+  }
+
+
+
+
+  export type AiChatGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: AiChatWhereInput
+    orderBy?: AiChatOrderByWithAggregationInput | AiChatOrderByWithAggregationInput[]
+    by: AiChatScalarFieldEnum[] | AiChatScalarFieldEnum
+    having?: AiChatScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: AiChatCountAggregateInputType | true
+    _avg?: AiChatAvgAggregateInputType
+    _sum?: AiChatSumAggregateInputType
+    _min?: AiChatMinAggregateInputType
+    _max?: AiChatMaxAggregateInputType
+  }
+
+  export type AiChatGroupByOutputType = {
+    id: string
+    tieuDe: string
+    noiDung: string
+    soLuot: number
+    createdBy: string | null
+    createdByName: string | null
+    createdAt: Date
+    updatedAt: Date
+    _count: AiChatCountAggregateOutputType | null
+    _avg: AiChatAvgAggregateOutputType | null
+    _sum: AiChatSumAggregateOutputType | null
+    _min: AiChatMinAggregateOutputType | null
+    _max: AiChatMaxAggregateOutputType | null
+  }
+
+  type GetAiChatGroupByPayload<T extends AiChatGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<AiChatGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof AiChatGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], AiChatGroupByOutputType[P]>
+            : GetScalarType<T[P], AiChatGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type AiChatSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    tieuDe?: boolean
+    noiDung?: boolean
+    soLuot?: boolean
+    createdBy?: boolean
+    createdByName?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["aiChat"]>
+
+  export type AiChatSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    tieuDe?: boolean
+    noiDung?: boolean
+    soLuot?: boolean
+    createdBy?: boolean
+    createdByName?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["aiChat"]>
+
+  export type AiChatSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    tieuDe?: boolean
+    noiDung?: boolean
+    soLuot?: boolean
+    createdBy?: boolean
+    createdByName?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["aiChat"]>
+
+  export type AiChatSelectScalar = {
+    id?: boolean
+    tieuDe?: boolean
+    noiDung?: boolean
+    soLuot?: boolean
+    createdBy?: boolean
+    createdByName?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type AiChatOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "tieuDe" | "noiDung" | "soLuot" | "createdBy" | "createdByName" | "createdAt" | "updatedAt", ExtArgs["result"]["aiChat"]>
+
+  export type $AiChatPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "AiChat"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      /**
+       * Suy tu cau hoi dau tien, de nhan ra cuoc tro chuyen trong danh sach
+       */
+      tieuDe: string
+      /**
+       * JSON mang cac luot: [{ role, text, toolCalls }]
+       */
+      noiDung: string
+      soLuot: number
+      createdBy: string | null
+      createdByName: string | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["aiChat"]>
+    composites: {}
+  }
+
+  type AiChatGetPayload<S extends boolean | null | undefined | AiChatDefaultArgs> = $Result.GetResult<Prisma.$AiChatPayload, S>
+
+  type AiChatCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<AiChatFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: AiChatCountAggregateInputType | true
+    }
+
+  export interface AiChatDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['AiChat'], meta: { name: 'AiChat' } }
+    /**
+     * Find zero or one AiChat that matches the filter.
+     * @param {AiChatFindUniqueArgs} args - Arguments to find a AiChat
+     * @example
+     * // Get one AiChat
+     * const aiChat = await prisma.aiChat.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends AiChatFindUniqueArgs>(args: SelectSubset<T, AiChatFindUniqueArgs<ExtArgs>>): Prisma__AiChatClient<$Result.GetResult<Prisma.$AiChatPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one AiChat that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {AiChatFindUniqueOrThrowArgs} args - Arguments to find a AiChat
+     * @example
+     * // Get one AiChat
+     * const aiChat = await prisma.aiChat.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends AiChatFindUniqueOrThrowArgs>(args: SelectSubset<T, AiChatFindUniqueOrThrowArgs<ExtArgs>>): Prisma__AiChatClient<$Result.GetResult<Prisma.$AiChatPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first AiChat that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AiChatFindFirstArgs} args - Arguments to find a AiChat
+     * @example
+     * // Get one AiChat
+     * const aiChat = await prisma.aiChat.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends AiChatFindFirstArgs>(args?: SelectSubset<T, AiChatFindFirstArgs<ExtArgs>>): Prisma__AiChatClient<$Result.GetResult<Prisma.$AiChatPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first AiChat that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AiChatFindFirstOrThrowArgs} args - Arguments to find a AiChat
+     * @example
+     * // Get one AiChat
+     * const aiChat = await prisma.aiChat.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends AiChatFindFirstOrThrowArgs>(args?: SelectSubset<T, AiChatFindFirstOrThrowArgs<ExtArgs>>): Prisma__AiChatClient<$Result.GetResult<Prisma.$AiChatPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more AiChats that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AiChatFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all AiChats
+     * const aiChats = await prisma.aiChat.findMany()
+     * 
+     * // Get first 10 AiChats
+     * const aiChats = await prisma.aiChat.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const aiChatWithIdOnly = await prisma.aiChat.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends AiChatFindManyArgs>(args?: SelectSubset<T, AiChatFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$AiChatPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a AiChat.
+     * @param {AiChatCreateArgs} args - Arguments to create a AiChat.
+     * @example
+     * // Create one AiChat
+     * const AiChat = await prisma.aiChat.create({
+     *   data: {
+     *     // ... data to create a AiChat
+     *   }
+     * })
+     * 
+     */
+    create<T extends AiChatCreateArgs>(args: SelectSubset<T, AiChatCreateArgs<ExtArgs>>): Prisma__AiChatClient<$Result.GetResult<Prisma.$AiChatPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many AiChats.
+     * @param {AiChatCreateManyArgs} args - Arguments to create many AiChats.
+     * @example
+     * // Create many AiChats
+     * const aiChat = await prisma.aiChat.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends AiChatCreateManyArgs>(args?: SelectSubset<T, AiChatCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many AiChats and returns the data saved in the database.
+     * @param {AiChatCreateManyAndReturnArgs} args - Arguments to create many AiChats.
+     * @example
+     * // Create many AiChats
+     * const aiChat = await prisma.aiChat.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many AiChats and only return the `id`
+     * const aiChatWithIdOnly = await prisma.aiChat.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends AiChatCreateManyAndReturnArgs>(args?: SelectSubset<T, AiChatCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$AiChatPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a AiChat.
+     * @param {AiChatDeleteArgs} args - Arguments to delete one AiChat.
+     * @example
+     * // Delete one AiChat
+     * const AiChat = await prisma.aiChat.delete({
+     *   where: {
+     *     // ... filter to delete one AiChat
+     *   }
+     * })
+     * 
+     */
+    delete<T extends AiChatDeleteArgs>(args: SelectSubset<T, AiChatDeleteArgs<ExtArgs>>): Prisma__AiChatClient<$Result.GetResult<Prisma.$AiChatPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one AiChat.
+     * @param {AiChatUpdateArgs} args - Arguments to update one AiChat.
+     * @example
+     * // Update one AiChat
+     * const aiChat = await prisma.aiChat.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends AiChatUpdateArgs>(args: SelectSubset<T, AiChatUpdateArgs<ExtArgs>>): Prisma__AiChatClient<$Result.GetResult<Prisma.$AiChatPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more AiChats.
+     * @param {AiChatDeleteManyArgs} args - Arguments to filter AiChats to delete.
+     * @example
+     * // Delete a few AiChats
+     * const { count } = await prisma.aiChat.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends AiChatDeleteManyArgs>(args?: SelectSubset<T, AiChatDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more AiChats.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AiChatUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many AiChats
+     * const aiChat = await prisma.aiChat.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends AiChatUpdateManyArgs>(args: SelectSubset<T, AiChatUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more AiChats and returns the data updated in the database.
+     * @param {AiChatUpdateManyAndReturnArgs} args - Arguments to update many AiChats.
+     * @example
+     * // Update many AiChats
+     * const aiChat = await prisma.aiChat.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more AiChats and only return the `id`
+     * const aiChatWithIdOnly = await prisma.aiChat.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends AiChatUpdateManyAndReturnArgs>(args: SelectSubset<T, AiChatUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$AiChatPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one AiChat.
+     * @param {AiChatUpsertArgs} args - Arguments to update or create a AiChat.
+     * @example
+     * // Update or create a AiChat
+     * const aiChat = await prisma.aiChat.upsert({
+     *   create: {
+     *     // ... data to create a AiChat
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the AiChat we want to update
+     *   }
+     * })
+     */
+    upsert<T extends AiChatUpsertArgs>(args: SelectSubset<T, AiChatUpsertArgs<ExtArgs>>): Prisma__AiChatClient<$Result.GetResult<Prisma.$AiChatPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of AiChats.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AiChatCountArgs} args - Arguments to filter AiChats to count.
+     * @example
+     * // Count the number of AiChats
+     * const count = await prisma.aiChat.count({
+     *   where: {
+     *     // ... the filter for the AiChats we want to count
+     *   }
+     * })
+    **/
+    count<T extends AiChatCountArgs>(
+      args?: Subset<T, AiChatCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], AiChatCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a AiChat.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AiChatAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends AiChatAggregateArgs>(args: Subset<T, AiChatAggregateArgs>): Prisma.PrismaPromise<GetAiChatAggregateType<T>>
+
+    /**
+     * Group by AiChat.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {AiChatGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends AiChatGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: AiChatGroupByArgs['orderBy'] }
+        : { orderBy?: AiChatGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, AiChatGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetAiChatGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the AiChat model
+   */
+  readonly fields: AiChatFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for AiChat.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__AiChatClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the AiChat model
+   */
+  interface AiChatFieldRefs {
+    readonly id: FieldRef<"AiChat", 'String'>
+    readonly tieuDe: FieldRef<"AiChat", 'String'>
+    readonly noiDung: FieldRef<"AiChat", 'String'>
+    readonly soLuot: FieldRef<"AiChat", 'Int'>
+    readonly createdBy: FieldRef<"AiChat", 'String'>
+    readonly createdByName: FieldRef<"AiChat", 'String'>
+    readonly createdAt: FieldRef<"AiChat", 'DateTime'>
+    readonly updatedAt: FieldRef<"AiChat", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * AiChat findUnique
+   */
+  export type AiChatFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiChat
+     */
+    select?: AiChatSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiChat
+     */
+    omit?: AiChatOmit<ExtArgs> | null
+    /**
+     * Filter, which AiChat to fetch.
+     */
+    where: AiChatWhereUniqueInput
+  }
+
+  /**
+   * AiChat findUniqueOrThrow
+   */
+  export type AiChatFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiChat
+     */
+    select?: AiChatSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiChat
+     */
+    omit?: AiChatOmit<ExtArgs> | null
+    /**
+     * Filter, which AiChat to fetch.
+     */
+    where: AiChatWhereUniqueInput
+  }
+
+  /**
+   * AiChat findFirst
+   */
+  export type AiChatFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiChat
+     */
+    select?: AiChatSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiChat
+     */
+    omit?: AiChatOmit<ExtArgs> | null
+    /**
+     * Filter, which AiChat to fetch.
+     */
+    where?: AiChatWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of AiChats to fetch.
+     */
+    orderBy?: AiChatOrderByWithRelationInput | AiChatOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for AiChats.
+     */
+    cursor?: AiChatWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` AiChats from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` AiChats.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of AiChats.
+     */
+    distinct?: AiChatScalarFieldEnum | AiChatScalarFieldEnum[]
+  }
+
+  /**
+   * AiChat findFirstOrThrow
+   */
+  export type AiChatFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiChat
+     */
+    select?: AiChatSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiChat
+     */
+    omit?: AiChatOmit<ExtArgs> | null
+    /**
+     * Filter, which AiChat to fetch.
+     */
+    where?: AiChatWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of AiChats to fetch.
+     */
+    orderBy?: AiChatOrderByWithRelationInput | AiChatOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for AiChats.
+     */
+    cursor?: AiChatWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` AiChats from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` AiChats.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of AiChats.
+     */
+    distinct?: AiChatScalarFieldEnum | AiChatScalarFieldEnum[]
+  }
+
+  /**
+   * AiChat findMany
+   */
+  export type AiChatFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiChat
+     */
+    select?: AiChatSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiChat
+     */
+    omit?: AiChatOmit<ExtArgs> | null
+    /**
+     * Filter, which AiChats to fetch.
+     */
+    where?: AiChatWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of AiChats to fetch.
+     */
+    orderBy?: AiChatOrderByWithRelationInput | AiChatOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing AiChats.
+     */
+    cursor?: AiChatWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` AiChats from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` AiChats.
+     */
+    skip?: number
+    distinct?: AiChatScalarFieldEnum | AiChatScalarFieldEnum[]
+  }
+
+  /**
+   * AiChat create
+   */
+  export type AiChatCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiChat
+     */
+    select?: AiChatSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiChat
+     */
+    omit?: AiChatOmit<ExtArgs> | null
+    /**
+     * The data needed to create a AiChat.
+     */
+    data: XOR<AiChatCreateInput, AiChatUncheckedCreateInput>
+  }
+
+  /**
+   * AiChat createMany
+   */
+  export type AiChatCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many AiChats.
+     */
+    data: AiChatCreateManyInput | AiChatCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * AiChat createManyAndReturn
+   */
+  export type AiChatCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiChat
+     */
+    select?: AiChatSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiChat
+     */
+    omit?: AiChatOmit<ExtArgs> | null
+    /**
+     * The data used to create many AiChats.
+     */
+    data: AiChatCreateManyInput | AiChatCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * AiChat update
+   */
+  export type AiChatUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiChat
+     */
+    select?: AiChatSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiChat
+     */
+    omit?: AiChatOmit<ExtArgs> | null
+    /**
+     * The data needed to update a AiChat.
+     */
+    data: XOR<AiChatUpdateInput, AiChatUncheckedUpdateInput>
+    /**
+     * Choose, which AiChat to update.
+     */
+    where: AiChatWhereUniqueInput
+  }
+
+  /**
+   * AiChat updateMany
+   */
+  export type AiChatUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update AiChats.
+     */
+    data: XOR<AiChatUpdateManyMutationInput, AiChatUncheckedUpdateManyInput>
+    /**
+     * Filter which AiChats to update
+     */
+    where?: AiChatWhereInput
+    /**
+     * Limit how many AiChats to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * AiChat updateManyAndReturn
+   */
+  export type AiChatUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiChat
+     */
+    select?: AiChatSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiChat
+     */
+    omit?: AiChatOmit<ExtArgs> | null
+    /**
+     * The data used to update AiChats.
+     */
+    data: XOR<AiChatUpdateManyMutationInput, AiChatUncheckedUpdateManyInput>
+    /**
+     * Filter which AiChats to update
+     */
+    where?: AiChatWhereInput
+    /**
+     * Limit how many AiChats to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * AiChat upsert
+   */
+  export type AiChatUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiChat
+     */
+    select?: AiChatSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiChat
+     */
+    omit?: AiChatOmit<ExtArgs> | null
+    /**
+     * The filter to search for the AiChat to update in case it exists.
+     */
+    where: AiChatWhereUniqueInput
+    /**
+     * In case the AiChat found by the `where` argument doesn't exist, create a new AiChat with this data.
+     */
+    create: XOR<AiChatCreateInput, AiChatUncheckedCreateInput>
+    /**
+     * In case the AiChat was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<AiChatUpdateInput, AiChatUncheckedUpdateInput>
+  }
+
+  /**
+   * AiChat delete
+   */
+  export type AiChatDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiChat
+     */
+    select?: AiChatSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiChat
+     */
+    omit?: AiChatOmit<ExtArgs> | null
+    /**
+     * Filter which AiChat to delete.
+     */
+    where: AiChatWhereUniqueInput
+  }
+
+  /**
+   * AiChat deleteMany
+   */
+  export type AiChatDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which AiChats to delete
+     */
+    where?: AiChatWhereInput
+    /**
+     * Limit how many AiChats to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * AiChat without action
+   */
+  export type AiChatDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the AiChat
+     */
+    select?: AiChatSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the AiChat
+     */
+    omit?: AiChatOmit<ExtArgs> | null
+  }
+
+
+  /**
+   * Model MisaImportBatch
+   */
+
+  export type AggregateMisaImportBatch = {
+    _count: MisaImportBatchCountAggregateOutputType | null
+    _avg: MisaImportBatchAvgAggregateOutputType | null
+    _sum: MisaImportBatchSumAggregateOutputType | null
+    _min: MisaImportBatchMinAggregateOutputType | null
+    _max: MisaImportBatchMaxAggregateOutputType | null
+  }
+
+  export type MisaImportBatchAvgAggregateOutputType = {
+    tongDong: number | null
+    docDuoc: number | null
+    boQua: number | null
+    soChungTu: number | null
+    tongTien: number | null
+    tongThue: number | null
+  }
+
+  export type MisaImportBatchSumAggregateOutputType = {
+    tongDong: number | null
+    docDuoc: number | null
+    boQua: number | null
+    soChungTu: number | null
+    tongTien: number | null
+    tongThue: number | null
+  }
+
+  export type MisaImportBatchMinAggregateOutputType = {
+    id: string | null
+    loai: string | null
+    tenFile: string | null
+    kyBaoCao: string | null
+    tongDong: number | null
+    docDuoc: number | null
+    boQua: number | null
+    soChungTu: number | null
+    tongTien: number | null
+    tongThue: number | null
+    chiTiet: string | null
+    apply: boolean | null
+    userId: string | null
+    userName: string | null
+    createdAt: Date | null
+  }
+
+  export type MisaImportBatchMaxAggregateOutputType = {
+    id: string | null
+    loai: string | null
+    tenFile: string | null
+    kyBaoCao: string | null
+    tongDong: number | null
+    docDuoc: number | null
+    boQua: number | null
+    soChungTu: number | null
+    tongTien: number | null
+    tongThue: number | null
+    chiTiet: string | null
+    apply: boolean | null
+    userId: string | null
+    userName: string | null
+    createdAt: Date | null
+  }
+
+  export type MisaImportBatchCountAggregateOutputType = {
+    id: number
+    loai: number
+    tenFile: number
+    kyBaoCao: number
+    tongDong: number
+    docDuoc: number
+    boQua: number
+    soChungTu: number
+    tongTien: number
+    tongThue: number
+    chiTiet: number
+    apply: number
+    userId: number
+    userName: number
+    createdAt: number
+    _all: number
+  }
+
+
+  export type MisaImportBatchAvgAggregateInputType = {
+    tongDong?: true
+    docDuoc?: true
+    boQua?: true
+    soChungTu?: true
+    tongTien?: true
+    tongThue?: true
+  }
+
+  export type MisaImportBatchSumAggregateInputType = {
+    tongDong?: true
+    docDuoc?: true
+    boQua?: true
+    soChungTu?: true
+    tongTien?: true
+    tongThue?: true
+  }
+
+  export type MisaImportBatchMinAggregateInputType = {
+    id?: true
+    loai?: true
+    tenFile?: true
+    kyBaoCao?: true
+    tongDong?: true
+    docDuoc?: true
+    boQua?: true
+    soChungTu?: true
+    tongTien?: true
+    tongThue?: true
+    chiTiet?: true
+    apply?: true
+    userId?: true
+    userName?: true
+    createdAt?: true
+  }
+
+  export type MisaImportBatchMaxAggregateInputType = {
+    id?: true
+    loai?: true
+    tenFile?: true
+    kyBaoCao?: true
+    tongDong?: true
+    docDuoc?: true
+    boQua?: true
+    soChungTu?: true
+    tongTien?: true
+    tongThue?: true
+    chiTiet?: true
+    apply?: true
+    userId?: true
+    userName?: true
+    createdAt?: true
+  }
+
+  export type MisaImportBatchCountAggregateInputType = {
+    id?: true
+    loai?: true
+    tenFile?: true
+    kyBaoCao?: true
+    tongDong?: true
+    docDuoc?: true
+    boQua?: true
+    soChungTu?: true
+    tongTien?: true
+    tongThue?: true
+    chiTiet?: true
+    apply?: true
+    userId?: true
+    userName?: true
+    createdAt?: true
+    _all?: true
+  }
+
+  export type MisaImportBatchAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MisaImportBatch to aggregate.
+     */
+    where?: MisaImportBatchWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaImportBatches to fetch.
+     */
+    orderBy?: MisaImportBatchOrderByWithRelationInput | MisaImportBatchOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: MisaImportBatchWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaImportBatches from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaImportBatches.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned MisaImportBatches
+    **/
+    _count?: true | MisaImportBatchCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: MisaImportBatchAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: MisaImportBatchSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: MisaImportBatchMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: MisaImportBatchMaxAggregateInputType
+  }
+
+  export type GetMisaImportBatchAggregateType<T extends MisaImportBatchAggregateArgs> = {
+        [P in keyof T & keyof AggregateMisaImportBatch]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateMisaImportBatch[P]>
+      : GetScalarType<T[P], AggregateMisaImportBatch[P]>
+  }
+
+
+
+
+  export type MisaImportBatchGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: MisaImportBatchWhereInput
+    orderBy?: MisaImportBatchOrderByWithAggregationInput | MisaImportBatchOrderByWithAggregationInput[]
+    by: MisaImportBatchScalarFieldEnum[] | MisaImportBatchScalarFieldEnum
+    having?: MisaImportBatchScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: MisaImportBatchCountAggregateInputType | true
+    _avg?: MisaImportBatchAvgAggregateInputType
+    _sum?: MisaImportBatchSumAggregateInputType
+    _min?: MisaImportBatchMinAggregateInputType
+    _max?: MisaImportBatchMaxAggregateInputType
+  }
+
+  export type MisaImportBatchGroupByOutputType = {
+    id: string
+    loai: string
+    tenFile: string
+    kyBaoCao: string | null
+    tongDong: number
+    docDuoc: number
+    boQua: number
+    soChungTu: number
+    tongTien: number
+    tongThue: number
+    chiTiet: string | null
+    apply: boolean
+    userId: string | null
+    userName: string | null
+    createdAt: Date
+    _count: MisaImportBatchCountAggregateOutputType | null
+    _avg: MisaImportBatchAvgAggregateOutputType | null
+    _sum: MisaImportBatchSumAggregateOutputType | null
+    _min: MisaImportBatchMinAggregateOutputType | null
+    _max: MisaImportBatchMaxAggregateOutputType | null
+  }
+
+  type GetMisaImportBatchGroupByPayload<T extends MisaImportBatchGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<MisaImportBatchGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof MisaImportBatchGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], MisaImportBatchGroupByOutputType[P]>
+            : GetScalarType<T[P], MisaImportBatchGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type MisaImportBatchSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    loai?: boolean
+    tenFile?: boolean
+    kyBaoCao?: boolean
+    tongDong?: boolean
+    docDuoc?: boolean
+    boQua?: boolean
+    soChungTu?: boolean
+    tongTien?: boolean
+    tongThue?: boolean
+    chiTiet?: boolean
+    apply?: boolean
+    userId?: boolean
+    userName?: boolean
+    createdAt?: boolean
+    docs?: boolean | MisaImportBatch$docsArgs<ExtArgs>
+    _count?: boolean | MisaImportBatchCountOutputTypeDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["misaImportBatch"]>
+
+  export type MisaImportBatchSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    loai?: boolean
+    tenFile?: boolean
+    kyBaoCao?: boolean
+    tongDong?: boolean
+    docDuoc?: boolean
+    boQua?: boolean
+    soChungTu?: boolean
+    tongTien?: boolean
+    tongThue?: boolean
+    chiTiet?: boolean
+    apply?: boolean
+    userId?: boolean
+    userName?: boolean
+    createdAt?: boolean
+  }, ExtArgs["result"]["misaImportBatch"]>
+
+  export type MisaImportBatchSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    loai?: boolean
+    tenFile?: boolean
+    kyBaoCao?: boolean
+    tongDong?: boolean
+    docDuoc?: boolean
+    boQua?: boolean
+    soChungTu?: boolean
+    tongTien?: boolean
+    tongThue?: boolean
+    chiTiet?: boolean
+    apply?: boolean
+    userId?: boolean
+    userName?: boolean
+    createdAt?: boolean
+  }, ExtArgs["result"]["misaImportBatch"]>
+
+  export type MisaImportBatchSelectScalar = {
+    id?: boolean
+    loai?: boolean
+    tenFile?: boolean
+    kyBaoCao?: boolean
+    tongDong?: boolean
+    docDuoc?: boolean
+    boQua?: boolean
+    soChungTu?: boolean
+    tongTien?: boolean
+    tongThue?: boolean
+    chiTiet?: boolean
+    apply?: boolean
+    userId?: boolean
+    userName?: boolean
+    createdAt?: boolean
+  }
+
+  export type MisaImportBatchOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "loai" | "tenFile" | "kyBaoCao" | "tongDong" | "docDuoc" | "boQua" | "soChungTu" | "tongTien" | "tongThue" | "chiTiet" | "apply" | "userId" | "userName" | "createdAt", ExtArgs["result"]["misaImportBatch"]>
+  export type MisaImportBatchInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    docs?: boolean | MisaImportBatch$docsArgs<ExtArgs>
+    _count?: boolean | MisaImportBatchCountOutputTypeDefaultArgs<ExtArgs>
+  }
+  export type MisaImportBatchIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {}
+  export type MisaImportBatchIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {}
+
+  export type $MisaImportBatchPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "MisaImportBatch"
+    objects: {
+      docs: Prisma.$MisaSaleDocPayload<ExtArgs>[]
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      loai: string
+      tenFile: string
+      kyBaoCao: string | null
+      tongDong: number
+      docDuoc: number
+      boQua: number
+      soChungTu: number
+      tongTien: number
+      tongThue: number
+      /**
+       * JSON: danh sách dòng bỏ qua kèm lý do + cảnh báo. Không nén, không cắt.
+       */
+      chiTiet: string | null
+      /**
+       * false = mới chạy thử, chưa ghi gì
+       */
+      apply: boolean
+      userId: string | null
+      userName: string | null
+      createdAt: Date
+    }, ExtArgs["result"]["misaImportBatch"]>
+    composites: {}
+  }
+
+  type MisaImportBatchGetPayload<S extends boolean | null | undefined | MisaImportBatchDefaultArgs> = $Result.GetResult<Prisma.$MisaImportBatchPayload, S>
+
+  type MisaImportBatchCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<MisaImportBatchFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: MisaImportBatchCountAggregateInputType | true
+    }
+
+  export interface MisaImportBatchDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['MisaImportBatch'], meta: { name: 'MisaImportBatch' } }
+    /**
+     * Find zero or one MisaImportBatch that matches the filter.
+     * @param {MisaImportBatchFindUniqueArgs} args - Arguments to find a MisaImportBatch
+     * @example
+     * // Get one MisaImportBatch
+     * const misaImportBatch = await prisma.misaImportBatch.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends MisaImportBatchFindUniqueArgs>(args: SelectSubset<T, MisaImportBatchFindUniqueArgs<ExtArgs>>): Prisma__MisaImportBatchClient<$Result.GetResult<Prisma.$MisaImportBatchPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one MisaImportBatch that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {MisaImportBatchFindUniqueOrThrowArgs} args - Arguments to find a MisaImportBatch
+     * @example
+     * // Get one MisaImportBatch
+     * const misaImportBatch = await prisma.misaImportBatch.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends MisaImportBatchFindUniqueOrThrowArgs>(args: SelectSubset<T, MisaImportBatchFindUniqueOrThrowArgs<ExtArgs>>): Prisma__MisaImportBatchClient<$Result.GetResult<Prisma.$MisaImportBatchPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first MisaImportBatch that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaImportBatchFindFirstArgs} args - Arguments to find a MisaImportBatch
+     * @example
+     * // Get one MisaImportBatch
+     * const misaImportBatch = await prisma.misaImportBatch.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends MisaImportBatchFindFirstArgs>(args?: SelectSubset<T, MisaImportBatchFindFirstArgs<ExtArgs>>): Prisma__MisaImportBatchClient<$Result.GetResult<Prisma.$MisaImportBatchPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first MisaImportBatch that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaImportBatchFindFirstOrThrowArgs} args - Arguments to find a MisaImportBatch
+     * @example
+     * // Get one MisaImportBatch
+     * const misaImportBatch = await prisma.misaImportBatch.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends MisaImportBatchFindFirstOrThrowArgs>(args?: SelectSubset<T, MisaImportBatchFindFirstOrThrowArgs<ExtArgs>>): Prisma__MisaImportBatchClient<$Result.GetResult<Prisma.$MisaImportBatchPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more MisaImportBatches that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaImportBatchFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all MisaImportBatches
+     * const misaImportBatches = await prisma.misaImportBatch.findMany()
+     * 
+     * // Get first 10 MisaImportBatches
+     * const misaImportBatches = await prisma.misaImportBatch.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const misaImportBatchWithIdOnly = await prisma.misaImportBatch.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends MisaImportBatchFindManyArgs>(args?: SelectSubset<T, MisaImportBatchFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MisaImportBatchPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a MisaImportBatch.
+     * @param {MisaImportBatchCreateArgs} args - Arguments to create a MisaImportBatch.
+     * @example
+     * // Create one MisaImportBatch
+     * const MisaImportBatch = await prisma.misaImportBatch.create({
+     *   data: {
+     *     // ... data to create a MisaImportBatch
+     *   }
+     * })
+     * 
+     */
+    create<T extends MisaImportBatchCreateArgs>(args: SelectSubset<T, MisaImportBatchCreateArgs<ExtArgs>>): Prisma__MisaImportBatchClient<$Result.GetResult<Prisma.$MisaImportBatchPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many MisaImportBatches.
+     * @param {MisaImportBatchCreateManyArgs} args - Arguments to create many MisaImportBatches.
+     * @example
+     * // Create many MisaImportBatches
+     * const misaImportBatch = await prisma.misaImportBatch.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends MisaImportBatchCreateManyArgs>(args?: SelectSubset<T, MisaImportBatchCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many MisaImportBatches and returns the data saved in the database.
+     * @param {MisaImportBatchCreateManyAndReturnArgs} args - Arguments to create many MisaImportBatches.
+     * @example
+     * // Create many MisaImportBatches
+     * const misaImportBatch = await prisma.misaImportBatch.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many MisaImportBatches and only return the `id`
+     * const misaImportBatchWithIdOnly = await prisma.misaImportBatch.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends MisaImportBatchCreateManyAndReturnArgs>(args?: SelectSubset<T, MisaImportBatchCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MisaImportBatchPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a MisaImportBatch.
+     * @param {MisaImportBatchDeleteArgs} args - Arguments to delete one MisaImportBatch.
+     * @example
+     * // Delete one MisaImportBatch
+     * const MisaImportBatch = await prisma.misaImportBatch.delete({
+     *   where: {
+     *     // ... filter to delete one MisaImportBatch
+     *   }
+     * })
+     * 
+     */
+    delete<T extends MisaImportBatchDeleteArgs>(args: SelectSubset<T, MisaImportBatchDeleteArgs<ExtArgs>>): Prisma__MisaImportBatchClient<$Result.GetResult<Prisma.$MisaImportBatchPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one MisaImportBatch.
+     * @param {MisaImportBatchUpdateArgs} args - Arguments to update one MisaImportBatch.
+     * @example
+     * // Update one MisaImportBatch
+     * const misaImportBatch = await prisma.misaImportBatch.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends MisaImportBatchUpdateArgs>(args: SelectSubset<T, MisaImportBatchUpdateArgs<ExtArgs>>): Prisma__MisaImportBatchClient<$Result.GetResult<Prisma.$MisaImportBatchPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more MisaImportBatches.
+     * @param {MisaImportBatchDeleteManyArgs} args - Arguments to filter MisaImportBatches to delete.
+     * @example
+     * // Delete a few MisaImportBatches
+     * const { count } = await prisma.misaImportBatch.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends MisaImportBatchDeleteManyArgs>(args?: SelectSubset<T, MisaImportBatchDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more MisaImportBatches.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaImportBatchUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many MisaImportBatches
+     * const misaImportBatch = await prisma.misaImportBatch.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends MisaImportBatchUpdateManyArgs>(args: SelectSubset<T, MisaImportBatchUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more MisaImportBatches and returns the data updated in the database.
+     * @param {MisaImportBatchUpdateManyAndReturnArgs} args - Arguments to update many MisaImportBatches.
+     * @example
+     * // Update many MisaImportBatches
+     * const misaImportBatch = await prisma.misaImportBatch.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more MisaImportBatches and only return the `id`
+     * const misaImportBatchWithIdOnly = await prisma.misaImportBatch.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends MisaImportBatchUpdateManyAndReturnArgs>(args: SelectSubset<T, MisaImportBatchUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MisaImportBatchPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one MisaImportBatch.
+     * @param {MisaImportBatchUpsertArgs} args - Arguments to update or create a MisaImportBatch.
+     * @example
+     * // Update or create a MisaImportBatch
+     * const misaImportBatch = await prisma.misaImportBatch.upsert({
+     *   create: {
+     *     // ... data to create a MisaImportBatch
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the MisaImportBatch we want to update
+     *   }
+     * })
+     */
+    upsert<T extends MisaImportBatchUpsertArgs>(args: SelectSubset<T, MisaImportBatchUpsertArgs<ExtArgs>>): Prisma__MisaImportBatchClient<$Result.GetResult<Prisma.$MisaImportBatchPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of MisaImportBatches.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaImportBatchCountArgs} args - Arguments to filter MisaImportBatches to count.
+     * @example
+     * // Count the number of MisaImportBatches
+     * const count = await prisma.misaImportBatch.count({
+     *   where: {
+     *     // ... the filter for the MisaImportBatches we want to count
+     *   }
+     * })
+    **/
+    count<T extends MisaImportBatchCountArgs>(
+      args?: Subset<T, MisaImportBatchCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], MisaImportBatchCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a MisaImportBatch.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaImportBatchAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends MisaImportBatchAggregateArgs>(args: Subset<T, MisaImportBatchAggregateArgs>): Prisma.PrismaPromise<GetMisaImportBatchAggregateType<T>>
+
+    /**
+     * Group by MisaImportBatch.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaImportBatchGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends MisaImportBatchGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: MisaImportBatchGroupByArgs['orderBy'] }
+        : { orderBy?: MisaImportBatchGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, MisaImportBatchGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetMisaImportBatchGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the MisaImportBatch model
+   */
+  readonly fields: MisaImportBatchFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for MisaImportBatch.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__MisaImportBatchClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    docs<T extends MisaImportBatch$docsArgs<ExtArgs> = {}>(args?: Subset<T, MisaImportBatch$docsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MisaSaleDocPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the MisaImportBatch model
+   */
+  interface MisaImportBatchFieldRefs {
+    readonly id: FieldRef<"MisaImportBatch", 'String'>
+    readonly loai: FieldRef<"MisaImportBatch", 'String'>
+    readonly tenFile: FieldRef<"MisaImportBatch", 'String'>
+    readonly kyBaoCao: FieldRef<"MisaImportBatch", 'String'>
+    readonly tongDong: FieldRef<"MisaImportBatch", 'Int'>
+    readonly docDuoc: FieldRef<"MisaImportBatch", 'Int'>
+    readonly boQua: FieldRef<"MisaImportBatch", 'Int'>
+    readonly soChungTu: FieldRef<"MisaImportBatch", 'Int'>
+    readonly tongTien: FieldRef<"MisaImportBatch", 'Float'>
+    readonly tongThue: FieldRef<"MisaImportBatch", 'Float'>
+    readonly chiTiet: FieldRef<"MisaImportBatch", 'String'>
+    readonly apply: FieldRef<"MisaImportBatch", 'Boolean'>
+    readonly userId: FieldRef<"MisaImportBatch", 'String'>
+    readonly userName: FieldRef<"MisaImportBatch", 'String'>
+    readonly createdAt: FieldRef<"MisaImportBatch", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * MisaImportBatch findUnique
+   */
+  export type MisaImportBatchFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaImportBatch
+     */
+    select?: MisaImportBatchSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaImportBatch
+     */
+    omit?: MisaImportBatchOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaImportBatchInclude<ExtArgs> | null
+    /**
+     * Filter, which MisaImportBatch to fetch.
+     */
+    where: MisaImportBatchWhereUniqueInput
+  }
+
+  /**
+   * MisaImportBatch findUniqueOrThrow
+   */
+  export type MisaImportBatchFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaImportBatch
+     */
+    select?: MisaImportBatchSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaImportBatch
+     */
+    omit?: MisaImportBatchOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaImportBatchInclude<ExtArgs> | null
+    /**
+     * Filter, which MisaImportBatch to fetch.
+     */
+    where: MisaImportBatchWhereUniqueInput
+  }
+
+  /**
+   * MisaImportBatch findFirst
+   */
+  export type MisaImportBatchFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaImportBatch
+     */
+    select?: MisaImportBatchSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaImportBatch
+     */
+    omit?: MisaImportBatchOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaImportBatchInclude<ExtArgs> | null
+    /**
+     * Filter, which MisaImportBatch to fetch.
+     */
+    where?: MisaImportBatchWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaImportBatches to fetch.
+     */
+    orderBy?: MisaImportBatchOrderByWithRelationInput | MisaImportBatchOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MisaImportBatches.
+     */
+    cursor?: MisaImportBatchWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaImportBatches from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaImportBatches.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MisaImportBatches.
+     */
+    distinct?: MisaImportBatchScalarFieldEnum | MisaImportBatchScalarFieldEnum[]
+  }
+
+  /**
+   * MisaImportBatch findFirstOrThrow
+   */
+  export type MisaImportBatchFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaImportBatch
+     */
+    select?: MisaImportBatchSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaImportBatch
+     */
+    omit?: MisaImportBatchOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaImportBatchInclude<ExtArgs> | null
+    /**
+     * Filter, which MisaImportBatch to fetch.
+     */
+    where?: MisaImportBatchWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaImportBatches to fetch.
+     */
+    orderBy?: MisaImportBatchOrderByWithRelationInput | MisaImportBatchOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MisaImportBatches.
+     */
+    cursor?: MisaImportBatchWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaImportBatches from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaImportBatches.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MisaImportBatches.
+     */
+    distinct?: MisaImportBatchScalarFieldEnum | MisaImportBatchScalarFieldEnum[]
+  }
+
+  /**
+   * MisaImportBatch findMany
+   */
+  export type MisaImportBatchFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaImportBatch
+     */
+    select?: MisaImportBatchSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaImportBatch
+     */
+    omit?: MisaImportBatchOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaImportBatchInclude<ExtArgs> | null
+    /**
+     * Filter, which MisaImportBatches to fetch.
+     */
+    where?: MisaImportBatchWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaImportBatches to fetch.
+     */
+    orderBy?: MisaImportBatchOrderByWithRelationInput | MisaImportBatchOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing MisaImportBatches.
+     */
+    cursor?: MisaImportBatchWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaImportBatches from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaImportBatches.
+     */
+    skip?: number
+    distinct?: MisaImportBatchScalarFieldEnum | MisaImportBatchScalarFieldEnum[]
+  }
+
+  /**
+   * MisaImportBatch create
+   */
+  export type MisaImportBatchCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaImportBatch
+     */
+    select?: MisaImportBatchSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaImportBatch
+     */
+    omit?: MisaImportBatchOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaImportBatchInclude<ExtArgs> | null
+    /**
+     * The data needed to create a MisaImportBatch.
+     */
+    data: XOR<MisaImportBatchCreateInput, MisaImportBatchUncheckedCreateInput>
+  }
+
+  /**
+   * MisaImportBatch createMany
+   */
+  export type MisaImportBatchCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many MisaImportBatches.
+     */
+    data: MisaImportBatchCreateManyInput | MisaImportBatchCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * MisaImportBatch createManyAndReturn
+   */
+  export type MisaImportBatchCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaImportBatch
+     */
+    select?: MisaImportBatchSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaImportBatch
+     */
+    omit?: MisaImportBatchOmit<ExtArgs> | null
+    /**
+     * The data used to create many MisaImportBatches.
+     */
+    data: MisaImportBatchCreateManyInput | MisaImportBatchCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * MisaImportBatch update
+   */
+  export type MisaImportBatchUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaImportBatch
+     */
+    select?: MisaImportBatchSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaImportBatch
+     */
+    omit?: MisaImportBatchOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaImportBatchInclude<ExtArgs> | null
+    /**
+     * The data needed to update a MisaImportBatch.
+     */
+    data: XOR<MisaImportBatchUpdateInput, MisaImportBatchUncheckedUpdateInput>
+    /**
+     * Choose, which MisaImportBatch to update.
+     */
+    where: MisaImportBatchWhereUniqueInput
+  }
+
+  /**
+   * MisaImportBatch updateMany
+   */
+  export type MisaImportBatchUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update MisaImportBatches.
+     */
+    data: XOR<MisaImportBatchUpdateManyMutationInput, MisaImportBatchUncheckedUpdateManyInput>
+    /**
+     * Filter which MisaImportBatches to update
+     */
+    where?: MisaImportBatchWhereInput
+    /**
+     * Limit how many MisaImportBatches to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * MisaImportBatch updateManyAndReturn
+   */
+  export type MisaImportBatchUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaImportBatch
+     */
+    select?: MisaImportBatchSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaImportBatch
+     */
+    omit?: MisaImportBatchOmit<ExtArgs> | null
+    /**
+     * The data used to update MisaImportBatches.
+     */
+    data: XOR<MisaImportBatchUpdateManyMutationInput, MisaImportBatchUncheckedUpdateManyInput>
+    /**
+     * Filter which MisaImportBatches to update
+     */
+    where?: MisaImportBatchWhereInput
+    /**
+     * Limit how many MisaImportBatches to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * MisaImportBatch upsert
+   */
+  export type MisaImportBatchUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaImportBatch
+     */
+    select?: MisaImportBatchSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaImportBatch
+     */
+    omit?: MisaImportBatchOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaImportBatchInclude<ExtArgs> | null
+    /**
+     * The filter to search for the MisaImportBatch to update in case it exists.
+     */
+    where: MisaImportBatchWhereUniqueInput
+    /**
+     * In case the MisaImportBatch found by the `where` argument doesn't exist, create a new MisaImportBatch with this data.
+     */
+    create: XOR<MisaImportBatchCreateInput, MisaImportBatchUncheckedCreateInput>
+    /**
+     * In case the MisaImportBatch was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<MisaImportBatchUpdateInput, MisaImportBatchUncheckedUpdateInput>
+  }
+
+  /**
+   * MisaImportBatch delete
+   */
+  export type MisaImportBatchDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaImportBatch
+     */
+    select?: MisaImportBatchSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaImportBatch
+     */
+    omit?: MisaImportBatchOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaImportBatchInclude<ExtArgs> | null
+    /**
+     * Filter which MisaImportBatch to delete.
+     */
+    where: MisaImportBatchWhereUniqueInput
+  }
+
+  /**
+   * MisaImportBatch deleteMany
+   */
+  export type MisaImportBatchDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MisaImportBatches to delete
+     */
+    where?: MisaImportBatchWhereInput
+    /**
+     * Limit how many MisaImportBatches to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * MisaImportBatch.docs
+   */
+  export type MisaImportBatch$docsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSaleDoc
+     */
+    select?: MisaSaleDocSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSaleDoc
+     */
+    omit?: MisaSaleDocOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaSaleDocInclude<ExtArgs> | null
+    where?: MisaSaleDocWhereInput
+    orderBy?: MisaSaleDocOrderByWithRelationInput | MisaSaleDocOrderByWithRelationInput[]
+    cursor?: MisaSaleDocWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: MisaSaleDocScalarFieldEnum | MisaSaleDocScalarFieldEnum[]
+  }
+
+  /**
+   * MisaImportBatch without action
+   */
+  export type MisaImportBatchDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaImportBatch
+     */
+    select?: MisaImportBatchSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaImportBatch
+     */
+    omit?: MisaImportBatchOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaImportBatchInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model MisaSaleDoc
+   */
+
+  export type AggregateMisaSaleDoc = {
+    _count: MisaSaleDocCountAggregateOutputType | null
+    _avg: MisaSaleDocAvgAggregateOutputType | null
+    _sum: MisaSaleDocSumAggregateOutputType | null
+    _min: MisaSaleDocMinAggregateOutputType | null
+    _max: MisaSaleDocMaxAggregateOutputType | null
+  }
+
+  export type MisaSaleDocAvgAggregateOutputType = {
+    tongDoanhSo: number | null
+    tongThue: number | null
+    tongChietKhau: number | null
+    tongTra: number | null
+  }
+
+  export type MisaSaleDocSumAggregateOutputType = {
+    tongDoanhSo: number | null
+    tongThue: number | null
+    tongChietKhau: number | null
+    tongTra: number | null
+  }
+
+  export type MisaSaleDocMinAggregateOutputType = {
+    id: string | null
+    soChungTu: string | null
+    soHoaDon: string | null
+    ngayChungTu: Date | null
+    ngayHachToan: Date | null
+    ngayHoaDon: Date | null
+    maKhach: string | null
+    tenKhach: string | null
+    nguonTenKhach: string | null
+    dienGiai: string | null
+    customerId: string | null
+    tongDoanhSo: number | null
+    tongThue: number | null
+    tongChietKhau: number | null
+    tongTra: number | null
+    thieuGiaVon: boolean | null
+    batchId: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type MisaSaleDocMaxAggregateOutputType = {
+    id: string | null
+    soChungTu: string | null
+    soHoaDon: string | null
+    ngayChungTu: Date | null
+    ngayHachToan: Date | null
+    ngayHoaDon: Date | null
+    maKhach: string | null
+    tenKhach: string | null
+    nguonTenKhach: string | null
+    dienGiai: string | null
+    customerId: string | null
+    tongDoanhSo: number | null
+    tongThue: number | null
+    tongChietKhau: number | null
+    tongTra: number | null
+    thieuGiaVon: boolean | null
+    batchId: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type MisaSaleDocCountAggregateOutputType = {
+    id: number
+    soChungTu: number
+    soHoaDon: number
+    ngayChungTu: number
+    ngayHachToan: number
+    ngayHoaDon: number
+    maKhach: number
+    tenKhach: number
+    nguonTenKhach: number
+    dienGiai: number
+    customerId: number
+    tongDoanhSo: number
+    tongThue: number
+    tongChietKhau: number
+    tongTra: number
+    thieuGiaVon: number
+    batchId: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type MisaSaleDocAvgAggregateInputType = {
+    tongDoanhSo?: true
+    tongThue?: true
+    tongChietKhau?: true
+    tongTra?: true
+  }
+
+  export type MisaSaleDocSumAggregateInputType = {
+    tongDoanhSo?: true
+    tongThue?: true
+    tongChietKhau?: true
+    tongTra?: true
+  }
+
+  export type MisaSaleDocMinAggregateInputType = {
+    id?: true
+    soChungTu?: true
+    soHoaDon?: true
+    ngayChungTu?: true
+    ngayHachToan?: true
+    ngayHoaDon?: true
+    maKhach?: true
+    tenKhach?: true
+    nguonTenKhach?: true
+    dienGiai?: true
+    customerId?: true
+    tongDoanhSo?: true
+    tongThue?: true
+    tongChietKhau?: true
+    tongTra?: true
+    thieuGiaVon?: true
+    batchId?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type MisaSaleDocMaxAggregateInputType = {
+    id?: true
+    soChungTu?: true
+    soHoaDon?: true
+    ngayChungTu?: true
+    ngayHachToan?: true
+    ngayHoaDon?: true
+    maKhach?: true
+    tenKhach?: true
+    nguonTenKhach?: true
+    dienGiai?: true
+    customerId?: true
+    tongDoanhSo?: true
+    tongThue?: true
+    tongChietKhau?: true
+    tongTra?: true
+    thieuGiaVon?: true
+    batchId?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type MisaSaleDocCountAggregateInputType = {
+    id?: true
+    soChungTu?: true
+    soHoaDon?: true
+    ngayChungTu?: true
+    ngayHachToan?: true
+    ngayHoaDon?: true
+    maKhach?: true
+    tenKhach?: true
+    nguonTenKhach?: true
+    dienGiai?: true
+    customerId?: true
+    tongDoanhSo?: true
+    tongThue?: true
+    tongChietKhau?: true
+    tongTra?: true
+    thieuGiaVon?: true
+    batchId?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type MisaSaleDocAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MisaSaleDoc to aggregate.
+     */
+    where?: MisaSaleDocWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaSaleDocs to fetch.
+     */
+    orderBy?: MisaSaleDocOrderByWithRelationInput | MisaSaleDocOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: MisaSaleDocWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaSaleDocs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaSaleDocs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned MisaSaleDocs
+    **/
+    _count?: true | MisaSaleDocCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: MisaSaleDocAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: MisaSaleDocSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: MisaSaleDocMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: MisaSaleDocMaxAggregateInputType
+  }
+
+  export type GetMisaSaleDocAggregateType<T extends MisaSaleDocAggregateArgs> = {
+        [P in keyof T & keyof AggregateMisaSaleDoc]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateMisaSaleDoc[P]>
+      : GetScalarType<T[P], AggregateMisaSaleDoc[P]>
+  }
+
+
+
+
+  export type MisaSaleDocGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: MisaSaleDocWhereInput
+    orderBy?: MisaSaleDocOrderByWithAggregationInput | MisaSaleDocOrderByWithAggregationInput[]
+    by: MisaSaleDocScalarFieldEnum[] | MisaSaleDocScalarFieldEnum
+    having?: MisaSaleDocScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: MisaSaleDocCountAggregateInputType | true
+    _avg?: MisaSaleDocAvgAggregateInputType
+    _sum?: MisaSaleDocSumAggregateInputType
+    _min?: MisaSaleDocMinAggregateInputType
+    _max?: MisaSaleDocMaxAggregateInputType
+  }
+
+  export type MisaSaleDocGroupByOutputType = {
+    id: string
+    soChungTu: string
+    soHoaDon: string | null
+    ngayChungTu: Date | null
+    ngayHachToan: Date | null
+    ngayHoaDon: Date | null
+    maKhach: string | null
+    tenKhach: string | null
+    nguonTenKhach: string | null
+    dienGiai: string | null
+    customerId: string | null
+    tongDoanhSo: number
+    tongThue: number
+    tongChietKhau: number
+    tongTra: number
+    thieuGiaVon: boolean
+    batchId: string | null
+    createdAt: Date
+    updatedAt: Date
+    _count: MisaSaleDocCountAggregateOutputType | null
+    _avg: MisaSaleDocAvgAggregateOutputType | null
+    _sum: MisaSaleDocSumAggregateOutputType | null
+    _min: MisaSaleDocMinAggregateOutputType | null
+    _max: MisaSaleDocMaxAggregateOutputType | null
+  }
+
+  type GetMisaSaleDocGroupByPayload<T extends MisaSaleDocGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<MisaSaleDocGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof MisaSaleDocGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], MisaSaleDocGroupByOutputType[P]>
+            : GetScalarType<T[P], MisaSaleDocGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type MisaSaleDocSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    soChungTu?: boolean
+    soHoaDon?: boolean
+    ngayChungTu?: boolean
+    ngayHachToan?: boolean
+    ngayHoaDon?: boolean
+    maKhach?: boolean
+    tenKhach?: boolean
+    nguonTenKhach?: boolean
+    dienGiai?: boolean
+    customerId?: boolean
+    tongDoanhSo?: boolean
+    tongThue?: boolean
+    tongChietKhau?: boolean
+    tongTra?: boolean
+    thieuGiaVon?: boolean
+    batchId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    batch?: boolean | MisaSaleDoc$batchArgs<ExtArgs>
+    lines?: boolean | MisaSaleDoc$linesArgs<ExtArgs>
+    _count?: boolean | MisaSaleDocCountOutputTypeDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["misaSaleDoc"]>
+
+  export type MisaSaleDocSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    soChungTu?: boolean
+    soHoaDon?: boolean
+    ngayChungTu?: boolean
+    ngayHachToan?: boolean
+    ngayHoaDon?: boolean
+    maKhach?: boolean
+    tenKhach?: boolean
+    nguonTenKhach?: boolean
+    dienGiai?: boolean
+    customerId?: boolean
+    tongDoanhSo?: boolean
+    tongThue?: boolean
+    tongChietKhau?: boolean
+    tongTra?: boolean
+    thieuGiaVon?: boolean
+    batchId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    batch?: boolean | MisaSaleDoc$batchArgs<ExtArgs>
+  }, ExtArgs["result"]["misaSaleDoc"]>
+
+  export type MisaSaleDocSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    soChungTu?: boolean
+    soHoaDon?: boolean
+    ngayChungTu?: boolean
+    ngayHachToan?: boolean
+    ngayHoaDon?: boolean
+    maKhach?: boolean
+    tenKhach?: boolean
+    nguonTenKhach?: boolean
+    dienGiai?: boolean
+    customerId?: boolean
+    tongDoanhSo?: boolean
+    tongThue?: boolean
+    tongChietKhau?: boolean
+    tongTra?: boolean
+    thieuGiaVon?: boolean
+    batchId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    batch?: boolean | MisaSaleDoc$batchArgs<ExtArgs>
+  }, ExtArgs["result"]["misaSaleDoc"]>
+
+  export type MisaSaleDocSelectScalar = {
+    id?: boolean
+    soChungTu?: boolean
+    soHoaDon?: boolean
+    ngayChungTu?: boolean
+    ngayHachToan?: boolean
+    ngayHoaDon?: boolean
+    maKhach?: boolean
+    tenKhach?: boolean
+    nguonTenKhach?: boolean
+    dienGiai?: boolean
+    customerId?: boolean
+    tongDoanhSo?: boolean
+    tongThue?: boolean
+    tongChietKhau?: boolean
+    tongTra?: boolean
+    thieuGiaVon?: boolean
+    batchId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type MisaSaleDocOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "soChungTu" | "soHoaDon" | "ngayChungTu" | "ngayHachToan" | "ngayHoaDon" | "maKhach" | "tenKhach" | "nguonTenKhach" | "dienGiai" | "customerId" | "tongDoanhSo" | "tongThue" | "tongChietKhau" | "tongTra" | "thieuGiaVon" | "batchId" | "createdAt" | "updatedAt", ExtArgs["result"]["misaSaleDoc"]>
+  export type MisaSaleDocInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    batch?: boolean | MisaSaleDoc$batchArgs<ExtArgs>
+    lines?: boolean | MisaSaleDoc$linesArgs<ExtArgs>
+    _count?: boolean | MisaSaleDocCountOutputTypeDefaultArgs<ExtArgs>
+  }
+  export type MisaSaleDocIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    batch?: boolean | MisaSaleDoc$batchArgs<ExtArgs>
+  }
+  export type MisaSaleDocIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    batch?: boolean | MisaSaleDoc$batchArgs<ExtArgs>
+  }
+
+  export type $MisaSaleDocPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "MisaSaleDoc"
+    objects: {
+      batch: Prisma.$MisaImportBatchPayload<ExtArgs> | null
+      lines: Prisma.$MisaSaleLinePayload<ExtArgs>[]
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      /**
+       * Khoá chống trùng: đổ lại cùng một file thì cập nhật, không nhân đôi.
+       */
+      soChungTu: string
+      soHoaDon: string | null
+      ngayChungTu: Date | null
+      ngayHachToan: Date | null
+      ngayHoaDon: Date | null
+      maKhach: string | null
+      tenKhach: string | null
+      /**
+       * cot | dienGiai | khong — tên khách lấy từ đâu. 'dienGiai' = vớt được, kém chắc hơn.
+       */
+      nguonTenKhach: string | null
+      dienGiai: string | null
+      /**
+       * Nối sang Customer của Kengi khi khớp được. null = chưa khớp, KHÔNG phải khách lẻ.
+       */
+      customerId: string | null
+      tongDoanhSo: number
+      tongThue: number
+      tongChietKhau: number
+      tongTra: number
+      /**
+       * true = MISA không xuất giá vốn cho chứng từ này ⇒ CẤM tính lãi/lỗ từ nó.
+       */
+      thieuGiaVon: boolean
+      batchId: string | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["misaSaleDoc"]>
+    composites: {}
+  }
+
+  type MisaSaleDocGetPayload<S extends boolean | null | undefined | MisaSaleDocDefaultArgs> = $Result.GetResult<Prisma.$MisaSaleDocPayload, S>
+
+  type MisaSaleDocCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<MisaSaleDocFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: MisaSaleDocCountAggregateInputType | true
+    }
+
+  export interface MisaSaleDocDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['MisaSaleDoc'], meta: { name: 'MisaSaleDoc' } }
+    /**
+     * Find zero or one MisaSaleDoc that matches the filter.
+     * @param {MisaSaleDocFindUniqueArgs} args - Arguments to find a MisaSaleDoc
+     * @example
+     * // Get one MisaSaleDoc
+     * const misaSaleDoc = await prisma.misaSaleDoc.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends MisaSaleDocFindUniqueArgs>(args: SelectSubset<T, MisaSaleDocFindUniqueArgs<ExtArgs>>): Prisma__MisaSaleDocClient<$Result.GetResult<Prisma.$MisaSaleDocPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one MisaSaleDoc that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {MisaSaleDocFindUniqueOrThrowArgs} args - Arguments to find a MisaSaleDoc
+     * @example
+     * // Get one MisaSaleDoc
+     * const misaSaleDoc = await prisma.misaSaleDoc.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends MisaSaleDocFindUniqueOrThrowArgs>(args: SelectSubset<T, MisaSaleDocFindUniqueOrThrowArgs<ExtArgs>>): Prisma__MisaSaleDocClient<$Result.GetResult<Prisma.$MisaSaleDocPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first MisaSaleDoc that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaSaleDocFindFirstArgs} args - Arguments to find a MisaSaleDoc
+     * @example
+     * // Get one MisaSaleDoc
+     * const misaSaleDoc = await prisma.misaSaleDoc.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends MisaSaleDocFindFirstArgs>(args?: SelectSubset<T, MisaSaleDocFindFirstArgs<ExtArgs>>): Prisma__MisaSaleDocClient<$Result.GetResult<Prisma.$MisaSaleDocPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first MisaSaleDoc that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaSaleDocFindFirstOrThrowArgs} args - Arguments to find a MisaSaleDoc
+     * @example
+     * // Get one MisaSaleDoc
+     * const misaSaleDoc = await prisma.misaSaleDoc.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends MisaSaleDocFindFirstOrThrowArgs>(args?: SelectSubset<T, MisaSaleDocFindFirstOrThrowArgs<ExtArgs>>): Prisma__MisaSaleDocClient<$Result.GetResult<Prisma.$MisaSaleDocPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more MisaSaleDocs that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaSaleDocFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all MisaSaleDocs
+     * const misaSaleDocs = await prisma.misaSaleDoc.findMany()
+     * 
+     * // Get first 10 MisaSaleDocs
+     * const misaSaleDocs = await prisma.misaSaleDoc.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const misaSaleDocWithIdOnly = await prisma.misaSaleDoc.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends MisaSaleDocFindManyArgs>(args?: SelectSubset<T, MisaSaleDocFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MisaSaleDocPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a MisaSaleDoc.
+     * @param {MisaSaleDocCreateArgs} args - Arguments to create a MisaSaleDoc.
+     * @example
+     * // Create one MisaSaleDoc
+     * const MisaSaleDoc = await prisma.misaSaleDoc.create({
+     *   data: {
+     *     // ... data to create a MisaSaleDoc
+     *   }
+     * })
+     * 
+     */
+    create<T extends MisaSaleDocCreateArgs>(args: SelectSubset<T, MisaSaleDocCreateArgs<ExtArgs>>): Prisma__MisaSaleDocClient<$Result.GetResult<Prisma.$MisaSaleDocPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many MisaSaleDocs.
+     * @param {MisaSaleDocCreateManyArgs} args - Arguments to create many MisaSaleDocs.
+     * @example
+     * // Create many MisaSaleDocs
+     * const misaSaleDoc = await prisma.misaSaleDoc.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends MisaSaleDocCreateManyArgs>(args?: SelectSubset<T, MisaSaleDocCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many MisaSaleDocs and returns the data saved in the database.
+     * @param {MisaSaleDocCreateManyAndReturnArgs} args - Arguments to create many MisaSaleDocs.
+     * @example
+     * // Create many MisaSaleDocs
+     * const misaSaleDoc = await prisma.misaSaleDoc.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many MisaSaleDocs and only return the `id`
+     * const misaSaleDocWithIdOnly = await prisma.misaSaleDoc.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends MisaSaleDocCreateManyAndReturnArgs>(args?: SelectSubset<T, MisaSaleDocCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MisaSaleDocPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a MisaSaleDoc.
+     * @param {MisaSaleDocDeleteArgs} args - Arguments to delete one MisaSaleDoc.
+     * @example
+     * // Delete one MisaSaleDoc
+     * const MisaSaleDoc = await prisma.misaSaleDoc.delete({
+     *   where: {
+     *     // ... filter to delete one MisaSaleDoc
+     *   }
+     * })
+     * 
+     */
+    delete<T extends MisaSaleDocDeleteArgs>(args: SelectSubset<T, MisaSaleDocDeleteArgs<ExtArgs>>): Prisma__MisaSaleDocClient<$Result.GetResult<Prisma.$MisaSaleDocPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one MisaSaleDoc.
+     * @param {MisaSaleDocUpdateArgs} args - Arguments to update one MisaSaleDoc.
+     * @example
+     * // Update one MisaSaleDoc
+     * const misaSaleDoc = await prisma.misaSaleDoc.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends MisaSaleDocUpdateArgs>(args: SelectSubset<T, MisaSaleDocUpdateArgs<ExtArgs>>): Prisma__MisaSaleDocClient<$Result.GetResult<Prisma.$MisaSaleDocPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more MisaSaleDocs.
+     * @param {MisaSaleDocDeleteManyArgs} args - Arguments to filter MisaSaleDocs to delete.
+     * @example
+     * // Delete a few MisaSaleDocs
+     * const { count } = await prisma.misaSaleDoc.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends MisaSaleDocDeleteManyArgs>(args?: SelectSubset<T, MisaSaleDocDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more MisaSaleDocs.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaSaleDocUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many MisaSaleDocs
+     * const misaSaleDoc = await prisma.misaSaleDoc.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends MisaSaleDocUpdateManyArgs>(args: SelectSubset<T, MisaSaleDocUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more MisaSaleDocs and returns the data updated in the database.
+     * @param {MisaSaleDocUpdateManyAndReturnArgs} args - Arguments to update many MisaSaleDocs.
+     * @example
+     * // Update many MisaSaleDocs
+     * const misaSaleDoc = await prisma.misaSaleDoc.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more MisaSaleDocs and only return the `id`
+     * const misaSaleDocWithIdOnly = await prisma.misaSaleDoc.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends MisaSaleDocUpdateManyAndReturnArgs>(args: SelectSubset<T, MisaSaleDocUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MisaSaleDocPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one MisaSaleDoc.
+     * @param {MisaSaleDocUpsertArgs} args - Arguments to update or create a MisaSaleDoc.
+     * @example
+     * // Update or create a MisaSaleDoc
+     * const misaSaleDoc = await prisma.misaSaleDoc.upsert({
+     *   create: {
+     *     // ... data to create a MisaSaleDoc
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the MisaSaleDoc we want to update
+     *   }
+     * })
+     */
+    upsert<T extends MisaSaleDocUpsertArgs>(args: SelectSubset<T, MisaSaleDocUpsertArgs<ExtArgs>>): Prisma__MisaSaleDocClient<$Result.GetResult<Prisma.$MisaSaleDocPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of MisaSaleDocs.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaSaleDocCountArgs} args - Arguments to filter MisaSaleDocs to count.
+     * @example
+     * // Count the number of MisaSaleDocs
+     * const count = await prisma.misaSaleDoc.count({
+     *   where: {
+     *     // ... the filter for the MisaSaleDocs we want to count
+     *   }
+     * })
+    **/
+    count<T extends MisaSaleDocCountArgs>(
+      args?: Subset<T, MisaSaleDocCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], MisaSaleDocCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a MisaSaleDoc.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaSaleDocAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends MisaSaleDocAggregateArgs>(args: Subset<T, MisaSaleDocAggregateArgs>): Prisma.PrismaPromise<GetMisaSaleDocAggregateType<T>>
+
+    /**
+     * Group by MisaSaleDoc.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaSaleDocGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends MisaSaleDocGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: MisaSaleDocGroupByArgs['orderBy'] }
+        : { orderBy?: MisaSaleDocGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, MisaSaleDocGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetMisaSaleDocGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the MisaSaleDoc model
+   */
+  readonly fields: MisaSaleDocFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for MisaSaleDoc.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__MisaSaleDocClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    batch<T extends MisaSaleDoc$batchArgs<ExtArgs> = {}>(args?: Subset<T, MisaSaleDoc$batchArgs<ExtArgs>>): Prisma__MisaImportBatchClient<$Result.GetResult<Prisma.$MisaImportBatchPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+    lines<T extends MisaSaleDoc$linesArgs<ExtArgs> = {}>(args?: Subset<T, MisaSaleDoc$linesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MisaSaleLinePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the MisaSaleDoc model
+   */
+  interface MisaSaleDocFieldRefs {
+    readonly id: FieldRef<"MisaSaleDoc", 'String'>
+    readonly soChungTu: FieldRef<"MisaSaleDoc", 'String'>
+    readonly soHoaDon: FieldRef<"MisaSaleDoc", 'String'>
+    readonly ngayChungTu: FieldRef<"MisaSaleDoc", 'DateTime'>
+    readonly ngayHachToan: FieldRef<"MisaSaleDoc", 'DateTime'>
+    readonly ngayHoaDon: FieldRef<"MisaSaleDoc", 'DateTime'>
+    readonly maKhach: FieldRef<"MisaSaleDoc", 'String'>
+    readonly tenKhach: FieldRef<"MisaSaleDoc", 'String'>
+    readonly nguonTenKhach: FieldRef<"MisaSaleDoc", 'String'>
+    readonly dienGiai: FieldRef<"MisaSaleDoc", 'String'>
+    readonly customerId: FieldRef<"MisaSaleDoc", 'String'>
+    readonly tongDoanhSo: FieldRef<"MisaSaleDoc", 'Float'>
+    readonly tongThue: FieldRef<"MisaSaleDoc", 'Float'>
+    readonly tongChietKhau: FieldRef<"MisaSaleDoc", 'Float'>
+    readonly tongTra: FieldRef<"MisaSaleDoc", 'Float'>
+    readonly thieuGiaVon: FieldRef<"MisaSaleDoc", 'Boolean'>
+    readonly batchId: FieldRef<"MisaSaleDoc", 'String'>
+    readonly createdAt: FieldRef<"MisaSaleDoc", 'DateTime'>
+    readonly updatedAt: FieldRef<"MisaSaleDoc", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * MisaSaleDoc findUnique
+   */
+  export type MisaSaleDocFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSaleDoc
+     */
+    select?: MisaSaleDocSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSaleDoc
+     */
+    omit?: MisaSaleDocOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaSaleDocInclude<ExtArgs> | null
+    /**
+     * Filter, which MisaSaleDoc to fetch.
+     */
+    where: MisaSaleDocWhereUniqueInput
+  }
+
+  /**
+   * MisaSaleDoc findUniqueOrThrow
+   */
+  export type MisaSaleDocFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSaleDoc
+     */
+    select?: MisaSaleDocSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSaleDoc
+     */
+    omit?: MisaSaleDocOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaSaleDocInclude<ExtArgs> | null
+    /**
+     * Filter, which MisaSaleDoc to fetch.
+     */
+    where: MisaSaleDocWhereUniqueInput
+  }
+
+  /**
+   * MisaSaleDoc findFirst
+   */
+  export type MisaSaleDocFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSaleDoc
+     */
+    select?: MisaSaleDocSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSaleDoc
+     */
+    omit?: MisaSaleDocOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaSaleDocInclude<ExtArgs> | null
+    /**
+     * Filter, which MisaSaleDoc to fetch.
+     */
+    where?: MisaSaleDocWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaSaleDocs to fetch.
+     */
+    orderBy?: MisaSaleDocOrderByWithRelationInput | MisaSaleDocOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MisaSaleDocs.
+     */
+    cursor?: MisaSaleDocWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaSaleDocs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaSaleDocs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MisaSaleDocs.
+     */
+    distinct?: MisaSaleDocScalarFieldEnum | MisaSaleDocScalarFieldEnum[]
+  }
+
+  /**
+   * MisaSaleDoc findFirstOrThrow
+   */
+  export type MisaSaleDocFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSaleDoc
+     */
+    select?: MisaSaleDocSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSaleDoc
+     */
+    omit?: MisaSaleDocOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaSaleDocInclude<ExtArgs> | null
+    /**
+     * Filter, which MisaSaleDoc to fetch.
+     */
+    where?: MisaSaleDocWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaSaleDocs to fetch.
+     */
+    orderBy?: MisaSaleDocOrderByWithRelationInput | MisaSaleDocOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MisaSaleDocs.
+     */
+    cursor?: MisaSaleDocWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaSaleDocs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaSaleDocs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MisaSaleDocs.
+     */
+    distinct?: MisaSaleDocScalarFieldEnum | MisaSaleDocScalarFieldEnum[]
+  }
+
+  /**
+   * MisaSaleDoc findMany
+   */
+  export type MisaSaleDocFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSaleDoc
+     */
+    select?: MisaSaleDocSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSaleDoc
+     */
+    omit?: MisaSaleDocOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaSaleDocInclude<ExtArgs> | null
+    /**
+     * Filter, which MisaSaleDocs to fetch.
+     */
+    where?: MisaSaleDocWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaSaleDocs to fetch.
+     */
+    orderBy?: MisaSaleDocOrderByWithRelationInput | MisaSaleDocOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing MisaSaleDocs.
+     */
+    cursor?: MisaSaleDocWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaSaleDocs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaSaleDocs.
+     */
+    skip?: number
+    distinct?: MisaSaleDocScalarFieldEnum | MisaSaleDocScalarFieldEnum[]
+  }
+
+  /**
+   * MisaSaleDoc create
+   */
+  export type MisaSaleDocCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSaleDoc
+     */
+    select?: MisaSaleDocSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSaleDoc
+     */
+    omit?: MisaSaleDocOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaSaleDocInclude<ExtArgs> | null
+    /**
+     * The data needed to create a MisaSaleDoc.
+     */
+    data: XOR<MisaSaleDocCreateInput, MisaSaleDocUncheckedCreateInput>
+  }
+
+  /**
+   * MisaSaleDoc createMany
+   */
+  export type MisaSaleDocCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many MisaSaleDocs.
+     */
+    data: MisaSaleDocCreateManyInput | MisaSaleDocCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * MisaSaleDoc createManyAndReturn
+   */
+  export type MisaSaleDocCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSaleDoc
+     */
+    select?: MisaSaleDocSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSaleDoc
+     */
+    omit?: MisaSaleDocOmit<ExtArgs> | null
+    /**
+     * The data used to create many MisaSaleDocs.
+     */
+    data: MisaSaleDocCreateManyInput | MisaSaleDocCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaSaleDocIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * MisaSaleDoc update
+   */
+  export type MisaSaleDocUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSaleDoc
+     */
+    select?: MisaSaleDocSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSaleDoc
+     */
+    omit?: MisaSaleDocOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaSaleDocInclude<ExtArgs> | null
+    /**
+     * The data needed to update a MisaSaleDoc.
+     */
+    data: XOR<MisaSaleDocUpdateInput, MisaSaleDocUncheckedUpdateInput>
+    /**
+     * Choose, which MisaSaleDoc to update.
+     */
+    where: MisaSaleDocWhereUniqueInput
+  }
+
+  /**
+   * MisaSaleDoc updateMany
+   */
+  export type MisaSaleDocUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update MisaSaleDocs.
+     */
+    data: XOR<MisaSaleDocUpdateManyMutationInput, MisaSaleDocUncheckedUpdateManyInput>
+    /**
+     * Filter which MisaSaleDocs to update
+     */
+    where?: MisaSaleDocWhereInput
+    /**
+     * Limit how many MisaSaleDocs to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * MisaSaleDoc updateManyAndReturn
+   */
+  export type MisaSaleDocUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSaleDoc
+     */
+    select?: MisaSaleDocSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSaleDoc
+     */
+    omit?: MisaSaleDocOmit<ExtArgs> | null
+    /**
+     * The data used to update MisaSaleDocs.
+     */
+    data: XOR<MisaSaleDocUpdateManyMutationInput, MisaSaleDocUncheckedUpdateManyInput>
+    /**
+     * Filter which MisaSaleDocs to update
+     */
+    where?: MisaSaleDocWhereInput
+    /**
+     * Limit how many MisaSaleDocs to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaSaleDocIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * MisaSaleDoc upsert
+   */
+  export type MisaSaleDocUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSaleDoc
+     */
+    select?: MisaSaleDocSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSaleDoc
+     */
+    omit?: MisaSaleDocOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaSaleDocInclude<ExtArgs> | null
+    /**
+     * The filter to search for the MisaSaleDoc to update in case it exists.
+     */
+    where: MisaSaleDocWhereUniqueInput
+    /**
+     * In case the MisaSaleDoc found by the `where` argument doesn't exist, create a new MisaSaleDoc with this data.
+     */
+    create: XOR<MisaSaleDocCreateInput, MisaSaleDocUncheckedCreateInput>
+    /**
+     * In case the MisaSaleDoc was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<MisaSaleDocUpdateInput, MisaSaleDocUncheckedUpdateInput>
+  }
+
+  /**
+   * MisaSaleDoc delete
+   */
+  export type MisaSaleDocDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSaleDoc
+     */
+    select?: MisaSaleDocSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSaleDoc
+     */
+    omit?: MisaSaleDocOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaSaleDocInclude<ExtArgs> | null
+    /**
+     * Filter which MisaSaleDoc to delete.
+     */
+    where: MisaSaleDocWhereUniqueInput
+  }
+
+  /**
+   * MisaSaleDoc deleteMany
+   */
+  export type MisaSaleDocDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MisaSaleDocs to delete
+     */
+    where?: MisaSaleDocWhereInput
+    /**
+     * Limit how many MisaSaleDocs to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * MisaSaleDoc.batch
+   */
+  export type MisaSaleDoc$batchArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaImportBatch
+     */
+    select?: MisaImportBatchSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaImportBatch
+     */
+    omit?: MisaImportBatchOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaImportBatchInclude<ExtArgs> | null
+    where?: MisaImportBatchWhereInput
+  }
+
+  /**
+   * MisaSaleDoc.lines
+   */
+  export type MisaSaleDoc$linesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSaleLine
+     */
+    select?: MisaSaleLineSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSaleLine
+     */
+    omit?: MisaSaleLineOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaSaleLineInclude<ExtArgs> | null
+    where?: MisaSaleLineWhereInput
+    orderBy?: MisaSaleLineOrderByWithRelationInput | MisaSaleLineOrderByWithRelationInput[]
+    cursor?: MisaSaleLineWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: MisaSaleLineScalarFieldEnum | MisaSaleLineScalarFieldEnum[]
+  }
+
+  /**
+   * MisaSaleDoc without action
+   */
+  export type MisaSaleDocDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSaleDoc
+     */
+    select?: MisaSaleDocSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSaleDoc
+     */
+    omit?: MisaSaleDocOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaSaleDocInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model MisaSaleLine
+   */
+
+  export type AggregateMisaSaleLine = {
+    _count: MisaSaleLineCountAggregateOutputType | null
+    _avg: MisaSaleLineAvgAggregateOutputType | null
+    _sum: MisaSaleLineSumAggregateOutputType | null
+    _min: MisaSaleLineMinAggregateOutputType | null
+    _max: MisaSaleLineMaxAggregateOutputType | null
+  }
+
+  export type MisaSaleLineAvgAggregateOutputType = {
+    soLuong: number | null
+    donGia: number | null
+    doanhSo: number | null
+    chietKhau: number | null
+    soLuongTra: number | null
+    giaTriTra: number | null
+    giamGia: number | null
+    thueGtgt: number | null
+    giaVon: number | null
+    dongSo: number | null
+  }
+
+  export type MisaSaleLineSumAggregateOutputType = {
+    soLuong: number | null
+    donGia: number | null
+    doanhSo: number | null
+    chietKhau: number | null
+    soLuongTra: number | null
+    giaTriTra: number | null
+    giamGia: number | null
+    thueGtgt: number | null
+    giaVon: number | null
+    dongSo: number | null
+  }
+
+  export type MisaSaleLineMinAggregateOutputType = {
+    id: string | null
+    docId: string | null
+    maHang: string | null
+    tenHang: string | null
+    dvt: string | null
+    soLuong: number | null
+    donGia: number | null
+    doanhSo: number | null
+    chietKhau: number | null
+    soLuongTra: number | null
+    giaTriTra: number | null
+    giamGia: number | null
+    thueGtgt: number | null
+    tkThueGtgt: string | null
+    giaVon: number | null
+    productId: string | null
+    dongSo: number | null
+  }
+
+  export type MisaSaleLineMaxAggregateOutputType = {
+    id: string | null
+    docId: string | null
+    maHang: string | null
+    tenHang: string | null
+    dvt: string | null
+    soLuong: number | null
+    donGia: number | null
+    doanhSo: number | null
+    chietKhau: number | null
+    soLuongTra: number | null
+    giaTriTra: number | null
+    giamGia: number | null
+    thueGtgt: number | null
+    tkThueGtgt: string | null
+    giaVon: number | null
+    productId: string | null
+    dongSo: number | null
+  }
+
+  export type MisaSaleLineCountAggregateOutputType = {
+    id: number
+    docId: number
+    maHang: number
+    tenHang: number
+    dvt: number
+    soLuong: number
+    donGia: number
+    doanhSo: number
+    chietKhau: number
+    soLuongTra: number
+    giaTriTra: number
+    giamGia: number
+    thueGtgt: number
+    tkThueGtgt: number
+    giaVon: number
+    productId: number
+    dongSo: number
+    _all: number
+  }
+
+
+  export type MisaSaleLineAvgAggregateInputType = {
+    soLuong?: true
+    donGia?: true
+    doanhSo?: true
+    chietKhau?: true
+    soLuongTra?: true
+    giaTriTra?: true
+    giamGia?: true
+    thueGtgt?: true
+    giaVon?: true
+    dongSo?: true
+  }
+
+  export type MisaSaleLineSumAggregateInputType = {
+    soLuong?: true
+    donGia?: true
+    doanhSo?: true
+    chietKhau?: true
+    soLuongTra?: true
+    giaTriTra?: true
+    giamGia?: true
+    thueGtgt?: true
+    giaVon?: true
+    dongSo?: true
+  }
+
+  export type MisaSaleLineMinAggregateInputType = {
+    id?: true
+    docId?: true
+    maHang?: true
+    tenHang?: true
+    dvt?: true
+    soLuong?: true
+    donGia?: true
+    doanhSo?: true
+    chietKhau?: true
+    soLuongTra?: true
+    giaTriTra?: true
+    giamGia?: true
+    thueGtgt?: true
+    tkThueGtgt?: true
+    giaVon?: true
+    productId?: true
+    dongSo?: true
+  }
+
+  export type MisaSaleLineMaxAggregateInputType = {
+    id?: true
+    docId?: true
+    maHang?: true
+    tenHang?: true
+    dvt?: true
+    soLuong?: true
+    donGia?: true
+    doanhSo?: true
+    chietKhau?: true
+    soLuongTra?: true
+    giaTriTra?: true
+    giamGia?: true
+    thueGtgt?: true
+    tkThueGtgt?: true
+    giaVon?: true
+    productId?: true
+    dongSo?: true
+  }
+
+  export type MisaSaleLineCountAggregateInputType = {
+    id?: true
+    docId?: true
+    maHang?: true
+    tenHang?: true
+    dvt?: true
+    soLuong?: true
+    donGia?: true
+    doanhSo?: true
+    chietKhau?: true
+    soLuongTra?: true
+    giaTriTra?: true
+    giamGia?: true
+    thueGtgt?: true
+    tkThueGtgt?: true
+    giaVon?: true
+    productId?: true
+    dongSo?: true
+    _all?: true
+  }
+
+  export type MisaSaleLineAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MisaSaleLine to aggregate.
+     */
+    where?: MisaSaleLineWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaSaleLines to fetch.
+     */
+    orderBy?: MisaSaleLineOrderByWithRelationInput | MisaSaleLineOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: MisaSaleLineWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaSaleLines from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaSaleLines.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned MisaSaleLines
+    **/
+    _count?: true | MisaSaleLineCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: MisaSaleLineAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: MisaSaleLineSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: MisaSaleLineMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: MisaSaleLineMaxAggregateInputType
+  }
+
+  export type GetMisaSaleLineAggregateType<T extends MisaSaleLineAggregateArgs> = {
+        [P in keyof T & keyof AggregateMisaSaleLine]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateMisaSaleLine[P]>
+      : GetScalarType<T[P], AggregateMisaSaleLine[P]>
+  }
+
+
+
+
+  export type MisaSaleLineGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: MisaSaleLineWhereInput
+    orderBy?: MisaSaleLineOrderByWithAggregationInput | MisaSaleLineOrderByWithAggregationInput[]
+    by: MisaSaleLineScalarFieldEnum[] | MisaSaleLineScalarFieldEnum
+    having?: MisaSaleLineScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: MisaSaleLineCountAggregateInputType | true
+    _avg?: MisaSaleLineAvgAggregateInputType
+    _sum?: MisaSaleLineSumAggregateInputType
+    _min?: MisaSaleLineMinAggregateInputType
+    _max?: MisaSaleLineMaxAggregateInputType
+  }
+
+  export type MisaSaleLineGroupByOutputType = {
+    id: string
+    docId: string
+    maHang: string
+    tenHang: string | null
+    dvt: string | null
+    soLuong: number
+    donGia: number
+    doanhSo: number
+    chietKhau: number
+    soLuongTra: number
+    giaTriTra: number
+    giamGia: number
+    thueGtgt: number
+    tkThueGtgt: string | null
+    giaVon: number | null
+    productId: string | null
+    dongSo: number | null
+    _count: MisaSaleLineCountAggregateOutputType | null
+    _avg: MisaSaleLineAvgAggregateOutputType | null
+    _sum: MisaSaleLineSumAggregateOutputType | null
+    _min: MisaSaleLineMinAggregateOutputType | null
+    _max: MisaSaleLineMaxAggregateOutputType | null
+  }
+
+  type GetMisaSaleLineGroupByPayload<T extends MisaSaleLineGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<MisaSaleLineGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof MisaSaleLineGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], MisaSaleLineGroupByOutputType[P]>
+            : GetScalarType<T[P], MisaSaleLineGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type MisaSaleLineSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    docId?: boolean
+    maHang?: boolean
+    tenHang?: boolean
+    dvt?: boolean
+    soLuong?: boolean
+    donGia?: boolean
+    doanhSo?: boolean
+    chietKhau?: boolean
+    soLuongTra?: boolean
+    giaTriTra?: boolean
+    giamGia?: boolean
+    thueGtgt?: boolean
+    tkThueGtgt?: boolean
+    giaVon?: boolean
+    productId?: boolean
+    dongSo?: boolean
+    doc?: boolean | MisaSaleDocDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["misaSaleLine"]>
+
+  export type MisaSaleLineSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    docId?: boolean
+    maHang?: boolean
+    tenHang?: boolean
+    dvt?: boolean
+    soLuong?: boolean
+    donGia?: boolean
+    doanhSo?: boolean
+    chietKhau?: boolean
+    soLuongTra?: boolean
+    giaTriTra?: boolean
+    giamGia?: boolean
+    thueGtgt?: boolean
+    tkThueGtgt?: boolean
+    giaVon?: boolean
+    productId?: boolean
+    dongSo?: boolean
+    doc?: boolean | MisaSaleDocDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["misaSaleLine"]>
+
+  export type MisaSaleLineSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    docId?: boolean
+    maHang?: boolean
+    tenHang?: boolean
+    dvt?: boolean
+    soLuong?: boolean
+    donGia?: boolean
+    doanhSo?: boolean
+    chietKhau?: boolean
+    soLuongTra?: boolean
+    giaTriTra?: boolean
+    giamGia?: boolean
+    thueGtgt?: boolean
+    tkThueGtgt?: boolean
+    giaVon?: boolean
+    productId?: boolean
+    dongSo?: boolean
+    doc?: boolean | MisaSaleDocDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["misaSaleLine"]>
+
+  export type MisaSaleLineSelectScalar = {
+    id?: boolean
+    docId?: boolean
+    maHang?: boolean
+    tenHang?: boolean
+    dvt?: boolean
+    soLuong?: boolean
+    donGia?: boolean
+    doanhSo?: boolean
+    chietKhau?: boolean
+    soLuongTra?: boolean
+    giaTriTra?: boolean
+    giamGia?: boolean
+    thueGtgt?: boolean
+    tkThueGtgt?: boolean
+    giaVon?: boolean
+    productId?: boolean
+    dongSo?: boolean
+  }
+
+  export type MisaSaleLineOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "docId" | "maHang" | "tenHang" | "dvt" | "soLuong" | "donGia" | "doanhSo" | "chietKhau" | "soLuongTra" | "giaTriTra" | "giamGia" | "thueGtgt" | "tkThueGtgt" | "giaVon" | "productId" | "dongSo", ExtArgs["result"]["misaSaleLine"]>
+  export type MisaSaleLineInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    doc?: boolean | MisaSaleDocDefaultArgs<ExtArgs>
+  }
+  export type MisaSaleLineIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    doc?: boolean | MisaSaleDocDefaultArgs<ExtArgs>
+  }
+  export type MisaSaleLineIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    doc?: boolean | MisaSaleDocDefaultArgs<ExtArgs>
+  }
+
+  export type $MisaSaleLinePayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "MisaSaleLine"
+    objects: {
+      doc: Prisma.$MisaSaleDocPayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      docId: string
+      maHang: string
+      tenHang: string | null
+      dvt: string | null
+      soLuong: number
+      donGia: number
+      doanhSo: number
+      chietKhau: number
+      soLuongTra: number
+      giaTriTra: number
+      giamGia: number
+      thueGtgt: number
+      tkThueGtgt: string | null
+      /**
+       * null = MISA KHÔNG xuất giá vốn. Tuyệt đối không mặc định 0 — 0 nghĩa là
+       * "bán không tốn đồng nào", tức lãi bằng đúng doanh thu.
+       */
+      giaVon: number | null
+      /**
+       * Nối sang Product của Kengi theo SKU (cột "Mã hàng"). null = chưa khớp.
+       */
+      productId: string | null
+      /**
+       * Dòng thứ mấy trong file gốc — để truy ngược khi số liệu đáng ngờ.
+       */
+      dongSo: number | null
+    }, ExtArgs["result"]["misaSaleLine"]>
+    composites: {}
+  }
+
+  type MisaSaleLineGetPayload<S extends boolean | null | undefined | MisaSaleLineDefaultArgs> = $Result.GetResult<Prisma.$MisaSaleLinePayload, S>
+
+  type MisaSaleLineCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<MisaSaleLineFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: MisaSaleLineCountAggregateInputType | true
+    }
+
+  export interface MisaSaleLineDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['MisaSaleLine'], meta: { name: 'MisaSaleLine' } }
+    /**
+     * Find zero or one MisaSaleLine that matches the filter.
+     * @param {MisaSaleLineFindUniqueArgs} args - Arguments to find a MisaSaleLine
+     * @example
+     * // Get one MisaSaleLine
+     * const misaSaleLine = await prisma.misaSaleLine.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends MisaSaleLineFindUniqueArgs>(args: SelectSubset<T, MisaSaleLineFindUniqueArgs<ExtArgs>>): Prisma__MisaSaleLineClient<$Result.GetResult<Prisma.$MisaSaleLinePayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one MisaSaleLine that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {MisaSaleLineFindUniqueOrThrowArgs} args - Arguments to find a MisaSaleLine
+     * @example
+     * // Get one MisaSaleLine
+     * const misaSaleLine = await prisma.misaSaleLine.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends MisaSaleLineFindUniqueOrThrowArgs>(args: SelectSubset<T, MisaSaleLineFindUniqueOrThrowArgs<ExtArgs>>): Prisma__MisaSaleLineClient<$Result.GetResult<Prisma.$MisaSaleLinePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first MisaSaleLine that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaSaleLineFindFirstArgs} args - Arguments to find a MisaSaleLine
+     * @example
+     * // Get one MisaSaleLine
+     * const misaSaleLine = await prisma.misaSaleLine.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends MisaSaleLineFindFirstArgs>(args?: SelectSubset<T, MisaSaleLineFindFirstArgs<ExtArgs>>): Prisma__MisaSaleLineClient<$Result.GetResult<Prisma.$MisaSaleLinePayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first MisaSaleLine that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaSaleLineFindFirstOrThrowArgs} args - Arguments to find a MisaSaleLine
+     * @example
+     * // Get one MisaSaleLine
+     * const misaSaleLine = await prisma.misaSaleLine.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends MisaSaleLineFindFirstOrThrowArgs>(args?: SelectSubset<T, MisaSaleLineFindFirstOrThrowArgs<ExtArgs>>): Prisma__MisaSaleLineClient<$Result.GetResult<Prisma.$MisaSaleLinePayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more MisaSaleLines that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaSaleLineFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all MisaSaleLines
+     * const misaSaleLines = await prisma.misaSaleLine.findMany()
+     * 
+     * // Get first 10 MisaSaleLines
+     * const misaSaleLines = await prisma.misaSaleLine.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const misaSaleLineWithIdOnly = await prisma.misaSaleLine.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends MisaSaleLineFindManyArgs>(args?: SelectSubset<T, MisaSaleLineFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MisaSaleLinePayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a MisaSaleLine.
+     * @param {MisaSaleLineCreateArgs} args - Arguments to create a MisaSaleLine.
+     * @example
+     * // Create one MisaSaleLine
+     * const MisaSaleLine = await prisma.misaSaleLine.create({
+     *   data: {
+     *     // ... data to create a MisaSaleLine
+     *   }
+     * })
+     * 
+     */
+    create<T extends MisaSaleLineCreateArgs>(args: SelectSubset<T, MisaSaleLineCreateArgs<ExtArgs>>): Prisma__MisaSaleLineClient<$Result.GetResult<Prisma.$MisaSaleLinePayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many MisaSaleLines.
+     * @param {MisaSaleLineCreateManyArgs} args - Arguments to create many MisaSaleLines.
+     * @example
+     * // Create many MisaSaleLines
+     * const misaSaleLine = await prisma.misaSaleLine.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends MisaSaleLineCreateManyArgs>(args?: SelectSubset<T, MisaSaleLineCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many MisaSaleLines and returns the data saved in the database.
+     * @param {MisaSaleLineCreateManyAndReturnArgs} args - Arguments to create many MisaSaleLines.
+     * @example
+     * // Create many MisaSaleLines
+     * const misaSaleLine = await prisma.misaSaleLine.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many MisaSaleLines and only return the `id`
+     * const misaSaleLineWithIdOnly = await prisma.misaSaleLine.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends MisaSaleLineCreateManyAndReturnArgs>(args?: SelectSubset<T, MisaSaleLineCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MisaSaleLinePayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a MisaSaleLine.
+     * @param {MisaSaleLineDeleteArgs} args - Arguments to delete one MisaSaleLine.
+     * @example
+     * // Delete one MisaSaleLine
+     * const MisaSaleLine = await prisma.misaSaleLine.delete({
+     *   where: {
+     *     // ... filter to delete one MisaSaleLine
+     *   }
+     * })
+     * 
+     */
+    delete<T extends MisaSaleLineDeleteArgs>(args: SelectSubset<T, MisaSaleLineDeleteArgs<ExtArgs>>): Prisma__MisaSaleLineClient<$Result.GetResult<Prisma.$MisaSaleLinePayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one MisaSaleLine.
+     * @param {MisaSaleLineUpdateArgs} args - Arguments to update one MisaSaleLine.
+     * @example
+     * // Update one MisaSaleLine
+     * const misaSaleLine = await prisma.misaSaleLine.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends MisaSaleLineUpdateArgs>(args: SelectSubset<T, MisaSaleLineUpdateArgs<ExtArgs>>): Prisma__MisaSaleLineClient<$Result.GetResult<Prisma.$MisaSaleLinePayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more MisaSaleLines.
+     * @param {MisaSaleLineDeleteManyArgs} args - Arguments to filter MisaSaleLines to delete.
+     * @example
+     * // Delete a few MisaSaleLines
+     * const { count } = await prisma.misaSaleLine.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends MisaSaleLineDeleteManyArgs>(args?: SelectSubset<T, MisaSaleLineDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more MisaSaleLines.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaSaleLineUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many MisaSaleLines
+     * const misaSaleLine = await prisma.misaSaleLine.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends MisaSaleLineUpdateManyArgs>(args: SelectSubset<T, MisaSaleLineUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more MisaSaleLines and returns the data updated in the database.
+     * @param {MisaSaleLineUpdateManyAndReturnArgs} args - Arguments to update many MisaSaleLines.
+     * @example
+     * // Update many MisaSaleLines
+     * const misaSaleLine = await prisma.misaSaleLine.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more MisaSaleLines and only return the `id`
+     * const misaSaleLineWithIdOnly = await prisma.misaSaleLine.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends MisaSaleLineUpdateManyAndReturnArgs>(args: SelectSubset<T, MisaSaleLineUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MisaSaleLinePayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one MisaSaleLine.
+     * @param {MisaSaleLineUpsertArgs} args - Arguments to update or create a MisaSaleLine.
+     * @example
+     * // Update or create a MisaSaleLine
+     * const misaSaleLine = await prisma.misaSaleLine.upsert({
+     *   create: {
+     *     // ... data to create a MisaSaleLine
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the MisaSaleLine we want to update
+     *   }
+     * })
+     */
+    upsert<T extends MisaSaleLineUpsertArgs>(args: SelectSubset<T, MisaSaleLineUpsertArgs<ExtArgs>>): Prisma__MisaSaleLineClient<$Result.GetResult<Prisma.$MisaSaleLinePayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of MisaSaleLines.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaSaleLineCountArgs} args - Arguments to filter MisaSaleLines to count.
+     * @example
+     * // Count the number of MisaSaleLines
+     * const count = await prisma.misaSaleLine.count({
+     *   where: {
+     *     // ... the filter for the MisaSaleLines we want to count
+     *   }
+     * })
+    **/
+    count<T extends MisaSaleLineCountArgs>(
+      args?: Subset<T, MisaSaleLineCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], MisaSaleLineCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a MisaSaleLine.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaSaleLineAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends MisaSaleLineAggregateArgs>(args: Subset<T, MisaSaleLineAggregateArgs>): Prisma.PrismaPromise<GetMisaSaleLineAggregateType<T>>
+
+    /**
+     * Group by MisaSaleLine.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaSaleLineGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends MisaSaleLineGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: MisaSaleLineGroupByArgs['orderBy'] }
+        : { orderBy?: MisaSaleLineGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, MisaSaleLineGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetMisaSaleLineGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the MisaSaleLine model
+   */
+  readonly fields: MisaSaleLineFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for MisaSaleLine.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__MisaSaleLineClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    doc<T extends MisaSaleDocDefaultArgs<ExtArgs> = {}>(args?: Subset<T, MisaSaleDocDefaultArgs<ExtArgs>>): Prisma__MisaSaleDocClient<$Result.GetResult<Prisma.$MisaSaleDocPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the MisaSaleLine model
+   */
+  interface MisaSaleLineFieldRefs {
+    readonly id: FieldRef<"MisaSaleLine", 'String'>
+    readonly docId: FieldRef<"MisaSaleLine", 'String'>
+    readonly maHang: FieldRef<"MisaSaleLine", 'String'>
+    readonly tenHang: FieldRef<"MisaSaleLine", 'String'>
+    readonly dvt: FieldRef<"MisaSaleLine", 'String'>
+    readonly soLuong: FieldRef<"MisaSaleLine", 'Float'>
+    readonly donGia: FieldRef<"MisaSaleLine", 'Float'>
+    readonly doanhSo: FieldRef<"MisaSaleLine", 'Float'>
+    readonly chietKhau: FieldRef<"MisaSaleLine", 'Float'>
+    readonly soLuongTra: FieldRef<"MisaSaleLine", 'Float'>
+    readonly giaTriTra: FieldRef<"MisaSaleLine", 'Float'>
+    readonly giamGia: FieldRef<"MisaSaleLine", 'Float'>
+    readonly thueGtgt: FieldRef<"MisaSaleLine", 'Float'>
+    readonly tkThueGtgt: FieldRef<"MisaSaleLine", 'String'>
+    readonly giaVon: FieldRef<"MisaSaleLine", 'Float'>
+    readonly productId: FieldRef<"MisaSaleLine", 'String'>
+    readonly dongSo: FieldRef<"MisaSaleLine", 'Int'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * MisaSaleLine findUnique
+   */
+  export type MisaSaleLineFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSaleLine
+     */
+    select?: MisaSaleLineSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSaleLine
+     */
+    omit?: MisaSaleLineOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaSaleLineInclude<ExtArgs> | null
+    /**
+     * Filter, which MisaSaleLine to fetch.
+     */
+    where: MisaSaleLineWhereUniqueInput
+  }
+
+  /**
+   * MisaSaleLine findUniqueOrThrow
+   */
+  export type MisaSaleLineFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSaleLine
+     */
+    select?: MisaSaleLineSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSaleLine
+     */
+    omit?: MisaSaleLineOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaSaleLineInclude<ExtArgs> | null
+    /**
+     * Filter, which MisaSaleLine to fetch.
+     */
+    where: MisaSaleLineWhereUniqueInput
+  }
+
+  /**
+   * MisaSaleLine findFirst
+   */
+  export type MisaSaleLineFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSaleLine
+     */
+    select?: MisaSaleLineSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSaleLine
+     */
+    omit?: MisaSaleLineOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaSaleLineInclude<ExtArgs> | null
+    /**
+     * Filter, which MisaSaleLine to fetch.
+     */
+    where?: MisaSaleLineWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaSaleLines to fetch.
+     */
+    orderBy?: MisaSaleLineOrderByWithRelationInput | MisaSaleLineOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MisaSaleLines.
+     */
+    cursor?: MisaSaleLineWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaSaleLines from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaSaleLines.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MisaSaleLines.
+     */
+    distinct?: MisaSaleLineScalarFieldEnum | MisaSaleLineScalarFieldEnum[]
+  }
+
+  /**
+   * MisaSaleLine findFirstOrThrow
+   */
+  export type MisaSaleLineFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSaleLine
+     */
+    select?: MisaSaleLineSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSaleLine
+     */
+    omit?: MisaSaleLineOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaSaleLineInclude<ExtArgs> | null
+    /**
+     * Filter, which MisaSaleLine to fetch.
+     */
+    where?: MisaSaleLineWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaSaleLines to fetch.
+     */
+    orderBy?: MisaSaleLineOrderByWithRelationInput | MisaSaleLineOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MisaSaleLines.
+     */
+    cursor?: MisaSaleLineWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaSaleLines from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaSaleLines.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MisaSaleLines.
+     */
+    distinct?: MisaSaleLineScalarFieldEnum | MisaSaleLineScalarFieldEnum[]
+  }
+
+  /**
+   * MisaSaleLine findMany
+   */
+  export type MisaSaleLineFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSaleLine
+     */
+    select?: MisaSaleLineSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSaleLine
+     */
+    omit?: MisaSaleLineOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaSaleLineInclude<ExtArgs> | null
+    /**
+     * Filter, which MisaSaleLines to fetch.
+     */
+    where?: MisaSaleLineWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaSaleLines to fetch.
+     */
+    orderBy?: MisaSaleLineOrderByWithRelationInput | MisaSaleLineOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing MisaSaleLines.
+     */
+    cursor?: MisaSaleLineWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaSaleLines from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaSaleLines.
+     */
+    skip?: number
+    distinct?: MisaSaleLineScalarFieldEnum | MisaSaleLineScalarFieldEnum[]
+  }
+
+  /**
+   * MisaSaleLine create
+   */
+  export type MisaSaleLineCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSaleLine
+     */
+    select?: MisaSaleLineSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSaleLine
+     */
+    omit?: MisaSaleLineOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaSaleLineInclude<ExtArgs> | null
+    /**
+     * The data needed to create a MisaSaleLine.
+     */
+    data: XOR<MisaSaleLineCreateInput, MisaSaleLineUncheckedCreateInput>
+  }
+
+  /**
+   * MisaSaleLine createMany
+   */
+  export type MisaSaleLineCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many MisaSaleLines.
+     */
+    data: MisaSaleLineCreateManyInput | MisaSaleLineCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * MisaSaleLine createManyAndReturn
+   */
+  export type MisaSaleLineCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSaleLine
+     */
+    select?: MisaSaleLineSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSaleLine
+     */
+    omit?: MisaSaleLineOmit<ExtArgs> | null
+    /**
+     * The data used to create many MisaSaleLines.
+     */
+    data: MisaSaleLineCreateManyInput | MisaSaleLineCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaSaleLineIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * MisaSaleLine update
+   */
+  export type MisaSaleLineUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSaleLine
+     */
+    select?: MisaSaleLineSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSaleLine
+     */
+    omit?: MisaSaleLineOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaSaleLineInclude<ExtArgs> | null
+    /**
+     * The data needed to update a MisaSaleLine.
+     */
+    data: XOR<MisaSaleLineUpdateInput, MisaSaleLineUncheckedUpdateInput>
+    /**
+     * Choose, which MisaSaleLine to update.
+     */
+    where: MisaSaleLineWhereUniqueInput
+  }
+
+  /**
+   * MisaSaleLine updateMany
+   */
+  export type MisaSaleLineUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update MisaSaleLines.
+     */
+    data: XOR<MisaSaleLineUpdateManyMutationInput, MisaSaleLineUncheckedUpdateManyInput>
+    /**
+     * Filter which MisaSaleLines to update
+     */
+    where?: MisaSaleLineWhereInput
+    /**
+     * Limit how many MisaSaleLines to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * MisaSaleLine updateManyAndReturn
+   */
+  export type MisaSaleLineUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSaleLine
+     */
+    select?: MisaSaleLineSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSaleLine
+     */
+    omit?: MisaSaleLineOmit<ExtArgs> | null
+    /**
+     * The data used to update MisaSaleLines.
+     */
+    data: XOR<MisaSaleLineUpdateManyMutationInput, MisaSaleLineUncheckedUpdateManyInput>
+    /**
+     * Filter which MisaSaleLines to update
+     */
+    where?: MisaSaleLineWhereInput
+    /**
+     * Limit how many MisaSaleLines to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaSaleLineIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * MisaSaleLine upsert
+   */
+  export type MisaSaleLineUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSaleLine
+     */
+    select?: MisaSaleLineSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSaleLine
+     */
+    omit?: MisaSaleLineOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaSaleLineInclude<ExtArgs> | null
+    /**
+     * The filter to search for the MisaSaleLine to update in case it exists.
+     */
+    where: MisaSaleLineWhereUniqueInput
+    /**
+     * In case the MisaSaleLine found by the `where` argument doesn't exist, create a new MisaSaleLine with this data.
+     */
+    create: XOR<MisaSaleLineCreateInput, MisaSaleLineUncheckedCreateInput>
+    /**
+     * In case the MisaSaleLine was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<MisaSaleLineUpdateInput, MisaSaleLineUncheckedUpdateInput>
+  }
+
+  /**
+   * MisaSaleLine delete
+   */
+  export type MisaSaleLineDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSaleLine
+     */
+    select?: MisaSaleLineSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSaleLine
+     */
+    omit?: MisaSaleLineOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaSaleLineInclude<ExtArgs> | null
+    /**
+     * Filter which MisaSaleLine to delete.
+     */
+    where: MisaSaleLineWhereUniqueInput
+  }
+
+  /**
+   * MisaSaleLine deleteMany
+   */
+  export type MisaSaleLineDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MisaSaleLines to delete
+     */
+    where?: MisaSaleLineWhereInput
+    /**
+     * Limit how many MisaSaleLines to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * MisaSaleLine without action
+   */
+  export type MisaSaleLineDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaSaleLine
+     */
+    select?: MisaSaleLineSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaSaleLine
+     */
+    omit?: MisaSaleLineOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaSaleLineInclude<ExtArgs> | null
+  }
+
+
+  /**
    * Enums
    */
 
@@ -166730,6 +174879,8 @@ export namespace Prisma {
     status: 'status',
     createdBy: 'createdBy',
     createdByName: 'createdByName',
+    salespersonId: 'salespersonId',
+    salespersonName: 'salespersonName',
     notes: 'notes',
     returnedAt: 'returnedAt',
     returnReason: 'returnReason',
@@ -166885,6 +175036,11 @@ export namespace Prisma {
     status: 'status',
     notes: 'notes',
     payable: 'payable',
+    paymentTermDays: 'paymentTermDays',
+    paymentTerms: 'paymentTerms',
+    paymentTermType: 'paymentTermType',
+    paymentTermDom: 'paymentTermDom',
+    paymentTermMonthOffset: 'paymentTermMonthOffset',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
   };
@@ -167022,6 +175178,23 @@ export namespace Prisma {
     estimatedDate: 'estimatedDate',
     completedDate: 'completedDate',
     notes: 'notes',
+    source: 'source',
+    productId: 'productId',
+    productSku: 'productSku',
+    quantity: 'quantity',
+    branchId: 'branchId',
+    customerId: 'customerId',
+    transactionId: 'transactionId',
+    soldReceiptNumber: 'soldReceiptNumber',
+    stockMovedAt: 'stockMovedAt',
+    replacedStockAt: 'replacedStockAt',
+    supplierId: 'supplierId',
+    supplierName: 'supplierName',
+    supplierBatchCode: 'supplierBatchCode',
+    sentToSupplierAt: 'sentToSupplierAt',
+    queuedForSupplierAt: 'queuedForSupplierAt',
+    supplierReturnedAt: 'supplierReturnedAt',
+    newUnitIssuedAt: 'newUnitIssuedAt',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
   };
@@ -167480,7 +175653,8 @@ export namespace Prisma {
     unitPrice: 'unitPrice',
     returnReason: 'returnReason',
     condition: 'condition',
-    restocked: 'restocked'
+    restocked: 'restocked',
+    disposed: 'disposed'
   };
 
   export type ReturnItemScalarFieldEnum = (typeof ReturnItemScalarFieldEnum)[keyof typeof ReturnItemScalarFieldEnum]
@@ -168026,6 +176200,7 @@ export namespace Prisma {
     id: 'id',
     onlineOrderId: 'onlineOrderId',
     productId: 'productId',
+    externalItemId: 'externalItemId',
     productName: 'productName',
     sku: 'sku',
     quantity: 'quantity',
@@ -168998,8 +177173,11 @@ export namespace Prisma {
     overwriteNames: 'overwriteNames',
     overwritePrices: 'overwritePrices',
     overwriteStock: 'overwriteStock',
+    overwriteDebt: 'overwriteDebt',
+    negateDebt: 'negateDebt',
     defaultCategoryId: 'defaultCategoryId',
     defaultWarehouseId: 'defaultWarehouseId',
+    lastSyncTime: 'lastSyncTime',
     lastSyncAt: 'lastSyncAt',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
@@ -169041,6 +177219,122 @@ export namespace Prisma {
   };
 
   export type MisaSyncLogScalarFieldEnum = (typeof MisaSyncLogScalarFieldEnum)[keyof typeof MisaSyncLogScalarFieldEnum]
+
+
+  export const PrintTemplateScalarFieldEnum: {
+    id: 'id',
+    name: 'name',
+    type: 'type',
+    htmlSource: 'htmlSource',
+    linkedPrinter: 'linkedPrinter',
+    isDefault: 'isDefault',
+    isBuiltIn: 'isBuiltIn',
+    daSuaTay: 'daSuaTay',
+    updatedAt: 'updatedAt'
+  };
+
+  export type PrintTemplateScalarFieldEnum = (typeof PrintTemplateScalarFieldEnum)[keyof typeof PrintTemplateScalarFieldEnum]
+
+
+  export const AiReportScalarFieldEnum: {
+    id: 'id',
+    loai: 'loai',
+    ky: 'ky',
+    tuNgay: 'tuNgay',
+    denNgay: 'denNgay',
+    tieuDe: 'tieuDe',
+    noiDung: 'noiDung',
+    toolCalls: 'toolCalls',
+    createdBy: 'createdBy',
+    createdByName: 'createdByName',
+    branchId: 'branchId',
+    createdAt: 'createdAt'
+  };
+
+  export type AiReportScalarFieldEnum = (typeof AiReportScalarFieldEnum)[keyof typeof AiReportScalarFieldEnum]
+
+
+  export const AiChatScalarFieldEnum: {
+    id: 'id',
+    tieuDe: 'tieuDe',
+    noiDung: 'noiDung',
+    soLuot: 'soLuot',
+    createdBy: 'createdBy',
+    createdByName: 'createdByName',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type AiChatScalarFieldEnum = (typeof AiChatScalarFieldEnum)[keyof typeof AiChatScalarFieldEnum]
+
+
+  export const MisaImportBatchScalarFieldEnum: {
+    id: 'id',
+    loai: 'loai',
+    tenFile: 'tenFile',
+    kyBaoCao: 'kyBaoCao',
+    tongDong: 'tongDong',
+    docDuoc: 'docDuoc',
+    boQua: 'boQua',
+    soChungTu: 'soChungTu',
+    tongTien: 'tongTien',
+    tongThue: 'tongThue',
+    chiTiet: 'chiTiet',
+    apply: 'apply',
+    userId: 'userId',
+    userName: 'userName',
+    createdAt: 'createdAt'
+  };
+
+  export type MisaImportBatchScalarFieldEnum = (typeof MisaImportBatchScalarFieldEnum)[keyof typeof MisaImportBatchScalarFieldEnum]
+
+
+  export const MisaSaleDocScalarFieldEnum: {
+    id: 'id',
+    soChungTu: 'soChungTu',
+    soHoaDon: 'soHoaDon',
+    ngayChungTu: 'ngayChungTu',
+    ngayHachToan: 'ngayHachToan',
+    ngayHoaDon: 'ngayHoaDon',
+    maKhach: 'maKhach',
+    tenKhach: 'tenKhach',
+    nguonTenKhach: 'nguonTenKhach',
+    dienGiai: 'dienGiai',
+    customerId: 'customerId',
+    tongDoanhSo: 'tongDoanhSo',
+    tongThue: 'tongThue',
+    tongChietKhau: 'tongChietKhau',
+    tongTra: 'tongTra',
+    thieuGiaVon: 'thieuGiaVon',
+    batchId: 'batchId',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type MisaSaleDocScalarFieldEnum = (typeof MisaSaleDocScalarFieldEnum)[keyof typeof MisaSaleDocScalarFieldEnum]
+
+
+  export const MisaSaleLineScalarFieldEnum: {
+    id: 'id',
+    docId: 'docId',
+    maHang: 'maHang',
+    tenHang: 'tenHang',
+    dvt: 'dvt',
+    soLuong: 'soLuong',
+    donGia: 'donGia',
+    doanhSo: 'doanhSo',
+    chietKhau: 'chietKhau',
+    soLuongTra: 'soLuongTra',
+    giaTriTra: 'giaTriTra',
+    giamGia: 'giamGia',
+    thueGtgt: 'thueGtgt',
+    tkThueGtgt: 'tkThueGtgt',
+    giaVon: 'giaVon',
+    productId: 'productId',
+    dongSo: 'dongSo'
+  };
+
+  export type MisaSaleLineScalarFieldEnum = (typeof MisaSaleLineScalarFieldEnum)[keyof typeof MisaSaleLineScalarFieldEnum]
 
 
   export const SortOrder: {
@@ -170426,6 +178720,8 @@ export namespace Prisma {
     status?: StringFilter<"Transaction"> | string
     createdBy?: StringFilter<"Transaction"> | string
     createdByName?: StringNullableFilter<"Transaction"> | string | null
+    salespersonId?: StringNullableFilter<"Transaction"> | string | null
+    salespersonName?: StringNullableFilter<"Transaction"> | string | null
     notes?: StringNullableFilter<"Transaction"> | string | null
     returnedAt?: DateTimeNullableFilter<"Transaction"> | Date | string | null
     returnReason?: StringNullableFilter<"Transaction"> | string | null
@@ -170461,6 +178757,8 @@ export namespace Prisma {
     status?: SortOrder
     createdBy?: SortOrder
     createdByName?: SortOrderInput | SortOrder
+    salespersonId?: SortOrderInput | SortOrder
+    salespersonName?: SortOrderInput | SortOrder
     notes?: SortOrderInput | SortOrder
     returnedAt?: SortOrderInput | SortOrder
     returnReason?: SortOrderInput | SortOrder
@@ -170499,6 +178797,8 @@ export namespace Prisma {
     status?: StringFilter<"Transaction"> | string
     createdBy?: StringFilter<"Transaction"> | string
     createdByName?: StringNullableFilter<"Transaction"> | string | null
+    salespersonId?: StringNullableFilter<"Transaction"> | string | null
+    salespersonName?: StringNullableFilter<"Transaction"> | string | null
     notes?: StringNullableFilter<"Transaction"> | string | null
     returnedAt?: DateTimeNullableFilter<"Transaction"> | Date | string | null
     returnReason?: StringNullableFilter<"Transaction"> | string | null
@@ -170534,6 +178834,8 @@ export namespace Prisma {
     status?: SortOrder
     createdBy?: SortOrder
     createdByName?: SortOrderInput | SortOrder
+    salespersonId?: SortOrderInput | SortOrder
+    salespersonName?: SortOrderInput | SortOrder
     notes?: SortOrderInput | SortOrder
     returnedAt?: SortOrderInput | SortOrder
     returnReason?: SortOrderInput | SortOrder
@@ -170573,6 +178875,8 @@ export namespace Prisma {
     status?: StringWithAggregatesFilter<"Transaction"> | string
     createdBy?: StringWithAggregatesFilter<"Transaction"> | string
     createdByName?: StringNullableWithAggregatesFilter<"Transaction"> | string | null
+    salespersonId?: StringNullableWithAggregatesFilter<"Transaction"> | string | null
+    salespersonName?: StringNullableWithAggregatesFilter<"Transaction"> | string | null
     notes?: StringNullableWithAggregatesFilter<"Transaction"> | string | null
     returnedAt?: DateTimeNullableWithAggregatesFilter<"Transaction"> | Date | string | null
     returnReason?: StringNullableWithAggregatesFilter<"Transaction"> | string | null
@@ -171245,6 +179549,11 @@ export namespace Prisma {
     status?: StringFilter<"Supplier"> | string
     notes?: StringNullableFilter<"Supplier"> | string | null
     payable?: FloatFilter<"Supplier"> | number
+    paymentTermDays?: IntNullableFilter<"Supplier"> | number | null
+    paymentTerms?: StringNullableFilter<"Supplier"> | string | null
+    paymentTermType?: StringNullableFilter<"Supplier"> | string | null
+    paymentTermDom?: IntNullableFilter<"Supplier"> | number | null
+    paymentTermMonthOffset?: IntNullableFilter<"Supplier"> | number | null
     createdAt?: DateTimeFilter<"Supplier"> | Date | string
     updatedAt?: DateTimeFilter<"Supplier"> | Date | string
     purchaseOrders?: PurchaseOrderListRelationFilter
@@ -171264,6 +179573,11 @@ export namespace Prisma {
     status?: SortOrder
     notes?: SortOrderInput | SortOrder
     payable?: SortOrder
+    paymentTermDays?: SortOrderInput | SortOrder
+    paymentTerms?: SortOrderInput | SortOrder
+    paymentTermType?: SortOrderInput | SortOrder
+    paymentTermDom?: SortOrderInput | SortOrder
+    paymentTermMonthOffset?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     purchaseOrders?: PurchaseOrderOrderByRelationAggregateInput
@@ -171286,6 +179600,11 @@ export namespace Prisma {
     status?: StringFilter<"Supplier"> | string
     notes?: StringNullableFilter<"Supplier"> | string | null
     payable?: FloatFilter<"Supplier"> | number
+    paymentTermDays?: IntNullableFilter<"Supplier"> | number | null
+    paymentTerms?: StringNullableFilter<"Supplier"> | string | null
+    paymentTermType?: StringNullableFilter<"Supplier"> | string | null
+    paymentTermDom?: IntNullableFilter<"Supplier"> | number | null
+    paymentTermMonthOffset?: IntNullableFilter<"Supplier"> | number | null
     createdAt?: DateTimeFilter<"Supplier"> | Date | string
     updatedAt?: DateTimeFilter<"Supplier"> | Date | string
     purchaseOrders?: PurchaseOrderListRelationFilter
@@ -171305,6 +179624,11 @@ export namespace Prisma {
     status?: SortOrder
     notes?: SortOrderInput | SortOrder
     payable?: SortOrder
+    paymentTermDays?: SortOrderInput | SortOrder
+    paymentTerms?: SortOrderInput | SortOrder
+    paymentTermType?: SortOrderInput | SortOrder
+    paymentTermDom?: SortOrderInput | SortOrder
+    paymentTermMonthOffset?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     _count?: SupplierCountOrderByAggregateInput
@@ -171331,6 +179655,11 @@ export namespace Prisma {
     status?: StringWithAggregatesFilter<"Supplier"> | string
     notes?: StringNullableWithAggregatesFilter<"Supplier"> | string | null
     payable?: FloatWithAggregatesFilter<"Supplier"> | number
+    paymentTermDays?: IntNullableWithAggregatesFilter<"Supplier"> | number | null
+    paymentTerms?: StringNullableWithAggregatesFilter<"Supplier"> | string | null
+    paymentTermType?: StringNullableWithAggregatesFilter<"Supplier"> | string | null
+    paymentTermDom?: IntNullableWithAggregatesFilter<"Supplier"> | number | null
+    paymentTermMonthOffset?: IntNullableWithAggregatesFilter<"Supplier"> | number | null
     createdAt?: DateTimeWithAggregatesFilter<"Supplier"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"Supplier"> | Date | string
   }
@@ -171939,6 +180268,23 @@ export namespace Prisma {
     estimatedDate?: DateTimeNullableFilter<"Repair"> | Date | string | null
     completedDate?: DateTimeNullableFilter<"Repair"> | Date | string | null
     notes?: StringNullableFilter<"Repair"> | string | null
+    source?: StringFilter<"Repair"> | string
+    productId?: StringNullableFilter<"Repair"> | string | null
+    productSku?: StringNullableFilter<"Repair"> | string | null
+    quantity?: IntFilter<"Repair"> | number
+    branchId?: StringNullableFilter<"Repair"> | string | null
+    customerId?: StringNullableFilter<"Repair"> | string | null
+    transactionId?: StringNullableFilter<"Repair"> | string | null
+    soldReceiptNumber?: StringNullableFilter<"Repair"> | string | null
+    stockMovedAt?: DateTimeNullableFilter<"Repair"> | Date | string | null
+    replacedStockAt?: DateTimeNullableFilter<"Repair"> | Date | string | null
+    supplierId?: StringNullableFilter<"Repair"> | string | null
+    supplierName?: StringNullableFilter<"Repair"> | string | null
+    supplierBatchCode?: StringNullableFilter<"Repair"> | string | null
+    sentToSupplierAt?: DateTimeNullableFilter<"Repair"> | Date | string | null
+    queuedForSupplierAt?: DateTimeNullableFilter<"Repair"> | Date | string | null
+    supplierReturnedAt?: DateTimeNullableFilter<"Repair"> | Date | string | null
+    newUnitIssuedAt?: DateTimeNullableFilter<"Repair"> | Date | string | null
     createdAt?: DateTimeFilter<"Repair"> | Date | string
     updatedAt?: DateTimeFilter<"Repair"> | Date | string
   }
@@ -171955,6 +180301,23 @@ export namespace Prisma {
     estimatedDate?: SortOrderInput | SortOrder
     completedDate?: SortOrderInput | SortOrder
     notes?: SortOrderInput | SortOrder
+    source?: SortOrder
+    productId?: SortOrderInput | SortOrder
+    productSku?: SortOrderInput | SortOrder
+    quantity?: SortOrder
+    branchId?: SortOrderInput | SortOrder
+    customerId?: SortOrderInput | SortOrder
+    transactionId?: SortOrderInput | SortOrder
+    soldReceiptNumber?: SortOrderInput | SortOrder
+    stockMovedAt?: SortOrderInput | SortOrder
+    replacedStockAt?: SortOrderInput | SortOrder
+    supplierId?: SortOrderInput | SortOrder
+    supplierName?: SortOrderInput | SortOrder
+    supplierBatchCode?: SortOrderInput | SortOrder
+    sentToSupplierAt?: SortOrderInput | SortOrder
+    queuedForSupplierAt?: SortOrderInput | SortOrder
+    supplierReturnedAt?: SortOrderInput | SortOrder
+    newUnitIssuedAt?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -171974,6 +180337,23 @@ export namespace Prisma {
     estimatedDate?: DateTimeNullableFilter<"Repair"> | Date | string | null
     completedDate?: DateTimeNullableFilter<"Repair"> | Date | string | null
     notes?: StringNullableFilter<"Repair"> | string | null
+    source?: StringFilter<"Repair"> | string
+    productId?: StringNullableFilter<"Repair"> | string | null
+    productSku?: StringNullableFilter<"Repair"> | string | null
+    quantity?: IntFilter<"Repair"> | number
+    branchId?: StringNullableFilter<"Repair"> | string | null
+    customerId?: StringNullableFilter<"Repair"> | string | null
+    transactionId?: StringNullableFilter<"Repair"> | string | null
+    soldReceiptNumber?: StringNullableFilter<"Repair"> | string | null
+    stockMovedAt?: DateTimeNullableFilter<"Repair"> | Date | string | null
+    replacedStockAt?: DateTimeNullableFilter<"Repair"> | Date | string | null
+    supplierId?: StringNullableFilter<"Repair"> | string | null
+    supplierName?: StringNullableFilter<"Repair"> | string | null
+    supplierBatchCode?: StringNullableFilter<"Repair"> | string | null
+    sentToSupplierAt?: DateTimeNullableFilter<"Repair"> | Date | string | null
+    queuedForSupplierAt?: DateTimeNullableFilter<"Repair"> | Date | string | null
+    supplierReturnedAt?: DateTimeNullableFilter<"Repair"> | Date | string | null
+    newUnitIssuedAt?: DateTimeNullableFilter<"Repair"> | Date | string | null
     createdAt?: DateTimeFilter<"Repair"> | Date | string
     updatedAt?: DateTimeFilter<"Repair"> | Date | string
   }, "id" | "code">
@@ -171990,6 +180370,23 @@ export namespace Prisma {
     estimatedDate?: SortOrderInput | SortOrder
     completedDate?: SortOrderInput | SortOrder
     notes?: SortOrderInput | SortOrder
+    source?: SortOrder
+    productId?: SortOrderInput | SortOrder
+    productSku?: SortOrderInput | SortOrder
+    quantity?: SortOrder
+    branchId?: SortOrderInput | SortOrder
+    customerId?: SortOrderInput | SortOrder
+    transactionId?: SortOrderInput | SortOrder
+    soldReceiptNumber?: SortOrderInput | SortOrder
+    stockMovedAt?: SortOrderInput | SortOrder
+    replacedStockAt?: SortOrderInput | SortOrder
+    supplierId?: SortOrderInput | SortOrder
+    supplierName?: SortOrderInput | SortOrder
+    supplierBatchCode?: SortOrderInput | SortOrder
+    sentToSupplierAt?: SortOrderInput | SortOrder
+    queuedForSupplierAt?: SortOrderInput | SortOrder
+    supplierReturnedAt?: SortOrderInput | SortOrder
+    newUnitIssuedAt?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     _count?: RepairCountOrderByAggregateInput
@@ -172014,6 +180411,23 @@ export namespace Prisma {
     estimatedDate?: DateTimeNullableWithAggregatesFilter<"Repair"> | Date | string | null
     completedDate?: DateTimeNullableWithAggregatesFilter<"Repair"> | Date | string | null
     notes?: StringNullableWithAggregatesFilter<"Repair"> | string | null
+    source?: StringWithAggregatesFilter<"Repair"> | string
+    productId?: StringNullableWithAggregatesFilter<"Repair"> | string | null
+    productSku?: StringNullableWithAggregatesFilter<"Repair"> | string | null
+    quantity?: IntWithAggregatesFilter<"Repair"> | number
+    branchId?: StringNullableWithAggregatesFilter<"Repair"> | string | null
+    customerId?: StringNullableWithAggregatesFilter<"Repair"> | string | null
+    transactionId?: StringNullableWithAggregatesFilter<"Repair"> | string | null
+    soldReceiptNumber?: StringNullableWithAggregatesFilter<"Repair"> | string | null
+    stockMovedAt?: DateTimeNullableWithAggregatesFilter<"Repair"> | Date | string | null
+    replacedStockAt?: DateTimeNullableWithAggregatesFilter<"Repair"> | Date | string | null
+    supplierId?: StringNullableWithAggregatesFilter<"Repair"> | string | null
+    supplierName?: StringNullableWithAggregatesFilter<"Repair"> | string | null
+    supplierBatchCode?: StringNullableWithAggregatesFilter<"Repair"> | string | null
+    sentToSupplierAt?: DateTimeNullableWithAggregatesFilter<"Repair"> | Date | string | null
+    queuedForSupplierAt?: DateTimeNullableWithAggregatesFilter<"Repair"> | Date | string | null
+    supplierReturnedAt?: DateTimeNullableWithAggregatesFilter<"Repair"> | Date | string | null
+    newUnitIssuedAt?: DateTimeNullableWithAggregatesFilter<"Repair"> | Date | string | null
     createdAt?: DateTimeWithAggregatesFilter<"Repair"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"Repair"> | Date | string
   }
@@ -174242,6 +182656,7 @@ export namespace Prisma {
     returnReason?: StringNullableFilter<"ReturnItem"> | string | null
     condition?: StringNullableFilter<"ReturnItem"> | string | null
     restocked?: BoolFilter<"ReturnItem"> | boolean
+    disposed?: BoolFilter<"ReturnItem"> | boolean
     returnOrder?: XOR<ReturnOrderScalarRelationFilter, ReturnOrderWhereInput>
   }
 
@@ -174256,6 +182671,7 @@ export namespace Prisma {
     returnReason?: SortOrderInput | SortOrder
     condition?: SortOrderInput | SortOrder
     restocked?: SortOrder
+    disposed?: SortOrder
     returnOrder?: ReturnOrderOrderByWithRelationInput
   }
 
@@ -174273,6 +182689,7 @@ export namespace Prisma {
     returnReason?: StringNullableFilter<"ReturnItem"> | string | null
     condition?: StringNullableFilter<"ReturnItem"> | string | null
     restocked?: BoolFilter<"ReturnItem"> | boolean
+    disposed?: BoolFilter<"ReturnItem"> | boolean
     returnOrder?: XOR<ReturnOrderScalarRelationFilter, ReturnOrderWhereInput>
   }, "id">
 
@@ -174287,6 +182704,7 @@ export namespace Prisma {
     returnReason?: SortOrderInput | SortOrder
     condition?: SortOrderInput | SortOrder
     restocked?: SortOrder
+    disposed?: SortOrder
     _count?: ReturnItemCountOrderByAggregateInput
     _avg?: ReturnItemAvgOrderByAggregateInput
     _max?: ReturnItemMaxOrderByAggregateInput
@@ -174308,6 +182726,7 @@ export namespace Prisma {
     returnReason?: StringNullableWithAggregatesFilter<"ReturnItem"> | string | null
     condition?: StringNullableWithAggregatesFilter<"ReturnItem"> | string | null
     restocked?: BoolWithAggregatesFilter<"ReturnItem"> | boolean
+    disposed?: BoolWithAggregatesFilter<"ReturnItem"> | boolean
   }
 
   export type DebtEntryWhereInput = {
@@ -177020,6 +185439,7 @@ export namespace Prisma {
     id?: StringFilter<"OnlineOrderItem"> | string
     onlineOrderId?: StringFilter<"OnlineOrderItem"> | string
     productId?: StringNullableFilter<"OnlineOrderItem"> | string | null
+    externalItemId?: StringNullableFilter<"OnlineOrderItem"> | string | null
     productName?: StringFilter<"OnlineOrderItem"> | string
     sku?: StringNullableFilter<"OnlineOrderItem"> | string | null
     quantity?: IntFilter<"OnlineOrderItem"> | number
@@ -177034,6 +185454,7 @@ export namespace Prisma {
     id?: SortOrder
     onlineOrderId?: SortOrder
     productId?: SortOrderInput | SortOrder
+    externalItemId?: SortOrderInput | SortOrder
     productName?: SortOrder
     sku?: SortOrderInput | SortOrder
     quantity?: SortOrder
@@ -177051,6 +185472,7 @@ export namespace Prisma {
     NOT?: OnlineOrderItemWhereInput | OnlineOrderItemWhereInput[]
     onlineOrderId?: StringFilter<"OnlineOrderItem"> | string
     productId?: StringNullableFilter<"OnlineOrderItem"> | string | null
+    externalItemId?: StringNullableFilter<"OnlineOrderItem"> | string | null
     productName?: StringFilter<"OnlineOrderItem"> | string
     sku?: StringNullableFilter<"OnlineOrderItem"> | string | null
     quantity?: IntFilter<"OnlineOrderItem"> | number
@@ -177065,6 +185487,7 @@ export namespace Prisma {
     id?: SortOrder
     onlineOrderId?: SortOrder
     productId?: SortOrderInput | SortOrder
+    externalItemId?: SortOrderInput | SortOrder
     productName?: SortOrder
     sku?: SortOrderInput | SortOrder
     quantity?: SortOrder
@@ -177085,6 +185508,7 @@ export namespace Prisma {
     id?: StringWithAggregatesFilter<"OnlineOrderItem"> | string
     onlineOrderId?: StringWithAggregatesFilter<"OnlineOrderItem"> | string
     productId?: StringNullableWithAggregatesFilter<"OnlineOrderItem"> | string | null
+    externalItemId?: StringNullableWithAggregatesFilter<"OnlineOrderItem"> | string | null
     productName?: StringWithAggregatesFilter<"OnlineOrderItem"> | string
     sku?: StringNullableWithAggregatesFilter<"OnlineOrderItem"> | string | null
     quantity?: IntWithAggregatesFilter<"OnlineOrderItem"> | number
@@ -181882,8 +190306,11 @@ export namespace Prisma {
     overwriteNames?: BoolFilter<"MisaConfig"> | boolean
     overwritePrices?: BoolFilter<"MisaConfig"> | boolean
     overwriteStock?: BoolFilter<"MisaConfig"> | boolean
+    overwriteDebt?: BoolFilter<"MisaConfig"> | boolean
+    negateDebt?: BoolFilter<"MisaConfig"> | boolean
     defaultCategoryId?: StringNullableFilter<"MisaConfig"> | string | null
     defaultWarehouseId?: StringNullableFilter<"MisaConfig"> | string | null
+    lastSyncTime?: StringNullableFilter<"MisaConfig"> | string | null
     lastSyncAt?: DateTimeNullableFilter<"MisaConfig"> | Date | string | null
     createdAt?: DateTimeFilter<"MisaConfig"> | Date | string
     updatedAt?: DateTimeFilter<"MisaConfig"> | Date | string
@@ -181903,8 +190330,11 @@ export namespace Prisma {
     overwriteNames?: SortOrder
     overwritePrices?: SortOrder
     overwriteStock?: SortOrder
+    overwriteDebt?: SortOrder
+    negateDebt?: SortOrder
     defaultCategoryId?: SortOrderInput | SortOrder
     defaultWarehouseId?: SortOrderInput | SortOrder
+    lastSyncTime?: SortOrderInput | SortOrder
     lastSyncAt?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -181927,8 +190357,11 @@ export namespace Prisma {
     overwriteNames?: BoolFilter<"MisaConfig"> | boolean
     overwritePrices?: BoolFilter<"MisaConfig"> | boolean
     overwriteStock?: BoolFilter<"MisaConfig"> | boolean
+    overwriteDebt?: BoolFilter<"MisaConfig"> | boolean
+    negateDebt?: BoolFilter<"MisaConfig"> | boolean
     defaultCategoryId?: StringNullableFilter<"MisaConfig"> | string | null
     defaultWarehouseId?: StringNullableFilter<"MisaConfig"> | string | null
+    lastSyncTime?: StringNullableFilter<"MisaConfig"> | string | null
     lastSyncAt?: DateTimeNullableFilter<"MisaConfig"> | Date | string | null
     createdAt?: DateTimeFilter<"MisaConfig"> | Date | string
     updatedAt?: DateTimeFilter<"MisaConfig"> | Date | string
@@ -181948,8 +190381,11 @@ export namespace Prisma {
     overwriteNames?: SortOrder
     overwritePrices?: SortOrder
     overwriteStock?: SortOrder
+    overwriteDebt?: SortOrder
+    negateDebt?: SortOrder
     defaultCategoryId?: SortOrderInput | SortOrder
     defaultWarehouseId?: SortOrderInput | SortOrder
+    lastSyncTime?: SortOrderInput | SortOrder
     lastSyncAt?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -181975,8 +190411,11 @@ export namespace Prisma {
     overwriteNames?: BoolWithAggregatesFilter<"MisaConfig"> | boolean
     overwritePrices?: BoolWithAggregatesFilter<"MisaConfig"> | boolean
     overwriteStock?: BoolWithAggregatesFilter<"MisaConfig"> | boolean
+    overwriteDebt?: BoolWithAggregatesFilter<"MisaConfig"> | boolean
+    negateDebt?: BoolWithAggregatesFilter<"MisaConfig"> | boolean
     defaultCategoryId?: StringNullableWithAggregatesFilter<"MisaConfig"> | string | null
     defaultWarehouseId?: StringNullableWithAggregatesFilter<"MisaConfig"> | string | null
+    lastSyncTime?: StringNullableWithAggregatesFilter<"MisaConfig"> | string | null
     lastSyncAt?: DateTimeNullableWithAggregatesFilter<"MisaConfig"> | Date | string | null
     createdAt?: DateTimeWithAggregatesFilter<"MisaConfig"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"MisaConfig"> | Date | string
@@ -182152,6 +190591,588 @@ export namespace Prisma {
     heartbeatAt?: DateTimeNullableWithAggregatesFilter<"MisaSyncLog"> | Date | string | null
     attempts?: IntWithAggregatesFilter<"MisaSyncLog"> | number
     finishedAt?: DateTimeNullableWithAggregatesFilter<"MisaSyncLog"> | Date | string | null
+  }
+
+  export type PrintTemplateWhereInput = {
+    AND?: PrintTemplateWhereInput | PrintTemplateWhereInput[]
+    OR?: PrintTemplateWhereInput[]
+    NOT?: PrintTemplateWhereInput | PrintTemplateWhereInput[]
+    id?: StringFilter<"PrintTemplate"> | string
+    name?: StringFilter<"PrintTemplate"> | string
+    type?: StringFilter<"PrintTemplate"> | string
+    htmlSource?: StringFilter<"PrintTemplate"> | string
+    linkedPrinter?: StringFilter<"PrintTemplate"> | string
+    isDefault?: BoolFilter<"PrintTemplate"> | boolean
+    isBuiltIn?: BoolFilter<"PrintTemplate"> | boolean
+    daSuaTay?: BoolFilter<"PrintTemplate"> | boolean
+    updatedAt?: DateTimeFilter<"PrintTemplate"> | Date | string
+  }
+
+  export type PrintTemplateOrderByWithRelationInput = {
+    id?: SortOrder
+    name?: SortOrder
+    type?: SortOrder
+    htmlSource?: SortOrder
+    linkedPrinter?: SortOrder
+    isDefault?: SortOrder
+    isBuiltIn?: SortOrder
+    daSuaTay?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type PrintTemplateWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: PrintTemplateWhereInput | PrintTemplateWhereInput[]
+    OR?: PrintTemplateWhereInput[]
+    NOT?: PrintTemplateWhereInput | PrintTemplateWhereInput[]
+    name?: StringFilter<"PrintTemplate"> | string
+    type?: StringFilter<"PrintTemplate"> | string
+    htmlSource?: StringFilter<"PrintTemplate"> | string
+    linkedPrinter?: StringFilter<"PrintTemplate"> | string
+    isDefault?: BoolFilter<"PrintTemplate"> | boolean
+    isBuiltIn?: BoolFilter<"PrintTemplate"> | boolean
+    daSuaTay?: BoolFilter<"PrintTemplate"> | boolean
+    updatedAt?: DateTimeFilter<"PrintTemplate"> | Date | string
+  }, "id">
+
+  export type PrintTemplateOrderByWithAggregationInput = {
+    id?: SortOrder
+    name?: SortOrder
+    type?: SortOrder
+    htmlSource?: SortOrder
+    linkedPrinter?: SortOrder
+    isDefault?: SortOrder
+    isBuiltIn?: SortOrder
+    daSuaTay?: SortOrder
+    updatedAt?: SortOrder
+    _count?: PrintTemplateCountOrderByAggregateInput
+    _max?: PrintTemplateMaxOrderByAggregateInput
+    _min?: PrintTemplateMinOrderByAggregateInput
+  }
+
+  export type PrintTemplateScalarWhereWithAggregatesInput = {
+    AND?: PrintTemplateScalarWhereWithAggregatesInput | PrintTemplateScalarWhereWithAggregatesInput[]
+    OR?: PrintTemplateScalarWhereWithAggregatesInput[]
+    NOT?: PrintTemplateScalarWhereWithAggregatesInput | PrintTemplateScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"PrintTemplate"> | string
+    name?: StringWithAggregatesFilter<"PrintTemplate"> | string
+    type?: StringWithAggregatesFilter<"PrintTemplate"> | string
+    htmlSource?: StringWithAggregatesFilter<"PrintTemplate"> | string
+    linkedPrinter?: StringWithAggregatesFilter<"PrintTemplate"> | string
+    isDefault?: BoolWithAggregatesFilter<"PrintTemplate"> | boolean
+    isBuiltIn?: BoolWithAggregatesFilter<"PrintTemplate"> | boolean
+    daSuaTay?: BoolWithAggregatesFilter<"PrintTemplate"> | boolean
+    updatedAt?: DateTimeWithAggregatesFilter<"PrintTemplate"> | Date | string
+  }
+
+  export type AiReportWhereInput = {
+    AND?: AiReportWhereInput | AiReportWhereInput[]
+    OR?: AiReportWhereInput[]
+    NOT?: AiReportWhereInput | AiReportWhereInput[]
+    id?: StringFilter<"AiReport"> | string
+    loai?: StringFilter<"AiReport"> | string
+    ky?: StringFilter<"AiReport"> | string
+    tuNgay?: StringNullableFilter<"AiReport"> | string | null
+    denNgay?: StringNullableFilter<"AiReport"> | string | null
+    tieuDe?: StringFilter<"AiReport"> | string
+    noiDung?: StringFilter<"AiReport"> | string
+    toolCalls?: StringNullableFilter<"AiReport"> | string | null
+    createdBy?: StringNullableFilter<"AiReport"> | string | null
+    createdByName?: StringNullableFilter<"AiReport"> | string | null
+    branchId?: StringNullableFilter<"AiReport"> | string | null
+    createdAt?: DateTimeFilter<"AiReport"> | Date | string
+  }
+
+  export type AiReportOrderByWithRelationInput = {
+    id?: SortOrder
+    loai?: SortOrder
+    ky?: SortOrder
+    tuNgay?: SortOrderInput | SortOrder
+    denNgay?: SortOrderInput | SortOrder
+    tieuDe?: SortOrder
+    noiDung?: SortOrder
+    toolCalls?: SortOrderInput | SortOrder
+    createdBy?: SortOrderInput | SortOrder
+    createdByName?: SortOrderInput | SortOrder
+    branchId?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type AiReportWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: AiReportWhereInput | AiReportWhereInput[]
+    OR?: AiReportWhereInput[]
+    NOT?: AiReportWhereInput | AiReportWhereInput[]
+    loai?: StringFilter<"AiReport"> | string
+    ky?: StringFilter<"AiReport"> | string
+    tuNgay?: StringNullableFilter<"AiReport"> | string | null
+    denNgay?: StringNullableFilter<"AiReport"> | string | null
+    tieuDe?: StringFilter<"AiReport"> | string
+    noiDung?: StringFilter<"AiReport"> | string
+    toolCalls?: StringNullableFilter<"AiReport"> | string | null
+    createdBy?: StringNullableFilter<"AiReport"> | string | null
+    createdByName?: StringNullableFilter<"AiReport"> | string | null
+    branchId?: StringNullableFilter<"AiReport"> | string | null
+    createdAt?: DateTimeFilter<"AiReport"> | Date | string
+  }, "id">
+
+  export type AiReportOrderByWithAggregationInput = {
+    id?: SortOrder
+    loai?: SortOrder
+    ky?: SortOrder
+    tuNgay?: SortOrderInput | SortOrder
+    denNgay?: SortOrderInput | SortOrder
+    tieuDe?: SortOrder
+    noiDung?: SortOrder
+    toolCalls?: SortOrderInput | SortOrder
+    createdBy?: SortOrderInput | SortOrder
+    createdByName?: SortOrderInput | SortOrder
+    branchId?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    _count?: AiReportCountOrderByAggregateInput
+    _max?: AiReportMaxOrderByAggregateInput
+    _min?: AiReportMinOrderByAggregateInput
+  }
+
+  export type AiReportScalarWhereWithAggregatesInput = {
+    AND?: AiReportScalarWhereWithAggregatesInput | AiReportScalarWhereWithAggregatesInput[]
+    OR?: AiReportScalarWhereWithAggregatesInput[]
+    NOT?: AiReportScalarWhereWithAggregatesInput | AiReportScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"AiReport"> | string
+    loai?: StringWithAggregatesFilter<"AiReport"> | string
+    ky?: StringWithAggregatesFilter<"AiReport"> | string
+    tuNgay?: StringNullableWithAggregatesFilter<"AiReport"> | string | null
+    denNgay?: StringNullableWithAggregatesFilter<"AiReport"> | string | null
+    tieuDe?: StringWithAggregatesFilter<"AiReport"> | string
+    noiDung?: StringWithAggregatesFilter<"AiReport"> | string
+    toolCalls?: StringNullableWithAggregatesFilter<"AiReport"> | string | null
+    createdBy?: StringNullableWithAggregatesFilter<"AiReport"> | string | null
+    createdByName?: StringNullableWithAggregatesFilter<"AiReport"> | string | null
+    branchId?: StringNullableWithAggregatesFilter<"AiReport"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"AiReport"> | Date | string
+  }
+
+  export type AiChatWhereInput = {
+    AND?: AiChatWhereInput | AiChatWhereInput[]
+    OR?: AiChatWhereInput[]
+    NOT?: AiChatWhereInput | AiChatWhereInput[]
+    id?: StringFilter<"AiChat"> | string
+    tieuDe?: StringFilter<"AiChat"> | string
+    noiDung?: StringFilter<"AiChat"> | string
+    soLuot?: IntFilter<"AiChat"> | number
+    createdBy?: StringNullableFilter<"AiChat"> | string | null
+    createdByName?: StringNullableFilter<"AiChat"> | string | null
+    createdAt?: DateTimeFilter<"AiChat"> | Date | string
+    updatedAt?: DateTimeFilter<"AiChat"> | Date | string
+  }
+
+  export type AiChatOrderByWithRelationInput = {
+    id?: SortOrder
+    tieuDe?: SortOrder
+    noiDung?: SortOrder
+    soLuot?: SortOrder
+    createdBy?: SortOrderInput | SortOrder
+    createdByName?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type AiChatWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: AiChatWhereInput | AiChatWhereInput[]
+    OR?: AiChatWhereInput[]
+    NOT?: AiChatWhereInput | AiChatWhereInput[]
+    tieuDe?: StringFilter<"AiChat"> | string
+    noiDung?: StringFilter<"AiChat"> | string
+    soLuot?: IntFilter<"AiChat"> | number
+    createdBy?: StringNullableFilter<"AiChat"> | string | null
+    createdByName?: StringNullableFilter<"AiChat"> | string | null
+    createdAt?: DateTimeFilter<"AiChat"> | Date | string
+    updatedAt?: DateTimeFilter<"AiChat"> | Date | string
+  }, "id">
+
+  export type AiChatOrderByWithAggregationInput = {
+    id?: SortOrder
+    tieuDe?: SortOrder
+    noiDung?: SortOrder
+    soLuot?: SortOrder
+    createdBy?: SortOrderInput | SortOrder
+    createdByName?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: AiChatCountOrderByAggregateInput
+    _avg?: AiChatAvgOrderByAggregateInput
+    _max?: AiChatMaxOrderByAggregateInput
+    _min?: AiChatMinOrderByAggregateInput
+    _sum?: AiChatSumOrderByAggregateInput
+  }
+
+  export type AiChatScalarWhereWithAggregatesInput = {
+    AND?: AiChatScalarWhereWithAggregatesInput | AiChatScalarWhereWithAggregatesInput[]
+    OR?: AiChatScalarWhereWithAggregatesInput[]
+    NOT?: AiChatScalarWhereWithAggregatesInput | AiChatScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"AiChat"> | string
+    tieuDe?: StringWithAggregatesFilter<"AiChat"> | string
+    noiDung?: StringWithAggregatesFilter<"AiChat"> | string
+    soLuot?: IntWithAggregatesFilter<"AiChat"> | number
+    createdBy?: StringNullableWithAggregatesFilter<"AiChat"> | string | null
+    createdByName?: StringNullableWithAggregatesFilter<"AiChat"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"AiChat"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"AiChat"> | Date | string
+  }
+
+  export type MisaImportBatchWhereInput = {
+    AND?: MisaImportBatchWhereInput | MisaImportBatchWhereInput[]
+    OR?: MisaImportBatchWhereInput[]
+    NOT?: MisaImportBatchWhereInput | MisaImportBatchWhereInput[]
+    id?: StringFilter<"MisaImportBatch"> | string
+    loai?: StringFilter<"MisaImportBatch"> | string
+    tenFile?: StringFilter<"MisaImportBatch"> | string
+    kyBaoCao?: StringNullableFilter<"MisaImportBatch"> | string | null
+    tongDong?: IntFilter<"MisaImportBatch"> | number
+    docDuoc?: IntFilter<"MisaImportBatch"> | number
+    boQua?: IntFilter<"MisaImportBatch"> | number
+    soChungTu?: IntFilter<"MisaImportBatch"> | number
+    tongTien?: FloatFilter<"MisaImportBatch"> | number
+    tongThue?: FloatFilter<"MisaImportBatch"> | number
+    chiTiet?: StringNullableFilter<"MisaImportBatch"> | string | null
+    apply?: BoolFilter<"MisaImportBatch"> | boolean
+    userId?: StringNullableFilter<"MisaImportBatch"> | string | null
+    userName?: StringNullableFilter<"MisaImportBatch"> | string | null
+    createdAt?: DateTimeFilter<"MisaImportBatch"> | Date | string
+    docs?: MisaSaleDocListRelationFilter
+  }
+
+  export type MisaImportBatchOrderByWithRelationInput = {
+    id?: SortOrder
+    loai?: SortOrder
+    tenFile?: SortOrder
+    kyBaoCao?: SortOrderInput | SortOrder
+    tongDong?: SortOrder
+    docDuoc?: SortOrder
+    boQua?: SortOrder
+    soChungTu?: SortOrder
+    tongTien?: SortOrder
+    tongThue?: SortOrder
+    chiTiet?: SortOrderInput | SortOrder
+    apply?: SortOrder
+    userId?: SortOrderInput | SortOrder
+    userName?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    docs?: MisaSaleDocOrderByRelationAggregateInput
+  }
+
+  export type MisaImportBatchWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: MisaImportBatchWhereInput | MisaImportBatchWhereInput[]
+    OR?: MisaImportBatchWhereInput[]
+    NOT?: MisaImportBatchWhereInput | MisaImportBatchWhereInput[]
+    loai?: StringFilter<"MisaImportBatch"> | string
+    tenFile?: StringFilter<"MisaImportBatch"> | string
+    kyBaoCao?: StringNullableFilter<"MisaImportBatch"> | string | null
+    tongDong?: IntFilter<"MisaImportBatch"> | number
+    docDuoc?: IntFilter<"MisaImportBatch"> | number
+    boQua?: IntFilter<"MisaImportBatch"> | number
+    soChungTu?: IntFilter<"MisaImportBatch"> | number
+    tongTien?: FloatFilter<"MisaImportBatch"> | number
+    tongThue?: FloatFilter<"MisaImportBatch"> | number
+    chiTiet?: StringNullableFilter<"MisaImportBatch"> | string | null
+    apply?: BoolFilter<"MisaImportBatch"> | boolean
+    userId?: StringNullableFilter<"MisaImportBatch"> | string | null
+    userName?: StringNullableFilter<"MisaImportBatch"> | string | null
+    createdAt?: DateTimeFilter<"MisaImportBatch"> | Date | string
+    docs?: MisaSaleDocListRelationFilter
+  }, "id">
+
+  export type MisaImportBatchOrderByWithAggregationInput = {
+    id?: SortOrder
+    loai?: SortOrder
+    tenFile?: SortOrder
+    kyBaoCao?: SortOrderInput | SortOrder
+    tongDong?: SortOrder
+    docDuoc?: SortOrder
+    boQua?: SortOrder
+    soChungTu?: SortOrder
+    tongTien?: SortOrder
+    tongThue?: SortOrder
+    chiTiet?: SortOrderInput | SortOrder
+    apply?: SortOrder
+    userId?: SortOrderInput | SortOrder
+    userName?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    _count?: MisaImportBatchCountOrderByAggregateInput
+    _avg?: MisaImportBatchAvgOrderByAggregateInput
+    _max?: MisaImportBatchMaxOrderByAggregateInput
+    _min?: MisaImportBatchMinOrderByAggregateInput
+    _sum?: MisaImportBatchSumOrderByAggregateInput
+  }
+
+  export type MisaImportBatchScalarWhereWithAggregatesInput = {
+    AND?: MisaImportBatchScalarWhereWithAggregatesInput | MisaImportBatchScalarWhereWithAggregatesInput[]
+    OR?: MisaImportBatchScalarWhereWithAggregatesInput[]
+    NOT?: MisaImportBatchScalarWhereWithAggregatesInput | MisaImportBatchScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"MisaImportBatch"> | string
+    loai?: StringWithAggregatesFilter<"MisaImportBatch"> | string
+    tenFile?: StringWithAggregatesFilter<"MisaImportBatch"> | string
+    kyBaoCao?: StringNullableWithAggregatesFilter<"MisaImportBatch"> | string | null
+    tongDong?: IntWithAggregatesFilter<"MisaImportBatch"> | number
+    docDuoc?: IntWithAggregatesFilter<"MisaImportBatch"> | number
+    boQua?: IntWithAggregatesFilter<"MisaImportBatch"> | number
+    soChungTu?: IntWithAggregatesFilter<"MisaImportBatch"> | number
+    tongTien?: FloatWithAggregatesFilter<"MisaImportBatch"> | number
+    tongThue?: FloatWithAggregatesFilter<"MisaImportBatch"> | number
+    chiTiet?: StringNullableWithAggregatesFilter<"MisaImportBatch"> | string | null
+    apply?: BoolWithAggregatesFilter<"MisaImportBatch"> | boolean
+    userId?: StringNullableWithAggregatesFilter<"MisaImportBatch"> | string | null
+    userName?: StringNullableWithAggregatesFilter<"MisaImportBatch"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"MisaImportBatch"> | Date | string
+  }
+
+  export type MisaSaleDocWhereInput = {
+    AND?: MisaSaleDocWhereInput | MisaSaleDocWhereInput[]
+    OR?: MisaSaleDocWhereInput[]
+    NOT?: MisaSaleDocWhereInput | MisaSaleDocWhereInput[]
+    id?: StringFilter<"MisaSaleDoc"> | string
+    soChungTu?: StringFilter<"MisaSaleDoc"> | string
+    soHoaDon?: StringNullableFilter<"MisaSaleDoc"> | string | null
+    ngayChungTu?: DateTimeNullableFilter<"MisaSaleDoc"> | Date | string | null
+    ngayHachToan?: DateTimeNullableFilter<"MisaSaleDoc"> | Date | string | null
+    ngayHoaDon?: DateTimeNullableFilter<"MisaSaleDoc"> | Date | string | null
+    maKhach?: StringNullableFilter<"MisaSaleDoc"> | string | null
+    tenKhach?: StringNullableFilter<"MisaSaleDoc"> | string | null
+    nguonTenKhach?: StringNullableFilter<"MisaSaleDoc"> | string | null
+    dienGiai?: StringNullableFilter<"MisaSaleDoc"> | string | null
+    customerId?: StringNullableFilter<"MisaSaleDoc"> | string | null
+    tongDoanhSo?: FloatFilter<"MisaSaleDoc"> | number
+    tongThue?: FloatFilter<"MisaSaleDoc"> | number
+    tongChietKhau?: FloatFilter<"MisaSaleDoc"> | number
+    tongTra?: FloatFilter<"MisaSaleDoc"> | number
+    thieuGiaVon?: BoolFilter<"MisaSaleDoc"> | boolean
+    batchId?: StringNullableFilter<"MisaSaleDoc"> | string | null
+    createdAt?: DateTimeFilter<"MisaSaleDoc"> | Date | string
+    updatedAt?: DateTimeFilter<"MisaSaleDoc"> | Date | string
+    batch?: XOR<MisaImportBatchNullableScalarRelationFilter, MisaImportBatchWhereInput> | null
+    lines?: MisaSaleLineListRelationFilter
+  }
+
+  export type MisaSaleDocOrderByWithRelationInput = {
+    id?: SortOrder
+    soChungTu?: SortOrder
+    soHoaDon?: SortOrderInput | SortOrder
+    ngayChungTu?: SortOrderInput | SortOrder
+    ngayHachToan?: SortOrderInput | SortOrder
+    ngayHoaDon?: SortOrderInput | SortOrder
+    maKhach?: SortOrderInput | SortOrder
+    tenKhach?: SortOrderInput | SortOrder
+    nguonTenKhach?: SortOrderInput | SortOrder
+    dienGiai?: SortOrderInput | SortOrder
+    customerId?: SortOrderInput | SortOrder
+    tongDoanhSo?: SortOrder
+    tongThue?: SortOrder
+    tongChietKhau?: SortOrder
+    tongTra?: SortOrder
+    thieuGiaVon?: SortOrder
+    batchId?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    batch?: MisaImportBatchOrderByWithRelationInput
+    lines?: MisaSaleLineOrderByRelationAggregateInput
+  }
+
+  export type MisaSaleDocWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    soChungTu?: string
+    AND?: MisaSaleDocWhereInput | MisaSaleDocWhereInput[]
+    OR?: MisaSaleDocWhereInput[]
+    NOT?: MisaSaleDocWhereInput | MisaSaleDocWhereInput[]
+    soHoaDon?: StringNullableFilter<"MisaSaleDoc"> | string | null
+    ngayChungTu?: DateTimeNullableFilter<"MisaSaleDoc"> | Date | string | null
+    ngayHachToan?: DateTimeNullableFilter<"MisaSaleDoc"> | Date | string | null
+    ngayHoaDon?: DateTimeNullableFilter<"MisaSaleDoc"> | Date | string | null
+    maKhach?: StringNullableFilter<"MisaSaleDoc"> | string | null
+    tenKhach?: StringNullableFilter<"MisaSaleDoc"> | string | null
+    nguonTenKhach?: StringNullableFilter<"MisaSaleDoc"> | string | null
+    dienGiai?: StringNullableFilter<"MisaSaleDoc"> | string | null
+    customerId?: StringNullableFilter<"MisaSaleDoc"> | string | null
+    tongDoanhSo?: FloatFilter<"MisaSaleDoc"> | number
+    tongThue?: FloatFilter<"MisaSaleDoc"> | number
+    tongChietKhau?: FloatFilter<"MisaSaleDoc"> | number
+    tongTra?: FloatFilter<"MisaSaleDoc"> | number
+    thieuGiaVon?: BoolFilter<"MisaSaleDoc"> | boolean
+    batchId?: StringNullableFilter<"MisaSaleDoc"> | string | null
+    createdAt?: DateTimeFilter<"MisaSaleDoc"> | Date | string
+    updatedAt?: DateTimeFilter<"MisaSaleDoc"> | Date | string
+    batch?: XOR<MisaImportBatchNullableScalarRelationFilter, MisaImportBatchWhereInput> | null
+    lines?: MisaSaleLineListRelationFilter
+  }, "id" | "soChungTu">
+
+  export type MisaSaleDocOrderByWithAggregationInput = {
+    id?: SortOrder
+    soChungTu?: SortOrder
+    soHoaDon?: SortOrderInput | SortOrder
+    ngayChungTu?: SortOrderInput | SortOrder
+    ngayHachToan?: SortOrderInput | SortOrder
+    ngayHoaDon?: SortOrderInput | SortOrder
+    maKhach?: SortOrderInput | SortOrder
+    tenKhach?: SortOrderInput | SortOrder
+    nguonTenKhach?: SortOrderInput | SortOrder
+    dienGiai?: SortOrderInput | SortOrder
+    customerId?: SortOrderInput | SortOrder
+    tongDoanhSo?: SortOrder
+    tongThue?: SortOrder
+    tongChietKhau?: SortOrder
+    tongTra?: SortOrder
+    thieuGiaVon?: SortOrder
+    batchId?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: MisaSaleDocCountOrderByAggregateInput
+    _avg?: MisaSaleDocAvgOrderByAggregateInput
+    _max?: MisaSaleDocMaxOrderByAggregateInput
+    _min?: MisaSaleDocMinOrderByAggregateInput
+    _sum?: MisaSaleDocSumOrderByAggregateInput
+  }
+
+  export type MisaSaleDocScalarWhereWithAggregatesInput = {
+    AND?: MisaSaleDocScalarWhereWithAggregatesInput | MisaSaleDocScalarWhereWithAggregatesInput[]
+    OR?: MisaSaleDocScalarWhereWithAggregatesInput[]
+    NOT?: MisaSaleDocScalarWhereWithAggregatesInput | MisaSaleDocScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"MisaSaleDoc"> | string
+    soChungTu?: StringWithAggregatesFilter<"MisaSaleDoc"> | string
+    soHoaDon?: StringNullableWithAggregatesFilter<"MisaSaleDoc"> | string | null
+    ngayChungTu?: DateTimeNullableWithAggregatesFilter<"MisaSaleDoc"> | Date | string | null
+    ngayHachToan?: DateTimeNullableWithAggregatesFilter<"MisaSaleDoc"> | Date | string | null
+    ngayHoaDon?: DateTimeNullableWithAggregatesFilter<"MisaSaleDoc"> | Date | string | null
+    maKhach?: StringNullableWithAggregatesFilter<"MisaSaleDoc"> | string | null
+    tenKhach?: StringNullableWithAggregatesFilter<"MisaSaleDoc"> | string | null
+    nguonTenKhach?: StringNullableWithAggregatesFilter<"MisaSaleDoc"> | string | null
+    dienGiai?: StringNullableWithAggregatesFilter<"MisaSaleDoc"> | string | null
+    customerId?: StringNullableWithAggregatesFilter<"MisaSaleDoc"> | string | null
+    tongDoanhSo?: FloatWithAggregatesFilter<"MisaSaleDoc"> | number
+    tongThue?: FloatWithAggregatesFilter<"MisaSaleDoc"> | number
+    tongChietKhau?: FloatWithAggregatesFilter<"MisaSaleDoc"> | number
+    tongTra?: FloatWithAggregatesFilter<"MisaSaleDoc"> | number
+    thieuGiaVon?: BoolWithAggregatesFilter<"MisaSaleDoc"> | boolean
+    batchId?: StringNullableWithAggregatesFilter<"MisaSaleDoc"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"MisaSaleDoc"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"MisaSaleDoc"> | Date | string
+  }
+
+  export type MisaSaleLineWhereInput = {
+    AND?: MisaSaleLineWhereInput | MisaSaleLineWhereInput[]
+    OR?: MisaSaleLineWhereInput[]
+    NOT?: MisaSaleLineWhereInput | MisaSaleLineWhereInput[]
+    id?: StringFilter<"MisaSaleLine"> | string
+    docId?: StringFilter<"MisaSaleLine"> | string
+    maHang?: StringFilter<"MisaSaleLine"> | string
+    tenHang?: StringNullableFilter<"MisaSaleLine"> | string | null
+    dvt?: StringNullableFilter<"MisaSaleLine"> | string | null
+    soLuong?: FloatFilter<"MisaSaleLine"> | number
+    donGia?: FloatFilter<"MisaSaleLine"> | number
+    doanhSo?: FloatFilter<"MisaSaleLine"> | number
+    chietKhau?: FloatFilter<"MisaSaleLine"> | number
+    soLuongTra?: FloatFilter<"MisaSaleLine"> | number
+    giaTriTra?: FloatFilter<"MisaSaleLine"> | number
+    giamGia?: FloatFilter<"MisaSaleLine"> | number
+    thueGtgt?: FloatFilter<"MisaSaleLine"> | number
+    tkThueGtgt?: StringNullableFilter<"MisaSaleLine"> | string | null
+    giaVon?: FloatNullableFilter<"MisaSaleLine"> | number | null
+    productId?: StringNullableFilter<"MisaSaleLine"> | string | null
+    dongSo?: IntNullableFilter<"MisaSaleLine"> | number | null
+    doc?: XOR<MisaSaleDocScalarRelationFilter, MisaSaleDocWhereInput>
+  }
+
+  export type MisaSaleLineOrderByWithRelationInput = {
+    id?: SortOrder
+    docId?: SortOrder
+    maHang?: SortOrder
+    tenHang?: SortOrderInput | SortOrder
+    dvt?: SortOrderInput | SortOrder
+    soLuong?: SortOrder
+    donGia?: SortOrder
+    doanhSo?: SortOrder
+    chietKhau?: SortOrder
+    soLuongTra?: SortOrder
+    giaTriTra?: SortOrder
+    giamGia?: SortOrder
+    thueGtgt?: SortOrder
+    tkThueGtgt?: SortOrderInput | SortOrder
+    giaVon?: SortOrderInput | SortOrder
+    productId?: SortOrderInput | SortOrder
+    dongSo?: SortOrderInput | SortOrder
+    doc?: MisaSaleDocOrderByWithRelationInput
+  }
+
+  export type MisaSaleLineWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: MisaSaleLineWhereInput | MisaSaleLineWhereInput[]
+    OR?: MisaSaleLineWhereInput[]
+    NOT?: MisaSaleLineWhereInput | MisaSaleLineWhereInput[]
+    docId?: StringFilter<"MisaSaleLine"> | string
+    maHang?: StringFilter<"MisaSaleLine"> | string
+    tenHang?: StringNullableFilter<"MisaSaleLine"> | string | null
+    dvt?: StringNullableFilter<"MisaSaleLine"> | string | null
+    soLuong?: FloatFilter<"MisaSaleLine"> | number
+    donGia?: FloatFilter<"MisaSaleLine"> | number
+    doanhSo?: FloatFilter<"MisaSaleLine"> | number
+    chietKhau?: FloatFilter<"MisaSaleLine"> | number
+    soLuongTra?: FloatFilter<"MisaSaleLine"> | number
+    giaTriTra?: FloatFilter<"MisaSaleLine"> | number
+    giamGia?: FloatFilter<"MisaSaleLine"> | number
+    thueGtgt?: FloatFilter<"MisaSaleLine"> | number
+    tkThueGtgt?: StringNullableFilter<"MisaSaleLine"> | string | null
+    giaVon?: FloatNullableFilter<"MisaSaleLine"> | number | null
+    productId?: StringNullableFilter<"MisaSaleLine"> | string | null
+    dongSo?: IntNullableFilter<"MisaSaleLine"> | number | null
+    doc?: XOR<MisaSaleDocScalarRelationFilter, MisaSaleDocWhereInput>
+  }, "id">
+
+  export type MisaSaleLineOrderByWithAggregationInput = {
+    id?: SortOrder
+    docId?: SortOrder
+    maHang?: SortOrder
+    tenHang?: SortOrderInput | SortOrder
+    dvt?: SortOrderInput | SortOrder
+    soLuong?: SortOrder
+    donGia?: SortOrder
+    doanhSo?: SortOrder
+    chietKhau?: SortOrder
+    soLuongTra?: SortOrder
+    giaTriTra?: SortOrder
+    giamGia?: SortOrder
+    thueGtgt?: SortOrder
+    tkThueGtgt?: SortOrderInput | SortOrder
+    giaVon?: SortOrderInput | SortOrder
+    productId?: SortOrderInput | SortOrder
+    dongSo?: SortOrderInput | SortOrder
+    _count?: MisaSaleLineCountOrderByAggregateInput
+    _avg?: MisaSaleLineAvgOrderByAggregateInput
+    _max?: MisaSaleLineMaxOrderByAggregateInput
+    _min?: MisaSaleLineMinOrderByAggregateInput
+    _sum?: MisaSaleLineSumOrderByAggregateInput
+  }
+
+  export type MisaSaleLineScalarWhereWithAggregatesInput = {
+    AND?: MisaSaleLineScalarWhereWithAggregatesInput | MisaSaleLineScalarWhereWithAggregatesInput[]
+    OR?: MisaSaleLineScalarWhereWithAggregatesInput[]
+    NOT?: MisaSaleLineScalarWhereWithAggregatesInput | MisaSaleLineScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"MisaSaleLine"> | string
+    docId?: StringWithAggregatesFilter<"MisaSaleLine"> | string
+    maHang?: StringWithAggregatesFilter<"MisaSaleLine"> | string
+    tenHang?: StringNullableWithAggregatesFilter<"MisaSaleLine"> | string | null
+    dvt?: StringNullableWithAggregatesFilter<"MisaSaleLine"> | string | null
+    soLuong?: FloatWithAggregatesFilter<"MisaSaleLine"> | number
+    donGia?: FloatWithAggregatesFilter<"MisaSaleLine"> | number
+    doanhSo?: FloatWithAggregatesFilter<"MisaSaleLine"> | number
+    chietKhau?: FloatWithAggregatesFilter<"MisaSaleLine"> | number
+    soLuongTra?: FloatWithAggregatesFilter<"MisaSaleLine"> | number
+    giaTriTra?: FloatWithAggregatesFilter<"MisaSaleLine"> | number
+    giamGia?: FloatWithAggregatesFilter<"MisaSaleLine"> | number
+    thueGtgt?: FloatWithAggregatesFilter<"MisaSaleLine"> | number
+    tkThueGtgt?: StringNullableWithAggregatesFilter<"MisaSaleLine"> | string | null
+    giaVon?: FloatNullableWithAggregatesFilter<"MisaSaleLine"> | number | null
+    productId?: StringNullableWithAggregatesFilter<"MisaSaleLine"> | string | null
+    dongSo?: IntNullableWithAggregatesFilter<"MisaSaleLine"> | number | null
   }
 
   export type BranchCreateInput = {
@@ -183615,6 +192636,8 @@ export namespace Prisma {
     change?: number
     status?: string
     createdByName?: string | null
+    salespersonId?: string | null
+    salespersonName?: string | null
     notes?: string | null
     returnedAt?: Date | string | null
     returnReason?: string | null
@@ -183650,6 +192673,8 @@ export namespace Prisma {
     status?: string
     createdBy: string
     createdByName?: string | null
+    salespersonId?: string | null
+    salespersonName?: string | null
     notes?: string | null
     returnedAt?: Date | string | null
     returnReason?: string | null
@@ -183681,6 +192706,8 @@ export namespace Prisma {
     change?: FloatFieldUpdateOperationsInput | number
     status?: StringFieldUpdateOperationsInput | string
     createdByName?: NullableStringFieldUpdateOperationsInput | string | null
+    salespersonId?: NullableStringFieldUpdateOperationsInput | string | null
+    salespersonName?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     returnedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     returnReason?: NullableStringFieldUpdateOperationsInput | string | null
@@ -183716,6 +192743,8 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     createdBy?: StringFieldUpdateOperationsInput | string
     createdByName?: NullableStringFieldUpdateOperationsInput | string | null
+    salespersonId?: NullableStringFieldUpdateOperationsInput | string | null
+    salespersonName?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     returnedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     returnReason?: NullableStringFieldUpdateOperationsInput | string | null
@@ -183749,6 +192778,8 @@ export namespace Prisma {
     status?: string
     createdBy: string
     createdByName?: string | null
+    salespersonId?: string | null
+    salespersonName?: string | null
     notes?: string | null
     returnedAt?: Date | string | null
     returnReason?: string | null
@@ -183778,6 +192809,8 @@ export namespace Prisma {
     change?: FloatFieldUpdateOperationsInput | number
     status?: StringFieldUpdateOperationsInput | string
     createdByName?: NullableStringFieldUpdateOperationsInput | string | null
+    salespersonId?: NullableStringFieldUpdateOperationsInput | string | null
+    salespersonName?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     returnedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     returnReason?: NullableStringFieldUpdateOperationsInput | string | null
@@ -183809,6 +192842,8 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     createdBy?: StringFieldUpdateOperationsInput | string
     createdByName?: NullableStringFieldUpdateOperationsInput | string | null
+    salespersonId?: NullableStringFieldUpdateOperationsInput | string | null
+    salespersonName?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     returnedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     returnReason?: NullableStringFieldUpdateOperationsInput | string | null
@@ -184575,6 +193610,11 @@ export namespace Prisma {
     status?: string
     notes?: string | null
     payable?: number
+    paymentTermDays?: number | null
+    paymentTerms?: string | null
+    paymentTermType?: string | null
+    paymentTermDom?: number | null
+    paymentTermMonthOffset?: number | null
     createdAt?: Date | string
     updatedAt?: Date | string
     purchaseOrders?: PurchaseOrderCreateNestedManyWithoutSupplierInput
@@ -184594,6 +193634,11 @@ export namespace Prisma {
     status?: string
     notes?: string | null
     payable?: number
+    paymentTermDays?: number | null
+    paymentTerms?: string | null
+    paymentTermType?: string | null
+    paymentTermDom?: number | null
+    paymentTermMonthOffset?: number | null
     createdAt?: Date | string
     updatedAt?: Date | string
     purchaseOrders?: PurchaseOrderUncheckedCreateNestedManyWithoutSupplierInput
@@ -184613,6 +193658,11 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     payable?: FloatFieldUpdateOperationsInput | number
+    paymentTermDays?: NullableIntFieldUpdateOperationsInput | number | null
+    paymentTerms?: NullableStringFieldUpdateOperationsInput | string | null
+    paymentTermType?: NullableStringFieldUpdateOperationsInput | string | null
+    paymentTermDom?: NullableIntFieldUpdateOperationsInput | number | null
+    paymentTermMonthOffset?: NullableIntFieldUpdateOperationsInput | number | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     purchaseOrders?: PurchaseOrderUpdateManyWithoutSupplierNestedInput
@@ -184632,6 +193682,11 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     payable?: FloatFieldUpdateOperationsInput | number
+    paymentTermDays?: NullableIntFieldUpdateOperationsInput | number | null
+    paymentTerms?: NullableStringFieldUpdateOperationsInput | string | null
+    paymentTermType?: NullableStringFieldUpdateOperationsInput | string | null
+    paymentTermDom?: NullableIntFieldUpdateOperationsInput | number | null
+    paymentTermMonthOffset?: NullableIntFieldUpdateOperationsInput | number | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     purchaseOrders?: PurchaseOrderUncheckedUpdateManyWithoutSupplierNestedInput
@@ -184651,6 +193706,11 @@ export namespace Prisma {
     status?: string
     notes?: string | null
     payable?: number
+    paymentTermDays?: number | null
+    paymentTerms?: string | null
+    paymentTermType?: string | null
+    paymentTermDom?: number | null
+    paymentTermMonthOffset?: number | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -184669,6 +193729,11 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     payable?: FloatFieldUpdateOperationsInput | number
+    paymentTermDays?: NullableIntFieldUpdateOperationsInput | number | null
+    paymentTerms?: NullableStringFieldUpdateOperationsInput | string | null
+    paymentTermType?: NullableStringFieldUpdateOperationsInput | string | null
+    paymentTermDom?: NullableIntFieldUpdateOperationsInput | number | null
+    paymentTermMonthOffset?: NullableIntFieldUpdateOperationsInput | number | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -184687,6 +193752,11 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     payable?: FloatFieldUpdateOperationsInput | number
+    paymentTermDays?: NullableIntFieldUpdateOperationsInput | number | null
+    paymentTerms?: NullableStringFieldUpdateOperationsInput | string | null
+    paymentTermType?: NullableStringFieldUpdateOperationsInput | string | null
+    paymentTermDom?: NullableIntFieldUpdateOperationsInput | number | null
+    paymentTermMonthOffset?: NullableIntFieldUpdateOperationsInput | number | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -185405,6 +194475,23 @@ export namespace Prisma {
     estimatedDate?: Date | string | null
     completedDate?: Date | string | null
     notes?: string | null
+    source?: string
+    productId?: string | null
+    productSku?: string | null
+    quantity?: number
+    branchId?: string | null
+    customerId?: string | null
+    transactionId?: string | null
+    soldReceiptNumber?: string | null
+    stockMovedAt?: Date | string | null
+    replacedStockAt?: Date | string | null
+    supplierId?: string | null
+    supplierName?: string | null
+    supplierBatchCode?: string | null
+    sentToSupplierAt?: Date | string | null
+    queuedForSupplierAt?: Date | string | null
+    supplierReturnedAt?: Date | string | null
+    newUnitIssuedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -185421,6 +194508,23 @@ export namespace Prisma {
     estimatedDate?: Date | string | null
     completedDate?: Date | string | null
     notes?: string | null
+    source?: string
+    productId?: string | null
+    productSku?: string | null
+    quantity?: number
+    branchId?: string | null
+    customerId?: string | null
+    transactionId?: string | null
+    soldReceiptNumber?: string | null
+    stockMovedAt?: Date | string | null
+    replacedStockAt?: Date | string | null
+    supplierId?: string | null
+    supplierName?: string | null
+    supplierBatchCode?: string | null
+    sentToSupplierAt?: Date | string | null
+    queuedForSupplierAt?: Date | string | null
+    supplierReturnedAt?: Date | string | null
+    newUnitIssuedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -185437,6 +194541,23 @@ export namespace Prisma {
     estimatedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     completedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
+    source?: StringFieldUpdateOperationsInput | string
+    productId?: NullableStringFieldUpdateOperationsInput | string | null
+    productSku?: NullableStringFieldUpdateOperationsInput | string | null
+    quantity?: IntFieldUpdateOperationsInput | number
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    customerId?: NullableStringFieldUpdateOperationsInput | string | null
+    transactionId?: NullableStringFieldUpdateOperationsInput | string | null
+    soldReceiptNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    stockMovedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    replacedStockAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    supplierId?: NullableStringFieldUpdateOperationsInput | string | null
+    supplierName?: NullableStringFieldUpdateOperationsInput | string | null
+    supplierBatchCode?: NullableStringFieldUpdateOperationsInput | string | null
+    sentToSupplierAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    queuedForSupplierAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    supplierReturnedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    newUnitIssuedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -185453,6 +194574,23 @@ export namespace Prisma {
     estimatedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     completedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
+    source?: StringFieldUpdateOperationsInput | string
+    productId?: NullableStringFieldUpdateOperationsInput | string | null
+    productSku?: NullableStringFieldUpdateOperationsInput | string | null
+    quantity?: IntFieldUpdateOperationsInput | number
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    customerId?: NullableStringFieldUpdateOperationsInput | string | null
+    transactionId?: NullableStringFieldUpdateOperationsInput | string | null
+    soldReceiptNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    stockMovedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    replacedStockAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    supplierId?: NullableStringFieldUpdateOperationsInput | string | null
+    supplierName?: NullableStringFieldUpdateOperationsInput | string | null
+    supplierBatchCode?: NullableStringFieldUpdateOperationsInput | string | null
+    sentToSupplierAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    queuedForSupplierAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    supplierReturnedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    newUnitIssuedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -185469,6 +194607,23 @@ export namespace Prisma {
     estimatedDate?: Date | string | null
     completedDate?: Date | string | null
     notes?: string | null
+    source?: string
+    productId?: string | null
+    productSku?: string | null
+    quantity?: number
+    branchId?: string | null
+    customerId?: string | null
+    transactionId?: string | null
+    soldReceiptNumber?: string | null
+    stockMovedAt?: Date | string | null
+    replacedStockAt?: Date | string | null
+    supplierId?: string | null
+    supplierName?: string | null
+    supplierBatchCode?: string | null
+    sentToSupplierAt?: Date | string | null
+    queuedForSupplierAt?: Date | string | null
+    supplierReturnedAt?: Date | string | null
+    newUnitIssuedAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -185485,6 +194640,23 @@ export namespace Prisma {
     estimatedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     completedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
+    source?: StringFieldUpdateOperationsInput | string
+    productId?: NullableStringFieldUpdateOperationsInput | string | null
+    productSku?: NullableStringFieldUpdateOperationsInput | string | null
+    quantity?: IntFieldUpdateOperationsInput | number
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    customerId?: NullableStringFieldUpdateOperationsInput | string | null
+    transactionId?: NullableStringFieldUpdateOperationsInput | string | null
+    soldReceiptNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    stockMovedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    replacedStockAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    supplierId?: NullableStringFieldUpdateOperationsInput | string | null
+    supplierName?: NullableStringFieldUpdateOperationsInput | string | null
+    supplierBatchCode?: NullableStringFieldUpdateOperationsInput | string | null
+    sentToSupplierAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    queuedForSupplierAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    supplierReturnedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    newUnitIssuedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -185501,6 +194673,23 @@ export namespace Prisma {
     estimatedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     completedDate?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
+    source?: StringFieldUpdateOperationsInput | string
+    productId?: NullableStringFieldUpdateOperationsInput | string | null
+    productSku?: NullableStringFieldUpdateOperationsInput | string | null
+    quantity?: IntFieldUpdateOperationsInput | number
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    customerId?: NullableStringFieldUpdateOperationsInput | string | null
+    transactionId?: NullableStringFieldUpdateOperationsInput | string | null
+    soldReceiptNumber?: NullableStringFieldUpdateOperationsInput | string | null
+    stockMovedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    replacedStockAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    supplierId?: NullableStringFieldUpdateOperationsInput | string | null
+    supplierName?: NullableStringFieldUpdateOperationsInput | string | null
+    supplierBatchCode?: NullableStringFieldUpdateOperationsInput | string | null
+    sentToSupplierAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    queuedForSupplierAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    supplierReturnedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    newUnitIssuedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -188167,6 +197356,7 @@ export namespace Prisma {
     returnReason?: string | null
     condition?: string | null
     restocked?: boolean
+    disposed?: boolean
     returnOrder: ReturnOrderCreateNestedOneWithoutItemsInput
   }
 
@@ -188181,6 +197371,7 @@ export namespace Prisma {
     returnReason?: string | null
     condition?: string | null
     restocked?: boolean
+    disposed?: boolean
   }
 
   export type ReturnItemUpdateInput = {
@@ -188193,6 +197384,7 @@ export namespace Prisma {
     returnReason?: NullableStringFieldUpdateOperationsInput | string | null
     condition?: NullableStringFieldUpdateOperationsInput | string | null
     restocked?: BoolFieldUpdateOperationsInput | boolean
+    disposed?: BoolFieldUpdateOperationsInput | boolean
     returnOrder?: ReturnOrderUpdateOneRequiredWithoutItemsNestedInput
   }
 
@@ -188207,6 +197399,7 @@ export namespace Prisma {
     returnReason?: NullableStringFieldUpdateOperationsInput | string | null
     condition?: NullableStringFieldUpdateOperationsInput | string | null
     restocked?: BoolFieldUpdateOperationsInput | boolean
+    disposed?: BoolFieldUpdateOperationsInput | boolean
   }
 
   export type ReturnItemCreateManyInput = {
@@ -188220,6 +197413,7 @@ export namespace Prisma {
     returnReason?: string | null
     condition?: string | null
     restocked?: boolean
+    disposed?: boolean
   }
 
   export type ReturnItemUpdateManyMutationInput = {
@@ -188232,6 +197426,7 @@ export namespace Prisma {
     returnReason?: NullableStringFieldUpdateOperationsInput | string | null
     condition?: NullableStringFieldUpdateOperationsInput | string | null
     restocked?: BoolFieldUpdateOperationsInput | boolean
+    disposed?: BoolFieldUpdateOperationsInput | boolean
   }
 
   export type ReturnItemUncheckedUpdateManyInput = {
@@ -188245,6 +197440,7 @@ export namespace Prisma {
     returnReason?: NullableStringFieldUpdateOperationsInput | string | null
     condition?: NullableStringFieldUpdateOperationsInput | string | null
     restocked?: BoolFieldUpdateOperationsInput | boolean
+    disposed?: BoolFieldUpdateOperationsInput | boolean
   }
 
   export type DebtEntryCreateInput = {
@@ -191493,6 +200689,7 @@ export namespace Prisma {
 
   export type OnlineOrderItemCreateInput = {
     id?: string
+    externalItemId?: string | null
     productName: string
     sku?: string | null
     quantity: number
@@ -191507,6 +200704,7 @@ export namespace Prisma {
     id?: string
     onlineOrderId: string
     productId?: string | null
+    externalItemId?: string | null
     productName: string
     sku?: string | null
     quantity: number
@@ -191517,6 +200715,7 @@ export namespace Prisma {
 
   export type OnlineOrderItemUpdateInput = {
     id?: StringFieldUpdateOperationsInput | string
+    externalItemId?: NullableStringFieldUpdateOperationsInput | string | null
     productName?: StringFieldUpdateOperationsInput | string
     sku?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
@@ -191531,6 +200730,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     onlineOrderId?: StringFieldUpdateOperationsInput | string
     productId?: NullableStringFieldUpdateOperationsInput | string | null
+    externalItemId?: NullableStringFieldUpdateOperationsInput | string | null
     productName?: StringFieldUpdateOperationsInput | string
     sku?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
@@ -191543,6 +200743,7 @@ export namespace Prisma {
     id?: string
     onlineOrderId: string
     productId?: string | null
+    externalItemId?: string | null
     productName: string
     sku?: string | null
     quantity: number
@@ -191553,6 +200754,7 @@ export namespace Prisma {
 
   export type OnlineOrderItemUpdateManyMutationInput = {
     id?: StringFieldUpdateOperationsInput | string
+    externalItemId?: NullableStringFieldUpdateOperationsInput | string | null
     productName?: StringFieldUpdateOperationsInput | string
     sku?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
@@ -191565,6 +200767,7 @@ export namespace Prisma {
     id?: StringFieldUpdateOperationsInput | string
     onlineOrderId?: StringFieldUpdateOperationsInput | string
     productId?: NullableStringFieldUpdateOperationsInput | string | null
+    externalItemId?: NullableStringFieldUpdateOperationsInput | string | null
     productName?: StringFieldUpdateOperationsInput | string
     sku?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
@@ -197278,8 +206481,11 @@ export namespace Prisma {
     overwriteNames?: boolean
     overwritePrices?: boolean
     overwriteStock?: boolean
+    overwriteDebt?: boolean
+    negateDebt?: boolean
     defaultCategoryId?: string | null
     defaultWarehouseId?: string | null
+    lastSyncTime?: string | null
     lastSyncAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -197299,8 +206505,11 @@ export namespace Prisma {
     overwriteNames?: boolean
     overwritePrices?: boolean
     overwriteStock?: boolean
+    overwriteDebt?: boolean
+    negateDebt?: boolean
     defaultCategoryId?: string | null
     defaultWarehouseId?: string | null
+    lastSyncTime?: string | null
     lastSyncAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -197320,8 +206529,11 @@ export namespace Prisma {
     overwriteNames?: BoolFieldUpdateOperationsInput | boolean
     overwritePrices?: BoolFieldUpdateOperationsInput | boolean
     overwriteStock?: BoolFieldUpdateOperationsInput | boolean
+    overwriteDebt?: BoolFieldUpdateOperationsInput | boolean
+    negateDebt?: BoolFieldUpdateOperationsInput | boolean
     defaultCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
     defaultWarehouseId?: NullableStringFieldUpdateOperationsInput | string | null
+    lastSyncTime?: NullableStringFieldUpdateOperationsInput | string | null
     lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -197341,8 +206553,11 @@ export namespace Prisma {
     overwriteNames?: BoolFieldUpdateOperationsInput | boolean
     overwritePrices?: BoolFieldUpdateOperationsInput | boolean
     overwriteStock?: BoolFieldUpdateOperationsInput | boolean
+    overwriteDebt?: BoolFieldUpdateOperationsInput | boolean
+    negateDebt?: BoolFieldUpdateOperationsInput | boolean
     defaultCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
     defaultWarehouseId?: NullableStringFieldUpdateOperationsInput | string | null
+    lastSyncTime?: NullableStringFieldUpdateOperationsInput | string | null
     lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -197362,8 +206577,11 @@ export namespace Prisma {
     overwriteNames?: boolean
     overwritePrices?: boolean
     overwriteStock?: boolean
+    overwriteDebt?: boolean
+    negateDebt?: boolean
     defaultCategoryId?: string | null
     defaultWarehouseId?: string | null
+    lastSyncTime?: string | null
     lastSyncAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -197383,8 +206601,11 @@ export namespace Prisma {
     overwriteNames?: BoolFieldUpdateOperationsInput | boolean
     overwritePrices?: BoolFieldUpdateOperationsInput | boolean
     overwriteStock?: BoolFieldUpdateOperationsInput | boolean
+    overwriteDebt?: BoolFieldUpdateOperationsInput | boolean
+    negateDebt?: BoolFieldUpdateOperationsInput | boolean
     defaultCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
     defaultWarehouseId?: NullableStringFieldUpdateOperationsInput | string | null
+    lastSyncTime?: NullableStringFieldUpdateOperationsInput | string | null
     lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -197404,8 +206625,11 @@ export namespace Prisma {
     overwriteNames?: BoolFieldUpdateOperationsInput | boolean
     overwritePrices?: BoolFieldUpdateOperationsInput | boolean
     overwriteStock?: BoolFieldUpdateOperationsInput | boolean
+    overwriteDebt?: BoolFieldUpdateOperationsInput | boolean
+    negateDebt?: BoolFieldUpdateOperationsInput | boolean
     defaultCategoryId?: NullableStringFieldUpdateOperationsInput | string | null
     defaultWarehouseId?: NullableStringFieldUpdateOperationsInput | string | null
+    lastSyncTime?: NullableStringFieldUpdateOperationsInput | string | null
     lastSyncAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -197612,6 +206836,698 @@ export namespace Prisma {
     heartbeatAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     attempts?: IntFieldUpdateOperationsInput | number
     finishedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  }
+
+  export type PrintTemplateCreateInput = {
+    id: string
+    name: string
+    type: string
+    htmlSource: string
+    linkedPrinter?: string
+    isDefault?: boolean
+    isBuiltIn?: boolean
+    daSuaTay?: boolean
+    updatedAt?: Date | string
+  }
+
+  export type PrintTemplateUncheckedCreateInput = {
+    id: string
+    name: string
+    type: string
+    htmlSource: string
+    linkedPrinter?: string
+    isDefault?: boolean
+    isBuiltIn?: boolean
+    daSuaTay?: boolean
+    updatedAt?: Date | string
+  }
+
+  export type PrintTemplateUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    type?: StringFieldUpdateOperationsInput | string
+    htmlSource?: StringFieldUpdateOperationsInput | string
+    linkedPrinter?: StringFieldUpdateOperationsInput | string
+    isDefault?: BoolFieldUpdateOperationsInput | boolean
+    isBuiltIn?: BoolFieldUpdateOperationsInput | boolean
+    daSuaTay?: BoolFieldUpdateOperationsInput | boolean
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PrintTemplateUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    type?: StringFieldUpdateOperationsInput | string
+    htmlSource?: StringFieldUpdateOperationsInput | string
+    linkedPrinter?: StringFieldUpdateOperationsInput | string
+    isDefault?: BoolFieldUpdateOperationsInput | boolean
+    isBuiltIn?: BoolFieldUpdateOperationsInput | boolean
+    daSuaTay?: BoolFieldUpdateOperationsInput | boolean
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PrintTemplateCreateManyInput = {
+    id: string
+    name: string
+    type: string
+    htmlSource: string
+    linkedPrinter?: string
+    isDefault?: boolean
+    isBuiltIn?: boolean
+    daSuaTay?: boolean
+    updatedAt?: Date | string
+  }
+
+  export type PrintTemplateUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    type?: StringFieldUpdateOperationsInput | string
+    htmlSource?: StringFieldUpdateOperationsInput | string
+    linkedPrinter?: StringFieldUpdateOperationsInput | string
+    isDefault?: BoolFieldUpdateOperationsInput | boolean
+    isBuiltIn?: BoolFieldUpdateOperationsInput | boolean
+    daSuaTay?: BoolFieldUpdateOperationsInput | boolean
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PrintTemplateUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    type?: StringFieldUpdateOperationsInput | string
+    htmlSource?: StringFieldUpdateOperationsInput | string
+    linkedPrinter?: StringFieldUpdateOperationsInput | string
+    isDefault?: BoolFieldUpdateOperationsInput | boolean
+    isBuiltIn?: BoolFieldUpdateOperationsInput | boolean
+    daSuaTay?: BoolFieldUpdateOperationsInput | boolean
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type AiReportCreateInput = {
+    id?: string
+    loai?: string
+    ky?: string
+    tuNgay?: string | null
+    denNgay?: string | null
+    tieuDe: string
+    noiDung: string
+    toolCalls?: string | null
+    createdBy?: string | null
+    createdByName?: string | null
+    branchId?: string | null
+    createdAt?: Date | string
+  }
+
+  export type AiReportUncheckedCreateInput = {
+    id?: string
+    loai?: string
+    ky?: string
+    tuNgay?: string | null
+    denNgay?: string | null
+    tieuDe: string
+    noiDung: string
+    toolCalls?: string | null
+    createdBy?: string | null
+    createdByName?: string | null
+    branchId?: string | null
+    createdAt?: Date | string
+  }
+
+  export type AiReportUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    loai?: StringFieldUpdateOperationsInput | string
+    ky?: StringFieldUpdateOperationsInput | string
+    tuNgay?: NullableStringFieldUpdateOperationsInput | string | null
+    denNgay?: NullableStringFieldUpdateOperationsInput | string | null
+    tieuDe?: StringFieldUpdateOperationsInput | string
+    noiDung?: StringFieldUpdateOperationsInput | string
+    toolCalls?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdByName?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type AiReportUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    loai?: StringFieldUpdateOperationsInput | string
+    ky?: StringFieldUpdateOperationsInput | string
+    tuNgay?: NullableStringFieldUpdateOperationsInput | string | null
+    denNgay?: NullableStringFieldUpdateOperationsInput | string | null
+    tieuDe?: StringFieldUpdateOperationsInput | string
+    noiDung?: StringFieldUpdateOperationsInput | string
+    toolCalls?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdByName?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type AiReportCreateManyInput = {
+    id?: string
+    loai?: string
+    ky?: string
+    tuNgay?: string | null
+    denNgay?: string | null
+    tieuDe: string
+    noiDung: string
+    toolCalls?: string | null
+    createdBy?: string | null
+    createdByName?: string | null
+    branchId?: string | null
+    createdAt?: Date | string
+  }
+
+  export type AiReportUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    loai?: StringFieldUpdateOperationsInput | string
+    ky?: StringFieldUpdateOperationsInput | string
+    tuNgay?: NullableStringFieldUpdateOperationsInput | string | null
+    denNgay?: NullableStringFieldUpdateOperationsInput | string | null
+    tieuDe?: StringFieldUpdateOperationsInput | string
+    noiDung?: StringFieldUpdateOperationsInput | string
+    toolCalls?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdByName?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type AiReportUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    loai?: StringFieldUpdateOperationsInput | string
+    ky?: StringFieldUpdateOperationsInput | string
+    tuNgay?: NullableStringFieldUpdateOperationsInput | string | null
+    denNgay?: NullableStringFieldUpdateOperationsInput | string | null
+    tieuDe?: StringFieldUpdateOperationsInput | string
+    noiDung?: StringFieldUpdateOperationsInput | string
+    toolCalls?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdByName?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type AiChatCreateInput = {
+    id?: string
+    tieuDe: string
+    noiDung: string
+    soLuot?: number
+    createdBy?: string | null
+    createdByName?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type AiChatUncheckedCreateInput = {
+    id?: string
+    tieuDe: string
+    noiDung: string
+    soLuot?: number
+    createdBy?: string | null
+    createdByName?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type AiChatUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    tieuDe?: StringFieldUpdateOperationsInput | string
+    noiDung?: StringFieldUpdateOperationsInput | string
+    soLuot?: IntFieldUpdateOperationsInput | number
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdByName?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type AiChatUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    tieuDe?: StringFieldUpdateOperationsInput | string
+    noiDung?: StringFieldUpdateOperationsInput | string
+    soLuot?: IntFieldUpdateOperationsInput | number
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdByName?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type AiChatCreateManyInput = {
+    id?: string
+    tieuDe: string
+    noiDung: string
+    soLuot?: number
+    createdBy?: string | null
+    createdByName?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type AiChatUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    tieuDe?: StringFieldUpdateOperationsInput | string
+    noiDung?: StringFieldUpdateOperationsInput | string
+    soLuot?: IntFieldUpdateOperationsInput | number
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdByName?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type AiChatUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    tieuDe?: StringFieldUpdateOperationsInput | string
+    noiDung?: StringFieldUpdateOperationsInput | string
+    soLuot?: IntFieldUpdateOperationsInput | number
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
+    createdByName?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MisaImportBatchCreateInput = {
+    id?: string
+    loai: string
+    tenFile: string
+    kyBaoCao?: string | null
+    tongDong?: number
+    docDuoc?: number
+    boQua?: number
+    soChungTu?: number
+    tongTien?: number
+    tongThue?: number
+    chiTiet?: string | null
+    apply?: boolean
+    userId?: string | null
+    userName?: string | null
+    createdAt?: Date | string
+    docs?: MisaSaleDocCreateNestedManyWithoutBatchInput
+  }
+
+  export type MisaImportBatchUncheckedCreateInput = {
+    id?: string
+    loai: string
+    tenFile: string
+    kyBaoCao?: string | null
+    tongDong?: number
+    docDuoc?: number
+    boQua?: number
+    soChungTu?: number
+    tongTien?: number
+    tongThue?: number
+    chiTiet?: string | null
+    apply?: boolean
+    userId?: string | null
+    userName?: string | null
+    createdAt?: Date | string
+    docs?: MisaSaleDocUncheckedCreateNestedManyWithoutBatchInput
+  }
+
+  export type MisaImportBatchUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    loai?: StringFieldUpdateOperationsInput | string
+    tenFile?: StringFieldUpdateOperationsInput | string
+    kyBaoCao?: NullableStringFieldUpdateOperationsInput | string | null
+    tongDong?: IntFieldUpdateOperationsInput | number
+    docDuoc?: IntFieldUpdateOperationsInput | number
+    boQua?: IntFieldUpdateOperationsInput | number
+    soChungTu?: IntFieldUpdateOperationsInput | number
+    tongTien?: FloatFieldUpdateOperationsInput | number
+    tongThue?: FloatFieldUpdateOperationsInput | number
+    chiTiet?: NullableStringFieldUpdateOperationsInput | string | null
+    apply?: BoolFieldUpdateOperationsInput | boolean
+    userId?: NullableStringFieldUpdateOperationsInput | string | null
+    userName?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    docs?: MisaSaleDocUpdateManyWithoutBatchNestedInput
+  }
+
+  export type MisaImportBatchUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    loai?: StringFieldUpdateOperationsInput | string
+    tenFile?: StringFieldUpdateOperationsInput | string
+    kyBaoCao?: NullableStringFieldUpdateOperationsInput | string | null
+    tongDong?: IntFieldUpdateOperationsInput | number
+    docDuoc?: IntFieldUpdateOperationsInput | number
+    boQua?: IntFieldUpdateOperationsInput | number
+    soChungTu?: IntFieldUpdateOperationsInput | number
+    tongTien?: FloatFieldUpdateOperationsInput | number
+    tongThue?: FloatFieldUpdateOperationsInput | number
+    chiTiet?: NullableStringFieldUpdateOperationsInput | string | null
+    apply?: BoolFieldUpdateOperationsInput | boolean
+    userId?: NullableStringFieldUpdateOperationsInput | string | null
+    userName?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    docs?: MisaSaleDocUncheckedUpdateManyWithoutBatchNestedInput
+  }
+
+  export type MisaImportBatchCreateManyInput = {
+    id?: string
+    loai: string
+    tenFile: string
+    kyBaoCao?: string | null
+    tongDong?: number
+    docDuoc?: number
+    boQua?: number
+    soChungTu?: number
+    tongTien?: number
+    tongThue?: number
+    chiTiet?: string | null
+    apply?: boolean
+    userId?: string | null
+    userName?: string | null
+    createdAt?: Date | string
+  }
+
+  export type MisaImportBatchUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    loai?: StringFieldUpdateOperationsInput | string
+    tenFile?: StringFieldUpdateOperationsInput | string
+    kyBaoCao?: NullableStringFieldUpdateOperationsInput | string | null
+    tongDong?: IntFieldUpdateOperationsInput | number
+    docDuoc?: IntFieldUpdateOperationsInput | number
+    boQua?: IntFieldUpdateOperationsInput | number
+    soChungTu?: IntFieldUpdateOperationsInput | number
+    tongTien?: FloatFieldUpdateOperationsInput | number
+    tongThue?: FloatFieldUpdateOperationsInput | number
+    chiTiet?: NullableStringFieldUpdateOperationsInput | string | null
+    apply?: BoolFieldUpdateOperationsInput | boolean
+    userId?: NullableStringFieldUpdateOperationsInput | string | null
+    userName?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MisaImportBatchUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    loai?: StringFieldUpdateOperationsInput | string
+    tenFile?: StringFieldUpdateOperationsInput | string
+    kyBaoCao?: NullableStringFieldUpdateOperationsInput | string | null
+    tongDong?: IntFieldUpdateOperationsInput | number
+    docDuoc?: IntFieldUpdateOperationsInput | number
+    boQua?: IntFieldUpdateOperationsInput | number
+    soChungTu?: IntFieldUpdateOperationsInput | number
+    tongTien?: FloatFieldUpdateOperationsInput | number
+    tongThue?: FloatFieldUpdateOperationsInput | number
+    chiTiet?: NullableStringFieldUpdateOperationsInput | string | null
+    apply?: BoolFieldUpdateOperationsInput | boolean
+    userId?: NullableStringFieldUpdateOperationsInput | string | null
+    userName?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MisaSaleDocCreateInput = {
+    id?: string
+    soChungTu: string
+    soHoaDon?: string | null
+    ngayChungTu?: Date | string | null
+    ngayHachToan?: Date | string | null
+    ngayHoaDon?: Date | string | null
+    maKhach?: string | null
+    tenKhach?: string | null
+    nguonTenKhach?: string | null
+    dienGiai?: string | null
+    customerId?: string | null
+    tongDoanhSo?: number
+    tongThue?: number
+    tongChietKhau?: number
+    tongTra?: number
+    thieuGiaVon?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    batch?: MisaImportBatchCreateNestedOneWithoutDocsInput
+    lines?: MisaSaleLineCreateNestedManyWithoutDocInput
+  }
+
+  export type MisaSaleDocUncheckedCreateInput = {
+    id?: string
+    soChungTu: string
+    soHoaDon?: string | null
+    ngayChungTu?: Date | string | null
+    ngayHachToan?: Date | string | null
+    ngayHoaDon?: Date | string | null
+    maKhach?: string | null
+    tenKhach?: string | null
+    nguonTenKhach?: string | null
+    dienGiai?: string | null
+    customerId?: string | null
+    tongDoanhSo?: number
+    tongThue?: number
+    tongChietKhau?: number
+    tongTra?: number
+    thieuGiaVon?: boolean
+    batchId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    lines?: MisaSaleLineUncheckedCreateNestedManyWithoutDocInput
+  }
+
+  export type MisaSaleDocUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    soChungTu?: StringFieldUpdateOperationsInput | string
+    soHoaDon?: NullableStringFieldUpdateOperationsInput | string | null
+    ngayChungTu?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHachToan?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHoaDon?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    maKhach?: NullableStringFieldUpdateOperationsInput | string | null
+    tenKhach?: NullableStringFieldUpdateOperationsInput | string | null
+    nguonTenKhach?: NullableStringFieldUpdateOperationsInput | string | null
+    dienGiai?: NullableStringFieldUpdateOperationsInput | string | null
+    customerId?: NullableStringFieldUpdateOperationsInput | string | null
+    tongDoanhSo?: FloatFieldUpdateOperationsInput | number
+    tongThue?: FloatFieldUpdateOperationsInput | number
+    tongChietKhau?: FloatFieldUpdateOperationsInput | number
+    tongTra?: FloatFieldUpdateOperationsInput | number
+    thieuGiaVon?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    batch?: MisaImportBatchUpdateOneWithoutDocsNestedInput
+    lines?: MisaSaleLineUpdateManyWithoutDocNestedInput
+  }
+
+  export type MisaSaleDocUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    soChungTu?: StringFieldUpdateOperationsInput | string
+    soHoaDon?: NullableStringFieldUpdateOperationsInput | string | null
+    ngayChungTu?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHachToan?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHoaDon?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    maKhach?: NullableStringFieldUpdateOperationsInput | string | null
+    tenKhach?: NullableStringFieldUpdateOperationsInput | string | null
+    nguonTenKhach?: NullableStringFieldUpdateOperationsInput | string | null
+    dienGiai?: NullableStringFieldUpdateOperationsInput | string | null
+    customerId?: NullableStringFieldUpdateOperationsInput | string | null
+    tongDoanhSo?: FloatFieldUpdateOperationsInput | number
+    tongThue?: FloatFieldUpdateOperationsInput | number
+    tongChietKhau?: FloatFieldUpdateOperationsInput | number
+    tongTra?: FloatFieldUpdateOperationsInput | number
+    thieuGiaVon?: BoolFieldUpdateOperationsInput | boolean
+    batchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    lines?: MisaSaleLineUncheckedUpdateManyWithoutDocNestedInput
+  }
+
+  export type MisaSaleDocCreateManyInput = {
+    id?: string
+    soChungTu: string
+    soHoaDon?: string | null
+    ngayChungTu?: Date | string | null
+    ngayHachToan?: Date | string | null
+    ngayHoaDon?: Date | string | null
+    maKhach?: string | null
+    tenKhach?: string | null
+    nguonTenKhach?: string | null
+    dienGiai?: string | null
+    customerId?: string | null
+    tongDoanhSo?: number
+    tongThue?: number
+    tongChietKhau?: number
+    tongTra?: number
+    thieuGiaVon?: boolean
+    batchId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type MisaSaleDocUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    soChungTu?: StringFieldUpdateOperationsInput | string
+    soHoaDon?: NullableStringFieldUpdateOperationsInput | string | null
+    ngayChungTu?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHachToan?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHoaDon?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    maKhach?: NullableStringFieldUpdateOperationsInput | string | null
+    tenKhach?: NullableStringFieldUpdateOperationsInput | string | null
+    nguonTenKhach?: NullableStringFieldUpdateOperationsInput | string | null
+    dienGiai?: NullableStringFieldUpdateOperationsInput | string | null
+    customerId?: NullableStringFieldUpdateOperationsInput | string | null
+    tongDoanhSo?: FloatFieldUpdateOperationsInput | number
+    tongThue?: FloatFieldUpdateOperationsInput | number
+    tongChietKhau?: FloatFieldUpdateOperationsInput | number
+    tongTra?: FloatFieldUpdateOperationsInput | number
+    thieuGiaVon?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MisaSaleDocUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    soChungTu?: StringFieldUpdateOperationsInput | string
+    soHoaDon?: NullableStringFieldUpdateOperationsInput | string | null
+    ngayChungTu?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHachToan?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHoaDon?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    maKhach?: NullableStringFieldUpdateOperationsInput | string | null
+    tenKhach?: NullableStringFieldUpdateOperationsInput | string | null
+    nguonTenKhach?: NullableStringFieldUpdateOperationsInput | string | null
+    dienGiai?: NullableStringFieldUpdateOperationsInput | string | null
+    customerId?: NullableStringFieldUpdateOperationsInput | string | null
+    tongDoanhSo?: FloatFieldUpdateOperationsInput | number
+    tongThue?: FloatFieldUpdateOperationsInput | number
+    tongChietKhau?: FloatFieldUpdateOperationsInput | number
+    tongTra?: FloatFieldUpdateOperationsInput | number
+    thieuGiaVon?: BoolFieldUpdateOperationsInput | boolean
+    batchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MisaSaleLineCreateInput = {
+    id?: string
+    maHang: string
+    tenHang?: string | null
+    dvt?: string | null
+    soLuong?: number
+    donGia?: number
+    doanhSo?: number
+    chietKhau?: number
+    soLuongTra?: number
+    giaTriTra?: number
+    giamGia?: number
+    thueGtgt?: number
+    tkThueGtgt?: string | null
+    giaVon?: number | null
+    productId?: string | null
+    dongSo?: number | null
+    doc: MisaSaleDocCreateNestedOneWithoutLinesInput
+  }
+
+  export type MisaSaleLineUncheckedCreateInput = {
+    id?: string
+    docId: string
+    maHang: string
+    tenHang?: string | null
+    dvt?: string | null
+    soLuong?: number
+    donGia?: number
+    doanhSo?: number
+    chietKhau?: number
+    soLuongTra?: number
+    giaTriTra?: number
+    giamGia?: number
+    thueGtgt?: number
+    tkThueGtgt?: string | null
+    giaVon?: number | null
+    productId?: string | null
+    dongSo?: number | null
+  }
+
+  export type MisaSaleLineUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    maHang?: StringFieldUpdateOperationsInput | string
+    tenHang?: NullableStringFieldUpdateOperationsInput | string | null
+    dvt?: NullableStringFieldUpdateOperationsInput | string | null
+    soLuong?: FloatFieldUpdateOperationsInput | number
+    donGia?: FloatFieldUpdateOperationsInput | number
+    doanhSo?: FloatFieldUpdateOperationsInput | number
+    chietKhau?: FloatFieldUpdateOperationsInput | number
+    soLuongTra?: FloatFieldUpdateOperationsInput | number
+    giaTriTra?: FloatFieldUpdateOperationsInput | number
+    giamGia?: FloatFieldUpdateOperationsInput | number
+    thueGtgt?: FloatFieldUpdateOperationsInput | number
+    tkThueGtgt?: NullableStringFieldUpdateOperationsInput | string | null
+    giaVon?: NullableFloatFieldUpdateOperationsInput | number | null
+    productId?: NullableStringFieldUpdateOperationsInput | string | null
+    dongSo?: NullableIntFieldUpdateOperationsInput | number | null
+    doc?: MisaSaleDocUpdateOneRequiredWithoutLinesNestedInput
+  }
+
+  export type MisaSaleLineUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    docId?: StringFieldUpdateOperationsInput | string
+    maHang?: StringFieldUpdateOperationsInput | string
+    tenHang?: NullableStringFieldUpdateOperationsInput | string | null
+    dvt?: NullableStringFieldUpdateOperationsInput | string | null
+    soLuong?: FloatFieldUpdateOperationsInput | number
+    donGia?: FloatFieldUpdateOperationsInput | number
+    doanhSo?: FloatFieldUpdateOperationsInput | number
+    chietKhau?: FloatFieldUpdateOperationsInput | number
+    soLuongTra?: FloatFieldUpdateOperationsInput | number
+    giaTriTra?: FloatFieldUpdateOperationsInput | number
+    giamGia?: FloatFieldUpdateOperationsInput | number
+    thueGtgt?: FloatFieldUpdateOperationsInput | number
+    tkThueGtgt?: NullableStringFieldUpdateOperationsInput | string | null
+    giaVon?: NullableFloatFieldUpdateOperationsInput | number | null
+    productId?: NullableStringFieldUpdateOperationsInput | string | null
+    dongSo?: NullableIntFieldUpdateOperationsInput | number | null
+  }
+
+  export type MisaSaleLineCreateManyInput = {
+    id?: string
+    docId: string
+    maHang: string
+    tenHang?: string | null
+    dvt?: string | null
+    soLuong?: number
+    donGia?: number
+    doanhSo?: number
+    chietKhau?: number
+    soLuongTra?: number
+    giaTriTra?: number
+    giamGia?: number
+    thueGtgt?: number
+    tkThueGtgt?: string | null
+    giaVon?: number | null
+    productId?: string | null
+    dongSo?: number | null
+  }
+
+  export type MisaSaleLineUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    maHang?: StringFieldUpdateOperationsInput | string
+    tenHang?: NullableStringFieldUpdateOperationsInput | string | null
+    dvt?: NullableStringFieldUpdateOperationsInput | string | null
+    soLuong?: FloatFieldUpdateOperationsInput | number
+    donGia?: FloatFieldUpdateOperationsInput | number
+    doanhSo?: FloatFieldUpdateOperationsInput | number
+    chietKhau?: FloatFieldUpdateOperationsInput | number
+    soLuongTra?: FloatFieldUpdateOperationsInput | number
+    giaTriTra?: FloatFieldUpdateOperationsInput | number
+    giamGia?: FloatFieldUpdateOperationsInput | number
+    thueGtgt?: FloatFieldUpdateOperationsInput | number
+    tkThueGtgt?: NullableStringFieldUpdateOperationsInput | string | null
+    giaVon?: NullableFloatFieldUpdateOperationsInput | number | null
+    productId?: NullableStringFieldUpdateOperationsInput | string | null
+    dongSo?: NullableIntFieldUpdateOperationsInput | number | null
+  }
+
+  export type MisaSaleLineUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    docId?: StringFieldUpdateOperationsInput | string
+    maHang?: StringFieldUpdateOperationsInput | string
+    tenHang?: NullableStringFieldUpdateOperationsInput | string | null
+    dvt?: NullableStringFieldUpdateOperationsInput | string | null
+    soLuong?: FloatFieldUpdateOperationsInput | number
+    donGia?: FloatFieldUpdateOperationsInput | number
+    doanhSo?: FloatFieldUpdateOperationsInput | number
+    chietKhau?: FloatFieldUpdateOperationsInput | number
+    soLuongTra?: FloatFieldUpdateOperationsInput | number
+    giaTriTra?: FloatFieldUpdateOperationsInput | number
+    giamGia?: FloatFieldUpdateOperationsInput | number
+    thueGtgt?: FloatFieldUpdateOperationsInput | number
+    tkThueGtgt?: NullableStringFieldUpdateOperationsInput | string | null
+    giaVon?: NullableFloatFieldUpdateOperationsInput | number | null
+    productId?: NullableStringFieldUpdateOperationsInput | string | null
+    dongSo?: NullableIntFieldUpdateOperationsInput | number | null
   }
 
   export type StringFilter<$PrismaModel = never> = {
@@ -198817,6 +208733,8 @@ export namespace Prisma {
     status?: SortOrder
     createdBy?: SortOrder
     createdByName?: SortOrder
+    salespersonId?: SortOrder
+    salespersonName?: SortOrder
     notes?: SortOrder
     returnedAt?: SortOrder
     returnReason?: SortOrder
@@ -198857,6 +208775,8 @@ export namespace Prisma {
     status?: SortOrder
     createdBy?: SortOrder
     createdByName?: SortOrder
+    salespersonId?: SortOrder
+    salespersonName?: SortOrder
     notes?: SortOrder
     returnedAt?: SortOrder
     returnReason?: SortOrder
@@ -198888,6 +208808,8 @@ export namespace Prisma {
     status?: SortOrder
     createdBy?: SortOrder
     createdByName?: SortOrder
+    salespersonId?: SortOrder
+    salespersonName?: SortOrder
     notes?: SortOrder
     returnedAt?: SortOrder
     returnReason?: SortOrder
@@ -199358,6 +209280,11 @@ export namespace Prisma {
     status?: SortOrder
     notes?: SortOrder
     payable?: SortOrder
+    paymentTermDays?: SortOrder
+    paymentTerms?: SortOrder
+    paymentTermType?: SortOrder
+    paymentTermDom?: SortOrder
+    paymentTermMonthOffset?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -199366,6 +209293,9 @@ export namespace Prisma {
     totalOrders?: SortOrder
     totalValue?: SortOrder
     payable?: SortOrder
+    paymentTermDays?: SortOrder
+    paymentTermDom?: SortOrder
+    paymentTermMonthOffset?: SortOrder
   }
 
   export type SupplierMaxOrderByAggregateInput = {
@@ -199382,6 +209312,11 @@ export namespace Prisma {
     status?: SortOrder
     notes?: SortOrder
     payable?: SortOrder
+    paymentTermDays?: SortOrder
+    paymentTerms?: SortOrder
+    paymentTermType?: SortOrder
+    paymentTermDom?: SortOrder
+    paymentTermMonthOffset?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -199400,6 +209335,11 @@ export namespace Prisma {
     status?: SortOrder
     notes?: SortOrder
     payable?: SortOrder
+    paymentTermDays?: SortOrder
+    paymentTerms?: SortOrder
+    paymentTermType?: SortOrder
+    paymentTermDom?: SortOrder
+    paymentTermMonthOffset?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -199408,6 +209348,9 @@ export namespace Prisma {
     totalOrders?: SortOrder
     totalValue?: SortOrder
     payable?: SortOrder
+    paymentTermDays?: SortOrder
+    paymentTermDom?: SortOrder
+    paymentTermMonthOffset?: SortOrder
   }
 
   export type SupplierNullableScalarRelationFilter = {
@@ -199778,12 +209721,30 @@ export namespace Prisma {
     estimatedDate?: SortOrder
     completedDate?: SortOrder
     notes?: SortOrder
+    source?: SortOrder
+    productId?: SortOrder
+    productSku?: SortOrder
+    quantity?: SortOrder
+    branchId?: SortOrder
+    customerId?: SortOrder
+    transactionId?: SortOrder
+    soldReceiptNumber?: SortOrder
+    stockMovedAt?: SortOrder
+    replacedStockAt?: SortOrder
+    supplierId?: SortOrder
+    supplierName?: SortOrder
+    supplierBatchCode?: SortOrder
+    sentToSupplierAt?: SortOrder
+    queuedForSupplierAt?: SortOrder
+    supplierReturnedAt?: SortOrder
+    newUnitIssuedAt?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
 
   export type RepairAvgOrderByAggregateInput = {
     cost?: SortOrder
+    quantity?: SortOrder
   }
 
   export type RepairMaxOrderByAggregateInput = {
@@ -199798,6 +209759,23 @@ export namespace Prisma {
     estimatedDate?: SortOrder
     completedDate?: SortOrder
     notes?: SortOrder
+    source?: SortOrder
+    productId?: SortOrder
+    productSku?: SortOrder
+    quantity?: SortOrder
+    branchId?: SortOrder
+    customerId?: SortOrder
+    transactionId?: SortOrder
+    soldReceiptNumber?: SortOrder
+    stockMovedAt?: SortOrder
+    replacedStockAt?: SortOrder
+    supplierId?: SortOrder
+    supplierName?: SortOrder
+    supplierBatchCode?: SortOrder
+    sentToSupplierAt?: SortOrder
+    queuedForSupplierAt?: SortOrder
+    supplierReturnedAt?: SortOrder
+    newUnitIssuedAt?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -199814,12 +209792,30 @@ export namespace Prisma {
     estimatedDate?: SortOrder
     completedDate?: SortOrder
     notes?: SortOrder
+    source?: SortOrder
+    productId?: SortOrder
+    productSku?: SortOrder
+    quantity?: SortOrder
+    branchId?: SortOrder
+    customerId?: SortOrder
+    transactionId?: SortOrder
+    soldReceiptNumber?: SortOrder
+    stockMovedAt?: SortOrder
+    replacedStockAt?: SortOrder
+    supplierId?: SortOrder
+    supplierName?: SortOrder
+    supplierBatchCode?: SortOrder
+    sentToSupplierAt?: SortOrder
+    queuedForSupplierAt?: SortOrder
+    supplierReturnedAt?: SortOrder
+    newUnitIssuedAt?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
 
   export type RepairSumOrderByAggregateInput = {
     cost?: SortOrder
+    quantity?: SortOrder
   }
 
   export type QuotationCountOrderByAggregateInput = {
@@ -201271,6 +211267,7 @@ export namespace Prisma {
     returnReason?: SortOrder
     condition?: SortOrder
     restocked?: SortOrder
+    disposed?: SortOrder
   }
 
   export type ReturnItemAvgOrderByAggregateInput = {
@@ -201289,6 +211286,7 @@ export namespace Prisma {
     returnReason?: SortOrder
     condition?: SortOrder
     restocked?: SortOrder
+    disposed?: SortOrder
   }
 
   export type ReturnItemMinOrderByAggregateInput = {
@@ -201302,6 +211300,7 @@ export namespace Prisma {
     returnReason?: SortOrder
     condition?: SortOrder
     restocked?: SortOrder
+    disposed?: SortOrder
   }
 
   export type ReturnItemSumOrderByAggregateInput = {
@@ -203094,6 +213093,7 @@ export namespace Prisma {
     id?: SortOrder
     onlineOrderId?: SortOrder
     productId?: SortOrder
+    externalItemId?: SortOrder
     productName?: SortOrder
     sku?: SortOrder
     quantity?: SortOrder
@@ -203113,6 +213113,7 @@ export namespace Prisma {
     id?: SortOrder
     onlineOrderId?: SortOrder
     productId?: SortOrder
+    externalItemId?: SortOrder
     productName?: SortOrder
     sku?: SortOrder
     quantity?: SortOrder
@@ -203125,6 +213126,7 @@ export namespace Prisma {
     id?: SortOrder
     onlineOrderId?: SortOrder
     productId?: SortOrder
+    externalItemId?: SortOrder
     productName?: SortOrder
     sku?: SortOrder
     quantity?: SortOrder
@@ -206224,8 +216226,11 @@ export namespace Prisma {
     overwriteNames?: SortOrder
     overwritePrices?: SortOrder
     overwriteStock?: SortOrder
+    overwriteDebt?: SortOrder
+    negateDebt?: SortOrder
     defaultCategoryId?: SortOrder
     defaultWarehouseId?: SortOrder
+    lastSyncTime?: SortOrder
     lastSyncAt?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -206245,8 +216250,11 @@ export namespace Prisma {
     overwriteNames?: SortOrder
     overwritePrices?: SortOrder
     overwriteStock?: SortOrder
+    overwriteDebt?: SortOrder
+    negateDebt?: SortOrder
     defaultCategoryId?: SortOrder
     defaultWarehouseId?: SortOrder
+    lastSyncTime?: SortOrder
     lastSyncAt?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -206266,8 +216274,11 @@ export namespace Prisma {
     overwriteNames?: SortOrder
     overwritePrices?: SortOrder
     overwriteStock?: SortOrder
+    overwriteDebt?: SortOrder
+    negateDebt?: SortOrder
     defaultCategoryId?: SortOrder
     defaultWarehouseId?: SortOrder
+    lastSyncTime?: SortOrder
     lastSyncAt?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -206381,6 +216392,396 @@ export namespace Prisma {
     skipped?: SortOrder
     failed?: SortOrder
     attempts?: SortOrder
+  }
+
+  export type PrintTemplateCountOrderByAggregateInput = {
+    id?: SortOrder
+    name?: SortOrder
+    type?: SortOrder
+    htmlSource?: SortOrder
+    linkedPrinter?: SortOrder
+    isDefault?: SortOrder
+    isBuiltIn?: SortOrder
+    daSuaTay?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type PrintTemplateMaxOrderByAggregateInput = {
+    id?: SortOrder
+    name?: SortOrder
+    type?: SortOrder
+    htmlSource?: SortOrder
+    linkedPrinter?: SortOrder
+    isDefault?: SortOrder
+    isBuiltIn?: SortOrder
+    daSuaTay?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type PrintTemplateMinOrderByAggregateInput = {
+    id?: SortOrder
+    name?: SortOrder
+    type?: SortOrder
+    htmlSource?: SortOrder
+    linkedPrinter?: SortOrder
+    isDefault?: SortOrder
+    isBuiltIn?: SortOrder
+    daSuaTay?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type AiReportCountOrderByAggregateInput = {
+    id?: SortOrder
+    loai?: SortOrder
+    ky?: SortOrder
+    tuNgay?: SortOrder
+    denNgay?: SortOrder
+    tieuDe?: SortOrder
+    noiDung?: SortOrder
+    toolCalls?: SortOrder
+    createdBy?: SortOrder
+    createdByName?: SortOrder
+    branchId?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type AiReportMaxOrderByAggregateInput = {
+    id?: SortOrder
+    loai?: SortOrder
+    ky?: SortOrder
+    tuNgay?: SortOrder
+    denNgay?: SortOrder
+    tieuDe?: SortOrder
+    noiDung?: SortOrder
+    toolCalls?: SortOrder
+    createdBy?: SortOrder
+    createdByName?: SortOrder
+    branchId?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type AiReportMinOrderByAggregateInput = {
+    id?: SortOrder
+    loai?: SortOrder
+    ky?: SortOrder
+    tuNgay?: SortOrder
+    denNgay?: SortOrder
+    tieuDe?: SortOrder
+    noiDung?: SortOrder
+    toolCalls?: SortOrder
+    createdBy?: SortOrder
+    createdByName?: SortOrder
+    branchId?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type AiChatCountOrderByAggregateInput = {
+    id?: SortOrder
+    tieuDe?: SortOrder
+    noiDung?: SortOrder
+    soLuot?: SortOrder
+    createdBy?: SortOrder
+    createdByName?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type AiChatAvgOrderByAggregateInput = {
+    soLuot?: SortOrder
+  }
+
+  export type AiChatMaxOrderByAggregateInput = {
+    id?: SortOrder
+    tieuDe?: SortOrder
+    noiDung?: SortOrder
+    soLuot?: SortOrder
+    createdBy?: SortOrder
+    createdByName?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type AiChatMinOrderByAggregateInput = {
+    id?: SortOrder
+    tieuDe?: SortOrder
+    noiDung?: SortOrder
+    soLuot?: SortOrder
+    createdBy?: SortOrder
+    createdByName?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type AiChatSumOrderByAggregateInput = {
+    soLuot?: SortOrder
+  }
+
+  export type MisaSaleDocListRelationFilter = {
+    every?: MisaSaleDocWhereInput
+    some?: MisaSaleDocWhereInput
+    none?: MisaSaleDocWhereInput
+  }
+
+  export type MisaSaleDocOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type MisaImportBatchCountOrderByAggregateInput = {
+    id?: SortOrder
+    loai?: SortOrder
+    tenFile?: SortOrder
+    kyBaoCao?: SortOrder
+    tongDong?: SortOrder
+    docDuoc?: SortOrder
+    boQua?: SortOrder
+    soChungTu?: SortOrder
+    tongTien?: SortOrder
+    tongThue?: SortOrder
+    chiTiet?: SortOrder
+    apply?: SortOrder
+    userId?: SortOrder
+    userName?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type MisaImportBatchAvgOrderByAggregateInput = {
+    tongDong?: SortOrder
+    docDuoc?: SortOrder
+    boQua?: SortOrder
+    soChungTu?: SortOrder
+    tongTien?: SortOrder
+    tongThue?: SortOrder
+  }
+
+  export type MisaImportBatchMaxOrderByAggregateInput = {
+    id?: SortOrder
+    loai?: SortOrder
+    tenFile?: SortOrder
+    kyBaoCao?: SortOrder
+    tongDong?: SortOrder
+    docDuoc?: SortOrder
+    boQua?: SortOrder
+    soChungTu?: SortOrder
+    tongTien?: SortOrder
+    tongThue?: SortOrder
+    chiTiet?: SortOrder
+    apply?: SortOrder
+    userId?: SortOrder
+    userName?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type MisaImportBatchMinOrderByAggregateInput = {
+    id?: SortOrder
+    loai?: SortOrder
+    tenFile?: SortOrder
+    kyBaoCao?: SortOrder
+    tongDong?: SortOrder
+    docDuoc?: SortOrder
+    boQua?: SortOrder
+    soChungTu?: SortOrder
+    tongTien?: SortOrder
+    tongThue?: SortOrder
+    chiTiet?: SortOrder
+    apply?: SortOrder
+    userId?: SortOrder
+    userName?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type MisaImportBatchSumOrderByAggregateInput = {
+    tongDong?: SortOrder
+    docDuoc?: SortOrder
+    boQua?: SortOrder
+    soChungTu?: SortOrder
+    tongTien?: SortOrder
+    tongThue?: SortOrder
+  }
+
+  export type MisaImportBatchNullableScalarRelationFilter = {
+    is?: MisaImportBatchWhereInput | null
+    isNot?: MisaImportBatchWhereInput | null
+  }
+
+  export type MisaSaleLineListRelationFilter = {
+    every?: MisaSaleLineWhereInput
+    some?: MisaSaleLineWhereInput
+    none?: MisaSaleLineWhereInput
+  }
+
+  export type MisaSaleLineOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type MisaSaleDocCountOrderByAggregateInput = {
+    id?: SortOrder
+    soChungTu?: SortOrder
+    soHoaDon?: SortOrder
+    ngayChungTu?: SortOrder
+    ngayHachToan?: SortOrder
+    ngayHoaDon?: SortOrder
+    maKhach?: SortOrder
+    tenKhach?: SortOrder
+    nguonTenKhach?: SortOrder
+    dienGiai?: SortOrder
+    customerId?: SortOrder
+    tongDoanhSo?: SortOrder
+    tongThue?: SortOrder
+    tongChietKhau?: SortOrder
+    tongTra?: SortOrder
+    thieuGiaVon?: SortOrder
+    batchId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type MisaSaleDocAvgOrderByAggregateInput = {
+    tongDoanhSo?: SortOrder
+    tongThue?: SortOrder
+    tongChietKhau?: SortOrder
+    tongTra?: SortOrder
+  }
+
+  export type MisaSaleDocMaxOrderByAggregateInput = {
+    id?: SortOrder
+    soChungTu?: SortOrder
+    soHoaDon?: SortOrder
+    ngayChungTu?: SortOrder
+    ngayHachToan?: SortOrder
+    ngayHoaDon?: SortOrder
+    maKhach?: SortOrder
+    tenKhach?: SortOrder
+    nguonTenKhach?: SortOrder
+    dienGiai?: SortOrder
+    customerId?: SortOrder
+    tongDoanhSo?: SortOrder
+    tongThue?: SortOrder
+    tongChietKhau?: SortOrder
+    tongTra?: SortOrder
+    thieuGiaVon?: SortOrder
+    batchId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type MisaSaleDocMinOrderByAggregateInput = {
+    id?: SortOrder
+    soChungTu?: SortOrder
+    soHoaDon?: SortOrder
+    ngayChungTu?: SortOrder
+    ngayHachToan?: SortOrder
+    ngayHoaDon?: SortOrder
+    maKhach?: SortOrder
+    tenKhach?: SortOrder
+    nguonTenKhach?: SortOrder
+    dienGiai?: SortOrder
+    customerId?: SortOrder
+    tongDoanhSo?: SortOrder
+    tongThue?: SortOrder
+    tongChietKhau?: SortOrder
+    tongTra?: SortOrder
+    thieuGiaVon?: SortOrder
+    batchId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type MisaSaleDocSumOrderByAggregateInput = {
+    tongDoanhSo?: SortOrder
+    tongThue?: SortOrder
+    tongChietKhau?: SortOrder
+    tongTra?: SortOrder
+  }
+
+  export type MisaSaleDocScalarRelationFilter = {
+    is?: MisaSaleDocWhereInput
+    isNot?: MisaSaleDocWhereInput
+  }
+
+  export type MisaSaleLineCountOrderByAggregateInput = {
+    id?: SortOrder
+    docId?: SortOrder
+    maHang?: SortOrder
+    tenHang?: SortOrder
+    dvt?: SortOrder
+    soLuong?: SortOrder
+    donGia?: SortOrder
+    doanhSo?: SortOrder
+    chietKhau?: SortOrder
+    soLuongTra?: SortOrder
+    giaTriTra?: SortOrder
+    giamGia?: SortOrder
+    thueGtgt?: SortOrder
+    tkThueGtgt?: SortOrder
+    giaVon?: SortOrder
+    productId?: SortOrder
+    dongSo?: SortOrder
+  }
+
+  export type MisaSaleLineAvgOrderByAggregateInput = {
+    soLuong?: SortOrder
+    donGia?: SortOrder
+    doanhSo?: SortOrder
+    chietKhau?: SortOrder
+    soLuongTra?: SortOrder
+    giaTriTra?: SortOrder
+    giamGia?: SortOrder
+    thueGtgt?: SortOrder
+    giaVon?: SortOrder
+    dongSo?: SortOrder
+  }
+
+  export type MisaSaleLineMaxOrderByAggregateInput = {
+    id?: SortOrder
+    docId?: SortOrder
+    maHang?: SortOrder
+    tenHang?: SortOrder
+    dvt?: SortOrder
+    soLuong?: SortOrder
+    donGia?: SortOrder
+    doanhSo?: SortOrder
+    chietKhau?: SortOrder
+    soLuongTra?: SortOrder
+    giaTriTra?: SortOrder
+    giamGia?: SortOrder
+    thueGtgt?: SortOrder
+    tkThueGtgt?: SortOrder
+    giaVon?: SortOrder
+    productId?: SortOrder
+    dongSo?: SortOrder
+  }
+
+  export type MisaSaleLineMinOrderByAggregateInput = {
+    id?: SortOrder
+    docId?: SortOrder
+    maHang?: SortOrder
+    tenHang?: SortOrder
+    dvt?: SortOrder
+    soLuong?: SortOrder
+    donGia?: SortOrder
+    doanhSo?: SortOrder
+    chietKhau?: SortOrder
+    soLuongTra?: SortOrder
+    giaTriTra?: SortOrder
+    giamGia?: SortOrder
+    thueGtgt?: SortOrder
+    tkThueGtgt?: SortOrder
+    giaVon?: SortOrder
+    productId?: SortOrder
+    dongSo?: SortOrder
+  }
+
+  export type MisaSaleLineSumOrderByAggregateInput = {
+    soLuong?: SortOrder
+    donGia?: SortOrder
+    doanhSo?: SortOrder
+    chietKhau?: SortOrder
+    soLuongTra?: SortOrder
+    giaTriTra?: SortOrder
+    giamGia?: SortOrder
+    thueGtgt?: SortOrder
+    giaVon?: SortOrder
+    dongSo?: SortOrder
   }
 
   export type UserCreateNestedManyWithoutBranchInput = {
@@ -209931,6 +220332,120 @@ export namespace Prisma {
     update?: XOR<XOR<AiAgentJobUpdateToOneWithWhereWithoutRunsInput, AiAgentJobUpdateWithoutRunsInput>, AiAgentJobUncheckedUpdateWithoutRunsInput>
   }
 
+  export type MisaSaleDocCreateNestedManyWithoutBatchInput = {
+    create?: XOR<MisaSaleDocCreateWithoutBatchInput, MisaSaleDocUncheckedCreateWithoutBatchInput> | MisaSaleDocCreateWithoutBatchInput[] | MisaSaleDocUncheckedCreateWithoutBatchInput[]
+    connectOrCreate?: MisaSaleDocCreateOrConnectWithoutBatchInput | MisaSaleDocCreateOrConnectWithoutBatchInput[]
+    createMany?: MisaSaleDocCreateManyBatchInputEnvelope
+    connect?: MisaSaleDocWhereUniqueInput | MisaSaleDocWhereUniqueInput[]
+  }
+
+  export type MisaSaleDocUncheckedCreateNestedManyWithoutBatchInput = {
+    create?: XOR<MisaSaleDocCreateWithoutBatchInput, MisaSaleDocUncheckedCreateWithoutBatchInput> | MisaSaleDocCreateWithoutBatchInput[] | MisaSaleDocUncheckedCreateWithoutBatchInput[]
+    connectOrCreate?: MisaSaleDocCreateOrConnectWithoutBatchInput | MisaSaleDocCreateOrConnectWithoutBatchInput[]
+    createMany?: MisaSaleDocCreateManyBatchInputEnvelope
+    connect?: MisaSaleDocWhereUniqueInput | MisaSaleDocWhereUniqueInput[]
+  }
+
+  export type MisaSaleDocUpdateManyWithoutBatchNestedInput = {
+    create?: XOR<MisaSaleDocCreateWithoutBatchInput, MisaSaleDocUncheckedCreateWithoutBatchInput> | MisaSaleDocCreateWithoutBatchInput[] | MisaSaleDocUncheckedCreateWithoutBatchInput[]
+    connectOrCreate?: MisaSaleDocCreateOrConnectWithoutBatchInput | MisaSaleDocCreateOrConnectWithoutBatchInput[]
+    upsert?: MisaSaleDocUpsertWithWhereUniqueWithoutBatchInput | MisaSaleDocUpsertWithWhereUniqueWithoutBatchInput[]
+    createMany?: MisaSaleDocCreateManyBatchInputEnvelope
+    set?: MisaSaleDocWhereUniqueInput | MisaSaleDocWhereUniqueInput[]
+    disconnect?: MisaSaleDocWhereUniqueInput | MisaSaleDocWhereUniqueInput[]
+    delete?: MisaSaleDocWhereUniqueInput | MisaSaleDocWhereUniqueInput[]
+    connect?: MisaSaleDocWhereUniqueInput | MisaSaleDocWhereUniqueInput[]
+    update?: MisaSaleDocUpdateWithWhereUniqueWithoutBatchInput | MisaSaleDocUpdateWithWhereUniqueWithoutBatchInput[]
+    updateMany?: MisaSaleDocUpdateManyWithWhereWithoutBatchInput | MisaSaleDocUpdateManyWithWhereWithoutBatchInput[]
+    deleteMany?: MisaSaleDocScalarWhereInput | MisaSaleDocScalarWhereInput[]
+  }
+
+  export type MisaSaleDocUncheckedUpdateManyWithoutBatchNestedInput = {
+    create?: XOR<MisaSaleDocCreateWithoutBatchInput, MisaSaleDocUncheckedCreateWithoutBatchInput> | MisaSaleDocCreateWithoutBatchInput[] | MisaSaleDocUncheckedCreateWithoutBatchInput[]
+    connectOrCreate?: MisaSaleDocCreateOrConnectWithoutBatchInput | MisaSaleDocCreateOrConnectWithoutBatchInput[]
+    upsert?: MisaSaleDocUpsertWithWhereUniqueWithoutBatchInput | MisaSaleDocUpsertWithWhereUniqueWithoutBatchInput[]
+    createMany?: MisaSaleDocCreateManyBatchInputEnvelope
+    set?: MisaSaleDocWhereUniqueInput | MisaSaleDocWhereUniqueInput[]
+    disconnect?: MisaSaleDocWhereUniqueInput | MisaSaleDocWhereUniqueInput[]
+    delete?: MisaSaleDocWhereUniqueInput | MisaSaleDocWhereUniqueInput[]
+    connect?: MisaSaleDocWhereUniqueInput | MisaSaleDocWhereUniqueInput[]
+    update?: MisaSaleDocUpdateWithWhereUniqueWithoutBatchInput | MisaSaleDocUpdateWithWhereUniqueWithoutBatchInput[]
+    updateMany?: MisaSaleDocUpdateManyWithWhereWithoutBatchInput | MisaSaleDocUpdateManyWithWhereWithoutBatchInput[]
+    deleteMany?: MisaSaleDocScalarWhereInput | MisaSaleDocScalarWhereInput[]
+  }
+
+  export type MisaImportBatchCreateNestedOneWithoutDocsInput = {
+    create?: XOR<MisaImportBatchCreateWithoutDocsInput, MisaImportBatchUncheckedCreateWithoutDocsInput>
+    connectOrCreate?: MisaImportBatchCreateOrConnectWithoutDocsInput
+    connect?: MisaImportBatchWhereUniqueInput
+  }
+
+  export type MisaSaleLineCreateNestedManyWithoutDocInput = {
+    create?: XOR<MisaSaleLineCreateWithoutDocInput, MisaSaleLineUncheckedCreateWithoutDocInput> | MisaSaleLineCreateWithoutDocInput[] | MisaSaleLineUncheckedCreateWithoutDocInput[]
+    connectOrCreate?: MisaSaleLineCreateOrConnectWithoutDocInput | MisaSaleLineCreateOrConnectWithoutDocInput[]
+    createMany?: MisaSaleLineCreateManyDocInputEnvelope
+    connect?: MisaSaleLineWhereUniqueInput | MisaSaleLineWhereUniqueInput[]
+  }
+
+  export type MisaSaleLineUncheckedCreateNestedManyWithoutDocInput = {
+    create?: XOR<MisaSaleLineCreateWithoutDocInput, MisaSaleLineUncheckedCreateWithoutDocInput> | MisaSaleLineCreateWithoutDocInput[] | MisaSaleLineUncheckedCreateWithoutDocInput[]
+    connectOrCreate?: MisaSaleLineCreateOrConnectWithoutDocInput | MisaSaleLineCreateOrConnectWithoutDocInput[]
+    createMany?: MisaSaleLineCreateManyDocInputEnvelope
+    connect?: MisaSaleLineWhereUniqueInput | MisaSaleLineWhereUniqueInput[]
+  }
+
+  export type MisaImportBatchUpdateOneWithoutDocsNestedInput = {
+    create?: XOR<MisaImportBatchCreateWithoutDocsInput, MisaImportBatchUncheckedCreateWithoutDocsInput>
+    connectOrCreate?: MisaImportBatchCreateOrConnectWithoutDocsInput
+    upsert?: MisaImportBatchUpsertWithoutDocsInput
+    disconnect?: MisaImportBatchWhereInput | boolean
+    delete?: MisaImportBatchWhereInput | boolean
+    connect?: MisaImportBatchWhereUniqueInput
+    update?: XOR<XOR<MisaImportBatchUpdateToOneWithWhereWithoutDocsInput, MisaImportBatchUpdateWithoutDocsInput>, MisaImportBatchUncheckedUpdateWithoutDocsInput>
+  }
+
+  export type MisaSaleLineUpdateManyWithoutDocNestedInput = {
+    create?: XOR<MisaSaleLineCreateWithoutDocInput, MisaSaleLineUncheckedCreateWithoutDocInput> | MisaSaleLineCreateWithoutDocInput[] | MisaSaleLineUncheckedCreateWithoutDocInput[]
+    connectOrCreate?: MisaSaleLineCreateOrConnectWithoutDocInput | MisaSaleLineCreateOrConnectWithoutDocInput[]
+    upsert?: MisaSaleLineUpsertWithWhereUniqueWithoutDocInput | MisaSaleLineUpsertWithWhereUniqueWithoutDocInput[]
+    createMany?: MisaSaleLineCreateManyDocInputEnvelope
+    set?: MisaSaleLineWhereUniqueInput | MisaSaleLineWhereUniqueInput[]
+    disconnect?: MisaSaleLineWhereUniqueInput | MisaSaleLineWhereUniqueInput[]
+    delete?: MisaSaleLineWhereUniqueInput | MisaSaleLineWhereUniqueInput[]
+    connect?: MisaSaleLineWhereUniqueInput | MisaSaleLineWhereUniqueInput[]
+    update?: MisaSaleLineUpdateWithWhereUniqueWithoutDocInput | MisaSaleLineUpdateWithWhereUniqueWithoutDocInput[]
+    updateMany?: MisaSaleLineUpdateManyWithWhereWithoutDocInput | MisaSaleLineUpdateManyWithWhereWithoutDocInput[]
+    deleteMany?: MisaSaleLineScalarWhereInput | MisaSaleLineScalarWhereInput[]
+  }
+
+  export type MisaSaleLineUncheckedUpdateManyWithoutDocNestedInput = {
+    create?: XOR<MisaSaleLineCreateWithoutDocInput, MisaSaleLineUncheckedCreateWithoutDocInput> | MisaSaleLineCreateWithoutDocInput[] | MisaSaleLineUncheckedCreateWithoutDocInput[]
+    connectOrCreate?: MisaSaleLineCreateOrConnectWithoutDocInput | MisaSaleLineCreateOrConnectWithoutDocInput[]
+    upsert?: MisaSaleLineUpsertWithWhereUniqueWithoutDocInput | MisaSaleLineUpsertWithWhereUniqueWithoutDocInput[]
+    createMany?: MisaSaleLineCreateManyDocInputEnvelope
+    set?: MisaSaleLineWhereUniqueInput | MisaSaleLineWhereUniqueInput[]
+    disconnect?: MisaSaleLineWhereUniqueInput | MisaSaleLineWhereUniqueInput[]
+    delete?: MisaSaleLineWhereUniqueInput | MisaSaleLineWhereUniqueInput[]
+    connect?: MisaSaleLineWhereUniqueInput | MisaSaleLineWhereUniqueInput[]
+    update?: MisaSaleLineUpdateWithWhereUniqueWithoutDocInput | MisaSaleLineUpdateWithWhereUniqueWithoutDocInput[]
+    updateMany?: MisaSaleLineUpdateManyWithWhereWithoutDocInput | MisaSaleLineUpdateManyWithWhereWithoutDocInput[]
+    deleteMany?: MisaSaleLineScalarWhereInput | MisaSaleLineScalarWhereInput[]
+  }
+
+  export type MisaSaleDocCreateNestedOneWithoutLinesInput = {
+    create?: XOR<MisaSaleDocCreateWithoutLinesInput, MisaSaleDocUncheckedCreateWithoutLinesInput>
+    connectOrCreate?: MisaSaleDocCreateOrConnectWithoutLinesInput
+    connect?: MisaSaleDocWhereUniqueInput
+  }
+
+  export type MisaSaleDocUpdateOneRequiredWithoutLinesNestedInput = {
+    create?: XOR<MisaSaleDocCreateWithoutLinesInput, MisaSaleDocUncheckedCreateWithoutLinesInput>
+    connectOrCreate?: MisaSaleDocCreateOrConnectWithoutLinesInput
+    upsert?: MisaSaleDocUpsertWithoutLinesInput
+    connect?: MisaSaleDocWhereUniqueInput
+    update?: XOR<XOR<MisaSaleDocUpdateToOneWithWhereWithoutLinesInput, MisaSaleDocUpdateWithoutLinesInput>, MisaSaleDocUncheckedUpdateWithoutLinesInput>
+  }
+
   export type NestedStringFilter<$PrismaModel = never> = {
     equals?: string | StringFieldRefInput<$PrismaModel>
     in?: string[] | ListStringFieldRefInput<$PrismaModel>
@@ -210322,6 +220837,8 @@ export namespace Prisma {
     change?: number
     status?: string
     createdByName?: string | null
+    salespersonId?: string | null
+    salespersonName?: string | null
     notes?: string | null
     returnedAt?: Date | string | null
     returnReason?: string | null
@@ -210355,6 +220872,8 @@ export namespace Prisma {
     change?: number
     status?: string
     createdByName?: string | null
+    salespersonId?: string | null
+    salespersonName?: string | null
     notes?: string | null
     returnedAt?: Date | string | null
     returnReason?: string | null
@@ -210690,6 +221209,8 @@ export namespace Prisma {
     status?: StringFilter<"Transaction"> | string
     createdBy?: StringFilter<"Transaction"> | string
     createdByName?: StringNullableFilter<"Transaction"> | string | null
+    salespersonId?: StringNullableFilter<"Transaction"> | string | null
+    salespersonName?: StringNullableFilter<"Transaction"> | string | null
     notes?: StringNullableFilter<"Transaction"> | string | null
     returnedAt?: DateTimeNullableFilter<"Transaction"> | Date | string | null
     returnReason?: StringNullableFilter<"Transaction"> | string | null
@@ -212049,6 +222570,7 @@ export namespace Prisma {
 
   export type OnlineOrderItemCreateWithoutProductInput = {
     id?: string
+    externalItemId?: string | null
     productName: string
     sku?: string | null
     quantity: number
@@ -212061,6 +222583,7 @@ export namespace Prisma {
   export type OnlineOrderItemUncheckedCreateWithoutProductInput = {
     id?: string
     onlineOrderId: string
+    externalItemId?: string | null
     productName: string
     sku?: string | null
     quantity: number
@@ -212433,6 +222956,7 @@ export namespace Prisma {
     id?: StringFilter<"OnlineOrderItem"> | string
     onlineOrderId?: StringFilter<"OnlineOrderItem"> | string
     productId?: StringNullableFilter<"OnlineOrderItem"> | string | null
+    externalItemId?: StringNullableFilter<"OnlineOrderItem"> | string | null
     productName?: StringFilter<"OnlineOrderItem"> | string
     sku?: StringNullableFilter<"OnlineOrderItem"> | string | null
     quantity?: IntFilter<"OnlineOrderItem"> | number
@@ -213108,6 +223632,8 @@ export namespace Prisma {
     change?: number
     status?: string
     createdByName?: string | null
+    salespersonId?: string | null
+    salespersonName?: string | null
     notes?: string | null
     returnedAt?: Date | string | null
     returnReason?: string | null
@@ -213141,6 +223667,8 @@ export namespace Prisma {
     status?: string
     createdBy: string
     createdByName?: string | null
+    salespersonId?: string | null
+    salespersonName?: string | null
     notes?: string | null
     returnedAt?: Date | string | null
     returnReason?: string | null
@@ -213702,6 +224230,8 @@ export namespace Prisma {
     change?: number
     status?: string
     createdByName?: string | null
+    salespersonId?: string | null
+    salespersonName?: string | null
     notes?: string | null
     returnedAt?: Date | string | null
     returnReason?: string | null
@@ -213736,6 +224266,8 @@ export namespace Prisma {
     status?: string
     createdBy: string
     createdByName?: string | null
+    salespersonId?: string | null
+    salespersonName?: string | null
     notes?: string | null
     returnedAt?: Date | string | null
     returnReason?: string | null
@@ -213855,6 +224387,8 @@ export namespace Prisma {
     change?: FloatFieldUpdateOperationsInput | number
     status?: StringFieldUpdateOperationsInput | string
     createdByName?: NullableStringFieldUpdateOperationsInput | string | null
+    salespersonId?: NullableStringFieldUpdateOperationsInput | string | null
+    salespersonName?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     returnedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     returnReason?: NullableStringFieldUpdateOperationsInput | string | null
@@ -213889,6 +224423,8 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     createdBy?: StringFieldUpdateOperationsInput | string
     createdByName?: NullableStringFieldUpdateOperationsInput | string | null
+    salespersonId?: NullableStringFieldUpdateOperationsInput | string | null
+    salespersonName?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     returnedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     returnReason?: NullableStringFieldUpdateOperationsInput | string | null
@@ -213998,6 +224534,8 @@ export namespace Prisma {
     change?: number
     status?: string
     createdByName?: string | null
+    salespersonId?: string | null
+    salespersonName?: string | null
     notes?: string | null
     returnedAt?: Date | string | null
     returnReason?: string | null
@@ -214032,6 +224570,8 @@ export namespace Prisma {
     status?: string
     createdBy: string
     createdByName?: string | null
+    salespersonId?: string | null
+    salespersonName?: string | null
     notes?: string | null
     returnedAt?: Date | string | null
     returnReason?: string | null
@@ -214078,6 +224618,8 @@ export namespace Prisma {
     change?: FloatFieldUpdateOperationsInput | number
     status?: StringFieldUpdateOperationsInput | string
     createdByName?: NullableStringFieldUpdateOperationsInput | string | null
+    salespersonId?: NullableStringFieldUpdateOperationsInput | string | null
+    salespersonName?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     returnedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     returnReason?: NullableStringFieldUpdateOperationsInput | string | null
@@ -214112,6 +224654,8 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     createdBy?: StringFieldUpdateOperationsInput | string
     createdByName?: NullableStringFieldUpdateOperationsInput | string | null
+    salespersonId?: NullableStringFieldUpdateOperationsInput | string | null
+    salespersonName?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     returnedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     returnReason?: NullableStringFieldUpdateOperationsInput | string | null
@@ -214981,6 +225525,11 @@ export namespace Prisma {
     status?: string
     notes?: string | null
     payable?: number
+    paymentTermDays?: number | null
+    paymentTerms?: string | null
+    paymentTermType?: string | null
+    paymentTermDom?: number | null
+    paymentTermMonthOffset?: number | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -214999,6 +225548,11 @@ export namespace Prisma {
     status?: string
     notes?: string | null
     payable?: number
+    paymentTermDays?: number | null
+    paymentTerms?: string | null
+    paymentTermType?: string | null
+    paymentTermDom?: number | null
+    paymentTermMonthOffset?: number | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -215059,6 +225613,11 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     payable?: FloatFieldUpdateOperationsInput | number
+    paymentTermDays?: NullableIntFieldUpdateOperationsInput | number | null
+    paymentTerms?: NullableStringFieldUpdateOperationsInput | string | null
+    paymentTermType?: NullableStringFieldUpdateOperationsInput | string | null
+    paymentTermDom?: NullableIntFieldUpdateOperationsInput | number | null
+    paymentTermMonthOffset?: NullableIntFieldUpdateOperationsInput | number | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -215077,6 +225636,11 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     payable?: FloatFieldUpdateOperationsInput | number
+    paymentTermDays?: NullableIntFieldUpdateOperationsInput | number | null
+    paymentTerms?: NullableStringFieldUpdateOperationsInput | string | null
+    paymentTermType?: NullableStringFieldUpdateOperationsInput | string | null
+    paymentTermDom?: NullableIntFieldUpdateOperationsInput | number | null
+    paymentTermMonthOffset?: NullableIntFieldUpdateOperationsInput | number | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -216326,6 +226890,7 @@ export namespace Prisma {
     returnReason?: string | null
     condition?: string | null
     restocked?: boolean
+    disposed?: boolean
   }
 
   export type ReturnItemUncheckedCreateWithoutReturnOrderInput = {
@@ -216338,6 +226903,7 @@ export namespace Prisma {
     returnReason?: string | null
     condition?: string | null
     restocked?: boolean
+    disposed?: boolean
   }
 
   export type ReturnItemCreateOrConnectWithoutReturnOrderInput = {
@@ -216380,6 +226946,7 @@ export namespace Prisma {
     returnReason?: StringNullableFilter<"ReturnItem"> | string | null
     condition?: StringNullableFilter<"ReturnItem"> | string | null
     restocked?: BoolFilter<"ReturnItem"> | boolean
+    disposed?: BoolFilter<"ReturnItem"> | boolean
   }
 
   export type ReturnOrderCreateWithoutItemsInput = {
@@ -217836,6 +228403,7 @@ export namespace Prisma {
 
   export type OnlineOrderItemCreateWithoutOnlineOrderInput = {
     id?: string
+    externalItemId?: string | null
     productName: string
     sku?: string | null
     quantity: number
@@ -217848,6 +228416,7 @@ export namespace Prisma {
   export type OnlineOrderItemUncheckedCreateWithoutOnlineOrderInput = {
     id?: string
     productId?: string | null
+    externalItemId?: string | null
     productName: string
     sku?: string | null
     quantity: number
@@ -221771,6 +232340,380 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type MisaSaleDocCreateWithoutBatchInput = {
+    id?: string
+    soChungTu: string
+    soHoaDon?: string | null
+    ngayChungTu?: Date | string | null
+    ngayHachToan?: Date | string | null
+    ngayHoaDon?: Date | string | null
+    maKhach?: string | null
+    tenKhach?: string | null
+    nguonTenKhach?: string | null
+    dienGiai?: string | null
+    customerId?: string | null
+    tongDoanhSo?: number
+    tongThue?: number
+    tongChietKhau?: number
+    tongTra?: number
+    thieuGiaVon?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    lines?: MisaSaleLineCreateNestedManyWithoutDocInput
+  }
+
+  export type MisaSaleDocUncheckedCreateWithoutBatchInput = {
+    id?: string
+    soChungTu: string
+    soHoaDon?: string | null
+    ngayChungTu?: Date | string | null
+    ngayHachToan?: Date | string | null
+    ngayHoaDon?: Date | string | null
+    maKhach?: string | null
+    tenKhach?: string | null
+    nguonTenKhach?: string | null
+    dienGiai?: string | null
+    customerId?: string | null
+    tongDoanhSo?: number
+    tongThue?: number
+    tongChietKhau?: number
+    tongTra?: number
+    thieuGiaVon?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    lines?: MisaSaleLineUncheckedCreateNestedManyWithoutDocInput
+  }
+
+  export type MisaSaleDocCreateOrConnectWithoutBatchInput = {
+    where: MisaSaleDocWhereUniqueInput
+    create: XOR<MisaSaleDocCreateWithoutBatchInput, MisaSaleDocUncheckedCreateWithoutBatchInput>
+  }
+
+  export type MisaSaleDocCreateManyBatchInputEnvelope = {
+    data: MisaSaleDocCreateManyBatchInput | MisaSaleDocCreateManyBatchInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type MisaSaleDocUpsertWithWhereUniqueWithoutBatchInput = {
+    where: MisaSaleDocWhereUniqueInput
+    update: XOR<MisaSaleDocUpdateWithoutBatchInput, MisaSaleDocUncheckedUpdateWithoutBatchInput>
+    create: XOR<MisaSaleDocCreateWithoutBatchInput, MisaSaleDocUncheckedCreateWithoutBatchInput>
+  }
+
+  export type MisaSaleDocUpdateWithWhereUniqueWithoutBatchInput = {
+    where: MisaSaleDocWhereUniqueInput
+    data: XOR<MisaSaleDocUpdateWithoutBatchInput, MisaSaleDocUncheckedUpdateWithoutBatchInput>
+  }
+
+  export type MisaSaleDocUpdateManyWithWhereWithoutBatchInput = {
+    where: MisaSaleDocScalarWhereInput
+    data: XOR<MisaSaleDocUpdateManyMutationInput, MisaSaleDocUncheckedUpdateManyWithoutBatchInput>
+  }
+
+  export type MisaSaleDocScalarWhereInput = {
+    AND?: MisaSaleDocScalarWhereInput | MisaSaleDocScalarWhereInput[]
+    OR?: MisaSaleDocScalarWhereInput[]
+    NOT?: MisaSaleDocScalarWhereInput | MisaSaleDocScalarWhereInput[]
+    id?: StringFilter<"MisaSaleDoc"> | string
+    soChungTu?: StringFilter<"MisaSaleDoc"> | string
+    soHoaDon?: StringNullableFilter<"MisaSaleDoc"> | string | null
+    ngayChungTu?: DateTimeNullableFilter<"MisaSaleDoc"> | Date | string | null
+    ngayHachToan?: DateTimeNullableFilter<"MisaSaleDoc"> | Date | string | null
+    ngayHoaDon?: DateTimeNullableFilter<"MisaSaleDoc"> | Date | string | null
+    maKhach?: StringNullableFilter<"MisaSaleDoc"> | string | null
+    tenKhach?: StringNullableFilter<"MisaSaleDoc"> | string | null
+    nguonTenKhach?: StringNullableFilter<"MisaSaleDoc"> | string | null
+    dienGiai?: StringNullableFilter<"MisaSaleDoc"> | string | null
+    customerId?: StringNullableFilter<"MisaSaleDoc"> | string | null
+    tongDoanhSo?: FloatFilter<"MisaSaleDoc"> | number
+    tongThue?: FloatFilter<"MisaSaleDoc"> | number
+    tongChietKhau?: FloatFilter<"MisaSaleDoc"> | number
+    tongTra?: FloatFilter<"MisaSaleDoc"> | number
+    thieuGiaVon?: BoolFilter<"MisaSaleDoc"> | boolean
+    batchId?: StringNullableFilter<"MisaSaleDoc"> | string | null
+    createdAt?: DateTimeFilter<"MisaSaleDoc"> | Date | string
+    updatedAt?: DateTimeFilter<"MisaSaleDoc"> | Date | string
+  }
+
+  export type MisaImportBatchCreateWithoutDocsInput = {
+    id?: string
+    loai: string
+    tenFile: string
+    kyBaoCao?: string | null
+    tongDong?: number
+    docDuoc?: number
+    boQua?: number
+    soChungTu?: number
+    tongTien?: number
+    tongThue?: number
+    chiTiet?: string | null
+    apply?: boolean
+    userId?: string | null
+    userName?: string | null
+    createdAt?: Date | string
+  }
+
+  export type MisaImportBatchUncheckedCreateWithoutDocsInput = {
+    id?: string
+    loai: string
+    tenFile: string
+    kyBaoCao?: string | null
+    tongDong?: number
+    docDuoc?: number
+    boQua?: number
+    soChungTu?: number
+    tongTien?: number
+    tongThue?: number
+    chiTiet?: string | null
+    apply?: boolean
+    userId?: string | null
+    userName?: string | null
+    createdAt?: Date | string
+  }
+
+  export type MisaImportBatchCreateOrConnectWithoutDocsInput = {
+    where: MisaImportBatchWhereUniqueInput
+    create: XOR<MisaImportBatchCreateWithoutDocsInput, MisaImportBatchUncheckedCreateWithoutDocsInput>
+  }
+
+  export type MisaSaleLineCreateWithoutDocInput = {
+    id?: string
+    maHang: string
+    tenHang?: string | null
+    dvt?: string | null
+    soLuong?: number
+    donGia?: number
+    doanhSo?: number
+    chietKhau?: number
+    soLuongTra?: number
+    giaTriTra?: number
+    giamGia?: number
+    thueGtgt?: number
+    tkThueGtgt?: string | null
+    giaVon?: number | null
+    productId?: string | null
+    dongSo?: number | null
+  }
+
+  export type MisaSaleLineUncheckedCreateWithoutDocInput = {
+    id?: string
+    maHang: string
+    tenHang?: string | null
+    dvt?: string | null
+    soLuong?: number
+    donGia?: number
+    doanhSo?: number
+    chietKhau?: number
+    soLuongTra?: number
+    giaTriTra?: number
+    giamGia?: number
+    thueGtgt?: number
+    tkThueGtgt?: string | null
+    giaVon?: number | null
+    productId?: string | null
+    dongSo?: number | null
+  }
+
+  export type MisaSaleLineCreateOrConnectWithoutDocInput = {
+    where: MisaSaleLineWhereUniqueInput
+    create: XOR<MisaSaleLineCreateWithoutDocInput, MisaSaleLineUncheckedCreateWithoutDocInput>
+  }
+
+  export type MisaSaleLineCreateManyDocInputEnvelope = {
+    data: MisaSaleLineCreateManyDocInput | MisaSaleLineCreateManyDocInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type MisaImportBatchUpsertWithoutDocsInput = {
+    update: XOR<MisaImportBatchUpdateWithoutDocsInput, MisaImportBatchUncheckedUpdateWithoutDocsInput>
+    create: XOR<MisaImportBatchCreateWithoutDocsInput, MisaImportBatchUncheckedCreateWithoutDocsInput>
+    where?: MisaImportBatchWhereInput
+  }
+
+  export type MisaImportBatchUpdateToOneWithWhereWithoutDocsInput = {
+    where?: MisaImportBatchWhereInput
+    data: XOR<MisaImportBatchUpdateWithoutDocsInput, MisaImportBatchUncheckedUpdateWithoutDocsInput>
+  }
+
+  export type MisaImportBatchUpdateWithoutDocsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    loai?: StringFieldUpdateOperationsInput | string
+    tenFile?: StringFieldUpdateOperationsInput | string
+    kyBaoCao?: NullableStringFieldUpdateOperationsInput | string | null
+    tongDong?: IntFieldUpdateOperationsInput | number
+    docDuoc?: IntFieldUpdateOperationsInput | number
+    boQua?: IntFieldUpdateOperationsInput | number
+    soChungTu?: IntFieldUpdateOperationsInput | number
+    tongTien?: FloatFieldUpdateOperationsInput | number
+    tongThue?: FloatFieldUpdateOperationsInput | number
+    chiTiet?: NullableStringFieldUpdateOperationsInput | string | null
+    apply?: BoolFieldUpdateOperationsInput | boolean
+    userId?: NullableStringFieldUpdateOperationsInput | string | null
+    userName?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MisaImportBatchUncheckedUpdateWithoutDocsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    loai?: StringFieldUpdateOperationsInput | string
+    tenFile?: StringFieldUpdateOperationsInput | string
+    kyBaoCao?: NullableStringFieldUpdateOperationsInput | string | null
+    tongDong?: IntFieldUpdateOperationsInput | number
+    docDuoc?: IntFieldUpdateOperationsInput | number
+    boQua?: IntFieldUpdateOperationsInput | number
+    soChungTu?: IntFieldUpdateOperationsInput | number
+    tongTien?: FloatFieldUpdateOperationsInput | number
+    tongThue?: FloatFieldUpdateOperationsInput | number
+    chiTiet?: NullableStringFieldUpdateOperationsInput | string | null
+    apply?: BoolFieldUpdateOperationsInput | boolean
+    userId?: NullableStringFieldUpdateOperationsInput | string | null
+    userName?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MisaSaleLineUpsertWithWhereUniqueWithoutDocInput = {
+    where: MisaSaleLineWhereUniqueInput
+    update: XOR<MisaSaleLineUpdateWithoutDocInput, MisaSaleLineUncheckedUpdateWithoutDocInput>
+    create: XOR<MisaSaleLineCreateWithoutDocInput, MisaSaleLineUncheckedCreateWithoutDocInput>
+  }
+
+  export type MisaSaleLineUpdateWithWhereUniqueWithoutDocInput = {
+    where: MisaSaleLineWhereUniqueInput
+    data: XOR<MisaSaleLineUpdateWithoutDocInput, MisaSaleLineUncheckedUpdateWithoutDocInput>
+  }
+
+  export type MisaSaleLineUpdateManyWithWhereWithoutDocInput = {
+    where: MisaSaleLineScalarWhereInput
+    data: XOR<MisaSaleLineUpdateManyMutationInput, MisaSaleLineUncheckedUpdateManyWithoutDocInput>
+  }
+
+  export type MisaSaleLineScalarWhereInput = {
+    AND?: MisaSaleLineScalarWhereInput | MisaSaleLineScalarWhereInput[]
+    OR?: MisaSaleLineScalarWhereInput[]
+    NOT?: MisaSaleLineScalarWhereInput | MisaSaleLineScalarWhereInput[]
+    id?: StringFilter<"MisaSaleLine"> | string
+    docId?: StringFilter<"MisaSaleLine"> | string
+    maHang?: StringFilter<"MisaSaleLine"> | string
+    tenHang?: StringNullableFilter<"MisaSaleLine"> | string | null
+    dvt?: StringNullableFilter<"MisaSaleLine"> | string | null
+    soLuong?: FloatFilter<"MisaSaleLine"> | number
+    donGia?: FloatFilter<"MisaSaleLine"> | number
+    doanhSo?: FloatFilter<"MisaSaleLine"> | number
+    chietKhau?: FloatFilter<"MisaSaleLine"> | number
+    soLuongTra?: FloatFilter<"MisaSaleLine"> | number
+    giaTriTra?: FloatFilter<"MisaSaleLine"> | number
+    giamGia?: FloatFilter<"MisaSaleLine"> | number
+    thueGtgt?: FloatFilter<"MisaSaleLine"> | number
+    tkThueGtgt?: StringNullableFilter<"MisaSaleLine"> | string | null
+    giaVon?: FloatNullableFilter<"MisaSaleLine"> | number | null
+    productId?: StringNullableFilter<"MisaSaleLine"> | string | null
+    dongSo?: IntNullableFilter<"MisaSaleLine"> | number | null
+  }
+
+  export type MisaSaleDocCreateWithoutLinesInput = {
+    id?: string
+    soChungTu: string
+    soHoaDon?: string | null
+    ngayChungTu?: Date | string | null
+    ngayHachToan?: Date | string | null
+    ngayHoaDon?: Date | string | null
+    maKhach?: string | null
+    tenKhach?: string | null
+    nguonTenKhach?: string | null
+    dienGiai?: string | null
+    customerId?: string | null
+    tongDoanhSo?: number
+    tongThue?: number
+    tongChietKhau?: number
+    tongTra?: number
+    thieuGiaVon?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    batch?: MisaImportBatchCreateNestedOneWithoutDocsInput
+  }
+
+  export type MisaSaleDocUncheckedCreateWithoutLinesInput = {
+    id?: string
+    soChungTu: string
+    soHoaDon?: string | null
+    ngayChungTu?: Date | string | null
+    ngayHachToan?: Date | string | null
+    ngayHoaDon?: Date | string | null
+    maKhach?: string | null
+    tenKhach?: string | null
+    nguonTenKhach?: string | null
+    dienGiai?: string | null
+    customerId?: string | null
+    tongDoanhSo?: number
+    tongThue?: number
+    tongChietKhau?: number
+    tongTra?: number
+    thieuGiaVon?: boolean
+    batchId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type MisaSaleDocCreateOrConnectWithoutLinesInput = {
+    where: MisaSaleDocWhereUniqueInput
+    create: XOR<MisaSaleDocCreateWithoutLinesInput, MisaSaleDocUncheckedCreateWithoutLinesInput>
+  }
+
+  export type MisaSaleDocUpsertWithoutLinesInput = {
+    update: XOR<MisaSaleDocUpdateWithoutLinesInput, MisaSaleDocUncheckedUpdateWithoutLinesInput>
+    create: XOR<MisaSaleDocCreateWithoutLinesInput, MisaSaleDocUncheckedCreateWithoutLinesInput>
+    where?: MisaSaleDocWhereInput
+  }
+
+  export type MisaSaleDocUpdateToOneWithWhereWithoutLinesInput = {
+    where?: MisaSaleDocWhereInput
+    data: XOR<MisaSaleDocUpdateWithoutLinesInput, MisaSaleDocUncheckedUpdateWithoutLinesInput>
+  }
+
+  export type MisaSaleDocUpdateWithoutLinesInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    soChungTu?: StringFieldUpdateOperationsInput | string
+    soHoaDon?: NullableStringFieldUpdateOperationsInput | string | null
+    ngayChungTu?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHachToan?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHoaDon?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    maKhach?: NullableStringFieldUpdateOperationsInput | string | null
+    tenKhach?: NullableStringFieldUpdateOperationsInput | string | null
+    nguonTenKhach?: NullableStringFieldUpdateOperationsInput | string | null
+    dienGiai?: NullableStringFieldUpdateOperationsInput | string | null
+    customerId?: NullableStringFieldUpdateOperationsInput | string | null
+    tongDoanhSo?: FloatFieldUpdateOperationsInput | number
+    tongThue?: FloatFieldUpdateOperationsInput | number
+    tongChietKhau?: FloatFieldUpdateOperationsInput | number
+    tongTra?: FloatFieldUpdateOperationsInput | number
+    thieuGiaVon?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    batch?: MisaImportBatchUpdateOneWithoutDocsNestedInput
+  }
+
+  export type MisaSaleDocUncheckedUpdateWithoutLinesInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    soChungTu?: StringFieldUpdateOperationsInput | string
+    soHoaDon?: NullableStringFieldUpdateOperationsInput | string | null
+    ngayChungTu?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHachToan?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHoaDon?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    maKhach?: NullableStringFieldUpdateOperationsInput | string | null
+    tenKhach?: NullableStringFieldUpdateOperationsInput | string | null
+    nguonTenKhach?: NullableStringFieldUpdateOperationsInput | string | null
+    dienGiai?: NullableStringFieldUpdateOperationsInput | string | null
+    customerId?: NullableStringFieldUpdateOperationsInput | string | null
+    tongDoanhSo?: FloatFieldUpdateOperationsInput | number
+    tongThue?: FloatFieldUpdateOperationsInput | number
+    tongChietKhau?: FloatFieldUpdateOperationsInput | number
+    tongTra?: FloatFieldUpdateOperationsInput | number
+    thieuGiaVon?: BoolFieldUpdateOperationsInput | boolean
+    batchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type UserCreateManyBranchInput = {
     id?: string
     email: string
@@ -221895,6 +232838,8 @@ export namespace Prisma {
     change?: number
     status?: string
     createdByName?: string | null
+    salespersonId?: string | null
+    salespersonName?: string | null
     notes?: string | null
     returnedAt?: Date | string | null
     returnReason?: string | null
@@ -222016,6 +232961,8 @@ export namespace Prisma {
     change?: FloatFieldUpdateOperationsInput | number
     status?: StringFieldUpdateOperationsInput | string
     createdByName?: NullableStringFieldUpdateOperationsInput | string | null
+    salespersonId?: NullableStringFieldUpdateOperationsInput | string | null
+    salespersonName?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     returnedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     returnReason?: NullableStringFieldUpdateOperationsInput | string | null
@@ -222049,6 +232996,8 @@ export namespace Prisma {
     change?: FloatFieldUpdateOperationsInput | number
     status?: StringFieldUpdateOperationsInput | string
     createdByName?: NullableStringFieldUpdateOperationsInput | string | null
+    salespersonId?: NullableStringFieldUpdateOperationsInput | string | null
+    salespersonName?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     returnedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     returnReason?: NullableStringFieldUpdateOperationsInput | string | null
@@ -222081,6 +233030,8 @@ export namespace Prisma {
     change?: FloatFieldUpdateOperationsInput | number
     status?: StringFieldUpdateOperationsInput | string
     createdByName?: NullableStringFieldUpdateOperationsInput | string | null
+    salespersonId?: NullableStringFieldUpdateOperationsInput | string | null
+    salespersonName?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     returnedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     returnReason?: NullableStringFieldUpdateOperationsInput | string | null
@@ -222784,6 +233735,7 @@ export namespace Prisma {
   export type OnlineOrderItemCreateManyProductInput = {
     id?: string
     onlineOrderId: string
+    externalItemId?: string | null
     productName: string
     sku?: string | null
     quantity: number
@@ -223057,6 +234009,7 @@ export namespace Prisma {
 
   export type OnlineOrderItemUpdateWithoutProductInput = {
     id?: StringFieldUpdateOperationsInput | string
+    externalItemId?: NullableStringFieldUpdateOperationsInput | string | null
     productName?: StringFieldUpdateOperationsInput | string
     sku?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
@@ -223069,6 +234022,7 @@ export namespace Prisma {
   export type OnlineOrderItemUncheckedUpdateWithoutProductInput = {
     id?: StringFieldUpdateOperationsInput | string
     onlineOrderId?: StringFieldUpdateOperationsInput | string
+    externalItemId?: NullableStringFieldUpdateOperationsInput | string | null
     productName?: StringFieldUpdateOperationsInput | string
     sku?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
@@ -223080,6 +234034,7 @@ export namespace Prisma {
   export type OnlineOrderItemUncheckedUpdateManyWithoutProductInput = {
     id?: StringFieldUpdateOperationsInput | string
     onlineOrderId?: StringFieldUpdateOperationsInput | string
+    externalItemId?: NullableStringFieldUpdateOperationsInput | string | null
     productName?: StringFieldUpdateOperationsInput | string
     sku?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
@@ -223293,6 +234248,8 @@ export namespace Prisma {
     status?: string
     createdBy: string
     createdByName?: string | null
+    salespersonId?: string | null
+    salespersonName?: string | null
     notes?: string | null
     returnedAt?: Date | string | null
     returnReason?: string | null
@@ -223353,6 +234310,8 @@ export namespace Prisma {
     change?: FloatFieldUpdateOperationsInput | number
     status?: StringFieldUpdateOperationsInput | string
     createdByName?: NullableStringFieldUpdateOperationsInput | string | null
+    salespersonId?: NullableStringFieldUpdateOperationsInput | string | null
+    salespersonName?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     returnedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     returnReason?: NullableStringFieldUpdateOperationsInput | string | null
@@ -223386,6 +234345,8 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     createdBy?: StringFieldUpdateOperationsInput | string
     createdByName?: NullableStringFieldUpdateOperationsInput | string | null
+    salespersonId?: NullableStringFieldUpdateOperationsInput | string | null
+    salespersonName?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     returnedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     returnReason?: NullableStringFieldUpdateOperationsInput | string | null
@@ -223418,6 +234379,8 @@ export namespace Prisma {
     status?: StringFieldUpdateOperationsInput | string
     createdBy?: StringFieldUpdateOperationsInput | string
     createdByName?: NullableStringFieldUpdateOperationsInput | string | null
+    salespersonId?: NullableStringFieldUpdateOperationsInput | string | null
+    salespersonName?: NullableStringFieldUpdateOperationsInput | string | null
     notes?: NullableStringFieldUpdateOperationsInput | string | null
     returnedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     returnReason?: NullableStringFieldUpdateOperationsInput | string | null
@@ -224179,6 +235142,7 @@ export namespace Prisma {
     returnReason?: string | null
     condition?: string | null
     restocked?: boolean
+    disposed?: boolean
   }
 
   export type ReturnItemUpdateWithoutReturnOrderInput = {
@@ -224191,6 +235155,7 @@ export namespace Prisma {
     returnReason?: NullableStringFieldUpdateOperationsInput | string | null
     condition?: NullableStringFieldUpdateOperationsInput | string | null
     restocked?: BoolFieldUpdateOperationsInput | boolean
+    disposed?: BoolFieldUpdateOperationsInput | boolean
   }
 
   export type ReturnItemUncheckedUpdateWithoutReturnOrderInput = {
@@ -224203,6 +235168,7 @@ export namespace Prisma {
     returnReason?: NullableStringFieldUpdateOperationsInput | string | null
     condition?: NullableStringFieldUpdateOperationsInput | string | null
     restocked?: BoolFieldUpdateOperationsInput | boolean
+    disposed?: BoolFieldUpdateOperationsInput | boolean
   }
 
   export type ReturnItemUncheckedUpdateManyWithoutReturnOrderInput = {
@@ -224215,6 +235181,7 @@ export namespace Prisma {
     returnReason?: NullableStringFieldUpdateOperationsInput | string | null
     condition?: NullableStringFieldUpdateOperationsInput | string | null
     restocked?: BoolFieldUpdateOperationsInput | boolean
+    disposed?: BoolFieldUpdateOperationsInput | boolean
   }
 
   export type SalesOrderItemCreateManySalesOrderInput = {
@@ -224610,6 +235577,7 @@ export namespace Prisma {
   export type OnlineOrderItemCreateManyOnlineOrderInput = {
     id?: string
     productId?: string | null
+    externalItemId?: string | null
     productName: string
     sku?: string | null
     quantity: number
@@ -224620,6 +235588,7 @@ export namespace Prisma {
 
   export type OnlineOrderItemUpdateWithoutOnlineOrderInput = {
     id?: StringFieldUpdateOperationsInput | string
+    externalItemId?: NullableStringFieldUpdateOperationsInput | string | null
     productName?: StringFieldUpdateOperationsInput | string
     sku?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
@@ -224632,6 +235601,7 @@ export namespace Prisma {
   export type OnlineOrderItemUncheckedUpdateWithoutOnlineOrderInput = {
     id?: StringFieldUpdateOperationsInput | string
     productId?: NullableStringFieldUpdateOperationsInput | string | null
+    externalItemId?: NullableStringFieldUpdateOperationsInput | string | null
     productName?: StringFieldUpdateOperationsInput | string
     sku?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
@@ -224643,6 +235613,7 @@ export namespace Prisma {
   export type OnlineOrderItemUncheckedUpdateManyWithoutOnlineOrderInput = {
     id?: StringFieldUpdateOperationsInput | string
     productId?: NullableStringFieldUpdateOperationsInput | string | null
+    externalItemId?: NullableStringFieldUpdateOperationsInput | string | null
     productName?: StringFieldUpdateOperationsInput | string
     sku?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
@@ -225633,6 +236604,168 @@ export namespace Prisma {
     chamTran?: BoolFieldUpdateOperationsInput | boolean
     errorMessage?: NullableStringFieldUpdateOperationsInput | string | null
     trigger?: StringFieldUpdateOperationsInput | string
+  }
+
+  export type MisaSaleDocCreateManyBatchInput = {
+    id?: string
+    soChungTu: string
+    soHoaDon?: string | null
+    ngayChungTu?: Date | string | null
+    ngayHachToan?: Date | string | null
+    ngayHoaDon?: Date | string | null
+    maKhach?: string | null
+    tenKhach?: string | null
+    nguonTenKhach?: string | null
+    dienGiai?: string | null
+    customerId?: string | null
+    tongDoanhSo?: number
+    tongThue?: number
+    tongChietKhau?: number
+    tongTra?: number
+    thieuGiaVon?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type MisaSaleDocUpdateWithoutBatchInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    soChungTu?: StringFieldUpdateOperationsInput | string
+    soHoaDon?: NullableStringFieldUpdateOperationsInput | string | null
+    ngayChungTu?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHachToan?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHoaDon?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    maKhach?: NullableStringFieldUpdateOperationsInput | string | null
+    tenKhach?: NullableStringFieldUpdateOperationsInput | string | null
+    nguonTenKhach?: NullableStringFieldUpdateOperationsInput | string | null
+    dienGiai?: NullableStringFieldUpdateOperationsInput | string | null
+    customerId?: NullableStringFieldUpdateOperationsInput | string | null
+    tongDoanhSo?: FloatFieldUpdateOperationsInput | number
+    tongThue?: FloatFieldUpdateOperationsInput | number
+    tongChietKhau?: FloatFieldUpdateOperationsInput | number
+    tongTra?: FloatFieldUpdateOperationsInput | number
+    thieuGiaVon?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    lines?: MisaSaleLineUpdateManyWithoutDocNestedInput
+  }
+
+  export type MisaSaleDocUncheckedUpdateWithoutBatchInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    soChungTu?: StringFieldUpdateOperationsInput | string
+    soHoaDon?: NullableStringFieldUpdateOperationsInput | string | null
+    ngayChungTu?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHachToan?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHoaDon?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    maKhach?: NullableStringFieldUpdateOperationsInput | string | null
+    tenKhach?: NullableStringFieldUpdateOperationsInput | string | null
+    nguonTenKhach?: NullableStringFieldUpdateOperationsInput | string | null
+    dienGiai?: NullableStringFieldUpdateOperationsInput | string | null
+    customerId?: NullableStringFieldUpdateOperationsInput | string | null
+    tongDoanhSo?: FloatFieldUpdateOperationsInput | number
+    tongThue?: FloatFieldUpdateOperationsInput | number
+    tongChietKhau?: FloatFieldUpdateOperationsInput | number
+    tongTra?: FloatFieldUpdateOperationsInput | number
+    thieuGiaVon?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    lines?: MisaSaleLineUncheckedUpdateManyWithoutDocNestedInput
+  }
+
+  export type MisaSaleDocUncheckedUpdateManyWithoutBatchInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    soChungTu?: StringFieldUpdateOperationsInput | string
+    soHoaDon?: NullableStringFieldUpdateOperationsInput | string | null
+    ngayChungTu?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHachToan?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHoaDon?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    maKhach?: NullableStringFieldUpdateOperationsInput | string | null
+    tenKhach?: NullableStringFieldUpdateOperationsInput | string | null
+    nguonTenKhach?: NullableStringFieldUpdateOperationsInput | string | null
+    dienGiai?: NullableStringFieldUpdateOperationsInput | string | null
+    customerId?: NullableStringFieldUpdateOperationsInput | string | null
+    tongDoanhSo?: FloatFieldUpdateOperationsInput | number
+    tongThue?: FloatFieldUpdateOperationsInput | number
+    tongChietKhau?: FloatFieldUpdateOperationsInput | number
+    tongTra?: FloatFieldUpdateOperationsInput | number
+    thieuGiaVon?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MisaSaleLineCreateManyDocInput = {
+    id?: string
+    maHang: string
+    tenHang?: string | null
+    dvt?: string | null
+    soLuong?: number
+    donGia?: number
+    doanhSo?: number
+    chietKhau?: number
+    soLuongTra?: number
+    giaTriTra?: number
+    giamGia?: number
+    thueGtgt?: number
+    tkThueGtgt?: string | null
+    giaVon?: number | null
+    productId?: string | null
+    dongSo?: number | null
+  }
+
+  export type MisaSaleLineUpdateWithoutDocInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    maHang?: StringFieldUpdateOperationsInput | string
+    tenHang?: NullableStringFieldUpdateOperationsInput | string | null
+    dvt?: NullableStringFieldUpdateOperationsInput | string | null
+    soLuong?: FloatFieldUpdateOperationsInput | number
+    donGia?: FloatFieldUpdateOperationsInput | number
+    doanhSo?: FloatFieldUpdateOperationsInput | number
+    chietKhau?: FloatFieldUpdateOperationsInput | number
+    soLuongTra?: FloatFieldUpdateOperationsInput | number
+    giaTriTra?: FloatFieldUpdateOperationsInput | number
+    giamGia?: FloatFieldUpdateOperationsInput | number
+    thueGtgt?: FloatFieldUpdateOperationsInput | number
+    tkThueGtgt?: NullableStringFieldUpdateOperationsInput | string | null
+    giaVon?: NullableFloatFieldUpdateOperationsInput | number | null
+    productId?: NullableStringFieldUpdateOperationsInput | string | null
+    dongSo?: NullableIntFieldUpdateOperationsInput | number | null
+  }
+
+  export type MisaSaleLineUncheckedUpdateWithoutDocInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    maHang?: StringFieldUpdateOperationsInput | string
+    tenHang?: NullableStringFieldUpdateOperationsInput | string | null
+    dvt?: NullableStringFieldUpdateOperationsInput | string | null
+    soLuong?: FloatFieldUpdateOperationsInput | number
+    donGia?: FloatFieldUpdateOperationsInput | number
+    doanhSo?: FloatFieldUpdateOperationsInput | number
+    chietKhau?: FloatFieldUpdateOperationsInput | number
+    soLuongTra?: FloatFieldUpdateOperationsInput | number
+    giaTriTra?: FloatFieldUpdateOperationsInput | number
+    giamGia?: FloatFieldUpdateOperationsInput | number
+    thueGtgt?: FloatFieldUpdateOperationsInput | number
+    tkThueGtgt?: NullableStringFieldUpdateOperationsInput | string | null
+    giaVon?: NullableFloatFieldUpdateOperationsInput | number | null
+    productId?: NullableStringFieldUpdateOperationsInput | string | null
+    dongSo?: NullableIntFieldUpdateOperationsInput | number | null
+  }
+
+  export type MisaSaleLineUncheckedUpdateManyWithoutDocInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    maHang?: StringFieldUpdateOperationsInput | string
+    tenHang?: NullableStringFieldUpdateOperationsInput | string | null
+    dvt?: NullableStringFieldUpdateOperationsInput | string | null
+    soLuong?: FloatFieldUpdateOperationsInput | number
+    donGia?: FloatFieldUpdateOperationsInput | number
+    doanhSo?: FloatFieldUpdateOperationsInput | number
+    chietKhau?: FloatFieldUpdateOperationsInput | number
+    soLuongTra?: FloatFieldUpdateOperationsInput | number
+    giaTriTra?: FloatFieldUpdateOperationsInput | number
+    giamGia?: FloatFieldUpdateOperationsInput | number
+    thueGtgt?: FloatFieldUpdateOperationsInput | number
+    tkThueGtgt?: NullableStringFieldUpdateOperationsInput | string | null
+    giaVon?: NullableFloatFieldUpdateOperationsInput | number | null
+    productId?: NullableStringFieldUpdateOperationsInput | string | null
+    dongSo?: NullableIntFieldUpdateOperationsInput | number | null
   }
 
 

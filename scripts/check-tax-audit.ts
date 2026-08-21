@@ -372,12 +372,25 @@ async function main() {
      * cả lập tức "quá hạn". Phần mềm không có ngày đăng ký kinh doanh nên không
      * được khẳng định — tách ra cảnh báo riêng, mức vừa. */
     {
+        /* NGÀY PHẢI TÍNH TƯƠNG ĐỐI (sửa 21/08/2026). Bản cũ ghi cứng mốc `2026-07 hạn 2026-08-20`
+         * làm "mốc chưa tới hạn"; đúng nửa đêm 20→21/08 nó thành QUÁ HẠN THẬT và ca kiểm đỏ, dù
+         * `kiemTraThue` chạy hoàn toàn đúng. Ca kiểm mục ruỗng theo lịch là ca kiểm sẽ bị tắt.
+         * `kiemTraThue` đọc `new Date()` bên trong, không nhận ngày tiêm vào — nên dựng mốc theo
+         * hôm nay: hai kỳ TRƯỚC ngày có dữ liệu (đã quá hạn) + một kỳ SAU, hạn còn ở tương lai. */
+        const nay = new Date()
+        const ngay = (d: Date) => d.toISOString().slice(0, 10)
+        const thangCua = (d: Date) => d.toISOString().slice(0, 7)
+        const batDauDuLieu = new Date(nay.getTime() - 20 * 86400_000)   // cửa hàng mới có dữ liệu 20 ngày
+        const hanTuongLai = new Date(nay.getTime() + 30 * 86400_000)
+        const kyCu1 = new Date(nay.getTime() - 300 * 86400_000)
+        const kyCu2 = new Date(nay.getTime() - 270 * 86400_000)
+
         const k = khoSach()
-        k.transactions = [{ createdAt: '2026-08-01T02:00:00.000Z', total: 1_000_000, status: 'completed' }] as any
+        k.transactions = [{ createdAt: batDauDuLieu.toISOString(), total: 1_000_000, status: 'completed' }] as any
         k.deadlines = [
-            { taxType: 'GTGT', period: '2026-01', dueDate: '2026-02-20', status: 'pending' },
-            { taxType: 'GTGT', period: '2026-02', dueDate: '2026-03-20', status: 'pending' },
-            { taxType: 'GTGT', period: '2026-07', dueDate: '2026-08-20', status: 'pending' },
+            { taxType: 'GTGT', period: thangCua(kyCu1), dueDate: ngay(new Date(kyCu1.getTime() + 40 * 86400_000)), status: 'pending' },
+            { taxType: 'GTGT', period: thangCua(kyCu2), dueDate: ngay(new Date(kyCu2.getTime() + 40 * 86400_000)), status: 'pending' },
+            { taxType: 'GTGT', period: thangCua(nay), dueDate: ngay(hanTuongLai), status: 'pending' },
         ]
         const h = await kiemTraThue(fakePrisma(k), KY)
         const cao = lay(h, 'to-khai-tre-han')

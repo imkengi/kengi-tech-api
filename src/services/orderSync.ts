@@ -4,6 +4,9 @@
  */
 
 import { adjustSellableStock } from '../lib/warehouseHelper'
+import { moTaLoi } from '../lib/gomLoi'
+import { TRANG_THAI_LEN_PHIEU } from '../lib/donDuocXoa'
+import { dangTat } from '../lib/choXong'
 
 type StorePrisma = any
 
@@ -16,21 +19,20 @@ export async function convertOnlineOrderToTransaction(prisma: StorePrisma, order
         where: { id: orderId },
         include: { items: true },
     })
-    if (!order) return false
+    /* Đơn BIẾN MẤT giữa chừng — hiếm nhưng có kịch bản thật: `processNewOrders`
+     * lấy danh sách id trước, rồi mới chuyển từng đơn; cron dọn dẹp chạy SONG
+     * SONG và có thể xoá một đơn nằm giữa hai bước đó. Im lặng ở đây là mất một
+     * đơn khỏi sổ mà không để lại dấu vết nào.
+     *
+     * Ba nhánh `return false` còn lại ở dưới (sai trạng thái, đã có phiếu) CỐ Ý
+     * im — chúng chạy mỗi lượt đồng bộ, ghi log là tạo tiếng ồn chứ không phải
+     * thông tin. */
+    if (!order) {
+        console.warn(`[OrderSync] Đơn ${orderId} không còn tồn tại lúc chuyển phiếu — bị xoá xen giữa?`)
+        return false
+    }
 
-    // Only convert orders with statuses that indicate a sale
-    const convertibleStatuses = [
-        // lowercase (nội bộ, sau khi mapStatus)
-        'confirmed', 'processing', 'shipping', 'completed', 'delivered',
-        // Shopee UPPERCASE (đề phòng lưu thẳng từ API)
-        'READY_TO_SHIP', 'PROCESSED', 'SHIPPED', 'COMPLETED',
-        // TikTok giữ nguyên trạng thái gốc (mapStatus từ 2026-06-11) — TRƯỚC ĐÂY
-        // THIẾU ở đây nên đơn TikTok kể cả DELIVERED bị chặn, không lên phiếu ⇒
-        // không vào hàng đợi xuất HĐ (tháng 7 chỉ 5/≥50 đơn đã giao vào được).
-        'AWAITING_SHIPMENT', 'AWAITING_COLLECTION', 'PARTIALLY_SHIPPING',
-        'IN_TRANSIT', 'DELIVERED',
-    ]
-    if (!convertibleStatuses.includes(order.status)) return false
+    if (!(TRANG_THAI_LEN_PHIEU as readonly string[]).includes(order.status)) return false
 
     // Check if already converted (receipt exists with this order number)
     const existing = await prisma.transaction.findFirst({
@@ -62,14 +64,17 @@ export async function convertOnlineOrderToTransaction(prisma: StorePrisma, order
     // (hoá đơn lấy dòng hàng từ phiếu bán). Tiền combo chia theo tỷ trọng giá gốc,
     // phần lẻ dồn vào dòng lớn nhất để tổng khớp tuyệt đối tiền khách trả.
     const expandBundle = async (bundleId: string, item: any): Promise<boolean> => {
-        const bundle = await prisma.bundle.findUnique({ where: { id: bundleId } }).catch(() => null)
+        /* Lỗi ĐỌC không được biến thành "combo rỗng" (20/08/2026): rỗng ⇒ hàm trả false ⇒ dòng đơn
+         * bị xử như một mã thường ⇒ trừ kho vào mã combo (thường không có tồn thật) và tiền cũng
+         * dồn vào đó. Đơn hỏng thì để lượt sau đồng bộ lại, hơn là ghi sai kho + sai doanh thu. */
+        const bundle = await prisma.bundle.findUnique({ where: { id: bundleId } })
         let comps: any[] = []
         try { comps = JSON.parse((bundle as any)?.items || '[]') } catch { comps = [] }
         const resolved: { p: any; qty: number; weight: number }[] = []
         for (const c of comps) {
             const cp = c.productId
-                ? await prisma.product.findUnique({ where: { id: c.productId } }).catch(() => null)
-                : (c.sku ? await prisma.product.findFirst({ where: { sku: c.sku } }).catch(() => null) : null)
+                ? await prisma.product.findUnique({ where: { id: c.productId } })
+                : (c.sku ? await prisma.product.findFirst({ where: { sku: c.sku } }) : null)
             if (!cp) { console.log(`[OrderSync] Combo ${bundle?.name}: thiếu thành phần ${c.sku || c.productId}`); continue }
             const qty = (Number(c.quantity) || 1) * (item.quantity || 1)
             resolved.push({ p: cp, qty, weight: (Number(c.originalPrice) || cp.sellingPrice || 1) * (Number(c.quantity) || 1) })
@@ -183,7 +188,9 @@ export async function convertOnlineOrderToTransaction(prisma: StorePrisma, order
         // Mã ĐÃ GỘP sang mã khác: chuyển sang mã đích + nhân hệ số (mã cũ vẫn còn
         // để sàn dò theo SKU, nhưng hàng thật nằm ở mã đích).
         if (product && (product as any).mergedIntoId) {
-            const tgt = await prisma.product.findUnique({ where: { id: (product as any).mergedIntoId } }).catch(() => null)
+            /* Đọc hỏng ⇒ tgt null ⇒ GIỮ NGUYÊN mã cũ: trừ kho vào mã đã gộp (mã đó không còn
+             * hàng thật) và bỏ luôn hệ số quy đổi ⇒ sai cả mặt hàng lẫn số lượng (20/08/2026). */
+            const tgt = await prisma.product.findUnique({ where: { id: (product as any).mergedIntoId } })
             if (tgt) {
                 mapRate *= Number((product as any).mergedRate) || 1
                 product = tgt
@@ -346,7 +353,20 @@ export async function processNewOrders(prisma: StorePrisma, channelId: string): 
     })
 
     let converted = 0
+    let daXuLy = 0          // đếm đơn ĐÃ CHẠM (thành công hay không) — khác `converted`
     for (const order of orders) {
+        /* Container đang tắt → dừng NGAY, đừng làm nốt. Đơn chưa kịp thì lượt sau
+         * quét lại (processNewOrders quét toàn bộ đơn đủ điều kiện mỗi lượt). Đo
+         * 03:02 UTC 18/08: không có cờ này, shutdown chờ 6 s vẫn không đủ → 11 đơn
+         * mất engine giữa chừng. Xem lib/choXong.ts. */
+        if (dangTat()) {
+            /* Đếm bằng `daXuLy` chứ không phải `converted`: converted chỉ đếm đơn CHUYỂN
+             * THÀNH CÔNG, nên bản đầu in "còn 20 đơn" khi thực tế còn 17 — người đọc log
+             * tưởng chưa chạy đơn nào (kiểm bằng prisma giả 18/08). */
+            console.log(`[OrderSync] Đang tắt — dừng chuyển đơn, đã xử lý ${daXuLy}/${orders.length}, còn ${orders.length - daXuLy} đơn để lượt sau`)
+            break
+        }
+        daXuLy++
         try {
             const success = await convertOnlineOrderToTransaction(prisma, order.id)
             if (success) converted++
@@ -358,12 +378,7 @@ export async function processNewOrders(prisma: StorePrisma, channelId: string): 
              * trong 6 giờ mà log chỉ ra `Error converting order X:` cụt lủn và
              * một dòng `prisma:error` trống, không lần nào biết vì sao. Đếm được
              * mà không chẩn được thì cũng như không thấy. */
-            const chiTiet = [
-                err?.code && `code=${err.code}`,
-                err?.message || err?.name || String(err),
-                err?.meta && `meta=${JSON.stringify(err.meta).slice(0, 200)}`,
-            ].filter(Boolean).join(' | ')
-            console.error(`[OrderSync] Error converting order ${order.orderNumber}: ${chiTiet}`)
+            console.error(`[OrderSync] Error converting order ${order.orderNumber}: ${moTaLoi(err)}`)
         }
     }
 

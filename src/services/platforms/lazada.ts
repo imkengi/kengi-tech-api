@@ -1,5 +1,6 @@
 import { PlatformService, PlatformCredentials, PlatformOrder, PlatformOrderItem, PlatformProduct, TokenResponse } from './base'
 import { proxyCircuitOpen, proxyCircuitError, noteProxySuccess, noteProxyFailure } from '../../lib/proxyBreaker'
+import { moTaLoi } from '../../lib/gomLoi'
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  LAZADA OPEN PLATFORM
@@ -67,7 +68,7 @@ export class LazadaService extends PlatformService {
             } catch (e: any) {
                 lastErr = e
                 if (i < LazadaService.FETCH_RETRIES - 1) {
-                    console.warn(`[Lazada fetch] lần ${i + 1} lỗi (${e?.message}) — thử lại`)
+                    console.warn(`[Lazada fetch] lần ${i + 1} lỗi (${moTaLoi(e)}) — thử lại`)
                     await sleep(1000 * 2 ** i)
                 }
             }

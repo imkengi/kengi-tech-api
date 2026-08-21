@@ -91,7 +91,7 @@ function getDeviceInfo(req: Request): string | null {
 
 function buildDetails(req: AuthRequest, action: string, entity: string): string {
     const parts: string[] = []
-    const user = req.user?.name || req.user?.email || 'Unknown'
+    const user = req.user?.email || 'Unknown'
     
     switch (action) {
         case 'create': {
@@ -147,8 +147,8 @@ export function auditLoggerMiddleware(req: AuthRequest, res: Response, next: Nex
                 // Fire-and-forget — don't block the response
                 prisma.auditLog.create({
                     data: {
-                        userId: req.user?.id || null,
-                        userName: req.user?.name || req.user?.email || 'system',
+                        userId: req.user?.userId || null,
+                        userName: req.user?.email || 'system',
                         action,
                         entity,
                         entityId: entityId ? String(entityId) : null,

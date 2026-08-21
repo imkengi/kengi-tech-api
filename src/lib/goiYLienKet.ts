@@ -40,6 +40,24 @@ export function tachTu(s: string): string[] {
     return chuanHoaTen(s).split(' ').filter(t => t.length >= 2 && !TU_RAC.has(t))
 }
 
+/**
+ * Token trông như MÃ MÁY / QUY CÁCH: có cả chữ lẫn số, từ 4 ký tự
+ * (`shd8611`, `ct16plus`, `20cm`). Đây thường là từ DUY NHẤT phân biệt hai mặt
+ * hàng cùng dòng, nhưng phép chấm điểm theo tỉ lệ từ lại chỉ tính nó như một từ
+ * bình thường.
+ *
+ * Đo KENGISTORE 16/08/2026: listing "Nồi Cơm Điện 1.8L Sunhouse **SHD8611**"
+ * được gợi nối vào hàng kho "Nồi cơm điện 1.8L Sunhouse **SHD8638**" với 0,83
+ * điểm — 5/6 từ khớp, lệch đúng cái mã. Listing đó đang chặn **1.026 đơn ≈ 710
+ * triệu**; nối theo gợi ý là quy toàn bộ số đó vào nhầm đời máy.
+ */
+export function laMaMay(t: string): boolean {
+    return t.length >= 4 && /[a-z]/.test(t) && /[0-9]/.test(t)
+}
+
+/** Số từ có nghĩa tối thiểu của TÊN KHO thì mới đủ làm bằng chứng. */
+export const TU_KHO_TOI_THIEU = 2
+
 export interface GoiY {
     listingId: string
     tenListing: string
@@ -69,18 +87,34 @@ export function goiYLienKet(
     listings: Array<{ id: string; name: string; sku: string | null }>,
     hangKho: Array<{ id: string; name: string; sku: string | null }>,
 ): GoiY[] {
-    const khoDaTach = hangKho.map(p => ({ p, tu: tachTu(p.name) }))
+    /* Loại thẳng mặt hàng có tên rút gọn còn quá ít từ có nghĩa.
+     *
+     * DÍNH THẬT 16/08/2026: "Phí bảo hành" sau khi bỏ từ tiếp thị chỉ còn ĐÚNG
+     * MỘT từ `phi`, vì `bao` và `hanh` đều nằm trong TU_RAC. Mẫu số bằng 1 nên
+     * bất kỳ listing nào có chữ "Miễn Phí Vận Chuyển" cũng khớp 1/1 = điểm
+     * TUYỆT ĐỐI, và vì không mã nào khác lại gần nên nó còn được gắn "tin cậy
+     * cao". Nối theo đó là ghi hàng nghìn đơn nồi cơm thành phí bảo hành. */
+    const khoDaTach = hangKho
+        .map(p => ({ p, tu: tachTu(p.name) }))
+        .filter(x => x.tu.length >= TU_KHO_TOI_THIEU)
+        .map(x => ({ ...x, ma: x.tu.filter(laMaMay) }))
     const ra: GoiY[] = []
 
     for (const l of listings) {
-        const tuL = new Set(tachTu(l.name))
+        const tuListing = tachTu(l.name)
+        const tuL = new Set(tuListing)
         if (!tuL.size) continue
+        const maL = new Set(tuListing.filter(laMaMay))
 
-        let tot: { p: any; diem: number } | null = null
+        let tot: { p: any; diem: number; tu: string[]; ma: string[] } | null = null
         let nhi = 0
-        for (const { p, tu } of khoDaTach) {
+        for (const { p, tu, ma } of khoDaTach) {
+            /* MÃ MÁY KHÁC NHAU = KHÔNG PHẢI CÙNG MẶT HÀNG.
+             * Chỉ xử khi CẢ HAI bên đều có mã: bên kho có mã mà listing không
+             * ghi mã thì im lặng bỏ qua là gợi hụt, không phải gợi sai. */
+            if (maL.size && ma.length && !ma.some(m => maL.has(m))) continue
             const d = chamDiem(tuL, tu)
-            if (!tot || d > tot.diem) { nhi = tot?.diem ?? 0; tot = { p, diem: d } }
+            if (!tot || d > tot.diem) { nhi = tot?.diem ?? 0; tot = { p, diem: d, tu, ma } }
             else if (d > nhi) nhi = d
         }
         if (!tot || tot.diem < 0.5) continue
@@ -90,8 +124,28 @@ export function goiYLienKet(
          * doanh thu chạy vào nhầm mã. Điểm nhì sát điểm nhất thì hạ tin cậy
          * xuống thấp để người dùng buộc phải tự nhìn. */
         const cachBiet = tot.diem - nhi
+
+        /* "TIN CẬY CAO" PHẢI CÓ BẰNG CHỨNG CỨNG, vì chính cái nhãn đó là thứ
+         * mời người ta bấm duyệt hàng loạt.
+         *
+         * Bằng chứng cứng = trùng MÃ MÁY, hoặc tên kho đủ dài để bản thân nó
+         * đã đặc trưng. Thiếu cả hai thì điểm cao chỉ đang phản ánh việc tên
+         * kho quá chung chung nên khớp trúng LỜI QUẢNG CÁO của listing.
+         *
+         * Đo KENGISTORE 16/08/2026, lấy mẫu 10 gợi ý "cao": 7 cái đúng thì cả
+         * 7 đều trùng mã máy; 3 cái sai thì đều là tên kho hai từ chung chung —
+         * "Quạt sàn Senko" (còn `quat`+`senko` vì `san` bị lọc) nuốt listing
+         * quạt hộp Senko BD230; "Tay cầm" nuốt listing mỏ lết vì listing có
+         * chữ "Tay Cầm Nhúng Nhựa"; "Linh Kiện" nuốt listing kìm cắt linh kiện.
+         * Cả ba đều 1,0 điểm và đều được gắn "cao".
+         *
+         * Ngưỡng 4 từ đặt rộng hơn mức quan sát được (hỏng ở 2 từ) là cố ý:
+         * gợi hụt thì người dùng tự tìm, gợi sai thì hỏng sổ. */
+        const trungMaMay = tot.ma.length > 0 && tot.ma.some(m => maL.has(m))
+        const duBangChung = trungMaMay || tot.tu.length >= 4
+
         const mucTinCay: GoiY['mucTinCay'] =
-            tot.diem >= 0.85 && cachBiet >= 0.15 ? 'cao'
+            duBangChung && tot.diem >= 0.85 && cachBiet >= 0.15 ? 'cao'
                 : tot.diem >= 0.65 && cachBiet >= 0.1 ? 'vua'
                     : 'thap'
 

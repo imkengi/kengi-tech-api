@@ -71,42 +71,52 @@ router.post('/', authMiddleware, requireRole('admin', 'manager'), validate(Creat
         if (!description?.trim()) return res.status(400).json({ success: false, error: 'Description required' })
         if (!amount || amount <= 0) return res.status(400).json({ success: false, error: 'Valid amount required' })
 
-        const expense = await prisma.expense.create({
-            data: {
-                description: description.trim(),
-                amount: Number(amount),
-                category: category || 'other',
-                paidBy: paidBy || 'Admin',
-                recurring: recurring || false,
-                date: date ? new Date(date) : new Date(),
-                bankAccountId: bankAccountId || null,
-                branchId: getBranchId(req) || null,
-            },
-        })
-
-        // Mirror to BankTransaction when paid from a bank account
-        if (bankAccountId) {
-            await prisma.bankTransaction.create({
+        /* Phiếu chi + BÚT TOÁN + dòng ngân hàng phải cùng một khối (20/08/2026). Bản cũ ghi phiếu
+         * xong mới `postExpenseJournal(...).catch(() => {})` — catch RỖNG, không cả log: bút toán
+         * hỏng thì phiếu chi vẫn nằm đó còn sổ kế toán không có khoản chi nào. */
+        const expense = await prisma.$transaction(async (t: any) => {
+            const row = await t.expense.create({
                 data: {
-                    bankAccountId,
-                    type: 'withdraw',
-                    amount: Number(amount),
                     description: description.trim(),
-                    reference: `EXP-${expense.id}`,
+                    amount: Number(amount),
+                    category: category || 'other',
+                    paidBy: paidBy || 'Admin',
+                    recurring: recurring || false,
                     date: date ? new Date(date) : new Date(),
+                    bankAccountId: bankAccountId || null,
+                    branchId: getBranchId(req) || null,
                 },
-            }).catch((e: any) => console.error('Bank transaction mirror failed:', e.message))
-        }
+            })
 
-        /* Ghi sổ kế toán ngay: Nợ 641/642 (theo loại) / Có 111|112, tách VAT đầu
-         * vào sang 1331. Phiếu 'pending' (bóc tự động từ hộp thư, chờ duyệt)
-         * KHÔNG ghi — chưa được xác nhận thì chưa phải nghiệp vụ. */
-        if ((expense.status ?? 'active') === 'active') {
-            await postExpenseJournal(prisma, expense as any, {
-                branchId: expense.branchId || null,
-                userId: req.user?.userId || null,
-            }).catch(() => { })
-        }
+            // Mirror to BankTransaction when paid from a bank account
+            if (bankAccountId) {
+                await t.bankTransaction.create({
+                    data: {
+                        bankAccountId,
+                        /* PHẢI là 'debit' (20/08/2026). Module ngân hàng chỉ hiểu 'credit'/'debit'
+                         * — `signed()` coi MỌI type khác 'debit' là TIỀN VÀO. Ghi 'withdraw' nghĩa
+                         * là mỗi phiếu chi trả từ tài khoản ngân hàng bị đếm thành tiền VÀO: số dư
+                         * tính lại, tổng thu/chi tháng và biểu đồ 6 tháng đều sai hướng. */
+                        type: 'debit',
+                        amount: Number(amount),
+                        description: description.trim(),
+                        reference: `EXP-${row.id}`,
+                        date: date ? new Date(date) : new Date(),
+                    },
+                })   // trong transaction rồi thì KHÔNG nuốt lỗi: hỏng là cả khối phải quay đầu
+            }
+
+            /* Ghi sổ kế toán ngay: Nợ 641/642 (theo loại) / Có 111|112, tách VAT đầu
+             * vào sang 1331. Phiếu 'pending' (bóc tự động từ hộp thư, chờ duyệt)
+             * KHÔNG ghi — chưa được xác nhận thì chưa phải nghiệp vụ. */
+            if ((row.status ?? 'active') === 'active') {
+                await postExpenseJournal(t, row as any, {
+                    branchId: row.branchId || null,
+                    userId: req.user?.userId || null,
+                })
+            }
+            return row
+        })
 
         cacheDel(`${req.user?.storeSchema || 'default'}:expenses:*`).catch(() => {})
         res.status(201).json({ success: true, data: expense })
@@ -158,34 +168,41 @@ router.post('/:id/cancel', authMiddleware, requireRole('admin', 'manager'), asyn
         if (!canAccessBranch(req, existing.branchId)) return res.status(404).json({ success: false, error: 'Không tìm thấy phiếu chi' })
         if (existing.status === 'cancelled') return res.status(400).json({ success: false, error: 'Phiếu chi đã bị hủy trước đó' })
 
-        const expense = await prisma.expense.update({
-            where: { id },
-            data: {
-                status: 'cancelled',
-                cancelledAt: new Date(),
-                cancelReason: reason?.trim() || null,
-            },
-        })
-
-        // Reverse the mirrored bank transaction if it was paid via bank
-        if (existing.bankAccountId) {
-            await prisma.bankTransaction.create({
+        /* Huỷ phiếu + BÚT TOÁN ĐẢO + dòng ngân hàng hoàn lại: cùng một khối. Bản cũ đảo sổ bằng
+         * `reverseJournalRefs(...).catch(() => {})` — catch RỖNG: phiếu thành 'cancelled' mà sổ
+         * vẫn giữ nguyên khoản chi, không ai biết (20/08/2026). */
+        const expense = await prisma.$transaction(async (t: any) => {
+            const row = await t.expense.update({
+                where: { id },
                 data: {
-                    bankAccountId: existing.bankAccountId,
-                    type: 'deposit',
-                    amount: existing.amount,
-                    description: `Hủy phiếu chi: ${existing.description}`,
-                    reference: `EXP-CANCEL-${existing.id}`,
-                    date: new Date(),
+                    status: 'cancelled',
+                    cancelledAt: new Date(),
+                    cancelReason: reason?.trim() || null,
                 },
-            }).catch((e: any) => console.error('Bank transaction reversal failed:', e.message))
-        }
+            })
 
-        /* Hủy phiếu chi thì phải ghi BÚT TOÁN ĐẢO, không xóa bút toán cũ — sổ kế
-         * toán sửa bằng bút toán đảo mới giữ được dấu vết kiểm toán. */
-        await reverseJournalRefs(prisma, refsOfExpense(existing.id), {
-            branchId: existing.branchId || null, userId: req.user?.userId || null,
-        }).catch(() => { })
+            // Đảo dòng ngân hàng nếu phiếu chi trả từ tài khoản ngân hàng
+            if (existing.bankAccountId) {
+                await t.bankTransaction.create({
+                    data: {
+                        bankAccountId: existing.bankAccountId,
+                        // Huỷ phiếu chi = tiền quay lại ⇒ 'credit' (xem ghi chú ở cashReceipts.ts).
+                        type: 'credit',
+                        amount: existing.amount,
+                        description: `Hủy phiếu chi: ${existing.description}`,
+                        reference: `EXP-CANCEL-${existing.id}`,
+                        date: new Date(),
+                    },
+                })
+            }
+
+            /* Hủy phiếu chi thì phải ghi BÚT TOÁN ĐẢO, không xóa bút toán cũ — sổ kế
+             * toán sửa bằng bút toán đảo mới giữ được dấu vết kiểm toán. */
+            await reverseJournalRefs(t, refsOfExpense(existing.id), {
+                branchId: existing.branchId || null, userId: req.user?.userId || null,
+            })
+            return row
+        })
 
         cacheDel(`${req.user?.storeSchema || 'default'}:expenses:*`).catch(() => {})
         res.json({ success: true, data: expense })

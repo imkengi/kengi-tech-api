@@ -86,7 +86,9 @@ import aiReportRoutes from './routes/aiReports'
 import fanpageRoutes from './routes/fanpage'
 import aiJobRoutes from './routes/aiJobs'
 import { cacheDisconnect, cacheHealth } from './lib/cache'
-import { startAutoSync, stopAutoSync } from './cron/autoSync'
+import { startAutoSync, stopAutoSync, choAutoSyncXong } from './cron/autoSync'
+import { startHanThanhToanCron } from './cron/hanThanhToanCron'
+import { batCoDangTat } from './lib/choXong'
 import { startFlashSaleScheduler } from './cron/flashSaleScheduler'
 import { startEInvoiceQueueCron } from './cron/einvoiceQueue'
 import { startFanpageCron, stopFanpageCron } from './cron/fanpageCron'
@@ -120,9 +122,13 @@ const allowedOrigins = [
     'https://kengi.vn',
     'https://www.kengi.vn',
     'https://open-retail.tinohosting.vn',
+    'https://studio.kengi.vn', // Nguyệt Các Tarot (trang tĩnh trên Tino)
     'http://localhost:3000',
     'http://localhost:3001',
     'http://localhost:3100', // Kengi Stream studio dev
+    'http://localhost:4189', // Nguyệt Các Tarot chạy máy local (tarot-server.js)
+    'http://127.0.0.1:4189',
+    'http://localhost:8791', // xem thử trang studio ở máy (python http.server)
 ]
 app.use(cors({
     /* Origin lạ thì TỪ CHỐI SẠCH, không ném Error.
@@ -216,6 +222,7 @@ app.use('/api/auth/token', tokenLimiter)
 app.use('/api/auth/send-otp', otpLimiter)
 app.use('/api/auth/verify-2fa', otpLimiter) // chống brute-force mã TOTP
 app.use('/api/auth/verify-otp', otpLimiter)
+app.use('/api/tarot/auth', authLimiter) // đăng nhập Google của trang tarot
 app.use('/api', apiLimiter)
 
 // ─── Request Logger (dev) ───────────────────────────────────────────────────
@@ -352,6 +359,12 @@ app.use('/api/ai-jobs', aiJobRoutes) // Tro ly AI tu dong theo lich
 import marketingRoutes from './routes/marketing'
 app.use('/api/marketing', marketingRoutes) // AI len content fanpage (hang doi cho duyet)
 
+// Nguyệt Các Tarot (kengi.vn/tarot) — đăng nhập Google + lưu lịch sử trải bài.
+// Hệ tài khoản RIÊNG, không dùng chung với tài khoản cửa hàng.
+import tarotRoutes from './routes/tarot'
+import { moTaLoi } from './lib/gomLoi'
+app.use('/api/tarot', tarotRoutes)
+
 // ─── Health check ───────────────────────────────────────────────────────────
 app.get('/api/health', async (_req, res) => {
     const cache = await cacheHealth()
@@ -360,6 +373,15 @@ app.get('/api/health', async (_req, res) => {
         status: 'ok',
         timestamp: new Date().toISOString(),
         architecture: 'multi-schema',
+        /* DẤU ẤN BẢN ĐANG CHẠY (20/08/2026). Sự cố hôm nay: prod chạy ảnh cũ hơn cây mã, thiếu bản
+         * vá "thiếu ≠ 0", và KHÔNG có cách nào biết trong một lần gọi — phải đi dò từng route xem
+         * cái nào 404. Nay `npm run deploy:gcloud` đóng commit + trạng thái cây vào env, chỗ này
+         * trả lại. `trangThai: 'ban'` = deploy từ cây có sửa chưa commit. */
+        build: {
+            sha: process.env.BUILD_GIT_SHA || 'khong-ro',
+            trangThai: process.env.BUILD_GIT_TRANG_THAI || 'khong-ro',
+            buildId: process.env.BUILD_ID || 'khong-ro',
+        },
         cache,
         websocket: ws,
     })
@@ -1004,7 +1026,7 @@ if (!process.env.PASSENGER_BASE_URI) {
                             await registryPrisma.$executeRawUnsafe(query)
                             migratedCount++;
                         } catch (e: any) {
-                            console.error(`[Migration] Error restoring ${table}: ${e.message}`)
+                            console.error(`[Migration] Error restoring ${table}: ${moTaLoi(e)}`)
                         }
                     }
                     if (migratedCount > 0) {
@@ -1517,6 +1539,7 @@ if (!process.env.PASSENGER_BASE_URI) {
                 startAiAgentCron()
                 startWebhookCron()
                 startEmailReplyCron()
+                startHanThanhToanCron()
                 startFlashSaleScheduler()
                 startEInvoiceQueueCron()
                 startTaxAuditCron()
@@ -1529,10 +1552,18 @@ if (!process.env.PASSENGER_BASE_URI) {
     // Graceful shutdown
     const shutdown = async () => {
         console.log('🛑 Shutting down gracefully...')
+        /* THỨ TỰ QUAN TRỌNG: (1) bật cờ đang tắt để vòng lặp dài tự thoát giữa
+         * chừng; (2) dừng hẹn giờ cron; (3) chờ lượt đang chạy xong (có trần);
+         * (4) MỚI đóng DB. Bản cũ đóng DB trước → cron đang chuyển đơn mất engine
+         * dưới chân (đo 18/08: 48 đơn hỏng 0,66 s sau SIGTERM). Có cờ nhưng chỉ
+         * chờ (không thoát sớm) thì vẫn 11 đơn vì lượt không kịp xong trong 6 s. */
+        batCoDangTat()
+        stopAutoSync()
+        const xong = await choAutoSyncXong(6_000)
+        if (!xong) console.warn('[Shutdown] autoSync chưa xong sau 6s — đóng DB, lượt sau sẽ chuyển lại đơn dở')
         await disconnectAll()
         await cacheDisconnect()
         await pubsubDisconnect()
-        stopAutoSync()
         stopFanpageCron()
         stopAiAgentCron()
         stopWebhookCron()

@@ -775,6 +775,19 @@ export const TOOLS: Tool[] = [
 
             const paymentType = String(a.payment_type || 'cash')
             const entry = await prisma.$transaction(async (tx: any) => {
+                /* Trừ nợ NGUYÊN TỬ rồi mới ghi sổ (20/08/2026): `debt: newBalance` tính từ lần đọc
+                 * trước transaction là "lost update" — AI gọi tool này trong khi nhân viên thu tiền
+                 * trên POS thì một trong hai lần trả biến mất. */
+                const sau = await tx.customer.update({
+                    where: { id: customer.id },
+                    data: { debt: { decrement: paid } },
+                    select: { debt: true },
+                })
+                let soDu = Number(sau?.debt) || 0
+                if (soDu < 0) {
+                    await tx.customer.update({ where: { id: customer.id }, data: { debt: 0 } })
+                    soDu = 0
+                }
                 // "Trả nợ" là prefix mà debt-history dò để phân loại — giữ nguyên,
                 // ghi chú người dùng nối phía sau.
                 const created = await tx.debtEntry.create({
@@ -785,10 +798,9 @@ export const TOOLS: Tool[] = [
                         type: 'payment',
                         amount: paid,
                         description: a.note ? `Trả nợ - ${String(a.note)}` : 'Trả nợ',
-                        balance: newBalance,
+                        balance: soDu,
                     },
                 })
-                await tx.customer.update({ where: { id: customer.id }, data: { debt: newBalance } })
                 await postDebtCollectionJournal(tx, {
                     amount: paid,
                     refKey: `COLLECT-DEBT-${created.id}`,
@@ -875,12 +887,22 @@ export const TOOLS: Tool[] = [
             properties: { limit: { type: 'number', description: 'Mặc định 10, tối đa 50' } },
         },
         run: async (a, { prisma }) => {
-            const rows = await prisma.customer.findMany({
-                orderBy: { totalPurchases: 'desc' },
-                take: Math.min(num(a?.limit, 10), 50),
-                select: { code: true, name: true, phone: true, totalPurchases: true, totalOrders: true, debt: true },
+            /* TÍNH SỐNG từ giao dịch (loại voided/returned) — cùng luật với segments-live, /customers/:id và widget Khách VIP.
+             * Trường tổng hợp Customer.totalPurchases do đồng bộ đắp dần, cửa hàng nhập KiotViet có khách 0 dù mua tỷ đồng
+             * (18/08/2026) → AI xếp "top" sai. */
+            const lim = Math.min(num(a?.limit, 10), 50)
+            const gom = await prisma.transaction.groupBy({
+                by: ['customerId'],
+                where: { customerId: { not: null }, status: { notIn: ['voided', 'returned'] } },
+                _sum: { total: true }, _count: { _all: true },
+                orderBy: { _sum: { total: 'desc' } },
+                take: lim,
             })
-            return { khachHang: rows }
+            const ids = gom.map((g: any) => g.customerId as string)
+            const khs = ids.length ? await prisma.customer.findMany({ where: { id: { in: ids } }, select: { id: true, code: true, name: true, phone: true, debt: true } }) : []
+            const theoId = new Map(khs.map((k: any) => [k.id, k]))
+            return { khachHang: gom.map((g: any) => { const k: any = theoId.get(g.customerId) || {}; return { code: k.code, name: k.name, phone: k.phone, totalPurchases: Math.round(Number(g._sum?.total) || 0), totalOrders: g._count?._all ?? 0, debt: k.debt ?? 0 } }),
+                ghiChu: 'Tổng mua tính sống từ giao dịch (loại đơn huỷ/trả), không phải trường tổng hợp trên hồ sơ khách.' }
         },
     },
     {

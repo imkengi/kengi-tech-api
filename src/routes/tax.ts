@@ -1,6 +1,9 @@
 import { Router, Request, Response } from 'express'
+import { conLaiPhieu, congNoHienThi } from '../lib/congNoNcc'
+import { phanBoTuoiNoFifo, roRong, doVaoRo, tuoiNgay } from '../lib/tuoiNoFifo'
 import { errMsg } from '../lib/errorResponse'
 import { authMiddleware, getBranchFilter, AuthRequest, getBranchId } from '../middleware/auth'
+import { requireRole } from '../middleware/roleMiddleware'
 import { chayTheoDot } from '../lib/poolGuard'
 import { createJournalEntriesForTransaction, AUTO_JOURNAL_REF_TYPES, PLATFORM_AR } from '../lib/autoJournal'
 import { postImportReceiptJournal, postExpenseJournal, postReturnJournal } from '../lib/autoJournalPurchase'
@@ -10,6 +13,15 @@ import { giaiTrinhKhaiBoSung } from '../lib/amendmentExplain'
 import { ganTienChoMoc, type MocNghiaVu } from '../lib/taxCalendar'
 import { nguongChiuThueHKD } from '../lib/taxAudit'
 import { suyHoSoThue, gieoLichNghiaVu } from '../lib/taxCalendarStore'
+
+/* Bảng CHƯA MIGRATE (P2021) thì coi như rỗng — cửa hàng chưa bật tính năng đó, đúng là không có
+ * số liệu. Nhưng lỗi ĐỌC khác (mất kết nối, hết pool…) mà cũng nuốt thành rỗng thì lịch nghĩa vụ
+ * thuế lặng lẽ tính trên số 0: sai kỳ khai, sai tạm nộp. Loại này phải nổi lên (20/08/2026). */
+const rongNeuChuaCoBang = (e: any): any[] => {
+    const ma = String(e?.code || '')
+    if (ma === 'P2021' || ma === 'P2022' || /does not exist|relation .* does not exist/i.test(String(e?.message || ''))) return []
+    throw e
+}
 import { tienThueDaNop, dieuKienButToanNopThue, ghiChuNguonDaNop } from '../lib/taxPaidLedger'
 
 const router = Router()
@@ -336,6 +348,7 @@ async function calculate01GTGT(prisma: any, req: any, periodType: string, year: 
     const totalSalesTax = transactions.reduce((s: number, t: any) => s + (t.tax || 0), 0)
     let ct21 = 0, ct22 = 0, ct23 = 0, ct24 = 0, ct25 = 0, ct26 = 0, ct27 = 0, ct28 = 0
     let nguonDoanhThu = 'phiếu bán hàng'
+    let loiDocHoaDon = false
 
     /* TÁCH DOANH THU THEO TỪNG THUẾ SUẤT.
      *
@@ -357,8 +370,11 @@ async function calculate01GTGT(prisma: any, req: any, periodType: string, year: 
             },
         },
         select: { vatRate: true, vatAmount: true, amount: true, eInvoice: { select: { invoiceType: true } } },
-    }).catch(() => [])
+    }).catch(() => { loiDocHoaDon = true; return [] })
 
+    /* Đọc hỏng thì rơi về phiếu bán hàng — ĐÚNG cách xử lý, nhưng phải nói ra: nhìn nhãn nguồn,
+     * kế toán không phân biệt được "cửa hàng chưa dùng hoá đơn điện tử" với "không đọc được hoá
+     * đơn điện tử", trong khi hai tình huống đó đòi hai hành động khác hẳn nhau (20/08/2026). */
     if (dongHoaDon.length > 0) {
         nguonDoanhThu = 'hóa đơn điện tử đã phát hành'
         for (const d of dongHoaDon) {
@@ -455,7 +471,9 @@ async function calculate01GTGT(prisma: any, req: any, periodType: string, year: 
         /* Nói rõ số liệu dựng từ đâu — kế toán cần biết mình đang đối chiếu với
          * hóa đơn hay với phiếu bán trước khi ký nộp. Trường này không phải chỉ
          * tiêu của tờ khai nên nơi lưu phải lọc bỏ. */
-        nguonDoanhThu,
+        nguonDoanhThu: loiDocHoaDon
+            ? `${nguonDoanhThu} — CHƯA đọc được hóa đơn điện tử, không rõ có hóa đơn nào chưa đối chiếu hay không`
+            : nguonDoanhThu,
     }
 }
 
@@ -475,7 +493,11 @@ async function doanhThuLuyKeNam(prisma: any, year: number, denNgay: Date): Promi
             createdAt: { gte: new Date(year, 0, 1), lte: denNgay },
         },
         _sum: { total: true },
-    }).catch(() => null)
+    })
+    /* KHÔNG `.catch(() => null)` (20/08/2026): đọc hỏng → 0 → hai nơi gọi đều rơi về doanh thu
+     * CỦA KỲ (`|| cnkdRevenue`) → luỹ kế năm nhìn nhỏ đi → kết luận "chưa vượt ngưỡng, thuế = 0".
+     * Đây đúng là con số quyết định hộ có phải nộp thuế hay không, như ghi chú ngay trên: không
+     * được phép quyết định trên dữ liệu chưa đọc được. Lỗi thì để nổi lên thành 500. */
     return Number(agg?._sum?.total || 0)
 }
 
@@ -1838,74 +1860,122 @@ router.get('/cash-book', authMiddleware, async (req: AuthRequest, res: Response)
 // ── DEBT AGING (Công Nợ Phải Thu/Trả) ──────────────────────────────────────
 
 // GET /api/tax/debt-aging?type=receivable&year=2026
+/**
+ * TUỔI NỢ PHÂN BỔ FIFO NEO SỔ (sửa 18/08/2026).
+ *
+ * Bản cũ dồn TOÀN BỘ nợ của một đối tác vào MỘT rổ theo "ngày kể từ lần mua cuối":
+ * khách mua đều thì không bao giờ già (Cửa Hàng Hoàng Sơn 163,7tr — GD cuối 24/7 → rổ
+ * 1–30 ngày, trong khi FIFO nói 225 ngày), và "hiện tại" chỉ khi mua ĐÚNG HÔM NAY nên
+ * HUTI hiện "quá hạn 4,16 tỷ" trong khi trang Công Nợ (FIFO) nói 1,26 tỷ >90 ngày. Hai
+ * màn hình công nợ nói hai câu chuyện tuổi nợ.
+ *
+ * Nay cùng luật với trang Công Nợ / Sức khoẻ khách (customers.ts `tuoiNoFifo`,
+ * lib/sucKhoeTaiChinhKhach): tiền trả cover nợ CŨ trước ⇒ nợ còn lại nằm ở các chứng từ
+ * MỚI NHẤT. Đi từ chứng từ mới nhất ngược về, cắt từng phần vào rổ theo ngày chứng từ
+ * cho tới khi cạn số dư sổ. Số dư vượt quá mọi chứng từ (dư đầu kỳ nhập tay/đồng bộ) xếp
+ * rổ >90 kèm cờ `duDauKyKhongChungTu` — nó có trước cả chứng từ cổ nhất trong hệ thống.
+ * Rổ "current" = chứng từ ≤ 7 ngày (khớp "Dưới 7 ngày" của trang Công Nợ).
+ *
+ * Phải trả NCC: sổ = payable (số dư đầu kỳ) + Σ phiếu chưa trả (lib/congNoNcc.ts — cùng
+ * số danh sách NCC), phân bổ FIFO trên phiếu chưa trả theo ngày chứng từ; phần dư sổ
+ * không có phiếu → >90 kèm cờ. Bản cũ chỉ cộng phiếu chưa trả nên tổng (20,46 tỷ ở HUTI)
+ * lệch danh sách NCC (20,15 tỷ) vì có NCC đã trả nhưng chưa gắn phiếu.
+ */
 router.get('/debt-aging', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const debtType = (req.query.type as string) || 'receivable'
         const now = new Date()
-
-        if (debtType === 'receivable') {
-            // Customers with debt > 0
-            const customers = await prisma.customer.findMany({
-                where: { debt: { gt: 0 } },
-                select: { id: true, name: true, debt: true, lastPurchaseDate: true },
-                orderBy: { debt: 'desc' },
-            })
-            const rows = customers.map(c => {
-                const daysSince = c.lastPurchaseDate ? Math.floor((now.getTime() - new Date(c.lastPurchaseDate).getTime()) / 86400000) : 999
-                const current = daysSince <= 0 ? c.debt : 0
-                const days30 = daysSince > 0 && daysSince <= 30 ? c.debt : 0
-                const days60 = daysSince > 30 && daysSince <= 60 ? c.debt : 0
-                const days90 = daysSince > 60 && daysSince <= 90 ? c.debt : 0
-                const overdue90 = daysSince > 90 ? c.debt : 0
-                return { partnerId: c.id, partnerName: c.name, totalDebt: c.debt, current, days30, days60, days90, overdue90, lastTransactionDate: c.lastPurchaseDate }
-            })
-            const totalDebt = rows.reduce((s, r) => s + r.totalDebt, 0)
-            const totalCurrent = rows.reduce((s, r) => s + r.current, 0)
-            const totalOverdue = totalDebt - totalCurrent
-            const agingSummary = {
+        const phanBoFifo = (soDu: number, chungTu: Array<{ ngay: Date; tien: number }>) => phanBoTuoiNoFifo(soDu, chungTu, now)
+        const gom = (rows: any[]) => ({
+            totalDebt: rows.reduce((s, r) => s + r.totalDebt, 0),
+            agingSummary: {
                 current: rows.reduce((s, r) => s + r.current, 0),
                 days30: rows.reduce((s, r) => s + r.days30, 0),
                 days60: rows.reduce((s, r) => s + r.days60, 0),
                 days90: rows.reduce((s, r) => s + r.days90, 0),
                 overdue90: rows.reduce((s, r) => s + r.overdue90, 0),
-            }
-            res.json({ success: true, data: { rows, totalDebt, totalCurrent, totalOverdue, agingSummary } })
-        } else {
-            // Payable: import receipts not fully paid (paymentStatus unpaid/partial).
-            // Outstanding = totalCost - paidAmount.
-            const imports = await prisma.importReceipt.findMany({
-                where: {
-                    status: { not: 'cancelled' },
-                    paymentStatus: { in: ['unpaid', 'partial'] },
-                } as any,
-                select: { id: true, supplierName: true, totalCost: true, paidAmount: true, createdAt: true } as any,
-                orderBy: { totalCost: 'desc' },
+            },
+        })
+
+        if (debtType === 'receivable') {
+            const customers = await prisma.customer.findMany({
+                where: { debt: { gt: 0 } },
+                select: { id: true, name: true, debt: true, lastPurchaseDate: true },
+                orderBy: { debt: 'desc' },
             })
-            const rows = (imports as any[]).map(i => {
-                const remaining = Math.max(0, (i.totalCost || 0) - (i.paidAmount || 0))
-                const daysSince = Math.floor((now.getTime() - new Date(i.createdAt).getTime()) / 86400000)
-                return {
-                    partnerId: i.id, partnerName: i.supplierName || 'NCC', totalDebt: remaining,
-                    current: daysSince <= 0 ? remaining : 0,
-                    days30: daysSince > 0 && daysSince <= 30 ? remaining : 0,
-                    days60: daysSince > 30 && daysSince <= 60 ? remaining : 0,
-                    days90: daysSince > 60 && daysSince <= 90 ? remaining : 0,
-                    overdue90: daysSince > 90 ? remaining : 0,
-                    lastTransactionDate: i.createdAt,
-                }
-            }).filter(r => r.totalDebt > 0)
-            const totalDebt = rows.reduce((s, r) => s + r.totalDebt, 0)
-            const totalCurrent = rows.reduce((s, r) => s + r.current, 0)
-            const totalOverdue = totalDebt - totalCurrent
-            const agingSummary = {
-                current: totalCurrent,
-                days30: rows.reduce((s, r) => s + r.days30, 0),
-                days60: rows.reduce((s, r) => s + r.days60, 0),
-                days90: rows.reduce((s, r) => s + r.days90, 0),
-                overdue90: rows.reduce((s, r) => s + r.overdue90, 0),
+            const ids = customers.map(c => c.id)
+            /* CÙNG TẬP CHỨNG TỪ với Sức khoẻ khách (lib/sucKhoeTaiChinhKhach `tapPhieuNoThat`) và trang Công Nợ:
+             * chỉ phiếu `partial` còn phần CHƯA THU (total − amountReceived > 0), lấy phần chưa thu — không phải mọi
+             * đơn với tổng. Rà soát độc lập 19/08/2026: bản đầu chạy trên mọi đơn ⇒ khách nợ cũ 100tr nhưng mua tiền
+             * mặt gần đây bị "trẻ hoá" tuổi nợ (khác Sức khoẻ ở cùng khách). Lưu ý: segments-live `tuoiNoFifo` (cột
+             * Số ngày nợ danh sách KH, điểm hạng) vẫn chạy trên mọi đơn — chờ chốt một luật chung. */
+            const donBan = ids.length ? await prisma.transaction.findMany({
+                // Gồm CẢ 'completed' lẫn 'partial' rồi lọc phần CHƯA THU (total − amountReceived > 0):
+                // đơn completed mà thu thiếu vẫn là nợ, và lọc mỗi 'partial' là lặp lại bẫy "đơn ghi nợ bị bỏ sót"
+                // mà check:doanhthu canh (bắt được 20/08 — sửa 19/08 chỉ chạy vài bộ kiểm nên lọt).
+                where: { customerId: { in: ids }, status: { in: ['completed', 'partial'] } },
+                select: { customerId: true, createdAt: true, transactionDate: true, total: true, amountReceived: true, status: true },
+                orderBy: { createdAt: 'desc' },
+            }) : []
+            const theoKhach = new Map<string, Array<{ ngay: Date; tien: number }>>()
+            for (const t of donBan as any[]) {
+                const con = Math.max(0, (Number(t.total) || 0) - (Number(t.amountReceived) || 0))
+                if (con <= 0) continue
+                const ds = theoKhach.get(t.customerId) || []
+                ds.push({ ngay: new Date(t.transactionDate || t.createdAt), tien: con })
+                theoKhach.set(t.customerId, ds)
             }
-            res.json({ success: true, data: { rows, totalDebt, totalCurrent, totalOverdue, agingSummary } })
+            const rows = customers.map(c => {
+                const ds = (theoKhach.get(c.id) || []).sort((a, b) => b.ngay.getTime() - a.ngay.getTime())
+                const { ro, moc, tuoiMoc, duDauKy } = phanBoFifo(c.debt, ds)
+                return { partnerId: c.id, partnerName: c.name, totalDebt: c.debt, ...ro,
+                    lastTransactionDate: ds[0]?.ngay ?? c.lastPurchaseDate ?? null,
+                    mocTuoiNo: moc, tuoiNoNgay: tuoiMoc, duDauKyKhongChungTu: duDauKy > 0 ? duDauKy : 0 }
+            })
+            const { totalDebt, agingSummary } = gom(rows)
+            const totalCurrent = agingSummary.current
+            res.json({ success: true, data: { rows, totalDebt, totalCurrent, totalOverdue: totalDebt - totalCurrent, agingSummary,
+                phuongPhap: 'FIFO neo sổ — chứng từ mới nhất trước, cắt từng phần theo ngày chứng từ; current = ≤7 ngày; dư đầu kỳ không chứng từ → >90' } })
+        } else {
+            // Phải trả NCC: theo NCC, sổ = payable + Σ phiếu chưa trả (cùng số danh sách NCC), FIFO trên phiếu chưa trả.
+            // Tuần tự (pool prod = 1, quy ước dự án)
+            const nccs = await prisma.supplier.findMany({ select: { id: true, name: true, code: true, payable: true } as any })
+            const phieu = await prisma.importReceipt.findMany({
+                where: { status: { notIn: ['cancelled', 'draft'] }, paymentStatus: { in: ['unpaid', 'partial'] } } as any,
+                select: { id: true, supplierId: true, supplierName: true, totalCost: true, paidAmount: true, paymentStatus: true, createdAt: true, transactionDate: true } as any,
+                orderBy: { createdAt: 'desc' },
+            })
+            const theoNcc = new Map<string, Array<{ ngay: Date; tien: number }>>()
+            const khongGan: Array<{ ngay: Date; tien: number; ten: string; id: string }> = []
+            for (const r of phieu as any[]) {
+                const conLai = conLaiPhieu(r)
+                if (conLai <= 0) continue
+                const ngay = new Date(r.transactionDate || r.createdAt)
+                if (!r.supplierId) { khongGan.push({ ngay, tien: conLai, ten: r.supplierName || 'Không rõ NCC', id: r.id }); continue }
+                const ds = theoNcc.get(r.supplierId) || []; ds.push({ ngay, tien: conLai }); theoNcc.set(r.supplierId, ds)
+            }
+            const rows: any[] = []
+            for (const n of nccs as any[]) {
+                const ds = (theoNcc.get(n.id) || []).sort((a, b) => b.ngay.getTime() - a.ngay.getTime())
+                const tongPhieu = ds.reduce((s, x) => s + x.tien, 0)
+                const soDu = congNoHienThi(Number(n.payable) || 0, tongPhieu)
+                if (soDu <= 0) continue
+                const { ro, moc, tuoiMoc, duDauKy } = phanBoFifo(soDu, ds)
+                rows.push({ partnerId: n.id, partnerName: n.name, totalDebt: soDu, ...ro,
+                    lastTransactionDate: ds[0]?.ngay ?? null, mocTuoiNo: moc, tuoiNoNgay: tuoiMoc,
+                    duDauKyKhongChungTu: duDauKy > 0 ? duDauKy : 0, phieuChuaTra: tongPhieu, soDuSo: Math.round(Number(n.payable) || 0) })
+            }
+            // Phiếu không gắn NCC: mỗi phiếu một dòng, tuổi theo ngày chứng từ (không có sổ để neo)
+            for (const k of khongGan) {
+                const ro = roRong(); const tuoi = tuoiNgay(k.ngay, now); doVaoRo(ro, tuoi, k.tien)
+                rows.push({ partnerId: k.id, partnerName: `${k.ten} (phiếu không gắn NCC)`, totalDebt: k.tien, ...ro, lastTransactionDate: k.ngay, mocTuoiNo: k.ngay, tuoiNoNgay: tuoi, duDauKyKhongChungTu: 0 })
+            }
+            rows.sort((a, b) => b.totalDebt - a.totalDebt)
+            const { totalDebt, agingSummary } = gom(rows)
+            const totalCurrent = agingSummary.current
+            res.json({ success: true, data: { rows, totalDebt, totalCurrent, totalOverdue: totalDebt - totalCurrent, agingSummary,
+                phuongPhap: 'Sổ NCC = payable + Σ phiếu chưa trả (như danh sách NCC); FIFO trên phiếu chưa trả theo ngày chứng từ; current = ≤7 ngày' } })
         }
     } catch (err) { console.error('GET /debt-aging error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
@@ -2389,7 +2459,15 @@ router.get('/revenue-analysis', authMiddleware, async (req: AuthRequest, res: Re
         const [txs, expenses, imports] = await Promise.all([
             prisma.transaction.findMany({ where: { status: { in: ['completed', 'partial'] }, createdAt: { gte: start, lte: end } }, select: { total: true, subtotal: true, tax: true, discount: true, createdAt: true } }),
             prisma.expense.findMany({ where: { date: { gte: start, lte: end } }, select: { amount: true, category: true, date: true } }),
-            prisma.importReceipt.findMany({ where: { createdAt: { gte: start, lte: end } }, select: { totalCost: true, createdAt: true } }),
+            /* Loại phiếu ĐÃ HUỶ khỏi giá vốn: câu này trước đây không lọc `status` gì cả, nên phiếu
+             * nhập `cancelled` (mua rồi huỷ — chưa từng phát sinh chi phí) vẫn bị cộng vào giá vốn,
+             * làm lợi nhuận của báo cáo này thấp hơn thật.
+             * CỐ Ý CHỈ loại 'cancelled', KHÔNG lọc `status: 'completed'` như vài chỗ khác trong file:
+             * `status` mặc định là **'draft'**, cửa hàng nào không bấm hoàn tất thì lọc chặt sẽ đưa
+             * giá vốn về 0 — sai nặng hơn nhiều so với cái đang sửa. Việc thống nhất quy ước giữa
+             * ba chỗ (ở đây · dòng 321 `completed` · dòng 2597 `not: 'draft'`) là quyết định nghiệp
+             * vụ, đã ghi ra để chủ shop chọn. (21/08/2026) */
+            prisma.importReceipt.findMany({ where: { status: { not: 'cancelled' }, createdAt: { gte: start, lte: end } }, select: { totalCost: true, createdAt: true } }),
         ])
 
         const netRevenue = txs.reduce((s, t) => s + (t.total || 0), 0)
@@ -2954,7 +3032,11 @@ router.post('/closing-entries', authMiddleware, async (req: AuthRequest, res: Re
 
         const entries = await prisma.journalEntry.findMany({
             where: { date: { gte: dateGte, lte: dateEnd } },
-            select: { debitAccount: true, creditAccount: true, amount: true, reference: true, referenceType: true },
+            /* Phải lấy CẢ hai cột tên: bên dưới gom số dư theo tài khoản có đọc
+             * `e.debitAccountName` / `e.creditAccountName`. Thiếu trong `select` thì chúng ra
+             * `undefined`, rơi vào `bal.name || code` và bảng kết chuyển hiện MÃ thay cho TÊN
+             * tài khoản ("511" thay vì "Doanh thu bán hàng") — sai lặng, vì có đường lùi che. */
+            select: { debitAccount: true, debitAccountName: true, creditAccount: true, creditAccountName: true, amount: true, reference: true, referenceType: true },
         })
 
         // Idempotency: refuse to re-run if closing entries already exist for this period
@@ -2974,11 +3056,21 @@ router.post('/closing-entries', authMiddleware, async (req: AuthRequest, res: Re
 
         const branchId = (req as any).branchId || null
         const userId = (req as any).userId || null
-        const created: any[] = []
-        for (let i = 0; i < plan.length; i++) {
-            const p = plan[i]!
-            try {
-                const entry = await prisma.journalEntry.create({
+        /* KẾT CHUYỂN PHẢI ĐƯỢC ĂN CẢ HOẶC KHÔNG GÌ (21/08/2026).
+         *
+         * Bản cũ tạo từng bút toán một, **nuốt lỗi từng cái** (`catch { console.error }`) rồi vẫn
+         * trả `success: true` kèm `totalCreated` = số nào ghi được. Hỏng ở bút toán thứ 3/5 thì:
+         *   · 4 bút toán đã nằm trong sổ, 1 bút toán không → **sổ kết chuyển DỞ DANG**;
+         *   · API vẫn báo 201 thành công, không ai biết;
+         *   · chạy lại thì **chốt chống trùng ở trên chặn bằng 409** ("đã có 4 bút toán kết chuyển")
+         *     ⇒ kỳ kế toán mắc kẹt, phải tự tay xoá 4 bút toán kia mới làm lại được.
+         * Nay gói cả lượt vào MỘT transaction: hỏng thì không có bút toán nào được ghi, chốt 409
+         * không kích hoạt, bấm lại là chạy sạch. Vài bút toán nên giữ kết nối rất ngắn (pool = 1). */
+        const created: any[] = await prisma.$transaction(async (tx) => {
+            const ra: any[] = []
+            for (let i = 0; i < plan.length; i++) {
+                const p = plan[i]!
+                ra.push(await tx.journalEntry.create({
                     data: {
                         date: closingDate,
                         description: p.description,
@@ -2989,12 +3081,10 @@ router.post('/closing-entries', authMiddleware, async (req: AuthRequest, res: Re
                         referenceType: 'closing',
                         branchId, createdBy: userId,
                     },
-                })
-                created.push(entry)
-            } catch (e) {
-                console.error('Failed to create closing entry', p, e)
+                }))
             }
-        }
+            return ra
+        })
 
         res.status(201).json({
             success: true,
@@ -3287,7 +3377,9 @@ router.get('/cash-flow', authMiddleware, async (req: AuthRequest, res: Response)
 
 // ── SEED TEST DATA ──────────────────────────────────────────────────────────
 
-router.post('/seed-test-data', authMiddleware, async (req: AuthRequest, res: Response) => {
+/* CHỈ admin/owner: route này GHI DỮ LIỆU THỬ vào cửa hàng THẬT (hoá đơn, phiếu nhập, bảng lương…).
+ * Trước 21/08/2026 chỉ cần đăng nhập là gọi được — thu ngân bấm nhầm là sổ có dữ liệu bịa. */
+router.post('/seed-test-data', authMiddleware, requireRole('admin', 'owner', 'superadmin'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const userId = (req as any).userId || 'seed'
@@ -3916,7 +4008,13 @@ router.get('/hkd/s1', authMiddleware, async (req: AuthRequest, res: Response) =>
                     { transactionDate: null, createdAt: { gte: start, lte: end } },
                 ]
             },
-            orderBy: [{ transactionDate: 'desc' }, { createdAt: 'desc' }]
+            orderBy: [{ transactionDate: 'desc' }, { createdAt: 'desc' }],
+            /* Hình thức thanh toán thật nằm ở bảng `Payment`. `Transaction` KHÔNG có cột
+             * `paymentMethod` (cột đó thuộc OnlineOrder/EInvoice), nên trước đây cột "Phương thức
+             * TT" của sổ doanh thu đọc `t.paymentMethod || 'cash'` ⇒ undefined ⇒ **mọi phiếu đều
+             * hiện 'cash'**, kể cả chuyển khoản. Sổ thuế không được nói chắc điều mình không biết.
+             * Kỳ báo cáo bó trong 1 tháng nên thêm một phép nối là chấp nhận được. (21/08/2026) */
+            include: { payments: { select: { type: true } } },
         })
         // Phiếu nào ĐÃ XUẤT HOÁ ĐƠN ĐIỆN TỬ (issued/SENT) — để sổ doanh thu lọc được
         // "chỉ báo cáo hoá đơn đã xuất". Bảng EInvoice có thể chưa tồn tại ở store
@@ -3947,13 +4045,20 @@ router.get('/hkd/s1', authMiddleware, async (req: AuthRequest, res: Response) =>
         }
 
         const getDate = (t: any) => t.transactionDate || t.createdAt
+        /** Hình thức thanh toán suy từ chính các dòng Payment; không có dòng nào thì để TRỐNG,
+         *  tuyệt đối không mặc định 'cash' (xem ghi chú ở câu truy vấn phía trên). */
+        const phuongThuc = (t: any): string => {
+            const rows: any[] = Array.isArray(t.payments) ? t.payments : []
+            const loai = [...new Set(rows.map(r => String(r?.type || '').trim().toLowerCase()).filter(Boolean))]
+            return loai.join('+')
+        }
         const rows = txs.map((t: any, i: number) => ({
             stt: i + 1,
             id: t.id,
             daXuatHD: hdMap.has(t.id),
             soHoaDonDT: hdMap.get(t.id) || '',
             ngay: fmtDate(getDate(t)),
-            soChungTu: t.receiptNumber || t.code || '',
+            soChungTu: t.receiptNumber || '',
             customerName: t.customerName || '',
             soHoaDonVAT: t.vatInvoiceNumber || '',
             doanhThuChuaThue: t.subtotal || 0,
@@ -3961,7 +4066,7 @@ router.get('/hkd/s1', authMiddleware, async (req: AuthRequest, res: Response) =>
             thueGTGT: t.tax || 0,
             doanhThuThuan: (t.subtotal || 0) - (t.discount || 0),
             tongThu: t.total || 0,
-            phuongThucTT: t.paymentMethod || 'cash',
+            phuongThucTT: phuongThuc(t),
         }))
 
         const summary = {
@@ -4036,7 +4141,9 @@ router.get('/hkd/s2', authMiddleware, async (req: AuthRequest, res: Response) =>
                 // FIX 2: Dùng transactionDate nếu có, fallback createdAt
                 const ngay = fmtDate(imp.transactionDate || imp.createdAt)
                 rows.push({
-                    stt: idx++, ngay, soChungTu: imp.receiptNumber || imp.code || '',
+                    /* `imp.receiptNumber` đã bỏ: `ImportReceipt` không có cột đó (tên thật là
+                     * `code`), nên toán hạng đầu luôn undefined — vô hại nhưng gây hiểu nhầm. */
+                    stt: idx++, ngay, soChungTu: imp.code || '',
                     supplierName: imp.supplierName || 'NCC', type: 'import',
                     maHang, tenHangHoa: item.productName || item.name || item.product?.name || '',
                     dvt: item.unit || item.product?.baseUnit || 'cái',
@@ -4320,20 +4427,34 @@ router.get('/hkd/s5', authMiddleware, async (req: AuthRequest, res: Response) =>
             // Dùng PayrollRecord — trả về field giống usePayrollAccounting
             rows = payrollRecords.map((r: any, i: number) => {
                 const gross = r.actualGross || r.grossSalary || 0
-                const bhxh = r.bhxh_emp || r.bhxhEmployee || Math.round(gross * 0.08)
-                const bhyt = r.bhyt_emp || r.bhytEmployee || Math.round(gross * 0.015)
-                const bhtn = r.bhtn_emp || r.bhtnEmployee || Math.round(gross * 0.01)
-                const tncn = r.pit || r.pitAmount || 0
+                /* SỬA 21/08/2026 — trước đây: `r.bhxh_emp || r.bhxhEmployee || Math.round(gross*0.08)`.
+                 * Hai vấn đề:
+                 *   · `bhxhEmployee`/`bhytEmployee`/`bhtnEmployee`/`pitAmount` KHÔNG phải cột của
+                 *     `PayrollRecord` (tên thật: `bhxh_emp`, `bhyt_emp`, `bhtn_emp`, `pit`) — luôn undefined.
+                 *   · Các cột thật là `Float @default(0)`, tức KHÔNG NULL: số 0 là giá trị THẬT, nghĩa là
+                 *     "không trừ bảo hiểm" (thử việc, hộ kinh doanh không đóng BHXH…). Chuỗi `||` coi 0 là
+                 *     rỗng nên rơi xuống nhánh ước lượng và **bịa ra khoản trừ 8% / 1,5% / 1%** chưa hề có,
+                 *     kéo theo thực lĩnh bị tính hụt ~10,5%. Bảng lương là chứng từ thuế — không được đoán.
+                 * Nay đọc thẳng cột thật; 0 nghĩa là 0. */
+                const bhxh = Number(r.bhxh_emp) || 0
+                const bhyt = Number(r.bhyt_emp) || 0
+                const bhtn = Number(r.bhtn_emp) || 0
+                const tncn = Number(r.pit) || 0
                 const net = r.netSalary || (gross - bhxh - bhyt - bhtn - tncn)
                 return {
                     stt: i + 1,
                     maNV: (r.employeeId || '').slice(-6).toUpperCase(),
                     tenNV: r.employeeName || '',
-                    chucVu: r.department || r.position || '',
+                    chucVu: r.department || '',
                     luongCB: gross,
-                    phuCap: r.allowances || 0,
-                    khauTru: r.deductions || 0,
-                    thuNhapThucTe: gross + (r.allowances || 0) - (r.deductions || 0),
+                    /* `PayrollRecord` KHÔNG có cột `allowances`/`deductions` — đọc ra undefined nên
+                     * hai cột này vốn đã luôn bằng 0; nay ghi thẳng 0 cho khỏi hiểu nhầm là có đọc
+                     * được gì. Nếu sổ cần Phụ cấp/Khấu trừ thật thì phải bổ sung cột vào model rồi
+                     * cho bảng lương ghi vào — CHƯA làm, và cố ý không suy bừa từ `bonus` vì
+                     * `actualGross` nhiều khả năng đã gồm thưởng (suy bừa là đếm hai lần). */
+                    phuCap: 0,
+                    khauTru: 0,
+                    thuNhapThucTe: gross,
                     bhxh, bhyt, bhtn, tncn,
                     luongThucLanh: net,
                     // Legacy aliases
@@ -4344,7 +4465,8 @@ router.get('/hkd/s5', authMiddleware, async (req: AuthRequest, res: Response) =>
             })
         } else {
             // Fallback: User.salary
-            const employees = await p.user.findMany({ where: { role: { not: 'customer' } } }).catch(() => [])
+            // Đọc hỏng ⇒ rỗng ⇒ phần chi phí lương trong tờ khai thuế = 0 mà không báo gì.
+            const employees = await p.user.findMany({ where: { role: { not: 'customer' } } })
             const monthsInPeriod = month ? 1 : 12
             rows = employees.filter((e: any) => (e.salary || 0) > 0).map((emp: any, i: number) => {
                 const gross = (emp.salary || 0) * monthsInPeriod
@@ -4429,13 +4551,20 @@ router.get('/hkd/bank-transactions', authMiddleware, async (req: AuthRequest, re
         res.json({ success: true, data: txs })
     } catch (err) { res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
+/* Ép về ĐÚNG hai từ mà module ngân hàng hiểu: 'debit' (tiền ra) | 'credit' (tiền vào).
+ * Trước đây hai route dưới ghi thẳng `type` do client gửi và mặc định 'deposit' — chữ mà
+ * `signed()` (ebanking.ts:121) không biết, nên rơi vào nhánh "mọi type khác = tiền vào".
+ * Nhận cả từ vựng cũ để form cũ gửi lên vẫn ghi đúng. (21/08/2026) */
+const chuanHoaLoaiBankTx = (t: any): 'debit' | 'credit' =>
+    ['debit', 'withdraw', 'chi', 'out'].includes(String(t || '').toLowerCase()) ? 'debit' : 'credit'
+
 router.post('/hkd/bank-transactions', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const p = req.storePrisma! as any
         const { bankAccountId, type, amount, description, reference, date } = req.body
         if (!description?.trim()) return res.status(400).json({ success: false, error: 'Diễn giải bắt buộc' })
         if (!amount || Number(amount) <= 0) return res.status(400).json({ success: false, error: 'Số tiền phải > 0' })
-        const tx = await p.bankTransaction.create({ data: { bankAccountId: bankAccountId || null, type: type || 'deposit', amount: Number(amount), description: description.trim(), reference: reference?.trim() || null, date: date ? new Date(date) : new Date() } })
+        const tx = await p.bankTransaction.create({ data: { bankAccountId: bankAccountId || null, type: chuanHoaLoaiBankTx(type), amount: Number(amount), description: description.trim(), reference: reference?.trim() || null, date: date ? new Date(date) : new Date() } })
         res.status(201).json({ success: true, data: tx })
     } catch (err) { console.error('POST /bank-transactions:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
@@ -4443,7 +4572,7 @@ router.put('/hkd/bank-transactions/:id', authMiddleware, async (req: AuthRequest
     try {
         const p = req.storePrisma! as any
         const { bankAccountId, type, amount, description, reference, date } = req.body
-        const tx = await p.bankTransaction.update({ where: { id: req.params.id }, data: { bankAccountId: bankAccountId || null, type, amount: Number(amount), description: description?.trim(), reference: reference?.trim() || null, ...(date && { date: new Date(date) }) } })
+        const tx = await p.bankTransaction.update({ where: { id: req.params.id }, data: { bankAccountId: bankAccountId || null, type: chuanHoaLoaiBankTx(type), amount: Number(amount), description: description?.trim(), reference: reference?.trim() || null, ...(date && { date: new Date(date) }) } })
         res.json({ success: true, data: tx })
     } catch (err) { res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
@@ -4463,27 +4592,73 @@ router.get('/hkd/s6', authMiddleware, async (req: AuthRequest, res: Response) =>
         const month = req.query.month ? Number(req.query.month) : undefined
         const { start, end } = hkdDateRange(year, month)
         
-        // ═══ TIỀN MẶT (auto từ POS + Expense) ═══
+        /* ═══ TIỀN MẶT (auto từ POS + Expense) ═══
+         *
+         * ⚠ SỬA 21/08/2026 — sổ quỹ tiền mặt trước đây KHÔNG có lấy một đồng doanh thu nào:
+         *   · `t.paymentMethod` — bảng `Transaction` KHÔNG HỀ CÓ cột này (cột `paymentMethod` chỉ
+         *     tồn tại ở `OnlineOrder` và `EInvoice`). Đọc ra `undefined`, nên `=== 'Tiền mặt'`
+         *     không bao giờ đúng ở đầu kỳ, và `!== 'Tiền mặt'` LUÔN đúng trong kỳ ⇒ `continue`
+         *     bỏ qua SẠCH mọi phiếu bán.
+         *   · `t.totalAmount` — cũng không có (tên thật là `total`) ⇒ dù có lọt cũng cộng 0.
+         *   · `e.paidBy !== 'Tiền mặt'` — cột này CÓ thật nhưng dữ liệu là tiếng Anh ('cash'/'bank');
+         *     chính `auditDrill.ts:345` đã phải dùng regex chấp nhận cả hai kiểu.
+         * Hình thức thanh toán thật nằm ở bảng `Payment` (POS ghi qua đó — xem
+         * transactions.ts:163 lọc bằng `payments.some(p => p.type === …)`).
+         *
+         * Nay cộng THỰC THU tiền mặt từ chính các dòng `Payment`, nên phiếu trả một phần tiền mặt
+         * một phần chuyển khoản cũng vào sổ đúng phần tiền mặt. Phiếu KHÔNG có dòng Payment nào thì
+         * KHÔNG đoán bằng 0 — đếm riêng và trả ra `soPhieuKhongRoHinhThuc` để trang nói thẳng. */
+        const LA_TIEN_MAT = (x: any) => /^(cash|tm|tien\s*mat|tiền\s*mặt)$/i.test(String(x ?? '').trim())
+        const CHON_TX = { id: true, status: true, total: true, amountReceived: true, receiptNumber: true,
+            customerName: true, transactionDate: true, createdAt: true,
+            payments: { select: { type: true, amount: true } } } as any
+        /** Thực thu tiền mặt của một phiếu; `null` = phiếu không có dòng thanh toán nào (chưa rõ). */
+        const thucThuTienMat = (t: any): number | null => {
+            const rows = Array.isArray(t.payments) ? t.payments : []
+            if (!rows.length) return null
+            return rows.filter((r: any) => LA_TIEN_MAT(r.type)).reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0)
+        }
+        /** Chi bằng tiền mặt hay không — DÙNG ĐÚNG quy ước của sổ cái (`autoJournalPurchase.ts:221`):
+         *  `paidBy` trống thì **xem có gắn tài khoản ngân hàng không** rồi mới đoán, chứ không mặc
+         *  định tiền mặt. Bản đầu tôi viết `e.paidBy ?? 'cash'` — bỏ qua `bankAccountId` — nên phiếu
+         *  chi qua ngân hàng mà quên điền `paidBy` bị tính thành chi tiền mặt, **làm hụt số dư quỹ
+         *  trên sổ S6 nộp thuế**. Sai một chiều và im lặng: sổ vẫn cân, chỉ là quỹ ít hơn thực tế.
+         *  (Quy ước trong repo không đồng nhất — `taxAudit.ts:571` và `auditDrill.ts:345` cũng bỏ qua
+         *  `bankAccountId`. Ở đây theo sổ cái vì S6 phải khớp với sổ cái, không phải với bộ soát.) */
+        const chiBangTienMat = (e: any) => /tiền\s*mặt|cash|^tm$/i.test(String(e.paidBy || (e.bankAccountId ? 'bank' : 'cash')).trim())
+
+        /* Đếm TÁCH LÀM HAI, đừng gộp: vòng đầu kỳ quét MỌI phiếu từ trước tới `start` (có thể là
+         * nhiều năm), vòng trong kỳ chỉ quét tháng đang xem. Gộp chung một số rồi đem hiện câu
+         * "N phiếu trong kỳ" là sai phạm vi — cửa hàng làm lâu năm sẽ thấy một con số to vô lý.
+         * Hai con số nói hai chuyện khác nhau: cái trước ảnh hưởng SỐ DƯ ĐẦU KỲ, cái sau ảnh hưởng
+         * các dòng TRONG KỲ. (21/08/2026) */
+        let soPhieuKhongRoHinhThuc = 0      // trong kỳ
+        let soPhieuKhongRoTruocKy = 0       // trước kỳ ⇒ số dư đầu kỳ có thể thiếu
         // Đầu kỳ tiền mặt
-        const prevTxs = await p.transaction.findMany({ where: { status: { in: ['completed', 'partial'] }, createdAt: { lt: start } } })
+        const prevTxs = await p.transaction.findMany({ where: { status: { in: ['completed', 'partial'] }, createdAt: { lt: start } }, select: CHON_TX })
         const prevExps = await p.expense.findMany({ where: { date: { lt: start } } })
         let tienMatDauKy = 0
-        // Sổ quỹ là THỰC THU: đơn ghi nợ (partial) chỉ cộng phần đã thu (amountReceived)
-        for (const t of prevTxs) { if (t.paymentMethod === 'Tiền mặt') tienMatDauKy += (t.status === 'partial' ? (t.amountReceived || 0) : (t.totalAmount || 0)) }
+        for (const t of prevTxs) {
+            const tm = thucThuTienMat(t)
+            if (tm === null) { soPhieuKhongRoTruocKy++; continue }   // TRƯỚC kỳ — đếm riêng
+            tienMatDauKy += tm
+        }
         for (const e of prevExps) {
-            if (e.paidBy !== 'Tiền mặt') continue
+            if (!chiBangTienMat(e)) continue
             tienMatDauKy += e.category === 'hkd_cash_thu' ? (e.amount||0) : -(e.amount||0)
         }
         // Giao dịch tiền mặt trong kỳ
-        const txs = await p.transaction.findMany({ where: { status: { in: ['completed', 'partial'] }, createdAt: { gte: start, lte: end } }, orderBy: { createdAt: 'asc' } })
+        const txs = await p.transaction.findMany({ where: { status: { in: ['completed', 'partial'] }, createdAt: { gte: start, lte: end } }, orderBy: { createdAt: 'asc' }, select: CHON_TX })
         const expenses = await p.expense.findMany({ where: { date: { gte: start, lte: end } }, orderBy: { date: 'asc' } })
         const tmEvents: any[] = []
         for (const t of txs) {
-            if (t.paymentMethod !== 'Tiền mặt') continue
-            tmEvents.push({ id: t.id, rawDate: t.transactionDate || t.createdAt, soChungTu: t.receiptNumber || `HD-${t.id.slice(-6)}`, dienGiai: `Thu tiền bán hàng - ${t.customerName || 'Khách lẻ'}`, thu: t.status === 'partial' ? (t.amountReceived || 0) : t.totalAmount, chi: 0, isManual: false })
+            const tm = thucThuTienMat(t)
+            if (tm === null) { soPhieuKhongRoHinhThuc++; continue }
+            if (tm <= 0) continue                     // phiếu có ghi thanh toán nhưng không phần nào bằng tiền mặt
+            tmEvents.push({ id: t.id, rawDate: t.transactionDate || t.createdAt, soChungTu: t.receiptNumber || `HD-${t.id.slice(-6)}`, dienGiai: `Thu tiền bán hàng - ${t.customerName || 'Khách lẻ'}`, thu: tm, chi: 0, isManual: false })
         }
         for (const e of expenses) {
-            if (e.paidBy !== 'Tiền mặt') continue
+            if (!chiBangTienMat(e)) continue
             const isThu = e.category === 'hkd_cash_thu'
             const hdMatch = (e.description || '').match(/^\[([^\]]+)\]\s*(.+)$/)
             tmEvents.push({ id: e.id, rawDate: e.date, soChungTu: hdMatch ? hdMatch[1] : (isThu ? `THU-${e.id.slice(-6)}` : `CHI-${e.id.slice(-6)}`), dienGiai: hdMatch ? hdMatch[2] : (e.description || ''), thu: isThu ? e.amount : 0, chi: isThu ? 0 : e.amount, isManual: ['hkd_cash_thu','hkd_cash_chi'].includes(e.category) })
@@ -4499,14 +4674,18 @@ router.get('/hkd/s6', authMiddleware, async (req: AuthRequest, res: Response) =>
         let tienGuiDauKy = 0
         try {
             const prevBankTxs = await p.bankTransaction.findMany({ where: { date: { lt: start } } })
-            for (const bt of prevBankTxs) { tienGuiDauKy += bt.type === 'deposit' ? bt.amount : -bt.amount }
+            /* Dấu phải theo ĐÚNG quy ước của module ngân hàng (`signed()` ở ebanking.ts:121):
+             * 'debit' = tiền RA, mọi type khác = tiền VÀO. Trước đây chỗ này lấy 'deposit' = vào
+             * và coi PHẦN CÒN LẠI là ra ⇒ mọi dòng gửi tiền ghi đúng chuẩn ('credit') bị TRỪ vào
+             * số dư đầu kỳ. Hai module đọc cùng một bảng bằng hai từ vựng ngược nhau. (21/08/2026) */
+            for (const bt of prevBankTxs) { tienGuiDauKy += bt.type === 'debit' ? -bt.amount : bt.amount }
         } catch (_) { /* BankTransaction table may not exist yet */ }
 
         const tienGuiRows: any[] = []; let tgBal = tienGuiDauKy, tgThu = 0, tgChi = 0, sttTG = 1
         try {
             const bankTxs = await p.bankTransaction.findMany({ where: { date: { gte: start, lte: end } }, include: { bankAccount: true }, orderBy: { date: 'asc' } })
             for (const bt of bankTxs) {
-                const isDep = bt.type === 'deposit'
+                const isDep = bt.type !== 'debit'      // cùng quy ước `signed()` — xem ghi chú ở đầu kỳ
                 const thu = isDep ? bt.amount : 0, chi = isDep ? 0 : bt.amount
                 tgBal += thu - chi; tgThu += thu; tgChi += chi
                 tienGuiRows.push({ id: bt.id, stt: sttTG++, ngay: fmtDate(bt.date), soChungTu: bt.reference || '', dienGiai: bt.description, thu, chi, tonCuoi: tgBal, isManual: true, bankName: bt.bankAccount?.bankName || '' })
@@ -4517,7 +4696,13 @@ router.get('/hkd/s6', authMiddleware, async (req: AuthRequest, res: Response) =>
             success: true, 
             data: { 
                 year, month,
-                tienMat: { dauKy: tienMatDauKy, rows: tienMatRows, tongThu: tmThu, tongChi: tmChi, cuoiKy: tmBal },
+                /* Phiếu bán KHÔNG có dòng Payment nào ⇒ không biết thu bằng gì. Cố ý KHÔNG gộp vào
+                 * tổng và KHÔNG coi là 0 đồng tiền mặt; trả ra để trang nói thẳng, thay vì để người
+                 * đọc tưởng sổ đã đủ. Hai con số TÁCH BẠCH:
+                 *   · `soPhieuKhongRoHinhThuc` — trong kỳ  ⇒ thiếu dòng trong sổ
+                 *   · `soPhieuKhongRoTruocKy`  — trước kỳ  ⇒ SỐ DƯ ĐẦU KỲ có thể thiếu */
+                tienMat: { dauKy: tienMatDauKy, rows: tienMatRows, tongThu: tmThu, tongChi: tmChi, cuoiKy: tmBal,
+                    soPhieuKhongRoHinhThuc, soPhieuKhongRoTruocKy },
                 tienGui: { dauKy: tienGuiDauKy, rows: tienGuiRows, tongThu: tgThu, tongChi: tgChi, cuoiKy: tgBal }
             } 
         })
@@ -4575,18 +4760,42 @@ router.get('/hkd/s7', authMiddleware, async (req: AuthRequest, res: Response) =>
         const txOrDate7 = { OR: [{ transactionDate: { gte: start, lte: end } }, { transactionDate: null, createdAt: { gte: start, lte: end } }] }
         const BANK_KEYWORDS = ['bank','transfer','banking','chuyen_khoan','momo','vnpay','zalopay','atm','Bank','Transfer']
         const [allTxs, allExp] = await Promise.all([
-            p.transaction.findMany({ where: { status: { in: ['completed', 'partial'] }, ...txOrDate7 }, orderBy: [{ transactionDate: 'asc' }, { createdAt: 'asc' }] }),
+            /* Phải nạp `payments`: hình thức thanh toán THẬT nằm ở bảng đó, `Transaction` không có
+             * cột `paymentMethod` (xem ghi chú dài ở `/hkd/s6`). (21/08/2026) */
+            p.transaction.findMany({ where: { status: { in: ['completed', 'partial'] }, ...txOrDate7 }, orderBy: [{ transactionDate: 'asc' }, { createdAt: 'asc' }], include: { payments: { select: { type: true, amount: true } } } }),
             p.expense.findMany({ where: { date: { gte: start, lte: end }, paidBy: { in: BANK_KEYWORDS } }, orderBy: { date: 'asc' } }),
         ])
-        const bankTxs = allTxs.filter((t: any) => BANK_KEYWORDS.includes((t.paymentMethod || '').toLowerCase()))
+        /* ⚠ SỬA 21/08/2026 — sổ tiền gửi này trước đây KHÔNG có một đồng tiền vào nào:
+         *      allTxs.filter(t => BANK_KEYWORDS.includes((t.paymentMethod || '').toLowerCase()))
+         * `t.paymentMethod` là cột KHÔNG TỒN TẠI trên `Transaction` ⇒ `undefined` ⇒ `''` ⇒ không
+         * khớp từ khoá nào ⇒ `bankTxs` LUÔN RỖNG. Sổ chỉ còn các dòng CHI (vì `e.paidBy` là cột
+         * thật), nên số dư âm dần — cùng một con bệnh với sổ quỹ tiền mặt S6.
+         * Nay cộng đúng phần thu qua ngân hàng từ chính các dòng `Payment`; phiếu không có dòng
+         * thanh toán nào thì KHÔNG coi là 0 mà đếm riêng để nói ra. */
+        const TU_KHOA_NH = new Set(BANK_KEYWORDS.map(k => k.toLowerCase()))
+        let soPhieuKhongRoHinhThuc = 0
+        const thuQuaNganHang = (t: any): number | null => {
+            const ds: any[] = Array.isArray(t.payments) ? t.payments : []
+            if (!ds.length) return null
+            return ds.filter(r => TU_KHOA_NH.has(String(r?.type || '').trim().toLowerCase()))
+                .reduce((s, r) => s + (Number(r.amount) || 0), 0)
+        }
+        const dongThuNH: any[] = []
+        for (const t of allTxs) {
+            const tien = thuQuaNganHang(t)
+            if (tien === null) { soPhieuKhongRoHinhThuc++; continue }
+            if (tien <= 0) continue
+            const loai = (t.payments || []).map((r: any) => String(r?.type || '').toLowerCase())
+                .filter((x: string) => TU_KHOA_NH.has(x))
+            dongThuNH.push({ ngay: fmtDate(t.transactionDate || t.createdAt), soChungTu: t.receiptNumber || '', dienGiai: `Thu - ${t.customerName || 'Khách'}`, thu: tien, chi: 0, phuongThucTT: [...new Set(loai)].join('+') || 'bank' })
+        }
         const items = [
-            // Sổ tiền gửi là THỰC THU: đơn ghi nợ chỉ tính phần đã thu
-            ...bankTxs.map((t: any) => ({ ngay: fmtDate(t.transactionDate || t.createdAt), soChungTu: t.receiptNumber || '', dienGiai: `Thu - ${t.customerName || 'Khách'}`, thu: t.status === 'partial' ? (t.amountReceived || 0) : (t.total || 0), chi: 0, phuongThucTT: t.paymentMethod || 'bank' })),
+            ...dongThuNH,
             ...allExp.map((e: any) => ({ ngay: fmtDate(e.date), soChungTu: `CP-${e.id.slice(-6)}`, dienGiai: e.description || e.category || 'Chi', thu: 0, chi: e.amount || 0, phuongThucTT: e.paidBy || 'bank' })),
         ].sort((a, b) => a.ngay.localeCompare(b.ngay))
         let balance = 0
         const rows = items.map((item, i) => { balance += item.thu - item.chi; return { stt: i + 1, ...item, tonCuoi: balance } })
-        res.json({ success: true, data: { rows, summary: { tongThu: rows.reduce((s, r) => s + r.thu, 0), tongChi: rows.reduce((s, r) => s + r.chi, 0), tonCuoiKy: balance }, year, month } })
+        res.json({ success: true, data: { rows, summary: { tongThu: rows.reduce((s, r) => s + r.thu, 0), tongChi: rows.reduce((s, r) => s + r.chi, 0), tonCuoiKy: balance, soPhieuKhongRoHinhThuc }, year, month } })
     } catch (err) { console.error('GET /hkd/s7:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
 })
 
@@ -6995,7 +7204,7 @@ router.get('/deadlines', authMiddleware, async (req: AuthRequest, res: Response)
             const toKhaiNam: any[] = await prisma.taxDeclaration.findMany({
                 where: { year },
                 select: { period: true, formType: true, ct38: true, ct40a: true, cnkdTotalTax: true },
-            }).catch(() => [])
+            }).catch(rongNeuChuaCoBang)
             const toKhaiTheoKy = new Map<string, number>()
             for (const t of toKhaiNam) {
                 if (String(t.formType || '').includes('_BS')) continue   // bản bổ sung không phải số gốc
@@ -7011,13 +7220,13 @@ router.get('/deadlines', authMiddleware, async (req: AuthRequest, res: Response)
             const kyLuong: any[] = await prisma.payrollPeriod.findMany({
                 where: { year },
                 select: { id: true, month: true },
-            }).catch(() => [])
+            }).catch(rongNeuChuaCoBang)
             const tncnTheoKy = new Map<string, number>()
             if (kyLuong.length) {
                 const dong: any[] = await prisma.payrollEntry.findMany({
                     where: { periodId: { in: kyLuong.map((k: any) => k.id) } },
                     select: { periodId: true, pitAmount: true },
-                }).catch(() => [])
+                }).catch(rongNeuChuaCoBang)
                 const thangCua = new Map(kyLuong.map((k: any) => [k.id, k.month]))
                 for (const e of dong) {
                     const m = thangCua.get(e.periodId)
@@ -7032,7 +7241,7 @@ router.get('/deadlines', authMiddleware, async (req: AuthRequest, res: Response)
             const btNam: any[] = await prisma.journalEntry.findMany({
                 where: { date: { gte: `${year}-01-01`, lte: `${year}-12-31` } },
                 select: { date: true, debitAccount: true, creditAccount: true, amount: true },
-            }).catch(() => [])
+            }).catch(rongNeuChuaCoBang)
             const laiTheoQuy = new Map<number, number>()
             const laDoanhThu = (tk: string) => /^(511|515|711)/.test(tk)
             const laChiPhi = (tk: string) => /^(632|635|641|642|811)/.test(tk)
@@ -7050,7 +7259,7 @@ router.get('/deadlines', authMiddleware, async (req: AuthRequest, res: Response)
             const dtNamTruoc: any[] = await prisma.journalEntry.findMany({
                 where: { date: { gte: `${year - 1}-01-01`, lte: `${year - 1}-12-31` } },
                 select: { debitAccount: true, creditAccount: true, amount: true },
-            }).catch(() => [])
+            }).catch(rongNeuChuaCoBang)
             const doanhThuNamTruoc = dtNamTruoc.length
                 ? dtNamTruoc.reduce((s: number, e: any) =>
                     s + (String(e.creditAccount || '').startsWith('511') ? e.amount : 0)
@@ -7085,7 +7294,9 @@ router.get('/deadlines', authMiddleware, async (req: AuthRequest, res: Response)
                 /* null khi không suy ra được — KHÔNG quy về 0, vì "0đ" nghĩa là
                  * không phải nộp gì, còn "chưa biết" là phải đi tra. Hai điều
                  * hoàn toàn khác nhau với người đang chuẩn bị tiền nộp thuế. */
-                estimatedAmount: d.estimatedAmount ?? tien?.soTien ?? null,
+                /* `TaxDeadline` không có cột `estimatedAmount` — toán hạng đầu luôn undefined,
+                 * đã bỏ. Nguồn thật là `tien?.soTien`. (21/08/2026) */
+                estimatedAmount: tien?.soTien ?? null,
                 nguonSoTien: tien ? (tien.tuToKhai ? 'to-khai' : 'uoc-tinh') : null,
                 dienGiaiSoTien: tien?.dienGiai ?? null,
                 status: feStatus,
@@ -7106,7 +7317,8 @@ router.post('/deadlines/:id/submit', authMiddleware, async (req: AuthRequest, re
     try {
         const prisma: any = req.storePrisma!
         const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id
-        const existing = await prisma.taxDeadline.findUnique({ where: { id } }).catch(() => null)
+        // Đọc hỏng ≠ không tìm thấy: 404 ở đây làm người dùng tưởng mốc hạn đã bị xoá.
+        const existing = await prisma.taxDeadline.findUnique({ where: { id } })
         if (!existing) return res.status(404).json({ success: false, error: 'Không tìm thấy hạn nộp' })
         const data = await prisma.taxDeadline.update({
             where: { id },
@@ -7790,7 +8002,8 @@ router.get('/export/general-ledger', authMiddleware, async (req: AuthRequest, re
                 OR: [{ debitAccount: accountCode }, { creditAccount: accountCode }],
             },
             select: { debitAccount: true, creditAccount: true, amount: true },
-        }).catch(() => [])
+        })   // KHÔNG nuốt lỗi: đọc hỏng mà trả rỗng thì sổ cái xuất ra "đầu kỳ 0, không phát sinh"
+             // — một tờ sổ trắng trông y hệt sổ thật (20/08/2026). Thà 500 để màn hình báo lỗi.
 
         let openDr = 0, openCr = 0
         for (const e of openingEntries) {
@@ -7806,7 +8019,7 @@ router.get('/export/general-ledger', authMiddleware, async (req: AuthRequest, re
                 OR: [{ debitAccount: accountCode }, { creditAccount: accountCode }],
             },
             orderBy: [{ date: 'asc' }, { createdAt: 'asc' }],
-        }).catch(() => [])
+        })
 
         let running = openingBalance
         const rows = periodEntries.map((e: any) => {
@@ -7868,7 +8081,7 @@ router.get('/export/journal-book', authMiddleware, async (req: AuthRequest, res:
             where: { date: { gte: startDate, lte: endDate } },
             orderBy: [{ date: 'asc' }, { createdAt: 'asc' }],
             take: limit,
-        }).catch(() => [])
+        })   // không nuốt lỗi — xem ghi chú ở /export/general-ledger
 
         const totalDebit = entries.reduce((s, e) => s + (e.amount || 0), 0)
         const totalCredit = totalDebit // every entry is debit=credit by construction
@@ -7878,6 +8091,10 @@ router.get('/export/journal-book', authMiddleware, async (req: AuthRequest, res:
             data: {
                 year, month: month || null,
                 startDate, endDate,
+                /* Sổ nhật ký xuất ra để nộp/đối chiếu: chạm trần `limit` là THIẾU DÒNG. Khai ra,
+                 * đừng để người cầm tờ sổ tưởng đã đủ kỳ (20/08/2026). */
+                daCatBot: entries.length >= limit,
+                gioiHanDong: limit,
                 rows: entries.map(e => ({
                     id: e.id,
                     date: e.date,

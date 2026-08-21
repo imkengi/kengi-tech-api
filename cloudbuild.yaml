@@ -4,6 +4,11 @@ substitutions:
   _CLOUD_SQL_INSTANCE: kengi-tech:asia-southeast1:kengi-tech-db
   _DB_NAME: kengi_tech
   _DB_USER: postgres
+  # DẤU ẤN BẢN DEPLOY (20/08/2026): lệnh deploy local truyền vào từ git của MÁY đang deploy.
+  # Sự cố tối 20/08: prod chạy ảnh cũ hơn cây mã mà không có cách nào biết trong một lần gọi.
+  # `sach` = cây sạch, `ban` = có sửa chưa commit (đúng thứ cần biết khi hai cây đè nhau).
+  _GIT_SHA: khong-ro
+  _GIT_TRANG_THAI: khong-ro
   _DB_PASSWORD: KengiTech2026%40
   _REDIS_URL: ""
   # Token tĩnh cho Kengi Stream studio — CHỈ dành cho script/cron, KHÔNG đưa vào
@@ -26,6 +31,25 @@ substitutions:
   _FB_APP_ID: ""
   _FB_APP_SECRET: ""
   _FB_WEBHOOK_VERIFY_TOKEN: 368333bd84ccb3dbde261bd50366490f56e63b13cfaaac20
+  # Google OAuth cho "Kết nối Google Drive" (dọn video đóng hàng tự động).
+  # Vì sao cần: file trong My Drive chỉ CHỦ SỞ HỮU xoá được — service account dù
+  # có quyền Editor vẫn bị Google chặn, nên phải chạy dưới danh nghĩa chủ shop.
+  # Tạo ở console.cloud.google.com → APIs & Services → Credentials → OAuth client
+  # ID (Web application), Authorized redirect URI:
+  #     https://api.kengi.vn/api/drive-videos/oauth/callback
+  # Màn hình đồng ý (OAuth consent screen) PHẢI publish PRODUCTION — để Testing
+  # thì refresh_token hết hạn sau 7 ngày, tuần nào cũng phải nối lại.
+  # Client ID không phải bí mật (nó lộ ra trong URL đăng nhập Google), để thẳng
+  # được. Client SECRET nằm ở Secret Manager: google-oauth-client-secret.
+  _GOOGLE_OAUTH_CLIENT_ID: "445765742612-dtb6i2bttc8r097a7j4otkdpageh3vo5.apps.googleusercontent.com"
+  # OAuth client RIÊNG cho trang Nguyệt Các Tarot (studio.kengi.vn/tarot.html).
+  # Tách khỏi client Drive ở trên vì đây là nút "Sign in with Google" chạy trong
+  # trình duyệt: client phải khai "Authorized JavaScript origins" =
+  #     https://studio.kengi.vn
+  # (thêm http://localhost:4189 nếu muốn thử ở máy). Thiếu origin thì nút hiện ra
+  # nhưng bấm vào Google từ chối với "origin is not allowed for the given client".
+  # Để trống thì backend tự lùi về _GOOGLE_OAUTH_CLIENT_ID.
+  _TAROT_GOOGLE_CLIENT_ID: "445765742612-63p27id5b33g62bc17d86g9ajhb8fgag.apps.googleusercontent.com"
 
 steps:
   # Step 1: Build Docker image
@@ -69,9 +93,57 @@ steps:
       - '--session-affinity'
       - '--add-cloudsql-instances'
       - '${_CLOUD_SQL_INSTANCE}'
+      # ⚠ --set-env-vars cũng THAY TOÀN BỘ danh sách env, y như --set-secrets ở
+      # dưới. Biến nào đặt bằng `gcloud run services update --update-env-vars`
+      # mà KHÔNG có trong dòng này thì lần deploy sau là mất sạch.
+      #
+      # PRISMA_POOL_SIZE dính đúng bẫy đó: nâng 3→8 ngày 29/07/2026 để chữa cạn
+      # pool, lần deploy kế tiếp xoá mất, và prod chạy lại mặc định 3 suốt hai
+      # tuần mà không ai biết — vì PRISMA_POOL_TIMEOUT=30 vẫn còn đây nên nhìn
+      # qua tưởng cấu hình pool còn nguyên. Đo 15/08: ≥500 lần "Timed out
+      # fetching a new connection (connection limit: 3)" trong 24h, dồn cục
+      # 18–20h giờ bán cao điểm.
+      #
+      # HẠ 5 → 2 ngày 15/08/2026 sau HAI lần Cloud SQL hết sạch slot trong một
+      # giờ ("FATAL: remaining connection slots are reserved..."), làm hỏng cả
+      # prisma.store.findMany và refreshToken ⇒ ĐĂNG NHẬP CỬA HÀNG CŨNG LỖI.
+      #
+      # Phép tính là gốc rễ chứ không phải xui: lib/prisma.ts tạo MỘT client cho
+      # MỖI schema cửa hàng, mỗi client giữ connection_limit=PRISMA_POOL_SIZE.
+      #   (9 cửa hàng + 1 registry) × 5 = 50 kết nối cho MỘT instance
+      #   db-f1-micro chỉ có max_connections = 50 (còn trừ ~3 slot superuser)
+      # Tức là một instance chạm đủ 9 cửa hàng là ăn hết cả DB; deploy xong có
+      # hai instance cùng ấm là chắc chắn sập.
+      #
+      # HẠ TIẾP 2 → 1 ngày 16/08/2026. Lý do: pool 2 VẪN chạm trần. Đo
+      # instance_count gộp theo revision + num_backends từng phút cho thấy khi
+      # Cloud Run tự nhân lên 2 instance lúc 17:04 thì kết nối đi 21 → 33 → 49
+      # (sát trần) trong 3 phút, và 17:13 đẻ ra 4 lỗi P1001 "Can't reach
+      # database server" ở convertOnlineOrderToTransaction ⇒ ĐƠN SÀN KHÔNG VÀO
+      # SỔ. Đây là đường LÀM MẤT TIỀN, không chỉ là mất ổn định.
+      #
+      # Đo thật là ~24 kết nối/instance (9×2=18 + registry 3–5; registryPrisma
+      # KHÔNG đặt connection_limit nên ăn mặc định cpus*2+1). Nên hạ maxScale
+      # 3→2 KHÔNG cứu được: 2 × 24 = 48–49, vẫn đúng vạch trần.
+      #   pool 1 →  9×1 + registry ≈ 12–14/instance  ×3 = 36–42  < 50 ✓
+      #
+      # Đánh đổi phải theo dõi: mỗi cửa hàng chỉ còn MỘT kết nối trên mỗi
+      # instance, nên truy vấn của cùng một cửa hàng xếp hàng. Triệu chứng nếu
+      # quá tay là "Timed out fetching a new connection (connection limit: 1)"
+      # — thấy nó dồn cục giờ cao điểm thì phải lên tier, đừng nâng lại số này.
+      #
+      # Muốn nâng lại thì PHẢI lên tier Cloud SQL trước (db-g1-small trở lên),
+      # đừng nâng số này một mình.
       - '--set-env-vars'
       - >-
-        NODE_ENV=production,DATABASE_URL=postgresql://${_DB_USER}:${_DB_PASSWORD}@localhost/${_DB_NAME}?host=/cloudsql/${_CLOUD_SQL_INSTANCE},CORS_ORIGIN=*,APP_BASE_URL=https://kengi.vn,REDIS_URL=${_REDIS_URL},LIVESTREAM_STUDIO_TOKEN=${_LIVESTREAM_TOKEN},SHOPEE_FORWARD_PROXY=https://kengi.vn/ai-livestream/shopee-forward.php,SHOPEE_FORWARD_SECRET=${_SHOPEE_FORWARD_SECRET},ADMIN_PANEL_USER=${_ADMIN_PANEL_USER},ADMIN_PANEL_PASS=${_ADMIN_PANEL_PASS},PRISMA_POOL_TIMEOUT=30,FB_APP_ID=${_FB_APP_ID},FB_APP_SECRET=${_FB_APP_SECRET},FB_WEBHOOK_VERIFY_TOKEN=${_FB_WEBHOOK_VERIFY_TOKEN}
+        NODE_ENV=production,DATABASE_URL=postgresql://${_DB_USER}:${_DB_PASSWORD}@localhost/${_DB_NAME}?host=/cloudsql/${_CLOUD_SQL_INSTANCE},CORS_ORIGIN=*,APP_BASE_URL=https://kengi.vn,REDIS_URL=${_REDIS_URL},LIVESTREAM_STUDIO_TOKEN=${_LIVESTREAM_TOKEN},SHOPEE_FORWARD_PROXY=https://kengi.vn/ai-livestream/shopee-forward.php,SHOPEE_FORWARD_SECRET=${_SHOPEE_FORWARD_SECRET},ADMIN_PANEL_USER=${_ADMIN_PANEL_USER},ADMIN_PANEL_PASS=${_ADMIN_PANEL_PASS},PRISMA_POOL_TIMEOUT=30,PRISMA_POOL_SIZE=1,FB_APP_ID=${_FB_APP_ID},FB_APP_SECRET=${_FB_APP_SECRET},FB_WEBHOOK_VERIFY_TOKEN=${_FB_WEBHOOK_VERIFY_TOKEN},GOOGLE_OAUTH_CLIENT_ID=${_GOOGLE_OAUTH_CLIENT_ID},TAROT_GOOGLE_CLIENT_ID=${_TAROT_GOOGLE_CLIENT_ID},PUBLIC_API_URL=https://api.kengi.vn,PUBLIC_WEB_URL=https://kengi.vn,BUILD_GIT_SHA=${_GIT_SHA},BUILD_GIT_TRANG_THAI=${_GIT_TRANG_THAI},BUILD_ID=$BUILD_ID
+      # ⚠ --set-secrets GHI ĐÈ TOÀN BỘ danh sách secret của service, không cộng
+      # thêm. Phải liệt kê ĐỦ MỌI khoá, thiếu cái nào là revision mới mất cái đó.
+      # (Đã dính 06/08/2026: chỉ khai GOOGLE_OAUTH_CLIENT_SECRET → mất luôn
+      # JWT_SECRET + ADMIN_KEY + SMTP ⇒ đăng nhập hỏng, phải rollback traffic.)
+      - '--set-secrets'
+      - >-
+        SMTP_USER=open-retail-smtp-user:latest,SMTP_PASS=open-retail-smtp-pass:latest,JWT_SECRET=open-retail-jwt-secret:latest,ADMIN_KEY=open-retail-admin-key:latest,GOOGLE_OAUTH_CLIENT_SECRET=google-oauth-client-secret:latest
 
   # Step 4: Force 100% traffic onto the just-deployed revision.
   # When the service's traffic has ever been pinned to a *named* revision (rather

@@ -1,4 +1,5 @@
 import { registryPrisma, getStorePrisma } from '../lib/prisma'
+import { chayNeuLanhDao } from '../lib/leaderLock'
 import { ensureFlashSaleTable, shopeeServiceFromChannel } from '../routes/flashSales'
 
 /**
@@ -167,9 +168,12 @@ export function startFlashSaleScheduler(): void {
     if (timer) return
     console.log(`⚡ Flash sale scheduler started (every ${TICK_MS / 60000} minutes)`)
     // Lệch pha 90s so với AutoSync khởi động để tránh dồn pool connection lúc boot
+    // Chỉ MỘT bản Cloud Run chạy mỗi nhịp (khoá Redis) — trước đây 2–3 bản cùng
+    // quét flash sale của mọi cửa hàng online, đốt kết nối DB vô ích (19/08/2026)
+    const chay = () => chayNeuLanhDao('flash-sale', TICK_MS - 15_000, runScheduler)
     setTimeout(() => {
-        runScheduler()
-        timer = setInterval(runScheduler, TICK_MS)
+        chay()
+        timer = setInterval(chay, TICK_MS)
     }, 90_000)
 }
 

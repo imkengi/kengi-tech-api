@@ -378,10 +378,13 @@ router.get('/overview', authMiddleware, async (req: AuthRequest, res: Response) 
         const branchId = String(req.query.branchId || '').trim()
         let whId = ''
         if (branchId) {
+            /* Đọc hỏng ⇒ whId rỗng ⇒ mọi truy vấn bên dưới lặng lẽ đổi từ TỒN CHI NHÁNH sang
+             * TỒN TOÀN CỬA HÀNG (`p.stock`). Người xem vẫn thấy một bảng bình thường, chỉ là đang
+             * đọc số của cả cửa hàng dưới nhãn một chi nhánh (20/08/2026). */
             const w = await prisma.warehouse.findFirst({
                 where: { type: 'main', isDefault: true, branchId },
                 select: { id: true },
-            }).catch(() => null)
+            })
             whId = w?.id || ''
         }
         // Biểu thức tồn dùng chung cho mọi truy vấn bên dưới

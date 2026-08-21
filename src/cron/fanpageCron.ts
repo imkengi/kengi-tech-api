@@ -6,10 +6,14 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { registryPrisma, getStorePrisma } from '../lib/prisma'
+import { chayNeuLanhDao } from '../lib/leaderLock'
 import { FacebookService, isRateLimitError } from '../services/platforms/facebook'
 import { pollAndAutoReply } from '../services/fanpageAutoReply'
 
-const RECONCILE_INTERVAL = 5 * 60 * 1000 // 5 phút
+// DÃN 5' → 10' + chỉ một bản chạy (19/08/2026): đối soát fanpage là lưới vét
+// (webhook Facebook đã đẩy bình luận/tin nhắn thời gian thực), 5' quét đủ
+// cửa hàng có fanpage trên mọi bản Cloud Run chỉ tốn kết nối DB.
+const RECONCILE_INTERVAL = 10 * 60 * 1000 // 10 phút
 const TOKEN_REFRESH_BUFFER = 7 * 86400_000 // refresh khi còn < 7 ngày
 const GRAPH_THROTTLE_MS = 300 // nghỉ giữa các call Graph liên tiếp (tránh rate-limit)
 const HEAL_RETRY_COOLDOWN = 60 * 60 * 1000 // heal thất bại → chỉ thử lại sau 60 phút
@@ -164,9 +168,10 @@ async function runReconcile(): Promise<void> {
 export function startFanpageCron(): void {
     if (timer) return
     console.log(`⏰ Fanpage cron started (every ${RECONCILE_INTERVAL / 60000} minutes)`)
+    const chay = () => chayNeuLanhDao('fanpage-reconcile', RECONCILE_INTERVAL - 30_000, runReconcile)
     setTimeout(() => {
-        runReconcile()
-        timer = setInterval(runReconcile, RECONCILE_INTERVAL)
+        chay()
+        timer = setInterval(chay, RECONCILE_INTERVAL)
     }, 60_000)
 }
 

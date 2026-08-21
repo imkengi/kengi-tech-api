@@ -351,6 +351,134 @@ async function matchVideosWithOrders(
 //  GET /api/drive-videos/videos — danh sách video kèm đơn đã ghép
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════════════════════
+//  KẾT NỐI GOOGLE DRIVE BẰNG TÀI KHOẢN CHỦ SHOP
+//  Cần cho việc TỰ DỌN VIDEO: file My Drive chỉ chủ sở hữu xoá được.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// GET /api/drive-videos/oauth/status — đã kết nối chưa, tài khoản nào
+router.get('/oauth/status', authMiddleware, requirePermission('settings.view', 'online_orders.view'), async (req: AuthRequest, res: Response) => {
+    try {
+        const { driveOAuthConfigured, driveRedirectUri } = await import('../lib/driveOAuth')
+        const st = await (req.storePrisma as any).storeSettings
+            .findFirst({ select: { driveOauthEmail: true, driveOauthAt: true, driveFolderId: true } as any })
+            .catch(() => null) as any
+        res.json({
+            success: true,
+            data: {
+                daCauHinh: driveOAuthConfigured(),
+                daKetNoi: !!st?.driveOauthEmail,
+                email: st?.driveOauthEmail || null,
+                ketNoiLuc: st?.driveOauthAt || null,
+                coThuMuc: !!st?.driveFolderId,
+                redirectUri: driveRedirectUri(),
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// GET /api/drive-videos/oauth/url — lấy link đưa chủ shop sang Google đồng ý
+router.get('/oauth/url', authMiddleware, requirePermission('settings.edit_store', 'settings.view'), async (req: AuthRequest, res: Response) => {
+    try {
+        const { driveOAuthConfigured, buildDriveAuthUrl } = await import('../lib/driveOAuth')
+        if (!driveOAuthConfigured()) {
+            return res.status(503).json({
+                success: false,
+                error: 'Chưa cấu hình Google OAuth trên máy chủ (GOOGLE_OAUTH_CLIENT_ID/SECRET) — báo Kengi bật giúp.',
+            })
+        }
+        // state chỉ để chống lạc trang, KHÔNG dùng để quyết định lưu token vào
+        // cửa hàng nào — cửa hàng được lấy từ PHIÊN ĐĂNG NHẬP ở bước /oauth/complete.
+        const state = Buffer.from(JSON.stringify({ t: Date.now() })).toString('base64url')
+        res.json({ success: true, data: { url: buildDriveAuthUrl(state) } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// GET /api/drive-videos/oauth/callback — Google gọi lại sau khi chủ shop đồng ý.
+//
+// ⚠ CALLBACK NÀY TUYỆT ĐỐI KHÔNG GHI TOKEN. Nó chỉ chuyển mã về web, y như
+// callback Shopee/TikTok trong routes/onlineOrders.ts. Lý do (lỗ hổng đã suýt
+// phát hành 06/08/2026): callback công khai không mang phiên đăng nhập, nếu lấy
+// mã cửa hàng từ 'state' thì kẻ xấu tự dựng liên kết với state trỏ cửa hàng
+// khác, rồi:
+//   • tự đăng nhập Google của hắn → ghi đè kết nối của cửa hàng nạn nhân, hoặc
+//   • gửi liên kết cho chủ shop nạn nhân → refresh_token TOÀN QUYỀN DRIVE của
+//     nạn nhân rơi vào cửa hàng của hắn, cron đêm dọn video Drive cá nhân nạn nhân.
+// Cách chặn: cửa hàng nhận token LUÔN lấy từ PHIÊN ĐĂNG NHẬP ở /oauth/complete,
+// không bao giờ từ tham số trên URL.
+router.get('/oauth/callback', async (req, res: Response) => {
+    const webBase = process.env.PUBLIC_WEB_URL || 'https://kengi.vn'
+    if (req.query.error) {
+        return res.redirect(`${webBase}/dashboard-settings?driveOauth=loi&msg=${encodeURIComponent(`Bạn đã từ chối cấp quyền (${req.query.error})`)}`)
+    }
+    const code = String(req.query.code || '')
+    if (!code) {
+        return res.redirect(`${webBase}/dashboard-settings?driveOauth=loi&msg=${encodeURIComponent('Thiếu mã xác thực từ Google')}`)
+    }
+    // Trả mã về web; web đang có phiên đăng nhập sẽ gọi /oauth/complete để đổi
+    // token và lưu vào ĐÚNG cửa hàng của người đang đăng nhập.
+    return res.redirect(`${webBase}/dashboard-settings?driveCode=${encodeURIComponent(code)}`)
+})
+
+// POST /api/drive-videos/oauth/complete { code } — đổi mã lấy token và lưu vào
+// cửa hàng CỦA NGƯỜI ĐANG ĐĂNG NHẬP (req.storePrisma từ JWT). Đây là chỗ duy
+// nhất được ghi token Drive.
+router.post('/oauth/complete', authMiddleware, requirePermission('settings.edit_store', 'settings.view'), async (req: AuthRequest, res: Response) => {
+    try {
+        const code = String(req.body?.code || '').trim()
+        if (!code) return res.status(400).json({ success: false, error: 'Thiếu mã xác thực' })
+        const { driveOAuthConfigured, exchangeDriveCode } = await import('../lib/driveOAuth')
+        if (!driveOAuthConfigured()) {
+            return res.status(503).json({ success: false, error: 'Máy chủ chưa cấu hình Google OAuth' })
+        }
+        const { refreshToken, email } = await exchangeDriveCode(code)
+
+        const sp = req.storePrisma as any
+        // Cột có thể chưa migrate ở schema cũ → tự vá rồi ghi
+        await sp.$executeRawUnsafe(`ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "driveOauthToken" TEXT`).catch(() => { })
+        await sp.$executeRawUnsafe(`ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "driveOauthEmail" TEXT`).catch(() => { })
+        await sp.$executeRawUnsafe(`ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "driveOauthAt" TIMESTAMP(3)`).catch(() => { })
+        const cur = await sp.storeSettings.findFirst({ select: { id: true } }).catch(() => null)
+        if (cur) {
+            await sp.storeSettings.update({
+                where: { id: cur.id },
+                data: { driveOauthToken: refreshToken, driveOauthEmail: email, driveOauthAt: new Date() } as any,
+            })
+        } else {
+            await sp.storeSettings.create({
+                data: { id: 'default', driveOauthToken: refreshToken, driveOauthEmail: email, driveOauthAt: new Date() } as any,
+            })
+        }
+        // KHÔNG log refresh_token — chỉ email để đối chiếu
+        console.log(`[DriveOAuth] ${req.user?.storeCode}: đã kết nối tài khoản ${email}`)
+        res.json({ success: true, data: { email } })
+    } catch (err: any) {
+        console.error('[DriveOAuth complete]', err?.message || err)
+        res.status(500).json({ success: false, error: String(err?.message || 'Kết nối thất bại').slice(0, 200) })
+    }
+})
+
+// POST /api/drive-videos/oauth/disconnect — gỡ kết nối (xoá token đã lưu)
+router.post('/oauth/disconnect', authMiddleware, requirePermission('settings.edit_store', 'settings.view'), async (req: AuthRequest, res: Response) => {
+    try {
+        const sp = req.storePrisma as any
+        const cur = await sp.storeSettings.findFirst({ select: { id: true } }).catch(() => null)
+        if (cur) {
+            await sp.storeSettings.update({
+                where: { id: cur.id },
+                data: { driveOauthToken: null, driveOauthEmail: null, driveOauthAt: null } as any,
+            })
+        }
+        res.json({ success: true })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
 router.get('/videos', authMiddleware, requirePermission('online_orders.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma

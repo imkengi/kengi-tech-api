@@ -17,6 +17,70 @@
  */
 
 /** Bỏ phần biến thiên để hai lần lỗi cùng bệnh gom về một nhóm. */
+/**
+ * MÔ TẢ MỘT LỖI SAO CHO KHÔNG BAO GIỜ RA CHUỖI RỖNG.
+ *
+ * `console.error(\`... : ${err.message || String(err)}\`)` là mẫu ai cũng viết,
+ * và nó THẤT BẠI IM LẶNG với lỗi Prisma: nội dung nằm ở `code`/`meta` còn
+ * `.message` rỗng.
+ *
+ * Tệ hơn, có loại lỗi rỗng CẢ `name` LẪN `message`. Lúc đó `String(err)` gọi
+ * `Error.prototype.toString()`, mà đặc tả nói name rỗng thì trả về message —
+ * cũng rỗng. Nên mọi đường lùi thông thường đều ra `""`.
+ *
+ * DÍNH THẬT HAI LẦN:
+ *   - 12–15/08/2026: hàng trăm `[OrderSync] Error converting order X:` cụt lủn
+ *     mỗi ngày, không lần nào chẩn được. Vá lần một (ghi thêm code|meta) —
+ *     nhưng vẫn hụt đúng ca `name` và `message` cùng rỗng.
+ *   - 16/08/2026 13:52 UTC: 8 dòng log dài ĐÚNG 55 ký tự, kết thúc bằng dấu
+ *     hai chấm. Thủ phạm thật là cạn pool (`connection limit: 1`) và chỉ tìm ra
+ *     nhờ mấy dòng `prisma:error` nằm rời bên cạnh.
+ *
+ * `err.stack` VẪN CÒN khung gọi kể cả khi name/message rỗng — đó là đường lùi.
+ */
+/**
+ * Chuỗi CÓ CHỮ mới tính là có nội dung.
+ *
+ * ⚠ Đây là chỗ bản đầu tiên của hàm này sai, và sai theo kiểu rất khó thấy:
+ * lỗi Prisma hay có `message` chỉ gồm một ký tự xuống dòng. Chuỗi `"\n"` là
+ * TRUTHY, nên hàm trả về `"\n"`, rồi Cloud Logging cắt ký tự xuống dòng ở cuối
+ * dòng log — ra **đúng 55 ký tự**, y hệt mã CŨ chưa vá. Tôi đã mất một vòng dài
+ * đi nghi Cloud Build đẩy nguồn cũ (tải cả gói nguồn 23MB về đối chiếu, soi log
+ * build tìm lớp đệm) trước khi nhận ra thủ phạm nằm ngay trong hàm này.
+ */
+function coChu(x: any): string | null {
+    if (typeof x !== 'string') return null
+    /* Gộp mọi khoảng trắng về một dấu cách: MỘT LỖI PHẢI LÀ MỘT DÒNG LOG.
+     * Thông báo lỗi Prisma thật thường nhiều dòng ("\nInvalid `prisma.x()`
+     * invocation:\n\n…"); để nguyên là nó vỡ thành nhiều bản ghi rời trong
+     * Cloud Logging — đúng thứ đã làm 4 ngày không ai chẩn được nguyên nhân. */
+    const s = x.replace(/\s+/g, ' ').trim()
+    return s ? s : null
+}
+
+export function moTaLoi(err: any): string {
+    const chinh = [
+        err?.code && `code=${err.code}`,
+        /* Ném thẳng chuỗi/số cũng là chuyện có thật — giữ nguyên nội dung.
+         * Cố ý KHÔNG dùng `String(err)` cho mọi kiểu: với object nó ra
+         * "[object Object]", nhìn như có thông tin mà thật ra không có gì. */
+        coChu(err?.message) || coChu(err?.name)
+        || (typeof err === 'number' ? String(err) : coChu(err)),
+        err?.meta && `meta=${JSON.stringify(err.meta).slice(0, 200)}`,
+    ].filter(Boolean).join(' | ')
+    if (chinh) return chinh
+
+    // Rỗng ruột: nói ra ĐƯỢC GÌ còn hơn để trống cho người sau đoán.
+    const kieu = err?.constructor?.name || (err === null ? 'null' : typeof err)
+    const khoa = err && typeof err === 'object' ? Object.keys(err).slice(0, 8).join(',') : ''
+    const khung = String(err?.stack || '').split('\n').map(s => s.trim()).filter(Boolean)[0] || ''
+    return [
+        `LỖI RỖNG kiểu=${kieu}`,
+        khoa && `khoá=${khoa}`,
+        khung && `tại ${khung.slice(0, 140)}`,
+    ].filter(Boolean).join(' | ')
+}
+
 export function chuKyLoi(msg: string): string {
     return String(msg || '')
         .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, '<uuid>')

@@ -13,7 +13,7 @@
  * trong một buổi sáng (SPE-260728TTKAQS95, TMMN2U6G, TMHC6XGV).
  */
 
-import { chonDonDuocXoa, maPhieuCuaDon, type DonUngVien } from '../src/lib/donDuocXoa'
+import { chonDonDuocXoa, maPhieuCuaDon, type DonUngVien, TRANG_THAI_LEN_PHIEU, TRANG_THAI_DA_BAN } from '../src/lib/donDuocXoa'
 
 let dat = 0, hong = 0
 function ok(ten: string, dk: boolean, thucTe?: any) {
@@ -81,6 +81,31 @@ function main() {
 
     // 9 — hàm dựng mã phiếu phải khớp quy ước dùng khắp hệ
     ok('9. mã phiếu đúng quy ước ONLINE-<mã đơn>', maPhieuCuaDon('SPE-123') === 'ONLINE-SPE-123', maPhieuCuaDon('SPE-123'))
+
+    /* 10 — MỘT NGUỒN SỰ THẬT. `TRANG_THAI_DA_BAN` phải SUY RA từ danh sách trạng
+     * thái còn lên phiếu được, không gõ tay. Trước đây hai danh sách nằm ở hai
+     * file (`donDuocXoa.ts` và hằng cục bộ trong `orderSync.ts`) và khớp nhau
+     * bằng niềm tin — thêm `DELIVERED` vào bộ lọc quét của cron mà quên bên này
+     * là đơn ĐÃ GIAO chưa lên phiếu bị xoá vô điều kiện. */
+    ok('10. TRANG_THAI_DA_BAN suy ra từ TRANG_THAI_LEN_PHIEU',
+        TRANG_THAI_DA_BAN === (TRANG_THAI_LEN_PHIEU as any), 'hai hằng phải là MỘT')
+
+    /* 10b — CA SINH TỬ của việc suy ra: đơn `DELIVERED` (TikTok) và `delivered`
+     * chưa có phiếu thì phải GIỮ. Với danh sách cứng cũ (`COMPLETED`/`completed`)
+     * chúng rơi vào nhánh "không phải đã bán" → xoá vô điều kiện. */
+    const giao = chonDonDuocXoa([
+        { id: 'd1', orderNumber: 'TIK-1', status: 'DELIVERED' },
+        { id: 'd2', orderNumber: 'SPE-2', status: 'delivered' },
+        { id: 'd3', orderNumber: 'SPE-3', status: 'IN_TRANSIT' },
+    ], new Set<string>())
+    ok('10b. đơn ĐÃ GIAO chưa có phiếu → GIỮ, không xoá',
+        giao.duocXoa.length === 0 && giao.giuLai.length === 3, giao.duocXoa.map(x => x.orderNumber))
+
+    // 10c — CHIỀU IM: đơn đã giao mà ĐÃ có phiếu thì vẫn cho xoá
+    const giao2 = chonDonDuocXoa(
+        [{ id: 'd1', orderNumber: 'TIK-1', status: 'DELIVERED' }],
+        new Set(['ONLINE-TIK-1']))
+    ok('10c. đơn đã giao ĐÃ có phiếu → vẫn cho xoá', giao2.duocXoa.length === 1, giao2)
 
     console.log(`\n${dat}/${dat + hong} ca đạt`)
     if (hong) process.exit(1)

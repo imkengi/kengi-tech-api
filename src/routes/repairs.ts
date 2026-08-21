@@ -157,7 +157,7 @@ router.get('/', authMiddleware, requirePermission('repairs.view'), async (req: A
         if (transactionId) where.transactionId = String(transactionId)
         if (search) {
             const q = String(search)
-            where.OR = [{ productName: { contains: q } }, { customerName: { contains: q } }, { code: { contains: q } }]
+            where.OR = [{ productName: { contains: q, mode: 'insensitive' } }, { customerName: { contains: q, mode: 'insensitive' } }, { code: { contains: q, mode: 'insensitive' } }]
         }
         const data = await prisma.repair.findMany({ where, orderBy: { createdAt: 'desc' } })
         res.json({ success: true, data })
@@ -254,6 +254,23 @@ router.post('/', authMiddleware, requirePermission('repairs.create'), validate(C
 const laAdmin = (req: AuthRequest) =>
     ['admin', 'owner', 'superadmin'].includes(String((req as any).user?.role || '').toLowerCase())
 
+/**
+ * GET /api/repairs/supplier-batch/:code — mọi phiếu trong một LÔ gửi NCC,
+ * để in lại phiếu bàn giao chung (nhiều phiếu, một chữ ký NCC).
+ */
+router.get('/supplier-batch/:code', authMiddleware, requirePermission('repairs.view'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const code = String(req.params.code || '').trim()
+        if (!code) return res.status(400).json({ success: false, error: 'Thiếu mã lô' })
+        const data = await prisma.repair.findMany({
+            where: { supplierBatchCode: code } as any,
+            orderBy: { createdAt: 'asc' },
+        })
+        res.json({ success: true, data })
+    } catch (err) { res.status(500).json({ success: false, error: 'Internal server error' }) }
+})
+
 // PUT /api/repairs/:id
 router.put('/:id', authMiddleware, requirePermission('repairs.edit'), validate(UpdateRepairSchema), async (req: AuthRequest, res: Response) => {
     try {
@@ -278,7 +295,8 @@ router.put('/:id', authMiddleware, requirePermission('repairs.edit'), validate(U
             }
         }
         const { status, cost, notes, completedDate, productId, quantity, source,
-            customerId, customerName, customerPhone, transactionId, soldReceiptNumber } = req.body
+            customerId, customerName, customerPhone, transactionId, soldReceiptNumber,
+            supplierId, supplierName, supplierBatchCode, queuedForSupplier } = req.body
         const data: any = {}
         if (status) data.status = status
         if (cost !== undefined) data.cost = Number(cost)
@@ -289,6 +307,20 @@ router.put('/:id', authMiddleware, requirePermission('repairs.edit'), validate(U
         // auto-gắn hoá đơn nên phải nhận thật (13/08/2026).
         if (customerName !== undefined) data.customerName = String(customerName ?? '')
         if (customerPhone !== undefined) data.customerPhone = customerPhone || null
+        /**
+         * GỬI NCC (19/08/2026): chọn NCC lúc chuyển 'Trả về NCC', nhiều phiếu
+         * gửi cùng lượt chung một mã lô để in MỘT phiếu bàn giao. NCC/lô ghi
+         * được cả khi phiếu đã ở sent_to_supplier (bổ sung sau); mốc
+         * sentToSupplierAt chỉ đóng lần đầu chuyển sang trạng thái này.
+         */
+        if (supplierId !== undefined) data.supplierId = supplierId || null
+        if (supplierName !== undefined) data.supplierName = supplierName || null
+        if (supplierBatchCode !== undefined) data.supplierBatchCode = supplierBatchCode || null
+        if (status === 'sent_to_supplier' && !existing.sentToSupplierAt) data.sentToSupplierAt = new Date()
+        // Rổ chờ gửi NCC: bấm tay đưa vào / rút ra. Gửi lô xong thì rổ tự trống
+        // (điều kiện chờ gửi có "chưa có sentToSupplierAt").
+        if (queuedForSupplier === true && !existing.queuedForSupplierAt) data.queuedForSupplierAt = new Date()
+        if (queuedForSupplier === false) data.queuedForSupplierAt = null
         /**
          * Link sang hoá đơn bán: POS gửi kèm lúc chuyển 'returned' sau khi thu
          * tiền — "phiếu sửa xong mà không biết thu ở hoá đơn nào" (13/08/2026).

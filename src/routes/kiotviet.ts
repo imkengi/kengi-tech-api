@@ -154,6 +154,7 @@ async function handleWebhook(sp: any, cfg: any, notis: { action: string; data: a
     // Webhook đụng khách nào thì hỏi lại KV số dư khách đó (làm tươi, không cộng trừ)
     opts.creds = creds
     opts.daTuoiNo = new Set<string>()
+    opts.tuWebhook = true   // payload webhook không mang Debt — công nợ chỉ lấy từ KV REST (18/08/2026)
     /**
      * SỬA HOÁ ĐƠN BÊN KIOTVIET PHẢI THEO VỀ ĐỦ DÒNG HÀNG.
      * KV sửa phiếu là huỷ bản gốc + đẻ bản .01 rồi bắn invoice.update — không
@@ -199,9 +200,16 @@ async function handleWebhook(sp: any, cfg: any, notis: { action: string; data: a
             // Không có nó thì chỉ thấy "lấy 1 · tạo 0" và không tài nào biết
             // KiotViet gửi thiếu trường gì (dính 08/08/2026 với invoice.update).
             const khongGhiDuoc = c.fetched > 0 && c.created === 0 && c.updated === 0
-            const mauGoc = khongGhiDuoc && n.data?.[0]
-                ? `Payload gốc — các trường: ${Object.keys(n.data[0]).join(', ')}\n${JSON.stringify(n.data[0]).slice(0, 1500)}`
-                : null
+            // Khách/NCC: LUÔN ghi danh sách trường + có debt hay không, kể cả khi ghi thành công.
+            // 18/08/2026: webhook customer.update không mang Debt → từng ghi đè 0 lên nợ thật mà
+            // log "success upd 1" không lưu gì để lần; nay nhìn log là biết KV gửi gì.
+            const laDoiTac = n.action.startsWith('customer') || n.action.startsWith('supplier')
+            const d0 = n.data?.[0]
+            const mauGoc = khongGhiDuoc && d0
+                ? `Payload gốc — các trường: ${Object.keys(d0).join(', ')}\n${JSON.stringify(d0).slice(0, 1500)}`
+                : laDoiTac && d0
+                    ? `Payload — các trường: ${Object.keys(d0).join(', ')} · debt: ${d0.debt === undefined ? 'KHÔNG CÓ (không đụng công nợ, hỏi lại KV)' : String(d0.debt)}`
+                    : null
 
             await sp.kiotVietSyncLog.create({
                 data: {

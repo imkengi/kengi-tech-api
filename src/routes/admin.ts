@@ -1124,6 +1124,10 @@ router.get('/tarot-config', async (_req: Request, res: Response) => {
                 aiDailyLimit: cf?.aiDailyLimit ?? 20,
                 aiDailyLimitIp: cf?.aiDailyLimitIp ?? 60,
                 requireLogin: !!cf?.requireLogin,
+                visionProvider: cf?.visionProvider || 'openai',
+                coKhoaThiGiac: !!cf?.visionApiKey,
+                duoiKhoaThiGiac: cf?.visionApiKey ? `••••${String(cf.visionApiKey).slice(-4)}` : '',
+                visionModel: cf?.visionModel || 'gpt-5.6-terra',
                 updatedAt: cf?.updatedAt || null,
             },
         })
@@ -1197,6 +1201,26 @@ router.put('/tarot-config', async (req: Request, res: Response) => {
         }
         if (req.body?.requireLogin !== undefined) data.requireLogin = !!req.body.requireLogin
 
+        /* Khoá THỊ GIÁC — tách hẳn khoá chữ vì DeepSeek không nhìn được ảnh. */
+        if (req.body?.visionProvider !== undefined) {
+            const p2 = String(req.body.visionProvider || '').trim().toLowerCase()
+            if (!['openai', 'gemini'].includes(p2)) {
+                res.status(400).json({ success: false, error: 'Nhà cung cấp AI nhìn ảnh phải là: openai hoặc gemini' })
+                return
+            }
+            data.visionProvider = p2
+        }
+        if (req.body?.visionModel !== undefined) data.visionModel = String(req.body.visionModel || '').trim().slice(0, 80) || 'gpt-5.6-terra'
+        if (req.body?.visionApiKey !== undefined) {
+            const k2 = String(req.body.visionApiKey || '').trim()
+            if (k2.startsWith('••')) { /* ô hiển thị khoá đã che — bỏ qua, đừng xoá khoá thật */ }
+            else if (!k2) data.visionApiKey = null
+            else if (k2.length < 20) {
+                res.status(400).json({ success: false, error: 'Khoá AI nhìn ảnh trông không hợp lệ (quá ngắn).' })
+                return
+            } else data.visionApiKey = k2
+        }
+
         const cf = await (prisma as any).tarotSetting.upsert({
             where: { id: 'default' },
             create: { id: 'default', ...data },
@@ -1213,6 +1237,10 @@ router.put('/tarot-config', async (req: Request, res: Response) => {
                 aiDailyLimit: cf.aiDailyLimit,
                 aiDailyLimitIp: cf.aiDailyLimitIp ?? 60,
                 requireLogin: !!cf.requireLogin,
+                visionProvider: cf.visionProvider || 'openai',
+                coKhoaThiGiac: !!cf.visionApiKey,
+                duoiKhoaThiGiac: cf.visionApiKey ? `••••${String(cf.visionApiKey).slice(-4)}` : '',
+                visionModel: cf.visionModel || 'gpt-5.6-terra',
                 updatedAt: cf.updatedAt,
             },
         })
@@ -1399,6 +1427,10 @@ router.post('/migrate-tarot', async (_req: Request, res: Response) => {
             `CREATE INDEX IF NOT EXISTS "TarotReading_ip_createdAt_idx" ON "TarotReading"("ip", "createdAt")`,
             `ALTER TABLE "TarotSetting" ADD COLUMN IF NOT EXISTS "aiDailyLimitIp" INTEGER NOT NULL DEFAULT 60`,
             `ALTER TABLE "TarotSetting" ADD COLUMN IF NOT EXISTS "requireLogin" BOOLEAN NOT NULL DEFAULT false`,
+            // Khoá riêng cho phần nhìn ảnh (xem chỉ tay) — DeepSeek không nhìn được ảnh.
+            `ALTER TABLE "TarotSetting" ADD COLUMN IF NOT EXISTS "visionProvider" TEXT NOT NULL DEFAULT 'openai'`,
+            `ALTER TABLE "TarotSetting" ADD COLUMN IF NOT EXISTS "visionApiKey" TEXT`,
+            `ALTER TABLE "TarotSetting" ADD COLUMN IF NOT EXISTS "visionModel" TEXT NOT NULL DEFAULT 'gpt-5.6-terra'`,
             // Lượt truy cập trang — bảng RIÊNG, không trộn vào TarotReading kẻo
             // phồng con số "lượt xem bài".
             `CREATE TABLE IF NOT EXISTS "TarotVisit" (
@@ -2415,6 +2447,117 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 /* Repair.customerId — co trong schema nhung log production bao
                  * "does not exist in the current database" o mot so cua hang. */
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "customerId" TEXT`)
+                // Gửi NCC theo lô + chọn NCC (2026-08-19) — ghép lại từ bản đang chạy trên prod 21/08.
+                // Cây này ra đời trước nên thiếu; thiếu cột thì route repairs ghi xuống sẽ nổ.
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "supplierId" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "supplierName" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "supplierBatchCode" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "sentToSupplierAt" TIMESTAMP(3)`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "queuedForSupplierAt" TIMESTAMP(3)`)
+                // 18/08/2026 — điều khoản thanh toán mặc định của NCC (xem schema Supplier)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Supplier" ADD COLUMN IF NOT EXISTS "paymentTermDays" INTEGER`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Supplier" ADD COLUMN IF NOT EXISTS "paymentTerms" TEXT`)
+                // 18/08/2026 chiều — kiểu điều khoản đầy đủ (net/dom/eom) cho NCC
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Supplier" ADD COLUMN IF NOT EXISTS "paymentTermType" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Supplier" ADD COLUMN IF NOT EXISTS "paymentTermDom" INTEGER`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Supplier" ADD COLUMN IF NOT EXISTS "paymentTermMonthOffset" INTEGER`)
+
+                /* 21/08/2026 — ĐỔ EXCEL MISA (mua/bán không có API, chỉ xuất Excel).
+                 * Ba bảng giữ nguyên văn sổ MISA, KHÔNG đẻ ra Transaction — POS đã ghi
+                 * đơn thật rồi, đổ thêm một bộ nữa là đếm trùng doanh thu. Khai tay ở đây
+                 * vì `db push` không chạy được trên prod (xem sync-schemas). */
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "MisaImportBatch" (
+                        "id" TEXT NOT NULL,
+                        "loai" TEXT NOT NULL,
+                        "tenFile" TEXT NOT NULL,
+                        "kyBaoCao" TEXT,
+                        "tongDong" INTEGER NOT NULL DEFAULT 0,
+                        "docDuoc" INTEGER NOT NULL DEFAULT 0,
+                        "boQua" INTEGER NOT NULL DEFAULT 0,
+                        "soChungTu" INTEGER NOT NULL DEFAULT 0,
+                        "tongTien" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "tongThue" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "chiTiet" TEXT,
+                        "apply" BOOLEAN NOT NULL DEFAULT false,
+                        "userId" TEXT,
+                        "userName" TEXT,
+                        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "MisaImportBatch_pkey" PRIMARY KEY ("id")
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MisaImportBatch_loai_createdAt_idx" ON "MisaImportBatch"("loai", "createdAt")`)
+
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "MisaSaleDoc" (
+                        "id" TEXT NOT NULL,
+                        "soChungTu" TEXT NOT NULL,
+                        "soHoaDon" TEXT,
+                        "ngayChungTu" TIMESTAMP(3),
+                        "ngayHachToan" TIMESTAMP(3),
+                        "ngayHoaDon" TIMESTAMP(3),
+                        "maKhach" TEXT,
+                        "tenKhach" TEXT,
+                        "nguonTenKhach" TEXT DEFAULT 'cot',
+                        "dienGiai" TEXT,
+                        "customerId" TEXT,
+                        "tongDoanhSo" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "tongThue" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "tongChietKhau" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "tongTra" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "thieuGiaVon" BOOLEAN NOT NULL DEFAULT true,
+                        "batchId" TEXT,
+                        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "MisaSaleDoc_pkey" PRIMARY KEY ("id")
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "MisaSaleDoc_soChungTu_key" ON "MisaSaleDoc"("soChungTu")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MisaSaleDoc_ngayChungTu_idx" ON "MisaSaleDoc"("ngayChungTu")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MisaSaleDoc_soHoaDon_idx" ON "MisaSaleDoc"("soHoaDon")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MisaSaleDoc_customerId_idx" ON "MisaSaleDoc"("customerId")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MisaSaleDoc_batchId_idx" ON "MisaSaleDoc"("batchId")`)
+
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "MisaSaleLine" (
+                        "id" TEXT NOT NULL,
+                        "docId" TEXT NOT NULL,
+                        "maHang" TEXT NOT NULL,
+                        "tenHang" TEXT,
+                        "dvt" TEXT,
+                        "soLuong" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "donGia" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "doanhSo" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "chietKhau" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "soLuongTra" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "giaTriTra" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "giamGia" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "thueGtgt" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "tkThueGtgt" TEXT,
+                        "giaVon" DOUBLE PRECISION,
+                        "productId" TEXT,
+                        "dongSo" INTEGER,
+                        CONSTRAINT "MisaSaleLine_pkey" PRIMARY KEY ("id"),
+                        CONSTRAINT "MisaSaleLine_docId_fkey" FOREIGN KEY ("docId") REFERENCES "MisaSaleDoc"("id") ON DELETE CASCADE ON UPDATE CASCADE
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MisaSaleLine_docId_idx" ON "MisaSaleLine"("docId")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MisaSaleLine_maHang_idx" ON "MisaSaleLine"("maHang")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MisaSaleLine_productId_idx" ON "MisaSaleLine"("productId")`)
+
+                /**
+                 * GỠ INDEX HÀM đã thử ngày 18/08/2026 — CHÚNG LÀM CHẬM HẲN.
+                 * Ý định: giúp các join LOWER(TRIM(sku)). Thực tế planner chuyển
+                 * các phép gộp toàn bảng (GROUP BY LOWER(TRIM(sku)) trong nhánh
+                 * "đã xuất HĐ"/"nhập VAT") từ SeqScan+HashAggregate sang quét
+                 * index ngẫu nhiên → /einvoice/tax-stock-gap 30 ngày tụt từ 5,4s
+                 * xuống 79s, khoảng "tất cả" quá 240s. Đo xong gỡ ngay, giữ
+                 * DROP idempotent để mọi cửa hàng đều sạch.
+                 */
+                await (sp as any).$executeRawUnsafe(`DROP INDEX IF EXISTS "Product_sku_lower_idx"`)
+                await (sp as any).$executeRawUnsafe(`DROP INDEX IF EXISTS "TransactionItem_sku_lower_idx"`)
+                await (sp as any).$executeRawUnsafe(`DROP INDEX IF EXISTS "ImportReceiptItem_sku_lower_idx"`)
+                await (sp as any).$executeRawUnsafe(`DROP INDEX IF EXISTS "OnlineOrder_online_receipt_idx"`)
 
                 storeResults.push(`${store.name}: OK`)
             } catch (e: any) {
@@ -2891,8 +3034,8 @@ router.get('/cloud-metrics', async (_req: Request, res: Response) => {
                 const latencyUrl = `${monitoringBase}/timeSeries?filter=${filter} AND metric.type="run.googleapis.com/request_latencies"&interval.startTime=${startOfDay.toISOString()}&interval.endTime=${now.toISOString()}&aggregation.alignmentPeriod=86400s&aggregation.perSeriesAligner=ALIGN_PERCENTILE_50`
 
                 const [reqCountRes, latencyRes] = await Promise.all([
-                    fetch(reqCountUrl, { headers: { Authorization: `Bearer ${accessToken}` } }).then(r => r.json()).catch(() => null),
-                    fetch(latencyUrl, { headers: { Authorization: `Bearer ${accessToken}` } }).then(r => r.json()).catch(() => null),
+                    fetch(reqCountUrl, { headers: { Authorization: `Bearer ${accessToken}` } }).then(r => r.json() as Promise<any>).catch(() => null),
+                    fetch(latencyUrl, { headers: { Authorization: `Bearer ${accessToken}` } }).then(r => r.json() as Promise<any>).catch(() => null),
                 ])
 
                 // Parse request counts per hour
@@ -3454,6 +3597,26 @@ router.get('/order-trace', async (req: Request, res: Response) => {
                 donSan: orders, phieuBan: txs, phieuTra: returns, hoaDon: invoices,
                 ketLuan: {
                     coDonSan: (orders as any[]).length > 0,
+                    /* CÂU HỎI TRUNG TÂM của công cụ này: đơn đã VÀO SỔ chưa.
+                     * Thiếu nó thì người dùng phải tự đếm `phieuBan.length` —
+                     * đúng việc tôi phải làm bằng tay suốt buổi soát 16/08 khi
+                     * kiểm 9 đơn trượt có tự lên phiếu lại không (7/9 lành sau
+                     * 3 phút). Đơn đã bán mà thiếu phiếu = doanh thu ngoài sổ. */
+                    coPhieuBan: (txs as any[]).length > 0,
+                    /* `daVaoSo` NỐI ĐÍCH DANH, không dựa vào `txs.length`.
+                     *
+                     * Mọi mảng ở trên tìm bằng `ILIKE '%<mã>%'` — khớp mờ, cố ý,
+                     * để người dùng gõ thiếu tiền tố vẫn ra. Nhưng một trường
+                     * tên "đã vào sổ" mà dựng trên khớp mờ là câu trả lời dứt
+                     * khoát đặt trên bằng chứng lỏng: một phiếu của đơn KHÁC có
+                     * mã chứa chuỗi này cũng làm nó thành true.
+                     *
+                     * Quy ước nối là `receiptNumber = 'ONLINE-' || orderNumber`
+                     * (xem dedup-by-subtraction-trap) — so đúng bằng nó. */
+                    daVaoSo: (orders as any[]).some((o: any) =>
+                        (txs as any[]).some((t: any) =>
+                            String(t.receiptNumber || '').toUpperCase()
+                            === `ONLINE-${String(o.orderNumber || '')}`.toUpperCase())),
                     coTraHang: (returns as any[]).length > 0,
                     daXuatHoaDon: (invoices as any[]).some((i: any) => ['SENT', 'issued', 'SIGNED'].includes(i.status)),
                 },
@@ -4096,7 +4259,7 @@ router.get('/vnpt-probe', async (req: Request, res: Response) => {
         let exx: any = {}; try { exx = JSON.parse(cfg.extra || '{}') } catch { }
         const { VnptProvider } = await import('../services/einvoice/vnpt')
         const pcfg = {
-            apiUrl: String(cfg.apiUrl || cfg.baseUrl || ''),
+            apiUrl: String(cfg.apiUrl || ''),   // `baseUrl` không phải cột của EInvoiceConfig
             // ?u= thử biến thể username (vd bỏ hậu tố _admin) với password đã lưu.
             // Cột thật của row là apiUsername/apiPassword (+ legacy apiKey/apiSecret);
             // KHÔNG có cột username/password trần — map sai là gửi chuỗi rỗng đi.
@@ -4188,6 +4351,119 @@ router.get('/vnpt-probe', async (req: Request, res: Response) => {
  * "nợ cũ in sai" thì phải nhìn được từng dòng sổ quanh phiếu đó, thay vì
  * đoán mò trong thuật toán.
  */
+/**
+ * GET /admin/kiotviet-no-ncc?storeCode=HUTI[&apply=1]
+ *
+ * ĐỐI CHIẾU CÔNG NỢ PHẢI TRẢ NCC (Supplier.payable) VỚI KIOTVIET — chỉ đọc; apply=1 sửa.
+ * Cùng bệnh với công nợ khách (xem /kiotviet-no-khach, 18/08/2026: 39 khách / 857,7tr
+ * giấu): payable cũng đồng bộ với luật `!existing.payable || overwritePrices`. Khác một
+ * điểm: NCC ít (vài chục) và KV có danh sách phân trang mang sẵn `debt`, nên đọc MỘT
+ * lượt danh sách rồi so — không cần gọi từng id.
+ *
+ * Tiện thể trả lời câu còn treo: danh sách KV có mang `debt` không? Nếu KHÔNG, đó là lý
+ * do đồng bộ khách (đọc `kv.debt` từ danh sách) không tự sửa được 39 khách kia.
+ */
+router.get('/kiotviet-no-ncc', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || '').trim()
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true, name: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const sp = getStorePrisma(store.schema) as any
+        const cfg = await sp.kiotVietConfig.findUnique({ where: { id: 'default' } }).catch(() => null)
+        if (!cfg) { res.json({ success: true, ketLuan: 'Cửa hàng chưa cấu hình KiotViet' }); return }
+        const { doiChieuNoNcc } = await import('../services/kiotvietRunner')
+        const kq = await doiChieuNoNcc(sp, cfg, String(req.query.apply || '') === '1')
+        res.json({ success: true, cuaHang: store.name, ...kq, danhSachLech: kq.danhSachLech.slice(0, 100),
+            ghiChu: 'chenh > 0: KiotViet nói NỢ NCC nhiều hơn Kengi (Kengi giấu nợ phải trả); chenh < 0: Kengi giữ nợ đã trả. Sửa: &apply=1. Cùng hàm với cron đối chiếu 24h.' })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err?.message })
+    }
+})
+
+/**
+ * GET /admin/kiotviet-no-khach?storeCode=HUTI&customerId=<localId>
+ *   (hoặc &code=HN73 — mã khách Kengi)
+ *
+ * HỎI THẲNG KIOTVIET "khách này giờ nợ bao nhiêu" rồi đặt cạnh sổ Kengi. CHỈ ĐỌC,
+ * không ghi gì. Sinh ra từ câu chủ shop hỏi 18/08/2026: "sao Phúc Hải (HN73)
+ * công nợ 0 mà lịch sử 647 phiếu toàn Bán hàng?" — sổ Kengi neo vào số KiotViet
+ * trả về ở lần chứng từ gần nhất (lamTuoiNoKhach), mà lần hỏi đó lỗi thì "giữ
+ * số cũ" âm thầm. Đây là cách phân biệt "KiotViet cũng nói 0" với "Kengi cầm số
+ * cũ" mà không phải mở KiotViet bằng tay.
+ */
+router.get('/kiotviet-no-khach', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || '').trim()
+        const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true, name: true } })
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const sp = getStorePrisma(store.schema) as any
+        let localId = String(req.query.customerId || '').trim()
+        const code = String(req.query.code || '').trim()
+        if (!localId && code) {
+            const c = await sp.customer.findFirst({ where: { code }, select: { id: true } })
+            localId = c?.id || ''
+        }
+        /* all=1 — QUÉT TOÀN BỘ khách có ánh xạ KiotViet, chỉ đọc, báo ai lệch. Đi
+         * tuần tự có nghỉ 120ms để không đập KiotViet; trần 800 khách/lượt.
+         * Đo 18/08: mẫu 12 khách chỉ lệch 1 (Phúc Hải) — nhưng mẫu ≠ toàn bộ. */
+        /* all=1 — QUÉT TOÀN BỘ khách có ánh xạ KiotViet (chỉ đọc); all=1&apply=1 — quét
+         * xong SỬA LUÔN. Cùng hàm với cron đối chiếu hằng ngày (doiChieuNoKhach). */
+        if (String(req.query.all || '') === '1') {
+            const cfgAll = await sp.kiotVietConfig.findUnique({ where: { id: 'default' } }).catch(() => null)
+            if (!cfgAll) { res.json({ success: true, ketLuan: 'Cửa hàng chưa cấu hình KiotViet' }); return }
+            const { doiChieuNoKhach } = await import('../services/kiotvietRunner')
+            const kq = await doiChieuNoKhach(sp, cfgAll, String(req.query.apply || '') === '1')
+            res.json({ success: true, cuaHang: store.name, ...kq, danhSachLech: kq.danhSachLech.slice(0, 100),
+                caiDat: { enabled: cfgAll.enabled, syncCustomers: cfgAll.syncCustomers, overwritePrices: cfgAll.overwritePrices, lastWebhookAt: cfgAll.lastWebhookAt },   // overwritePrices bật = webhook từng ghi đè 0 lên nợ (18/08)
+                ghiChu: 'chenh > 0: KiotViet nói nợ NHIỀU hơn Kengi (Kengi đang giấu nợ); chenh < 0: KiotViet nói ít hơn (khách trả dư / đã trả). Sửa hàng loạt: &apply=1.' })
+            return
+        }
+        if (!localId) { res.status(400).json({ success: false, error: 'Cần customerId hoặc code' }); return }
+        const kh = await sp.customer.findUnique({ where: { id: localId }, select: { id: true, code: true, name: true, debt: true, updatedAt: true } })
+        if (!kh) { res.status(404).json({ success: false, error: 'Không tìm thấy khách' }); return }
+        const map = await sp.kiotVietMap.findFirst({ where: { entity: 'customer', localId }, select: { kvId: true, kvCode: true, syncedAt: true } })
+        if (!map) {
+            res.json({ success: true, khach: kh, ketLuan: 'Khách này KHÔNG có ánh xạ KiotViet — sổ Kengi là nguồn duy nhất, không có gì để đối chiếu' })
+            return
+        }
+        const cfg = await sp.kiotVietConfig.findUnique({ where: { id: 'default' } }).catch(() => null)
+        if (!cfg) { res.json({ success: true, khach: kh, kvId: map.kvId, ketLuan: 'Cửa hàng chưa cấu hình KiotViet' }); return }
+        const { credsOf } = await import('../services/kiotvietRunner')
+        const { KV } = await import('../services/kiotviet')
+        let kvDebt: number | null = null, kvName: string | null = null, loiKV: string | null = null
+        try {
+            const kv: any = await KV.customerById(credsOf(cfg), map.kvId)
+            const d = kv?.debt ?? kv?.data?.debt
+            kvDebt = Number.isFinite(Number(d)) ? Number(d) : null
+            kvName = kv?.name ?? kv?.data?.name ?? null
+        } catch (e: any) { loiKV = String(e?.message || e).slice(0, 200) }
+        const kengiDebt = Number(kh.debt) || 0
+        const khop = kvDebt !== null && Math.abs(kvDebt - kengiDebt) <= 1
+        /* apply=1 — ÉP LÀM TƯƠI bằng đúng hàm hệ thống dùng khi có chứng từ
+         * (lamTuoiNoKhach: hỏi KV rồi ghi, không cộng trừ). Chỉ ghi khi lệch. */
+        let daLamTuoi: any = null
+        if (String(req.query.apply || '') === '1' && !khop && kvDebt !== null && !loiKV) {
+            const { lamTuoiNoKhach } = await import('../services/kiotvietSync')
+            await lamTuoiNoKhach(sp, { creds: credsOf(cfg), apply: true } as any, map.kvId)
+            const sau = await sp.customer.findUnique({ where: { id: localId }, select: { debt: true } })
+            daLamTuoi = { truoc: kengiDebt, sau: Number(sau?.debt) || 0, thanhCong: Math.abs((Number(sau?.debt) || 0) - kvDebt) <= 1 }
+            console.log(`[admin] làm tươi nợ ${kh.code} từ KiotViet: ${kengiDebt} → ${daLamTuoi.sau} (KV ${kvDebt})`)
+        }
+        res.json({
+            success: true,
+            khach: { id: kh.id, code: kh.code, name: kh.name, kengiDebt, kengiUpdatedAt: kh.updatedAt },
+            kiotviet: { kvId: map.kvId, kvCode: map.kvCode, kvName, kvDebt, loi: loiKV, mapSyncedAt: map.syncedAt },
+            khop, daLamTuoi,
+            ketLuan: loiKV ? 'Không hỏi được KiotViet lúc này — chưa kết luận được'
+                : kvDebt === null ? 'KiotViet không trả trường debt — chưa kết luận được'
+                    : khop ? 'KiotViet cũng nói đúng số này — sổ Kengi ĐÚNG'
+                        : `LỆCH: KiotViet nói ${kvDebt.toLocaleString('vi-VN')} còn Kengi giữ ${kengiDebt.toLocaleString('vi-VN')} — lần làm tươi gần nhất có thể đã lỗi; chạy lại đồng bộ khách để cập nhật`,
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err?.message })
+    }
+})
+
 router.get('/debt-trace', async (req: Request, res: Response) => {
     try {
         const storeCode = String(req.query.storeCode || '').trim()
@@ -4229,6 +4505,28 @@ router.get('/debt-trace', async (req: Request, res: Response) => {
             customerDebt: customer?.debt ?? null,
             // Neo phải khớp: dòng mới nhất (history[0] vì đã đảo) = đúng số dư hiện tại
             neoKhop: history.length ? Math.abs((history[0].balance ?? 0) - (customer?.debt ?? 0)) <= 1 : null,
+            /* TÓM TẮT SỔ — để trả lời "sao khách này nợ 0 mà lịch sử toàn Bán hàng?"
+             * (câu chủ shop hỏi 18/08 về Phúc Hải HN73, 647 dòng). Số dư ở đây NEO
+             * vào Customer.debt (KiotViet trả về mỗi lần có chứng từ, xem
+             * lamTuoiNoKhach) rồi chạy ngược; nếu Σbán − Σthu ≠ debt thì sổ Kengi
+             * THIẾU chứng từ (thường là phiếu thu gộp chưa đồng bộ) — số dư lịch sử
+             * chạy âm là dấu hiệu, KHÔNG phải khách nợ thật. */
+            tomTat: (() => {
+                let soBan = 0, tongBan = 0, soThu = 0, tongThu = 0, soKhac = 0
+                for (const h of history as any[]) {
+                    const a = Number(h?.amount) || 0
+                    if (h?.type === 'sale') { soBan++; tongBan += a }
+                    else if (h?.type === 'payment') { soThu++; tongThu += a }
+                    else soKhac++
+                }
+                const soDuSo = Number(customer?.debt) || 0
+                return { soBan, tongBan: Math.round(tongBan), soThu, tongThu: Math.round(tongThu), soKhac,
+                    chenhBanTru: Math.round(tongBan - tongThu), soDuSo,
+                    soThieuTrongSo: Math.round((tongBan - tongThu) - soDuSo),
+                    ghiChu: Math.abs((tongBan - tongThu) - soDuSo) > 1000
+                        ? 'Σbán − Σthu KHÁC số dư sổ ⇒ sổ Kengi thiếu chứng từ (phiếu thu gộp chưa đồng bộ / nợ đầu kỳ). Số dư sổ là của KiotViet — đối chiếu bên KiotViet trước khi kết luận.'
+                        : 'Σbán − Σthu khớp số dư sổ.' }
+            })(),
             timThayDong: !!row,
             noCuSeIn: Math.round(noCu),
             dongBanHang: row || null,
@@ -6176,6 +6474,102 @@ router.get('/health-overview', async (req: Request, res: Response) => {
         res.json({ success: true, data: { ...du, tuDem: false } })
     } catch (e: any) {
         res.status(500).json({ success: false, error: String(e?.message || e) })
+    }
+})
+
+/* ── Hai route CHẨN ĐOÁN đơn sàn (ghép lại từ bản đang chạy trên prod, 21/08).
+ * Cây này ra đời trước nên không có; deploy mà thiếu là mất công cụ soi lệch
+ * trạng thái giữa sổ Kengi và trạng thái thật bên sàn. ── */
+// ─── GET /admin/repair-trace?storeCode= ─────────────────────────────────────
+/**
+ * CHỈ ĐỌC: soi vì sao "đổi mới không vào kho hư hỏng" — liệt kê phiếu sửa
+ * gần nhất (kèm mốc ghi kho), thẻ kho referenceType='repair', và các dòng
+ * tồn của kho hư hỏng (kể cả ÂM — di sản chiều sai trước 10/08).
+ */
+/**
+ * GET /admin/online-status-probe?storeCode=  — CHỈ ĐỌC.
+ * Soi đơn online "kẹt" trạng thái: gom theo (sàn, trạng thái Kengi) × tuổi đơn,
+ * kèm mẫu đơn cũ nhất mỗi nhóm để đối chiếu với sàn. Đơn chưa kết thúc mà
+ * quá 7–14 ngày là dấu hiệu Kengi lệch sàn (webhook trượt / trạng thái lạ
+ * không có trong bảng map). Dùng để đo trước khi sửa (19/08/2026).
+ */
+router.get('/online-status-probe', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || '').trim()
+        if (!storeCode) return res.status(400).json({ success: false, error: 'Thiếu storeCode' })
+        const store = await prisma.store.findFirst({
+            where: { code: { equals: storeCode, mode: 'insensitive' } }, select: { schema: true },
+        })
+        if (!store) return res.status(404).json({ success: false, error: 'Không thấy cửa hàng' })
+        const sp: any = getStorePrisma(store.schema)
+        const rows: any[] = await sp.$queryRawUnsafe(`
+            SELECT o.platform, o.status,
+                   COUNT(*)::int AS tong,
+                   COUNT(*) FILTER (WHERE o."createdAt" < now() - interval '7 days')::int  AS qua7,
+                   COUNT(*) FILTER (WHERE o."createdAt" < now() - interval '14 days')::int AS qua14,
+                   COUNT(*) FILTER (WHERE o."createdAt" < now() - interval '30 days')::int AS qua30,
+                   MIN(o."createdAt") AS cuNhat,
+                   MAX(o."updatedAt") AS capNhatMoiNhat
+            FROM "OnlineOrder" o
+            GROUP BY o.platform, o.status
+            ORDER BY o.platform, tong DESC`)
+        // mẫu 3 đơn cũ nhất của mỗi nhóm CHƯA kết thúc
+        const ketThuc = ['COMPLETED','CANCELLED','completed','cancelled','TO_RETURN','returned']
+        const mau: any[] = await sp.$queryRawUnsafe(`
+            SELECT platform, status, "externalStatus", "orderNumber", "createdAt", "updatedAt", "deliveredAt" FROM (
+              SELECT o.platform, o.status, o."externalStatus", o."orderNumber", o."createdAt", o."updatedAt", o."deliveredAt",
+                     ROW_NUMBER() OVER (PARTITION BY o.platform, o.status ORDER BY o."createdAt")::int AS rn
+              FROM "OnlineOrder" o
+              WHERE NOT (o.status = ANY($1)) AND o."createdAt" < now() - interval '7 days'
+            ) t WHERE rn <= 3 ORDER BY platform, status, "createdAt"`, ketThuc)
+        // externalStatus (mã gốc sàn) nào KHÔNG khớp status đã map — nghi map thiếu
+        const lech: any[] = await sp.$queryRawUnsafe(`
+            SELECT o.platform, o."externalStatus", o.status, COUNT(*)::int AS tong
+            FROM "OnlineOrder" o
+            WHERE o."externalStatus" IS NOT NULL AND o."externalStatus" <> o.status
+            GROUP BY 1,2,3 ORDER BY tong DESC LIMIT 40`)
+        res.json({ success: true, theoTrangThai: rows, mauDonCu: mau, maGocKhacMap: lech })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err?.message || String(err) })
+    }
+})
+
+/**
+ * GET /admin/online-live-check?storeCode=&orderNumber=  — CHỈ ĐỌC, không ghi.
+ * Hỏi SÀN trạng thái hiện tại của một đơn (getOrderDetail bằng token của kênh)
+ * rồi đặt cạnh trạng thái Kengi đang lưu — để phân biệt "Kengi lệch sàn" với
+ * "sàn thật sự còn để trạng thái đó" trước khi sửa (19/08/2026).
+ */
+router.get('/online-live-check', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || '').trim()
+        const orderNumber = String(req.query.orderNumber || '').trim()
+        if (!storeCode || !orderNumber) return res.status(400).json({ success: false, error: 'Thiếu storeCode/orderNumber' })
+        const store = await prisma.store.findFirst({
+            where: { code: { equals: storeCode, mode: 'insensitive' } }, select: { schema: true },
+        })
+        if (!store) return res.status(404).json({ success: false, error: 'Không thấy cửa hàng' })
+        const sp: any = getStorePrisma(store.schema)
+        const o = await sp.onlineOrder.findFirst({ where: { orderNumber }, include: { channel: true } })
+        if (!o) return res.status(404).json({ success: false, error: 'Không thấy đơn' })
+        const { getPlatformService } = await import('../services/platforms')
+        const ch = o.channel
+        const svc: any = getPlatformService(ch.platform, {
+            apiKey: ch.apiKey || '', apiSecret: ch.apiSecret || '',
+            accessToken: ch.accessToken || undefined, refreshToken: ch.refreshToken || undefined,
+            shopId: ch.shopId || undefined, shopCipher: (ch as any).shopCipher || undefined,
+        } as any)
+        if (!svc) return res.status(400).json({ success: false, error: 'Sàn không hỗ trợ' })
+        const eid = String(o.externalOrderId || '').replace(/^(SPE-|TIK-|LAZ-)/i, '')
+        const live = await svc.getOrderDetail(eid)
+        res.json({
+            success: true,
+            kengi: { status: o.status, externalStatus: o.externalStatus, updatedAt: o.updatedAt, deliveredAt: o.deliveredAt, syncedAt: (o as any).syncedAt },
+            san: live ? { status: live.status, externalStatus: live.externalStatus, deliveredAt: live.deliveredAt, shippedAt: live.shippedAt } : null,
+            lech: live ? live.status !== o.status : null,
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err?.message || String(err) })
     }
 })
 

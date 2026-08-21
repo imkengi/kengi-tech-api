@@ -8,6 +8,7 @@
  * đối vẫn "đẹp" ngay cả khi thiếu hẳn một mảng nghiệp vụ — chỉ có đối chiếu
  * ngược với hóa đơn / phiếu nhập / phiếu chi / phiếu trả mới lòi ra chỗ thiếu.
  */
+import { conLaiPhieu } from './congNoNcc'
 
 export type Muc = 'cao' | 'vua' | 'thap'
 
@@ -234,17 +235,37 @@ export async function soatSoSach(
     // 5b. 331 vs công nợ NCC còn lại
     {
         const so = -soDuTheoTienTo(luyKe, '331').du // 331 dư Có
+        /* "Thực tế" = CÔNG NỢ NCC THEO SỔ (payable số dư đầu kỳ + Σ phiếu chưa trả, lib/congNoNcc.ts) — đúng số cột
+         * Công nợ ở danh sách NCC và = KiotViet ở cửa hàng đồng bộ (HUTI 20,15 tỷ). Bản cũ chỉ cộng phiếu chưa trả
+         * (HUTI 20,46 tỷ) nên đối chiếu 331 lệch thêm phần "đã trả chưa gắn phiếu" — không phải lỗi sổ kế toán. */
         const imps = await prisma.importReceipt.findMany({
             where: { status: 'completed', paymentStatus: { in: ['unpaid', 'partial'] } },
-            select: { totalCost: true, paidAmount: true },
+            select: { supplierId: true, totalCost: true, paidAmount: true, paymentStatus: true },
         })
-        const that = Math.round(imps.reduce((s: number, i: any) => s + Math.max(0, (i.totalCost || 0) - (i.paidAmount || 0)), 0))
+        const phieuTheoNcc = new Map<string, number>()
+        let khongGanNcc = 0
+        for (const i of imps as any[]) {
+            const cl = conLaiPhieu(i)
+            if (cl <= 0) continue
+            if (!i.supplierId) { khongGanNcc += cl; continue }
+            phieuTheoNcc.set(i.supplierId, (phieuTheoNcc.get(i.supplierId) || 0) + cl)
+        }
+        // Thiếu bảng NCC (mock/kiểm) thì phần sổ = 0, vẫn cộng phiếu — không sập cả buổi soát
+        let loiDocNcc = false
+        const nccs: any[] = await Promise.resolve().then(() => (prisma as any).supplier?.findMany?.({ select: { id: true, payable: true } }) ?? [])
+            .catch(() => { loiDocNcc = true; return [] })
+        /* Rà soát độc lập 19/08/2026: `Supplier.payable` (số dư đầu kỳ / phần dư KV) KHÔNG có bút toán 331 nào
+         * (autoJournal chỉ ghi phiếu) ⇒ so 331 với payable + phiếu là so hai thế giới, cửa hàng nhập payable tay
+         * sẽ bị báo lệch mãi. So 331 với Σ PHIẾU chưa trả (cùng thế giới bút toán); phần số dư đầu kỳ nêu riêng. */
+        let that = Math.round(khongGanNcc)
+        for (const [, tien] of phieuTheoNcc) that += Math.round(tien)
+        const tongSoDuDauKy = nccs.reduce((s2, n) => s2 + (Number(n.payable) || 0), 0)
         const lech = Math.round(so) - that
         if (Math.abs(lech) >= 1000) vanDe.push({
             code: 'lech-331', muc: soTrong ? (laHoKinhDoanh ? 'thap' : 'vua')
                 : Math.abs(lech) > Math.max(that, 1) * 0.1 ? 'cao' : 'vua',
             tieuDe: 'Phải trả người bán trên sổ lệch với công nợ nhà cung cấp',
-            chiTiet: `Sổ TK 331 dư Có ${vnd(so)} ₫, tổng còn nợ trên phiếu nhập là ${vnd(that)} ₫ — lệch ${vnd(Math.abs(lech))} ₫. Hay gặp khi phiếu nhập cũ chưa được ghi sổ, hoặc trả tiền NCC không qua chức năng thanh toán phiếu.`,
+            chiTiet: `Sổ TK 331 dư Có ${vnd(so)} ₫, tổng phiếu nhập chưa trả là ${vnd(that)} ₫ — lệch ${vnd(Math.abs(lech))} ₫.${loiDocNcc ? ' (Chưa đọc được hồ sơ NCC nên KHÔNG biết số dư đầu kỳ — đừng hiểu là bằng 0.)' : ''}${Math.round(tongSoDuDauKy) !== 0 ? ` (Ngoài ra hồ sơ NCC còn số dư đầu kỳ ${vnd(Math.round(tongSoDuDauKy))} ₫ không có bút toán 331 — không tính vào lệch này.)` : ''} Hay gặp khi phiếu nhập cũ chưa được ghi sổ, hoặc trả tiền NCC không qua chức năng thanh toán phiếu.`,
             tien: Math.abs(lech), soLuong: imps.length, viDu: [], ghiBuDuoc: false,
         })
     }

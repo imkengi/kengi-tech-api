@@ -18,6 +18,8 @@
  * chi, phiếu nhập kho KHÔNG kéo được (xem ghi chú đầu services/misa.ts).
  */
 
+import { tongPhieuChuaTraTheoNcc, soDuDauKyTuKV } from '../lib/congNoNcc'
+
 export interface MisaCounters {
     fetched: number
     created: number
@@ -448,10 +450,13 @@ async function datTon(sp: any, product: any, target: number, opts: MisaOptions, 
 
     await sp.$transaction(async (tx: any) => {
         if (whId) {
+            /* Y HỆT lỗi đã sửa bên kiotvietSync (20/08/2026): tồn hiện tại đọc hỏng ⇒ coi như 0 ⇒
+             * `newQty = delta` ⇒ GHI ĐÈ tồn kho bằng số bịa. Đang trong transaction nên ném là an
+             * toàn: cả lượt bị huỷ, tồn giữ nguyên, lượt đồng bộ sau làm lại. */
             const cur = await tx.warehouseStock.findUnique({
                 where: { warehouseId_productId: { warehouseId: whId, productId: product.id } },
                 select: { quantity: true },
-            }).catch(() => null)
+            })
             const newQty = (Number(cur?.quantity) || 0) + delta
             await tx.warehouseStock.upsert({
                 where: { warehouseId_productId: { warehouseId: whId, productId: product.id } },
@@ -568,10 +573,16 @@ export async function syncMisaDebt(
                 let ncc = localId ? await sp.supplier.findUnique({ where: { id: localId } }).catch(() => null) : null
                 if (!ncc && code) ncc = await sp.supplier.findUnique({ where: { code } }).catch(() => null)
                 if (!ncc) { boQua(c, `Phải trả ${code || misaId}: chưa có NCC này bên Kengi${nhacChayThu(opts)}`); continue }
-                if (Math.round(ncc.payable || 0) === soTienNo) { c.skipped++; continue }
-                if (opts.apply) await sp.supplier.update({ where: { id: ncc.id }, data: { payable: soTienNo } })
+                /* payable là SỐ DƯ ĐẦU KỲ (app cộng thêm Σ phiếu chưa trả khi hiển thị) — MISA trả TỔNG nợ hiện tại,
+                 * nên ghi PHẦN DƯ = tổng MISA − Σ phiếu chưa trả, kẻo đếm đôi như vụ KiotViet 18/08/2026 (lib/congNoNcc.ts). */
+                let phieuNcc: number
+                try { phieuNcc = (await tongPhieuChuaTraTheoNcc(sp, [ncc.id])).get(ncc.id)?.tong || 0 }
+                catch (e: any) { boQua(c, `Phải trả ${code || misaId}: không đọc được phiếu chưa trả — giữ payable cũ (${e?.message || e})`); continue }
+                const soDuDauKy = soDuDauKyTuKV(soTienNo, phieuNcc)
+                if (Math.round(ncc.payable || 0) === soDuDauKy) { c.skipped++; continue }
+                if (opts.apply) await sp.supplier.update({ where: { id: ncc.id }, data: { payable: soDuDauKy } })
                 c.updated++
-                noteSample(c, { code: ncc.code, ten: ncc.name, noCu: ncc.payable, noMoi: soTienNo })
+                noteSample(c, { code: ncc.code, ten: ncc.name, noCu: ncc.payable, noMoi: soDuDauKy, tongMisa: soTienNo, phieuChuaTra: phieuNcc })
             }
         } catch (e: any) {
             noteError(c, `Công nợ ${ten} ${pick(r, 'account_object_code') || ''}: ${e?.message || e}`)

@@ -259,7 +259,12 @@ export const REPORT_TOOLS: Tool[] = [
                 sanPham: {
                     soMaDaBan: spRows.length,
                     top10ChiemPhanTramDoanhThu: doanhThu ? Number((top10DoanhThu / doanhThu * 100).toFixed(1)) : null,
+                    /* CẮT THÌ PHẢI KHAI (21/08/2026): trợ lý AI đọc hai danh sách này rồi nói lại
+                     * cho chủ shop. Cắt 10 mà không kèm tổng ⇒ AI trình bày như thể ĐÃ ĐỦ, chủ shop
+                     * nhập thiếu hàng. Kèm số tổng để AI nói được "10 trong số N". */
+                    soMaSapHet: sapHet.length,
                     banChaySapHet: sapHet.slice(0, 10),
+                    soMaDaHetMaVanCoNguoiMua: daHet.length,
                     coNguoiMuaNhungHetHang: daHet.slice(0, 10),
                 },
                 tonKho: { vonNamTrongTon: Math.round(vonTon), soMaConTon, soMaTonKhongBanDuoc: hangChet },

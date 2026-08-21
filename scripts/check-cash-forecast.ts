@@ -34,6 +34,8 @@ interface Kho {
     mocThue?: any[]
     toKhai?: any[]
     noKhach?: number
+    /** Điều khoản NCC (id, paymentTermType, paymentTermDays, …) — để suy hạn cho phiếu không ghi hạn */
+    ncc?: any[]
     /** Cửa hàng thu tiền lần đầu cách đây bao nhiêu ngày (null = lâu hơn cửa sổ đo). */
     tuoiNgay?: number | null
 }
@@ -59,6 +61,7 @@ function fakePrisma(k: Kho, loi?: Record<string, boolean>) {
         taxDeadline: { findMany: async () => { no('TaxDeadline'); return k.mocThue || [] } },
         taxDeclaration: { findMany: async () => k.toKhai || [] },
         customer: { aggregate: async () => ({ _sum: { debt: k.noKhach ?? 0 } }) },
+        supplier: { findMany: async () => k.ncc || [] },
     }
 }
 
@@ -235,7 +238,20 @@ async function main() {
             [hnay.uocTinh.soNgayLayTrungBinh, hnay.uocTinh.thuMoiNgay])
     }
 
-    console.log(`\n${dat}/${dat + hong} ca đạt`)
+    console.log('\n▶ Hạn trả SUY từ điều khoản NCC (18/08/2026) — phiếu không ghi hạn vẫn lên lịch\n')
+    const rSuy = await duBaoDongTien(fakePrisma({
+        taiKhoan: [{ id: 'B1', bankName: 'A', balance: 100_000_000 }],
+        ncc: [{ id: 'NCC1', paymentTermType: 'net', paymentTermDays: 20 }],
+        phieuNhap: [
+            { code: 'PN-SUY', supplierId: 'NCC1', supplierName: 'Sunhouse TBNB', totalCost: 40_000_000, paidAmount: 0, dueDate: null, transactionDate: NGAY(-30), status: 'completed' },
+            { code: 'PN-KHONG', supplierId: 'NCC-LA', supplierName: 'NCC không điều khoản', totalCost: 7_000_000, paidAmount: 0, dueDate: null, transactionDate: NGAY(-3), status: 'completed' },
+        ],
+    }), { soNgay: 14 })
+    const mSuy = rSuy.ngay.flatMap((n: any) => n.muc || []).filter((m: any) => m.nhom === 'no-ncc')
+    ok('phiếu không ghi hạn + NCC Net 20 → SUY hạn (nhập −30 ngày ⇒ quá hạn 10 ngày) → lên lịch ngày mai, ghi "hạn suy"', mSuy.length === 1 && mSuy[0].soTien === 40_000_000 && /hạn suy từ điều khoản/.test(mSuy[0].moTa) && /quá hạn/.test(mSuy[0].moTa), mSuy)
+    ok('phiếu NCC không điều khoản → KHÔNG bịa hạn, không lên lịch, có ghi chú số phiếu chưa có hạn', !mSuy.some((m: any) => /PN-KHONG/.test(m.moTa)) && rSuy.ghiChu.some((g: string) => /1 phiếu nhập còn nợ 7.000.000/.test(g)), rSuy.ghiChu)
+    ok('tổng nợ NCC đến hạn chỉ gồm phiếu suy được hạn (40tr)', rSuy.tomTat.noNccDenHan === 40_000_000, rSuy.tomTat.noNccDenHan)
+console.log(`\n${dat}/${dat + hong} ca đạt`)
     if (hong) process.exit(1)
 }
 

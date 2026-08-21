@@ -36,6 +36,10 @@ export interface PlatformOrder {
     paidAt?: string
     shippedAt?: string
     deliveredAt?: string
+    /** HẠN bàn giao ĐVVC (Shopee ship_by_date) — deadline, không phải ngày đã gửi */
+    shipByDate?: string
+    /** Đơn hỏa tốc (Instant Delivery): kênh vận chuyển có service_type_identifier='instant' */
+    isInstant?: boolean
 }
 
 export interface PlatformOrderItem {

@@ -9,6 +9,7 @@ import { reverseOnlineOrderEffects, isReversalStatus } from '../services/onlineO
 import { adjustSellableStock } from '../lib/warehouseHelper'
 import { registryPrisma, mapWithConcurrency } from '../lib/prisma'
 import { computeOrderProfits } from '../lib/onlineOrderProfit'
+import { moTaLoi } from '../lib/gomLoi'
 
 const router = Router()
 
@@ -155,7 +156,8 @@ router.get('/stats', authMiddleware, requirePermission('online_orders.view', 'or
             `SELECT COUNT(*)::int AS cnt, COALESCE(SUM("total"),0)::float8 AS total
              FROM "OnlineOrder" WHERE ${pkConds.join(' AND ')}`,
             ...pkParams
-        ).catch(() => [{ cnt: 0, total: 0 }])
+        )   /* KHÔNG nuốt lỗi: hỏng ⇒ [{cnt:0,total:0}] ⇒ tab "đã lấy hàng" hiện 0 đơn / 0đ y như
+             * một ngày không ai lấy hàng. Cả trang này đã có nhánh lỗi ở FE (20/08/2026). */
 
         // Helper: aggregate count for a status, covering both Shopee UPPERCASE and legacy lowercase
         const countFor = (...statuses: string[]) =>
@@ -2913,7 +2915,10 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                                 reverted++
                                 console.warn(`[Sync] Lazada ${s.orderNumber}: chốt ĐÃ GIAO oan → trả về "${truth.status}"`)
                             } catch (vErr: any) {
-                                console.warn(`[Sync] Lazada soát lại ${sid}: ${vErr?.message || vErr}`)
+                                /* `${vErr}` trong chuỗi mẫu NUỐT lỗi Prisma: nội dung nằm ở
+                                 * code/meta, còn message có thể rỗng — và nếu name cũng rỗng
+                                 * thì String(err) ra chuỗi rỗng. Xem moTaLoi(). */
+                                console.warn(`[Sync] Lazada soát lại ${sid}: ${moTaLoi(vErr)}`)
                             }
                         }
                         if (reverted > 0) {

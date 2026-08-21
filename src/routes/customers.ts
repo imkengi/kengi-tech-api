@@ -10,6 +10,7 @@ import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { nextCode } from '../lib/codeGenerator'
 import { postDebtCollectionJournal } from '../lib/autoJournal'
 import { emitEntityEvent } from '../lib/webhookDispatch'
+import { tinhTronBo } from '../lib/diemSucKhoeKhach'
 
 const router = Router()
 
@@ -135,6 +136,7 @@ router.get('/segments-live', authMiddleware, requirePermission('customers.view')
                 _count: { _all: true },
                 _sum: { total: true },
                 _max: { createdAt: true },
+                _min: { createdAt: true },   // ngày mua ĐẦU TIÊN — "khách mới tháng" phải đếm theo đây, không theo Customer.createdAt (cửa hàng nhập KiotViet: 593/593 khách "tạo" cùng tháng)
             }),
             // CỬA SỔ 12 THÁNG: xếp hạng theo bình quân tháng gần đây, không phải
             // tổng trọn đời — mua một cục năm ngoái rồi biến mất mà vẫn Kim cương
@@ -299,6 +301,7 @@ router.get('/segments-live', authMiddleware, requirePermission('customers.view')
                 loiNhuanThang: laChuCua && v ? Math.round((((v.rev12 || 0) - (v.von12 || 0)) as number) / 12) : null,
                 loiNhuan, bienLoiNhuan,
                 createdAt: c.createdAt.toISOString(),
+                firstPurchaseDate: a?._min?.createdAt ? new Date(a._min.createdAt).toISOString() : null,
                 lastPurchaseDate: lanCuoi ? new Date(lanCuoi).toISOString() : null,
             }
         })
@@ -310,6 +313,131 @@ router.get('/segments-live', authMiddleware, requirePermission('customers.view')
 })
 
 // GET /api/customers/:id
+/**
+ * GET /customers/financial-overview — BẢNG TỔNG QUAN sức khoẻ tài chính MỌI khách.
+ *
+ * Chủ shop dùng trang chi tiết kiểu đổi qua 14 khách/3 phút (log 18/08) → cần
+ * so sánh nhiều khách một lúc. MỘT truy vấn SQL gộp theo customerId (không lặp
+ * N khách × 2 truy vấn — HUTI 415 khách), ghép với Customer.debt (nguồn sự thật).
+ *
+ * ⚠ KHÔNG có tuổi nợ FIFO ở đây (cần từng phiếu) — chỉ có "nợ bằng mấy tháng
+ * mua" tính từ tổng. Bấm vào tên là xuống báo cáo chi tiết mới có FIFO. Nói rõ
+ * trên giao diện để không ai đọc cột này thành "tuổi nợ".
+ *
+ * Cột dấu hiệu (BE quyết, FE chỉ tô): imLau = >2× nhịp mua VÀ ≥14 ngày;
+ * giam = tiền 90 ngày < 85% tiền 90 ngày liền trước (có kỳ trước > 0).
+ */
+router.get('/financial-overview', authMiddleware, requirePermission('customers.view'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const gioiHan = Math.min(500, Math.max(10, Number(req.query.limit) || 200))
+        // Ngày theo giờ VN: cộng 7h rồi lấy date
+        const rows: any[] = await (prisma as any).$queryRawUnsafe(`
+            WITH ban AS (
+                SELECT t."customerId" AS cid,
+                       COALESCE(t."transactionDate", t."createdAt") AS ngay,
+                       t.total::float8 AS total, t.status,
+                       GREATEST(0, t.total - COALESCE(t."amountReceived", 0))::float8 AS con
+                FROM "Transaction" t
+                WHERE t."customerId" IS NOT NULL AND t.status IN ('completed','partial')
+                  AND COALESCE(t."transactionDate", t."createdAt") >= now() - interval '365 days'
+            ),
+            gom AS (
+                SELECT cid,
+                       COUNT(*)::int AS "soDon12t",
+                       SUM(total)::float8 AS "tien12t",
+                       COUNT(DISTINCT (ngay + interval '7 hours')::date)::int AS "soNgayMua",
+                       COUNT(DISTINCT to_char(ngay + interval '7 hours', 'YYYY-MM'))::int AS "soThangMua",
+                       MAX(ngay) AS "muaCuoi",
+                       MIN(ngay) AS "muaDau",
+                       SUM(CASE WHEN ngay >= now() - interval '90 days' THEN total ELSE 0 END)::float8 AS "tien90",
+                       SUM(CASE WHEN ngay >= now() - interval '180 days' AND ngay < now() - interval '90 days' THEN total ELSE 0 END)::float8 AS "tien90Truoc",
+                       SUM(CASE WHEN status = 'partial' THEN 1 ELSE 0 END)::int AS "soPhieuTreo",
+                       SUM(CASE WHEN status = 'partial' THEN con ELSE 0 END)::float8 AS "tienTreo"
+                FROM ban GROUP BY cid
+            )
+            SELECT c.id, c.name, c.code, c.phone, c.debt::float8 AS "duNo", c."totalOrders",
+                   COALESCE(g."soDon12t", 0) AS "soDon12t", COALESCE(g."tien12t", 0) AS "tien12t",
+                   COALESCE(g."soNgayMua", 0) AS "soNgayMua", COALESCE(g."soThangMua", 0) AS "soThangMua",
+                   g."muaCuoi", g."muaDau",
+                   COALESCE(g."tien90", 0) AS "tien90", COALESCE(g."tien90Truoc", 0) AS "tien90Truoc",
+                   COALESCE(g."soPhieuTreo", 0) AS "soPhieuTreo", COALESCE(g."tienTreo", 0) AS "tienTreo"
+            FROM "Customer" c
+            LEFT JOIN gom g ON g.cid = c.id
+            -- LEFT JOIN (rà soát độc lập 19/08/2026): INNER JOIN làm vế c.debt > 0 vô hiệu — khách CÓ NỢ mà không
+            -- mua trong 365 ngày (nhóm rủi ro nhất) biến mất khỏi "tổng quan MỌI khách" trong khi Công Nợ vẫn thấy.
+            WHERE COALESCE(g."soDon12t", 0) > 0 OR c.debt > 0
+            ORDER BY c.debt DESC, COALESCE(g."tien12t", 0) DESC
+            LIMIT ${gioiHan}
+        `)
+        /* ĐIỂM + TUỔI NỢ FIFO cho từng dòng — đi qua ĐÚNG chuỗi tính của báo cáo
+         * chi tiết (tinhTronBo, kỳ 12 tháng) để hai màn hình ra CÙNG MỘT con
+         * điểm. Tải phiếu của các khách trong danh sách bằng MỘT truy vấn rồi
+         * gom trong bộ nhớ; mỗi khách giữ tối đa 2000 phiếu mới nhất — đúng
+         * `take` của endpoint chi tiết. Đo thời gian để biết giá phải trả. */
+        const t0 = Date.now()
+        const ids: string[] = rows.map((r: any) => String(r.id))
+        const TRAN_DONG = 60_000
+        const phieuTatCa: any[] = ids.length === 0 ? [] : await prisma.transaction.findMany({
+            where: { customerId: { in: ids }, status: { in: ['completed', 'partial'] } },
+            select: { id: true, customerId: true, total: true, status: true, transactionDate: true, createdAt: true, amountReceived: true },
+            orderBy: { createdAt: 'desc' },
+            take: TRAN_DONG,
+        })
+        if (phieuTatCa.length >= TRAN_DONG) {
+            console.warn(`[financial-overview] chạm trần ${TRAN_DONG} phiếu — khách xếp cuối có thể thiếu phiếu cũ, điểm lệch với báo cáo chi tiết`)
+        }
+        const theoKhach = new Map<string, any[]>()
+        for (const p of phieuTatCa) {
+            const k = String(p.customerId)
+            let arr = theoKhach.get(k)
+            if (!arr) { arr = []; theoKhach.set(k, arr) }
+            if (arr.length < 2000) arr.push({
+                id: p.id, total: Number(p.total) || 0, status: String(p.status),
+                transactionDate: p.transactionDate, createdAt: p.createdAt, daTra: Number(p.amountReceived) || 0,
+            })
+        }
+        const homNay = new Date()
+        const nay = Date.now()
+        const NGAY = 86_400_000
+        const items = rows.map((r: any) => {
+            const tb = tinhTronBo(theoKhach.get(String(r.id)) || [], Number(r.duNo) || 0, homNay, 12, Number(r.totalOrders) || 0)
+            const muaCuoi = r.muaCuoi ? new Date(r.muaCuoi) : null
+            const muaDau = r.muaDau ? new Date(r.muaDau) : null
+            const ngayTuLanCuoi = muaCuoi ? Math.max(0, Math.floor((nay - muaCuoi.getTime()) / NGAY)) : null
+            const nhip = (muaDau && muaCuoi && r.soNgayMua >= 2)
+                ? Math.round((muaCuoi.getTime() - muaDau.getTime()) / NGAY / (r.soNgayMua - 1) * 10) / 10 : null
+            const imLau = nhip !== null && ngayTuLanCuoi !== null && ngayTuLanCuoi >= 14 && ngayTuLanCuoi > 2 * nhip
+            const tbThang = r.soThangMua > 0 ? r.tien12t / r.soThangMua : 0
+            const duNo = Number(r.duNo) || 0
+            const noBangMayThang = tbThang > 0 && duNo > 0 ? Math.round(duNo / tbThang * 10) / 10 : null
+            const xuHuong = r.tien90Truoc > 0 ? Math.round((r.tien90 - r.tien90Truoc) / r.tien90Truoc * 1000) / 1000 : null
+            const nhanXuHuong = xuHuong === null ? 'chua-du' : xuHuong > 0.15 ? 'tang' : xuHuong < -0.15 ? 'giam' : 'on-dinh'
+            return {
+                id: r.id, ten: r.name, ma: r.code, sdt: r.phone,
+                duNo, soDon12t: r.soDon12t, tien12t: Math.round(r.tien12t), tbThang: Math.round(tbThang),
+                ngayTuLanCuoi, nhipMua: nhip, imLau,
+                tien90: Math.round(r.tien90), tien90Truoc: Math.round(r.tien90Truoc), xuHuong, nhanXuHuong,
+                noBangMayThang,
+                /* Phiếu treo THÔ — sổ 0 mà treo > 0 là khách trả gộp (không phải nợ); chỉ để tham khảo */
+                soPhieuTreo: r.soPhieuTreo, tienTreo: Math.round(r.tienTreo),
+                phieuTreoKhongPhaiNo: duNo <= 0 && r.soPhieuTreo > 0,
+                // Từ chuỗi tính chung — KHỚP báo cáo chi tiết
+                xepHang: tb.hoSo.xepHang,
+                ngayNoLauNhat: tb.hoSo.ngayNoLauNhat,
+                diem: tb.diem.tong, hang: tb.diem.hang, nhanDiem: tb.diem.nhan, biChanTran: tb.diem.biChanTran, doTinCay: tb.diem.doTinCay,
+            }
+        })
+        const mat = Date.now() - t0
+        if (mat > 1500) console.warn(`[financial-overview] tính điểm ${items.length} khách / ${phieuTatCa.length} phiếu mất ${mat}ms — cân nhắc tách endpoint`)
+        res.json({ success: true, data: { items, tong: items.length, gioiHan, soPhieuTai: phieuTatCa.length, msTinh: mat } })
+    } catch (err: any) {
+        console.error('[financial-overview]', err?.message || err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
+
+
 router.get('/:id', authMiddleware, requirePermission('customers.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
@@ -686,6 +814,61 @@ export async function buildDebtHistory(prisma: any, custId: string): Promise<{
         return { customer, history }
     }
 }
+
+/**
+ * GET /customers/:id/financial-health — HỒ SƠ SỨC KHOẺ TÀI CHÍNH của một khách.
+ *
+ * Yêu cầu chủ shop 18/08/2026. Trả cả hai con số "ngày nợ": từ phiếu chưa trả
+ * hết GẦN NHẤT (đúng lời chủ shop: "tính từ giao dịch không thanh toán cuối
+ * cùng") và từ phiếu CŨ NHẤT còn treo (tuổi nợ). Logic ở lib/sucKhoeTaiChinhKhach.ts.
+ *
+ * Truy vấn TUẦN TỰ — pool mỗi cửa hàng chỉ 1 kết nối.
+ */
+router.get('/:id/financial-health', authMiddleware, requirePermission('customers.view'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const id = String(req.params.id)
+        const customer = await prisma.customer.findUnique({ where: { id }, select: { id: true, name: true, debt: true, totalPurchases: true, totalOrders: true } })
+        if (!customer) { res.status(404).json({ success: false, error: 'Customer not found' }); return }
+
+        /* Số ĐÃ TRẢ trên từng phiếu = `Transaction.amountReceived` — đây là NGUỒN
+         * SỰ THẬT mà chính hệ thống dùng để chặn trả quá nợ (POST /pay-debt:
+         * remainingDebt = total − amountReceived). Bản đầu tôi cộng tổng Payment
+         * không phải 'credit' — trông tương đương nhưng lệch với đường KiotViet/MCP
+         * tạo payments theo quy ước riêng, và Payment 'credit' gốc KHÔNG giảm khi
+         * khách trả nợ (xem chú thích transactions.ts ~363). Đọc đúng chỗ hệ thống
+         * đã tin, đừng tự tính lại. */
+        const phieu: any[] = await prisma.transaction.findMany({
+            where: { customerId: id, status: { in: ['completed', 'partial'] } },
+            select: { id: true, total: true, status: true, transactionDate: true, createdAt: true, amountReceived: true },
+            orderBy: { createdAt: 'desc' },
+            take: 2000,
+        })
+        const dauVao = phieu.map(p => ({
+            id: p.id, total: Number(p.total) || 0, status: String(p.status),
+            transactionDate: p.transactionDate, createdAt: p.createdAt,
+            daTra: Number(p.amountReceived) || 0,
+        }))
+        // Báo cáo theo tháng (mặc định 12 tháng gần nhất; ?months=0 = tất cả)
+        const soThang = req.query.months === undefined ? 12 : Math.max(0, Math.min(60, Number(req.query.months) || 0))
+        /* MỘT chuỗi tính dùng chung với bảng tổng quan (tinhTronBo): hồ sơ, theo
+         * tháng, chỉ số mở rộng (FIFO neo sổ), và ĐIỂM 0–100 chặn trần theo xepHang.
+         * Chưa có nguồn "ngày trả đủ" đáng tin → thoiQuenTra để null, không bịa. */
+        const { hoSo, theoThang, moRong, diem } = tinhTronBo(dauVao, Number(customer.debt) || 0, new Date(), soThang, Number(customer.totalOrders) || 0)
+        res.json({ success: true, data: {
+            khach: { id: customer.id, ten: customer.name, tongMua: customer.totalPurchases, soDon: customer.totalOrders },
+            ...hoSo,
+            theoThang: theoThang.thang,
+            tongHopKy: theoThang.tongHop,
+            soThangKy: soThang,
+            moRong,
+            diem,
+        } })
+    } catch (err: any) {
+        console.error('[financial-health]', err?.message || err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
 
 router.get('/:id/debt-history', authMiddleware, requirePermission('customers.view'), async (req: AuthRequest, res: Response) => {
     try {

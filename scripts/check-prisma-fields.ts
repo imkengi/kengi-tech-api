@@ -214,8 +214,9 @@ const TU_KHOA = new Set([
 interface Loi { file: string; dong: number; model: string; truong: string; goiY: string[] }
 const loi: Loi[] = []
 let soKiem = 0
+const dsFile = quet(path.join(GOC, 'src'))
 
-for (const file of quet(path.join(GOC, 'src'))) {
+for (const file of dsFile) {
     const s = boRuotChuoi(fs.readFileSync(file, 'utf8'))
     for (const m of s.matchAll(/\b(?:\w+\.)?(\w+)\.(findMany|findFirst|findUnique|count|aggregate|groupBy)\s*\(/g)) {
         const bien = m[1]
@@ -329,7 +330,7 @@ function soatKhoiGhi(
     }
 }
 
-for (const file of quet(path.join(GOC, 'src'))) {
+for (const file of dsFile) {
     const s = boRuotChuoi(fs.readFileSync(file, 'utf8'))
     /* Nhận MỌI biến giữ client, không chỉ `prisma`/`tx`: mã thật còn dùng
      * `storePrisma`, `sp`, `registryPrisma`… Bản đầu chỉ khớp hai tên nên bỏ qua
@@ -406,7 +407,7 @@ function doiSoDau(s: string, moNgoac: number): string {
     return ''
 }
 
-for (const file of quet(path.join(GOC, 'src'))) {
+for (const file of dsFile) {
     /* SQL thô NẰM TRONG template literal, nên phần này phải đọc bản GỐC —
          * dùng bản đã xoá ruột chuỗi thì không còn câu SQL nào để soi. */
         const s = fs.readFileSync(file, 'utf8')
@@ -474,7 +475,13 @@ if (loiSql.length > 0) {
 }
 
 if (loi.length === 0 && loiSql.length === 0 && loiGhi.length === 0) {
-    console.log('✅ Mọi tên cột trong select, khối ghi và SQL thô đều có trong schema.\n')
+    /* Khai luôn ĐÃ SOI BAO NHIÊU. Xanh mà không nói soi gì thì không phân biệt được
+     * "quét sạch, không lỗi" với "đường quét hỏng, chẳng đọc được file nào". */
+    if (!dsFile.length) {
+        console.log('⛔ KHÔNG KẾT LUẬN ĐƯỢC — soi 0 file. Đường quét hỏng, KHÔNG phải schema sạch.\n')
+        process.exit(2)
+    }
+    console.log(`✅ Mọi tên cột trong select, khối ghi và SQL thô đều có trong schema — đã soi ${dsFile.length} file.\n`)
     process.exit(0)
 }
 /* Chỉ sai ở SQL thô thì phần lỗi đã in ở trên rồi — thoát luôn, đừng in tiếp

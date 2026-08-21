@@ -5,6 +5,8 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { Tool, ToolCtx, ToolError } from '../lib/mcpTypes'
+import { conLaiPhieu, congNoHienThi } from '../lib/congNoNcc'
+import { tinhHanTraTheoQuyTac, quyTacTuSupplier, nhanQuyTac, mucHanTra } from '../lib/dieuKhoanThanhToan'
 import { kiemTraThue, type KhoangKy } from '../lib/taxAudit'
 import { truyVetChungTu } from '../lib/auditPack'
 import { moPhongThanhTra } from '../lib/auditDrill'
@@ -262,7 +264,7 @@ export const FINANCE_TOOLS: Tool[] = [
     },
     {
         name: 'supplier_debt',
-        description: 'CÔNG NỢ PHẢI TRẢ NHÀ CUNG CẤP: phiếu nhập chưa trả hết, tổng còn nợ, phiếu quá hạn. Dùng khi hỏi "còn nợ ai", "tới hạn trả tiền chưa".',
+        description: 'CÔNG NỢ PHẢI TRẢ NHÀ CUNG CẤP theo SỔ (số dư đầu kỳ + phiếu chưa trả — đúng số danh sách NCC) và theo PHIẾU; hạn trả suy từ điều khoản NCC; phiếu quá hạn / sắp đến hạn. Dùng khi hỏi "còn nợ ai", "tới hạn trả tiền chưa".',
         inputSchema: {
             type: 'object',
             properties: {
@@ -272,54 +274,85 @@ export const FINANCE_TOOLS: Tool[] = [
             additionalProperties: false,
         },
         run: async (a, { prisma }: ToolCtx) => {
-            // paymentStatus mặc định "paid" để phiếu nhập CŨ (trước khi có tracking
-            // công nợ) không bị tính thành nợ ảo — chỉ lấy partial/unpaid.
-            const dk: any = { paymentStatus: { in: ['partial', 'unpaid'] }, status: { not: 'cancelled' } }
-            if (a?.only_overdue) dk.dueDate = { lt: new Date() }
-
-            const phieu = await prisma.importReceipt.findMany({
-                where: dk,
+            /* CÙNG LUẬT với trang Hạn Thanh Toán (/import-receipts/payment-due) và danh sách NCC (18/08/2026):
+             *  - Phiếu còn nợ = status 'completed' (đã nhận hàng) và paymentStatus partial/unpaid; phiếu cũ
+             *    mặc định 'paid' không tính (nợ ảo). Bản cũ lấy ≠ cancelled nên gồm cả phiếu NHÁP.
+             *  - Hạn trả: phiếu tự ghi, không thì SUY SỐNG từ điều khoản NCC theo ngày chứng từ (hanSuy) —
+             *    bản cũ chỉ đọc dueDate trên phiếu nên 10 phiếu Sunhouse-TBNB quá hạn 7–97 ngày (HUTI) vô hình.
+             *  - Tổng nợ theo SỔ = Σ_NCC (payable số dư đầu kỳ + Σ phiếu chưa trả), kẹp ≥ 0 (lib/congNoNcc.ts)
+             *    — chính là số cột Công nợ ở danh sách NCC và = KiotViet ở HUTI (20,15 tỷ); Σ phiếu chỉ là
+             *    "theo phiếu" (20,46 tỷ), phần lệch = đã trả chưa gắn phiếu / phiếu không gắn NCC.
+             * Đừng để AI nói một số khác màn hình chủ shop đang xem. */
+            const homNay = new Date()
+            const TRAN_PHIEU_MCP = 2000
+            // Tuần tự (pool prod = 1, quy ước dự án)
+            const phieuAll = await prisma.importReceipt.findMany({
+                where: { paymentStatus: { in: ['partial', 'unpaid'] }, status: 'completed' } as any,
                 orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }],
-                take: Math.min(num(a?.limit, 20), 100),
                 select: {
-                    code: true, supplierName: true, totalCost: true, paidAmount: true,
-                    paymentStatus: true, dueDate: true, paymentTerm: true, createdAt: true,
-                },
+                    id: true, code: true, supplierId: true, supplierName: true, totalCost: true, paidAmount: true,
+                    paymentStatus: true, dueDate: true, paymentTerm: true, createdAt: true, transactionDate: true,
+                } as any,
+                take: TRAN_PHIEU_MCP,
             })
-            const tatCa = await prisma.importReceipt.aggregate({
-                where: { paymentStatus: { in: ['partial', 'unpaid'] }, status: { not: 'cancelled' } },
-                _sum: { totalCost: true, paidAmount: true }, _count: true,
-            })
-            const quaHan = await prisma.importReceipt.aggregate({
-                where: { paymentStatus: { in: ['partial', 'unpaid'] }, status: { not: 'cancelled' }, dueDate: { lt: new Date() } },
-                _sum: { totalCost: true, paidAmount: true }, _count: true,
-            })
-
-            const conNo = (Number(tatCa._sum.totalCost) || 0) - (Number(tatCa._sum.paidAmount) || 0)
-            const conNoQuaHan = (Number(quaHan._sum.totalCost) || 0) - (Number(quaHan._sum.paidAmount) || 0)
-            const homNay = Date.now()
-
+            /* Chạm trần ⇒ mọi tổng dưới đây THIẾU. AI đọc kết quả này rồi nói lại cho chủ shop, nên
+             * phải kèm câu cảnh báo ngay trong dữ liệu — im lặng là để AI khẳng định số sai. */
+            const biCatPhieu = (phieuAll as any[]).length >= TRAN_PHIEU_MCP
+            const nccAll = await prisma.supplier.findMany({ select: { id: true, code: true, name: true, payable: true, paymentTerms: true, paymentTermType: true, paymentTermDays: true, paymentTermDom: true, paymentTermMonthOffset: true } as any })
+            const nccTheoId = new Map<string, any>((nccAll as any[]).map(n => [n.id, n]))
+            const dong = (phieuAll as any[]).map(p => {
+                const ncc = p.supplierId ? nccTheoId.get(p.supplierId) : null
+                const conLai = conLaiPhieu(p)
+                const han = tinhHanTraTheoQuyTac(p.transactionDate || p.createdAt, p.dueDate, quyTacTuSupplier(ncc))
+                const hanSuy = !p.dueDate && !!han
+                const muc = mucHanTra(han, homNay, 7)
+                const treNgay = han ? Math.floor((homNay.getTime() - han.getTime()) / 86400_000) : null
+                return { p, ncc, conLai, han, hanSuy, muc, treNgay }
+            }).filter(x => x.conLai > 0)
+            const chon = (a?.only_overdue ? dong.filter(x => x.muc === 'qua-han') : dong)
+                .sort((x, y) => (x.han ? x.han.getTime() : Infinity) - (y.han ? y.han.getTime() : Infinity))
+                .slice(0, Math.min(num(a?.limit, 20), 100))
+            // Công nợ theo sổ từng NCC (như danh sách NCC)
+            const phieuTheoNcc = new Map<string, number>()
+            for (const x of dong) if (x.p.supplierId) phieuTheoNcc.set(x.p.supplierId, (phieuTheoNcc.get(x.p.supplierId) || 0) + x.conLai)
+            const theoNcc = (nccAll as any[]).map(n => {
+                const phieu = phieuTheoNcc.get(n.id) || 0
+                const soDu = Math.round(Number(n.payable) || 0)
+                return { nhaCungCap: n.name, ma: n.code, congNoTheoSo: congNoHienThi(soDu, phieu), soDuDauKy: soDu, phieuChuaTra: Math.round(phieu),
+                    daTraChuaGanPhieu: soDu < 0 ? -soDu : 0, dieuKhoan: n.paymentTerms || nhanQuyTac(quyTacTuSupplier(n)) || null }
+            }).filter(x => x.congNoTheoSo > 0 || x.phieuChuaTra > 0).sort((x, y) => y.congNoTheoSo - x.congNoTheoSo)
+            const tongTheoPhieu = dong.reduce((s, x) => s + x.conLai, 0)
+            const quaHan = dong.filter(x => x.muc === 'qua-han')
+            const sapDen = dong.filter(x => x.muc === 'sap-den')
             return {
-                tongConNo: Math.round(conNo),
-                soPhieuConNo: tatCa._count,
-                conNoQuaHan: Math.round(conNoQuaHan),
-                soPhieuQuaHan: quaHan._count,
-                danhSach: phieu.map((p: any) => {
-                    const conLai = (Number(p.totalCost) || 0) - (Number(p.paidAmount) || 0)
-                    const treNgay = p.dueDate ? Math.floor((homNay - new Date(p.dueDate).getTime()) / 86400_000) : null
-                    return {
-                        maPhieu: p.code,
-                        nhaCungCap: p.supplierName || 'Không rõ',
-                        tongTien: Math.round(Number(p.totalCost) || 0),
-                        daTra: Math.round(Number(p.paidAmount) || 0),
-                        conNo: Math.round(conLai),
-                        hanTra: p.dueDate,
-                        dieuKhoan: p.paymentTerm,
-                        tinhTrang: treNgay === null ? 'chưa đặt hạn' : treNgay > 0 ? `QUÁ HẠN ${treNgay} ngày` : `còn ${-treNgay} ngày`,
-                        ngayNhap: p.createdAt,
-                    }
-                }),
-                ghiChu: 'Phiếu nhập cũ (trước khi hệ thống theo dõi công nợ) mặc định là ĐÃ TRẢ ĐỦ nên không xuất hiện ở đây.',
+                ...(biCatPhieu ? { canhBaoCat: `CHƯA ĐỦ: chỉ đọc ${TRAN_PHIEU_MCP} phiếu còn nợ sớm hạn nhất, mọi tổng dưới đây THẤP HƠN thực tế — không được nói đây là con số cuối cùng.` } : {}),
+                tongCongNoTheoSo: theoNcc.reduce((s, x) => s + x.congNoTheoSo, 0),
+                soNccConNo: theoNcc.filter(x => x.congNoTheoSo > 0).length,
+                tongConNoTheoPhieu: Math.round(tongTheoPhieu),
+                soPhieuConNo: dong.length,
+                conNoQuaHan: Math.round(quaHan.reduce((s, x) => s + x.conLai, 0)),
+                soPhieuQuaHan: quaHan.length,
+                conNoSapDenHan7Ngay: Math.round(sapDen.reduce((s, x) => s + x.conLai, 0)),
+                soPhieuSapDenHan: sapDen.length,
+                soPhieuChuaCoHan: dong.filter(x => x.muc === 'khong-han').length,
+                /* Cắt danh sách thì phải KHAI, cùng lối với `canhBaoCat` ở trên. Tổng và số đếm
+                 * phía trên tính trên TOÀN BỘ `theoNcc` nên vẫn đúng — nhưng trợ lý AI nhìn thấy 30
+                 * dòng rất dễ nói "đây là các NCC anh đang nợ". (21/08/2026) */
+                ...(theoNcc.length > 30 ? { canhBaoCatNcc: `Danh sách dưới đây chỉ có 30/${theoNcc.length} nhà cung cấp (nợ lớn nhất trước). Tổng và số đếm ở trên là ĐỦ; riêng danh sách thì KHÔNG — đừng nói đây là toàn bộ NCC.` } : {}),
+                theoNhaCungCap: theoNcc.slice(0, 30),
+                danhSach: chon.map(({ p, conLai, han, hanSuy, muc, treNgay }) => ({
+                    maPhieu: p.code,
+                    nhaCungCap: p.supplierName || 'Không rõ (phiếu không gắn NCC)',
+                    tongTien: Math.round(Number(p.totalCost) || 0),
+                    daTra: Math.round(Number(p.paidAmount) || 0),
+                    conNo: Math.round(conLai),
+                    hanTra: han, hanSuyTuDieuKhoan: hanSuy,
+                    dieuKhoan: p.paymentTerm || null,
+                    muc,
+                    tinhTrang: han === null ? 'chưa thoả thuận hạn' : treNgay! > 0 ? `QUÁ HẠN ${treNgay} ngày` : treNgay === 0 ? 'đến hạn hôm nay' : `còn ${-treNgay!} ngày`,
+                    ngayNhap: p.transactionDate || p.createdAt,
+                })),
+                ghiChu: 'tongCongNoTheoSo = số cột Công nợ ở danh sách NCC (số dư sổ + phiếu chưa trả), là con số để trả lời "đang nợ ai bao nhiêu". tongConNoTheoPhieu chỉ cộng phiếu; lệch với sổ = đã trả chưa gắn phiếu hoặc phiếu không gắn NCC. Hạn không ghi trên phiếu được suy từ điều khoản NCC (hanSuyTuDieuKhoan=true). Phiếu nhập cũ mặc định ĐÃ TRẢ ĐỦ nên không xuất hiện.',
             }
         },
     },
@@ -895,11 +928,15 @@ export const FINANCE_TOOLS: Tool[] = [
         run: async (a, { prisma }: ToolCtx) => {
             const ky = dungKyThue(a)
             const hoSo = await kiemTraThue(prisma, ky)
-            const anDinh = await moPhongAnDinh(prisma, ky).catch(() => null)
+            /* Mô phỏng ấn định hỏng ⇒ kế hoạch khắc phục KHÔNG liệt kê căn cứ ấn định nào. AI đọc
+             * kết quả này dễ nói "không có rủi ro bị ấn định" — nên phải kèm câu đính chính. */
+            let loiAnDinh = false
+            const anDinh = await moPhongAnDinh(prisma, ky).catch(() => { loiAnDinh = true; return null })
             // Hôm nay theo giờ VN — lệch múi giờ là sai hạn chót cả ngày
             const homNay = new Date(Date.now() + VN_OFFSET_MS).toISOString().slice(0, 10)
             const kh = lapKeHoachKhacPhuc(hoSo, anDinh, ky, homNay)
             return {
+                ...(loiAnDinh ? { canhBaoDoc: 'Không chạy được mô phỏng ấn định thuế — phần căn cứ ấn định BỎ TRỐNG vì chưa đọc được, không phải vì không có rủi ro.' } : {}),
                 ky: kh.ky,
                 tomTat: kh.tomTat,
                 hanNopToKhaiCuaKy: kh.hanNopToKhai,
