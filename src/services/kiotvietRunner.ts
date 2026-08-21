@@ -77,11 +77,11 @@ export async function resumeStalledSyncs(): Promise<void> {
         const schema = String(store.schema || '').replace(/[^A-Za-z0-9_]/g, '')
         if (!schema) continue
         try {
-            const rows: any[] = await (registryPrisma as any).$queryRawUnsafe(
+            const rows: any[] = await registryPrisma.$queryRawUnsafe(
                 `SELECT 1 FROM "${schema}"."KiotVietSyncLog" WHERE mode = 'manual' AND status = 'running' LIMIT 1`,
             )
             if (rows.length) coDotChay.push(store)
-        } catch { /* schema không có bảng KV → cửa hàng đó không nối KiotViet */ }
+        } catch { /* schema không có bảng KV → không nối KiotViet */ }
     }
 
     for (const store of coDotChay) {

@@ -27,7 +27,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         const { search, status } = req.query
         const where: any = {}
         if (status && status !== 'all') where.status = status
-        if (search) { const q = String(search); where.OR = [{ name: { contains: q } }, { code: { contains: q } }, { phone: { contains: q } }] }
+        if (search) { const q = String(search); where.OR = [{ name: { contains: q, mode: 'insensitive' } }, { code: { contains: q, mode: 'insensitive' } }, { phone: { contains: q, mode: 'insensitive' } }] }
         const data = await prisma.driver.findMany({ where, orderBy: { createdAt: 'desc' } })
         const _response = { success: true, data }
         await cacheSet(cacheKey, _response, 300)

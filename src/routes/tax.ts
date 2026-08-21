@@ -6779,9 +6779,9 @@ router.get('/chart-of-accounts', authMiddleware, async (req: AuthRequest, res: R
         if (req.query.q) {
             const q = String(req.query.q)
             where.OR = [
-                { code: { contains: q } },
-                { name: { contains: q } },
-                { nameEn: { contains: q } },
+                { code: { contains: q, mode: 'insensitive' } },
+                { name: { contains: q, mode: 'insensitive' } },
+                { nameEn: { contains: q, mode: 'insensitive' } },
             ]
         }
         const data = await prisma.chartOfAccount.findMany({

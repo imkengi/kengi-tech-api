@@ -26,7 +26,14 @@ function fmtErr(err: any): string {
     return parts.join(' | ')
 }
 
-const SYNC_INTERVAL    = 10 * 60 * 1000       // 10 phút
+/**
+ * DÃN 10' → 30' (19/08/2026). Đo 7 ngày: cron là thứ ăn kết nối DB, không phải
+ * khách — nền 2 giờ sáng vẫn 36–41/50 kết nối. Webhook Shopee/TikTok đã nhận
+ * đơn mới + đổi trạng thái theo thời gian thực; lượt quét này giờ là LƯỚI VÉT
+ * (đơn lỡ webhook, Lazada chưa có webhook, làm mới token sắp hết hạn) — 30'
+ * là đủ, quét 10' chỉ đốt kết nối.
+ */
+const SYNC_INTERVAL    = 30 * 60 * 1000       // 30 phút
 const CLEANUP_INTERVAL = 24 * 60 * 60 * 1000  // 24 tiếng
 const CLEANUP_DAYS     = 18                    // Xóa đơn cũ hơn 18 ngày
 
@@ -684,13 +691,18 @@ export function startAutoSync() {
     // phần còn dở. Cloud Run thay máy mỗi lần deploy nên việc chạy nền hay đứt
     // giữa chừng — không có cái này thì người dùng phải tự bấm lại (2026-08-06).
     // Đợi 45 giây cho máy khởi động xong rồi mới bắt đầu dò.
+    // DÃN 90s → 5' và bọc khoá (19/08/2026): watchdog cũ mỗi 90 giây mở client
+    // tới TẤT CẢ cửa hàng (kể cả không nối KiotViet), trên MỌI bản Cloud Run →
+    // không cửa hàng nào rảnh đủ 10' để được thải kết nối. Đợt đồng bộ đứt
+    // giữa chừng chờ tối đa 5' mới được nối lại — chấp nhận được, ai cần gấp
+    // vẫn bấm đồng bộ tay.
     setTimeout(() => {
         const tick = () => chayNeuLanhDao('kiotviet-watchdog', 4 * 60_000, () =>
             import('../services/kiotvietRunner')
                 .then(m => m.resumeStalledSyncs())
                 .catch(e => console.error('[KiotViet watchdog]', e?.message || e)))
         tick()
-        setInterval(tick, 90_000)
+        setInterval(tick, 5 * 60_000)
     }, 45_000)
 
     // Cleanup chạy lần đầu sau 5 phút (tránh xung đột lúc khởi động), sau đó mỗi 24h
@@ -709,15 +721,15 @@ export function startAutoSync() {
                 .then(m => m.runDriveVideoCleanup())
                 .catch(e => console.error('[VideoCleanup] không chạy được:', e?.message || e))
         }
-        runAllCleanup()
         const chayDon = () => chayNeuLanhDao('auto-cleanup', 60 * 60_000, runAllCleanup)
+        chayDon()
         cleanupTimer = setInterval(chayDon, CLEANUP_INTERVAL)
     }, 5 * 60_000)
 
     // Đối soát phí sàn: lần đầu sau 10 phút, sau đó mỗi 6 tiếng
     setTimeout(() => {
-        runFeeSync()
         const chayPhi = () => chayNeuLanhDao('fee-sync', 60 * 60_000, runFeeSync)
+        chayPhi()
         feeTimer = setInterval(chayPhi, FEE_INTERVAL)
     }, 10 * 60_000)
 

@@ -19,9 +19,9 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         if (search) {
             const q = String(search)
             where.OR = [
-                { userName: { contains: q } },
-                { details: { contains: q } },
-                { entity: { contains: q } },
+                { userName: { contains: q, mode: 'insensitive' } },
+                { details: { contains: q, mode: 'insensitive' } },
+                { entity: { contains: q, mode: 'insensitive' } },
             ]
         }
         const data = await prisma.auditLog.findMany({ where, orderBy: { createdAt: 'desc' }, take: 200 })

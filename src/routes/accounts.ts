@@ -82,9 +82,9 @@ router.get('/flat', authMiddleware, async (req: AuthRequest, res: Response) => {
         if (req.query.q) {
             const q = String(req.query.q)
             where.OR = [
-                { code: { contains: q } },
-                { name: { contains: q } },
-                { nameEn: { contains: q } },
+                { code: { contains: q, mode: 'insensitive' } },
+                { name: { contains: q, mode: 'insensitive' } },
+                { nameEn: { contains: q, mode: 'insensitive' } },
             ]
         }
         const data = await prisma.chartOfAccount.findMany({ where, orderBy: [{ code: 'asc' }] })

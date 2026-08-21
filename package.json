@@ -53,7 +53,7 @@
     "check:nhanhloichet": "npx tsx scripts/check-nhanh-loi-chet.ts",
     "check:khachlactx": "npx tsx scripts/check-khach-lac-tx.ts",
     "check:khoiphucno": "npx tsx scripts/check-khoi-phuc-no.ts",
-    "check:quyenandroid": "ts-node scripts/check-quyen-android.ts"
+    "check:quyenandroid": "npx tsx scripts/check-quyen-android.ts"
   },
   "dependencies": {
     "@google-cloud/bigquery": "^8.1.1",

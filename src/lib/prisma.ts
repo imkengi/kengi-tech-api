@@ -130,7 +130,12 @@ function getStorePrisma(schemaName: string): StorePrisma {
  * giảm năng lực phục vụ: cửa hàng quay lại chỉ tốn một lần nối lại. Ngưỡng đặt
  * đủ dài để cửa hàng đang bán không bao giờ bị thải giữa chừng.
  */
-const NHAN_ROI_MS = parseInt(process.env.PRISMA_IDLE_EVICT_MS || String(10 * 60_000), 10)
+/* HẠ 10' → 3' (19/08/2026). Đo 7 ngày: cron chạm cửa hàng mỗi 90s–5' trên mọi
+ * bản nên với ngưỡng 10' KHÔNG cửa hàng nào từng được thải — nền 2 giờ sáng
+ * vẫn 36–41/50 kết nối. Cron giờ đã dãn (30'/10'/5') và chỉ chạy trên một
+ * bản, nên 3' là đủ để cửa hàng vắng thật sự trả kết nối. Cửa hàng đang bán
+ * chạm liên tục nên không bao giờ tới hạn; nối lại chỉ tốn một lần bắt tay. */
+const NHAN_ROI_MS = parseInt(process.env.PRISMA_IDLE_EVICT_MS || String(3 * 60_000), 10)
 
 function thaiClientNhanRoi(): void {
     /* Phần QUYẾT ĐỊNH nằm ở lib/thaiClientNhanRoi.ts (thuần, có bộ kiểm riêng);

@@ -300,9 +300,15 @@ router.get('/stats', authMiddleware, requirePermission('pos.view'), async (req: 
         const voidedCount = voided.length
         const returnedCount = returned.length
 
-        // Today vs yesterday
-        const todayTx = revenueTx.filter(t => t.createdAt >= todayStart)
-        const yesterdayTx = revenueTx.filter(t => t.createdAt >= yesterdayStart && t.createdAt < todayStart)
+        // Today vs yesterday — ĐỘC LẬP với bộ lọc ngày của trang: trang đang lọc
+        // "Hôm nay" thì `recent` không có đơn hôm qua → ô Hôm qua luôn 0đ dù có
+        // 22 đơn thật (19/08/2026). Tra riêng hai ngày này, cùng điều kiện doanh thu.
+        const hqTx = await prisma.transaction.findMany({
+            where: { ...branchFilter, status: { in: ['completed', 'partial'] }, createdAt: { gte: yesterdayStart, lt: new Date(todayStart.getTime() + 86400_000) } },
+            select: { total: true, createdAt: true },
+        })
+        const todayTx = hqTx.filter(t => t.createdAt >= todayStart)
+        const yesterdayTx = hqTx.filter(t => t.createdAt >= yesterdayStart && t.createdAt < todayStart)
         const revenueToday = todayTx.reduce((s, t) => s + t.total, 0)
         const revenueYesterday = yesterdayTx.reduce((s, t) => s + t.total, 0)
 
@@ -325,17 +331,22 @@ router.get('/stats', authMiddleware, requirePermission('pos.view'), async (req: 
             const dayEnd = new Date(dayStart.getTime() + 86400_000)
             const dayTx = revenueTx.filter(t => t.createdAt >= dayStart && t.createdAt < dayEnd)
             byDay.push({
-                date: dayStart.toISOString().slice(0, 10),
+                date: new Date(dayStart.getTime() + VN_MS).toISOString().slice(0, 10),
                 revenue: dayTx.reduce((s, t) => s + t.total, 0),
                 count: dayTx.length,
             })
         }
 
-        // Payment method breakdown
+        // Payment method breakdown — tiền + SỐ ĐƠN theo phương thức (19/08/2026:
+        // "chỗ này nên hiện số đơn"). Một đơn chia 2 cách trả thì đếm vào cả hai.
+        // Gồm cả đơn 'partial' (ghi nợ một phần) — phần đã thu cũng là thanh toán.
         const paymentBreakdown: Record<string, number> = {}
-        for (const t of completed) {
+        const paymentOrders: Record<string, number> = {}
+        for (const t of revenueTx) {
+            const seen = new Set<string>()
             for (const p of t.payments) {
                 paymentBreakdown[p.type] = (paymentBreakdown[p.type] || 0) + p.amount
+                if (!seen.has(p.type)) { seen.add(p.type); paymentOrders[p.type] = (paymentOrders[p.type] || 0) + 1 }
             }
         }
 
@@ -389,6 +400,7 @@ router.get('/stats', authMiddleware, requirePermission('pos.view'), async (req: 
                 byHour,
                 byDay,
                 paymentBreakdown,
+                paymentOrders,
                 topProducts,
                 cashiers,
             },

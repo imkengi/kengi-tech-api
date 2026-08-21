@@ -40,7 +40,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         if (tier && tier !== 'all') where.tier = tier
         if (search) {
             const q = String(search)
-            where.OR = [{ name: { contains: q } }, { phone: { contains: q } }]
+            where.OR = [{ name: { contains: q, mode: 'insensitive' } }, { phone: { contains: q, mode: 'insensitive' } }]
         }
         const data = await prisma.loyaltyMember.findMany({
             where,

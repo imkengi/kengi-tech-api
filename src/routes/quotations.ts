@@ -95,7 +95,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         if (status && status !== 'all') where.status = status
         if (search) {
             const q = String(search)
-            where.OR = [{ code: { contains: q } }, { customerName: { contains: q } }]
+            where.OR = [{ code: { contains: q, mode: 'insensitive' } }, { customerName: { contains: q, mode: 'insensitive' } }]
         }
         const data = await prisma.quotation.findMany({ where, orderBy: { createdAt: 'desc' } })
         const parsed = data.map(q => ({ ...q, items: safeParseItems(q.items) }))

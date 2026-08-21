@@ -1876,13 +1876,78 @@ router.put('/queue/receipt/:txId/buyer', einvoiceAuth, async (req: AuthRequest, 
         if (info.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(info.email)) {
             res.status(400).json({ success: false, error: 'Email không hợp lệ' }); return
         }
-        const has = info.name || info.taxCode || info.address || info.email
+        const has = info.name || info.taxCode || info.address || info.email || info.nationalId
         const tx = await prisma.transaction.update({
             where: { id: txId },
             data: { vatBuyerInfo: has ? JSON.stringify(info) : null },
             select: { id: true, vatBuyerInfo: true },
         })
         res.json({ success: true, data: { id: tx.id, vatBuyerInfo: has ? info : null } })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// ─── Thông tin xuất HĐ theo MÃ ĐƠN SÀN ──────────────────────────────────────
+// Khách nhắn xin hoá đơn thì nhân viên đang đứng ở trang ĐƠN HÀNG ONLINE, tay
+// cầm mã đơn — không phải tab hàng đợi xuất HĐ với txId. Cho đọc/ghi thẳng theo
+// orderNumber; Transaction của đơn sàn có receiptNumber = 'ONLINE-' + orderNumber.
+router.get('/buyer/by-order/:orderNumber', einvoiceAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        await ensureTables(req)
+        const prisma = req.storePrisma! as any
+        const tx = await timTxTheoMaDon(prisma, String(req.params.orderNumber))
+        if (!tx) {
+            res.status(404).json({ success: false, error: 'Đơn chưa có phiếu bán trong hệ thống (chưa đồng bộ xong)' })
+            return
+        }
+        let info: any = null
+        try { info = tx.vatBuyerInfo ? JSON.parse(tx.vatBuyerInfo) : null } catch { }
+        // Đã có hoá đơn phát hành chưa — có rồi thì thông tin mới chỉ dùng được
+        // cho hoá đơn THAY THẾ, phải nói rõ để nhân viên khỏi chờ auto vô ích.
+        const issued = await prisma.eInvoice.findFirst({
+            where: { transactionId: tx.id, status: { in: ['ISSUING', 'issued', 'SIGNED', 'SENT'] } },
+            select: { id: true, invoiceNumber: true, invoiceSymbol: true, status: true },
+            orderBy: { createdAt: 'desc' },
+        }).catch(() => null)
+        res.json({
+            success: true,
+            data: { txId: tx.id, receiptNumber: tx.receiptNumber, total: tx.total, vatBuyerInfo: info, issuedInvoice: issued },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
+// Cùng luật ghi với PUT /queue/receipt/:txId/buyer (email hợp lệ, toàn trường
+// rỗng = gỡ yêu cầu) — chỉ khác cách tìm phiếu.
+router.put('/buyer/by-order/:orderNumber', einvoiceAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        await ensureTables(req)
+        const prisma = req.storePrisma! as any
+        const tx = await timTxTheoMaDon(prisma, String(req.params.orderNumber))
+        if (!tx) {
+            res.status(404).json({ success: false, error: 'Đơn chưa có phiếu bán trong hệ thống (chưa đồng bộ xong)' })
+            return
+        }
+        const b = req.body || {}
+        const sv = (v: any) => (v === undefined || v === null ? '' : String(v).trim())
+        const info = { name: sv(b.name), taxCode: sv(b.taxCode), address: sv(b.address), email: sv(b.email), nationalId: sv(b.nationalId) }
+        if (info.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(info.email)) {
+            res.status(400).json({ success: false, error: 'Email không hợp lệ' })
+            return
+        }
+        if (info.nationalId && !/^\d{9,12}$/.test(info.nationalId)) {
+            res.status(400).json({ success: false, error: 'CCCD phải là 9–12 chữ số' })
+            return
+        }
+        const has = info.name || info.taxCode || info.address || info.email || info.nationalId
+        const saved = await prisma.transaction.update({
+            where: { id: tx.id },
+            data: { vatBuyerInfo: has ? JSON.stringify(info) : null },
+            select: { id: true, vatBuyerInfo: true },
+        })
+        res.json({ success: true, data: { txId: saved.id, vatBuyerInfo: has ? info : null } })
     } catch (err: any) {
         res.status(500).json({ success: false, error: errMsg(err) })
     }
@@ -2154,6 +2219,56 @@ router.post('/cancel/:invoiceId', einvoiceAuth, requireRole('admin', 'manager'),
 // ═════════════════════════════════════════════════════════════════════════════
 
 // POST /api/einvoice/from-sale/:saleId — auto-create DRAFT from a Transaction
+/**
+ * POST /einvoice/shopee-buyer-info/:transactionId — kéo THÔNG TIN XUẤT HĐ khách
+ * khai trên Shopee (get_buyer_invoice_info) về phiếu: ghi vào Transaction.vatBuyerInfo
+ * {type, name, taxCode, address, email, nationalId, companyName…}. Từ 28/07/2026
+ * Shopee VN trả `national_id` cho HĐ cá nhân → luồng xuất tự đưa vào <CCCDan>.
+ * Chỉ ĐỌC từ sàn + ghi lên phiếu; không xuất HĐ ở đây.
+ */
+router.post('/shopee-buyer-info/:transactionId', einvoiceAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma! as any
+        const txId = String(req.params.transactionId)
+        const tx = await prisma.transaction.findUnique({ where: { id: txId } })
+        if (!tx) return res.status(404).json({ success: false, error: 'Không thấy phiếu' })
+        const rn = String(tx.receiptNumber || '')
+        if (!rn.startsWith('ONLINE-')) return res.status(400).json({ success: false, error: 'Không phải đơn sàn' })
+        const oo = await prisma.onlineOrder.findFirst({
+            where: { orderNumber: rn.replace(/^ONLINE-/, '') }, include: { channel: true },
+        })
+        if (!oo || String(oo.channel?.platform).toLowerCase() !== 'shopee') {
+            return res.status(400).json({ success: false, error: 'Chỉ hỗ trợ đơn Shopee (Lazada/TikTok không có API thông tin HĐ người mua)' })
+        }
+        const { getPlatformService } = await import('../services/platforms')
+        const ch = oo.channel
+        const svc: any = getPlatformService('shopee', {
+            apiKey: ch.apiKey || '', apiSecret: ch.apiSecret || '',
+            accessToken: ch.accessToken || undefined, refreshToken: ch.refreshToken || undefined,
+            shopId: ch.shopId || undefined,
+        } as any)
+        const sn = String(oo.externalOrderId || oo.orderNumber).replace(/^SPE-/i, '')
+        const info = await svc.getBuyerInvoiceInfo(sn)
+        if (!info) return res.json({ success: true, data: null, message: 'Khách không khai thông tin xuất hoá đơn trên Shopee cho đơn này' })
+        const laCongTy = info.invoiceType === 'company'
+        const vbi = {
+            source: 'shopee', fetchedAt: new Date().toISOString(),
+            type: info.invoiceType,
+            name: laCongTy ? (info.companyName || info.name || '') : (info.name || ''),
+            taxCode: laCongTy ? (info.companyTaxId || '') : (info.taxId || ''),
+            address: laCongTy ? (info.companyAddress || info.address || '') : (info.address || ''),
+            email: laCongTy ? (info.companyEmail || info.email || '') : (info.email || ''),
+            phone: info.phone || '',
+            nationalId: info.nationalId || '',
+        }
+        await prisma.transaction.update({ where: { id: txId }, data: { vatBuyerInfo: JSON.stringify(vbi) } as any })
+        res.json({ success: true, data: vbi })
+    } catch (err: any) {
+        console.error('[shopee-buyer-info]', err?.message || err)
+        res.status(502).json({ success: false, error: err?.message || 'Không lấy được thông tin từ Shopee' })
+    }
+})
+
 router.post('/from-sale/:saleId', einvoiceAuth, requireRole('admin', 'manager', 'cashier'), async (req: AuthRequest, res: Response) => {
     try {
         await ensureTables(req)
@@ -2208,7 +2323,7 @@ router.post('/from-sale/:saleId', einvoiceAuth, requireRole('admin', 'manager', 
                 status: 'DRAFT',
                 invoiceDate: todayISO(),
                 ...seller,
-                buyerName: tx.customer?.name || tx.customerName || 'Khách lẻ',
+                buyerName: tenNguoiMuaHD(tx.customer?.name || tx.customerName, tx.customer?.taxCode || req.body?.buyerTaxCode, tx.receiptNumber),
                 buyerTaxCode: tx.customer?.taxCode || req.body?.buyerTaxCode || '',
                 buyerAddress: tx.customer?.address || req.body?.buyerAddress || '',
                 totalBeforeVat: computed.totalBeforeVat,
@@ -2599,6 +2714,11 @@ router.post('/:id/replace', einvoiceAuth, requireRole('admin', 'manager'), async
         const id = String(req.params.id)
         const original = await getInvoiceWithItems(prisma, id)
         if (!original) return res.status(404).json({ success: false, error: 'Không tìm thấy hóa đơn' })
+        const _maDonGoc = original.transactionId
+            ? ((await prisma.transaction.findUnique({
+                where: { id: original.transactionId }, select: { receiptNumber: true },
+            }).catch(() => null))?.receiptNumber || '')
+            : ''
         if (!['SIGNED', 'SENT', 'CANCELLED'].includes(original.status)) {
             return res.status(400).json({ success: false, error: `Chỉ thay thế hóa đơn đã ký/gửi/hủy. Trạng thái hiện tại: ${original.status}` })
         }
@@ -2640,7 +2760,7 @@ router.post('/:id/replace', einvoiceAuth, requireRole('admin', 'manager'), async
                 // số 2). Tên dính '*' không kèm MST thì ép về người tiêu dùng.
                 buyerName: (() => {
                     const n = bStr(b.buyerName) || original.buyerName || ''
-                    return (!n || (n.includes('*') && !bStr(b.buyerTaxCode))) ? 'Bán cho người tiêu dùng' : n
+                    return tenNguoiMuaHD(n, b.buyerTaxCode, _maDonGoc)
                 })(),
                 buyerTaxCode: bStr(b.buyerTaxCode) || '',
                 buyerAddress: (bStr(b.buyerAddress) || '').includes('*') ? '' : (bStr(b.buyerAddress) || ''),
@@ -2906,6 +3026,11 @@ router.post('/:id/adjust', einvoiceAuth, requireRole('admin', 'manager'), async 
         const id = String(req.params.id)
         const original = await getInvoiceWithItems(prisma, id)
         if (!original) return res.status(404).json({ success: false, error: 'Không tìm thấy hóa đơn' })
+        const _maDonGoc = original.transactionId
+            ? ((await prisma.transaction.findUnique({
+                where: { id: original.transactionId }, select: { receiptNumber: true },
+            }).catch(() => null))?.receiptNumber || '')
+            : ''
         if (!['SIGNED', 'SENT'].includes(original.status)) {
             return res.status(400).json({ success: false, error: `Chỉ điều chỉnh hóa đơn đã ký/phát hành. Trạng thái hiện tại: ${original.status}` })
         }
@@ -2952,7 +3077,7 @@ router.post('/:id/adjust', einvoiceAuth, requireRole('admin', 'manager'), async 
             sellerAddress: cfgRow.companyAddress || original.sellerAddress || '',
             buyerName: (() => {
                 const n = bStr(b.buyerName) || original.buyerName || ''
-                return (!n || (n.includes('*') && !bStr(b.buyerTaxCode) && !bStr(original.buyerTaxCode))) ? 'Bán cho người tiêu dùng' : n
+                return tenNguoiMuaHD(n, bStr(b.buyerTaxCode) || bStr(original.buyerTaxCode), _maDonGoc)
             })(),
             buyerTaxCode: bStr(b.buyerTaxCode) || bStr(original.buyerTaxCode) || '',
             buyerAddress: (bStr(b.buyerAddress) || bStr(original.buyerAddress) || '').includes('*') ? '' : (bStr(b.buyerAddress) || bStr(original.buyerAddress) || ''),

@@ -1555,10 +1555,30 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 // Transaction sales channel tracking (2026-05-13)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Transaction" ADD COLUMN IF NOT EXISTS "channel" TEXT NOT NULL DEFAULT 'direct'`)
 
+                /**
+                 * GỠ INDEX HÀM đã thử ngày 18/08/2026 — CHÚNG LÀM CHẬM HẲN.
+                 * Ý định: giúp các join LOWER(TRIM(sku)). Thực tế planner chuyển
+                 * các phép gộp toàn bảng (GROUP BY LOWER(TRIM(sku)) trong nhánh
+                 * "đã xuất HĐ"/"nhập VAT") từ SeqScan+HashAggregate sang quét
+                 * index ngẫu nhiên → /einvoice/tax-stock-gap 30 ngày tụt từ 5,4s
+                 * xuống 79s, khoảng "tất cả" quá 240s. Đo xong gỡ ngay, giữ
+                 * DROP idempotent để mọi cửa hàng đều sạch.
+                 */
+                await (sp as any).$executeRawUnsafe(`DROP INDEX IF EXISTS "Product_sku_lower_idx"`)
+                await (sp as any).$executeRawUnsafe(`DROP INDEX IF EXISTS "TransactionItem_sku_lower_idx"`)
+                await (sp as any).$executeRawUnsafe(`DROP INDEX IF EXISTS "ImportReceiptItem_sku_lower_idx"`)
+                await (sp as any).$executeRawUnsafe(`DROP INDEX IF EXISTS "OnlineOrder_online_receipt_idx"`)
+
                 // Repair ↔ hoá đơn bán + nối khách theo id (2026-08-13)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "customerId" TEXT`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "transactionId" TEXT`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "soldReceiptNumber" TEXT`)
+                // Gửi NCC theo lô + chọn NCC (2026-08-19)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "supplierId" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "supplierName" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "supplierBatchCode" TEXT`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "sentToSupplierAt" TIMESTAMP(3)`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "queuedForSupplierAt" TIMESTAMP(3)`)
 
                 // SalesTrip pause support (2026-05-13)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "SalesTrip" ADD COLUMN IF NOT EXISTS "pausedAt" TIMESTAMP`)
@@ -4546,6 +4566,93 @@ router.get('/debt-trace', async (req: Request, res: Response) => {
  * gần nhất (kèm mốc ghi kho), thẻ kho referenceType='repair', và các dòng
  * tồn của kho hư hỏng (kể cả ÂM — di sản chiều sai trước 10/08).
  */
+/**
+ * GET /admin/online-status-probe?storeCode=  — CHỈ ĐỌC.
+ * Soi đơn online "kẹt" trạng thái: gom theo (sàn, trạng thái Kengi) × tuổi đơn,
+ * kèm mẫu đơn cũ nhất mỗi nhóm để đối chiếu với sàn. Đơn chưa kết thúc mà
+ * quá 7–14 ngày là dấu hiệu Kengi lệch sàn (webhook trượt / trạng thái lạ
+ * không có trong bảng map). Dùng để đo trước khi sửa (19/08/2026).
+ */
+router.get('/online-status-probe', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || '').trim()
+        if (!storeCode) return res.status(400).json({ success: false, error: 'Thiếu storeCode' })
+        const store = await prisma.store.findFirst({
+            where: { code: { equals: storeCode, mode: 'insensitive' } }, select: { schema: true },
+        })
+        if (!store) return res.status(404).json({ success: false, error: 'Không thấy cửa hàng' })
+        const sp: any = getStorePrisma(store.schema)
+        const rows: any[] = await sp.$queryRawUnsafe(`
+            SELECT o.platform, o.status,
+                   COUNT(*)::int AS tong,
+                   COUNT(*) FILTER (WHERE o."createdAt" < now() - interval '7 days')::int  AS qua7,
+                   COUNT(*) FILTER (WHERE o."createdAt" < now() - interval '14 days')::int AS qua14,
+                   COUNT(*) FILTER (WHERE o."createdAt" < now() - interval '30 days')::int AS qua30,
+                   MIN(o."createdAt") AS cuNhat,
+                   MAX(o."updatedAt") AS capNhatMoiNhat
+            FROM "OnlineOrder" o
+            GROUP BY o.platform, o.status
+            ORDER BY o.platform, tong DESC`)
+        // mẫu 3 đơn cũ nhất của mỗi nhóm CHƯA kết thúc
+        const ketThuc = ['COMPLETED','CANCELLED','completed','cancelled','TO_RETURN','returned']
+        const mau: any[] = await sp.$queryRawUnsafe(`
+            SELECT platform, status, "externalStatus", "orderNumber", "createdAt", "updatedAt", "deliveredAt" FROM (
+              SELECT o.platform, o.status, o."externalStatus", o."orderNumber", o."createdAt", o."updatedAt", o."deliveredAt",
+                     ROW_NUMBER() OVER (PARTITION BY o.platform, o.status ORDER BY o."createdAt")::int AS rn
+              FROM "OnlineOrder" o
+              WHERE NOT (o.status = ANY($1)) AND o."createdAt" < now() - interval '7 days'
+            ) t WHERE rn <= 3 ORDER BY platform, status, "createdAt"`, ketThuc)
+        // externalStatus (mã gốc sàn) nào KHÔNG khớp status đã map — nghi map thiếu
+        const lech: any[] = await sp.$queryRawUnsafe(`
+            SELECT o.platform, o."externalStatus", o.status, COUNT(*)::int AS tong
+            FROM "OnlineOrder" o
+            WHERE o."externalStatus" IS NOT NULL AND o."externalStatus" <> o.status
+            GROUP BY 1,2,3 ORDER BY tong DESC LIMIT 40`)
+        res.json({ success: true, theoTrangThai: rows, mauDonCu: mau, maGocKhacMap: lech })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err?.message || String(err) })
+    }
+})
+
+/**
+ * GET /admin/online-live-check?storeCode=&orderNumber=  — CHỈ ĐỌC, không ghi.
+ * Hỏi SÀN trạng thái hiện tại của một đơn (getOrderDetail bằng token của kênh)
+ * rồi đặt cạnh trạng thái Kengi đang lưu — để phân biệt "Kengi lệch sàn" với
+ * "sàn thật sự còn để trạng thái đó" trước khi sửa (19/08/2026).
+ */
+router.get('/online-live-check', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || '').trim()
+        const orderNumber = String(req.query.orderNumber || '').trim()
+        if (!storeCode || !orderNumber) return res.status(400).json({ success: false, error: 'Thiếu storeCode/orderNumber' })
+        const store = await prisma.store.findFirst({
+            where: { code: { equals: storeCode, mode: 'insensitive' } }, select: { schema: true },
+        })
+        if (!store) return res.status(404).json({ success: false, error: 'Không thấy cửa hàng' })
+        const sp: any = getStorePrisma(store.schema)
+        const o = await sp.onlineOrder.findFirst({ where: { orderNumber }, include: { channel: true } })
+        if (!o) return res.status(404).json({ success: false, error: 'Không thấy đơn' })
+        const { getPlatformService } = await import('../services/platforms')
+        const ch = o.channel
+        const svc: any = getPlatformService(ch.platform, {
+            apiKey: ch.apiKey || '', apiSecret: ch.apiSecret || '',
+            accessToken: ch.accessToken || undefined, refreshToken: ch.refreshToken || undefined,
+            shopId: ch.shopId || undefined, shopCipher: (ch as any).shopCipher || undefined,
+        } as any)
+        if (!svc) return res.status(400).json({ success: false, error: 'Sàn không hỗ trợ' })
+        const eid = String(o.externalOrderId || '').replace(/^(SPE-|TIK-|LAZ-)/i, '')
+        const live = await svc.getOrderDetail(eid)
+        res.json({
+            success: true,
+            kengi: { status: o.status, externalStatus: o.externalStatus, updatedAt: o.updatedAt, deliveredAt: o.deliveredAt, syncedAt: (o as any).syncedAt },
+            san: live ? { status: live.status, externalStatus: live.externalStatus, deliveredAt: live.deliveredAt, shippedAt: live.shippedAt } : null,
+            lech: live ? live.status !== o.status : null,
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err?.message || String(err) })
+    }
+})
+
 router.get('/repair-trace', async (req: Request, res: Response) => {
     try {
         const storeCode = String(req.query.storeCode || '').trim()
