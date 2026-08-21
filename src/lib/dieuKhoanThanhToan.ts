@@ -131,7 +131,9 @@ export function nhanQuyTac(q: QuyTacDieuKhoan | null | undefined): string | null
         return n === 0 ? 'Trả ngay' : `Sau ${n} ngày`
     }
     if (q.type === 'eom') return `Cuối ${thang(off)}`
-    if (q.type === 'dom') return q.dom ? `Ngày ${q.dom} ${thang(off)}` : null
+    /* "Ngày 15 của 2 tháng sau" chứ không phải "Ngày 15 2 tháng sau" — hai con số dính nhau
+     * đọc thành "ngày 152". Ca thật chủ shop nêu 21/08: mua tháng 1, công nợ 15 tháng 3. */
+    if (q.type === 'dom') return q.dom ? `Ngày ${q.dom} ${off === 0 ? 'tháng này' : 'của ' + thang(off)}` : null
     return null
 }
 

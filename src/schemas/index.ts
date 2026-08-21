@@ -3,6 +3,10 @@ import { z } from 'zod'
 // ─── Products ────────────────────────────────────────────────────────────────
 export const CreateProductSchema = z.object({
     name: z.string().min(1, 'Tên sản phẩm không được để trống').max(255),
+    /* ĐƠN VỊ GHI TRÊN HOÁ ĐƠN (lớp thứ ba của hệ đơn vị: kho / sàn / hoá đơn).
+     * ProductForm.tsx:267 CÓ gửi trường này và có ô nhập, nhưng zod thiếu nên nó bị CẮT
+     * ⇒ gõ xong không lưu, trả 200 OK. Cùng bệnh với contactName/notes của NCC (21/08). */
+    invoiceUnit: z.string().max(50).optional().nullable(),
     sku: z.string().min(1, 'SKU không được để trống').max(100),
     barcode: z.string().max(100).optional().nullable(),
     description: z.string().max(2000).optional().nullable(),
@@ -139,6 +143,14 @@ export const CreateSupplierSchema = z.object({
     email: z.string().email().optional().nullable().or(z.literal('')),
     address: z.string().max(500).optional().nullable(),
     taxCode: z.string().max(20).optional().nullable(),
+    /* TÊN CỘT THẬT LÀ `contactName`/`notes`, KHÔNG phải `contactPerson`/`note`.
+     * Zod THAY HẲN req.body bằng data đã lọc (validate.ts dòng 18) nên khoá lạ bị CẮT.
+     * Khai sai tên = nhận thứ không ai gửi, cắt thứ mọi nơi gửi ⇒ route destructure ra
+     * `undefined`, Prisma hiểu là "đừng đổi trường này" rồi LẶNG LẼ bỏ qua.
+     * Đó là "sửa NCC xong không lưu" (21/08). Đo: web 4 file + Android 27 file dùng
+     * `contactName`, KHÔNG file nào dùng `contactPerson`.
+     * Giữ tên cũ làm đường lùi cho client cũ; route chỉ đọc tên đúng. */
+    contactName: z.string().max(200).optional().nullable(),
     contactPerson: z.string().max(200).optional().nullable(),
     paymentTerms: z.string().max(200).optional().nullable(),
     // Số ngày được nợ, 0 = trả ngay. Không gửi mà có nhãn thì server tự suy từ nhãn.
@@ -147,6 +159,7 @@ export const CreateSupplierSchema = z.object({
     paymentTermType: z.enum(['net', 'dom', 'eom']).optional().nullable(),
     paymentTermDom: z.number().int().min(1).max(31).optional().nullable(),
     paymentTermMonthOffset: z.number().int().min(0).max(12).optional().nullable(),
+    notes: z.string().max(1000).optional().nullable(),
     note: z.string().max(1000).optional().nullable(),
     payable: z.number().min(0).optional().default(0),
     status: z.enum(['active', 'inactive']).default('active'),
