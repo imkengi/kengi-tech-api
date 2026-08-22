@@ -124,6 +124,27 @@ async function napDonKhach(prisma: any, custId: string, name: string | null, pho
     }))
 }
 
+/**
+ * TỈ LỆ NỢ TRÊN MUA, TRUNG BÌNH THEO THÁNG (12 tháng gần nhất).
+ *
+ * Chia theo THÁNG CÓ MUA, không chia cho tháng trống — cùng quy ước với
+ * "Mua TB / tháng" ở phần trên, để hai con số đọc cùng một kiểu.
+ * Nợ lấy từ `noTheoPhieu` (số dư SỔ đã chia FIFO), không phải chênh lệch theo phiếu.
+ */
+function tiLeNoTheoThang(ds: DongTx[], noTheoPhieu: Map<string, number>): number {
+    const m = new Map<string, { mua: number; no: number }>()
+    for (const t of ds) {
+        const ym = vnYm(t.createdAt)
+        const o = m.get(ym) ?? { mua: 0, no: 0 }
+        o.mua += t.total
+        o.no += noTheoPhieu.get(t.id) ?? 0
+        m.set(ym, o)
+    }
+    const tiLe: number[] = []
+    for (const o of m.values()) if (o.mua > 0) tiLe.push(Math.min(1, o.no / o.mua))
+    return tiLe.length ? tiLe.reduce((a, b) => a + b, 0) / tiLe.length : 0
+}
+
 /** FIFO neo sổ: chia dư nợ SỔ lên các phiếu treo, MỚI trước (tiền trả đã trừ phiếu cũ). */
 function chiaNoFifo(txs: DongTx[], duNoSo: number, now: Date) {
     const treo = txs
@@ -158,6 +179,12 @@ function chiaNoFifo(txs: DongTx[], duNoSo: number, now: Date) {
          *  "đơn chịu": neo vào sổ (nguồn sự thật) nên khách trả gộp không bị buộc
          *  tội oan, và khách hết nợ thì không phiếu nào bị đánh dấu. */
         idConNo: new Set(phu.map(x => x.t.id)),
+        /** SỐ TIỀN nợ chia cho từng phiếu. Bảng tháng dùng cái này thay vì
+         *  `total - daThu`: hai cột cạnh nhau phải nói cùng một thứ tiếng, mà tiếng
+         *  đúng là SỔ. Đo 22/08: khách Đào Xuân Nghiêm sổ 351.982.900đ nhưng cộng
+         *  theo phiếu ra 999.224.582đ — lệch 2,8 lần vì trả gộp không gắn phiếu.
+         *  Lấy con số theo phiếu đi chấm điểm là phạt khách gần gấp ba lần nợ thật. */
+        noTheoPhieu: new Map(phu.map(x => [x.t.id, x.tien] as const)),
         soPhieuTreo: treo.length,
         tienTreoTheoPhieu: Math.round(tienTreoTheoPhieu),
         ngayNoLauNhat: cuNhat ? tuoiNgay(cuNhat.createdAt, now) : null,
@@ -221,11 +248,11 @@ function tinhMoRong(txs12: DongTx[], now: Date) {
 function chamDiem(opts: {
     duNo: number; tongMua12: number; ngayNoLauNhat: number | null
     tangTruongTien: number | null; dangImLau: boolean
-    tiLeMuaChiu12: number; soDon12: number
+    tiLeNoThangTB: number; soDon12: number
     xepHang: 'tot' | 'theo-doi' | 'rui-ro' | 'chua-du-du-lieu'
     traGop: boolean
 }) {
-    const { duNo, tongMua12, ngayNoLauNhat, tangTruongTien, dangImLau, tiLeMuaChiu12, soDon12, xepHang, traGop } = opts
+    const { duNo, tongMua12, ngayNoLauNhat, tangTruongTien, dangImLau, tiLeNoThangTB, soDon12, xepHang, traGop } = opts
     if (xepHang === 'chua-du-du-lieu') return null
 
     // 1. Gánh nợ: nợ ÷ tổng mua 12t — 0% ăn trọn, ≥50% về 0. Trả gộp = không nợ.
@@ -241,7 +268,20 @@ function chamDiem(opts: {
                 : tangTruongTien > -0.3 ? 12 : 5
     if (dangImLau) dXu = Math.max(0, dXu - 7)
     // 4. Mua chịu trong kỳ (12t): 0% ăn trọn, ≥60% đơn chịu về 0. Trả gộp miễn trừ.
-    const dChiu = Math.round(25 * (1 - Math.min(1, (traGop ? 0 : tiLeMuaChiu12) / 0.6)))
+    /**
+     * NỢ / MUA TRONG THÁNG — thay cho "Mua chịu trong kỳ" (22/08/2026, chủ shop chốt).
+     *
+     * Vì sao đổi: ở tiệm này ĐA SỐ khách đều mua nợ, nên "có mua chịu hay không"
+     * không phân biệt được ai với ai — và tệ hơn, nó đo lại đúng thứ mà "Gánh nợ"
+     * đã đo, tức 50/100 điểm dồn vào một sự thật duy nhất.
+     *
+     * Nay hỏi câu khác: MỖI THÁNG mua 100 đồng thì bao nhiêu đồng thành nợ.
+     * Trung bình cộng theo THÁNG CÓ MUA (không chia cho tháng trống) — mỗi tháng
+     * một phiếu bầu, để một tháng mua lớn không nuốt hết các tháng còn lại.
+     * Nợ lấy từ số dư SỔ đã chia FIFO, không phải "total - daThu" theo phiếu.
+     * ≥60% là 0đ, giữ đúng ngưỡng cũ để so sánh được với điểm trước đây.
+     */
+    const dChiu = Math.round(25 * (1 - Math.min(1, (traGop ? 0 : tiLeNoThangTB) / 0.6)))
 
     let tong = dGanh + dTuoi + dXu + dChiu
     let biChanTran = false
@@ -262,7 +302,7 @@ function chamDiem(opts: {
             { ma: 'ganh-no', ten: 'Gánh nợ', diem: dGanh, toiDa: 25, giaiThich: traGop ? 'Sổ không nợ (phiếu treo là trả gộp)' : duNo <= 0 ? 'Không nợ theo sổ' : `Nợ bằng ${Math.round(rNo * 100)}% tổng mua 12 tháng (≥50% là 0đ)` },
             { ma: 'tuoi-no', ten: 'Tuổi nợ', diem: dTuoi, toiDa: 25, giaiThich: traGop || duNo <= 0 ? 'Không có nợ để tính tuổi' : ngayNoLauNhat === null ? 'Nợ ngoài phiếu — không rõ tuổi, coi như già' : `Phiếu nợ cũ nhất ${ngayNoLauNhat} ngày (90 ngày là 0đ)` },
             { ma: 'xu-huong', ten: 'Xu hướng & nhịp', diem: dXu, toiDa: 25, giaiThich: (tangTruongTien === null ? 'Chưa đủ 3 tháng trước để so' : `Tiền mua 3 tháng gần ${tangTruongTien >= 0 ? '+' : ''}${Math.round(tangTruongTien * 100)}% so với 3 tháng trước`) + (dangImLau ? ' · đang IM LÂU (−7đ)' : '') },
-            { ma: 'mua-chiu', ten: 'Mua chịu trong kỳ', diem: dChiu, toiDa: 25, giaiThich: traGop ? 'Trả gộp — không tính mua chịu' : `${Math.round(tiLeMuaChiu12 * 100)}% đơn 12 tháng còn nợ theo sổ (≥60% là 0đ)` },
+            { ma: 'no-tren-mua-thang', ten: 'Nợ / mua trong tháng', diem: dChiu, toiDa: 25, giaiThich: traGop ? 'Trả gộp — không tính' : `Mỗi tháng mua 100đ thì ${Math.round(tiLeNoThangTB * 100)}đ thành nợ (trung bình 12 tháng, ≥60% là 0đ)` },
         ],
     }
 }
@@ -365,12 +405,12 @@ router.get('/financial-overview', authMiddleware, requirePermission('customers.v
             const thangCo = new Set(ds.map(t => vnYm(t.createdAt))).size
             const tongMua12 = ds.reduce((s, t) => s + t.total, 0)
             const tbThang = thangCo > 0 ? tongMua12 / thangCo : 0
-            const tiLeChiu = ds.length ? ds.filter(t => t.coChiu).length / ds.length : 0
+            const tiLeNoThang = tiLeNoTheoThang(ds, fifo.noTheoPhieu)
             const hangNo = xepHangNo(duNo, fifo.ngayNoLauNhat, traGop, ds.length > 0)
             const diem = chamDiem({
                 duNo, tongMua12, ngayNoLauNhat: fifo.ngayNoLauNhat,
                 tangTruongTien: mr.xuHuong.tangTruongTien, dangImLau: mr.nhipMua.dangImLau,
-                tiLeMuaChiu12: tiLeChiu, soDon12: ds.length, xepHang: hangNo, traGop,
+                tiLeNoThangTB: tiLeNoThang, soDon12: ds.length, xepHang: hangNo, traGop,
             })
             return {
                 id: k.id, ten: k.name, ma: k.code ?? null, sdt: k.phone ?? null,
@@ -442,7 +482,8 @@ router.get('/:id/financial-health', authMiddleware, requirePermission('customers
             const o = thangMap.get(ym) ?? { soDon: 0, tienMua: 0, soDonChiu: 0, tienNo: 0 }
             o.soDon++; o.tienMua += t.total
             if (t.coChiu) o.soDonChiu++
-            o.tienNo += Math.max(0, t.total - t.daThu)
+            // Nợ theo SỔ đã chia FIFO — KHÔNG phải `total - daThu` (xem noTheoPhieu)
+            o.tienNo += fifo.noTheoPhieu.get(t.id) ?? 0
             thangMap.set(ym, o)
         }
         const theoThang = [...thangMap.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([thang, o]) => ({
@@ -469,14 +510,16 @@ router.get('/:id/financial-health', authMiddleware, requirePermission('customers
 
         const tongMuaAll = tatCa.reduce((s, t) => s + t.total, 0)
         const tongMua12 = ds12.reduce((s, t) => s + t.total, 0)
+        // Vẫn giữ tỉ lệ ĐƠN còn nợ để hiển thị (ô "Tỉ lệ đơn mua chịu"), nhưng
+        // CHẤM ĐIỂM thì dùng nợ/mua theo tháng — xem ghi chú ở chamDiem.
         const tiLeMuaChiuAll = tatCa.length ? tatCa.filter(t => t.coChiu).length / tatCa.length : 0
-        const tiLeMuaChiu12 = ds12.length ? ds12.filter(t => t.coChiu).length / ds12.length : 0
+        const tiLeNoThang12 = tiLeNoTheoThang(ds12, fifo.noTheoPhieu)
 
         const hangNo = xepHangNo(duNo, fifo.ngayNoLauNhat, traGop, tatCa.length > 0)
         const diem = chamDiem({
             duNo, tongMua12, ngayNoLauNhat: fifo.ngayNoLauNhat,
             tangTruongTien: mr.xuHuong.tangTruongTien, dangImLau: mr.nhipMua.dangImLau,
-            tiLeMuaChiu12, soDon12: ds12.length, xepHang: hangNo, traGop,
+            tiLeNoThangTB: tiLeNoThang12, soDon12: ds12.length, xepHang: hangNo, traGop,
         })
 
         const lyDo: string[] = []
