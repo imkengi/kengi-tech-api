@@ -10,6 +10,7 @@ import { adjustSellableStock } from '../lib/warehouseHelper'
 import { registryPrisma, mapWithConcurrency } from '../lib/prisma'
 import { computeOrderProfits } from '../lib/onlineOrderProfit'
 import { moTaLoi } from '../lib/gomLoi'
+import { gomNhomDVVC, khoaNhomDVVC } from '../lib/dvvc'
 
 const router = Router()
 
@@ -386,6 +387,92 @@ router.delete('/channels/:id', authMiddleware, requirePermission('online_orders.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // GET /api/online-orders
+/**
+ * Các nhãn ĐVVC THÔ thuộc về một nhóm — đọc từ CHÍNH dữ liệu, không phải bảng cứng.
+ *
+ * Vì sao không so chuỗi thẳng trong SQL: nhóm nhận diện theo chuỗi ĐÃ BỎ DẤU
+ * ("giao hang nhanh"), mà Postgres không bỏ dấu giúp nếu chưa bật `unaccent`.
+ * Nên lấy danh sách nhãn có thật (vài chục giá trị) rồi gom ở tầng ứng dụng —
+ * bảng cứng sẽ mục ngay khi sàn đổi tên hoặc shop bật thêm một ĐVVC mới.
+ */
+async function nhanThuocNhomDVVC(prisma: any, key: string): Promise<string[]> {
+    const rows: any[] = await prisma.onlineOrder.findMany({
+        where: { shippingCarrier: { not: null } },
+        select: { shippingCarrier: true },
+        distinct: ['shippingCarrier'],
+    })
+    return rows
+        .map(r => String(r.shippingCarrier || ''))
+        .filter(t => t && khoaNhomDVVC(t) === key)
+}
+
+/**
+ * DỰNG ĐIỀU KIỆN LỌC ĐƠN SÀN — dùng CHUNG cho `GET /` và `GET /carriers`.
+ *
+ * Tách ra (22/08/2026) vì bộ đếm ĐVVC phải đếm trên ĐÚNG tập đơn mà danh sách
+ * đang hiển thị. Chép lại một bản thứ hai là cách chắc chắn nhất để hai con số
+ * lệch nhau rồi không ai biết vì sao — đúng bệnh "hai router cùng đường" đã dính.
+ *
+ * Trả thêm `layHomNay` vì `GET /` dùng nó để chọn cách sắp xếp.
+ */
+function dungWhereDon(q: any): { where: any; layHomNay: boolean } {
+    const {
+        search, status, channelId, platform, paymentStatus,
+        startDate, endDate, isInstant, pickedUpToday,
+    } = q
+
+    const where: any = {}
+    if (status && status !== 'all') {
+        // Client gửi 1 hoặc nhiều trạng thái `?status=A,B,C`; mỗi giá trị được
+        // expand qua BẢNG ĐỒNG NGHĨA CHUNG (đầu file) nên danh sách trả về
+        // khớp đúng con số mà /stats đếm cho tab đó.
+        const requested = (status as string).split(',').map(s => s.trim()).filter(Boolean)
+        const expanded = new Set<string>()
+        for (const s of requested) {
+            expanded.add(s)
+            for (const v of expandStatus(s)) expanded.add(v)
+        }
+        where.status = { in: [...expanded] }
+    }
+    if (channelId) where.channelId = channelId as string
+    if (platform && platform !== 'all') where.platform = platform
+    if (paymentStatus && paymentStatus !== 'all') where.paymentStatus = paymentStatus
+    // Tab HỎA TỐC (Shopee Instant Delivery): ?isInstant=true — chỉ đơn instant
+    if (isInstant === 'true') where.isInstant = true
+    /**
+     * Tab ĐVVC ĐÃ LẤY HÀNG HÔM NAY: ?pickedUpToday=true
+     * Mốc là `shippedAt` — thời điểm ĐVVC THỰC SỰ lấy hàng, không phải hạn
+     * bàn giao: Shopee lấy từ `pickup_done_time`, TikTok `rts_time`, Lazada
+     * `shipped_at`. Cắt ngày theo GIỜ VIỆT NAM để khớp biên bản của shipper.
+     */
+    const layHomNay = pickedUpToday === 'true'
+    if (layHomNay) {
+        const { tu, den } = khoangNgayVN()
+        where.shippedAt = { gte: tu, lte: den }
+        // ĐƠN HUỶ KHÔNG TÍNH LÀ ĐÃ GIAO ĐI. Danh sách này để đối chiếu với
+        // biên bản bàn giao của shipper; đơn đã huỷ nằm trong đó chỉ gây rối.
+        where.status = { notIn: [...CANCEL_LIKE_STATUSES] }
+    }
+    if (search) {
+        where.OR = [
+            { orderNumber: { contains: search, mode: 'insensitive' } },
+            { customerName: { contains: search, mode: 'insensitive' } },
+            { customerPhone: { contains: search, mode: 'insensitive' } },
+            { trackingNumber: { contains: search, mode: 'insensitive' } },
+        ]
+    }
+    if (startDate || endDate) {
+        const gte = startDate ? new Date(startDate as string) : null
+        const lte = endDate ? new Date(endDate as string) : null
+        where.createdAt = {}
+        if (gte && !isNaN(gte.getTime())) where.createdAt.gte = gte
+        if (lte && !isNaN(lte.getTime())) where.createdAt.lte = lte
+        if (Object.keys(where.createdAt).length === 0) delete where.createdAt
+    }
+
+    return { where, layHomNay }
+}
+
 router.get('/', authMiddleware, requirePermission('online_orders.view', 'orders.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
@@ -400,53 +487,24 @@ router.get('/', authMiddleware, requirePermission('online_orders.view', 'orders.
         const size = Math.min(1000, Math.max(1, parseInt(pageSize as string, 10) || 20))
         const skip = (pageNum - 1) * size
 
-        const where: any = {}
-        if (status && status !== 'all') {
-            // Client gửi 1 hoặc nhiều trạng thái `?status=A,B,C`; mỗi giá trị được
-            // expand qua BẢNG ĐỒNG NGHĨA CHUNG (đầu file) nên danh sách trả về
-            // khớp đúng con số mà /stats đếm cho tab đó.
-            const requested = (status as string).split(',').map(s => s.trim()).filter(Boolean)
-            const expanded = new Set<string>()
-            for (const s of requested) {
-                expanded.add(s)
-                for (const v of expandStatus(s)) expanded.add(v)
-            }
-            where.status = { in: [...expanded] }
-        }
-        if (channelId) where.channelId = channelId as string
-        if (platform && platform !== 'all') where.platform = platform
-        if (paymentStatus && paymentStatus !== 'all') where.paymentStatus = paymentStatus
-        // Tab HỎA TỐC (Shopee Instant Delivery): ?isInstant=true — chỉ đơn instant
-        if (isInstant === 'true') where.isInstant = true
+        const { where, layHomNay } = dungWhereDon(req.query)
+
         /**
-         * Tab ĐVVC ĐÃ LẤY HÀNG HÔM NAY: ?pickedUpToday=true
-         * Mốc là `shippedAt` — thời điểm ĐVVC THỰC SỰ lấy hàng, không phải hạn
-         * bàn giao: Shopee lấy từ `pickup_done_time`, TikTok `rts_time`, Lazada
-         * `shipped_at`. Cắt ngày theo GIỜ VIỆT NAM để khớp biên bản của shipper.
+         * LỌC THEO ĐVVC — `?carrier=<khoá nhóm>` (`khong-co` = đơn chưa có ĐVVC).
+         * Gom nhãn vì mỗi sàn gọi một kiểu: GHN nằm dưới BA tên khác nhau
+         * ("GHN", "GHN - Hàng Cồng Kềnh", "Giao Hàng Nhanh"), lọc theo chuỗi thô
+         * là hụt 1.115/2.092 đơn khi đối soát với GHN. Xem `lib/dvvc.ts`.
+         * Dùng AND chứ KHÔNG gán `where.OR` — `search` đã chiếm OR rồi, gán đè
+         * là mất luôn điều kiện tìm kiếm.
          */
-        const layHomNay = pickedUpToday === 'true'
-        if (layHomNay) {
-            const { tu, den } = khoangNgayVN()
-            where.shippedAt = { gte: tu, lte: den }
-            // ĐƠN HUỶ KHÔNG TÍNH LÀ ĐÃ GIAO ĐI. Danh sách này để đối chiếu với
-            // biên bản bàn giao của shipper; đơn đã huỷ nằm trong đó chỉ gây rối.
-            where.status = { notIn: [...CANCEL_LIKE_STATUSES] }
-        }
-        if (search) {
-            where.OR = [
-                { orderNumber: { contains: search, mode: 'insensitive' } },
-                { customerName: { contains: search, mode: 'insensitive' } },
-                { customerPhone: { contains: search, mode: 'insensitive' } },
-                { trackingNumber: { contains: search, mode: 'insensitive' } },
-            ]
-        }
-        if (startDate || endDate) {
-            const gte = startDate ? new Date(startDate as string) : null
-            const lte = endDate ? new Date(endDate as string) : null
-            where.createdAt = {}
-            if (gte && !isNaN(gte.getTime())) where.createdAt.gte = gte
-            if (lte && !isNaN(lte.getTime())) where.createdAt.lte = lte
-            if (Object.keys(where.createdAt).length === 0) delete where.createdAt
+        const carrier = String(req.query.carrier || '').trim()
+        if (carrier && carrier !== 'all') {
+            if (carrier === 'khong-co') {
+                where.AND = [...(where.AND || []),
+                    { OR: [{ shippingCarrier: null }, { shippingCarrier: '' }] }]
+            } else {
+                where.shippingCarrier = { in: await nhanThuocNhomDVVC(prisma, carrier) }
+            }
         }
 
         const [total, orders] = await Promise.all([
@@ -512,6 +570,38 @@ router.get('/', authMiddleware, requirePermission('online_orders.view', 'orders.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // GET /api/online-orders/products/stats
+/**
+ * GET /online-orders/carriers — danh sách ĐVVC để dựng bộ lọc.
+ *
+ * Đếm trên ĐÚNG tập đơn mà danh sách đang hiển thị (dùng chung `dungWhereDon`),
+ * nên con số trong ô chọn khớp với con số sau khi lọc. Trả kèm `nhan[]` — các
+ * nhãn THÔ nằm trong mỗi nhóm — để giao diện nói rõ đã gom những gì, thay vì
+ * gom lén rồi bắt người dùng tin.
+ *
+ * PHẢI khai trước `GET /:id` kẻo bị route đó nuốt.
+ */
+router.get('/carriers', authMiddleware, requirePermission('online_orders.view', 'orders.view'), async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma = req.storePrisma!
+        const { where } = dungWhereDon(req.query)
+        // `as any`: generic của groupBy trong Prisma đòi `where` đúng kiểu sinh ra,
+        // mà `dungWhereDon` trả `any` để dùng chung được cho nhiều đường.
+        const rows: any[] = await (prisma as any).onlineOrder.groupBy({
+            by: ['shippingCarrier'],
+            where,
+            _count: { _all: true },
+        })
+        const nhom = gomNhomDVVC(rows.map(r => ({
+            ten: r.shippingCarrier as string | null,
+            tong: r._count?._all ?? 0,
+        })))
+        res.json({ success: true, data: { nhom, tong: nhom.reduce((a, g) => a + g.tong, 0) } })
+    } catch (err: any) {
+        console.error('Get carriers error:', err)
+        res.status(500).json(errMsg(err, 'Không lấy được danh sách đơn vị vận chuyển'))
+    }
+})
+
 router.get('/products/stats', authMiddleware, requirePermission('online_orders.view', 'orders.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
