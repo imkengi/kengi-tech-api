@@ -134,7 +134,13 @@ export async function dongBoCayDanhMuc(
                 where: { entity_kvId: { entity: 'category', kvId: x.kvId } },
                 select: { localId: true },
             }).catch(() => null)
-            if (anhXa?.localId) {
+            /* Bỏ qua ánh xạ nếu danh mục đó ĐÃ bị một nhóm KiotViet khác nhận trong lượt
+             * này. Lượt chạy trước (khi chưa có sổ idDaChiem) đã ghi ÁNH XẠ SAI: hai mã
+             * KiotViet trùng tên cùng trỏ MỘT danh mục Kengi. Chỉ chặn ở đường dò-theo-tên
+             * là không đủ — ánh xạ hỏng sẵn vẫn lọt, rồi cái thứ hai báo "người dùng đã xếp
+             * cha khác", tức ĐỔ LỖI NHẦM cho người dùng trong khi họ không xếp gì cả.
+             * Bỏ qua ở đây thì nó rơi xuống nhánh tạo mới và ánh xạ được ghi lại cho đúng. */
+            if (anhXa?.localId && !idDaChiem.has(anhXa.localId)) {
                 const con = await sp.category.findUnique({ where: { id: anhXa.localId }, select: { id: true } }).catch(() => null)
                 if (con) localId = con.id      // ánh xạ có thể trỏ danh mục đã xoá
             }
