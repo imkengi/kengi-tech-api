@@ -117,6 +117,14 @@ export async function dongBoCayDanhMuc(
      * Tra ánh xạ trước, rồi tới TÊN — để nhận lại đúng những danh mục phẳng mà bản cũ
      * đã tạo, thay vì đẻ thêm một bộ mới bên cạnh. TUẦN TỰ, pool prod = 1. */
     const localTheoKv = new Map<string, string>()
+    /* ID Kengi ĐÃ bị một nhóm KiotViet nhận trong lượt này.
+     *
+     * KiotViet CHO PHÉP TRÙNG TÊN: đo HUTI 22/08/2026 có hai nhóm cùng tên "CC-DM-ĐB" nằm
+     * dưới hai cha khác nhau. Bước dò dự phòng tra theo TÊN, nên cả hai cùng trỏ về MỘT
+     * danh mục Kengi: cái thứ nhất nối cha xong, cái thứ hai thấy đã có cha nên báo
+     * "người dùng đã xếp cha khác" và bỏ qua — nhìn ra ngoài thì y như thiếu danh mục.
+     * Giữ sổ này để tên trùng thì tạo danh mục RIÊNG thay vì tranh nhau một chỗ. */
+    const idDaChiem = new Set<string>()
 
     for (const x of dm) {
         try {
@@ -132,8 +140,12 @@ export async function dongBoCayDanhMuc(
             }
 
             if (!localId) {
-                const theoTen = await sp.category.findFirst({ where: { name: x.ten }, select: { id: true } }).catch(() => null)
-                if (theoTen) localId = theoTen.id
+                // Lấy danh mục cùng tên ĐẦU TIÊN CHƯA BỊ CHIẾM — trùng tên thì cái sau tự tạo mới.
+                const cungTen: Array<{ id: string }> = await sp.category
+                    .findMany({ where: { name: x.ten }, select: { id: true }, take: 20 })
+                    .catch(() => [])
+                const chuaChiem = cungTen.find(c => !idDaChiem.has(c.id))
+                if (chuaChiem) localId = chuaChiem.id
             }
 
             if (!localId) {
@@ -154,6 +166,7 @@ export async function dongBoCayDanhMuc(
             // TS chưa suy được là nhánh trên luôn gán — chốt lại, và nếu thật sự rỗng thì
             // BỎ QUA có khai báo, không im lặng nhét null vào bảng tra.
             if (!localId) { kq.boQua++; continue }
+            idDaChiem.add(localId)
             localTheoKv.set(x.kvId, localId)
 
             if (opts.apply) {

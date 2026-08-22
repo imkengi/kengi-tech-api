@@ -266,7 +266,20 @@ export const KV = {
 
     branches: (creds: KiotVietCreds) => fetchJson(creds, '/branches', { pageSize: 100 }),
 
-    categories: (creds: KiotVietCreds) => fetchJson(creds, '/categories', { pageSize: 100 }),
+    /* PHÂN TRANG — KHÔNG được gọi một phát rồi thôi.
+     *
+     * Bản trước: `fetchJson('/categories', { pageSize: 100 })`. KiotViet kẹp pageSize tối đa
+     * 100, nên cửa hàng có nhiều hơn 100 nhóm hàng là **mất phần dư, im lặng**. Đo HUTI
+     * 22/08/2026: KiotViet báo total 170, đợt đồng bộ chỉ lấy 100 ⇒ **70 nhóm hàng chưa bao
+     * giờ sang**, và người dùng chỉ thấy "vẫn thiếu vài cái".
+     *
+     * Mọi thực thể khác (products/customers/suppliers/invoices…) đều đã dùng fetchAllPages;
+     * riêng categories bị bỏ sót. fetchAllPages dừng theo `total` KiotViet báo, không theo
+     * "trang rỗng". */
+    categories: async (creds: KiotVietCreds) => {
+        const r = await fetchAllPages(creds, '/categories', {})
+        return { data: r.items, total: r.total, truncated: r.truncated }
+    },
 
     /** Gọi thẳng một đường dẫn bất kỳ — dùng cho webhook cần nạp lại 1 bản ghi. */
     raw: (creds: KiotVietCreds, path: string, params: Record<string, any> = {}) =>
