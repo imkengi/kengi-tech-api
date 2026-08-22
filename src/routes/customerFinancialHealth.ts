@@ -232,7 +232,12 @@ function xepHangNo(duNo: number, ngayNoLauNhat: number | null, traGop: boolean, 
 router.get('/financial-overview', authMiddleware, requirePermission('customers.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma! as any
-        const limit = Math.min(500, Math.max(20, Number(req.query.limit) || 300))
+        /* Trần 500 / mặc định 300 là quá hẹp: cửa hàng 593 khách thì 293 người KHÔNG BAO
+         * GIỜ được chấm, mà `tong` lại trả về đúng số dòng lấy được nên giao diện không có
+         * cách nào biết đã bị cắt (chủ shop phát hiện 22/08/2026: "593 khách mà chấm có
+         * 300"). Chi phí không tăng theo số khách — vẫn 2 lượt truy vấn, phần tính nằm
+         * trong bộ nhớ — nên nâng trần được. */
+        const limit = Math.min(2000, Math.max(20, Number(req.query.limit) || 1000))
         const now = new Date()
         const moc12 = new Date(now.getTime() - 365 * NGAY_MS)
 
@@ -252,7 +257,27 @@ router.get('/financial-overview', authMiddleware, requirePermission('customers.v
             ORDER BY c.debt DESC, COALESCE(m."tongMua",0) DESC
             LIMIT ${limit}
         `, moc12)
-        if (khach.length === 0) { res.json({ success: true, data: { tong: 0, items: [] } }); return }
+
+        /* ĐẾM TỔNG THẬT (trước LIMIT). Không có con số này thì việc bị cắt là VÔ HÌNH:
+         * `tong: items.length` luôn khớp với số dòng trả về, nên màn hình không bao giờ
+         * biết mình đang chấm thiếu người. */
+        const demRows: any[] = await prisma.$queryRawUnsafe(`
+            SELECT COUNT(*)::int AS n
+            FROM "Customer" c
+            LEFT JOIN (
+                SELECT "customerId"
+                FROM "Transaction"
+                WHERE status IN ('completed','partial') AND "createdAt" >= $1 AND "customerId" IS NOT NULL
+                GROUP BY "customerId"
+            ) m ON m."customerId" = c.id
+            WHERE c.debt > 0 OR m."customerId" IS NOT NULL
+        `, moc12).catch(() => [])
+        const tongTatCa = Number(demRows?.[0]?.n) || khach.length
+
+        if (khach.length === 0) {
+            res.json({ success: true, data: { tong: 0, tongTatCa, biCat: tongTatCa > 0, items: [] } })
+            return
+        }
         const ids = khach.map(k => k.id)
 
         // 2) Toàn bộ đơn 12 tháng của các khách đó (một lần) + payment gộp
@@ -316,7 +341,11 @@ router.get('/financial-overview', authMiddleware, requirePermission('customers.v
                 soPhieuTreo: fifo.soPhieuTreo,
             }
         })
-        res.json({ success: true, data: { tong: items.length, items } })
+        // biCat = ĐANG CHẤM THIẾU NGƯỜI. Màn hình phải nói ra, đừng để tưởng đã soi hết.
+        res.json({
+            success: true,
+            data: { tong: items.length, tongTatCa, biCat: tongTatCa > items.length, items },
+        })
     } catch (err: any) {
         console.error('[financial-overview]', err?.message || err)
         res.status(500).json({ success: false, error: 'Không dựng được bảng tổng quan' })
