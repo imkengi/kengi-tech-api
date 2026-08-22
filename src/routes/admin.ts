@@ -4653,6 +4653,84 @@ router.get('/online-live-check', async (req: Request, res: Response) => {
     }
 })
 
+/**
+ * GET /admin/lazada-raw?storeCode=&orderNumber=  — CHỈ ĐỌC, không ghi.
+ *
+ * Vì sao có (22/08/2026): 44/52 đơn Lazada của KENGISTORE mang externalStatus
+ * "confirmed", kể cả đơn đã giao xong từ tháng 3 — mà "confirmed" KHÔNG nằm trong
+ * bảng trạng thái Lazada công bố. Bộ nối đang đọc `statuses[0]` ở cấp ĐƠN và bỏ
+ * hẳn `status` của từng DÒNG HÀNG mà /order/items/get trả về. Trước khi sửa thì
+ * phải NHÌN payload thật đã — đoán rồi map bừa là bịa dữ liệu đơn hàng.
+ *
+ * Trả về khoá + giá trị thô của /order/get và /order/items/get, có che số điện
+ * thoại/địa chỉ vì đây là dữ liệu khách.
+ */
+router.get('/lazada-raw', async (req: Request, res: Response) => {
+    try {
+        const storeCode = String(req.query.storeCode || '').trim()
+        const orderNumber = String(req.query.orderNumber || '').trim()
+        if (!storeCode || !orderNumber) return res.status(400).json({ success: false, error: 'Thiếu storeCode/orderNumber' })
+        const store = await prisma.store.findFirst({
+            where: { code: { equals: storeCode, mode: 'insensitive' } }, select: { schema: true },
+        })
+        if (!store) return res.status(404).json({ success: false, error: 'Không thấy cửa hàng' })
+        const sp: any = getStorePrisma(store.schema)
+        const o = await sp.onlineOrder.findFirst({ where: { orderNumber }, include: { channel: true } })
+        if (!o) return res.status(404).json({ success: false, error: 'Không thấy đơn' })
+        if (o.channel?.platform !== 'lazada') return res.status(400).json({ success: false, error: 'Đơn này không phải Lazada' })
+
+        const { getPlatformService } = await import('../services/platforms')
+        const ch = o.channel
+        const svc: any = getPlatformService('lazada', {
+            apiKey: ch.apiKey || '', apiSecret: ch.apiSecret || '',
+            accessToken: ch.accessToken || undefined, refreshToken: ch.refreshToken || undefined,
+            shopId: ch.shopId || undefined,
+        } as any)
+        const eid = String(o.externalOrderId || '').replace(/^LAZ-/i, '')
+
+        // buildUrl/httpGet là protected — cùng file class nên phải đi qua `as any`.
+        const urlDon = svc.buildUrl('/order/get', { order_id: eid })
+        const donThoRaw = await svc.httpGet(urlDon)
+        const urlHang = svc.buildUrl('/order/items/get', { order_id: eid })
+        const hangTho = await svc.httpGet(urlHang)
+
+        const che = (v: any) => typeof v === 'string' && v.length > 4 ? v.slice(0, 2) + '***' : v
+        const don = donThoRaw?.data || {}
+        const donAnToan: any = {}
+        for (const [k, v] of Object.entries(don)) {
+            donAnToan[k] = /phone|address|first_name|last_name|email/i.test(k) ? che(v) : v
+        }
+
+        const hang = Array.isArray(hangTho?.data) ? hangTho.data : []
+        res.json({
+            success: true,
+            kengi: { status: o.status, externalStatus: o.externalStatus, deliveredAt: o.deliveredAt },
+            donGet: {
+                code: donThoRaw?.code,
+                khoa: Object.keys(don),
+                statuses: don.statuses,
+                status: don.status,
+                tatCa: donAnToan,
+            },
+            itemsGet: {
+                code: hangTho?.code,
+                soDong: hang.length,
+                khoaDongDau: hang[0] ? Object.keys(hang[0]) : [],
+                trangThaiTungDong: hang.map((it: any) => ({
+                    order_item_id: it.order_item_id,
+                    sku: it.sku,
+                    status: it.status,
+                    reason: it.reason,
+                    delivered_at: it.delivered_at,
+                    shipment_provider: it.shipment_provider,
+                })),
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err?.message || String(err) })
+    }
+})
+
 router.get('/repair-trace', async (req: Request, res: Response) => {
     try {
         const storeCode = String(req.query.storeCode || '').trim()
