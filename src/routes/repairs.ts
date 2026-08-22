@@ -4,7 +4,7 @@ import { requirePermission } from '../middleware/permissionMiddleware'
 import { validate } from '../middleware/validate'
 import { CreateRepairSchema, UpdateRepairSchema } from '../schemas'
 import { nextCode } from '../lib/codeGenerator'
-import { adjustSellableStock, decrementSellableStock, updateWarehouseStock } from '../lib/warehouseHelper'
+import { adjustSellableStock, decrementSellableStock, updateWarehouseStock, khoHuHong } from '../lib/warehouseHelper'
 
 const router = Router()
 
@@ -56,18 +56,7 @@ const router = Router()
 /** Trạng thái nghĩa là "đã xác nhận hỏng, bắt tay vào xử lý" */
 const DA_VAO_XUONG = ['repairing', 'warranty', 'sent_to_supplier']
 
-async function khoHuHong(prisma: any, branchId: string | null): Promise<string | null> {
-    const w = await prisma.warehouse.findFirst({
-        where: { type: 'damaged', isActive: true, ...(branchId ? { branchId } : {}) },
-        select: { id: true },
-    }).catch(() => null)
-    if (w?.id) return w.id
-    // Chi nhánh chưa có kho hư hỏng riêng → dùng kho hư hỏng bất kỳ của cửa hàng
-    const bat = await prisma.warehouse.findFirst({
-        where: { type: 'damaged', isActive: true }, select: { id: true },
-    }).catch(() => null)
-    return bat?.id || null
-}
+// khoHuHong đã chuyển sang lib/warehouseHelper.ts (trả hàng cũng dùng) — import ở đầu file.
 
 async function ghiTheKho(
     tx: any, r: any, delta: number, lyDo: string, req: AuthRequest,

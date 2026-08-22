@@ -6,7 +6,7 @@ import { chayTheoDot } from '../lib/poolGuard'
 import { requirePermission } from '../middleware/permissionMiddleware'
 import { nextCode } from '../lib/codeGenerator'
 import { reverseOnlineOrderEffects, isReversalStatus } from '../services/onlineOrderReversal'
-import { adjustSellableStock } from '../lib/warehouseHelper'
+import { adjustSellableStock, updateWarehouseStock, khoHuHong } from '../lib/warehouseHelper'
 import { registryPrisma, mapWithConcurrency } from '../lib/prisma'
 import { computeOrderProfits } from '../lib/onlineOrderProfit'
 import { moTaLoi } from '../lib/gomLoi'
@@ -4018,6 +4018,26 @@ router.put('/returns/:returnId/process', authMiddleware, async (req: AuthRequest
         const { returnId } = req.params
         const { action, reviewNote } = req.body // action: 'approve' | 'reject'
 
+        /**
+         * DUYỆT TRẢ HÀNG PHẢI CHỌN HÀNG ĐI ĐÂU (22/08/2026).
+         *
+         * Trước đây duyệt là CỘNG THẲNG toàn bộ vào kho chính, không hỏi gì — hàng
+         * khách trả về vì hỏng cũng thành hàng bán được, và người bán chỉ phát hiện
+         * khi giao cho khách sau rồi bị trả lần nữa.
+         *
+         *   `xuLyKho`        — { [returnItemId]: 'ban-tiep' | 'hu-hong' } cho từng dòng
+         *   `xuLyKhoMacDinh` — áp cho dòng không khai trong map (mặc định 'ban-tiep',
+         *                      giữ đúng hành vi cũ để lệnh gọi cũ không đổi nghĩa)
+         *
+         * 'ban-tiep' → kho chính +n (hàng bán lại được)
+         * 'hu-hong'  → KHO HƯ HỎNG +n, kho chính KHÔNG đổi.
+         *   Vì sao không trừ kho chính: hàng này đến từ NGOÀI (khách trả về), tồn kho
+         *   chính đã bị trừ lúc bán rồi. Trừ thêm lần nữa là ăn gian tồn — khác hẳn
+         *   `dayVaoKhoHu` bên sửa chữa (món đó đi TỪ kho chính ra).
+         */
+        const xuLyKho: Record<string, string> = (req.body?.xuLyKho && typeof req.body.xuLyKho === 'object') ? req.body.xuLyKho : {}
+        const xuLyMacDinh = req.body?.xuLyKhoMacDinh === 'hu-hong' ? 'hu-hong' : 'ban-tiep'
+
         if (!['approve', 'reject'].includes(action)) {
             res.status(400).json({ success: false, error: 'Action phải là approve hoặc reject' })
             return
@@ -4127,25 +4147,76 @@ router.put('/returns/:returnId/process', authMiddleware, async (req: AuthRequest
             // ── Restore inventory ── mirror sang kho main (adjustSellableStock cần
             // productId): ưu tiên item.productId, fallback resolve theo SKU.
             // Đơn sàn không có branchId → null (kho main null-branch).
+            const branchId = (returnOrder as any).branchId ?? null
+            let khoHuId: string | null | undefined = undefined   // undefined = chưa tra
+            const loiKho: string[] = []
             for (const item of returnOrder.items) {
+                const chon = xuLyKho[item.id] === 'hu-hong' ? 'hu-hong'
+                    : xuLyKho[item.id] === 'ban-tiep' ? 'ban-tiep'
+                    : xuLyMacDinh
                 let productId = item.productId as string | null
                 if (!productId && item.sku) {
                     const p = await prisma.product.findFirst({ where: { sku: item.sku } })
                     productId = p?.id ?? null
                 }
+                let daGhiKho = false
                 if (productId) {
                     try {
-                        await adjustSellableStock(prisma, productId, null, item.quantity)
-                        console.log(`[Return] ✅ Restored ${item.quantity}x ${item.sku || productId}`)
-                    } catch (invErr) {
-                        console.error(`[Return] ⚠️ Failed to restore stock for ${item.sku || productId}:`, invErr)
+                        if (chon === 'ban-tiep') {
+                            await adjustSellableStock(prisma, productId, branchId, item.quantity,
+                                `Trả hàng ${returnOrder.code} — bán tiếp`)
+                        } else {
+                            if (khoHuId === undefined) khoHuId = await khoHuHong(prisma, branchId)
+                            if (!khoHuId) {
+                                /* KHÔNG im lặng bỏ qua: hàng hỏng biến mất khỏi mọi sổ thì
+                                 * không ai biết mình đang giữ bao nhiêu hàng lỗi. */
+                                loiKho.push(`${item.sku || item.productName}: cửa hàng CHƯA có kho hư hỏng — chưa ghi được`)
+                            } else {
+                                await updateWarehouseStock(prisma, khoHuId, productId, item.quantity)
+                            }
+                        }
+                        daGhiKho = chon === 'ban-tiep' || !!khoHuId
+                        if (daGhiKho) {
+                            // Thẻ kho: có dấu + lý do, để sau này lần được hàng đi đâu
+                            await prisma.inventoryTransaction.create({
+                                data: {
+                                    type: 'adjustment',
+                                    productId,
+                                    productName: item.productName,
+                                    productSku: item.sku || '',
+                                    quantity: item.quantity,
+                                    reason: chon === 'ban-tiep'
+                                        ? `Khách trả — bán tiếp (phiếu ${returnOrder.code})`
+                                        : `Khách trả — HƯ HỎNG, vào kho hư hỏng (phiếu ${returnOrder.code})`,
+                                    referenceId: returnOrder.code,
+                                    referenceType: 'return',
+                                    branchId,
+                                    userId: req.user?.userId || null,
+                                    userName: (req as any).user?.name || 'Hệ thống',
+                                },
+                            }).catch(() => { /* thẻ kho hỏng không được giết nghiệp vụ chính */ })
+                        }
+                        console.log(`[Return] ${chon === 'ban-tiep' ? '✅ bán tiếp' : '🛠 hư hỏng'} ${item.quantity}x ${item.sku || productId}`)
+                    } catch (invErr: any) {
+                        console.error(`[Return] ⚠️ Ghi kho hỏng cho ${item.sku || productId}:`, invErr?.message || invErr)
+                        loiKho.push(`${item.sku || item.productName}: ${invErr?.message || 'lỗi ghi kho'}`)
                     }
+                } else {
+                    loiKho.push(`${item.sku || item.productName}: chưa khớp được sản phẩm nào — kho KHÔNG đổi`)
                 }
-                // Mark as restocked
                 await prisma.returnItem.update({
                     where: { id: item.id },
-                    data: { restocked: true },
+                    data: {
+                        restocked: chon === 'ban-tiep' && daGhiKho,
+                        disposed: chon === 'hu-hong' && daGhiKho,
+                        condition: chon,
+                    },
                 })
+            }
+            if (loiKho.length) {
+                /* Gộp vào cảnh báo trả về màn hình. Nuốt ở đây thì người duyệt tưởng
+                 * hàng đã vào kho, trong khi nó không nằm ở sổ nào cả. */
+                platformWarning = [platformWarning, `Kho: ${loiKho.join(' · ')}`].filter(Boolean).join(' | ')
             }
 
             // ── Update original order ──

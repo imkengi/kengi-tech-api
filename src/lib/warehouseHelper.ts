@@ -198,6 +198,26 @@ export async function decrementSellableStock(
     return true
 }
 
+/**
+ * KHO HƯ HỎNG của chi nhánh (type='damaged'). Trả null nếu cửa hàng chưa dựng kho đó.
+ *
+ * Đưa ra lib dùng chung 22/08/2026: trước đây nằm riêng trong routes/repairs.ts, mà
+ * trả hàng cũng cần đúng cái kho ấy. Chép bản thứ hai là cách chắc nhất để hai chỗ
+ * chọn hai kho khác nhau rồi tồn lệch mà không ai biết.
+ */
+export async function khoHuHong(client: AnyPrisma, branchId: string | null): Promise<string | null> {
+    const w = await client.warehouse.findFirst({
+        where: { type: 'damaged', isActive: true, ...(branchId ? { branchId } : {}) },
+        select: { id: true },
+    }).catch(() => null)
+    if (w?.id) return w.id
+    // Chi nhánh chưa có kho hư hỏng riêng → dùng kho hư hỏng bất kỳ của cửa hàng
+    const bat = await client.warehouse.findFirst({
+        where: { type: 'damaged', isActive: true }, select: { id: true },
+    }).catch(() => null)
+    return bat?.id || null
+}
+
 // Upsert a WarehouseStock row, applying a signed delta to its quantity.
 // Positive delta = stock in, negative = stock out. Product name/sku are looked
 // up so the row stays self-describing when first created.
