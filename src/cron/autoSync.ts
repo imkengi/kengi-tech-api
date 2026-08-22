@@ -401,6 +401,99 @@ async function runAutoSync() {
                         } catch { /* bỏ qua, vòng sau vá tiếp */ }
                     }
 
+                    // ── VÁ DẦN NGÀY NHẬN HÀNG (LAZADA) ──────────────────────
+                    // ĐO 22/08/2026: trường trạng thái của Lazada VN ĐÓNG BĂNG ở
+                    // 'confirmed'. Không phải "chưa cập nhật" — hai đơn J&T đã giao
+                    // xong gần một tháng (LZD-530782326931035, LZD-527325447880594)
+                    // vẫn trả status='confirmed' ở CẢ cấp đơn LẪN cấp dòng hàng,
+                    // delivered_at rỗng. Toàn shop 44/52 đơn mang nhãn đó, có đơn từ
+                    // tháng 3. Tài liệu chính chủ còn để "statuses": [] trong ví dụ,
+                    // và 'confirmed' KHÔNG nằm trong bảng trạng thái Lazada công bố.
+                    //
+                    // ⇒ VẬN ĐƠN là nguồn DUY NHẤT còn tiến triển. Mà trước nay chỉ
+                    // lượt đồng bộ TAY mới tra nó — cron này chỉ tra cho Shopee. Nên
+                    // không ai bấm là đơn nằm lì ở tab "Chờ xử lý" vĩnh viễn, kể cả
+                    // khi khách đã nhận hàng. Đúng 5 đơn 01–10/08 kẹt theo đường này.
+                    //
+                    // Rải 30 đơn/kênh mỗi vòng như Shopee, ưu tiên đơn LÂU NHẤT CHƯA
+                    // TRA. Đơn đã có ngày nhận thì loại hẳn — trước đây lượt tay xét
+                    // cả 44 đơn xong rồi, đốt sạch hạn giờ 230s và TIMEOUT trước khi
+                    // tới 5 đơn thật sự cần (thấy "Truncated response body" 07:31:30
+                    // và 07:32:20 ngày 22/08).
+                    if (channel.platform === 'lazada' && channel.accessToken) {
+                        try {
+                            const TRA_DUOC = ['confirmed', 'processing', 'shipping', 'packed', 'repacked',
+                                'ready_to_ship', 'ready_to_ship_pending', 'toship', 'shipped']
+                            const LO = 30
+                            const dem: any[] = await storePrisma.$queryRawUnsafe(
+                                `SELECT COUNT(*)::int AS n FROM "OnlineOrder"
+                                 WHERE "channelId" = $1 AND "deliveredAt" IS NULL
+                                   AND status = ANY($2) AND "externalOrderId" IS NOT NULL`,
+                                channel.id, TRA_DUOC)
+                            const tongCanTra = Number(dem?.[0]?.n) || 0
+                            const canVaLz: any[] = tongCanTra === 0 ? [] : await storePrisma.$queryRawUnsafe(
+                                `SELECT id, "externalOrderId", status FROM "OnlineOrder"
+                                 WHERE "channelId" = $1 AND "deliveredAt" IS NULL
+                                   AND status = ANY($2) AND "externalOrderId" IS NOT NULL
+                                 ORDER BY "syncedAt" ASC NULLS FIRST, "createdAt" ASC
+                                 LIMIT ${LO}`, channel.id, TRA_DUOC)
+                            if (canVaLz.length) {
+                                const svcLz = getPlatformService('lazada', {
+                                    apiKey: channel.apiKey || '', apiSecret: channel.apiSecret || '',
+                                    accessToken: channel.accessToken || undefined,
+                                    refreshToken: channel.refreshToken || undefined,
+                                    shopId: channel.shopId || undefined,
+                                })
+                                let va = 0, loi = 0, chuaGiao = 0
+                                let loiDau = ''
+                                for (const o of canVaLz) {
+                                    const eid = String(o.externalOrderId || '').replace(/^LAZ-/i, '')
+                                    if (!eid) continue
+                                    try {
+                                        const dt = await (svcLz as any).getDeliveredTime?.(eid)
+                                        if (dt) {
+                                            // CHỈ nâng status khi vận đơn có mốc giao thật.
+                                            // externalStatus giữ nguyên nhãn sàn — để nhìn thấy
+                                            // được là sàn vẫn đứng im, đừng che lại.
+                                            await storePrisma.onlineOrder.update({
+                                                where: { id: o.id },
+                                                data: { status: 'delivered', deliveredAt: dt, syncedAt: new Date() },
+                                            })
+                                            va++
+                                        } else {
+                                            // Chưa có sự kiện 1400 → đơn CHƯA giao xong thật.
+                                            // Vẫn đóng dấu syncedAt để vòng sau xoay sang đơn
+                                            // khác, khỏi kẹt mãi vào cùng một nhúm.
+                                            await storePrisma.onlineOrder.update({
+                                                where: { id: o.id }, data: { syncedAt: new Date() },
+                                            })
+                                            chuaGiao++
+                                        }
+                                    } catch (e: any) {
+                                        // Lỗi cấp KÊNH (token/IP whitelist) thì 29 đơn còn lại
+                                        // hỏng y hệt — dừng ngay, đừng đốt hạn mức.
+                                        const m = fmtErr(e)
+                                        if (/từ chối kênh/i.test(m)) { loi++; loiDau = m; break }
+                                        loi++
+                                        if (!loiDau) loiDau = m
+                                        if (loi >= 3) break
+                                    }
+                                    await new Promise(r => setTimeout(r, 200))
+                                }
+                                // KHÔNG im lặng khi còn tồn: nói rõ đã tra bao nhiêu trên tổng,
+                                // kẻo đọc log tưởng đã quét hết (bệnh "đặt trần rồi báo cáo như
+                                // thể không có trần").
+                                const conLai = Math.max(0, tongCanTra - canVaLz.length)
+                                console.log(`[AutoSync] ${store.name}/${channel.name}: vận đơn Lazada` +
+                                    ` — tra ${canVaLz.length}/${tongCanTra} đơn, chốt đã giao ${va},` +
+                                    ` chưa giao ${chuaGiao}, lỗi ${loi}${loiDau ? ` (${loiDau})` : ''}` +
+                                    `${conLai > 0 ? ` — CÒN ${conLai} đơn để vòng sau` : ''}`)
+                            }
+                        } catch (e: any) {
+                            console.error(`[AutoSync] ${store.name}/${channel.name}: vá vận đơn Lazada hỏng:`, fmtErr(e))
+                        }
+                    }
+
                     // Đồng bộ TRẢ HÀNG/HOÀN TIỀN mỗi vòng cron (7 ngày gần nhất).
                     // Shopee KHÔNG có webhook trả hàng → trước đây chỉ cập nhật khi
                     // bấm tay nút trong modal kênh, nên tab Trả hàng đứng im.

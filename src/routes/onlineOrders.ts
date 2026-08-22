@@ -2785,7 +2785,16 @@ router.post('/channels/:id/sync', authMiddleware, async (req: AuthRequest, res: 
                     'unpaid', 'topack', 'toship', 'packed', 'repacked',
                     'ready_to_ship', 'ready_to_ship_pending', 'shipped',
                 ]
-                const lzWhere = { channelId: channel.id, status: { in: NON_TERMINAL }, externalOrderId: { not: null } }
+                // `deliveredAt: null` — ĐO 22/08/2026: 44/52 đơn Lazada đã có ngày nhận
+                // vẫn lọt vào đây (vì 'delivered' nằm trong NON_TERMINAL), mỗi đơn ngốn 2
+                // lượt HTTP. Xếp theo syncedAt/createdAt tăng dần ⇒ quét từ đơn CŨ NHẤT,
+                // đốt sạch hạn giờ 230s vào đám đã xong rồi TIMEOUT trước khi tới mấy đơn
+                // thật sự kẹt ("Truncated response body" lúc 07:31:30 và 07:32:20). Loại
+                // đơn đã có ngày nhận thì ngân sách rơi đúng chỗ cần.
+                // ĐÁNH ĐỔI nói rõ: đơn đã chốt ngày nhận sẽ KHÔNG được xét lại ở đây, nên
+                // một lần trả hàng SAU khi đã giao không bắt được bằng lối này — hiện cũng
+                // chưa lối nào bắt được cho Lazada, cần cơ chế riêng như returns của Shopee.
+                const lzWhere = { channelId: channel.id, status: { in: NON_TERMINAL }, externalOrderId: { not: null }, deliveredAt: null }
                 const LZ_CAP = 120
                 const lzTotal = await prisma.onlineOrder.count({ where: lzWhere })
                 // Xoay vòng theo lâu nhất chưa kiểm tra — cùng lý do như TikTok.
