@@ -206,14 +206,37 @@ export async function decrementSellableStock(
  * chọn hai kho khác nhau rồi tồn lệch mà không ai biết.
  */
 export async function khoHuHong(client: AnyPrisma, branchId: string | null): Promise<string | null> {
-    const w = await client.warehouse.findFirst({
-        where: { type: 'damaged', isActive: true, ...(branchId ? { branchId } : {}) },
-        select: { id: true },
+    /* KHÔNG có chi nhánh (đơn sàn, import) ⇒ quy về CHI NHÁNH CHÍNH — đúng quy ước
+     * của getOrCreateDefaultWarehouse, để online và POS trỏ cùng một kho.
+     *
+     * Vì sao phải làm rõ (đo 22/08/2026, HUTI): mỗi loại kho tồn tại HAI bản — một
+     * gắn CN01, một `branchId = null`. Bản cũ `findFirst` với where thiếu branchId
+     * nên BỐC ĐẠI: lần này vào kho CN01, lần sau vào kho null-branch, tồn bị xé đôi
+     * mà không ai biết. Kho chính của cửa hàng này đã dính đúng bệnh đó: bản CN01
+     * 1.675 mã/128.315 tồn, bản null-branch 1.690 mã/133.012 tồn. */
+    let nb = branchId || null
+    if (!nb) {
+        const chinh = await client.branch
+            .findFirst({ where: { isMainBranch: true }, select: { id: true } })
+            .catch(() => null)
+        nb = chinh?.id ?? null
+    }
+    if (nb) {
+        const w = await client.warehouse.findFirst({
+            where: { type: 'damaged', isActive: true, branchId: nb }, select: { id: true },
+        }).catch(() => null)
+        if (w?.id) return w.id
+    }
+    // Chi nhánh chưa có kho hư hỏng riêng → kho null-branch (bản gieo lúc khởi tạo)
+    const nul = await client.warehouse.findFirst({
+        where: { type: 'damaged', isActive: true, branchId: null }, select: { id: true },
     }).catch(() => null)
-    if (w?.id) return w.id
-    // Chi nhánh chưa có kho hư hỏng riêng → dùng kho hư hỏng bất kỳ của cửa hàng
+    if (nul?.id) return nul.id
+    /* Cuối đường mới lấy bất kỳ — nhưng SẮP THEO createdAt để hai lượt gọi luôn ra
+     * cùng một kho. `findFirst` không thứ tự là nguồn của cảnh xé đôi ở trên. */
     const bat = await client.warehouse.findFirst({
-        where: { type: 'damaged', isActive: true }, select: { id: true },
+        where: { type: 'damaged', isActive: true },
+        orderBy: { createdAt: 'asc' }, select: { id: true },
     }).catch(() => null)
     return bat?.id || null
 }
