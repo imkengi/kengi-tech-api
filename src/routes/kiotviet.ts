@@ -602,7 +602,12 @@ router.get('/imported-summary', async (req: Request, res: Response) => {
                       COUNT(*) FILTER (WHERE DATE("createdAt") = DATE("date"))::int AS dungNgay
                FROM "Expense" WHERE "sourceRef" LIKE 'KV|%'`),
             q(`SELECT COUNT(*)::int AS tong,
-                      COUNT(*) FILTER (WHERE "brandId" IS NOT NULL)::int AS coThuongHieu
+                      COUNT(*) FILTER (WHERE "brandId" IS NOT NULL)::int AS coThuongHieu,
+                      -- ĐO ĐỘ PHỦ NHÓM HÀNG. Không có con số này thì lỗi "hàng cũ không
+                      -- bao giờ được gắn nhóm" không ai thấy: báo cáo doanh thu theo nhóm
+                      -- dồn hết vào "Chưa phân loại" mà đợt đồng bộ vẫn báo success.
+                      -- (HUTI 22/08/2026: 431 SP chưa phân loại = 88% doanh thu.)
+                      COUNT(*) FILTER (WHERE "categoryId" IS NOT NULL)::int AS coNhomHang
                FROM "Product" p
                WHERE EXISTS (SELECT 1 FROM "KiotVietMap" m WHERE m."entity"='product' AND m."localId"=p."id")`),
         ]
