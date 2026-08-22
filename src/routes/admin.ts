@@ -4702,8 +4702,37 @@ router.get('/lazada-raw', async (req: Request, res: Response) => {
         }
 
         const hang = Array.isArray(hangTho?.data) ? hangTho.data : []
+
+        // VẬN ĐƠN — với shop này đây là nguồn DUY NHẤT còn tiến triển: trường trạng
+        // thái của Orders API đóng băng ở "confirmed" kể cả đơn J&T đã giao xong.
+        let vanDon: any = null
+        try {
+            const urlTrace = svc.buildUrl('/logistic/order/trace', { order_id: eid })
+            const traceTho = await svc.httpGet(urlTrace)
+            const modules: any[] = traceTho?.result?.module || traceTho?.data?.module || []
+            const sk: any[] = []
+            for (const m of modules) {
+                for (const pk of (m?.package_detail_info_list || [])) {
+                    for (const e of (pk?.logistic_detail_info_list || [])) sk.push(e)
+                }
+            }
+            vanDon = {
+                code: traceTho?.code,
+                soSuKien: sk.length,
+                suKien: sk.map((e: any) => ({
+                    status_code: e.status_code,
+                    detail_type: e.detail_type,
+                    title: e.title,
+                    event_time: e.event_time ?? e.receive_time,
+                })),
+            }
+        } catch (e: any) {
+            vanDon = { loi: e?.message || String(e) }
+        }
+
         res.json({
             success: true,
+            vanDon,
             kengi: { status: o.status, externalStatus: o.externalStatus, deliveredAt: o.deliveredAt },
             donGet: {
                 code: donThoRaw?.code,
