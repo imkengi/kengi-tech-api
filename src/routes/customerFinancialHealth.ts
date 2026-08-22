@@ -232,12 +232,20 @@ function xepHangNo(duNo: number, ngayNoLauNhat: number | null, traGop: boolean, 
 router.get('/financial-overview', authMiddleware, requirePermission('customers.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma! as any
-        /* Trần 500 / mặc định 300 là quá hẹp: cửa hàng 593 khách thì 293 người KHÔNG BAO
-         * GIỜ được chấm, mà `tong` lại trả về đúng số dòng lấy được nên giao diện không có
-         * cách nào biết đã bị cắt (chủ shop phát hiện 22/08/2026: "593 khách mà chấm có
-         * 300"). Chi phí không tăng theo số khách — vẫn 2 lượt truy vấn, phần tính nằm
-         * trong bộ nhớ — nên nâng trần được. */
-        const limit = Math.min(2000, Math.max(20, Number(req.query.limit) || 1000))
+        /* LẤY HẾT, KHÔNG ĐẶT TRẦN.
+         *
+         * Trần nào cũng là một con số bịa: 300 làm cửa hàng 343 khách mất 43 người, nâng lên
+         * 2000 thì cửa hàng 2001 khách lại mất 1 — và lần nào cũng phải đợi chủ shop phát hiện
+         * rồi báo. Đây là màn hình ĐÁNH GIÁ CÔNG NỢ; bỏ sót một khách nợ nặng là bỏ sót đúng
+         * người cần nhìn nhất.
+         *
+         * Chi phí KHÔNG tăng theo số khách: vẫn đúng 3 lượt truy vấn (đếm + danh sách khách +
+         * đơn hàng), phần chấm điểm chạy trong bộ nhớ.
+         *
+         * Vẫn nhận `?limit=` cho nơi nào chủ động muốn cắt — và khi đó `biCat` sẽ bật để màn
+         * hình nói ra. Không truyền thì lấy hết. */
+        const limitTho = Number(req.query.limit)
+        const limit = Number.isFinite(limitTho) && limitTho > 0 ? Math.max(20, limitTho) : null
         const now = new Date()
         const moc12 = new Date(now.getTime() - 365 * NGAY_MS)
 
@@ -255,7 +263,7 @@ router.get('/financial-overview', authMiddleware, requirePermission('customers.v
             ) m ON m."customerId" = c.id
             WHERE c.debt > 0 OR m."customerId" IS NOT NULL
             ORDER BY c.debt DESC, COALESCE(m."tongMua",0) DESC
-            LIMIT ${limit}
+            ${limit ? `LIMIT ${limit}` : ''}
         `, moc12)
 
         /* ĐẾM TỔNG THẬT (trước LIMIT). Không có con số này thì việc bị cắt là VÔ HÌNH:
