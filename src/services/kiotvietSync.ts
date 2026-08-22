@@ -344,6 +344,18 @@ async function saveMap(sp: any, entity: string, kvId: string | number, kvCode: s
  */
 const DRYRUN_CATEGORY = '__CHAY_THU_SE_TAO_NHOM__'
 
+/** Id của nhóm tạm "Chưa phân loại" (do luồng nhập liệu khác tạo). null nếu chưa có.
+ *  Tra một lần rồi nhớ trong cache — vòng lặp hàng hoá chạy hàng nghìn lượt, pool prod = 1. */
+async function idNhomTam(sp: any, cache: Map<string, string>): Promise<string | null> {
+    const dem = '#nhomtam'
+    if (cache.has(dem)) return cache.get(dem) || null
+    const c = await sp.category
+        .findFirst({ where: { name: { equals: 'Chưa phân loại', mode: 'insensitive' } }, select: { id: true } })
+        .catch(() => null)
+    cache.set(dem, c?.id || '')
+    return c?.id || null
+}
+
 /**
  * Lấy/tạo Category cho một mặt hàng KiotViet. Có bộ nhớ đệm trong một đợt đồng bộ.
  *
@@ -493,6 +505,21 @@ export async function syncProducts(sp: any, items: any[], opts: SyncOptions, c: 
                 if (brandName && (!existing.brandId || opts.overwriteNames)) {
                     const bId = await resolveBrand(sp, brandName, brandCache, opts.apply)
                     if (bId && bId !== existing.brandId) data.brandId = bId
+                }
+
+                /* DANH MỤC — nhánh CẬP NHẬT trước đây KHÔNG hề gán, chỉ nhánh tạo mới có.
+                 * Hệ quả: hàng đã có sẵn trong Kengi thì đồng bộ bao nhiêu lần cũng vẫn
+                 * "Chưa phân loại". Đo HUTI 22/08/2026: 431 sản phẩm chưa phân loại,
+                 * chiếm 88% doanh thu — báo cáo theo nhóm hàng gần như vô dụng.
+                 *
+                 * CHỈ ĐIỀN KHI TRỐNG, hoặc khi đang nằm ở nhóm tạm "Chưa phân loại"
+                 * (nhóm đó là chỗ đổ khi chưa biết xếp đâu, KHÔNG phải cách xếp của người
+                 * dùng). Cách xếp thật của người dùng thì không đụng vào. */
+                if (!existing.categoryId || existing.categoryId === (await idNhomTam(sp, catCache))) {
+                    const cId = await resolveCategory(
+                        sp, kv?.categoryName, opts.defaultCategoryId, catCache, opts.apply, kv?.categoryId,
+                    )
+                    if (cId && cId !== existing.categoryId && cId !== DRYRUN_CATEGORY) data.categoryId = cId
                 }
 
                 // Thiếu ≠ 0 (cùng bài công nợ 18/08/2026): bản ghi KHÔNG mang `inventories` thì
