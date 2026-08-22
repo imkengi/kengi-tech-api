@@ -24,16 +24,35 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
+      # ĐÓNG DẤU GIT — trước 22/08/2026 bước này KHÔNG truyền _GIT_SHA, nên cloudbuild.yaml
+      # rơi về mặc định "khong-ro". Mà lượt build của CI luôn về SAU lượt deploy tay vài giây
+      # (cùng do `git push` khởi động) nên nó luôn giành traffic ⇒ /api/health LUÔN báo
+      # "khong-ro", và cả cơ chế dấu ấn dựng sau sự cố 20/08 chưa từng dùng được lần nào.
       - name: Submit Cloud Build
         run: |
-          gcloud builds submit --config cloudbuild.yaml --project kengi-tech .
+          SHA="${GITHUB_SHA::7}"
+          echo "Deploy commit $SHA"
+          gcloud builds submit --config cloudbuild.yaml --project kengi-tech \
+            --substitutions=_GIT_SHA="$SHA",_GIT_TRANG_THAI=ci .
 
-      - name: Verify deployment
+      # XÁC MINH BẰNG DẤU ẤN, KHÔNG BẰNG HTTP 200.
+      # Bản cũ chỉ `sleep 10` rồi xem có 200 không — một revision CŨ cũng trả 200, nên bước đó
+      # không chứng minh được gì (đúng cái bẫy đã ghi trong deploy.md cho FE). Nay so đúng commit,
+      # và SAI thì HỎNG job chứ không "Warning" rồi bỏ qua.
+      - name: Verify serving commit
         run: |
-          sleep 10
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://kengi-tech-api-445765742612.asia-southeast1.run.app/api/health" -m 15)
-          if [ "$STATUS" = "200" ]; then
-            echo "Deployment verified - API is healthy"
-          else
-            echo "Warning: Health check returned HTTP $STATUS"
-          fi
+          SHA="${GITHUB_SHA::7}"
+          URL="https://kengi-tech-api-445765742612.asia-southeast1.run.app/api/health"
+          for i in $(seq 1 20); do
+            BODY=$(curl -s -m 15 "$URL" || true)
+            GOT=$(echo "$BODY" | python3 -c "import sys,json;print((json.load(sys.stdin).get('build') or {}).get('sha',''))" 2>/dev/null || echo "")
+            if [ "$GOT" = "$SHA" ]; then
+              echo "OK — prod dang chay commit $GOT"
+              exit 0
+            fi
+            echo "  lan $i: prod dang bao '$GOT', cho '$SHA'…"
+            sleep 6
+          done
+          echo "::error::Prod KHONG chay commit $SHA sau 2 phut (dang bao '$GOT')."
+          echo "Kha nang: traffic bi ghim vao revision co ten, hoac mot luot deploy khac de len."
+          exit 1
