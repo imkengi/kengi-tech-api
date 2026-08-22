@@ -43,6 +43,65 @@ interface DongTx {
     coChiu: boolean // có payment credit
 }
 
+/**
+ * TIỀN ĐÃ THU + CỜ BÁN CHỊU của từng phiếu — dùng CHUNG cho cả danh sách lẫn chi tiết.
+ *
+ * Sửa 22/08/2026, hai lỗi nằm cùng một chỗ:
+ *
+ * 1. `daThu` trước đây CHỈ cộng bảng `Payment`, bỏ hẳn `Transaction.amountReceived`.
+ *    Mà route bán hàng chỉ ghi Payment KHI client gửi kèm mảng `payments`
+ *    ("Only add payments if provided" — transactions.ts). Phiếu POS khách trả đủ
+ *    tiền mà không gửi mảng đó thì trông như CHƯA TRẢ ĐỒNG NÀO. Triệu chứng đã
+ *    hiện ngay trên màn hình: khách Đào Xuân Nghiêm sổ nợ 351.982.900đ nhưng
+ *    "999.224.582đ theo phiếu" — lệch 2,8 lần.
+ *    ⇒ Lấy số LỚN HƠN giữa hai nguồn. Đừng tin một nguồn khi nguồn kia có thể
+ *      đầy đủ hơn; thà ước lượng đã thu NHIỀU hơn còn hơn tố oan khách đang nợ.
+ *
+ * 2. `coChiu` trước đây = "đơn có Payment kiểu 'credit'". Liệt kê MỌI chỗ tạo
+ *    Payment trong mã nguồn thì KHÔNG đường bán nào tạo dòng đó — nó chỉ sinh ra
+ *    khi HUỶ phiếu thu (customers.ts:966). Nên cờ này gần như luôn false:
+ *      · cột "Đơn chịu" báo 0 (0%) ở MỌI tháng, kể cả tháng nợ phát sinh 100%
+ *      · thành phần chấm điểm "Mua chịu trong kỳ" tặng không 25/25 cho mọi khách
+ *        — kể cả khách đang nợ 352tr, đẩy điểm lên 82/100 hạng A "Rất tốt"
+ *    Và hai cột CẠNH NHAU trong cùng bảng dùng hai cơ sở khác nhau: cột tiền
+ *    `total - daThu` (đúng), cột đếm dùng cờ mù.
+ *    ⇒ Đơn chịu = đơn CHƯA TRẢ ĐỦ, đúng cơ sở với cột tiền bên cạnh. Cờ Payment
+ *      'credit' giữ lại làm tín hiệu phụ cho dữ liệu cũ.
+ *
+ * Khách trả gộp (`traGop`) vẫn được miễn ở khâu chấm điểm như cũ — `chamDiem` ép
+ * tiLeMuaChiu về 0 khi traGop, nên bản vá này không phạt oan họ.
+ */
+async function gomThanhToan(
+    prisma: any,
+    txs: { id: string; total: any; amountReceived?: any }[],
+): Promise<Map<string, { daThu: number; coChiu: boolean }>> {
+    const ket = new Map<string, { daThu: number; coChiu: boolean }>()
+    if (!txs.length) return ket
+    const rows: any[] = await prisma.payment.groupBy({
+        by: ['transactionId', 'type'],
+        where: { transactionId: { in: txs.map(t => t.id) } },
+        _sum: { amount: true },
+    })
+    const thuTheoPhieu = new Map<string, number>()
+    const coCredit = new Set<string>()
+    for (const r of rows) {
+        if (r.type === 'credit') { if ((r._sum?.amount ?? 0) > 0) coCredit.add(r.transactionId) }
+        else thuTheoPhieu.set(r.transactionId, (thuTheoPhieu.get(r.transactionId) ?? 0) + (r._sum?.amount ?? 0))
+    }
+    for (const t of txs) {
+        const total = Number(t.total) || 0
+        const daThu = Math.max(thuTheoPhieu.get(t.id) ?? 0, Number(t.amountReceived) || 0)
+        ket.set(t.id, {
+            daThu,
+            // CHỈ là tín hiệu phụ cho dữ liệu cũ. Cờ THẬT được đặt sau khi chia FIFO
+            // (xem chiaNoFifo) — vì "chưa trả đủ" KHÔNG đồng nghĩa "mua chịu": khách
+            // trả gộp thì phiếu nào cũng treo dù họ không nợ đồng nào.
+            coChiu: coCredit.has(t.id),
+        })
+    }
+    return ket
+}
+
 /** Nạp toàn bộ đơn (completed/partial) + tiền đã thu của MỘT khách — 2 truy vấn. */
 async function napDonKhach(prisma: any, custId: string, name: string | null, phone: string | null): Promise<DongTx[]> {
     // Cùng luật match với buildDebtHistory: ưu tiên customerId, fallback
@@ -52,28 +111,16 @@ async function napDonKhach(prisma: any, custId: string, name: string | null, pho
     if (phone) or.push({ customerId: null, customerPhone: phone })
     const txs = await prisma.transaction.findMany({
         where: { OR: or, status: { in: ['completed', 'partial'] } },
-        select: { id: true, receiptNumber: true, total: true, createdAt: true },
+        select: { id: true, receiptNumber: true, total: true, createdAt: true, amountReceived: true },
         orderBy: { createdAt: 'asc' },
     })
     if (txs.length === 0) return []
-    const ids = txs.map((t: any) => t.id)
-    // GROUP BY một lần thay vì include payments từng đơn
-    const rows: any[] = await prisma.payment.groupBy({
-        by: ['transactionId', 'type'],
-        where: { transactionId: { in: ids } },
-        _sum: { amount: true },
-    })
-    const daThu = new Map<string, number>()
-    const coChiu = new Set<string>()
-    for (const r of rows) {
-        if (r.type === 'credit') { if ((r._sum?.amount ?? 0) > 0) coChiu.add(r.transactionId) }
-        else daThu.set(r.transactionId, (daThu.get(r.transactionId) ?? 0) + (r._sum?.amount ?? 0))
-    }
+    const tt = await gomThanhToan(prisma, txs)
     return txs.map((t: any) => ({
         id: t.id, receiptNumber: t.receiptNumber, total: Number(t.total) || 0,
         createdAt: new Date(t.createdAt),
-        daThu: daThu.get(t.id) ?? 0,
-        coChiu: coChiu.has(t.id),
+        daThu: tt.get(t.id)?.daThu ?? 0,
+        coChiu: tt.get(t.id)?.coChiu ?? false,
     }))
 }
 
@@ -107,6 +154,10 @@ function chiaNoFifo(txs: DongTx[], duNoSo: number, now: Date) {
     bac.b0_30 = Math.round(bac.b0_30); bac.b31_60 = Math.round(bac.b31_60)
     bac.b61_90 = Math.round(bac.b61_90); bac.tren90 = Math.round(bac.tren90)
     return {
+        /** Phiếu ĐƯỢC CHIA nợ từ số dư SỔ — tức phiếu thật sự còn nợ. Dùng làm cờ
+         *  "đơn chịu": neo vào sổ (nguồn sự thật) nên khách trả gộp không bị buộc
+         *  tội oan, và khách hết nợ thì không phiếu nào bị đánh dấu. */
+        idConNo: new Set(phu.map(x => x.t.id)),
         soPhieuTreo: treo.length,
         tienTreoTheoPhieu: Math.round(tienTreoTheoPhieu),
         ngayNoLauNhat: cuNhat ? tuoiNgay(cuNhat.createdAt, now) : null,
@@ -211,7 +262,7 @@ function chamDiem(opts: {
             { ma: 'ganh-no', ten: 'Gánh nợ', diem: dGanh, toiDa: 25, giaiThich: traGop ? 'Sổ không nợ (phiếu treo là trả gộp)' : duNo <= 0 ? 'Không nợ theo sổ' : `Nợ bằng ${Math.round(rNo * 100)}% tổng mua 12 tháng (≥50% là 0đ)` },
             { ma: 'tuoi-no', ten: 'Tuổi nợ', diem: dTuoi, toiDa: 25, giaiThich: traGop || duNo <= 0 ? 'Không có nợ để tính tuổi' : ngayNoLauNhat === null ? 'Nợ ngoài phiếu — không rõ tuổi, coi như già' : `Phiếu nợ cũ nhất ${ngayNoLauNhat} ngày (90 ngày là 0đ)` },
             { ma: 'xu-huong', ten: 'Xu hướng & nhịp', diem: dXu, toiDa: 25, giaiThich: (tangTruongTien === null ? 'Chưa đủ 3 tháng trước để so' : `Tiền mua 3 tháng gần ${tangTruongTien >= 0 ? '+' : ''}${Math.round(tangTruongTien * 100)}% so với 3 tháng trước`) + (dangImLau ? ' · đang IM LÂU (−7đ)' : '') },
-            { ma: 'mua-chiu', ten: 'Mua chịu trong kỳ', diem: dChiu, toiDa: 25, giaiThich: traGop ? 'Trả gộp — không tính mua chịu' : `${Math.round(tiLeMuaChiu12 * 100)}% đơn 12 tháng là mua chịu (≥60% là 0đ)` },
+            { ma: 'mua-chiu', ten: 'Mua chịu trong kỳ', diem: dChiu, toiDa: 25, giaiThich: traGop ? 'Trả gộp — không tính mua chịu' : `${Math.round(tiLeMuaChiu12 * 100)}% đơn 12 tháng còn nợ theo sổ (≥60% là 0đ)` },
         ],
     }
 }
@@ -291,23 +342,13 @@ router.get('/financial-overview', authMiddleware, requirePermission('customers.v
         // 2) Toàn bộ đơn 12 tháng của các khách đó (một lần) + payment gộp
         const txs: any[] = await prisma.transaction.findMany({
             where: { customerId: { in: ids }, status: { in: ['completed', 'partial'] }, createdAt: { gte: moc12 } },
-            select: { id: true, customerId: true, receiptNumber: true, total: true, createdAt: true },
+            select: { id: true, customerId: true, receiptNumber: true, total: true, createdAt: true, amountReceived: true },
             orderBy: { createdAt: 'asc' },
         })
-        const payRows: any[] = txs.length ? await prisma.payment.groupBy({
-            by: ['transactionId', 'type'],
-            where: { transactionId: { in: txs.map(t => t.id) } },
-            _sum: { amount: true },
-        }) : []
-        const daThu = new Map<string, number>()
-        const coChiu = new Set<string>()
-        for (const r of payRows) {
-            if (r.type === 'credit') { if ((r._sum?.amount ?? 0) > 0) coChiu.add(r.transactionId) }
-            else daThu.set(r.transactionId, (daThu.get(r.transactionId) ?? 0) + (r._sum?.amount ?? 0))
-        }
+        const tt = await gomThanhToan(prisma, txs)
         const theoKhach = new Map<string, DongTx[]>()
         for (const t of txs) {
-            const d: DongTx = { id: t.id, receiptNumber: t.receiptNumber, total: Number(t.total) || 0, createdAt: new Date(t.createdAt), daThu: daThu.get(t.id) ?? 0, coChiu: coChiu.has(t.id) }
+            const d: DongTx = { id: t.id, receiptNumber: t.receiptNumber, total: Number(t.total) || 0, createdAt: new Date(t.createdAt), daThu: tt.get(t.id)?.daThu ?? 0, coChiu: tt.get(t.id)?.coChiu ?? false }
             const arr = theoKhach.get(t.customerId) ?? []
             arr.push(d); theoKhach.set(t.customerId, arr)
         }
@@ -316,6 +357,9 @@ router.get('/financial-overview', authMiddleware, requirePermission('customers.v
             const ds = theoKhach.get(k.id) ?? []
             const duNo = Math.round(Number(k.debt) || 0)
             const fifo = chiaNoFifo(ds, duNo, now)
+            // Cờ "đơn chịu" đặt SAU khi chia FIFO: phiếu được chia nợ từ SỔ mới là
+            // phiếu thật sự còn nợ. Xem ghi chú ở gomThanhToan/chiaNoFifo.
+            for (const t of ds) if (fifo.idConNo.has(t.id)) t.coChiu = true
             const traGop = duNo <= 0 && fifo.soPhieuTreo > 0
             const mr = tinhMoRong(ds, now)
             const thangCo = new Set(ds.map(t => vnYm(t.createdAt))).size
@@ -387,6 +431,9 @@ router.get('/:id/financial-health', authMiddleware, requirePermission('customers
         // Kỳ đang xem (12/6/0=tất cả) — chỉ ảnh hưởng bảng tháng + tổng hợp kỳ
         const mocKy = soThangKy === 0 ? null : new Date(now.getTime() - soThangKy * 30.44 * NGAY_MS)
         const dsKy = mocKy ? tatCa.filter(t => t.createdAt >= mocKy) : tatCa
+
+        // FIFO chạy TRƯỚC bảng tháng: cờ "đơn chịu" lấy từ phiếu được chia nợ theo SỔ.
+        for (const t of tatCa) if (fifo.idConNo.has(t.id)) t.coChiu = true
 
         // Theo tháng (VN +7)
         const thangMap = new Map<string, { soDon: number; tienMua: number; soDonChiu: number; tienNo: number }>()
