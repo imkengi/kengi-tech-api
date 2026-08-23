@@ -101,7 +101,10 @@ export const CreateCustomerSchema = z.object({
     birthday: z.string().optional().nullable(),
     gender: z.enum(['male', 'female', 'other']).optional().nullable(),
     code: z.string().optional().nullable(),
-    debt: z.number().min(0).default(0),
+    /* CÔNG NỢ KHÁCH — CHO PHÉP ÂM, cùng lý do với `payable` của NCC: âm = khách đã
+     * trả dư, mình đang giữ tiền của họ. HUTI đang có 1 khách như vậy (−1.760.001)
+     * và trước bản vá này thì hồ sơ đó không sửa được bất cứ trường nào. */
+    debt: z.number().default(0),
     loyaltyPoints: z.number().int().min(0).default(0),
 }).passthrough()
 
@@ -161,7 +164,15 @@ export const CreateSupplierSchema = z.object({
     paymentTermMonthOffset: z.number().int().min(0).max(12).optional().nullable(),
     notes: z.string().max(1000).optional().nullable(),
     note: z.string().max(1000).optional().nullable(),
-    payable: z.number().min(0).optional().default(0),
+    /* CÔNG NỢ ĐẦU KỲ — CHO PHÉP ÂM (sửa 23/08/2026).
+     * Âm = mình đã TRẢ DƯ cho nhà cung cấp, tức họ đang nợ lại mình. Đó là tình
+     * huống kế toán có thật, và dữ liệu ĐANG CÓ: 12/54 NCC của HUTI đang âm
+     * (Sunhouse −60.670.621, HLA THUẬT HY −60.585.000, Casper −33.481.481…).
+     * `min(0)` cũ tạo ra cái bẫy độc: bản ghi HỢP LỆ trong DB nhưng KHÔNG SỬA
+     * ĐƯỢC qua API — biểu mẫu gửi lại nguyên `payable` đang có, Zod chặn 400, nên
+     * đổi tên hay số điện thoại cũng không lưu nổi. Đúng lỗi "sửa NCC xong không
+     * lưu" mà chủ shop báo. */
+    payable: z.number().optional().default(0),
     status: z.enum(['active', 'inactive']).default('active'),
 })
 
