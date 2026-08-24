@@ -1570,6 +1570,18 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 await (sp as any).$executeRawUnsafe(`DROP INDEX IF EXISTS "OnlineOrder_online_receipt_idx"`)
 
                 // Repair ↔ hoá đơn bán + nối khách theo id (2026-08-13)
+                /* IMEI / số máy (24/08/2026) — mã nhận dạng thiết bị, tra phiếu bằng số này.
+                 *
+                 * ⚠ BÀI HỌC PHẢI GHI LẠI: `/admin/migrate` KHÔNG đọc schema Prisma. Nó là
+                 * DANH SÁCH CÂU LỆNH ALTER VIẾT TAY ngay tại đây. Thêm trường vào
+                 * `schema-store.prisma` rồi gọi migrate thì nó chạy xong danh sách CŨ và báo
+                 * "OK" cho mọi cửa hàng — trong khi cột mới CHƯA HỀ được tạo. Mà client Prisma
+                 * lúc đó ĐÃ biết trường mới, nên mọi `findMany` trên bảng đó ném P2022 và cả
+                 * trang chết. Đã dính đúng vậy: thêm `imei`, migrate báo OK 8/8 cửa hàng, rồi
+                 * `GET /api/repairs` 500 sạch, trang Sửa Chữa trắng.
+                 * ⇒ ĐỔI SCHEMA THÌ PHẢI THÊM MỘT DÒNG ALTER Ở ĐÂY. */
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "imei" TEXT`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Repair_imei_idx" ON "Repair"("imei")`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "customerId" TEXT`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "transactionId" TEXT`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Repair" ADD COLUMN IF NOT EXISTS "soldReceiptNumber" TEXT`)
