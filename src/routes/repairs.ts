@@ -146,7 +146,9 @@ router.get('/', authMiddleware, requirePermission('repairs.view'), async (req: A
         if (transactionId) where.transactionId = String(transactionId)
         if (search) {
             const q = String(search)
-            where.OR = [{ productName: { contains: q, mode: 'insensitive' } }, { customerName: { contains: q, mode: 'insensitive' } }, { code: { contains: q, mode: 'insensitive' } }]
+            /* Thêm IMEI vào ô tìm (23/08/2026): khách cầm máy tới thường chỉ đọc được
+             * số máy, không nhớ mã phiếu — không tra được bằng IMEI thì cột đó vô dụng. */
+            where.OR = [{ productName: { contains: q, mode: 'insensitive' } }, { customerName: { contains: q, mode: 'insensitive' } }, { code: { contains: q, mode: 'insensitive' } }, { imei: { contains: q, mode: 'insensitive' } }]
         }
         const data = await prisma.repair.findMany({ where, orderBy: { createdAt: 'desc' } })
         res.json({ success: true, data })
@@ -194,7 +196,7 @@ router.post('/', authMiddleware, requirePermission('repairs.create'), validate(C
     try {
         const prisma = req.storePrisma!
         const { productName, customerName, customerPhone, issue, cost, estimatedDate, notes,
-            source, productId, quantity, customerId } = req.body
+            source, productId, quantity, customerId, imei } = req.body
         if (!productName?.trim() || !issue?.trim()) return res.status(400).json({ success: false, error: 'Tên thiết bị và mô tả sự cố không được để trống' })
 
         const nguon = source === 'internal' ? 'internal' : 'customer'
@@ -222,6 +224,9 @@ router.post('/', authMiddleware, requirePermission('repairs.create'), validate(C
         const data = await prisma.repair.create({
             data: {
                 code, productName, customerName: customerName || '', customerPhone, issue,
+                /* Cắt khoảng trắng và bỏ chuỗi rỗng: người ta hay bấm vào ô IMEI rồi
+                 * bỏ đi, để nguyên '' thì tra cứu về sau khớp lung tung. */
+                imei: (typeof imei === 'string' && imei.trim()) ? imei.trim() : null,
                 cost: Number(cost) || 0,
                 estimatedDate: estimatedDate ? new Date(estimatedDate) : null,
                 notes,
@@ -285,7 +290,7 @@ router.put('/:id', authMiddleware, requirePermission('repairs.edit'), validate(U
         }
         const { status, cost, notes, completedDate, productId, quantity, source,
             customerId, customerName, customerPhone, transactionId, soldReceiptNumber,
-            supplierId, supplierName, supplierBatchCode, queuedForSupplier } = req.body
+            supplierId, supplierName, supplierBatchCode, queuedForSupplier, imei } = req.body
         const data: any = {}
         if (status) data.status = status
         if (cost !== undefined) data.cost = Number(cost)
@@ -296,6 +301,10 @@ router.put('/:id', authMiddleware, requirePermission('repairs.edit'), validate(U
         // auto-gắn hoá đơn nên phải nhận thật (13/08/2026).
         if (customerName !== undefined) data.customerName = String(customerName ?? '')
         if (customerPhone !== undefined) data.customerPhone = customerPhone || null
+        /* IMEI sửa được cả sau khi tạo: lúc nhận máy nhân viên hay ghi vội, số máy
+         * thường phải mở máy ra mới đọc được. Chuỗi rỗng ⇒ null, đừng lưu '' rồi
+         * để tra cứu khớp bậy. */
+        if (imei !== undefined) data.imei = (typeof imei === 'string' && imei.trim()) ? imei.trim() : null
         /**
          * GỬI NCC (19/08/2026): chọn NCC lúc chuyển 'Trả về NCC', nhiều phiếu
          * gửi cùng lượt chung một mã lô để in MỘT phiếu bàn giao. NCC/lô ghi

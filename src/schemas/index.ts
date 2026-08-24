@@ -195,6 +195,10 @@ export const CreateRepairSchema = z.object({
     customerName: z.string().max(200).optional().nullable(),
     customerPhone: z.string().max(50).optional().nullable(),
     issue: z.string().min(1, 'Mô tả sự cố không được để trống').max(1000),
+    /* IMEI / số máy. KHÔNG ép đúng 15 số: điện thoại thì 15, nhưng phiếu này còn
+     * nhận nồi cơm, bàn là, máy xay — mã máy của chúng dài ngắn khác nhau. Chỉ chặn
+     * rác quá dài. */
+    imei: z.string().max(64).optional().nullable(),
     cost: z.number().min(0).optional().nullable(),
     estimatedDate: z.string().optional().nullable(),
     notes: z.string().max(5000).optional().nullable(),

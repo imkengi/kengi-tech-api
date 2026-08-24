@@ -698,6 +698,10 @@ model Repair {
   source     String  @default("customer")
   productId  String? // bắt buộc khi source = internal, và khi muốn đổi mới
   productSku String?
+  /// IMEI / số máy — mã nhận dạng THIẾT BỊ, khách đọc số này để tra phiếu.
+  /// Cột riêng chứ không nhét vào JSON `notes`: nhét vào đó thì không tra được,
+  /// mà tra cứu chính là việc duy nhất người ta cần tới IMEI.
+  imei       String?
   quantity   Int     @default(1)
   branchId   String? // quyết định lấy kho chính / kho hư hỏng của chi nhánh nào
 
@@ -734,6 +738,7 @@ model Repair {
   @@index([status])
   @@index([source])
   @@index([productId])
+  @@index([imei])
 }
 
 // ─── Quotations ────────────────────────────────────────────────────────────────
