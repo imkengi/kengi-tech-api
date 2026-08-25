@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken'
 import { errMsg } from '../lib/errorResponse'
 import { registryPrisma, getStorePrisma, dropStoreSchema, mapWithConcurrency, syncBranchSchemaTables, dangGiuClient, traClient } from '../lib/prisma'
 import { chayTheoDot } from '../lib/poolGuard'
+import { khoHuHong } from '../lib/warehouseHelper'
 import { invalidateStoreStatus } from '../lib/storeStatusCache'
 
 const router = Router()
@@ -1129,6 +1130,182 @@ router.post('/gop-kho-chinh', async (req: Request, res: Response) => {
         res.json({ success: true, cheDo: apply ? 'ĐÃ ÁP DỤNG' : 'CHẠY THỬ — không đụng dữ liệu', ketQua })
     } catch (err: any) {
         console.error('[admin] gop-kho-chinh:', err?.message)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
+// ─── POST /admin/kho-hu-hong-soat ────────────────────────────────────────────
+/**
+ * SOÁT + CHỮA KHO HƯ HỎNG ÂM (đo HUTI 25/08/2026: kho hư hỏng CN01 âm −535 ở 11 mã).
+ *
+ * Vì sao âm được: các luồng sửa chữa cộng/trừ kho hư hỏng THEO CẶP (đẩy vào +n,
+ * nhận về −n), nhưng hai thời kỳ làm vế cộng rơi mất chỗ:
+ *   1. TRƯỚC 06/08 (chưa seed kho): `if (khoHu)` bỏ qua vế cộng; sau đó kho ra
+ *      đời, vế trừ chạy thật → âm.
+ *   2. TRƯỚC 22/08 (khoHuHong "bốc đại"): vế cộng vào kho này, vế trừ vào kho kia.
+ *
+ * May là số ĐÚNG tính lại được từ chứng từ gốc, không phải đoán:
+ *   đúng = Σ phiếu sửa ĐANG GIỮ hàng (stockMovedAt/replacedStockAt, chưa supplierReturned)
+ *        + Σ trả hàng HƯ HỎNG (InventoryTransaction referenceType='return', reason chứa 'HƯ HỎNG')
+ *        + Σ chuyển kho completed VÀO damaged − Σ chuyển RA
+ * (ba nguồn GHI THẲNG WarehouseStock, không đi qua nhau → cộng không đếm trùng)
+ *
+ * apply: đặt kho hư hỏng CHÍNH THỨC (theo resolver khoHuHong) := số tính được,
+ * xoá dòng của các kho hư hỏng khác (bản sao thời bốc đại) rồi tắt chúng.
+ * Tính ra vẫn âm ⇒ đề xuất 0 + cờ 'am-sau-tinh' (chứng từ cổ hơn cả dữ liệu).
+ * KHÔNG đụng Product.stock — kho hư hỏng nằm ngoài tồn bán được.
+ *
+ * Body: { storeCode?, apply?: true } — mặc định CHỈ BÁO CÁO.
+ */
+router.post('/kho-hu-hong-soat', async (req: Request, res: Response) => {
+    try {
+        const { storeCode, apply } = req.body || {}
+        const stores = await prisma.store.findMany({
+            where: storeCode
+                ? { code: { equals: String(storeCode), mode: 'insensitive' } }
+                : { status: 'active' },
+        })
+        if (!stores.length) return res.status(404).json({ success: false, error: 'Không tìm thấy store' })
+
+        const ketQua: any[] = []
+        for (const store of stores) {
+            const sp: any = getStorePrisma(store.schema)
+            try {
+                const khoHu = await sp.warehouse.findMany({
+                    where: { type: 'damaged' },
+                    select: { id: true, code: true, branchId: true, isActive: true, isDefault: true },
+                })
+                if (!khoHu.length) { ketQua.push({ store: store.code, ok: 'Chưa có kho hư hỏng' }); continue }
+                const theoNhanh = khoHu.filter((w: any) => w.branchId)
+                if (theoNhanh.length > 1) {
+                    ketQua.push({ store: store.code, boQua: `Có ${theoNhanh.length} kho hư hỏng theo chi nhánh — đa chi nhánh, xử tay` })
+                    continue
+                }
+                // Kho đích = đúng kho mà resolver khoHuHong của mọi luồng đang trả
+                const khoDichId = await khoHuHong(sp, null)
+                const khoDich = khoHu.find((w: any) => w.id === khoDichId) || null
+                if (!khoDich) { ketQua.push({ store: store.code, boQua: 'Resolver không trả kho hư hỏng đang hoạt động' }); continue }
+                const idKhoHu = khoHu.map((w: any) => w.id)
+
+                // ── Ba nguồn chứng từ (tuần tự — PROD POOL 1) ──
+                const dangGiu = await sp.repair.findMany({
+                    where: {
+                        productId: { not: null }, supplierReturnedAt: null,
+                        OR: [{ stockMovedAt: { not: null } }, { replacedStockAt: { not: null } }],
+                    },
+                    select: { productId: true, quantity: true, code: true },
+                }).catch(() => [])
+                const traHang = await sp.inventoryTransaction.findMany({
+                    where: { referenceType: 'return', reason: { contains: 'HƯ HỎNG' } },
+                    select: { productId: true, quantity: true },
+                }).catch(() => [])
+                const chuyen = await sp.stockTransfer.findMany({
+                    where: {
+                        status: 'completed',
+                        OR: [{ toWarehouseId: { in: idKhoHu } }, { fromWarehouseId: { in: idKhoHu } }],
+                    },
+                    select: { toWarehouseId: true, fromWarehouseId: true, items: { select: { productId: true, quantity: true } } },
+                }).catch(() => [])
+                const dongHu = await sp.warehouseStock.findMany({
+                    where: { warehouseId: { in: idKhoHu } },
+                    select: { warehouseId: true, productId: true, productSku: true, productName: true, quantity: true },
+                })
+
+                // ── Tính số đúng theo sản phẩm ──
+                const tinh = new Map<string, { suaChua: number; traHang: number; chuyenKho: number; phieu: string[] }>()
+                const lay = (pid: string) => {
+                    let t = tinh.get(pid)
+                    if (!t) { t = { suaChua: 0, traHang: 0, chuyenKho: 0, phieu: [] }; tinh.set(pid, t) }
+                    return t
+                }
+                for (const r of dangGiu) {
+                    const t = lay(String(r.productId))
+                    t.suaChua += Math.max(1, Number(r.quantity) || 1)
+                    if (t.phieu.length < 4) t.phieu.push(r.code)
+                }
+                for (const r of traHang) lay(String(r.productId)).traHang += Number(r.quantity) || 0
+                for (const c of chuyen) {
+                    const vao = c.toWarehouseId && idKhoHu.includes(c.toWarehouseId)
+                    for (const it of c.items || []) {
+                        lay(String(it.productId)).chuyenKho += (vao ? 1 : -1) * (Number(it.quantity) || 0)
+                    }
+                }
+
+                // Tập soát = mọi mã có dòng ≠ 0 ở bất kỳ kho hư hỏng nào ∪ mọi mã tính ra ≠ 0
+                const hienCo = new Map<string, { sku: string; ten: string; tong: number }>()
+                for (const d of dongHu) {
+                    const cur = hienCo.get(String(d.productId)) || { sku: d.productSku || '', ten: d.productName, tong: 0 }
+                    cur.tong += Number(d.quantity) || 0
+                    hienCo.set(String(d.productId), cur)
+                }
+                const tatCa = new Set<string>([...hienCo.keys(), ...tinh.keys()])
+                const bang: any[] = []
+                for (const pid of tatCa) {
+                    const t = tinh.get(pid)
+                    const tong = (t ? t.suaChua + t.traHang + t.chuyenKho : 0)
+                    const deXuat = Math.max(0, tong)
+                    const dang = hienCo.get(pid)
+                    const hienTai = dang ? dang.tong : 0
+                    if (hienTai === deXuat) continue // đã đúng — khỏi báo
+                    let sku = dang?.sku || '', ten = dang?.ten || ''
+                    if (!sku) {
+                        const p = await sp.product.findUnique({ where: { id: pid }, select: { sku: true, name: true } }).catch(() => null)
+                        sku = p?.sku || pid; ten = p?.name || ''
+                    }
+                    bang.push({
+                        sku, ten: ten.slice(0, 40), hienTai, deXuat,
+                        tinhTu: t ? { suaChua: t.suaChua, traHang: t.traHang, chuyenKho: t.chuyenKho } : null,
+                        phieuGiu: t?.phieu || [],
+                        ...(tong < 0 ? { canhBao: 'am-sau-tinh — chứng từ cổ hơn dữ liệu, đề xuất 0' } : {}),
+                        _pid: pid,
+                    })
+                }
+                bang.sort((a, b) => a.hienTai - b.hienTai)
+
+                const muc: any = {
+                    store: store.code,
+                    khoDich: khoDich.code,
+                    khoHuKhac: khoHu.filter((w: any) => w.id !== khoDich.id).map((w: any) => w.code),
+                    soMaLech: bang.length,
+                    bang: bang.map(({ _pid, ...r }) => r),
+                }
+
+                if (apply) {
+                    for (const r of bang) {
+                        if (r.deXuat === 0) {
+                            await sp.warehouseStock.deleteMany({ where: { warehouseId: khoDich.id, productId: r._pid } })
+                        } else {
+                            await sp.warehouseStock.upsert({
+                                where: { warehouseId_productId: { warehouseId: khoDich.id, productId: r._pid } },
+                                create: { warehouseId: khoDich.id, productId: r._pid, productName: r.ten, productSku: r.sku, quantity: r.deXuat },
+                                update: { quantity: r.deXuat },
+                            })
+                        }
+                    }
+                    for (const w of khoHu) {
+                        if (w.id === khoDich.id) continue
+                        await sp.warehouseStock.deleteMany({ where: { warehouseId: w.id } })
+                        await sp.warehouse.update({
+                            where: { id: w.id },
+                            data: { isDefault: false, isActive: false, description: `Đã gộp vào ${khoDich.code} (kho-hu-hong-soat ${new Date().toISOString().slice(0, 10)})` },
+                        }).catch(() => null)
+                    }
+                    const conAm = await sp.warehouseStock.count({
+                        where: { warehouseId: { in: idKhoHu }, quantity: { lt: 0 } },
+                    })
+                    muc.conDongAmSau = conAm
+                    muc.daLam = 'ĐÃ CHỮA'
+                } else {
+                    muc.daLam = 'chỉ báo cáo, chưa đụng gì'
+                }
+                ketQua.push(muc)
+            } catch (e: any) {
+                ketQua.push({ store: store.code, loi: e?.message?.slice(0, 160) })
+            }
+        }
+        res.json({ success: true, cheDo: apply ? 'ĐÃ ÁP DỤNG' : 'CHỈ BÁO CÁO', ketQua })
+    } catch (err: any) {
+        console.error('[admin] kho-hu-hong-soat:', err?.message)
         res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
     }
 })
