@@ -20,7 +20,9 @@ import * as XLSX from 'xlsx'
 import { registryPrisma, getStorePrisma } from '../lib/prisma'
 import { errMsg } from '../lib/errorResponse'
 import { cacheDel } from '../lib/cache'
-import { docNhatKyTien } from '../services/misaExcel'
+import { docNhatKyTien, votTenKhach } from '../services/misaExcel'
+import { createJournalEntriesForTransaction } from '../lib/autoJournal'
+import { postImportReceiptJournal } from '../lib/autoJournalPurchase'
 import { doMuaHangMisa, tomTatMuaDeGhiLog } from '../services/misaImportMuaHang'
 import {
     MISA, MISA_DATA_TYPE, MISA_DEBT_TYPE, misaTime, testMisaConnection, clearMisaToken,
@@ -674,6 +676,64 @@ router.get('/sales', async (req: Request, res: Response) => {
  *     nhập từ KiotViet nên hai cái lệch nhau. Trả về CẢ HAI cách cắt kỳ để nhìn thấy độ lệch
  *     thay vì chọn hộ một cái rồi giấu cái kia.
  */
+/**
+ * CÂN ĐỐI TỒN ĐẦU KỲ cho cửa hàng GƯƠNG (26/08/2026, chủ shop: "khi có phiếu
+ * bán hàng thì tồn kho phải trừ vào").
+ *
+ * Bài toán: Product.stock của cửa hàng gương là ẢNH CHỤP tồn từ đồng bộ MISA
+ * (thẩm quyền), và chứng từ tháng đang đổ ĐÃ NẰM TRONG ảnh chụp đó — cộng/trừ
+ * thẳng vào stock là đếm trùng. Nhưng thẻ kho vẫn phải kể được chuyện nhập/bán.
+ *
+ * Lời giải kế toán: mỗi sản phẩm một dòng "Tồn đầu kỳ" = stock − Σ(biến động
+ * chứng từ). Thẻ kho thành: tồn đầu kỳ + nhập − bán = ĐÚNG tồn hiện tại. Đổ
+ * thêm tháng cũ (data 7 sau data 8) → Σ đổi → dòng đầu kỳ TỰ co lại, tổng bất
+ * biến. Product.stock KHÔNG bị đụng — MISA vẫn là thẩm quyền tồn.
+ */
+async function canDoiTonDauKyGuong(sp: any): Promise<{ taoMoi: number; capNhat: number }> {
+    const kq = { taoMoi: 0, capNhat: 0 }
+    // Tuần tự — PROD PRISMA_POOL_SIZE=1
+    const products = await sp.product.findMany({ select: { id: true, sku: true, name: true, stock: true } })
+    const sums = await sp.inventoryTransaction.groupBy({
+        by: ['productId'], _sum: { quantity: true },
+        where: { referenceType: { in: ['sale', 'import_receipt'] } },
+    }).catch(() => [] as any[])
+    const dauKyCu = await sp.inventoryTransaction.findMany({
+        where: { referenceType: 'misa_opening' },
+        select: { id: true, productId: true, quantity: true },
+    })
+    const minRow = await sp.inventoryTransaction.findFirst({
+        where: { referenceType: { in: ['sale', 'import_receipt'] } },
+        orderBy: { createdAt: 'asc' }, select: { createdAt: true },
+    })
+    const mapSum = new Map<string, number>((sums as any[]).map((x: any) => [String(x.productId), Number(x._sum?.quantity) || 0]))
+    const mapCu = new Map<string, { id: string; quantity: number }>(dauKyCu.map((x: any) => [String(x.productId), x]))
+    // Mốc: một ngày trước chứng từ sớm nhất — luỹ kế thẻ kho mở màn bằng tồn đầu kỳ
+    const mocTDK = minRow ? new Date(new Date(minRow.createdAt).getTime() - 86400000) : new Date()
+
+    for (const p of products) {
+        const mong = (Number(p.stock) || 0) - (mapSum.get(p.id) ?? 0)
+        const cu = mapCu.get(p.id)
+        if (!cu) {
+            if (mong === 0) continue
+            await sp.inventoryTransaction.create({
+                data: {
+                    type: 'adjustment', productId: p.id, productName: p.name, productSku: p.sku,
+                    quantity: mong, reason: 'Tồn đầu kỳ (cân đối với tồn MISA)',
+                    referenceId: 'MISA-TDK', referenceType: 'misa_opening',
+                    userName: 'Sổ MISA', createdAt: mocTDK,
+                },
+            })
+            kq.taoMoi++
+        } else if (Number(cu.quantity) !== mong) {
+            await sp.inventoryTransaction.update({
+                where: { id: cu.id }, data: { quantity: mong, createdAt: mocTDK },
+            })
+            kq.capNhat++
+        }
+    }
+    return kq
+}
+
 // ─── POST /api/misa/do-thanh-don-ban ────────────────────────────────────────
 /**
  * ĐỔ SỔ MISA THÀNH ĐƠN BÁN THẬT của một cửa hàng GƯƠNG (25/08/2026, chủ shop
@@ -740,6 +800,7 @@ router.post('/do-thanh-don-ban', async (req: Request, res: Response) => {
 
         const kq = {
             donMoi: 0, donCapNhat: 0, donCoHoaDon: 0, khachMoi: 0, khachDaCo: 0, spMoi: 0, spDaCo: 0,
+            butToanMoi: 0, dongTheKho: 0,
             tongTien: 0, tuNgay: null as string | null, denNgay: null as string | null,
             canhBao: [] as string[], viDu: [] as string[],
         }
@@ -854,6 +915,37 @@ router.post('/do-thanh-don-ban', async (req: Request, res: Response) => {
                 if (customerId && !doc.customerId) {
                     await sp.misaSaleDoc.update({ where: { id: doc.id }, data: { customerId } }).catch(() => null)
                 }
+                /* HẠCH TOÁN NGAY TẠI ĐÂY (26/08/2026, chủ shop: "phiếu có GTGT là
+                 * hạch toán vào hết"): bộ đổ ghi thẳng DB nên né mất móc hạch toán
+                 * của route POS — 74 đơn đầu tiên từng nằm ngoài sổ kế toán vì thế.
+                 * Helper idempotent theo reference (SALE-/VAT-/COGS-…) nên chạy lại
+                 * không nhân đôi; đổ thêm tháng cũ là tự vào sổ, khỏi bấm gì thêm. */
+                /* THẺ KHO: phiếu bán trừ kho (dòng âm, đúng ngôn ngữ POS). Xoá-ghi-lại
+                 * theo mã đơn nên đổ lại không nhân đôi; tồn tổng do dòng tồn đầu kỳ
+                 * cân đối ở cuối lượt — xem canDoiTonDauKyGuong. */
+                await sp.inventoryTransaction.deleteMany({ where: { referenceId: rn, referenceType: 'sale' } })
+                for (const it of items) {
+                    if (!(it.quantity > 0)) continue
+                    await sp.inventoryTransaction.create({
+                        data: {
+                            type: 'sale', productId: it.productId, productName: it.productName,
+                            productSku: it.sku, quantity: -it.quantity,
+                            reason: `Bán hàng - ${rn} (sổ MISA)`,
+                            referenceId: rn, referenceType: 'sale',
+                            unitPrice: it.unitPrice || 0, userName: 'Sổ MISA', createdAt: ngay,
+                        },
+                    })
+                    kq.dongTheKho++
+                }
+                const txBt = await sp.transaction.findUnique({
+                    where: { receiptNumber: rn },
+                    include: { payments: true, items: { include: { product: { select: { costPrice: true } } } } },
+                })
+                if (txBt) {
+                    const bt = await createJournalEntriesForTransaction(sp, txBt as any, { userId: user.id })
+                        .catch((e: any) => { console.error('[misa] but toan don', rn, e?.message); return { created: [] } })
+                    kq.butToanMoi += bt.created.length
+                }
             } else {
                 const cu = await sp.transaction.findUnique({ where: { receiptNumber: rn }, select: { id: true } })
                 if (cu) kq.donCapNhat++; else kq.donMoi++
@@ -862,6 +954,8 @@ router.post('/do-thanh-don-ban', async (req: Request, res: Response) => {
         }
 
         if (apply) {
+            const tdk = await canDoiTonDauKyGuong(sp)
+            ;(kq as any).tonDauKy = tdk
             // Đơn mới phải hiện ngay trên Tổng Quan/Báo Cáo — cache 300s không được che
             await cacheDel(`${store.schema}:*:dashboard:*`).catch(() => { })
             await cacheDel(`${store.schema}:dashboard:*`).catch(() => { })
@@ -986,8 +1080,14 @@ router.post('/do-thanh-phieu-nhap', async (req: Request, res: Response) => {
         let categoryId: string | null = (await sp.category.findFirst({ select: { id: true }, orderBy: { createdAt: 'asc' } }))?.id || null
         if (!categoryId && apply) categoryId = (await sp.category.create({ data: { name: 'MISA' }, select: { id: true } })).id
 
+        /* HKD/cá nhân không được khấu trừ VAT đầu vào — đọc đúng loại hình kẻo
+         * sổ mọc ra 1331 không có thật (cùng lý do với /tax/auto-journal). */
+        const btLoaiHinh = (await sp.storeSettings.findFirst({ select: { businessType: true } }).catch(() => null))?.businessType || 'company'
+        const vatKhauTru = !(btLoaiHinh === 'household' || btLoaiHinh === 'individual')
+
         const kq = {
             phieuMoi: 0, phieuCapNhat: 0, coHoaDon: 0, spMoi: 0, spDaCo: 0,
+            butToanMoi: 0, dongTheKho: 0,
             tongTienHang: 0, tongThue: 0, tuNgay: null as string | null, denNgay: null as string | null,
             canhBao: [] as string[], viDu: [] as string[],
         }
@@ -1063,14 +1163,41 @@ router.post('/do-thanh-phieu-nhap', async (req: Request, res: Response) => {
                 const cu = await sp.importReceipt.findUnique({ where: { code }, select: { id: true } })
                 if (cu) kq.phieuCapNhat++; else kq.phieuMoi++
             }
+            if (apply) {
+                // Thẻ kho: phiếu nhập cộng kho — cùng khuôn với đơn bán ở trên
+                await sp.inventoryTransaction.deleteMany({ where: { referenceId: code, referenceType: 'import_receipt' } })
+                for (const it of items) {
+                    if (!(it.quantity > 0)) continue
+                    await sp.inventoryTransaction.create({
+                        data: {
+                            type: 'import', productId: it.productId, productName: it.productName,
+                            productSku: it.productSku, quantity: it.quantity,
+                            reason: `Nhập kho theo phiếu ${code} (sổ MISA)`,
+                            referenceId: code, referenceType: 'import_receipt',
+                            unitPrice: it.costPrice || 0, supplierName: 'Sổ MISA',
+                            userName: 'Sổ MISA', createdAt: ngay,
+                        },
+                    })
+                    kq.dongTheKho++
+                }
+                // Hạch toán phiếu nhập ngay sau ghi — cùng lý do với do-thanh-don-ban
+                const phieuBt = await sp.importReceipt.findUnique({ where: { code } })
+                if (phieuBt) {
+                    const bt = await postImportReceiptJournal(sp, phieuBt as any, { userId: user.id, vatKhauTru })
+                        .catch((e: any) => { console.error('[misa] but toan phieu', code, e?.message); return { created: [] } })
+                    kq.butToanMoi += bt.created.length
+                }
+            }
             if (kq.viDu.length < 5) kq.viDu.push(`${code} · ${iso} · HĐ ${doc.soHoaDon || '—'} · ${Math.round(totalCost).toLocaleString('vi-VN')}đ + thuế ${Math.round(vatAmount).toLocaleString('vi-VN')}đ · ${items.length} dòng`)
         }
 
         if (apply) {
+            const tdk = await canDoiTonDauKyGuong(sp)
+            ;(kq as any).tonDauKy = tdk
             await cacheDel(`${store.schema}:*:dashboard:*`).catch(() => { })
             await cacheDel(`${store.schema}:dashboard:*`).catch(() => { })
         }
-        kq.canhBao.unshift('Phiếu KHÔNG cộng tồn kho (cửa hàng gương chỉ giữ sổ) và không có tên NCC — sổ MISA mẫu này không xuất cột đó')
+        kq.canhBao.unshift('Thẻ kho ghi nhập theo phiếu + dòng tồn đầu kỳ tự cân đối (tồn tổng vẫn theo MISA); sổ không có tên NCC nên phiếu ghi Sổ MISA')
 
         res.json({ success: true, store: store.code, apply, soChungTu: docs.length, ...kq })
     } catch (e: any) {
@@ -1141,6 +1268,8 @@ router.post('/import-cash-journal', uploadExcel.single('file'), async (req: Requ
         }
 
         let moi = 0, capNhat = 0, tongTien = 0
+        const mapKhach = new Map<string, string | null>()
+        const mapTenKhach = new Map<string, string>()
         let tuNgay: string | null = null, denNgay: string | null = null
         for (const e of kq.entries) {
             tongTien += e.soTien
@@ -1153,11 +1282,33 @@ router.post('/import-cash-journal', uploadExcel.single('file'), async (req: Requ
             if (kq.loai === 'thu') {
                 const cu = await sp.cashReceipt.findFirst({ where: { reference: khoa }, select: { id: true } })
                 if (apply) {
+                    /* TỰ NỐI (26/08/2026, chủ shop: "đổ data 8 xong tới data 7 thì
+                     * phải tự link hết"): vớt tên từ diễn giải ("Bán hàng cho X",
+                     * "Thu tiền của Y") rồi nối vào Customer sẵn có — khách đã sinh
+                     * từ lượt đổ sổ bán nên phiếu thu tháng nào đổ cũng bám được.
+                     * reference MISA-<số hiệu> trùng receiptNumber của đơn PT cùng
+                     * số — hai sổ tự soi nhau qua khoá đó, không cần cột nối riêng. */
+                    let khachId: string | null = null, khachTen: string | null = null
+                    const tenVot = votTenKhach(e.dienGiai || '')
+                    if (tenVot) {
+                        khachId = mapKhach.get(tenVot.toLowerCase()) ?? null
+                        if (khachId === null && !mapKhach.has(tenVot.toLowerCase())) {
+                            const kh = await sp.customer.findFirst({
+                                where: { name: { equals: tenVot, mode: 'insensitive' } }, select: { id: true, name: true },
+                            }).catch(() => null)
+                            khachId = kh?.id || null
+                            khachTen = kh?.name || null
+                            mapKhach.set(tenVot.toLowerCase(), khachId)
+                            if (khachId) mapTenKhach.set(khachId, khachTen || tenVot)
+                        }
+                        if (khachId && !khachTen) khachTen = mapTenKhach.get(khachId) || tenVot
+                    }
                     const duLieu = {
                         description: e.dienGiai || `Thu tiền ${e.soHieu} (sổ MISA)`,
                         amount: e.soTien, category: 'other',
                         date: e.ngay || new Date(), receivedVia: 'Tiền mặt',
                         reference: khoa, status: 'active',
+                        customerId: khachId, customerName: khachTen,
                     }
                     if (cu) { await sp.cashReceipt.update({ where: { id: cu.id }, data: duLieu }); capNhat++ }
                     else { await sp.cashReceipt.create({ data: { ...duLieu, createdAt: e.ngay || new Date() } }); moi++ }
