@@ -163,6 +163,24 @@ export interface SyncOptions {
     /** Khách đã làm tươi trong lượt này — khỏi hỏi KV trùng */
     daTuoiNo?: Set<string>
     /**
+     * GẮN THẺ KHO CHO PHIẾU NHẬP (25/08/2026) — hai mốc thời gian, cả hai do
+     * runner đặt trước khi chạy các pha:
+     *
+     * `mocBatDauDot` — thời điểm bắt đầu CHÍNH đợt này. Pha tồn kho (products)
+     * chạy TRƯỚC pha phiếu nhập, nên phần tồn của phiếu mới đã bị hấp thụ vào
+     * một dòng `adjustment` VÔ DANH sinh sau mốc này. Pha phiếu nhập sẽ TÁCH
+     * NHÃN dòng đó: đẻ dòng `import` mang mã phiếu + để phần dư lại — tổng theo
+     * dấu không đổi một li, tồn kho không bị đụng, thẻ kho thì kể được sự thật
+     * "Nhập kho theo phiếu PN00xxxx" thay vì một con số không tên.
+     *
+     * `mocPhienTruocProducts` — mốc của lượt đồng bộ tồn GẦN NHẤT TRƯỚC đợt này.
+     * Phiếu có ngày chứng từ TRƯỚC mốc đó đã bị lượt trước hấp thụ rồi; gắn nữa
+     * là ăn gian dòng của đợt này (đẻ ra một cặp +/− bịa). Backfill nhiều tháng
+     * phiếu cũ vì thế tự động bị loại — đúng như phải thế.
+     */
+    mocBatDauDot?: Date
+    mocPhienTruocProducts?: Date | null
+    /**
      * Bản ghi đến từ WEBHOOK — payload customer/supplier.update của KiotViet KHÔNG mang
      * Debt (18/08/2026). Bật cờ này là KHÔNG BAO GIỜ lấy công nợ từ payload (kể cả khi
      * họ gửi `Debt: 0` cho có) — khách thì hỏi lại KV bằng lamTuoiNoKhach, NCC để cron
@@ -1266,7 +1284,65 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
  * KHÔNG CỘNG KHO (cùng lý do với hoá đơn: `onHand` bên KiotViet đã tính rồi,
  * cộng thêm lần nữa là tồn khống gấp đôi).
  */
+/**
+ * Tách nhãn dòng `adjustment` vô danh của CHÍNH đợt này thành dòng `import` mang
+ * mã phiếu nhập + phần dư. KHÔNG đụng tồn kho — chỉ đổi cách thẻ kho kể chuyện.
+ *
+ * Trả 'ok' khi gắn được; 'giu' khi giữ nguyên dạng điều chỉnh (phiếu cũ đã bị
+ * lượt trước hấp thụ, tồn không đổi trong đợt này, hoặc pha tồn kho không chạy).
+ * 'giu' KHÔNG phải lỗi — nó nghĩa là không có dòng nào của đợt này để tách.
+ */
+async function ganTheKhoPhieuNhap(
+    sp: any, opts: SyncOptions,
+    phieu: { code: string; ngay: Date; supplierId: string | null; supplierName: string },
+    line: { productId: string; productName: string; productSku: string; quantity: number; costPrice: number },
+): Promise<'ok' | 'giu'> {
+    if (!opts.mocBatDauDot || !(line.quantity > 0)) return 'giu'
+    if (opts.mocPhienTruocProducts && phieu.ngay < opts.mocPhienTruocProducts) return 'giu'
+    const adj = await sp.inventoryTransaction.findFirst({
+        where: {
+            productId: line.productId,
+            referenceType: 'kiotviet',
+            type: 'adjustment',
+            createdAt: { gte: opts.mocBatDauDot },
+        },
+        orderBy: { createdAt: 'desc' },
+    }).catch(() => null)
+    if (!adj) return 'giu'
+
+    const conLai = (Number(adj.quantity) || 0) - line.quantity
+    await sp.$transaction(async (tx: any) => {
+        await tx.inventoryTransaction.create({
+            data: {
+                type: 'import',
+                productId: line.productId,
+                productName: line.productName,
+                productSku: line.productSku,
+                // SỐ LƯỢNG CÓ DẤU — dương = nhập, đúng quy ước cả hệ thống
+                quantity: line.quantity,
+                reason: `Nhập kho theo phiếu ${phieu.code} (KiotViet)`,
+                referenceId: phieu.code,
+                referenceType: 'import_receipt',
+                unitPrice: line.costPrice || 0,
+                supplierId: phieu.supplierId,
+                supplierName: phieu.supplierName,
+                userName: 'KiotViet Sync',
+                /* Cùng thời điểm với dòng điều chỉnh gốc: tồn luỹ kế của thẻ kho
+                 * cộng theo thứ tự thời gian — đặt lệch là cong lịch sử. */
+                createdAt: adj.createdAt,
+            },
+        })
+        if (conLai === 0) {
+            await tx.inventoryTransaction.delete({ where: { id: adj.id } })
+        } else {
+            await tx.inventoryTransaction.update({ where: { id: adj.id }, data: { quantity: conLai } })
+        }
+    })
+    return 'ok'
+}
+
 export async function syncPurchaseOrders(sp: any, items: any[], opts: SyncOptions, c: SyncCounters): Promise<void> {
+    let ganOk = 0, ganGiu = 0
     for (const kv of items) {
         c.fetched++
         beat(opts, c)
@@ -1370,12 +1446,23 @@ export async function syncPurchaseOrders(sp: any, items: any[], opts: SyncOption
                     },
                 })
                 await saveMap(sp, 'purchaseOrder', kvId, code, created.id)
+                // Thẻ kho: tách nhãn dòng điều chỉnh vô danh của đợt này (xem helper)
+                for (const l of lines) {
+                    const kq = await ganTheKhoPhieuNhap(sp, opts, { code, ngay, supplierId, supplierName }, l)
+                    if (kq === 'ok') ganOk++
+                    else ganGiu++
+                }
             }
             c.created++
             noteSample(c, { code, ncc: supplierName, tong: total, daTra, soDong: lines.length, ngay: ngay.toISOString().slice(0, 10) })
         } catch (e: any) {
             noteError(c, `Phiếu nhập ${kv?.code || kv?.id}: ${e?.message || e}`)
         }
+    }
+    /* Không dùng noteError — nó tăng failed, mà đây là dòng THÔNG TIN. 'giữ' không
+     * phải lỗi: phiếu cũ đã bị lượt trước hấp thụ thì đúng ra là phải giữ. */
+    if (ganOk || ganGiu) {
+        c.errors.push(`Thẻ kho: gắn ${ganOk} dòng theo mã phiếu nhập · giữ ${ganGiu} dòng dạng điều chỉnh (đã hấp thụ từ trước / tồn không đổi)`)
     }
 }
 

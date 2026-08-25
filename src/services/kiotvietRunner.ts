@@ -266,6 +266,19 @@ export async function runSync(
     baseOpts.daTuoiNo = new Set<string>()
     baseOpts.rebuildLines = rebuildLines
     baseOpts.updateOnly = updateOnly
+    /* Hai mốc cho việc gắn thẻ kho phiếu nhập — xem ghi chú ở SyncOptions.
+     * Mốc lượt-tồn-kho-trước tính cả webhook stock.update: chúng cũng đi qua
+     * applyStock nên cũng hấp thụ tồn y như pha products. */
+    baseOpts.mocBatDauDot = new Date()
+    baseOpts.mocPhienTruocProducts = await sp.kiotVietSyncLog.findFirst({
+        where: {
+            OR: [{ entity: { contains: 'products' } }, { entity: { contains: 'stock.' } }],
+            status: { in: ['success', 'partial'] },
+            NOT: { id: logId },
+        },
+        orderBy: { startedAt: 'desc' },
+        select: { startedAt: true },
+    }).then((r: any) => r?.startedAt ?? null).catch(() => null)
     const creds = credsOf(cfg)
     const totals = newCounters()
 
