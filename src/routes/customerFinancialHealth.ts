@@ -320,7 +320,7 @@ function xepHangNo(duNo: number, ngayNoLauNhat: number | null, traGop: boolean, 
 
 // ─── GET /api/customers/financial-overview ───────────────────────────────────
 // Bảng tổng quan MỌI khách (có mua 12 tháng hoặc có nợ) — set-based, không N+1.
-router.get('/financial-overview', authMiddleware, requirePermission('customers.view'), async (req: AuthRequest, res: Response) => {
+router.get('/financial-overview', authMiddleware, requirePermission('customer_health.view', 'customers.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma! as any
         /* LẤY HẾT, KHÔNG ĐẶT TRẦN.
@@ -445,7 +445,7 @@ router.get('/financial-overview', authMiddleware, requirePermission('customers.v
 })
 
 // ─── GET /api/customers/:id/financial-health?months=12|6|0 ───────────────────
-router.get('/:id/financial-health', authMiddleware, requirePermission('customers.view'), async (req: AuthRequest, res: Response) => {
+router.get('/:id/financial-health', authMiddleware, requirePermission('customer_health.view', 'customers.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma! as any
         const custId = String(req.params.id)

@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import { errorDetail } from '../lib/errorResponse'
 import { moTaLoi } from '../lib/gomLoi'
 import { authMiddleware, getBranchFilter, AuthRequest, getBranchId, canAccessBranch } from '../middleware/auth'
+import { requirePermission } from '../middleware/permissionMiddleware'
 import { calculateCostPrice, getCostPriceMethod } from '../lib/costPrice'
 import { nextCode } from '../lib/codeGenerator'
 import { getOrCreateDefaultWarehouse, updateWarehouseStock, adjustSellableStock } from '../lib/warehouseHelper'
@@ -208,7 +209,10 @@ router.get('/duplicates', authMiddleware, async (req: AuthRequest, res: Response
  *
  * ?sapDen=N — ngưỡng "sắp đến hạn" tính bằng ngày (mặc định 7); ?supplierId=.
  */
-router.get('/payment-due', authMiddleware, async (req: AuthRequest, res: Response) => {
+/* Gác quyền (23/08/2026): trước đây route này CHỈ cần đăng nhập — menu giấu link chứ
+ * API mở cho mọi người dùng. Nay đòi quyền riêng HOẶC quyền cũ (import.view — đúng
+ * quyền mà menu vẫn dùng để hiện tab), nên không ai đang dùng bị mất truy cập. */
+router.get('/payment-due', authMiddleware, requirePermission('payment_due.view', 'import.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         /* Cùng luật với GET / (getBranchFilter): chi nhánh CHÍNH thấy hết. Bản đầu dùng getBranchId → phiếu
