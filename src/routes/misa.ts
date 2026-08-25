@@ -735,7 +735,7 @@ router.post('/do-thanh-don-ban', async (req: Request, res: Response) => {
         }
 
         const kq = {
-            donMoi: 0, donCapNhat: 0, khachMoi: 0, khachDaCo: 0, spMoi: 0, spDaCo: 0,
+            donMoi: 0, donCapNhat: 0, donCoHoaDon: 0, khachMoi: 0, khachDaCo: 0, spMoi: 0, spDaCo: 0,
             tongTien: 0, tuNgay: null as string | null, denNgay: null as string | null,
             canhBao: [] as string[], viDu: [] as string[],
         }
@@ -825,7 +825,14 @@ router.post('/do-thanh-don-ban', async (req: Request, res: Response) => {
                 createdBy: user.id, createdByName: 'Sổ MISA',
                 notes: `Đổ từ sổ MISA${doc.soHoaDon ? ` — HĐ ${doc.soHoaDon}` : ''} (sổ không ghi hình thức thu tiền)`,
                 transactionDate: ngay, createdAt: ngay,
+                /* Sổ MISA CÓ số hoá đơn nghĩa là hoá đơn ĐÃ XUẤT bên MISA/CQT —
+                 * để mặc định 'none' là màn hình gào "chưa xuất VAT" trên đơn đã
+                 * có HĐ (chủ shop bắt được ngay 25/08). PT không số HĐ giữ 'none'. */
+                vatStatus: doc.soHoaDon ? 'issued' : 'none',
+                vatInvoiceNumber: doc.soHoaDon || null,
+                vatIssuedAt: doc.soHoaDon ? (doc.ngayHoaDon || ngay) : null,
             }
+            if (doc.soHoaDon) kq.donCoHoaDon++
 
             if (apply) {
                 const cu = await sp.transaction.findUnique({ where: { receiptNumber: rn }, select: { id: true } })
@@ -858,6 +865,10 @@ router.post('/do-thanh-don-ban', async (req: Request, res: Response) => {
 
         res.json({ success: true, store: store.code, apply, soChungTu: docs.length, ...kq })
     } catch (e: any) {
+        /* Lượt apply đầu 25/08 trả 500 mà KHÔNG để lại vết gì trong log (errMsg
+         * che sạch) trong khi dữ liệu đã vào đủ — không log nguyên văn thì không
+         * bao giờ biết đã nổ ở đâu. */
+        console.error('[misa] do-thanh-don-ban:', e?.message || e, e?.stack?.split('\n')[1] || '')
         res.status(500).json({ success: false, error: errMsg(e) })
     }
 })
