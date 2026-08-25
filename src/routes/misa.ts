@@ -670,6 +670,198 @@ router.get('/sales', async (req: Request, res: Response) => {
  *     nhập từ KiotViet nên hai cái lệch nhau. Trả về CẢ HAI cách cắt kỳ để nhìn thấy độ lệch
  *     thay vì chọn hộ một cái rồi giấu cái kia.
  */
+// ─── POST /api/misa/do-thanh-don-ban ────────────────────────────────────────
+/**
+ * ĐỔ SỔ MISA THÀNH ĐƠN BÁN THẬT của một cửa hàng GƯƠNG (25/08/2026, chủ shop
+ * chốt cho HUTITAX: "Thành đơn bán thật của HUTITAX").
+ *
+ * VÌ SAO ĐƯỢC PHÉP dù quy tắc 21/08 là "sổ MISA lưu riêng, không tạo Transaction
+ * kẻo đếm trùng": quy tắc đó bảo vệ cửa hàng CÓ bán POS. Cửa hàng gương như
+ * HUTITAX không có một đơn POS nào — sổ MISA chính LÀ doanh thu của nó. RÀO CỨNG
+ * bên dưới: từ chối chạy nếu cửa hàng có bất kỳ đơn nào không mang mã MISA-.
+ *
+ * Quy ước ghi:
+ *   - receiptNumber = 'MISA-<số chứng từ>' (unique) — chống trùng: chạy lại là
+ *     CẬP NHẬT + dựng lại dòng hàng, không nhân đôi.
+ *   - createdAt = transactionDate = NGÀY CHỨNG TỪ — dồn về hôm nay là báo cáo
+ *     ngày nổ tung (bài học KV: createdAt = lúc nhập từng làm lệch báo cáo).
+ *   - amountReceived = total, status 'completed' — sổ chi tiết bán hàng MISA
+ *     KHÔNG ghi hình thức/tiến độ thu tiền; ghi chú nói rõ điều đó trên từng đơn.
+ *   - KHÔNG đụng tồn kho, KHÔNG ghi InventoryTransaction/Payment — chỉ doanh thu.
+ *   - Sản phẩm/khách thiếu thì tạo mới (costPrice 0 = CHƯA CÓ giá vốn — lãi/lỗ
+ *     của cửa hàng gương không dùng được, MISA không xuất giá vốn).
+ *
+ * Body: { storeCode, apply?: true } — mặc định CHẠY THỬ.
+ */
+router.post('/do-thanh-don-ban', async (req: Request, res: Response) => {
+    try {
+        const b: any = req.body || {}
+        const store = await registryPrisma.store.findFirst({
+            where: { code: { equals: String(b.storeCode || ''), mode: 'insensitive' } },
+            select: { code: true, name: true, schema: true },
+        })
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const sp: any = getStorePrisma(store.schema)
+        const apply = b.apply === true || b.apply === 'true'
+
+        // RÀO: cửa hàng đã có đơn POS thật thì tuyệt đối không đổ — đếm trùng doanh thu
+        const soDonNgoai = await sp.transaction.count({
+            where: { NOT: { receiptNumber: { startsWith: 'MISA-' } } },
+        })
+        if (soDonNgoai > 0) {
+            res.status(400).json({
+                success: false,
+                error: `Cửa hàng ${store.code} có ${soDonNgoai} đơn bán KHÔNG phải từ MISA — đổ thêm sổ MISA vào là đếm trùng doanh thu. Chỉ chạy trên cửa hàng gương (0 đơn POS).`,
+            })
+            return
+        }
+
+        const user = await sp.user.findFirst({
+            where: { role: { in: ['admin', 'owner', 'manager'] } },
+            orderBy: { createdAt: 'asc' }, select: { id: true },
+        })
+        if (!user?.id) { res.status(400).json({ success: false, error: 'Cửa hàng chưa có tài khoản admin/manager để đứng tên đơn (createdBy là khoá ngoại bắt buộc)' }); return }
+
+        const docs = await sp.misaSaleDoc.findMany({
+            include: { lines: true },
+            orderBy: { ngayChungTu: 'asc' },
+        })
+        if (!docs.length) { res.json({ success: true, store: store.code, thongBao: 'Chưa có chứng từ MISA nào — đổ Excel trước đã' }); return }
+
+        // Nhóm hàng đích cho sản phẩm phải tạo mới
+        let categoryId: string | null = (await sp.category.findFirst({ select: { id: true }, orderBy: { createdAt: 'asc' } }))?.id || null
+        if (!categoryId && apply) {
+            categoryId = (await sp.category.create({ data: { name: 'MISA' }, select: { id: true } })).id
+        }
+
+        const kq = {
+            donMoi: 0, donCapNhat: 0, khachMoi: 0, khachDaCo: 0, spMoi: 0, spDaCo: 0,
+            tongTien: 0, tuNgay: null as string | null, denNgay: null as string | null,
+            canhBao: [] as string[], viDu: [] as string[],
+        }
+        const khachMoiTao = new Map<string, string>()   // tên thường → customerId
+        const spMoiTao = new Map<string, string>()       // sku → productId
+        let demKhach = 0
+
+        for (const doc of docs) {
+            const rn = `MISA-${doc.soChungTu}`
+            const ngay = doc.ngayChungTu || doc.ngayHachToan || doc.createdAt
+            const tien = (doc.tongDoanhSo || 0) - (doc.tongChietKhau || 0) - (doc.tongTra || 0) + (doc.tongThue || 0)
+            kq.tongTien += tien
+            const iso = ngay.toISOString().slice(0, 10)
+            if (!kq.tuNgay || iso < kq.tuNgay) kq.tuNgay = iso
+            if (!kq.denNgay || iso > kq.denNgay) kq.denNgay = iso
+
+            // ── Khách: khớp theo mã (MST) trước, rồi theo tên; thiếu thì tạo ──
+            let customerId: string | null = doc.customerId || null
+            const tenKhach = (doc.tenKhach || '').trim()
+            if (!customerId && tenKhach) {
+                const khoaTen = tenKhach.toLowerCase()
+                customerId = khachMoiTao.get(khoaTen) || null
+                if (!customerId) {
+                    const cu = doc.maKhach
+                        ? await sp.customer.findFirst({ where: { code: doc.maKhach }, select: { id: true } })
+                        : null
+                    const cu2 = cu || await sp.customer.findFirst({
+                        where: { name: { equals: tenKhach, mode: 'insensitive' } }, select: { id: true },
+                    })
+                    if (cu2?.id) { customerId = cu2.id; kq.khachDaCo++ }
+                    else if (apply) {
+                        demKhach++
+                        const tao = await sp.customer.create({
+                            data: {
+                                code: doc.maKhach || `MISA-KH-${Date.now().toString(36)}-${demKhach}`,
+                                name: tenKhach, phone: '',
+                                notes: doc.nguonTenKhach === 'dienGiai' ? 'Tên vớt từ diễn giải MISA — soát lại' : 'Tạo từ sổ MISA',
+                            }, select: { id: true },
+                        })
+                        customerId = tao.id
+                        kq.khachMoi++
+                    } else { kq.khachMoi++ }
+                    if (customerId) khachMoiTao.set(khoaTen, customerId)
+                }
+            }
+
+            // ── Dòng hàng: khớp SKU, thiếu thì tạo (giá vốn 0 = CHƯA CÓ) ──
+            const items: any[] = []
+            for (const l of doc.lines || []) {
+                const soLuong = Math.max(1, Math.round(Number(l.soLuong) || 0))
+                if (!(Number(l.soLuong) > 0) && !(Number(l.doanhSo) > 0)) continue
+                let productId = l.productId || spMoiTao.get(l.maHang) || null
+                if (!productId) {
+                    const p = await sp.product.findUnique({ where: { sku: l.maHang }, select: { id: true } })
+                    if (p?.id) { productId = p.id; kq.spDaCo++ }
+                    else if (apply && categoryId) {
+                        const tao = await sp.product.create({
+                            data: {
+                                sku: l.maHang, name: l.tenHang || l.maHang, categoryId,
+                                sellingPrice: Number(l.donGia) || 0, costPrice: 0,
+                                baseUnit: l.dvt || 'cái', stock: 0,
+                                description: 'Tạo từ sổ MISA (chưa có giá vốn)',
+                            }, select: { id: true },
+                        })
+                        productId = tao.id
+                        kq.spMoi++
+                    } else { kq.spMoi++; continue }
+                    if (productId) spMoiTao.set(l.maHang, productId)
+                }
+                if (Math.abs(soLuong - (Number(l.soLuong) || 0)) > 0.001) {
+                    if (kq.canhBao.length < 8) kq.canhBao.push(`${doc.soChungTu}/${l.maHang}: số lượng lẻ ${l.soLuong} làm tròn ${soLuong} (tiền giữ theo sổ, không theo SL×đơn giá)`)
+                }
+                items.push({
+                    productId, productName: l.tenHang || l.maHang, sku: l.maHang,
+                    quantity: soLuong, unitPrice: Number(l.donGia) || 0,
+                    discount: Number(l.chietKhau) || 0,
+                    lineTotal: (Number(l.doanhSo) || 0) - (Number(l.chietKhau) || 0),
+                })
+            }
+
+            const duLieu = {
+                customerId, customerName: tenKhach || null,
+                subtotal: (doc.tongDoanhSo || 0) - (doc.tongChietKhau || 0),
+                tax: doc.tongThue || 0,
+                total: tien, amountReceived: tien,
+                status: 'completed', channel: 'direct',
+                createdBy: user.id, createdByName: 'Sổ MISA',
+                notes: `Đổ từ sổ MISA${doc.soHoaDon ? ` — HĐ ${doc.soHoaDon}` : ''} (sổ không ghi hình thức thu tiền)`,
+                transactionDate: ngay, createdAt: ngay,
+            }
+
+            if (apply) {
+                const cu = await sp.transaction.findUnique({ where: { receiptNumber: rn }, select: { id: true } })
+                if (cu) {
+                    // Dựng lại bản ghi con theo nguồn — cập nhật nửa vời là sổ cũ sổ mới trộn nhau
+                    await sp.transactionItem.deleteMany({ where: { transactionId: cu.id } })
+                    await sp.transaction.update({ where: { id: cu.id }, data: { ...duLieu, items: { create: items } } })
+                    kq.donCapNhat++
+                } else {
+                    await sp.transaction.create({ data: { ...duLieu, receiptNumber: rn, items: { create: items } } })
+                    kq.donMoi++
+                }
+                if (customerId && !doc.customerId) {
+                    await sp.misaSaleDoc.update({ where: { id: doc.id }, data: { customerId } }).catch(() => null)
+                }
+            } else {
+                const cu = await sp.transaction.findUnique({ where: { receiptNumber: rn }, select: { id: true } })
+                if (cu) kq.donCapNhat++; else kq.donMoi++
+            }
+            if (kq.viDu.length < 5) kq.viDu.push(`${rn} · ${iso} · ${tenKhach || '(không tên)'} · ${Math.round(tien).toLocaleString('vi-VN')}đ · ${items.length} dòng`)
+        }
+
+        if (apply) {
+            // Đơn mới phải hiện ngay trên Tổng Quan/Báo Cáo — cache 300s không được che
+            await cacheDel(`${store.schema}:*:dashboard:*`).catch(() => { })
+            await cacheDel(`${store.schema}:dashboard:*`).catch(() => { })
+            await cacheDel(`${store.schema}:*:transactions:*`).catch(() => { })
+        }
+        kq.canhBao.unshift('MISA không xuất giá vốn — lãi/lỗ của cửa hàng gương KHÔNG dùng được, chỉ tin doanh thu/thuế')
+
+        res.json({ success: true, store: store.code, apply, soChungTu: docs.length, ...kq })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
 router.get('/doi-chieu', async (req: Request, res: Response) => {
     try {
         const store = await resolveStore(String(req.query.storeCode || ''))
