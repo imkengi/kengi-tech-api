@@ -789,8 +789,10 @@ router.post('/do-thanh-don-ban', async (req: Request, res: Response) => {
             // ── Dòng hàng: khớp SKU, thiếu thì tạo (giá vốn 0 = CHƯA CÓ) ──
             const items: any[] = []
             for (const l of doc.lines || []) {
-                const soLuong = Math.max(1, Math.round(Number(l.soLuong) || 0))
-                if (!(Number(l.soLuong) > 0) && !(Number(l.doanhSo) > 0)) continue
+                // Cùng bệnh với sổ mua: dòng doanh số ÂM (chiết khấu) không được vứt
+                if (!(Number(l.soLuong) || 0) && !(Number(l.doanhSo) || 0) && !(Number(l.giaTriTra) || 0)) continue
+                const soLuongTho = Math.round(Number(l.soLuong) || 0)
+                const soLuong = soLuongTho >= 1 ? soLuongTho : ((Number(l.doanhSo) || 0) > 0 ? 1 : 0)
                 let productId = l.productId || spMoiTao.get(l.maHang) || null
                 if (!productId) {
                     const p = await sp.product.findUnique({ where: { sku: l.maHang }, select: { id: true } })
@@ -816,7 +818,7 @@ router.post('/do-thanh-don-ban', async (req: Request, res: Response) => {
                     productId, productName: l.tenHang || l.maHang, sku: l.maHang,
                     quantity: soLuong, unitPrice: Number(l.donGia) || 0,
                     discount: Number(l.chietKhau) || 0,
-                    lineTotal: (Number(l.doanhSo) || 0) - (Number(l.chietKhau) || 0),
+                    lineTotal: (Number(l.doanhSo) || 0) - (Number(l.chietKhau) || 0) - (Number(l.giamGia) || 0) - (Number(l.giaTriTra) || 0),
                 })
             }
 
@@ -1001,8 +1003,12 @@ router.post('/do-thanh-phieu-nhap', async (req: Request, res: Response) => {
             const items: any[] = []
             let totalCost = 0
             for (const l of doc.lines || []) {
-                const soLuong = Math.max(1, Math.round(Number(l.soLuong) || 0))
-                if (!(Number(l.soLuong) > 0) && !(Number(l.giaTri) > 0)) continue
+                /* Dòng tiền ÂM là CHIẾT KHẤU của NCC (đo 25/08: NK00244/NK00245 mang
+                 * mã CKPN, giá trị −14.781.788 tổng). Lọc "> 0" là vứt mất chiết khấu
+                 * → tổng phiếu PHỒNG đúng bấy nhiêu. Chỉ bỏ dòng mọi-số-đều-0. */
+                if (!(Number(l.soLuong) || 0) && !(Number(l.giaTri) || 0) && !(Number(l.giaTriTra) || 0)) continue
+                const soLuongTho = Math.round(Number(l.soLuong) || 0)
+                const soLuong = soLuongTho >= 1 ? soLuongTho : ((Number(l.giaTri) || 0) > 0 ? 1 : 0)
                 let productId = l.productId || spMoiTao.get(l.maHang) || null
                 if (!productId) {
                     const p = await sp.product.findUnique({ where: { sku: l.maHang }, select: { id: true } })
