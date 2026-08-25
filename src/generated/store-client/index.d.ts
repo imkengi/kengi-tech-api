@@ -48544,6 +48544,7 @@ export namespace Prisma {
     source: string | null
     productId: string | null
     productSku: string | null
+    imei: string | null
     quantity: number | null
     branchId: string | null
     customerId: string | null
@@ -48577,6 +48578,7 @@ export namespace Prisma {
     source: string | null
     productId: string | null
     productSku: string | null
+    imei: string | null
     quantity: number | null
     branchId: string | null
     customerId: string | null
@@ -48610,6 +48612,7 @@ export namespace Prisma {
     source: number
     productId: number
     productSku: number
+    imei: number
     quantity: number
     branchId: number
     customerId: number
@@ -48655,6 +48658,7 @@ export namespace Prisma {
     source?: true
     productId?: true
     productSku?: true
+    imei?: true
     quantity?: true
     branchId?: true
     customerId?: true
@@ -48688,6 +48692,7 @@ export namespace Prisma {
     source?: true
     productId?: true
     productSku?: true
+    imei?: true
     quantity?: true
     branchId?: true
     customerId?: true
@@ -48721,6 +48726,7 @@ export namespace Prisma {
     source?: true
     productId?: true
     productSku?: true
+    imei?: true
     quantity?: true
     branchId?: true
     customerId?: true
@@ -48841,6 +48847,7 @@ export namespace Prisma {
     source: string
     productId: string | null
     productSku: string | null
+    imei: string | null
     quantity: number
     branchId: string | null
     customerId: string | null
@@ -48893,6 +48900,7 @@ export namespace Prisma {
     source?: boolean
     productId?: boolean
     productSku?: boolean
+    imei?: boolean
     quantity?: boolean
     branchId?: boolean
     customerId?: boolean
@@ -48926,6 +48934,7 @@ export namespace Prisma {
     source?: boolean
     productId?: boolean
     productSku?: boolean
+    imei?: boolean
     quantity?: boolean
     branchId?: boolean
     customerId?: boolean
@@ -48959,6 +48968,7 @@ export namespace Prisma {
     source?: boolean
     productId?: boolean
     productSku?: boolean
+    imei?: boolean
     quantity?: boolean
     branchId?: boolean
     customerId?: boolean
@@ -48992,6 +49002,7 @@ export namespace Prisma {
     source?: boolean
     productId?: boolean
     productSku?: boolean
+    imei?: boolean
     quantity?: boolean
     branchId?: boolean
     customerId?: boolean
@@ -49010,7 +49021,7 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type RepairOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "code" | "productName" | "customerName" | "customerPhone" | "issue" | "status" | "cost" | "estimatedDate" | "completedDate" | "notes" | "source" | "productId" | "productSku" | "quantity" | "branchId" | "customerId" | "transactionId" | "soldReceiptNumber" | "stockMovedAt" | "replacedStockAt" | "supplierId" | "supplierName" | "supplierBatchCode" | "sentToSupplierAt" | "queuedForSupplierAt" | "supplierReturnedAt" | "newUnitIssuedAt" | "createdAt" | "updatedAt", ExtArgs["result"]["repair"]>
+  export type RepairOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "code" | "productName" | "customerName" | "customerPhone" | "issue" | "status" | "cost" | "estimatedDate" | "completedDate" | "notes" | "source" | "productId" | "productSku" | "imei" | "quantity" | "branchId" | "customerId" | "transactionId" | "soldReceiptNumber" | "stockMovedAt" | "replacedStockAt" | "supplierId" | "supplierName" | "supplierBatchCode" | "sentToSupplierAt" | "queuedForSupplierAt" | "supplierReturnedAt" | "newUnitIssuedAt" | "createdAt" | "updatedAt", ExtArgs["result"]["repair"]>
 
   export type $RepairPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     name: "Repair"
@@ -49030,6 +49041,12 @@ export namespace Prisma {
       source: string
       productId: string | null
       productSku: string | null
+      /**
+       * IMEI / số máy — mã nhận dạng THIẾT BỊ, khách đọc số này để tra phiếu.
+       * Cột riêng chứ không nhét vào JSON `notes`: nhét vào đó thì không tra được,
+       * mà tra cứu chính là việc duy nhất người ta cần tới IMEI.
+       */
+      imei: string | null
       quantity: number
       branchId: string | null
       customerId: string | null
@@ -49483,6 +49500,7 @@ export namespace Prisma {
     readonly source: FieldRef<"Repair", 'String'>
     readonly productId: FieldRef<"Repair", 'String'>
     readonly productSku: FieldRef<"Repair", 'String'>
+    readonly imei: FieldRef<"Repair", 'String'>
     readonly quantity: FieldRef<"Repair", 'Int'>
     readonly branchId: FieldRef<"Repair", 'String'>
     readonly customerId: FieldRef<"Repair", 'String'>
@@ -175181,6 +175199,7 @@ export namespace Prisma {
     source: 'source',
     productId: 'productId',
     productSku: 'productSku',
+    imei: 'imei',
     quantity: 'quantity',
     branchId: 'branchId',
     customerId: 'customerId',
@@ -180271,6 +180290,7 @@ export namespace Prisma {
     source?: StringFilter<"Repair"> | string
     productId?: StringNullableFilter<"Repair"> | string | null
     productSku?: StringNullableFilter<"Repair"> | string | null
+    imei?: StringNullableFilter<"Repair"> | string | null
     quantity?: IntFilter<"Repair"> | number
     branchId?: StringNullableFilter<"Repair"> | string | null
     customerId?: StringNullableFilter<"Repair"> | string | null
@@ -180304,6 +180324,7 @@ export namespace Prisma {
     source?: SortOrder
     productId?: SortOrderInput | SortOrder
     productSku?: SortOrderInput | SortOrder
+    imei?: SortOrderInput | SortOrder
     quantity?: SortOrder
     branchId?: SortOrderInput | SortOrder
     customerId?: SortOrderInput | SortOrder
@@ -180340,6 +180361,7 @@ export namespace Prisma {
     source?: StringFilter<"Repair"> | string
     productId?: StringNullableFilter<"Repair"> | string | null
     productSku?: StringNullableFilter<"Repair"> | string | null
+    imei?: StringNullableFilter<"Repair"> | string | null
     quantity?: IntFilter<"Repair"> | number
     branchId?: StringNullableFilter<"Repair"> | string | null
     customerId?: StringNullableFilter<"Repair"> | string | null
@@ -180373,6 +180395,7 @@ export namespace Prisma {
     source?: SortOrder
     productId?: SortOrderInput | SortOrder
     productSku?: SortOrderInput | SortOrder
+    imei?: SortOrderInput | SortOrder
     quantity?: SortOrder
     branchId?: SortOrderInput | SortOrder
     customerId?: SortOrderInput | SortOrder
@@ -180414,6 +180437,7 @@ export namespace Prisma {
     source?: StringWithAggregatesFilter<"Repair"> | string
     productId?: StringNullableWithAggregatesFilter<"Repair"> | string | null
     productSku?: StringNullableWithAggregatesFilter<"Repair"> | string | null
+    imei?: StringNullableWithAggregatesFilter<"Repair"> | string | null
     quantity?: IntWithAggregatesFilter<"Repair"> | number
     branchId?: StringNullableWithAggregatesFilter<"Repair"> | string | null
     customerId?: StringNullableWithAggregatesFilter<"Repair"> | string | null
@@ -194478,6 +194502,7 @@ export namespace Prisma {
     source?: string
     productId?: string | null
     productSku?: string | null
+    imei?: string | null
     quantity?: number
     branchId?: string | null
     customerId?: string | null
@@ -194511,6 +194536,7 @@ export namespace Prisma {
     source?: string
     productId?: string | null
     productSku?: string | null
+    imei?: string | null
     quantity?: number
     branchId?: string | null
     customerId?: string | null
@@ -194544,6 +194570,7 @@ export namespace Prisma {
     source?: StringFieldUpdateOperationsInput | string
     productId?: NullableStringFieldUpdateOperationsInput | string | null
     productSku?: NullableStringFieldUpdateOperationsInput | string | null
+    imei?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     customerId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -194577,6 +194604,7 @@ export namespace Prisma {
     source?: StringFieldUpdateOperationsInput | string
     productId?: NullableStringFieldUpdateOperationsInput | string | null
     productSku?: NullableStringFieldUpdateOperationsInput | string | null
+    imei?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     customerId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -194610,6 +194638,7 @@ export namespace Prisma {
     source?: string
     productId?: string | null
     productSku?: string | null
+    imei?: string | null
     quantity?: number
     branchId?: string | null
     customerId?: string | null
@@ -194643,6 +194672,7 @@ export namespace Prisma {
     source?: StringFieldUpdateOperationsInput | string
     productId?: NullableStringFieldUpdateOperationsInput | string | null
     productSku?: NullableStringFieldUpdateOperationsInput | string | null
+    imei?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     customerId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -194676,6 +194706,7 @@ export namespace Prisma {
     source?: StringFieldUpdateOperationsInput | string
     productId?: NullableStringFieldUpdateOperationsInput | string | null
     productSku?: NullableStringFieldUpdateOperationsInput | string | null
+    imei?: NullableStringFieldUpdateOperationsInput | string | null
     quantity?: IntFieldUpdateOperationsInput | number
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
     customerId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -209724,6 +209755,7 @@ export namespace Prisma {
     source?: SortOrder
     productId?: SortOrder
     productSku?: SortOrder
+    imei?: SortOrder
     quantity?: SortOrder
     branchId?: SortOrder
     customerId?: SortOrder
@@ -209762,6 +209794,7 @@ export namespace Prisma {
     source?: SortOrder
     productId?: SortOrder
     productSku?: SortOrder
+    imei?: SortOrder
     quantity?: SortOrder
     branchId?: SortOrder
     customerId?: SortOrder
@@ -209795,6 +209828,7 @@ export namespace Prisma {
     source?: SortOrder
     productId?: SortOrder
     productSku?: SortOrder
+    imei?: SortOrder
     quantity?: SortOrder
     branchId?: SortOrder
     customerId?: SortOrder

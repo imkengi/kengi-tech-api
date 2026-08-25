@@ -16,6 +16,7 @@
  */
 
 import { registryPrisma, getStorePrisma } from '../lib/prisma'
+import { getOrCreateDefaultWarehouse } from '../lib/warehouseHelper'
 import { errMsg } from '../lib/errorResponse'
 import { tongPhieuChuaTraTheoNcc, congNoChuaKep, soDuDauKyTuKV } from '../lib/congNoNcc'
 import { KV, kvDate, type KiotVietCreds } from './kiotviet'
@@ -200,10 +201,12 @@ export async function buildOptions(sp: any, cfg: any, apply: boolean): Promise<S
     if (!warehouseId) {
         if (dem.warehouseId) warehouseId = dem.warehouseId
         else {
-            const wh = await sp.warehouse.findFirst({
-                where: { type: 'main', isActive: true },
-                orderBy: { isDefault: 'desc' }, select: { id: true },
-            }).catch(() => null)
+            /* "Kho main đầu tiên tìm thấy" từng MƠ HỒ khi cửa hàng có HAI kho
+             * main (boot-seed mồ côi + kho chi nhánh chính — đo HUTI 25/08/2026):
+             * KV bơm tồn vào kho mồ côi trong khi POS ghi kho chi nhánh → hai
+             * bản sao lệch nhau (SHD4030: 156 vs 16). Dùng ĐÚNG resolver của
+             * POS (null → kho chi nhánh chính) để mọi luồng cùng trỏ một kho. */
+            const wh = await getOrCreateDefaultWarehouse(sp, null).catch(() => null)
             warehouseId = wh?.id || null
             if (warehouseId) dem.warehouseId = warehouseId
         }

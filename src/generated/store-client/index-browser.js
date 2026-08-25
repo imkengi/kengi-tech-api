@@ -592,6 +592,7 @@ exports.Prisma.RepairScalarFieldEnum = {
   source: 'source',
   productId: 'productId',
   productSku: 'productSku',
+  imei: 'imei',
   quantity: 'quantity',
   branchId: 'branchId',
   customerId: 'customerId',

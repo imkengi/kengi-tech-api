@@ -984,6 +984,155 @@ router.post('/cleanup-orphan-warehouses', async (req: Request, res: Response) =>
     }
 })
 
+// ─── POST /admin/gop-kho-chinh ───────────────────────────────────────────────
+/**
+ * HỢP NHẤT KHO CHÍNH — chữa bệnh "một cửa hàng HAI kho chính" (đo HUTI 25/08/2026).
+ *
+ * Bệnh: boot-seed tạo kho main KHÔNG gắn chi nhánh (mồ côi); tạo chi nhánh chính
+ * lại đẻ kho main thứ hai. Hai luồng ghi mỗi luồng chọn một cái:
+ *   - POS / nhập tay / đơn sàn → kho CHI NHÁNH CHÍNH (getOrCreateDefaultWarehouse)
+ *   - Đồng bộ KiotViet (cũ)   → kho mồ côi (fallback lấy "main đầu tiên tìm thấy")
+ * Đo được: kho CN01 đóng băng từ 06/08 (SHD4030 ghi 156, thật 16), kho mồ côi mới
+ * là bản sống. `/cleanup-orphan-warehouses` TỪ CHỐI dọn — đúng, vì mồ côi còn tồn
+ * khác 0. Cái thiếu là bước GỘP: chính là endpoint này.
+ *
+ * Cách gộp — thẩm quyền là Product.stock (bất biến WarehouseStock[main] == Product.stock):
+ *   1. Kho ĐÍCH = kho main mặc định của chi nhánh chính (đúng kho resolver trả).
+ *   2. Đặt từng dòng kho đích := Product.stock — CHỈ ghi dòng đang lệch.
+ *   3. XOÁ dòng tồn kho mồ côi (bản sao cũ, không phải tồn thật nằm chỗ khác) rồi
+ *      bỏ cờ mặc định + ngưng hoạt động. KHÔNG xoá cứng — StockTransfer/SalesTrip
+ *      không có onDelete cascade.
+ *   4. Ghim KiotVietConfig.defaultWarehouseId = kho đích — hết mơ hồ vĩnh viễn.
+ *
+ * KHÔNG ghi InventoryTransaction: Product.stock không đổi một li — đây là sửa BẢN
+ * SAO theo kho; thẻ kho cộng dồn từ InventoryTransaction, ghi thêm dòng điều chỉnh
+ * sẽ làm CONG tồn luỹ kế trong khi tồn thật đứng yên.
+ *
+ * RÀO: cửa hàng có >1 kho main gắn chi nhánh (đa chi nhánh giữ tồn riêng) thì
+ * Product.stock là TỔNG các nơi — không đổ hết vào một kho được → báo và bỏ qua.
+ *
+ * Body: { storeCode?, apply?: true } — mặc định CHẠY THỬ, chỉ đếm và trả kế hoạch.
+ */
+router.post('/gop-kho-chinh', async (req: Request, res: Response) => {
+    try {
+        const { storeCode, apply } = req.body || {}
+        const stores = await prisma.store.findMany({
+            where: storeCode
+                ? { code: { equals: String(storeCode), mode: 'insensitive' } }
+                : { status: 'active' },
+        })
+        if (!stores.length) return res.status(404).json({ success: false, error: 'Không tìm thấy store' })
+
+        const ketQua: any[] = []
+        for (const store of stores) {
+            const sp: any = getStorePrisma(store.schema)
+            try {
+                const nhanhChinh = await sp.branch.findFirst({ where: { isMainBranch: true }, select: { id: true, code: true } }).catch(() => null)
+                const khoDich = nhanhChinh?.id
+                    ? await sp.warehouse.findFirst({
+                        where: { type: 'main', isDefault: true, branchId: nhanhChinh.id },
+                        select: { id: true, code: true, name: true },
+                    })
+                    : null
+                const moCoi = await sp.warehouse.findMany({
+                    where: { type: 'main', branchId: null },
+                    select: { id: true, code: true, isDefault: true, isActive: true },
+                })
+                if (!khoDich) {
+                    ketQua.push({ store: store.code, boQua: 'Chi nhánh chính chưa có kho main riêng — kho mồ côi (nếu có) đang là kho thật, không gộp', soMoCoi: moCoi.length })
+                    continue
+                }
+                if (!moCoi.length) {
+                    ketQua.push({ store: store.code, ok: 'Đã đúng 1 kho chính, không có mồ côi', khoChinh: khoDich.code })
+                    continue
+                }
+                const soMainNhanh = await sp.warehouse.count({ where: { type: 'main', isActive: true, branchId: { not: null } } })
+                if (soMainNhanh > 1) {
+                    ketQua.push({ store: store.code, boQua: `Có ${soMainNhanh} kho main theo chi nhánh — đa chi nhánh giữ tồn riêng, phải xử tay`, moCoi: moCoi.map((w: any) => w.code) })
+                    continue
+                }
+
+                // ── Kế hoạch: kho đích lệch gì so với Product.stock ──
+                const sanPham = await sp.product.findMany({ select: { id: true, sku: true, name: true, stock: true } })
+                const dongDich = await sp.warehouseStock.findMany({
+                    where: { warehouseId: khoDich.id }, select: { productId: true, quantity: true },
+                })
+                const mapDich = new Map<string, number>(dongDich.map((r: any) => [String(r.productId), Number(r.quantity) || 0]))
+                const lech: Array<{ id: string; sku: string; name: string; tu: number; ve: number }> = []
+                for (const p of sanPham) {
+                    const dang = mapDich.get(p.id) ?? 0
+                    const dung = Number(p.stock) || 0
+                    if (dang !== dung) lech.push({ id: p.id, sku: p.sku, name: p.name, tu: dang, ve: dung })
+                }
+
+                const tonMoCoi: any[] = []
+                for (const w of moCoi) {
+                    const soDong = await sp.warehouseStock.count({ where: { warehouseId: w.id } })
+                    tonMoCoi.push({ ma: w.code, macDinh: w.isDefault, dangHoatDong: w.isActive, soDongTonSeXoa: soDong })
+                }
+
+                const muc: any = {
+                    store: store.code,
+                    khoDich: { ma: khoDich.code, ten: khoDich.name },
+                    soSanPham: sanPham.length,
+                    soMaLechTruoc: lech.length,
+                    viDuLech: lech.slice(0, 8).map(l => `${l.sku}: ${l.tu} → ${l.ve}`),
+                    moCoi: tonMoCoi,
+                }
+
+                if (apply) {
+                    // Tuần tự — PROD PRISMA_POOL_SIZE=1, tuyệt đối không Promise.all
+                    for (const l of lech) {
+                        await sp.warehouseStock.upsert({
+                            where: { warehouseId_productId: { warehouseId: khoDich.id, productId: l.id } },
+                            create: { warehouseId: khoDich.id, productId: l.id, productName: l.name, productSku: l.sku, quantity: l.ve },
+                            update: { quantity: l.ve },
+                        })
+                    }
+                    for (const w of moCoi) {
+                        const daXoa = await sp.warehouseStock.deleteMany({ where: { warehouseId: w.id } })
+                        await sp.warehouse.update({
+                            where: { id: w.id },
+                            data: {
+                                isDefault: false, isActive: false,
+                                description: `Đã gộp vào ${khoDich.code} (gop-kho-chinh ${new Date().toISOString().slice(0, 10)})`,
+                            },
+                        })
+                        const t = tonMoCoi.find(x => x.ma === w.code)
+                        if (t) t.daXoaDong = daXoa.count
+                    }
+                    const cfg = await sp.kiotVietConfig.findUnique({ where: { id: 'default' } }).catch(() => null)
+                    if (cfg) {
+                        await sp.kiotVietConfig.update({ where: { id: 'default' }, data: { defaultWarehouseId: khoDich.id } })
+                        muc.kvGhimKho = `${cfg.defaultWarehouseId || '(chưa chọn — fallback mơ hồ)'} → ${khoDich.id}`
+                    }
+
+                    // Nghiệm thu bằng số ngay trong cùng phản hồi
+                    const dongSau = await sp.warehouseStock.findMany({
+                        where: { warehouseId: khoDich.id }, select: { productId: true, quantity: true },
+                    })
+                    const mapSau = new Map<string, number>(dongSau.map((r: any) => [String(r.productId), Number(r.quantity) || 0]))
+                    let lechSau = 0
+                    for (const p of sanPham) {
+                        if ((mapSau.get(p.id) ?? 0) !== (Number(p.stock) || 0)) lechSau++
+                    }
+                    muc.soMaLechSau = lechSau
+                    muc.daLam = 'ĐÃ GỘP'
+                } else {
+                    muc.daLam = 'chạy thử, chưa đụng gì'
+                }
+                ketQua.push(muc)
+            } catch (e: any) {
+                ketQua.push({ store: store.code, loi: e?.message?.slice(0, 160) })
+            }
+        }
+        res.json({ success: true, cheDo: apply ? 'ĐÃ ÁP DỤNG' : 'CHẠY THỬ — không đụng dữ liệu', ketQua })
+    } catch (err: any) {
+        console.error('[admin] gop-kho-chinh:', err?.message)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
 /* GET /admin/tarot-readings — soi các lượt gần nhất.
  *
  * Dựng để truy một báo lỗi "chưa lật lá nào đã thấy trong lịch sử": đọc code
