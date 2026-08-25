@@ -3234,7 +3234,8 @@ model MisaImportBatch {
   userName  String?
   createdAt DateTime @default(now())
 
-  docs MisaSaleDoc[]
+  docs         MisaSaleDoc[]
+  purchaseDocs MisaPurchaseDoc[]
 
   @@index([loai, createdAt])
 }
@@ -3302,6 +3303,63 @@ model MisaSaleLine {
   /// Nối sang Product của Kengi theo SKU (cột "Mã hàng"). null = chưa khớp.
   productId String?
   /// Dòng thứ mấy trong file gốc — để truy ngược khi số liệu đáng ngờ.
+  dongSo    Int?
+
+  @@index([docId])
+  @@index([maHang])
+  @@index([productId])
+}
+
+/// Sổ chi tiết MUA HÀNG đổ từ Excel MISA (25/08/2026) — cùng triết lý với
+/// MisaSaleDoc: sổ RIÊNG để đối chiếu; muốn thành phiếu nhập thật của cửa hàng
+/// GƯƠNG thì qua POST /api/misa/do-thanh-phieu-nhap (có rào chống đếm trùng).
+/// Sổ MISA mẫu này KHÔNG có cột nhà cung cấp — phiếu quy đổi ghi rõ điều đó.
+model MisaPurchaseDoc {
+  id           String    @id @default(cuid())
+  /// Khoá chống trùng: đổ lại cùng file thì cập nhật, không nhân đôi.
+  soChungTu    String    @unique
+  soHoaDon     String?
+  ngayChungTu  DateTime?
+  ngayHachToan DateTime?
+  ngayHoaDon   DateTime?
+
+  tongGiaTri    Float @default(0)
+  tongThue      Float @default(0)
+  tongChietKhau Float @default(0)
+  tongTra       Float @default(0)
+  tongGiamGia   Float @default(0)
+
+  batchId   String?
+  batch     MisaImportBatch?   @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  lines     MisaPurchaseLine[]
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  @@index([ngayChungTu])
+  @@index([soHoaDon])
+  @@index([batchId])
+}
+
+model MisaPurchaseLine {
+  id    String          @id @default(cuid())
+  docId String
+  doc   MisaPurchaseDoc @relation(fields: [docId], references: [id], onDelete: Cascade)
+
+  maHang  String
+  tenHang String?
+  dvt     String?
+
+  soLuong    Float @default(0)
+  donGia     Float @default(0)
+  giaTri     Float @default(0)
+  thueGtgt   Float @default(0)
+  chietKhau  Float @default(0)
+  soLuongTra Float @default(0)
+  giaTriTra  Float @default(0)
+  giamGia    Float @default(0)
+
+  /// Nối sang Product của Kengi theo SKU (cột "Mã hàng"). null = chưa khớp.
+  productId String?
   dongSo    Int?
 
   @@index([docId])

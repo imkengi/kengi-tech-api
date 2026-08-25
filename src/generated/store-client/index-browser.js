@@ -2431,6 +2431,41 @@ exports.Prisma.MisaSaleLineScalarFieldEnum = {
   dongSo: 'dongSo'
 };
 
+exports.Prisma.MisaPurchaseDocScalarFieldEnum = {
+  id: 'id',
+  soChungTu: 'soChungTu',
+  soHoaDon: 'soHoaDon',
+  ngayChungTu: 'ngayChungTu',
+  ngayHachToan: 'ngayHachToan',
+  ngayHoaDon: 'ngayHoaDon',
+  tongGiaTri: 'tongGiaTri',
+  tongThue: 'tongThue',
+  tongChietKhau: 'tongChietKhau',
+  tongTra: 'tongTra',
+  tongGiamGia: 'tongGiamGia',
+  batchId: 'batchId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.MisaPurchaseLineScalarFieldEnum = {
+  id: 'id',
+  docId: 'docId',
+  maHang: 'maHang',
+  tenHang: 'tenHang',
+  dvt: 'dvt',
+  soLuong: 'soLuong',
+  donGia: 'donGia',
+  giaTri: 'giaTri',
+  thueGtgt: 'thueGtgt',
+  chietKhau: 'chietKhau',
+  soLuongTra: 'soLuongTra',
+  giaTriTra: 'giaTriTra',
+  giamGia: 'giamGia',
+  productId: 'productId',
+  dongSo: 'dongSo'
+};
+
 exports.Prisma.SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -2581,7 +2616,9 @@ exports.Prisma.ModelName = {
   AiChat: 'AiChat',
   MisaImportBatch: 'MisaImportBatch',
   MisaSaleDoc: 'MisaSaleDoc',
-  MisaSaleLine: 'MisaSaleLine'
+  MisaSaleLine: 'MisaSaleLine',
+  MisaPurchaseDoc: 'MisaPurchaseDoc',
+  MisaPurchaseLine: 'MisaPurchaseLine'
 };
 
 /**

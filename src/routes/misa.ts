@@ -19,6 +19,9 @@ import multer from 'multer'
 import * as XLSX from 'xlsx'
 import { registryPrisma, getStorePrisma } from '../lib/prisma'
 import { errMsg } from '../lib/errorResponse'
+import { cacheDel } from '../lib/cache'
+import { docNhatKyTien } from '../services/misaExcel'
+import { doMuaHangMisa, tomTatMuaDeGhiLog } from '../services/misaImportMuaHang'
 import {
     MISA, MISA_DATA_TYPE, MISA_DEBT_TYPE, misaTime, testMisaConnection, clearMisaToken,
     doDanhMuc, type MisaCreds,
@@ -56,6 +59,7 @@ export const MISA_ENTITY_LABEL: Record<string, string> = {
     // Đổ từ Excel — không phải thực thể đồng bộ được, nhưng dùng chung nhật ký nên cần nhãn
     salesExcel: 'Bán hàng (đổ Excel)',
     purchasesExcel: 'Mua hàng (đổ Excel)',
+    cashExcel: 'Thu/Chi tiền (đổ Excel)',
 }
 
 function safeEqual(a: string, b: string): boolean {
@@ -869,6 +873,325 @@ router.post('/do-thanh-don-ban', async (req: Request, res: Response) => {
          * che sạch) trong khi dữ liệu đã vào đủ — không log nguyên văn thì không
          * bao giờ biết đã nổ ở đâu. */
         console.error('[misa] do-thanh-don-ban:', e?.message || e, e?.stack?.split('\n')[1] || '')
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// ─── POST /api/misa/import-purchases ────────────────────────────────────────
+/** Đổ Excel "Sổ chi tiết mua hàng" — song sinh với /import-sales. */
+router.post('/import-purchases', uploadExcel.single('file'), async (req: Request, res: Response) => {
+    try {
+        const b: any = req.body || {}
+        const store = await resolveStore(String(b.storeCode || ''))
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        if (!req.file?.buffer?.length) { res.status(400).json({ success: false, error: 'Chưa chọn file Excel' }); return }
+        let rows: any[][]
+        let tenSheet = ''
+        try {
+            const wb = XLSX.read(req.file.buffer, { type: 'buffer', codepage: 65001, raw: false })
+            tenSheet = wb.SheetNames[0] || ''
+            if (!tenSheet) throw new Error('file không có sheet nào')
+            rows = XLSX.utils.sheet_to_json<any[]>(wb.Sheets[tenSheet]!, { header: 1, raw: false, defval: '' })
+        } catch (e: any) {
+            res.status(400).json({ success: false, error: `Không mở được file Excel: ${errMsg(e)}` }); return
+        }
+        const apply = b.apply === true || b.apply === 'true'
+        const kq = await doMuaHangMisa(store.sp, rows, {
+            tenFile: req.file.originalname || 'không rõ tên', apply,
+            userId: (req as any).user?.userId || null,
+            userName: (req as any).user?.email || 'admin-panel',
+        })
+        await store.sp.misaSyncLog.create({
+            data: {
+                entity: 'purchasesExcel', mode: 'excel', dryRun: !apply,
+                status: kq.tieuDeThieu.length ? 'error' : 'success',
+                errors: kq.tieuDeThieu.length
+                    ? `Thiếu cột bắt buộc: ${kq.tieuDeThieu.join(', ')}`
+                    : (kq.canhBao.length ? kq.canhBao.join(' · ').slice(0, 4000) : null),
+                fetched: kq.tongDong, created: kq.chungTuMoi, updated: kq.chungTuCapNhat,
+                skipped: kq.boQua, failed: kq.tieuDeThieu.length ? 1 : 0,
+                details: JSON.stringify(tomTatMuaDeGhiLog(kq)),
+                startedAt: new Date(), finishedAt: new Date(),
+            },
+        }).catch(() => { /* nhật ký hỏng không được làm hỏng lượt đổ */ })
+        res.json({ success: true, sheet: tenSheet, store: store.name, apply, ...kq })
+    } catch (e: any) {
+        console.error('[misa] import-purchases:', e?.message || e)
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+/** GET /api/misa/purchases?storeCode=&from=&to= — đọc lại sổ mua đã đổ. */
+router.get('/purchases', async (req: Request, res: Response) => {
+    try {
+        const store = await resolveStore(String(req.query.storeCode || ''))
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const from = req.query.from ? new Date(String(req.query.from)) : null
+        const to = req.query.to ? new Date(String(req.query.to) + 'T23:59:59+07:00') : null
+        const where: any = {}
+        if (from || to) where.ngayChungTu = { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) }
+        const items = await store.sp.misaPurchaseDoc.findMany({
+            where, orderBy: { ngayChungTu: 'desc' },
+            take: Math.min(Number(req.query.limit) || 100, 300),
+            include: { _count: { select: { lines: true } } },
+        })
+        const doPhu = await store.sp.misaImportBatch.findFirst({
+            where: { loai: 'purchases', apply: true }, orderBy: { createdAt: 'desc' },
+            select: { tenFile: true, kyBaoCao: true, createdAt: true, docDuoc: true, tongDong: true, boQua: true },
+        }).catch(() => null)
+        res.json({ success: true, items, doPhu })
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// ─── POST /api/misa/do-thanh-phieu-nhap ─────────────────────────────────────
+/**
+ * Sổ mua MISA → PHIẾU NHẬP THẬT của cửa hàng GƯƠNG — song sinh với
+ * /do-thanh-don-ban, cùng rào: từ chối nếu cửa hàng có phiếu nhập không mang
+ * mã MISA-. KHÔNG đụng tồn kho / thẻ kho — cửa hàng gương chỉ giữ sổ sách.
+ * Sổ MISA mẫu này không có cột NCC → phiếu ghi rõ "Sổ MISA (sổ không ghi NCC)".
+ * paidAmount = đủ để không đẻ công nợ ảo (sổ không nói tiến độ trả tiền).
+ */
+router.post('/do-thanh-phieu-nhap', async (req: Request, res: Response) => {
+    try {
+        const b: any = req.body || {}
+        const store = await registryPrisma.store.findFirst({
+            where: { code: { equals: String(b.storeCode || ''), mode: 'insensitive' } },
+            select: { code: true, name: true, schema: true },
+        })
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const sp: any = getStorePrisma(store.schema)
+        const apply = b.apply === true || b.apply === 'true'
+
+        const soPhieuNgoai = await sp.importReceipt.count({ where: { NOT: { code: { startsWith: 'MISA-' } } } })
+        if (soPhieuNgoai > 0) {
+            res.status(400).json({
+                success: false,
+                error: `Cửa hàng ${store.code} có ${soPhieuNgoai} phiếu nhập KHÔNG phải từ MISA — đổ thêm là đếm trùng. Chỉ chạy trên cửa hàng gương.`,
+            })
+            return
+        }
+        const user = await sp.user.findFirst({
+            where: { role: { in: ['admin', 'owner', 'manager'] } },
+            orderBy: { createdAt: 'asc' }, select: { id: true, name: true },
+        })
+        if (!user?.id) { res.status(400).json({ success: false, error: 'Cửa hàng chưa có tài khoản admin/manager để đứng tên phiếu' }); return }
+
+        const docs = await sp.misaPurchaseDoc.findMany({ include: { lines: true }, orderBy: { ngayChungTu: 'asc' } })
+        if (!docs.length) { res.json({ success: true, store: store.code, thongBao: 'Chưa có chứng từ mua nào — đổ Excel mua hàng trước đã' }); return }
+
+        let categoryId: string | null = (await sp.category.findFirst({ select: { id: true }, orderBy: { createdAt: 'asc' } }))?.id || null
+        if (!categoryId && apply) categoryId = (await sp.category.create({ data: { name: 'MISA' }, select: { id: true } })).id
+
+        const kq = {
+            phieuMoi: 0, phieuCapNhat: 0, coHoaDon: 0, spMoi: 0, spDaCo: 0,
+            tongTienHang: 0, tongThue: 0, tuNgay: null as string | null, denNgay: null as string | null,
+            canhBao: [] as string[], viDu: [] as string[],
+        }
+        const spMoiTao = new Map<string, string>()
+
+        for (const doc of docs) {
+            const code = `MISA-${doc.soChungTu}`
+            const ngay = doc.ngayChungTu || doc.ngayHachToan || doc.createdAt
+            const iso = ngay.toISOString().slice(0, 10)
+            if (!kq.tuNgay || iso < kq.tuNgay) kq.tuNgay = iso
+            if (!kq.denNgay || iso > kq.denNgay) kq.denNgay = iso
+
+            const items: any[] = []
+            let totalCost = 0
+            for (const l of doc.lines || []) {
+                const soLuong = Math.max(1, Math.round(Number(l.soLuong) || 0))
+                if (!(Number(l.soLuong) > 0) && !(Number(l.giaTri) > 0)) continue
+                let productId = l.productId || spMoiTao.get(l.maHang) || null
+                if (!productId) {
+                    const p = await sp.product.findUnique({ where: { sku: l.maHang }, select: { id: true } })
+                    if (p?.id) { productId = p.id; kq.spDaCo++ }
+                    else if (apply && categoryId) {
+                        const tao = await sp.product.create({
+                            data: {
+                                sku: l.maHang, name: l.tenHang || l.maHang, categoryId,
+                                costPrice: Number(l.donGia) || 0, sellingPrice: 0,
+                                baseUnit: l.dvt || 'cái', stock: 0,
+                                description: 'Tạo từ sổ mua hàng MISA',
+                            }, select: { id: true },
+                        })
+                        productId = tao.id
+                        kq.spMoi++
+                    } else { kq.spMoi++; continue }
+                    if (productId) spMoiTao.set(l.maHang, productId)
+                }
+                const net = (Number(l.giaTri) || 0) - (Number(l.chietKhau) || 0) - (Number(l.giamGia) || 0) - (Number(l.giaTriTra) || 0)
+                totalCost += net
+                items.push({
+                    productId, productName: l.tenHang || l.maHang, productSku: l.maHang,
+                    quantity: soLuong, returnedQuantity: Math.max(0, Math.round(Number(l.soLuongTra) || 0)),
+                    costPrice: Number(l.donGia) || 0, discount: Number(l.chietKhau) || 0, total: net,
+                })
+            }
+            const vatAmount = Number(doc.tongThue) || 0
+            kq.tongTienHang += totalCost
+            kq.tongThue += vatAmount
+            if (doc.soHoaDon) kq.coHoaDon++
+
+            const duLieu = {
+                supplierName: 'Sổ MISA (sổ không ghi NCC)',
+                totalCost, totalItems: items.length, status: 'completed',
+                paidAmount: totalCost + vatAmount, paymentStatus: 'paid',
+                hasVatInvoice: !!doc.soHoaDon, vatInvoiceNo: doc.soHoaDon || null, vatAmount,
+                note: `Đổ từ sổ mua hàng MISA${doc.soHoaDon ? ` — HĐ ${doc.soHoaDon}` : ''} (sổ không ghi NCC & tiến độ trả tiền; KHÔNG cộng tồn kho)`,
+                userId: user.id, userName: 'Sổ MISA',
+                transactionDate: ngay, createdAt: ngay,
+            }
+            if (apply) {
+                const cu = await sp.importReceipt.findUnique({ where: { code }, select: { id: true } })
+                if (cu) {
+                    await sp.importReceiptItem.deleteMany({ where: { receiptId: cu.id } })
+                    await sp.importReceipt.update({ where: { id: cu.id }, data: { ...duLieu, items: { create: items } } })
+                    kq.phieuCapNhat++
+                } else {
+                    await sp.importReceipt.create({ data: { ...duLieu, code, items: { create: items } } })
+                    kq.phieuMoi++
+                }
+            } else {
+                const cu = await sp.importReceipt.findUnique({ where: { code }, select: { id: true } })
+                if (cu) kq.phieuCapNhat++; else kq.phieuMoi++
+            }
+            if (kq.viDu.length < 5) kq.viDu.push(`${code} · ${iso} · HĐ ${doc.soHoaDon || '—'} · ${Math.round(totalCost).toLocaleString('vi-VN')}đ + thuế ${Math.round(vatAmount).toLocaleString('vi-VN')}đ · ${items.length} dòng`)
+        }
+
+        if (apply) {
+            await cacheDel(`${store.schema}:*:dashboard:*`).catch(() => { })
+            await cacheDel(`${store.schema}:dashboard:*`).catch(() => { })
+        }
+        kq.canhBao.unshift('Phiếu KHÔNG cộng tồn kho (cửa hàng gương chỉ giữ sổ) và không có tên NCC — sổ MISA mẫu này không xuất cột đó')
+
+        res.json({ success: true, store: store.code, apply, soChungTu: docs.length, ...kq })
+    } catch (e: any) {
+        console.error('[misa] do-thanh-phieu-nhap:', e?.message || e, e?.stack?.split('\n')[1] || '')
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
+// ─── POST /api/misa/import-cash-journal ─────────────────────────────────────
+/**
+ * Sổ NHẬT KÝ THU TIỀN / CHI TIỀN → thẳng vào sổ quỹ của cửa hàng GƯƠNG:
+ * thu → CashReceipt (khoá chống trùng `reference` = MISA-<số hiệu>), chi →
+ * Expense (khoá `sourceRef`). Không cần bảng staging — hai bảng đích có sẵn
+ * khoá chống trùng và màn Thu Chi đọc thẳng chúng.
+ *
+ * RÀO chống đếm trùng: từ chối khi cửa hàng đã có phiếu thu/chi KHÔNG mang mã
+ * MISA- (cửa hàng thật ghi sổ quỹ qua POS/Thu Chi — đổ thêm là tiền đếm đôi).
+ */
+router.post('/import-cash-journal', uploadExcel.single('file'), async (req: Request, res: Response) => {
+    try {
+        const b: any = req.body || {}
+        const store = await resolveStore(String(b.storeCode || ''))
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        if (!req.file?.buffer?.length) { res.status(400).json({ success: false, error: 'Chưa chọn file Excel' }); return }
+        let rows: any[][]
+        let tenSheet = ''
+        try {
+            const wb = XLSX.read(req.file.buffer, { type: 'buffer', codepage: 65001, raw: false })
+            tenSheet = wb.SheetNames[0] || ''
+            if (!tenSheet) throw new Error('file không có sheet nào')
+            rows = XLSX.utils.sheet_to_json<any[]>(wb.Sheets[tenSheet]!, { header: 1, raw: false, defval: '' })
+        } catch (e: any) {
+            res.status(400).json({ success: false, error: `Không mở được file Excel: ${errMsg(e)}` }); return
+        }
+        const apply = b.apply === true || b.apply === 'true'
+        const kq = docNhatKyTien(rows)
+        if (kq.tieuDeThieu.length || !kq.loai) {
+            res.json({
+                success: true, sheet: tenSheet, store: store.name, apply: false,
+                loai: kq.loai, tieuDeThieu: kq.tieuDeThieu.length ? kq.tieuDeThieu : ['(không nhận ra sổ thu hay chi)'],
+                tongDong: kq.tongDong,
+            })
+            return
+        }
+        const sp = store.sp
+
+        // Rào cửa hàng gương — đếm bản ghi KHÔNG phải MISA (reference/sourceRef null cũng tính)
+        let soNgoai = 0
+        if (kq.loai === 'thu') {
+            const [tong, cuaMisa] = [
+                await sp.cashReceipt.count(),
+                await sp.cashReceipt.count({ where: { reference: { startsWith: 'MISA-' } } }),
+            ]
+            soNgoai = tong - cuaMisa
+        } else {
+            const [tong, cuaMisa] = [
+                await sp.expense.count(),
+                await sp.expense.count({ where: { sourceRef: { startsWith: 'MISA-' } } }),
+            ]
+            soNgoai = tong - cuaMisa
+        }
+        if (soNgoai > 0) {
+            res.status(400).json({
+                success: false,
+                error: `Cửa hàng có ${soNgoai} phiếu ${kq.loai === 'thu' ? 'thu' : 'chi'} KHÔNG phải từ MISA — đổ thêm là tiền đếm đôi. Chỉ chạy trên cửa hàng gương.`,
+            })
+            return
+        }
+
+        let moi = 0, capNhat = 0, tongTien = 0
+        let tuNgay: string | null = null, denNgay: string | null = null
+        for (const e of kq.entries) {
+            tongTien += e.soTien
+            const iso = e.ngay ? e.ngay.toISOString().slice(0, 10) : null
+            if (iso) {
+                if (!tuNgay || iso < tuNgay) tuNgay = iso
+                if (!denNgay || iso > denNgay) denNgay = iso
+            }
+            const khoa = `MISA-${e.soHieu}`
+            if (kq.loai === 'thu') {
+                const cu = await sp.cashReceipt.findFirst({ where: { reference: khoa }, select: { id: true } })
+                if (apply) {
+                    const duLieu = {
+                        description: e.dienGiai || `Thu tiền ${e.soHieu} (sổ MISA)`,
+                        amount: e.soTien, category: 'other',
+                        date: e.ngay || new Date(), receivedVia: 'Tiền mặt',
+                        reference: khoa, status: 'active',
+                    }
+                    if (cu) { await sp.cashReceipt.update({ where: { id: cu.id }, data: duLieu }); capNhat++ }
+                    else { await sp.cashReceipt.create({ data: { ...duLieu, createdAt: e.ngay || new Date() } }); moi++ }
+                } else { if (cu) capNhat++; else moi++ }
+            } else {
+                const cu = await sp.expense.findFirst({ where: { sourceRef: khoa }, select: { id: true } })
+                if (apply) {
+                    const duLieu = {
+                        description: e.dienGiai || `Chi tiền ${e.soHieu} (sổ MISA)`,
+                        amount: e.soTien, category: 'other',
+                        date: e.ngay || new Date(), paidBy: 'Sổ MISA',
+                        sourceRef: khoa, status: 'active',
+                    }
+                    if (cu) { await sp.expense.update({ where: { id: cu.id }, data: duLieu }); capNhat++ }
+                    else { await sp.expense.create({ data: { ...duLieu, createdAt: e.ngay || new Date() } }); moi++ }
+                } else { if (cu) capNhat++; else moi++ }
+            }
+        }
+
+        await sp.misaSyncLog.create({
+            data: {
+                entity: 'cashExcel', mode: 'excel', dryRun: !apply,
+                status: 'success',
+                errors: kq.boQua.length ? `Bỏ ${kq.boQua.length} dòng: ${kq.boQua.slice(0, 5).map(x => x.lyDo).join(' · ')}`.slice(0, 4000) : null,
+                fetched: kq.tongDong, created: apply ? moi : 0, updated: apply ? capNhat : 0,
+                skipped: kq.boQua.length, failed: 0,
+                details: JSON.stringify({ loai: kq.loai, tongTien, tuNgay, denNgay, boQua: kq.boQua.slice(0, 50) }),
+                startedAt: new Date(), finishedAt: new Date(),
+            },
+        }).catch(() => { })
+
+        res.json({
+            success: true, sheet: tenSheet, store: store.name, apply,
+            loai: kq.loai, kyBaoCao: kq.kyBaoCao,
+            tongDong: kq.tongDong, docDuoc: kq.entries.length, boQua: kq.boQua.length,
+            boQuaChiTiet: kq.boQua.slice(0, 10),
+            moi, capNhat, tongTien, tuNgay, denNgay,
+        })
+    } catch (e: any) {
+        console.error('[misa] import-cash-journal:', e?.message || e)
         res.status(500).json({ success: false, error: errMsg(e) })
     }
 })

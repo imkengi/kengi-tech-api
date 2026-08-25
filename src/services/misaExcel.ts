@@ -321,3 +321,237 @@ export function gomChungTu(dong: DongBanHangMisa[]): ChungTuBanHangMisa[] {
     }
     return [...map.values()]
 }
+
+/* ═══════════════ SỔ CHI TIẾT MUA HÀNG (25/08/2026) ═══════════════
+ * Khác sổ bán hàng: file PHẲNG — mỗi dòng đã mang đủ số chứng từ + ngày + số
+ * hoá đơn, không có khối "Tên hàng:" lồng nhau, và KHÔNG có cột nhà cung cấp
+ * (đo file thật 25/08: 161 dòng, tổng 1.727.612.790đ + thuế 140.547.153đ). */
+
+export interface DongMuaHangMisa {
+    ngayHachToan: Date | null
+    ngayChungTu: Date | null
+    soChungTu: string
+    ngayHoaDon: Date | null
+    soHoaDon: string
+    maHang: string
+    tenHang: string
+    dvt: string
+    soLuong: number
+    donGia: number
+    giaTri: number
+    thueGtgt: number
+    chietKhau: number
+    soLuongTra: number
+    giaTriTra: number
+    giamGia: number
+    dongSo: number
+}
+
+const COT_MUA_HANG: Record<string, string[]> = {
+    ngayHachToan: ['ngay hach toan'],
+    ngayChungTu: ['ngay chung tu'],
+    soChungTu: ['so chung tu'],
+    ngayHoaDon: ['ngay hoa don'],
+    soHoaDon: ['so hoa don'],
+    maHang: ['ma hang'],
+    tenHang: ['ten hang'],
+    dvt: ['dvt', 'don vi tinh'],
+    soLuong: ['so luong mua', 'so luong'],
+    donGia: ['don gia'],
+    giaTri: ['gia tri mua', 'thanh tien'],
+    thueGtgt: ['thue gtgt'],
+    chietKhau: ['chiet khau'],
+    soLuongTra: ['so luong tra lai'],
+    giaTriTra: ['gia tri tra lai'],
+    giamGia: ['gia tri giam gia', 'giam gia'],
+}
+const BAT_BUOC_MUA = ['soChungTu', 'maHang', 'soLuong', 'giaTri']
+
+/** Bản tổng quát của timHangTieuDe — nhận map cột thay vì gắn cứng bán hàng. */
+function timTieuDeTheo(map: Record<string, string[]>, batBuoc: string[], rows: any[][]) {
+    let tot = { chiSo: -1, anhXa: {} as Partial<Record<string, number>>, diem: 0 }
+    const gioiHan = Math.min(rows.length, 20)
+    for (let r = 0; r < gioiHan; r++) {
+        const anhXa: Partial<Record<string, number>> = {}
+        let diem = 0
+        ;(rows[r] || []).forEach((o: any, c: number) => {
+            const ten = chuanHoa(o)
+            if (!ten) return
+            for (const [truong, nhan] of Object.entries(map)) {
+                if (anhXa[truong] !== undefined) continue
+                if (nhan.includes(ten)) { anhXa[truong] = c; diem++; break }
+            }
+        })
+        if (diem > tot.diem) tot = { chiSo: r, anhXa, diem }
+    }
+    const thieu = batBuoc.filter(t => tot.anhXa[t] === undefined).map(t => map[t]![0]!)
+    return { chiSo: tot.chiSo, anhXa: tot.anhXa, thieu }
+}
+
+export function docSoMuaHang(rows: any[][]): KetQuaDocExcel<DongMuaHangMisa> {
+    const kq: KetQuaDocExcel<DongMuaHangMisa> = {
+        dong: [], tongDong: 0, docDuoc: 0, boQua: [], tieuDeThieu: [], kyBaoCao: '',
+    }
+    if (!rows?.length) { kq.tieuDeThieu = ['(file rỗng)']; return kq }
+    for (let r = 0; r < Math.min(rows.length, 10); r++) {
+        const t = String(rows[r]?.find((x: any) => /tháng\s*\d/i.test(String(x ?? ''))) ?? '')
+        if (t) { kq.kyBaoCao = t.trim(); break }
+    }
+    const { chiSo, anhXa, thieu } = timTieuDeTheo(COT_MUA_HANG, BAT_BUOC_MUA, rows)
+    if (chiSo < 0 || thieu.length) { kq.tieuDeThieu = thieu.length ? thieu : ['(không dò được hàng tiêu đề)']; return kq }
+    const lay = (r: any[], t: string) => (anhXa[t] === undefined ? undefined : r[anhXa[t]!])
+
+    for (let r = chiSo + 1; r < rows.length; r++) {
+        const hang = rows[r] || []
+        const soChungTu = String(lay(hang, 'soChungTu') ?? '').trim()
+        const giaTri = docSo(lay(hang, 'giaTri'))
+        const soLuong = docSo(lay(hang, 'soLuong'))
+        if (!soChungTu) {
+            // Dòng tổng cộng của MISA không có số chứng từ — chỉ ghi nhận khi nó mang tiền
+            if ((giaTri ?? 0) > 0 && !/tong cong/.test(chuanHoa(hang.join(' ')))) {
+                kq.boQua.push({ dong: r + 1, lyDo: 'không có số chứng từ (có thể là dòng tổng cộng)' })
+            }
+            continue
+        }
+        kq.tongDong++
+        const maHang = String(lay(hang, 'maHang') ?? '').trim()
+        if (!maHang) { kq.boQua.push({ dong: r + 1, lyDo: `chứng từ ${soChungTu}: thiếu mã hàng` }); continue }
+        kq.dong.push({
+            ngayHachToan: docNgay(lay(hang, 'ngayHachToan')),
+            ngayChungTu: docNgay(lay(hang, 'ngayChungTu')),
+            soChungTu,
+            ngayHoaDon: docNgay(lay(hang, 'ngayHoaDon')),
+            soHoaDon: String(lay(hang, 'soHoaDon') ?? '').trim(),
+            maHang,
+            tenHang: String(lay(hang, 'tenHang') ?? '').trim(),
+            dvt: String(lay(hang, 'dvt') ?? '').trim(),
+            soLuong: soLuong ?? 0,
+            donGia: docSo(lay(hang, 'donGia')) ?? 0,
+            giaTri: giaTri ?? 0,
+            thueGtgt: docSo(lay(hang, 'thueGtgt')) ?? 0,
+            chietKhau: docSo(lay(hang, 'chietKhau')) ?? 0,
+            soLuongTra: docSo(lay(hang, 'soLuongTra')) ?? 0,
+            giaTriTra: docSo(lay(hang, 'giaTriTra')) ?? 0,
+            giamGia: docSo(lay(hang, 'giamGia')) ?? 0,
+            dongSo: r + 1,
+        })
+        kq.docDuoc++
+    }
+    return kq
+}
+
+export interface ChungTuMuaHangMisa {
+    soChungTu: string
+    soHoaDon: string
+    ngay: Date | null
+    ngayHoaDon: Date | null
+    lines: DongMuaHangMisa[]
+    tongGiaTri: number
+    tongThue: number
+    tongChietKhau: number
+    tongTra: number
+    tongGiamGia: number
+}
+
+export function gomChungTuMua(dong: DongMuaHangMisa[]): ChungTuMuaHangMisa[] {
+    const theo = new Map<string, ChungTuMuaHangMisa>()
+    for (const d of dong) {
+        let ct = theo.get(d.soChungTu)
+        if (!ct) {
+            ct = {
+                soChungTu: d.soChungTu, soHoaDon: d.soHoaDon,
+                ngay: d.ngayChungTu || d.ngayHachToan, ngayHoaDon: d.ngayHoaDon,
+                lines: [], tongGiaTri: 0, tongThue: 0, tongChietKhau: 0, tongTra: 0, tongGiamGia: 0,
+            }
+            theo.set(d.soChungTu, ct)
+        }
+        if (!ct.soHoaDon && d.soHoaDon) ct.soHoaDon = d.soHoaDon
+        if (!ct.ngay) ct.ngay = d.ngayChungTu || d.ngayHachToan
+        if (!ct.ngayHoaDon) ct.ngayHoaDon = d.ngayHoaDon
+        ct.lines.push(d)
+        ct.tongGiaTri += d.giaTri
+        ct.tongThue += d.thueGtgt
+        ct.tongChietKhau += d.chietKhau
+        ct.tongTra += d.giaTriTra
+        ct.tongGiamGia += d.giamGia
+    }
+    return [...theo.values()]
+}
+
+/* ═══════════════ SỔ NHẬT KÝ THU TIỀN / CHI TIỀN (25/08/2026) ═══════════════
+ * Tiêu đề nằm trên HAI hàng: hàng trên có "Ngày, tháng ghi sổ / Chứng từ /
+ * Diễn giải / Ghi nợ TK 111" (thu — tiền vào; sổ chi là "Ghi có TK 111"),
+ * hàng dưới có "Số hiệu / Ngày, tháng". Bộ dò một-hàng dùng cho bán/mua không
+ * ăn được — dò riêng: tìm hàng chứa "so hieu", rồi lấy cột tiền ở hàng trên. */
+
+export interface DongNhatKyTien {
+    soHieu: string
+    ngay: Date | null
+    dienGiai: string
+    soTien: number
+    dongSo: number
+}
+
+export interface KetQuaNhatKyTien {
+    loai: 'thu' | 'chi' | null
+    entries: DongNhatKyTien[]
+    tongDong: number
+    boQua: Array<{ dong: number; lyDo: string }>
+    kyBaoCao: string
+    tieuDeThieu: string[]
+}
+
+export function docNhatKyTien(rows: any[][]): KetQuaNhatKyTien {
+    const kq: KetQuaNhatKyTien = { loai: null, entries: [], tongDong: 0, boQua: [], kyBaoCao: '', tieuDeThieu: [] }
+    if (!rows?.length) { kq.tieuDeThieu = ['(file rỗng)']; return kq }
+
+    const dauFile = chuanHoa(rows.slice(0, 6).flat().join(' '))
+    if (/nhat ky thu tien/.test(dauFile)) kq.loai = 'thu'
+    else if (/nhat ky chi tien/.test(dauFile)) kq.loai = 'chi'
+    for (let r = 0; r < Math.min(rows.length, 10); r++) {
+        const t = String(rows[r]?.find((x: any) => /tháng\s*\d/i.test(String(x ?? ''))) ?? '')
+        if (t) { kq.kyBaoCao = t.trim(); break }
+    }
+
+    let hangB = -1
+    for (let r = 0; r < Math.min(rows.length, 25); r++) {
+        if ((rows[r] || []).some((o: any) => chuanHoa(o) === 'so hieu')) { hangB = r; break }
+    }
+    if (hangB < 1) { kq.tieuDeThieu = ['so hieu (hàng tiêu đề chứng từ)']; return kq }
+    const hangA = rows[hangB - 1] || []
+    const cSoHieu = (rows[hangB] || []).findIndex((o: any) => chuanHoa(o) === 'so hieu')
+    const cNgayCT = (rows[hangB] || []).findIndex((o: any) => /^ngay/.test(chuanHoa(o)))
+    let cDienGiai = -1, cTien = -1
+    hangA.forEach((o: any, c: number) => {
+        const t = chuanHoa(o)
+        if (cDienGiai < 0 && /dien giai/.test(t)) cDienGiai = c
+        if (cTien < 0 && /^ghi no.*111/.test(t)) { cTien = c; kq.loai = 'thu' }
+        if (cTien < 0 && /^ghi co.*111/.test(t)) { cTien = c; kq.loai = 'chi' }
+    })
+    // "Ngày, tháng ghi sổ" cùng hàng trên — dự phòng khi cột ngày chứng từ trống
+    const cNgayGhiSo = hangA.findIndex((o: any) => /ghi so/.test(chuanHoa(o)))
+    if (cTien < 0) { kq.tieuDeThieu = ['ghi no/co tk 111 (cột số tiền)']; return kq }
+
+    for (let r = hangB + 1; r < rows.length; r++) {
+        const hang = rows[r] || []
+        const soHieu = String(hang[cSoHieu] ?? '').trim()
+        const soTien = docSo(hang[cTien])
+        if (!soHieu) {
+            if ((soTien ?? 0) > 0 && !/tong cong|luy ke/.test(chuanHoa(hang.join(' ')))) {
+                kq.boQua.push({ dong: r + 1, lyDo: 'có tiền mà không có số hiệu chứng từ' })
+            }
+            continue
+        }
+        kq.tongDong++
+        if (!((soTien ?? 0) > 0)) { kq.boQua.push({ dong: r + 1, lyDo: `${soHieu}: số tiền 0/trống` }); continue }
+        kq.entries.push({
+            soHieu,
+            ngay: docNgay(cNgayCT >= 0 ? hang[cNgayCT] : undefined) || docNgay(cNgayGhiSo >= 0 ? hang[cNgayGhiSo] : undefined),
+            dienGiai: String(cDienGiai >= 0 ? hang[cDienGiai] ?? '' : '').trim(),
+            soTien: soTien!,
+            dongSo: r + 1,
+        })
+    }
+    return kq
+}
+

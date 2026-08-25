@@ -1881,6 +1881,55 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 // Transaction sales channel tracking (2026-05-13)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Transaction" ADD COLUMN IF NOT EXISTS "channel" TEXT NOT NULL DEFAULT 'direct'`)
 
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "MisaPurchaseDoc" (
+                        "id" TEXT NOT NULL,
+                        "soChungTu" TEXT NOT NULL,
+                        "soHoaDon" TEXT,
+                        "ngayChungTu" TIMESTAMP(3),
+                        "ngayHachToan" TIMESTAMP(3),
+                        "ngayHoaDon" TIMESTAMP(3),
+                        "tongGiaTri" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "tongThue" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "tongChietKhau" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "tongTra" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "tongGiamGia" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "batchId" TEXT,
+                        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        CONSTRAINT "MisaPurchaseDoc_pkey" PRIMARY KEY ("id")
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "MisaPurchaseDoc_soChungTu_key" ON "MisaPurchaseDoc"("soChungTu")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MisaPurchaseDoc_ngayChungTu_idx" ON "MisaPurchaseDoc"("ngayChungTu")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MisaPurchaseDoc_soHoaDon_idx" ON "MisaPurchaseDoc"("soHoaDon")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MisaPurchaseDoc_batchId_idx" ON "MisaPurchaseDoc"("batchId")`)
+
+                await (sp as any).$executeRawUnsafe(`
+                    CREATE TABLE IF NOT EXISTS "MisaPurchaseLine" (
+                        "id" TEXT NOT NULL,
+                        "docId" TEXT NOT NULL,
+                        "maHang" TEXT NOT NULL,
+                        "tenHang" TEXT,
+                        "dvt" TEXT,
+                        "soLuong" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "donGia" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "giaTri" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "thueGtgt" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "chietKhau" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "soLuongTra" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "giaTriTra" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "giamGia" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                        "productId" TEXT,
+                        "dongSo" INTEGER,
+                        CONSTRAINT "MisaPurchaseLine_pkey" PRIMARY KEY ("id"),
+                        CONSTRAINT "MisaPurchaseLine_docId_fkey" FOREIGN KEY ("docId") REFERENCES "MisaPurchaseDoc"("id") ON DELETE CASCADE ON UPDATE CASCADE
+                    )
+                `)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MisaPurchaseLine_docId_idx" ON "MisaPurchaseLine"("docId")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MisaPurchaseLine_maHang_idx" ON "MisaPurchaseLine"("maHang")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "MisaPurchaseLine_productId_idx" ON "MisaPurchaseLine"("productId")`)
+
                 /**
                  * GỠ INDEX HÀM đã thử ngày 18/08/2026 — CHÚNG LÀM CHẬM HẲN.
                  * Ý định: giúp các join LOWER(TRIM(sku)). Thực tế planner chuyển

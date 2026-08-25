@@ -698,6 +698,19 @@ export type MisaSaleDoc = $Result.DefaultSelection<Prisma.$MisaSaleDocPayload>
  * Một dòng hàng trong chứng từ bán hàng MISA.
  */
 export type MisaSaleLine = $Result.DefaultSelection<Prisma.$MisaSaleLinePayload>
+/**
+ * Model MisaPurchaseDoc
+ * Sổ chi tiết MUA HÀNG đổ từ Excel MISA (25/08/2026) — cùng triết lý với
+ * MisaSaleDoc: sổ RIÊNG để đối chiếu; muốn thành phiếu nhập thật của cửa hàng
+ * GƯƠNG thì qua POST /api/misa/do-thanh-phieu-nhap (có rào chống đếm trùng).
+ * Sổ MISA mẫu này KHÔNG có cột nhà cung cấp — phiếu quy đổi ghi rõ điều đó.
+ */
+export type MisaPurchaseDoc = $Result.DefaultSelection<Prisma.$MisaPurchaseDocPayload>
+/**
+ * Model MisaPurchaseLine
+ * 
+ */
+export type MisaPurchaseLine = $Result.DefaultSelection<Prisma.$MisaPurchaseLinePayload>
 
 /**
  * ##  Prisma Client ʲˢ
@@ -2156,6 +2169,26 @@ export class PrismaClient<
     * ```
     */
   get misaSaleLine(): Prisma.MisaSaleLineDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.misaPurchaseDoc`: Exposes CRUD operations for the **MisaPurchaseDoc** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more MisaPurchaseDocs
+    * const misaPurchaseDocs = await prisma.misaPurchaseDoc.findMany()
+    * ```
+    */
+  get misaPurchaseDoc(): Prisma.MisaPurchaseDocDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.misaPurchaseLine`: Exposes CRUD operations for the **MisaPurchaseLine** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more MisaPurchaseLines
+    * const misaPurchaseLines = await prisma.misaPurchaseLine.findMany()
+    * ```
+    */
+  get misaPurchaseLine(): Prisma.MisaPurchaseLineDelegate<ExtArgs, ClientOptions>;
 }
 
 export namespace Prisma {
@@ -2730,7 +2763,9 @@ export namespace Prisma {
     AiChat: 'AiChat',
     MisaImportBatch: 'MisaImportBatch',
     MisaSaleDoc: 'MisaSaleDoc',
-    MisaSaleLine: 'MisaSaleLine'
+    MisaSaleLine: 'MisaSaleLine',
+    MisaPurchaseDoc: 'MisaPurchaseDoc',
+    MisaPurchaseLine: 'MisaPurchaseLine'
   };
 
   export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -2749,7 +2784,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "branch" | "user" | "apiKey" | "webhookEndpoint" | "webhookDelivery" | "salesCheckin" | "category" | "brand" | "product" | "productSerial" | "unitConversion" | "productImage" | "customerGroup" | "customer" | "transaction" | "transactionItem" | "payment" | "inventoryTransaction" | "importReceipt" | "importReceiptItem" | "promotion" | "supplier" | "purchaseOrder" | "purchaseOrderItem" | "expense" | "cashReceipt" | "notification" | "warranty" | "repair" | "quotation" | "auditLog" | "priceHistory" | "shippingOrder" | "driver" | "vehicle" | "vehicleMaintenance" | "crmEmailLog" | "vehicleFuelLog" | "vehicleDocument" | "deliveryRoute" | "deliveryStop" | "taxConfig" | "bankAccount" | "bankTransaction" | "bankConnectionConfig" | "taxDeclaration" | "customerSegment" | "currency" | "feedback" | "schedule" | "returnOrder" | "returnItem" | "debtEntry" | "bundle" | "salesOrder" | "salesOrderItem" | "priceList" | "priceListItem" | "priceRule" | "announcement" | "attendance" | "loyaltyMember" | "loyaltyTransaction" | "review" | "skuMapping" | "hkdRevenueEntry" | "storeSettings" | "store" | "branchRequest" | "branchDeleteRequest" | "payrollRecord" | "employee" | "payrollPeriod" | "payrollEntry" | "onlineChannel" | "onlineOrder" | "onlineProduct" | "onlineOrderItem" | "syncLog" | "journalEntry" | "fixedAsset" | "depreciationEntry" | "cCDC" | "cCDCAllocation" | "eInvoiceConfig" | "eInvoice" | "eInvoiceItem" | "adjustmentInvoice" | "adjustmentInvoiceItem" | "hKDRevenueEntry" | "warehouse" | "warehouseStock" | "stockTransfer" | "stockTransferItem" | "salesTrip" | "salesTripItem" | "salesTripLog" | "inventoryCount" | "inventoryCountItem" | "zReport" | "storageFile" | "chartOfAccount" | "periodLock" | "exchangeRate" | "taxDeadline" | "taxAuditLog" | "taxBudget" | "fbUserToken" | "fbPage" | "fbScheduledPost" | "fbCommentRule" | "fbAutoReplyLog" | "fbBrandProfile" | "fbContentPlan" | "fbContentDraft" | "crmTask" | "crmDeal" | "crmActivity" | "crmZaloLog" | "crmCampaign" | "aiAgentJob" | "aiAgentRun" | "kiotVietConfig" | "kiotVietMap" | "kiotVietSyncLog" | "misaConfig" | "misaMap" | "misaSyncLog" | "printTemplate" | "aiReport" | "aiChat" | "misaImportBatch" | "misaSaleDoc" | "misaSaleLine"
+      modelProps: "branch" | "user" | "apiKey" | "webhookEndpoint" | "webhookDelivery" | "salesCheckin" | "category" | "brand" | "product" | "productSerial" | "unitConversion" | "productImage" | "customerGroup" | "customer" | "transaction" | "transactionItem" | "payment" | "inventoryTransaction" | "importReceipt" | "importReceiptItem" | "promotion" | "supplier" | "purchaseOrder" | "purchaseOrderItem" | "expense" | "cashReceipt" | "notification" | "warranty" | "repair" | "quotation" | "auditLog" | "priceHistory" | "shippingOrder" | "driver" | "vehicle" | "vehicleMaintenance" | "crmEmailLog" | "vehicleFuelLog" | "vehicleDocument" | "deliveryRoute" | "deliveryStop" | "taxConfig" | "bankAccount" | "bankTransaction" | "bankConnectionConfig" | "taxDeclaration" | "customerSegment" | "currency" | "feedback" | "schedule" | "returnOrder" | "returnItem" | "debtEntry" | "bundle" | "salesOrder" | "salesOrderItem" | "priceList" | "priceListItem" | "priceRule" | "announcement" | "attendance" | "loyaltyMember" | "loyaltyTransaction" | "review" | "skuMapping" | "hkdRevenueEntry" | "storeSettings" | "store" | "branchRequest" | "branchDeleteRequest" | "payrollRecord" | "employee" | "payrollPeriod" | "payrollEntry" | "onlineChannel" | "onlineOrder" | "onlineProduct" | "onlineOrderItem" | "syncLog" | "journalEntry" | "fixedAsset" | "depreciationEntry" | "cCDC" | "cCDCAllocation" | "eInvoiceConfig" | "eInvoice" | "eInvoiceItem" | "adjustmentInvoice" | "adjustmentInvoiceItem" | "hKDRevenueEntry" | "warehouse" | "warehouseStock" | "stockTransfer" | "stockTransferItem" | "salesTrip" | "salesTripItem" | "salesTripLog" | "inventoryCount" | "inventoryCountItem" | "zReport" | "storageFile" | "chartOfAccount" | "periodLock" | "exchangeRate" | "taxDeadline" | "taxAuditLog" | "taxBudget" | "fbUserToken" | "fbPage" | "fbScheduledPost" | "fbCommentRule" | "fbAutoReplyLog" | "fbBrandProfile" | "fbContentPlan" | "fbContentDraft" | "crmTask" | "crmDeal" | "crmActivity" | "crmZaloLog" | "crmCampaign" | "aiAgentJob" | "aiAgentRun" | "kiotVietConfig" | "kiotVietMap" | "kiotVietSyncLog" | "misaConfig" | "misaMap" | "misaSyncLog" | "printTemplate" | "aiReport" | "aiChat" | "misaImportBatch" | "misaSaleDoc" | "misaSaleLine" | "misaPurchaseDoc" | "misaPurchaseLine"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -12669,6 +12704,154 @@ export namespace Prisma {
           }
         }
       }
+      MisaPurchaseDoc: {
+        payload: Prisma.$MisaPurchaseDocPayload<ExtArgs>
+        fields: Prisma.MisaPurchaseDocFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.MisaPurchaseDocFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaPurchaseDocPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.MisaPurchaseDocFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaPurchaseDocPayload>
+          }
+          findFirst: {
+            args: Prisma.MisaPurchaseDocFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaPurchaseDocPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.MisaPurchaseDocFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaPurchaseDocPayload>
+          }
+          findMany: {
+            args: Prisma.MisaPurchaseDocFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaPurchaseDocPayload>[]
+          }
+          create: {
+            args: Prisma.MisaPurchaseDocCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaPurchaseDocPayload>
+          }
+          createMany: {
+            args: Prisma.MisaPurchaseDocCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.MisaPurchaseDocCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaPurchaseDocPayload>[]
+          }
+          delete: {
+            args: Prisma.MisaPurchaseDocDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaPurchaseDocPayload>
+          }
+          update: {
+            args: Prisma.MisaPurchaseDocUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaPurchaseDocPayload>
+          }
+          deleteMany: {
+            args: Prisma.MisaPurchaseDocDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.MisaPurchaseDocUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.MisaPurchaseDocUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaPurchaseDocPayload>[]
+          }
+          upsert: {
+            args: Prisma.MisaPurchaseDocUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaPurchaseDocPayload>
+          }
+          aggregate: {
+            args: Prisma.MisaPurchaseDocAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateMisaPurchaseDoc>
+          }
+          groupBy: {
+            args: Prisma.MisaPurchaseDocGroupByArgs<ExtArgs>
+            result: $Utils.Optional<MisaPurchaseDocGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.MisaPurchaseDocCountArgs<ExtArgs>
+            result: $Utils.Optional<MisaPurchaseDocCountAggregateOutputType> | number
+          }
+        }
+      }
+      MisaPurchaseLine: {
+        payload: Prisma.$MisaPurchaseLinePayload<ExtArgs>
+        fields: Prisma.MisaPurchaseLineFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.MisaPurchaseLineFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaPurchaseLinePayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.MisaPurchaseLineFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaPurchaseLinePayload>
+          }
+          findFirst: {
+            args: Prisma.MisaPurchaseLineFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaPurchaseLinePayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.MisaPurchaseLineFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaPurchaseLinePayload>
+          }
+          findMany: {
+            args: Prisma.MisaPurchaseLineFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaPurchaseLinePayload>[]
+          }
+          create: {
+            args: Prisma.MisaPurchaseLineCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaPurchaseLinePayload>
+          }
+          createMany: {
+            args: Prisma.MisaPurchaseLineCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.MisaPurchaseLineCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaPurchaseLinePayload>[]
+          }
+          delete: {
+            args: Prisma.MisaPurchaseLineDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaPurchaseLinePayload>
+          }
+          update: {
+            args: Prisma.MisaPurchaseLineUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaPurchaseLinePayload>
+          }
+          deleteMany: {
+            args: Prisma.MisaPurchaseLineDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.MisaPurchaseLineUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.MisaPurchaseLineUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaPurchaseLinePayload>[]
+          }
+          upsert: {
+            args: Prisma.MisaPurchaseLineUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$MisaPurchaseLinePayload>
+          }
+          aggregate: {
+            args: Prisma.MisaPurchaseLineAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateMisaPurchaseLine>
+          }
+          groupBy: {
+            args: Prisma.MisaPurchaseLineGroupByArgs<ExtArgs>
+            result: $Utils.Optional<MisaPurchaseLineGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.MisaPurchaseLineCountArgs<ExtArgs>
+            result: $Utils.Optional<MisaPurchaseLineCountAggregateOutputType> | number
+          }
+        }
+      }
     }
   } & {
     other: {
@@ -12899,6 +13082,8 @@ export namespace Prisma {
     misaImportBatch?: MisaImportBatchOmit
     misaSaleDoc?: MisaSaleDocOmit
     misaSaleLine?: MisaSaleLineOmit
+    misaPurchaseDoc?: MisaPurchaseDocOmit
+    misaPurchaseLine?: MisaPurchaseLineOmit
   }
 
   /* Types for Logging */
@@ -14233,10 +14418,12 @@ export namespace Prisma {
 
   export type MisaImportBatchCountOutputType = {
     docs: number
+    purchaseDocs: number
   }
 
   export type MisaImportBatchCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     docs?: boolean | MisaImportBatchCountOutputTypeCountDocsArgs
+    purchaseDocs?: boolean | MisaImportBatchCountOutputTypeCountPurchaseDocsArgs
   }
 
   // Custom InputTypes
@@ -14255,6 +14442,13 @@ export namespace Prisma {
    */
   export type MisaImportBatchCountOutputTypeCountDocsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: MisaSaleDocWhereInput
+  }
+
+  /**
+   * MisaImportBatchCountOutputType without action
+   */
+  export type MisaImportBatchCountOutputTypeCountPurchaseDocsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: MisaPurchaseDocWhereInput
   }
 
 
@@ -14286,6 +14480,37 @@ export namespace Prisma {
    */
   export type MisaSaleDocCountOutputTypeCountLinesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: MisaSaleLineWhereInput
+  }
+
+
+  /**
+   * Count Type MisaPurchaseDocCountOutputType
+   */
+
+  export type MisaPurchaseDocCountOutputType = {
+    lines: number
+  }
+
+  export type MisaPurchaseDocCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    lines?: boolean | MisaPurchaseDocCountOutputTypeCountLinesArgs
+  }
+
+  // Custom InputTypes
+  /**
+   * MisaPurchaseDocCountOutputType without action
+   */
+  export type MisaPurchaseDocCountOutputTypeDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPurchaseDocCountOutputType
+     */
+    select?: MisaPurchaseDocCountOutputTypeSelect<ExtArgs> | null
+  }
+
+  /**
+   * MisaPurchaseDocCountOutputType without action
+   */
+  export type MisaPurchaseDocCountOutputTypeCountLinesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: MisaPurchaseLineWhereInput
   }
 
 
@@ -171028,6 +171253,7 @@ export namespace Prisma {
     userName?: boolean
     createdAt?: boolean
     docs?: boolean | MisaImportBatch$docsArgs<ExtArgs>
+    purchaseDocs?: boolean | MisaImportBatch$purchaseDocsArgs<ExtArgs>
     _count?: boolean | MisaImportBatchCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["misaImportBatch"]>
 
@@ -171088,6 +171314,7 @@ export namespace Prisma {
   export type MisaImportBatchOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "loai" | "tenFile" | "kyBaoCao" | "tongDong" | "docDuoc" | "boQua" | "soChungTu" | "tongTien" | "tongThue" | "chiTiet" | "apply" | "userId" | "userName" | "createdAt", ExtArgs["result"]["misaImportBatch"]>
   export type MisaImportBatchInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     docs?: boolean | MisaImportBatch$docsArgs<ExtArgs>
+    purchaseDocs?: boolean | MisaImportBatch$purchaseDocsArgs<ExtArgs>
     _count?: boolean | MisaImportBatchCountOutputTypeDefaultArgs<ExtArgs>
   }
   export type MisaImportBatchIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {}
@@ -171097,6 +171324,7 @@ export namespace Prisma {
     name: "MisaImportBatch"
     objects: {
       docs: Prisma.$MisaSaleDocPayload<ExtArgs>[]
+      purchaseDocs: Prisma.$MisaPurchaseDocPayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
@@ -171515,6 +171743,7 @@ export namespace Prisma {
   export interface Prisma__MisaImportBatchClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
     readonly [Symbol.toStringTag]: "PrismaPromise"
     docs<T extends MisaImportBatch$docsArgs<ExtArgs> = {}>(args?: Subset<T, MisaImportBatch$docsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MisaSaleDocPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    purchaseDocs<T extends MisaImportBatch$purchaseDocsArgs<ExtArgs> = {}>(args?: Subset<T, MisaImportBatch$purchaseDocsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MisaPurchaseDocPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -171968,6 +172197,30 @@ export namespace Prisma {
     take?: number
     skip?: number
     distinct?: MisaSaleDocScalarFieldEnum | MisaSaleDocScalarFieldEnum[]
+  }
+
+  /**
+   * MisaImportBatch.purchaseDocs
+   */
+  export type MisaImportBatch$purchaseDocsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPurchaseDoc
+     */
+    select?: MisaPurchaseDocSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPurchaseDoc
+     */
+    omit?: MisaPurchaseDocOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaPurchaseDocInclude<ExtArgs> | null
+    where?: MisaPurchaseDocWhereInput
+    orderBy?: MisaPurchaseDocOrderByWithRelationInput | MisaPurchaseDocOrderByWithRelationInput[]
+    cursor?: MisaPurchaseDocWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: MisaPurchaseDocScalarFieldEnum | MisaPurchaseDocScalarFieldEnum[]
   }
 
   /**
@@ -174627,6 +174880,2540 @@ export namespace Prisma {
      * Choose, which related nodes to fetch as well
      */
     include?: MisaSaleLineInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model MisaPurchaseDoc
+   */
+
+  export type AggregateMisaPurchaseDoc = {
+    _count: MisaPurchaseDocCountAggregateOutputType | null
+    _avg: MisaPurchaseDocAvgAggregateOutputType | null
+    _sum: MisaPurchaseDocSumAggregateOutputType | null
+    _min: MisaPurchaseDocMinAggregateOutputType | null
+    _max: MisaPurchaseDocMaxAggregateOutputType | null
+  }
+
+  export type MisaPurchaseDocAvgAggregateOutputType = {
+    tongGiaTri: number | null
+    tongThue: number | null
+    tongChietKhau: number | null
+    tongTra: number | null
+    tongGiamGia: number | null
+  }
+
+  export type MisaPurchaseDocSumAggregateOutputType = {
+    tongGiaTri: number | null
+    tongThue: number | null
+    tongChietKhau: number | null
+    tongTra: number | null
+    tongGiamGia: number | null
+  }
+
+  export type MisaPurchaseDocMinAggregateOutputType = {
+    id: string | null
+    soChungTu: string | null
+    soHoaDon: string | null
+    ngayChungTu: Date | null
+    ngayHachToan: Date | null
+    ngayHoaDon: Date | null
+    tongGiaTri: number | null
+    tongThue: number | null
+    tongChietKhau: number | null
+    tongTra: number | null
+    tongGiamGia: number | null
+    batchId: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type MisaPurchaseDocMaxAggregateOutputType = {
+    id: string | null
+    soChungTu: string | null
+    soHoaDon: string | null
+    ngayChungTu: Date | null
+    ngayHachToan: Date | null
+    ngayHoaDon: Date | null
+    tongGiaTri: number | null
+    tongThue: number | null
+    tongChietKhau: number | null
+    tongTra: number | null
+    tongGiamGia: number | null
+    batchId: string | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type MisaPurchaseDocCountAggregateOutputType = {
+    id: number
+    soChungTu: number
+    soHoaDon: number
+    ngayChungTu: number
+    ngayHachToan: number
+    ngayHoaDon: number
+    tongGiaTri: number
+    tongThue: number
+    tongChietKhau: number
+    tongTra: number
+    tongGiamGia: number
+    batchId: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type MisaPurchaseDocAvgAggregateInputType = {
+    tongGiaTri?: true
+    tongThue?: true
+    tongChietKhau?: true
+    tongTra?: true
+    tongGiamGia?: true
+  }
+
+  export type MisaPurchaseDocSumAggregateInputType = {
+    tongGiaTri?: true
+    tongThue?: true
+    tongChietKhau?: true
+    tongTra?: true
+    tongGiamGia?: true
+  }
+
+  export type MisaPurchaseDocMinAggregateInputType = {
+    id?: true
+    soChungTu?: true
+    soHoaDon?: true
+    ngayChungTu?: true
+    ngayHachToan?: true
+    ngayHoaDon?: true
+    tongGiaTri?: true
+    tongThue?: true
+    tongChietKhau?: true
+    tongTra?: true
+    tongGiamGia?: true
+    batchId?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type MisaPurchaseDocMaxAggregateInputType = {
+    id?: true
+    soChungTu?: true
+    soHoaDon?: true
+    ngayChungTu?: true
+    ngayHachToan?: true
+    ngayHoaDon?: true
+    tongGiaTri?: true
+    tongThue?: true
+    tongChietKhau?: true
+    tongTra?: true
+    tongGiamGia?: true
+    batchId?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type MisaPurchaseDocCountAggregateInputType = {
+    id?: true
+    soChungTu?: true
+    soHoaDon?: true
+    ngayChungTu?: true
+    ngayHachToan?: true
+    ngayHoaDon?: true
+    tongGiaTri?: true
+    tongThue?: true
+    tongChietKhau?: true
+    tongTra?: true
+    tongGiamGia?: true
+    batchId?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type MisaPurchaseDocAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MisaPurchaseDoc to aggregate.
+     */
+    where?: MisaPurchaseDocWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaPurchaseDocs to fetch.
+     */
+    orderBy?: MisaPurchaseDocOrderByWithRelationInput | MisaPurchaseDocOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: MisaPurchaseDocWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaPurchaseDocs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaPurchaseDocs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned MisaPurchaseDocs
+    **/
+    _count?: true | MisaPurchaseDocCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: MisaPurchaseDocAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: MisaPurchaseDocSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: MisaPurchaseDocMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: MisaPurchaseDocMaxAggregateInputType
+  }
+
+  export type GetMisaPurchaseDocAggregateType<T extends MisaPurchaseDocAggregateArgs> = {
+        [P in keyof T & keyof AggregateMisaPurchaseDoc]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateMisaPurchaseDoc[P]>
+      : GetScalarType<T[P], AggregateMisaPurchaseDoc[P]>
+  }
+
+
+
+
+  export type MisaPurchaseDocGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: MisaPurchaseDocWhereInput
+    orderBy?: MisaPurchaseDocOrderByWithAggregationInput | MisaPurchaseDocOrderByWithAggregationInput[]
+    by: MisaPurchaseDocScalarFieldEnum[] | MisaPurchaseDocScalarFieldEnum
+    having?: MisaPurchaseDocScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: MisaPurchaseDocCountAggregateInputType | true
+    _avg?: MisaPurchaseDocAvgAggregateInputType
+    _sum?: MisaPurchaseDocSumAggregateInputType
+    _min?: MisaPurchaseDocMinAggregateInputType
+    _max?: MisaPurchaseDocMaxAggregateInputType
+  }
+
+  export type MisaPurchaseDocGroupByOutputType = {
+    id: string
+    soChungTu: string
+    soHoaDon: string | null
+    ngayChungTu: Date | null
+    ngayHachToan: Date | null
+    ngayHoaDon: Date | null
+    tongGiaTri: number
+    tongThue: number
+    tongChietKhau: number
+    tongTra: number
+    tongGiamGia: number
+    batchId: string | null
+    createdAt: Date
+    updatedAt: Date
+    _count: MisaPurchaseDocCountAggregateOutputType | null
+    _avg: MisaPurchaseDocAvgAggregateOutputType | null
+    _sum: MisaPurchaseDocSumAggregateOutputType | null
+    _min: MisaPurchaseDocMinAggregateOutputType | null
+    _max: MisaPurchaseDocMaxAggregateOutputType | null
+  }
+
+  type GetMisaPurchaseDocGroupByPayload<T extends MisaPurchaseDocGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<MisaPurchaseDocGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof MisaPurchaseDocGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], MisaPurchaseDocGroupByOutputType[P]>
+            : GetScalarType<T[P], MisaPurchaseDocGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type MisaPurchaseDocSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    soChungTu?: boolean
+    soHoaDon?: boolean
+    ngayChungTu?: boolean
+    ngayHachToan?: boolean
+    ngayHoaDon?: boolean
+    tongGiaTri?: boolean
+    tongThue?: boolean
+    tongChietKhau?: boolean
+    tongTra?: boolean
+    tongGiamGia?: boolean
+    batchId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    batch?: boolean | MisaPurchaseDoc$batchArgs<ExtArgs>
+    lines?: boolean | MisaPurchaseDoc$linesArgs<ExtArgs>
+    _count?: boolean | MisaPurchaseDocCountOutputTypeDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["misaPurchaseDoc"]>
+
+  export type MisaPurchaseDocSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    soChungTu?: boolean
+    soHoaDon?: boolean
+    ngayChungTu?: boolean
+    ngayHachToan?: boolean
+    ngayHoaDon?: boolean
+    tongGiaTri?: boolean
+    tongThue?: boolean
+    tongChietKhau?: boolean
+    tongTra?: boolean
+    tongGiamGia?: boolean
+    batchId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    batch?: boolean | MisaPurchaseDoc$batchArgs<ExtArgs>
+  }, ExtArgs["result"]["misaPurchaseDoc"]>
+
+  export type MisaPurchaseDocSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    soChungTu?: boolean
+    soHoaDon?: boolean
+    ngayChungTu?: boolean
+    ngayHachToan?: boolean
+    ngayHoaDon?: boolean
+    tongGiaTri?: boolean
+    tongThue?: boolean
+    tongChietKhau?: boolean
+    tongTra?: boolean
+    tongGiamGia?: boolean
+    batchId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    batch?: boolean | MisaPurchaseDoc$batchArgs<ExtArgs>
+  }, ExtArgs["result"]["misaPurchaseDoc"]>
+
+  export type MisaPurchaseDocSelectScalar = {
+    id?: boolean
+    soChungTu?: boolean
+    soHoaDon?: boolean
+    ngayChungTu?: boolean
+    ngayHachToan?: boolean
+    ngayHoaDon?: boolean
+    tongGiaTri?: boolean
+    tongThue?: boolean
+    tongChietKhau?: boolean
+    tongTra?: boolean
+    tongGiamGia?: boolean
+    batchId?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type MisaPurchaseDocOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "soChungTu" | "soHoaDon" | "ngayChungTu" | "ngayHachToan" | "ngayHoaDon" | "tongGiaTri" | "tongThue" | "tongChietKhau" | "tongTra" | "tongGiamGia" | "batchId" | "createdAt" | "updatedAt", ExtArgs["result"]["misaPurchaseDoc"]>
+  export type MisaPurchaseDocInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    batch?: boolean | MisaPurchaseDoc$batchArgs<ExtArgs>
+    lines?: boolean | MisaPurchaseDoc$linesArgs<ExtArgs>
+    _count?: boolean | MisaPurchaseDocCountOutputTypeDefaultArgs<ExtArgs>
+  }
+  export type MisaPurchaseDocIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    batch?: boolean | MisaPurchaseDoc$batchArgs<ExtArgs>
+  }
+  export type MisaPurchaseDocIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    batch?: boolean | MisaPurchaseDoc$batchArgs<ExtArgs>
+  }
+
+  export type $MisaPurchaseDocPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "MisaPurchaseDoc"
+    objects: {
+      batch: Prisma.$MisaImportBatchPayload<ExtArgs> | null
+      lines: Prisma.$MisaPurchaseLinePayload<ExtArgs>[]
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      /**
+       * Khoá chống trùng: đổ lại cùng file thì cập nhật, không nhân đôi.
+       */
+      soChungTu: string
+      soHoaDon: string | null
+      ngayChungTu: Date | null
+      ngayHachToan: Date | null
+      ngayHoaDon: Date | null
+      tongGiaTri: number
+      tongThue: number
+      tongChietKhau: number
+      tongTra: number
+      tongGiamGia: number
+      batchId: string | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["misaPurchaseDoc"]>
+    composites: {}
+  }
+
+  type MisaPurchaseDocGetPayload<S extends boolean | null | undefined | MisaPurchaseDocDefaultArgs> = $Result.GetResult<Prisma.$MisaPurchaseDocPayload, S>
+
+  type MisaPurchaseDocCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<MisaPurchaseDocFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: MisaPurchaseDocCountAggregateInputType | true
+    }
+
+  export interface MisaPurchaseDocDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['MisaPurchaseDoc'], meta: { name: 'MisaPurchaseDoc' } }
+    /**
+     * Find zero or one MisaPurchaseDoc that matches the filter.
+     * @param {MisaPurchaseDocFindUniqueArgs} args - Arguments to find a MisaPurchaseDoc
+     * @example
+     * // Get one MisaPurchaseDoc
+     * const misaPurchaseDoc = await prisma.misaPurchaseDoc.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends MisaPurchaseDocFindUniqueArgs>(args: SelectSubset<T, MisaPurchaseDocFindUniqueArgs<ExtArgs>>): Prisma__MisaPurchaseDocClient<$Result.GetResult<Prisma.$MisaPurchaseDocPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one MisaPurchaseDoc that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {MisaPurchaseDocFindUniqueOrThrowArgs} args - Arguments to find a MisaPurchaseDoc
+     * @example
+     * // Get one MisaPurchaseDoc
+     * const misaPurchaseDoc = await prisma.misaPurchaseDoc.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends MisaPurchaseDocFindUniqueOrThrowArgs>(args: SelectSubset<T, MisaPurchaseDocFindUniqueOrThrowArgs<ExtArgs>>): Prisma__MisaPurchaseDocClient<$Result.GetResult<Prisma.$MisaPurchaseDocPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first MisaPurchaseDoc that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaPurchaseDocFindFirstArgs} args - Arguments to find a MisaPurchaseDoc
+     * @example
+     * // Get one MisaPurchaseDoc
+     * const misaPurchaseDoc = await prisma.misaPurchaseDoc.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends MisaPurchaseDocFindFirstArgs>(args?: SelectSubset<T, MisaPurchaseDocFindFirstArgs<ExtArgs>>): Prisma__MisaPurchaseDocClient<$Result.GetResult<Prisma.$MisaPurchaseDocPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first MisaPurchaseDoc that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaPurchaseDocFindFirstOrThrowArgs} args - Arguments to find a MisaPurchaseDoc
+     * @example
+     * // Get one MisaPurchaseDoc
+     * const misaPurchaseDoc = await prisma.misaPurchaseDoc.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends MisaPurchaseDocFindFirstOrThrowArgs>(args?: SelectSubset<T, MisaPurchaseDocFindFirstOrThrowArgs<ExtArgs>>): Prisma__MisaPurchaseDocClient<$Result.GetResult<Prisma.$MisaPurchaseDocPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more MisaPurchaseDocs that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaPurchaseDocFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all MisaPurchaseDocs
+     * const misaPurchaseDocs = await prisma.misaPurchaseDoc.findMany()
+     * 
+     * // Get first 10 MisaPurchaseDocs
+     * const misaPurchaseDocs = await prisma.misaPurchaseDoc.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const misaPurchaseDocWithIdOnly = await prisma.misaPurchaseDoc.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends MisaPurchaseDocFindManyArgs>(args?: SelectSubset<T, MisaPurchaseDocFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MisaPurchaseDocPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a MisaPurchaseDoc.
+     * @param {MisaPurchaseDocCreateArgs} args - Arguments to create a MisaPurchaseDoc.
+     * @example
+     * // Create one MisaPurchaseDoc
+     * const MisaPurchaseDoc = await prisma.misaPurchaseDoc.create({
+     *   data: {
+     *     // ... data to create a MisaPurchaseDoc
+     *   }
+     * })
+     * 
+     */
+    create<T extends MisaPurchaseDocCreateArgs>(args: SelectSubset<T, MisaPurchaseDocCreateArgs<ExtArgs>>): Prisma__MisaPurchaseDocClient<$Result.GetResult<Prisma.$MisaPurchaseDocPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many MisaPurchaseDocs.
+     * @param {MisaPurchaseDocCreateManyArgs} args - Arguments to create many MisaPurchaseDocs.
+     * @example
+     * // Create many MisaPurchaseDocs
+     * const misaPurchaseDoc = await prisma.misaPurchaseDoc.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends MisaPurchaseDocCreateManyArgs>(args?: SelectSubset<T, MisaPurchaseDocCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many MisaPurchaseDocs and returns the data saved in the database.
+     * @param {MisaPurchaseDocCreateManyAndReturnArgs} args - Arguments to create many MisaPurchaseDocs.
+     * @example
+     * // Create many MisaPurchaseDocs
+     * const misaPurchaseDoc = await prisma.misaPurchaseDoc.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many MisaPurchaseDocs and only return the `id`
+     * const misaPurchaseDocWithIdOnly = await prisma.misaPurchaseDoc.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends MisaPurchaseDocCreateManyAndReturnArgs>(args?: SelectSubset<T, MisaPurchaseDocCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MisaPurchaseDocPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a MisaPurchaseDoc.
+     * @param {MisaPurchaseDocDeleteArgs} args - Arguments to delete one MisaPurchaseDoc.
+     * @example
+     * // Delete one MisaPurchaseDoc
+     * const MisaPurchaseDoc = await prisma.misaPurchaseDoc.delete({
+     *   where: {
+     *     // ... filter to delete one MisaPurchaseDoc
+     *   }
+     * })
+     * 
+     */
+    delete<T extends MisaPurchaseDocDeleteArgs>(args: SelectSubset<T, MisaPurchaseDocDeleteArgs<ExtArgs>>): Prisma__MisaPurchaseDocClient<$Result.GetResult<Prisma.$MisaPurchaseDocPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one MisaPurchaseDoc.
+     * @param {MisaPurchaseDocUpdateArgs} args - Arguments to update one MisaPurchaseDoc.
+     * @example
+     * // Update one MisaPurchaseDoc
+     * const misaPurchaseDoc = await prisma.misaPurchaseDoc.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends MisaPurchaseDocUpdateArgs>(args: SelectSubset<T, MisaPurchaseDocUpdateArgs<ExtArgs>>): Prisma__MisaPurchaseDocClient<$Result.GetResult<Prisma.$MisaPurchaseDocPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more MisaPurchaseDocs.
+     * @param {MisaPurchaseDocDeleteManyArgs} args - Arguments to filter MisaPurchaseDocs to delete.
+     * @example
+     * // Delete a few MisaPurchaseDocs
+     * const { count } = await prisma.misaPurchaseDoc.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends MisaPurchaseDocDeleteManyArgs>(args?: SelectSubset<T, MisaPurchaseDocDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more MisaPurchaseDocs.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaPurchaseDocUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many MisaPurchaseDocs
+     * const misaPurchaseDoc = await prisma.misaPurchaseDoc.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends MisaPurchaseDocUpdateManyArgs>(args: SelectSubset<T, MisaPurchaseDocUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more MisaPurchaseDocs and returns the data updated in the database.
+     * @param {MisaPurchaseDocUpdateManyAndReturnArgs} args - Arguments to update many MisaPurchaseDocs.
+     * @example
+     * // Update many MisaPurchaseDocs
+     * const misaPurchaseDoc = await prisma.misaPurchaseDoc.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more MisaPurchaseDocs and only return the `id`
+     * const misaPurchaseDocWithIdOnly = await prisma.misaPurchaseDoc.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends MisaPurchaseDocUpdateManyAndReturnArgs>(args: SelectSubset<T, MisaPurchaseDocUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MisaPurchaseDocPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one MisaPurchaseDoc.
+     * @param {MisaPurchaseDocUpsertArgs} args - Arguments to update or create a MisaPurchaseDoc.
+     * @example
+     * // Update or create a MisaPurchaseDoc
+     * const misaPurchaseDoc = await prisma.misaPurchaseDoc.upsert({
+     *   create: {
+     *     // ... data to create a MisaPurchaseDoc
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the MisaPurchaseDoc we want to update
+     *   }
+     * })
+     */
+    upsert<T extends MisaPurchaseDocUpsertArgs>(args: SelectSubset<T, MisaPurchaseDocUpsertArgs<ExtArgs>>): Prisma__MisaPurchaseDocClient<$Result.GetResult<Prisma.$MisaPurchaseDocPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of MisaPurchaseDocs.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaPurchaseDocCountArgs} args - Arguments to filter MisaPurchaseDocs to count.
+     * @example
+     * // Count the number of MisaPurchaseDocs
+     * const count = await prisma.misaPurchaseDoc.count({
+     *   where: {
+     *     // ... the filter for the MisaPurchaseDocs we want to count
+     *   }
+     * })
+    **/
+    count<T extends MisaPurchaseDocCountArgs>(
+      args?: Subset<T, MisaPurchaseDocCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], MisaPurchaseDocCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a MisaPurchaseDoc.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaPurchaseDocAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends MisaPurchaseDocAggregateArgs>(args: Subset<T, MisaPurchaseDocAggregateArgs>): Prisma.PrismaPromise<GetMisaPurchaseDocAggregateType<T>>
+
+    /**
+     * Group by MisaPurchaseDoc.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaPurchaseDocGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends MisaPurchaseDocGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: MisaPurchaseDocGroupByArgs['orderBy'] }
+        : { orderBy?: MisaPurchaseDocGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, MisaPurchaseDocGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetMisaPurchaseDocGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the MisaPurchaseDoc model
+   */
+  readonly fields: MisaPurchaseDocFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for MisaPurchaseDoc.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__MisaPurchaseDocClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    batch<T extends MisaPurchaseDoc$batchArgs<ExtArgs> = {}>(args?: Subset<T, MisaPurchaseDoc$batchArgs<ExtArgs>>): Prisma__MisaImportBatchClient<$Result.GetResult<Prisma.$MisaImportBatchPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+    lines<T extends MisaPurchaseDoc$linesArgs<ExtArgs> = {}>(args?: Subset<T, MisaPurchaseDoc$linesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MisaPurchaseLinePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the MisaPurchaseDoc model
+   */
+  interface MisaPurchaseDocFieldRefs {
+    readonly id: FieldRef<"MisaPurchaseDoc", 'String'>
+    readonly soChungTu: FieldRef<"MisaPurchaseDoc", 'String'>
+    readonly soHoaDon: FieldRef<"MisaPurchaseDoc", 'String'>
+    readonly ngayChungTu: FieldRef<"MisaPurchaseDoc", 'DateTime'>
+    readonly ngayHachToan: FieldRef<"MisaPurchaseDoc", 'DateTime'>
+    readonly ngayHoaDon: FieldRef<"MisaPurchaseDoc", 'DateTime'>
+    readonly tongGiaTri: FieldRef<"MisaPurchaseDoc", 'Float'>
+    readonly tongThue: FieldRef<"MisaPurchaseDoc", 'Float'>
+    readonly tongChietKhau: FieldRef<"MisaPurchaseDoc", 'Float'>
+    readonly tongTra: FieldRef<"MisaPurchaseDoc", 'Float'>
+    readonly tongGiamGia: FieldRef<"MisaPurchaseDoc", 'Float'>
+    readonly batchId: FieldRef<"MisaPurchaseDoc", 'String'>
+    readonly createdAt: FieldRef<"MisaPurchaseDoc", 'DateTime'>
+    readonly updatedAt: FieldRef<"MisaPurchaseDoc", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * MisaPurchaseDoc findUnique
+   */
+  export type MisaPurchaseDocFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPurchaseDoc
+     */
+    select?: MisaPurchaseDocSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPurchaseDoc
+     */
+    omit?: MisaPurchaseDocOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaPurchaseDocInclude<ExtArgs> | null
+    /**
+     * Filter, which MisaPurchaseDoc to fetch.
+     */
+    where: MisaPurchaseDocWhereUniqueInput
+  }
+
+  /**
+   * MisaPurchaseDoc findUniqueOrThrow
+   */
+  export type MisaPurchaseDocFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPurchaseDoc
+     */
+    select?: MisaPurchaseDocSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPurchaseDoc
+     */
+    omit?: MisaPurchaseDocOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaPurchaseDocInclude<ExtArgs> | null
+    /**
+     * Filter, which MisaPurchaseDoc to fetch.
+     */
+    where: MisaPurchaseDocWhereUniqueInput
+  }
+
+  /**
+   * MisaPurchaseDoc findFirst
+   */
+  export type MisaPurchaseDocFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPurchaseDoc
+     */
+    select?: MisaPurchaseDocSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPurchaseDoc
+     */
+    omit?: MisaPurchaseDocOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaPurchaseDocInclude<ExtArgs> | null
+    /**
+     * Filter, which MisaPurchaseDoc to fetch.
+     */
+    where?: MisaPurchaseDocWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaPurchaseDocs to fetch.
+     */
+    orderBy?: MisaPurchaseDocOrderByWithRelationInput | MisaPurchaseDocOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MisaPurchaseDocs.
+     */
+    cursor?: MisaPurchaseDocWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaPurchaseDocs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaPurchaseDocs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MisaPurchaseDocs.
+     */
+    distinct?: MisaPurchaseDocScalarFieldEnum | MisaPurchaseDocScalarFieldEnum[]
+  }
+
+  /**
+   * MisaPurchaseDoc findFirstOrThrow
+   */
+  export type MisaPurchaseDocFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPurchaseDoc
+     */
+    select?: MisaPurchaseDocSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPurchaseDoc
+     */
+    omit?: MisaPurchaseDocOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaPurchaseDocInclude<ExtArgs> | null
+    /**
+     * Filter, which MisaPurchaseDoc to fetch.
+     */
+    where?: MisaPurchaseDocWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaPurchaseDocs to fetch.
+     */
+    orderBy?: MisaPurchaseDocOrderByWithRelationInput | MisaPurchaseDocOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MisaPurchaseDocs.
+     */
+    cursor?: MisaPurchaseDocWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaPurchaseDocs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaPurchaseDocs.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MisaPurchaseDocs.
+     */
+    distinct?: MisaPurchaseDocScalarFieldEnum | MisaPurchaseDocScalarFieldEnum[]
+  }
+
+  /**
+   * MisaPurchaseDoc findMany
+   */
+  export type MisaPurchaseDocFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPurchaseDoc
+     */
+    select?: MisaPurchaseDocSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPurchaseDoc
+     */
+    omit?: MisaPurchaseDocOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaPurchaseDocInclude<ExtArgs> | null
+    /**
+     * Filter, which MisaPurchaseDocs to fetch.
+     */
+    where?: MisaPurchaseDocWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaPurchaseDocs to fetch.
+     */
+    orderBy?: MisaPurchaseDocOrderByWithRelationInput | MisaPurchaseDocOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing MisaPurchaseDocs.
+     */
+    cursor?: MisaPurchaseDocWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaPurchaseDocs from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaPurchaseDocs.
+     */
+    skip?: number
+    distinct?: MisaPurchaseDocScalarFieldEnum | MisaPurchaseDocScalarFieldEnum[]
+  }
+
+  /**
+   * MisaPurchaseDoc create
+   */
+  export type MisaPurchaseDocCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPurchaseDoc
+     */
+    select?: MisaPurchaseDocSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPurchaseDoc
+     */
+    omit?: MisaPurchaseDocOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaPurchaseDocInclude<ExtArgs> | null
+    /**
+     * The data needed to create a MisaPurchaseDoc.
+     */
+    data: XOR<MisaPurchaseDocCreateInput, MisaPurchaseDocUncheckedCreateInput>
+  }
+
+  /**
+   * MisaPurchaseDoc createMany
+   */
+  export type MisaPurchaseDocCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many MisaPurchaseDocs.
+     */
+    data: MisaPurchaseDocCreateManyInput | MisaPurchaseDocCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * MisaPurchaseDoc createManyAndReturn
+   */
+  export type MisaPurchaseDocCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPurchaseDoc
+     */
+    select?: MisaPurchaseDocSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPurchaseDoc
+     */
+    omit?: MisaPurchaseDocOmit<ExtArgs> | null
+    /**
+     * The data used to create many MisaPurchaseDocs.
+     */
+    data: MisaPurchaseDocCreateManyInput | MisaPurchaseDocCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaPurchaseDocIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * MisaPurchaseDoc update
+   */
+  export type MisaPurchaseDocUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPurchaseDoc
+     */
+    select?: MisaPurchaseDocSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPurchaseDoc
+     */
+    omit?: MisaPurchaseDocOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaPurchaseDocInclude<ExtArgs> | null
+    /**
+     * The data needed to update a MisaPurchaseDoc.
+     */
+    data: XOR<MisaPurchaseDocUpdateInput, MisaPurchaseDocUncheckedUpdateInput>
+    /**
+     * Choose, which MisaPurchaseDoc to update.
+     */
+    where: MisaPurchaseDocWhereUniqueInput
+  }
+
+  /**
+   * MisaPurchaseDoc updateMany
+   */
+  export type MisaPurchaseDocUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update MisaPurchaseDocs.
+     */
+    data: XOR<MisaPurchaseDocUpdateManyMutationInput, MisaPurchaseDocUncheckedUpdateManyInput>
+    /**
+     * Filter which MisaPurchaseDocs to update
+     */
+    where?: MisaPurchaseDocWhereInput
+    /**
+     * Limit how many MisaPurchaseDocs to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * MisaPurchaseDoc updateManyAndReturn
+   */
+  export type MisaPurchaseDocUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPurchaseDoc
+     */
+    select?: MisaPurchaseDocSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPurchaseDoc
+     */
+    omit?: MisaPurchaseDocOmit<ExtArgs> | null
+    /**
+     * The data used to update MisaPurchaseDocs.
+     */
+    data: XOR<MisaPurchaseDocUpdateManyMutationInput, MisaPurchaseDocUncheckedUpdateManyInput>
+    /**
+     * Filter which MisaPurchaseDocs to update
+     */
+    where?: MisaPurchaseDocWhereInput
+    /**
+     * Limit how many MisaPurchaseDocs to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaPurchaseDocIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * MisaPurchaseDoc upsert
+   */
+  export type MisaPurchaseDocUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPurchaseDoc
+     */
+    select?: MisaPurchaseDocSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPurchaseDoc
+     */
+    omit?: MisaPurchaseDocOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaPurchaseDocInclude<ExtArgs> | null
+    /**
+     * The filter to search for the MisaPurchaseDoc to update in case it exists.
+     */
+    where: MisaPurchaseDocWhereUniqueInput
+    /**
+     * In case the MisaPurchaseDoc found by the `where` argument doesn't exist, create a new MisaPurchaseDoc with this data.
+     */
+    create: XOR<MisaPurchaseDocCreateInput, MisaPurchaseDocUncheckedCreateInput>
+    /**
+     * In case the MisaPurchaseDoc was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<MisaPurchaseDocUpdateInput, MisaPurchaseDocUncheckedUpdateInput>
+  }
+
+  /**
+   * MisaPurchaseDoc delete
+   */
+  export type MisaPurchaseDocDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPurchaseDoc
+     */
+    select?: MisaPurchaseDocSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPurchaseDoc
+     */
+    omit?: MisaPurchaseDocOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaPurchaseDocInclude<ExtArgs> | null
+    /**
+     * Filter which MisaPurchaseDoc to delete.
+     */
+    where: MisaPurchaseDocWhereUniqueInput
+  }
+
+  /**
+   * MisaPurchaseDoc deleteMany
+   */
+  export type MisaPurchaseDocDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MisaPurchaseDocs to delete
+     */
+    where?: MisaPurchaseDocWhereInput
+    /**
+     * Limit how many MisaPurchaseDocs to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * MisaPurchaseDoc.batch
+   */
+  export type MisaPurchaseDoc$batchArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaImportBatch
+     */
+    select?: MisaImportBatchSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaImportBatch
+     */
+    omit?: MisaImportBatchOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaImportBatchInclude<ExtArgs> | null
+    where?: MisaImportBatchWhereInput
+  }
+
+  /**
+   * MisaPurchaseDoc.lines
+   */
+  export type MisaPurchaseDoc$linesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPurchaseLine
+     */
+    select?: MisaPurchaseLineSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPurchaseLine
+     */
+    omit?: MisaPurchaseLineOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaPurchaseLineInclude<ExtArgs> | null
+    where?: MisaPurchaseLineWhereInput
+    orderBy?: MisaPurchaseLineOrderByWithRelationInput | MisaPurchaseLineOrderByWithRelationInput[]
+    cursor?: MisaPurchaseLineWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: MisaPurchaseLineScalarFieldEnum | MisaPurchaseLineScalarFieldEnum[]
+  }
+
+  /**
+   * MisaPurchaseDoc without action
+   */
+  export type MisaPurchaseDocDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPurchaseDoc
+     */
+    select?: MisaPurchaseDocSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPurchaseDoc
+     */
+    omit?: MisaPurchaseDocOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaPurchaseDocInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model MisaPurchaseLine
+   */
+
+  export type AggregateMisaPurchaseLine = {
+    _count: MisaPurchaseLineCountAggregateOutputType | null
+    _avg: MisaPurchaseLineAvgAggregateOutputType | null
+    _sum: MisaPurchaseLineSumAggregateOutputType | null
+    _min: MisaPurchaseLineMinAggregateOutputType | null
+    _max: MisaPurchaseLineMaxAggregateOutputType | null
+  }
+
+  export type MisaPurchaseLineAvgAggregateOutputType = {
+    soLuong: number | null
+    donGia: number | null
+    giaTri: number | null
+    thueGtgt: number | null
+    chietKhau: number | null
+    soLuongTra: number | null
+    giaTriTra: number | null
+    giamGia: number | null
+    dongSo: number | null
+  }
+
+  export type MisaPurchaseLineSumAggregateOutputType = {
+    soLuong: number | null
+    donGia: number | null
+    giaTri: number | null
+    thueGtgt: number | null
+    chietKhau: number | null
+    soLuongTra: number | null
+    giaTriTra: number | null
+    giamGia: number | null
+    dongSo: number | null
+  }
+
+  export type MisaPurchaseLineMinAggregateOutputType = {
+    id: string | null
+    docId: string | null
+    maHang: string | null
+    tenHang: string | null
+    dvt: string | null
+    soLuong: number | null
+    donGia: number | null
+    giaTri: number | null
+    thueGtgt: number | null
+    chietKhau: number | null
+    soLuongTra: number | null
+    giaTriTra: number | null
+    giamGia: number | null
+    productId: string | null
+    dongSo: number | null
+  }
+
+  export type MisaPurchaseLineMaxAggregateOutputType = {
+    id: string | null
+    docId: string | null
+    maHang: string | null
+    tenHang: string | null
+    dvt: string | null
+    soLuong: number | null
+    donGia: number | null
+    giaTri: number | null
+    thueGtgt: number | null
+    chietKhau: number | null
+    soLuongTra: number | null
+    giaTriTra: number | null
+    giamGia: number | null
+    productId: string | null
+    dongSo: number | null
+  }
+
+  export type MisaPurchaseLineCountAggregateOutputType = {
+    id: number
+    docId: number
+    maHang: number
+    tenHang: number
+    dvt: number
+    soLuong: number
+    donGia: number
+    giaTri: number
+    thueGtgt: number
+    chietKhau: number
+    soLuongTra: number
+    giaTriTra: number
+    giamGia: number
+    productId: number
+    dongSo: number
+    _all: number
+  }
+
+
+  export type MisaPurchaseLineAvgAggregateInputType = {
+    soLuong?: true
+    donGia?: true
+    giaTri?: true
+    thueGtgt?: true
+    chietKhau?: true
+    soLuongTra?: true
+    giaTriTra?: true
+    giamGia?: true
+    dongSo?: true
+  }
+
+  export type MisaPurchaseLineSumAggregateInputType = {
+    soLuong?: true
+    donGia?: true
+    giaTri?: true
+    thueGtgt?: true
+    chietKhau?: true
+    soLuongTra?: true
+    giaTriTra?: true
+    giamGia?: true
+    dongSo?: true
+  }
+
+  export type MisaPurchaseLineMinAggregateInputType = {
+    id?: true
+    docId?: true
+    maHang?: true
+    tenHang?: true
+    dvt?: true
+    soLuong?: true
+    donGia?: true
+    giaTri?: true
+    thueGtgt?: true
+    chietKhau?: true
+    soLuongTra?: true
+    giaTriTra?: true
+    giamGia?: true
+    productId?: true
+    dongSo?: true
+  }
+
+  export type MisaPurchaseLineMaxAggregateInputType = {
+    id?: true
+    docId?: true
+    maHang?: true
+    tenHang?: true
+    dvt?: true
+    soLuong?: true
+    donGia?: true
+    giaTri?: true
+    thueGtgt?: true
+    chietKhau?: true
+    soLuongTra?: true
+    giaTriTra?: true
+    giamGia?: true
+    productId?: true
+    dongSo?: true
+  }
+
+  export type MisaPurchaseLineCountAggregateInputType = {
+    id?: true
+    docId?: true
+    maHang?: true
+    tenHang?: true
+    dvt?: true
+    soLuong?: true
+    donGia?: true
+    giaTri?: true
+    thueGtgt?: true
+    chietKhau?: true
+    soLuongTra?: true
+    giaTriTra?: true
+    giamGia?: true
+    productId?: true
+    dongSo?: true
+    _all?: true
+  }
+
+  export type MisaPurchaseLineAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MisaPurchaseLine to aggregate.
+     */
+    where?: MisaPurchaseLineWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaPurchaseLines to fetch.
+     */
+    orderBy?: MisaPurchaseLineOrderByWithRelationInput | MisaPurchaseLineOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: MisaPurchaseLineWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaPurchaseLines from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaPurchaseLines.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned MisaPurchaseLines
+    **/
+    _count?: true | MisaPurchaseLineCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: MisaPurchaseLineAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: MisaPurchaseLineSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: MisaPurchaseLineMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: MisaPurchaseLineMaxAggregateInputType
+  }
+
+  export type GetMisaPurchaseLineAggregateType<T extends MisaPurchaseLineAggregateArgs> = {
+        [P in keyof T & keyof AggregateMisaPurchaseLine]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateMisaPurchaseLine[P]>
+      : GetScalarType<T[P], AggregateMisaPurchaseLine[P]>
+  }
+
+
+
+
+  export type MisaPurchaseLineGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: MisaPurchaseLineWhereInput
+    orderBy?: MisaPurchaseLineOrderByWithAggregationInput | MisaPurchaseLineOrderByWithAggregationInput[]
+    by: MisaPurchaseLineScalarFieldEnum[] | MisaPurchaseLineScalarFieldEnum
+    having?: MisaPurchaseLineScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: MisaPurchaseLineCountAggregateInputType | true
+    _avg?: MisaPurchaseLineAvgAggregateInputType
+    _sum?: MisaPurchaseLineSumAggregateInputType
+    _min?: MisaPurchaseLineMinAggregateInputType
+    _max?: MisaPurchaseLineMaxAggregateInputType
+  }
+
+  export type MisaPurchaseLineGroupByOutputType = {
+    id: string
+    docId: string
+    maHang: string
+    tenHang: string | null
+    dvt: string | null
+    soLuong: number
+    donGia: number
+    giaTri: number
+    thueGtgt: number
+    chietKhau: number
+    soLuongTra: number
+    giaTriTra: number
+    giamGia: number
+    productId: string | null
+    dongSo: number | null
+    _count: MisaPurchaseLineCountAggregateOutputType | null
+    _avg: MisaPurchaseLineAvgAggregateOutputType | null
+    _sum: MisaPurchaseLineSumAggregateOutputType | null
+    _min: MisaPurchaseLineMinAggregateOutputType | null
+    _max: MisaPurchaseLineMaxAggregateOutputType | null
+  }
+
+  type GetMisaPurchaseLineGroupByPayload<T extends MisaPurchaseLineGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<MisaPurchaseLineGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof MisaPurchaseLineGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], MisaPurchaseLineGroupByOutputType[P]>
+            : GetScalarType<T[P], MisaPurchaseLineGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type MisaPurchaseLineSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    docId?: boolean
+    maHang?: boolean
+    tenHang?: boolean
+    dvt?: boolean
+    soLuong?: boolean
+    donGia?: boolean
+    giaTri?: boolean
+    thueGtgt?: boolean
+    chietKhau?: boolean
+    soLuongTra?: boolean
+    giaTriTra?: boolean
+    giamGia?: boolean
+    productId?: boolean
+    dongSo?: boolean
+    doc?: boolean | MisaPurchaseDocDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["misaPurchaseLine"]>
+
+  export type MisaPurchaseLineSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    docId?: boolean
+    maHang?: boolean
+    tenHang?: boolean
+    dvt?: boolean
+    soLuong?: boolean
+    donGia?: boolean
+    giaTri?: boolean
+    thueGtgt?: boolean
+    chietKhau?: boolean
+    soLuongTra?: boolean
+    giaTriTra?: boolean
+    giamGia?: boolean
+    productId?: boolean
+    dongSo?: boolean
+    doc?: boolean | MisaPurchaseDocDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["misaPurchaseLine"]>
+
+  export type MisaPurchaseLineSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    docId?: boolean
+    maHang?: boolean
+    tenHang?: boolean
+    dvt?: boolean
+    soLuong?: boolean
+    donGia?: boolean
+    giaTri?: boolean
+    thueGtgt?: boolean
+    chietKhau?: boolean
+    soLuongTra?: boolean
+    giaTriTra?: boolean
+    giamGia?: boolean
+    productId?: boolean
+    dongSo?: boolean
+    doc?: boolean | MisaPurchaseDocDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["misaPurchaseLine"]>
+
+  export type MisaPurchaseLineSelectScalar = {
+    id?: boolean
+    docId?: boolean
+    maHang?: boolean
+    tenHang?: boolean
+    dvt?: boolean
+    soLuong?: boolean
+    donGia?: boolean
+    giaTri?: boolean
+    thueGtgt?: boolean
+    chietKhau?: boolean
+    soLuongTra?: boolean
+    giaTriTra?: boolean
+    giamGia?: boolean
+    productId?: boolean
+    dongSo?: boolean
+  }
+
+  export type MisaPurchaseLineOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "docId" | "maHang" | "tenHang" | "dvt" | "soLuong" | "donGia" | "giaTri" | "thueGtgt" | "chietKhau" | "soLuongTra" | "giaTriTra" | "giamGia" | "productId" | "dongSo", ExtArgs["result"]["misaPurchaseLine"]>
+  export type MisaPurchaseLineInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    doc?: boolean | MisaPurchaseDocDefaultArgs<ExtArgs>
+  }
+  export type MisaPurchaseLineIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    doc?: boolean | MisaPurchaseDocDefaultArgs<ExtArgs>
+  }
+  export type MisaPurchaseLineIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    doc?: boolean | MisaPurchaseDocDefaultArgs<ExtArgs>
+  }
+
+  export type $MisaPurchaseLinePayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "MisaPurchaseLine"
+    objects: {
+      doc: Prisma.$MisaPurchaseDocPayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      docId: string
+      maHang: string
+      tenHang: string | null
+      dvt: string | null
+      soLuong: number
+      donGia: number
+      giaTri: number
+      thueGtgt: number
+      chietKhau: number
+      soLuongTra: number
+      giaTriTra: number
+      giamGia: number
+      /**
+       * Nối sang Product của Kengi theo SKU (cột "Mã hàng"). null = chưa khớp.
+       */
+      productId: string | null
+      dongSo: number | null
+    }, ExtArgs["result"]["misaPurchaseLine"]>
+    composites: {}
+  }
+
+  type MisaPurchaseLineGetPayload<S extends boolean | null | undefined | MisaPurchaseLineDefaultArgs> = $Result.GetResult<Prisma.$MisaPurchaseLinePayload, S>
+
+  type MisaPurchaseLineCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<MisaPurchaseLineFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: MisaPurchaseLineCountAggregateInputType | true
+    }
+
+  export interface MisaPurchaseLineDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['MisaPurchaseLine'], meta: { name: 'MisaPurchaseLine' } }
+    /**
+     * Find zero or one MisaPurchaseLine that matches the filter.
+     * @param {MisaPurchaseLineFindUniqueArgs} args - Arguments to find a MisaPurchaseLine
+     * @example
+     * // Get one MisaPurchaseLine
+     * const misaPurchaseLine = await prisma.misaPurchaseLine.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends MisaPurchaseLineFindUniqueArgs>(args: SelectSubset<T, MisaPurchaseLineFindUniqueArgs<ExtArgs>>): Prisma__MisaPurchaseLineClient<$Result.GetResult<Prisma.$MisaPurchaseLinePayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one MisaPurchaseLine that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {MisaPurchaseLineFindUniqueOrThrowArgs} args - Arguments to find a MisaPurchaseLine
+     * @example
+     * // Get one MisaPurchaseLine
+     * const misaPurchaseLine = await prisma.misaPurchaseLine.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends MisaPurchaseLineFindUniqueOrThrowArgs>(args: SelectSubset<T, MisaPurchaseLineFindUniqueOrThrowArgs<ExtArgs>>): Prisma__MisaPurchaseLineClient<$Result.GetResult<Prisma.$MisaPurchaseLinePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first MisaPurchaseLine that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaPurchaseLineFindFirstArgs} args - Arguments to find a MisaPurchaseLine
+     * @example
+     * // Get one MisaPurchaseLine
+     * const misaPurchaseLine = await prisma.misaPurchaseLine.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends MisaPurchaseLineFindFirstArgs>(args?: SelectSubset<T, MisaPurchaseLineFindFirstArgs<ExtArgs>>): Prisma__MisaPurchaseLineClient<$Result.GetResult<Prisma.$MisaPurchaseLinePayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first MisaPurchaseLine that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaPurchaseLineFindFirstOrThrowArgs} args - Arguments to find a MisaPurchaseLine
+     * @example
+     * // Get one MisaPurchaseLine
+     * const misaPurchaseLine = await prisma.misaPurchaseLine.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends MisaPurchaseLineFindFirstOrThrowArgs>(args?: SelectSubset<T, MisaPurchaseLineFindFirstOrThrowArgs<ExtArgs>>): Prisma__MisaPurchaseLineClient<$Result.GetResult<Prisma.$MisaPurchaseLinePayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more MisaPurchaseLines that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaPurchaseLineFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all MisaPurchaseLines
+     * const misaPurchaseLines = await prisma.misaPurchaseLine.findMany()
+     * 
+     * // Get first 10 MisaPurchaseLines
+     * const misaPurchaseLines = await prisma.misaPurchaseLine.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const misaPurchaseLineWithIdOnly = await prisma.misaPurchaseLine.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends MisaPurchaseLineFindManyArgs>(args?: SelectSubset<T, MisaPurchaseLineFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MisaPurchaseLinePayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a MisaPurchaseLine.
+     * @param {MisaPurchaseLineCreateArgs} args - Arguments to create a MisaPurchaseLine.
+     * @example
+     * // Create one MisaPurchaseLine
+     * const MisaPurchaseLine = await prisma.misaPurchaseLine.create({
+     *   data: {
+     *     // ... data to create a MisaPurchaseLine
+     *   }
+     * })
+     * 
+     */
+    create<T extends MisaPurchaseLineCreateArgs>(args: SelectSubset<T, MisaPurchaseLineCreateArgs<ExtArgs>>): Prisma__MisaPurchaseLineClient<$Result.GetResult<Prisma.$MisaPurchaseLinePayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many MisaPurchaseLines.
+     * @param {MisaPurchaseLineCreateManyArgs} args - Arguments to create many MisaPurchaseLines.
+     * @example
+     * // Create many MisaPurchaseLines
+     * const misaPurchaseLine = await prisma.misaPurchaseLine.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends MisaPurchaseLineCreateManyArgs>(args?: SelectSubset<T, MisaPurchaseLineCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many MisaPurchaseLines and returns the data saved in the database.
+     * @param {MisaPurchaseLineCreateManyAndReturnArgs} args - Arguments to create many MisaPurchaseLines.
+     * @example
+     * // Create many MisaPurchaseLines
+     * const misaPurchaseLine = await prisma.misaPurchaseLine.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many MisaPurchaseLines and only return the `id`
+     * const misaPurchaseLineWithIdOnly = await prisma.misaPurchaseLine.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends MisaPurchaseLineCreateManyAndReturnArgs>(args?: SelectSubset<T, MisaPurchaseLineCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MisaPurchaseLinePayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a MisaPurchaseLine.
+     * @param {MisaPurchaseLineDeleteArgs} args - Arguments to delete one MisaPurchaseLine.
+     * @example
+     * // Delete one MisaPurchaseLine
+     * const MisaPurchaseLine = await prisma.misaPurchaseLine.delete({
+     *   where: {
+     *     // ... filter to delete one MisaPurchaseLine
+     *   }
+     * })
+     * 
+     */
+    delete<T extends MisaPurchaseLineDeleteArgs>(args: SelectSubset<T, MisaPurchaseLineDeleteArgs<ExtArgs>>): Prisma__MisaPurchaseLineClient<$Result.GetResult<Prisma.$MisaPurchaseLinePayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one MisaPurchaseLine.
+     * @param {MisaPurchaseLineUpdateArgs} args - Arguments to update one MisaPurchaseLine.
+     * @example
+     * // Update one MisaPurchaseLine
+     * const misaPurchaseLine = await prisma.misaPurchaseLine.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends MisaPurchaseLineUpdateArgs>(args: SelectSubset<T, MisaPurchaseLineUpdateArgs<ExtArgs>>): Prisma__MisaPurchaseLineClient<$Result.GetResult<Prisma.$MisaPurchaseLinePayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more MisaPurchaseLines.
+     * @param {MisaPurchaseLineDeleteManyArgs} args - Arguments to filter MisaPurchaseLines to delete.
+     * @example
+     * // Delete a few MisaPurchaseLines
+     * const { count } = await prisma.misaPurchaseLine.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends MisaPurchaseLineDeleteManyArgs>(args?: SelectSubset<T, MisaPurchaseLineDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more MisaPurchaseLines.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaPurchaseLineUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many MisaPurchaseLines
+     * const misaPurchaseLine = await prisma.misaPurchaseLine.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends MisaPurchaseLineUpdateManyArgs>(args: SelectSubset<T, MisaPurchaseLineUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more MisaPurchaseLines and returns the data updated in the database.
+     * @param {MisaPurchaseLineUpdateManyAndReturnArgs} args - Arguments to update many MisaPurchaseLines.
+     * @example
+     * // Update many MisaPurchaseLines
+     * const misaPurchaseLine = await prisma.misaPurchaseLine.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more MisaPurchaseLines and only return the `id`
+     * const misaPurchaseLineWithIdOnly = await prisma.misaPurchaseLine.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends MisaPurchaseLineUpdateManyAndReturnArgs>(args: SelectSubset<T, MisaPurchaseLineUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$MisaPurchaseLinePayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one MisaPurchaseLine.
+     * @param {MisaPurchaseLineUpsertArgs} args - Arguments to update or create a MisaPurchaseLine.
+     * @example
+     * // Update or create a MisaPurchaseLine
+     * const misaPurchaseLine = await prisma.misaPurchaseLine.upsert({
+     *   create: {
+     *     // ... data to create a MisaPurchaseLine
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the MisaPurchaseLine we want to update
+     *   }
+     * })
+     */
+    upsert<T extends MisaPurchaseLineUpsertArgs>(args: SelectSubset<T, MisaPurchaseLineUpsertArgs<ExtArgs>>): Prisma__MisaPurchaseLineClient<$Result.GetResult<Prisma.$MisaPurchaseLinePayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of MisaPurchaseLines.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaPurchaseLineCountArgs} args - Arguments to filter MisaPurchaseLines to count.
+     * @example
+     * // Count the number of MisaPurchaseLines
+     * const count = await prisma.misaPurchaseLine.count({
+     *   where: {
+     *     // ... the filter for the MisaPurchaseLines we want to count
+     *   }
+     * })
+    **/
+    count<T extends MisaPurchaseLineCountArgs>(
+      args?: Subset<T, MisaPurchaseLineCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], MisaPurchaseLineCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a MisaPurchaseLine.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaPurchaseLineAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends MisaPurchaseLineAggregateArgs>(args: Subset<T, MisaPurchaseLineAggregateArgs>): Prisma.PrismaPromise<GetMisaPurchaseLineAggregateType<T>>
+
+    /**
+     * Group by MisaPurchaseLine.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {MisaPurchaseLineGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends MisaPurchaseLineGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: MisaPurchaseLineGroupByArgs['orderBy'] }
+        : { orderBy?: MisaPurchaseLineGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, MisaPurchaseLineGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetMisaPurchaseLineGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the MisaPurchaseLine model
+   */
+  readonly fields: MisaPurchaseLineFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for MisaPurchaseLine.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__MisaPurchaseLineClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    doc<T extends MisaPurchaseDocDefaultArgs<ExtArgs> = {}>(args?: Subset<T, MisaPurchaseDocDefaultArgs<ExtArgs>>): Prisma__MisaPurchaseDocClient<$Result.GetResult<Prisma.$MisaPurchaseDocPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the MisaPurchaseLine model
+   */
+  interface MisaPurchaseLineFieldRefs {
+    readonly id: FieldRef<"MisaPurchaseLine", 'String'>
+    readonly docId: FieldRef<"MisaPurchaseLine", 'String'>
+    readonly maHang: FieldRef<"MisaPurchaseLine", 'String'>
+    readonly tenHang: FieldRef<"MisaPurchaseLine", 'String'>
+    readonly dvt: FieldRef<"MisaPurchaseLine", 'String'>
+    readonly soLuong: FieldRef<"MisaPurchaseLine", 'Float'>
+    readonly donGia: FieldRef<"MisaPurchaseLine", 'Float'>
+    readonly giaTri: FieldRef<"MisaPurchaseLine", 'Float'>
+    readonly thueGtgt: FieldRef<"MisaPurchaseLine", 'Float'>
+    readonly chietKhau: FieldRef<"MisaPurchaseLine", 'Float'>
+    readonly soLuongTra: FieldRef<"MisaPurchaseLine", 'Float'>
+    readonly giaTriTra: FieldRef<"MisaPurchaseLine", 'Float'>
+    readonly giamGia: FieldRef<"MisaPurchaseLine", 'Float'>
+    readonly productId: FieldRef<"MisaPurchaseLine", 'String'>
+    readonly dongSo: FieldRef<"MisaPurchaseLine", 'Int'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * MisaPurchaseLine findUnique
+   */
+  export type MisaPurchaseLineFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPurchaseLine
+     */
+    select?: MisaPurchaseLineSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPurchaseLine
+     */
+    omit?: MisaPurchaseLineOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaPurchaseLineInclude<ExtArgs> | null
+    /**
+     * Filter, which MisaPurchaseLine to fetch.
+     */
+    where: MisaPurchaseLineWhereUniqueInput
+  }
+
+  /**
+   * MisaPurchaseLine findUniqueOrThrow
+   */
+  export type MisaPurchaseLineFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPurchaseLine
+     */
+    select?: MisaPurchaseLineSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPurchaseLine
+     */
+    omit?: MisaPurchaseLineOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaPurchaseLineInclude<ExtArgs> | null
+    /**
+     * Filter, which MisaPurchaseLine to fetch.
+     */
+    where: MisaPurchaseLineWhereUniqueInput
+  }
+
+  /**
+   * MisaPurchaseLine findFirst
+   */
+  export type MisaPurchaseLineFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPurchaseLine
+     */
+    select?: MisaPurchaseLineSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPurchaseLine
+     */
+    omit?: MisaPurchaseLineOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaPurchaseLineInclude<ExtArgs> | null
+    /**
+     * Filter, which MisaPurchaseLine to fetch.
+     */
+    where?: MisaPurchaseLineWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaPurchaseLines to fetch.
+     */
+    orderBy?: MisaPurchaseLineOrderByWithRelationInput | MisaPurchaseLineOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MisaPurchaseLines.
+     */
+    cursor?: MisaPurchaseLineWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaPurchaseLines from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaPurchaseLines.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MisaPurchaseLines.
+     */
+    distinct?: MisaPurchaseLineScalarFieldEnum | MisaPurchaseLineScalarFieldEnum[]
+  }
+
+  /**
+   * MisaPurchaseLine findFirstOrThrow
+   */
+  export type MisaPurchaseLineFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPurchaseLine
+     */
+    select?: MisaPurchaseLineSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPurchaseLine
+     */
+    omit?: MisaPurchaseLineOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaPurchaseLineInclude<ExtArgs> | null
+    /**
+     * Filter, which MisaPurchaseLine to fetch.
+     */
+    where?: MisaPurchaseLineWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaPurchaseLines to fetch.
+     */
+    orderBy?: MisaPurchaseLineOrderByWithRelationInput | MisaPurchaseLineOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for MisaPurchaseLines.
+     */
+    cursor?: MisaPurchaseLineWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaPurchaseLines from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaPurchaseLines.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of MisaPurchaseLines.
+     */
+    distinct?: MisaPurchaseLineScalarFieldEnum | MisaPurchaseLineScalarFieldEnum[]
+  }
+
+  /**
+   * MisaPurchaseLine findMany
+   */
+  export type MisaPurchaseLineFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPurchaseLine
+     */
+    select?: MisaPurchaseLineSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPurchaseLine
+     */
+    omit?: MisaPurchaseLineOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaPurchaseLineInclude<ExtArgs> | null
+    /**
+     * Filter, which MisaPurchaseLines to fetch.
+     */
+    where?: MisaPurchaseLineWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of MisaPurchaseLines to fetch.
+     */
+    orderBy?: MisaPurchaseLineOrderByWithRelationInput | MisaPurchaseLineOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing MisaPurchaseLines.
+     */
+    cursor?: MisaPurchaseLineWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` MisaPurchaseLines from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` MisaPurchaseLines.
+     */
+    skip?: number
+    distinct?: MisaPurchaseLineScalarFieldEnum | MisaPurchaseLineScalarFieldEnum[]
+  }
+
+  /**
+   * MisaPurchaseLine create
+   */
+  export type MisaPurchaseLineCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPurchaseLine
+     */
+    select?: MisaPurchaseLineSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPurchaseLine
+     */
+    omit?: MisaPurchaseLineOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaPurchaseLineInclude<ExtArgs> | null
+    /**
+     * The data needed to create a MisaPurchaseLine.
+     */
+    data: XOR<MisaPurchaseLineCreateInput, MisaPurchaseLineUncheckedCreateInput>
+  }
+
+  /**
+   * MisaPurchaseLine createMany
+   */
+  export type MisaPurchaseLineCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many MisaPurchaseLines.
+     */
+    data: MisaPurchaseLineCreateManyInput | MisaPurchaseLineCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * MisaPurchaseLine createManyAndReturn
+   */
+  export type MisaPurchaseLineCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPurchaseLine
+     */
+    select?: MisaPurchaseLineSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPurchaseLine
+     */
+    omit?: MisaPurchaseLineOmit<ExtArgs> | null
+    /**
+     * The data used to create many MisaPurchaseLines.
+     */
+    data: MisaPurchaseLineCreateManyInput | MisaPurchaseLineCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaPurchaseLineIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * MisaPurchaseLine update
+   */
+  export type MisaPurchaseLineUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPurchaseLine
+     */
+    select?: MisaPurchaseLineSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPurchaseLine
+     */
+    omit?: MisaPurchaseLineOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaPurchaseLineInclude<ExtArgs> | null
+    /**
+     * The data needed to update a MisaPurchaseLine.
+     */
+    data: XOR<MisaPurchaseLineUpdateInput, MisaPurchaseLineUncheckedUpdateInput>
+    /**
+     * Choose, which MisaPurchaseLine to update.
+     */
+    where: MisaPurchaseLineWhereUniqueInput
+  }
+
+  /**
+   * MisaPurchaseLine updateMany
+   */
+  export type MisaPurchaseLineUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update MisaPurchaseLines.
+     */
+    data: XOR<MisaPurchaseLineUpdateManyMutationInput, MisaPurchaseLineUncheckedUpdateManyInput>
+    /**
+     * Filter which MisaPurchaseLines to update
+     */
+    where?: MisaPurchaseLineWhereInput
+    /**
+     * Limit how many MisaPurchaseLines to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * MisaPurchaseLine updateManyAndReturn
+   */
+  export type MisaPurchaseLineUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPurchaseLine
+     */
+    select?: MisaPurchaseLineSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPurchaseLine
+     */
+    omit?: MisaPurchaseLineOmit<ExtArgs> | null
+    /**
+     * The data used to update MisaPurchaseLines.
+     */
+    data: XOR<MisaPurchaseLineUpdateManyMutationInput, MisaPurchaseLineUncheckedUpdateManyInput>
+    /**
+     * Filter which MisaPurchaseLines to update
+     */
+    where?: MisaPurchaseLineWhereInput
+    /**
+     * Limit how many MisaPurchaseLines to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaPurchaseLineIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * MisaPurchaseLine upsert
+   */
+  export type MisaPurchaseLineUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPurchaseLine
+     */
+    select?: MisaPurchaseLineSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPurchaseLine
+     */
+    omit?: MisaPurchaseLineOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaPurchaseLineInclude<ExtArgs> | null
+    /**
+     * The filter to search for the MisaPurchaseLine to update in case it exists.
+     */
+    where: MisaPurchaseLineWhereUniqueInput
+    /**
+     * In case the MisaPurchaseLine found by the `where` argument doesn't exist, create a new MisaPurchaseLine with this data.
+     */
+    create: XOR<MisaPurchaseLineCreateInput, MisaPurchaseLineUncheckedCreateInput>
+    /**
+     * In case the MisaPurchaseLine was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<MisaPurchaseLineUpdateInput, MisaPurchaseLineUncheckedUpdateInput>
+  }
+
+  /**
+   * MisaPurchaseLine delete
+   */
+  export type MisaPurchaseLineDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPurchaseLine
+     */
+    select?: MisaPurchaseLineSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPurchaseLine
+     */
+    omit?: MisaPurchaseLineOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaPurchaseLineInclude<ExtArgs> | null
+    /**
+     * Filter which MisaPurchaseLine to delete.
+     */
+    where: MisaPurchaseLineWhereUniqueInput
+  }
+
+  /**
+   * MisaPurchaseLine deleteMany
+   */
+  export type MisaPurchaseLineDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which MisaPurchaseLines to delete
+     */
+    where?: MisaPurchaseLineWhereInput
+    /**
+     * Limit how many MisaPurchaseLines to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * MisaPurchaseLine without action
+   */
+  export type MisaPurchaseLineDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the MisaPurchaseLine
+     */
+    select?: MisaPurchaseLineSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the MisaPurchaseLine
+     */
+    omit?: MisaPurchaseLineOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: MisaPurchaseLineInclude<ExtArgs> | null
   }
 
 
@@ -177354,6 +180141,47 @@ export namespace Prisma {
   };
 
   export type MisaSaleLineScalarFieldEnum = (typeof MisaSaleLineScalarFieldEnum)[keyof typeof MisaSaleLineScalarFieldEnum]
+
+
+  export const MisaPurchaseDocScalarFieldEnum: {
+    id: 'id',
+    soChungTu: 'soChungTu',
+    soHoaDon: 'soHoaDon',
+    ngayChungTu: 'ngayChungTu',
+    ngayHachToan: 'ngayHachToan',
+    ngayHoaDon: 'ngayHoaDon',
+    tongGiaTri: 'tongGiaTri',
+    tongThue: 'tongThue',
+    tongChietKhau: 'tongChietKhau',
+    tongTra: 'tongTra',
+    tongGiamGia: 'tongGiamGia',
+    batchId: 'batchId',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type MisaPurchaseDocScalarFieldEnum = (typeof MisaPurchaseDocScalarFieldEnum)[keyof typeof MisaPurchaseDocScalarFieldEnum]
+
+
+  export const MisaPurchaseLineScalarFieldEnum: {
+    id: 'id',
+    docId: 'docId',
+    maHang: 'maHang',
+    tenHang: 'tenHang',
+    dvt: 'dvt',
+    soLuong: 'soLuong',
+    donGia: 'donGia',
+    giaTri: 'giaTri',
+    thueGtgt: 'thueGtgt',
+    chietKhau: 'chietKhau',
+    soLuongTra: 'soLuongTra',
+    giaTriTra: 'giaTriTra',
+    giamGia: 'giamGia',
+    productId: 'productId',
+    dongSo: 'dongSo'
+  };
+
+  export type MisaPurchaseLineScalarFieldEnum = (typeof MisaPurchaseLineScalarFieldEnum)[keyof typeof MisaPurchaseLineScalarFieldEnum]
 
 
   export const SortOrder: {
@@ -190865,6 +193693,7 @@ export namespace Prisma {
     userName?: StringNullableFilter<"MisaImportBatch"> | string | null
     createdAt?: DateTimeFilter<"MisaImportBatch"> | Date | string
     docs?: MisaSaleDocListRelationFilter
+    purchaseDocs?: MisaPurchaseDocListRelationFilter
   }
 
   export type MisaImportBatchOrderByWithRelationInput = {
@@ -190884,6 +193713,7 @@ export namespace Prisma {
     userName?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     docs?: MisaSaleDocOrderByRelationAggregateInput
+    purchaseDocs?: MisaPurchaseDocOrderByRelationAggregateInput
   }
 
   export type MisaImportBatchWhereUniqueInput = Prisma.AtLeast<{
@@ -190906,6 +193736,7 @@ export namespace Prisma {
     userName?: StringNullableFilter<"MisaImportBatch"> | string | null
     createdAt?: DateTimeFilter<"MisaImportBatch"> | Date | string
     docs?: MisaSaleDocListRelationFilter
+    purchaseDocs?: MisaPurchaseDocListRelationFilter
   }, "id">
 
   export type MisaImportBatchOrderByWithAggregationInput = {
@@ -191197,6 +194028,218 @@ export namespace Prisma {
     giaVon?: FloatNullableWithAggregatesFilter<"MisaSaleLine"> | number | null
     productId?: StringNullableWithAggregatesFilter<"MisaSaleLine"> | string | null
     dongSo?: IntNullableWithAggregatesFilter<"MisaSaleLine"> | number | null
+  }
+
+  export type MisaPurchaseDocWhereInput = {
+    AND?: MisaPurchaseDocWhereInput | MisaPurchaseDocWhereInput[]
+    OR?: MisaPurchaseDocWhereInput[]
+    NOT?: MisaPurchaseDocWhereInput | MisaPurchaseDocWhereInput[]
+    id?: StringFilter<"MisaPurchaseDoc"> | string
+    soChungTu?: StringFilter<"MisaPurchaseDoc"> | string
+    soHoaDon?: StringNullableFilter<"MisaPurchaseDoc"> | string | null
+    ngayChungTu?: DateTimeNullableFilter<"MisaPurchaseDoc"> | Date | string | null
+    ngayHachToan?: DateTimeNullableFilter<"MisaPurchaseDoc"> | Date | string | null
+    ngayHoaDon?: DateTimeNullableFilter<"MisaPurchaseDoc"> | Date | string | null
+    tongGiaTri?: FloatFilter<"MisaPurchaseDoc"> | number
+    tongThue?: FloatFilter<"MisaPurchaseDoc"> | number
+    tongChietKhau?: FloatFilter<"MisaPurchaseDoc"> | number
+    tongTra?: FloatFilter<"MisaPurchaseDoc"> | number
+    tongGiamGia?: FloatFilter<"MisaPurchaseDoc"> | number
+    batchId?: StringNullableFilter<"MisaPurchaseDoc"> | string | null
+    createdAt?: DateTimeFilter<"MisaPurchaseDoc"> | Date | string
+    updatedAt?: DateTimeFilter<"MisaPurchaseDoc"> | Date | string
+    batch?: XOR<MisaImportBatchNullableScalarRelationFilter, MisaImportBatchWhereInput> | null
+    lines?: MisaPurchaseLineListRelationFilter
+  }
+
+  export type MisaPurchaseDocOrderByWithRelationInput = {
+    id?: SortOrder
+    soChungTu?: SortOrder
+    soHoaDon?: SortOrderInput | SortOrder
+    ngayChungTu?: SortOrderInput | SortOrder
+    ngayHachToan?: SortOrderInput | SortOrder
+    ngayHoaDon?: SortOrderInput | SortOrder
+    tongGiaTri?: SortOrder
+    tongThue?: SortOrder
+    tongChietKhau?: SortOrder
+    tongTra?: SortOrder
+    tongGiamGia?: SortOrder
+    batchId?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    batch?: MisaImportBatchOrderByWithRelationInput
+    lines?: MisaPurchaseLineOrderByRelationAggregateInput
+  }
+
+  export type MisaPurchaseDocWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    soChungTu?: string
+    AND?: MisaPurchaseDocWhereInput | MisaPurchaseDocWhereInput[]
+    OR?: MisaPurchaseDocWhereInput[]
+    NOT?: MisaPurchaseDocWhereInput | MisaPurchaseDocWhereInput[]
+    soHoaDon?: StringNullableFilter<"MisaPurchaseDoc"> | string | null
+    ngayChungTu?: DateTimeNullableFilter<"MisaPurchaseDoc"> | Date | string | null
+    ngayHachToan?: DateTimeNullableFilter<"MisaPurchaseDoc"> | Date | string | null
+    ngayHoaDon?: DateTimeNullableFilter<"MisaPurchaseDoc"> | Date | string | null
+    tongGiaTri?: FloatFilter<"MisaPurchaseDoc"> | number
+    tongThue?: FloatFilter<"MisaPurchaseDoc"> | number
+    tongChietKhau?: FloatFilter<"MisaPurchaseDoc"> | number
+    tongTra?: FloatFilter<"MisaPurchaseDoc"> | number
+    tongGiamGia?: FloatFilter<"MisaPurchaseDoc"> | number
+    batchId?: StringNullableFilter<"MisaPurchaseDoc"> | string | null
+    createdAt?: DateTimeFilter<"MisaPurchaseDoc"> | Date | string
+    updatedAt?: DateTimeFilter<"MisaPurchaseDoc"> | Date | string
+    batch?: XOR<MisaImportBatchNullableScalarRelationFilter, MisaImportBatchWhereInput> | null
+    lines?: MisaPurchaseLineListRelationFilter
+  }, "id" | "soChungTu">
+
+  export type MisaPurchaseDocOrderByWithAggregationInput = {
+    id?: SortOrder
+    soChungTu?: SortOrder
+    soHoaDon?: SortOrderInput | SortOrder
+    ngayChungTu?: SortOrderInput | SortOrder
+    ngayHachToan?: SortOrderInput | SortOrder
+    ngayHoaDon?: SortOrderInput | SortOrder
+    tongGiaTri?: SortOrder
+    tongThue?: SortOrder
+    tongChietKhau?: SortOrder
+    tongTra?: SortOrder
+    tongGiamGia?: SortOrder
+    batchId?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: MisaPurchaseDocCountOrderByAggregateInput
+    _avg?: MisaPurchaseDocAvgOrderByAggregateInput
+    _max?: MisaPurchaseDocMaxOrderByAggregateInput
+    _min?: MisaPurchaseDocMinOrderByAggregateInput
+    _sum?: MisaPurchaseDocSumOrderByAggregateInput
+  }
+
+  export type MisaPurchaseDocScalarWhereWithAggregatesInput = {
+    AND?: MisaPurchaseDocScalarWhereWithAggregatesInput | MisaPurchaseDocScalarWhereWithAggregatesInput[]
+    OR?: MisaPurchaseDocScalarWhereWithAggregatesInput[]
+    NOT?: MisaPurchaseDocScalarWhereWithAggregatesInput | MisaPurchaseDocScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"MisaPurchaseDoc"> | string
+    soChungTu?: StringWithAggregatesFilter<"MisaPurchaseDoc"> | string
+    soHoaDon?: StringNullableWithAggregatesFilter<"MisaPurchaseDoc"> | string | null
+    ngayChungTu?: DateTimeNullableWithAggregatesFilter<"MisaPurchaseDoc"> | Date | string | null
+    ngayHachToan?: DateTimeNullableWithAggregatesFilter<"MisaPurchaseDoc"> | Date | string | null
+    ngayHoaDon?: DateTimeNullableWithAggregatesFilter<"MisaPurchaseDoc"> | Date | string | null
+    tongGiaTri?: FloatWithAggregatesFilter<"MisaPurchaseDoc"> | number
+    tongThue?: FloatWithAggregatesFilter<"MisaPurchaseDoc"> | number
+    tongChietKhau?: FloatWithAggregatesFilter<"MisaPurchaseDoc"> | number
+    tongTra?: FloatWithAggregatesFilter<"MisaPurchaseDoc"> | number
+    tongGiamGia?: FloatWithAggregatesFilter<"MisaPurchaseDoc"> | number
+    batchId?: StringNullableWithAggregatesFilter<"MisaPurchaseDoc"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"MisaPurchaseDoc"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"MisaPurchaseDoc"> | Date | string
+  }
+
+  export type MisaPurchaseLineWhereInput = {
+    AND?: MisaPurchaseLineWhereInput | MisaPurchaseLineWhereInput[]
+    OR?: MisaPurchaseLineWhereInput[]
+    NOT?: MisaPurchaseLineWhereInput | MisaPurchaseLineWhereInput[]
+    id?: StringFilter<"MisaPurchaseLine"> | string
+    docId?: StringFilter<"MisaPurchaseLine"> | string
+    maHang?: StringFilter<"MisaPurchaseLine"> | string
+    tenHang?: StringNullableFilter<"MisaPurchaseLine"> | string | null
+    dvt?: StringNullableFilter<"MisaPurchaseLine"> | string | null
+    soLuong?: FloatFilter<"MisaPurchaseLine"> | number
+    donGia?: FloatFilter<"MisaPurchaseLine"> | number
+    giaTri?: FloatFilter<"MisaPurchaseLine"> | number
+    thueGtgt?: FloatFilter<"MisaPurchaseLine"> | number
+    chietKhau?: FloatFilter<"MisaPurchaseLine"> | number
+    soLuongTra?: FloatFilter<"MisaPurchaseLine"> | number
+    giaTriTra?: FloatFilter<"MisaPurchaseLine"> | number
+    giamGia?: FloatFilter<"MisaPurchaseLine"> | number
+    productId?: StringNullableFilter<"MisaPurchaseLine"> | string | null
+    dongSo?: IntNullableFilter<"MisaPurchaseLine"> | number | null
+    doc?: XOR<MisaPurchaseDocScalarRelationFilter, MisaPurchaseDocWhereInput>
+  }
+
+  export type MisaPurchaseLineOrderByWithRelationInput = {
+    id?: SortOrder
+    docId?: SortOrder
+    maHang?: SortOrder
+    tenHang?: SortOrderInput | SortOrder
+    dvt?: SortOrderInput | SortOrder
+    soLuong?: SortOrder
+    donGia?: SortOrder
+    giaTri?: SortOrder
+    thueGtgt?: SortOrder
+    chietKhau?: SortOrder
+    soLuongTra?: SortOrder
+    giaTriTra?: SortOrder
+    giamGia?: SortOrder
+    productId?: SortOrderInput | SortOrder
+    dongSo?: SortOrderInput | SortOrder
+    doc?: MisaPurchaseDocOrderByWithRelationInput
+  }
+
+  export type MisaPurchaseLineWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: MisaPurchaseLineWhereInput | MisaPurchaseLineWhereInput[]
+    OR?: MisaPurchaseLineWhereInput[]
+    NOT?: MisaPurchaseLineWhereInput | MisaPurchaseLineWhereInput[]
+    docId?: StringFilter<"MisaPurchaseLine"> | string
+    maHang?: StringFilter<"MisaPurchaseLine"> | string
+    tenHang?: StringNullableFilter<"MisaPurchaseLine"> | string | null
+    dvt?: StringNullableFilter<"MisaPurchaseLine"> | string | null
+    soLuong?: FloatFilter<"MisaPurchaseLine"> | number
+    donGia?: FloatFilter<"MisaPurchaseLine"> | number
+    giaTri?: FloatFilter<"MisaPurchaseLine"> | number
+    thueGtgt?: FloatFilter<"MisaPurchaseLine"> | number
+    chietKhau?: FloatFilter<"MisaPurchaseLine"> | number
+    soLuongTra?: FloatFilter<"MisaPurchaseLine"> | number
+    giaTriTra?: FloatFilter<"MisaPurchaseLine"> | number
+    giamGia?: FloatFilter<"MisaPurchaseLine"> | number
+    productId?: StringNullableFilter<"MisaPurchaseLine"> | string | null
+    dongSo?: IntNullableFilter<"MisaPurchaseLine"> | number | null
+    doc?: XOR<MisaPurchaseDocScalarRelationFilter, MisaPurchaseDocWhereInput>
+  }, "id">
+
+  export type MisaPurchaseLineOrderByWithAggregationInput = {
+    id?: SortOrder
+    docId?: SortOrder
+    maHang?: SortOrder
+    tenHang?: SortOrderInput | SortOrder
+    dvt?: SortOrderInput | SortOrder
+    soLuong?: SortOrder
+    donGia?: SortOrder
+    giaTri?: SortOrder
+    thueGtgt?: SortOrder
+    chietKhau?: SortOrder
+    soLuongTra?: SortOrder
+    giaTriTra?: SortOrder
+    giamGia?: SortOrder
+    productId?: SortOrderInput | SortOrder
+    dongSo?: SortOrderInput | SortOrder
+    _count?: MisaPurchaseLineCountOrderByAggregateInput
+    _avg?: MisaPurchaseLineAvgOrderByAggregateInput
+    _max?: MisaPurchaseLineMaxOrderByAggregateInput
+    _min?: MisaPurchaseLineMinOrderByAggregateInput
+    _sum?: MisaPurchaseLineSumOrderByAggregateInput
+  }
+
+  export type MisaPurchaseLineScalarWhereWithAggregatesInput = {
+    AND?: MisaPurchaseLineScalarWhereWithAggregatesInput | MisaPurchaseLineScalarWhereWithAggregatesInput[]
+    OR?: MisaPurchaseLineScalarWhereWithAggregatesInput[]
+    NOT?: MisaPurchaseLineScalarWhereWithAggregatesInput | MisaPurchaseLineScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"MisaPurchaseLine"> | string
+    docId?: StringWithAggregatesFilter<"MisaPurchaseLine"> | string
+    maHang?: StringWithAggregatesFilter<"MisaPurchaseLine"> | string
+    tenHang?: StringNullableWithAggregatesFilter<"MisaPurchaseLine"> | string | null
+    dvt?: StringNullableWithAggregatesFilter<"MisaPurchaseLine"> | string | null
+    soLuong?: FloatWithAggregatesFilter<"MisaPurchaseLine"> | number
+    donGia?: FloatWithAggregatesFilter<"MisaPurchaseLine"> | number
+    giaTri?: FloatWithAggregatesFilter<"MisaPurchaseLine"> | number
+    thueGtgt?: FloatWithAggregatesFilter<"MisaPurchaseLine"> | number
+    chietKhau?: FloatWithAggregatesFilter<"MisaPurchaseLine"> | number
+    soLuongTra?: FloatWithAggregatesFilter<"MisaPurchaseLine"> | number
+    giaTriTra?: FloatWithAggregatesFilter<"MisaPurchaseLine"> | number
+    giamGia?: FloatWithAggregatesFilter<"MisaPurchaseLine"> | number
+    productId?: StringNullableWithAggregatesFilter<"MisaPurchaseLine"> | string | null
+    dongSo?: IntNullableWithAggregatesFilter<"MisaPurchaseLine"> | number | null
   }
 
   export type BranchCreateInput = {
@@ -207152,6 +210195,7 @@ export namespace Prisma {
     userName?: string | null
     createdAt?: Date | string
     docs?: MisaSaleDocCreateNestedManyWithoutBatchInput
+    purchaseDocs?: MisaPurchaseDocCreateNestedManyWithoutBatchInput
   }
 
   export type MisaImportBatchUncheckedCreateInput = {
@@ -207171,6 +210215,7 @@ export namespace Prisma {
     userName?: string | null
     createdAt?: Date | string
     docs?: MisaSaleDocUncheckedCreateNestedManyWithoutBatchInput
+    purchaseDocs?: MisaPurchaseDocUncheckedCreateNestedManyWithoutBatchInput
   }
 
   export type MisaImportBatchUpdateInput = {
@@ -207190,6 +210235,7 @@ export namespace Prisma {
     userName?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     docs?: MisaSaleDocUpdateManyWithoutBatchNestedInput
+    purchaseDocs?: MisaPurchaseDocUpdateManyWithoutBatchNestedInput
   }
 
   export type MisaImportBatchUncheckedUpdateInput = {
@@ -207209,6 +210255,7 @@ export namespace Prisma {
     userName?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     docs?: MisaSaleDocUncheckedUpdateManyWithoutBatchNestedInput
+    purchaseDocs?: MisaPurchaseDocUncheckedUpdateManyWithoutBatchNestedInput
   }
 
   export type MisaImportBatchCreateManyInput = {
@@ -207557,6 +210604,253 @@ export namespace Prisma {
     thueGtgt?: FloatFieldUpdateOperationsInput | number
     tkThueGtgt?: NullableStringFieldUpdateOperationsInput | string | null
     giaVon?: NullableFloatFieldUpdateOperationsInput | number | null
+    productId?: NullableStringFieldUpdateOperationsInput | string | null
+    dongSo?: NullableIntFieldUpdateOperationsInput | number | null
+  }
+
+  export type MisaPurchaseDocCreateInput = {
+    id?: string
+    soChungTu: string
+    soHoaDon?: string | null
+    ngayChungTu?: Date | string | null
+    ngayHachToan?: Date | string | null
+    ngayHoaDon?: Date | string | null
+    tongGiaTri?: number
+    tongThue?: number
+    tongChietKhau?: number
+    tongTra?: number
+    tongGiamGia?: number
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    batch?: MisaImportBatchCreateNestedOneWithoutPurchaseDocsInput
+    lines?: MisaPurchaseLineCreateNestedManyWithoutDocInput
+  }
+
+  export type MisaPurchaseDocUncheckedCreateInput = {
+    id?: string
+    soChungTu: string
+    soHoaDon?: string | null
+    ngayChungTu?: Date | string | null
+    ngayHachToan?: Date | string | null
+    ngayHoaDon?: Date | string | null
+    tongGiaTri?: number
+    tongThue?: number
+    tongChietKhau?: number
+    tongTra?: number
+    tongGiamGia?: number
+    batchId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    lines?: MisaPurchaseLineUncheckedCreateNestedManyWithoutDocInput
+  }
+
+  export type MisaPurchaseDocUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    soChungTu?: StringFieldUpdateOperationsInput | string
+    soHoaDon?: NullableStringFieldUpdateOperationsInput | string | null
+    ngayChungTu?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHachToan?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHoaDon?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    tongGiaTri?: FloatFieldUpdateOperationsInput | number
+    tongThue?: FloatFieldUpdateOperationsInput | number
+    tongChietKhau?: FloatFieldUpdateOperationsInput | number
+    tongTra?: FloatFieldUpdateOperationsInput | number
+    tongGiamGia?: FloatFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    batch?: MisaImportBatchUpdateOneWithoutPurchaseDocsNestedInput
+    lines?: MisaPurchaseLineUpdateManyWithoutDocNestedInput
+  }
+
+  export type MisaPurchaseDocUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    soChungTu?: StringFieldUpdateOperationsInput | string
+    soHoaDon?: NullableStringFieldUpdateOperationsInput | string | null
+    ngayChungTu?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHachToan?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHoaDon?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    tongGiaTri?: FloatFieldUpdateOperationsInput | number
+    tongThue?: FloatFieldUpdateOperationsInput | number
+    tongChietKhau?: FloatFieldUpdateOperationsInput | number
+    tongTra?: FloatFieldUpdateOperationsInput | number
+    tongGiamGia?: FloatFieldUpdateOperationsInput | number
+    batchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    lines?: MisaPurchaseLineUncheckedUpdateManyWithoutDocNestedInput
+  }
+
+  export type MisaPurchaseDocCreateManyInput = {
+    id?: string
+    soChungTu: string
+    soHoaDon?: string | null
+    ngayChungTu?: Date | string | null
+    ngayHachToan?: Date | string | null
+    ngayHoaDon?: Date | string | null
+    tongGiaTri?: number
+    tongThue?: number
+    tongChietKhau?: number
+    tongTra?: number
+    tongGiamGia?: number
+    batchId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type MisaPurchaseDocUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    soChungTu?: StringFieldUpdateOperationsInput | string
+    soHoaDon?: NullableStringFieldUpdateOperationsInput | string | null
+    ngayChungTu?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHachToan?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHoaDon?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    tongGiaTri?: FloatFieldUpdateOperationsInput | number
+    tongThue?: FloatFieldUpdateOperationsInput | number
+    tongChietKhau?: FloatFieldUpdateOperationsInput | number
+    tongTra?: FloatFieldUpdateOperationsInput | number
+    tongGiamGia?: FloatFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MisaPurchaseDocUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    soChungTu?: StringFieldUpdateOperationsInput | string
+    soHoaDon?: NullableStringFieldUpdateOperationsInput | string | null
+    ngayChungTu?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHachToan?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHoaDon?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    tongGiaTri?: FloatFieldUpdateOperationsInput | number
+    tongThue?: FloatFieldUpdateOperationsInput | number
+    tongChietKhau?: FloatFieldUpdateOperationsInput | number
+    tongTra?: FloatFieldUpdateOperationsInput | number
+    tongGiamGia?: FloatFieldUpdateOperationsInput | number
+    batchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MisaPurchaseLineCreateInput = {
+    id?: string
+    maHang: string
+    tenHang?: string | null
+    dvt?: string | null
+    soLuong?: number
+    donGia?: number
+    giaTri?: number
+    thueGtgt?: number
+    chietKhau?: number
+    soLuongTra?: number
+    giaTriTra?: number
+    giamGia?: number
+    productId?: string | null
+    dongSo?: number | null
+    doc: MisaPurchaseDocCreateNestedOneWithoutLinesInput
+  }
+
+  export type MisaPurchaseLineUncheckedCreateInput = {
+    id?: string
+    docId: string
+    maHang: string
+    tenHang?: string | null
+    dvt?: string | null
+    soLuong?: number
+    donGia?: number
+    giaTri?: number
+    thueGtgt?: number
+    chietKhau?: number
+    soLuongTra?: number
+    giaTriTra?: number
+    giamGia?: number
+    productId?: string | null
+    dongSo?: number | null
+  }
+
+  export type MisaPurchaseLineUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    maHang?: StringFieldUpdateOperationsInput | string
+    tenHang?: NullableStringFieldUpdateOperationsInput | string | null
+    dvt?: NullableStringFieldUpdateOperationsInput | string | null
+    soLuong?: FloatFieldUpdateOperationsInput | number
+    donGia?: FloatFieldUpdateOperationsInput | number
+    giaTri?: FloatFieldUpdateOperationsInput | number
+    thueGtgt?: FloatFieldUpdateOperationsInput | number
+    chietKhau?: FloatFieldUpdateOperationsInput | number
+    soLuongTra?: FloatFieldUpdateOperationsInput | number
+    giaTriTra?: FloatFieldUpdateOperationsInput | number
+    giamGia?: FloatFieldUpdateOperationsInput | number
+    productId?: NullableStringFieldUpdateOperationsInput | string | null
+    dongSo?: NullableIntFieldUpdateOperationsInput | number | null
+    doc?: MisaPurchaseDocUpdateOneRequiredWithoutLinesNestedInput
+  }
+
+  export type MisaPurchaseLineUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    docId?: StringFieldUpdateOperationsInput | string
+    maHang?: StringFieldUpdateOperationsInput | string
+    tenHang?: NullableStringFieldUpdateOperationsInput | string | null
+    dvt?: NullableStringFieldUpdateOperationsInput | string | null
+    soLuong?: FloatFieldUpdateOperationsInput | number
+    donGia?: FloatFieldUpdateOperationsInput | number
+    giaTri?: FloatFieldUpdateOperationsInput | number
+    thueGtgt?: FloatFieldUpdateOperationsInput | number
+    chietKhau?: FloatFieldUpdateOperationsInput | number
+    soLuongTra?: FloatFieldUpdateOperationsInput | number
+    giaTriTra?: FloatFieldUpdateOperationsInput | number
+    giamGia?: FloatFieldUpdateOperationsInput | number
+    productId?: NullableStringFieldUpdateOperationsInput | string | null
+    dongSo?: NullableIntFieldUpdateOperationsInput | number | null
+  }
+
+  export type MisaPurchaseLineCreateManyInput = {
+    id?: string
+    docId: string
+    maHang: string
+    tenHang?: string | null
+    dvt?: string | null
+    soLuong?: number
+    donGia?: number
+    giaTri?: number
+    thueGtgt?: number
+    chietKhau?: number
+    soLuongTra?: number
+    giaTriTra?: number
+    giamGia?: number
+    productId?: string | null
+    dongSo?: number | null
+  }
+
+  export type MisaPurchaseLineUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    maHang?: StringFieldUpdateOperationsInput | string
+    tenHang?: NullableStringFieldUpdateOperationsInput | string | null
+    dvt?: NullableStringFieldUpdateOperationsInput | string | null
+    soLuong?: FloatFieldUpdateOperationsInput | number
+    donGia?: FloatFieldUpdateOperationsInput | number
+    giaTri?: FloatFieldUpdateOperationsInput | number
+    thueGtgt?: FloatFieldUpdateOperationsInput | number
+    chietKhau?: FloatFieldUpdateOperationsInput | number
+    soLuongTra?: FloatFieldUpdateOperationsInput | number
+    giaTriTra?: FloatFieldUpdateOperationsInput | number
+    giamGia?: FloatFieldUpdateOperationsInput | number
+    productId?: NullableStringFieldUpdateOperationsInput | string | null
+    dongSo?: NullableIntFieldUpdateOperationsInput | number | null
+  }
+
+  export type MisaPurchaseLineUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    docId?: StringFieldUpdateOperationsInput | string
+    maHang?: StringFieldUpdateOperationsInput | string
+    tenHang?: NullableStringFieldUpdateOperationsInput | string | null
+    dvt?: NullableStringFieldUpdateOperationsInput | string | null
+    soLuong?: FloatFieldUpdateOperationsInput | number
+    donGia?: FloatFieldUpdateOperationsInput | number
+    giaTri?: FloatFieldUpdateOperationsInput | number
+    thueGtgt?: FloatFieldUpdateOperationsInput | number
+    chietKhau?: FloatFieldUpdateOperationsInput | number
+    soLuongTra?: FloatFieldUpdateOperationsInput | number
+    giaTriTra?: FloatFieldUpdateOperationsInput | number
+    giamGia?: FloatFieldUpdateOperationsInput | number
     productId?: NullableStringFieldUpdateOperationsInput | string | null
     dongSo?: NullableIntFieldUpdateOperationsInput | number | null
   }
@@ -216556,7 +219850,17 @@ export namespace Prisma {
     none?: MisaSaleDocWhereInput
   }
 
+  export type MisaPurchaseDocListRelationFilter = {
+    every?: MisaPurchaseDocWhereInput
+    some?: MisaPurchaseDocWhereInput
+    none?: MisaPurchaseDocWhereInput
+  }
+
   export type MisaSaleDocOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type MisaPurchaseDocOrderByRelationAggregateInput = {
     _count?: SortOrder
   }
 
@@ -216815,6 +220119,166 @@ export namespace Prisma {
     giamGia?: SortOrder
     thueGtgt?: SortOrder
     giaVon?: SortOrder
+    dongSo?: SortOrder
+  }
+
+  export type MisaPurchaseLineListRelationFilter = {
+    every?: MisaPurchaseLineWhereInput
+    some?: MisaPurchaseLineWhereInput
+    none?: MisaPurchaseLineWhereInput
+  }
+
+  export type MisaPurchaseLineOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
+  export type MisaPurchaseDocCountOrderByAggregateInput = {
+    id?: SortOrder
+    soChungTu?: SortOrder
+    soHoaDon?: SortOrder
+    ngayChungTu?: SortOrder
+    ngayHachToan?: SortOrder
+    ngayHoaDon?: SortOrder
+    tongGiaTri?: SortOrder
+    tongThue?: SortOrder
+    tongChietKhau?: SortOrder
+    tongTra?: SortOrder
+    tongGiamGia?: SortOrder
+    batchId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type MisaPurchaseDocAvgOrderByAggregateInput = {
+    tongGiaTri?: SortOrder
+    tongThue?: SortOrder
+    tongChietKhau?: SortOrder
+    tongTra?: SortOrder
+    tongGiamGia?: SortOrder
+  }
+
+  export type MisaPurchaseDocMaxOrderByAggregateInput = {
+    id?: SortOrder
+    soChungTu?: SortOrder
+    soHoaDon?: SortOrder
+    ngayChungTu?: SortOrder
+    ngayHachToan?: SortOrder
+    ngayHoaDon?: SortOrder
+    tongGiaTri?: SortOrder
+    tongThue?: SortOrder
+    tongChietKhau?: SortOrder
+    tongTra?: SortOrder
+    tongGiamGia?: SortOrder
+    batchId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type MisaPurchaseDocMinOrderByAggregateInput = {
+    id?: SortOrder
+    soChungTu?: SortOrder
+    soHoaDon?: SortOrder
+    ngayChungTu?: SortOrder
+    ngayHachToan?: SortOrder
+    ngayHoaDon?: SortOrder
+    tongGiaTri?: SortOrder
+    tongThue?: SortOrder
+    tongChietKhau?: SortOrder
+    tongTra?: SortOrder
+    tongGiamGia?: SortOrder
+    batchId?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type MisaPurchaseDocSumOrderByAggregateInput = {
+    tongGiaTri?: SortOrder
+    tongThue?: SortOrder
+    tongChietKhau?: SortOrder
+    tongTra?: SortOrder
+    tongGiamGia?: SortOrder
+  }
+
+  export type MisaPurchaseDocScalarRelationFilter = {
+    is?: MisaPurchaseDocWhereInput
+    isNot?: MisaPurchaseDocWhereInput
+  }
+
+  export type MisaPurchaseLineCountOrderByAggregateInput = {
+    id?: SortOrder
+    docId?: SortOrder
+    maHang?: SortOrder
+    tenHang?: SortOrder
+    dvt?: SortOrder
+    soLuong?: SortOrder
+    donGia?: SortOrder
+    giaTri?: SortOrder
+    thueGtgt?: SortOrder
+    chietKhau?: SortOrder
+    soLuongTra?: SortOrder
+    giaTriTra?: SortOrder
+    giamGia?: SortOrder
+    productId?: SortOrder
+    dongSo?: SortOrder
+  }
+
+  export type MisaPurchaseLineAvgOrderByAggregateInput = {
+    soLuong?: SortOrder
+    donGia?: SortOrder
+    giaTri?: SortOrder
+    thueGtgt?: SortOrder
+    chietKhau?: SortOrder
+    soLuongTra?: SortOrder
+    giaTriTra?: SortOrder
+    giamGia?: SortOrder
+    dongSo?: SortOrder
+  }
+
+  export type MisaPurchaseLineMaxOrderByAggregateInput = {
+    id?: SortOrder
+    docId?: SortOrder
+    maHang?: SortOrder
+    tenHang?: SortOrder
+    dvt?: SortOrder
+    soLuong?: SortOrder
+    donGia?: SortOrder
+    giaTri?: SortOrder
+    thueGtgt?: SortOrder
+    chietKhau?: SortOrder
+    soLuongTra?: SortOrder
+    giaTriTra?: SortOrder
+    giamGia?: SortOrder
+    productId?: SortOrder
+    dongSo?: SortOrder
+  }
+
+  export type MisaPurchaseLineMinOrderByAggregateInput = {
+    id?: SortOrder
+    docId?: SortOrder
+    maHang?: SortOrder
+    tenHang?: SortOrder
+    dvt?: SortOrder
+    soLuong?: SortOrder
+    donGia?: SortOrder
+    giaTri?: SortOrder
+    thueGtgt?: SortOrder
+    chietKhau?: SortOrder
+    soLuongTra?: SortOrder
+    giaTriTra?: SortOrder
+    giamGia?: SortOrder
+    productId?: SortOrder
+    dongSo?: SortOrder
+  }
+
+  export type MisaPurchaseLineSumOrderByAggregateInput = {
+    soLuong?: SortOrder
+    donGia?: SortOrder
+    giaTri?: SortOrder
+    thueGtgt?: SortOrder
+    chietKhau?: SortOrder
+    soLuongTra?: SortOrder
+    giaTriTra?: SortOrder
+    giamGia?: SortOrder
     dongSo?: SortOrder
   }
 
@@ -220373,11 +223837,25 @@ export namespace Prisma {
     connect?: MisaSaleDocWhereUniqueInput | MisaSaleDocWhereUniqueInput[]
   }
 
+  export type MisaPurchaseDocCreateNestedManyWithoutBatchInput = {
+    create?: XOR<MisaPurchaseDocCreateWithoutBatchInput, MisaPurchaseDocUncheckedCreateWithoutBatchInput> | MisaPurchaseDocCreateWithoutBatchInput[] | MisaPurchaseDocUncheckedCreateWithoutBatchInput[]
+    connectOrCreate?: MisaPurchaseDocCreateOrConnectWithoutBatchInput | MisaPurchaseDocCreateOrConnectWithoutBatchInput[]
+    createMany?: MisaPurchaseDocCreateManyBatchInputEnvelope
+    connect?: MisaPurchaseDocWhereUniqueInput | MisaPurchaseDocWhereUniqueInput[]
+  }
+
   export type MisaSaleDocUncheckedCreateNestedManyWithoutBatchInput = {
     create?: XOR<MisaSaleDocCreateWithoutBatchInput, MisaSaleDocUncheckedCreateWithoutBatchInput> | MisaSaleDocCreateWithoutBatchInput[] | MisaSaleDocUncheckedCreateWithoutBatchInput[]
     connectOrCreate?: MisaSaleDocCreateOrConnectWithoutBatchInput | MisaSaleDocCreateOrConnectWithoutBatchInput[]
     createMany?: MisaSaleDocCreateManyBatchInputEnvelope
     connect?: MisaSaleDocWhereUniqueInput | MisaSaleDocWhereUniqueInput[]
+  }
+
+  export type MisaPurchaseDocUncheckedCreateNestedManyWithoutBatchInput = {
+    create?: XOR<MisaPurchaseDocCreateWithoutBatchInput, MisaPurchaseDocUncheckedCreateWithoutBatchInput> | MisaPurchaseDocCreateWithoutBatchInput[] | MisaPurchaseDocUncheckedCreateWithoutBatchInput[]
+    connectOrCreate?: MisaPurchaseDocCreateOrConnectWithoutBatchInput | MisaPurchaseDocCreateOrConnectWithoutBatchInput[]
+    createMany?: MisaPurchaseDocCreateManyBatchInputEnvelope
+    connect?: MisaPurchaseDocWhereUniqueInput | MisaPurchaseDocWhereUniqueInput[]
   }
 
   export type MisaSaleDocUpdateManyWithoutBatchNestedInput = {
@@ -220394,6 +223872,20 @@ export namespace Prisma {
     deleteMany?: MisaSaleDocScalarWhereInput | MisaSaleDocScalarWhereInput[]
   }
 
+  export type MisaPurchaseDocUpdateManyWithoutBatchNestedInput = {
+    create?: XOR<MisaPurchaseDocCreateWithoutBatchInput, MisaPurchaseDocUncheckedCreateWithoutBatchInput> | MisaPurchaseDocCreateWithoutBatchInput[] | MisaPurchaseDocUncheckedCreateWithoutBatchInput[]
+    connectOrCreate?: MisaPurchaseDocCreateOrConnectWithoutBatchInput | MisaPurchaseDocCreateOrConnectWithoutBatchInput[]
+    upsert?: MisaPurchaseDocUpsertWithWhereUniqueWithoutBatchInput | MisaPurchaseDocUpsertWithWhereUniqueWithoutBatchInput[]
+    createMany?: MisaPurchaseDocCreateManyBatchInputEnvelope
+    set?: MisaPurchaseDocWhereUniqueInput | MisaPurchaseDocWhereUniqueInput[]
+    disconnect?: MisaPurchaseDocWhereUniqueInput | MisaPurchaseDocWhereUniqueInput[]
+    delete?: MisaPurchaseDocWhereUniqueInput | MisaPurchaseDocWhereUniqueInput[]
+    connect?: MisaPurchaseDocWhereUniqueInput | MisaPurchaseDocWhereUniqueInput[]
+    update?: MisaPurchaseDocUpdateWithWhereUniqueWithoutBatchInput | MisaPurchaseDocUpdateWithWhereUniqueWithoutBatchInput[]
+    updateMany?: MisaPurchaseDocUpdateManyWithWhereWithoutBatchInput | MisaPurchaseDocUpdateManyWithWhereWithoutBatchInput[]
+    deleteMany?: MisaPurchaseDocScalarWhereInput | MisaPurchaseDocScalarWhereInput[]
+  }
+
   export type MisaSaleDocUncheckedUpdateManyWithoutBatchNestedInput = {
     create?: XOR<MisaSaleDocCreateWithoutBatchInput, MisaSaleDocUncheckedCreateWithoutBatchInput> | MisaSaleDocCreateWithoutBatchInput[] | MisaSaleDocUncheckedCreateWithoutBatchInput[]
     connectOrCreate?: MisaSaleDocCreateOrConnectWithoutBatchInput | MisaSaleDocCreateOrConnectWithoutBatchInput[]
@@ -220406,6 +223898,20 @@ export namespace Prisma {
     update?: MisaSaleDocUpdateWithWhereUniqueWithoutBatchInput | MisaSaleDocUpdateWithWhereUniqueWithoutBatchInput[]
     updateMany?: MisaSaleDocUpdateManyWithWhereWithoutBatchInput | MisaSaleDocUpdateManyWithWhereWithoutBatchInput[]
     deleteMany?: MisaSaleDocScalarWhereInput | MisaSaleDocScalarWhereInput[]
+  }
+
+  export type MisaPurchaseDocUncheckedUpdateManyWithoutBatchNestedInput = {
+    create?: XOR<MisaPurchaseDocCreateWithoutBatchInput, MisaPurchaseDocUncheckedCreateWithoutBatchInput> | MisaPurchaseDocCreateWithoutBatchInput[] | MisaPurchaseDocUncheckedCreateWithoutBatchInput[]
+    connectOrCreate?: MisaPurchaseDocCreateOrConnectWithoutBatchInput | MisaPurchaseDocCreateOrConnectWithoutBatchInput[]
+    upsert?: MisaPurchaseDocUpsertWithWhereUniqueWithoutBatchInput | MisaPurchaseDocUpsertWithWhereUniqueWithoutBatchInput[]
+    createMany?: MisaPurchaseDocCreateManyBatchInputEnvelope
+    set?: MisaPurchaseDocWhereUniqueInput | MisaPurchaseDocWhereUniqueInput[]
+    disconnect?: MisaPurchaseDocWhereUniqueInput | MisaPurchaseDocWhereUniqueInput[]
+    delete?: MisaPurchaseDocWhereUniqueInput | MisaPurchaseDocWhereUniqueInput[]
+    connect?: MisaPurchaseDocWhereUniqueInput | MisaPurchaseDocWhereUniqueInput[]
+    update?: MisaPurchaseDocUpdateWithWhereUniqueWithoutBatchInput | MisaPurchaseDocUpdateWithWhereUniqueWithoutBatchInput[]
+    updateMany?: MisaPurchaseDocUpdateManyWithWhereWithoutBatchInput | MisaPurchaseDocUpdateManyWithWhereWithoutBatchInput[]
+    deleteMany?: MisaPurchaseDocScalarWhereInput | MisaPurchaseDocScalarWhereInput[]
   }
 
   export type MisaImportBatchCreateNestedOneWithoutDocsInput = {
@@ -220478,6 +223984,78 @@ export namespace Prisma {
     upsert?: MisaSaleDocUpsertWithoutLinesInput
     connect?: MisaSaleDocWhereUniqueInput
     update?: XOR<XOR<MisaSaleDocUpdateToOneWithWhereWithoutLinesInput, MisaSaleDocUpdateWithoutLinesInput>, MisaSaleDocUncheckedUpdateWithoutLinesInput>
+  }
+
+  export type MisaImportBatchCreateNestedOneWithoutPurchaseDocsInput = {
+    create?: XOR<MisaImportBatchCreateWithoutPurchaseDocsInput, MisaImportBatchUncheckedCreateWithoutPurchaseDocsInput>
+    connectOrCreate?: MisaImportBatchCreateOrConnectWithoutPurchaseDocsInput
+    connect?: MisaImportBatchWhereUniqueInput
+  }
+
+  export type MisaPurchaseLineCreateNestedManyWithoutDocInput = {
+    create?: XOR<MisaPurchaseLineCreateWithoutDocInput, MisaPurchaseLineUncheckedCreateWithoutDocInput> | MisaPurchaseLineCreateWithoutDocInput[] | MisaPurchaseLineUncheckedCreateWithoutDocInput[]
+    connectOrCreate?: MisaPurchaseLineCreateOrConnectWithoutDocInput | MisaPurchaseLineCreateOrConnectWithoutDocInput[]
+    createMany?: MisaPurchaseLineCreateManyDocInputEnvelope
+    connect?: MisaPurchaseLineWhereUniqueInput | MisaPurchaseLineWhereUniqueInput[]
+  }
+
+  export type MisaPurchaseLineUncheckedCreateNestedManyWithoutDocInput = {
+    create?: XOR<MisaPurchaseLineCreateWithoutDocInput, MisaPurchaseLineUncheckedCreateWithoutDocInput> | MisaPurchaseLineCreateWithoutDocInput[] | MisaPurchaseLineUncheckedCreateWithoutDocInput[]
+    connectOrCreate?: MisaPurchaseLineCreateOrConnectWithoutDocInput | MisaPurchaseLineCreateOrConnectWithoutDocInput[]
+    createMany?: MisaPurchaseLineCreateManyDocInputEnvelope
+    connect?: MisaPurchaseLineWhereUniqueInput | MisaPurchaseLineWhereUniqueInput[]
+  }
+
+  export type MisaImportBatchUpdateOneWithoutPurchaseDocsNestedInput = {
+    create?: XOR<MisaImportBatchCreateWithoutPurchaseDocsInput, MisaImportBatchUncheckedCreateWithoutPurchaseDocsInput>
+    connectOrCreate?: MisaImportBatchCreateOrConnectWithoutPurchaseDocsInput
+    upsert?: MisaImportBatchUpsertWithoutPurchaseDocsInput
+    disconnect?: MisaImportBatchWhereInput | boolean
+    delete?: MisaImportBatchWhereInput | boolean
+    connect?: MisaImportBatchWhereUniqueInput
+    update?: XOR<XOR<MisaImportBatchUpdateToOneWithWhereWithoutPurchaseDocsInput, MisaImportBatchUpdateWithoutPurchaseDocsInput>, MisaImportBatchUncheckedUpdateWithoutPurchaseDocsInput>
+  }
+
+  export type MisaPurchaseLineUpdateManyWithoutDocNestedInput = {
+    create?: XOR<MisaPurchaseLineCreateWithoutDocInput, MisaPurchaseLineUncheckedCreateWithoutDocInput> | MisaPurchaseLineCreateWithoutDocInput[] | MisaPurchaseLineUncheckedCreateWithoutDocInput[]
+    connectOrCreate?: MisaPurchaseLineCreateOrConnectWithoutDocInput | MisaPurchaseLineCreateOrConnectWithoutDocInput[]
+    upsert?: MisaPurchaseLineUpsertWithWhereUniqueWithoutDocInput | MisaPurchaseLineUpsertWithWhereUniqueWithoutDocInput[]
+    createMany?: MisaPurchaseLineCreateManyDocInputEnvelope
+    set?: MisaPurchaseLineWhereUniqueInput | MisaPurchaseLineWhereUniqueInput[]
+    disconnect?: MisaPurchaseLineWhereUniqueInput | MisaPurchaseLineWhereUniqueInput[]
+    delete?: MisaPurchaseLineWhereUniqueInput | MisaPurchaseLineWhereUniqueInput[]
+    connect?: MisaPurchaseLineWhereUniqueInput | MisaPurchaseLineWhereUniqueInput[]
+    update?: MisaPurchaseLineUpdateWithWhereUniqueWithoutDocInput | MisaPurchaseLineUpdateWithWhereUniqueWithoutDocInput[]
+    updateMany?: MisaPurchaseLineUpdateManyWithWhereWithoutDocInput | MisaPurchaseLineUpdateManyWithWhereWithoutDocInput[]
+    deleteMany?: MisaPurchaseLineScalarWhereInput | MisaPurchaseLineScalarWhereInput[]
+  }
+
+  export type MisaPurchaseLineUncheckedUpdateManyWithoutDocNestedInput = {
+    create?: XOR<MisaPurchaseLineCreateWithoutDocInput, MisaPurchaseLineUncheckedCreateWithoutDocInput> | MisaPurchaseLineCreateWithoutDocInput[] | MisaPurchaseLineUncheckedCreateWithoutDocInput[]
+    connectOrCreate?: MisaPurchaseLineCreateOrConnectWithoutDocInput | MisaPurchaseLineCreateOrConnectWithoutDocInput[]
+    upsert?: MisaPurchaseLineUpsertWithWhereUniqueWithoutDocInput | MisaPurchaseLineUpsertWithWhereUniqueWithoutDocInput[]
+    createMany?: MisaPurchaseLineCreateManyDocInputEnvelope
+    set?: MisaPurchaseLineWhereUniqueInput | MisaPurchaseLineWhereUniqueInput[]
+    disconnect?: MisaPurchaseLineWhereUniqueInput | MisaPurchaseLineWhereUniqueInput[]
+    delete?: MisaPurchaseLineWhereUniqueInput | MisaPurchaseLineWhereUniqueInput[]
+    connect?: MisaPurchaseLineWhereUniqueInput | MisaPurchaseLineWhereUniqueInput[]
+    update?: MisaPurchaseLineUpdateWithWhereUniqueWithoutDocInput | MisaPurchaseLineUpdateWithWhereUniqueWithoutDocInput[]
+    updateMany?: MisaPurchaseLineUpdateManyWithWhereWithoutDocInput | MisaPurchaseLineUpdateManyWithWhereWithoutDocInput[]
+    deleteMany?: MisaPurchaseLineScalarWhereInput | MisaPurchaseLineScalarWhereInput[]
+  }
+
+  export type MisaPurchaseDocCreateNestedOneWithoutLinesInput = {
+    create?: XOR<MisaPurchaseDocCreateWithoutLinesInput, MisaPurchaseDocUncheckedCreateWithoutLinesInput>
+    connectOrCreate?: MisaPurchaseDocCreateOrConnectWithoutLinesInput
+    connect?: MisaPurchaseDocWhereUniqueInput
+  }
+
+  export type MisaPurchaseDocUpdateOneRequiredWithoutLinesNestedInput = {
+    create?: XOR<MisaPurchaseDocCreateWithoutLinesInput, MisaPurchaseDocUncheckedCreateWithoutLinesInput>
+    connectOrCreate?: MisaPurchaseDocCreateOrConnectWithoutLinesInput
+    upsert?: MisaPurchaseDocUpsertWithoutLinesInput
+    connect?: MisaPurchaseDocWhereUniqueInput
+    update?: XOR<XOR<MisaPurchaseDocUpdateToOneWithWhereWithoutLinesInput, MisaPurchaseDocUpdateWithoutLinesInput>, MisaPurchaseDocUncheckedUpdateWithoutLinesInput>
   }
 
   export type NestedStringFilter<$PrismaModel = never> = {
@@ -232428,6 +236006,50 @@ export namespace Prisma {
     skipDuplicates?: boolean
   }
 
+  export type MisaPurchaseDocCreateWithoutBatchInput = {
+    id?: string
+    soChungTu: string
+    soHoaDon?: string | null
+    ngayChungTu?: Date | string | null
+    ngayHachToan?: Date | string | null
+    ngayHoaDon?: Date | string | null
+    tongGiaTri?: number
+    tongThue?: number
+    tongChietKhau?: number
+    tongTra?: number
+    tongGiamGia?: number
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    lines?: MisaPurchaseLineCreateNestedManyWithoutDocInput
+  }
+
+  export type MisaPurchaseDocUncheckedCreateWithoutBatchInput = {
+    id?: string
+    soChungTu: string
+    soHoaDon?: string | null
+    ngayChungTu?: Date | string | null
+    ngayHachToan?: Date | string | null
+    ngayHoaDon?: Date | string | null
+    tongGiaTri?: number
+    tongThue?: number
+    tongChietKhau?: number
+    tongTra?: number
+    tongGiamGia?: number
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    lines?: MisaPurchaseLineUncheckedCreateNestedManyWithoutDocInput
+  }
+
+  export type MisaPurchaseDocCreateOrConnectWithoutBatchInput = {
+    where: MisaPurchaseDocWhereUniqueInput
+    create: XOR<MisaPurchaseDocCreateWithoutBatchInput, MisaPurchaseDocUncheckedCreateWithoutBatchInput>
+  }
+
+  export type MisaPurchaseDocCreateManyBatchInputEnvelope = {
+    data: MisaPurchaseDocCreateManyBatchInput | MisaPurchaseDocCreateManyBatchInput[]
+    skipDuplicates?: boolean
+  }
+
   export type MisaSaleDocUpsertWithWhereUniqueWithoutBatchInput = {
     where: MisaSaleDocWhereUniqueInput
     update: XOR<MisaSaleDocUpdateWithoutBatchInput, MisaSaleDocUncheckedUpdateWithoutBatchInput>
@@ -232469,6 +236091,42 @@ export namespace Prisma {
     updatedAt?: DateTimeFilter<"MisaSaleDoc"> | Date | string
   }
 
+  export type MisaPurchaseDocUpsertWithWhereUniqueWithoutBatchInput = {
+    where: MisaPurchaseDocWhereUniqueInput
+    update: XOR<MisaPurchaseDocUpdateWithoutBatchInput, MisaPurchaseDocUncheckedUpdateWithoutBatchInput>
+    create: XOR<MisaPurchaseDocCreateWithoutBatchInput, MisaPurchaseDocUncheckedCreateWithoutBatchInput>
+  }
+
+  export type MisaPurchaseDocUpdateWithWhereUniqueWithoutBatchInput = {
+    where: MisaPurchaseDocWhereUniqueInput
+    data: XOR<MisaPurchaseDocUpdateWithoutBatchInput, MisaPurchaseDocUncheckedUpdateWithoutBatchInput>
+  }
+
+  export type MisaPurchaseDocUpdateManyWithWhereWithoutBatchInput = {
+    where: MisaPurchaseDocScalarWhereInput
+    data: XOR<MisaPurchaseDocUpdateManyMutationInput, MisaPurchaseDocUncheckedUpdateManyWithoutBatchInput>
+  }
+
+  export type MisaPurchaseDocScalarWhereInput = {
+    AND?: MisaPurchaseDocScalarWhereInput | MisaPurchaseDocScalarWhereInput[]
+    OR?: MisaPurchaseDocScalarWhereInput[]
+    NOT?: MisaPurchaseDocScalarWhereInput | MisaPurchaseDocScalarWhereInput[]
+    id?: StringFilter<"MisaPurchaseDoc"> | string
+    soChungTu?: StringFilter<"MisaPurchaseDoc"> | string
+    soHoaDon?: StringNullableFilter<"MisaPurchaseDoc"> | string | null
+    ngayChungTu?: DateTimeNullableFilter<"MisaPurchaseDoc"> | Date | string | null
+    ngayHachToan?: DateTimeNullableFilter<"MisaPurchaseDoc"> | Date | string | null
+    ngayHoaDon?: DateTimeNullableFilter<"MisaPurchaseDoc"> | Date | string | null
+    tongGiaTri?: FloatFilter<"MisaPurchaseDoc"> | number
+    tongThue?: FloatFilter<"MisaPurchaseDoc"> | number
+    tongChietKhau?: FloatFilter<"MisaPurchaseDoc"> | number
+    tongTra?: FloatFilter<"MisaPurchaseDoc"> | number
+    tongGiamGia?: FloatFilter<"MisaPurchaseDoc"> | number
+    batchId?: StringNullableFilter<"MisaPurchaseDoc"> | string | null
+    createdAt?: DateTimeFilter<"MisaPurchaseDoc"> | Date | string
+    updatedAt?: DateTimeFilter<"MisaPurchaseDoc"> | Date | string
+  }
+
   export type MisaImportBatchCreateWithoutDocsInput = {
     id?: string
     loai: string
@@ -232485,6 +236143,7 @@ export namespace Prisma {
     userId?: string | null
     userName?: string | null
     createdAt?: Date | string
+    purchaseDocs?: MisaPurchaseDocCreateNestedManyWithoutBatchInput
   }
 
   export type MisaImportBatchUncheckedCreateWithoutDocsInput = {
@@ -232503,6 +236162,7 @@ export namespace Prisma {
     userId?: string | null
     userName?: string | null
     createdAt?: Date | string
+    purchaseDocs?: MisaPurchaseDocUncheckedCreateNestedManyWithoutBatchInput
   }
 
   export type MisaImportBatchCreateOrConnectWithoutDocsInput = {
@@ -232585,6 +236245,7 @@ export namespace Prisma {
     userId?: NullableStringFieldUpdateOperationsInput | string | null
     userName?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    purchaseDocs?: MisaPurchaseDocUpdateManyWithoutBatchNestedInput
   }
 
   export type MisaImportBatchUncheckedUpdateWithoutDocsInput = {
@@ -232603,6 +236264,7 @@ export namespace Prisma {
     userId?: NullableStringFieldUpdateOperationsInput | string | null
     userName?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    purchaseDocs?: MisaPurchaseDocUncheckedUpdateManyWithoutBatchNestedInput
   }
 
   export type MisaSaleLineUpsertWithWhereUniqueWithoutDocInput = {
@@ -232743,6 +236405,263 @@ export namespace Prisma {
     tongChietKhau?: FloatFieldUpdateOperationsInput | number
     tongTra?: FloatFieldUpdateOperationsInput | number
     thieuGiaVon?: BoolFieldUpdateOperationsInput | boolean
+    batchId?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MisaImportBatchCreateWithoutPurchaseDocsInput = {
+    id?: string
+    loai: string
+    tenFile: string
+    kyBaoCao?: string | null
+    tongDong?: number
+    docDuoc?: number
+    boQua?: number
+    soChungTu?: number
+    tongTien?: number
+    tongThue?: number
+    chiTiet?: string | null
+    apply?: boolean
+    userId?: string | null
+    userName?: string | null
+    createdAt?: Date | string
+    docs?: MisaSaleDocCreateNestedManyWithoutBatchInput
+  }
+
+  export type MisaImportBatchUncheckedCreateWithoutPurchaseDocsInput = {
+    id?: string
+    loai: string
+    tenFile: string
+    kyBaoCao?: string | null
+    tongDong?: number
+    docDuoc?: number
+    boQua?: number
+    soChungTu?: number
+    tongTien?: number
+    tongThue?: number
+    chiTiet?: string | null
+    apply?: boolean
+    userId?: string | null
+    userName?: string | null
+    createdAt?: Date | string
+    docs?: MisaSaleDocUncheckedCreateNestedManyWithoutBatchInput
+  }
+
+  export type MisaImportBatchCreateOrConnectWithoutPurchaseDocsInput = {
+    where: MisaImportBatchWhereUniqueInput
+    create: XOR<MisaImportBatchCreateWithoutPurchaseDocsInput, MisaImportBatchUncheckedCreateWithoutPurchaseDocsInput>
+  }
+
+  export type MisaPurchaseLineCreateWithoutDocInput = {
+    id?: string
+    maHang: string
+    tenHang?: string | null
+    dvt?: string | null
+    soLuong?: number
+    donGia?: number
+    giaTri?: number
+    thueGtgt?: number
+    chietKhau?: number
+    soLuongTra?: number
+    giaTriTra?: number
+    giamGia?: number
+    productId?: string | null
+    dongSo?: number | null
+  }
+
+  export type MisaPurchaseLineUncheckedCreateWithoutDocInput = {
+    id?: string
+    maHang: string
+    tenHang?: string | null
+    dvt?: string | null
+    soLuong?: number
+    donGia?: number
+    giaTri?: number
+    thueGtgt?: number
+    chietKhau?: number
+    soLuongTra?: number
+    giaTriTra?: number
+    giamGia?: number
+    productId?: string | null
+    dongSo?: number | null
+  }
+
+  export type MisaPurchaseLineCreateOrConnectWithoutDocInput = {
+    where: MisaPurchaseLineWhereUniqueInput
+    create: XOR<MisaPurchaseLineCreateWithoutDocInput, MisaPurchaseLineUncheckedCreateWithoutDocInput>
+  }
+
+  export type MisaPurchaseLineCreateManyDocInputEnvelope = {
+    data: MisaPurchaseLineCreateManyDocInput | MisaPurchaseLineCreateManyDocInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type MisaImportBatchUpsertWithoutPurchaseDocsInput = {
+    update: XOR<MisaImportBatchUpdateWithoutPurchaseDocsInput, MisaImportBatchUncheckedUpdateWithoutPurchaseDocsInput>
+    create: XOR<MisaImportBatchCreateWithoutPurchaseDocsInput, MisaImportBatchUncheckedCreateWithoutPurchaseDocsInput>
+    where?: MisaImportBatchWhereInput
+  }
+
+  export type MisaImportBatchUpdateToOneWithWhereWithoutPurchaseDocsInput = {
+    where?: MisaImportBatchWhereInput
+    data: XOR<MisaImportBatchUpdateWithoutPurchaseDocsInput, MisaImportBatchUncheckedUpdateWithoutPurchaseDocsInput>
+  }
+
+  export type MisaImportBatchUpdateWithoutPurchaseDocsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    loai?: StringFieldUpdateOperationsInput | string
+    tenFile?: StringFieldUpdateOperationsInput | string
+    kyBaoCao?: NullableStringFieldUpdateOperationsInput | string | null
+    tongDong?: IntFieldUpdateOperationsInput | number
+    docDuoc?: IntFieldUpdateOperationsInput | number
+    boQua?: IntFieldUpdateOperationsInput | number
+    soChungTu?: IntFieldUpdateOperationsInput | number
+    tongTien?: FloatFieldUpdateOperationsInput | number
+    tongThue?: FloatFieldUpdateOperationsInput | number
+    chiTiet?: NullableStringFieldUpdateOperationsInput | string | null
+    apply?: BoolFieldUpdateOperationsInput | boolean
+    userId?: NullableStringFieldUpdateOperationsInput | string | null
+    userName?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    docs?: MisaSaleDocUpdateManyWithoutBatchNestedInput
+  }
+
+  export type MisaImportBatchUncheckedUpdateWithoutPurchaseDocsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    loai?: StringFieldUpdateOperationsInput | string
+    tenFile?: StringFieldUpdateOperationsInput | string
+    kyBaoCao?: NullableStringFieldUpdateOperationsInput | string | null
+    tongDong?: IntFieldUpdateOperationsInput | number
+    docDuoc?: IntFieldUpdateOperationsInput | number
+    boQua?: IntFieldUpdateOperationsInput | number
+    soChungTu?: IntFieldUpdateOperationsInput | number
+    tongTien?: FloatFieldUpdateOperationsInput | number
+    tongThue?: FloatFieldUpdateOperationsInput | number
+    chiTiet?: NullableStringFieldUpdateOperationsInput | string | null
+    apply?: BoolFieldUpdateOperationsInput | boolean
+    userId?: NullableStringFieldUpdateOperationsInput | string | null
+    userName?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    docs?: MisaSaleDocUncheckedUpdateManyWithoutBatchNestedInput
+  }
+
+  export type MisaPurchaseLineUpsertWithWhereUniqueWithoutDocInput = {
+    where: MisaPurchaseLineWhereUniqueInput
+    update: XOR<MisaPurchaseLineUpdateWithoutDocInput, MisaPurchaseLineUncheckedUpdateWithoutDocInput>
+    create: XOR<MisaPurchaseLineCreateWithoutDocInput, MisaPurchaseLineUncheckedCreateWithoutDocInput>
+  }
+
+  export type MisaPurchaseLineUpdateWithWhereUniqueWithoutDocInput = {
+    where: MisaPurchaseLineWhereUniqueInput
+    data: XOR<MisaPurchaseLineUpdateWithoutDocInput, MisaPurchaseLineUncheckedUpdateWithoutDocInput>
+  }
+
+  export type MisaPurchaseLineUpdateManyWithWhereWithoutDocInput = {
+    where: MisaPurchaseLineScalarWhereInput
+    data: XOR<MisaPurchaseLineUpdateManyMutationInput, MisaPurchaseLineUncheckedUpdateManyWithoutDocInput>
+  }
+
+  export type MisaPurchaseLineScalarWhereInput = {
+    AND?: MisaPurchaseLineScalarWhereInput | MisaPurchaseLineScalarWhereInput[]
+    OR?: MisaPurchaseLineScalarWhereInput[]
+    NOT?: MisaPurchaseLineScalarWhereInput | MisaPurchaseLineScalarWhereInput[]
+    id?: StringFilter<"MisaPurchaseLine"> | string
+    docId?: StringFilter<"MisaPurchaseLine"> | string
+    maHang?: StringFilter<"MisaPurchaseLine"> | string
+    tenHang?: StringNullableFilter<"MisaPurchaseLine"> | string | null
+    dvt?: StringNullableFilter<"MisaPurchaseLine"> | string | null
+    soLuong?: FloatFilter<"MisaPurchaseLine"> | number
+    donGia?: FloatFilter<"MisaPurchaseLine"> | number
+    giaTri?: FloatFilter<"MisaPurchaseLine"> | number
+    thueGtgt?: FloatFilter<"MisaPurchaseLine"> | number
+    chietKhau?: FloatFilter<"MisaPurchaseLine"> | number
+    soLuongTra?: FloatFilter<"MisaPurchaseLine"> | number
+    giaTriTra?: FloatFilter<"MisaPurchaseLine"> | number
+    giamGia?: FloatFilter<"MisaPurchaseLine"> | number
+    productId?: StringNullableFilter<"MisaPurchaseLine"> | string | null
+    dongSo?: IntNullableFilter<"MisaPurchaseLine"> | number | null
+  }
+
+  export type MisaPurchaseDocCreateWithoutLinesInput = {
+    id?: string
+    soChungTu: string
+    soHoaDon?: string | null
+    ngayChungTu?: Date | string | null
+    ngayHachToan?: Date | string | null
+    ngayHoaDon?: Date | string | null
+    tongGiaTri?: number
+    tongThue?: number
+    tongChietKhau?: number
+    tongTra?: number
+    tongGiamGia?: number
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    batch?: MisaImportBatchCreateNestedOneWithoutPurchaseDocsInput
+  }
+
+  export type MisaPurchaseDocUncheckedCreateWithoutLinesInput = {
+    id?: string
+    soChungTu: string
+    soHoaDon?: string | null
+    ngayChungTu?: Date | string | null
+    ngayHachToan?: Date | string | null
+    ngayHoaDon?: Date | string | null
+    tongGiaTri?: number
+    tongThue?: number
+    tongChietKhau?: number
+    tongTra?: number
+    tongGiamGia?: number
+    batchId?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type MisaPurchaseDocCreateOrConnectWithoutLinesInput = {
+    where: MisaPurchaseDocWhereUniqueInput
+    create: XOR<MisaPurchaseDocCreateWithoutLinesInput, MisaPurchaseDocUncheckedCreateWithoutLinesInput>
+  }
+
+  export type MisaPurchaseDocUpsertWithoutLinesInput = {
+    update: XOR<MisaPurchaseDocUpdateWithoutLinesInput, MisaPurchaseDocUncheckedUpdateWithoutLinesInput>
+    create: XOR<MisaPurchaseDocCreateWithoutLinesInput, MisaPurchaseDocUncheckedCreateWithoutLinesInput>
+    where?: MisaPurchaseDocWhereInput
+  }
+
+  export type MisaPurchaseDocUpdateToOneWithWhereWithoutLinesInput = {
+    where?: MisaPurchaseDocWhereInput
+    data: XOR<MisaPurchaseDocUpdateWithoutLinesInput, MisaPurchaseDocUncheckedUpdateWithoutLinesInput>
+  }
+
+  export type MisaPurchaseDocUpdateWithoutLinesInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    soChungTu?: StringFieldUpdateOperationsInput | string
+    soHoaDon?: NullableStringFieldUpdateOperationsInput | string | null
+    ngayChungTu?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHachToan?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHoaDon?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    tongGiaTri?: FloatFieldUpdateOperationsInput | number
+    tongThue?: FloatFieldUpdateOperationsInput | number
+    tongChietKhau?: FloatFieldUpdateOperationsInput | number
+    tongTra?: FloatFieldUpdateOperationsInput | number
+    tongGiamGia?: FloatFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    batch?: MisaImportBatchUpdateOneWithoutPurchaseDocsNestedInput
+  }
+
+  export type MisaPurchaseDocUncheckedUpdateWithoutLinesInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    soChungTu?: StringFieldUpdateOperationsInput | string
+    soHoaDon?: NullableStringFieldUpdateOperationsInput | string | null
+    ngayChungTu?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHachToan?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHoaDon?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    tongGiaTri?: FloatFieldUpdateOperationsInput | number
+    tongThue?: FloatFieldUpdateOperationsInput | number
+    tongChietKhau?: FloatFieldUpdateOperationsInput | number
+    tongTra?: FloatFieldUpdateOperationsInput | number
+    tongGiamGia?: FloatFieldUpdateOperationsInput | number
     batchId?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -236661,6 +240580,22 @@ export namespace Prisma {
     updatedAt?: Date | string
   }
 
+  export type MisaPurchaseDocCreateManyBatchInput = {
+    id?: string
+    soChungTu: string
+    soHoaDon?: string | null
+    ngayChungTu?: Date | string | null
+    ngayHachToan?: Date | string | null
+    ngayHoaDon?: Date | string | null
+    tongGiaTri?: number
+    tongThue?: number
+    tongChietKhau?: number
+    tongTra?: number
+    tongGiamGia?: number
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
   export type MisaSaleDocUpdateWithoutBatchInput = {
     id?: StringFieldUpdateOperationsInput | string
     soChungTu?: StringFieldUpdateOperationsInput | string
@@ -236722,6 +240657,56 @@ export namespace Prisma {
     tongChietKhau?: FloatFieldUpdateOperationsInput | number
     tongTra?: FloatFieldUpdateOperationsInput | number
     thieuGiaVon?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type MisaPurchaseDocUpdateWithoutBatchInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    soChungTu?: StringFieldUpdateOperationsInput | string
+    soHoaDon?: NullableStringFieldUpdateOperationsInput | string | null
+    ngayChungTu?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHachToan?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHoaDon?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    tongGiaTri?: FloatFieldUpdateOperationsInput | number
+    tongThue?: FloatFieldUpdateOperationsInput | number
+    tongChietKhau?: FloatFieldUpdateOperationsInput | number
+    tongTra?: FloatFieldUpdateOperationsInput | number
+    tongGiamGia?: FloatFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    lines?: MisaPurchaseLineUpdateManyWithoutDocNestedInput
+  }
+
+  export type MisaPurchaseDocUncheckedUpdateWithoutBatchInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    soChungTu?: StringFieldUpdateOperationsInput | string
+    soHoaDon?: NullableStringFieldUpdateOperationsInput | string | null
+    ngayChungTu?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHachToan?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHoaDon?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    tongGiaTri?: FloatFieldUpdateOperationsInput | number
+    tongThue?: FloatFieldUpdateOperationsInput | number
+    tongChietKhau?: FloatFieldUpdateOperationsInput | number
+    tongTra?: FloatFieldUpdateOperationsInput | number
+    tongGiamGia?: FloatFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    lines?: MisaPurchaseLineUncheckedUpdateManyWithoutDocNestedInput
+  }
+
+  export type MisaPurchaseDocUncheckedUpdateManyWithoutBatchInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    soChungTu?: StringFieldUpdateOperationsInput | string
+    soHoaDon?: NullableStringFieldUpdateOperationsInput | string | null
+    ngayChungTu?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHachToan?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    ngayHoaDon?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    tongGiaTri?: FloatFieldUpdateOperationsInput | number
+    tongThue?: FloatFieldUpdateOperationsInput | number
+    tongChietKhau?: FloatFieldUpdateOperationsInput | number
+    tongTra?: FloatFieldUpdateOperationsInput | number
+    tongGiamGia?: FloatFieldUpdateOperationsInput | number
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -236798,6 +240783,74 @@ export namespace Prisma {
     thueGtgt?: FloatFieldUpdateOperationsInput | number
     tkThueGtgt?: NullableStringFieldUpdateOperationsInput | string | null
     giaVon?: NullableFloatFieldUpdateOperationsInput | number | null
+    productId?: NullableStringFieldUpdateOperationsInput | string | null
+    dongSo?: NullableIntFieldUpdateOperationsInput | number | null
+  }
+
+  export type MisaPurchaseLineCreateManyDocInput = {
+    id?: string
+    maHang: string
+    tenHang?: string | null
+    dvt?: string | null
+    soLuong?: number
+    donGia?: number
+    giaTri?: number
+    thueGtgt?: number
+    chietKhau?: number
+    soLuongTra?: number
+    giaTriTra?: number
+    giamGia?: number
+    productId?: string | null
+    dongSo?: number | null
+  }
+
+  export type MisaPurchaseLineUpdateWithoutDocInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    maHang?: StringFieldUpdateOperationsInput | string
+    tenHang?: NullableStringFieldUpdateOperationsInput | string | null
+    dvt?: NullableStringFieldUpdateOperationsInput | string | null
+    soLuong?: FloatFieldUpdateOperationsInput | number
+    donGia?: FloatFieldUpdateOperationsInput | number
+    giaTri?: FloatFieldUpdateOperationsInput | number
+    thueGtgt?: FloatFieldUpdateOperationsInput | number
+    chietKhau?: FloatFieldUpdateOperationsInput | number
+    soLuongTra?: FloatFieldUpdateOperationsInput | number
+    giaTriTra?: FloatFieldUpdateOperationsInput | number
+    giamGia?: FloatFieldUpdateOperationsInput | number
+    productId?: NullableStringFieldUpdateOperationsInput | string | null
+    dongSo?: NullableIntFieldUpdateOperationsInput | number | null
+  }
+
+  export type MisaPurchaseLineUncheckedUpdateWithoutDocInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    maHang?: StringFieldUpdateOperationsInput | string
+    tenHang?: NullableStringFieldUpdateOperationsInput | string | null
+    dvt?: NullableStringFieldUpdateOperationsInput | string | null
+    soLuong?: FloatFieldUpdateOperationsInput | number
+    donGia?: FloatFieldUpdateOperationsInput | number
+    giaTri?: FloatFieldUpdateOperationsInput | number
+    thueGtgt?: FloatFieldUpdateOperationsInput | number
+    chietKhau?: FloatFieldUpdateOperationsInput | number
+    soLuongTra?: FloatFieldUpdateOperationsInput | number
+    giaTriTra?: FloatFieldUpdateOperationsInput | number
+    giamGia?: FloatFieldUpdateOperationsInput | number
+    productId?: NullableStringFieldUpdateOperationsInput | string | null
+    dongSo?: NullableIntFieldUpdateOperationsInput | number | null
+  }
+
+  export type MisaPurchaseLineUncheckedUpdateManyWithoutDocInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    maHang?: StringFieldUpdateOperationsInput | string
+    tenHang?: NullableStringFieldUpdateOperationsInput | string | null
+    dvt?: NullableStringFieldUpdateOperationsInput | string | null
+    soLuong?: FloatFieldUpdateOperationsInput | number
+    donGia?: FloatFieldUpdateOperationsInput | number
+    giaTri?: FloatFieldUpdateOperationsInput | number
+    thueGtgt?: FloatFieldUpdateOperationsInput | number
+    chietKhau?: FloatFieldUpdateOperationsInput | number
+    soLuongTra?: FloatFieldUpdateOperationsInput | number
+    giaTriTra?: FloatFieldUpdateOperationsInput | number
+    giamGia?: FloatFieldUpdateOperationsInput | number
     productId?: NullableStringFieldUpdateOperationsInput | string | null
     dongSo?: NullableIntFieldUpdateOperationsInput | number | null
   }
