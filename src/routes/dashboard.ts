@@ -20,7 +20,10 @@ router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => 
             ? req.query.period : 'thisMonth') as DashboardPeriod
 
         const cacheKey = `${schema}:${cacheBranch}:dashboard:stats:${period}`
-        const cached = await cacheGet(cacheKey)
+        /* ?fresh=1 = người dùng BẤM Làm mới — bỏ qua cache đọc nhưng vẫn ghi lại
+         * bản mới cho người sau. Không có đường này thì nút Làm mới chỉ làm mới
+         * được phía trình duyệt, còn máy chủ vẫn trả số cũ tới hết TTL. */
+        const cached = req.query.fresh === '1' ? null : await cacheGet(cacheKey)
         if (cached) return res.json({ success: true, source: 'cache', data: cached })
 
         const stats = await getDashboardStats(prisma, branchFilter, period)
@@ -43,7 +46,10 @@ router.get('/revenue', authMiddleware, async (req: AuthRequest, res: Response) =
         const days = Math.min(90, Math.max(1, parseInt(req.query.days as string) || 7))
 
         const cacheKey = `${schema}:${cacheBranch}:dashboard:revenue:${days}`
-        const cached = await cacheGet(cacheKey)
+        /* ?fresh=1 = người dùng BẤM Làm mới — bỏ qua cache đọc nhưng vẫn ghi lại
+         * bản mới cho người sau. Không có đường này thì nút Làm mới chỉ làm mới
+         * được phía trình duyệt, còn máy chủ vẫn trả số cũ tới hết TTL. */
+        const cached = req.query.fresh === '1' ? null : await cacheGet(cacheKey)
         if (cached) return res.json({ success: true, data: cached, source: 'cache' })
 
         const data = await getRevenueByDays(prisma, days, branchFilter)
@@ -63,7 +69,10 @@ router.get('/top-products', authMiddleware, async (req: AuthRequest, res: Respon
         const schema = req.user?.storeSchema || 'unknown'
 
         const cacheKey = `${schema}:dashboard:top-products`
-        const cached = await cacheGet(cacheKey)
+        /* ?fresh=1 = người dùng BẤM Làm mới — bỏ qua cache đọc nhưng vẫn ghi lại
+         * bản mới cho người sau. Không có đường này thì nút Làm mới chỉ làm mới
+         * được phía trình duyệt, còn máy chủ vẫn trả số cũ tới hết TTL. */
+        const cached = req.query.fresh === '1' ? null : await cacheGet(cacheKey)
         if (cached) return res.json({ success: true, data: cached, source: 'cache' })
 
         const data = await getTopProducts(prisma)
@@ -84,7 +93,10 @@ router.get('/recent-activity', authMiddleware, async (req: AuthRequest, res: Res
         const branchFilter = getBranchFilter(req)
         const cacheBranch = req.user?.isMainBranch ? 'all' : (req.user?.branchId || 'none')
         const cacheKey = `${schema}:${cacheBranch}:dashboard:recent-activity`
-        const cached = await cacheGet(cacheKey)
+        /* ?fresh=1 = người dùng BẤM Làm mới — bỏ qua cache đọc nhưng vẫn ghi lại
+         * bản mới cho người sau. Không có đường này thì nút Làm mới chỉ làm mới
+         * được phía trình duyệt, còn máy chủ vẫn trả số cũ tới hết TTL. */
+        const cached = req.query.fresh === '1' ? null : await cacheGet(cacheKey)
         if (cached) return res.json({ success: true, data: cached, source: 'cache' })
 
         const data = await getRecentActivity(prisma, 10, branchFilter)

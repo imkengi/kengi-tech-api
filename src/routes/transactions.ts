@@ -1101,6 +1101,11 @@ router.post('/', authMiddleware, requirePermission('pos.create_order'), validate
         }
 
         cacheDel(`${req.user?.storeSchema || 'default'}:*:transactions:*`).catch(() => { })
+        // Số liệu tổng quan/báo cáo đọc từ cache dashboard (TTL 300s). Đơn đổi mà
+        // không xoá nó thì 5 phút sau màn hình mới nhúc nhích — bấm Làm mới cũng chịu,
+        // vì máy chủ vẫn trả bản cache (25/08/2026: "bấm mà không cập nhật data mới").
+        cacheDel(`${req.user?.storeSchema || 'default'}:*:dashboard:*`).catch(() => { })
+        cacheDel(`${req.user?.storeSchema || 'default'}:dashboard:*`).catch(() => { })
         if (promoIds.length > 0) {
             cacheDel(`${req.user?.storeSchema || 'default'}:promotions:*`).catch(() => { })
         }
@@ -1278,6 +1283,11 @@ router.put('/:id/void', authMiddleware, requirePermission('pos.create_order'), a
         }
 
         cacheDel(`${req.user?.storeSchema || 'default'}:*:transactions:*`).catch(() => { })
+        // Số liệu tổng quan/báo cáo đọc từ cache dashboard (TTL 300s). Đơn đổi mà
+        // không xoá nó thì 5 phút sau màn hình mới nhúc nhích — bấm Làm mới cũng chịu,
+        // vì máy chủ vẫn trả bản cache (25/08/2026: "bấm mà không cập nhật data mới").
+        cacheDel(`${req.user?.storeSchema || 'default'}:*:dashboard:*`).catch(() => { })
+        cacheDel(`${req.user?.storeSchema || 'default'}:dashboard:*`).catch(() => { })
         console.log(`🚫 Transaction ${existing.receiptNumber} voided`)
 
         // Publish realtime event
@@ -1432,6 +1442,11 @@ router.put('/:id/pay-debt', authMiddleware, requirePermission('pos.create_order'
         } catch { }
 
         cacheDel(`${req.user?.storeSchema || 'default'}:*:transactions:*`).catch(() => { })
+        // Số liệu tổng quan/báo cáo đọc từ cache dashboard (TTL 300s). Đơn đổi mà
+        // không xoá nó thì 5 phút sau màn hình mới nhúc nhích — bấm Làm mới cũng chịu,
+        // vì máy chủ vẫn trả bản cache (25/08/2026: "bấm mà không cập nhật data mới").
+        cacheDel(`${req.user?.storeSchema || 'default'}:*:dashboard:*`).catch(() => { })
+        cacheDel(`${req.user?.storeSchema || 'default'}:dashboard:*`).catch(() => { })
         console.log(`💰 Debt paid for ${existing.receiptNumber}: ${payAmount}`)
 
         res.json({
@@ -1684,6 +1699,11 @@ router.put('/:id/return', authMiddleware, requirePermission('pos.create_order'),
         }
 
         cacheDel(`${req.user?.storeSchema || 'default'}:*:transactions:*`).catch(() => { })
+        // Số liệu tổng quan/báo cáo đọc từ cache dashboard (TTL 300s). Đơn đổi mà
+        // không xoá nó thì 5 phút sau màn hình mới nhúc nhích — bấm Làm mới cũng chịu,
+        // vì máy chủ vẫn trả bản cache (25/08/2026: "bấm mà không cập nhật data mới").
+        cacheDel(`${req.user?.storeSchema || 'default'}:*:dashboard:*`).catch(() => { })
+        cacheDel(`${req.user?.storeSchema || 'default'}:dashboard:*`).catch(() => { })
         console.log(`↩️ Transaction ${existing.receiptNumber} returned as ${returnCode} — ${itemsToReturn.length} items`)
 
         // Publish realtime event
@@ -1751,6 +1771,11 @@ router.put('/:id', authMiddleware, requirePermission('pos.create_order'), async 
         })
 
         cacheDel(`${req.user?.storeSchema || 'default'}:*:transactions:*`).catch(() => { })
+        // Số liệu tổng quan/báo cáo đọc từ cache dashboard (TTL 300s). Đơn đổi mà
+        // không xoá nó thì 5 phút sau màn hình mới nhúc nhích — bấm Làm mới cũng chịu,
+        // vì máy chủ vẫn trả bản cache (25/08/2026: "bấm mà không cập nhật data mới").
+        cacheDel(`${req.user?.storeSchema || 'default'}:*:dashboard:*`).catch(() => { })
+        cacheDel(`${req.user?.storeSchema || 'default'}:dashboard:*`).catch(() => { })
         console.log(`✏️ Transaction ${existing.receiptNumber} updated — notes/customer`)
 
         res.json({
@@ -1804,6 +1829,11 @@ router.put('/:id/vat', authMiddleware, requirePermission('pos.create_order'), as
 
         const transaction = await prisma.transaction.update({ where: { id }, data: updateData })
         cacheDel(`${req.user?.storeSchema || 'default'}:*:transactions:*`).catch(() => { })
+        // Số liệu tổng quan/báo cáo đọc từ cache dashboard (TTL 300s). Đơn đổi mà
+        // không xoá nó thì 5 phút sau màn hình mới nhúc nhích — bấm Làm mới cũng chịu,
+        // vì máy chủ vẫn trả bản cache (25/08/2026: "bấm mà không cập nhật data mới").
+        cacheDel(`${req.user?.storeSchema || 'default'}:*:dashboard:*`).catch(() => { })
+        cacheDel(`${req.user?.storeSchema || 'default'}:dashboard:*`).catch(() => { })
         console.log(`🧾 Transaction ${existing.receiptNumber} VAT: ${updateData.vatStatus} (${updateData.vatInvoiceNumber || 'N/A'})`)
 
         res.json({ success: true, data: transaction })
@@ -1967,6 +1997,11 @@ router.post('/:id/revise', authMiddleware, requirePermission('pos.create_order')
         } catch { }
 
         cacheDel(`${req.user?.storeSchema || 'default'}:*:transactions:*`).catch(() => { })
+        // Số liệu tổng quan/báo cáo đọc từ cache dashboard (TTL 300s). Đơn đổi mà
+        // không xoá nó thì 5 phút sau màn hình mới nhúc nhích — bấm Làm mới cũng chịu,
+        // vì máy chủ vẫn trả bản cache (25/08/2026: "bấm mà không cập nhật data mới").
+        cacheDel(`${req.user?.storeSchema || 'default'}:*:dashboard:*`).catch(() => { })
+        cacheDel(`${req.user?.storeSchema || 'default'}:dashboard:*`).catch(() => { })
         console.log(`📝 Transaction ${existing.receiptNumber} revised → ${newReceiptNumber} (${warrantyCount} warranties transferred)`)
 
         // Đảo bút toán hóa đơn CŨ (#4): revise = hủy đơn cũ + tạo đơn mới. Đơn mới đã
@@ -2198,6 +2233,11 @@ router.post('/:id/convert-to-van', authMiddleware, requirePermission('transactio
         }).catch(() => { /* nhật ký hỏng không được giết nghiệp vụ */ })
 
         cacheDel(`${req.user?.storeSchema || 'default'}:*:transactions:*`).catch(() => { })
+        // Số liệu tổng quan/báo cáo đọc từ cache dashboard (TTL 300s). Đơn đổi mà
+        // không xoá nó thì 5 phút sau màn hình mới nhúc nhích — bấm Làm mới cũng chịu,
+        // vì máy chủ vẫn trả bản cache (25/08/2026: "bấm mà không cập nhật data mới").
+        cacheDel(`${req.user?.storeSchema || 'default'}:*:dashboard:*`).catch(() => { })
+        cacheDel(`${req.user?.storeSchema || 'default'}:dashboard:*`).catch(() => { })
 
         res.json({
             success: true,
