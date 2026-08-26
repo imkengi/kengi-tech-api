@@ -494,6 +494,8 @@ export interface DongNhatKyTien {
 
 export interface KetQuaNhatKyTien {
     loai: 'thu' | 'chi' | null
+    /** 'tienmat' (TK 111) | 'nganhang' (TK 112) — nhật ký tiền gửi cùng mẫu, chỉ khác cột TK */
+    kenh: 'tienmat' | 'nganhang'
     entries: DongNhatKyTien[]
     tongDong: number
     boQua: Array<{ dong: number; lyDo: string }>
@@ -502,12 +504,13 @@ export interface KetQuaNhatKyTien {
 }
 
 export function docNhatKyTien(rows: any[][]): KetQuaNhatKyTien {
-    const kq: KetQuaNhatKyTien = { loai: null, entries: [], tongDong: 0, boQua: [], kyBaoCao: '', tieuDeThieu: [] }
+    const kq: KetQuaNhatKyTien = { loai: null, kenh: 'tienmat', entries: [], tongDong: 0, boQua: [], kyBaoCao: '', tieuDeThieu: [] }
     if (!rows?.length) { kq.tieuDeThieu = ['(file rỗng)']; return kq }
 
     const dauFile = chuanHoa(rows.slice(0, 6).flat().join(' '))
     if (/nhat ky thu tien/.test(dauFile)) kq.loai = 'thu'
     else if (/nhat ky chi tien/.test(dauFile)) kq.loai = 'chi'
+    if (/tien gui|ngan hang/.test(dauFile)) kq.kenh = 'nganhang'
     for (let r = 0; r < Math.min(rows.length, 10); r++) {
         const t = String(rows[r]?.find((x: any) => /tháng\s*\d/i.test(String(x ?? ''))) ?? '')
         if (t) { kq.kyBaoCao = t.trim(); break }
@@ -525,8 +528,9 @@ export function docNhatKyTien(rows: any[][]): KetQuaNhatKyTien {
     hangA.forEach((o: any, c: number) => {
         const t = chuanHoa(o)
         if (cDienGiai < 0 && /dien giai/.test(t)) cDienGiai = c
-        if (cTien < 0 && /^ghi no.*111/.test(t)) { cTien = c; kq.loai = 'thu' }
-        if (cTien < 0 && /^ghi co.*111/.test(t)) { cTien = c; kq.loai = 'chi' }
+        // 111 = tiền mặt, 112 = tiền gửi ngân hàng — cùng mẫu sổ (26/08/2026)
+        if (cTien < 0 && /^ghi no.*11[12]/.test(t)) { cTien = c; kq.loai = 'thu'; kq.kenh = /112/.test(t) ? 'nganhang' : 'tienmat' }
+        if (cTien < 0 && /^ghi co.*11[12]/.test(t)) { cTien = c; kq.loai = 'chi'; kq.kenh = /112/.test(t) ? 'nganhang' : 'tienmat' }
     })
     // "Ngày, tháng ghi sổ" cùng hàng trên — dự phòng khi cột ngày chứng từ trống
     const cNgayGhiSo = hangA.findIndex((o: any) => /ghi so/.test(chuanHoa(o)))

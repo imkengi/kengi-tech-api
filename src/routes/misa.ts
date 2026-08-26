@@ -22,7 +22,7 @@ import { errMsg } from '../lib/errorResponse'
 import { cacheDel } from '../lib/cache'
 import { docNhatKyTien, votTenKhach } from '../services/misaExcel'
 import { createJournalEntriesForTransaction } from '../lib/autoJournal'
-import { postImportReceiptJournal } from '../lib/autoJournalPurchase'
+import { postImportReceiptJournal, refsOfImport } from '../lib/autoJournalPurchase'
 import { doMuaHangMisa, tomTatMuaDeGhiLog } from '../services/misaImportMuaHang'
 import {
     MISA, MISA_DATA_TYPE, MISA_DEBT_TYPE, misaTime, testMisaConnection, clearMisaToken,
@@ -801,9 +801,46 @@ router.post('/do-thanh-don-ban', async (req: Request, res: Response) => {
             categoryId = (await sp.category.create({ data: { name: 'MISA' }, select: { id: true } })).id
         }
 
+        /* BẰNG CHỨNG THU TIỀN (26/08/2026, chủ shop: "tất cả phải có phiếu thu
+         * mới tính"): đơn CHỈ được ghi nhận đã thu đúng bằng phần phiếu thu khớp
+         * được — ba tầng khớp, chặt trước lỏng sau:
+         *   1. trùng số chứng từ (PT bán lẻ = chính phiếu thu của nó)
+         *   2. diễn giải phiếu thu nhắc số hoá đơn/số chứng từ của đơn
+         *   3. cùng ngày + cùng số tiền, và cặp (ngày, tiền) là DUY NHẤT ở cả
+         *      hai phía — trùng lặp thì thà bỏ khớp còn hơn khớp bừa
+         * Không khớp được thì đơn là BÁN CHỊU: status partial, treo công nợ 131. */
+        const dsThuBc = await sp.cashReceipt.findMany({
+            where: { reference: { startsWith: 'MISA-' } },
+            select: { reference: true, amount: true, date: true, description: true },
+        })
+        const thuTheoRef = new Map<string, any>()
+        const thuTheoSo = new Map<string, any[]>()
+        const thuTheoNgayTien = new Map<string, any[]>()
+        const reSo = /\b(BH\d{4,}|PT\d{4,}|\d{5,8})\b/g
+        for (const t of dsThuBc) {
+            ;(t as any).daDung = false
+            thuTheoRef.set(String(t.reference), t)
+            for (const m of String(t.description || '').match(reSo) || []) {
+                const k = m.replace(/^0+/, '')
+                if (!thuTheoSo.has(k)) thuTheoSo.set(k, [])
+                thuTheoSo.get(k)!.push(t)
+            }
+            const kNT = `${new Date(t.date).toISOString().slice(0, 10)}|${Math.round(Number(t.amount) || 0)}`
+            if (!thuTheoNgayTien.has(kNT)) thuTheoNgayTien.set(kNT, [])
+            thuTheoNgayTien.get(kNT)!.push(t)
+        }
+        // Cặp (ngày, tiền) phía ĐƠN cũng phải duy nhất mới được khớp tầng 3
+        const demDonNgayTien = new Map<string, number>()
+        for (const d of docs) {
+            const ng = d.ngayChungTu || d.ngayHachToan || d.createdAt
+            const t = (d.tongDoanhSo || 0) - (d.tongChietKhau || 0) - (d.tongTra || 0) + (d.tongThue || 0)
+            const k = `${ng.toISOString().slice(0, 10)}|${Math.round(t)}`
+            demDonNgayTien.set(k, (demDonNgayTien.get(k) || 0) + 1)
+        }
+
         const kq = {
             donMoi: 0, donCapNhat: 0, donCoHoaDon: 0, khachMoi: 0, khachDaCo: 0, spMoi: 0, spDaCo: 0,
-            butToanMoi: 0, dongTheKho: 0,
+            butToanMoi: 0, dongTheKho: 0, donThuKhop: 0, donBanChiu: 0, tienThuKhop: 0,
             tongTien: 0, tuNgay: null as string | null, denNgay: null as string | null,
             canhBao: [] as string[], viDu: [] as string[],
         }
@@ -886,14 +923,35 @@ router.post('/do-thanh-don-ban', async (req: Request, res: Response) => {
                 })
             }
 
+            // ── Khớp phiếu thu (3 tầng — xem chú thích đầu hàm) ──
+            const bangChung: any[] = []
+            const tw = thuTheoRef.get(rn)
+            if (tw && !tw.daDung) { bangChung.push(tw); tw.daDung = true }
+            for (const kSo of [String(doc.soHoaDon || '').replace(/^0+/, ''), doc.soChungTu]) {
+                if (!kSo) continue
+                for (const t of thuTheoSo.get(kSo) || []) {
+                    if (!t.daDung) { bangChung.push(t); t.daDung = true }
+                }
+            }
+            if (!bangChung.length) {
+                const kNT = `${ngay.toISOString().slice(0, 10)}|${Math.round(tien)}`
+                const ung = (thuTheoNgayTien.get(kNT) || []).filter((t: any) => !t.daDung)
+                if (ung.length === 1 && demDonNgayTien.get(kNT) === 1) { bangChung.push(ung[0]); ung[0].daDung = true }
+            }
+            const daThu = Math.min(tien, bangChung.reduce((a, t) => a + (Number(t.amount) || 0), 0))
+            const thuDu = daThu >= tien - 1
+            if (bangChung.length) { kq.donThuKhop++; kq.tienThuKhop += daThu } else { kq.donBanChiu++ }
+
             const duLieu = {
                 customerId, customerName: tenKhach || null,
                 subtotal: (doc.tongDoanhSo || 0) - (doc.tongChietKhau || 0),
                 tax: doc.tongThue || 0,
-                total: tien, amountReceived: tien,
-                status: 'completed', channel: 'direct',
+                total: tien, amountReceived: daThu,
+                status: thuDu ? 'completed' : 'partial', channel: 'direct',
                 createdBy: user.id, createdByName: 'Sổ MISA',
-                notes: `Đổ từ sổ MISA${doc.soHoaDon ? ` — HĐ ${doc.soHoaDon}` : ''} (sổ không ghi hình thức thu tiền)`,
+                notes: `Đổ từ sổ MISA${doc.soHoaDon ? ` — HĐ ${doc.soHoaDon}` : ''}` + (bangChung.length
+                    ? ` · khớp phiếu thu ${bangChung.map((t: any) => String(t.reference).replace('MISA-', '')).join(', ')}`
+                    : ' · BÁN CHỊU — chưa khớp được phiếu thu nào (treo 131)'),
                 transactionDate: ngay, createdAt: ngay,
                 /* Sổ MISA CÓ số hoá đơn nghĩa là hoá đơn ĐÃ XUẤT bên MISA/CQT —
                  * để mặc định 'none' là màn hình gào "chưa xuất VAT" trên đơn đã
@@ -940,6 +998,19 @@ router.post('/do-thanh-don-ban', async (req: Request, res: Response) => {
                     })
                     kq.dongTheKho++
                 }
+                /* Cửa hàng gương tái sinh được từ sổ nguồn → XOÁ bút toán cũ của đơn
+                 * rồi ghi lại (đảo VOID- giữ ref gốc làm lượt ghi lại bị bỏ qua —
+                 * postReversal dành cho huỷ đơn thật, không dành cho tái đổ). */
+                await sp.journalEntry.deleteMany({
+                    where: {
+                        OR: [
+                            { reference: { in: [`SALE-${rn}`, `VAT-${rn}`, `DISC-${rn}`, `COGS-${rn}`] } },
+                            { reference: { startsWith: `COLLECT-${rn}` } },
+                            { reference: { in: [`VOID-SALE-${rn}`, `VOID-VAT-${rn}`, `VOID-DISC-${rn}`, `VOID-COGS-${rn}`] } },
+                            { reference: { startsWith: `VOID-COLLECT-${rn}` } },
+                        ],
+                    },
+                }).catch(() => null)
                 const txBt = await sp.transaction.findUnique({
                     where: { receiptNumber: rn },
                     include: { payments: true, items: { include: { product: { select: { costPrice: true } } } } },
@@ -1184,6 +1255,13 @@ router.post('/do-thanh-phieu-nhap', async (req: Request, res: Response) => {
                     kq.dongTheKho++
                 }
                 // Hạch toán phiếu nhập ngay sau ghi — cùng lý do với do-thanh-don-ban
+                const refsCu = refsOfImport(code)
+                await sp.journalEntry.deleteMany({
+                    where: { OR: [
+                        { reference: { in: refsCu } },
+                        { reference: { in: refsCu.map(r => `VOID-${r}`) } },
+                    ] },
+                }).catch(() => null)
                 const phieuBt = await sp.importReceipt.findUnique({ where: { code } })
                 if (phieuBt) {
                     const bt = await postImportReceiptJournal(sp, phieuBt as any, { userId: user.id, vatKhauTru })
@@ -1309,7 +1387,7 @@ router.post('/import-cash-journal', uploadExcel.single('file'), async (req: Requ
                     const duLieu = {
                         description: e.dienGiai || `Thu tiền ${e.soHieu} (sổ MISA)`,
                         amount: e.soTien, category: 'other',
-                        date: e.ngay || new Date(), receivedVia: 'Tiền mặt',
+                        date: e.ngay || new Date(), receivedVia: kq.kenh === 'nganhang' ? 'Chuyển khoản' : 'Tiền mặt',
                         reference: khoa, status: 'active',
                         customerId: khachId, customerName: khachTen,
                     }
@@ -1345,7 +1423,7 @@ router.post('/import-cash-journal', uploadExcel.single('file'), async (req: Requ
 
         res.json({
             success: true, sheet: tenSheet, store: store.name, apply,
-            loai: kq.loai, kyBaoCao: kq.kyBaoCao,
+            loai: kq.loai, kenh: kq.kenh, kyBaoCao: kq.kyBaoCao,
             tongDong: kq.tongDong, docDuoc: kq.entries.length, boQua: kq.boQua.length,
             boQuaChiTiet: kq.boQua.slice(0, 10),
             moi, capNhat, tongTien, tuNgay, denNgay,
@@ -1382,7 +1460,7 @@ router.get('/lien-ket-soat', async (req: Request, res: Response) => {
         // ── Tầng đơn/phiếu thật ──
         const dsDon = await sp.transaction.findMany({
             where: { receiptNumber: { startsWith: 'MISA-' } },
-            select: { receiptNumber: true, total: true, tax: true, amountReceived: true, vatStatus: true, vatInvoiceNumber: true, customerId: true },
+            select: { receiptNumber: true, total: true, tax: true, amountReceived: true, vatStatus: true, vatInvoiceNumber: true, customerId: true, status: true },
         })
         const dsPhieuNhap = await sp.importReceipt.findMany({
             where: { code: { startsWith: 'MISA-' } },
@@ -1491,7 +1569,11 @@ router.get('/lien-ket-soat', async (req: Request, res: Response) => {
                 },
                 chuaCoSoChi: dsChi.length === 0,
             },
-            noiThuDon: { thuTrungSoDon: thuTrungDon, thuNhacHoaDonBH: thuNhacBH, trongDoKhopDon: thuNhacBHKhop, thuCoKhach },
+            noiThuDon: {
+                thuTrungSoDon: thuTrungDon, thuNhacHoaDonBH: thuNhacBH, trongDoKhopDon: thuNhacBHKhop, thuCoKhach,
+                donThuDu: dsDon.filter((x: any) => x.status === 'completed').length,
+                donBanChiu: dsDon.filter((x: any) => x.status === 'partial').length,
+            },
         })
     } catch (e: any) {
         console.error('[misa] lien-ket-soat:', e?.message || e)
