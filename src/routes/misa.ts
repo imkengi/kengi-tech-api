@@ -693,16 +693,19 @@ async function canDoiTonDauKyGuong(sp: any): Promise<{ taoMoi: number; capNhat: 
     const kq = { taoMoi: 0, capNhat: 0 }
     // Tuần tự — PROD PRISMA_POOL_SIZE=1
     const products = await sp.product.findMany({ select: { id: true, sku: true, name: true, stock: true } })
+    /* Tru MOI dong tru chinh dong ton dau ky — cua hang guong co the mang
+     * dong 'adjustment' cu cua dong bo ton MISA; chi tru sale+import la plug
+     * dem thieu va tong the kho phong gap doi (do 26/08: 645.963 vs 322.983). */
     const sums = await sp.inventoryTransaction.groupBy({
         by: ['productId'], _sum: { quantity: true },
-        where: { referenceType: { in: ['sale', 'import_receipt'] } },
+        where: { referenceType: { not: 'misa_opening' } },
     }).catch(() => [] as any[])
     const dauKyCu = await sp.inventoryTransaction.findMany({
         where: { referenceType: 'misa_opening' },
         select: { id: true, productId: true, quantity: true },
     })
     const minRow = await sp.inventoryTransaction.findFirst({
-        where: { referenceType: { in: ['sale', 'import_receipt'] } },
+        where: { referenceType: { not: 'misa_opening' } },
         orderBy: { createdAt: 'asc' }, select: { createdAt: true },
     })
     const mapSum = new Map<string, number>((sums as any[]).map((x: any) => [String(x.productId), Number(x._sum?.quantity) || 0]))
@@ -1428,13 +1431,16 @@ router.get('/lien-ket-soat', async (req: Request, res: Response) => {
         const thuTrungDon = dsThu.filter((x: any) => setDon.has(String(x.reference))).length
         // Phiếu thu nhắc tới hoá đơn BH trong diễn giải — nối thu tiền ↔ đơn bán chịu
         let thuNhacBH = 0, thuNhacBHKhop = 0
-        const maBH = /BH\d{4,}/g
+        /* Dien giai nhat ky thu cua MISA ghi SO HOA DON dien tu ("theo hoa don
+         * so 00002511"), khong ghi ma chung tu BH — noi qua vatInvoiceNumber. */
+        const setHD = new Map<string, string>()
+        for (const d of dsDon) if (d.vatInvoiceNumber) setHD.set(String(d.vatInvoiceNumber).replace(/^0+/, ''), d.receiptNumber)
+        const maSo = /\b(BH\d{4,}|\d{5,8})\b/g
         for (const t of dsThu) {
-            const m = String(t.description || '').match(maBH)
-            if (m?.length) {
-                thuNhacBH++
-                if (m.some((c: string) => setDon.has('MISA-' + c))) thuNhacBHKhop++
-            }
+            const m = String(t.description || '').match(maSo)
+            if (!m?.length) continue
+            thuNhacBH++
+            if (m.some((c: string) => setDon.has('MISA-' + c) || setHD.has(c.replace(/^0+/, '')))) thuNhacBHKhop++
         }
         const thuCoKhach = dsThu.filter((x: any) => x.customerId).length
         const donCoKhach = dsDon.filter((x: any) => x.customerId).length
