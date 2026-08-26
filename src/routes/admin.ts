@@ -985,6 +985,34 @@ router.post('/cleanup-orphan-warehouses', async (req: Request, res: Response) =>
     }
 })
 
+// ─── POST /admin/gieo-he-tai-khoan ──────────────────────────────────────────
+/**
+ * Gieo hệ tài khoản TT99 cho MỌI cửa hàng còn trống (26/08/2026, chủ shop:
+ * "tất cả các cửa hàng đều phải có chứ"). Bổ trợ cho gieo-lười ở GET
+ * /api/accounts — gieo lười lo cửa hàng TƯƠNG LAI, endpoint này quét một
+ * lượt cho cửa hàng HIỆN CÓ khỏi chờ ai mở trang. Idempotent: có rồi thì thôi.
+ */
+router.post('/gieo-he-tai-khoan', async (req: Request, res: Response) => {
+    try {
+        const { damBaoHeTaiKhoan } = await import('./accounts')
+        const stores = await prisma.store.findMany({ where: { status: 'active' }, select: { code: true, schema: true } })
+        const ketQua: any[] = []
+        for (const st of stores) {
+            try {
+                const sp: any = getStorePrisma(st.schema)
+                const r = await damBaoHeTaiKhoan(sp)
+                ketQua.push({ store: st.code, truoc: r.truoc, sau: r.sau, daGieo: r.truoc === 0 && r.sau > 0 })
+            } catch (e: any) {
+                ketQua.push({ store: st.code, loi: e?.message?.slice(0, 120) })
+            }
+        }
+        res.json({ success: true, ketQua })
+    } catch (err: any) {
+        console.error('[admin] gieo-he-tai-khoan:', err?.message)
+        res.status(500).json({ success: false, error: err?.message || 'Internal server error' })
+    }
+})
+
 // ─── POST /admin/gop-kho-chinh ───────────────────────────────────────────────
 /**
  * HỢP NHẤT KHO CHÍNH — chữa bệnh "một cửa hàng HAI kho chính" (đo HUTI 25/08/2026).

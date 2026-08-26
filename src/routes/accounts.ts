@@ -64,10 +64,10 @@ function buildTree(rows: any[]): any[] {
  * thống. Gieo lười ở lượt đọc đầu tiên, mọi cửa hàng tự có — cùng khuôn với
  * ensureDefaultWarehouses bên kho.
  */
-async function damBaoHeTaiKhoan(prisma: any): Promise<void> {
+export async function damBaoHeTaiKhoan(prisma: any): Promise<{ truoc: number; sau: number }> {
     try {
         const n = await prisma.chartOfAccount.count()
-        if (n > 0) return
+        if (n > 0) return { truoc: n, sau: n }
         await prisma.chartOfAccount.createMany({
             data: COA_SEED.map((acc: any) => ({
                 code: acc.code, name: acc.name, nameEn: acc.nameEn ?? null,
@@ -77,7 +77,9 @@ async function damBaoHeTaiKhoan(prisma: any): Promise<void> {
             })),
             skipDuplicates: true,
         })
+        return { truoc: 0, sau: await prisma.chartOfAccount.count() }
     } catch { /* bảng chưa migrate — GET bên dưới tự báo lỗi rõ hơn */ }
+    return { truoc: -1, sau: -1 }
 }
 
 // GET /api/accounts — tree view
