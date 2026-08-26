@@ -1353,6 +1353,146 @@ router.post('/import-cash-journal', uploadExcel.single('file'), async (req: Requ
     }
 })
 
+// ─── GET /api/misa/lien-ket-soat?storeCode= ─────────────────────────────────
+/**
+ * SOÁT LIÊN KẾT CHỨNG TỪ của cửa hàng gương (26/08/2026, chủ shop: "xem các
+ * logic liên quan giữa các phiếu... có bị đứt logic không, vẽ ra").
+ *
+ * CHỈ ĐỌC. Đo từng cạnh của đồ thị: sổ MISA → đơn bán → bút toán → thẻ kho,
+ * phiếu thu → khách/đơn, phiếu nhập → bút toán/thẻ kho — và đếm cạnh ĐỨT
+ * (chứng từ thiếu vế đối của nó). Con số trả về dùng để vẽ sơ đồ + là bộ soát
+ * chạy lại sau MỖI lần đổ tháng mới.
+ */
+router.get('/lien-ket-soat', async (req: Request, res: Response) => {
+    try {
+        const store = await registryPrisma.store.findFirst({
+            where: { code: { equals: String(req.query.storeCode || ''), mode: 'insensitive' } },
+            select: { code: true, schema: true },
+        })
+        if (!store) { res.status(404).json({ success: false, error: 'Không tìm thấy cửa hàng' }); return }
+        const sp: any = getStorePrisma(store.schema)
+
+        // ── Tầng chứng từ nguồn (sổ MISA) ──
+        const soBan = await sp.misaSaleDoc.findMany({ select: { soChungTu: true, soHoaDon: true, customerId: true, tongDoanhSo: true, tongThue: true, tongChietKhau: true, tongTra: true } })
+        const soMua = await sp.misaPurchaseDoc.findMany({ select: { soChungTu: true, soHoaDon: true, tongGiaTri: true, tongThue: true } })
+
+        // ── Tầng đơn/phiếu thật ──
+        const dsDon = await sp.transaction.findMany({
+            where: { receiptNumber: { startsWith: 'MISA-' } },
+            select: { receiptNumber: true, total: true, tax: true, amountReceived: true, vatStatus: true, vatInvoiceNumber: true, customerId: true },
+        })
+        const dsPhieuNhap = await sp.importReceipt.findMany({
+            where: { code: { startsWith: 'MISA-' } },
+            select: { code: true, totalCost: true, vatAmount: true, hasVatInvoice: true },
+        })
+        const dsThu = await sp.cashReceipt.findMany({
+            where: { reference: { startsWith: 'MISA-' } },
+            select: { reference: true, amount: true, customerId: true, description: true },
+        })
+        const dsChi = await sp.expense.findMany({
+            where: { sourceRef: { startsWith: 'MISA-' } },
+            select: { sourceRef: true, amount: true },
+        })
+
+        // ── Tầng bút toán + thẻ kho ──
+        const refBt = await sp.journalEntry.findMany({
+            where: { referenceType: { not: 'manual' } }, select: { reference: true, amount: true, debitAccount: true, creditAccount: true },
+        })
+        const btTheo = (dau: string) => refBt.filter((x: any) => String(x.reference || '').startsWith(dau))
+        const theKhoBan = await sp.inventoryTransaction.count({ where: { referenceType: 'sale', referenceId: { startsWith: 'MISA-' } } })
+        const theKhoNhap = await sp.inventoryTransaction.count({ where: { referenceType: 'import_receipt', referenceId: { startsWith: 'MISA-' } } })
+        const tonDauKy = await sp.inventoryTransaction.findMany({
+            where: { referenceType: 'misa_opening' }, select: { productSku: true, quantity: true },
+        })
+        const tdkAm = tonDauKy.filter((x: any) => Number(x.quantity) < 0)
+            .sort((a: any, b: any) => Number(a.quantity) - Number(b.quantity))
+
+        // Bất biến thẻ kho tổng: Σ mọi dòng thẻ kho == Σ Product.stock
+        const sumTheKho = await sp.inventoryTransaction.aggregate({ _sum: { quantity: true } })
+            .then((r: any) => Number(r?._sum?.quantity) || 0)
+        const sumStock = await sp.product.aggregate({ _sum: { stock: true } })
+            .then((r: any) => Number(r?._sum?.stock) || 0)
+
+        // ── Đếm cạnh đứt ──
+        const setDon = new Set(dsDon.map((x: any) => x.receiptNumber))
+        const setPhieu = new Set(dsPhieuNhap.map((x: any) => x.code))
+        const banThieuDon = soBan.filter((d: any) => !setDon.has('MISA-' + d.soChungTu)).map((d: any) => d.soChungTu)
+        const muaThieuPhieu = soMua.filter((d: any) => !setPhieu.has('MISA-' + d.soChungTu)).map((d: any) => d.soChungTu)
+
+        const setSale = new Set(btTheo('SALE-').map((x: any) => x.reference))
+        const setImp = new Set(btTheo('IMP-').map((x: any) => x.reference))
+        const donThieuBt = dsDon.filter((x: any) => !setSale.has('SALE-' + x.receiptNumber.replace(/^MISA-/, 'MISA-'))).filter((x: any) => !setSale.has('SALE-' + x.receiptNumber)).map((x: any) => x.receiptNumber)
+        const phieuThieuBt = dsPhieuNhap.filter((x: any) => !setImp.has('IMP-' + x.code)).map((x: any) => x.code)
+
+        // Phiếu thu PT trùng số với đơn PT (bán lẻ thu ngay) — nối tự nhiên qua mã
+        const thuTrungDon = dsThu.filter((x: any) => setDon.has(String(x.reference))).length
+        // Phiếu thu nhắc tới hoá đơn BH trong diễn giải — nối thu tiền ↔ đơn bán chịu
+        let thuNhacBH = 0, thuNhacBHKhop = 0
+        const maBH = /BH\d{4,}/g
+        for (const t of dsThu) {
+            const m = String(t.description || '').match(maBH)
+            if (m?.length) {
+                thuNhacBH++
+                if (m.some((c: string) => setDon.has('MISA-' + c))) thuNhacBHKhop++
+            }
+        }
+        const thuCoKhach = dsThu.filter((x: any) => x.customerId).length
+        const donCoKhach = dsDon.filter((x: any) => x.customerId).length
+        const donCoHD = dsDon.filter((x: any) => x.vatStatus === 'issued').length
+
+        // Tiền: sổ nói thu 1,11 tỷ nhưng đơn đang khai amountReceived = total
+        const tongBan = dsDon.reduce((a: number, x: any) => a + (Number(x.total) || 0), 0)
+        const tongKhaiDaThu = dsDon.reduce((a: number, x: any) => a + (Number(x.amountReceived) || 0), 0)
+        const tongThuThat = dsThu.reduce((a: number, x: any) => a + (Number(x.amount) || 0), 0)
+        const tongChi = dsChi.reduce((a: number, x: any) => a + (Number(x.amount) || 0), 0)
+        const tongNhap = dsPhieuNhap.reduce((a: number, x: any) => a + (Number(x.totalCost) || 0) + (Number(x.vatAmount) || 0), 0)
+
+        res.json({
+            success: true,
+            store: store.code,
+            soMisa: {
+                ban: { soChungTu: soBan.length, coHoaDon: soBan.filter((x: any) => x.soHoaDon).length, daNoiKhach: soBan.filter((x: any) => x.customerId).length },
+                mua: { soChungTu: soMua.length, coHoaDon: soMua.filter((x: any) => x.soHoaDon).length },
+                thu: { soPhieu: dsThu.length, tongTien: tongThuThat },
+                chi: { soPhieu: dsChi.length, tongTien: tongChi },
+            },
+            chungTuThat: {
+                donBan: { so: dsDon.length, tongTien: tongBan, coVatIssued: donCoHD, coKhach: donCoKhach },
+                phieuNhap: { so: dsPhieuNhap.length, tongTienGomThue: tongNhap, coHoaDonDauVao: dsPhieuNhap.filter((x: any) => x.hasVatInvoice).length },
+            },
+            butToan: {
+                SALE: btTheo('SALE-').length, VAT: btTheo('VAT-').length, COGS: btTheo('COGS-').length,
+                DISC: btTheo('DISC-').length, IMP: btTheo('IMP-').length,
+                khac: refBt.length - btTheo('SALE-').length - btTheo('VAT-').length - btTheo('COGS-').length - btTheo('DISC-').length - btTheo('IMP-').length,
+            },
+            theKho: {
+                dongBan: theKhoBan, dongNhap: theKhoNhap, dongTonDauKy: tonDauKy.length,
+                batBienTong: { sumTheKho, sumProductStock: sumStock, lech: sumTheKho - sumStock, khop: sumTheKho === sumStock },
+            },
+            catDut: {
+                soBanThieuDon: banThieuDon.slice(0, 10),
+                soMuaThieuPhieu: muaThieuPhieu.slice(0, 10),
+                donThieuButToan: donThieuBt.slice(0, 10),
+                phieuThieuButToan: phieuThieuBt.slice(0, 10),
+                tonDauKyAm: { so: tdkAm.length, viDu: tdkAm.slice(0, 8).map((x: any) => `${x.productSku}: ${x.quantity}`) },
+                /* Cạnh đứt CÓ CHỦ ĐÍCH cần khai thật: sổ chi tiết bán không ghi tiến độ
+                 * thu tiền nên đơn khai amountReceived = total; nhật ký thu nói số thật. */
+                tienThu: {
+                    tongBanKhaiDaThu: tongKhaiDaThu,
+                    tongThuTheoNhatKy: tongThuThat,
+                    chenh: tongKhaiDaThu - tongThuThat,
+                    ghiChu: 'chênh = phần có thể là BÁN CHỊU (TK 131) mà sổ chi tiết bán không cho biết — cần sổ công nợ 131 để khớp',
+                },
+                chuaCoSoChi: dsChi.length === 0,
+            },
+            noiThuDon: { thuTrungSoDon: thuTrungDon, thuNhacHoaDonBH: thuNhacBH, trongDoKhopDon: thuNhacBHKhop, thuCoKhach },
+        })
+    } catch (e: any) {
+        console.error('[misa] lien-ket-soat:', e?.message || e)
+        res.status(500).json({ success: false, error: errMsg(e) })
+    }
+})
+
 router.get('/doi-chieu', async (req: Request, res: Response) => {
     try {
         const store = await resolveStore(String(req.query.storeCode || ''))
