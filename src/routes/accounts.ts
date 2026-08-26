@@ -55,8 +55,34 @@ function buildTree(rows: any[]): any[] {
     return roots
 }
 
+/**
+ * TỰ GIEO hệ tài khoản TT99 khi bảng còn TRỐNG (26/08/2026).
+ *
+ * Vì sao: cửa hàng mới (HUTITAX) mở Kế Toán → Sổ Cái thấy ô chọn tài khoản
+ * rỗng và trang trắng trơn — trong khi bút toán đã có sẵn 368 dòng. Bắt người
+ * dùng biết tới nút seed trong Hệ Thống Tài Khoản là bắt họ hiểu ruột hệ
+ * thống. Gieo lười ở lượt đọc đầu tiên, mọi cửa hàng tự có — cùng khuôn với
+ * ensureDefaultWarehouses bên kho.
+ */
+async function damBaoHeTaiKhoan(prisma: any): Promise<void> {
+    try {
+        const n = await prisma.chartOfAccount.count()
+        if (n > 0) return
+        await prisma.chartOfAccount.createMany({
+            data: COA_SEED.map((acc: any) => ({
+                code: acc.code, name: acc.name, nameEn: acc.nameEn ?? null,
+                level: acc.level, parentCode: acc.parentCode ?? null,
+                type: acc.type, nature: acc.nature, description: acc.description ?? null,
+                isSystem: true, isActive: true,
+            })),
+            skipDuplicates: true,
+        })
+    } catch { /* bảng chưa migrate — GET bên dưới tự báo lỗi rõ hơn */ }
+}
+
 // GET /api/accounts — tree view
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
+    await damBaoHeTaiKhoan(req.storePrisma! as any)
     try {
         const prisma: any = req.storePrisma!
         const where: any = {}
@@ -72,6 +98,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 
 // GET /api/accounts/flat — flat list with optional filters
 router.get('/flat', authMiddleware, async (req: AuthRequest, res: Response) => {
+    await damBaoHeTaiKhoan(req.storePrisma! as any)
     try {
         const prisma: any = req.storePrisma!
         const where: any = {}
