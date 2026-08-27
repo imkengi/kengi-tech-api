@@ -136,7 +136,12 @@ async function runQueue(): Promise<void> {
             }
         }
     } catch (e: any) {
+        /* 27/08/2026 20:39: P1001 (khong voi toi Cloud SQL — gio nay nhieu cron
+         * don cung luc) lam findMany nem loi → ca dem khong xuat mot hoa don nao,
+         * vi lastRunDate da bi danh dau TRUOC khi chay. Tra lai co de tick 10'
+         * sau THU LAI — issueInvoiceForTransaction idempotent nen chay bu an toan. */
         console.error('[EInvoiceQueue] Fatal:', e?.message || e)
+        lastRunDate = ''
     } finally {
         running = false
     }
@@ -151,7 +156,13 @@ export function startEInvoiceQueueCron(): void {
         const now = new Date()
         const today = now.toISOString().slice(0, 10)
         if (lastRunDate === today) return
-        if (now.getUTCHours() === RUN_HOUR_UTC && now.getUTCMinutes() >= RUN_MINUTE) {
+        /* "Tu 13:30 UTC tro di trong ngay" chu khong phai "dung khung 13:3x":
+         * truoc day so sanh === gio nen Fatal luc 13:39 la het cua thu lai (tick
+         * sau roi sang 14h). Gio moi tick 10' con chua-chay-hom-nay deu chay bu
+         * duoc — ke ca instance restart giua toi. */
+        const denGio = now.getUTCHours() > RUN_HOUR_UTC
+            || (now.getUTCHours() === RUN_HOUR_UTC && now.getUTCMinutes() >= RUN_MINUTE)
+        if (denGio) {
             lastRunDate = today
             runQueue()
         }
