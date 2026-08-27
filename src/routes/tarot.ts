@@ -213,7 +213,11 @@ async function chanLamDung(cauHinh: any, req: TarotAuthRequest): Promise<string 
     const dauNgay = new Date()
     dauNgay.setHours(0, 0, 0, 0)
 
-    const tran = Number(cauHinh?.aiDailyLimit ?? 20)
+    /* Bật thu credit thì trần theo NGƯỜI do thuPhiAi() lo (lượt miễn phí trong
+     * ngày + credit đã mua). Giữ thêm aiDailyLimit ở đây nữa là người vừa trả
+     * tiền xong vẫn bị chặn — mất tiền mà không xem được gì. Trần theo IP bên
+     * dưới thì GIỮ NGUYÊN: nó bảo vệ hạ tầng, không phải bảo vệ ví. */
+    const tran = cauHinh?.creditEnabled ? 0 : Number(cauHinh?.aiDailyLimit ?? 20)
     if (tran > 0) {
         const daDung = await prisma.tarotReading.count({
             where: { userId: req.tarotUser!.id, createdAt: { gte: dauNgay }, aiAnswer: { not: null } },
@@ -232,6 +236,190 @@ async function chanLamDung(cauHinh: any, req: TarotAuthRequest): Promise<string 
         }
     }
     return null
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  CREDIT — thu tiền lượt luận giải AI, nạp bằng chuyển khoản QR VietQR
+ *
+ *  VÌ SAO TRỪ TIỀN Ở ĐÂY MÀ KHÔNG PHẢI Ở TRÌNH DUYỆT: bản chạy ở máy
+ *  (nc_credits_dating.js) để trang tự gọi /api/credits/spend rồi mới gọi AI.
+ *  Cách đó không giữ được tiền: mở DevTools gọi thẳng /api/tarot/ai-reading là
+ *  xem chùa, credit chỉ còn là hình vẽ. Nên ở bản máy chủ này, trừ credit nằm
+ *  TRONG chính đường đi của lượt AI — không có cửa nào vòng qua.
+ *
+ *  ĐỐI SOÁT LÀ DUYỆT TAY (chủ trang chốt 27/08/2026): không có webhook ngân
+ *  hàng nào cộng credit tự động. VietQR chỉ sinh ảnh mã QR, nó KHÔNG biết tiền
+ *  đã về hay chưa — muốn tự động phải mua thêm dịch vụ đọc biến động số dư.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/** Bảng gói mặc định; chủ trang sửa được ở admin (lưu JSON vào creditPackages). */
+const GOI_NAP_MAC_DINH = [
+    { id: 'nc5', vnd: 10000, credits: 5 },
+    { id: 'nc18', vnd: 30000, credits: 18 },
+    { id: 'nc35', vnd: 50000, credits: 35 },
+    { id: 'nc80', vnd: 100000, credits: 80 },
+]
+
+/** Giá một lượt theo tính năng. Đồng giá, tách ra để sau này chỉnh riêng được. */
+const GIA_LUOT: Record<string, number> = { tarot: 1, cosmic: 1, palm: 1 }
+
+/** Bảng gói đang hiệu lực — JSON hỏng thì lùi về bảng mặc định, không để trang trắng. */
+function layGoiNap(cauHinh: any): Array<{ id: string; vnd: number; credits: number }> {
+    const raw = parseJson(cauHinh?.creditPackages)
+    if (!Array.isArray(raw) || !raw.length) return GOI_NAP_MAC_DINH
+    const sach = raw
+        .map((g: any) => ({
+            id: cleanText(g?.id, 20),
+            vnd: Math.round(Number(g?.vnd)),
+            credits: Math.round(Number(g?.credits)),
+        }))
+        .filter(g => g.id && Number.isFinite(g.vnd) && g.vnd > 0 && Number.isFinite(g.credits) && g.credits > 0)
+        .slice(0, 8)
+    return sach.length ? sach : GOI_NAP_MAC_DINH
+}
+
+/** Đủ hai mảnh (BIN + số tài khoản) mới dựng được QR; thiếu là không mở nạp được. */
+function coTaiKhoanNhan(cauHinh: any): boolean {
+    return !!(String(cauHinh?.bankBin || '').trim() && String(cauHinh?.bankAccountNo || '').trim())
+}
+
+/* Ảnh QR do img.vietqr.io dựng — miễn phí, không cần khoá. Nhúng sẵn số tiền và
+ * nội dung nên người nạp không phải gõ tay, đỡ sai mã rồi mất công tra. */
+function anhQrVietQr(cauHinh: any, soTien: number, noiDung: string): string {
+    const bin = String(cauHinh?.bankBin || '').trim()
+    const stk = String(cauHinh?.bankAccountNo || '').trim()
+    if (!bin || !stk) return ''
+    const q = new URLSearchParams({
+        amount: String(Math.round(soTien)),
+        addInfo: noiDung,
+        accountName: String(cauHinh?.bankAccountName || '').trim(),
+    })
+    return `https://img.vietqr.io/image/${bin}-${stk}-compact2.png?${q.toString()}`
+}
+
+/** Đầu ngày hôm nay theo giờ máy chủ — dùng chung cho mọi phép đếm theo ngày. */
+function dauNgayHomNay(): Date {
+    const d = new Date()
+    d.setHours(0, 0, 0, 0)
+    return d
+}
+
+/* Số lượt AI đã phục vụ trong ngày, đếm từ SỔ CÁI chứ không từ TarotReading.
+ *
+ * TarotReading chỉ có dòng khi trang chủ động gọi POST /readings để lưu; lượt
+ * nào trang không lưu là phép đếm hụt — với hạn mức miễn phí thì hụt vài lượt
+ * không chết ai, nhưng với tiền thì hụt nghĩa là KHÔNG BAO GIỜ thu được đồng
+ * nào. Mỗi lượt AI ở đây luôn ghi một dòng sổ (miễn phí ghi delta = 0). */
+async function soLuotAiHomNay(userId: string): Promise<number> {
+    return await prisma.tarotCreditLedger.count({
+        where: {
+            userId,
+            createdAt: { gte: dauNgayHomNay() },
+            OR: [{ reason: { startsWith: 'free:' } }, { reason: { startsWith: 'spend:' } }],
+        },
+    })
+}
+
+interface KetQuaThuPhi {
+    /** Có nội dung là CHẶN, đem trả thẳng cho người xem. */
+    chan?: string
+    ma?: string
+    status?: number
+    /** Gọi khi AI hỏng: trả lại credit và xoá dòng sổ, coi như lượt này chưa xảy ra. */
+    hoanLai?: () => Promise<void>
+}
+
+/* Cổng vào của MỌI lượt luận giải AI: chặn lạm dụng, rồi thu tiền nếu đang bật.
+ *
+ * Thứ tự có chủ ý — kiểm tra rẻ trước, ghi đĩa sau cùng — để lượt bị chặn không
+ * tốn một vòng ghi nào (pool DB chỉ 1 kết nối). */
+async function thuPhiAi(cauHinh: any, req: TarotAuthRequest, tinhNang: string): Promise<KetQuaThuPhi> {
+    const chan = await chanLamDung(cauHinh, req)
+    if (chan === 'DANG_NHAP') return { chan: 'DANG_NHAP', ma: 'CAN_DANG_NHAP', status: 401 }
+    if (chan) return { chan, status: 429 }
+
+    // Công tắc tắt → trang chạy y hệt như trước khi có credit.
+    if (!cauHinh?.creditEnabled) return {}
+
+    const userId = req.tarotUser!.id
+    const gia = GIA_LUOT[tinhNang] ?? 1
+
+    /* Bảng credit chưa tạo (chưa chạy migrate-tarot) thì KHÔNG được chặn người
+     * xem: bật nhầm công tắc mà cả trang tắt AI là hỏng chuyện lớn hơn nhiều so
+     * với vài lượt xem không thu được tiền. Kêu vào log cho chủ trang thấy. */
+    let daDung: number
+    try {
+        daDung = await soLuotAiHomNay(userId)
+    } catch (e: any) {
+        console.error('[tarot] BẬT credit nhưng chưa có bảng — gọi POST /api/admin/migrate-tarot:', e?.message)
+        return {}
+    }
+
+    const soFree = Math.max(0, Number(cauHinh?.freeDailyLimit ?? 3))
+    if (daDung < soFree) {
+        // Lượt miễn phí vẫn ghi sổ (delta = 0) để lần sau đếm đúng.
+        await ghiSo(userId, 0, `free:${tinhNang}`, await soDuCua(userId), null)
+        return { hoanLai: () => xoaSoGanNhat(userId, `free:${tinhNang}`) }
+    }
+
+    /* TRỪ CREDIT ATOMIC — điều kiện balance >= giá nằm trong chính câu UPDATE.
+     * Hai tab bấm cùng lúc thì câu thứ hai không khớp điều kiện nữa và trả về
+     * count = 0; không có cửa nào tiêu quá số dư. Đừng thay bằng đọc-rồi-ghi. */
+    const tru = await prisma.tarotCreditAccount.updateMany({
+        where: { userId, balance: { gte: gia } },
+        data: { balance: { decrement: gia } },
+    })
+    if (!tru.count) {
+        return {
+            chan: soFree > 0
+                ? `Bạn đã dùng hết ${soFree} lượt miễn phí hôm nay. Nạp thêm credit để xem tiếp nhé.`
+                : 'Bạn chưa đủ credit cho lượt luận giải này. Nạp thêm rồi thử lại nhé.',
+            ma: 'KHONG_DU_CREDIT',
+            status: 402,
+        }
+    }
+
+    await ghiSo(userId, -gia, `spend:${tinhNang}`, await soDuCua(userId), null)
+
+    return {
+        hoanLai: async () => {
+            /* AI hỏng thì lượt này coi như chưa từng xảy ra: trả credit VÀ xoá
+             * dòng sổ. Giữ dòng sổ lại là người xem mất một lượt miễn phí trong
+             * ngày chỉ vì máy chủ AI trục trặc. */
+            await prisma.tarotCreditAccount.updateMany({
+                where: { userId },
+                data: { balance: { increment: gia } },
+            }).catch(() => null)
+            await xoaSoGanNhat(userId, `spend:${tinhNang}`)
+        },
+    }
+}
+
+async function soDuCua(userId: string): Promise<number> {
+    const tk = await prisma.tarotCreditAccount.findUnique({ where: { userId } }).catch(() => null)
+    return Number(tk?.balance ?? 0)
+}
+
+async function ghiSo(userId: string, delta: number, reason: string, balance: number, orderId: string | null) {
+    // Sổ hỏng thì KHÔNG được làm gãy lượt xem — số dư đã đổi ở bảng tài khoản rồi.
+    await prisma.tarotCreditLedger.create({
+        data: { userId, delta, reason, balance, orderId },
+    }).catch((e: any) => console.error('[tarot] không ghi được sổ credit:', e?.message))
+}
+
+async function xoaSoGanNhat(userId: string, reason: string) {
+    const dong = await prisma.tarotCreditLedger.findFirst({
+        where: { userId, reason },
+        orderBy: { createdAt: 'desc' },
+    }).catch(() => null)
+    if (dong) await prisma.tarotCreditLedger.delete({ where: { id: dong.id } }).catch(() => null)
+}
+
+/** "NC" + 6 số — đủ ngắn để gõ tay vào nội dung chuyển khoản mà không sai. */
+function maNoiDungMoi(): string {
+    let ra = 'NC'
+    for (let i = 0; i < 6; i += 1) ra += Math.floor(Math.random() * 10)
+    return ra
 }
 
 /** "Nguyễn Minh Anh (17/03/1995 12:00)" — đủ để nhận ra xem cho ai. */
@@ -290,10 +478,14 @@ router.get('/config', async (_req: Request, res: Response) => {
     // bấm rồi mới nhận lỗi. Bảng chưa tạo thì coi như chưa bật, không phải lỗi.
     let aiEnabled = false
     let batBuocDangNhap = false
+    let thuCredit = false
+    let soFree = 0
     try {
         const cf: any = await prisma.tarotSetting.findUnique({ where: { id: 'default' } })
         aiEnabled = !!cf?.openaiApiKey
         batBuocDangNhap = !!cf?.requireLogin
+        thuCredit = !!cf?.creditEnabled
+        soFree = Math.max(0, Number(cf?.freeDailyLimit ?? 3))
     } catch { /* chưa migrate → chưa bật */ }
 
     res.json({
@@ -305,6 +497,10 @@ router.get('/config', async (_req: Request, res: Response) => {
             // Mặc định KHÔNG bắt đăng nhập — trang mở cho khách vãng lai, chỉ
             // bật cờ này ở admin khi muốn siết lại.
             requireLogin: !!batBuocDangNhap,
+            /* Trang dựa vào cờ này để hiện (hay giấu) chip credit. Tắt thì
+             * người xem không thấy bóng dáng chuyện tiền nong ở đâu cả. */
+            creditEnabled: thuCredit,
+            freeDailyLimit: soFree,
         },
     })
 })
@@ -606,13 +802,16 @@ router.post('/ai-reading', tarotAuthMem, async (req: TarotAuthRequest, res: Resp
         return
     }
 
-    const chan = await chanLamDung(cauHinh, req)
-    if (chan === 'DANG_NHAP') {
+    /* Thu tiền TRƯỚC khi gọi AI: gọi xong mới trừ thì lượt nào máy chủ AI trả
+     * chậm rồi người xem đóng tab là mất trắng một lượt không ai trả. Hỏng thì
+     * hoàn lại ở khối catch bên dưới. */
+    const phi = await thuPhiAi(cauHinh, req, 'tarot')
+    if (phi.ma === 'CAN_DANG_NHAP') {
         res.status(401).json({ error: 'Phần luận giải AI cần đăng nhập. Bấm Đăng nhập ở góc trên rồi thử lại.', code: 'CAN_DANG_NHAP' })
         return
     }
-    if (chan) {
-        res.status(429).json({ error: chan })
+    if (phi.chan) {
+        res.status(phi.status || 429).json({ error: phi.chan, code: phi.ma })
         return
     }
 
@@ -626,6 +825,8 @@ router.post('/ai-reading', tarotAuthMem, async (req: TarotAuthRequest, res: Resp
         // Trả đúng hình dạng trang đang chờ (giống tarot-server.js chạy ở máy).
         res.json(kq)
     } catch (e: any) {
+        // Không xem được thì không lấy tiền — trả credit lại ngay.
+        await phi.hoanLai?.().catch(() => null)
         const status = Number(e?.status) || 500
         if (status >= 500) console.error('[tarot] luận giải AI hỏng:', e?.message)
         res.status(status).json({ error: e?.message || 'Không luận giải được.' })
@@ -667,14 +868,14 @@ router.post('/cosmic-reading', tarotAuthMem, async (req: TarotAuthRequest, res: 
         return
     }
 
-    // Trần lượt dùng CHUNG với tarot — cùng một hạn mức API của chủ trang.
-    const chan = await chanLamDung(cauHinh, req)
-    if (chan === 'DANG_NHAP') {
+    // Trần lượt và ví credit dùng CHUNG với tarot — cùng một hạn mức API của chủ trang.
+    const phi = await thuPhiAi(cauHinh, req, 'cosmic')
+    if (phi.ma === 'CAN_DANG_NHAP') {
         res.status(401).json({ error: 'Phần xem chi tiết cần đăng nhập. Bấm Đăng nhập ở góc trên rồi thử lại.', code: 'CAN_DANG_NHAP' })
         return
     }
-    if (chan) {
-        res.status(429).json({ error: chan })
+    if (phi.chan) {
+        res.status(phi.status || 429).json({ error: phi.chan, code: phi.ma })
         return
     }
 
@@ -745,6 +946,7 @@ router.post('/cosmic-reading', tarotAuthMem, async (req: TarotAuthRequest, res: 
         res.json({ reading: kq.reading, model: kq.model })
     } catch (e: any) {
         const status = Number(e?.status) || 500
+        await phi.hoanLai?.().catch(() => null)
         if (status >= 500) console.error('[tarot] xem chi tiết hỏng:', e?.message)
         res.status(status).json({ error: e?.message || 'Chưa thể mở phần xem chi tiết.' })
     }
@@ -777,13 +979,13 @@ router.post('/palm-reading', tarotAuthMem, async (req: TarotAuthRequest, res: Re
         return
     }
 
-    const chan = await chanLamDung(cauHinh, req)
-    if (chan === 'DANG_NHAP') {
+    const phi = await thuPhiAi(cauHinh, req, 'palm')
+    if (phi.ma === 'CAN_DANG_NHAP') {
         res.status(401).json({ error: 'Xem chỉ tay bằng AI cần đăng nhập. Bấm Đăng nhập ở góc trên rồi thử lại.', code: 'CAN_DANG_NHAP' })
         return
     }
-    if (chan) {
-        res.status(429).json({ error: chan })
+    if (phi.chan) {
+        res.status(phi.status || 429).json({ error: phi.chan, code: phi.ma })
         return
     }
 
@@ -821,6 +1023,7 @@ router.post('/palm-reading', tarotAuthMem, async (req: TarotAuthRequest, res: Re
         res.json({ reading: kq.reading, model: kq.model })
     } catch (e: any) {
         const status = Number(e?.status) || 500
+        await phi.hoanLai?.().catch(() => null)
         if (status >= 500) console.error('[tarot] xem chỉ tay hỏng:', e?.message)
         res.status(status).json({ error: e?.message || 'Chưa thể xem chỉ tay lúc này.' })
     }
@@ -834,6 +1037,152 @@ router.delete('/readings', tarotAuthMem, async (req: TarotAuthRequest, res: Resp
         res.json({ success: true, data: { deleted: kq.count } })
     } catch (e: any) {
         loiDb(e, res, 'Không xoá được lịch sử trải bài.')
+    }
+})
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  API CREDIT CHO TRANG XEM
+ *
+ *  Đều đòi ĐĂNG NHẬP THẬT (tarotAuth, không phải tarotAuthMem): credit là tiền
+ *  của người ta. Gắn số dư vào mã khách trong localStorage thì xoá cache một
+ *  cái là mất, mà không có đường nào chứng minh để trả lại.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+// ─── GET /api/tarot/credits/me — số dư, lượt free còn lại, bảng gói ─────────
+
+router.get('/credits/me', tarotAuth, async (req: TarotAuthRequest, res: Response) => {
+    try {
+        const cauHinh: any = await prisma.tarotSetting.findUnique({ where: { id: 'default' } })
+        const userId = req.tarotUser!.id
+        const soFree = Math.max(0, Number(cauHinh?.freeDailyLimit ?? 3))
+        const daDung = await soLuotAiHomNay(userId).catch(() => 0)
+
+        res.json({
+            success: true,
+            data: {
+                creditEnabled: !!cauHinh?.creditEnabled,
+                balance: await soDuCua(userId),
+                gia: GIA_LUOT.tarot,
+                freeDailyLimit: soFree,
+                freeConLai: Math.max(0, soFree - daDung),
+                packages: layGoiNap(cauHinh),
+                /* Chưa khai tài khoản nhận tiền thì trang phải nói "chưa mở nạp"
+                 * chứ không được hiện một mã QR rỗng cho người ta quét. */
+                bankReady: coTaiKhoanNhan(cauHinh),
+                bankName: String(cauHinh?.bankAccountName || ''),
+                bankAccountNo: String(cauHinh?.bankAccountNo || ''),
+            },
+        })
+    } catch (e: any) {
+        loiDb(e, res, 'Không đọc được số dư credit.')
+    }
+})
+
+// ─── POST /api/tarot/credits/topup — tạo đơn nạp, trả mã + ảnh QR ──────────
+
+router.post('/credits/topup', tarotAuth, async (req: TarotAuthRequest, res: Response) => {
+    try {
+        const cauHinh: any = await prisma.tarotSetting.findUnique({ where: { id: 'default' } })
+        if (!coTaiKhoanNhan(cauHinh)) {
+            res.status(503).json({ success: false, error: 'Chủ trang chưa khai tài khoản nhận tiền nên chưa nạp được. Hãy quay lại sau.' })
+            return
+        }
+
+        const goi = layGoiNap(cauHinh).find(g => g.id === cleanText(req.body?.packageId, 20))
+        if (!goi) {
+            res.status(400).json({ success: false, error: 'Gói nạp không còn hiệu lực. Hãy tải lại trang rồi chọn lại.' })
+            return
+        }
+
+        /* Đơn CŨ CÒN CHỜ của cùng người + cùng gói thì dùng lại, đừng đẻ đơn mới.
+         * Người sốt ruột bấm ba lần là ba mã khác nhau, chuyển tiền theo mã nào
+         * cũng đúng nhưng hai đơn kia treo mãi trong danh sách chờ của admin. */
+        const cu = await prisma.tarotTopupOrder.findFirst({
+            where: {
+                userId: req.tarotUser!.id,
+                status: 'pending',
+                vnd: goi.vnd,
+                createdAt: { gte: new Date(Date.now() - 30 * 60 * 1000) },
+            },
+            orderBy: { createdAt: 'desc' },
+        })
+        if (cu) {
+            res.json({
+                success: true,
+                data: {
+                    orderId: cu.id, code: cu.code, vnd: cu.vnd, credits: cu.credits,
+                    qrUrl: anhQrVietQr(cauHinh, cu.vnd, cu.code),
+                    bankAccountNo: String(cauHinh?.bankAccountNo || ''),
+                    bankAccountName: String(cauHinh?.bankAccountName || ''),
+                },
+            })
+            return
+        }
+
+        /* Mã trùng thì cột code (UNIQUE) ném P2002 — thử lại vài lần thay vì để
+         * người nạp nhận lỗi. Xác suất trùng rất thấp nhưng không phải là không. */
+        let don: any = null
+        for (let i = 0; i < 5 && !don; i += 1) {
+            try {
+                don = await prisma.tarotTopupOrder.create({
+                    data: {
+                        code: maNoiDungMoi(),
+                        userId: req.tarotUser!.id,
+                        email: req.tarotUser!.email || null,
+                        name: cleanText(req.body?.name, 120) || null,
+                        vnd: goi.vnd,
+                        credits: goi.credits,
+                        status: 'pending',
+                    },
+                })
+            } catch (e: any) {
+                if (e?.code !== 'P2002') throw e
+            }
+        }
+        if (!don) {
+            res.status(500).json({ success: false, error: 'Chưa tạo được mã nạp. Thử lại giúp mình nhé.' })
+            return
+        }
+
+        res.json({
+            success: true,
+            data: {
+                orderId: don.id, code: don.code, vnd: don.vnd, credits: don.credits,
+                qrUrl: anhQrVietQr(cauHinh, don.vnd, don.code),
+                bankAccountNo: String(cauHinh?.bankAccountNo || ''),
+                bankAccountName: String(cauHinh?.bankAccountName || ''),
+            },
+        })
+    } catch (e: any) {
+        loiDb(e, res, 'Không tạo được đơn nạp credit.')
+    }
+})
+
+/* ─── GET /api/tarot/credits/topup/:id — trang hỏi lại xem đã duyệt chưa ─────
+ *
+ * Đối soát là DUYỆT TAY nên chuyển khoản xong chưa cộng ngay được: trang cứ hỏi
+ * lại vài giây một lần, tới lúc chủ trang bấm duyệt ở admin thì status đổi sang
+ * 'paid'. Nói rõ điều đó ở giao diện, đừng để người ta ngồi đợi tưởng treo. */
+router.get('/credits/topup/:id', tarotAuth, async (req: TarotAuthRequest, res: Response) => {
+    try {
+        const don = await prisma.tarotTopupOrder.findUnique({ where: { id: String(req.params.id || '') } })
+        // Chỉ chủ đơn xem được — nếu không thì dò id là biết ai nạp bao nhiêu.
+        if (!don || don.userId !== req.tarotUser!.id) {
+            res.status(404).json({ success: false, error: 'Không tìm thấy đơn nạp này.' })
+            return
+        }
+        res.json({
+            success: true,
+            data: {
+                status: don.status,
+                code: don.code,
+                vnd: don.vnd,
+                credits: don.credits,
+                balance: await soDuCua(req.tarotUser!.id),
+            },
+        })
+    } catch (e: any) {
+        loiDb(e, res, 'Không đọc được trạng thái đơn nạp.')
     }
 })
 

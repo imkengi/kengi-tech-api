@@ -1482,6 +1482,15 @@ router.get('/tarot-config', async (_req: Request, res: Response) => {
                 coKhoaThiGiac: !!cf?.visionApiKey,
                 duoiKhoaThiGiac: cf?.visionApiKey ? `••••${String(cf.visionApiKey).slice(-4)}` : '',
                 visionModel: cf?.visionModel || 'gpt-5.6-terra',
+                /* ─── Thu tiền lượt luận giải AI ───
+                 * Số tài khoản KHÔNG che: nó nằm sẵn trong mã QR mà ai vào trang
+                 * cũng quét được, che ở đây chỉ làm chủ trang khó đối chiếu. */
+                creditEnabled: !!cf?.creditEnabled,
+                freeDailyLimit: cf?.freeDailyLimit ?? 3,
+                bankBin: cf?.bankBin || '',
+                bankAccountNo: cf?.bankAccountNo || '',
+                bankAccountName: cf?.bankAccountName || '',
+                creditPackages: cf?.creditPackages || '',
                 updatedAt: cf?.updatedAt || null,
             },
         })
@@ -1575,6 +1584,72 @@ router.put('/tarot-config', async (req: Request, res: Response) => {
             } else data.visionApiKey = k2
         }
 
+        /* ─── Thu tiền lượt luận giải AI ─────────────────────────────────
+         * BẬT CÔNG TẮC MÀ CHƯA KHAI TÀI KHOẢN NHẬN TIỀN = chặn hết người xem:
+         * hết lượt miễn phí là họ gặp panel nạp, mà panel không dựng nổi QR vì
+         * không có số tài khoản. Chặn ngay tại đây, đừng để phát hiện qua tin
+         * nhắn than phiền. */
+        if (req.body?.creditEnabled !== undefined) data.creditEnabled = !!req.body.creditEnabled
+        if (req.body?.freeDailyLimit !== undefined) {
+            const n = Number(req.body.freeDailyLimit)
+            if (!Number.isFinite(n) || n < 0 || n > 100) {
+                res.status(400).json({ success: false, error: 'Số lượt miễn phí mỗi ngày phải trong khoảng 0–100 (0 = thu tiền ngay từ lượt đầu).' })
+                return
+            }
+            data.freeDailyLimit = Math.floor(n)
+        }
+        if (req.body?.bankBin !== undefined) {
+            const bin = String(req.body.bankBin || '').trim()
+            if (bin && !/^\d{6}$/.test(bin)) {
+                res.status(400).json({ success: false, error: 'Mã ngân hàng (BIN) phải là 6 chữ số, ví dụ 970422 cho MBBank.' })
+                return
+            }
+            data.bankBin = bin || null
+        }
+        if (req.body?.bankAccountNo !== undefined) {
+            const stk = String(req.body.bankAccountNo || '').trim()
+            if (stk && !/^[0-9]{4,20}$/.test(stk)) {
+                res.status(400).json({ success: false, error: 'Số tài khoản chỉ gồm chữ số (4–20 ký tự).' })
+                return
+            }
+            data.bankAccountNo = stk || null
+        }
+        if (req.body?.bankAccountName !== undefined) {
+            data.bankAccountName = String(req.body.bankAccountName || '').trim().slice(0, 120) || null
+        }
+        if (req.body?.creditPackages !== undefined) {
+            const raw = String(req.body.creditPackages || '').trim()
+            if (!raw) data.creditPackages = null
+            else {
+                let goi: any
+                try { goi = JSON.parse(raw) } catch { goi = null }
+                if (!Array.isArray(goi) || !goi.length) {
+                    res.status(400).json({ success: false, error: 'Bảng gói nạp phải là danh sách JSON, ví dụ [{"id":"nc5","vnd":10000,"credits":5}].' })
+                    return
+                }
+                const xau = goi.find((g: any) => !g?.id || !(Number(g?.vnd) > 0) || !(Number(g?.credits) > 0))
+                if (xau) {
+                    res.status(400).json({ success: false, error: 'Mỗi gói phải có id, vnd > 0 và credits > 0.' })
+                    return
+                }
+                data.creditPackages = JSON.stringify(goi.slice(0, 8).map((g: any) => ({
+                    id: String(g.id).slice(0, 20),
+                    vnd: Math.round(Number(g.vnd)),
+                    credits: Math.round(Number(g.credits)),
+                })))
+            }
+        }
+
+        if (data.creditEnabled) {
+            const cfCu: any = await (prisma as any).tarotSetting.findUnique({ where: { id: 'default' } }).catch(() => null)
+            const bin = data.bankBin !== undefined ? data.bankBin : cfCu?.bankBin
+            const stk = data.bankAccountNo !== undefined ? data.bankAccountNo : cfCu?.bankAccountNo
+            if (!bin || !stk) {
+                res.status(400).json({ success: false, error: 'Muốn bật thu credit thì phải khai đủ ngân hàng và số tài khoản nhận tiền trước — không có thì người xem hết lượt miễn phí sẽ không nạp được.' })
+                return
+            }
+        }
+
         const cf = await (prisma as any).tarotSetting.upsert({
             where: { id: 'default' },
             create: { id: 'default', ...data },
@@ -1595,6 +1670,12 @@ router.put('/tarot-config', async (req: Request, res: Response) => {
                 coKhoaThiGiac: !!cf.visionApiKey,
                 duoiKhoaThiGiac: cf.visionApiKey ? `••••${String(cf.visionApiKey).slice(-4)}` : '',
                 visionModel: cf.visionModel || 'gpt-5.6-terra',
+                creditEnabled: !!cf.creditEnabled,
+                freeDailyLimit: cf.freeDailyLimit ?? 3,
+                bankBin: cf.bankBin || '',
+                bankAccountNo: cf.bankAccountNo || '',
+                bankAccountName: cf.bankAccountName || '',
+                creditPackages: cf.creditPackages || '',
                 updatedAt: cf.updatedAt,
             },
         })
@@ -1719,6 +1800,143 @@ router.get('/tarot-stats', async (_req: Request, res: Response) => {
     }
 })
 
+/* ═══════════════════════════════════════════════════════════════════════════
+ *  DUYỆT ĐƠN NẠP CREDIT — đối soát bằng TAY
+ *
+ *  Không có webhook ngân hàng nào ở đây (chủ trang chốt duyệt tay 27/08/2026).
+ *  Quy trình: người xem chọn gói → máy chủ sinh mã NCxxxxxx → họ chuyển khoản
+ *  kèm mã đó → chủ trang mở app ngân hàng, thấy tiền về, vào đây bấm duyệt.
+ *
+ *  ĐỐI CHIẾU TRƯỚC KHI BẤM. Nút này CỘNG TIỀN THẬT vào ví người ta và không có
+ *  đường lùi: đã cộng rồi thì người dùng tiêu ngay lượt sau.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* GET /admin/tarot-topups — danh sách đơn nạp, mặc định xem đơn đang chờ. */
+router.get('/tarot-topups', async (req: Request, res: Response) => {
+    try {
+        const limit = Math.min(Math.max(Number(req.query.limit) || 30, 1), 100)
+        const trangThai = String(req.query.status || 'pending')
+        const where = ['pending', 'paid', 'cancelled'].includes(trangThai) ? { status: trangThai } : {}
+
+        const rows: any[] = await (prisma as any).tarotTopupOrder.findMany({
+            where,
+            orderBy: { createdAt: 'desc' },
+            take: limit,
+        })
+
+        /* Tra hồ sơ Google MỘT LƯỢT cho tất cả id — pool chỉ 1 kết nối, tra từng
+         * dòng là 30 vòng đi về cho một cái bảng 30 dòng. */
+        const idNguoi = [...new Set(rows.map(r => r.userId).filter(Boolean))]
+        const hoSo = new Map<string, any>()
+        if (idNguoi.length) {
+            const us: any[] = await (prisma as any).tarotUser.findMany({
+                where: { id: { in: idNguoi } },
+                select: { id: true, name: true, email: true },
+            })
+            us.forEach(u => hoSo.set(u.id, u))
+        }
+
+        // Số dư hiện tại, cũng một lượt.
+        const vi = new Map<string, number>()
+        if (idNguoi.length) {
+            const tks: any[] = await (prisma as any).tarotCreditAccount.findMany({
+                where: { userId: { in: idNguoi } },
+                select: { userId: true, balance: true },
+            })
+            tks.forEach(t => vi.set(t.userId, t.balance))
+        }
+
+        res.json({
+            success: true,
+            data: rows.map(r => ({
+                id: r.id,
+                code: r.code,
+                userId: r.userId,
+                email: hoSo.get(r.userId)?.email || r.email || '',
+                name: hoSo.get(r.userId)?.name || r.name || '',
+                soDuHienTai: vi.get(r.userId) ?? 0,
+                vnd: r.vnd,
+                credits: r.credits,
+                status: r.status,
+                note: r.note || '',
+                paidAt: r.paidAt,
+                createdAt: r.createdAt,
+            })),
+        })
+    } catch (err: any) {
+        if (err?.code === 'P2021' || /does not exist/i.test(String(err?.message || ''))) {
+            res.status(503).json({ success: false, error: 'Chưa tạo bảng credit. Gọi POST /api/admin/migrate-tarot một lần.', code: 'CHUA_MIGRATE' })
+            return
+        }
+        console.error('[admin] tarot-topups:', err?.message)
+        res.status(500).json({ success: false, error: errMsg(err, 'Không đọc được danh sách đơn nạp') })
+    }
+})
+
+/* POST /admin/tarot-topups/:id/confirm — xác nhận đã nhận tiền, cộng credit. */
+router.post('/tarot-topups/:id/confirm', async (req: Request, res: Response) => {
+    try {
+        const id = String(req.params.id || '')
+        const ghiChu = String(req.body?.note || '').trim().slice(0, 300) || null
+
+        /* CHỐT TRẠNG THÁI TRƯỚC, CỘNG TIỀN SAU — và chốt bằng updateMany có điều
+         * kiện status='pending'. Hai tab admin cùng bấm duyệt một đơn thì tab
+         * thứ hai nhận count = 0 và dừng lại; cộng tiền trước rồi mới đổi trạng
+         * thái là cộng đúp, người dùng được không hai lần tiền. */
+        const chot = await (prisma as any).tarotTopupOrder.updateMany({
+            where: { id, status: 'pending' },
+            data: { status: 'paid', paidAt: new Date(), note: ghiChu },
+        })
+        if (!chot.count) {
+            const don = await (prisma as any).tarotTopupOrder.findUnique({ where: { id } })
+            res.status(409).json({
+                success: false,
+                error: don ? `Đơn này đã ở trạng thái "${don.status}" rồi, không duyệt lại được.` : 'Không tìm thấy đơn nạp này.',
+            })
+            return
+        }
+
+        const don = await (prisma as any).tarotTopupOrder.findUnique({ where: { id } })
+        const tk = await (prisma as any).tarotCreditAccount.upsert({
+            where: { userId: don.userId },
+            create: { userId: don.userId, balance: don.credits },
+            update: { balance: { increment: don.credits } },
+        })
+        await (prisma as any).tarotCreditLedger.create({
+            data: { userId: don.userId, delta: don.credits, reason: 'topup', orderId: don.id, balance: tk.balance },
+        }).catch((e: any) => console.error('[admin] không ghi được sổ credit:', e?.message))
+
+        res.json({ success: true, data: { code: don.code, credits: don.credits, soDuMoi: tk.balance } })
+    } catch (err: any) {
+        if (err?.code === 'P2021' || /does not exist/i.test(String(err?.message || ''))) {
+            res.status(503).json({ success: false, error: 'Chưa tạo bảng credit. Gọi POST /api/admin/migrate-tarot một lần.', code: 'CHUA_MIGRATE' })
+            return
+        }
+        console.error('[admin] tarot-topups confirm:', err?.message)
+        res.status(500).json({ success: false, error: errMsg(err, 'Không duyệt được đơn nạp') })
+    }
+})
+
+/* POST /admin/tarot-topups/:id/cancel — huỷ đơn treo (chuyển nhầm, bỏ ngang). */
+router.post('/tarot-topups/:id/cancel', async (req: Request, res: Response) => {
+    try {
+        const id = String(req.params.id || '')
+        const ghiChu = String(req.body?.note || '').trim().slice(0, 300) || null
+        const chot = await (prisma as any).tarotTopupOrder.updateMany({
+            where: { id, status: 'pending' },
+            data: { status: 'cancelled', note: ghiChu },
+        })
+        if (!chot.count) {
+            res.status(409).json({ success: false, error: 'Đơn này không còn ở trạng thái chờ nên không huỷ được.' })
+            return
+        }
+        res.json({ success: true })
+    } catch (err: any) {
+        console.error('[admin] tarot-topups cancel:', err?.message)
+        res.status(500).json({ success: false, error: errMsg(err, 'Không huỷ được đơn nạp') })
+    }
+})
+
 /* POST /admin/migrate-tarot — CHỈ tạo 2 bảng của trang tarot.
  *
  * Tách khỏi /migrate vì /migrate quét TOÀN BỘ schema cửa hàng: hàng trăm câu
@@ -1798,13 +2016,63 @@ router.post('/migrate-tarot', async (_req: Request, res: Response) => {
             )`,
             `CREATE INDEX IF NOT EXISTS "TarotVisit_createdAt_idx" ON "TarotVisit"("createdAt")`,
             `CREATE INDEX IF NOT EXISTS "TarotVisit_userId_idx" ON "TarotVisit"("userId")`,
+
+            /* ─── CREDIT: thu tiền lượt luận giải AI, nạp qua QR VietQR ───────
+             * Ba bảng này chỉ được ĐỘNG TỚI khi chủ trang bật công tắc
+             * creditEnabled. Tạo sẵn ở đây để lúc bật không phải chạy migrate
+             * lần nữa (bật công tắc mà bảng chưa có = trang tự tắt tính năng AI
+             * cho toàn bộ người xem, không ai hiểu vì sao). */
+            `ALTER TABLE "TarotSetting" ADD COLUMN IF NOT EXISTS "creditEnabled" BOOLEAN NOT NULL DEFAULT false`,
+            `ALTER TABLE "TarotSetting" ADD COLUMN IF NOT EXISTS "freeDailyLimit" INTEGER NOT NULL DEFAULT 3`,
+            `ALTER TABLE "TarotSetting" ADD COLUMN IF NOT EXISTS "bankBin" TEXT`,
+            `ALTER TABLE "TarotSetting" ADD COLUMN IF NOT EXISTS "bankAccountNo" TEXT`,
+            `ALTER TABLE "TarotSetting" ADD COLUMN IF NOT EXISTS "bankAccountName" TEXT`,
+            `ALTER TABLE "TarotSetting" ADD COLUMN IF NOT EXISTS "creditPackages" TEXT`,
+            `CREATE TABLE IF NOT EXISTS "TarotCreditAccount" (
+                "userId" TEXT NOT NULL,
+                "balance" INTEGER NOT NULL DEFAULT 0,
+                "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT "TarotCreditAccount_pkey" PRIMARY KEY ("userId")
+            )`,
+            `CREATE TABLE IF NOT EXISTS "TarotCreditLedger" (
+                "id" TEXT NOT NULL,
+                "userId" TEXT NOT NULL,
+                "delta" INTEGER NOT NULL,
+                "reason" TEXT NOT NULL,
+                "orderId" TEXT,
+                "balance" INTEGER NOT NULL,
+                "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT "TarotCreditLedger_pkey" PRIMARY KEY ("id")
+            )`,
+            `CREATE INDEX IF NOT EXISTS "TarotCreditLedger_userId_createdAt_idx" ON "TarotCreditLedger"("userId", "createdAt")`,
+            `CREATE TABLE IF NOT EXISTS "TarotTopupOrder" (
+                "id" TEXT NOT NULL,
+                "code" TEXT NOT NULL,
+                "userId" TEXT NOT NULL,
+                "email" TEXT,
+                "name" TEXT,
+                "vnd" INTEGER NOT NULL,
+                "credits" INTEGER NOT NULL,
+                "status" TEXT NOT NULL DEFAULT 'pending',
+                "note" TEXT,
+                "paidAt" TIMESTAMP(3),
+                "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT "TarotTopupOrder_pkey" PRIMARY KEY ("id")
+            )`,
+            // Mã nội dung chuyển khoản phải DUY NHẤT: trùng mã là tiền đã vào
+            // tài khoản mà không biết cộng cho ai.
+            `CREATE UNIQUE INDEX IF NOT EXISTS "TarotTopupOrder_code_key" ON "TarotTopupOrder"("code")`,
+            `CREATE INDEX IF NOT EXISTS "TarotTopupOrder_status_createdAt_idx" ON "TarotTopupOrder"("status", "createdAt")`,
+            `CREATE INDEX IF NOT EXISTS "TarotTopupOrder_userId_createdAt_idx" ON "TarotTopupOrder"("userId", "createdAt")`,
         ]
         for (const sql of cauLenh) await (prisma as any).$executeRawUnsafe(sql)
 
         // Đọc lại từ information_schema để trả bằng chứng bảng đã có thật.
         const bang: any[] = await (prisma as any).$queryRawUnsafe(
             `SELECT table_name FROM information_schema.tables
-             WHERE table_schema = 'public' AND table_name IN ('TarotUser','TarotReading','TarotSetting')
+             WHERE table_schema = 'public' AND table_name IN
+                   ('TarotUser','TarotReading','TarotSetting','TarotVisit',
+                    'TarotCreditAccount','TarotCreditLedger','TarotTopupOrder')
              ORDER BY table_name`
         )
         res.json({ success: true, data: { tables: bang.map(r => r.table_name) } })

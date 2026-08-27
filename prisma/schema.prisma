@@ -136,7 +136,75 @@ model TarotSetting {
     visionApiKey    String?
     visionModel     String   @default("gpt-5.6-terra")
     requireLogin    Boolean  @default(false) // bật thì phải đăng nhập mới dùng được AI
+
+    /* ─── THU TIỀN LƯỢT LUẬN GIẢI AI (credit + VietQR) ───────────────────────
+     * creditEnabled là CÔNG TẮC: tắt (mặc định) thì trang chạy y như trước —
+     * miễn phí trong hạn mức aiDailyLimit. Bật thì mỗi người vẫn được
+     * freeDailyLimit lượt miễn phí mỗi ngày, hết mới trừ credit.
+     *
+     * Ba cột ngân hàng dùng để dựng ảnh QR VietQR (img.vietqr.io). Thiếu một
+     * trong ba là KHÔNG dựng được QR — lúc đó trang phải báo "chưa mở nạp
+     * credit" chứ không được hiện QR rỗng cho người ta quét. */
+    creditEnabled   Boolean  @default(false)
+    freeDailyLimit  Int      @default(3) // 0 = thu tiền ngay từ lượt đầu
+    bankBin         String? // mã BIN 6 số theo VietQR, vd '970422' (MBBank)
+    bankAccountNo   String?
+    bankAccountName String? // tên chủ tài khoản, hiện trong QR
+    creditPackages  String? // JSON [{id, vnd, credits}] — trống thì dùng bảng mặc định trong code
+
     updatedAt       DateTime @updatedAt
+}
+
+/* ─── SỐ DƯ CREDIT ────────────────────────────────────────────────────────────
+ * Một dòng cho mỗi TarotUser.id. KHÔNG mở cho khách vãng lai: luận giải AI vốn
+ * đã bắt buộc đăng nhập, mà cho khách giữ số dư thì xoá localStorage là mất
+ * tiền của người ta — không có cách nào trả lại.
+ *
+ * balance là con số ĐƯỢC TIN: trừ tiền chạy bằng updateMany có điều kiện
+ * balance >= giá nên hai tab bấm cùng lúc không thể tiêu quá số dư. Ledger chỉ
+ * để tra lại lịch sử, không phải nguồn tính số dư (cộng dồn 400 dòng mỗi lượt
+ * xem là tự bắn vào chân với pool 1 kết nối). */
+model TarotCreditAccount {
+    userId    String   @id // TarotUser.id
+    balance   Int      @default(0)
+    updatedAt DateTime @updatedAt
+}
+
+/* Sổ cái từng bút toán — cộng khi nạp, trừ khi xem, cộng lại khi AI hỏng. */
+model TarotCreditLedger {
+    id        String   @id @default(cuid())
+    userId    String
+    delta     Int // + nạp/hoàn, − tiêu
+    reason    String // topup | spend:tarot | spend:cosmic | spend:palm | refund | admin
+    orderId   String? // TarotTopupOrder.id khi delta đến từ một đơn nạp
+    balance   Int // số dư SAU bút toán, để đối chiếu khi có tranh cãi
+    createdAt DateTime @default(now())
+
+    @@index([userId, createdAt])
+}
+
+/* ─── ĐƠN NẠP CREDIT ─────────────────────────────────────────────────────────
+ * Người xem chọn gói → sinh một mã `code` (vd NC483920) đưa vào nội dung chuyển
+ * khoản → chủ trang đối chiếu app ngân hàng rồi bấm duyệt ở kengi.vn/admin.
+ *
+ * KHÔNG có đối soát tự động (chủ shop chọn duyệt tay 27/08/2026). Vì vậy `code`
+ * phải @unique: hai đơn trùng mã là không thể biết tiền của ai, mà tiền thì đã
+ * vào tài khoản rồi. */
+model TarotTopupOrder {
+    id        String    @id @default(cuid())
+    code      String    @unique // nội dung chuyển khoản, vd 'NC483920'
+    userId    String // TarotUser.id
+    email     String? // chép lại lúc tạo đơn để admin nhận ra người nạp
+    name      String?
+    vnd       Int
+    credits   Int
+    status    String    @default("pending") // pending | paid | cancelled
+    note      String? // ghi chú của admin lúc duyệt/huỷ
+    paidAt    DateTime?
+    createdAt DateTime  @default(now())
+
+    @@index([status, createdAt])
+    @@index([userId, createdAt])
 }
 
 // ─── Pending 2FA Store (persistent, survives server restarts) ─────────────────
