@@ -187,6 +187,12 @@ export async function fetchAllPages<T = any>(
 
     const items: T[] = []
     const removedIds: number[] = []
+    /* CHỐNG PHÂN TRANG QUAY VÒNG (đo 28/08/2026): /invoices với fromPurchaseDate
+     * 3 ngày (~800 hoá đơn thật) mà KV báo total ≥ 50k và cứ phát trang ĐẦY —
+     * vượt cuối tập lọc là nó quay lại phát bản cũ. Điều kiện dừng theo total
+     * vì thế không bao giờ tới, chạy đủ 500 trang trần (20 phút, 50k dòng thừa).
+     * Rào: cả một trang toàn id ĐÃ THẤY nghĩa là đang quay vòng — dừng ngay. */
+    const daThayId = new Set<any>()
     let currentItem = 0
     let total = 0
     let pages = 0
@@ -201,6 +207,9 @@ export async function fetchAllPages<T = any>(
         if (Array.isArray(removed)) removedIds.push(...removed.map(Number).filter(Number.isFinite))
 
         if (batch.length) {
+            const truoc = daThayId.size
+            for (const r of batch as any[]) { const id = (r as any)?.id; if (id != null) daThayId.add(id) }
+            if (daThayId.size === truoc) break   // toàn bản đã thấy → quay vòng
             items.push(...batch)
             if (opts.onPage) await opts.onPage(batch, items.length, total)
         }
