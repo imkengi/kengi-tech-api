@@ -92,6 +92,7 @@ import { startHanThanhToanCron } from './cron/hanThanhToanCron'
 import { batCoDangTat } from './lib/choXong'
 import { startFlashSaleScheduler } from './cron/flashSaleScheduler'
 import { startEInvoiceQueueCron } from './cron/einvoiceQueue'
+import { startKiotVietNightlyCron, stopKiotVietNightlyCron } from './cron/kiotvietNightly'
 import { startFanpageCron, stopFanpageCron } from './cron/fanpageCron'
 import { startAiAgentCron, stopAiAgentCron } from './cron/aiAgentCron'
 import { startWebhookCron, stopWebhookCron } from './cron/webhookCron'
@@ -1544,6 +1545,7 @@ if (!process.env.PASSENGER_BASE_URI) {
                 startHanThanhToanCron()
                 startFlashSaleScheduler()
                 startEInvoiceQueueCron()
+                startKiotVietNightlyCron()
                 startTaxAuditCron()
                 startTaxDeadlineCron()
                 startReconcileCron()
@@ -1567,6 +1569,7 @@ if (!process.env.PASSENGER_BASE_URI) {
         await cacheDisconnect()
         await pubsubDisconnect()
         stopFanpageCron()
+        stopKiotVietNightlyCron()
         stopAiAgentCron()
         stopWebhookCron()
         stopEmailReplyCron()
