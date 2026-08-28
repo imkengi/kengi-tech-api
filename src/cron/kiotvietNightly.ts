@@ -12,11 +12,12 @@ import { errMsg } from '../lib/errorResponse'
  * cũng là lưới an toàn cho cả tồn kho.
  *
  * Phạm vi mỗi đêm (theo đúng thứ tự phụ thuộc của SYNC_ENTITIES):
- *   categories → products → suppliers → returns → purchaseOrders
+ *   categories → products → suppliers → invoices → returns → purchaseOrders
  * - products chạy trước để pha phiếu nhập TÁCH NHÃN thẻ kho được (xem
  *   ganTheKhoPhieuNhap) và tự chữa trôi tồn nếu webhook stock chết.
- * - KHÔNG đụng invoices/cashflow: hoá đơn đã có webhook riêng, còn sổ quỹ đụng
- *   tiền — muốn lên lịch phải là quyết định riêng của chủ shop.
+ * - invoices VÀO danh sách từ 28/08: webhook hoá đơn tự tắt ngầm lần nữa (im
+ *   từ 09:07 26/08, chủ shop phát hiện thiếu HĐ) — webhook không tin được.
+ *   cashflow vẫn ở ngoài: sổ quỹ đụng tiền, lên lịch phải là quyết định riêng.
  * - Chứng từ quét cửa sổ 3 ngày (bù đêm hỏng vẫn không sót); danh mục thì bộ
  *   chạy LUÔN lấy trọn bộ, không dính fromDate (quy ước data-sync-gate).
  *
@@ -27,7 +28,7 @@ import { errMsg } from '../lib/errorResponse'
 const RUN_HOUR_UTC = 17    // 00:00 VN
 const RUN_MINUTE = 0
 const LOOKBACK_DAYS = 3
-const ENTITIES = ['categories', 'products', 'suppliers', 'returns', 'purchaseOrders']
+const ENTITIES = ['categories', 'products', 'suppliers', 'invoices', 'returns', 'purchaseOrders']
 const STALE_MS = 2 * 60_000
 
 let timer: NodeJS.Timeout | null = null
