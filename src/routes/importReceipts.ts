@@ -971,6 +971,21 @@ router.put('/:id/pay', authMiddleware, async (req: AuthRequest, res: Response) =
         // category 'supplier_payment' → auto-journal ghi Nợ 331/Có 11x (giảm phải
         // trả), KHÔNG vào chi phí 6428. paidBy quyết định vế Có 111 (cash) hay 112.
         const payBy = String(req.body?.paidBy || req.body?.method || 'cash').toLowerCase()
+        /* TÀI KHOẢN CHUYỂN ĐI (30/08/2026, chủ shop: "chọn chuyển từ tài khoản
+         * nào để mai này tra soát sao kê cho dễ"): phiếu chi gắn bankAccountId
+         * thì đối chiếu sao kê e-banking lọc thẳng theo tài khoản được. Chỉ có
+         * nghĩa với chuyển khoản; id lạ thì báo lỗi chứ không ghi bừa. */
+        let bankAccountId: string | null = null
+        if ((payBy === 'bank' || payBy === 'transfer') && req.body?.bankAccountId) {
+            const tk = await (prisma as any).bankAccount.findUnique({
+                where: { id: String(req.body.bankAccountId) }, select: { id: true },
+            }).catch(() => null)
+            if (!tk) {
+                res.status(400).json({ success: false, error: 'Tài khoản ngân hàng không tồn tại — tải lại danh sách rồi chọn lại' })
+                return
+            }
+            bankAccountId = tk.id
+        }
         /* PHIẾU CHI + BÚT TOÁN đi cùng nhau (20/08/2026). Bản cũ tạo phiếu chi rồi ghi sổ ở lệnh
          * riêng với `.catch(() => { })` RỖNG: phiếu nhập ghi "đã trả", có phiếu chi, mà sổ không
          * có bút toán giảm 331 nào — sổ và kho tiền lệch nhau trong im lặng.
@@ -985,6 +1000,7 @@ router.put('/:id/pay', authMiddleware, async (req: AuthRequest, res: Response) =
                         amount: payAmount,
                         category: 'supplier_payment',
                         paidBy: payBy === 'bank' || payBy === 'transfer' ? 'bank' : 'cash',
+                        bankAccountId,
                         date: new Date(),
                         branchId: receipt.branchId || null,
                     },
