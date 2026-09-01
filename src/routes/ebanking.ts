@@ -475,6 +475,117 @@ router.post('/transactions/auto-reconcile', authMiddleware, requireRole('admin',
 // Khi đối soát và có counterAccount (mà chưa gắn bút toán), tự tạo bút toán:
 //   credit (tiền vào): Nợ 112 / Có counterAccount
 //   debit  (tiền ra) : Nợ counterAccount / Có 112
+/** Bỏ dấu + thường hoá để so tên người nhận/NCC/nhân viên giữa các nguồn. */
+function boDauTen(t: any): string {
+    return String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+// ─── GET /api/ebanking/transactions/goi-y?accountId= ────────────────────────
+/**
+ * GỢI Ý ĐỐI SOÁT THEO NGƯỜI NHẬN/GỬI (01/09/2026, chủ shop: "tự động dò theo
+ * người nhận hoặc người gửi, gợi ý duyệt cho nhanh luôn").
+ *
+ * Chỉ gợi ý cho dòng TIỀN RA chưa đối soát, bốn tầng chặt → lỏng:
+ *   1. LỊCH SỬ — cùng người nhận đã từng đối soát ra loại gì (mạnh nhất: chi
+ *      lương cho anh A tháng trước thì tháng này vẫn là chi lương)
+ *   2. Tên trùng đúng MỘT nhà cung cấp → trả NCC (kèm id để trừ công nợ)
+ *   3. Tên trùng nhân viên đang làm việc → chi lương
+ *   4. Từ khoá diễn giải (lương / điện nước / vận chuyển)
+ * Trùng nhiều NCC hoặc không đủ tin thì KHÔNG gợi ý — thà bỏ trống còn hơn
+ * gợi bừa để người dùng duyệt nhầm hàng loạt.
+ */
+router.get('/transactions/goi-y', authMiddleware, requireRole('admin', 'manager', 'superadmin'), async (req: AuthRequest, res: Response) => {
+    try {
+        await ensureTables(req)
+        const prisma = req.storePrisma! as any
+        const accountId = String(req.query.accountId || '')
+        const where: any = { isReconciled: false, type: 'debit' }
+        if (accountId && accountId !== 'ALL') where.bankAccountId = accountId
+        const txns = await prisma.bankTransaction.findMany({
+            where, orderBy: { transactionDate: 'desc' }, take: 200,
+            select: { id: true, description: true, counterpartyName: true },
+        })
+        if (!txns.length) return res.json({ success: true, data: {} })
+
+        // Tầng 1 — lịch sử: người nhận này từng được đối soát ra loại gì
+        const daSoat = await prisma.bankTransaction.findMany({
+            where: { isReconciled: true, matchedExpenseId: { not: null }, counterpartyName: { not: null } },
+            orderBy: { reconciledAt: 'desc' }, take: 500,
+            select: { counterpartyName: true, matchedExpenseId: true },
+        }).catch(() => [] as any[])
+        const expIds = [...new Set(daSoat.map((x: any) => x.matchedExpenseId).filter(Boolean))] as string[]
+        const exps = expIds.length
+            ? await prisma.expense.findMany({ where: { id: { in: expIds } }, select: { id: true, category: true, supplierName: true } }).catch(() => [] as any[])
+            : []
+        const expById = new Map(exps.map((e: any) => [e.id, e]))
+        const lichSu = new Map<string, Map<string, { dem: number; supplierName: string | null }>>()
+        for (const d of daSoat) {
+            const k = boDauTen(d.counterpartyName)
+            const e = expById.get(d.matchedExpenseId)
+            if (!k || !e) continue
+            if (!lichSu.has(k)) lichSu.set(k, new Map())
+            const m = lichSu.get(k)!
+            const cur = m.get(e.category) || { dem: 0, supplierName: null }
+            cur.dem++
+            if (e.supplierName) cur.supplierName = e.supplierName
+            m.set(e.category, cur)
+        }
+
+        const nccs = await prisma.supplier.findMany({ select: { id: true, name: true } }).catch(() => [] as any[])
+        const nccNorm = nccs.map((n: any) => ({ id: n.id, name: n.name, norm: boDauTen(n.name) })).filter((n: any) => n.norm.length >= 4)
+        const users = await prisma.user.findMany({ where: { employeeStatus: 'active' }, select: { name: true } }).catch(() => [] as any[])
+        const userNorm = users.map((u: any) => boDauTen(u.name)).filter((n: string) => n.length >= 5)
+
+        const goiY: Record<string, any> = {}
+        for (const t of txns) {
+            const cp = boDauTen(t.counterpartyName)
+            const van = `${cp} ${boDauTen(t.description)}`.trim()
+            // 1. lịch sử
+            if (cp && lichSu.has(cp)) {
+                const m = lichSu.get(cp)!
+                let best: any = null
+                for (const [cat, v] of m) if (!best || v.dem > best.dem) best = { cat, ...v }
+                if (best) {
+                    let supplierId: string | undefined
+                    if (best.cat === 'supplier_payment') {
+                        const ncc = nccNorm.find((n: any) => boDauTen(best.supplierName || '') === n.norm)
+                            || nccNorm.find((n: any) => cp.includes(n.norm) || n.norm.includes(cp))
+                        supplierId = ncc?.id
+                    }
+                    if (best.cat !== 'supplier_payment' || supplierId) {
+                        goiY[t.id] = {
+                            loaiChi: best.cat, supplierId: supplierId || null,
+                            supplierName: best.supplierName || null,
+                            lyDo: `người nhận này đã duyệt ${best.dem} lần trước`,
+                        }
+                        continue
+                    }
+                }
+            }
+            // 2. trùng đúng MỘT NCC
+            const trungNcc = nccNorm.filter((n: any) => van.includes(n.norm) || (cp.length >= 5 && n.norm.includes(cp)))
+            if (trungNcc.length === 1) {
+                goiY[t.id] = { loaiChi: 'supplier_payment', supplierId: trungNcc[0].id, supplierName: trungNcc[0].name, lyDo: 'tên trùng nhà cung cấp' }
+                continue
+            }
+            // 3. trùng tên nhân viên
+            if (userNorm.some((u: string) => van.includes(u))) {
+                goiY[t.id] = { loaiChi: 'salary', supplierId: null, supplierName: null, lyDo: 'người nhận trùng tên nhân viên' }
+                continue
+            }
+            // 4. từ khoá diễn giải
+            if (/\bluong\b|tien luong|tra luong|salary/.test(van)) { goiY[t.id] = { loaiChi: 'salary', supplierId: null, supplierName: null, lyDo: 'diễn giải có chữ lương' }; continue }
+            if (/dien luc|\bevn\b|tien dien|tien nuoc|internet|\bfpt\b|vnpt|viettel/.test(van)) { goiY[t.id] = { loaiChi: 'utilities', supplierId: null, supplierName: null, lyDo: 'diễn giải điện / nước / mạng' }; continue }
+            if (/van chuyen|\bghn\b|ghtk|giao hang/.test(van)) { goiY[t.id] = { loaiChi: 'transport', supplierId: null, supplierName: null, lyDo: 'diễn giải vận chuyển' } }
+        }
+        res.json({ success: true, data: goiY })
+    } catch (err: any) {
+        console.error('GET /ebanking/transactions/goi-y error:', err?.message)
+        res.status(500).json({ success: false, error: errMsg(err) })
+    }
+})
+
 router.post('/transactions/:id/reconcile', authMiddleware, requireRole('admin', 'manager', 'superadmin'), async (req: AuthRequest, res: Response) => {
     try {
         await ensureTables(req)
