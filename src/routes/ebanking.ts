@@ -509,9 +509,26 @@ router.post('/transactions/:id/reconcile', authMiddleware, requireRole('admin', 
                  * thì chọn gì"): quyết định tài khoản hạch toán — salary → 6411,
                  * rent → 6421… (bảng TK_CHI_PHI). Loại lạ rơi về 'other' 6428. */
                 const loaiChi = TK_CHI_PHI[String(b.expenseCategory || '').toLowerCase()] ? String(b.expenseCategory).toLowerCase() : 'other'
+                /* TRẢ TIỀN NCC PHẢI GẮN NCC (01/09/2026, chủ shop: "chi cho nhà
+                 * cung cấp mà không gắn vào NCC thì trừ công nợ kiểu gì"): bút
+                 * toán Nợ 331 mới chỉ là sổ cái tổng — công nợ TỪNG NCC tính từ
+                 * ImportReceipt.paidAmount + Supplier.payable (lib/congNoNcc),
+                 * nên tiền phải PHÂN BỔ vào phiếu nhập chưa trả của đúng NCC:
+                 * FIFO cũ trước (đúng /pay: nợ phiếu = totalCost − paidAmount),
+                 * hết phiếu mà còn dư thì trừ số dư đầu kỳ (payable). */
+                let nccChon: any = null
+                if (loaiChi === 'supplier_payment') {
+                    nccChon = b.supplierId
+                        ? await prisma.supplier.findUnique({ where: { id: String(b.supplierId) } }).catch(() => null)
+                        : null
+                    if (!nccChon) {
+                        return res.status(400).json({ success: false, error: 'Chi trả nhà cung cấp phải chọn NCC — không thì công nợ của họ không giảm được' })
+                    }
+                }
                 phieuChiTuSinh = await prisma.expense.create({
                     data: {
                         description: `Chi theo sao kê: ${tx.description || tx.referenceNo || 'không diễn giải'}`.slice(0, 300),
+                        supplierName: nccChon?.name || null,
                         amount: round2(tx.amount), category: loaiChi, paidBy: 'bank',
                         bankAccountId: tx.bankAccountId || null,
                         date: isNaN(when.getTime()) ? new Date() : when,
@@ -524,6 +541,41 @@ router.post('/transactions/:id/reconcile', authMiddleware, requireRole('admin', 
                     branchId: phieuChiTuSinh.branchId, userId: req.user?.userId || null,
                 }).catch((e: any) => console.error('[ebanking] bút toán phiếu chi tự sinh lỗi:', e?.message))
                 b.matchedExpenseId = phieuChiTuSinh.id
+
+                if (nccChon) {
+                    // Đối soát sao kê là thao tác một người — cập nhật tuần tự đủ an toàn,
+                    // KHÔNG Promise.all (PROD PRISMA_POOL_SIZE=1).
+                    let conLai = round2(tx.amount)
+                    const phanBo: Array<{ phieu: string; tra: number }> = []
+                    const phieus = await prisma.importReceipt.findMany({
+                        where: { supplierId: nccChon.id, status: { not: 'cancelled' }, paymentStatus: { in: ['unpaid', 'partial'] } },
+                        orderBy: { createdAt: 'asc' },
+                        select: { id: true, code: true, totalCost: true, paidAmount: true },
+                    }).catch(() => [] as any[])
+                    for (const ph of phieus) {
+                        if (conLai <= 0) break
+                        const no = Math.max(0, round2(ph.totalCost) - round2(ph.paidAmount || 0))
+                        if (no <= 0) continue
+                        const tra = Math.min(no, conLai)
+                        await prisma.importReceipt.update({
+                            where: { id: ph.id },
+                            data: {
+                                paidAmount: round2((ph.paidAmount || 0) + tra),
+                                paymentStatus: round2((ph.paidAmount || 0) + tra) >= round2(ph.totalCost) ? 'paid' : 'partial',
+                            },
+                        })
+                        phanBo.push({ phieu: ph.code, tra })
+                        conLai = round2(conLai - tra)
+                    }
+                    if (conLai > 0 && round2(nccChon.payable || 0) > 0) {
+                        const truDau = Math.min(conLai, round2(nccChon.payable))
+                        await prisma.supplier.update({ where: { id: nccChon.id }, data: { payable: round2(nccChon.payable - truDau) } }).catch(() => null)
+                        phanBo.push({ phieu: '(số dư đầu kỳ)', tra: truDau })
+                        conLai = round2(conLai - truDau)
+                    }
+                    ;(phieuChiTuSinh as any).phanBoCongNo = phanBo
+                    ;(phieuChiTuSinh as any).traVuotNo = conLai > 0 ? conLai : 0
+                }
             }
         }
 
