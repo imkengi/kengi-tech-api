@@ -190,13 +190,60 @@ const USER_SELECT = {
 //   5. Seed branch, admin user, store settings into the schema
 //   6. Return JWT with branchSchema
 // ════════════════════════════════════════════════════════════════════════════════
+/**
+ * XÁC MINH ID TOKEN GOOGLE (30/08/2026, chủ shop: "thêm phần tiếp tục với
+ * Google"). Cùng cách với trang tarot: verifyIdToken qua google-auth-library,
+ * audience nhận cả hai client đã cấu hình trên prod. Email PHẢI ở trạng thái
+ * đã xác minh — token hợp lệ mà email chưa verify vẫn không cho qua.
+ */
+async function xacThucGoogle(credential: string): Promise<{ email: string; name: string }> {
+    const audience = [process.env.GOOGLE_OAUTH_CLIENT_ID, process.env.TAROT_GOOGLE_CLIENT_ID]
+        .filter(Boolean) as string[]
+    if (!audience.length) throw new Error('CHUA_CAU_HINH_GOOGLE')
+    const { OAuth2Client } = await import('google-auth-library')
+    const ticket = await new OAuth2Client().verifyIdToken({ idToken: credential, audience })
+    const payload = ticket.getPayload()
+    if (!payload?.email || !payload.email_verified) throw new Error('GOOGLE_EMAIL_CHUA_XAC_MINH')
+    return { email: String(payload.email).toLowerCase(), name: payload.name || String(payload.email).split('@')[0] }
+}
+
+function loiGoogle(e: any): string {
+    if (e?.message === 'CHUA_CAU_HINH_GOOGLE') return 'Máy chủ chưa cấu hình đăng nhập Google'
+    if (e?.message === 'GOOGLE_EMAIL_CHUA_XAC_MINH') return 'Email Google chưa được xác minh'
+    return 'Không xác minh được tài khoản Google — thử lại'
+}
+
+/** Client id cho nút Google phía FE — đọc lúc chạy, khỏi đóng cứng vào bản build. */
+router.get('/google-client-id', (_req: Request, res: Response) => {
+    res.json({
+        success: true,
+        data: { clientId: process.env.GOOGLE_OAUTH_CLIENT_ID || process.env.TAROT_GOOGLE_CLIENT_ID || null },
+    })
+})
+
 router.post('/signup', async (req: Request, res: Response) => {
     try {
-        const { storeName, storeAddress, fullName, email, phone, password } = req.body
+        let { storeName, storeAddress, fullName, email, phone, password } = req.body
+        const { googleCredential } = req.body
+        /* Đăng ký qua Google: email + tên lấy từ TOKEN (đã xác minh), không tin
+         * chuỗi client gõ; mật khẩu được phép bỏ trống — sinh ngẫu nhiên, chủ
+         * cửa hàng đăng nhập bằng Google từ đó về sau (đặt lại được qua Quên
+         * mật khẩu vì OTP gửi về chính email này). */
+        let matKhauTuSinh = false
+        if (googleCredential) {
+            try {
+                const g = await xacThucGoogle(String(googleCredential))
+                email = g.email
+                if (!String(fullName || '').trim()) fullName = g.name
+            } catch (e: any) {
+                return res.status(401).json({ success: false, error: loiGoogle(e) })
+            }
+            if (!password) { password = 'Gg1-' + crypto.randomBytes(12).toString('base64url'); matKhauTuSinh = true }
+        }
         if (!storeName?.trim() || !fullName?.trim() || !email?.trim() || !password) {
             return res.status(400).json({ success: false, error: 'Vui lòng điền đầy đủ thông tin' })
         }
-        if (password.length < 8 || !/[A-Z]/.test(password) || !/[0-9]/.test(password)) {
+        if (!matKhauTuSinh && (password.length < 8 || !/[A-Z]/.test(password) || !/[0-9]/.test(password))) {
             return res.status(400).json({ success: false, error: 'Mật khẩu tối thiểu 8 ký tự, bao gồm chữ hoa và số' })
         }
         // Basic email format validation
@@ -366,8 +413,9 @@ router.post('/branches', async (req: Request, res: Response) => {
 // branchId is kept in JWT for filtering context only.
 router.post('/login', async (req: Request, res: Response) => {
     try {
-        const { email, password, storeCode, branchId } = req.body
-        if (!email || !password) {
+        let { email } = req.body
+        const { password, storeCode, branchId, googleCredential } = req.body
+        if (!googleCredential && (!email || !password)) {
             res.status(400).json({ success: false, error: 'Email và mật khẩu là bắt buộc' })
             return
         }
@@ -394,15 +442,39 @@ router.post('/login', async (req: Request, res: Response) => {
         const targetBranchId: string | null = branchId || null
 
         // 3. Authenticate user in the store schema
+        /* Đăng nhập Google: danh tính là EMAIL TRONG TOKEN đã xác minh — bỏ qua
+         * email client gõ, và không so mật khẩu. Mọi bước sau (2FA, chi nhánh,
+         * phát token) đi CHUNG một đường với đăng nhập mật khẩu. */
+        let quaGoogle = false
+        if (googleCredential) {
+            try {
+                const g = await xacThucGoogle(String(googleCredential))
+                email = g.email
+                quaGoogle = true
+            } catch (e: any) {
+                res.status(401).json({ success: false, error: loiGoogle(e) })
+                return
+            }
+        }
         const branchPrisma = getStorePrisma(branchSchema)
         const user = await branchPrisma.user.findFirst({
             where: { email: email.trim().toLowerCase() },
         })
-        if (!user) { res.status(401).json({ success: false, error: 'Email hoặc mật khẩu không đúng' }); return }
+        if (!user) {
+            res.status(401).json({
+                success: false,
+                error: quaGoogle
+                    ? `Email ${email} chưa có tài khoản trong cửa hàng này — nhờ quản trị viên tạo tài khoản với đúng email Google`
+                    : 'Email hoặc mật khẩu không đúng',
+            })
+            return
+        }
         if (user.isLocked) { res.status(403).json({ success: false, error: 'Tài khoản đã bị khóa. Liên hệ quản trị viên.' }); return }
 
-        const valid = await bcrypt.compare(password, user.password)
-        if (!valid) { res.status(401).json({ success: false, error: 'Email hoặc mật khẩu không đúng' }); return }
+        if (!quaGoogle) {
+            const valid = await bcrypt.compare(password, user.password)
+            if (!valid) { res.status(401).json({ success: false, error: 'Email hoặc mật khẩu không đúng' }); return }
+        }
 
         // 3.5 — 2FA gate: if enabled, send OTP and stop here. Client must call
         //      /api/auth/verify-otp with purpose=login_2fa to complete login.

@@ -23,6 +23,7 @@ import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest, getBranchId, getBranchFilter } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
 import { errMsg } from '../lib/errorResponse'
+import { postExpenseJournal } from '../lib/autoJournalPurchase'
 
 const router = Router()
 
@@ -489,6 +490,39 @@ router.post('/transactions/:id/reconcile', authMiddleware, requireRole('admin', 
         }
         const reconciled = b.reconciled === undefined ? true : !!b.reconciled
 
+        /* CHI PHÍ TỰ SINH PHIẾU (30/08/2026, chủ shop: "mã chứng từ chi phí thì
+         * tự sinh, còn phiếu bán hàng thì mới cần link"): dòng sao kê tiền RA
+         * khớp loại chi phí mà KHÔNG gõ mã → tạo luôn phiếu chi từ chính dòng
+         * sao kê (tiền / ngày / diễn giải / tài khoản) + bút toán EXP-. Chống
+         * trùng bằng sourceRef BANK-<id> — bấm lại chỉ nối vào phiếu đã tạo. */
+        let phieuChiTuSinh: any = null
+        if (b.matchType === 'expense' && !b.matchedExpenseId && reconciled) {
+            if (tx.type !== 'debit') {
+                return res.status(400).json({ success: false, error: 'Dòng tiền VÀO không tự tạo phiếu chi được — chọn loại khớp khác hoặc gõ mã chứng từ' })
+            }
+            const daCo = await prisma.expense.findFirst({ where: { sourceRef: `BANK-${id}` }, select: { id: true } }).catch(() => null)
+            if (daCo) {
+                b.matchedExpenseId = daCo.id
+            } else {
+                const when = new Date(tx.transactionDate || tx.date || tx.createdAt)
+                phieuChiTuSinh = await prisma.expense.create({
+                    data: {
+                        description: `Chi theo sao kê: ${tx.description || tx.referenceNo || 'không diễn giải'}`.slice(0, 300),
+                        amount: round2(tx.amount), category: 'other', paidBy: 'bank',
+                        bankAccountId: tx.bankAccountId || null,
+                        date: isNaN(when.getTime()) ? new Date() : when,
+                        sourceRef: `BANK-${id}`,
+                        branchId: tx.branchId || getBranchId(req) || null,
+                        status: 'active',
+                    },
+                })
+                await postExpenseJournal(prisma, phieuChiTuSinh as any, {
+                    branchId: phieuChiTuSinh.branchId, userId: req.user?.userId || null,
+                }).catch((e: any) => console.error('[ebanking] bút toán phiếu chi tự sinh lỗi:', e?.message))
+                b.matchedExpenseId = phieuChiTuSinh.id
+            }
+        }
+
         // Tạo bút toán nếu được yêu cầu (có counterAccount) và chưa có bút toán.
         let journalEntryId: string | null = b.journalEntryId ?? tx.journalEntryId ?? null
         let journalEntry: any = null
@@ -527,7 +561,7 @@ router.post('/transactions/:id/reconcile', authMiddleware, requireRole('admin', 
                 journalEntryId,
             },
         })
-        res.json({ success: true, data: { transaction: updated, journalEntry } })
+        res.json({ success: true, data: { transaction: updated, journalEntry, phieuChi: phieuChiTuSinh } })
     } catch (err: any) {
         console.error('POST /ebanking/transactions/:id/reconcile error:', err)
         res.status(500).json({ success: false, error: errMsg(err) })
