@@ -518,7 +518,7 @@ router.get('/transactions/goi-y', authMiddleware, requireRole('admin', 'manager'
         const exps = expIds.length
             ? await prisma.expense.findMany({ where: { id: { in: expIds } }, select: { id: true, category: true, supplierName: true } }).catch(() => [] as any[])
             : []
-        const expById = new Map(exps.map((e: any) => [e.id, e]))
+        const expById = new Map<string, any>(exps.map((e: any) => [String(e.id), e]))
         const lichSu = new Map<string, Map<string, { dem: number; supplierName: string | null }>>()
         for (const d of daSoat) {
             const k = boDauTen(d.counterpartyName)
