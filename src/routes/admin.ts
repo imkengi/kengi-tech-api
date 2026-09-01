@@ -4887,6 +4887,20 @@ router.get('/notif-probe', async (req: Request, res: Response) => {
                 title: '🧾 TEST đẩy thông báo', message: `Bắn thử lúc ${new Date().toISOString()}`,
             })
         }
+        // &seed=1 → tạo 3 bản ghi Notification mẫu — worker poll của app Android
+        // (chạy mỗi lần mở app) sẽ vẽ chúng qua ĐÚNG code path thông báo mới,
+        // dùng để nghiệm thu khay thông báo khi FCM trên máy ảo không deliver.
+        if (String(req.query.seed || '') === '1') {
+            const gio = new Date().toLocaleTimeString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
+            const mk = (title: string, message: string) =>
+                sp.notification.create({ data: { title, message, type: 'system' } })
+                    .then(() => 'ok').catch((e: any) => `LOI: ${e?.message}`)
+            out.seeded = [
+                await mk('🧾 Xuất hoá đơn thành công', `Hoá đơn số 00123 đã phát hành lúc ${gio}`),
+                await mk('📦 Đơn sàn mới', 'Shopee: 2 đơn mới đang chờ xử lý'),
+                await mk('⚠️ Tồn kho cảnh báo', 'Bộ sạc nhanh 65W GaN sắp hết hàng (còn 3 cái)'),
+            ]
+        }
         res.json({ success: true, data: out })
     } catch (err: any) {
         res.status(500).json({ success: false, error: err?.message })
