@@ -23,7 +23,7 @@ import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest, getBranchId, getBranchFilter } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
 import { errMsg } from '../lib/errorResponse'
-import { postExpenseJournal } from '../lib/autoJournalPurchase'
+import { postExpenseJournal, TK_CHI_PHI } from '../lib/autoJournalPurchase'
 
 const router = Router()
 
@@ -505,10 +505,14 @@ router.post('/transactions/:id/reconcile', authMiddleware, requireRole('admin', 
                 b.matchedExpenseId = daCo.id
             } else {
                 const when = new Date(tx.transactionDate || tx.date || tx.createdAt)
+                /* Loại chi do người đối soát chọn (30/08, chủ shop hỏi "chi LƯƠNG
+                 * thì chọn gì"): quyết định tài khoản hạch toán — salary → 6411,
+                 * rent → 6421… (bảng TK_CHI_PHI). Loại lạ rơi về 'other' 6428. */
+                const loaiChi = TK_CHI_PHI[String(b.expenseCategory || '').toLowerCase()] ? String(b.expenseCategory).toLowerCase() : 'other'
                 phieuChiTuSinh = await prisma.expense.create({
                     data: {
                         description: `Chi theo sao kê: ${tx.description || tx.referenceNo || 'không diễn giải'}`.slice(0, 300),
-                        amount: round2(tx.amount), category: 'other', paidBy: 'bank',
+                        amount: round2(tx.amount), category: loaiChi, paidBy: 'bank',
                         bankAccountId: tx.bankAccountId || null,
                         date: isNaN(when.getTime()) ? new Date() : when,
                         sourceRef: `BANK-${id}`,
