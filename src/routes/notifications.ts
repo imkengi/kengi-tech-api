@@ -99,8 +99,13 @@ export async function sendPushToStore(prisma: any, title: string, body: string):
                     body: JSON.stringify({
                         message: {
                             token,
-                            notification: { title, body },
-                            android: { priority: 'HIGH', notification: { channel_id: 'kengi_alerts' } },
+                            // DATA-ONLY (01/09/2026): notification-payload để HỆ THỐNG vẽ khi
+                            // app chạy nền — Android tự gộp cụt lủn, không xoè được nội dung,
+                            // "phải vào app mới xem được". Data-only thì onMessageReceived
+                            // chạy CẢ KHI NỀN, app tự vẽ từng thông báo + nhóm xoè được.
+                            // App cũ vẫn hiện bình thường (đã có fallback đọc data.title/message).
+                            data: { title, message: body },
+                            android: { priority: 'HIGH' },
                         },
                     }),
                 })
