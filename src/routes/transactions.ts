@@ -183,7 +183,20 @@ router.get('/', authMiddleware, requirePermission('pos.view'), async (req: AuthR
             userMap = Object.fromEntries(users.map(u => [u.id, u.name]))
         }
 
-        const data = filteredTx.map(t => ({
+        const data = filteredTx.map(t => {
+            // Giá vốn + lợi nhuận TỪNG ĐƠN (02/09/2026 — app bấm "Lợi nhuận" ở báo
+            // cáo phải thấy lãi từng đơn, không phải doanh thu). TransactionItem
+            // không lưu giá vốn lúc bán, nên dùng product.costPrice hiện tại —
+            // cùng định nghĩa với COGS của /reports/financial (SUM(p.costPrice*qty)).
+            // Mặt hàng đã xoá/không có giá vốn → tính 0 và đánh dấu thieuGiaVon.
+            let cogs = 0
+            let thieuGiaVon = false
+            for (const i of t.items) {
+                const cp = (i as any).product?.costPrice
+                if (cp == null) thieuGiaVon = true
+                cogs += (cp || 0) * i.quantity
+            }
+            return {
             id: t.id,
             receiptNumber: t.receiptNumber,
             customerId: t.customerId,
@@ -197,8 +210,12 @@ router.get('/', authMiddleware, requirePermission('pos.view'), async (req: AuthR
                 unitPrice: i.unitPrice,
                 discount: i.discount,
                 lineTotal: i.lineTotal,
+                costPrice: (i as any).product?.costPrice ?? null,
                 product: (i as any).product || undefined,
             })),
+            cogs,
+            profit: t.total - cogs,
+            thieuGiaVon,
             subtotal: t.subtotal,
             discount: t.discount,
             tax: t.tax,
@@ -224,7 +241,8 @@ router.get('/', authMiddleware, requirePermission('pos.view'), async (req: AuthR
             // Tình trạng HĐĐT — FE lọc "Đã/Chưa xuất HĐ" + badge cần 2 trường này
             vatStatus: (t as any).vatStatus || 'none',
             vatInvoiceNumber: (t as any).vatInvoiceNumber || null,
-        }))
+            }
+        })
 
         const response = {
             success: true,
