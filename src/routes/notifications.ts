@@ -1,51 +1,16 @@
 import { Router, Response, Request } from 'express'
-import { authMiddleware, sseAuthMiddleware, AuthRequest } from '../middleware/auth'
+import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { registryPrisma, getStorePrisma } from '../lib/prisma'
 
 const router = Router()
 
-interface ConnectedClient {
-    res: Response
-    storeId: string
-}
-
-// In-memory SSE clients per store
-const clients = new Map<string, Set<ConnectedClient>>()
-
 /**
- * Send an event to all SSE clients for a given store.
- * @param storeId  Store identifier string
- * @param event    SSE event name (e.g. 'low_stock', 'new_order')
- * @param data     Payload object
+ * SSE ĐÃ GỠ (02/09/2026) — xem chú thích ở route GET /stream bên dưới.
+ * Mọi thông báo đi bằng hai đường còn lại, cả hai đều BỀN:
+ *   - Web: ghi bảng Notification → FE poll GET /notifications mỗi 15 giây.
+ *   - App Android: FCM push (sendPushToStore).
  */
-export function sendNotification(storeId: string, event: string, data: object): number {
-    const storeClients = clients.get(storeId)
-    if (!storeClients || storeClients.size === 0) {
-        // Log để soi: emit mà 0 client = lệch key hoặc SSE nối instance khác
-        console.log(`[SSE] emit '${event}' key='${storeId}' → 0 client (keys đang mở: ${[...clients.keys()].join(',') || 'trống'})`)
-        return 0
-    }
-    const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
-    let sent = 0
-    for (const client of storeClients) {
-        try {
-            client.res.write(payload)
-            sent++
-        } catch {
-            storeClients.delete(client)
-        }
-    }
-    console.log(`[SSE] emit '${event}' key='${storeId}' → ${sent} client`)
-    return sent
-}
-
-/** Số client SSE đang mở theo key — cho probe chẩn đoán. */
-export function sseStats(): Record<string, number> {
-    const out: Record<string, number> = {}
-    for (const [k, v] of clients.entries()) out[k] = v.size
-    return out
-}
 
 // ─── FCM push (đẩy tức thì tới app Android kể cả khi app đóng) ───────────────
 // Token truy cập lấy từ metadata server của Cloud Run (service account mặc định,
@@ -147,36 +112,23 @@ router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => 
 })
 
 // GET /api/notifications/stream — SSE connection
-router.get('/stream', sseAuthMiddleware, (req: AuthRequest, res: Response) => {
-    const storeId = (req as any).storeId || req.user?.storeSchema || 'default'
-
-    res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'Access-Control-Allow-Origin': '*',
-    })
-
-    const client: ConnectedClient = { res, storeId }
-
-    if (!clients.has(storeId)) clients.set(storeId, new Set())
-    clients.get(storeId)!.add(client)
-
-    // Send initial ping
-    res.write('event: connected\ndata: {"status":"ok"}\n\n')
-
-    // Keep-alive heartbeat every 25s
-    const heartbeat = setInterval(() => {
-        try {
-            res.write(': heartbeat\n\n')
-        } catch {
-            clearInterval(heartbeat)
-        }
-    }, 25000)
-
-    req.on('close', () => {
-        clearInterval(heartbeat)
-        clients.get(storeId)?.delete(client)
+// GET /notifications/stream — ĐÃ GỠ SSE (02/09/2026)
+//
+// VÌ SAO: Cloud Run tính tiền theo thời gian request còn mở. Mỗi tab kengi.vn
+// đăng nhập giữ một kết nối SSE vĩnh viễn (nối lại mỗi 300 giây), nên chỉ cần
+// MỘT tab mở cả ngày là một instance bị tính tiền 24/7. Đo 30 ngày tới
+// 02/09/2026: endpoint này + /api/events chiếm 98% số giây tính tiền của service,
+// khoảng 2 triệu VND trong hoá đơn 3,1 triệu, trong khi KHÔNG thêm thông tin gì:
+// mọi sự kiện đã được ghi vào bảng Notification trước khi đẩy, và hook poll của
+// FE đã tự toast thông báo mới (einvoice/system/error).
+//
+// KHÔNG XOÁ HẲN ROUTE: tab cũ mở nhiều ngày vẫn chạy bundle cũ và còn nối lại
+// dài dài. Trả 410 TỨC THÌ, không auth, không chạm DB — mỗi lần nối chỉ tốn vài
+// mili giây thay vì giữ máy chủ 300 giây.
+router.get('/stream', (_req: Request, res: Response) => {
+    res.status(410).json({
+        success: false,
+        error: 'Kênh SSE đã gỡ. Dùng GET /api/notifications (poll 15 giây) hoặc FCM push.',
     })
 })
 

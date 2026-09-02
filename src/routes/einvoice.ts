@@ -33,7 +33,7 @@ import { errMsg } from '../lib/errorResponse'
 import { authMiddleware, AuthRequest, getBranchFilter } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
 import { getProvider, PROVIDERS } from '../services/einvoice'
-import { sendNotification, sendPushToStore } from './notifications'
+import { sendPushToStore } from './notifications'
 import type { EInvoiceProviderConfig, EInvoiceData } from '../services/einvoice'
 import { moTaLoi } from '../lib/gomLoi'
 
@@ -955,10 +955,9 @@ export async function issueInvoiceForTransaction(
         await prisma.notification.create({
             data: { type: 'einvoice', title: notifTitle, message: notifMessage },
         }).catch(() => { })
-        // Đẩy realtime cho web đang mở (toast qua SSE)
-        if (sseKey) {
-            try { sendNotification(sseKey, 'einvoice_issued', { title: notifTitle, message: notifMessage }) } catch { }
-        }
+        // Web KHÔNG cần đẩy riêng: bản ghi Notification ở trên là nguồn duy nhất,
+        // hook poll của FE (15 giây) tự toast tin mới. SSE đã gỡ 02/09/2026 vì
+        // giữ instance Cloud Run sống 24/7 — xem routes/notifications.ts.
         // Push FCM tức thì tới app Android (kể cả khi app đóng) — fire & forget
         sendPushToStore(prisma, notifTitle, notifMessage).catch(() => { })
         // Khách có email → nhờ VNPT gửi hoá đơn. Lỗi email KHÔNG làm hỏng phát

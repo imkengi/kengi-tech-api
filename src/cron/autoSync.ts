@@ -342,8 +342,9 @@ async function runAutoSync() {
                                 data: { type: 'new_order', title: tieuDe, message: noiDung },
                             }).catch(() => { })
                             try {
-                                const { sendNotification, sendPushToStore } = await import('../routes/notifications')
-                                sendNotification(store.schema, 'new_order', { title: tieuDe, message: noiDung })
+                                // Web đọc bản ghi Notification vừa tạo ở trên qua poll;
+                                // chỉ còn push FCM cho app Android (SSE gỡ 02/09/2026).
+                                const { sendPushToStore } = await import('../routes/notifications')
                                 sendPushToStore(storePrisma, tieuDe, noiDung).catch(() => { })
                             } catch { }
                         }

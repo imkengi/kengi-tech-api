@@ -4860,18 +4860,18 @@ router.get('/returns-raw', async (req: Request, res: Response) => {
 })
 
 // ─── GET /admin/notif-probe ──────────────────────────────────────────────────
-// Chẩn đoán thông báo: ?storeCode=… → 5 bản ghi Notification mới nhất + số
-// client SSE đang mở trên INSTANCE này; &emit=1 bắn thử 'einvoice_issued' vào
-// key schema của store để xem web có nhận không.
+// Chẩn đoán thông báo: ?storeCode=… → 5 bản ghi Notification mới nhất;
+// &emit=1 tạo một bản ghi loại 'einvoice' để nghiệm thu ĐÚNG đường thật của web
+// (poll GET /notifications → toast). SSE đã gỡ 02/09/2026 nên không còn số client.
 router.get('/notif-probe', async (req: Request, res: Response) => {
     try {
         const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
         const store = await prisma.store.findFirst({ where: { code: storeCode }, select: { schema: true } })
         if (!store) { res.status(404).json({ success: false, error: 'store?' }); return }
         const sp = getStorePrisma(store.schema) as any
-        const { sseStats, sendNotification, sendPushToStore, ensureDeviceTokenTable } = await import('./notifications')
+        const { sendPushToStore, ensureDeviceTokenTable } = await import('./notifications')
         const rows = await sp.notification.findMany({ orderBy: { createdAt: 'desc' }, take: 5 }).catch((e: any) => `LOI: ${e?.message}`)
-        const out: any = { schema: store.schema, sseClients: sseStats(), notifRows: rows }
+        const out: any = { schema: store.schema, notifRows: rows }
         // Thiết bị đã đăng ký nhận push FCM
         await ensureDeviceTokenTable(sp)
         out.devices = await sp.$queryRawUnsafe(
@@ -4883,9 +4883,14 @@ router.get('/notif-probe', async (req: Request, res: Response) => {
                 `Bắn thử lúc ${new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`)
         }
         if (String(req.query.emit || '') === '1') {
-            out.emitted = sendNotification(store.schema, 'einvoice_issued', {
-                title: '🧾 TEST đẩy thông báo', message: `Bắn thử lúc ${new Date().toISOString()}`,
-            })
+            out.emitted = await sp.notification.create({
+                data: {
+                    type: 'einvoice',
+                    title: '🧾 TEST đẩy thông báo',
+                    message: `Bắn thử lúc ${new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`,
+                },
+            }).then(() => 'da tao ban ghi — web se toast trong <=15 giay')
+                .catch((e: any) => `LOI: ${e?.message}`)
         }
         // &seed=1 → tạo 3 bản ghi Notification mẫu — worker poll của app Android
         // (chạy mỗi lần mở app) sẽ vẽ chúng qua ĐÚNG code path thông báo mới,
