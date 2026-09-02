@@ -2,10 +2,32 @@ import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest, getBranchFilter } from '../middleware/auth'
 import { cacheGet, cacheSet } from '../lib/cache'
 import { getDashboardStats, getRevenueByDays, getTopProducts, getRecentActivity, DashboardPeriod } from '../lib/queries'
+import { tinhViecCanLam } from '../lib/viecCanLam'
 
 const router = Router()
 
 const VALID_PERIODS: DashboardPeriod[] = ['today', '7days', 'thisMonth', 'lastMonth', 'thisYear']
+
+// ─── GET /api/dashboard/viec-can-lam ────────────────────────────────────────
+// Bảng "Việc cần xử lý ngay" ở trang Tổng Quan. Luật gom nằm ở lib/viecCanLam
+// để tool MCP dùng CHUNG một bộ luật với web.
+router.get('/viec-can-lam', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const schema = req.user?.storeSchema || 'unknown'
+        const cacheBranch = req.user?.isMainBranch ? 'all' : (req.user?.branchId || 'none')
+        const cacheKey = `${schema}:${cacheBranch}:dashboard:viec-can-lam`
+        // ?fresh=1 = người dùng bấm Làm mới — bỏ cache đọc nhưng vẫn ghi lại bản mới
+        const cached = req.query.fresh === '1' ? null : await cacheGet(cacheKey)
+        if (cached) return res.json({ success: true, data: cached, source: 'cache' })
+
+        const data = await tinhViecCanLam(req.storePrisma!, { branchFilter: getBranchFilter(req) })
+        await cacheSet(cacheKey, data, 120)
+        res.json({ success: true, data, source: 'prisma' })
+    } catch (err) {
+        console.error('Get viec-can-lam error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
+})
 
 // ─── GET /api/dashboard/stats ───────────────────────────────────────────────
 router.get('/stats', authMiddleware, async (req: AuthRequest, res: Response) => {

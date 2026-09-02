@@ -29,7 +29,7 @@ import { tongPhieuChuaTraTheoNcc, congNoHienThi } from '../lib/congNoNcc'
 export async function timPhieuTrungSoHoaDon(
     prisma: any,
     args: { vatInvoiceNo?: string | null; supplierId?: string | null; supplierName?: string | null; boQuaId?: string },
-): Promise<{ code: string; createdAt: any } | null> {
+): Promise<{ code: string; createdAt: any; supplierName?: string | null; cungNcc: boolean } | null> {
     const so = String(args.vatInvoiceNo || '').replace(/\s+/g, '').toLowerCase()
     if (!so) return null
 
@@ -40,22 +40,33 @@ export async function timPhieuTrungSoHoaDon(
         : args.supplierName
             ? { supplierName: args.supplierName }
             : null
-    if (!dieuKien) return null   // không biết nhà cung cấp thì không kết luận được
 
+    /* CHƯA CHỌN NHÀ CUNG CẤP thì vẫn phải soát (03/09/2026 — chủ shop: "trùng
+     * hoá đơn không cho nhập vào"). Bản cũ trả null ở đây, nên chỉ cần bỏ trống
+     * ô NCC là cùng một tờ hoá đơn vào sổ được vô số lần: tồn kho thừa, giá vốn
+     * lệch, thuế GTGT khấu trừ khai trùng. Soát toàn bộ rồi báo rõ phiếu cũ
+     * thuộc NCC nào — nếu thật sự là hai nhà cung cấp khác nhau trùng số thì
+     * chọn NCC vào phiếu là phân biệt được ngay. */
     const ds = await prisma.importReceipt.findMany({
         where: {
-            ...dieuKien,
+            ...(dieuKien || {}),
             status: { not: 'cancelled' },
             vatInvoiceNo: { not: null },
             ...(args.boQuaId ? { id: { not: args.boQuaId } } : {}),
         },
-        select: { id: true, code: true, vatInvoiceNo: true, createdAt: true },
+        select: { id: true, code: true, vatInvoiceNo: true, supplierId: true, supplierName: true, createdAt: true },
         orderBy: { createdAt: 'desc' },
-        take: 500,
+        take: dieuKien ? 500 : 2000,
     }).catch(() => [])
 
     const trung = ds.find((r: any) => String(r.vatInvoiceNo || '').replace(/\s+/g, '').toLowerCase() === so)
-    return trung ? { code: trung.code, createdAt: trung.createdAt } : null
+    if (!trung) return null
+    return {
+        code: trung.code,
+        createdAt: trung.createdAt,
+        supplierName: trung.supplierName ?? null,
+        cungNcc: Boolean(dieuKien),
+    }
 }
 
 
@@ -505,13 +516,20 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
             supplierName: receiptData?.supplierName,
         })
         if (trung) {
+            const oDau = trung.cungNcc
+                ? 'đã dùng cho nhà cung cấp này'
+                : `đã dùng ở phiếu của nhà cung cấp "${trung.supplierName || 'không ghi tên'}"`
             return res.status(400).json({
                 success: false,
-                error: `Số hoá đơn "${receiptData.vatInvoiceNo}" đã dùng cho nhà cung cấp này ở phiếu ${trung.code}. `
+                error: `Số hoá đơn "${receiptData.vatInvoiceNo}" ${oDau} — phiếu ${trung.code}. `
                     + 'Nhập trùng số hoá đơn là khai trùng thuế GTGT được khấu trừ và trùng chi phí được trừ — cơ quan thuế đối chiếu ra ngay vì bên bán chỉ phát hành một tờ. '
-                    + 'Kiểm tra lại số trên hoá đơn, hoặc mở phiếu cũ nếu đây là cùng một lần nhập.',
+                    + (trung.cungNcc
+                        ? 'Kiểm tra lại số trên hoá đơn, hoặc mở phiếu cũ nếu đây là cùng một lần nhập.'
+                        : 'Nếu đây là hoá đơn của một nhà cung cấp KHÁC trùng số, hãy chọn nhà cung cấp cho phiếu này rồi lưu lại.'),
                 code: 'TRUNG_SO_HOA_DON',
                 phieuTrung: trung.code,
+                nccPhieuTrung: trung.supplierName ?? null,
+                cungNcc: trung.cungNcc,
             })
         }
 

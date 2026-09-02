@@ -8,6 +8,8 @@ import { FANPAGE_TOOLS } from './mcpFanpageTools'
 import { FINANCE_TOOLS } from './mcpFinanceTools'
 import { MARKETING_TOOLS } from './mcpMarketingTools'
 import { REPORT_TOOLS } from './mcpReportTools'
+import { ACCOUNTING_TOOLS } from './mcpAccountingTools'
+import { OPS_TOOLS } from './mcpOpsTools'
 
 // Re-export để mcpAgent.ts (và code cũ) vẫn `import { ToolError, ToolCtx } from './mcp'`
 export { ToolError }
@@ -55,7 +57,14 @@ const INSTRUCTIONS =
     'PHÂN TÍCH TỔNG THỂ / SWOT: gọi swot_data(from,to) — MỘT lần gọi gom đủ doanh thu, biên lãi, đà kỳ, khách quay lại, ghi nợ, hàng sắp hết/đã hết, vốn tồn, hàng chết, cơ cấu thanh toán; nhận định dựa trên số đó. ' +
     'TÀI CHÍNH: profit_report cho câu hỏi lãi/lỗ (doanh thu − giá vốn − chi phí; giá vốn là ƯỚC TÍNH theo giá vốn hiện tại, hãy nói rõ điều đó khi báo cáo), '+
     'expense_report cho chi phí theo nhóm, supplier_debt cho công nợ phải trả nhà cung cấp, list_import_receipts cho lịch sử nhập hàng, '+
-    'stock_by_warehouse cho tồn theo từng kho/xe. Ngày truyền dạng 2026-07-01 và được hiểu theo GIỜ VN.'
+    'stock_by_warehouse cho tồn theo từng kho/xe. Ngày truyền dạng 2026-07-01 và được hiểu theo GIỜ VN. ' +
+    'VIỆC CẦN XỬ LÝ: hỏi "hôm nay cần làm gì / có gì gấp" thì gọi viec_can_lam TRƯỚC — nó gom sẵn hàng hết, nợ tới hạn, đơn sàn chờ, hoá đơn lỗi, sao kê chưa đối soát. ' +
+    'SỔ SÁCH KẾ TOÁN: accounting_income_statement (lãi/lỗ ĐÃ VÀO SỔ — khác profit_report vốn là ước tính), accounting_balance_sheet, accounting_cash_flow, ' +
+    'accounting_trial_balance (cân đối phát sinh), accounting_ledger(account) để soi một tài khoản, accounting_journal để tìm bút toán, accounting_cash_book cho sổ quỹ/sổ ngân hàng, ' +
+    'accounting_account_balance khi chỉ cần số dư nhanh. Mọi con số kế toán đều đi kèm TK Nợ/Có — nói rõ cặp tài khoản khi báo cáo. ' +
+    'NHẬP HÀNG: check_duplicate_invoice TRƯỚC KHI lập phiếu (trùng số hoá đơn = khai trùng thuế GTGT, hệ thống sẽ chặn); create_draft_import_receipt chỉ tạo phiếu NHÁP, ' +
+    'người thật phải bấm Hoàn tất trên web mới vào kho. list_payment_due cho hạn trả NCC, list_customer_debts cho khách nợ. ' +
+    'Tool ghi an toàn: create_supplier, create_expense (tự ghi bút toán), create_draft_import_receipt. KHÔNG có tool nào tự trả tiền NCC hay tự nhập kho — đó là việc của người.'
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
 // Lối 1: x-admin-key (+ x-store-code) — nội bộ. Lối 2: authMiddleware sẵn có
@@ -942,6 +951,10 @@ export const TOOLS: Tool[] = [
     ...MARKETING_TOOLS,
     // Báo cáo tổng thể — swot_data gom sẵn nguyên liệu phân tích SWOT một lần gọi
     ...REPORT_TOOLS,
+    // Sổ sách kế toán (03/09/2026) — agent đọc được sổ cái/cân đối/BCTC
+    ...ACCOUNTING_TOOLS,
+    // Vận hành: việc cần làm, NCC, hạn trả, công nợ, đơn, sao kê, kho, chi phí
+    ...OPS_TOOLS,
 ]
 
 function errContentThrow(message: string): never { throw new ToolError(message) }
