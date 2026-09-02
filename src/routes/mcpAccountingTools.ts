@@ -319,13 +319,28 @@ export const ACCOUNTING_TOOLS: Tool[] = [
             const nguonVon = nguonMa.map(m => ({ taiKhoan: m, ten: tenTK(m), ben: 'Dư Có', soTien: Math.round(duCo(bs, m)) })).filter(r => r.soTien !== 0)
             const tongTS = taiSan.reduce((s, r) => s + r.soTien, 0)
             const tongNV = nguonVon.reduce((s, r) => s + r.soTien, 0)
+            const lech = Math.round(tongTS - tongNV)
+
+            /* Lãi/lỗ luỹ kế CHƯA KẾT CHUYỂN về 421 làm bảng lệch đúng bằng con số đó.
+             * Không giải thích thì agent sẽ báo "sổ không cân" — nghe như dữ liệu hỏng,
+             * trong khi thật ra chỉ là chưa khoá sổ kỳ. Tự đối chiếu để nói đúng bản chất. */
+            const lai = duCo(bs, '511') + duCo(bs, '515') + duCo(bs, '711')
+                - duNo(bs, '632') - duNo(bs, '635') - duNo(bs, '641') - duNo(bs, '642') - duNo(bs, '811') - duNo(bs, '821')
+            const lechDoChuaKetChuyen = Math.abs(lech - Math.round(lai)) < 1000
+
             return {
                 ngayChot: den,
                 taiSan, tongTaiSan: tongTS,
                 nguonVon, tongNguonVon: tongNV,
-                canDoi: Math.abs(tongTS - tongNV) < 1,
-                lech: Math.round(tongTS - tongNV),
-                ghiChu: 'TK 214 (hao mòn) mang dấu âm trong tài sản là ĐÚNG — nó là tài khoản điều chỉnh giảm.',
+                canDoi: Math.abs(lech) < 1,
+                lech,
+                loiNhuanChuaKetChuyen: Math.round(lai),
+                giaiThichLech: Math.abs(lech) < 1
+                    ? null
+                    : lechDoChuaKetChuyen
+                        ? `Lệch ${lech.toLocaleString('vi-VN')}đ ĐÚNG BẰNG lãi/lỗ trong kỳ chưa kết chuyển sang TK 421 — sổ KHÔNG hỏng, chỉ là chưa khoá sổ. Vào Kế toán → Khoá sổ / Kết chuyển để bảng cân.`
+                        : `Lệch ${lech.toLocaleString('vi-VN')}đ KHÔNG khớp lãi/lỗ trong kỳ (${Math.round(lai).toLocaleString('vi-VN')}đ) — chỗ này là bút toán một vế hoặc thiếu bút toán, cần soi accounting_journal.`,
+                ghiChu: 'TK 214 (hao mòn) mang dấu âm trong tài sản là ĐÚNG — nó là tài khoản điều chỉnh giảm. Số dư 111 âm là BẤT THƯỜNG (quỹ tiền mặt không thể âm) — thường do thiếu phiếu thu.',
             }
         },
     },
