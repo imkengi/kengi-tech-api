@@ -197,7 +197,7 @@
 
   <div id="webhookCfg">
     <div class="row">
-      <div style="flex:3"><label>Webhook URL (bản Production của n8n)</label><input type="text" id="hookUrl" placeholder="https://n8n-cua-ban.com/webhook/xxxxxxxx"></div>
+      <div style="flex:3"><label>Webhook URL (bản Production của n8n)</label><input type="text" id="hookUrl" value="https://n8n.kengi.vn/webhook/zalo-chao-hang" placeholder="https://n8n-cua-ban.com/webhook/zalo-chao-hang"></div>
       <div style="flex:0 0 160px"><label>Loại hội thoại mặc định</label><select id="threadType"><option value="1">1 — Nhóm</option><option value="0">0 — Cá nhân</option></select></div>
       <div style="flex:0 0 120px"><label>urgency</label><input type="number" id="urgency" value="1"><div class="hint">Workflow cũ dùng 1</div></div>
     </div>
@@ -217,7 +217,7 @@
       <summary>Chưa có webhook? Lấy workflow n8n nhận tin ở đây</summary>
       <ol>
         <li>Bấm <b>Sao chép workflow</b> bên dưới.</li>
-        <li>Trong n8n: <b>Workflows → Import from Clipboard</b> → dán.</li>
+        <li>Trong n8n: tạo workflow mới, bấm vào vùng canvas trống rồi <b>Ctrl+V</b> để dán (bản n8n cũ có menu ba chấm → Import from Clipboard).</li>
         <li>Mở node <b>Gửi Zalo</b>, chọn lại credential <i>Zalo Huti</i> (credential không đi kèm file import).</li>
         <li><b>Save</b> rồi bật <b>Active</b>, copy <b>Production URL</b> của node Webhook dán vào ô trên.</li>
       </ol>
@@ -871,13 +871,13 @@ function manualShow() {
 
 /* ─────────── workflow n8n nhận tin ─────────── */
 function n8nWorkflow() {
-  const path = uuid();
+  const path = 'zalo-chao-hang';
   return {
     name: 'Zalo — nhận tin chào hàng từ tool HTML (Kengi)',
     nodes: [
       {
         parameters: { httpMethod: 'POST', path: path, responseMode: 'responseNode', options: { allowedOrigins: '*' } },
-        type: 'n8n-nodes-base.webhook', typeVersion: 2, position: [0, 0], id: uuid(), name: 'Nhận yêu cầu', webhookId: path
+        type: 'n8n-nodes-base.webhook', typeVersion: 2, position: [0, 0], id: uuid(), name: 'Nhận yêu cầu', webhookId: uuid()
       },
       {
         parameters: {
@@ -929,7 +929,8 @@ function loadSettings() {
   if (s.tpl) TPLS.forEach(t => { if (s.tpl[t]) S.tpl[t] = { on: !!s.tpl[t].on, text: s.tpl[t].text || '', imgs: s.tpl[t].imgs || '' }; });
   S.ruleMap = s.ruleMap || {};
   const set = (id, v, chk) => { if (v === undefined || v === null) return; if (chk) $(id).checked = !!v; else $(id).value = v; };
-  set('ruleMode', s.ruleMode); set('hookUrl', s.hook); set('threadType', s.tt); set('urgency', s.urg);
+  set('ruleMode', s.ruleMode); set('threadType', s.tt); set('urgency', s.urg);
+  if (String(s.hook || '').indexOf('/webhook') >= 0) set('hookUrl', s.hook);
   set('retries', s.retries); set('timeout', s.timeout); set('hdrName', s.hdrName);
   set('delayMin', s.dmin); set('delayMax', s.dmax); set('batchN', s.bn); set('batchPause', s.bp);
   set('campaign', s.camp); set('chkSkipSent', s.skipSent, true); set('chkNoCors', s.noCors, true);
