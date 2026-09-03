@@ -3991,6 +3991,129 @@ router.get('/returns-summary', async (req: Request, res: Response) => {
 //  (b) phiếu trả ĐÃ HOÀN TIỀN nhưng đơn chưa đảo về returned (sót đảo hiệu ứng)
 //  (c) đơn ĐÃ XUẤT HOÁ ĐƠN nhưng sau đó có phiếu trả đang mở (phải điều chỉnh HĐ)
 //  (d) đơn có phiếu trả đang mở mà vẫn nằm chờ xuất HĐ (đã chặn auto-xuất)
+/* ─────────────────────────────────────────────────────────────────────────────
+ *  ĐO PHƠI NHIỄM GIÁ VỐN — GET /api/admin/do-gia-von?ngay=90   (04/09/2026)
+ *
+ *  CHỈ ĐỌC, không ghi gì. Dựng để trả lời một câu trước khi đụng vào schema:
+ *  *"bút toán giá vốn hàng bán đang sai/thiếu bao nhiêu, ở đâu?"*
+ *
+ *  Vì sao phải đo trước: bút toán giá vốn hiện đọc `product.costPrice` — tức là
+ *  giá vốn **hiện tại**, không phải giá vốn **lúc bán**. Hai hệ quả:
+ *    1. Hàng chưa khai giá vốn (costPrice = 0) ⇒ `cogsAmount = 0` ⇒ khối ghi sổ bị
+ *       bỏ qua HOÀN TOÀN, im lặng. Sổ có doanh thu mà không có giá vốn ⇒ lãi ảo.
+ *    2. Đổi giá vốn hôm nay là đổi luôn con số của đơn bán tháng trước nếu ghi lại.
+ *
+ *  Sửa triệt để cần thêm cột giá vốn vào TransactionItem + migrate + vá 5 đường ghi.
+ *  Đó là việc lớn — nên đo xem nó đáng bao nhiêu tiền đã, rồi mới quyết.
+ *
+ *  Chạy TUẦN TỰ từng cửa hàng: pool prod mỗi cửa hàng đúng 1 kết nối.
+ *  Mọi trần đọc đều KHAI RA trong kết quả — cắt ngầm rồi báo như thể không cắt là
+ *  đúng lỗi đã cắn nhiều lần (xem memory tran-cat-am-tham).
+ * ───────────────────────────────────────────────────────────────────────────── */
+router.get('/do-gia-von', async (req: Request, res: Response) => {
+    try {
+        const soNgay = Math.min(365, Math.max(1, Number(req.query.ngay) || 90))
+        const TRAN_DON = 3000
+        const tuNgay = new Date(Date.now() - soNgay * 86400_000)
+
+        const stores = await prisma.store.findMany()
+        const ketQua: any[] = []
+
+        for (const store of stores) {
+            if ((store as any).isDemo) continue
+            const ten = store.name
+            try {
+                const sp: any = getStorePrisma((store as any).schema)
+
+                const donDs = await sp.transaction.findMany({
+                    where: { createdAt: { gte: tuNgay }, status: { notIn: ['cancelled'] } },
+                    select: {
+                        receiptNumber: true, total: true, subtotal: true, createdAt: true,
+                        items: { select: { productId: true, quantity: true, baseQuantity: true, lineTotal: true } },
+                    },
+                    take: TRAN_DON,
+                    orderBy: { createdAt: 'desc' },
+                })
+                if (donDs.length === 0) { ketQua.push({ ten, soDon: 0 }); continue }
+
+                // Giá vốn HIỆN TẠI của mọi mã hàng có mặt trong kỳ
+                const dsMa = Array.from(new Set(
+                    donDs.flatMap((d: any) => d.items.map((i: any) => i.productId)).filter(Boolean),
+                )) as string[]
+                const hangDs = dsMa.length
+                    ? await sp.product.findMany({ where: { id: { in: dsMa } }, select: { id: true, costPrice: true } })
+                    : []
+                const giaVonTheoMa = new Map<string, number>(
+                    hangDs.map((h: any) => [h.id, Number(h.costPrice) || 0]),
+                )
+
+                let donKhongGiaVon = 0, donCoMotPhan = 0
+                let doanhThuKhongGiaVon = 0, tongDoanhThu = 0
+                const maThieu = new Map<string, number>()   // productId → số dòng
+
+                for (const d of donDs) {
+                    const dt = Number(d.subtotal ?? d.total) || 0
+                    tongDoanhThu += dt
+                    let coGiaVon = 0, thieuGiaVon = 0
+                    for (const it of d.items) {
+                        const gv = giaVonTheoMa.get(String(it.productId)) ?? 0
+                        if (gv > 0) coGiaVon++
+                        else {
+                            thieuGiaVon++
+                            maThieu.set(String(it.productId), (maThieu.get(String(it.productId)) || 0) + 1)
+                        }
+                    }
+                    if (thieuGiaVon > 0 && coGiaVon === 0) { donKhongGiaVon++; doanhThuKhongGiaVon += dt }
+                    else if (thieuGiaVon > 0) donCoMotPhan++
+                }
+
+                /* Đối chiếu với SỔ: đơn nào không có bút toán COGS-. Đây mới là con số
+                 * thật sự đáng lo — thiếu giá vốn trên sổ nghĩa là lãi trên báo cáo
+                 * cao hơn lãi thật. */
+                const dsRef = donDs.map((d: any) => `COGS-${d.receiptNumber}`)
+                let soCoButToan = 0
+                for (let i = 0; i < dsRef.length; i += 500) {
+                    const lo = dsRef.slice(i, i + 500)
+                    const co = await sp.journalEntry.findMany({
+                        where: { reference: { in: lo } }, select: { reference: true },
+                    })
+                    soCoButToan += new Set(co.map((x: any) => x.reference)).size
+                }
+
+                ketQua.push({
+                    ten,
+                    soDon: donDs.length,
+                    chamTran: donDs.length >= TRAN_DON,
+                    tongDoanhThu: Math.round(tongDoanhThu),
+                    donKhongCoGiaVonNao: donKhongGiaVon,
+                    doanhThuKhongGiaVon: Math.round(doanhThuKhongGiaVon),
+                    donThieuMotPhan: donCoMotPhan,
+                    soMaHangChuaKhaiGiaVon: maThieu.size,
+                    donCoButToanGiaVon: soCoButToan,
+                    donTHIEUButToanGiaVon: donDs.length - soCoButToan,
+                    tiLeThieu: donDs.length ? Math.round((donDs.length - soCoButToan) * 1000 / donDs.length) / 10 : 0,
+                })
+            } catch (e: any) {
+                // Đọc hỏng phải NÓI RA, đừng để cửa hàng biến mất khỏi bảng rồi bị
+                // hiểu thành "cửa hàng này không sao".
+                ketQua.push({ ten, loi: String(e?.message || e) })
+            }
+        }
+
+        res.json({
+            success: true,
+            data: {
+                soNgay, tranDocMoiCuaHang: TRAN_DON,
+                ghiChu: 'donTHIEUButToanGiaVon = đơn có doanh thu trên sổ nhưng KHÔNG có bút toán COGS- ⇒ lãi trên báo cáo cao hơn thật',
+                cuaHang: ketQua,
+            },
+        })
+    } catch (err: any) {
+        console.error('GET /admin/do-gia-von lỗi:', err)
+        res.status(500).json({ success: false, error: String(err?.message || err) })
+    }
+})
+
 router.get('/store-health', async (req: Request, res: Response) => {
     try {
         const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
