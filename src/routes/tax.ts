@@ -9,6 +9,7 @@ import { createJournalEntriesForTransaction, AUTO_JOURNAL_REF_TYPES, PLATFORM_AR
 import { postImportReceiptJournal, postExpenseJournal, postReturnJournal } from '../lib/autoJournalPurchase'
 import { COA_SEED, accountName } from '../lib/chartOfAccounts'
 import { enforcePeriodLock, assertNotLocked } from '../lib/periodLock'
+import { tinhB01, tinhB02, tinhB03 } from '../lib/baoCaoTaiChinh'
 import { giaiTrinhKhaiBoSung } from '../lib/amendmentExplain'
 import { ganTienChoMoc, type MocNghiaVu } from '../lib/taxCalendar'
 import { nguongChiuThueHKD } from '../lib/taxAudit'
@@ -3105,72 +3106,51 @@ router.post('/closing-entries', authMiddleware, async (req: AuthRequest, res: Re
 
 router.get('/balance-sheet', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-        const prisma = req.storePrisma!
         const year = Number(req.query.year) || new Date().getFullYear()
         const month = req.query.month ? Number(req.query.month) : undefined
-        const dateEnd = month ? `${year}-${String(month).padStart(2, '0')}-31` : `${year}-12-31`
+        // Cuối kỳ: ngày cuối THẬT của tháng, không phải "-31" cho mọi tháng
+        const dateEnd = month
+            ? new Date(year, month, 0).toISOString().slice(0, 10)
+            : `${year}-12-31`
 
-        let entries: any[] = []
-        try { entries = await prisma.journalEntry.findMany({ where: { date: { lte: dateEnd } } }) } catch (_) { }
+        /* Dùng CHUNG lib/baoCaoTaiChinh.ts với màn Kế Toán (/api/reports/*) và với
+         * tool MCP của trợ lý AI. Trước 03/09/2026 route này tự gom theo chữ số đầu
+         * rồi cộng thêm một dòng 421 bù cho cân — nên hai màn hình ra hai tổng tài
+         * sản khác nhau, và ô "Cân đối" thì luôn sáng vì số bù làm đẳng thức thành
+         * hằng đúng. Nay số liệu giống hệt màn Kế Toán. */
+        const b = await tinhB01(req.storePrisma!, { ngay: dateEnd })
 
-        // Aggregate by account — compute net balance per account
-        const accountBalances: Record<string, { debit: number; credit: number; name: string }> = {}
-        for (const e of entries) {
-            if (!accountBalances[e.debitAccount]) accountBalances[e.debitAccount] = { debit: 0, credit: 0, name: e.debitAccountName || '' }
-            if (!accountBalances[e.creditAccount]) accountBalances[e.creditAccount] = { debit: 0, credit: 0, name: e.creditAccountName || '' }
-            accountBalances[e.debitAccount].debit += e.amount
-            accountBalances[e.creditAccount].credit += e.amount
+        const raDong = (r: { ma: string; ten: string; kyNay: number }) =>
+            ({ code: r.ma, name: r.ten, balance: r.kyNay })
+
+        /* Lãi/lỗ chưa kết chuyển vẫn hiện trong phần vốn chủ để tổng nguồn vốn đọc
+         * được, nhưng ghi RÕ là chưa ghi sổ — khác hẳn dòng 421 bù im lặng của bản cũ. */
+        const equity = b.vonChuSoHuu.map(raDong)
+        if (Math.abs(b.loiNhuanChuaKetChuyen) >= 1) {
+            equity.push({
+                code: '421*',
+                name: 'Lợi nhuận chưa kết chuyển (chưa ghi sổ)',
+                balance: b.loiNhuanChuaKetChuyen,
+            })
         }
-
-        // Classify accounts by VN chart of accounts
-        const classify = (code: string) => {
-            const c1 = code.charAt(0)
-            if (c1 === '1') return 'asset'        // Tài sản
-            if (c1 === '2') return 'asset'         // Tài sản dài hạn
-            if (c1 === '3') return 'liability'     // Nợ phải trả
-            if (c1 === '4') return 'equity'        // Vốn chủ sở hữu
-            if (c1 === '5') return 'revenue'       // Doanh thu
-            if (c1 === '6') return 'expense'       // Chi phí
-            if (c1 === '7') return 'revenue'       // Thu nhập khác
-            if (c1 === '8') return 'expense'       // Chi phí khác
-            return 'other'
-        }
-
-        const assets: { code: string; name: string; balance: number }[] = []
-        const liabilities: { code: string; name: string; balance: number }[] = []
-        const equity: { code: string; name: string; balance: number }[] = []
-
-        for (const [code, bal] of Object.entries(accountBalances)) {
-            const cls = classify(code)
-            const balance = bal.debit - bal.credit
-            const item = { code, name: bal.name || code, balance: Math.abs(balance) }
-            if (cls === 'asset') assets.push({ ...item, balance })
-            else if (cls === 'liability') liabilities.push({ ...item, balance: -balance })
-            else if (cls === 'equity') equity.push({ ...item, balance: -balance })
-        }
-
-        // Retained earnings = Revenue - Expenses (accumulated from journal)
-        let retainedEarnings = 0
-        for (const [code, bal] of Object.entries(accountBalances)) {
-            const cls = classify(code)
-            if (cls === 'revenue') retainedEarnings += (bal.credit - bal.debit)
-            if (cls === 'expense') retainedEarnings -= (bal.debit - bal.credit)
-        }
-        if (retainedEarnings !== 0) {
-            equity.push({ code: '421', name: 'Lợi nhuận chưa phân phối', balance: retainedEarnings })
-        }
-
-        const totalAssets = assets.reduce((s, a) => s + a.balance, 0)
-        const totalLiabilities = liabilities.reduce((s, l) => s + l.balance, 0)
-        const totalEquity = equity.reduce((s, e) => s + e.balance, 0)
 
         res.json({
             success: true, data: {
-                assets: assets.sort((a, b) => a.code.localeCompare(b.code)),
-                liabilities: liabilities.sort((a, b) => a.code.localeCompare(b.code)),
-                equity: equity.sort((a, b) => a.code.localeCompare(b.code)),
-                totalAssets, totalLiabilities, totalEquity,
-                isBalanced: Math.abs(totalAssets - (totalLiabilities + totalEquity)) < 1,
+                assets: [...b.taiSanNganHan, ...b.taiSanDaiHan].map(raDong),
+                liabilities: b.noPhaiTra.map(raDong),
+                equity,
+                unclassified: b.khongPhanLoai.map(raDong),
+                totalAssets: b.tongTaiSan,
+                totalLiabilities: b.tongNoPhaiTra,
+                totalEquity: b.tongVonChuSoHuu + b.loiNhuanChuaKetChuyen,
+                totalUnclassified: b.tongKhongPhanLoai,
+                // Sổ có THẬT SỰ cân không, sau khi trừ phần giải thích được
+                isBalanced: b.canDoi,
+                retainedNotClosed: b.loiNhuanChuaKetChuyen,
+                displayGap: b.lechTrinhBay,
+                unexplainedGap: b.lechKhongGiaiThichDuoc,
+                imbalanceNote: b.giaiThichLech,
+                readable: b.docDuoc,
             }
         })
     } catch (err) { console.error('GET /balance-sheet error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
@@ -3184,78 +3164,66 @@ router.get('/income-statement', authMiddleware, async (req: AuthRequest, res: Re
         const year = Number(req.query.year) || new Date().getFullYear()
         const month = req.query.month ? Number(req.query.month) : undefined
         const dateGte = month ? `${year}-${String(month).padStart(2, '0')}-01` : `${year}-01-01`
-        const dateEnd = month ? `${year}-${String(month).padStart(2, '0')}-31` : `${year}-12-31`
+        const dateEnd = month
+            ? new Date(year, month, 0).toISOString().slice(0, 10)
+            : `${year}-12-31`
 
-        let entries: any[] = []
-        try { entries = await prisma.journalEntry.findMany({ where: { date: { gte: dateGte, lte: dateEnd } } }) } catch (_) { }
+        /* Số kế toán lấy từ lib dùng chung. Hai thay đổi so với bản cũ của route này,
+         * cả hai đều là SỬA SAI chứ không phải đổi ý:
+         *   · `taxExpense` trước đây lấy Có 3331 = VAT ĐẦU RA, không phải chi phí
+         *     thuế TNDN — nhãn "thuế" trên KQKD chỉ đúng cho TK 821.
+         *   · Chi phí nhân công 622 trước đây bị cộng thẳng vào chi phí hoạt động;
+         *     đúng quy trình nó phải kết chuyển qua 154 → 632, cộng cả hai là đếm
+         *     hai lần. Nay trả riêng ở `laborCost622` kèm cảnh báo. */
+        const b = await tinhB02(prisma, { tu: dateGte, den: dateEnd })
+        const k = b.kyNay
 
-        // Also get raw transaction/expense data for supplemental info
+        // Số liệu gốc (ngoài sổ) để đối chiếu — giữ nguyên như cũ
         const start = month ? new Date(year, month - 1, 1) : new Date(year, 0, 1)
         const end = month ? new Date(year, month, 0, 23, 59, 59, 999) : new Date(year, 11, 31, 23, 59, 59, 999)
+        // Tuần tự: pool prod mỗi store 1 kết nối
+        const txs = await prisma.transaction.findMany({
+            where: { status: { in: ['completed', 'partial'] }, createdAt: { gte: start, lte: end } },
+            select: { total: true, tax: true, subtotal: true, discount: true },
+        })
+        const rawExpenses = await prisma.expense.findMany({
+            where: { date: { gte: start, lte: end } },
+            select: { amount: true, category: true },
+        })
 
-        const [txs, rawExpenses] = await Promise.all([
-            prisma.transaction.findMany({ where: { status: { in: ['completed', 'partial'] }, createdAt: { gte: start, lte: end } }, select: { total: true, tax: true, subtotal: true, discount: true } }),
-            prisma.expense.findMany({ where: { date: { gte: start, lte: end } }, select: { amount: true, category: true } }),
-        ])
-
-        // From journal entries
-        const sumByAccount = (acctPrefix: string, side: 'debit' | 'credit') =>
-            entries.filter(e => (side === 'debit' ? e.debitAccount : e.creditAccount).startsWith(acctPrefix))
-                .reduce((s, e) => s + e.amount, 0)
-
-        const revenue511 = sumByAccount('511', 'credit')      // Doanh thu bán hàng
-        const discount521 = sumByAccount('521', 'debit')       // Chiết khấu
-        const netRevenue = revenue511 - discount521
-        const cogs632 = sumByAccount('632', 'debit')           // Giá vốn
-        const grossProfit = netRevenue - cogs632
-        const sellingExp641 = sumByAccount('641', 'debit')     // CP bán hàng
-        const adminExp642 = sumByAccount('642', 'debit')       // CP QLDN
-        const laborExp622 = sumByAccount('622', 'debit')       // CP nhân công
-        const totalOpExp = sellingExp641 + adminExp642 + laborExp622
-        const operatingProfit = grossProfit - totalOpExp
-        const financialIncome515 = sumByAccount('515', 'credit')   // Doanh thu hoat dong tai chinh (TT200 line 21)
-        const financialExpense635 = sumByAccount('635', 'debit')   // Chi phi tai chinh (TT200 line 22)
-        const otherIncome711 = sumByAccount('711', 'credit')   // Thu nhap khac (TT200 line 31)
-        const otherExpense811 = sumByAccount('811', 'debit')   // Chi phi khac (TT200 line 32)
-        const profitBeforeTax = operatingProfit + financialIncome515 - financialExpense635 + otherIncome711 - otherExpense811
-        const taxExpense = sumByAccount('3331', 'credit')      // Thuế GTGT
-        const netIncome = profitBeforeTax  // Simplified — tax already in revenue
-
-        // Raw data for supplemental info
-        const totalRawRevenue = txs.reduce((s, t) => s + (t.subtotal || t.total || 0), 0)
-        const totalRawExpenses = rawExpenses.reduce((s, e) => s + (e.amount || 0), 0)
-
-        // Expense breakdown by category
+        const totalRawRevenue = txs.reduce((s: number, t: any) => s + (t.subtotal || t.total || 0), 0)
+        const totalRawExpenses = rawExpenses.reduce((s: number, e: any) => s + (e.amount || 0), 0)
         const expByCategory: Record<string, number> = {}
-        rawExpenses.forEach(e => {
-            const cat = (e as any).category || 'other'
+        rawExpenses.forEach((e: any) => {
+            const cat = e.category || 'other'
             expByCategory[cat] = (expByCategory[cat] || 0) + (e.amount || 0)
         })
 
         res.json({
             success: true, data: {
-                // Income Statement lines
-                revenue: revenue511,
-                discount: discount521,
-                netRevenue,
-                cogs: cogs632,
-                grossProfit,
-                sellingExpenses: sellingExp641,
-                adminExpenses: adminExp642,
-                laborExpenses: laborExp622,
-                totalOperatingExpenses: totalOpExp,
-                operatingProfit,
-                financialIncome: financialIncome515,
-                financialExpense: financialExpense635,
-                otherIncome: otherIncome711,
-                otherExpenses: otherExpense811,
-                profitBeforeTax,
-                taxExpense,
-                netIncome,
-                // Margin ratios
-                grossMargin: totalRawRevenue > 0 ? (grossProfit / totalRawRevenue * 100) : 0,
-                netMargin: totalRawRevenue > 0 ? (netIncome / totalRawRevenue * 100) : 0,
-                // Supplemental
+                revenue: k.doanhThu,
+                discount: k.giamTruDoanhThu,
+                netRevenue: k.doanhThuThuan,
+                cogs: k.giaVon,
+                grossProfit: k.loiNhuanGop,
+                sellingExpenses: k.chiPhiBanHang,
+                adminExpenses: k.chiPhiQuanLy,
+                laborExpenses: b.chiPhiNhanCong622,
+                totalOperatingExpenses: k.chiPhiBanHang + k.chiPhiQuanLy,
+                operatingProfit: k.loiNhuanThuan,
+                financialIncome: k.doanhThuTaiChinh,
+                financialExpense: k.chiPhiTaiChinh,
+                otherIncome: k.thuNhapKhac,
+                otherExpenses: k.chiPhiKhac,
+                profitBeforeTax: k.loiNhuanTruocThue,
+                taxExpense: k.chiPhiThueTNDN,
+                netIncome: k.loiNhuanSauThue,
+                vatOutput: b.vatDauRa,
+                laborCost622: b.chiPhiNhanCong622,
+                warnings: b.canhBao,
+                readable: b.docDuoc,
+                grossMargin: totalRawRevenue > 0 ? (k.loiNhuanGop / totalRawRevenue * 100) : 0,
+                netMargin: totalRawRevenue > 0 ? (k.loiNhuanSauThue / totalRawRevenue * 100) : 0,
                 txCount: txs.length,
                 rawRevenue: totalRawRevenue,
                 rawExpenses: totalRawExpenses,
@@ -3299,77 +3267,38 @@ router.get('/account-balances', authMiddleware, async (req: AuthRequest, res: Re
 
 router.get('/cash-flow', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
-        const prisma = req.storePrisma!
         const year = Number(req.query.year) || new Date().getFullYear()
         const month = req.query.month ? Number(req.query.month) : undefined
         const dateGte = month ? `${year}-${String(month).padStart(2, '0')}-01` : `${year}-01-01`
-        const dateEnd = month ? `${year}-${String(month).padStart(2, '0')}-31` : `${year}-12-31`
+        const dateEnd = month
+            ? new Date(year, month, 0).toISOString().slice(0, 10)
+            : `${year}-12-31`
 
-        let entries: any[] = []
-        try { entries = await prisma.journalEntry.findMany({ where: { date: { gte: dateGte, lte: dateEnd } } }) } catch (_) { }
-
-        // Helper: sum amounts where cash accounts (111,112) are on debit or credit side
-        const cashAccounts = ['111', '112', '1111', '1112', '1121', '1122']
-        const isCash = (code: string) => cashAccounts.some(c => code.startsWith(c))
-
-        // OPERATING ACTIVITIES — Cash from revenue (TK511→cash), Cash expenses (cash→TK6xx)
-        let cashFromSales = 0, cashFromExpenses = 0, cashFromPayroll = 0, cashFromTax = 0
-        // INVESTING — Fixed assets (TK211, TK213)
-        let cashInvesting = 0
-        // FINANCING — Loans (TK341), Equity (TK411)
-        let cashFinancing = 0
-
-        for (const e of entries) {
-            const debitIsCash = isCash(e.debitAccount)
-            const creditIsCash = isCash(e.creditAccount)
-
-            if (debitIsCash) {
-                // Cash inflow
-                if (e.creditAccount.startsWith('511') || e.creditAccount.startsWith('512')) cashFromSales += e.amount
-                else if (e.creditAccount.startsWith('131')) cashFromSales += e.amount // receivable collected
-                else if (e.creditAccount.startsWith('711')) cashFromSales += e.amount // other income
-                else if (e.creditAccount.startsWith('341') || e.creditAccount.startsWith('411')) cashFinancing += e.amount
-                else if (e.creditAccount.startsWith('2')) cashInvesting += e.amount // asset disposal
-            }
-            if (creditIsCash) {
-                // Cash outflow
-                if (e.debitAccount.startsWith('6')) cashFromExpenses -= e.amount
-                else if (e.debitAccount.startsWith('331')) cashFromExpenses -= e.amount // pay supplier
-                else if (e.debitAccount.startsWith('334')) cashFromPayroll -= e.amount // pay salary
-                else if (e.debitAccount.startsWith('333')) cashFromTax -= e.amount // pay tax
-                else if (e.debitAccount.startsWith('2')) cashInvesting -= e.amount // buy assets
-                else if (e.debitAccount.startsWith('341') || e.debitAccount.startsWith('411')) cashFinancing -= e.amount // repay loan
-            }
-        }
-
-        const operatingCashFlow = cashFromSales + cashFromExpenses + cashFromPayroll + cashFromTax
-        const netCashFlow = operatingCashFlow + cashInvesting + cashFinancing
-
-        // Opening/closing cash — sum all cash account balances
-        let allEntries: any[] = []
-        try { allEntries = await prisma.journalEntry.findMany({ where: { date: { lte: dateEnd } } }) } catch (_) { }
-        let openingEntries: any[] = []
-        try { openingEntries = await prisma.journalEntry.findMany({ where: { date: { lt: dateGte } } }) } catch (_) { }
-
-        let closingCash = 0, openingCash = 0
-        for (const e of allEntries) {
-            if (isCash(e.debitAccount)) closingCash += e.amount
-            if (isCash(e.creditAccount)) closingCash -= e.amount
-        }
-        for (const e of openingEntries) {
-            if (isCash(e.debitAccount)) openingCash += e.amount
-            if (isCash(e.creditAccount)) openingCash -= e.amount
-        }
+        /* Bản cũ của route này thiếu nhánh "còn lại": thu/chi tiền có tài khoản đối
+         * ứng ngoài danh sách (tạm ứng 141, phải thu khác 138…) rơi mất, nên lưu
+         * chuyển thuần KHÔNG khớp biến động số dư tiền mà không ai biết. Lib dùng
+         * chung có nhánh vét và tự kiểm phép khớp (`tiesOut`). */
+        const b = await tinhB03(req.storePrisma!, { tu: dateGte, den: dateEnd })
 
         res.json({
             success: true, data: {
                 operating: {
-                    cashFromSales, cashFromExpenses, cashFromPayroll, cashFromTax,
-                    total: operatingCashFlow,
+                    cashFromSales: b.thuTuBanHang,
+                    cashFromExpenses: b.traNguoiBan,
+                    cashFromPayroll: b.traNguoiLaoDong,
+                    cashFromTax: b.nopThue,
+                    cashOther: b.khacHDKD,
+                    total: b.thuanHDKD,
                 },
-                investing: { total: cashInvesting },
-                financing: { total: cashFinancing },
-                netCashFlow, openingCash, closingCash,
+                investing: { total: b.thuanDauTu },
+                financing: { total: b.thuanTaiChinh },
+                netCashFlow: b.thuanTrongKy,
+                openingCash: b.tienDauKy,
+                closingCash: b.tienCuoiKy,
+                tiesOut: b.khopSoDu,
+                tieOutGap: b.lechSoDu,
+                warnings: b.canhBao,
+                readable: b.docDuoc,
             }
         })
     } catch (err) { console.error('GET /cash-flow error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }

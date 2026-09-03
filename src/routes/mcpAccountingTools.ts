@@ -13,6 +13,7 @@
 
 import { Tool, ToolError } from '../lib/mcpTypes'
 import { accountName } from '../lib/chartOfAccounts'
+import { tinhB01, tinhB02, tinhB03 } from '../lib/baoCaoTaiChinh'
 
 type But = { date: string; description: string; debitAccount: string; creditAccount: string; amount: number; reference?: string | null; debitAccountName?: string | null; creditAccountName?: string | null }
 
@@ -249,7 +250,7 @@ export const ACCOUNTING_TOOLS: Tool[] = [
     },
     {
         name: 'accounting_income_statement',
-        description: 'Báo cáo kết quả kinh doanh (B02-DNN) từ SỔ SÁCH: doanh thu 511, giá vốn 632, chi phí 641/642, lãi trước/sau thuế. Khác profit_report ở chỗ đây là số ĐÃ VÀO SỔ chứ không phải ước tính theo giá vốn hiện tại.',
+        description: 'Báo cáo kết quả kinh doanh (B02-DNN) từ SỔ SÁCH: doanh thu 511, giá vốn 632, chi phí 641/642, lãi trước/sau thuế. Khác profit_report ở chỗ đây là số ĐÃ VÀO SỔ chứ không phải ước tính theo giá vốn hiện tại. Số liệu giống hệt màn Kế Toán và màn Thuế trên web (dùng chung lib/baoCaoTaiChinh.ts).',
         inputSchema: {
             type: 'object',
             properties: {
@@ -259,94 +260,70 @@ export const ACCOUNTING_TOOLS: Tool[] = [
         },
         run: async (a, { prisma }) => {
             const from = ngay(a.from, dauThang()), to = ngay(a.to, homNay())
-            const bs = await docBut(prisma, from, to)
-            const doanhThu = duCo(bs, '511')
-            const giamTru = duNo(bs, '521')
-            const dtThuan = doanhThu - giamTru
-            const giaVon = duNo(bs, '632')
-            const lnGop = dtThuan - giaVon
-            const dtTaiChinh = duCo(bs, '515')
-            const cpTaiChinh = duNo(bs, '635')
-            const cpBanHang = duNo(bs, '641')
-            const cpQuanLy = duNo(bs, '642')
-            const lnThuan = lnGop + dtTaiChinh - cpTaiChinh - cpBanHang - cpQuanLy
-            const thuNhapKhac = duCo(bs, '711')
-            const chiPhiKhac = duNo(bs, '811')
-            const lnTruocThue = lnThuan + thuNhapKhac - chiPhiKhac
-            const thueTNDN = duNo(bs, '821')
-            const r = (n: number) => Math.round(n)
+            const b = await tinhB02(prisma, { tu: from, den: to })
+            const k = b.kyNay
             return {
                 kyBaoCao: { from, to },
                 nguon: 'JournalEntry (số đã vào sổ)',
                 chiTieu: [
-                    { ma: '01', ten: 'Doanh thu bán hàng và cung cấp dịch vụ', taiKhoan: '511', ben: 'Có', soTien: r(doanhThu) },
-                    { ma: '02', ten: 'Các khoản giảm trừ doanh thu', taiKhoan: '521', ben: 'Nợ', soTien: r(giamTru) },
-                    { ma: '10', ten: 'Doanh thu thuần', taiKhoan: null, ben: null, soTien: r(dtThuan) },
-                    { ma: '11', ten: 'Giá vốn hàng bán', taiKhoan: '632', ben: 'Nợ', soTien: r(giaVon) },
-                    { ma: '20', ten: 'Lợi nhuận gộp', taiKhoan: null, ben: null, soTien: r(lnGop) },
-                    { ma: '21', ten: 'Doanh thu hoạt động tài chính', taiKhoan: '515', ben: 'Có', soTien: r(dtTaiChinh) },
-                    { ma: '22', ten: 'Chi phí tài chính', taiKhoan: '635', ben: 'Nợ', soTien: r(cpTaiChinh) },
-                    { ma: '25', ten: 'Chi phí bán hàng', taiKhoan: '641', ben: 'Nợ', soTien: r(cpBanHang) },
-                    { ma: '26', ten: 'Chi phí quản lý doanh nghiệp', taiKhoan: '642', ben: 'Nợ', soTien: r(cpQuanLy) },
-                    { ma: '30', ten: 'Lợi nhuận thuần từ HĐKD', taiKhoan: null, ben: null, soTien: r(lnThuan) },
-                    { ma: '31', ten: 'Thu nhập khác', taiKhoan: '711', ben: 'Có', soTien: r(thuNhapKhac) },
-                    { ma: '32', ten: 'Chi phí khác', taiKhoan: '811', ben: 'Nợ', soTien: r(chiPhiKhac) },
-                    { ma: '50', ten: 'Tổng lợi nhuận kế toán trước thuế', taiKhoan: null, ben: null, soTien: r(lnTruocThue) },
-                    { ma: '51', ten: 'Chi phí thuế TNDN', taiKhoan: '821', ben: 'Nợ', soTien: r(thueTNDN) },
-                    { ma: '60', ten: 'Lợi nhuận sau thuế', taiKhoan: null, ben: null, soTien: r(lnTruocThue - thueTNDN) },
+                    { ma: '01', ten: 'Doanh thu bán hàng và cung cấp dịch vụ', taiKhoan: '511', ben: 'Có', soTien: k.doanhThu },
+                    { ma: '02', ten: 'Các khoản giảm trừ doanh thu', taiKhoan: '521', ben: 'Nợ', soTien: k.giamTruDoanhThu },
+                    { ma: '10', ten: 'Doanh thu thuần', taiKhoan: null, ben: null, soTien: k.doanhThuThuan },
+                    { ma: '11', ten: 'Giá vốn hàng bán', taiKhoan: '632', ben: 'Nợ', soTien: k.giaVon },
+                    { ma: '20', ten: 'Lợi nhuận gộp', taiKhoan: null, ben: null, soTien: k.loiNhuanGop },
+                    { ma: '21', ten: 'Doanh thu hoạt động tài chính', taiKhoan: '515', ben: 'Có', soTien: k.doanhThuTaiChinh },
+                    { ma: '22', ten: 'Chi phí tài chính', taiKhoan: '635', ben: 'Nợ', soTien: k.chiPhiTaiChinh },
+                    { ma: '25', ten: 'Chi phí bán hàng', taiKhoan: '641', ben: 'Nợ', soTien: k.chiPhiBanHang },
+                    { ma: '26', ten: 'Chi phí quản lý doanh nghiệp', taiKhoan: '642', ben: 'Nợ', soTien: k.chiPhiQuanLy },
+                    { ma: '30', ten: 'Lợi nhuận thuần từ HĐKD', taiKhoan: null, ben: null, soTien: k.loiNhuanThuan },
+                    { ma: '31', ten: 'Thu nhập khác', taiKhoan: '711', ben: 'Có', soTien: k.thuNhapKhac },
+                    { ma: '32', ten: 'Chi phí khác', taiKhoan: '811', ben: 'Nợ', soTien: k.chiPhiKhac },
+                    { ma: '40', ten: 'Lợi nhuận khác', taiKhoan: null, ben: null, soTien: k.loiNhuanKhac },
+                    { ma: '50', ten: 'Tổng lợi nhuận kế toán trước thuế', taiKhoan: null, ben: null, soTien: k.loiNhuanTruocThue },
+                    { ma: '51', ten: 'Chi phí thuế TNDN', taiKhoan: '821', ben: 'Nợ', soTien: k.chiPhiThueTNDN },
+                    { ma: '60', ten: 'Lợi nhuận sau thuế', taiKhoan: null, ben: null, soTien: k.loiNhuanSauThue },
                 ],
-                canhBao: bs.length === 0 ? 'Kỳ này KHÔNG có bút toán nào — hoặc chưa phát sinh, hoặc nghiệp vụ chưa được ghi sổ. Đừng kết luận "không có doanh thu" khi chưa đối chiếu với sổ bán hàng.' : null,
+                vatDauRa: b.vatDauRa,
+                chiPhiNhanCong622: b.chiPhiNhanCong622,
+                docDuocSo: b.docDuoc,
+                canhBao: !b.docDuoc
+                    ? ['KHÔNG đọc được sổ nhật ký — số 0 ở đây KHÔNG có nghĩa là không phát sinh. Đừng kết luận gì từ báo cáo này.']
+                    : (b.canhBao.length ? b.canhBao : null),
             }
         },
     },
     {
         name: 'accounting_balance_sheet',
-        description: 'Bảng cân đối kế toán (B01-DNN) tại một ngày: tài sản (tiền, phải thu, hàng tồn, TSCĐ) và nguồn vốn (phải trả, vốn chủ). Kèm kiểm tra cân đối Tài sản = Nguồn vốn.',
+        description: 'Bảng cân đối kế toán (B01-DNN) tại một ngày: tài sản (tiền, phải thu, hàng tồn, TSCĐ) và nguồn vốn (phải trả, vốn chủ). Kèm giải thích chênh lệch: lệch đúng bằng lãi chưa kết chuyển là BÌNH THƯỜNG, không phải sổ hỏng. Số liệu giống hệt hai màn hình web.',
         inputSchema: {
             type: 'object',
             properties: { date: { type: 'string', description: 'Ngày chốt YYYY-MM-DD (mặc định hôm nay)' } },
         },
         run: async (a, { prisma }) => {
             const den = ngay(a.date, homNay())
-            const bs: But[] = await prisma.journalEntry.findMany({
-                where: { date: { lte: den } },
-                select: { debitAccount: true, creditAccount: true, amount: true, date: true, description: true },
-                take: 100000,
-            }).catch(() => [])
-            const taiSanMa = ['111', '112', '131', '133', '141', '142', '152', '153', '154', '155', '156', '157', '211', '214', '242']
-            const nguonMa = ['331', '333', '334', '338', '341', '411', '421']
-            const taiSan = taiSanMa.map(m => ({ taiKhoan: m, ten: tenTK(m), ben: 'Dư Nợ', soTien: Math.round(duNo(bs, m)) })).filter(r => r.soTien !== 0)
-            const nguonVon = nguonMa.map(m => ({ taiKhoan: m, ten: tenTK(m), ben: 'Dư Có', soTien: Math.round(duCo(bs, m)) })).filter(r => r.soTien !== 0)
-            const tongTS = taiSan.reduce((s, r) => s + r.soTien, 0)
-            const tongNV = nguonVon.reduce((s, r) => s + r.soTien, 0)
-            const lech = Math.round(tongTS - tongNV)
-
-            /* Lãi/lỗ luỹ kế CHƯA KẾT CHUYỂN về 421 làm bảng lệch đúng bằng con số đó.
-             * Không giải thích thì agent sẽ báo "sổ không cân" — nghe như dữ liệu hỏng,
-             * trong khi thật ra chỉ là chưa khoá sổ kỳ. Tự đối chiếu để nói đúng bản chất. */
-            const lai = duCo(bs, '511') + duCo(bs, '515') + duCo(bs, '711')
-                - duNo(bs, '632') - duNo(bs, '635') - duNo(bs, '641') - duNo(bs, '642') - duNo(bs, '811') - duNo(bs, '821')
-            const lechDoChuaKetChuyen = Math.abs(lech - Math.round(lai)) < 1000
-
+            const b = await tinhB01(prisma, { ngay: den })
+            const ra = (r: { ma: string; ten: string; kyNay: number }, ben: string) =>
+                ({ taiKhoan: r.ma, ten: r.ten, ben, soTien: r.kyNay })
             return {
                 ngayChot: den,
-                taiSan, tongTaiSan: tongTS,
-                nguonVon, tongNguonVon: tongNV,
-                canDoi: Math.abs(lech) < 1,
-                lech,
-                loiNhuanChuaKetChuyen: Math.round(lai),
-                giaiThichLech: Math.abs(lech) < 1
-                    ? null
-                    : lechDoChuaKetChuyen
-                        ? `Lệch ${lech.toLocaleString('vi-VN')}đ ĐÚNG BẰNG lãi/lỗ trong kỳ chưa kết chuyển sang TK 421 — sổ KHÔNG hỏng, chỉ là chưa khoá sổ. Vào Kế toán → Khoá sổ / Kết chuyển để bảng cân.`
-                        : `Lệch ${lech.toLocaleString('vi-VN')}đ KHÔNG khớp lãi/lỗ trong kỳ (${Math.round(lai).toLocaleString('vi-VN')}đ) — chỗ này là bút toán một vế hoặc thiếu bút toán, cần soi accounting_journal.`,
-                ghiChu: 'TK 214 (hao mòn) mang dấu âm trong tài sản là ĐÚNG — nó là tài khoản điều chỉnh giảm. Số dư 111 âm là BẤT THƯỜNG (quỹ tiền mặt không thể âm) — thường do thiếu phiếu thu.',
+                taiSan: [...b.taiSanNganHan, ...b.taiSanDaiHan].filter(r => r.kyNay !== 0).map(r => ra(r, 'Dư Nợ')),
+                tongTaiSan: b.tongTaiSan,
+                nguonVon: [...b.noPhaiTra, ...b.vonChuSoHuu].filter(r => r.kyNay !== 0).map(r => ra(r, 'Dư Có')),
+                tongNguonVon: b.tongNguonVon,
+                taiKhoanNgoaiNhom: b.khongPhanLoai.filter(r => r.kyNay !== 0).map(r => ra(r, 'Dư Nợ')),
+                canDoi: b.canDoi,
+                lech: b.lechTrinhBay,
+                lechKhongGiaiThichDuoc: b.lechKhongGiaiThichDuoc,
+                loiNhuanChuaKetChuyen: b.loiNhuanChuaKetChuyen,
+                giaiThichLech: b.giaiThichLech,
+                docDuocSo: b.docDuoc,
+                ghiChu: 'TK 214 (hao mòn) mang dấu âm trong tài sản là ĐÚNG — nó là tài khoản điều chỉnh giảm. Số dư 111 âm là BẤT THƯỜNG (quỹ tiền mặt không thể âm) — thường do thiếu phiếu thu. `canDoi` ở đây đã trừ phần giải thích được, nên canDoi=false mới thật sự là sổ có vấn đề.',
             }
         },
     },
     {
         name: 'accounting_cash_flow',
-        description: 'Lưu chuyển tiền tệ (trực tiếp): tiền thực thu từ khách, thực chi cho NCC / lương / thuế, đầu tư, tài chính. Trả lời "tháng này tiền đi đâu hết".',
+        description: 'Lưu chuyển tiền tệ (trực tiếp): tiền thực thu từ khách, thực chi cho NCC / lương / thuế, đầu tư, tài chính. Trả lời "tháng này tiền đi đâu hết". Có tự kiểm: lưu chuyển thuần phải khớp biến động số dư tiền.',
         inputSchema: {
             type: 'object',
             properties: {
@@ -356,44 +333,27 @@ export const ACCOUNTING_TOOLS: Tool[] = [
         },
         run: async (a, { prisma }) => {
             const from = ngay(a.from, dauThang()), to = ngay(a.to, homNay())
-            const bs = await docBut(prisma, from, to)
-            const laTien = (tk: string) => Boolean(tk) && (tk.startsWith('111') || tk.startsWith('112'))
-            let thuKhach = 0, chiNCC = 0, chiLuong = 0, chiThue = 0, khac = 0, dauTu = 0, taiChinh = 0
-            for (const e of bs) {
-                const vaoTien = laTien(e.debitAccount), raTien = laTien(e.creditAccount)
-                if (vaoTien === raTien) continue
-                if (vaoTien) {
-                    const c = e.creditAccount
-                    if (c.startsWith('511') || c.startsWith('512') || c.startsWith('131') || c.startsWith('3331')) thuKhach += e.amount
-                    else if (c.startsWith('341') || c.startsWith('411')) taiChinh += e.amount
-                    else if (c.startsWith('2')) dauTu += e.amount
-                    else khac += e.amount
-                } else {
-                    const d = e.debitAccount
-                    if (d.startsWith('334')) chiLuong -= e.amount
-                    else if (d.startsWith('333')) chiThue -= e.amount
-                    else if (d.startsWith('331') || d.startsWith('152') || d.startsWith('153') || d.startsWith('156') || d.startsWith('632') || d.startsWith('641') || d.startsWith('642')) chiNCC -= e.amount
-                    else if (d.startsWith('2')) dauTu -= e.amount
-                    else if (d.startsWith('341') || d.startsWith('411')) taiChinh -= e.amount
-                    else khac -= e.amount
-                }
-            }
-            const r = (n: number) => Math.round(n)
-            const hdkd = thuKhach + chiNCC + chiLuong + chiThue + khac
+            const b = await tinhB03(prisma, { tu: from, den: to })
             return {
                 kyBaoCao: { from, to },
                 hoatDongKinhDoanh: {
-                    thuTuKhachHang: r(thuKhach),
-                    chiTraNhaCungCap: r(chiNCC),
-                    chiTraNguoiLaoDong: r(chiLuong),
-                    chiNopThue: r(chiThue),
-                    thuChiKhac: r(khac),
-                    luuChuyenThuan: r(hdkd),
+                    thuTuKhachHang: b.thuTuBanHang,
+                    chiTraNhaCungCap: b.traNguoiBan,
+                    chiTraNguoiLaoDong: b.traNguoiLaoDong,
+                    chiNopThue: b.nopThue,
+                    thuChiKhac: b.khacHDKD,
+                    luuChuyenThuan: b.thuanHDKD,
                 },
-                hoatDongDauTu: r(dauTu),
-                hoatDongTaiChinh: r(taiChinh),
-                luuChuyenTienThuan: r(hdkd + dauTu + taiChinh),
-                ghiChu: 'Số âm = tiền ra. Phân loại theo tài khoản đối ứng của mỗi bút toán tiền.',
+                hoatDongDauTu: b.thuanDauTu,
+                hoatDongTaiChinh: b.thuanTaiChinh,
+                luuChuyenTienThuan: b.thuanTrongKy,
+                tienDauKy: b.tienDauKy,
+                tienCuoiKy: b.tienCuoiKy,
+                khopSoDuTien: b.khopSoDu,
+                lechSoDu: b.lechSoDu,
+                docDuocSo: b.docDuoc,
+                canhBao: b.canhBao.length ? b.canhBao : null,
+                ghiChu: 'Số âm = tiền ra. Phân loại theo tài khoản đối ứng của mỗi bút toán tiền. khopSoDuTien=false nghĩa là còn bút toán tiền chưa xếp được nhóm — báo cáo chưa dùng được để kết luận.',
             }
         },
     },
