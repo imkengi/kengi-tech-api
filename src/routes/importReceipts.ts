@@ -325,6 +325,222 @@ router.get('/payment-due', authMiddleware, requirePermission('payment_due.view',
 })
 
 // GET /api/import-receipts
+/* ─────────────────────────────────────────────────────────────────────────────
+ *  TRẢ GỘP NHIỀU PHIẾU BẰNG MỘT LỆNH CHUYỂN — POST /api/import-receipts/tra-nhom
+ *  (03/09/2026)
+ *
+ *  Chủ shop: "1 ngày nếu có những NCC cùng nhóm thì gom thanh toán 1 lần chứ".
+ *  Đúng thực tế: vài pháp nhân cùng một chủ, kế toán chuyển MỘT lệnh cho cả cụm.
+ *
+ *  MỘT LỆNH CHUYỂN = MỘT PHIẾU CHI. Không đẻ N phiếu chi cho N phiếu nhập: sao kê
+ *  ngân hàng chỉ có MỘT dòng ghi nợ, mà sổ quỹ lại có N dòng thì đối chiếu không
+ *  bao giờ khớp. Công nợ vẫn trừ đúng từng phiếu nhập của từng NCC.
+ *
+ *  RÀO CHẶN QUAN TRỌNG NHẤT — MỘT LỆNH CHUYỂN CHỈ TỚI MỘT NƠI NHẬN. Gom nhầm hai
+ *  NCC có tài khoản khác nhau vào một lệnh là ghi "đã trả" cho một NCC chưa hề
+ *  nhận được đồng nào: công nợ của họ biến mất khỏi màn hình, không ai đòi nữa,
+ *  và tiền thì đã nằm ở túi người khác. Nên tính "nơi nhận hiệu lực" của từng
+ *  phiếu rồi bắt buộc tất cả phải trùng nhau, khác một cái là từ chối và NÓI RÕ
+ *  cái nào khác.
+ *
+ *  Chuyển khoản thì nơi nhận là SỐ TÀI KHOẢN (riêng của NCC thắng tài khoản nhóm,
+ *  cùng luật với `bankHieuLuc`). Tiền mặt thì nơi nhận là NHÓM — một người ôm tiền
+ *  đi thu hộ cả cụm.
+ * ───────────────────────────────────────────────────────────────────────────── */
+router.post('/tra-nhom', authMiddleware, async (req: AuthRequest, res: Response) => {
+    try {
+        const prisma: any = req.storePrisma!
+        const ids: string[] = Array.isArray(req.body?.receiptIds)
+            ? Array.from(new Set(req.body.receiptIds.map((x: any) => String(x)).filter(Boolean)))
+            : []
+        if (ids.length === 0) { res.status(400).json({ success: false, error: 'Chưa chọn phiếu nào' }); return }
+        if (ids.length > 100) {
+            res.status(400).json({ success: false, error: 'Mỗi lệnh gộp tối đa 100 phiếu — chia làm nhiều lượt' })
+            return
+        }
+
+        const payBy = String(req.body?.paidBy || 'bank').toLowerCase()
+        const laChuyenKhoan = payBy === 'bank' || payBy === 'transfer'
+
+        const phieuDs = await prisma.importReceipt.findMany({ where: { id: { in: ids } } })
+        if (phieuDs.length !== ids.length) {
+            /* Thiếu phiếu thì DỪNG, đừng trả phần còn lại: người bấm đang nhìn một
+             * tổng tiền cụ thể, trả thiếu một phiếu là lệch đúng số họ vừa chuyển. */
+            const thay = new Set(phieuDs.map((r: any) => r.id))
+            res.status(404).json({ success: false, error: `Không tìm thấy ${ids.filter(i => !thay.has(i)).length} phiếu — tải lại trang rồi chọn lại` })
+            return
+        }
+
+        // ─── Kiểm từng phiếu: quyền chi nhánh, chưa huỷ, còn nợ ───
+        const canTra: Array<{ phieu: any; conLai: number }> = []
+        for (const r of phieuDs) {
+            if (!canAccessBranch(req, r.branchId)) { res.status(404).json({ success: false, error: `Phiếu ${r.code} không thuộc chi nhánh đang xem` }); return }
+            if (r.status === 'cancelled') { res.status(400).json({ success: false, error: `Phiếu ${r.code} đã huỷ — bỏ nó ra khỏi lệnh gộp` }); return }
+            const daTra = r.paymentStatus === 'paid' ? r.totalCost : (r.paidAmount ?? 0)
+            const conLai = Math.round(Math.max(0, r.totalCost - daTra))
+            if (conLai <= 0) { res.status(400).json({ success: false, error: `Phiếu ${r.code} đã trả đủ — tải lại trang rồi chọn lại` }); return }
+            canTra.push({ phieu: r, conLai })
+        }
+
+        // ─── NƠI NHẬN phải là MỘT ───
+        const nccIds = Array.from(new Set(canTra.map(x => String(x.phieu.supplierId || '')).filter(Boolean)))
+        const nccDs = nccIds.length
+            ? await prisma.supplier.findMany({
+                where: { id: { in: nccIds } },
+                include: { group: { select: { id: true, name: true, bankBin: true, bankAccountNo: true, bankAccountName: true } } },
+            })
+            : []
+        const nccTheoId = new Map<string, any>(nccDs.map((n: any) => [n.id, n]))
+
+        /** Tài khoản THẬT SỰ nhận tiền — riêng của NCC thắng tài khoản nhóm */
+        const tkHieuLuc = (n: any) => {
+            if (!n) return null
+            if (n.bankBin && n.bankAccountNo && n.bankAccountName) {
+                return { bin: n.bankBin, so: n.bankAccountNo, ten: n.bankAccountName, nguon: 'ncc' as const }
+            }
+            const g = n.group
+            if (g?.bankBin && g?.bankAccountNo && g?.bankAccountName) {
+                return { bin: g.bankBin, so: g.bankAccountNo, ten: g.bankAccountName, nguon: 'nhom' as const }
+            }
+            return null
+        }
+
+        const noiNhan = new Map<string, string[]>()   // khoá → tên NCC
+        for (const { phieu } of canTra) {
+            const n = nccTheoId.get(String(phieu.supplierId || ''))
+            const ten = String(phieu.supplierName || n?.name || 'NCC không rõ')
+            let khoa: string
+            if (laChuyenKhoan) {
+                const tk = tkHieuLuc(n)
+                // Chưa khai tài khoản thì tự nó là một đích riêng — không gộp mù được
+                khoa = tk ? `tk:${tk.bin}|${tk.so}` : `chua-khai:${phieu.supplierId || phieu.id}`
+            } else {
+                khoa = n?.groupId ? `nhom:${n.groupId}` : `ncc:${phieu.supplierId || phieu.id}`
+            }
+            const cu2 = noiNhan.get(khoa) || []
+            if (!cu2.includes(ten)) cu2.push(ten)
+            noiNhan.set(khoa, cu2)
+        }
+        if (noiNhan.size > 1) {
+            const moTa = Array.from(noiNhan.entries()).map(([k, tens]) => {
+                const nhan = k.startsWith('tk:') ? k.slice(3).split('|')[1]
+                    : k.startsWith('chua-khai:') ? 'chưa khai tài khoản' : 'trả riêng'
+                return `${tens.join(', ')} → ${nhan}`
+            })
+            res.status(400).json({
+                success: false,
+                error: 'Không gộp được: các phiếu này trả về NHIỀU nơi nhận khác nhau, một lệnh chuyển chỉ tới một nơi. '
+                    + moTa.join(' · ') + '. Tách ra trả từng nơi, hoặc khai chung tài khoản nhóm trước.',
+            })
+            return
+        }
+
+        const tongTien = canTra.reduce((a, x) => a + x.conLai, 0)
+        if (tongTien <= 0) { res.status(400).json({ success: false, error: 'Tổng tiền bằng 0 — không có gì để trả' }); return }
+
+        // Tài khoản chuyển ĐI (của mình) — chỉ có nghĩa với chuyển khoản
+        let bankAccountId: string | null = null
+        if (laChuyenKhoan && req.body?.bankAccountId) {
+            const tk = await prisma.bankAccount.findUnique({
+                where: { id: String(req.body.bankAccountId) }, select: { id: true },
+            }).catch(() => null)
+            if (!tk) { res.status(400).json({ success: false, error: 'Tài khoản ngân hàng không tồn tại — tải lại danh sách rồi chọn lại' }); return }
+            bankAccountId = tk.id
+        }
+
+        /* ─── GHI TRẢ: MỘT transaction cho CẢ CỤM ───
+         * Tất-cả-hoặc-không-gì. Ghi lẻ từng phiếu rồi gãy giữa chừng là để lại một
+         * lệnh chuyển đã đi mà chỉ vài phiếu được trừ — dò lại rất mất công.
+         * Tuần tự trong transaction: pool prod mỗi cửa hàng đúng 1 kết nối. */
+        let daGhi: Array<{ code: string; supplierName: string; tra: number }> = []
+        try {
+            daGhi = await prisma.$transaction(async (tx: any) => {
+                const kq: Array<{ code: string; supplierName: string; tra: number }> = []
+                for (const { phieu, conLai } of canTra) {
+                    const fresh = await tx.importReceipt.findUnique({ where: { id: phieu.id } })
+                    if (!fresh || fresh.status === 'cancelled') throw new Error('PAY_CONFLICT')
+                    const daTra = fresh.paymentStatus === 'paid' ? fresh.totalCost : (fresh.paidAmount ?? 0)
+                    if (daTra + conLai > fresh.totalCost + 1) throw new Error('PAY_CONFLICT')
+                    // Khoá lạc quan theo paidAmount cũ — lượt thua nhận 409, không ghi đè
+                    const w = await tx.importReceipt.updateMany({
+                        where: { id: fresh.id, paidAmount: fresh.paidAmount },
+                        data: { paidAmount: daTra + conLai, paymentStatus: 'paid' },
+                    })
+                    if (w.count === 0) throw new Error('PAY_CONFLICT')
+                    kq.push({ code: fresh.code, supplierName: String(fresh.supplierName || ''), tra: conLai })
+                }
+                return kq
+            }, { timeout: 30000 })
+        } catch (e: any) {
+            if (e?.message === 'PAY_CONFLICT') {
+                res.status(409).json({ success: false, error: 'Một phiếu trong cụm vừa được thanh toán ở thao tác khác — KHÔNG ghi gì cả, tải lại trang rồi chọn lại' })
+                return
+            }
+            throw e
+        }
+
+        /* ─── MỘT phiếu chi cho cả lệnh + bút toán đi kèm ───
+         * Hỏng thì phải KÊU: phiếu nhập đã ghi trả rồi, sổ quỹ đang thiếu khoản chi
+         * này, người ta cần biết mà bù. Nuốt lỗi ở đây là sổ và kho tiền lệch nhau
+         * trong im lặng — đúng lỗi đã cắn ngày 20/08. */
+        const tenNhan = Array.from(noiNhan.values())[0] || []
+        const moTaChi = `Trả gộp ${daGhi.length} phiếu nhập cho ${tenNhan.slice(0, 3).join(', ')}`
+            + (tenNhan.length > 3 ? ` +${tenNhan.length - 3} NCC` : '')
+            + ` (${daGhi.map(x => x.code).slice(0, 8).join(', ')}${daGhi.length > 8 ? '…' : ''})`
+        let phieuChi: any = null
+        let loiSo: string | null = null
+        try {
+            phieuChi = await prisma.$transaction(async (t: any) => {
+                const pc = await t.expense.create({
+                    data: {
+                        description: moTaChi,
+                        amount: tongTien,
+                        category: 'supplier_payment',
+                        paidBy: laChuyenKhoan ? 'bank' : 'cash',
+                        bankAccountId,
+                        date: new Date(),
+                        branchId: getBranchId(req) || canTra[0]?.phieu.branchId || null,
+                    },
+                })
+                await postExpenseJournal(t, pc as any, {
+                    branchId: pc.branchId || null,
+                    userId: (req as any).user?.userId || null,
+                })
+                return pc
+            })
+        } catch (e: any) {
+            loiSo = moTaLoi(e)
+            console.error(`[tra-nhom] ĐÃ ghi trả ${tongTien} cho ${daGhi.length} phiếu (${daGhi.map(x => x.code).join(', ')}) nhưng KHÔNG tạo được phiếu chi + bút toán — sổ đang thiếu khoản chi này:`, loiSo)
+        }
+
+        try {
+            const u = await prisma.user.findUnique({ where: { id: req.user!.userId } })
+            await prisma.auditLog.create({
+                data: {
+                    userId: req.user!.userId, userName: u?.name || 'Admin',
+                    action: 'pay_supplier_batch', entity: 'ImportReceipt',
+                    entityId: phieuChi?.id || daGhi[0]?.code || '',
+                    details: JSON.stringify({ tongTien, soPhieu: daGhi.length, phieu: daGhi, phieuChiId: phieuChi?.id || null }),
+                },
+            })
+        } catch { /* nhật ký hỏng không được chặn việc đã làm xong */ }
+
+        res.json({
+            success: true,
+            data: {
+                tongTien, soPhieu: daGhi.length, chiTiet: daGhi,
+                phieuChiId: phieuChi?.id || null,
+                // Nói thẳng khi sổ quỹ chưa có khoản chi, đừng để người dùng tưởng xong xuôi
+                canhBaoSo: phieuChi ? null
+                    : `Đã trừ công nợ ${daGhi.length} phiếu nhưng CHƯA tạo được phiếu chi trong sổ quỹ (${loiSo || 'không rõ lỗi'}). Vào Kế Toán → Đối chiếu sổ sách để ghi bù.`,
+            },
+        })
+    } catch (err: any) {
+        console.error('POST /import-receipts/tra-nhom lỗi:', err)
+        res.status(500).json({ success: false, error: errorDetail(err) })
+    }
+})
+
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
