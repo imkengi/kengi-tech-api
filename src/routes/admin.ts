@@ -4083,7 +4083,16 @@ router.get('/do-gia-von', async (req: Request, res: Response) => {
                  * nghĩa là đường ghi đang hỏng, ghi bù bao nhiêu cũng lại hụt tiếp. */
                 const bay = Date.now() - 7 * 86400_000
                 const bamuoi = Date.now() - 30 * 86400_000
-                const chuaVao = { trong7Ngay: 0, tu8Den30: 0, tren30: 0 }
+                /* Mốc 24 GIỜ là câu quyết định: hai đường đồng bộ (KiotViet, đơn sàn)
+                 * mới được nối vào sổ ngày 03/09, nên "7 ngày" gồm 6 ngày TRƯỚC bản
+                 * vá — không phân biệt được rò cũ với rò đang chảy. */
+                const motNgay = Date.now() - 86400_000
+                const chuaVao = { trong24Gio: 0, trong7Ngay: 0, tu8Den30: 0, tren30: 0 }
+                /* Đơn ĐÃ HUỶ đếm RIÊNG. Huỷ đơn chỉ ghi bút toán ĐẢO (VOID-<ref>) và
+                 * giữ nguyên SALE- gốc, nên đơn huỷ mà không có SALE- nghĩa là nó chưa
+                 * từng vào sổ — nhưng ghi bù cho nó thì vô nghĩa, hai vế triệt tiêu
+                 * nhau. Gộp vào con số "cần ghi bù" là thổi phồng việc phải làm. */
+                let chuaVaoDaHuy = 0
                 const theoNguon = new Map<string, number>()
                 for (let i = 0; i < donDs.length; i += 400) {
                     const lo = donDs.slice(i, i + 400)
@@ -4099,7 +4108,9 @@ router.get('/do-gia-von', async (req: Request, res: Response) => {
                         if (coDt) soCoDoanhThu++
                         if (coDt && !coGv) soCoDoanhThuThieuGiaVon++
                         if (!coDt) {
+                            if (String(d.status) === 'voided') { chuaVaoDaHuy++; continue }
                             const t = new Date(d.createdAt).getTime()
+                            if (t >= motNgay) chuaVao.trong24Gio++
                             if (t >= bay) chuaVao.trong7Ngay++
                             else if (t >= bamuoi) chuaVao.tu8Den30++
                             else chuaVao.tren30++
@@ -4129,6 +4140,8 @@ router.get('/do-gia-von', async (req: Request, res: Response) => {
                     // Còn đây là đơn CHƯA VÀO SỔ, không liên quan gì tới giá vốn
                     donChuaVaoSoHoanToan: donDs.length - soCoDoanhThu,
                     chuaVaoSoTheoMoc: chuaVao,
+                    chuaVaoSoNhungDaHuy: chuaVaoDaHuy,
+                    canGhiBu: donDs.length - soCoDoanhThu - chuaVaoDaHuy,
                     chuaVaoSoTheoNguon: Object.fromEntries(
                         Array.from(theoNguon.entries()).sort((a, b) => b[1] - a[1]).slice(0, 8),
                     ),
