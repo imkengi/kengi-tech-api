@@ -1425,6 +1425,28 @@ model Attendance {
   @@index([date])
 }
 
+/// Mỗi đơn đóng gói xong = MỘT dòng. Dùng cho hai việc:
+///   · đếm "hôm nay ai đóng bao nhiêu đơn"
+///   · làm bằng chứng đối chiếu với video (cùng mã đơn, cùng mốc giờ)
+/// Ghi theo TÀI KHOẢN ĐANG ĐĂNG NHẬP, không nhận danh tính do máy khách gửi lên —
+/// không thì ai cũng khai được mình đóng nhiều đơn.
+model PackingLog {
+  id        String   @id @default(cuid())
+  branchId  String?
+  userId    String
+  userName  String
+  /// Mã đơn / mã vận đơn đã quét lúc bắt đầu quay
+  orderCode String
+  /// Ngày làm việc (00:00 giờ VN) — khoá để đếm theo ngày và chấm công
+  workDate  DateTime
+  createdAt DateTime @default(now())
+
+  /// Một đơn đóng lại lần hai trong cùng ngày không được đếm thành hai công
+  @@unique([userId, orderCode, workDate])
+  @@index([workDate])
+  @@index([userId, workDate])
+}
+
 // ─── Loyalty ────────────────────────────────────────────────────────────────
 
 model LoyaltyMember {

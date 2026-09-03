@@ -2300,6 +2300,19 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Supplier" ADD COLUMN IF NOT EXISTS "bankAccountName" TEXT`)
                 // URL Apps Script của trang quay video đóng gói — lưu theo cửa hàng (03/09/2026)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "driveAppsScriptUrl" TEXT`)
+                // Nhật ký đóng gói — đếm đơn/ngày + chấm công cho nhân viên đóng hàng (03/09/2026)
+                await (sp as any).$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "PackingLog" (
+                    "id" TEXT NOT NULL PRIMARY KEY,
+                    "branchId" TEXT,
+                    "userId" TEXT NOT NULL,
+                    "userName" TEXT NOT NULL,
+                    "orderCode" TEXT NOT NULL,
+                    "workDate" TIMESTAMP(3) NOT NULL,
+                    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )`)
+                await (sp as any).$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "PackingLog_userId_orderCode_workDate_key" ON "PackingLog"("userId","orderCode","workDate")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "PackingLog_workDate_idx" ON "PackingLog"("workDate")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "PackingLog_userId_workDate_idx" ON "PackingLog"("userId","workDate")`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "OnlineOrder" ADD COLUMN IF NOT EXISTS "stockDeducted" BOOLEAN NOT NULL DEFAULT false`)
 
                 // Mã ngành hàng sản phẩm sàn (2026-07-06) — TikTok category_chains / Shopee category_id
