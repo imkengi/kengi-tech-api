@@ -59,7 +59,15 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
                 { phone: { contains: q, mode: 'insensitive' } },
             ]
         }
-        const suppliers = await prisma.supplier.findMany({ where, orderBy: { createdAt: 'desc' } })
+        const suppliers = await prisma.supplier.findMany({
+            where, orderBy: { createdAt: 'desc' },
+            /* Kèm tài khoản của NHÓM để trang Hạn thanh toán dựng được mã QR mà
+             * không phải gọi thêm lượt nữa. NCC khai riêng thì dùng riêng — nhóm
+             * chỉ là mặc định dùng chung. */
+            include: {
+                group: { select: { id: true, name: true, bankBin: true, bankAccountNo: true, bankAccountName: true } },
+            },
+        })
 
         // Tính động cho MỖI NCC: số đơn, tổng giá trị nhập, và CÔNG NỢ phải trả hiện tại.
         // (Field totalOrders/totalValue lưu trên record NCC không được cập nhật → luôn 0;
@@ -94,6 +102,26 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         }
         const enriched = suppliers.map(s => ({
             ...s,
+            /* Tài khoản DÙNG ĐỂ CHUYỂN TIỀN, đã chốt sẵn ở máy chủ: riêng thắng nhóm.
+             * Chốt ở đây thay vì để mỗi màn hình tự suy — hai nơi suy hai kiểu là
+             * tiền đi nhầm tài khoản, mà loại sai đó rất khó đòi lại. */
+            bankHieuLuc: ((): any => {
+                const g: any = (s as any).group
+                const rieng = (s as any).bankBin && (s as any).bankAccountNo && (s as any).bankAccountName
+                if (rieng) {
+                    return {
+                        bankBin: (s as any).bankBin, bankAccountNo: (s as any).bankAccountNo,
+                        bankAccountName: (s as any).bankAccountName, nguon: 'ncc', tenNhom: null,
+                    }
+                }
+                if (g && g.bankBin && g.bankAccountNo && g.bankAccountName) {
+                    return {
+                        bankBin: g.bankBin, bankAccountNo: g.bankAccountNo,
+                        bankAccountName: g.bankAccountName, nguon: 'nhom', tenNhom: g.name,
+                    }
+                }
+                return null
+            })(),
             totalOrders: agg[s.id]?.orders ?? 0,
             totalValue: agg[s.id]?.value ?? 0,
             debt: Math.max(0, Math.round(agg[s.id]?.debt ?? 0)),
@@ -421,7 +449,7 @@ router.post('/', authMiddleware, requireRole('admin', 'manager'), validate(Creat
     try {
         const prisma = req.storePrisma!
         const { name, contactName, phone, email, address, taxCode, status, notes, payable,
-            bankBin, bankAccountNo, bankAccountName } = req.body
+            bankBin, bankAccountNo, bankAccountName, groupId } = req.body
         if (!name?.trim()) return res.status(400).json({ success: false, error: 'Name required' })
         const code = await nextCode(prisma, 'supplierCodeSeq', 'NCC', 3, '-', 'Supplier', 'code')
         /* Điều khoản thanh toán: nhận số ngày tường minh; chỉ có nhãn thì suy
@@ -431,7 +459,7 @@ router.post('/', authMiddleware, requireRole('admin', 'manager'), validate(Creat
          * `??` gộp undefined với null nên client xoá số mà còn nhãn sẽ bị suy lại. */
         const supplier = await prisma.supplier.create({
             data: { code, name: name.trim(), contactName, phone, email, address, taxCode, status: status || 'active', notes, payable: payable ?? 0,
-                bankBin, bankAccountNo, bankAccountName,
+                bankBin, bankAccountNo, bankAccountName, groupId,
                     ...docDieuKhoanTuBody(req.body) },
         })
         cacheDel(`${req.user?.storeSchema || 'default'}:suppliers:*`).catch(() => { })
@@ -448,11 +476,11 @@ router.put('/:id', authMiddleware, requireRole('admin', 'manager'), validate(Upd
     try {
         const prisma = req.storePrisma!
         const { name, contactName, phone, email, address, taxCode, status, notes, payable,
-            bankBin, bankAccountNo, bankAccountName } = req.body
+            bankBin, bankAccountNo, bankAccountName, groupId } = req.body
         const supplier = await prisma.supplier.update({
             where: { id: String(req.params.id) },
             data: { name, contactName, phone, email, address, taxCode, status, notes, payable,
-                bankBin, bankAccountNo, bankAccountName,
+                bankBin, bankAccountNo, bankAccountName, groupId,
                     ...docDieuKhoanTuBody(req.body) },
         })
         res.json({ success: true, data: supplier })

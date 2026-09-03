@@ -2298,6 +2298,19 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Supplier" ADD COLUMN IF NOT EXISTS "bankBin" TEXT`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Supplier" ADD COLUMN IF NOT EXISTS "bankAccountNo" TEXT`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Supplier" ADD COLUMN IF NOT EXISTS "bankAccountName" TEXT`)
+                // Nhóm NCC dùng chung một tài khoản nhận tiền (03/09/2026)
+                await (sp as any).$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "SupplierGroup" (
+                    "id" TEXT NOT NULL PRIMARY KEY,
+                    "name" TEXT NOT NULL,
+                    "note" TEXT,
+                    "bankBin" TEXT,
+                    "bankAccountNo" TEXT,
+                    "bankAccountName" TEXT,
+                    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )`)
+                await (sp as any).$executeRawUnsafe(`ALTER TABLE "Supplier" ADD COLUMN IF NOT EXISTS "groupId" TEXT`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Supplier_groupId_idx" ON "Supplier"("groupId")`)
                 // URL Apps Script của trang quay video đóng gói — lưu theo cửa hàng (03/09/2026)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "StoreSettings" ADD COLUMN IF NOT EXISTS "driveAppsScriptUrl" TEXT`)
                 // Nhật ký đóng gói — đếm đơn/ngày + chấm công cho nhân viên đóng hàng (03/09/2026)

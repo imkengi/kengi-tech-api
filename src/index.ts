@@ -69,6 +69,7 @@ import driveVideoRoutes from './routes/driveVideos'
 import upgradeRequestRoutes from './routes/upgradeRequests'
 import webhookRoutes from './routes/webhooks'
 import packingLogRoutes from './routes/packingLogs'
+import supplierGroupRoutes from './routes/supplierGroups'
 import eventRoutes from './routes/events'
 import warehouseRoutes from './routes/warehouses'
 import salesTripRoutes from './routes/salesTrips'
@@ -317,6 +318,7 @@ app.use('/api/drive-videos', driveVideoRoutes) // Video đóng gói trên Google
 app.use('/api/upgrade-requests', upgradeRequestRoutes)
 app.use('/api/webhooks', webhookRoutes)
 app.use('/api/packing-logs', packingLogRoutes)
+app.use('/api/supplier-groups', supplierGroupRoutes)
 app.use('/api/webhook-endpoints', webhookEndpointRoutes)
 app.use('/api/warehouses', warehouseRoutes)
 app.use('/api/sales-trips', salesTripRoutes)

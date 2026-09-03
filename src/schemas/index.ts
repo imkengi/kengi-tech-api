@@ -180,6 +180,8 @@ export const CreateSupplierSchema = z.object({
     bankBin: z.string().max(20).optional().nullable(),
     bankAccountNo: z.string().max(50).optional().nullable(),
     bankAccountName: z.string().max(200).optional().nullable(),
+    /* Nhóm NCC dùng chung tài khoản nhận tiền; null = đứng riêng */
+    groupId: z.string().optional().nullable(),
     status: z.enum(['active', 'inactive']).default('active'),
 })
 

@@ -511,6 +511,29 @@ model Promotion {
 
 // ─── Suppliers ─────────────────────────────────────────────────────────────────
 
+/// NHÓM NHÀ CUNG CẤP DÙNG CHUNG MỘT TÀI KHOẢN NHẬN TIỀN (03/09/2026).
+///
+/// Chủ shop: "có thể gộp nhiều nhà cung cấp thành nhóm, dùng 1 stk để chuyển tiền".
+/// Thực tế hay gặp: vài pháp nhân/cửa hàng khác tên nhưng cùng một chủ, hoặc cùng
+/// một người đứng ra thu tiền — kế toán chuyển về một tài khoản duy nhất.
+///
+/// Tài khoản của NCC vẫn thắng tài khoản nhóm: nhóm chỉ là mặc định dùng chung,
+/// NCC nào khai riêng thì tiền đi theo cái riêng đó.
+model SupplierGroup {
+  id              String  @id @default(cuid())
+  name            String
+  note            String?
+  /// Tài khoản nhận tiền dùng chung — cùng quy ước với Supplier (bankBin = mã BIN VietQR)
+  bankBin         String?
+  bankAccountNo   String?
+  bankAccountName String?
+
+  suppliers Supplier[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model Supplier {
   id                     String   @id @default(cuid())
   code                   String   @unique
@@ -544,6 +567,9 @@ model Supplier {
   bankBin                String?
   bankAccountNo          String?
   bankAccountName        String?
+  /// Nhóm dùng chung tài khoản nhận tiền; null = đứng riêng
+  groupId                String?
+  group                  SupplierGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
