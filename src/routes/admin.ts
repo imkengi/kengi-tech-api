@@ -4013,6 +4013,13 @@ router.get('/returns-summary', async (req: Request, res: Response) => {
 router.get('/do-gia-von', async (req: Request, res: Response) => {
     try {
         const soNgay = Math.min(365, Math.max(1, Number(req.query.ngay) || 90))
+        /* MỐC CẮT tuỳ chọn (?moc=2026-09-03T11:30:00Z) — đếm riêng đơn đồng bộ SAU
+         * một thời điểm. Cần vì các mốc tròn (24h, 7 ngày) đều trùm lên lúc bản vá
+         * lên prod, nên không phân biệt được "rò đã bịt" với "rò đang chảy".
+         * `Transaction.createdAt` là LÚC ĐỒNG BỘ (ngày đặt nằm ở transactionDate),
+         * nên so với giờ deploy là đúng thứ cần so. */
+        const mocRaw = String(req.query.moc || '')
+        const mocCat = mocRaw && !isNaN(new Date(mocRaw).getTime()) ? new Date(mocRaw).getTime() : null
         const TRAN_DON = 3000
         const tuNgay = new Date(Date.now() - soNgay * 86400_000)
 
@@ -4087,7 +4094,8 @@ router.get('/do-gia-von', async (req: Request, res: Response) => {
                  * mới được nối vào sổ ngày 03/09, nên "7 ngày" gồm 6 ngày TRƯỚC bản
                  * vá — không phân biệt được rò cũ với rò đang chảy. */
                 const motNgay = Date.now() - 86400_000
-                const chuaVao = { trong24Gio: 0, trong7Ngay: 0, tu8Den30: 0, tren30: 0 }
+                const chuaVao = { trong24Gio: 0, trong7Ngay: 0, tu8Den30: 0, tren30: 0, sauMoc: 0 }
+                let tongSauMoc = 0
                 /* Đơn ĐÃ HUỶ đếm RIÊNG. Huỷ đơn chỉ ghi bút toán ĐẢO (VOID-<ref>) và
                  * giữ nguyên SALE- gốc, nên đơn huỷ mà không có SALE- nghĩa là nó chưa
                  * từng vào sổ — nhưng ghi bù cho nó thì vô nghĩa, hai vế triệt tiêu
@@ -4102,6 +4110,8 @@ router.get('/do-gia-von', async (req: Request, res: Response) => {
                     })
                     const tap = new Set(co.map((x: any) => x.reference))
                     for (const d of lo) {
+                        if (mocCat !== null && new Date(d.createdAt).getTime() >= mocCat
+                            && String(d.status) !== 'voided') tongSauMoc++
                         const coGv = tap.has(`COGS-${d.receiptNumber}`)
                         const coDt = tap.has(`SALE-${d.receiptNumber}`)
                         if (coGv) soCoButToan++
@@ -4110,6 +4120,7 @@ router.get('/do-gia-von', async (req: Request, res: Response) => {
                         if (!coDt) {
                             if (String(d.status) === 'voided') { chuaVaoDaHuy++; continue }
                             const t = new Date(d.createdAt).getTime()
+                            if (mocCat !== null && t >= mocCat) chuaVao.sauMoc++
                             if (t >= motNgay) chuaVao.trong24Gio++
                             if (t >= bay) chuaVao.trong7Ngay++
                             else if (t >= bamuoi) chuaVao.tu8Den30++
@@ -4141,6 +4152,9 @@ router.get('/do-gia-von', async (req: Request, res: Response) => {
                     donChuaVaoSoHoanToan: donDs.length - soCoDoanhThu,
                     chuaVaoSoTheoMoc: chuaVao,
                     chuaVaoSoNhungDaHuy: chuaVaoDaHuy,
+                    // Mẫu số đi kèm: có bao nhiêu đơn đồng bộ SAU mốc, để biết
+                    // "0 đơn chưa vào sổ" là ĐÃ BỊT hay chỉ là KHÔNG CÓ ĐƠN NÀO
+                    ...(mocCat !== null ? { tongDonSauMoc: tongSauMoc } : {}),
                     canGhiBu: donDs.length - soCoDoanhThu - chuaVaoDaHuy,
                     chuaVaoSoTheoNguon: Object.fromEntries(
                         Array.from(theoNguon.entries()).sort((a, b) => b[1] - a[1]).slice(0, 8),
