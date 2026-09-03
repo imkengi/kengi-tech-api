@@ -4070,14 +4070,26 @@ router.get('/do-gia-von', async (req: Request, res: Response) => {
                 /* Đối chiếu với SỔ: đơn nào không có bút toán COGS-. Đây mới là con số
                  * thật sự đáng lo — thiếu giá vốn trên sổ nghĩa là lãi trên báo cáo
                  * cao hơn lãi thật. */
-                const dsRef = donDs.map((d: any) => `COGS-${d.receiptNumber}`)
-                let soCoButToan = 0
-                for (let i = 0; i < dsRef.length; i += 500) {
-                    const lo = dsRef.slice(i, i + 500)
+                /* Đếm CẢ HAI: bút toán doanh thu (SALE-) và giá vốn (COGS-).
+                 * Tách ra vì hai nguyên nhân cần hai bản vá khác hẳn nhau:
+                 *   · có SALE- mà thiếu COGS-  ⇒ lỗi RIÊNG của khối giá vốn
+                 *   · thiếu CẢ HAI             ⇒ đơn chưa vào sổ, không dính giá vốn
+                 * Gộp chung rồi kết luận là vá nhầm chỗ. */
+                let soCoButToan = 0, soCoDoanhThu = 0, soCoDoanhThuThieuGiaVon = 0
+                for (let i = 0; i < donDs.length; i += 400) {
+                    const lo = donDs.slice(i, i + 400)
+                    const refs = lo.flatMap((d: any) => [`COGS-${d.receiptNumber}`, `SALE-${d.receiptNumber}`])
                     const co = await sp.journalEntry.findMany({
-                        where: { reference: { in: lo } }, select: { reference: true },
+                        where: { reference: { in: refs } }, select: { reference: true },
                     })
-                    soCoButToan += new Set(co.map((x: any) => x.reference)).size
+                    const tap = new Set(co.map((x: any) => x.reference))
+                    for (const d of lo) {
+                        const coGv = tap.has(`COGS-${d.receiptNumber}`)
+                        const coDt = tap.has(`SALE-${d.receiptNumber}`)
+                        if (coGv) soCoButToan++
+                        if (coDt) soCoDoanhThu++
+                        if (coDt && !coGv) soCoDoanhThuThieuGiaVon++
+                    }
                 }
 
                 ketQua.push({
@@ -4091,6 +4103,11 @@ router.get('/do-gia-von', async (req: Request, res: Response) => {
                     soMaHangChuaKhaiGiaVon: maThieu.size,
                     donCoButToanGiaVon: soCoButToan,
                     donTHIEUButToanGiaVon: donDs.length - soCoButToan,
+                    donCoButToanDoanhThu: soCoDoanhThu,
+                    // ĐÂY mới là lỗi riêng của khối giá vốn: sổ có doanh thu mà không có giá vốn
+                    donCoDoanhThuNhungTHIEUGiaVon: soCoDoanhThuThieuGiaVon,
+                    // Còn đây là đơn CHƯA VÀO SỔ, không liên quan gì tới giá vốn
+                    donChuaVaoSoHoanToan: donDs.length - soCoDoanhThu,
                     tiLeThieu: donDs.length ? Math.round((donDs.length - soCoButToan) * 1000 / donDs.length) / 10 : 0,
                 })
             } catch (e: any) {
