@@ -420,7 +420,8 @@ function docDieuKhoanTuBody(b: any): Record<string, any> {
 router.post('/', authMiddleware, requireRole('admin', 'manager'), validate(CreateSupplierSchema), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        const { name, contactName, phone, email, address, taxCode, status, notes, payable } = req.body
+        const { name, contactName, phone, email, address, taxCode, status, notes, payable,
+            bankBin, bankAccountNo, bankAccountName } = req.body
         if (!name?.trim()) return res.status(400).json({ success: false, error: 'Name required' })
         const code = await nextCode(prisma, 'supplierCodeSeq', 'NCC', 3, '-', 'Supplier', 'code')
         /* Điều khoản thanh toán: nhận số ngày tường minh; chỉ có nhãn thì suy
@@ -430,6 +431,7 @@ router.post('/', authMiddleware, requireRole('admin', 'manager'), validate(Creat
          * `??` gộp undefined với null nên client xoá số mà còn nhãn sẽ bị suy lại. */
         const supplier = await prisma.supplier.create({
             data: { code, name: name.trim(), contactName, phone, email, address, taxCode, status: status || 'active', notes, payable: payable ?? 0,
+                bankBin, bankAccountNo, bankAccountName,
                     ...docDieuKhoanTuBody(req.body) },
         })
         cacheDel(`${req.user?.storeSchema || 'default'}:suppliers:*`).catch(() => { })
@@ -445,10 +447,12 @@ router.post('/', authMiddleware, requireRole('admin', 'manager'), validate(Creat
 router.put('/:id', authMiddleware, requireRole('admin', 'manager'), validate(UpdateSupplierSchema), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        const { name, contactName, phone, email, address, taxCode, status, notes, payable } = req.body
+        const { name, contactName, phone, email, address, taxCode, status, notes, payable,
+            bankBin, bankAccountNo, bankAccountName } = req.body
         const supplier = await prisma.supplier.update({
             where: { id: String(req.params.id) },
             data: { name, contactName, phone, email, address, taxCode, status, notes, payable,
+                bankBin, bankAccountNo, bankAccountName,
                     ...docDieuKhoanTuBody(req.body) },
         })
         res.json({ success: true, data: supplier })

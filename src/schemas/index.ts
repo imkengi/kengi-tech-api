@@ -173,6 +173,13 @@ export const CreateSupplierSchema = z.object({
      * đổi tên hay số điện thoại cũng không lưu nổi. Đúng lỗi "sửa NCC xong không
      * lưu" mà chủ shop báo. */
     payable: z.number().optional().default(0),
+    /* TÀI KHOẢN NHẬN TIỀN CỦA NCC — dựng mã VietQR ở trang Hạn thanh toán.
+     * PHẢI khai ở đây: Zod thay hẳn req.body bằng data đã lọc, khoá lạ bị CẮT,
+     * nên thiếu ba dòng này là biểu mẫu gửi lên mà route nhận `undefined` rồi
+     * Prisma lặng lẽ bỏ qua — đúng lỗi "sửa NCC xong không lưu" đã cắn 21/08. */
+    bankBin: z.string().max(20).optional().nullable(),
+    bankAccountNo: z.string().max(50).optional().nullable(),
+    bankAccountName: z.string().max(200).optional().nullable(),
     status: z.enum(['active', 'inactive']).default('active'),
 })
 

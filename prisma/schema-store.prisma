@@ -537,6 +537,13 @@ model Supplier {
   paymentTermType        String? // "net" | "dom" | "eom"
   paymentTermDom         Int? // dom: ngày trong tháng 1..31
   paymentTermMonthOffset Int? // dom/eom: 0 = tháng này, 1 = tháng sau, …
+  // TÀI KHOẢN NHẬN TIỀN CỦA NCC (03/09/2026) — để trang Hạn thanh toán dựng mã
+  // VietQR cho kế toán quét chuyển khoản, khỏi gõ tay số tài khoản.
+  // `bankBin` là mã BIN 6 số của VietQR (970436 = Vietcombank…), KHÔNG phải tên
+  // ngân hàng: tên viết mỗi nơi một kiểu thì không dựng được QR.
+  bankBin                String?
+  bankAccountNo          String?
+  bankAccountName        String?
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
