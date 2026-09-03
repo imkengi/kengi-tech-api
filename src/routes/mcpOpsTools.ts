@@ -392,12 +392,30 @@ export const OPS_TOOLS: Tool[] = [
             required: ['order_code'],
         },
         run: async (a, { prisma }) => {
-            const q = String(a.order_code)
+            const q = String(a.order_code || '').trim()
+            if (!q) throw new ToolError('Thiếu order_code')
+            /* DÒ ĐÚNG TÊN CỘT (03/09/2026). Bản cũ dò `orderCode` và `platformOrderId`
+             * — HAI CỘT KHÔNG TỒN TẠI. Prisma `as any` không ném P2022 mà trả về
+             * không-tìm-thấy, nên tool luôn báo "Không tìm thấy đơn sàn" kể cả với
+             * mã có thật (đo hôm nay với SPE-2609033AFWUNGK, đơn có trong hệ thống).
+             * Tên thật: orderNumber (duy nhất) · externalOrderId · trackingNumber. */
             const o = await prisma.onlineOrder.findFirst({
-                where: { OR: [{ id: q }, { orderCode: q }, { platformOrderId: q }] },
-                include: { items: true },
+                where: { OR: [{ id: q }, { orderNumber: q }, { externalOrderId: q }, { trackingNumber: q }] },
+                include: {
+                    // Kèm ảnh + SKU kho để agent nói được "đơn này gồm hàng gì"
+                    items: {
+                        include: {
+                            product: {
+                                select: {
+                                    sku: true,
+                                    images: { select: { url: true }, orderBy: { isPrimary: 'desc' }, take: 1 },
+                                },
+                            },
+                        },
+                    },
+                },
             }).catch(() => null)
-            if (!o) throw new ToolError(`Không tìm thấy đơn sàn "${q}"`)
+            if (!o) throw new ToolError(`Không tìm thấy đơn sàn "${q}" — thử mã đơn (orderNumber), mã sàn (externalOrderId) hoặc mã vận đơn`)
             return o
         },
     },
