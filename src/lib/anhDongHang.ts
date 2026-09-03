@@ -10,11 +10,15 @@
 //  (`OnlineProduct.imageUrl`), và tấm đó còn đúng hơn: chính là ảnh khách nhìn
 //  thấy lúc đặt hàng.
 //
-//  Khớp bằng HAI khoá, không chỉ SKU:
-//    1. `localProductId` — listing đã map sang hàng kho. Đây là khoá CHẮC nhất.
-//    2. `sku` — đường lùi cho listing chưa map.
-//  Chỉ khớp SKU thì hụt: SKU trên dòng hàng của đơn là SKU PHÂN LOẠI của sàn
-//  (đo thật: "SHD8611R"), có thể khác SKU lưu ở listing.
+//  HÀNG CÓ PHÂN LOẠI THÌ LẤY ẢNH CHÍNH. Sàn lưu MỘT ảnh cho cả listing chứ không
+//  lưu ảnh từng phân loại, mà dòng hàng của đơn lại mang SKU PHÂN LOẠI (đo thật:
+//  "SHD8611R", hậu tố R = màu đỏ) trong khi listing lưu SKU gốc "SHD8611". Nên
+//  khớp thẳng SKU là trượt. Thứ tự dò, chắc nhất trước:
+//    1. ảnh kho — shop tự đặt, quý nhất vì đúng hàng thật trong kho
+//    2. `externalItemId` ↔ `platformProductId` — đúng listing trên sàn
+//    3. `localProductId` — listing đã map sang hàng kho
+//    4. `sku` khớp hẳn
+//    5. SKU phân loại → lùi về ảnh chính của listing CHA (khớp tiền tố)
 //
 //  Dùng chung cho GET /online-orders và tool MCP get_online_order — hai nơi nói
 //  khác nhau về "hàng này ảnh nào" thì còn khó lần hơn là không có ảnh.
@@ -50,32 +54,73 @@ export async function ganAnhDongHang<T extends DongHangCoAnh>(
 
     const theoProduct = new Map<string, string>()
     const theoSku = new Map<string, string>()
+    const theoItemId = new Map<string, string>()
+    /** [sku listing, ảnh] — để dò listing CHA của một SKU phân loại */
+    const dsSkuListing: Array<[string, string]> = []
 
     if (dsSku.length || dsProductId.length) {
         try {
-            const dieuKien: any[] = []
-            if (dsProductId.length) dieuKien.push({ localProductId: { in: dsProductId } })
-            if (dsSku.length) dieuKien.push({ sku: { in: dsSku } })
+            /* Lấy TOÀN BỘ listing có ảnh của cửa hàng, không lọc theo SKU.
+             *
+             * Vì sao không lọc: SKU trên dòng hàng là SKU PHÂN LOẠI (đo thật:
+             * "SHD8611R" — hậu tố R = màu đỏ), còn listing lưu SKU GỐC
+             * ("SHD8611"). Lọc `sku IN (...)` thì không bao giờ khớp, và mỗi
+             * listing chỉ giữ MỘT ảnh — ảnh chính — chứ không lưu ảnh từng phân
+             * loại. Muốn dò được listing cha thì phải có cả bảng trong tay.
+             *
+             * Danh mục listing của một cửa hàng cỡ vài nghìn dòng, chỉ lấy 3 cột,
+             * một lượt cho cả trang — rẻ hơn nhiều so với tra từng dòng hàng. */
             const listings = await prisma.onlineProduct.findMany({
-                where: { AND: [{ OR: dieuKien }, { imageUrl: { not: null } }] },
-                select: { sku: true, imageUrl: true, localProductId: true },
+                where: { imageUrl: { not: null } },
+                select: { sku: true, imageUrl: true, localProductId: true, platformProductId: true },
+                take: 10000,
             })
             for (const lp of listings) {
                 if (!lp.imageUrl) continue
                 if (lp.localProductId && !theoProduct.has(lp.localProductId)) {
                     theoProduct.set(lp.localProductId, lp.imageUrl)
                 }
-                if (lp.sku && !theoSku.has(lp.sku)) theoSku.set(lp.sku, lp.imageUrl)
+                if (lp.platformProductId && !theoItemId.has(lp.platformProductId)) {
+                    theoItemId.set(lp.platformProductId, lp.imageUrl)
+                }
+                if (lp.sku) {
+                    const k = String(lp.sku).trim()
+                    if (k && !theoSku.has(k)) theoSku.set(k, lp.imageUrl)
+                    if (k.length >= 4) dsSkuListing.push([k, lp.imageUrl])
+                }
             }
+            // SKU dài trước: "SHD8611" phải thắng "SHD86" khi cùng là tiền tố
+            dsSkuListing.sort((a, b) => b[0].length - a[0].length)
         } catch (e: any) {
             console.error('[anh-dong-hang] không đọc được ảnh listing:', e?.message || e)
         }
     }
 
+    /** SKU phân loại → ảnh CHÍNH của listing cha ("SHD8611R" → listing "SHD8611") */
+    const anhListingCha = (sku: string): string | null => {
+        for (const [k, url] of dsSkuListing) {
+            if (sku.length > k.length && sku.startsWith(k)) {
+                /* Phần dư phải NGẮN (hậu tố phân loại: R, XL, -DO…). Không kẹp thì
+                 * "SHD86" nuốt luôn "SHD8611234" — hai mã hàng khác hẳn nhau. */
+                if (sku.length - k.length <= 4) return url
+            }
+        }
+        return null
+    }
+
     return ds.map(it => {
+        const sku = String(it.sku || '').trim()
         const anhKho = it.product?.images?.[0]?.url || null
+        const anhTheoItem = (it as any).externalItemId
+            ? theoItemId.get(String((it as any).externalItemId).trim()) || null : null
         const anhTheoSp = it.productId ? theoProduct.get(String(it.productId)) || null : null
-        const anhTheoSku = it.sku ? theoSku.get(String(it.sku).trim()) || null : null
-        return { ...it, imageUrl: anhKho || anhTheoSp || anhTheoSku || null }
+        const anhTheoSku = sku ? theoSku.get(sku) || null : null
+        const anhCha = sku ? anhListingCha(sku) : null
+        return {
+            ...it,
+            // Ảnh kho (shop tự đặt) → listing đúng mã sàn → theo sản phẩm → SKU khớp
+            // hẳn → SKU phân loại lùi về ảnh chính của listing cha
+            imageUrl: anhKho || anhTheoItem || anhTheoSp || anhTheoSku || anhCha || null,
+        }
     })
 }
