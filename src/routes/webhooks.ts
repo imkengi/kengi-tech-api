@@ -46,8 +46,16 @@ function verifyShopeeSignature(rawBody: Buffer, url: string, partnerKey: string,
 // ═══════════════════════════════════════════════════════════════════════════════
 
 router.post('/shopee', async (req: Request, res: Response) => {
-    // Always respond 200 immediately (Shopee retries on non-200)
-    res.json({ success: true })
+    /* TRẢ 200 VỚI THÂN RỖNG (03/09/2026).
+     *
+     * Shopee đòi phản hồi 2xx và THÂN RỖNG. Bản trước trả `{"success":true}` —
+     * vẫn là 200 nhưng có thân, và bấm "Verify" bên console thì Shopee gửi lại
+     * tin xác minh liên tục mà không chịu qua (đo: 13 lượt code=0 trong một giờ,
+     * không có lấy một push đơn nào).
+     *
+     * Trả lời NGAY rồi mới xử lý: Shopee tính giờ chờ ngắn và gửi lại nếu chậm,
+     * mà lấy chi tiết đơn thì phải gọi ngược API Shopee nên không kịp. */
+    res.status(200).end()
 
     try {
         const body = req.body
@@ -63,8 +71,13 @@ router.post('/shopee', async (req: Request, res: Response) => {
         console.log(`[Shopee Webhook] code=${pushCode} shop=${shopId} data=${JSON.stringify(data).substring(0, 300)}`)
 
         // Process order pushes (3, 4) + new chat message push (10)
+        // code 0 = Shopee xác minh URL (bấm Verify bên console). Đã trả 200 rỗng ở trên.
+        if (pushCode === 0) {
+            console.log(`[Shopee Webhook] ✅ Xác minh URL — đã trả 200 thân rỗng`)
+            return
+        }
         if (pushCode !== 3 && pushCode !== 4 && pushCode !== 10) {
-            console.log(`[Shopee Webhook] Ignoring push code ${pushCode}`)
+            console.log(`[Shopee Webhook] Bỏ qua push code ${pushCode} (chỉ nhận 3=trạng thái, 4=mã vận đơn, 10=chat)`)
             return
         }
 
