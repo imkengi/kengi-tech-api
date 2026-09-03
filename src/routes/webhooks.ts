@@ -139,17 +139,50 @@ router.post('/shopee', async (req: Request, res: Response) => {
             await cacheSet(shopSchemaCacheKey(shopId), resolvedSchema, SHOP_SCHEMA_TTL)
         }
 
-        // ── Verify HMAC signature (env-wide partner key, then per-channel apiSecret) ──
-        const partnerKey = process.env.SHOPEE_PARTNER_KEY || channel.apiSecret || ''
-        if (!partnerKey) {
-            console.warn(`[Shopee Webhook] No partner key available for shop_id=${shopId} — processing without signature check`)
+        /* ── KIỂM CHỮ KÝ: THỬ NHIỀU KHOÁ (03/09/2026) ────────────────────────
+         *
+         * Shopee ký push bằng "Live Push Partner Key" — bên console nó là ô RIÊNG,
+         * có nút Reset riêng, nên rất có thể KHÁC khoá API đang lưu ở `apiSecret`.
+         * Bản cũ chỉ thử một khoá rồi im lặng bỏ push; chủ shop sẽ thấy "Shopee báo
+         * gửi thành công" mà mã vận đơn không về, không có manh mối nào.
+         *
+         * Ba cửa hàng của mình nằm trên BA app Shopee khác nhau, mỗi app một khoá,
+         * nên KHÔNG dùng được một biến môi trường chung — `SHOPEE_PARTNER_KEY` đặt
+         * vào là hỏng hai shop. Ưu tiên khoá theo TỪNG KÊNH.
+         *
+         * Thử lần lượt và nói rõ khoá nào khớp, để lần sau khỏi mò. */
+        const ungVienKhoa: Array<{ ten: string; key: string }> = [
+            { ten: 'channel.webhookSecret', key: channel.webhookSecret || '' },
+            { ten: 'channel.apiSecret', key: channel.apiSecret || '' },
+            { ten: 'env.SHOPEE_PARTNER_KEY', key: process.env.SHOPEE_PARTNER_KEY || '' },
+        ].filter(x => !!x.key)
+
+        if (ungVienKhoa.length === 0) {
+            console.warn(`[Shopee Webhook] Kênh ${channel.name} chưa có khoá nào để kiểm chữ ký (shop_id=${shopId}) — xử lý mà KHÔNG kiểm`)
         } else if (!signature) {
-            console.warn(`[Shopee Webhook] Missing Authorization header for shop_id=${shopId} — processing without signature check`)
+            console.warn(`[Shopee Webhook] Không có header Authorization (shop_id=${shopId}) — xử lý mà KHÔNG kiểm`)
         } else if (!rawBody) {
-            console.warn(`[Shopee Webhook] Raw body unavailable — processing without signature check`)
-        } else if (!verifyShopeeSignature(rawBody, pushUrl, partnerKey, signature)) {
-            console.warn(`[Shopee Webhook] ❌ Invalid signature for shop_id=${shopId} — rejecting`)
-            return
+            console.warn(`[Shopee Webhook] Không đọc được thân thô — xử lý mà KHÔNG kiểm`)
+        } else {
+            const khop = ungVienKhoa.find(x => verifyShopeeSignature(rawBody, pushUrl, x.key, signature))
+            if (!khop) {
+                console.error(
+                    `[Shopee Webhook] ❌ CHỮ KÝ KHÔNG KHỚP — bỏ push code=${pushCode} của kênh "${channel.name}" (shop_id=${shopId}).
+` +
+                    `   Đã thử ${ungVienKhoa.length} khoá: ${ungVienKhoa.map(x => x.ten).join(', ')}.
+` +
+                    `   URL dùng để ký: ${pushUrl}
+` +
+                    `   CÁCH CHỮA: vào Shopee Open Platform → Push Mechanism → Set Push, chép "Live Push Partner Key" ` +
+                    `của app này rồi lưu vào webhookSecret của kênh. Nếu URL trên KHÁC chuỗi đã khai bên console ` +
+                    `thì đặt biến SHOPEE_WEBHOOK_URL đúng bằng chuỗi đó (Shopee ký theo URL, sai một ký tự là lệch).`,
+                )
+                return
+            }
+            if (khop.ten !== 'channel.webhookSecret') {
+                // Khớp bằng khoá dự phòng — chạy được, nhưng nên khai đúng chỗ cho rõ ràng
+                console.log(`[Shopee Webhook] chữ ký khớp bằng ${khop.ten} (kênh ${channel.name})`)
+            }
         }
 
         // ── Code 10: tin nhắn chat mới → đẩy realtime cho FE refresh khung chat ──

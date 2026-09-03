@@ -341,7 +341,7 @@ router.put('/channels/:id', authMiddleware, requirePermission('online_orders.man
     try {
         const prisma = req.storePrisma!
         const { id } = req.params
-        const { name, platform, status, shopUrl, apiKey, apiSecret, accessToken, syncEnabled } = req.body
+        const { name, platform, status, shopUrl, apiKey, apiSecret, accessToken, syncEnabled, webhookSecret } = req.body
 
         const data: any = {}
         if (name !== undefined) data.name = name
@@ -350,6 +350,9 @@ router.put('/channels/:id', authMiddleware, requirePermission('online_orders.man
         if (shopUrl !== undefined) data.shopUrl = shopUrl
         if (apiKey !== undefined) data.apiKey = apiKey
         if (apiSecret !== undefined) data.apiSecret = apiSecret
+        /* Live Push Partner Key của app Shopee — khoá Shopee dùng để KÝ push,
+         * là ô riêng bên console nên có thể khác apiSecret (khoá gọi API). */
+        if (webhookSecret !== undefined) data.webhookSecret = webhookSecret
         if (accessToken !== undefined) data.accessToken = accessToken
         if (syncEnabled !== undefined) data.syncEnabled = syncEnabled
 
