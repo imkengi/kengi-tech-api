@@ -4029,6 +4029,8 @@ router.get('/do-gia-von', async (req: Request, res: Response) => {
                     where: { createdAt: { gte: tuNgay }, status: { notIn: ['cancelled'] } },
                     select: {
                         receiptNumber: true, total: true, subtotal: true, createdAt: true,
+                        // Nhận dạng ĐƯỜNG GHI đã tạo đơn — để biết chỗ nào đang rò
+                        channel: true, createdByName: true, status: true,
                         items: { select: { productId: true, quantity: true, baseQuantity: true, lineTotal: true } },
                     },
                     take: TRAN_DON,
@@ -4082,6 +4084,7 @@ router.get('/do-gia-von', async (req: Request, res: Response) => {
                 const bay = Date.now() - 7 * 86400_000
                 const bamuoi = Date.now() - 30 * 86400_000
                 const chuaVao = { trong7Ngay: 0, tu8Den30: 0, tren30: 0 }
+                const theoNguon = new Map<string, number>()
                 for (let i = 0; i < donDs.length; i += 400) {
                     const lo = donDs.slice(i, i + 400)
                     const refs = lo.flatMap((d: any) => [`COGS-${d.receiptNumber}`, `SALE-${d.receiptNumber}`])
@@ -4100,6 +4103,11 @@ router.get('/do-gia-von', async (req: Request, res: Response) => {
                             if (t >= bay) chuaVao.trong7Ngay++
                             else if (t >= bamuoi) chuaVao.tu8Den30++
                             else chuaVao.tren30++
+                            /* Gom theo NGUỒN TẠO ĐƠN. Log không có dòng [ghi-so] nào
+                             * ⇒ hàm ghi sổ không hề được GỌI, nên phải tìm xem đường
+                             * nào tạo ra những đơn này. */
+                            const k = `${d.channel || 'khong-ro'} · ${d.createdByName || 'khong-ro'} · ${d.status}`
+                            theoNguon.set(k, (theoNguon.get(k) || 0) + 1)
                         }
                     }
                 }
@@ -4121,6 +4129,9 @@ router.get('/do-gia-von', async (req: Request, res: Response) => {
                     // Còn đây là đơn CHƯA VÀO SỔ, không liên quan gì tới giá vốn
                     donChuaVaoSoHoanToan: donDs.length - soCoDoanhThu,
                     chuaVaoSoTheoMoc: chuaVao,
+                    chuaVaoSoTheoNguon: Object.fromEntries(
+                        Array.from(theoNguon.entries()).sort((a, b) => b[1] - a[1]).slice(0, 8),
+                    ),
                     tiLeThieu: donDs.length ? Math.round((donDs.length - soCoButToan) * 1000 / donDs.length) / 10 : 0,
                 })
             } catch (e: any) {
