@@ -1,5 +1,8 @@
 import { khoangNgayVN } from '../lib/vnTime'
 import { Router, Response, NextFunction } from 'express'
+import { postReturnJournal } from '../lib/autoJournalPurchase'
+import { thuGhiSo, sanCuaDon } from '../lib/ghiSoDongBo'
+import { PLATFORM_AR } from '../lib/autoJournal'
 import { errMsg } from '../lib/errorResponse'
 import { authMiddleware, AuthRequest, getBranchFilter } from '../middleware/auth'
 import { chayTheoDot } from '../lib/poolGuard'
@@ -3959,9 +3962,25 @@ router.post('/returns/manual', authMiddleware, async (req: AuthRequest, res: Res
             include: { items: true },
         })
 
-        // KHÔNG tự đảo kho/bút toán ở đây: trả một phần là chuyện thường, đảo
-        // toàn bộ đơn sẽ sai. Người dùng xử lý tiếp ở tab "Cần điều chỉnh" (HĐ)
-        // và phiếu nhập trả hàng nếu cần hoàn kho.
+        /* Ghi sổ khi phiếu nhập tay đã ở trạng thái HOÀN TIỀN (điểm đứt 5).
+         * Vẫn KHÔNG đảo kho ở đây — trả một phần là chuyện thường, đảo toàn bộ đơn
+         * sẽ sai; người dùng xử lý kho tiếp ở tab "Cần điều chỉnh". Vì kho chưa
+         * hoàn nên bút toán cũng không ghi vế nhập lại kho. */
+        if (status === 'refunded') {
+            const tkSan = PLATFORM_AR[sanCuaDon((order as any).channel?.platform)]!
+            await thuGhiSo(`Trả hàng nhập tay ${code}`, () => postReturnJournal(prisma, {
+                code,
+                customerName: order.customerName || 'Khách sàn',
+                originalInvoice: order.orderNumber,
+                totalRefund: refundAmount,
+                refundMethod: 'platform_refund',
+                costValue: 0,
+                branchId: (order as any).branchId || req.user?.branchId || null,
+                createdAt: (ngay && !isNaN(ngay.getTime())) ? ngay : new Date(),
+                taiKhoanDoiUng: { code: tkSan.account, name: tkSan.name },
+            }, { userId: req.user?.userId ?? null }))
+        }
+
         res.status(201).json({
             success: true,
             data: created,
@@ -4239,6 +4258,30 @@ router.put('/returns/:returnId/process', authMiddleware, async (req: AuthRequest
             data: updateData,
             include: { items: true },
         })
+
+        /* GHI SỔ (03/09/2026 — điểm đứt 5). Đặt Ở ĐÂY chứ không ở chỗ tạo phiếu:
+         * phiếu trả sinh ra ở trạng thái `pending`, chưa phải nghiệp vụ kế toán —
+         * ghi sớm là giảm doanh thu cho một khoản có thể bị từ chối. Duyệt xong mới
+         * là lúc tiền thật sự hoàn.
+         *
+         * Đối ứng 131-<SÀN>: sàn hoàn tiền bằng cách trừ vào khoản còn nợ shop, tiền
+         * không ra khỏi quỹ. Vế nhập lại kho để bộ sinh bút toán bỏ qua (costValue=0)
+         * vì kho đã được hoàn ở khối trên bằng adjustSellableStock — ghi thêm
+         * Nợ 156 / Có 632 nữa là cộng hàng vào kho hai lần trên sổ. */
+        if (updateData.status === 'refunded') {
+            const tkSan = PLATFORM_AR[sanCuaDon((returnOrder as any).channel?.platform)]!
+            await thuGhiSo(`Trả hàng đơn sàn ${returnOrder.code}`, () => postReturnJournal(prisma, {
+                code: returnOrder.code,
+                customerName: returnOrder.customerName,
+                originalInvoice: returnOrder.originalInvoice,
+                totalRefund: Number((returnOrder as any).totalRefund) || 0,
+                refundMethod: 'platform_refund',
+                costValue: 0,
+                branchId: (returnOrder as any).branchId ?? null,
+                createdAt: (returnOrder as any).createdAt ?? new Date(),
+                taiKhoanDoiUng: { code: tkSan.account, name: tkSan.name },
+            }, { branchId: (returnOrder as any).branchId ?? null, userId: req.user?.userId ?? null }))
+        }
 
         // Audit log
         try {

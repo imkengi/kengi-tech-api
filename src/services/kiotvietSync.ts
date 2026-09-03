@@ -25,6 +25,9 @@
  */
 
 import crypto from 'crypto'
+import { createJournalEntriesForTransaction } from '../lib/autoJournal'
+import { postImportReceiptJournal, postReturnJournal, postExpenseJournal } from '../lib/autoJournalPurchase'
+import { thuGhiSo, coKhauTruVat } from '../lib/ghiSoDongBo'
 import { KV } from './kiotviet'
 import { tongPhieuChuaTraTheoNcc, soDuDauKyTuKV } from '../lib/congNoNcc'
 
@@ -1182,6 +1185,11 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
 
             if (opts.apply) {
                 const created = await sp.transaction.create({
+                    include: {
+                        // Bút toán cần dòng hàng (giá vốn) và cách trả (chọn 111/112/131)
+                        items: { include: { product: { select: { costPrice: true } } } },
+                        payments: true,
+                    },
                     data: {
                         receiptNumber: code,
                         customerId,
@@ -1215,6 +1223,15 @@ export async function syncInvoices(sp: any, items: any[], opts: SyncOptions, c: 
                     },
                 })
                 await saveMap(sp, 'invoice', kvId, code, created.id)
+
+                /* GHI SỔ (03/09/2026 — điểm đứt 1). Trước bản này đồng bộ KiotViet
+                 * tạo hoá đơn rồi dừng, không sinh bút toán nào; đo trên HUTI thì
+                 * sổ TK 511 chỉ có 35% doanh thu thật. Khoá SALE-<số phiếu> lo phần
+                 * chống ghi hai lần nên chạy lại đồng bộ không đẻ thêm bút toán. */
+                await thuGhiSo(`HĐ ${code}`, () => createJournalEntriesForTransaction(sp, created as any, {
+                    branchId: (created as any).branchId ?? null,
+                    userId: opts.systemUserId ?? null,
+                }))
                 /* Tổng mua của khách là số TỔNG HỢP SẴN mà chỉ đường POS duy
                  * trì — đồng bộ KiotViet trước nay không đụng tới, nên cửa hàng
                  * nhập bán từ KiotViet có khách mua hàng tỷ mà danh sách hiện
@@ -1342,6 +1359,9 @@ async function ganTheKhoPhieuNhap(
 }
 
 export async function syncPurchaseOrders(sp: any, items: any[], opts: SyncOptions, c: SyncCounters): Promise<void> {
+    /* Hộ kinh doanh không được khấu trừ VAT đầu vào → VAT nằm trong giá vốn.
+     * Đọc MỘT lần cho cả lượt: pool prod mỗi cửa hàng chỉ 1 kết nối. */
+    const khauTruVat = await coKhauTruVat(sp)
     let ganOk = 0, ganGiu = 0
     for (const kv of items) {
         c.fetched++
@@ -1446,6 +1466,12 @@ export async function syncPurchaseOrders(sp: any, items: any[], opts: SyncOption
                     },
                 })
                 await saveMap(sp, 'purchaseOrder', kvId, code, created.id)
+                // GHI SỔ: Nợ 156 / Có 331 (+ 1331 nếu được khấu trừ) — điểm đứt 1
+                await thuGhiSo(`Phiếu nhập ${code}`, () => postImportReceiptJournal(sp, created as any, {
+                    branchId: (created as any).branchId ?? null,
+                    userId: opts.systemUserId ?? null,
+                    vatKhauTru: khauTruVat,
+                }))
                 // Thẻ kho: tách nhãn dòng điều chỉnh vô danh của đợt này (xem helper)
                 for (const l of lines) {
                     const kq = await ganTheKhoPhieuNhap(sp, opts, { code, ngay, supplierId, supplierName }, l)
@@ -1553,6 +1579,19 @@ export async function syncReturns(sp: any, items: any[], opts: SyncOptions, c: S
                     },
                 })
                 await saveMap(sp, 'return', kvId, code, created.id)
+                /* GHI SỔ: Nợ 5212 / Có 111|131 + nhập lại kho — điểm đứt 1.
+                 * KiotViet không cho biết giá vốn hàng trả nên KHÔNG ghi vế nhập
+                 * lại kho (Nợ 156 / Có 632): ghi bừa một con số là làm sai giá vốn,
+                 * còn bỏ trống thì bộ đối chiếu soi ra được. */
+                await thuGhiSo(`Trả hàng ${code}`, () => postReturnJournal(sp, {
+                    code,
+                    customerName: String(kv?.customerName || '') || null,
+                    originalInvoice,
+                    totalRefund: total,
+                    refundMethod: 'cash',
+                    costValue: 0,
+                    createdAt: date,
+                }, { userId: opts.systemUserId ?? null }))
             }
             c.created++
             noteSample(c, { code, khach: kv?.customerName, tien: total, soDong: lines.length, ngay: date.toISOString().slice(0, 10) })
@@ -1696,6 +1735,11 @@ export async function syncCashflow(sp: any, items: any[], opts: SyncOptions, c: 
                 const dup = await sp.expense.findFirst({ where: { sourceRef: `KV|${code}` } })   // chốt chống trùng: nuốt lỗi đọc ⇒ tạo bản ghi thứ hai (20/08/2026)
                 if (dup) { c.skipped++; if (opts.apply) await saveMap(sp, entity, kvId, code, dup.id); continue }
                 if (opts.apply) {
+                    /* KHÔNG ghi sổ ở đây (điểm đứt 1 — cố ý chừa lại): phiếu chi
+                     * này vào trạng thái `pending` = CHỜ DUYỆT, chưa được tính vào
+                     * thống kê. Ghi bút toán cho một khoản chưa duyệt là đưa chi phí
+                     * chưa ai xác nhận vào báo cáo lãi lỗ. Bút toán sinh khi chủ shop
+                     * duyệt phiếu, theo đúng đường expenses.ts. */
                     const created = await sp.expense.create({
                         data: {
                             description: note, amount, category: 'Sổ quỹ KiotViet', date,

@@ -296,6 +296,13 @@ export interface ReturnForJournal {
     vatAmount?: number | null
     branchId?: string | null
     createdAt?: Date | null
+    /**
+     * Tài khoản đối ứng chỉ đích danh, ví dụ `131-SHOPEE` cho hàng trả của đơn sàn.
+     * Sàn hoàn tiền thì tiền trừ thẳng vào khoản sàn còn nợ shop, chứ không ra khỏi
+     * quỹ — ghi Có 111 là làm hụt sổ quỹ, ghi Có 131 chung là để 131-SHOPEE treo
+     * cao hơn thực tế.
+     */
+    taiKhoanDoiUng?: { code: string; name: string } | null
 }
 
 /**
@@ -316,7 +323,8 @@ export async function postReturnJournal(
     await chanKhoaSo(client, opts, branchId, date, `phiếu trả hàng ${r.code}`)
     const method = String(r.refundMethod || 'cash')
     const traBangTien = method === 'cash' || method === 'bank_transfer' || method === 'bank' || method === 'transfer'
-    const doiUng = traBangTien ? tkTien(method) : { code: '131', name: 'Phải thu khách hàng' }
+    const doiUng = r.taiKhoanDoiUng
+        ?? (traBangTien ? tkTien(method) : { code: '131', name: 'Phải thu khách hàng' })
 
     const vat = Math.round(Number(r.vatAmount) || 0)
     const tienHang = Math.round((Number(r.totalRefund) || 0) - vat)

@@ -1,5 +1,8 @@
 import { Router, Response } from 'express'
 import { errMsg } from '../lib/errorResponse'
+import { createJournalEntriesForTransaction } from '../lib/autoJournal'
+import { postImportReceiptJournal, postReturnJournal } from '../lib/autoJournalPurchase'
+import { thuGhiSo, coKhauTruVat } from '../lib/ghiSoDongBo'
 import multer from 'multer'
 import * as XLSX from 'xlsx'
 import { authMiddleware, AuthRequest, getBranchFilter, getBranchId } from '../middleware/auth'
@@ -480,7 +483,11 @@ router.post('/transactions', authMiddleware, upload.single('file'), async (req: 
                         }
                     })
                 } else {
-                    await getPrisma(req).transaction.create({
+                    const donMoi = await getPrisma(req).transaction.create({
+                        include: {
+                            items: { include: { product: { select: { costPrice: true } } } },
+                            payments: true,
+                        },
                         data: {
                             receiptNumber, customerName, customerPhone,
                             customerId,
@@ -491,6 +498,13 @@ router.post('/transactions', authMiddleware, upload.single('file'), async (req: 
                             payments: { create: paymentsCreate }
                         }
                     })
+                    /* GHI SỔ (03/09/2026 — điểm đứt 4). Nhập liệu hàng loạt trước nay
+                     * đổ phiếu bán vào rồi dừng: số chứng từ nhảy vọt mà sổ đứng yên.
+                     * `createdAt` ở đây đã là NGÀY CHỨNG TỪ GỐC nên bút toán vào đúng kỳ. */
+                    await thuGhiSo(`HĐ ${receiptNumber}`, () => createJournalEntriesForTransaction(
+                        getPrisma(req), donMoi as any,
+                        { branchId: branchId || null, userId },
+                    ))
                 }
 
                 for (const item of itemsData) {
@@ -578,7 +592,7 @@ router.post('/import-receipts', authMiddleware, upload.single('file'), async (re
                 // Nay PHẢI khai báo tường minh (?hasVatInvoice=1 hoặc cột trong file).
                 const hasVatInvoice = String(req.query.hasVatInvoice || req.body?.hasVatInvoice || '') === '1'
                     || String(req.query.hasVatInvoice || req.body?.hasVatInvoice || '').toLowerCase() === 'true'
-                await getPrisma(req).importReceipt.create({
+                const phieuMoi = await getPrisma(req).importReceipt.create({
                     data: {
                         code, supplierName, totalCost, totalItems, branchId: branchId || null,
                         status: 'completed', note, userId, userName: 'Import',
@@ -587,6 +601,11 @@ router.post('/import-receipts', authMiddleware, upload.single('file'), async (re
                         items: { create: itemsData }
                     }
                 })
+                // GHI SỔ: Nợ 156 / Có 331 — điểm đứt 4
+                await thuGhiSo(`Phiếu nhập ${code}`, async () => postImportReceiptJournal(
+                    getPrisma(req), phieuMoi as any,
+                    { branchId: branchId || null, userId, vatKhauTru: await coKhauTruVat(getPrisma(req)) },
+                ))
 
                 for (const item of itemsData) {
                     await adjustSellableStock(getPrisma(req), item.productId, branchId, item.quantity)
@@ -680,6 +699,27 @@ router.post('/returns', authMiddleware, upload.single('file'), async (req: AuthR
                             }))
                         },
                     }
+                })
+
+                /* GHI SỔ: Nợ 5212 / Có 111 + nhập lại kho — điểm đứt 4.
+                 * Phiếu import đặt sẵn status 'refunded' và restocked=true, tức hàng
+                 * ĐÃ về kho, nên ghi luôn vế nhập lại kho theo giá vốn hiện tại của
+                 * mã hàng. Không tra được giá vốn thì để 0 và bộ đối chiếu soi ra —
+                 * đoán một con số là làm sai giá vốn. */
+                await thuGhiSo(`Trả hàng ${code}`, async () => {
+                    let giaVon = 0
+                    for (const i2 of itemsList) {
+                        if (!i2.productId) continue
+                        const sp2 = await getPrisma(req).product.findUnique({
+                            where: { id: i2.productId }, select: { costPrice: true },
+                        })
+                        giaVon += (sp2?.costPrice ?? 0) * (i2.quantity ?? 0)
+                    }
+                    return postReturnJournal(getPrisma(req), {
+                        code, customerName, originalInvoice,
+                        totalRefund, refundMethod: 'cash', costValue: giaVon,
+                        branchId: branchId || null, createdAt,
+                    }, { branchId: branchId || null })
                 })
 
                 for (const item of itemsList) {

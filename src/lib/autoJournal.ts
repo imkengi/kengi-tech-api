@@ -120,6 +120,15 @@ export interface AutoJournalOptions {
      * nói rõ với người dùng là đang ghi vào kỳ đã khoá.
      */
     boQuaKhoaSo?: boolean
+    /**
+     * Chỉ đích danh sàn TMĐT thay vì đoán từ số phiếu.
+     *
+     * `detectOnlinePlatform` chỉ nhìn tiền tố số phiếu; đường đồng bộ đơn sàn đặt
+     * số phiếu dạng `ONLINE-<mã đơn của sàn>` nên không lộ sàn nào, và đơn Shopee
+     * sẽ rơi vào 131-SAN chung thay vì 131-SHOPEE. Nơi gọi biết chắc sàn thì
+     * truyền vào đây.
+     */
+    san?: keyof typeof PLATFORM_AR | null
 }
 
 export interface LoiBut {
@@ -246,7 +255,7 @@ export async function createJournalEntriesForTransaction(
     //   fully paid in cash       → 111 (Tiền mặt)
     //   fully paid via bank/xfer → 112 (Tiền gửi ngân hàng)
     //   otherwise                → 131 (Phải thu khách hàng)
-    const onlinePlatform = detectOnlinePlatform(tx.receiptNumber)
+    const onlinePlatform = opts.san ?? detectOnlinePlatform(tx.receiptNumber)
     const platformAr = onlinePlatform ? PLATFORM_AR[onlinePlatform] : null
     const totalPaid = tx.payments?.reduce((s, p) => s + (p.amount || 0), 0) || tx.amountReceived || 0
     const isPaid = totalPaid >= tx.total

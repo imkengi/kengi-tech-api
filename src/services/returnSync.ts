@@ -5,6 +5,9 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { ShopeeService, TikTokService } from './platforms'
+import { postReturnJournal } from '../lib/autoJournalPurchase'
+import { PLATFORM_AR } from '../lib/autoJournal'
+import { thuGhiSo, sanCuaDon } from '../lib/ghiSoDongBo'
 import { reverseOnlineOrderEffects } from './onlineOrderReversal'
 
 export interface ReturnsSyncResult {
@@ -243,6 +246,32 @@ export async function syncChannelReturns(prisma: any, channel: any, since: Date,
                     },
                 },
             })
+
+            /* GHI SỔ (03/09/2026 — điểm đứt 3): Nợ 5212 / Có 131-<SÀN>.
+             *
+             * CHỈ ghi khi phiếu đã ở trạng thái HOÀN TIỀN. Phiếu trả đang chờ duyệt
+             * chưa phải nghiệp vụ kế toán — ghi sớm là giảm doanh thu cho một khoản
+             * sàn có thể từ chối.
+             *
+             * Đối ứng là 131-<SÀN> chứ không phải 111: sàn hoàn tiền bằng cách trừ
+             * vào khoản họ còn nợ shop, tiền không ra khỏi quỹ. Ghi Có 111 là làm
+             * hụt sổ quỹ tiền mặt một khoản không có thật.
+             *
+             * KHÔNG ghi vế nhập lại kho (Nợ 156 / Có 632): hàng trả từ sàn thường
+             * chưa về tới kho lúc này, và sàn không cho biết giá vốn. */
+            if (ret.status === 'refunded') {
+                const tkSan = PLATFORM_AR[sanCuaDon(platformLabel)]!
+                await thuGhiSo(`Trả hàng sàn ${returnCode}`, () => postReturnJournal(prisma, {
+                    code: returnCode,
+                    customerName: order?.customerName || `Khách ${platformLabel}`,
+                    originalInvoice: order?.orderNumber || ret.orderSn,
+                    totalRefund: refundAmount,
+                    refundMethod: 'platform_refund',
+                    costValue: 0,
+                    createdAt: platformCreatedAt || ret.updateTime || new Date(),
+                    taiKhoanDoiUng: { code: tkSan.account, name: tkSan.name },
+                }, {}))
+            }
 
             // Update order status if refunded + đảo hiệu ứng (kho/HĐ/bút toán)
             if (order && ret.status === 'refunded') {

@@ -4,6 +4,8 @@
  */
 
 import { adjustSellableStock } from '../lib/warehouseHelper'
+import { createJournalEntriesForTransaction } from '../lib/autoJournal'
+import { thuGhiSo, sanCuaDon } from '../lib/ghiSoDongBo'
 import { moTaLoi } from '../lib/gomLoi'
 import { TRANG_THAI_LEN_PHIEU } from '../lib/donDuocXoa'
 import { dangTat } from '../lib/choXong'
@@ -252,7 +254,11 @@ export async function convertOnlineOrderToTransaction(prisma: StorePrisma, order
     }
 
     // Create Transaction
-    await prisma.transaction.create({
+    const donDaTao = await prisma.transaction.create({
+        include: {
+            items: { include: { product: { select: { costPrice: true } } } },
+            payments: true,
+        },
         data: {
             receiptNumber: `ONLINE-${order.orderNumber}`,
             customerId: null,
@@ -287,6 +293,25 @@ export async function convertOnlineOrderToTransaction(prisma: StorePrisma, order
             },
         },
     })
+
+    /* GHI SỔ (03/09/2026 — điểm đứt 2). Đồng bộ đơn sàn trước nay tạo phiếu bán
+     * rồi dừng: bộ sinh bút toán CÓ SẴN đường hạch toán qua pháp nhân sàn
+     * (Nợ 131-SHOPEE / Có 511) nhưng không ai gọi nó lúc đơn về.
+     *
+     * Hai chỗ phải nói rõ sàn và ngày:
+     *   · số phiếu là `ONLINE-<mã đơn của sàn>` nên không lộ sàn nào — truyền
+     *     `san` vào để đơn Shopee ghi 131-SHOPEE chứ không rơi vào 131-SAN chung;
+     *   · ngày bút toán lấy NGÀY ĐẶT ĐƠN TRÊN SÀN, không phải lúc chạy đồng bộ,
+     *     nếu không đơn cũ dồn hết vào ngày sync. */
+    await thuGhiSo(`Đơn sàn ${order.orderNumber}`, () => createJournalEntriesForTransaction(
+        prisma,
+        { ...(donDaTao as any), createdAt: order.createdAt || (donDaTao as any).createdAt },
+        {
+            branchId: (donDaTao as any).branchId ?? null,
+            userId: systemUser.id,
+            san: sanCuaDon(order.platform),
+        },
+    ))
 
     // Deduct inventory for each matched product.
     // CHỐNG TRỪ KHO 2 LẦN: đường PUT /online-orders/:id/status cũng trừ kho độc
