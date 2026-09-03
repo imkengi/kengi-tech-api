@@ -68,6 +68,13 @@ router.post('/reconcile/fix', authMiddleware, async (req: AuthRequest, res: Resp
         const userId = req.user?.userId || null
         const daTao: Array<{ type: string; ref: string; amount: number }> = []
 
+        /* GHI BÙ VÀO KỲ ĐÃ KHOÁ (03/09/2026).
+         * Hai bộ sinh bút toán nay chặn chứng từ rơi vào kỳ đã khoá sổ. Ghi bù chỉ
+         * hoàn tất phần sổ còn thiếu của chứng từ đã có, nhưng VẪN làm đổi số của
+         * kỳ đã khoá — nên phải do người dùng chủ động chọn. Không chọn thì trả
+         * 423 kèm hướng dẫn, chứ không âm thầm bỏ sót. */
+        const boQuaKhoaSo = req.body?.boQuaKhoaSo === true
+
         /* ── CHẠY THEO LÔ, KHÔNG ÔM HẾT MỘT LƯỢT ────────────────────────────
          *
          * Cloud Run cắt request ở 300 giây. Ghi bù cho một cửa hàng thiếu hàng
@@ -109,7 +116,7 @@ router.post('/reconcile/fix', authMiddleware, async (req: AuthRequest, res: Resp
         const txsLo = conNguyen(txs, (t: any) => daGhi(`SALE-${t.receiptNumber}`), quota)
         quota -= txsLo.length
         for (const t of txsLo) {
-            const r = await createJournalEntriesForTransaction(prisma, t as any, { branchId: t.branchId ?? null, userId, skipDupCheck: true })
+            const r = await createJournalEntriesForTransaction(prisma, t as any, { branchId: t.branchId ?? null, userId, skipDupCheck: true, boQuaKhoaSo })
             daTao.push(...r.created)
         }
 
@@ -120,7 +127,7 @@ router.post('/reconcile/fix', authMiddleware, async (req: AuthRequest, res: Resp
         const impsLo = conNguyen(imps, (i: any) => daGhi(`IMP-${i.code}`), Math.max(0, quota))
         quota -= impsLo.length
         for (const i of impsLo) {
-            const r = await postImportReceiptJournal(prisma, i as any, { branchId: i.branchId ?? null, userId, vatKhauTru })
+            const r = await postImportReceiptJournal(prisma, i as any, { branchId: i.branchId ?? null, userId, vatKhauTru, boQuaKhoaSo })
             daTao.push(...r.created)
         }
 
@@ -131,7 +138,7 @@ router.post('/reconcile/fix', authMiddleware, async (req: AuthRequest, res: Resp
             (e: any) => daGhi(`EXP-${e.id}`), Math.max(0, quota))
         quota -= expsLo.length
         for (const e of expsLo) {
-            const r = await postExpenseJournal(prisma, e as any, { branchId: e.branchId ?? null, userId, vatKhauTru })
+            const r = await postExpenseJournal(prisma, e as any, { branchId: e.branchId ?? null, userId, vatKhauTru, boQuaKhoaSo })
             daTao.push(...r.created)
         }
 
@@ -158,7 +165,7 @@ router.post('/reconcile/fix', authMiddleware, async (req: AuthRequest, res: Resp
                 code: ret.code, customerName: ret.customerName, originalInvoice: ret.originalInvoice,
                 totalRefund: ret.totalRefund || 0, refundMethod: ret.refundMethod,
                 costValue: giaVon, vatAmount: vatTra, branchId: ret.branchId, createdAt: ret.createdAt,
-            }, { branchId: ret.branchId ?? null, userId })
+            }, { branchId: ret.branchId ?? null, userId, boQuaKhoaSo })
             daTao.push(...r.created)
         }
 
@@ -176,7 +183,7 @@ router.post('/reconcile/fix', authMiddleware, async (req: AuthRequest, res: Resp
                     id: d.id, productName: d.productName, quantity: d.quantity || 0,
                     costPrice: sp?.costPrice ?? d.unitPrice ?? 0,
                     reason: d.reason || d.note || null, date: d.createdAt,
-                }, { userId })
+                }, { userId, boQuaKhoaSo })
                 daTao.push(...r.created)
             }
         } catch (e) { console.error('Ghi bù điều chỉnh kho lỗi (bỏ qua):', e) }
@@ -196,7 +203,16 @@ router.post('/reconcile/fix', authMiddleware, async (req: AuthRequest, res: Resp
                 soChungTuMoiLo: MOI_LO,
             },
         })
-    } catch (err) {
+    } catch (err: any) {
+        if (err?.code === 'PERIOD_LOCKED') {
+            res.status(423).json({
+                success: false, code: 'PERIOD_LOCKED', lockDate: err.lockDate,
+                error: `Kỳ kế toán đã khoá sổ đến ${err.lockDate}, nên không ghi bù bút toán vào kỳ đó. `
+                    + 'Nếu thật sự muốn ghi bù vào kỳ đã khoá (số liệu của kỳ đã nộp sẽ đổi), '
+                    + 'gửi lại kèm { "boQuaKhoaSo": true }.',
+            })
+            return
+        }
         console.error('Ghi bù bút toán lỗi:', err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }

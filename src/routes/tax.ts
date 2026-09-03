@@ -2555,6 +2555,14 @@ router.post('/auto-journal', authMiddleware, async (req: AuthRequest, res: Respo
         const branchId = (req as any).branchId || null
         const userId = (req as any).userId || null
 
+        /* GHI BÙ VÀO KỲ ĐÃ KHOÁ (03/09/2026).
+         * Hai bộ sinh bút toán nay tự chặn chứng từ rơi vào kỳ đã khoá sổ. Ghi bù
+         * không tạo nghiệp vụ mới — nó hoàn tất phần sổ còn thiếu của chứng từ đã
+         * có — nhưng VẪN làm đổi số của kỳ đã khoá, nên phải do người dùng chủ
+         * động chọn: `?boQuaKhoaSo=1`. Không chọn thì lượt chạy dừng với 423 và
+         * câu hướng dẫn, chứ không âm thầm bỏ sót chứng từ. */
+        const boQuaKhoaSo = String(req.query.boQuaKhoaSo || '') === '1'
+
         /* HKD/cá nhân không được khấu trừ VAT đầu vào → VAT nằm trong giá vốn,
          * không tách sang 1331. Phải đọc đúng loại hình, nếu không sổ của HKD sẽ
          * mọc ra một khoản thuế được khấu trừ không có thật. */
@@ -2575,7 +2583,7 @@ router.post('/auto-journal', authMiddleware, async (req: AuthRequest, res: Respo
             if (allRefs.every(r => existingRefs.has(r))) continue
 
             const result = await createJournalEntriesForTransaction(prisma, tx as any, {
-                branchId, userId, skipDupCheck: true,
+                branchId, userId, skipDupCheck: true, boQuaKhoaSo,
             })
             for (const entry of result.created) {
                 created.push(entry)
@@ -2598,7 +2606,7 @@ router.post('/auto-journal', authMiddleware, async (req: AuthRequest, res: Respo
             const ref = `EXP-${exp.id}`
             if (existingRefs.has(ref)) continue
             const r = await postExpenseJournal(prisma, exp as any, {
-                branchId: exp.branchId || branchId, userId, vatKhauTru: !_hkdKhongKhauTru,
+                branchId: exp.branchId || branchId, userId, vatKhauTru: !_hkdKhongKhauTru, boQuaKhoaSo,
             })
             for (const entry of r.created) { created.push(entry); existingRefs.add(entry.ref) }
         }
@@ -2617,7 +2625,7 @@ router.post('/auto-journal', authMiddleware, async (req: AuthRequest, res: Respo
             const ref = `IMP-${imp.code}`
             if (existingRefs.has(ref)) continue
             const r = await postImportReceiptJournal(prisma, imp as any, {
-                branchId: imp.branchId || branchId, userId, vatKhauTru: !_hkdKhongKhauTru,
+                branchId: imp.branchId || branchId, userId, vatKhauTru: !_hkdKhongKhauTru, boQuaKhoaSo,
             })
             for (const entry of r.created) { created.push(entry); existingRefs.add(entry.ref) }
         }
@@ -2650,7 +2658,7 @@ router.post('/auto-journal', authMiddleware, async (req: AuthRequest, res: Respo
                     totalRefund: ret.totalRefund || 0, refundMethod: ret.refundMethod,
                     costValue: giaVon, vatAmount: vatTra,
                     branchId: ret.branchId, createdAt: ret.createdAt,
-                }, { branchId: ret.branchId || branchId, userId })
+                }, { branchId: ret.branchId || branchId, userId, boQuaKhoaSo })
                 for (const entry of r.created) { created.push(entry); existingRefs.add(entry.ref) }
             }
         } catch (e) { console.error('Backfill bút toán trả hàng lỗi (bỏ qua):', e) }
@@ -2857,7 +2865,19 @@ router.post('/auto-journal', authMiddleware, async (req: AuthRequest, res: Respo
         }
 
         res.json({ success: true, data: { created, summary } })
-    } catch (err) { console.error('POST /auto-journal error:', err); res.status(500).json({ success: false, error: 'Internal server error' }) }
+    } catch (err: any) {
+        if (err?.code === 'PERIOD_LOCKED') {
+            res.status(423).json({
+                success: false, code: 'PERIOD_LOCKED', lockDate: err.lockDate,
+                error: `Kỳ kế toán đã khoá sổ đến ${err.lockDate}, nên không ghi bù bút toán vào kỳ đó. `
+                    + 'Nếu thật sự muốn ghi bù vào kỳ đã khoá (số liệu của kỳ đã nộp sẽ đổi), '
+                    + 'gọi lại với ?boQuaKhoaSo=1.',
+            })
+            return
+        }
+        console.error('POST /auto-journal error:', err)
+        res.status(500).json({ success: false, error: 'Internal server error' })
+    }
 })
 
 // DELETE /api/tax/auto-journal?year=2026&month=3

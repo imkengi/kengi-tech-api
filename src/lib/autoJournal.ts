@@ -1,3 +1,5 @@
+import { khoaSoChan, loiKhoaSo } from './periodLock'
+
 // Helpers for auto-generating JournalEntry records from POS transactions.
 // Used by both the live POS flow (POST /api/transactions) and the
 // batch backfill endpoint (POST /api/tax/auto-journal).
@@ -81,6 +83,11 @@ export async function postDebtCollectionJournal(client: any, opts: {
     const amount = Math.round(opts.amount || 0)
     if (amount <= 0) return
     const isBank = opts.paymentType === 'bank' || opts.paymentType === 'transfer'
+
+    // Khoá sổ chặn cả đường thu nợ — trước đây đường này ghi tự do vào kỳ đã khoá
+    const khoa = await khoaSoChan(client, opts.branchId ?? null, opts.date)
+    if (khoa) throw loiKhoaSo(khoa, `bút toán thu nợ ${opts.refKey}`)
+
     try {
         await client.journalEntry.create({
             data: {
@@ -93,7 +100,13 @@ export async function postDebtCollectionJournal(client: any, opts: {
                 branchId: opts.branchId ?? null, createdBy: opts.userId ?? null,
             },
         })
-    } catch (_) { /* dup ref / schema missing — non-fatal */ }
+    } catch (e: any) {
+        // Trùng ref = đã ghi rồi (chống ghi hai lần), im lặng là đúng. Lỗi khác PHẢI nói.
+        if (!laTrungKhoa(e)) {
+            console.error(`[autoJournal] KHÔNG ghi được bút toán thu nợ ref=${opts.refKey}: ${e?.message || e}`)
+            throw e
+        }
+    }
 }
 
 export interface AutoJournalOptions {
@@ -101,10 +114,65 @@ export interface AutoJournalOptions {
     userId?: string | null
     // When true, skip the existing-reference probe (caller has already deduped).
     skipDupCheck?: boolean
+    /**
+     * Cho phép ghi vào kỳ ĐÃ KHOÁ SỔ. Chỉ các đường SỬA CHỮA do người dùng chủ
+     * động bấm mới được bật (ghi bù bút toán thiếu, đối chiếu sổ sách) — và phải
+     * nói rõ với người dùng là đang ghi vào kỳ đã khoá.
+     */
+    boQuaKhoaSo?: boolean
+}
+
+export interface LoiBut {
+    ref: string
+    loai: string
+    thongBao: string
 }
 
 export interface AutoJournalResult {
     created: Array<{ type: string; ref: string; amount: number }>
+    /** Bút toán KHÔNG ghi được (đã loại trừ trùng khoá) — nơi gọi phải nói ra */
+    loi: LoiBut[]
+    /** Bị chặn vì kỳ đã khoá sổ; null = không bị chặn */
+    khoaSo: string | null
+}
+
+/** Trùng `reference` = đã ghi rồi, đúng thiết kế chống ghi hai lần → bỏ qua im lặng */
+const laTrungKhoa = (e: any) =>
+    e?.code === 'P2002' || /unique|duplicate/i.test(String(e?.message || ''))
+
+/**
+ * Ghi MỘT bút toán và nói thật khi hỏng.
+ *
+ * Bản cũ bọc mọi lệnh ghi trong `catch (_) { }` rỗng: bút toán nằm cùng
+ * $transaction với đơn hàng nên nuốt lỗi ở đây nghĩa là ĐƠN LƯU THÀNH CÔNG MÀ
+ * SỔ THIẾU, không log, không cảnh báo — doanh thu trên sổ hụt dần so với thực
+ * tế mà không ai biết (đúng dạng sự cố "sổ chỉ ghi 1,2% doanh thu").
+ *
+ * Vì sao KHÔNG ném lỗi ra để $transaction quay đầu: máy bán hàng mà từ chối
+ * chốt đơn vì trục trặc ghi sổ là hỏng việc kinh doanh, trong khi sổ thiếu thì
+ * ghi bù lại được (đã có sẵn đường đối chiếu + ghi bù). Nên: ghi log đầy đủ,
+ * trả lỗi về cho nơi gọi, và bảng "Việc cần làm" tự soi ra đơn chưa vào sổ.
+ */
+async function ghiBut(
+    prisma: any,
+    data: any,
+    loai: string,
+    kq: AutoJournalResult,
+): Promise<boolean> {
+    try {
+        await prisma.journalEntry.create({ data })
+        kq.created.push({ type: loai, ref: data.reference, amount: data.amount })
+        return true
+    } catch (e: any) {
+        if (laTrungKhoa(e)) return false
+        const thongBao = String(e?.message || e)
+        kq.loi.push({ ref: String(data.reference || ''), loai, thongBao })
+        console.error(
+            `[autoJournal] KHÔNG ghi được bút toán ${loai} ref=${data.reference} ` +
+            `(Nợ ${data.debitAccount} / Có ${data.creditAccount} ${data.amount}): ${thongBao}`,
+        )
+        return false
+    }
 }
 
 /**
@@ -122,7 +190,7 @@ export async function createJournalEntriesForTransaction(
     tx: TxWithRelations,
     opts: AutoJournalOptions = {},
 ): Promise<AutoJournalResult> {
-    const result: AutoJournalResult = { created: [] }
+    const result: AutoJournalResult = { created: [], loi: [], khoaSo: null }
 
     const saleRef = `SALE-${tx.receiptNumber}`
     const vatRef = `VAT-${tx.receiptNumber}`
@@ -160,6 +228,19 @@ export async function createJournalEntriesForTransaction(
     const branchId = opts.branchId ?? tx.branchId ?? null
     const userId = opts.userId ?? null
 
+    /* KHOÁ SỔ — chặn ở đây là kín cả tám đường ghi, vì mọi nghiệp vụ bán hàng
+     * đều đi qua hàm này. Đơn bán hôm nay có date = hôm nay nên không bao giờ
+     * chạm khoá; chỉ chứng từ LÙI NGÀY vào kỳ đã khoá mới bị chặn — đúng ý nghĩa
+     * của khoá sổ. Ném lỗi để $transaction của đơn quay đầu: một đơn ghi ngày
+     * trong kỳ đã khoá thì không nên tồn tại, chứ không phải chỉ thiếu bút toán. */
+    if (!opts.boQuaKhoaSo) {
+        const khoa = await khoaSoChan(prisma, branchId, date)
+        if (khoa) {
+            result.khoaSo = khoa.lockDate
+            throw loiKhoaSo(khoa, `chứng từ ${tx.receiptNumber} (ngày ${date})`)
+        }
+    }
+
     // Choose debit account from payment mix:
     //   đơn SÀN TMĐT          → 131-<SÀN> (phải thu pháp nhân Shopee/TikTok...)
     //   fully paid in cash       → 111 (Tiền mặt)
@@ -185,55 +266,40 @@ export async function createJournalEntriesForTransaction(
 
     // 1. Revenue entry — Nợ TK11x/131 / Có TK511
     if (revenue > 0 && !existing.has(saleRef)) {
-        try {
-            await prisma.journalEntry.create({
-                data: {
-                    date,
-                    description: platformAr
-                        ? `Bán hàng qua ${platformAr.label} ${tx.receiptNumber}${tx.customerName ? ' - KH: ' + tx.customerName : ''}`
-                        : `Bán hàng ${tx.receiptNumber}${tx.customerName ? ' - KH: ' + tx.customerName : ''}`,
-                    debitAccount, debitAccountName: debitName,
-                    creditAccount: '511', creditAccountName: 'Doanh thu bán hàng',
-                    amount: revenue, reference: saleRef, referenceType: 'sale',
-                    branchId, createdBy: userId,
-                },
-            })
-            result.created.push({ type: 'sale', ref: saleRef, amount: revenue })
-        } catch (_) { /* unique-conflict or schema missing — non-fatal */ }
+        await ghiBut(prisma, {
+            date,
+            description: platformAr
+                ? `Bán hàng qua ${platformAr.label} ${tx.receiptNumber}${tx.customerName ? ' - KH: ' + tx.customerName : ''}`
+                : `Bán hàng ${tx.receiptNumber}${tx.customerName ? ' - KH: ' + tx.customerName : ''}`,
+            debitAccount, debitAccountName: debitName,
+            creditAccount: '511', creditAccountName: 'Doanh thu bán hàng',
+            amount: revenue, reference: saleRef, referenceType: 'sale',
+            branchId, createdBy: userId,
+        }, 'sale', result)
     }
 
     // 2. VAT-out entry — Nợ TK11x/131 / Có TK3331
     if (vatAmount > 0 && !existing.has(vatRef)) {
-        try {
-            await prisma.journalEntry.create({
-                data: {
-                    date,
-                    description: `Thuế GTGT đầu ra ${tx.receiptNumber}`,
-                    debitAccount, debitAccountName: debitName,
-                    creditAccount: '3331', creditAccountName: 'Thuế GTGT phải nộp',
-                    amount: vatAmount, reference: vatRef, referenceType: 'sale',
-                    branchId, createdBy: userId,
-                },
-            })
-            result.created.push({ type: 'vat-out', ref: vatRef, amount: vatAmount })
-        } catch (_) { }
+        await ghiBut(prisma, {
+            date,
+            description: `Thuế GTGT đầu ra ${tx.receiptNumber}`,
+            debitAccount, debitAccountName: debitName,
+            creditAccount: '3331', creditAccountName: 'Thuế GTGT phải nộp',
+            amount: vatAmount, reference: vatRef, referenceType: 'sale',
+            branchId, createdBy: userId,
+        }, 'vat-out', result)
     }
 
     // 3. Discount entry — Nợ TK521 / Có TK11x/131
     if (discountAmount > 0 && !existing.has(discRef)) {
-        try {
-            await prisma.journalEntry.create({
-                data: {
-                    date,
-                    description: `Giảm giá hàng bán ${tx.receiptNumber}`,
-                    debitAccount: '521', debitAccountName: 'Chiết khấu thương mại',
-                    creditAccount: debitAccount, creditAccountName: debitName,
-                    amount: discountAmount, reference: discRef, referenceType: 'sale',
-                    branchId, createdBy: userId,
-                },
-            })
-            result.created.push({ type: 'discount', ref: discRef, amount: discountAmount })
-        } catch (_) { }
+        await ghiBut(prisma, {
+            date,
+            description: `Giảm giá hàng bán ${tx.receiptNumber}`,
+            debitAccount: '521', debitAccountName: 'Chiết khấu thương mại',
+            creditAccount: debitAccount, creditAccountName: debitName,
+            amount: discountAmount, reference: discRef, referenceType: 'sale',
+            branchId, createdBy: userId,
+        }, 'discount', result)
     }
 
     // 4. COGS entry — Nợ TK632 / Có TK156
@@ -246,19 +312,14 @@ export async function createJournalEntriesForTransaction(
             return s + (cost * qty)
         }, 0) || 0
         if (cogsAmount > 0) {
-            try {
-                await prisma.journalEntry.create({
-                    data: {
-                        date,
-                        description: `Giá vốn hàng bán ${tx.receiptNumber}`,
-                        debitAccount: '632', debitAccountName: 'Giá vốn hàng bán',
-                        creditAccount: '156', creditAccountName: 'Hàng hóa',
-                        amount: cogsAmount, reference: cogsRef, referenceType: 'sale',
-                        branchId, createdBy: userId,
-                    },
-                })
-                result.created.push({ type: 'cogs', ref: cogsRef, amount: cogsAmount })
-            } catch (_) { }
+            await ghiBut(prisma, {
+                date,
+                description: `Giá vốn hàng bán ${tx.receiptNumber}`,
+                debitAccount: '632', debitAccountName: 'Giá vốn hàng bán',
+                creditAccount: '156', creditAccountName: 'Hàng hóa',
+                amount: cogsAmount, reference: cogsRef, referenceType: 'sale',
+                branchId, createdBy: userId,
+            }, 'cogs', result)
         }
     }
 
@@ -273,19 +334,14 @@ export async function createJournalEntriesForTransaction(
     if (debitAccount === '131' && totalPaid > 0 && !existing.has(collectRef)) {
         const payType = tx.payments?.[0]?.type || 'cash'
         const isBank = payType === 'bank' || payType === 'transfer'
-        try {
-            await prisma.journalEntry.create({
-                data: {
-                    date,
-                    description: `Thu tiền bán hàng ${tx.receiptNumber}${tx.customerName ? ' - KH: ' + tx.customerName : ''}`,
-                    debitAccount: isBank ? '112' : '111', debitAccountName: isBank ? 'Tiền gửi ngân hàng' : 'Tiền mặt',
-                    creditAccount: '131', creditAccountName: 'Phải thu khách hàng',
-                    amount: Math.round(totalPaid), reference: collectRef, referenceType: 'sale',
-                    branchId, createdBy: userId,
-                },
-            })
-            result.created.push({ type: 'collect', ref: collectRef, amount: totalPaid })
-        } catch (_) { }
+        await ghiBut(prisma, {
+            date,
+            description: `Thu tiền bán hàng ${tx.receiptNumber}${tx.customerName ? ' - KH: ' + tx.customerName : ''}`,
+            debitAccount: isBank ? '112' : '111', debitAccountName: isBank ? 'Tiền gửi ngân hàng' : 'Tiền mặt',
+            creditAccount: '131', creditAccountName: 'Phải thu khách hàng',
+            amount: Math.round(totalPaid), reference: collectRef, referenceType: 'sale',
+            branchId, createdBy: userId,
+        }, 'collect', result)
     }
 
     return result
@@ -308,7 +364,13 @@ async function postReversal(prisma: any, e: any, date: string, opts: { branchId?
                 branchId: opts.branchId ?? e.branchId ?? null, createdBy: opts.userId ?? null,
             },
         })
-    } catch (_) { /* đã đảo (unique) — idempotent */ }
+    } catch (e: any) {
+        // Trùng VOID-<ref> = đã đảo rồi, im lặng là đúng. Lỗi khác thì PHẢI nói:
+        // đảo hụt một vế nghĩa là hoá đơn đã huỷ mà sổ vẫn còn ghi nhận doanh thu.
+        if (!laTrungKhoa(e)) {
+            console.error(`[autoJournal] KHÔNG đảo được bút toán ref=${ref}: ${e?.message || e}`)
+        }
+    }
 }
 
 // Đảo toàn bộ bút toán của 1 hóa đơn (SALE/VAT/DISC/COGS + mọi COLLECT-<receipt>*).
@@ -327,7 +389,12 @@ export async function reverseJournalEntriesForTransaction(
                 ],
             },
         })
-    } catch { return }
+    } catch (e: any) {
+        // Không đọc được sổ thì KHÔNG được im lặng bỏ qua: hoá đơn sắp bị huỷ mà
+        // bút toán vẫn nằm nguyên trong sổ là doanh thu ma.
+        console.error(`[autoJournal] KHÔNG đọc được bút toán để đảo cho HĐ ${receiptNumber}: ${e?.message || e}`)
+        throw e
+    }
     const date = fmtDate(new Date())
     for (const e of entries) await postReversal(prisma, e, date, opts)
 }
@@ -341,5 +408,8 @@ export async function reverseJournalByReference(
         const entries = await prisma.journalEntry.findMany({ where: { reference } })
         const date = fmtDate(new Date())
         for (const e of entries) await postReversal(prisma, e, date, opts)
-    } catch { /* ignore */ }
+    } catch (e: any) {
+        console.error(`[autoJournal] KHÔNG đảo được bút toán ref=${reference}: ${e?.message || e}`)
+        throw e
+    }
 }

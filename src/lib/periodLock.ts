@@ -85,6 +85,44 @@ export async function assertNotLocked(
 }
 
 /**
+ * KHOÁ SỔ Ở TẦNG GHI BÚT TOÁN (03/09/2026).
+ *
+ * Trước đây khoá sổ chỉ được kiểm ở 3 route (chi phí, phiếu thu, bút toán tay),
+ * còn TÁM đường ghi chính — POS, nhập hàng, trả hàng, kiểm kê, lương, TSCĐ,
+ * CCDC, sao kê — không kiểm gì cả. Khoá sổ tháng 6 xong, một chứng từ lùi ngày
+ * về tháng 6 vẫn vào sổ bình thường, và báo cáo đã nộp với sổ hiện tại lệch nhau
+ * mà không có dấu vết nào.
+ *
+ * Nay hai bộ sinh bút toán (autoJournal.ts, autoJournalPurchase.ts) gọi hàm này
+ * MỘT lần cho mỗi chứng từ — mọi đường ghi đều đi qua đó nên chặn một chỗ là kín
+ * cả tám route.
+ *
+ * Trả về lock khi PHẢI CHẶN, null khi được phép ghi. Không ném lỗi để nơi gọi
+ * tự quyết (ném ra, hay ghi nhận rồi bỏ qua).
+ */
+export async function khoaSoChan(
+    client: any,
+    branchId: string | null | undefined,
+    voucherDate: unknown,
+): Promise<CurrentLock | null> {
+    const lock = await getCurrentLock(client, branchId)
+    if (!lock) return null
+    const d = toDateString(voucherDate)
+    // Không đọc được ngày → chặn cho chắc: chứng từ không ngày có thể rơi vào kỳ đã khoá.
+    return (!d || d <= lock.lockDate) ? lock : null
+}
+
+/** Lỗi chuẩn cho trường hợp bị khoá sổ chặn — cùng mã với assertNotLocked. */
+export function loiKhoaSo(lock: CurrentLock, chungTu: string): Error {
+    const err: any = new Error(
+        `Kỳ kế toán đã khóa sổ đến ${lock.lockDate}. Không ghi được ${chungTu} vào kỳ đã khóa.`,
+    )
+    err.code = 'PERIOD_LOCKED'
+    err.lockDate = lock.lockDate
+    return err
+}
+
+/**
  * Express middleware that blocks voucher mutations inside a locked period.
  * Reads the voucher date from `req.body[dateField]` (POST/PUT) and, when absent
  * on edits/deletes, conservatively blocks if any active lock exists.

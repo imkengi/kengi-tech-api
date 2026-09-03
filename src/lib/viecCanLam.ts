@@ -42,6 +42,8 @@ export interface KetQuaViecCanLam {
 }
 
 const dauNgay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate())
+/** JournalEntry.date là CHUỖI 'YYYY-MM-DD', không phải Date — so sánh phải cùng kiểu */
+const chuoiNgay = (d: Date) => d.toISOString().slice(0, 10)
 
 /** Chạy một phép đo; hỏng thì ghi vào danh sách "không đọc được" và trả null. */
 async function doAn(ten: string, fn: () => Promise<any>, hong: string[]): Promise<any> {
@@ -271,6 +273,48 @@ export async function tinhViecCanLam(prisma: any, opts?: { branchFilter?: any })
             tieuDe: `${baoGia} báo giá chưa chốt`,
             chiTiet: 'Khách đã hỏi giá mà chưa quay lại — gọi lại sớm là đơn, để nguội là mất về tay chỗ khác.',
             soLuong: baoGia, duongDan: '/dashboard-quotations', nhanNut: 'Theo dõi báo giá',
+        })
+    }
+
+    // ─── 13. Đơn đã bán mà CHƯA vào sổ kế toán ───────────────────────────────
+    /* Bút toán bán hàng nằm cùng $transaction với đơn, và trước 03/09/2026 lỗi ghi
+     * sổ bị `catch (_) { }` nuốt sạch: đơn lưu thành công, sổ thiếu, không log,
+     * không cảnh báo. Nay lỗi đã được ghi log, nhưng log thì chủ shop không đọc —
+     * nên soi thẳng ra đây. Đây là bộ soát HẬU KIỂM: dù bút toán mất vì lý do gì
+     * (lỗi ghi, mất kết nối, đơn tạo trước khi có tính năng) thì vẫn lộ ra. */
+    const chuaVaoSo = await doAn('Đơn chưa vào sổ kế toán', async () => {
+        // Cửa hàng TẮT ghi sổ tự động thì không có gì để soát — im lặng là đúng
+        const cai = await prisma.storeSettings.findFirst({ select: { autoCreateJournalEntries: true } })
+        if (cai?.autoCreateJournalEntries === false) return null
+
+        const tu = new Date(homNay.getTime() - 30 * 86400_000)
+        const TRAN = 3000
+        const dsDon = await prisma.transaction.findMany({
+            where: { status: { in: ['completed', 'partial'] }, createdAt: { gte: tu }, ...bo },
+            select: { receiptNumber: true },
+            take: TRAN,
+        })
+        if (dsDon.length === 0) return null
+
+        const soDaGhi = await prisma.journalEntry.findMany({
+            where: { referenceType: 'sale', reference: { startsWith: 'SALE-' }, date: { gte: chuoiNgay(tu) } },
+            select: { reference: true },
+            take: 20000,
+        })
+        const daGhi = new Set(soDaGhi.map((e: any) => String(e.reference)))
+        const thieu = dsDon.filter((t: any) => t.receiptNumber && !daGhi.has(`SALE-${t.receiptNumber}`))
+        if (thieu.length === 0) return null
+        // Chạm trần thì NÓI RÕ là đếm chưa hết, đừng để con số cắt ngầm thành kết luận
+        return { so: thieu.length, chamTran: dsDon.length >= TRAN }
+    }, hong)
+    if (chuaVaoSo && chuaVaoSo.so > 0) {
+        items.push({
+            ma: 'don-chua-vao-so', nhom: 'soSach', mucDo: 'khan',
+            tieuDe: `${chuaVaoSo.so} đơn đã bán chưa vào sổ kế toán`,
+            chiTiet: chuaVaoSo.chamTran
+                ? `Đếm trong 3.000 đơn gần nhất của 30 ngày — số thật có thể nhiều hơn. Doanh thu trên sổ đang thấp hơn doanh thu thật, báo cáo thuế lấy từ sổ nên cũng thiếu theo. Vào Đối chiếu sổ sách bấm Ghi bù.`
+                : `Doanh thu trên sổ đang thấp hơn doanh thu thật đúng bằng phần này, và báo cáo thuế lấy số từ sổ nên cũng thiếu theo. Vào Đối chiếu sổ sách bấm Ghi bù là xong.`,
+            soLuong: chuaVaoSo.so, duongDan: '/dashboard-accounting/reconcile', nhanNut: 'Đối chiếu sổ sách',
         })
     }
 

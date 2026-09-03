@@ -20,15 +20,36 @@
  *   RETVAT-<mã>           giảm VAT đầu ra        Nợ 3331 / Có 111|131
  *   RETCOGS-<mã>          nhập lại kho           Nợ 156  / Có 632
  *
- * Mọi hàm đều nuốt lỗi ghi sổ (trùng khóa / thiếu bảng) để KHÔNG chặn nghiệp vụ
- * gốc — giống hệt cách autoJournal.ts đang làm với hóa đơn bán.
+ * Ghi hỏng thì KHÔNG chặn nghiệp vụ gốc (phiếu nhập, phiếu chi vẫn lưu), nhưng
+ * từ 03/09/2026 KHÔNG còn nuốt im lặng: trùng khóa là chuyện bình thường của cơ
+ * chế chống ghi hai lần nên bỏ qua, còn mọi lỗi khác đều ghi log kèm số phiếu và
+ * cặp tài khoản — trước đây `catch (_) { return false }` che sạch, nên một phiếu
+ * nhập không vào được sổ vẫn báo thành công.
+ *
+ * KHOÁ SỔ: mỗi nghiệp vụ kiểm một lần trước khi ghi (chanKhoaSo). Chứng từ lùi
+ * ngày vào kỳ đã khoá bị NÉM LỖI chứ không ghi nửa vời.
  */
+import { khoaSoChan, loiKhoaSo } from './periodLock'
 
 const fmtDate = (d: Date) => d.toISOString().slice(0, 10)
 
 export interface JournalOpts {
     branchId?: string | null
     userId?: string | null
+    /**
+     * Cho phép ghi vào kỳ ĐÃ KHOÁ SỔ. Chỉ đường SỬA CHỮA do người dùng chủ động
+     * bấm mới được bật (ghi bù bút toán thiếu / đối chiếu sổ sách).
+     */
+    boQuaKhoaSo?: boolean
+}
+
+/** Chặn ghi vào kỳ đã khoá. Gọi MỘT lần cho mỗi chứng từ, trước khi ghi. */
+async function chanKhoaSo(
+    client: any, opts: JournalOpts, branchId: string | null, date: string, chungTu: string,
+): Promise<void> {
+    if (opts.boQuaKhoaSo) return
+    const khoa = await khoaSoChan(client, branchId, date)
+    if (khoa) throw loiKhoaSo(khoa, chungTu)
 }
 
 export interface JournalResult {
@@ -65,7 +86,18 @@ async function ghi(client: any, d: {
             },
         })
         return true
-    } catch (_) { return false }
+    } catch (e: any) {
+        /* Trùng `reference` = đã ghi rồi, đúng thiết kế chống ghi hai lần → im lặng.
+         * Lỗi KHÁC thì phải nói: bản cũ nuốt sạch nên một phiếu nhập không vào được
+         * sổ vẫn báo thành công, tồn kho tăng mà giá vốn/công nợ NCC không ghi. */
+        if (!(e?.code === 'P2002' || /unique|duplicate/i.test(String(e?.message || '')))) {
+            console.error(
+                `[autoJournalPurchase] KHÔNG ghi được bút toán ref=${d.reference} ` +
+                `(Nợ ${d.debitAccount} / Có ${d.creditAccount} ${amount}): ${e?.message || e}`,
+            )
+        }
+        return false
+    }
 }
 
 /* ─── NHẬP HÀNG ──────────────────────────────────────────────────────────── */
@@ -105,6 +137,7 @@ export async function postImportReceiptJournal(
     const date = fmtDate(r.transactionDate || r.createdAt || new Date())
     const branchId = opts.branchId ?? r.branchId ?? null
     const userId = opts.userId ?? null
+    await chanKhoaSo(client, opts, branchId, date, `phiếu nhập ${r.code}`)
     const vat = Math.round(Number(r.vatAmount) || 0)
     const vatKhauTru = opts.vatKhauTru !== false
     const phiKhac = (Number(r.shippingFee) || 0) + (Number(r.importTax) || 0)
@@ -151,8 +184,10 @@ export async function postSupplierPaymentJournal(client: any, o: {
     userId?: string | null
 }): Promise<void> {
     const tien = tkTien(o.method)
+    const ngayTra = o.date || fmtDate(new Date())
+    await chanKhoaSo(client, o as JournalOpts, o.branchId ?? null, ngayTra, `phiếu trả nợ NCC ${o.receiptCode}`)
     await ghi(client, {
-        date: o.date || fmtDate(new Date()),
+        date: ngayTra,
         description: `Trả nợ NCC phiếu ${o.receiptCode}${o.supplierName ? ' - ' + o.supplierName : ''}`,
         debitAccount: '331', debitAccountName: 'Phải trả người bán',
         creditAccount: tien.code, creditAccountName: tien.name,
@@ -218,6 +253,7 @@ export async function postExpenseJournal(
     const date = fmtDate(e.date || new Date())
     const branchId = opts.branchId ?? e.branchId ?? null
     const userId = opts.userId ?? null
+    await chanKhoaSo(client, opts, branchId, date, `phiếu chi ${e.id}`)
     const tien = tkTien(e.paidBy || (e.bankAccountId ? 'bank' : 'cash'))
     const loai = String(e.category || 'other').toLowerCase()
     const tk = TK_CHI_PHI[loai] ?? TK_CHI_PHI.other!
@@ -277,6 +313,7 @@ export async function postReturnJournal(
     const date = fmtDate(r.createdAt || new Date())
     const branchId = opts.branchId ?? r.branchId ?? null
     const userId = opts.userId ?? null
+    await chanKhoaSo(client, opts, branchId, date, `phiếu trả hàng ${r.code}`)
     const method = String(r.refundMethod || 'cash')
     const traBangTien = method === 'cash' || method === 'bank_transfer' || method === 'bank' || method === 'transfer'
     const doiUng = traBangTien ? tkTien(method) : { code: '131', name: 'Phải thu khách hàng' }
@@ -349,6 +386,7 @@ export async function postStockAdjustJournal(
     const date = fmtDate(a.date || new Date())
     const branchId = opts.branchId ?? a.branchId ?? null
     const userId = opts.userId ?? null
+    await chanKhoaSo(client, opts, branchId, date, `phiếu điều chỉnh kho ${a.id}`)
     const ten = a.productName ? ` - ${a.productName}` : ''
     const lyDo = a.reason ? ` (${a.reason})` : ''
     const ref = `ADJ-${a.id}`
