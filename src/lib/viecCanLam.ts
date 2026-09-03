@@ -146,7 +146,7 @@ export async function tinhViecCanLam(prisma: any, opts?: { branchFilter?: any })
             tieuDe: `${khachNo.so} khách đang nợ`,
             chiTiet: `Tổng ${(khachNo.tong || 0).toLocaleString('vi-VN')}đ chưa thu. Tiền nằm ở khách là tiền không quay được vòng hàng.`,
             soLuong: khachNo.so, soTien: khachNo.tong,
-            duongDan: '/dashboard-debts', nhanNut: 'Xem công nợ',
+            duongDan: '/dashboard-debt', nhanNut: 'Xem công nợ',
         })
     }
 
@@ -231,7 +231,7 @@ export async function tinhViecCanLam(prisma: any, opts?: { branchFilter?: any })
             ma: 'trung-so-hoa-don', nhom: 'thue', mucDo: 'khan',
             tieuDe: `${trungHD} số hoá đơn nhập bị trùng`,
             chiTiet: 'Cùng một tờ hoá đơn vào sổ hai lần: tồn kho thừa, giá vốn lệch, nợ NCC ghi thừa và thuế GTGT khấu trừ khai trùng.',
-            soLuong: trungHD, duongDan: '/dashboard-import?tab=duplicates', nhanNut: 'Xem phiếu trùng',
+            soLuong: trungHD, duongDan: '/dashboard-import', nhanNut: 'Xem phiếu trùng',
         })
     }
 
