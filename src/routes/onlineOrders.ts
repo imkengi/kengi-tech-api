@@ -1,5 +1,6 @@
 import { khoangNgayVN } from '../lib/vnTime'
 import { Router, Response, NextFunction } from 'express'
+import { ganAnhDongHang } from '../lib/anhDongHang'
 import { postReturnJournal } from '../lib/autoJournalPurchase'
 import { thuGhiSo, sanCuaDon } from '../lib/ghiSoDongBo'
 import { PLATFORM_AR } from '../lib/autoJournal'
@@ -555,46 +556,12 @@ router.get('/', authMiddleware, requirePermission('online_orders.view', 'orders.
 
         // Lợi nhuận tạm tính — chỉ owner/admin thấy, cùng quy ước với phí sàn /
         // thực nhận ở /stats. Tính sau khi lấy đơn để không đụng vào câu query lọc.
-        /* ─── ẢNH CHO DÒNG HÀNG (03/09/2026) ────────────────────────────────
-         *
-         * Trang đóng gói hiện danh sách hàng phải đóng; có ảnh thì liếc là biết
-         * đúng hàng chưa. Nhưng ẢNH KHO GẦN NHƯ KHÔNG CÓ: đo hôm nay, trong toàn
-         * bộ máy chủ chỉ có ĐÚNG MỘT chỗ từng tạo ProductImage (nhập Excel hàng
-         * loạt) — không đường đồng bộ nào lưu ảnh, nên `product.images` rỗng.
-         *
-         * Ảnh listing trên sàn thì CÓ SẴN (`OnlineProduct.imageUrl`), và nó còn
-         * đúng hơn: đó chính là tấm khách nhìn thấy lúc đặt.
-         *
-         * Lấy MỘT lượt cho cả trang theo tập SKU, không tra từng dòng — đơn nhiều
-         * mã mà tra lẻ thì pool prod (1 kết nối) xếp hàng dài. */
-        const dsSku = Array.from(new Set(
-            orders.flatMap((o: any) => (o.items || []).map((it: any) => String(it.sku || '').trim()))
-                .filter((x: string) => !!x),
-        ))
-        const anhTheoSku = new Map<string, string>()
-        if (dsSku.length > 0) {
-            try {
-                const dsListing = await prisma.onlineProduct.findMany({
-                    where: { sku: { in: dsSku }, imageUrl: { not: null } },
-                    select: { sku: true, imageUrl: true },
-                })
-                for (const lp of dsListing) {
-                    if (lp.sku && lp.imageUrl && !anhTheoSku.has(lp.sku)) anhTheoSku.set(lp.sku, lp.imageUrl)
-                }
-            } catch (e: any) {
-                // Đọc hỏng thì chỉ MẤT ẢNH, đừng làm hỏng cả danh sách đơn
-                console.error('[online-orders] không đọc được ảnh listing:', e?.message || e)
-            }
+        /* Ảnh cho dòng hàng — luật gom ở lib/anhDongHang.ts, dùng chung với tool MCP */
+        const anhTheoDon = new Map<string, any[]>()
+        for (const o of orders as any[]) {
+            anhTheoDon.set(o.id, await ganAnhDongHang(prisma, (o.items || []) as any[]))
         }
-        const ganAnh = (o: any) => ({
-            ...o,
-            items: (o.items || []).map((it: any) => {
-                const anhKho = it.product?.images?.[0]?.url || null
-                const anhSan = it.sku ? anhTheoSku.get(String(it.sku).trim()) || null : null
-                // Ưu tiên ảnh KHO (do shop tự đặt), thiếu mới lấy ảnh sàn
-                return { ...it, imageUrl: anhKho || anhSan || null }
-            }),
-        })
+        const ganAnh = (o: any) => ({ ...o, items: anhTheoDon.get(o.id) ?? o.items })
 
         let items: any[] = orders.map(ganAnh)
         if (['owner', 'admin'].includes(req.user?.role || 'cashier')) {

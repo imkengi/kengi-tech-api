@@ -12,6 +12,7 @@
 // ═════════════════════════════════════════════════════════════════════════════
 
 import { Tool, ToolError, ToolCtx } from '../lib/mcpTypes'
+import { ganAnhDongHang } from '../lib/anhDongHang'
 import { tinhViecCanLam } from '../lib/viecCanLam'
 import { postExpenseJournal } from '../lib/autoJournalPurchase'
 import { timPhieuTrungSoHoaDon } from './importReceipts'
@@ -417,29 +418,8 @@ export const OPS_TOOLS: Tool[] = [
             }).catch(() => null)
             if (!o) throw new ToolError(`Không tìm thấy đơn sàn "${q}" — thử mã đơn (orderNumber), mã sàn (externalOrderId) hoặc mã vận đơn`)
 
-            /* Gắn ảnh cho từng dòng hàng — CÙNG luật với GET /online-orders:
-             * ảnh kho trước, thiếu thì ảnh listing trên sàn (OnlineProduct.imageUrl).
-             * Để tool và trang đóng gói không bao giờ nói khác nhau về "hàng này ảnh nào". */
-            const dsSku = Array.from(new Set(
-                ((o as any).items || []).map((it: any) => String(it.sku || '').trim()).filter(Boolean),
-            )) as string[]
-            const anhSan = new Map<string, string>()
-            if (dsSku.length) {
-                const lp = await prisma.onlineProduct.findMany({
-                    where: { sku: { in: dsSku }, imageUrl: { not: null } },
-                    select: { sku: true, imageUrl: true },
-                }).catch(() => [])
-                for (const x of lp) if (x.sku && x.imageUrl && !anhSan.has(x.sku)) anhSan.set(x.sku, x.imageUrl)
-            }
-            return {
-                ...(o as any),
-                items: ((o as any).items || []).map((it: any) => ({
-                    ...it,
-                    imageUrl: it.product?.images?.[0]?.url
-                        || (it.sku ? anhSan.get(String(it.sku).trim()) : null)
-                        || null,
-                })),
-            }
+            // Ảnh dòng hàng: cùng hàm với GET /online-orders (lib/anhDongHang.ts)
+            return { ...(o as any), items: await ganAnhDongHang(prisma, ((o as any).items || []) as any[]) }
         },
     },
 
