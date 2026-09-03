@@ -214,6 +214,16 @@ router.post('/shopee', async (req: Request, res: Response) => {
         })
 
         // Fetch full order detail from Shopee
+        /* MÃ VẬN ĐƠN LẤY THẲNG TỪ PUSH (03/09/2026).
+         *
+         * Push code 4 mang sẵn `tracking_no` trong thân, nhưng bản cũ bỏ qua nó và
+         * chỉ đọc `orderDetail.trackingNumber` từ lượt gọi ngược API — mà lượt đó
+         * trả rỗng. Đo thật hôm nay: push nói `"tracking_no":"GYYUGRH6"` mà log ghi
+         * `tracking=none` — đúng thứ chủ shop cần thì bị vứt đi.
+         *
+         * Đây cũng là đường NHANH NHẤT: khỏi chờ Shopee cập nhật xong bên API. */
+        const maVanDonTuPush = String((data as any).tracking_no || (data as any).tracking_number || '').trim()
+
         const orderDetail = await shopee.getOrderDetail(orderSn)
         if (!orderDetail) {
             console.log(`[Shopee Webhook] Could not fetch order detail for ${orderSn}`)
@@ -233,7 +243,7 @@ router.post('/shopee', async (req: Request, res: Response) => {
                     status: orderDetail.status,
                     externalStatus: orderDetail.externalStatus,
                     paymentStatus: orderDetail.paymentStatus,
-                    trackingNumber: orderDetail.trackingNumber || existing.trackingNumber,
+                    trackingNumber: maVanDonTuPush || orderDetail.trackingNumber || existing.trackingNumber,
                     shippingCarrier: orderDetail.shippingCarrier || existing.shippingCarrier,
                     shippedAt: orderDetail.shippedAt ? new Date(orderDetail.shippedAt) : existing.shippedAt,
                     deliveredAt: orderDetail.deliveredAt ? new Date(orderDetail.deliveredAt) : existing.deliveredAt,
@@ -241,7 +251,9 @@ router.post('/shopee', async (req: Request, res: Response) => {
                     syncedAt: new Date(),
                 },
             })
-            console.log(`[Shopee Webhook] ✅ Updated ${orderSn} → status=${orderDetail.status} tracking=${orderDetail.trackingNumber || 'none'}`)
+            const _mvd = maVanDonTuPush || orderDetail.trackingNumber
+            console.log(`[Shopee Webhook] ✅ Updated ${orderSn} → status=${orderDetail.status} `
+                + `tracking=${_mvd || 'none'}${maVanDonTuPush ? ' (từ push)' : ''}`)
 
             // Đơn chuyển sang hủy/hoàn chung cuộc → đảo hiệu ứng (hoàn kho + void
             // HĐ đã convert + đảo bút toán). Idempotent nên gọi lặp lại vô hại.
@@ -273,7 +285,7 @@ router.post('/shopee', async (req: Request, res: Response) => {
                     total: orderDetail.total,
                     paymentMethod: orderDetail.paymentMethod || null,
                     paymentStatus: orderDetail.paymentStatus,
-                    trackingNumber: orderDetail.trackingNumber || null,
+                    trackingNumber: maVanDonTuPush || orderDetail.trackingNumber || null,
                     shippingCarrier: orderDetail.shippingCarrier || null,
                     paidAt: orderDetail.paidAt ? new Date(orderDetail.paidAt) : null,
                     shippedAt: orderDetail.shippedAt ? new Date(orderDetail.shippedAt) : null,
