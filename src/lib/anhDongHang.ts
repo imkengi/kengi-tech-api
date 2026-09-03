@@ -14,11 +14,15 @@
 //  lưu ảnh từng phân loại, mà dòng hàng của đơn lại mang SKU PHÂN LOẠI (đo thật:
 //  "SHD8611R", hậu tố R = màu đỏ) trong khi listing lưu SKU gốc "SHD8611". Nên
 //  khớp thẳng SKU là trượt. Thứ tự dò, chắc nhất trước:
+//  LUẬT: phân loại nào CÓ ảnh riêng thì giữ ảnh riêng — chỉ phân loại KHÔNG có
+//  ảnh mới mượn ảnh chính của listing cha. Nên phải dò từ RIÊNG NHẤT tới CHUNG
+//  NHẤT, dò ngược là ảnh chung cướp chỗ ảnh riêng:
 //    1. ảnh kho — shop tự đặt, quý nhất vì đúng hàng thật trong kho
-//    2. `externalItemId` ↔ `platformProductId` — đúng listing trên sàn
-//    3. `localProductId` — listing đã map sang hàng kho
-//    4. `sku` khớp hẳn
-//    5. SKU phân loại → lùi về ảnh chính của listing CHA (khớp tiền tố)
+//    2. `sku` khớp hẳn — đây là dòng của CHÍNH phân loại đó, ảnh riêng của nó
+//    3. `localProductId` — listing đã map sang đúng hàng kho
+//    4. `externalItemId` ↔ `platformProductId` — mã listing, các phân loại DÙNG
+//       CHUNG nên chỉ là ảnh chính; để sau ảnh riêng
+//    5. SKU phân loại → khớp tiền tố, mượn ảnh chính của listing CHA
 //
 //  Dùng chung cho GET /online-orders và tool MCP get_online_order — hai nơi nói
 //  khác nhau về "hàng này ảnh nào" thì còn khó lần hơn là không có ảnh.
@@ -118,9 +122,11 @@ export async function ganAnhDongHang<T extends DongHangCoAnh>(
         const anhCha = sku ? anhListingCha(sku) : null
         return {
             ...it,
-            // Ảnh kho (shop tự đặt) → listing đúng mã sàn → theo sản phẩm → SKU khớp
-            // hẳn → SKU phân loại lùi về ảnh chính của listing cha
-            imageUrl: anhKho || anhTheoItem || anhTheoSp || anhTheoSku || anhCha || null,
+            /* RIÊNG trước, CHUNG sau. `anhTheoItem` là ảnh theo mã listing mà mọi
+             * phân loại dùng chung — đặt nó trước `anhTheoSku` thì phân loại có
+             * ảnh riêng vẫn bị gán ảnh chính, sai ý "chỉ phân loại KHÔNG có ảnh
+             * mới lấy ảnh chính". */
+            imageUrl: anhKho || anhTheoSku || anhTheoSp || anhTheoItem || anhCha || null,
         }
     })
 }
