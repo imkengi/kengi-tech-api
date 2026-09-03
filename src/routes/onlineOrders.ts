@@ -519,7 +519,26 @@ router.get('/', authMiddleware, requirePermission('online_orders.view', 'orders.
                 where,
                 // items kèm SKU kho của SP đã link — packing list dùng làm fallback
                 // khi item.sku rỗng (SP Shopee nhiều phân loại có item_sku trống)
-                include: { items: { include: { product: { select: { sku: true } } } }, channel: true },
+                include: {
+                    items: {
+                        include: {
+                            /* Kèm ẢNH sản phẩm (03/09/2026): trang đóng gói hiện danh sách
+                             * hàng phải đóng — có ảnh thì liếc là biết đúng hàng chưa, chứ
+                             * đọc tên dài ba dòng thì chậm và dễ nhầm hàng cùng dòng.
+                             * Chỉ lấy 1 ảnh ĐẠI DIỆN, không kéo cả bộ ảnh về cho nặng. */
+                            product: {
+                                select: {
+                                    sku: true,
+                                    /* Lọc cứng isPrimary thì hàng chưa đặt ảnh đại diện ra
+                                     * MẢNG RỖNG — mất ảnh oan. Sắp ảnh đại diện lên đầu rồi
+                                     * lấy một tấm: có đại diện thì dùng, không thì lấy tấm đầu. */
+                                    images: { select: { url: true }, orderBy: { isPrimary: 'desc' }, take: 1 },
+                                },
+                            },
+                        },
+                    },
+                    channel: true,
+                },
                 // Tab hỏa tốc: đơn cận HẠN bàn giao (shipByDate) lên đầu — SLA ≤4h,
                 // trễ là mất đơn. Postgres ASC mặc định đẩy null xuống cuối.
                 orderBy: layHomNay
