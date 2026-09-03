@@ -109,7 +109,24 @@ export async function khoaSoChan(
     if (!lock) return null
     const d = toDateString(voucherDate)
     // Không đọc được ngày → chặn cho chắc: chứng từ không ngày có thể rơi vào kỳ đã khoá.
-    return (!d || d <= lock.lockDate) ? lock : null
+    if (!d) return lock
+
+    /* CHỨNG TỪ CỦA NGÀY HÔM NAY KHÔNG BAO GIỜ BỊ CHẶN.
+     *
+     * Khoá sổ là khoá kỳ ĐÃ ĐÓNG; một kỳ chưa kết thúc thì chưa đóng được. Nếu
+     * ai đó lỡ đặt ngày khoá bằng hôm nay hoặc một ngày trong tương lai, luật
+     * `d <= lockDate` thuần tuý sẽ chặn luôn bút toán của MỌI đơn bán trong ngày
+     * — tức là máy bán hàng ngừng bán vì một ô ngày gõ sai. Đây là hàm mà đường
+     * POS đi qua, nên nó phải không có kiểu hỏng đó.
+     *
+     * Chứng từ LÙI NGÀY về quá khứ nằm trong kỳ khoá vẫn bị chặn như thường —
+     * đó mới là việc khoá sổ sinh ra để làm. (Các route nhập tay dùng
+     * assertNotLocked vẫn giữ luật chặt hơn: ở đó có người ngồi sửa được ngày khoá.)
+     */
+    const homNay = new Date().toISOString().slice(0, 10)
+    if (d >= homNay) return null
+
+    return d <= lock.lockDate ? lock : null
 }
 
 /** Lỗi chuẩn cho trường hợp bị khoá sổ chặn — cùng mã với assertNotLocked. */
