@@ -1580,6 +1580,11 @@ model StoreSettings {
 
   // Google Drive folder ID for packing/return-unbox videos
   driveFolderId   String?
+  /* URL Apps Script của trang quay video đóng gói (/video-online/).
+   * Trước 03/09/2026 URL này nằm trong localStorage TỪNG TRÌNH DUYỆT — mỗi máy
+   * đóng gói phải tự dán lại, và xoá cache là mất. Nay lưu theo CỬA HÀNG: khai
+   * một lần, mọi máy dùng chung. */
+  driveAppsScriptUrl String?
   // Kết nối Google Drive BẰNG TÀI KHOẢN CHỦ SHOP (OAuth). Cần vì file trong
   // My Drive chỉ CHỦ SỞ HỮU xoá được — service account dù có quyền Editor vẫn
   // bị Google chặn, nên dọn video tự động phải chạy dưới danh nghĩa chính chủ.

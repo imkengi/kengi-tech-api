@@ -75,6 +75,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
                 // Trợ lý AI: chỉ báo ĐÃ cấu hình hay chưa (không lộ key)
                 geminiConfigured: Boolean((store as any)?.geminiApiKey),
                 driveFolderId: (store as any)?.driveFolderId || null,
+                driveAppsScriptUrl: (store as any)?.driveAppsScriptUrl || null,
             },
         })
     } catch (err) {
@@ -90,7 +91,7 @@ router.put('/', authMiddleware, requireRole('admin'), async (req: AuthRequest, r
         const { name, address, phone, logo, costPriceMethod, trackSerial, trackBatch, allowNegativeStock, shiftConfig,
             notifyLowStock, notifyNewOrder, notifyDailyReport, notifyWeeklyReport,
             openTime, closeTime, dailyRevenueTarget, monthlyRevenueTarget, dailyOrderTarget,
-            driveFolderId } = req.body
+            driveFolderId, driveAppsScriptUrl } = req.body
 
         if (costPriceMethod && !['fixed', 'average', 'lastImport'].includes(costPriceMethod)) {
             res.status(400).json({ success: false, error: 'Invalid cost price method' })
@@ -147,6 +148,7 @@ router.put('/', authMiddleware, requireRole('admin'), async (req: AuthRequest, r
             data.dailyOrderTarget = n === null ? null : Math.trunc(n)
         }
         if (driveFolderId !== undefined) data.driveFolderId = driveFolderId || null
+        if (driveAppsScriptUrl !== undefined) data.driveAppsScriptUrl = driveAppsScriptUrl || null
 
         const updated = await prisma.storeSettings.upsert({
             where: { id: 'default' },
