@@ -456,6 +456,12 @@ router.put('/:id', authMiddleware, requireRole('admin', 'manager'), validate(Upd
                     ...docDieuKhoanTuBody(req.body) },
         })
         res.json({ success: true, data: supplier })
+        /* DỌN CACHE DANH SÁCH (03/09/2026). GET /suppliers cache 300 GIÂY, mà chỉ
+         * lượt TẠO mới dọn — lượt SỬA thì không, nên sửa xong danh sách giữ số cũ
+         * tới 5 phút. Người dùng thấy "sửa xong không lưu" y hệt lỗi 21/08 dù dữ
+         * liệu đã vào DB đúng. Đo thật hôm nay: khai số tài khoản NCC xong đọc lại
+         * vẫn null, tưởng mất cột. */
+        cacheDel(`${req.user?.storeSchema || 'default'}:suppliers:*`).catch(() => { })
         emitEntityEvent(prisma, 'supplier.updated', supplierPayload(supplier), req.user?.storeSchema).catch(() => { })
     } catch (err) {
         res.status(500).json({ success: false, error: 'Internal server error' })
@@ -471,6 +477,8 @@ router.delete('/:id', authMiddleware, requireRole('admin', 'manager'), async (re
         const toDelete = await prisma.supplier.findUnique({ where: { id: String(req.params.id) } })
         await prisma.supplier.delete({ where: { id: String(req.params.id) } })
         res.json({ success: true })
+        // Xoá NCC cũng phải dọn cache danh sách, cùng lý do với lượt sửa
+        cacheDel(`${req.user?.storeSchema || 'default'}:suppliers:*`).catch(() => { })
         if (toDelete) emitEntityEvent(prisma, 'supplier.deleted', supplierPayload(toDelete), req.user?.storeSchema).catch(() => { })
     } catch (err) {
         res.status(500).json({ success: false, error: 'Internal server error' })
