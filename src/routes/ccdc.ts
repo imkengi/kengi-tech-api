@@ -21,6 +21,7 @@ import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest, getBranchId, getBranchFilter } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
 import { errMsg } from '../lib/errorResponse'
+import { khoaSoChan, loiKhoaSo } from '../lib/periodLock'
 
 const router = Router()
 
@@ -110,6 +111,9 @@ export async function allocateForPeriod(prisma: any, ccdc: any, month: number, y
     const expenseAcc = ccdc.expenseAccountCode || '642'
     const sourceAcc = ccdc.accountCode || '242'
     const date = `${year}-${String(month).padStart(2, '0')}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`
+    /* Phân bổ CCDC cũng mang ngày cuối tháng — chặn nếu tháng đó đã khoá sổ (điểm lỗi 6) */
+    const khoaCcdc = await khoaSoChan(prisma, branchId, date)
+    if (khoaCcdc) throw loiKhoaSo(khoaCcdc, `bút toán phân bổ CCDC ${ccdc.code} T${month}/${year}`)
     const journal = await prisma.journalEntry.create({
         data: {
             date,
@@ -148,6 +152,10 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         const data = await prisma.cCDC.findMany({ where, orderBy: { code: 'asc' } })
         res.json({ success: true, data })
     } catch (err: any) {
+        if (err?.code === 'PERIOD_LOCKED') {
+            res.status(423).json({ success: false, code: 'PERIOD_LOCKED', lockDate: err.lockDate, error: err.message })
+            return
+        }
         console.error('GET /ccdc error:', err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }

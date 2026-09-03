@@ -3,6 +3,7 @@ import { authMiddleware, AuthRequest, getBranchId, getBranchFilter } from '../mi
 import { requireRole } from '../middleware/roleMiddleware'
 import { errMsg } from '../lib/errorResponse'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
+import { khoaSoChan, loiKhoaSo } from '../lib/periodLock'
 
 const router = Router()
 
@@ -622,6 +623,21 @@ router.post('/periods/:id/pay', authMiddleware, requireRole('admin', 'manager', 
         /* GHI SỔ VÀ ĐÁNH DẤU "ĐÃ CHI" PHẢI ĐI CÙNG NHAU (20/08/2026). Bản cũ: bút toán hỏng thì chỉ
          * `console.error` rồi VẪN đặt status='paid' — kỳ lương báo đã chi trong khi sổ không có
          * đồng nào chi lương. Đúng cơ chế làm "sổ kế toán không phản ánh" (xem memory cùng tên). */
+        /* KHOÁ SỔ (03/09/2026 — điểm lỗi 6). Route này ghi THẲNG journalEntry.create
+         * chứ không đi qua autoJournal*, nên chốt khoá sổ đặt trong hai lib đó không
+         * chạm tới. Bút toán chi lương mang ngày CUỐI THÁNG của kỳ lương, tức rất dễ
+         * rơi vào kỳ đã khoá khi trả lương chậm — đúng ca cần chặn. */
+        {
+            const khoa = await khoaSoChan(prisma, branchId, payDate)
+            if (khoa) {
+                res.status(423).json({
+                    success: false, code: 'PERIOD_LOCKED', lockDate: khoa.lockDate,
+                    error: `Kỳ kế toán đã khoá sổ đến ${khoa.lockDate}, không ghi được bút toán chi lương ${monthLabel} vào kỳ đó. Bỏ khoá sổ rồi chi lại, hoặc kiểm tra lại kỳ lương.`,
+                })
+                return
+            }
+        }
+
         const created: any[] = []
         const updated = await prisma.$transaction(async (t: any) => {
             if (totalNet > 0) {

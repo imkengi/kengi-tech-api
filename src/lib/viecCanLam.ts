@@ -283,9 +283,20 @@ export async function tinhViecCanLam(prisma: any, opts?: { branchFilter?: any })
      * nên soi thẳng ra đây. Đây là bộ soát HẬU KIỂM: dù bút toán mất vì lý do gì
      * (lỗi ghi, mất kết nối, đơn tạo trước khi có tính năng) thì vẫn lộ ra. */
     const chuaVaoSo = await doAn('Đơn chưa vào sổ kế toán', async () => {
+        const cai = await prisma.storeSettings.findFirst({
+            select: { autoCreateJournalEntries: true, businessType: true },
+        })
+
         // Cửa hàng TẮT ghi sổ tự động thì không có gì để soát — im lặng là đúng
-        const cai = await prisma.storeSettings.findFirst({ select: { autoCreateJournalEntries: true } })
         if (cai?.autoCreateJournalEntries === false) return null
+
+        /* HỘ KINH DOANH KHÔNG BẮT BUỘC SỔ KÉP (Điều 3 TT 88/2021) — họ cần Sổ Doanh
+         * Thu, không phải bút toán Nợ/Có. Bản đầu của mục này quên đọc loại hình nên
+         * xếp 3.000 việc mức "gấp" cho KENGISTORE về một nghĩa vụ họ KHÔNG có. Doạ
+         * người ta bằng nghĩa vụ không tồn tại cũng sai y như bỏ sót việc thật.
+         * (taxAudit.ts đã phân biệt từ trước — mục này giờ theo cùng quy ước.) */
+        const loaiHinh = String(cai?.businessType || 'company')
+        if (loaiHinh === 'household' || loaiHinh === 'individual') return null
 
         const tu = new Date(homNay.getTime() - 30 * 86400_000)
         const TRAN = 3000

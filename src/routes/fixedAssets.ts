@@ -23,6 +23,7 @@ import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest, getBranchId, getBranchFilter } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
 import { errMsg } from '../lib/errorResponse'
+import { khoaSoChan, loiKhoaSo } from '../lib/periodLock'
 
 const router = Router()
 
@@ -166,6 +167,10 @@ export async function depreciateAssetForPeriod(prisma: any, asset: any, month: n
     const expenseAcc = asset.expenseAccountCode || asset.depreciationAccount || '6424'
     const depAcc = asset.depAccAccountCode || '2141'
     const date = `${year}-${String(month).padStart(2, '0')}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`
+    /* Khấu hao mang ngày cuối tháng — chạy khấu hao bù cho tháng đã khoá sổ là
+     * ghi vào kỳ đã nộp. Ném lỗi để nơi gọi trả 423 (điểm lỗi 6). */
+    const khoaDep = await khoaSoChan(prisma, branchId, date)
+    if (khoaDep) throw loiKhoaSo(khoaDep, `bút toán khấu hao TSCĐ ${asset.code} T${month}/${year}`)
     const journal = await prisma.journalEntry.create({
         data: {
             date,
@@ -208,6 +213,10 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         const data = await prisma.fixedAsset.findMany({ where, orderBy: { code: 'asc' } })
         res.json({ success: true, data })
     } catch (err: any) {
+        if (err?.code === 'PERIOD_LOCKED') {
+            res.status(423).json({ success: false, code: 'PERIOD_LOCKED', lockDate: err.lockDate, error: err.message })
+            return
+        }
         console.error('GET /fixed-assets error:', err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }
@@ -479,6 +488,16 @@ router.post('/:id/dispose', authMiddleware, requireRole('admin', 'manager', 'sup
         const depAcc = asset.depAccAccountCode || '2141'
         const ref = `DISPOSE-${asset.code}`
         const journals: any[] = []
+
+        // Thanh lý ghi theo NGÀY THANH LÝ — lùi ngày vào kỳ đã khoá thì chặn (điểm lỗi 6)
+        const khoaDis = await khoaSoChan(prisma, branchId, disposalDate)
+        if (khoaDis) {
+            res.status(423).json({
+                success: false, code: 'PERIOD_LOCKED', lockDate: khoaDis.lockDate,
+                error: `Kỳ kế toán đã khoá sổ đến ${khoaDis.lockDate}, không ghi được bút toán thanh lý TSCĐ ${asset.code} ngày ${disposalDate} vào kỳ đó.`,
+            })
+            return
+        }
 
         const mkJournal = async (debit: string, credit: string, amount: number, desc: string) => {
             if (amount <= 0) return

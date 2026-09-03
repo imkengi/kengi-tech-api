@@ -24,6 +24,7 @@ import { authMiddleware, AuthRequest, getBranchId, getBranchFilter } from '../mi
 import { requireRole } from '../middleware/roleMiddleware'
 import { errMsg } from '../lib/errorResponse'
 import { postExpenseJournal, TK_CHI_PHI } from '../lib/autoJournalPurchase'
+import { khoaSoChan, loiKhoaSo } from '../lib/periodLock'
 
 const router = Router()
 
@@ -705,6 +706,11 @@ router.post('/transactions/:id/reconcile', authMiddleware, requireRole('admin', 
                 const creditAccountName = isCredit ? counterName : 'Tiền gửi ngân hàng'
                 const when = new Date(tx.transactionDate || tx.date || tx.createdAt)
                 const date = (isNaN(when.getTime()) ? new Date() : when).toISOString().slice(0, 10)
+                /* Nhánh này ghi THẲNG (nhánh phiếu chi bên trên đi qua postExpenseJournal
+                 * nên đã được chặn). Sao kê hay được kéo về muộn nhiều ngày, nên bút toán
+                 * đối soát rất dễ mang ngày thuộc kỳ đã khoá (điểm lỗi 6). */
+                const khoaNH = await khoaSoChan(prisma, tx.branchId || getBranchId(req) || null, date)
+                if (khoaNH) throw loiKhoaSo(khoaNH, `bút toán đối soát sao kê ngày ${date}`)
                 journalEntry = await prisma.journalEntry.create({
                     data: {
                         date, description: `Đối soát NH: ${tx.description || ''}`.trim(),
@@ -730,6 +736,10 @@ router.post('/transactions/:id/reconcile', authMiddleware, requireRole('admin', 
         })
         res.json({ success: true, data: { transaction: updated, journalEntry, phieuChi: phieuChiTuSinh } })
     } catch (err: any) {
+        if (err?.code === 'PERIOD_LOCKED') {
+            res.status(423).json({ success: false, code: 'PERIOD_LOCKED', lockDate: err.lockDate, error: err.message })
+            return
+        }
         console.error('POST /ebanking/transactions/:id/reconcile error:', err)
         res.status(500).json({ success: false, error: errMsg(err) })
     }

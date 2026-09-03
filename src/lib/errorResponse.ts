@@ -13,7 +13,17 @@ const isDev = (): boolean => process.env.NODE_ENV === 'development'
  * For the `error:` field of a response.
  * Returns the real error message in development, otherwise the generic fallback.
  */
+/* Lỗi CÓ CHỦ Ý dành cho người dùng — không phải chi tiết nội bộ, phải hiện nguyên văn.
+ *
+ * Bộ lọc này từng che mất thông báo có ích: một chứng từ bị khoá sổ từ chối sẽ ra
+ * "Internal server error" trên prod, và người dùng không có cách nào biết vì sao —
+ * đúng cái bẫy "lỗi của bên thứ ba bị che thành lỗi chung". Mã nào nằm ở đây là
+ * mã do CHÍNH hệ thống này sinh ra để nói với người dùng, không lộ gì nội bộ. */
+const MA_CHO_NGUOI_DUNG = new Set(['PERIOD_LOCKED', 'TRUNG_SO_HOA_DON'])
+
 export function errMsg(err: unknown, fallback = 'Internal server error'): string {
+    const ma = (err as any)?.code
+    if (ma && MA_CHO_NGUOI_DUNG.has(String(ma)) && err instanceof Error && err.message) return err.message
     if (isDev()) {
         if (err instanceof Error && err.message) return err.message
         if (typeof err === 'string' && err) return err
