@@ -42,3 +42,24 @@ export function errorDetail(err: unknown): string | undefined {
     if (typeof err === 'string') return err
     return undefined
 }
+
+/**
+ * Trả lỗi cho client: lỗi CÓ CHỦ Ý dành cho người dùng đi đúng mã HTTP của nó,
+ * còn lại mới là 500 + thông báo chung.
+ *
+ * Vì sao cần: các lỗi như PERIOD_LOCKED ném từ TẦNG SÂU (hàm sinh bút toán) rồi
+ * nổi lên qua `catch` của route, mà mọi catch đều kết thúc bằng 500 + errMsg. Đặt
+ * tay từng chỗ thì dễ đặt nhầm handler (đã cắn một lần 03/09) — nên gom về đây và
+ * thay cả loạt.
+ */
+export function guiLoi(res: any, err: any, log?: string): void {
+    if (err?.code === 'PERIOD_LOCKED') {
+        res.status(423).json({
+            success: false, code: 'PERIOD_LOCKED',
+            lockDate: err.lockDate, error: err.message,
+        })
+        return
+    }
+    if (log) console.error(log, err)
+    res.status(500).json({ success: false, error: errMsg(err) })
+}

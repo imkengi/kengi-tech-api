@@ -20,7 +20,7 @@
 import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest, getBranchId, getBranchFilter } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
-import { errMsg } from '../lib/errorResponse'
+import { errMsg, guiLoi } from '../lib/errorResponse'
 import { khoaSoChan, loiKhoaSo } from '../lib/periodLock'
 
 const router = Router()
@@ -152,12 +152,8 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         const data = await prisma.cCDC.findMany({ where, orderBy: { code: 'asc' } })
         res.json({ success: true, data })
     } catch (err: any) {
-        if (err?.code === 'PERIOD_LOCKED') {
-            res.status(423).json({ success: false, code: 'PERIOD_LOCKED', lockDate: err.lockDate, error: err.message })
-            return
-        }
         console.error('GET /ccdc error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -193,7 +189,7 @@ router.post('/', authMiddleware, requireRole('admin', 'manager', 'superadmin'), 
         res.status(201).json({ success: true, data })
     } catch (err: any) {
         console.error('POST /ccdc error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -214,7 +210,7 @@ router.get('/summary', authMiddleware, async (req: AuthRequest, res: Response) =
         res.json({ success: true, data: { totalItems: items.length, totalValue, allocatedAmount: allocated, remainingAmount: remaining, byStatus } })
     } catch (err: any) {
         console.error('GET /ccdc/summary error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -246,7 +242,7 @@ router.post('/allocate-all', authMiddleware, requireRole('admin', 'manager', 'su
         res.json({ success: true, data: { month, year, processed, skipped, totalAllocated, results } })
     } catch (err: any) {
         console.error('POST /ccdc/allocate-all error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -263,7 +259,7 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
         res.json({ success: true, data: { ...ccdc, allocations } })
     } catch (err: any) {
         console.error('GET /ccdc/:id error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -301,7 +297,7 @@ router.put('/:id', authMiddleware, requireRole('admin', 'manager', 'superadmin')
         res.json({ success: true, data: updated })
     } catch (err: any) {
         console.error('PUT /ccdc/:id error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -318,7 +314,7 @@ router.delete('/:id', authMiddleware, requireRole('admin', 'manager', 'superadmi
         res.json({ success: true, data: { id, deleted: true } })
     } catch (err: any) {
         console.error('DELETE /ccdc/:id error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -339,7 +335,7 @@ router.post('/:id/allocate', authMiddleware, requireRole('admin', 'manager', 'su
         res.json({ success: true, data: { allocation: r.allocation, journalEntry: r.journal, ccdc: r.ccdc } })
     } catch (err: any) {
         console.error('POST /ccdc/:id/allocate error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -354,7 +350,7 @@ router.get('/:id/allocation-history', authMiddleware, async (req: AuthRequest, r
         res.json({ success: true, data: allocations })
     } catch (err: any) {
         console.error('GET /ccdc/:id/allocation-history error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 

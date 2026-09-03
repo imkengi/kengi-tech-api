@@ -22,7 +22,7 @@
 import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest, getBranchId, getBranchFilter } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
-import { errMsg } from '../lib/errorResponse'
+import { errMsg, guiLoi } from '../lib/errorResponse'
 import { khoaSoChan, loiKhoaSo } from '../lib/periodLock'
 
 const router = Router()
@@ -213,12 +213,8 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
         const data = await prisma.fixedAsset.findMany({ where, orderBy: { code: 'asc' } })
         res.json({ success: true, data })
     } catch (err: any) {
-        if (err?.code === 'PERIOD_LOCKED') {
-            res.status(423).json({ success: false, code: 'PERIOD_LOCKED', lockDate: err.lockDate, error: err.message })
-            return
-        }
         console.error('GET /fixed-assets error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -267,7 +263,7 @@ router.post('/', authMiddleware, requireRole('admin', 'manager', 'superadmin'), 
         res.status(201).json({ success: true, data })
     } catch (err: any) {
         console.error('POST /fixed-assets error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -303,7 +299,7 @@ router.get('/summary', authMiddleware, async (req: AuthRequest, res: Response) =
         })
     } catch (err: any) {
         console.error('GET /fixed-assets/summary error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -335,7 +331,7 @@ router.post('/depreciate-all', authMiddleware, requireRole('admin', 'manager', '
         res.json({ success: true, data: { month, year, processed, skipped, totalDepreciation, results } })
     } catch (err: any) {
         console.error('POST /fixed-assets/depreciate-all error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -353,7 +349,7 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
         res.json({ success: true, data: { ...asset, netBookValue: netBook(asset), depreciationEntries } })
     } catch (err: any) {
         console.error('GET /fixed-assets/:id error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -388,7 +384,7 @@ router.put('/:id', authMiddleware, requireRole('admin', 'manager', 'superadmin')
         res.json({ success: true, data: updated })
     } catch (err: any) {
         console.error('PUT /fixed-assets/:id error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -405,7 +401,7 @@ router.delete('/:id', authMiddleware, requireRole('admin', 'manager', 'superadmi
         res.json({ success: true, data: { id, deleted: true } })
     } catch (err: any) {
         console.error('DELETE /fixed-assets/:id error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -427,7 +423,7 @@ router.post('/:id/depreciate', authMiddleware, requireRole('admin', 'manager', '
         res.json({ success: true, data: { entry: r.entry, journalEntry: r.journal, asset: r.asset } })
     } catch (err: any) {
         console.error('POST /fixed-assets/:id/depreciate error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -460,7 +456,7 @@ router.get('/:id/depreciation-schedule', authMiddleware, async (req: AuthRequest
         res.json({ success: true, data: { assetId: asset.id, code: asset.code, name: asset.name, method: asset.depreciationMethod || asset.method, totalPeriods: schedule.length, schedule } })
     } catch (err: any) {
         console.error('GET /fixed-assets/:id/depreciation-schedule error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -526,7 +522,7 @@ router.post('/:id/dispose', authMiddleware, requireRole('admin', 'manager', 'sup
         res.json({ success: true, data: { asset: updated, journalEntries: journals, netBookValueWrittenOff: remainingNbv, proceeds: disposalAmount } })
     } catch (err: any) {
         console.error('POST /fixed-assets/:id/dispose error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 

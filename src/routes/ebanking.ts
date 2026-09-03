@@ -22,7 +22,7 @@
 import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest, getBranchId, getBranchFilter } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
-import { errMsg } from '../lib/errorResponse'
+import { errMsg, guiLoi } from '../lib/errorResponse'
 import { postExpenseJournal, TK_CHI_PHI } from '../lib/autoJournalPurchase'
 import { khoaSoChan, loiKhoaSo } from '../lib/periodLock'
 
@@ -151,7 +151,7 @@ router.get('/accounts', authMiddleware, async (req: AuthRequest, res: Response) 
         res.json({ success: true, data })
     } catch (err: any) {
         console.error('GET /ebanking/accounts error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -181,7 +181,7 @@ router.post('/accounts', authMiddleware, requireRole('admin', 'manager', 'supera
         res.status(201).json({ success: true, data })
     } catch (err: any) {
         console.error('POST /ebanking/accounts error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -196,7 +196,7 @@ router.get('/accounts/:id', authMiddleware, async (req: AuthRequest, res: Respon
         res.json({ success: true, data: { ...acc, transactionCount: txCount } })
     } catch (err: any) {
         console.error('GET /ebanking/accounts/:id error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -220,7 +220,7 @@ router.put('/accounts/:id', authMiddleware, requireRole('admin', 'manager', 'sup
         res.json({ success: true, data: updated })
     } catch (err: any) {
         console.error('PUT /ebanking/accounts/:id error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -241,7 +241,7 @@ router.delete('/accounts/:id', authMiddleware, requireRole('admin', 'manager', '
         res.json({ success: true, data: { id, deleted: true } })
     } catch (err: any) {
         console.error('DELETE /ebanking/accounts/:id error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -267,7 +267,7 @@ router.get('/accounts/:id/balance', authMiddleware, async (req: AuthRequest, res
         })
     } catch (err: any) {
         console.error('GET /ebanking/accounts/:id/balance error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -296,7 +296,7 @@ router.get('/accounts/:id/transactions', authMiddleware, async (req: AuthRequest
         res.json({ success: true, data, pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) } })
     } catch (err: any) {
         console.error('GET /ebanking/accounts/:id/transactions error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -338,7 +338,7 @@ router.post('/accounts/:id/transactions', authMiddleware, requireRole('admin', '
         res.status(201).json({ success: true, data: { transaction: tx, account } })
     } catch (err: any) {
         console.error('POST /ebanking/accounts/:id/transactions error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -406,7 +406,7 @@ router.post('/accounts/:id/import-csv', authMiddleware, requireRole('admin', 'ma
         res.json({ success: true, data: { imported, skipped, errors: errors.slice(0, 20), account } })
     } catch (err: any) {
         console.error('POST /ebanking/accounts/:id/import-csv error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -466,7 +466,7 @@ router.post('/transactions/auto-reconcile', authMiddleware, requireRole('admin',
         res.json({ success: true, data: { scanned: txns.length, matched, unmatched: txns.length - matched, results } })
     } catch (err: any) {
         console.error('POST /ebanking/transactions/auto-reconcile error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -583,7 +583,7 @@ router.get('/transactions/goi-y', authMiddleware, requireRole('admin', 'manager'
         res.json({ success: true, data: goiY })
     } catch (err: any) {
         console.error('GET /ebanking/transactions/goi-y error:', err?.message)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -736,12 +736,8 @@ router.post('/transactions/:id/reconcile', authMiddleware, requireRole('admin', 
         })
         res.json({ success: true, data: { transaction: updated, journalEntry, phieuChi: phieuChiTuSinh } })
     } catch (err: any) {
-        if (err?.code === 'PERIOD_LOCKED') {
-            res.status(423).json({ success: false, code: 'PERIOD_LOCKED', lockDate: err.lockDate, error: err.message })
-            return
-        }
         console.error('POST /ebanking/transactions/:id/reconcile error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -805,7 +801,7 @@ router.get('/transactions', authMiddleware, async (req: AuthRequest, res: Respon
         res.json({ success: true, daCatBot: data.length >= TRAN_SAO_KE, data: data.map((t: any) => toFeTxn(t, accNameById)) })
     } catch (err: any) {
         console.error('GET /ebanking/transactions error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -844,7 +840,7 @@ router.post('/transactions', authMiddleware, requireRole('admin', 'manager', 'su
         res.status(201).json({ success: true, data: toFeTxn(tx) })
     } catch (err: any) {
         console.error('POST /ebanking/transactions error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -897,7 +893,7 @@ router.post('/transactions/import', authMiddleware, requireRole('admin', 'manage
         res.json({ success: true, data: { imported, skipped } })
     } catch (err: any) {
         console.error('POST /ebanking/transactions/import error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -947,7 +943,7 @@ router.post('/reconcile/auto', authMiddleware, requireRole('admin', 'manager', '
         res.json({ success: true, data: { scanned: txns.length, matched } })
     } catch (err: any) {
         console.error('POST /ebanking/reconcile/auto error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -1001,7 +997,7 @@ router.get('/overview', authMiddleware, async (req: AuthRequest, res: Response) 
         })
     } catch (err: any) {
         console.error('GET /ebanking/overview error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -1048,7 +1044,7 @@ router.get('/dashboard', authMiddleware, async (req: AuthRequest, res: Response)
         })
     } catch (err: any) {
         console.error('GET /ebanking/dashboard error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -1076,7 +1072,7 @@ router.get('/connections', authMiddleware, async (req: AuthRequest, res: Respons
         res.json({ success: true, data: data.map(maskConfig) })
     } catch (err: any) {
         console.error('GET /ebanking/connections error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -1101,7 +1097,7 @@ router.post('/connections', authMiddleware, requireRole('admin', 'manager', 'sup
         res.status(existing ? 200 : 201).json({ success: true, data: maskConfig(saved) })
     } catch (err: any) {
         console.error('POST /ebanking/connections error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -1117,7 +1113,7 @@ router.delete('/connections/:id', authMiddleware, requireRole('admin', 'manager'
         res.json({ success: true, data: { id, deleted: true } })
     } catch (err: any) {
         console.error('DELETE /ebanking/connections/:id error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -1137,7 +1133,7 @@ router.post('/connections/:id/sync', authMiddleware, requireRole('admin', 'manag
         res.json({ success: true, data: { connection: maskConfig(updated), message: `Đồng bộ sao kê ${cfg.bankName} thành công (mô phỏng)`, imported: 0 } })
     } catch (err: any) {
         console.error('POST /ebanking/connections/:id/sync error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 

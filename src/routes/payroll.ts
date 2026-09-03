@@ -1,7 +1,7 @@
 import { Router, Response } from 'express'
 import { authMiddleware, AuthRequest, getBranchId, getBranchFilter } from '../middleware/auth'
 import { requireRole } from '../middleware/roleMiddleware'
-import { errMsg } from '../lib/errorResponse'
+import { errMsg, guiLoi } from '../lib/errorResponse'
 import { cacheGet, cacheSet, cacheDel } from '../lib/cache'
 import { khoaSoChan, loiKhoaSo } from '../lib/periodLock'
 
@@ -353,7 +353,7 @@ router.get('/employees', authMiddleware, async (req: AuthRequest, res: Response)
         res.json({ success: true, data })
     } catch (err: any) {
         console.error('GET /payroll/employees error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -382,7 +382,7 @@ router.post('/employees', authMiddleware, requireRole('admin', 'manager', 'super
         res.status(201).json({ success: true, data })
     } catch (err: any) {
         console.error('POST /payroll/employees error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -396,7 +396,7 @@ router.get('/employees/:id', authMiddleware, async (req: AuthRequest, res: Respo
         res.json({ success: true, data: emp })
     } catch (err: any) {
         console.error('GET /payroll/employees/:id error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -424,7 +424,7 @@ router.put('/employees/:id', authMiddleware, requireRole('admin', 'manager', 'su
         res.json({ success: true, data: updated })
     } catch (err: any) {
         console.error('PUT /payroll/employees/:id error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -440,7 +440,7 @@ router.delete('/employees/:id', authMiddleware, requireRole('admin', 'manager', 
         res.json({ success: true, data: { id, deleted: true } })
     } catch (err: any) {
         console.error('DELETE /payroll/employees/:id error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -458,7 +458,7 @@ router.get('/periods', authMiddleware, async (req: AuthRequest, res: Response) =
         res.json({ success: true, data })
     } catch (err: any) {
         console.error('GET /payroll/periods error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -481,7 +481,7 @@ router.post('/periods', authMiddleware, requireRole('admin', 'manager', 'superad
         res.status(201).json({ success: true, data })
     } catch (err: any) {
         console.error('POST /payroll/periods error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -496,7 +496,7 @@ router.get('/periods/:id', authMiddleware, async (req: AuthRequest, res: Respons
         res.json({ success: true, data: { ...period, entryCount } })
     } catch (err: any) {
         console.error('GET /payroll/periods/:id error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -518,7 +518,7 @@ router.put('/periods/:id', authMiddleware, requireRole('admin', 'manager', 'supe
         res.json({ success: true, data: updated })
     } catch (err: any) {
         console.error('PUT /payroll/periods/:id error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -536,7 +536,7 @@ router.delete('/periods/:id', authMiddleware, requireRole('admin', 'manager', 's
         res.json({ success: true, data: { id, deleted: true } })
     } catch (err: any) {
         console.error('DELETE /payroll/periods/:id error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -573,7 +573,7 @@ router.post('/periods/:id/calculate', authMiddleware, requireRole('admin', 'mana
         res.json({ success: true, data: { period: period2, entries: created, count: created.length } })
     } catch (err: any) {
         console.error('POST /payroll/periods/:id/calculate error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -593,7 +593,7 @@ router.post('/periods/:id/confirm', authMiddleware, requireRole('admin', 'manage
         res.json({ success: true, data: updated })
     } catch (err: any) {
         console.error('POST /payroll/periods/:id/confirm error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -658,7 +658,7 @@ router.post('/periods/:id/pay', authMiddleware, requireRole('admin', 'manager', 
         res.json({ success: true, data: { period: updated, journalEntries: created, totalPaid: totalNet } })
     } catch (err: any) {
         console.error('POST /payroll/periods/:id/pay error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -674,7 +674,7 @@ router.get('/periods/:id/entries', authMiddleware, async (req: AuthRequest, res:
         res.json({ success: true, data: entries })
     } catch (err: any) {
         console.error('GET /payroll/periods/:id/entries error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
@@ -699,7 +699,7 @@ router.get('/periods/:id/payslip/:employeeId', authMiddleware, async (req: AuthR
         })
     } catch (err: any) {
         console.error('GET /payroll/periods/:id/payslip/:employeeId error:', err)
-        res.status(500).json({ success: false, error: errMsg(err) })
+        guiLoi(res, err)
     }
 })
 
