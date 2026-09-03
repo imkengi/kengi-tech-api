@@ -4076,6 +4076,12 @@ router.get('/do-gia-von', async (req: Request, res: Response) => {
                  *   · thiếu CẢ HAI             ⇒ đơn chưa vào sổ, không dính giá vốn
                  * Gộp chung rồi kết luận là vá nhầm chỗ. */
                 let soCoButToan = 0, soCoDoanhThu = 0, soCoDoanhThuThieuGiaVon = 0
+                /* CHIA THEO MỐC THỜI GIAN — câu quyết định là "rò rỉ đã bịt chưa".
+                 * Đơn cũ không vào sổ thì ghi bù là xong; đơn HÔM NAY vẫn không vào sổ
+                 * nghĩa là đường ghi đang hỏng, ghi bù bao nhiêu cũng lại hụt tiếp. */
+                const bay = Date.now() - 7 * 86400_000
+                const bamuoi = Date.now() - 30 * 86400_000
+                const chuaVao = { trong7Ngay: 0, tu8Den30: 0, tren30: 0 }
                 for (let i = 0; i < donDs.length; i += 400) {
                     const lo = donDs.slice(i, i + 400)
                     const refs = lo.flatMap((d: any) => [`COGS-${d.receiptNumber}`, `SALE-${d.receiptNumber}`])
@@ -4089,6 +4095,12 @@ router.get('/do-gia-von', async (req: Request, res: Response) => {
                         if (coGv) soCoButToan++
                         if (coDt) soCoDoanhThu++
                         if (coDt && !coGv) soCoDoanhThuThieuGiaVon++
+                        if (!coDt) {
+                            const t = new Date(d.createdAt).getTime()
+                            if (t >= bay) chuaVao.trong7Ngay++
+                            else if (t >= bamuoi) chuaVao.tu8Den30++
+                            else chuaVao.tren30++
+                        }
                     }
                 }
 
@@ -4108,6 +4120,7 @@ router.get('/do-gia-von', async (req: Request, res: Response) => {
                     donCoDoanhThuNhungTHIEUGiaVon: soCoDoanhThuThieuGiaVon,
                     // Còn đây là đơn CHƯA VÀO SỔ, không liên quan gì tới giá vốn
                     donChuaVaoSoHoanToan: donDs.length - soCoDoanhThu,
+                    chuaVaoSoTheoMoc: chuaVao,
                     tiLeThieu: donDs.length ? Math.round((donDs.length - soCoButToan) * 1000 / donDs.length) / 10 : 0,
                 })
             } catch (e: any) {
