@@ -64,7 +64,7 @@ router.get('/ton', authMiddleware, requirePermission(...QUYEN_XEM), async (req: 
         const hang = dsMa.length
             ? await prisma.product.findMany({
                 where: { id: { in: dsMa } },
-                select: { id: true, costPrice: true, stock: true, sku: true, name: true, unit: true },
+                select: { id: true, costPrice: true, stock: true, sku: true, name: true, baseUnit: true },
             })
             : []
         const theoMa = new Map(hang.map((h: any) => [h.id, h]))
@@ -80,7 +80,7 @@ router.get('/ton', authMiddleware, requirePermission(...QUYEN_XEM), async (req: 
                         productName: x.productName || h?.name || '',
                         productSku: x.productSku || h?.sku || null,
                         quantity: x.quantity,
-                        donVi: h?.unit || null,
+                        donVi: h?.baseUnit || null,
                         giaVonHienTai: h?.costPrice ?? 0,
                         tonKhoChinh: h?.stock ?? 0,
                     }
