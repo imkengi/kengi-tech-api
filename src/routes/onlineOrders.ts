@@ -302,13 +302,26 @@ router.get('/bang-dieu-khien', authMiddleware, requirePermission('online_orders.
             let nhanVien: any[] = []
             let daDongHomNay = -1
             const dongTheoGio: number[] = new Array(24).fill(0)
+            /* Danh sách MÃ ĐÃ QUÉT kèm giờ quét SỚM NHẤT của mã đó — dùng lại ở bước
+             * tính doanh số theo lúc đóng bên dưới. Phải là giờ SỚM NHẤT vì khoá duy
+             * nhất của PackingLog là (người, mã, ngày): cùng một đơn hai người cùng
+             * quét là HAI dòng, cộng tiền theo dòng thì đơn đó tính hai lần. */
+            const gioQuetSom = new Map<string, Date>()
+            let logDaDoc = false
             try {
                 const logs = await prisma.packingLog.findMany({
                     where: { workDate: dauNgayCong },
                     select: { userId: true, userName: true, orderCode: true, createdAt: true },
                     take: 20000,
                 })
+                logDaDoc = true
                 daDongHomNay = new Set(logs.map((l: any) => l.orderCode)).size
+                for (const l of logs) {
+                    const ma = String(l.orderCode || '').trim()
+                    if (!ma) continue
+                    const cu = gioQuetSom.get(ma)
+                    if (!cu || new Date(l.createdAt) < cu) gioQuetSom.set(ma, new Date(l.createdAt))
+                }
                 const theoNguoi = new Map<string, any>()
                 for (const l of logs) {
                     const g = gioVN(l.createdAt)
@@ -330,6 +343,126 @@ router.get('/bang-dieu-khien', authMiddleware, requirePermission('online_orders.
             } catch (e: any) {
                 console.error('[bang-dieu-khien] không đọc được nhật ký đóng gói:', e?.message || e)
             }
+
+            /* ─── 6b. DOANH SỐ THEO LÚC ĐÓNG ────────────────────────────────────
+             * Chủ shop: "đơn là đơn thực đóng chứ không phải đơn bắt đầu đếm từ hôm
+             * nay". Đúng — đo thật ngày 04/09/2026 trên KENGISTORE: trong 125 đơn đóng
+             * hôm nay có 49 đơn (39%) là đơn của những ngày trước. Tính doanh số theo
+             * NGÀY ĐƠN VỀ ra 57,80tr, theo LÚC ĐÓNG ra 49,88tr — lệch 7,92tr.
+             * Tiệm làm việc theo cái đóng được, nên ngày của bảng này đi theo lúc đóng.
+             *
+             * NỐI BẰNG GÌ: `orderCode` là thứ nhân viên QUÉT nên có thể là mã đơn hoặc
+             * mã vận đơn. Đo 04/09: 123/125 mã nối được, và CẢ 123 đều qua mã vận đơn,
+             * không mã nào qua mã đơn. Vẫn thử cả hai đường vì cửa hàng khác có thể dán
+             * mã đơn lên kiện.
+             *
+             * PHẦN KHÔNG NỐI ĐƯỢC PHẢI NÓI RA. Nối hụt bao nhiêu thì doanh số thiếu
+             * bấy nhiêu — im lặng là đúng kiểu "trần cắt âm thầm": con số trông đầy đủ
+             * nhưng không phải. */
+            const theoGioDong: Array<{ gio: number; soDon: number; doanhThu: number; shop: Record<string, number> }> = []
+            for (let g = 0; g <= 23; g++) theoGioDong.push({ gio: g, soDon: 0, doanhThu: 0, shop: {} })
+            let tienDong = -1
+            let dongKhongNoiDuoc = -1
+            let dongDonCu = 0
+            const duongShopDong: Array<{ khoa: string; san: string; shop: string; tong: number }> = []
+            if (logDaDoc) {
+                try {
+                    const maDaQuet = Array.from(gioQuetSom.keys())
+                    let daNoi: any[] = []
+                    if (maDaQuet.length) {
+                        const theoVanDon = await prisma.onlineOrder.findMany({
+                            where: { trackingNumber: { in: maDaQuet } },
+                            select: {
+                                orderNumber: true, trackingNumber: true, platform: true, channelName: true,
+                                status: true, total: true, netRevenue: true, createdAt: true,
+                            },
+                            take: 20000,
+                        })
+                        const theoSoDon = await prisma.onlineOrder.findMany({
+                            where: { orderNumber: { in: maDaQuet } },
+                            select: {
+                                orderNumber: true, trackingNumber: true, platform: true, channelName: true,
+                                status: true, total: true, netRevenue: true, createdAt: true,
+                            },
+                            take: 20000,
+                        })
+                        daNoi = [...theoVanDon, ...theoSoDon]
+                    }
+                    const theoMa = new Map<string, any>()
+                    for (const d of daNoi) {
+                        if (d.trackingNumber) theoMa.set(String(d.trackingNumber).trim(), d)
+                        if (d.orderNumber) theoMa.set(String(d.orderNumber).trim(), d)
+                    }
+
+                    // Gom doanh số từng shop trước, để chọn ra các đường vẽ
+                    const tongShop = new Map<string, { san: string; shop: string; tong: number }>()
+                    let hong = 0
+                    tienDong = 0
+                    for (const [ma, gio] of gioQuetSom) {
+                        const d = theoMa.get(ma)
+                        if (!d) { hong++; continue }
+                        if (new Date(d.createdAt) < dauNgayVN) dongDonCu++
+                        if (laHuy(d.status)) continue
+                        const t = tienCua(d)
+                        tienDong += t
+                        const k = khoaShopCua(d)
+                        let o = tongShop.get(k)
+                        if (!o) { o = { san: sanCua(d), shop: shopCua(d), tong: 0 }; tongShop.set(k, o) }
+                        o.tong += t
+                        const oGio = theoGioDong[gioVN(gio)]
+                        if (oGio) { oGio.soDon++; oGio.doanhThu += t }
+                    }
+                    dongKhongNoiDuoc = hong
+
+                    const xep = Array.from(tongShop.entries())
+                        .map(([k, v]) => ({ k, ...v }))
+                        .sort((a, b) => b.tong - a.tong)
+                    xep.slice(0, TOI_DA_DUONG).forEach((t, i) => duongShopDong.push({
+                        khoa: `s${i}`, san: t.san, shop: t.shop, tong: t.tong,
+                    }))
+                    const khoaDong = new Map<string, string>()
+                    xep.slice(0, TOI_DA_DUONG).forEach((t, i) => khoaDong.set(t.k, `s${i}`))
+                    const duDong = xep.slice(TOI_DA_DUONG)
+                    if (duDong.length) {
+                        duongShopDong.push({
+                            khoa: 'sKhac', san: 'KHAC', shop: `${duDong.length} shop khác`,
+                            tong: duDong.reduce((a, t) => a + t.tong, 0),
+                        })
+                        for (const t of duDong) khoaDong.set(t.k, 'sKhac')
+                    }
+                    for (const o of theoGioDong) for (const d of duongShopDong) o.shop[d.khoa] = 0
+                    for (const [ma, gio] of gioQuetSom) {
+                        const d = theoMa.get(ma)
+                        if (!d || laHuy(d.status)) continue
+                        const k = khoaDong.get(khoaShopCua(d))
+                        const oGio = theoGioDong[gioVN(gio)]
+                        if (k && oGio) oGio.shop[k] += tienCua(d)
+                    }
+                } catch (e: any) {
+                    console.error('[bang-dieu-khien] không tính được doanh số theo lúc đóng:', e?.message || e)
+                }
+            }
+
+            /* Đối chứng cùng giờ của HÔM QUA, cũng theo lúc đóng — so một con số tính
+             * theo lúc đóng với một con số tính theo ngày đơn về là so hai thứ khác
+             * nhau rồi gọi nó là tăng/giảm. */
+            let dongHomQuaCungGio = -1
+            try {
+                const dauNgayCongQua = new Date(dauNgayCong.getTime() - 86400_000)
+                const logQua = await prisma.packingLog.findMany({
+                    where: { workDate: dauNgayCongQua },
+                    select: { orderCode: true, createdAt: true },
+                    take: 20000,
+                })
+                const somQua = new Map<string, Date>()
+                for (const l of logQua) {
+                    const ma = String(l.orderCode || '').trim()
+                    if (!ma) continue
+                    const cu = somQua.get(ma)
+                    if (!cu || new Date(l.createdAt) < cu) somQua.set(ma, new Date(l.createdAt))
+                }
+                dongHomQuaCungGio = Array.from(somQua.values()).filter(t => gioVN(t) <= gioHienTai).length
+            } catch { /* giữ -1 = đọc hỏng */ }
 
             /* ─── Top sản phẩm bán chạy HÔM NAY (theo doanh số) ───
              * Chỉ lấy dòng hàng của ĐƠN HÔM NAY và bỏ đơn huỷ. Gộp theo SKU nếu có,
@@ -394,6 +527,16 @@ router.get('/bang-dieu-khien', authMiddleware, requirePermission('online_orders.
                     topSanPham,
                     tonDong: { choDong, choDongCu },
                     dongGoi: { daDongHomNay, nhanVien, nhatKyTuNgay },
+                    /* Doanh số theo LÚC ĐÓNG — trục thời gian chính của bảng này */
+                    theoLucDong: {
+                        tien: tienDong,
+                        theoGio: theoGioDong,
+                        duongShop: duongShopDong,
+                        homQuaCungGio: dongHomQuaCungGio,
+                        donCu: dongDonCu,
+                        /** Mã đã quét mà không tra ra đơn sàn — phần doanh số này THIẾU */
+                        khongNoiDuoc: dongKhongNoiDuoc,
+                    },
                     shipperLayHomNay,
                     shipperLayDonCu,
                     dangDiChuaCoGioQuet,
