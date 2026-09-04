@@ -4253,6 +4253,101 @@ router.get('/shipper-hom-nay', async (req: Request, res: Response) => {
     }
 })
 
+/* ─── NHẬT KÝ QUÉT MÃ CÓ NỐI ĐƯỢC SANG ĐƠN SÀN KHÔNG — GET /admin/do-dong-goi
+ *  (04/09/2026) CHỈ ĐỌC.
+ *
+ *  Chủ shop: "đơn là đơn thực đóng chứ không phải đơn bắt đầu đếm từ hôm nay".
+ *  Muốn tính doanh số theo LÚC ĐÓNG thì phải nối PackingLog.orderCode sang
+ *  OnlineOrder. Mà `orderCode` là thứ nhân viên QUÉT — có thể là mã đơn, có thể là
+ *  mã vận đơn (chú thích schema nói đúng như vậy).
+ *
+ *  Phải đo TỈ LỆ NỐI ĐƯỢC trước khi đổi trục thời gian của cả bảng: nối hụt thì
+ *  doanh số tụt mà không ai biết vì sao — đúng kiểu sai âm thầm tệ nhất.
+ *  Trả về cả VÀI MÃ KHÔNG NỐI ĐƯỢC để còn nhìn tận mắt chúng là cái gì. */
+router.get('/do-dong-goi', async (req: Request, res: Response) => {
+    try {
+        const code = String(req.query.store || '').trim()
+        if (!code) { res.status(400).json({ success: false, error: 'Thiếu ?store=' }); return }
+        const store = await prisma.store.findFirst({ where: { code } })
+        if (!store) { res.status(404).json({ success: false, error: 'Không thấy cửa hàng' }); return }
+        const sp: any = getStorePrisma((store as any).schema)
+
+        const soNgay = Math.min(30, Math.max(1, Number(req.query.ngay) || 1))
+        const vnNow = new Date(Date.now() + 7 * 3600_000)
+        const dauNgayCong = new Date(Date.UTC(vnNow.getUTCFullYear(), vnNow.getUTCMonth(), vnNow.getUTCDate()))
+        const tuNgayCong = new Date(dauNgayCong.getTime() - (soNgay - 1) * 86400_000)
+        const dauNgayVN = new Date(dauNgayCong.getTime() - 7 * 3600_000)
+
+        const logs = await sp.packingLog.findMany({
+            where: { workDate: { gte: tuNgayCong } },
+            select: { orderCode: true, createdAt: true, userName: true },
+            take: 20000,
+        })
+        const maDaQuet = Array.from(new Set(logs.map((l: any) => String(l.orderCode || '').trim()).filter(Boolean)))
+
+        // Nối theo HAI đường, đo riêng từng đường
+        const theoSoDon = maDaQuet.length ? await sp.onlineOrder.findMany({
+            where: { orderNumber: { in: maDaQuet } },
+            select: { orderNumber: true, trackingNumber: true, total: true, netRevenue: true, status: true, createdAt: true },
+        }) : []
+        const theoVanDon = maDaQuet.length ? await sp.onlineOrder.findMany({
+            where: { trackingNumber: { in: maDaQuet } },
+            select: { orderNumber: true, trackingNumber: true, total: true, netRevenue: true, status: true, createdAt: true },
+        }) : []
+
+        const bang = new Map<string, any>()
+        for (const d of theoSoDon) bang.set(String(d.orderNumber), d)
+        for (const d of theoVanDon) if (d.trackingNumber) bang.set(String(d.trackingNumber), d)
+
+        const noiDuoc = maDaQuet.filter((m: any) => bang.has(String(m)))
+        const khongNoi = maDaQuet.filter((m: any) => !bang.has(String(m)))
+        const tien = (d: any) => (Number(d.netRevenue) > 0 ? Number(d.netRevenue) : Number(d.total)) || 0
+        const laHuy = (st: string) => ['CANCELLED', 'IN_CANCEL', 'TO_RETURN', 'cancelled', 'cancelling', 'returned']
+            .includes(String(st))
+
+        // Trong số đơn ĐÃ ĐÓNG hôm nay, bao nhiêu là đơn của NGÀY TRƯỚC
+        let donCu = 0, tienDong = 0
+        for (const m of noiDuoc) {
+            const d = bang.get(String(m))
+            if (!laHuy(d.status)) tienDong += tien(d)
+            if (new Date(d.createdAt) < dauNgayVN) donCu++
+        }
+
+        // Đối chứng: doanh số tính theo NGÀY ĐƠN VỀ, cách bảng đang chạy hiện nay
+        const donVeHomNay = await sp.onlineOrder.findMany({
+            where: { createdAt: { gte: dauNgayVN } },
+            select: { total: true, netRevenue: true, status: true },
+            take: 5000,
+        })
+        const tienDonVe = donVeHomNay.filter((d: any) => !laHuy(d.status)).reduce((a: number, d: any) => a + tien(d), 0)
+
+        res.json({
+            success: true,
+            data: {
+                soNgay, tuNgayCong: tuNgayCong.toISOString(),
+                nhatKy: { dong: logs.length, maRieng: maDaQuet.length },
+                noi: {
+                    duoc: noiDuoc.length,
+                    hong: khongNoi.length,
+                    tiLe: maDaQuet.length ? Math.round((noiDuoc.length / maDaQuet.length) * 1000) / 10 : null,
+                    theoSoDon: theoSoDon.length,
+                    theoVanDon: theoVanDon.length,
+                },
+                maKhongNoiDuoc: khongNoi.slice(0, 20),
+                soSanh: {
+                    tienTheoLucDong: tienDong,
+                    tienTheoDonVe: tienDonVe,
+                    donDaDongLaDonCu: donCu,
+                    ghiChu: 'tienTheoLucDong chỉ tính được trên phần NỐI ĐƯỢC — nối hụt bao nhiêu thì thiếu bấy nhiêu',
+                },
+            },
+        })
+    } catch (err: any) {
+        console.error('GET /admin/do-dong-goi lỗi:', err)
+        res.status(500).json({ success: false, error: String(err?.message || err) })
+    }
+})
+
 router.get('/store-health', async (req: Request, res: Response) => {
     try {
         const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
