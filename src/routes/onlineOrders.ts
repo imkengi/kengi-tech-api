@@ -160,9 +160,18 @@ router.get('/bang-dieu-khien', authMiddleware, requirePermission('online_orders.
              * về giờ quét thì rơi khỏi con số này — im lặng, và con số trông thấp hơn
              * thực tế. Đếm riêng rồi để màn hình nói ra, đừng giấu. */
             let shipperLayHomNay = 0
+            let shipperLayDonCu = 0
             let dangDiChuaCoGioQuet = 0
             try {
                 shipperLayHomNay = await prisma.onlineOrder.count({ where: { shippedAt: { gte: dauNgayVN } } })
+                /* Trong số đó, bao nhiêu là ĐƠN CŨ mới được lấy sáng nay.
+                 * Đo thật 04/09: cả 2 đơn được tính đều là đơn HÔM QUA, ĐVVC tới lấy
+                 * lúc 07:25 và 11:11 sáng nay. Thẻ nằm cạnh các số của hôm nay nên bị
+                 * đọc thành "đơn hôm nay đã lấy 2" — chủ shop hỏi ngay "shipper chưa
+                 * lấy mà sao có 2 rồi". Con số đúng, nhãn sai. Tách ra để nói rõ. */
+                shipperLayDonCu = await prisma.onlineOrder.count({
+                    where: { shippedAt: { gte: dauNgayVN }, createdAt: { lt: dauNgayVN } },
+                })
                 const dsDangDi = [
                     ...(STATUS_SYNONYMS.SHIPPED || []),
                     ...(STATUS_SYNONYMS.TO_CONFIRM_RECEIVE || []),
@@ -170,7 +179,7 @@ router.get('/bang-dieu-khien', authMiddleware, requirePermission('online_orders.
                 dangDiChuaCoGioQuet = await prisma.onlineOrder.count({
                     where: { status: { in: dsDangDi }, shippedAt: null },
                 })
-            } catch { shipperLayHomNay = -1; dangDiChuaCoGioQuet = -1 }
+            } catch { shipperLayHomNay = -1; shipperLayDonCu = -1; dangDiChuaCoGioQuet = -1 }
 
             // ─── 5. TỒN ĐỌNG: chờ đóng (không bó theo ngày) ───
             let choDong = -1, choDongCu = -1
@@ -282,6 +291,7 @@ router.get('/bang-dieu-khien', authMiddleware, requirePermission('online_orders.
                     tonDong: { choDong, choDongCu },
                     dongGoi: { daDongHomNay, nhanVien, nhatKyTuNgay },
                     shipperLayHomNay,
+                    shipperLayDonCu,
                     dangDiChuaCoGioQuet,
                     tran: {
                         donToiDa: TRAN_DON,
