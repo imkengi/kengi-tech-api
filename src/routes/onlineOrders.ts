@@ -64,6 +64,192 @@ const CANCEL_LIKE_STATUSES: string[] = [
     ...STATUS_SYNONYMS.TO_RETURN,
 ]
 
+/* ─────────────────────────────────────────────────────────────────────────────
+ *  BẢNG ĐIỀU KHIỂN HÀNG ONLINE — GET /api/online-orders/bang-dieu-khien?ngay=7
+ *  (04/09/2026)
+ *
+ *  Chủ shop: "làm cho t 1 trang dashboard về hàng online riêng đi, có biểu đồ doanh
+ *  số, từng shop bao nhiêu đơn, nhân viên đang đóng gói có làm hay không và đã đóng
+ *  bao nhiêu đơn, bao nhiêu đơn đã đóng xong, bao nhiêu đơn shipper lấy".
+ *
+ *  GOM MỘT LƯỢT, CHẠY TUẦN TỰ. Pool prod mỗi cửa hàng đúng 1 kết nối — trang gọi
+ *  bốn API song song thì chúng tự xếp hàng sau nhau mà còn tốn thêm bốn lượt xác
+ *  thực. Một lượt trả đủ thì trang cũng khỏi cảnh mỗi ô một trạng thái tải.
+ *
+ *  BA CHỖ DỄ ĐỌC NHẦM, ĐÃ KHAI RÕ TRONG KẾT QUẢ:
+ *
+ *  1. `nhatKyDongGoiTuNgay` — bảng PackingLog mới có từ 03/09/2026. Trước ngày đó
+ *     KHÔNG có dữ liệu, không phải "không ai đóng đơn". Thiếu mốc này thì biểu đồ
+ *     30 ngày nhìn như cả tháng nhân viên ngồi chơi.
+ *
+ *  2. `daDongXong` đếm theo NHẬT KÝ ĐÓNG GÓI, còn `shipperDaLay` đếm theo TRẠNG
+ *     THÁI TRÊN SÀN. Hai nguồn khác nhau nên `shipperDaLay` CÓ THỂ LỚN HƠN
+ *     `daDongXong` — đơn đóng trước ngày có nhật ký, hoặc đóng mà quên quét mã.
+ *     Đó không phải lỗi số liệu; trừ hai con số cho nhau mới là sai.
+ *
+ *  3. Mọi trần đọc đều trả về trong `tran`. Cắt ngầm rồi báo như thể không cắt là
+ *     lỗi đã cắn nhiều lần ở kho mã này.
+ * ───────────────────────────────────────────────────────────────────────────── */
+router.get('/bang-dieu-khien', authMiddleware, requirePermission('online_orders.view', 'orders.view'),
+    async (req: AuthRequest, res: Response) => {
+        try {
+            const prisma: any = req.storePrisma!
+            const soNgay = Math.min(90, Math.max(1, Number(req.query.ngay) || 7))
+            const TRAN_DON = 5000
+
+            /* Cắt ngày theo GIỜ VN, không theo UTC. Lấy mốc UTC thì "hôm nay" của
+             * tiệm bắt đầu lúc 7 giờ sáng — đơn bán buổi sáng rơi vào ngày hôm trước. */
+            const bayGio = new Date()
+            const vnNow = new Date(bayGio.getTime() + 7 * 3600_000)
+            const dauHomNayVN = new Date(Date.UTC(vnNow.getUTCFullYear(), vnNow.getUTCMonth(), vnNow.getUTCDate()) - 7 * 3600_000)
+            const tuNgay = new Date(dauHomNayVN.getTime() - (soNgay - 1) * 86400_000)
+            const ngayVN = (d: Date) => new Date(d.getTime() + 7 * 3600_000).toISOString().slice(0, 10)
+
+            // ─── 1. Đơn trong kỳ ───
+            const donDs = await prisma.onlineOrder.findMany({
+                where: { createdAt: { gte: tuNgay } },
+                select: {
+                    id: true, orderNumber: true, platform: true, channelName: true,
+                    status: true, total: true, netRevenue: true, createdAt: true,
+                    trackingNumber: true,
+                },
+                take: TRAN_DON,
+                orderBy: { createdAt: 'desc' },
+            })
+
+            const laHuy = (st: string) => ['CANCELLED', 'IN_CANCEL', 'TO_RETURN', 'cancelled', 'cancelling', 'returned']
+                .includes(String(st))
+            const nhom = (st: string) => STATUS_GROUP_OF[String(st)] || String(st)
+
+            // ─── 2. Biểu đồ doanh số theo ngày ───
+            const theoNgay = new Map<string, { ngay: string; soDon: number; doanhThu: number; huy: number }>()
+            for (let i = 0; i < soNgay; i++) {
+                const k = ngayVN(new Date(tuNgay.getTime() + i * 86400_000))
+                theoNgay.set(k, { ngay: k, soDon: 0, doanhThu: 0, huy: 0 })
+            }
+            // ─── 3. Theo sàn / theo shop ───
+            const theoSan = new Map<string, { san: string; shop: string; soDon: number; doanhThu: number; huy: number }>()
+            // ─── 4. Đếm theo trạng thái ───
+            const demTrangThai: Record<string, number> = {}
+
+            for (const d of donDs) {
+                const k = ngayVN(new Date(d.createdAt))
+                const o = theoNgay.get(k)
+                const huy = laHuy(d.status)
+                const tien = Number(d.netRevenue) > 0 ? Number(d.netRevenue) : Number(d.total) || 0
+                if (o) {
+                    o.soDon++
+                    if (huy) o.huy++
+                    else o.doanhThu += tien
+                }
+                const san = String(d.platform || 'khac').toUpperCase()
+                const shop = String(d.channelName || san)
+                const kS = `${san}|${shop}`
+                let t = theoSan.get(kS)
+                if (!t) { t = { san, shop, soDon: 0, doanhThu: 0, huy: 0 }; theoSan.set(kS, t) }
+                t.soDon++
+                if (huy) t.huy++
+                else t.doanhThu += tien
+
+                const g = nhom(d.status)
+                demTrangThai[g] = (demTrangThai[g] || 0) + 1
+            }
+
+            // ─── 5. Nhật ký đóng gói HÔM NAY ───
+            const dauNgayCong = new Date(Date.UTC(vnNow.getUTCFullYear(), vnNow.getUTCMonth(), vnNow.getUTCDate()))
+            let dongGoiHomNay: any[] = []
+            let tongDongHomNay = 0
+            try {
+                const logs = await prisma.packingLog.findMany({
+                    where: { workDate: dauNgayCong },
+                    select: { userId: true, userName: true, orderCode: true, createdAt: true },
+                    take: 20000,
+                })
+                tongDongHomNay = logs.length
+                const theoNguoi = new Map<string, { userId: string; userName: string; soDon: number; lanCuoi: string | null }>()
+                for (const l of logs) {
+                    let o = theoNguoi.get(l.userId)
+                    if (!o) { o = { userId: l.userId, userName: l.userName, soDon: 0, lanCuoi: null }; theoNguoi.set(l.userId, o) }
+                    o.soDon++
+                    o.userName = l.userName
+                    const t = new Date(l.createdAt).toISOString()
+                    if (!o.lanCuoi || t > o.lanCuoi) o.lanCuoi = t
+                }
+                dongGoiHomNay = Array.from(theoNguoi.values())
+                    .map(o => ({
+                        ...o,
+                        /* "Đang làm" = có quét mã trong 30 phút gần đây. Nghỉ tay lâu
+                         * hơn thế thì để máy nói "ngưng lúc HH:mm" chứ đừng khẳng định
+                         * người ta đã về — nghỉ ăn trưa cũng quá 30 phút. */
+                        dangLam: o.lanCuoi ? (Date.now() - new Date(o.lanCuoi).getTime()) < 30 * 60_000 : false,
+                    }))
+                    .sort((a, b) => b.soDon - a.soDon)
+            } catch (e: any) {
+                console.error('[bang-dieu-khien] không đọc được nhật ký đóng gói:', e?.message || e)
+                dongGoiHomNay = []
+                tongDongHomNay = -1     // -1 = ĐỌC HỎNG, khác hẳn 0 = không ai đóng
+            }
+
+            // ─── 6. Đơn trong kỳ đã có nhật ký đóng gói ───
+            let daDongXong = 0
+            try {
+                const maDon = donDs.map((d: any) => String(d.orderNumber)).filter(Boolean)
+                for (let i = 0; i < maDon.length; i += 500) {
+                    const lo = maDon.slice(i, i + 500)
+                    const co = await prisma.packingLog.findMany({
+                        where: { orderCode: { in: lo } }, select: { orderCode: true },
+                    })
+                    daDongXong += new Set(co.map((x: any) => x.orderCode)).size
+                }
+            } catch { daDongXong = -1 }
+
+            // ─── 7. Nhật ký đóng gói có từ bao giờ ───
+            let nhatKyTuNgay: string | null = null
+            try {
+                const dau = await prisma.packingLog.findFirst({
+                    orderBy: { workDate: 'asc' }, select: { workDate: true },
+                })
+                nhatKyTuNgay = dau ? new Date(dau.workDate).toISOString().slice(0, 10) : null
+            } catch { /* không đọc được thì để null, trang tự nói là chưa rõ */ }
+
+            const soCuaNhom = (...gs: string[]) => gs.reduce((a, g) => a + (demTrangThai[g] || 0), 0)
+
+            res.json({
+                success: true,
+                data: {
+                    ky: { tu: ngayVN(tuNgay), den: ngayVN(dauHomNayVN), soNgay },
+                    bieuDo: Array.from(theoNgay.values()),
+                    theoSan: Array.from(theoSan.values()).sort((a, b) => b.soDon - a.soDon),
+                    trangThai: {
+                        choXacNhan: soCuaNhom('UNPAID'),
+                        choDong: soCuaNhom('READY_TO_SHIP', 'PROCESSED'),
+                        daDongXong,
+                        shipperDaLay: soCuaNhom('SHIPPED'),
+                        daGiao: soCuaNhom('TO_CONFIRM_RECEIVE', 'COMPLETED'),
+                        huy: soCuaNhom('CANCELLED', 'IN_CANCEL', 'TO_RETURN'),
+                    },
+                    dongGoi: {
+                        tongDonHomNay: tongDongHomNay,
+                        nhanVien: dongGoiHomNay,
+                        nhatKyTuNgay,
+                    },
+                    tong: {
+                        soDon: donDs.length,
+                        doanhThu: Array.from(theoNgay.values()).reduce((a, x) => a + x.doanhThu, 0),
+                    },
+                    tran: {
+                        donToiDa: TRAN_DON,
+                        chamTran: donDs.length >= TRAN_DON,
+                        ghiChu: 'daDongXong đếm theo NHẬT KÝ đóng gói, shipperDaLay đếm theo TRẠNG THÁI trên sàn — hai nguồn khác nhau, đừng trừ cho nhau',
+                    },
+                },
+            })
+        } catch (err: any) {
+            console.error('GET /online-orders/bang-dieu-khien lỗi:', err)
+            res.status(500).json({ success: false, error: errMsg(err, 'Không đọc được số liệu hàng online') })
+        }
+    })
+
 router.get('/stats', authMiddleware, requirePermission('online_orders.view', 'orders.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
