@@ -14,7 +14,7 @@ import { adjustSellableStock, updateWarehouseStock, khoHuHong } from '../lib/war
 import { registryPrisma, mapWithConcurrency } from '../lib/prisma'
 import { computeOrderProfits } from '../lib/onlineOrderProfit'
 import { moTaLoi } from '../lib/gomLoi'
-import { gomNhomDVVC, khoaNhomDVVC } from '../lib/dvvc'
+import { gomNhomDVVC, khoaNhomDVVC, tenNhomDVVC } from '../lib/dvvc'
 
 const router = Router()
 
@@ -103,6 +103,12 @@ router.get('/bang-dieu-khien', authMiddleware, requirePermission('online_orders.
                 .includes(String(st))
             const nhomCua = (st: string) => STATUS_GROUP_OF[String(st)] || String(st)
             const tienCua = (d: any) => (Number(d.netRevenue) > 0 ? Number(d.netRevenue) : Number(d.total)) || 0
+            /* MỘT chỗ duy nhất sinh khoá shop. Bảng "doanh số theo shop" và các đường
+             * trên biểu đồ phải gọi tên shop y hệt nhau — chép hai bản là chúng lệch
+             * nhau lúc nào không biết, rồi đường vẽ ra không khớp dòng nào trong bảng. */
+            const sanCua = (d: any) => String(d.platform || 'khac').toUpperCase()
+            const shopCua = (d: any) => String(d.channelName || sanCua(d))
+            const khoaShopCua = (d: any) => `${sanCua(d)}|${shopCua(d)}`
 
             // ─── 1. Đơn VỀ hôm nay + hôm qua (hôm qua để so cùng giờ) ───
             const donDs = await prisma.onlineOrder.findMany({
@@ -119,8 +125,12 @@ router.get('/bang-dieu-khien', authMiddleware, requirePermission('online_orders.
 
             // ─── 2. Theo GIỜ trong ngày ───
             const gioHienTai = gioVN(bayGio)
-            const theoGio: Array<{ gio: number; soDon: number; doanhThu: number; homQua: number; homQuaTien: number }> = []
-            for (let g = 0; g <= 23; g++) theoGio.push({ gio: g, soDon: 0, doanhThu: 0, homQua: 0, homQuaTien: 0 })
+            const theoGio: Array<{
+                gio: number; soDon: number; doanhThu: number; homQua: number; homQuaTien: number
+                /** Doanh số từng shop trong giờ đó, khoá theo `duongShop[].khoa` */
+                shop: Record<string, number>
+            }> = []
+            for (let g = 0; g <= 23; g++) theoGio.push({ gio: g, soDon: 0, doanhThu: 0, homQua: 0, homQuaTien: 0, shop: {} })
             for (const d of homNay) {
                 if (laHuy(d.status)) continue
                 const o = theoGio[gioVN(d.createdAt)]
@@ -138,14 +148,48 @@ router.get('/bang-dieu-khien', authMiddleware, requirePermission('online_orders.
             // ─── 3. Theo shop, chỉ tính đơn VỀ HÔM NAY ───
             const theoSan = new Map<string, { san: string; shop: string; soDon: number; doanhThu: number; huy: number }>()
             for (const d of homNay) {
-                const san = String(d.platform || 'khac').toUpperCase()
-                const shop = String(d.channelName || san)
-                const k = `${san}|${shop}`
+                const k = khoaShopCua(d)
                 let t = theoSan.get(k)
-                if (!t) { t = { san, shop, soDon: 0, doanhThu: 0, huy: 0 }; theoSan.set(k, t) }
+                if (!t) { t = { san: sanCua(d), shop: shopCua(d), soDon: 0, doanhThu: 0, huy: 0 }; theoSan.set(k, t) }
                 t.soDon++
                 if (laHuy(d.status)) t.huy++
                 else t.doanhThu += tienCua(d)
+            }
+
+            /* ─── 3b. MỖI SHOP MỘT ĐƯỜNG ────────────────────────────────────────
+             * Chủ shop: "doanh số không vẽ theo như này mà vẽ các shop với nhau".
+             * Trước đây biểu đồ là hôm nay so hôm qua — trả lời câu "hôm nay khá hơn
+             * hôm qua không", chứ không trả lời được "shop nào đang kéo doanh số".
+             *
+             * KẸP SỐ ĐƯỜNG. Cửa hàng nhiều shop thì 12 đường chồng nhau là không đọc
+             * được gì; lấy 6 shop doanh số cao nhất, phần còn lại dồn vào "Shop khác"
+             * để tổng vẫn đúng — cắt bỏ hẳn là biểu đồ cộng lại không bằng thẻ tổng
+             * mà chẳng ai hiểu vì sao. */
+            const TOI_DA_DUONG = 6
+            const shopXep = Array.from(theoSan.entries())
+                .map(([k, t]) => ({ k, ...t }))
+                .sort((a, b) => b.doanhThu - a.doanhThu)
+            const duongShop = shopXep.slice(0, TOI_DA_DUONG).map((t, i) => ({
+                khoa: `s${i}`, san: t.san, shop: t.shop, tong: t.doanhThu,
+            }))
+            const khoaCua = new Map<string, string>()
+            shopXep.slice(0, TOI_DA_DUONG).forEach((t, i) => khoaCua.set(t.k, `s${i}`))
+            const conLai = shopXep.slice(TOI_DA_DUONG)
+            if (conLai.length) {
+                duongShop.push({
+                    khoa: 'sKhac', san: 'KHAC', shop: `${conLai.length} shop khác`,
+                    tong: conLai.reduce((a, t) => a + t.doanhThu, 0),
+                })
+                for (const t of conLai) khoaCua.set(t.k, 'sKhac')
+            }
+            /* Điền 0 cho MỌI khoá ở MỌI giờ: thiếu khoá thì đường bị đứt quãng chứ
+             * không phải chạm đáy — nhìn tưởng mất dữ liệu. */
+            for (const o of theoGio) for (const d of duongShop) o.shop[d.khoa] = 0
+            for (const d of homNay) {
+                if (laHuy(d.status)) continue
+                const k = khoaCua.get(khoaShopCua(d))
+                const o = theoGio[gioVN(d.createdAt)]
+                if (k && o) o.shop[k] += tienCua(d)
             }
 
             /* ─── 4. Shipper lấy HÔM NAY ───────────────────────────────────────
@@ -182,9 +226,9 @@ router.get('/bang-dieu-khien', authMiddleware, requirePermission('online_orders.
             } catch { shipperLayHomNay = -1; shipperLayDonCu = -1; dangDiChuaCoGioQuet = -1 }
 
             // ─── 5. TỒN ĐỌNG: chờ đóng (không bó theo ngày) ───
+            const dsCho = [...(STATUS_SYNONYMS.READY_TO_SHIP || []), ...(STATUS_SYNONYMS.PROCESSED || [])]
             let choDong = -1, choDongCu = -1
             try {
-                const dsCho = [...(STATUS_SYNONYMS.READY_TO_SHIP || []), ...(STATUS_SYNONYMS.PROCESSED || [])]
                 const cho = await prisma.onlineOrder.findMany({
                     where: { status: { in: dsCho } },
                     select: { createdAt: true },
@@ -194,6 +238,64 @@ router.get('/bang-dieu-khien', authMiddleware, requirePermission('online_orders.
                 // Đơn về từ HÔM TRƯỚC mà vẫn chưa đi — phần việc đang ùn
                 choDongCu = cho.filter((x: any) => new Date(x.createdAt) < dauNgayVN).length
             } catch { /* giữ -1 = đọc hỏng */ }
+
+            /* ─── 5b. TỪNG ĐVVC: ai đã tới lấy, ai còn nợ bao nhiêu đơn ─────────
+             * Chủ shop: "thiếu đơn vị vận chuyển nào, còn lấy bao nhiêu".
+             *
+             * ⛔ KHÔNG gom theo chuỗi thô. `shippingCarrier` là nhãn sàn trả về, mỗi
+             * sàn gọi một kiểu: GHN nằm dưới BA tên ("GHN", "GHN - Hàng Cồng Kềnh",
+             * "Giao Hàng Nhanh") — đếm theo chuỗi thô là thấy 977 đơn trong khi thực
+             * tế 2.092. Phải đi qua `khoaNhomDVVC` của lib/dvvc.ts, và hiện luôn các
+             * nhãn thô đã gom để việc gom nhìn thấy được.
+             *
+             * "Còn phải lấy" = đơn đang ở trạng thái chờ bàn giao mà CHƯA có giờ ĐVVC
+             * quét nhận. Đơn chưa gắn ĐVVC dồn vào nhóm `khong-co` — đó là việc khác
+             * (chưa tạo vận đơn), KHÔNG tính là "hãng chưa tới". */
+            let theoDvvc: any[] = []
+            let dvvcChuaToi = -1
+            try {
+                const daLayDs = await prisma.onlineOrder.findMany({
+                    where: { shippedAt: { gte: dauNgayVN } },
+                    select: { shippingCarrier: true },
+                    take: TRAN_DON,
+                })
+                const choLayDs = await prisma.onlineOrder.findMany({
+                    where: { status: { in: dsCho }, shippedAt: null },
+                    select: { shippingCarrier: true },
+                    take: TRAN_DON,
+                })
+
+                const bang = new Map<string, {
+                    khoa: string; ten: string; daLay: number; conPhaiLay: number; nhan: Set<string>
+                }>()
+                const nap = (ds: any[], truong: 'daLay' | 'conPhaiLay') => {
+                    for (const x of ds) {
+                        const tho = String(x.shippingCarrier ?? '').trim()
+                        const khoa = khoaNhomDVVC(tho)
+                        let g = bang.get(khoa)
+                        if (!g) {
+                            g = { khoa, ten: tenNhomDVVC(khoa), daLay: 0, conPhaiLay: 0, nhan: new Set() }
+                            bang.set(khoa, g)
+                        }
+                        g[truong]++
+                        if (tho) g.nhan.add(tho)
+                    }
+                }
+                nap(daLayDs, 'daLay')
+                nap(choLayDs, 'conPhaiLay')
+
+                theoDvvc = Array.from(bang.values())
+                    .map(g => ({ ...g, nhan: Array.from(g.nhan).sort() }))
+                    // Ai còn nợ nhiều đơn nhất lên đầu — đó là thứ người trực ca cần gọi
+                    .sort((a, b) => (b.conPhaiLay - a.conPhaiLay) || (b.daLay - a.daLay))
+
+                /* "Chưa tới lấy" = còn đơn chờ mà hôm nay chưa quét nhận đơn nào.
+                 * Loại nhóm `khong-co` ra: chưa gắn ĐVVC thì không có hãng nào để mà
+                 * trách, đổ vào đây là con số vu oan cho một hãng không tồn tại. */
+                dvvcChuaToi = theoDvvc.filter(g => g.conPhaiLay > 0 && g.daLay === 0 && g.khoa !== 'khong-co').length
+            } catch (e: any) {
+                console.error('[bang-dieu-khien] không đọc được ĐVVC:', e?.message || e)
+            }
 
             // ─── 6. Đóng gói hôm nay ───
             const dauNgayCong = new Date(Date.UTC(vnNow.getUTCFullYear(), vnNow.getUTCMonth(), vnNow.getUTCDate()))
@@ -287,12 +389,16 @@ router.get('/bang-dieu-khien', authMiddleware, requirePermission('online_orders.
                     theoGio,
                     dongTheoGio,
                     theoSan: Array.from(theoSan.values()).sort((a, b) => b.soDon - a.soDon),
+                    /** Các đường trên biểu đồ — mỗi shop một đường, xếp theo doanh số */
+                    duongShop,
                     topSanPham,
                     tonDong: { choDong, choDongCu },
                     dongGoi: { daDongHomNay, nhanVien, nhatKyTuNgay },
                     shipperLayHomNay,
                     shipperLayDonCu,
                     dangDiChuaCoGioQuet,
+                    theoDvvc,
+                    dvvcChuaToi,
                     tran: {
                         donToiDa: TRAN_DON,
                         chamTran: donDs.length >= TRAN_DON,
