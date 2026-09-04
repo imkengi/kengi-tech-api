@@ -122,9 +122,32 @@ export async function convertOnlineOrderToTransaction(prisma: StorePrisma, order
             product = await prisma.product.findUnique({ where: { id: item.productId } })
         }
 
-        // Try matching by SKU
+        /* Khớp theo SKU — KHÔNG PHÂN BIỆT HOA THƯỜNG (sửa 04/09/2026).
+         *
+         * Đo thật trên KENGISTORE: 7/8 mã đang chặn đơn là lệch đúng chữ hoa —
+         * sàn ghi "ct18plus"/"Ct28plus", kho ghi "CT18PLUS"/"CT28PLUS". Phép so
+         * cũ dùng `{ sku: skuSach }` là so CHẶT, nên trượt hết; trong khi bảng
+         * ánh xạ SkuMapping ngay bên dưới lại đã dùng `mode: 'insensitive'`.
+         * Hai phép so cùng một thứ mà một bên chặt một bên lỏng — đơn rơi vào
+         * khe giữa hai luật rồi kẹt vĩnh viễn.
+         *
+         * NHIỀU MÃ TRÙNG NHAU KHI BỎ HOA THƯỜNG THÌ BỎ QUA, KHÔNG ĐOÁN. Chọn
+         * bừa một cái là doanh thu và trừ kho chạy vào nhầm mặt hàng — âm thầm
+         * và khó lần hơn hẳn việc đơn kẹt lại chờ người xử. */
         if (!product && skuSach) {
-            product = await prisma.product.findFirst({ where: { sku: skuSach } })
+            const ungVien = await prisma.product.findMany({
+                where: { sku: { equals: skuSach, mode: 'insensitive' } },
+                take: 5,
+            })
+            if (ungVien.length === 1) {
+                product = ungVien[0]
+            } else if (ungVien.length > 1) {
+                console.warn(
+                    `[OrderSync] SKU "${skuSach}" khớp ${ungVien.length} mặt hàng khi bỏ phân biệt hoa thường ` +
+                    `(${ungVien.map((x: any) => x.sku).join(', ')}) — BỎ QUA, không đoán. Sửa SKU cho khác hẳn nhau ` +
+                    `hoặc khai ánh xạ SKU đích danh.`,
+                )
+            }
 
             // If found, link the productId for future syncs
             if (product) {
