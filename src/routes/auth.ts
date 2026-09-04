@@ -416,7 +416,7 @@ router.post('/login', async (req: Request, res: Response) => {
         let { email } = req.body
         const { password, storeCode, branchId, googleCredential } = req.body
         if (!googleCredential && (!email || !password)) {
-            res.status(400).json({ success: false, error: 'Email và mật khẩu là bắt buộc' })
+            res.status(400).json({ success: false, error: 'Tên đăng nhập (hoặc email) và mật khẩu là bắt buộc' })
             return
         }
         if (!storeCode) {
@@ -457,15 +457,23 @@ router.post('/login', async (req: Request, res: Response) => {
             }
         }
         const branchPrisma = getStorePrisma(branchSchema)
-        const user = await branchPrisma.user.findFirst({
-            where: { email: email.trim().toLowerCase() },
-        })
+        /* Ô đầu tiên nhận CẢ email lẫn TÊN ĐĂNG NHẬP (04/09/2026 — chủ shop: "thêm
+         * nhân viên có tên đăng nhập để họ đăng nhập cho nhanh").
+         *
+         * Có '@' thì chắc chắn là email; không có thì tra tên đăng nhập. Tách bằng
+         * '@' chứ không tra cả hai cột cùng lúc: username bị CẤM chứa '@' ở đường
+         * tạo/sửa, nên hai không gian tên không bao giờ giẫm nhau — tra `OR` sẽ mở
+         * đường cho một chuỗi khớp hai người nếu về sau ai đó lách được luật kia. */
+        const dinhDanh = String(email).trim().toLowerCase()
+        const user = dinhDanh.includes('@')
+            ? await branchPrisma.user.findFirst({ where: { email: dinhDanh } })
+            : await branchPrisma.user.findFirst({ where: { username: dinhDanh } as any })
         if (!user) {
             res.status(401).json({
                 success: false,
                 error: quaGoogle
                     ? `Email ${email} chưa có tài khoản trong cửa hàng này — nhờ quản trị viên tạo tài khoản với đúng email Google`
-                    : 'Email hoặc mật khẩu không đúng',
+                    : 'Tên đăng nhập/email hoặc mật khẩu không đúng',
             })
             return
         }

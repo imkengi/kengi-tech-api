@@ -34,6 +34,14 @@ model Branch {
 model User {
   id               String    @id @default(cuid())
   email            String    @unique
+  /**
+   * TÊN ĐĂNG NHẬP ngắn (04/09/2026) — nhân viên gõ "hung" thay vì
+   * "nv.001@kengitech.vn". Cùng cửa hàng thì không trùng nhau; khác cửa hàng thì
+   * thoải mái vì mỗi cửa hàng một schema riêng.
+   * CẤM ký tự '@' (chặn ở tầng route): username chứa '@' sẽ đụng đường tra email,
+   * hai người khác nhau cùng đăng nhập được bằng một chuỗi.
+   */
+  username         String?   @unique
   name             String
   password         String
   role             String    @default("cashier")
@@ -511,20 +519,43 @@ model Promotion {
 
 // ─── Suppliers ─────────────────────────────────────────────────────────────────
 
+/// NHÓM NHÀ CUNG CẤP DÙNG CHUNG MỘT TÀI KHOẢN NHẬN TIỀN (03/09/2026).
+///
+/// Chủ shop: "có thể gộp nhiều nhà cung cấp thành nhóm, dùng 1 stk để chuyển tiền".
+/// Thực tế hay gặp: vài pháp nhân/cửa hàng khác tên nhưng cùng một chủ, hoặc cùng
+/// một người đứng ra thu tiền — kế toán chuyển về một tài khoản duy nhất.
+///
+/// Tài khoản của NCC vẫn thắng tài khoản nhóm: nhóm chỉ là mặc định dùng chung,
+/// NCC nào khai riêng thì tiền đi theo cái riêng đó.
+model SupplierGroup {
+  id              String  @id @default(cuid())
+  name            String
+  note            String?
+  /// Tài khoản nhận tiền dùng chung — cùng quy ước với Supplier (bankBin = mã BIN VietQR)
+  bankBin         String?
+  bankAccountNo   String?
+  bankAccountName String?
+
+  suppliers Supplier[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model Supplier {
-  id                     String   @id @default(cuid())
-  code                   String   @unique
+  id                     String         @id @default(cuid())
+  code                   String         @unique
   name                   String
   contactName            String?
   phone                  String?
   email                  String?
   address                String?
   taxCode                String?
-  totalOrders            Int      @default(0)
-  totalValue             Float    @default(0)
-  status                 String   @default("active")
+  totalOrders            Int            @default(0)
+  totalValue             Float          @default(0)
+  status                 String         @default("active")
   notes                  String?
-  payable                Float    @default(0) // công nợ phải trả NCC (số dư đầu kỳ + phát sinh)
+  payable                Float          @default(0) // công nợ phải trả NCC (số dư đầu kỳ + phát sinh)
   // ĐIỀU KHOẢN THANH TOÁN mặc định của NCC (thêm 18/08/2026). Phiếu nhập mới
   // không ghi dueDate thì tự suy = ngày nhập + paymentTermDays. Trước đây FE đã
   // gửi `paymentTerms` và schema zod đã nhận, nhưng route KHÔNG ghi và model
@@ -537,8 +568,18 @@ model Supplier {
   paymentTermType        String? // "net" | "dom" | "eom"
   paymentTermDom         Int? // dom: ngày trong tháng 1..31
   paymentTermMonthOffset Int? // dom/eom: 0 = tháng này, 1 = tháng sau, …
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  // TÀI KHOẢN NHẬN TIỀN CỦA NCC (03/09/2026) — để trang Hạn thanh toán dựng mã
+  // VietQR cho kế toán quét chuyển khoản, khỏi gõ tay số tài khoản.
+  // `bankBin` là mã BIN 6 số của VietQR (970436 = Vietcombank…), KHÔNG phải tên
+  // ngân hàng: tên viết mỗi nơi một kiểu thì không dựng được QR.
+  bankBin                String?
+  bankAccountNo          String?
+  bankAccountName        String?
+  /// Nhóm dùng chung tài khoản nhận tiền; null = đứng riêng
+  groupId                String?
+  group                  SupplierGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
 
   purchaseOrders PurchaseOrder[]
 }
@@ -1418,6 +1459,28 @@ model Attendance {
   @@index([date])
 }
 
+/// Mỗi đơn đóng gói xong = MỘT dòng. Dùng cho hai việc:
+///   · đếm "hôm nay ai đóng bao nhiêu đơn"
+///   · làm bằng chứng đối chiếu với video (cùng mã đơn, cùng mốc giờ)
+/// Ghi theo TÀI KHOẢN ĐANG ĐĂNG NHẬP, không nhận danh tính do máy khách gửi lên —
+/// không thì ai cũng khai được mình đóng nhiều đơn.
+model PackingLog {
+  id        String   @id @default(cuid())
+  branchId  String?
+  userId    String
+  userName  String
+  /// Mã đơn / mã vận đơn đã quét lúc bắt đầu quay
+  orderCode String
+  /// Ngày làm việc (00:00 giờ VN) — khoá để đếm theo ngày và chấm công
+  workDate  DateTime
+  createdAt DateTime @default(now())
+
+  /// Một đơn đóng lại lần hai trong cùng ngày không được đếm thành hai công
+  @@unique([userId, orderCode, workDate])
+  @@index([workDate])
+  @@index([userId, workDate])
+}
+
 // ─── Loyalty ────────────────────────────────────────────────────────────────
 
 model LoyaltyMember {
@@ -1572,13 +1635,20 @@ model StoreSettings {
   dailyOrderTarget     Int?
 
   // Google Drive folder ID for packing/return-unbox videos
-  driveFolderId   String?
+  driveFolderId      String?
+  /**
+   * URL Apps Script của trang quay video đóng gói (/video-online/).
+   * Trước 03/09/2026 URL này nằm trong localStorage TỪNG TRÌNH DUYỆT — mỗi máy
+   * đóng gói phải tự dán lại, và xoá cache là mất. Nay lưu theo CỬA HÀNG: khai
+   * một lần, mọi máy dùng chung.
+   */
+  driveAppsScriptUrl String?
   // Kết nối Google Drive BẰNG TÀI KHOẢN CHỦ SHOP (OAuth). Cần vì file trong
   // My Drive chỉ CHỦ SỞ HỮU xoá được — service account dù có quyền Editor vẫn
   // bị Google chặn, nên dọn video tự động phải chạy dưới danh nghĩa chính chủ.
-  driveOauthToken String? // refresh_token (dài hạn)
-  driveOauthEmail String? // email tài khoản đã kết nối, để hiện trên giao diện
-  driveOauthAt    DateTime?
+  driveOauthToken    String? // refresh_token (dài hạn)
+  driveOauthEmail    String? // email tài khoản đã kết nối, để hiện trên giao diện
+  driveOauthAt       DateTime?
 
   updatedAt DateTime @updatedAt
 }

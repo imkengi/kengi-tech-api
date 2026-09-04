@@ -23,6 +23,33 @@ const DEPARTMENT_ROLES: Record<string, string[]> = {
     warranty: ['warranty', 'repairs'],
 }
 
+/* ─── TÊN ĐĂNG NHẬP (04/09/2026) ──────────────────────────────────────────────
+ * Chủ shop: "thêm nhân viên có tên đăng nhập để họ đăng nhập cho nhanh".
+ * Nhân viên gõ "hung" thay vì "nv.001@kengitech.vn" — nhất là trên điện thoại ở
+ * trang quay video đóng hàng.
+ *
+ * Bốn luật, mỗi luật chặn một kiểu hỏng thật:
+ *   · CẤM '@' — đường đăng nhập tách email/username bằng dấu này. Username có '@'
+ *     là hai người khác nhau cùng đăng nhập được bằng một chuỗi.
+ *   · Chỉ chữ thường/số/._- và TỰ hạ chữ thường — điện thoại tự viết hoa chữ đầu,
+ *     người ta gõ "Hung" rồi tưởng sai mật khẩu.
+ *   · Tối thiểu 3 ký tự — "an", "b" quá dễ đụng nhau và dễ gõ nhầm.
+ *   · Bỏ trống ⇒ NULL, KHÔNG phải chuỗi rỗng. Postgres coi nhiều NULL là khác
+ *     nhau nhưng nhiều '' là TRÙNG, nên để '' thì người thứ hai không lưu được.
+ * ─────────────────────────────────────────────────────────────────────────── */
+function chuanTenDangNhap(v: any): { ok: true; giaTri: string | null } | { ok: false; loi: string } {
+    if (v === undefined) return { ok: true, giaTri: null }
+    const t = String(v ?? '').trim().toLowerCase()
+    if (!t) return { ok: true, giaTri: null }
+    if (t.includes('@')) return { ok: false, loi: 'Tên đăng nhập không được chứa ký tự @ (đó là dạng email)' }
+    if (t.length < 3) return { ok: false, loi: 'Tên đăng nhập phải từ 3 ký tự trở lên' }
+    if (t.length > 32) return { ok: false, loi: 'Tên đăng nhập tối đa 32 ký tự' }
+    if (!/^[a-z0-9._-]+$/.test(t)) {
+        return { ok: false, loi: 'Tên đăng nhập chỉ gồm chữ thường không dấu, số và . _ -' }
+    }
+    return { ok: true, giaTri: t }
+}
+
 // GET /api/employees/stats
 router.get('/stats', authMiddleware, requirePermission('employees.view'), async (req: AuthRequest, res: Response) => {
     try {
@@ -91,7 +118,7 @@ router.get('/:id', authMiddleware, requirePermission('employees.view'), async (r
 router.post('/', authMiddleware, requirePermission('employees.create'), validate(CreateEmployeeSchema), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        const { name, phone, email, role, salary, notes, branchId: assignBranchId, password: customPassword } = req.body
+        const { name, phone, email, role, salary, notes, branchId: assignBranchId, password: customPassword, username } = req.body
         if (!name?.trim()) return res.status(400).json({ success: false, error: 'Name required' })
         if (!phone?.trim()) return res.status(400).json({ success: false, error: 'Phone required' })
 
@@ -102,7 +129,14 @@ router.post('/', authMiddleware, requirePermission('employees.create'), validate
         const emailVal = email?.trim() || `${code.toLowerCase().replace('-', '.')}@kengitech.vn`
 
         const existing = await prisma.user.findFirst({ where: { email: emailVal } })
-        if (existing) return res.status(400).json({ success: false, error: 'Email already exists' })
+        if (existing) return res.status(400).json({ success: false, error: 'Email đã tồn tại' })
+
+        const tdn = chuanTenDangNhap(username)
+        if (!tdn.ok) return res.status(400).json({ success: false, error: tdn.loi })
+        if (tdn.giaTri) {
+            const trung = await prisma.user.findFirst({ where: { username: tdn.giaTri } as any })
+            if (trung) return res.status(400).json({ success: false, error: `Tên đăng nhập "${tdn.giaTri}" đã có người dùng` })
+        }
 
         const hashedPassword = await bcrypt.hash(customPassword || '123456', 10)
 
@@ -110,6 +144,7 @@ router.post('/', authMiddleware, requirePermission('employees.create'), validate
             data: {
                 name: name.trim(), email: emailVal, password: hashedPassword,
                 role: role || 'cashier', phone: phone?.trim(), code,
+                ...(tdn.giaTri ? { username: tdn.giaTri } : {}),
                 salary: salary ? Number(salary) : null,
                 hireDate: new Date(), employeeStatus: 'active',
                 notes: notes?.trim() || null, branchId: effectiveBranchId || null,
@@ -127,7 +162,7 @@ router.post('/', authMiddleware, requirePermission('employees.create'), validate
 router.put('/:id', authMiddleware, requirePermission('employees.edit'), validate(UpdateEmployeeSchema), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
-        const { name, phone, email, role, salary, notes, employeeStatus, branchId: newBranchId } = req.body
+        const { name, phone, email, role, salary, notes, employeeStatus, branchId: newBranchId, username } = req.body
         const empId = String(req.params.id)
 
         const target = await prisma.user.findFirst({ where: { id: empId } })
@@ -145,6 +180,18 @@ router.put('/:id', authMiddleware, requirePermission('employees.edit'), validate
         if (name !== undefined) data.name = name
         if (phone !== undefined) data.phone = phone
         if (email !== undefined) data.email = email
+        if (username !== undefined) {
+            const t = chuanTenDangNhap(username)
+            if (!t.ok) return res.status(400).json({ success: false, error: t.loi })
+            if (t.giaTri) {
+                const trung = await prisma.user.findFirst({
+                    where: { username: t.giaTri, NOT: { id: empId } } as any,
+                })
+                if (trung) return res.status(400).json({ success: false, error: `Tên đăng nhập "${t.giaTri}" đã có người dùng` })
+            }
+            // Xoá trắng ô ⇒ NULL, để nhân viên khác dùng lại được tên đó
+            data.username = t.giaTri
+        }
         if (role !== undefined) data.role = role
         if (salary !== undefined) data.salary = Number(salary)
         if (notes !== undefined) data.notes = notes

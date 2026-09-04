@@ -114,6 +114,11 @@ export const UpdateCustomerSchema = CreateCustomerSchema.partial()
 export const CreateEmployeeSchema = z.object({
     name: z.string().min(1, 'Tên nhân viên không được để trống').max(200),
     email: z.string().email('Email không hợp lệ').optional().nullable().or(z.literal('')),
+    /* TÊN ĐĂNG NHẬP ngắn (04/09/2026). PHẢI khai ở đây: middleware validate gán
+     * `req.body = result.data`, mà zod CẮT SẠCH trường không khai — thiếu dòng này
+     * thì route nhận username = undefined và im lặng bỏ qua, không lỗi gì cả.
+     * Luật chi tiết nằm ở `chuanTenDangNhap` trong routes/employees.ts. */
+    username: z.string().max(32).optional().nullable().or(z.literal('')),
     phone: z.string().max(20).optional().nullable(),
     role: z.enum(['admin', 'manager', 'staff', 'cashier', 'warehouse', 'driver', 'accountant', 'warranty']).optional(),
     department: z.string().max(100).optional().nullable(),

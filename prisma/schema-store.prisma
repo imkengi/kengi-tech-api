@@ -34,6 +34,12 @@ model Branch {
 model User {
   id               String    @id @default(cuid())
   email            String    @unique
+  /* TÊN ĐĂNG NHẬP ngắn (04/09/2026) — nhân viên gõ "hung" thay vì
+   * "nv.001@kengitech.vn". Cùng cửa hàng thì không trùng nhau; khác cửa hàng thì
+   * thoải mái vì mỗi cửa hàng một schema riêng.
+   * CẤM ký tự '@' (chặn ở tầng route): username chứa '@' sẽ đụng đường tra email,
+   * hai người khác nhau cùng đăng nhập được bằng một chuỗi. */
+  username         String?   @unique
   name             String
   password         String
   role             String    @default("cashier")

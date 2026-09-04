@@ -136,6 +136,7 @@ exports.Prisma.BranchScalarFieldEnum = {
 exports.Prisma.UserScalarFieldEnum = {
   id: 'id',
   email: 'email',
+  username: 'username',
   name: 'name',
   password: 'password',
   role: 'role',
@@ -454,6 +455,17 @@ exports.Prisma.PromotionScalarFieldEnum = {
   updatedAt: 'updatedAt'
 };
 
+exports.Prisma.SupplierGroupScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  note: 'note',
+  bankBin: 'bankBin',
+  bankAccountNo: 'bankAccountNo',
+  bankAccountName: 'bankAccountName',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
 exports.Prisma.SupplierScalarFieldEnum = {
   id: 'id',
   code: 'code',
@@ -473,6 +485,10 @@ exports.Prisma.SupplierScalarFieldEnum = {
   paymentTermType: 'paymentTermType',
   paymentTermDom: 'paymentTermDom',
   paymentTermMonthOffset: 'paymentTermMonthOffset',
+  bankBin: 'bankBin',
+  bankAccountNo: 'bankAccountNo',
+  bankAccountName: 'bankAccountName',
+  groupId: 'groupId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -1123,6 +1139,16 @@ exports.Prisma.AttendanceScalarFieldEnum = {
   updatedAt: 'updatedAt'
 };
 
+exports.Prisma.PackingLogScalarFieldEnum = {
+  id: 'id',
+  branchId: 'branchId',
+  userId: 'userId',
+  userName: 'userName',
+  orderCode: 'orderCode',
+  workDate: 'workDate',
+  createdAt: 'createdAt'
+};
+
 exports.Prisma.LoyaltyMemberScalarFieldEnum = {
   id: 'id',
   customerId: 'customerId',
@@ -1223,6 +1249,7 @@ exports.Prisma.StoreSettingsScalarFieldEnum = {
   monthlyRevenueTarget: 'monthlyRevenueTarget',
   dailyOrderTarget: 'dailyOrderTarget',
   driveFolderId: 'driveFolderId',
+  driveAppsScriptUrl: 'driveAppsScriptUrl',
   driveOauthToken: 'driveOauthToken',
   driveOauthEmail: 'driveOauthEmail',
   driveOauthAt: 'driveOauthAt',
@@ -2504,6 +2531,7 @@ exports.Prisma.ModelName = {
   ImportReceipt: 'ImportReceipt',
   ImportReceiptItem: 'ImportReceiptItem',
   Promotion: 'Promotion',
+  SupplierGroup: 'SupplierGroup',
   Supplier: 'Supplier',
   PurchaseOrder: 'PurchaseOrder',
   PurchaseOrderItem: 'PurchaseOrderItem',
@@ -2544,6 +2572,7 @@ exports.Prisma.ModelName = {
   PriceRule: 'PriceRule',
   Announcement: 'Announcement',
   Attendance: 'Attendance',
+  PackingLog: 'PackingLog',
   LoyaltyMember: 'LoyaltyMember',
   LoyaltyTransaction: 'LoyaltyTransaction',
   Review: 'Review',
