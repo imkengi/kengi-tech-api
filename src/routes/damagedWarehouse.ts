@@ -41,16 +41,35 @@ const router = Router()
 const QUYEN_XEM = ['damaged_warehouse.view', 'inventory.view'] as const
 const QUYEN_SUA = ['damaged_warehouse.edit', 'damaged_warehouse.view', 'inventory.adjust'] as const
 
-/** Kho hư hỏng của chi nhánh đang xem; chưa có thì báo rõ chứ đừng tạo bừa. */
-async function layKho(req: AuthRequest): Promise<string | null> {
-    return khoHuHong(req.storePrisma as any, getBranchId(req) || null)
+/** Kho hư hỏng đang xem; chưa có thì báo rõ chứ đừng tạo bừa.
+ *
+ *  `khoId` do màn hình gửi lên được QUYỀN QUYẾT ĐỊNH, vì bảng tồn và danh sách lô
+ *  phải nói về CÙNG một kho. Trước đây bảng tồn đi theo kho người dùng bấm chọn còn
+ *  danh sách lô đi theo chi nhánh của tài khoản, nên hai nửa màn hình đếm hai kho
+ *  khác nhau (đo 04/09/2026: thẻ tổng nói 5 mã, danh sách lô hiện 3 mã).
+ *
+ *  Id lạ thì BÁO LỖI. Lặng lẽ rơi về kho mặc định là cộng/trừ tồn nhầm kho — sai
+ *  âm thầm, tới lúc kiểm kê mới lòi. */
+async function layKho(req: AuthRequest): Promise<{ khoId: string | null; loi?: string }> {
+    const prisma: any = req.storePrisma!
+    const xin = String((req.query as any)?.khoId || (req.body as any)?.khoId || '').trim()
+    if (xin) {
+        const w = await prisma.warehouse
+            .findUnique({ where: { id: xin }, select: { id: true, type: true } })
+            .catch(() => null)
+        if (!w) return { khoId: null, loi: 'Không tìm thấy kho này — tải lại danh sách kho' }
+        if (String(w.type) !== 'damaged') return { khoId: null, loi: 'Kho được chọn không phải kho hư hỏng' }
+        return { khoId: w.id }
+    }
+    return { khoId: await khoHuHong(prisma, getBranchId(req) || null) }
 }
 
 // ─── GET /ton — TỪNG LÔ, không gom theo mã ───────────────────────────────────
 router.get('/ton', authMiddleware, requirePermission(...QUYEN_XEM), async (req: AuthRequest, res: Response) => {
     try {
         const prisma: any = req.storePrisma!
-        const khoId = await layKho(req)
+        const { khoId, loi } = await layKho(req)
+        if (loi) { res.status(400).json({ success: false, error: loi }); return }
         if (!khoId) { res.json({ success: true, data: { khoId: null, items: [], thieuKho: true } }); return }
 
         /* MỖI LƯỢT NHẬP LÀ MỘT LÔ (04/09/2026 — chủ shop: "mỗi hàng hư sẽ mỗi kiểu,
@@ -86,25 +105,63 @@ router.get('/ton', authMiddleware, requirePermission(...QUYEN_XEM), async (req: 
         const theoMa = new Map(hang.map((h: any) => [h.id, h]))
         const chiTiet = (pid: string) => theoMa.get(pid) as any
 
-        const items = lo.map((l: any) => {
+        /* GỘP LÔ CÙNG LÝ DO (04/09/2026 — chủ shop: "chung lí do thì nhập số lượng
+         * lại"). Nhập ba lượt, mỗi lượt một cái, cùng ghi "hư vỡ" thì trên màn hình
+         * phải là MỘT dòng ba cái chứ không phải ba dòng một cái.
+         *
+         * Chỉ chuẩn hoá HOA/thường và khoảng trắng. KHÔNG bỏ dấu: bỏ dấu thì "vỡ" và
+         * "vô" thành cùng một chữ — gộp nhầm hai kiểu hỏng khác hẳn nhau.
+         *
+         * NGUỒN nằm trong khoá gộp: "lấy từ tồn" và "không qua kho" là hai loại hàng
+         * khác nhau về sổ sách dù lý do hỏng viết giống hệt.
+         *
+         * Gộp ở lúc ĐỌC chứ không lúc nhập: mỗi lượt nhập vẫn là một bản ghi riêng
+         * nên nhật ký giữ nguyên, và những lô đã lỡ tách trước hôm nay cũng tự gom
+         * lại — chứ gộp lúc nhập thì chỉ cứu được hàng nhập sau này. */
+        const chuanLyDo = (s: any) => String(s || '').trim().replace(/\s+/g, ' ').toLowerCase()
+        const nhom = new Map<string, any>()
+        for (const l of lo) {
             const h = chiTiet(l.productId)
-            return {
-                id: l.id, laLoCu: false,
-                productId: l.productId,
-                productName: l.productName || h?.name || '',
-                productSku: l.productSku || h?.sku || null,
-                quantity: l.conLai || 0,
-                soLuongNhap: l.quantity,
-                nguon: l.nguon || null,
-                lyDo: l.lyDo || null,
-                ghiChu: l.ghiChu || null,
-                ngayNhap: l.createdAt,
-                nguoiNhap: l.userName || null,
-                donVi: h?.baseUnit || null,
-                giaVonHienTai: h?.costPrice ?? 0,
-                tonKhoChinh: h?.stock ?? 0,
+            const khoa = `${l.productId}|${l.nguon || ''}|${chuanLyDo(l.lyDo)}`
+            const g = nhom.get(khoa)
+            if (!g) {
+                nhom.set(khoa, {
+                    id: l.id, laLoCu: false,
+                    /** Mọi lô trong đống — xử tới đâu trừ lô VÀO KHO SỚM NHẤT tới đó */
+                    entryIds: [l.id],
+                    soLuot: 1,
+                    productId: l.productId,
+                    productName: l.productName || h?.name || '',
+                    productSku: l.productSku || h?.sku || null,
+                    quantity: l.conLai || 0,
+                    soLuongNhap: l.quantity,
+                    nguon: l.nguon || null,
+                    lyDo: l.lyDo || null,
+                    ghiChu: l.ghiChu || null,
+                    ngayNhap: l.createdAt,      // lượt SỚM NHẤT — đống này nằm đây từ bao giờ
+                    ngayNhapCuoi: l.createdAt,  // lượt gần nhất
+                    nguoiNhap: l.userName || null,
+                    donVi: h?.baseUnit || null,
+                    giaVonHienTai: h?.costPrice ?? 0,
+                    tonKhoChinh: h?.stock ?? 0,
+                })
+                continue
             }
-        })
+            g.entryIds.push(l.id)
+            g.soLuot++
+            g.quantity += l.conLai || 0
+            g.soLuongNhap += l.quantity
+            if (new Date(l.createdAt) < new Date(g.ngayNhap)) g.ngayNhap = l.createdAt
+            if (new Date(l.createdAt) > new Date(g.ngayNhapCuoi)) g.ngayNhapCuoi = l.createdAt
+            if (!g.ghiChu && l.ghiChu) g.ghiChu = l.ghiChu
+            // Nhiều người cùng bỏ hàng vào một đống thì nói thật là nhiều người
+            if (!g.nguoiNhap) g.nguoiNhap = l.userName || null
+            else if (l.userName && g.nguoiNhap !== l.userName && g.nguoiNhap !== 'nhiều người') g.nguoiNhap = 'nhiều người'
+        }
+        /* `lo` đang xếp MỚI→CŨ nên `entryIds` gom vào cũng mới→cũ; đảo lại để bên
+         * /xuat trừ đúng thứ tự vào kho. Đống nào trừ hết thì lô biến mất theo điều
+         * kiện conLai > 0 ở trên. */
+        const items: any[] = Array.from(nhom.values()).map((g: any) => ({ ...g, entryIds: [...g.entryIds].reverse() }))
 
         for (const t of tonKho) {
             const con = (t.quantity || 0) - (daCoLo.get(t.productId) || 0)
@@ -112,6 +169,7 @@ router.get('/ton', authMiddleware, requirePermission(...QUYEN_XEM), async (req: 
             const h = chiTiet(t.productId)
             items.push({
                 id: `cu:${t.productId}`, laLoCu: true,
+                entryIds: [], soLuot: 1,
                 productId: t.productId,
                 productName: t.productName || h?.name || '',
                 productSku: t.productSku || h?.sku || null,
@@ -121,6 +179,7 @@ router.get('/ton', authMiddleware, requirePermission(...QUYEN_XEM), async (req: 
                 lyDo: null,
                 ghiChu: null,
                 ngayNhap: t.updatedAt,
+                ngayNhapCuoi: t.updatedAt,
                 nguoiNhap: null,
                 donVi: h?.baseUnit || null,
                 giaVonHienTai: h?.costPrice ?? 0,
@@ -170,9 +229,12 @@ router.post('/nhap', authMiddleware, requirePermission(...QUYEN_SUA), async (req
         })
         if (!hang) { res.status(404).json({ success: false, error: 'Không tìm thấy mặt hàng' }); return }
 
-        const khoId = await layKho(req)
+        const { khoId, loi: loiKho } = await layKho(req)
         if (!khoId) {
-            res.status(400).json({ success: false, error: 'Cửa hàng chưa có kho hư hỏng — tạo kho loại "damaged" trước' })
+            res.status(400).json({
+                success: false,
+                error: loiKho || 'Cửa hàng chưa có kho hư hỏng — tạo kho loại "damaged" trước',
+            })
             return
         }
         const branchId = getBranchId(req) || null
@@ -230,11 +292,17 @@ router.post('/xuat', authMiddleware, requirePermission(...QUYEN_SUA), async (req
         const prisma: any = req.storePrisma!
         const b = req.body || {}
         const productId = String(b.productId || '').trim()
-        /* XỬ THEO LÔ (04/09/2026). `entryId` chỉ đích danh lô nào — vì mỗi lô có lý
-         * do và phí sửa riêng, xử "5 cái Samsung" chung một lượt là mất hết phần đó.
-         * Thiếu entryId thì vẫn chạy như cũ (trừ theo mã) để lô cũ chưa có bản ghi
-         * nhập vẫn xử được. */
-        const entryId = b.entryId ? String(b.entryId).trim() : null
+        /* XỬ THEO LÔ (04/09/2026). Mỗi lô có lý do và phí sửa riêng, xử "5 cái
+         * Samsung" chung một lượt là mất hết phần đó.
+         *
+         * Màn hình gộp các lô CÙNG LÝ DO thành một đống nên gửi lên cả `entryIds` của
+         * đống — trừ dần CŨ TRƯỚC. `entryId` một lô vẫn nhận để bản app cũ không gãy.
+         * Không có lô nào (tồn cũ chưa có bản ghi nhập) thì trừ theo mã như trước. */
+        const dsLoId: string[] = Array.from(new Set(
+            (Array.isArray(b.entryIds) ? b.entryIds : (b.entryId ? [b.entryId] : []))
+                .map((x: any) => String(x || '').trim())
+                .filter((x: string) => x && !x.startsWith('cu:')),
+        ))
         const quantity = Math.floor(Number(b.quantity) || 0)
         const cachXuLy = String(b.cachXuLy || '')
         const phiSuaChua = Math.max(0, Math.round(Number(b.phiSuaChua) || 0))
@@ -251,22 +319,30 @@ router.post('/xuat', authMiddleware, requirePermission(...QUYEN_SUA), async (req
             res.status(400).json({ success: false, error: 'Phí sửa chữa chỉ dùng cho "Sửa chữa xong"' }); return
         }
 
-        const khoId = await layKho(req)
-        if (!khoId) { res.status(400).json({ success: false, error: 'Cửa hàng chưa có kho hư hỏng' }); return }
+        const { khoId, loi: loiKho } = await layKho(req)
+        if (!khoId) { res.status(400).json({ success: false, error: loiKho || 'Cửa hàng chưa có kho hư hỏng' }); return }
 
-        /* Lô chỉ định thì phải còn đủ TRONG LÔ ĐÓ, không mượn của lô khác — mượn
-         * là phí sửa và lý do bị gán nhầm sang lô không liên quan. */
-        let lo: any = null
-        if (entryId && !entryId.startsWith('cu:')) {
-            lo = await prisma.damagedEntry.findUnique({ where: { id: entryId } }).catch(() => null)
-            if (!lo || lo.loai !== 'nhap') {
-                res.status(404).json({ success: false, error: 'Không tìm thấy lô hàng này — tải lại danh sách' }); return
-            }
-            if ((lo.conLai ?? 0) < quantity) {
-                res.status(400).json({
+        /* Đống chỉ định thì phải còn đủ TRONG ĐỐNG ĐÓ, không mượn của đống khác —
+         * mượn là phí sửa và lý do bị gán nhầm sang hàng không liên quan.
+         *
+         * Ràng luôn `warehouseId` + `productId` vào truy vấn: id lô gửi lên mà thuộc
+         * kho khác hoặc mã khác thì phải trượt, đừng tin id đến từ máy khách. */
+        let dsLo: any[] = []
+        if (dsLoId.length) {
+            dsLo = await prisma.damagedEntry.findMany({
+                where: { id: { in: dsLoId }, loai: 'nhap', warehouseId: khoId, productId },
+                orderBy: { createdAt: 'asc' },   // CŨ TRƯỚC
+            })
+            if (dsLo.length !== dsLoId.length) {
+                res.status(404).json({
                     success: false,
-                    error: `Lô này chỉ còn ${lo.conLai ?? 0} — không đủ ${quantity}`,
+                    error: 'Lô hàng đã đổi kể từ lúc mở màn hình — tải lại danh sách rồi làm lại',
                 })
+                return
+            }
+            const con = dsLo.reduce((a: number, l: any) => a + Math.max(0, l.conLai ?? 0), 0)
+            if (con < quantity) {
+                res.status(400).json({ success: false, error: `Đống này chỉ còn ${con} — không đủ ${quantity}` })
                 return
             }
         }
@@ -322,30 +398,42 @@ router.post('/xuat', authMiddleware, requirePermission(...QUYEN_SUA), async (req
                 await tx.product.update({ where: { id: maDich }, data: { costPrice: giaVonSau } })
             }
 
-            // Trừ dần lô nguồn; hết thì lô tự biến khỏi danh sách (điều kiện conLai > 0)
-            if (lo) {
-                await tx.damagedEntry.update({
-                    where: { id: lo.id },
-                    data: { conLai: { decrement: quantity } },
-                })
+            /* Trừ dần các lô trong đống, CŨ TRƯỚC — để hàng không nằm mãi trong kho
+             * hư hỏng. Lô nào về 0 thì tự biến khỏi danh sách (điều kiện conLai > 0). */
+            const daTru: Array<{ id: string; soLuong: number }> = []
+            let conPhaiTru = quantity
+            for (const l of dsLo) {
+                if (conPhaiTru <= 0) break
+                const lay = Math.min(conPhaiTru, Math.max(0, l.conLai ?? 0))
+                if (lay <= 0) continue
+                await tx.damagedEntry.update({ where: { id: l.id }, data: { conLai: { decrement: lay } } })
+                daTru.push({ id: l.id, soLuong: lay })
+                conPhaiTru -= lay
             }
+
+            /* Một lượt trừ nhiều lô thì `nguonEntryId` chỉ giữ được lô đầu — ghi thêm
+             * vết vào ghi chú để sau này còn dò ngược ra đủ các lô đã bị trừ. */
+            const vetLo = daTru.length > 1
+                ? `[trừ ${daTru.length} lô: ${daTru.map(x => `${x.id.slice(-6)}×${x.soLuong}`).join(', ')}]`
+                : ''
+            const ghiChuNguoiDung = b.ghiChu ? String(b.ghiChu).slice(0, 800) : ''
 
             const entry = await tx.damagedEntry.create({
                 data: {
                     warehouseId: khoId, loai: 'xuat', productId,
-                    nguonEntryId: lo?.id ?? null,
+                    nguonEntryId: daTru[0]?.id ?? null,
                     productName: nguon.name, productSku: nguon.sku,
                     quantity, cachXuLy, phiSuaChua,
                     productDichId: maDich === productId ? null : maDich,
                     giaVonMoi: veKhoChinh ? giaVonNhap : null,
                     lyDo: b.lyDo ? String(b.lyDo).slice(0, 500) : null,
-                    ghiChu: b.ghiChu ? String(b.ghiChu).slice(0, 1000) : null,
+                    ghiChu: [ghiChuNguoiDung, vetLo].filter(Boolean).join(' ') || null,
                     branchId,
                     userId: req.user?.userId || null,
                     userName: (req.user as any)?.name || req.user?.email || null,
                 },
             })
-            return { entry, giaVonSau }
+            return { entry, giaVonSau, daTru }
         })
 
         res.status(201).json({
@@ -356,6 +444,7 @@ router.post('/xuat', authMiddleware, requirePermission(...QUYEN_SUA), async (req
                 maDich: maDich === productId ? null : { id: dich.id, sku: dich.sku, name: dich.name },
                 giaVonMoiMoiCai: veKhoChinh ? giaVonNhap : null,
                 giaVonSauBinhQuan: ketQua.giaVonSau,
+                loDaTru: ketQua.daTru,
                 ghiChu: veKhoChinh
                     ? `Đã cộng ${quantity} vào tồn kho chính của ${dich.sku || dich.name}`
                     : 'Huỷ hàng — KHÔNG cộng vào tồn kho chính',
