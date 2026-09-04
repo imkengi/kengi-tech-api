@@ -148,11 +148,29 @@ router.get('/bang-dieu-khien', authMiddleware, requirePermission('online_orders.
                 else t.doanhThu += tienCua(d)
             }
 
-            // ─── 4. Shipper lấy HÔM NAY — theo `shippedAt`, không theo trạng thái ───
+            /* ─── 4. Shipper lấy HÔM NAY ───────────────────────────────────────
+             * Chủ shop: "shipper lấy hàng là shipper quét lấy hàng thành công thì mới
+             * tính vào chứ". Đúng — và `shippedAt` CHÍNH LÀ giờ đó, không phải giờ
+             * mình tạo vận đơn (đã tra tận nơi lấy số 04/09/2026):
+             *   · Shopee → `pickup_done_time`  (platforms/shopee.ts)
+             *   · TikTok → `collection_time`   (platforms/tiktok.ts)
+             *   · Lazada → `shipped_at`        (platforms/lazada.ts)
+             *
+             * LỖ HỔNG PHẢI ĐẾM RIÊNG: đơn đã sang trạng thái đang đi mà sàn CHƯA trả
+             * về giờ quét thì rơi khỏi con số này — im lặng, và con số trông thấp hơn
+             * thực tế. Đếm riêng rồi để màn hình nói ra, đừng giấu. */
             let shipperLayHomNay = 0
+            let dangDiChuaCoGioQuet = 0
             try {
                 shipperLayHomNay = await prisma.onlineOrder.count({ where: { shippedAt: { gte: dauNgayVN } } })
-            } catch { shipperLayHomNay = -1 }
+                const dsDangDi = [
+                    ...(STATUS_SYNONYMS.SHIPPED || []),
+                    ...(STATUS_SYNONYMS.TO_CONFIRM_RECEIVE || []),
+                ]
+                dangDiChuaCoGioQuet = await prisma.onlineOrder.count({
+                    where: { status: { in: dsDangDi }, shippedAt: null },
+                })
+            } catch { shipperLayHomNay = -1; dangDiChuaCoGioQuet = -1 }
 
             // ─── 5. TỒN ĐỌNG: chờ đóng (không bó theo ngày) ───
             let choDong = -1, choDongCu = -1
@@ -264,10 +282,11 @@ router.get('/bang-dieu-khien', authMiddleware, requirePermission('online_orders.
                     tonDong: { choDong, choDongCu },
                     dongGoi: { daDongHomNay, nhanVien, nhatKyTuNgay },
                     shipperLayHomNay,
+                    dangDiChuaCoGioQuet,
                     tran: {
                         donToiDa: TRAN_DON,
                         chamTran: donDs.length >= TRAN_DON,
-                        ghiChu: 'Ba mốc khác nhau: đơn về theo createdAt · đã đóng theo nhật ký quét mã · shipper lấy theo shippedAt. Đừng trừ chúng cho nhau.',
+                        ghiChu: 'Ba mốc khác nhau: đơn về theo createdAt · đã đóng theo nhật ký quét mã · shipper lấy theo GIỜ QUÉT NHẬN của ĐVVC (Shopee pickup_done_time, TikTok collection_time). Đừng trừ chúng cho nhau.',
                     },
                 },
             })
