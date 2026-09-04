@@ -46,21 +46,37 @@ async function layKho(req: AuthRequest): Promise<string | null> {
     return khoHuHong(req.storePrisma as any, getBranchId(req) || null)
 }
 
-// ─── GET /ton ────────────────────────────────────────────────────────────────
+// ─── GET /ton — TỪNG LÔ, không gom theo mã ───────────────────────────────────
 router.get('/ton', authMiddleware, requirePermission(...QUYEN_XEM), async (req: AuthRequest, res: Response) => {
     try {
         const prisma: any = req.storePrisma!
         const khoId = await layKho(req)
         if (!khoId) { res.json({ success: true, data: { khoId: null, items: [], thieuKho: true } }); return }
 
-        const ds = await prisma.warehouseStock.findMany({
-            where: { warehouseId: khoId, quantity: { gt: 0 } },
-            orderBy: { updatedAt: 'desc' },
-            take: 1000,
+        /* MỖI LƯỢT NHẬP LÀ MỘT LÔ (04/09/2026 — chủ shop: "mỗi hàng hư sẽ mỗi kiểu,
+         * không giống nhau được"). 5 cái Samsung hư không phải một cục: cái vỡ màn,
+         * cái vào nước — lý do và phí sửa khác nhau. Trả về từng lô kèm lý do của
+         * chính nó, thay vì một dòng tổng vô danh. */
+        const lo = await prisma.damagedEntry.findMany({
+            where: { warehouseId: khoId, loai: 'nhap', conLai: { gt: 0 } },
+            orderBy: { createdAt: 'desc' },
+            take: 500,
         })
-        /* Kèm giá vốn hiện tại của mã — màn hình cần nó để tính trước "giá vốn sau
-         * khi cộng phí sửa" cho người bấm thấy TRƯỚC khi xác nhận. */
-        const dsMa = Array.from(new Set(ds.map((x: any) => x.productId)))
+
+        /* TỒN CŨ CHƯA CÓ LÔ. Hàng vào kho hư hỏng từ trước khi có bảng lô (qua phiếu
+         * sửa chữa, trả hàng…) không có dòng NHẬP nào. Bỏ qua là chúng biến mất khỏi
+         * màn hình dù vẫn nằm trong kho — nên gom phần chênh thành một lô "cũ" cho
+         * mỗi mã, vẫn xử lý được, chỉ là không có lý do đi kèm. */
+        const tonKho = await prisma.warehouseStock.findMany({
+            where: { warehouseId: khoId, quantity: { gt: 0 } }, take: 1000,
+        })
+        const daCoLo = new Map<string, number>()
+        for (const l of lo) daCoLo.set(l.productId, (daCoLo.get(l.productId) || 0) + (l.conLai || 0))
+
+        const dsMa = Array.from(new Set([
+            ...lo.map((x: any) => x.productId),
+            ...tonKho.map((x: any) => x.productId),
+        ]))
         const hang = dsMa.length
             ? await prisma.product.findMany({
                 where: { id: { in: dsMa } },
@@ -68,25 +84,53 @@ router.get('/ton', authMiddleware, requirePermission(...QUYEN_XEM), async (req: 
             })
             : []
         const theoMa = new Map(hang.map((h: any) => [h.id, h]))
+        const chiTiet = (pid: string) => theoMa.get(pid) as any
+
+        const items = lo.map((l: any) => {
+            const h = chiTiet(l.productId)
+            return {
+                id: l.id, laLoCu: false,
+                productId: l.productId,
+                productName: l.productName || h?.name || '',
+                productSku: l.productSku || h?.sku || null,
+                quantity: l.conLai || 0,
+                soLuongNhap: l.quantity,
+                nguon: l.nguon || null,
+                lyDo: l.lyDo || null,
+                ghiChu: l.ghiChu || null,
+                ngayNhap: l.createdAt,
+                nguoiNhap: l.userName || null,
+                donVi: h?.baseUnit || null,
+                giaVonHienTai: h?.costPrice ?? 0,
+                tonKhoChinh: h?.stock ?? 0,
+            }
+        })
+
+        for (const t of tonKho) {
+            const con = (t.quantity || 0) - (daCoLo.get(t.productId) || 0)
+            if (con <= 0) continue
+            const h = chiTiet(t.productId)
+            items.push({
+                id: `cu:${t.productId}`, laLoCu: true,
+                productId: t.productId,
+                productName: t.productName || h?.name || '',
+                productSku: t.productSku || h?.sku || null,
+                quantity: con,
+                soLuongNhap: con,
+                nguon: null,
+                lyDo: null,
+                ghiChu: null,
+                ngayNhap: t.updatedAt,
+                nguoiNhap: null,
+                donVi: h?.baseUnit || null,
+                giaVonHienTai: h?.costPrice ?? 0,
+                tonKhoChinh: h?.stock ?? 0,
+            })
+        }
 
         res.json({
             success: true,
-            data: {
-                khoId,
-                items: ds.map((x: any) => {
-                    const h: any = theoMa.get(x.productId)
-                    return {
-                        id: x.id, productId: x.productId,
-                        productName: x.productName || h?.name || '',
-                        productSku: x.productSku || h?.sku || null,
-                        quantity: x.quantity,
-                        donVi: h?.baseUnit || null,
-                        giaVonHienTai: h?.costPrice ?? 0,
-                        tonKhoChinh: h?.stock ?? 0,
-                    }
-                }),
-                chamTran: ds.length >= 1000,
-            },
+            data: { khoId, items, chamTran: lo.length >= 500 || tonKho.length >= 1000 },
         })
     } catch (err: any) { guiLoi(res, err, 'GET /damaged-warehouse/ton lỗi:') }
 })
@@ -156,6 +200,8 @@ router.post('/nhap', authMiddleware, requirePermission(...QUYEN_SUA), async (req
                     warehouseId: khoId, loai: 'nhap', productId,
                     productName: hang.name, productSku: hang.sku,
                     quantity, nguon,
+                    // Lô mới vào thì còn nguyên; xử tới đâu trừ tới đó
+                    conLai: quantity,
                     lyDo: b.lyDo ? String(b.lyDo).slice(0, 500) : null,
                     ghiChu: b.ghiChu ? String(b.ghiChu).slice(0, 1000) : null,
                     branchId,
@@ -184,6 +230,11 @@ router.post('/xuat', authMiddleware, requirePermission(...QUYEN_SUA), async (req
         const prisma: any = req.storePrisma!
         const b = req.body || {}
         const productId = String(b.productId || '').trim()
+        /* XỬ THEO LÔ (04/09/2026). `entryId` chỉ đích danh lô nào — vì mỗi lô có lý
+         * do và phí sửa riêng, xử "5 cái Samsung" chung một lượt là mất hết phần đó.
+         * Thiếu entryId thì vẫn chạy như cũ (trừ theo mã) để lô cũ chưa có bản ghi
+         * nhập vẫn xử được. */
+        const entryId = b.entryId ? String(b.entryId).trim() : null
         const quantity = Math.floor(Number(b.quantity) || 0)
         const cachXuLy = String(b.cachXuLy || '')
         const phiSuaChua = Math.max(0, Math.round(Number(b.phiSuaChua) || 0))
@@ -202,6 +253,23 @@ router.post('/xuat', authMiddleware, requirePermission(...QUYEN_SUA), async (req
 
         const khoId = await layKho(req)
         if (!khoId) { res.status(400).json({ success: false, error: 'Cửa hàng chưa có kho hư hỏng' }); return }
+
+        /* Lô chỉ định thì phải còn đủ TRONG LÔ ĐÓ, không mượn của lô khác — mượn
+         * là phí sửa và lý do bị gán nhầm sang lô không liên quan. */
+        let lo: any = null
+        if (entryId && !entryId.startsWith('cu:')) {
+            lo = await prisma.damagedEntry.findUnique({ where: { id: entryId } }).catch(() => null)
+            if (!lo || lo.loai !== 'nhap') {
+                res.status(404).json({ success: false, error: 'Không tìm thấy lô hàng này — tải lại danh sách' }); return
+            }
+            if ((lo.conLai ?? 0) < quantity) {
+                res.status(400).json({
+                    success: false,
+                    error: `Lô này chỉ còn ${lo.conLai ?? 0} — không đủ ${quantity}`,
+                })
+                return
+            }
+        }
 
         const ton = await prisma.warehouseStock.findUnique({
             where: { warehouseId_productId: { warehouseId: khoId, productId } },
@@ -254,9 +322,18 @@ router.post('/xuat', authMiddleware, requirePermission(...QUYEN_SUA), async (req
                 await tx.product.update({ where: { id: maDich }, data: { costPrice: giaVonSau } })
             }
 
+            // Trừ dần lô nguồn; hết thì lô tự biến khỏi danh sách (điều kiện conLai > 0)
+            if (lo) {
+                await tx.damagedEntry.update({
+                    where: { id: lo.id },
+                    data: { conLai: { decrement: quantity } },
+                })
+            }
+
             const entry = await tx.damagedEntry.create({
                 data: {
                     warehouseId: khoId, loai: 'xuat', productId,
+                    nguonEntryId: lo?.id ?? null,
                     productName: nguon.name, productSku: nguon.sku,
                     quantity, cachXuLy, phiSuaChua,
                     productDichId: maDich === productId ? null : maDich,

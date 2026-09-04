@@ -126126,12 +126126,14 @@ export namespace Prisma {
     quantity: number | null
     phiSuaChua: number | null
     giaVonMoi: number | null
+    conLai: number | null
   }
 
   export type DamagedEntrySumAggregateOutputType = {
     quantity: number | null
     phiSuaChua: number | null
     giaVonMoi: number | null
+    conLai: number | null
   }
 
   export type DamagedEntryMinAggregateOutputType = {
@@ -126147,6 +126149,8 @@ export namespace Prisma {
     phiSuaChua: number | null
     productDichId: string | null
     giaVonMoi: number | null
+    conLai: number | null
+    nguonEntryId: string | null
     lyDo: string | null
     ghiChu: string | null
     branchId: string | null
@@ -126168,6 +126172,8 @@ export namespace Prisma {
     phiSuaChua: number | null
     productDichId: string | null
     giaVonMoi: number | null
+    conLai: number | null
+    nguonEntryId: string | null
     lyDo: string | null
     ghiChu: string | null
     branchId: string | null
@@ -126189,6 +126195,8 @@ export namespace Prisma {
     phiSuaChua: number
     productDichId: number
     giaVonMoi: number
+    conLai: number
+    nguonEntryId: number
     lyDo: number
     ghiChu: number
     branchId: number
@@ -126203,12 +126211,14 @@ export namespace Prisma {
     quantity?: true
     phiSuaChua?: true
     giaVonMoi?: true
+    conLai?: true
   }
 
   export type DamagedEntrySumAggregateInputType = {
     quantity?: true
     phiSuaChua?: true
     giaVonMoi?: true
+    conLai?: true
   }
 
   export type DamagedEntryMinAggregateInputType = {
@@ -126224,6 +126234,8 @@ export namespace Prisma {
     phiSuaChua?: true
     productDichId?: true
     giaVonMoi?: true
+    conLai?: true
+    nguonEntryId?: true
     lyDo?: true
     ghiChu?: true
     branchId?: true
@@ -126245,6 +126257,8 @@ export namespace Prisma {
     phiSuaChua?: true
     productDichId?: true
     giaVonMoi?: true
+    conLai?: true
+    nguonEntryId?: true
     lyDo?: true
     ghiChu?: true
     branchId?: true
@@ -126266,6 +126280,8 @@ export namespace Prisma {
     phiSuaChua?: true
     productDichId?: true
     giaVonMoi?: true
+    conLai?: true
+    nguonEntryId?: true
     lyDo?: true
     ghiChu?: true
     branchId?: true
@@ -126374,6 +126390,8 @@ export namespace Prisma {
     phiSuaChua: number
     productDichId: string | null
     giaVonMoi: number | null
+    conLai: number | null
+    nguonEntryId: string | null
     lyDo: string | null
     ghiChu: string | null
     branchId: string | null
@@ -126414,6 +126432,8 @@ export namespace Prisma {
     phiSuaChua?: boolean
     productDichId?: boolean
     giaVonMoi?: boolean
+    conLai?: boolean
+    nguonEntryId?: boolean
     lyDo?: boolean
     ghiChu?: boolean
     branchId?: boolean
@@ -126435,6 +126455,8 @@ export namespace Prisma {
     phiSuaChua?: boolean
     productDichId?: boolean
     giaVonMoi?: boolean
+    conLai?: boolean
+    nguonEntryId?: boolean
     lyDo?: boolean
     ghiChu?: boolean
     branchId?: boolean
@@ -126456,6 +126478,8 @@ export namespace Prisma {
     phiSuaChua?: boolean
     productDichId?: boolean
     giaVonMoi?: boolean
+    conLai?: boolean
+    nguonEntryId?: boolean
     lyDo?: boolean
     ghiChu?: boolean
     branchId?: boolean
@@ -126477,6 +126501,8 @@ export namespace Prisma {
     phiSuaChua?: boolean
     productDichId?: boolean
     giaVonMoi?: boolean
+    conLai?: boolean
+    nguonEntryId?: boolean
     lyDo?: boolean
     ghiChu?: boolean
     branchId?: boolean
@@ -126485,7 +126511,7 @@ export namespace Prisma {
     createdAt?: boolean
   }
 
-  export type DamagedEntryOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "warehouseId" | "loai" | "productId" | "productName" | "productSku" | "quantity" | "nguon" | "cachXuLy" | "phiSuaChua" | "productDichId" | "giaVonMoi" | "lyDo" | "ghiChu" | "branchId" | "userId" | "userName" | "createdAt", ExtArgs["result"]["damagedEntry"]>
+  export type DamagedEntryOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "warehouseId" | "loai" | "productId" | "productName" | "productSku" | "quantity" | "nguon" | "cachXuLy" | "phiSuaChua" | "productDichId" | "giaVonMoi" | "conLai" | "nguonEntryId" | "lyDo" | "ghiChu" | "branchId" | "userId" | "userName" | "createdAt", ExtArgs["result"]["damagedEntry"]>
 
   export type $DamagedEntryPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     name: "DamagedEntry"
@@ -126512,6 +126538,24 @@ export namespace Prisma {
        * Giá vốn mỗi cái ĐÃ tính cả phí sửa, ghi lại để sau còn đối chiếu
        */
       giaVonMoi: number | null
+      /**
+       * ─── TỪNG LÔ, KHÔNG GOM CHUNG (04/09/2026) ───────────────────────────────
+       *    * Chủ shop: "mỗi hàng hư sẽ mỗi kiểu, không giống nhau được".
+       *    *
+       *    * 5 cái Samsung hư không phải một cục: cái vỡ màn, cái vào nước, cái chỉ trầy
+       *    * — lý do khác nhau, phí sửa khác nhau, cách xử lý khác nhau. Gom theo mã như
+       *    * WarehouseStock thì mất sạch phần đó, và không cách nào sửa riêng một cái.
+       *    *
+       *    * Nên MỖI LƯỢT NHẬP là một LÔ riêng, giữ lý do của chính nó. `conLai` là số
+       *    * còn chưa xử của lô; xử một phần thì trừ dần, hết thì lô biến khỏi danh sách.
+       *    * Dòng XUẤT trỏ về lô nguồn qua `nguonEntryId` để lần lại được đường đi.
+       * Chỉ có nghĩa với dòng NHẬP: còn bao nhiêu cái của lô này chưa xử
+       */
+      conLai: number | null
+      /**
+       * Chỉ có nghĩa với dòng XUẤT: xử từ lô nào
+       */
+      nguonEntryId: string | null
       lyDo: string | null
       ghiChu: string | null
       branchId: string | null
@@ -126953,6 +126997,8 @@ export namespace Prisma {
     readonly phiSuaChua: FieldRef<"DamagedEntry", 'Float'>
     readonly productDichId: FieldRef<"DamagedEntry", 'String'>
     readonly giaVonMoi: FieldRef<"DamagedEntry", 'Float'>
+    readonly conLai: FieldRef<"DamagedEntry", 'Int'>
+    readonly nguonEntryId: FieldRef<"DamagedEntry", 'String'>
     readonly lyDo: FieldRef<"DamagedEntry", 'String'>
     readonly ghiChu: FieldRef<"DamagedEntry", 'String'>
     readonly branchId: FieldRef<"DamagedEntry", 'String'>
@@ -183145,6 +183191,8 @@ export namespace Prisma {
     phiSuaChua: 'phiSuaChua',
     productDichId: 'productDichId',
     giaVonMoi: 'giaVonMoi',
+    conLai: 'conLai',
+    nguonEntryId: 'nguonEntryId',
     lyDo: 'lyDo',
     ghiChu: 'ghiChu',
     branchId: 'branchId',
@@ -193823,6 +193871,8 @@ export namespace Prisma {
     phiSuaChua?: FloatFilter<"DamagedEntry"> | number
     productDichId?: StringNullableFilter<"DamagedEntry"> | string | null
     giaVonMoi?: FloatNullableFilter<"DamagedEntry"> | number | null
+    conLai?: IntNullableFilter<"DamagedEntry"> | number | null
+    nguonEntryId?: StringNullableFilter<"DamagedEntry"> | string | null
     lyDo?: StringNullableFilter<"DamagedEntry"> | string | null
     ghiChu?: StringNullableFilter<"DamagedEntry"> | string | null
     branchId?: StringNullableFilter<"DamagedEntry"> | string | null
@@ -193844,6 +193894,8 @@ export namespace Prisma {
     phiSuaChua?: SortOrder
     productDichId?: SortOrderInput | SortOrder
     giaVonMoi?: SortOrderInput | SortOrder
+    conLai?: SortOrderInput | SortOrder
+    nguonEntryId?: SortOrderInput | SortOrder
     lyDo?: SortOrderInput | SortOrder
     ghiChu?: SortOrderInput | SortOrder
     branchId?: SortOrderInput | SortOrder
@@ -193868,6 +193920,8 @@ export namespace Prisma {
     phiSuaChua?: FloatFilter<"DamagedEntry"> | number
     productDichId?: StringNullableFilter<"DamagedEntry"> | string | null
     giaVonMoi?: FloatNullableFilter<"DamagedEntry"> | number | null
+    conLai?: IntNullableFilter<"DamagedEntry"> | number | null
+    nguonEntryId?: StringNullableFilter<"DamagedEntry"> | string | null
     lyDo?: StringNullableFilter<"DamagedEntry"> | string | null
     ghiChu?: StringNullableFilter<"DamagedEntry"> | string | null
     branchId?: StringNullableFilter<"DamagedEntry"> | string | null
@@ -193889,6 +193943,8 @@ export namespace Prisma {
     phiSuaChua?: SortOrder
     productDichId?: SortOrderInput | SortOrder
     giaVonMoi?: SortOrderInput | SortOrder
+    conLai?: SortOrderInput | SortOrder
+    nguonEntryId?: SortOrderInput | SortOrder
     lyDo?: SortOrderInput | SortOrder
     ghiChu?: SortOrderInput | SortOrder
     branchId?: SortOrderInput | SortOrder
@@ -193918,6 +193974,8 @@ export namespace Prisma {
     phiSuaChua?: FloatWithAggregatesFilter<"DamagedEntry"> | number
     productDichId?: StringNullableWithAggregatesFilter<"DamagedEntry"> | string | null
     giaVonMoi?: FloatNullableWithAggregatesFilter<"DamagedEntry"> | number | null
+    conLai?: IntNullableWithAggregatesFilter<"DamagedEntry"> | number | null
+    nguonEntryId?: StringNullableWithAggregatesFilter<"DamagedEntry"> | string | null
     lyDo?: StringNullableWithAggregatesFilter<"DamagedEntry"> | string | null
     ghiChu?: StringNullableWithAggregatesFilter<"DamagedEntry"> | string | null
     branchId?: StringNullableWithAggregatesFilter<"DamagedEntry"> | string | null
@@ -209924,6 +209982,8 @@ export namespace Prisma {
     phiSuaChua?: number
     productDichId?: string | null
     giaVonMoi?: number | null
+    conLai?: number | null
+    nguonEntryId?: string | null
     lyDo?: string | null
     ghiChu?: string | null
     branchId?: string | null
@@ -209945,6 +210005,8 @@ export namespace Prisma {
     phiSuaChua?: number
     productDichId?: string | null
     giaVonMoi?: number | null
+    conLai?: number | null
+    nguonEntryId?: string | null
     lyDo?: string | null
     ghiChu?: string | null
     branchId?: string | null
@@ -209966,6 +210028,8 @@ export namespace Prisma {
     phiSuaChua?: FloatFieldUpdateOperationsInput | number
     productDichId?: NullableStringFieldUpdateOperationsInput | string | null
     giaVonMoi?: NullableFloatFieldUpdateOperationsInput | number | null
+    conLai?: NullableIntFieldUpdateOperationsInput | number | null
+    nguonEntryId?: NullableStringFieldUpdateOperationsInput | string | null
     lyDo?: NullableStringFieldUpdateOperationsInput | string | null
     ghiChu?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -209987,6 +210051,8 @@ export namespace Prisma {
     phiSuaChua?: FloatFieldUpdateOperationsInput | number
     productDichId?: NullableStringFieldUpdateOperationsInput | string | null
     giaVonMoi?: NullableFloatFieldUpdateOperationsInput | number | null
+    conLai?: NullableIntFieldUpdateOperationsInput | number | null
+    nguonEntryId?: NullableStringFieldUpdateOperationsInput | string | null
     lyDo?: NullableStringFieldUpdateOperationsInput | string | null
     ghiChu?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -210008,6 +210074,8 @@ export namespace Prisma {
     phiSuaChua?: number
     productDichId?: string | null
     giaVonMoi?: number | null
+    conLai?: number | null
+    nguonEntryId?: string | null
     lyDo?: string | null
     ghiChu?: string | null
     branchId?: string | null
@@ -210029,6 +210097,8 @@ export namespace Prisma {
     phiSuaChua?: FloatFieldUpdateOperationsInput | number
     productDichId?: NullableStringFieldUpdateOperationsInput | string | null
     giaVonMoi?: NullableFloatFieldUpdateOperationsInput | number | null
+    conLai?: NullableIntFieldUpdateOperationsInput | number | null
+    nguonEntryId?: NullableStringFieldUpdateOperationsInput | string | null
     lyDo?: NullableStringFieldUpdateOperationsInput | string | null
     ghiChu?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -210050,6 +210120,8 @@ export namespace Prisma {
     phiSuaChua?: FloatFieldUpdateOperationsInput | number
     productDichId?: NullableStringFieldUpdateOperationsInput | string | null
     giaVonMoi?: NullableFloatFieldUpdateOperationsInput | number | null
+    conLai?: NullableIntFieldUpdateOperationsInput | number | null
+    nguonEntryId?: NullableStringFieldUpdateOperationsInput | string | null
     lyDo?: NullableStringFieldUpdateOperationsInput | string | null
     ghiChu?: NullableStringFieldUpdateOperationsInput | string | null
     branchId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -222019,6 +222091,8 @@ export namespace Prisma {
     phiSuaChua?: SortOrder
     productDichId?: SortOrder
     giaVonMoi?: SortOrder
+    conLai?: SortOrder
+    nguonEntryId?: SortOrder
     lyDo?: SortOrder
     ghiChu?: SortOrder
     branchId?: SortOrder
@@ -222031,6 +222105,7 @@ export namespace Prisma {
     quantity?: SortOrder
     phiSuaChua?: SortOrder
     giaVonMoi?: SortOrder
+    conLai?: SortOrder
   }
 
   export type DamagedEntryMaxOrderByAggregateInput = {
@@ -222046,6 +222121,8 @@ export namespace Prisma {
     phiSuaChua?: SortOrder
     productDichId?: SortOrder
     giaVonMoi?: SortOrder
+    conLai?: SortOrder
+    nguonEntryId?: SortOrder
     lyDo?: SortOrder
     ghiChu?: SortOrder
     branchId?: SortOrder
@@ -222067,6 +222144,8 @@ export namespace Prisma {
     phiSuaChua?: SortOrder
     productDichId?: SortOrder
     giaVonMoi?: SortOrder
+    conLai?: SortOrder
+    nguonEntryId?: SortOrder
     lyDo?: SortOrder
     ghiChu?: SortOrder
     branchId?: SortOrder
@@ -222079,6 +222158,7 @@ export namespace Prisma {
     quantity?: SortOrder
     phiSuaChua?: SortOrder
     giaVonMoi?: SortOrder
+    conLai?: SortOrder
   }
 
   export type WarehouseStockListRelationFilter = {

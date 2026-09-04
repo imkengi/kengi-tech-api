@@ -1759,6 +1759,8 @@ exports.Prisma.DamagedEntryScalarFieldEnum = {
   phiSuaChua: 'phiSuaChua',
   productDichId: 'productDichId',
   giaVonMoi: 'giaVonMoi',
+  conLai: 'conLai',
+  nguonEntryId: 'nguonEntryId',
   lyDo: 'lyDo',
   ghiChu: 'ghiChu',
   branchId: 'branchId',

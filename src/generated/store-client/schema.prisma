@@ -2339,6 +2339,20 @@ model DamagedEntry {
   productDichId String?
   /// Giá vốn mỗi cái ĐÃ tính cả phí sửa, ghi lại để sau còn đối chiếu
   giaVonMoi     Float?
+  /**
+   * ─── TỪNG LÔ, KHÔNG GOM CHUNG (04/09/2026) ───────────────────────────────
+   * Chủ shop: "mỗi hàng hư sẽ mỗi kiểu, không giống nhau được".
+   * 5 cái Samsung hư không phải một cục: cái vỡ màn, cái vào nước, cái chỉ trầy
+   * — lý do khác nhau, phí sửa khác nhau, cách xử lý khác nhau. Gom theo mã như
+   * WarehouseStock thì mất sạch phần đó, và không cách nào sửa riêng một cái.
+   * Nên MỖI LƯỢT NHẬP là một LÔ riêng, giữ lý do của chính nó. `conLai` là số
+   * còn chưa xử của lô; xử một phần thì trừ dần, hết thì lô biến khỏi danh sách.
+   * Dòng XUẤT trỏ về lô nguồn qua `nguonEntryId` để lần lại được đường đi.
+   */
+  /// Chỉ có nghĩa với dòng NHẬP: còn bao nhiêu cái của lô này chưa xử
+  conLai        Int?
+  /// Chỉ có nghĩa với dòng XUẤT: xử từ lô nào
+  nguonEntryId  String?
   lyDo          String?
   ghiChu        String?
   branchId      String?
