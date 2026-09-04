@@ -2307,6 +2307,47 @@ model HKDRevenueEntry {
   @@index([createdAt])
 }
 
+// ─── Nhật ký kho hư hỏng (04/09/2026) ─────────────────────────────────────────
+//
+// Chủ shop: "thêm tính năng nhập hàng vào kho hư hỏng… có nút chọn nhập từ kho và
+// không qua kho… trong tồn kho hư hỏng thì có thể cập nhật bán tiếp, sửa chữa xong
+// (cộng thêm phí sửa chữa) và cộng vào kho chính (chọn nhập vào mã cũ hoặc mã mới)".
+//
+// Vì sao cần bảng RIÊNG chứ không chỉ đổi WarehouseStock: tồn chỉ cho biết CÒN BAO
+// NHIÊU, không cho biết hàng đó từ đâu vào, ai đưa vào, sửa hết bao nhiêu tiền. Mà
+// phí sửa chữa lại đi thẳng vào giá vốn lúc nhập lại kho chính — không lưu vết thì
+// sau này không ai đối chiếu nổi vì sao giá vốn mã đó nhảy.
+model DamagedEntry {
+  id           String   @id @default(cuid())
+  warehouseId  String
+  loai         String // 'nhap' | 'xuat'
+  productId    String
+  productName  String
+  productSku   String?
+  quantity     Int
+  // nhap: 'tu-kho' (trừ tồn kho chính) | 'ngoai' (không đụng tồn kho chính)
+  nguon        String?
+  // xuat: 'ban-tiep' | 'sua-xong' | 'huy'
+  cachXuLy     String?
+  /// Phí sửa chữa TỔNG của lượt xuất này; chia cho quantity ra phí mỗi cái
+  phiSuaChua   Float    @default(0)
+  /// Mã đích khi nhập lại kho chính — null nghĩa là về đúng mã cũ
+  productDichId String?
+  /// Giá vốn mỗi cái ĐÃ tính cả phí sửa, ghi lại để sau còn đối chiếu
+  giaVonMoi    Float?
+  lyDo         String?
+  ghiChu       String?
+  branchId     String?
+  userId       String?
+  userName     String?
+  createdAt    DateTime @default(now())
+
+  @@index([warehouseId])
+  @@index([productId])
+  @@index([createdAt])
+  @@index([loai])
+}
+
 // ─── Warehouses (Kho hàng — chính / hư hỏng / bảo hành / khác) ────────────────
 
 model Warehouse {

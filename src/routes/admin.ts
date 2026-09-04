@@ -2311,6 +2311,31 @@ router.post('/migrate', async (_req: Request, res: Response) => {
                 )`)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "Supplier" ADD COLUMN IF NOT EXISTS "groupId" TEXT`)
                 await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Supplier_groupId_idx" ON "Supplier"("groupId")`)
+                // Nhật ký kho hư hỏng (04/09/2026)
+                await (sp as any).$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "DamagedEntry" (
+                    "id" TEXT NOT NULL PRIMARY KEY,
+                    "warehouseId" TEXT NOT NULL,
+                    "loai" TEXT NOT NULL,
+                    "productId" TEXT NOT NULL,
+                    "productName" TEXT NOT NULL,
+                    "productSku" TEXT,
+                    "quantity" INTEGER NOT NULL,
+                    "nguon" TEXT,
+                    "cachXuLy" TEXT,
+                    "phiSuaChua" DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    "productDichId" TEXT,
+                    "giaVonMoi" DOUBLE PRECISION,
+                    "lyDo" TEXT,
+                    "ghiChu" TEXT,
+                    "branchId" TEXT,
+                    "userId" TEXT,
+                    "userName" TEXT,
+                    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "DamagedEntry_warehouseId_idx" ON "DamagedEntry"("warehouseId")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "DamagedEntry_productId_idx" ON "DamagedEntry"("productId")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "DamagedEntry_createdAt_idx" ON "DamagedEntry"("createdAt")`)
+                await (sp as any).$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "DamagedEntry_loai_idx" ON "DamagedEntry"("loai")`)
                 // Tên đăng nhập ngắn cho nhân viên (04/09/2026)
                 await (sp as any).$executeRawUnsafe(`ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "username" TEXT`)
                 await (sp as any).$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "User_username_key" ON "User"("username")`)

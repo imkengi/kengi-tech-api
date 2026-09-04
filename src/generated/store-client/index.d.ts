@@ -488,6 +488,11 @@ export type AdjustmentInvoiceItem = $Result.DefaultSelection<Prisma.$AdjustmentI
  */
 export type HKDRevenueEntry = $Result.DefaultSelection<Prisma.$HKDRevenueEntryPayload>
 /**
+ * Model DamagedEntry
+ * 
+ */
+export type DamagedEntry = $Result.DefaultSelection<Prisma.$DamagedEntryPayload>
+/**
  * Model Warehouse
  * 
  */
@@ -1772,6 +1777,16 @@ export class PrismaClient<
   get hKDRevenueEntry(): Prisma.HKDRevenueEntryDelegate<ExtArgs, ClientOptions>;
 
   /**
+   * `prisma.damagedEntry`: Exposes CRUD operations for the **DamagedEntry** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more DamagedEntries
+    * const damagedEntries = await prisma.damagedEntry.findMany()
+    * ```
+    */
+  get damagedEntry(): Prisma.DamagedEntryDelegate<ExtArgs, ClientOptions>;
+
+  /**
    * `prisma.warehouse`: Exposes CRUD operations for the **Warehouse** model.
     * Example usage:
     * ```ts
@@ -2763,6 +2778,7 @@ export namespace Prisma {
     AdjustmentInvoice: 'AdjustmentInvoice',
     AdjustmentInvoiceItem: 'AdjustmentInvoiceItem',
     HKDRevenueEntry: 'HKDRevenueEntry',
+    DamagedEntry: 'DamagedEntry',
     Warehouse: 'Warehouse',
     WarehouseStock: 'WarehouseStock',
     StockTransfer: 'StockTransfer',
@@ -2827,7 +2843,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "branch" | "user" | "apiKey" | "webhookEndpoint" | "webhookDelivery" | "salesCheckin" | "category" | "brand" | "product" | "productSerial" | "unitConversion" | "productImage" | "customerGroup" | "customer" | "transaction" | "transactionItem" | "payment" | "inventoryTransaction" | "importReceipt" | "importReceiptItem" | "promotion" | "supplierGroup" | "supplier" | "purchaseOrder" | "purchaseOrderItem" | "expense" | "cashReceipt" | "notification" | "warranty" | "repair" | "quotation" | "auditLog" | "priceHistory" | "shippingOrder" | "driver" | "vehicle" | "vehicleMaintenance" | "crmEmailLog" | "vehicleFuelLog" | "vehicleDocument" | "deliveryRoute" | "deliveryStop" | "taxConfig" | "bankAccount" | "bankTransaction" | "bankConnectionConfig" | "taxDeclaration" | "customerSegment" | "currency" | "feedback" | "schedule" | "returnOrder" | "returnItem" | "debtEntry" | "bundle" | "salesOrder" | "salesOrderItem" | "priceList" | "priceListItem" | "priceRule" | "announcement" | "attendance" | "packingLog" | "loyaltyMember" | "loyaltyTransaction" | "review" | "skuMapping" | "hkdRevenueEntry" | "storeSettings" | "store" | "branchRequest" | "branchDeleteRequest" | "payrollRecord" | "employee" | "payrollPeriod" | "payrollEntry" | "onlineChannel" | "onlineOrder" | "onlineProduct" | "onlineOrderItem" | "syncLog" | "journalEntry" | "fixedAsset" | "depreciationEntry" | "cCDC" | "cCDCAllocation" | "eInvoiceConfig" | "eInvoice" | "eInvoiceItem" | "adjustmentInvoice" | "adjustmentInvoiceItem" | "hKDRevenueEntry" | "warehouse" | "warehouseStock" | "stockTransfer" | "stockTransferItem" | "salesTrip" | "salesTripItem" | "salesTripLog" | "inventoryCount" | "inventoryCountItem" | "zReport" | "storageFile" | "chartOfAccount" | "periodLock" | "exchangeRate" | "taxDeadline" | "taxAuditLog" | "taxBudget" | "fbUserToken" | "fbPage" | "fbScheduledPost" | "fbCommentRule" | "fbAutoReplyLog" | "fbBrandProfile" | "fbContentPlan" | "fbContentDraft" | "crmTask" | "crmDeal" | "crmActivity" | "crmZaloLog" | "crmCampaign" | "aiAgentJob" | "aiAgentRun" | "kiotVietConfig" | "kiotVietMap" | "kiotVietSyncLog" | "misaConfig" | "misaMap" | "misaSyncLog" | "printTemplate" | "aiReport" | "aiChat" | "misaImportBatch" | "misaSaleDoc" | "misaSaleLine" | "misaPurchaseDoc" | "misaPurchaseLine"
+      modelProps: "branch" | "user" | "apiKey" | "webhookEndpoint" | "webhookDelivery" | "salesCheckin" | "category" | "brand" | "product" | "productSerial" | "unitConversion" | "productImage" | "customerGroup" | "customer" | "transaction" | "transactionItem" | "payment" | "inventoryTransaction" | "importReceipt" | "importReceiptItem" | "promotion" | "supplierGroup" | "supplier" | "purchaseOrder" | "purchaseOrderItem" | "expense" | "cashReceipt" | "notification" | "warranty" | "repair" | "quotation" | "auditLog" | "priceHistory" | "shippingOrder" | "driver" | "vehicle" | "vehicleMaintenance" | "crmEmailLog" | "vehicleFuelLog" | "vehicleDocument" | "deliveryRoute" | "deliveryStop" | "taxConfig" | "bankAccount" | "bankTransaction" | "bankConnectionConfig" | "taxDeclaration" | "customerSegment" | "currency" | "feedback" | "schedule" | "returnOrder" | "returnItem" | "debtEntry" | "bundle" | "salesOrder" | "salesOrderItem" | "priceList" | "priceListItem" | "priceRule" | "announcement" | "attendance" | "packingLog" | "loyaltyMember" | "loyaltyTransaction" | "review" | "skuMapping" | "hkdRevenueEntry" | "storeSettings" | "store" | "branchRequest" | "branchDeleteRequest" | "payrollRecord" | "employee" | "payrollPeriod" | "payrollEntry" | "onlineChannel" | "onlineOrder" | "onlineProduct" | "onlineOrderItem" | "syncLog" | "journalEntry" | "fixedAsset" | "depreciationEntry" | "cCDC" | "cCDCAllocation" | "eInvoiceConfig" | "eInvoice" | "eInvoiceItem" | "adjustmentInvoice" | "adjustmentInvoiceItem" | "hKDRevenueEntry" | "damagedEntry" | "warehouse" | "warehouseStock" | "stockTransfer" | "stockTransferItem" | "salesTrip" | "salesTripItem" | "salesTripLog" | "inventoryCount" | "inventoryCountItem" | "zReport" | "storageFile" | "chartOfAccount" | "periodLock" | "exchangeRate" | "taxDeadline" | "taxAuditLog" | "taxBudget" | "fbUserToken" | "fbPage" | "fbScheduledPost" | "fbCommentRule" | "fbAutoReplyLog" | "fbBrandProfile" | "fbContentPlan" | "fbContentDraft" | "crmTask" | "crmDeal" | "crmActivity" | "crmZaloLog" | "crmCampaign" | "aiAgentJob" | "aiAgentRun" | "kiotVietConfig" | "kiotVietMap" | "kiotVietSyncLog" | "misaConfig" | "misaMap" | "misaSyncLog" | "printTemplate" | "aiReport" | "aiChat" | "misaImportBatch" | "misaSaleDoc" | "misaSaleLine" | "misaPurchaseDoc" | "misaPurchaseLine"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -9639,6 +9655,80 @@ export namespace Prisma {
           }
         }
       }
+      DamagedEntry: {
+        payload: Prisma.$DamagedEntryPayload<ExtArgs>
+        fields: Prisma.DamagedEntryFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.DamagedEntryFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$DamagedEntryPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.DamagedEntryFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$DamagedEntryPayload>
+          }
+          findFirst: {
+            args: Prisma.DamagedEntryFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$DamagedEntryPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.DamagedEntryFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$DamagedEntryPayload>
+          }
+          findMany: {
+            args: Prisma.DamagedEntryFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$DamagedEntryPayload>[]
+          }
+          create: {
+            args: Prisma.DamagedEntryCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$DamagedEntryPayload>
+          }
+          createMany: {
+            args: Prisma.DamagedEntryCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.DamagedEntryCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$DamagedEntryPayload>[]
+          }
+          delete: {
+            args: Prisma.DamagedEntryDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$DamagedEntryPayload>
+          }
+          update: {
+            args: Prisma.DamagedEntryUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$DamagedEntryPayload>
+          }
+          deleteMany: {
+            args: Prisma.DamagedEntryDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.DamagedEntryUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.DamagedEntryUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$DamagedEntryPayload>[]
+          }
+          upsert: {
+            args: Prisma.DamagedEntryUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$DamagedEntryPayload>
+          }
+          aggregate: {
+            args: Prisma.DamagedEntryAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateDamagedEntry>
+          }
+          groupBy: {
+            args: Prisma.DamagedEntryGroupByArgs<ExtArgs>
+            result: $Utils.Optional<DamagedEntryGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.DamagedEntryCountArgs<ExtArgs>
+            result: $Utils.Optional<DamagedEntryCountAggregateOutputType> | number
+          }
+        }
+      }
       Warehouse: {
         payload: Prisma.$WarehousePayload<ExtArgs>
         fields: Prisma.WarehouseFieldRefs
@@ -13231,6 +13321,7 @@ export namespace Prisma {
     adjustmentInvoice?: AdjustmentInvoiceOmit
     adjustmentInvoiceItem?: AdjustmentInvoiceItemOmit
     hKDRevenueEntry?: HKDRevenueEntryOmit
+    damagedEntry?: DamagedEntryOmit
     warehouse?: WarehouseOmit
     warehouseStock?: WarehouseStockOmit
     stockTransfer?: StockTransferOmit
@@ -126020,6 +126111,1221 @@ export namespace Prisma {
 
 
   /**
+   * Model DamagedEntry
+   */
+
+  export type AggregateDamagedEntry = {
+    _count: DamagedEntryCountAggregateOutputType | null
+    _avg: DamagedEntryAvgAggregateOutputType | null
+    _sum: DamagedEntrySumAggregateOutputType | null
+    _min: DamagedEntryMinAggregateOutputType | null
+    _max: DamagedEntryMaxAggregateOutputType | null
+  }
+
+  export type DamagedEntryAvgAggregateOutputType = {
+    quantity: number | null
+    phiSuaChua: number | null
+    giaVonMoi: number | null
+  }
+
+  export type DamagedEntrySumAggregateOutputType = {
+    quantity: number | null
+    phiSuaChua: number | null
+    giaVonMoi: number | null
+  }
+
+  export type DamagedEntryMinAggregateOutputType = {
+    id: string | null
+    warehouseId: string | null
+    loai: string | null
+    productId: string | null
+    productName: string | null
+    productSku: string | null
+    quantity: number | null
+    nguon: string | null
+    cachXuLy: string | null
+    phiSuaChua: number | null
+    productDichId: string | null
+    giaVonMoi: number | null
+    lyDo: string | null
+    ghiChu: string | null
+    branchId: string | null
+    userId: string | null
+    userName: string | null
+    createdAt: Date | null
+  }
+
+  export type DamagedEntryMaxAggregateOutputType = {
+    id: string | null
+    warehouseId: string | null
+    loai: string | null
+    productId: string | null
+    productName: string | null
+    productSku: string | null
+    quantity: number | null
+    nguon: string | null
+    cachXuLy: string | null
+    phiSuaChua: number | null
+    productDichId: string | null
+    giaVonMoi: number | null
+    lyDo: string | null
+    ghiChu: string | null
+    branchId: string | null
+    userId: string | null
+    userName: string | null
+    createdAt: Date | null
+  }
+
+  export type DamagedEntryCountAggregateOutputType = {
+    id: number
+    warehouseId: number
+    loai: number
+    productId: number
+    productName: number
+    productSku: number
+    quantity: number
+    nguon: number
+    cachXuLy: number
+    phiSuaChua: number
+    productDichId: number
+    giaVonMoi: number
+    lyDo: number
+    ghiChu: number
+    branchId: number
+    userId: number
+    userName: number
+    createdAt: number
+    _all: number
+  }
+
+
+  export type DamagedEntryAvgAggregateInputType = {
+    quantity?: true
+    phiSuaChua?: true
+    giaVonMoi?: true
+  }
+
+  export type DamagedEntrySumAggregateInputType = {
+    quantity?: true
+    phiSuaChua?: true
+    giaVonMoi?: true
+  }
+
+  export type DamagedEntryMinAggregateInputType = {
+    id?: true
+    warehouseId?: true
+    loai?: true
+    productId?: true
+    productName?: true
+    productSku?: true
+    quantity?: true
+    nguon?: true
+    cachXuLy?: true
+    phiSuaChua?: true
+    productDichId?: true
+    giaVonMoi?: true
+    lyDo?: true
+    ghiChu?: true
+    branchId?: true
+    userId?: true
+    userName?: true
+    createdAt?: true
+  }
+
+  export type DamagedEntryMaxAggregateInputType = {
+    id?: true
+    warehouseId?: true
+    loai?: true
+    productId?: true
+    productName?: true
+    productSku?: true
+    quantity?: true
+    nguon?: true
+    cachXuLy?: true
+    phiSuaChua?: true
+    productDichId?: true
+    giaVonMoi?: true
+    lyDo?: true
+    ghiChu?: true
+    branchId?: true
+    userId?: true
+    userName?: true
+    createdAt?: true
+  }
+
+  export type DamagedEntryCountAggregateInputType = {
+    id?: true
+    warehouseId?: true
+    loai?: true
+    productId?: true
+    productName?: true
+    productSku?: true
+    quantity?: true
+    nguon?: true
+    cachXuLy?: true
+    phiSuaChua?: true
+    productDichId?: true
+    giaVonMoi?: true
+    lyDo?: true
+    ghiChu?: true
+    branchId?: true
+    userId?: true
+    userName?: true
+    createdAt?: true
+    _all?: true
+  }
+
+  export type DamagedEntryAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which DamagedEntry to aggregate.
+     */
+    where?: DamagedEntryWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of DamagedEntries to fetch.
+     */
+    orderBy?: DamagedEntryOrderByWithRelationInput | DamagedEntryOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: DamagedEntryWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` DamagedEntries from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` DamagedEntries.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned DamagedEntries
+    **/
+    _count?: true | DamagedEntryCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: DamagedEntryAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: DamagedEntrySumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: DamagedEntryMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: DamagedEntryMaxAggregateInputType
+  }
+
+  export type GetDamagedEntryAggregateType<T extends DamagedEntryAggregateArgs> = {
+        [P in keyof T & keyof AggregateDamagedEntry]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateDamagedEntry[P]>
+      : GetScalarType<T[P], AggregateDamagedEntry[P]>
+  }
+
+
+
+
+  export type DamagedEntryGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: DamagedEntryWhereInput
+    orderBy?: DamagedEntryOrderByWithAggregationInput | DamagedEntryOrderByWithAggregationInput[]
+    by: DamagedEntryScalarFieldEnum[] | DamagedEntryScalarFieldEnum
+    having?: DamagedEntryScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: DamagedEntryCountAggregateInputType | true
+    _avg?: DamagedEntryAvgAggregateInputType
+    _sum?: DamagedEntrySumAggregateInputType
+    _min?: DamagedEntryMinAggregateInputType
+    _max?: DamagedEntryMaxAggregateInputType
+  }
+
+  export type DamagedEntryGroupByOutputType = {
+    id: string
+    warehouseId: string
+    loai: string
+    productId: string
+    productName: string
+    productSku: string | null
+    quantity: number
+    nguon: string | null
+    cachXuLy: string | null
+    phiSuaChua: number
+    productDichId: string | null
+    giaVonMoi: number | null
+    lyDo: string | null
+    ghiChu: string | null
+    branchId: string | null
+    userId: string | null
+    userName: string | null
+    createdAt: Date
+    _count: DamagedEntryCountAggregateOutputType | null
+    _avg: DamagedEntryAvgAggregateOutputType | null
+    _sum: DamagedEntrySumAggregateOutputType | null
+    _min: DamagedEntryMinAggregateOutputType | null
+    _max: DamagedEntryMaxAggregateOutputType | null
+  }
+
+  type GetDamagedEntryGroupByPayload<T extends DamagedEntryGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<DamagedEntryGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof DamagedEntryGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], DamagedEntryGroupByOutputType[P]>
+            : GetScalarType<T[P], DamagedEntryGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type DamagedEntrySelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    warehouseId?: boolean
+    loai?: boolean
+    productId?: boolean
+    productName?: boolean
+    productSku?: boolean
+    quantity?: boolean
+    nguon?: boolean
+    cachXuLy?: boolean
+    phiSuaChua?: boolean
+    productDichId?: boolean
+    giaVonMoi?: boolean
+    lyDo?: boolean
+    ghiChu?: boolean
+    branchId?: boolean
+    userId?: boolean
+    userName?: boolean
+    createdAt?: boolean
+  }, ExtArgs["result"]["damagedEntry"]>
+
+  export type DamagedEntrySelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    warehouseId?: boolean
+    loai?: boolean
+    productId?: boolean
+    productName?: boolean
+    productSku?: boolean
+    quantity?: boolean
+    nguon?: boolean
+    cachXuLy?: boolean
+    phiSuaChua?: boolean
+    productDichId?: boolean
+    giaVonMoi?: boolean
+    lyDo?: boolean
+    ghiChu?: boolean
+    branchId?: boolean
+    userId?: boolean
+    userName?: boolean
+    createdAt?: boolean
+  }, ExtArgs["result"]["damagedEntry"]>
+
+  export type DamagedEntrySelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    warehouseId?: boolean
+    loai?: boolean
+    productId?: boolean
+    productName?: boolean
+    productSku?: boolean
+    quantity?: boolean
+    nguon?: boolean
+    cachXuLy?: boolean
+    phiSuaChua?: boolean
+    productDichId?: boolean
+    giaVonMoi?: boolean
+    lyDo?: boolean
+    ghiChu?: boolean
+    branchId?: boolean
+    userId?: boolean
+    userName?: boolean
+    createdAt?: boolean
+  }, ExtArgs["result"]["damagedEntry"]>
+
+  export type DamagedEntrySelectScalar = {
+    id?: boolean
+    warehouseId?: boolean
+    loai?: boolean
+    productId?: boolean
+    productName?: boolean
+    productSku?: boolean
+    quantity?: boolean
+    nguon?: boolean
+    cachXuLy?: boolean
+    phiSuaChua?: boolean
+    productDichId?: boolean
+    giaVonMoi?: boolean
+    lyDo?: boolean
+    ghiChu?: boolean
+    branchId?: boolean
+    userId?: boolean
+    userName?: boolean
+    createdAt?: boolean
+  }
+
+  export type DamagedEntryOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "warehouseId" | "loai" | "productId" | "productName" | "productSku" | "quantity" | "nguon" | "cachXuLy" | "phiSuaChua" | "productDichId" | "giaVonMoi" | "lyDo" | "ghiChu" | "branchId" | "userId" | "userName" | "createdAt", ExtArgs["result"]["damagedEntry"]>
+
+  export type $DamagedEntryPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "DamagedEntry"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      warehouseId: string
+      loai: string
+      productId: string
+      productName: string
+      productSku: string | null
+      quantity: number
+      nguon: string | null
+      cachXuLy: string | null
+      /**
+       * Phí sửa chữa TỔNG của lượt xuất này; chia cho quantity ra phí mỗi cái
+       */
+      phiSuaChua: number
+      /**
+       * Mã đích khi nhập lại kho chính — null nghĩa là về đúng mã cũ
+       */
+      productDichId: string | null
+      /**
+       * Giá vốn mỗi cái ĐÃ tính cả phí sửa, ghi lại để sau còn đối chiếu
+       */
+      giaVonMoi: number | null
+      lyDo: string | null
+      ghiChu: string | null
+      branchId: string | null
+      userId: string | null
+      userName: string | null
+      createdAt: Date
+    }, ExtArgs["result"]["damagedEntry"]>
+    composites: {}
+  }
+
+  type DamagedEntryGetPayload<S extends boolean | null | undefined | DamagedEntryDefaultArgs> = $Result.GetResult<Prisma.$DamagedEntryPayload, S>
+
+  type DamagedEntryCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<DamagedEntryFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: DamagedEntryCountAggregateInputType | true
+    }
+
+  export interface DamagedEntryDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['DamagedEntry'], meta: { name: 'DamagedEntry' } }
+    /**
+     * Find zero or one DamagedEntry that matches the filter.
+     * @param {DamagedEntryFindUniqueArgs} args - Arguments to find a DamagedEntry
+     * @example
+     * // Get one DamagedEntry
+     * const damagedEntry = await prisma.damagedEntry.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends DamagedEntryFindUniqueArgs>(args: SelectSubset<T, DamagedEntryFindUniqueArgs<ExtArgs>>): Prisma__DamagedEntryClient<$Result.GetResult<Prisma.$DamagedEntryPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one DamagedEntry that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {DamagedEntryFindUniqueOrThrowArgs} args - Arguments to find a DamagedEntry
+     * @example
+     * // Get one DamagedEntry
+     * const damagedEntry = await prisma.damagedEntry.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends DamagedEntryFindUniqueOrThrowArgs>(args: SelectSubset<T, DamagedEntryFindUniqueOrThrowArgs<ExtArgs>>): Prisma__DamagedEntryClient<$Result.GetResult<Prisma.$DamagedEntryPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first DamagedEntry that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {DamagedEntryFindFirstArgs} args - Arguments to find a DamagedEntry
+     * @example
+     * // Get one DamagedEntry
+     * const damagedEntry = await prisma.damagedEntry.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends DamagedEntryFindFirstArgs>(args?: SelectSubset<T, DamagedEntryFindFirstArgs<ExtArgs>>): Prisma__DamagedEntryClient<$Result.GetResult<Prisma.$DamagedEntryPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first DamagedEntry that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {DamagedEntryFindFirstOrThrowArgs} args - Arguments to find a DamagedEntry
+     * @example
+     * // Get one DamagedEntry
+     * const damagedEntry = await prisma.damagedEntry.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends DamagedEntryFindFirstOrThrowArgs>(args?: SelectSubset<T, DamagedEntryFindFirstOrThrowArgs<ExtArgs>>): Prisma__DamagedEntryClient<$Result.GetResult<Prisma.$DamagedEntryPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more DamagedEntries that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {DamagedEntryFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all DamagedEntries
+     * const damagedEntries = await prisma.damagedEntry.findMany()
+     * 
+     * // Get first 10 DamagedEntries
+     * const damagedEntries = await prisma.damagedEntry.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const damagedEntryWithIdOnly = await prisma.damagedEntry.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends DamagedEntryFindManyArgs>(args?: SelectSubset<T, DamagedEntryFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$DamagedEntryPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a DamagedEntry.
+     * @param {DamagedEntryCreateArgs} args - Arguments to create a DamagedEntry.
+     * @example
+     * // Create one DamagedEntry
+     * const DamagedEntry = await prisma.damagedEntry.create({
+     *   data: {
+     *     // ... data to create a DamagedEntry
+     *   }
+     * })
+     * 
+     */
+    create<T extends DamagedEntryCreateArgs>(args: SelectSubset<T, DamagedEntryCreateArgs<ExtArgs>>): Prisma__DamagedEntryClient<$Result.GetResult<Prisma.$DamagedEntryPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many DamagedEntries.
+     * @param {DamagedEntryCreateManyArgs} args - Arguments to create many DamagedEntries.
+     * @example
+     * // Create many DamagedEntries
+     * const damagedEntry = await prisma.damagedEntry.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends DamagedEntryCreateManyArgs>(args?: SelectSubset<T, DamagedEntryCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many DamagedEntries and returns the data saved in the database.
+     * @param {DamagedEntryCreateManyAndReturnArgs} args - Arguments to create many DamagedEntries.
+     * @example
+     * // Create many DamagedEntries
+     * const damagedEntry = await prisma.damagedEntry.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many DamagedEntries and only return the `id`
+     * const damagedEntryWithIdOnly = await prisma.damagedEntry.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends DamagedEntryCreateManyAndReturnArgs>(args?: SelectSubset<T, DamagedEntryCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$DamagedEntryPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a DamagedEntry.
+     * @param {DamagedEntryDeleteArgs} args - Arguments to delete one DamagedEntry.
+     * @example
+     * // Delete one DamagedEntry
+     * const DamagedEntry = await prisma.damagedEntry.delete({
+     *   where: {
+     *     // ... filter to delete one DamagedEntry
+     *   }
+     * })
+     * 
+     */
+    delete<T extends DamagedEntryDeleteArgs>(args: SelectSubset<T, DamagedEntryDeleteArgs<ExtArgs>>): Prisma__DamagedEntryClient<$Result.GetResult<Prisma.$DamagedEntryPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one DamagedEntry.
+     * @param {DamagedEntryUpdateArgs} args - Arguments to update one DamagedEntry.
+     * @example
+     * // Update one DamagedEntry
+     * const damagedEntry = await prisma.damagedEntry.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends DamagedEntryUpdateArgs>(args: SelectSubset<T, DamagedEntryUpdateArgs<ExtArgs>>): Prisma__DamagedEntryClient<$Result.GetResult<Prisma.$DamagedEntryPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more DamagedEntries.
+     * @param {DamagedEntryDeleteManyArgs} args - Arguments to filter DamagedEntries to delete.
+     * @example
+     * // Delete a few DamagedEntries
+     * const { count } = await prisma.damagedEntry.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends DamagedEntryDeleteManyArgs>(args?: SelectSubset<T, DamagedEntryDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more DamagedEntries.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {DamagedEntryUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many DamagedEntries
+     * const damagedEntry = await prisma.damagedEntry.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends DamagedEntryUpdateManyArgs>(args: SelectSubset<T, DamagedEntryUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more DamagedEntries and returns the data updated in the database.
+     * @param {DamagedEntryUpdateManyAndReturnArgs} args - Arguments to update many DamagedEntries.
+     * @example
+     * // Update many DamagedEntries
+     * const damagedEntry = await prisma.damagedEntry.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more DamagedEntries and only return the `id`
+     * const damagedEntryWithIdOnly = await prisma.damagedEntry.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends DamagedEntryUpdateManyAndReturnArgs>(args: SelectSubset<T, DamagedEntryUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$DamagedEntryPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one DamagedEntry.
+     * @param {DamagedEntryUpsertArgs} args - Arguments to update or create a DamagedEntry.
+     * @example
+     * // Update or create a DamagedEntry
+     * const damagedEntry = await prisma.damagedEntry.upsert({
+     *   create: {
+     *     // ... data to create a DamagedEntry
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the DamagedEntry we want to update
+     *   }
+     * })
+     */
+    upsert<T extends DamagedEntryUpsertArgs>(args: SelectSubset<T, DamagedEntryUpsertArgs<ExtArgs>>): Prisma__DamagedEntryClient<$Result.GetResult<Prisma.$DamagedEntryPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of DamagedEntries.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {DamagedEntryCountArgs} args - Arguments to filter DamagedEntries to count.
+     * @example
+     * // Count the number of DamagedEntries
+     * const count = await prisma.damagedEntry.count({
+     *   where: {
+     *     // ... the filter for the DamagedEntries we want to count
+     *   }
+     * })
+    **/
+    count<T extends DamagedEntryCountArgs>(
+      args?: Subset<T, DamagedEntryCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], DamagedEntryCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a DamagedEntry.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {DamagedEntryAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends DamagedEntryAggregateArgs>(args: Subset<T, DamagedEntryAggregateArgs>): Prisma.PrismaPromise<GetDamagedEntryAggregateType<T>>
+
+    /**
+     * Group by DamagedEntry.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {DamagedEntryGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends DamagedEntryGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: DamagedEntryGroupByArgs['orderBy'] }
+        : { orderBy?: DamagedEntryGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, DamagedEntryGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetDamagedEntryGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the DamagedEntry model
+   */
+  readonly fields: DamagedEntryFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for DamagedEntry.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__DamagedEntryClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the DamagedEntry model
+   */
+  interface DamagedEntryFieldRefs {
+    readonly id: FieldRef<"DamagedEntry", 'String'>
+    readonly warehouseId: FieldRef<"DamagedEntry", 'String'>
+    readonly loai: FieldRef<"DamagedEntry", 'String'>
+    readonly productId: FieldRef<"DamagedEntry", 'String'>
+    readonly productName: FieldRef<"DamagedEntry", 'String'>
+    readonly productSku: FieldRef<"DamagedEntry", 'String'>
+    readonly quantity: FieldRef<"DamagedEntry", 'Int'>
+    readonly nguon: FieldRef<"DamagedEntry", 'String'>
+    readonly cachXuLy: FieldRef<"DamagedEntry", 'String'>
+    readonly phiSuaChua: FieldRef<"DamagedEntry", 'Float'>
+    readonly productDichId: FieldRef<"DamagedEntry", 'String'>
+    readonly giaVonMoi: FieldRef<"DamagedEntry", 'Float'>
+    readonly lyDo: FieldRef<"DamagedEntry", 'String'>
+    readonly ghiChu: FieldRef<"DamagedEntry", 'String'>
+    readonly branchId: FieldRef<"DamagedEntry", 'String'>
+    readonly userId: FieldRef<"DamagedEntry", 'String'>
+    readonly userName: FieldRef<"DamagedEntry", 'String'>
+    readonly createdAt: FieldRef<"DamagedEntry", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * DamagedEntry findUnique
+   */
+  export type DamagedEntryFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the DamagedEntry
+     */
+    select?: DamagedEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the DamagedEntry
+     */
+    omit?: DamagedEntryOmit<ExtArgs> | null
+    /**
+     * Filter, which DamagedEntry to fetch.
+     */
+    where: DamagedEntryWhereUniqueInput
+  }
+
+  /**
+   * DamagedEntry findUniqueOrThrow
+   */
+  export type DamagedEntryFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the DamagedEntry
+     */
+    select?: DamagedEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the DamagedEntry
+     */
+    omit?: DamagedEntryOmit<ExtArgs> | null
+    /**
+     * Filter, which DamagedEntry to fetch.
+     */
+    where: DamagedEntryWhereUniqueInput
+  }
+
+  /**
+   * DamagedEntry findFirst
+   */
+  export type DamagedEntryFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the DamagedEntry
+     */
+    select?: DamagedEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the DamagedEntry
+     */
+    omit?: DamagedEntryOmit<ExtArgs> | null
+    /**
+     * Filter, which DamagedEntry to fetch.
+     */
+    where?: DamagedEntryWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of DamagedEntries to fetch.
+     */
+    orderBy?: DamagedEntryOrderByWithRelationInput | DamagedEntryOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for DamagedEntries.
+     */
+    cursor?: DamagedEntryWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` DamagedEntries from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` DamagedEntries.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of DamagedEntries.
+     */
+    distinct?: DamagedEntryScalarFieldEnum | DamagedEntryScalarFieldEnum[]
+  }
+
+  /**
+   * DamagedEntry findFirstOrThrow
+   */
+  export type DamagedEntryFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the DamagedEntry
+     */
+    select?: DamagedEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the DamagedEntry
+     */
+    omit?: DamagedEntryOmit<ExtArgs> | null
+    /**
+     * Filter, which DamagedEntry to fetch.
+     */
+    where?: DamagedEntryWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of DamagedEntries to fetch.
+     */
+    orderBy?: DamagedEntryOrderByWithRelationInput | DamagedEntryOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for DamagedEntries.
+     */
+    cursor?: DamagedEntryWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` DamagedEntries from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` DamagedEntries.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of DamagedEntries.
+     */
+    distinct?: DamagedEntryScalarFieldEnum | DamagedEntryScalarFieldEnum[]
+  }
+
+  /**
+   * DamagedEntry findMany
+   */
+  export type DamagedEntryFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the DamagedEntry
+     */
+    select?: DamagedEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the DamagedEntry
+     */
+    omit?: DamagedEntryOmit<ExtArgs> | null
+    /**
+     * Filter, which DamagedEntries to fetch.
+     */
+    where?: DamagedEntryWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of DamagedEntries to fetch.
+     */
+    orderBy?: DamagedEntryOrderByWithRelationInput | DamagedEntryOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing DamagedEntries.
+     */
+    cursor?: DamagedEntryWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` DamagedEntries from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` DamagedEntries.
+     */
+    skip?: number
+    distinct?: DamagedEntryScalarFieldEnum | DamagedEntryScalarFieldEnum[]
+  }
+
+  /**
+   * DamagedEntry create
+   */
+  export type DamagedEntryCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the DamagedEntry
+     */
+    select?: DamagedEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the DamagedEntry
+     */
+    omit?: DamagedEntryOmit<ExtArgs> | null
+    /**
+     * The data needed to create a DamagedEntry.
+     */
+    data: XOR<DamagedEntryCreateInput, DamagedEntryUncheckedCreateInput>
+  }
+
+  /**
+   * DamagedEntry createMany
+   */
+  export type DamagedEntryCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many DamagedEntries.
+     */
+    data: DamagedEntryCreateManyInput | DamagedEntryCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * DamagedEntry createManyAndReturn
+   */
+  export type DamagedEntryCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the DamagedEntry
+     */
+    select?: DamagedEntrySelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the DamagedEntry
+     */
+    omit?: DamagedEntryOmit<ExtArgs> | null
+    /**
+     * The data used to create many DamagedEntries.
+     */
+    data: DamagedEntryCreateManyInput | DamagedEntryCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * DamagedEntry update
+   */
+  export type DamagedEntryUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the DamagedEntry
+     */
+    select?: DamagedEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the DamagedEntry
+     */
+    omit?: DamagedEntryOmit<ExtArgs> | null
+    /**
+     * The data needed to update a DamagedEntry.
+     */
+    data: XOR<DamagedEntryUpdateInput, DamagedEntryUncheckedUpdateInput>
+    /**
+     * Choose, which DamagedEntry to update.
+     */
+    where: DamagedEntryWhereUniqueInput
+  }
+
+  /**
+   * DamagedEntry updateMany
+   */
+  export type DamagedEntryUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update DamagedEntries.
+     */
+    data: XOR<DamagedEntryUpdateManyMutationInput, DamagedEntryUncheckedUpdateManyInput>
+    /**
+     * Filter which DamagedEntries to update
+     */
+    where?: DamagedEntryWhereInput
+    /**
+     * Limit how many DamagedEntries to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * DamagedEntry updateManyAndReturn
+   */
+  export type DamagedEntryUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the DamagedEntry
+     */
+    select?: DamagedEntrySelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the DamagedEntry
+     */
+    omit?: DamagedEntryOmit<ExtArgs> | null
+    /**
+     * The data used to update DamagedEntries.
+     */
+    data: XOR<DamagedEntryUpdateManyMutationInput, DamagedEntryUncheckedUpdateManyInput>
+    /**
+     * Filter which DamagedEntries to update
+     */
+    where?: DamagedEntryWhereInput
+    /**
+     * Limit how many DamagedEntries to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * DamagedEntry upsert
+   */
+  export type DamagedEntryUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the DamagedEntry
+     */
+    select?: DamagedEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the DamagedEntry
+     */
+    omit?: DamagedEntryOmit<ExtArgs> | null
+    /**
+     * The filter to search for the DamagedEntry to update in case it exists.
+     */
+    where: DamagedEntryWhereUniqueInput
+    /**
+     * In case the DamagedEntry found by the `where` argument doesn't exist, create a new DamagedEntry with this data.
+     */
+    create: XOR<DamagedEntryCreateInput, DamagedEntryUncheckedCreateInput>
+    /**
+     * In case the DamagedEntry was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<DamagedEntryUpdateInput, DamagedEntryUncheckedUpdateInput>
+  }
+
+  /**
+   * DamagedEntry delete
+   */
+  export type DamagedEntryDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the DamagedEntry
+     */
+    select?: DamagedEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the DamagedEntry
+     */
+    omit?: DamagedEntryOmit<ExtArgs> | null
+    /**
+     * Filter which DamagedEntry to delete.
+     */
+    where: DamagedEntryWhereUniqueInput
+  }
+
+  /**
+   * DamagedEntry deleteMany
+   */
+  export type DamagedEntryDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which DamagedEntries to delete
+     */
+    where?: DamagedEntryWhereInput
+    /**
+     * Limit how many DamagedEntries to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * DamagedEntry without action
+   */
+  export type DamagedEntryDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the DamagedEntry
+     */
+    select?: DamagedEntrySelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the DamagedEntry
+     */
+    omit?: DamagedEntryOmit<ExtArgs> | null
+  }
+
+
+  /**
    * Model Warehouse
    */
 
@@ -181826,6 +183132,30 @@ export namespace Prisma {
   export type HKDRevenueEntryScalarFieldEnum = (typeof HKDRevenueEntryScalarFieldEnum)[keyof typeof HKDRevenueEntryScalarFieldEnum]
 
 
+  export const DamagedEntryScalarFieldEnum: {
+    id: 'id',
+    warehouseId: 'warehouseId',
+    loai: 'loai',
+    productId: 'productId',
+    productName: 'productName',
+    productSku: 'productSku',
+    quantity: 'quantity',
+    nguon: 'nguon',
+    cachXuLy: 'cachXuLy',
+    phiSuaChua: 'phiSuaChua',
+    productDichId: 'productDichId',
+    giaVonMoi: 'giaVonMoi',
+    lyDo: 'lyDo',
+    ghiChu: 'ghiChu',
+    branchId: 'branchId',
+    userId: 'userId',
+    userName: 'userName',
+    createdAt: 'createdAt'
+  };
+
+  export type DamagedEntryScalarFieldEnum = (typeof DamagedEntryScalarFieldEnum)[keyof typeof DamagedEntryScalarFieldEnum]
+
+
   export const WarehouseScalarFieldEnum: {
     id: 'id',
     code: 'code',
@@ -192475,6 +193805,125 @@ export namespace Prisma {
     branchId?: StringNullableWithAggregatesFilter<"HKDRevenueEntry"> | string | null
     createdAt?: DateTimeWithAggregatesFilter<"HKDRevenueEntry"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"HKDRevenueEntry"> | Date | string
+  }
+
+  export type DamagedEntryWhereInput = {
+    AND?: DamagedEntryWhereInput | DamagedEntryWhereInput[]
+    OR?: DamagedEntryWhereInput[]
+    NOT?: DamagedEntryWhereInput | DamagedEntryWhereInput[]
+    id?: StringFilter<"DamagedEntry"> | string
+    warehouseId?: StringFilter<"DamagedEntry"> | string
+    loai?: StringFilter<"DamagedEntry"> | string
+    productId?: StringFilter<"DamagedEntry"> | string
+    productName?: StringFilter<"DamagedEntry"> | string
+    productSku?: StringNullableFilter<"DamagedEntry"> | string | null
+    quantity?: IntFilter<"DamagedEntry"> | number
+    nguon?: StringNullableFilter<"DamagedEntry"> | string | null
+    cachXuLy?: StringNullableFilter<"DamagedEntry"> | string | null
+    phiSuaChua?: FloatFilter<"DamagedEntry"> | number
+    productDichId?: StringNullableFilter<"DamagedEntry"> | string | null
+    giaVonMoi?: FloatNullableFilter<"DamagedEntry"> | number | null
+    lyDo?: StringNullableFilter<"DamagedEntry"> | string | null
+    ghiChu?: StringNullableFilter<"DamagedEntry"> | string | null
+    branchId?: StringNullableFilter<"DamagedEntry"> | string | null
+    userId?: StringNullableFilter<"DamagedEntry"> | string | null
+    userName?: StringNullableFilter<"DamagedEntry"> | string | null
+    createdAt?: DateTimeFilter<"DamagedEntry"> | Date | string
+  }
+
+  export type DamagedEntryOrderByWithRelationInput = {
+    id?: SortOrder
+    warehouseId?: SortOrder
+    loai?: SortOrder
+    productId?: SortOrder
+    productName?: SortOrder
+    productSku?: SortOrderInput | SortOrder
+    quantity?: SortOrder
+    nguon?: SortOrderInput | SortOrder
+    cachXuLy?: SortOrderInput | SortOrder
+    phiSuaChua?: SortOrder
+    productDichId?: SortOrderInput | SortOrder
+    giaVonMoi?: SortOrderInput | SortOrder
+    lyDo?: SortOrderInput | SortOrder
+    ghiChu?: SortOrderInput | SortOrder
+    branchId?: SortOrderInput | SortOrder
+    userId?: SortOrderInput | SortOrder
+    userName?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type DamagedEntryWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: DamagedEntryWhereInput | DamagedEntryWhereInput[]
+    OR?: DamagedEntryWhereInput[]
+    NOT?: DamagedEntryWhereInput | DamagedEntryWhereInput[]
+    warehouseId?: StringFilter<"DamagedEntry"> | string
+    loai?: StringFilter<"DamagedEntry"> | string
+    productId?: StringFilter<"DamagedEntry"> | string
+    productName?: StringFilter<"DamagedEntry"> | string
+    productSku?: StringNullableFilter<"DamagedEntry"> | string | null
+    quantity?: IntFilter<"DamagedEntry"> | number
+    nguon?: StringNullableFilter<"DamagedEntry"> | string | null
+    cachXuLy?: StringNullableFilter<"DamagedEntry"> | string | null
+    phiSuaChua?: FloatFilter<"DamagedEntry"> | number
+    productDichId?: StringNullableFilter<"DamagedEntry"> | string | null
+    giaVonMoi?: FloatNullableFilter<"DamagedEntry"> | number | null
+    lyDo?: StringNullableFilter<"DamagedEntry"> | string | null
+    ghiChu?: StringNullableFilter<"DamagedEntry"> | string | null
+    branchId?: StringNullableFilter<"DamagedEntry"> | string | null
+    userId?: StringNullableFilter<"DamagedEntry"> | string | null
+    userName?: StringNullableFilter<"DamagedEntry"> | string | null
+    createdAt?: DateTimeFilter<"DamagedEntry"> | Date | string
+  }, "id">
+
+  export type DamagedEntryOrderByWithAggregationInput = {
+    id?: SortOrder
+    warehouseId?: SortOrder
+    loai?: SortOrder
+    productId?: SortOrder
+    productName?: SortOrder
+    productSku?: SortOrderInput | SortOrder
+    quantity?: SortOrder
+    nguon?: SortOrderInput | SortOrder
+    cachXuLy?: SortOrderInput | SortOrder
+    phiSuaChua?: SortOrder
+    productDichId?: SortOrderInput | SortOrder
+    giaVonMoi?: SortOrderInput | SortOrder
+    lyDo?: SortOrderInput | SortOrder
+    ghiChu?: SortOrderInput | SortOrder
+    branchId?: SortOrderInput | SortOrder
+    userId?: SortOrderInput | SortOrder
+    userName?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    _count?: DamagedEntryCountOrderByAggregateInput
+    _avg?: DamagedEntryAvgOrderByAggregateInput
+    _max?: DamagedEntryMaxOrderByAggregateInput
+    _min?: DamagedEntryMinOrderByAggregateInput
+    _sum?: DamagedEntrySumOrderByAggregateInput
+  }
+
+  export type DamagedEntryScalarWhereWithAggregatesInput = {
+    AND?: DamagedEntryScalarWhereWithAggregatesInput | DamagedEntryScalarWhereWithAggregatesInput[]
+    OR?: DamagedEntryScalarWhereWithAggregatesInput[]
+    NOT?: DamagedEntryScalarWhereWithAggregatesInput | DamagedEntryScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"DamagedEntry"> | string
+    warehouseId?: StringWithAggregatesFilter<"DamagedEntry"> | string
+    loai?: StringWithAggregatesFilter<"DamagedEntry"> | string
+    productId?: StringWithAggregatesFilter<"DamagedEntry"> | string
+    productName?: StringWithAggregatesFilter<"DamagedEntry"> | string
+    productSku?: StringNullableWithAggregatesFilter<"DamagedEntry"> | string | null
+    quantity?: IntWithAggregatesFilter<"DamagedEntry"> | number
+    nguon?: StringNullableWithAggregatesFilter<"DamagedEntry"> | string | null
+    cachXuLy?: StringNullableWithAggregatesFilter<"DamagedEntry"> | string | null
+    phiSuaChua?: FloatWithAggregatesFilter<"DamagedEntry"> | number
+    productDichId?: StringNullableWithAggregatesFilter<"DamagedEntry"> | string | null
+    giaVonMoi?: FloatNullableWithAggregatesFilter<"DamagedEntry"> | number | null
+    lyDo?: StringNullableWithAggregatesFilter<"DamagedEntry"> | string | null
+    ghiChu?: StringNullableWithAggregatesFilter<"DamagedEntry"> | string | null
+    branchId?: StringNullableWithAggregatesFilter<"DamagedEntry"> | string | null
+    userId?: StringNullableWithAggregatesFilter<"DamagedEntry"> | string | null
+    userName?: StringNullableWithAggregatesFilter<"DamagedEntry"> | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"DamagedEntry"> | Date | string
   }
 
   export type WarehouseWhereInput = {
@@ -208462,6 +209911,153 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type DamagedEntryCreateInput = {
+    id?: string
+    warehouseId: string
+    loai: string
+    productId: string
+    productName: string
+    productSku?: string | null
+    quantity: number
+    nguon?: string | null
+    cachXuLy?: string | null
+    phiSuaChua?: number
+    productDichId?: string | null
+    giaVonMoi?: number | null
+    lyDo?: string | null
+    ghiChu?: string | null
+    branchId?: string | null
+    userId?: string | null
+    userName?: string | null
+    createdAt?: Date | string
+  }
+
+  export type DamagedEntryUncheckedCreateInput = {
+    id?: string
+    warehouseId: string
+    loai: string
+    productId: string
+    productName: string
+    productSku?: string | null
+    quantity: number
+    nguon?: string | null
+    cachXuLy?: string | null
+    phiSuaChua?: number
+    productDichId?: string | null
+    giaVonMoi?: number | null
+    lyDo?: string | null
+    ghiChu?: string | null
+    branchId?: string | null
+    userId?: string | null
+    userName?: string | null
+    createdAt?: Date | string
+  }
+
+  export type DamagedEntryUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    warehouseId?: StringFieldUpdateOperationsInput | string
+    loai?: StringFieldUpdateOperationsInput | string
+    productId?: StringFieldUpdateOperationsInput | string
+    productName?: StringFieldUpdateOperationsInput | string
+    productSku?: NullableStringFieldUpdateOperationsInput | string | null
+    quantity?: IntFieldUpdateOperationsInput | number
+    nguon?: NullableStringFieldUpdateOperationsInput | string | null
+    cachXuLy?: NullableStringFieldUpdateOperationsInput | string | null
+    phiSuaChua?: FloatFieldUpdateOperationsInput | number
+    productDichId?: NullableStringFieldUpdateOperationsInput | string | null
+    giaVonMoi?: NullableFloatFieldUpdateOperationsInput | number | null
+    lyDo?: NullableStringFieldUpdateOperationsInput | string | null
+    ghiChu?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    userId?: NullableStringFieldUpdateOperationsInput | string | null
+    userName?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type DamagedEntryUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    warehouseId?: StringFieldUpdateOperationsInput | string
+    loai?: StringFieldUpdateOperationsInput | string
+    productId?: StringFieldUpdateOperationsInput | string
+    productName?: StringFieldUpdateOperationsInput | string
+    productSku?: NullableStringFieldUpdateOperationsInput | string | null
+    quantity?: IntFieldUpdateOperationsInput | number
+    nguon?: NullableStringFieldUpdateOperationsInput | string | null
+    cachXuLy?: NullableStringFieldUpdateOperationsInput | string | null
+    phiSuaChua?: FloatFieldUpdateOperationsInput | number
+    productDichId?: NullableStringFieldUpdateOperationsInput | string | null
+    giaVonMoi?: NullableFloatFieldUpdateOperationsInput | number | null
+    lyDo?: NullableStringFieldUpdateOperationsInput | string | null
+    ghiChu?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    userId?: NullableStringFieldUpdateOperationsInput | string | null
+    userName?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type DamagedEntryCreateManyInput = {
+    id?: string
+    warehouseId: string
+    loai: string
+    productId: string
+    productName: string
+    productSku?: string | null
+    quantity: number
+    nguon?: string | null
+    cachXuLy?: string | null
+    phiSuaChua?: number
+    productDichId?: string | null
+    giaVonMoi?: number | null
+    lyDo?: string | null
+    ghiChu?: string | null
+    branchId?: string | null
+    userId?: string | null
+    userName?: string | null
+    createdAt?: Date | string
+  }
+
+  export type DamagedEntryUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    warehouseId?: StringFieldUpdateOperationsInput | string
+    loai?: StringFieldUpdateOperationsInput | string
+    productId?: StringFieldUpdateOperationsInput | string
+    productName?: StringFieldUpdateOperationsInput | string
+    productSku?: NullableStringFieldUpdateOperationsInput | string | null
+    quantity?: IntFieldUpdateOperationsInput | number
+    nguon?: NullableStringFieldUpdateOperationsInput | string | null
+    cachXuLy?: NullableStringFieldUpdateOperationsInput | string | null
+    phiSuaChua?: FloatFieldUpdateOperationsInput | number
+    productDichId?: NullableStringFieldUpdateOperationsInput | string | null
+    giaVonMoi?: NullableFloatFieldUpdateOperationsInput | number | null
+    lyDo?: NullableStringFieldUpdateOperationsInput | string | null
+    ghiChu?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    userId?: NullableStringFieldUpdateOperationsInput | string | null
+    userName?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type DamagedEntryUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    warehouseId?: StringFieldUpdateOperationsInput | string
+    loai?: StringFieldUpdateOperationsInput | string
+    productId?: StringFieldUpdateOperationsInput | string
+    productName?: StringFieldUpdateOperationsInput | string
+    productSku?: NullableStringFieldUpdateOperationsInput | string | null
+    quantity?: IntFieldUpdateOperationsInput | number
+    nguon?: NullableStringFieldUpdateOperationsInput | string | null
+    cachXuLy?: NullableStringFieldUpdateOperationsInput | string | null
+    phiSuaChua?: FloatFieldUpdateOperationsInput | number
+    productDichId?: NullableStringFieldUpdateOperationsInput | string | null
+    giaVonMoi?: NullableFloatFieldUpdateOperationsInput | number | null
+    lyDo?: NullableStringFieldUpdateOperationsInput | string | null
+    ghiChu?: NullableStringFieldUpdateOperationsInput | string | null
+    branchId?: NullableStringFieldUpdateOperationsInput | string | null
+    userId?: NullableStringFieldUpdateOperationsInput | string | null
+    userName?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type WarehouseCreateInput = {
     id?: string
     code: string
@@ -220408,6 +222004,81 @@ export namespace Prisma {
     thueGTGT?: SortOrder
     doanhThuThuan?: SortOrder
     tncnUocTinh?: SortOrder
+  }
+
+  export type DamagedEntryCountOrderByAggregateInput = {
+    id?: SortOrder
+    warehouseId?: SortOrder
+    loai?: SortOrder
+    productId?: SortOrder
+    productName?: SortOrder
+    productSku?: SortOrder
+    quantity?: SortOrder
+    nguon?: SortOrder
+    cachXuLy?: SortOrder
+    phiSuaChua?: SortOrder
+    productDichId?: SortOrder
+    giaVonMoi?: SortOrder
+    lyDo?: SortOrder
+    ghiChu?: SortOrder
+    branchId?: SortOrder
+    userId?: SortOrder
+    userName?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type DamagedEntryAvgOrderByAggregateInput = {
+    quantity?: SortOrder
+    phiSuaChua?: SortOrder
+    giaVonMoi?: SortOrder
+  }
+
+  export type DamagedEntryMaxOrderByAggregateInput = {
+    id?: SortOrder
+    warehouseId?: SortOrder
+    loai?: SortOrder
+    productId?: SortOrder
+    productName?: SortOrder
+    productSku?: SortOrder
+    quantity?: SortOrder
+    nguon?: SortOrder
+    cachXuLy?: SortOrder
+    phiSuaChua?: SortOrder
+    productDichId?: SortOrder
+    giaVonMoi?: SortOrder
+    lyDo?: SortOrder
+    ghiChu?: SortOrder
+    branchId?: SortOrder
+    userId?: SortOrder
+    userName?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type DamagedEntryMinOrderByAggregateInput = {
+    id?: SortOrder
+    warehouseId?: SortOrder
+    loai?: SortOrder
+    productId?: SortOrder
+    productName?: SortOrder
+    productSku?: SortOrder
+    quantity?: SortOrder
+    nguon?: SortOrder
+    cachXuLy?: SortOrder
+    phiSuaChua?: SortOrder
+    productDichId?: SortOrder
+    giaVonMoi?: SortOrder
+    lyDo?: SortOrder
+    ghiChu?: SortOrder
+    branchId?: SortOrder
+    userId?: SortOrder
+    userName?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type DamagedEntrySumOrderByAggregateInput = {
+    quantity?: SortOrder
+    phiSuaChua?: SortOrder
+    giaVonMoi?: SortOrder
   }
 
   export type WarehouseStockListRelationFilter = {

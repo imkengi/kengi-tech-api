@@ -1746,6 +1746,27 @@ exports.Prisma.HKDRevenueEntryScalarFieldEnum = {
   updatedAt: 'updatedAt'
 };
 
+exports.Prisma.DamagedEntryScalarFieldEnum = {
+  id: 'id',
+  warehouseId: 'warehouseId',
+  loai: 'loai',
+  productId: 'productId',
+  productName: 'productName',
+  productSku: 'productSku',
+  quantity: 'quantity',
+  nguon: 'nguon',
+  cachXuLy: 'cachXuLy',
+  phiSuaChua: 'phiSuaChua',
+  productDichId: 'productDichId',
+  giaVonMoi: 'giaVonMoi',
+  lyDo: 'lyDo',
+  ghiChu: 'ghiChu',
+  branchId: 'branchId',
+  userId: 'userId',
+  userName: 'userName',
+  createdAt: 'createdAt'
+};
+
 exports.Prisma.WarehouseScalarFieldEnum = {
   id: 'id',
   code: 'code',
@@ -2602,6 +2623,7 @@ exports.Prisma.ModelName = {
   AdjustmentInvoice: 'AdjustmentInvoice',
   AdjustmentInvoiceItem: 'AdjustmentInvoiceItem',
   HKDRevenueEntry: 'HKDRevenueEntry',
+  DamagedEntry: 'DamagedEntry',
   Warehouse: 'Warehouse',
   WarehouseStock: 'WarehouseStock',
   StockTransfer: 'StockTransfer',
