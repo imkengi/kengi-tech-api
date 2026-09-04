@@ -119,8 +119,8 @@ router.get('/bang-dieu-khien', authMiddleware, requirePermission('online_orders.
 
             // ─── 2. Theo GIỜ trong ngày ───
             const gioHienTai = gioVN(bayGio)
-            const theoGio: Array<{ gio: number; soDon: number; doanhThu: number; homQua: number }> = []
-            for (let g = 0; g <= 23; g++) theoGio.push({ gio: g, soDon: 0, doanhThu: 0, homQua: 0 })
+            const theoGio: Array<{ gio: number; soDon: number; doanhThu: number; homQua: number; homQuaTien: number }> = []
+            for (let g = 0; g <= 23; g++) theoGio.push({ gio: g, soDon: 0, doanhThu: 0, homQua: 0, homQuaTien: 0 })
             for (const d of homNay) {
                 if (laHuy(d.status)) continue
                 const o = theoGio[gioVN(d.createdAt)]
@@ -129,7 +129,10 @@ router.get('/bang-dieu-khien', authMiddleware, requirePermission('online_orders.
             for (const d of homQua) {
                 if (laHuy(d.status)) continue
                 const o = theoGio[gioVN(d.createdAt)]
-                if (o) o.homQua++
+                /* Cần cả TIỀN của hôm qua, không chỉ số đơn: biểu đồ so hai đường
+                 * doanh số, mà đường nền lại là số đơn thì hai trục khác đơn vị —
+                 * nhìn tưởng so được, thực ra vô nghĩa. */
+                if (o) { o.homQua++; o.homQuaTien += tienCua(d) }
             }
 
             // ─── 3. Theo shop, chỉ tính đơn VỀ HÔM NAY ───
