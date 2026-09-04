@@ -199,6 +199,35 @@ router.get('/bang-dieu-khien', authMiddleware, requirePermission('online_orders.
                 console.error('[bang-dieu-khien] không đọc được nhật ký đóng gói:', e?.message || e)
             }
 
+            /* ─── Top sản phẩm bán chạy HÔM NAY (theo doanh số) ───
+             * Chỉ lấy dòng hàng của ĐƠN HÔM NAY và bỏ đơn huỷ. Gộp theo SKU nếu có,
+             * không thì theo tên — hai sàn đặt tên khác nhau cho cùng một mã, gộp
+             * theo tên không thôi là một mặt hàng bị tách làm đôi. */
+            let topSanPham: any[] = []
+            try {
+                const maDonHomNay = homNay.filter((d: any) => !laHuy(d.status)).map((d: any) => d.orderNumber)
+                if (maDonHomNay.length) {
+                    const dongHang = await prisma.onlineOrderItem.findMany({
+                        where: { onlineOrder: { orderNumber: { in: maDonHomNay } } },
+                        select: { productName: true, sku: true, quantity: true, lineTotal: true },
+                        take: 20000,
+                    })
+                    const gom = new Map<string, { ten: string; sku: string | null; soLuong: number; doanhThu: number }>()
+                    for (const it of dongHang) {
+                        const khoa = String(it.sku || '').trim() || String(it.productName || '').trim()
+                        if (!khoa) continue
+                        let o = gom.get(khoa)
+                        if (!o) { o = { ten: it.productName, sku: it.sku || null, soLuong: 0, doanhThu: 0 }; gom.set(khoa, o) }
+                        o.soLuong += Number(it.quantity) || 0
+                        o.doanhThu += Number(it.lineTotal) || 0
+                    }
+                    topSanPham = Array.from(gom.values()).sort((a, b) => b.doanhThu - a.doanhThu).slice(0, 5)
+                }
+            } catch (e: any) {
+                console.error('[bang-dieu-khien] không đọc được dòng hàng:', e?.message || e)
+                topSanPham = []
+            }
+
             let nhatKyTuNgay: string | null = null
             try {
                 const dau = await prisma.packingLog.findFirst({ orderBy: { workDate: 'asc' }, select: { workDate: true } })
@@ -228,6 +257,7 @@ router.get('/bang-dieu-khien', authMiddleware, requirePermission('online_orders.
                     theoGio,
                     dongTheoGio,
                     theoSan: Array.from(theoSan.values()).sort((a, b) => b.soDon - a.soDon),
+                    topSanPham,
                     tonDong: { choDong, choDongCu },
                     dongGoi: { daDongHomNay, nhanVien, nhatKyTuNgay },
                     shipperLayHomNay,
