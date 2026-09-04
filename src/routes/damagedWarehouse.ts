@@ -38,6 +38,11 @@ import { khoHuHong, updateWarehouseStock, adjustSellableStock } from '../lib/war
 
 const router = Router()
 
+/** Khoá gộp của lý do: chỉ chuẩn hoá HOA/thường và khoảng trắng.
+ *  KHÔNG bỏ dấu — bỏ dấu thì "vỡ" và "vô" thành cùng một chữ, gộp nhầm hai kiểu
+ *  hỏng khác hẳn nhau. Dùng chung cho cả /ton (gộp) lẫn /xuat (nới cho app cũ). */
+const chuanLyDo = (s: any) => String(s || '').trim().replace(/\s+/g, ' ').toLowerCase()
+
 const QUYEN_XEM = ['damaged_warehouse.view', 'inventory.view'] as const
 const QUYEN_SUA = ['damaged_warehouse.edit', 'damaged_warehouse.view', 'inventory.adjust'] as const
 
@@ -118,7 +123,6 @@ router.get('/ton', authMiddleware, requirePermission(...QUYEN_XEM), async (req: 
          * Gộp ở lúc ĐỌC chứ không lúc nhập: mỗi lượt nhập vẫn là một bản ghi riêng
          * nên nhật ký giữ nguyên, và những lô đã lỡ tách trước hôm nay cũng tự gom
          * lại — chứ gộp lúc nhập thì chỉ cứu được hàng nhập sau này. */
-        const chuanLyDo = (s: any) => String(s || '').trim().replace(/\s+/g, ' ').toLowerCase()
         const nhom = new Map<string, any>()
         for (const l of lo) {
             const h = chiTiet(l.productId)
@@ -340,6 +344,25 @@ router.post('/xuat', authMiddleware, requirePermission(...QUYEN_SUA), async (req
                 })
                 return
             }
+            /* APP BẢN CŨ (1.0.30) chỉ biết gửi MỘT `entryId`. Nay id đó là id đại
+             * diện của cả đống, còn số lượng gửi lên là của cả đống — nên một lô
+             * không đủ và người dùng bị chặn dù hàng vẫn còn. Nới ra đúng các lô
+             * CÙNG ĐỐNG rồi trừ cũ trước; đây chính là thứ app bản mới gửi sẵn,
+             * chỉ khác là máy chủ tự đi tìm lấy. */
+            if (dsLo.length === 1 && !Array.isArray(b.entryIds) && Math.max(0, dsLo[0].conLai ?? 0) < quantity) {
+                const g = dsLo[0]
+                const anhEm = await prisma.damagedEntry.findMany({
+                    where: {
+                        warehouseId: khoId, productId, loai: 'nhap',
+                        conLai: { gt: 0 }, nguon: g.nguon ?? null,
+                    },
+                    orderBy: { createdAt: 'asc' },
+                    take: 200,
+                })
+                const cungDong = anhEm.filter((l: any) => chuanLyDo(l.lyDo) === chuanLyDo(g.lyDo))
+                if (cungDong.length) dsLo = cungDong
+            }
+
             const con = dsLo.reduce((a: number, l: any) => a + Math.max(0, l.conLai ?? 0), 0)
             if (con < quantity) {
                 res.status(400).json({ success: false, error: `Đống này chỉ còn ${con} — không đủ ${quantity}` })
