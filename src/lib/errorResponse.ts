@@ -19,7 +19,7 @@ const isDev = (): boolean => process.env.NODE_ENV === 'development'
  * "Internal server error" trên prod, và người dùng không có cách nào biết vì sao —
  * đúng cái bẫy "lỗi của bên thứ ba bị che thành lỗi chung". Mã nào nằm ở đây là
  * mã do CHÍNH hệ thống này sinh ra để nói với người dùng, không lộ gì nội bộ. */
-const MA_CHO_NGUOI_DUNG = new Set(['PERIOD_LOCKED', 'TRUNG_SO_HOA_DON'])
+const MA_CHO_NGUOI_DUNG = new Set(['PERIOD_LOCKED', 'TRUNG_SO_HOA_DON', 'LO_KHONG_DU'])
 
 export function errMsg(err: unknown, fallback = 'Internal server error'): string {
     const ma = (err as any)?.code

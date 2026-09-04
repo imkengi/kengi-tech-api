@@ -433,6 +433,18 @@ router.post('/xuat', authMiddleware, requirePermission(...QUYEN_SUA), async (req
                 daTru.push({ id: l.id, soLuong: lay })
                 conPhaiTru -= lay
             }
+            /* Kiểm số dư đọc NGOÀI giao dịch, nên giữa lúc kiểm và lúc trừ có thể có
+             * lượt xử khác chen vào. Trừ không đủ mà vẫn cho qua là kho hư hỏng hiện
+             * nhiều hơn thực tế MÃI MÃI (lô còn conLai mà hàng đã đi) — thà đổ cả
+             * giao dịch để người dùng bấm lại. */
+            if (dsLo.length && conPhaiTru > 0) {
+                const e: any = new Error(
+                    `Lô vừa bị lượt xử khác trừ mất — chỉ gom được ${quantity - conPhaiTru}/${quantity}. Tải lại rồi làm lại.`,
+                )
+                // Không có mã này thì errMsg() che thành "Internal server error" trên prod
+                e.code = 'LO_KHONG_DU'
+                throw e
+            }
 
             /* Một lượt trừ nhiều lô thì `nguonEntryId` chỉ giữ được lô đầu — ghi thêm
              * vết vào ghi chú để sau này còn dò ngược ra đủ các lô đã bị trừ. */
