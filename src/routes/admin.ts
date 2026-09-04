@@ -4185,6 +4185,46 @@ router.get('/do-gia-von', async (req: Request, res: Response) => {
     }
 })
 
+/* ─── AI ĐANG ĐƯỢC TÍNH LÀ "SHIPPER ĐÃ LẤY" — GET /admin/shipper-hom-nay (04/09/2026)
+ *  Chỉ đọc. Chủ shop: "shipper chưa lấy mà sao có 2 rồi".
+ *  Trả về ĐÍCH DANH từng đơn kèm nguồn của mốc thời gian, để đối chiếu tay với sàn
+ *  thay vì tranh luận trên một con số tổng. */
+router.get('/shipper-hom-nay', async (req: Request, res: Response) => {
+    try {
+        const code = String(req.query.store || '').trim()
+        if (!code) { res.status(400).json({ success: false, error: 'Thiếu ?store=' }); return }
+        const store = await prisma.store.findFirst({ where: { code } })
+        if (!store) { res.status(404).json({ success: false, error: 'Không thấy cửa hàng' }); return }
+        const sp: any = getStorePrisma((store as any).schema)
+
+        const vnNow = new Date(Date.now() + 7 * 3600_000)
+        const dauNgayVN = new Date(Date.UTC(vnNow.getUTCFullYear(), vnNow.getUTCMonth(), vnNow.getUTCDate()) - 7 * 3600_000)
+
+        const ds = await sp.onlineOrder.findMany({
+            where: { shippedAt: { gte: dauNgayVN } },
+            select: {
+                orderNumber: true, platform: true, channelName: true, status: true,
+                externalStatus: true, trackingNumber: true, shippingCarrier: true,
+                shippedAt: true, deliveredAt: true, createdAt: true, syncedAt: true, total: true,
+            },
+            orderBy: { shippedAt: 'desc' },
+            take: 50,
+        })
+        res.json({
+            success: true,
+            data: {
+                tuLuc: dauNgayVN.toISOString(),
+                so: ds.length,
+                ghiChu: 'shippedAt lấy từ: Shopee pickup_done_time · TikTok collection_time · Lazada shipped_at',
+                donHang: ds,
+            },
+        })
+    } catch (err: any) {
+        console.error('GET /admin/shipper-hom-nay lỗi:', err)
+        res.status(500).json({ success: false, error: String(err?.message || err) })
+    }
+})
+
 router.get('/store-health', async (req: Request, res: Response) => {
     try {
         const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
