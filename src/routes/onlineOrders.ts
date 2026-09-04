@@ -480,7 +480,11 @@ function dungWhereDon(q: any): { where: any; layHomNay: boolean } {
     return { where, layHomNay }
 }
 
-router.get('/', authMiddleware, requirePermission('online_orders.view', 'orders.view'), async (req: AuthRequest, res: Response) => {
+/* `packing.view` mở ĐÚNG đường này để nhân viên đóng gói quét mã tra đơn.
+ * CỐ Ý không mở /stats, /stats/analytics, /channels — người đóng gói cần biết đơn
+ * này gồm những gì, không cần thấy doanh thu và cấu hình kênh. Quyền hẹp hơn thì
+ * cấp cũng dễ hơn: chủ shop không phải đắn đo giữa "cho xem hết" và "không cho". */
+router.get('/', authMiddleware, requirePermission('packing.view', 'online_orders.view', 'orders.view'), async (req: AuthRequest, res: Response) => {
     try {
         const prisma = req.storePrisma!
         const {

@@ -33,7 +33,7 @@ function ngayLamViec(d: Date): Date {
 }
 
 // ─── POST / — ghi một đơn vừa đóng xong ──────────────────────────────────────
-router.post('/', authMiddleware, requirePermission('online_orders.view', 'orders.view'),
+router.post('/', authMiddleware, requirePermission('packing.view', 'online_orders.view', 'orders.view'),
     async (req: AuthRequest, res: Response) => {
         try {
             const prisma: any = req.storePrisma!
@@ -106,7 +106,7 @@ router.post('/', authMiddleware, requirePermission('online_orders.view', 'orders
     })
 
 // ─── GET /thong-ke — đếm theo nhân viên, theo ngày ───────────────────────────
-router.get('/thong-ke', authMiddleware, requirePermission('online_orders.view', 'orders.view'),
+router.get('/thong-ke', authMiddleware, requirePermission('packing.view', 'online_orders.view', 'orders.view'),
     async (req: AuthRequest, res: Response) => {
         try {
             const prisma: any = req.storePrisma!

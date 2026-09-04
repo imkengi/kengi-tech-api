@@ -28,7 +28,7 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
         // Map bổ sung 04/08/2026 — các module có menu/route từ trước nhưng CHƯA
         // vào ma trận: manager từng bị khoá cả mảng bán hàng online (trong khi
         // driver lại có online_orders.view), thuế, lương, xe, giám sát sales.
-        'online_orders', 'online_products', 'online_chat',
+        'online_orders', 'online_products', 'online_chat', 'packing',
         'tax', 'payroll', 'vehicles', 'employees_sales',
         'mailbox',
     ],
@@ -55,6 +55,9 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
         // 04/08/2026: nhân viên bán hàng phải xem được giá niêm yết, khuyến mãi,
         // combo đang chạy — không thì tư vấn khách bằng trí nhớ.
         'price_list.view', 'promotions.view', 'bundles.view',
+        // 04/09/2026: quay video đóng hàng là việc của nhân viên bán/kho, và quyền
+        // này KHÔNG kéo theo màn đơn hàng online (doanh thu, cấu hình kênh).
+        'packing.view',
     ],
     warranty: [
         'dashboard.view',
