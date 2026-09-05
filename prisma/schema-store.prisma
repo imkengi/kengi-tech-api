@@ -2963,6 +2963,183 @@ model FbContentDraft {
 // Trước đây các mảng này chỉ nằm ở localStorage trình duyệt nên mỗi máy một dữ
 // liệu. Đưa lên DB để cả đội dùng chung.
 
+// ─────────────────────────────────────────────────────────────────────────────
+// MARKETING STUDIO — đăng nội dung ra NHIỀU nền tảng (05/09/2026)
+//
+// Thay cho bộ Fb* chỉ-Facebook ở trên: FbPage→MktAccount, FbContentPlan→MktCampaign,
+// FbContentDraft→MktContent, FbScheduledPost→MktPublication.
+//
+// Khác biệt đáng giá nhất KHÔNG phải là thêm nền tảng, mà là bộ máy đăng an toàn:
+// khoá idempotent, giành việc nguyên tử, và "ghi mơ hồ thì KHÔNG BAO GIỜ tự thử
+// lại". Bộ Fb* cũ không có gì trong ba thứ đó — nghĩa là một lần timeout giữa
+// chừng có thể đăng trùng lên trang khách hàng mà không ai biết.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model MktAccount {
+  id         String @id @default(cuid())
+  platform   String // facebook | instagram | tiktok | youtube
+  externalId String // id trang/kênh phía nền tảng
+  name       String @default("")
+  avatar     String?
+  category   String?
+  followers  Int? // null = CHƯA ĐỌC ĐƯỢC, khác hẳn 0 = không có ai theo dõi
+
+  // ⛔ MÃ HOÁ AES-256-GCM, chuỗi "iv.tag.body" base64 — KHÔNG lưu thô.
+  // FbPage.accessToken ở trên đang lưu THÔ; đó là thứ bản này sửa.
+  // Khoá giải nằm ở env MARKETING_VAULT_KEY (Secret Manager), KHÔNG phải file:
+  // đĩa Cloud Run là tạm, restart là mất khoá và mọi token thành rác không giải được.
+  accessToken    String
+  tokenExpiresAt DateTime?
+
+  status      String    @default("active") // active | disconnected | token_expired
+  lastSyncAt  DateTime?
+  connectedBy String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  publications MktPublication[]
+  metrics      MktMetric[]
+
+  @@unique([platform, externalId])
+  @@index([status])
+}
+
+model MktCampaign {
+  id       String  @id @default(cuid())
+  name     String
+  goal     String  @default("")
+  // paused = GIỮ cả hàng đợi: publication của chiến dịch tạm dừng không được gửi.
+  status   String  @default("active") // active | paused | done
+  startAt  DateTime?
+  endAt    DateTime?
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contents MktContent[]
+
+  @@index([status])
+}
+
+model MktContent {
+  id         String  @id @default(cuid())
+  campaignId String?
+  title      String  @default("")
+  body       String  @default("")
+  hashtags   String  @default("[]") // JSON array
+  linkUrl    String?
+  assetIds   String  @default("[]") // JSON array MktAsset.id
+  productIds String  @default("[]") // JSON array Product.id — truy vết bài nào đẩy hàng nào
+
+  // Khoá lạc quan: SỬA NỘI DUNG LÀ MẤT DUYỆT. Mỗi lần sửa tăng revision, và
+  // approvedRevision phải bằng revision hiện tại thì mới được gửi. Thiếu cơ chế
+  // này thì người ta duyệt một bài, sửa lại nội dung, rồi bài khác hẳn được đăng.
+  revision         Int       @default(1)
+  approvedRevision Int? // null = chưa duyệt lần nào
+  approvedAt       DateTime?
+  approvedBy       String?
+  rejectReason     String?
+
+  status    String   @default("draft") // draft | pending | approved | scheduled | done | rejected
+  source    String   @default("manual") // manual | ai
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  campaign     MktCampaign?     @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  publications MktPublication[]
+
+  @@index([status])
+  @@index([campaignId])
+}
+
+model MktPublication {
+  id        String @id @default(cuid())
+  contentId String
+  accountId String
+
+  // Một dòng cho MỖI (nội dung × kênh) — kênh này hỏng không kéo kênh kia hỏng theo.
+  // `idempotencyKey` = contentId|accountId|revision. Gọi gửi hai lần vẫn MỘT bài.
+  idempotencyKey String @unique
+
+  scheduledAt DateTime
+
+  // queued     — chờ tới giờ
+  // processing — worker đang giữ (xem leaseUntil)
+  // sent       — chắc chắn đã lên, có remotePostId
+  // failed     — chắc chắn KHÔNG lên, an toàn để thử lại
+  // uncertain  — ⛔ GỬI ĐI RỒI MÀ KHÔNG BIẾT KẾT QUẢ (timeout/đứt mạng giữa chừng).
+  //              TUYỆT ĐỐI KHÔNG tự thử lại: thử lại là đăng trùng lên trang khách
+  //              hàng. Phải người vào xem rồi quyết.
+  // cancelled  — người huỷ trước khi gửi
+  status String @default("queued")
+
+  // Giành việc nguyên tử: UPDATE ... WHERE id=? AND status='queued' rồi ĐẾM SỐ DÒNG
+  // ĐỔI. 0 dòng = đứa khác giành mất. Worker chết thì leaseUntil hết hạn, đứa sau nhặt lại.
+  leaseUntil DateTime?
+  workerId   String?
+
+  // Checkpoint: id phiên upload/container phía nền tảng. Resume phải DÙNG LẠI cái
+  // này, không thì mỗi lần thử lại đẻ thêm một container nữa trên nền tảng.
+  remoteRef String?
+  // Id bài công khai sau khi đăng — KHÁC remoteRef. TikTok trả publish_id lúc gửi
+  // và post_id công khai mãi về sau; lẫn hai cái là link tới bài không tồn tại.
+  remotePostId String?
+
+  attempts     Int       @default(0)
+  errorMessage String?
+  errorCode    String? // 429 | 401 | TIMEOUT | ... — phân loại để biết có được thử lại không
+  sentAt       DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  content MktContent @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  account MktAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([status, scheduledAt])
+  @@index([contentId])
+  @@index([accountId])
+}
+
+model MktAsset {
+  id        String @id @default(cuid())
+  // Tên file trên đĩa = id + đuôi từ DANH SÁCH TRẮNG (jpg/png/mp4). Không bao giờ
+  // ghép tên người dùng nhập vào đường dẫn.
+  localFile String
+  mime      String
+  bytes     Int
+  width     Int?
+  height    Int?
+  durationS Float?
+  createdBy String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model MktMetric {
+  id        String @id @default(cuid())
+  accountId String
+  // publicationId để trống = số liệu mức KÊNH; có = số liệu của MỘT bài.
+  publicationId String?
+  snapshotAt    DateTime @default(now())
+
+  // ⛔ TẤT CẢ ĐỀU NULLABLE, KHÔNG @default(0). Nền tảng không trả số nào thì phải
+  // để NULL. Ghi 0 là biến "chưa đọc được" thành "bằng không" — đúng cái bẫy đã
+  // làm báo cáo doanh thu hiện 0đ khi đọc hỏng.
+  views    Int?
+  likes    Int?
+  comments Int?
+  shares   Int?
+  reach    Int?
+  clicks   Int?
+
+  account MktAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, snapshotAt])
+  @@index([publicationId])
+}
+
 model CrmTask {
   id           String    @id @default(cuid())
   title        String

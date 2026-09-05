@@ -5,6 +5,7 @@ import { errMsg } from '../lib/errorResponse'
 import { registryPrisma, getStorePrisma, dropStoreSchema, mapWithConcurrency, syncBranchSchemaTables, dangGiuClient, traClient } from '../lib/prisma'
 import { chayTheoDot } from '../lib/poolGuard'
 import { khoHuHong } from '../lib/warehouseHelper'
+import { maHoa, coKhoaVault } from '../lib/maHoaKhoa'
 import { invalidateStoreStatus } from '../lib/storeStatusCache'
 
 const router = Router()
@@ -4507,6 +4508,220 @@ router.get('/do-app-fb', async (_req: Request, res: Response) => {
  *
  *  Chạy TUẦN TỰ từng cửa hàng: pool prod mỗi cửa hàng đúng 1 kết nối.
  * ───────────────────────────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────────────────────
+ *  CHUYỂN DỮ LIỆU Fb* → Mkt*  —  POST /admin/chuyen-marketing   (05/09/2026)
+ *
+ *  ⚠ MẶC ĐỊNH CHẠY THỬ. Chỉ đếm và trả mẫu; muốn ghi thật phải gửi {"apply":true}.
+ *
+ *  Bản đồ:
+ *    FbPage         → MktAccount   (platform='facebook', token được MÃ HOÁ lại)
+ *    FbContentPlan  → MktCampaign
+ *    FbContentDraft → MktContent
+ *    FbScheduledPost→ MktPublication (+ MktContent riêng nếu bài không có bản nháp)
+ *
+ *  CHỐNG TRÙNG: giữ NGUYÊN id cũ làm id mới. Chạy lại lần hai phải ra "bỏ qua —
+ *  đã có", tuyệt đối không đẻ thêm bản ghi. (MktAccount dùng khoá tự nhiên
+ *  platform+externalId vì id cũ là pageId của Facebook chứ không phải cuid.)
+ *
+ *  Chạy TUẦN TỰ từng cửa hàng — pool prod mỗi cửa hàng đúng 1 kết nối.
+ * ───────────────────────────────────────────────────────────────────────────── */
+router.post('/chuyen-marketing', async (req: Request, res: Response) => {
+    try {
+        const ghiThat = req.body?.apply === true
+
+        /* Không có khoá vault thì KHÔNG chuyển được token — dừng ngay, đừng ghi
+         * một nửa. Chạy thử vẫn cho phép để chủ shop xem trước sẽ chuyển những gì. */
+        const coKhoa = coKhoaVault()
+        if (ghiThat && !coKhoa) {
+            res.status(400).json({
+                success: false,
+                error: 'Thiếu MARKETING_VAULT_KEY nên không mã hoá được token. ' +
+                    'Khai secret rồi deploy lại; chạy thử (bỏ apply) thì vẫn xem trước được.',
+            })
+            return
+        }
+
+        const stores = await registryPrisma.store.findMany({
+            where: { status: 'active' },
+            select: { code: true, name: true, schema: true },
+            orderBy: { code: 'asc' },
+        })
+
+        const chiTiet: any[] = []
+        let tongChuyen = 0, tongBoQua = 0, tongDocHong = 0
+
+        for (const st of stores) {
+            const d: any = { cuaHang: st.code, ten: st.name }
+            try {
+                const sp: any = getStorePrisma(st.schema)
+
+                const [pages, plans, drafts, posts] = [
+                    await sp.fbPage.findMany(),
+                    await sp.fbContentPlan.findMany(),
+                    await sp.fbContentDraft.findMany(),
+                    await sp.fbScheduledPost.findMany(),
+                ]
+                d.nguon = { page: pages.length, chienDich: plans.length, noiDung: drafts.length, baiHen: posts.length }
+
+                if (!pages.length && !plans.length && !drafts.length && !posts.length) {
+                    d.ketLuan = 'Không có gì để chuyển.'
+                    chiTiet.push(d)
+                    continue
+                }
+
+                let chuyen = 0, boQua = 0
+                const mauBoQua: string[] = []
+                /* pageId (Facebook) → MktAccount.id (cuid) — publication cần id nội bộ. */
+                const banDoTaiKhoan = new Map<string, string>()
+
+                // ── 1. FbPage → MktAccount ────────────────────────────────────
+                for (const p of pages) {
+                    const daCo = await sp.mktAccount.findUnique({
+                        where: { platform_externalId: { platform: 'facebook', externalId: p.pageId } },
+                    })
+                    if (daCo) {
+                        banDoTaiKhoan.set(p.pageId, daCo.id); boQua++
+                        mauBoQua.push(`page ${p.pageId}: đã có`)
+                        continue
+                    }
+                    if (!ghiThat) { chuyen++; banDoTaiKhoan.set(p.pageId, 'CHAY-THU'); continue }
+                    const moi = await sp.mktAccount.create({
+                        data: {
+                            platform: 'facebook', externalId: p.pageId, name: p.name || '',
+                            avatar: p.avatar ?? null, category: p.category ?? null,
+                            followers: typeof p.fanCount === 'number' ? p.fanCount : null,
+                            accessToken: maHoa(p.accessToken),   // ← thô → mã hoá
+                            tokenExpiresAt: p.tokenExpiresAt ?? null,
+                            status: p.status || 'active', connectedBy: p.connectedBy ?? null,
+                        },
+                    })
+                    banDoTaiKhoan.set(p.pageId, moi.id); chuyen++
+                }
+
+                // ── 2. FbContentPlan → MktCampaign (giữ nguyên id) ────────────
+                for (const pl of plans) {
+                    if (await sp.mktCampaign.findUnique({ where: { id: pl.id } })) {
+                        boQua++; mauBoQua.push(`chiến dịch ${pl.id}: đã có`); continue
+                    }
+                    if (!ghiThat) { chuyen++; continue }
+                    await sp.mktCampaign.create({
+                        data: {
+                            id: pl.id, name: pl.title, goal: pl.goal || '',
+                            status: pl.status === 'cancelled' ? 'paused' : (pl.status === 'done' ? 'done' : 'active'),
+                            startAt: pl.fromDate, endAt: pl.toDate, createdBy: pl.createdBy ?? null,
+                        },
+                    })
+                    chuyen++
+                }
+
+                // ── 3. FbContentDraft → MktContent (giữ nguyên id) ────────────
+                const draftTheoPost = new Map<string, any>()
+                for (const dr of drafts) {
+                    if (dr.scheduledPostId) draftTheoPost.set(dr.scheduledPostId, dr)
+                    if (await sp.mktContent.findUnique({ where: { id: dr.id } })) {
+                        boQua++; mauBoQua.push(`nội dung ${dr.id}: đã có`); continue
+                    }
+                    if (!ghiThat) { chuyen++; continue }
+                    /* Bài ĐÃ lên lịch/đã đăng nghĩa là chủ shop từng duyệt → coi
+                     * revision 1 là đã duyệt. Bài `pending` thì KHÔNG được tự duyệt hộ. */
+                    const daDuyet = ['scheduled', 'published'].includes(dr.status)
+                    await sp.mktContent.create({
+                        data: {
+                            id: dr.id, campaignId: dr.planId ?? null,
+                            title: dr.title || '', body: dr.message || '',
+                            hashtags: dr.hashtags || '[]', linkUrl: dr.linkUrl ?? null,
+                            assetIds: '[]', productIds: dr.productIds || '[]',
+                            revision: 1, approvedRevision: daDuyet ? 1 : null,
+                            approvedAt: daDuyet ? dr.updatedAt : null,
+                            rejectReason: dr.rejectReason ?? null,
+                            status: dr.status === 'published' ? 'done'
+                                : dr.status === 'scheduled' ? 'scheduled'
+                                    : dr.status === 'rejected' ? 'rejected' : 'pending',
+                            source: dr.source || 'ai', createdBy: dr.createdBy ?? null,
+                        },
+                    })
+                    chuyen++
+                }
+
+                // ── 4. FbScheduledPost → MktPublication ───────────────────────
+                for (const po of posts) {
+                    if (await sp.mktPublication.findUnique({ where: { id: po.id } })) {
+                        boQua++; mauBoQua.push(`bài hẹn ${po.id}: đã có`); continue
+                    }
+                    const accId = banDoTaiKhoan.get(po.pageId)
+                    if (!accId) {
+                        /* Bài hẹn trỏ tới page KHÔNG còn trong FbPage — không dựng
+                         * được tài khoản đích. Nói rõ lý do thay vì im lặng bỏ. */
+                        boQua++; mauBoQua.push(`bài hẹn ${po.id}: page ${po.pageId} không còn trong FbPage`)
+                        continue
+                    }
+                    if (!ghiThat) { chuyen++; continue }
+
+                    /* Bài hẹn không có bản nháp nào trỏ tới → dựng một MktContent
+                     * riêng, nếu không thì mất hẳn nội dung bài. */
+                    let contentId = draftTheoPost.get(po.id)?.id
+                    if (!contentId) {
+                        const c = await sp.mktContent.create({
+                            data: {
+                                title: '', body: po.message || '', linkUrl: po.linkUrl ?? null,
+                                revision: 1, approvedRevision: 1, approvedAt: po.createdAt,
+                                status: po.status === 'published' ? 'done' : 'scheduled',
+                                source: 'manual', createdBy: po.createdBy ?? null,
+                            },
+                        })
+                        contentId = c.id
+                    }
+                    await sp.mktPublication.create({
+                        data: {
+                            id: po.id, contentId, accountId: accId,
+                            idempotencyKey: `${contentId}|${accId}|1`,
+                            scheduledAt: po.scheduledAt,
+                            status: po.status === 'published' ? 'sent'
+                                : po.status === 'failed' ? 'failed'
+                                    : po.status === 'cancelled' ? 'cancelled' : 'queued',
+                            remotePostId: po.fbPostId ?? null,
+                            errorMessage: po.errorMessage ?? null,
+                            sentAt: po.publishedAt ?? null,
+                        },
+                    })
+                    chuyen++
+                }
+
+                d.seChuyen = chuyen
+                d.boQua = boQua
+                if (mauBoQua.length) d.viDuBoQua = mauBoQua.slice(0, 5)
+                tongChuyen += chuyen; tongBoQua += boQua
+            } catch (e: any) {
+                /* Đọc hỏng KHÁC "không có gì" — ghi riêng, đừng để lẫn vào số 0. */
+                d.docDuoc = false
+                d.loi = String(e?.message || e).slice(0, 200)
+                tongDocHong++
+            }
+            chiTiet.push(d)
+        }
+
+        res.json({
+            success: true,
+            data: {
+                cheDo: ghiThat ? 'GHI THẬT' : 'CHẠY THỬ (gửi {"apply":true} để ghi)',
+                coKhoaVault: coKhoa,
+                soCuaHang: stores.length,
+                soCuaHangDocHong: tongDocHong,
+                tongSeChuyen: tongChuyen,
+                tongBoQua: tongBoQua,
+                chiTiet,
+                ketLuan: tongDocHong > 0
+                    ? `⚠ ${tongDocHong} cửa hàng ĐỌC HỎNG — số liệu dưới đây THIẾU, đừng coi là "không có gì".`
+                    : tongChuyen === 0
+                        ? 'Không có bản ghi nào cần chuyển (đã chuyển xong, hoặc chưa từng có dữ liệu Fb*).'
+                        : `${ghiThat ? 'Đã chuyển' : 'Sẽ chuyển'} ${tongChuyen} bản ghi.`,
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err) })
+    }
+})
+
 router.get('/do-fanpage', async (req: Request, res: Response) => {
     try {
         const thuToken = String(req.query.thu ?? '1') !== '0'

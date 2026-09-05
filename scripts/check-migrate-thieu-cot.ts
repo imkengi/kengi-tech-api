@@ -98,15 +98,50 @@ if (moi.length === 0) {
     process.exit(0)
 }
 
-const thieu = moi.filter(c => !coAlter.has(c) && !bangMoiTao.has(c.split('.')[0]!))
+/* BẢNG MỚI HOÀN TOÀN đi đường KHÁC: `prisma db push` qua POST /admin/sync-schemas,
+ * không phải danh sách ALTER viết tay. Dán ALTER cho chúng là SAI THẬT — `ALTER
+ * TABLE "X" ADD COLUMN` trên bảng chưa tồn tại thì lỗi, và bộ chặn này từng bảo
+ * người ta làm đúng như thế (thêm 6 bảng Mkt* ngày 05/09/2026 sinh ra 60+ dòng
+ * ALTER vô nghĩa).
+ *
+ * Nhận diện: model có mặt trong schema MỚI mà KHÔNG có cột nào trong schema CŨ.
+ *
+ * ⚠ Miễn ALTER nhưng KHÔNG được im: quên chạy /admin/sync-schemas thì bảng không
+ * tồn tại trên prod và mọi truy vấn tới nó sẽ hỏng — cùng hạng hậu quả với việc
+ * quên ALTER. Nên vẫn in một khối nhắc riêng, thật to. */
+const bangCu = new Set([...cu].map(c => c.split('.')[0]!))
+const bangMoiHoanToan = new Set(
+    [...new Set(moi.map(c => c.split('.')[0]!))].filter(b => !bangCu.has(b))
+)
+
+const duocMien = (c: string) => {
+    const b = c.split('.')[0]!
+    return coAlter.has(c) || bangMoiTao.has(b) || bangMoiHoanToan.has(b)
+}
+const thieu = moi.filter(c => !duocMien(c))
 for (const c of moi) {
-    const ok = coAlter.has(c) || bangMoiTao.has(c.split('.')[0]!)
-    console.log(`   ${ok ? '✓' : '⛔'} ${c}${bangMoiTao.has(c.split('.')[0]!) && !coAlter.has(c) ? '  (bảng có CREATE TABLE — ok)' : ''}`)
+    const b = c.split('.')[0]!
+    if (bangMoiHoanToan.has(b)) continue     // liệt kê gọn ở khối riêng bên dưới
+    const ok = duocMien(c)
+    console.log(`   ${ok ? '✓' : '⛔'} ${c}${bangMoiTao.has(b) && !coAlter.has(c) ? '  (bảng có CREATE TABLE — ok)' : ''}`)
+}
+
+if (bangMoiHoanToan.size) {
+    console.log('')
+    console.log(`   ⚠ ${bangMoiHoanToan.size} BẢNG MỚI HOÀN TOÀN — KHÔNG cần ALTER, nhưng PHẢI tạo bảng:`)
+    for (const b of [...bangMoiHoanToan].sort()) {
+        const soCot = moi.filter(c => c.startsWith(`${b}.`)).length
+        console.log(`        ${b}  (${soCot} cột)`)
+    }
+    console.log('')
+    console.log('     Sau khi deploy, chạy:  POST /api/admin/sync-schemas  -H "x-admin-key: ..." -d \'{}\'')
+    console.log('     Bỏ bước này thì bảng KHÔNG tồn tại trên prod và mọi truy vấn tới nó đều hỏng.')
+    console.log('     Kiểm chứng bằng NỘI DUNG (gọi một đường có đụng bảng), đừng tin mã HTTP 200.')
 }
 console.log('')
 
 if (thieu.length === 0) {
-    console.log('   ✓ Mọi cột mới đều đã có dòng ALTER.')
+    console.log('   ✓ Mọi cột mới đều đã có dòng ALTER (hoặc thuộc bảng mới hoàn toàn).')
     process.exit(0)
 }
 
