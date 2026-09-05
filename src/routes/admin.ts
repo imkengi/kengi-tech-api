@@ -4360,9 +4360,13 @@ router.get('/do-dong-goi', async (req: Request, res: Response) => {
  *  (khoá Gemini ~39 ký tự) mà không lộ được ký tự nào. */
 router.get('/do-tro-ly', async (_req: Request, res: Response) => {
     try {
+        /* Cột là `status` ('active'|'inactive'|'suspended'), KHÔNG phải `isActive`,
+         * và Store không có `isDemo` (cờ demo được đánh bằng SQL thô ngoài schema).
+         * Prisma của registry có kiểu đầy đủ nên nó bắt được ngay — khác hẳn
+         * storePrisma dùng `as any`, chỗ đó cột sai chỉ ra undefined lặng lẽ. */
         const stores = await prisma.store.findMany({
-            where: { isActive: true } as any,
-            select: { code: true, name: true, schema: true, isDemo: true } as any,
+            where: { status: 'active' },
+            select: { code: true, name: true, schema: true, hasAiJobs: true },
             orderBy: { code: 'asc' },
         })
         const ra: any[] = []
@@ -4383,7 +4387,7 @@ router.get('/do-tro-ly', async (_req: Request, res: Response) => {
                 coKhoa = null
             }
             ra.push({
-                cuaHang: st.code, ten: st.name, demo: !!st.isDemo,
+                cuaHang: st.code, ten: st.name, coTacVuTuDong: !!st.hasAiJobs,
                 daCauHinhTroLy: coKhoa,
                 doDaiKhoa: doDai,       // chỉ độ dài, không có ký tự nào
                 ghiChu: coKhoa === null ? 'KHÔNG ĐỌC ĐƯỢC (khác với chưa cấu hình)'
