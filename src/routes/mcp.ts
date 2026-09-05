@@ -5,6 +5,7 @@ import { decrementSellableStock, adjustSellableStock } from '../lib/warehouseHel
 import { createJournalEntriesForTransaction, postDebtCollectionJournal } from '../lib/autoJournal'
 import { Tool, ToolCtx, ToolError, canhBaoCat } from '../lib/mcpTypes'
 import { FANPAGE_TOOLS } from './mcpFanpageTools'
+import { MKT_TOOLS } from './mcpMktTools'
 import { FINANCE_TOOLS } from './mcpFinanceTools'
 import { MARKETING_TOOLS } from './mcpMarketingTools'
 import { REPORT_TOOLS } from './mcpReportTools'
@@ -952,6 +953,7 @@ export const TOOLS: Tool[] = [
     // Fanpage Manager (Facebook) — cùng dữ liệu với kengi.vn/fanpage-manager.
     // Tách file riêng vì bộ tool này dài và gắn với Graph API, không phải bán lẻ.
     ...FANPAGE_TOOLS,
+    ...MKT_TOOLS,
     // Tài chính & mua hàng — lãi lỗ, chi phí, công nợ NCC, nhập hàng, tồn theo kho
     ...FINANCE_TOOLS,
     // AI marketing — lên kế hoạch nội dung, soạn bài vào hàng đợi CHỜ DUYỆT.

@@ -143,7 +143,7 @@ steps:
       # JWT_SECRET + ADMIN_KEY + SMTP ⇒ đăng nhập hỏng, phải rollback traffic.)
       - '--set-secrets'
       - >-
-        SMTP_USER=open-retail-smtp-user:latest,SMTP_PASS=open-retail-smtp-pass:latest,JWT_SECRET=open-retail-jwt-secret:latest,ADMIN_KEY=open-retail-admin-key:latest,GOOGLE_OAUTH_CLIENT_SECRET=google-oauth-client-secret:latest
+        SMTP_USER=open-retail-smtp-user:latest,SMTP_PASS=open-retail-smtp-pass:latest,JWT_SECRET=open-retail-jwt-secret:latest,ADMIN_KEY=open-retail-admin-key:latest,GOOGLE_OAUTH_CLIENT_SECRET=google-oauth-client-secret:latest,MARKETING_VAULT_KEY=marketing-vault-key:latest
 
   # Step 4: Force 100% traffic onto the just-deployed revision.
   # When the service's traffic has ever been pinned to a *named* revision (rather

@@ -21,6 +21,10 @@ const GEMINI_URL = (m: string) => `https://generativelanguage.googleapis.com/v1b
  * cũng không thể tự lên đơn hay đăng bài lên fanpage.
  */
 export const TOOL_NHAY_CAM = new Set([
+    // Marketing Studio 05/09/2026: soan bai va len lich deu la thao tac
+    // co the dan toi noi dung xuat hien tren trang khach hang.
+    'mkt_soan_noi_dung',
+    'mkt_len_lich_dang',
     'create_sale',
     'record_debt_payment',
     'fanpage_create_post',

@@ -88,6 +88,7 @@ import taxAuditRoutes from './routes/taxAudit'
 import strategyRoutes from './routes/strategy'
 import aiReportRoutes from './routes/aiReports'
 import fanpageRoutes from './routes/fanpage'
+import mktStudioRoutes from './routes/mktStudio'
 import aiJobRoutes from './routes/aiJobs'
 import { cacheDisconnect, cacheHealth } from './lib/cache'
 import { startAutoSync, stopAutoSync, choAutoSyncXong } from './cron/autoSync'
@@ -364,6 +365,7 @@ app.use('/api/storage', storageRoutes)
 import chatRoutes from './routes/chat'
 app.use('/api/online-orders/chat', chatRoutes)
 app.use('/api/fanpage', fanpageRoutes)
+app.use('/api/mkt', mktStudioRoutes)   // Marketing Studio (da nen tang)
 app.use('/api/ai-jobs', aiJobRoutes) // Tro ly AI tu dong theo lich
 
 // Content AI (hàng đợi bài chờ duyệt). Từng bị ngắt 04/08/2026 vì file route

@@ -188,6 +188,18 @@ router.put('/brand', authMiddleware, requireRole(...QUAN_LY), async (req: AuthRe
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  KẾ HOẠCH NỘI DUNG
+//
+//  ⚠ ĐANG THAY THẾ (05/09/2026) — luồng nội dung dưới đây (FbContentPlan /
+//  FbContentDraft / FbScheduledPost) chỉ chạy được với Facebook và KHÔNG có khoá
+//  idempotent, không giành việc nguyên tử, không xử lý "ghi mơ hồ". Bản thay thế
+//  là `/api/mkt/*` (bảng Mkt*), chạy được 4 nền tảng và có đủ ba thứ đó.
+//
+//  CHƯA XOÁ, và cố ý chưa xoá: giao diện fanpage-manager hiện tại còn gọi các
+//  đường này. Đo 05/09/2026: bảng Fb* RỖNG ở cả 11 cửa hàng (POST
+//  /admin/chuyen-marketing chạy thử ra 0 bản ghi), nên không có dữ liệu nào mắc
+//  kẹt ở đây — xoá được ngay khi giao diện mới lên thay.
+//
+//  ⛔ ĐỪNG THÊM TÍNH NĂNG MỚI VÀO ĐÂY. Thêm vào `/api/mkt/*`.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // GET /api/marketing/plans?pageId=
