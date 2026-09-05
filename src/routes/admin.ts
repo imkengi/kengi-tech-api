@@ -4412,6 +4412,81 @@ router.get('/do-tro-ly', async (_req: Request, res: Response) => {
     }
 })
 
+/* ─── APP FACEBOOK CẤU HÌNH ĐÚNG CHƯA — GET /admin/do-app-fb (05/09/2026)
+ *  CHỈ ĐỌC. KHÔNG in App Secret ra, kể cả một phần.
+ *
+ *  Vì sao cần: nút "Đăng nhập bằng Facebook" ở Fanpage Manager hỏng thì Facebook
+ *  chỉ hiện một hộp thoại cụt ngủn, không nói vì sao. Ba nguyên nhân hay gặp đều
+ *  KIỂM ĐƯỢC TỪ MÁY CHỦ, không cần ai bấm gì:
+ *    1. App ID / App Secret không khớp nhau → xin app token là hỏng ngay
+ *    2. Miền kengi.vn chưa khai trong App Domains → FB.login bị chặn im lặng
+ *    3. App đang ở chế độ phát triển → chỉ tài khoản có vai trò trong app đăng
+ *       nhập được, người ngoài bấm là lỗi
+ *
+ *  Hỏi thẳng Graph API bằng chính app token của app đó — không đụng tài khoản
+ *  Facebook của ai. */
+router.get('/do-app-fb', async (_req: Request, res: Response) => {
+    const APP_ID = process.env.FB_APP_ID || ''
+    const APP_SECRET = process.env.FB_APP_SECRET || ''
+    const ra: any = {
+        coAppId: !!APP_ID,
+        coAppSecret: !!APP_SECRET,
+        appId: APP_ID || null,          // App ID KHÔNG phải bí mật, hiện được
+        doDaiSecret: APP_SECRET.length, // chỉ độ dài, không ký tự nào
+    }
+    if (!APP_ID || !APP_SECRET) {
+        ra.ketLuan = 'Máy chủ THIẾU FB_APP_ID hoặc FB_APP_SECRET → nút đăng nhập Facebook không thể chạy.'
+        res.json({ success: true, data: ra })
+        return
+    }
+    try {
+        const tok = `${APP_ID}|${APP_SECRET}`
+        const url = `https://graph.facebook.com/v21.0/${APP_ID}` +
+            `?fields=name,link,app_domains,privacy_policy_url,category` +
+            `&access_token=${encodeURIComponent(tok)}`
+        const r = await fetch(url)
+        const j: any = await r.json()
+
+        if (j?.error) {
+            /* Lỗi ở BƯỚC NÀY gần như luôn là cặp ID/Secret không khớp — nói thẳng
+             * thay vì trả nguyên văn lỗi Graph API cho người không đọc được nó. */
+            ra.ketLuan = 'App ID và App Secret trên máy chủ KHÔNG khớp nhau (Facebook từ chối app token).'
+            ra.loiGraph = String(j.error?.message || '').slice(0, 200)
+            res.json({ success: true, data: ra })
+            return
+        }
+
+        const mien: string[] = Array.isArray(j?.app_domains) ? j.app_domains : []
+        ra.tenApp = j?.name ?? null
+        ra.mienDaKhai = mien
+        ra.coKengiVn = mien.some(m => String(m).toLowerCase().includes('kengi.vn'))
+        ra.coChinhSachRiengTu = !!j?.privacy_policy_url
+
+        const van: string[] = []
+        if (!mien.length) {
+            van.push('App CHƯA khai App Domains nào. Facebook có thể chặn FB.login từ kengi.vn — ' +
+                'vào developers.facebook.com → app → Settings → Basic → App Domains, thêm "kengi.vn".')
+        } else if (!ra.coKengiVn) {
+            van.push(`App Domains hiện là [${mien.join(', ')}] — KHÔNG có kengi.vn. ` +
+                'FB.login gọi từ kengi.vn sẽ bị chặn. Thêm "kengi.vn" vào App Domains.')
+        }
+        if (!ra.coChinhSachRiengTu) {
+            van.push('App chưa khai Privacy Policy URL — Facebook bắt buộc có trước khi đưa app ' +
+                'sang chế độ Live; đang ở chế độ phát triển thì chỉ tài khoản có vai trò trong app ' +
+                'mới đăng nhập được.')
+        }
+        ra.canSua = van
+        ra.ketLuan = van.length
+            ? 'App có thật nhưng CÒN THIẾU cấu hình — xem `canSua`.'
+            : 'App ID/Secret khớp, App Domains có kengi.vn. Nếu vẫn hỏng thì do quyền (App Review) hoặc tài khoản không quản trị fanpage nào.'
+        res.json({ success: true, data: ra })
+    } catch (err: any) {
+        ra.ketLuan = 'Không hỏi được Facebook (mạng máy chủ) — KHÔNG kết luận là app hỏng.'
+        ra.loi = String(err?.message || err).slice(0, 200)
+        res.json({ success: true, data: ra })
+    }
+})
+
 router.get('/store-health', async (req: Request, res: Response) => {
     try {
         const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
