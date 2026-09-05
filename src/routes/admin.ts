@@ -4487,6 +4487,142 @@ router.get('/do-app-fb', async (_req: Request, res: Response) => {
     }
 })
 
+/* ─── ĐÃ CÓ AI NỐI FANPAGE THẬT CHƯA — GET /admin/do-fanpage (05/09/2026)
+ *  CHỈ ĐỌC. KHÔNG in accessToken, kể cả một phần.
+ *
+ *  Vì sao cần: cả hôm nay tôi vá đường nối fanpage rồi kết luận "chưa ai nối được"
+ *  — nhưng đó là SUY ĐOÁN từ chỗ tôi không thấy, không phải phép đo. Registry có
+ *  sẵn cờ `Store.hasFanpages` (do chính /connect-page-token bật lên) và bảng
+ *  FbPage nằm trong schema từng cửa hàng. Hỏi thẳng là ra.
+ *
+ *  Hai mức bằng chứng, KHÁC NHAU — đừng lẫn:
+ *    · CÓ DÒNG trong FbPage  = đã từng nối được một lần
+ *    · TOKEN CÒN SỐNG        = ĐANG dùng được ngay bây giờ
+ *  Một page nối từ 3 tháng trước thì có dòng nhưng token đã chết. Vì vậy mặc định
+ *  hỏi luôn Graph API bằng chính token đã lưu (?thu=0 để tắt nếu chỉ cần đếm).
+ *
+ *  Chạy TUẦN TỰ từng cửa hàng: pool prod mỗi cửa hàng đúng 1 kết nối.
+ * ───────────────────────────────────────────────────────────────────────────── */
+router.get('/do-fanpage', async (req: Request, res: Response) => {
+    try {
+        const thuToken = String(req.query.thu ?? '1') !== '0'
+        const stores = await prisma.store.findMany()
+        const ketQua: any[] = []
+        let tongPage = 0, tongSong = 0, tongChet = 0, tongKhongThu = 0
+
+        for (const store of stores) {
+            const dong: any = {
+                cuaHang: store.name,
+                ma: (store as any).code ?? null,
+                coCoHasFanpages: !!(store as any).hasFanpages,
+            }
+            try {
+                const sp: any = getStorePrisma((store as any).schema)
+                const pages = await sp.fbPage.findMany({
+                    select: {
+                        pageId: true, name: true, status: true, fanCount: true,
+                        tokenExpiresAt: true, webhookSubscribed: true,
+                        autoReplyEnabled: true, lastSyncAt: true, connectedBy: true,
+                        createdAt: true, accessToken: true,
+                    },
+                    orderBy: { createdAt: 'asc' },
+                })
+                dong.soPage = pages.length
+                tongPage += pages.length
+
+                const ds: any[] = []
+                for (const pg of pages) {
+                    const tok = String(pg.accessToken || '')
+                    const mo: any = {
+                        pageId: pg.pageId,
+                        ten: pg.name,
+                        trangThai: pg.status,
+                        fan: pg.fanCount,
+                        /* CHỈ độ dài — không một ký tự nào của token đi ra ngoài. */
+                        doDaiToken: tok.length,
+                        hanToken: pg.tokenExpiresAt,
+                        webhook: pg.webhookSubscribed,
+                        tuTraLoi: pg.autoReplyEnabled,
+                        noiLuc: pg.createdAt,
+                        dongBoCuoi: pg.lastSyncAt,
+                    }
+                    if (!thuToken) {
+                        mo.tokenConSong = null
+                        mo.ghiChu = 'chưa thử (?thu=0) — KHÔNG kết luận là chết'
+                        tongKhongThu++
+                    } else if (!tok) {
+                        mo.tokenConSong = false
+                        mo.ghiChu = 'không có token trong CSDL'
+                        tongChet++
+                    } else {
+                        try {
+                            const r = await fetch(
+                                'https://graph.facebook.com/v21.0/me?fields=id,name' +
+                                '&access_token=' + encodeURIComponent(tok))
+                            const j: any = await r.json()
+                            if (j?.error) {
+                                mo.tokenConSong = false
+                                mo.ghiChu = 'Facebook từ chối: ' + String(j.error?.message || '').slice(0, 160)
+                                tongChet++
+                            } else {
+                                mo.tokenConSong = true
+                                mo.graphTraVe = { id: j?.id ?? null, name: j?.name ?? null }
+                                /* Token của page khác page đã lưu = đã lưu nhầm. */
+                                mo.khopPageId = String(j?.id || '') === String(pg.pageId)
+                                tongSong++
+                            }
+                        } catch (e: any) {
+                            /* Lỗi MẠNG không phải bằng chứng token chết. */
+                            mo.tokenConSong = null
+                            mo.ghiChu = 'không hỏi được Facebook (mạng máy chủ): ' +
+                                String(e?.message || e).slice(0, 120)
+                            tongKhongThu++
+                        }
+                    }
+                    ds.push(mo)
+                }
+                dong.pages = ds
+
+                /* Cờ registry và bảng thật lệch nhau thì fanpageCron sẽ bỏ sót
+                 * (cờ false mà có page) hoặc quét thừa (cờ true mà rỗng). */
+                if (!!(store as any).hasFanpages !== (pages.length > 0)) {
+                    dong.canhBaoLechCo = `Store.hasFanpages=${!!(store as any).hasFanpages} ` +
+                        `nhưng bảng FbPage có ${pages.length} dòng — fanpageCron sẽ ` +
+                        (pages.length > 0 ? 'BỎ SÓT cửa hàng này.' : 'quét thừa cửa hàng này.')
+                }
+            } catch (e: any) {
+                /* Đọc hỏng ≠ không có. Nói rõ là hỏng. */
+                dong.docDuoc = false
+                dong.loi = String(e?.message || e).slice(0, 180)
+            }
+            ketQua.push(dong)
+        }
+
+        const coDong = ketQua.filter(d => (d.soPage || 0) > 0)
+        const ketLuan = tongPage === 0
+            ? 'CHƯA cửa hàng nào nối fanpage — bảng FbPage rỗng ở tất cả cửa hàng đọc được.'
+            : (tongSong > 0
+                ? `${tongSong}/${tongPage} page có token CÒN SỐNG ngay lúc đo ⇒ đường nối fanpage CHẠY ĐƯỢC thật.`
+                : `Có ${tongPage} page đã từng nối nhưng KHÔNG page nào còn token sống — phải nối lại.`)
+
+        res.json({
+            success: true,
+            data: {
+                thuTokenThat: thuToken,
+                soCuaHang: stores.length,
+                soCuaHangDocHong: ketQua.filter(d => d.docDuoc === false).length,
+                tongPage, tongTokenSong: tongSong, tongTokenChet: tongChet,
+                tongChuaThu: tongKhongThu,
+                cuaHangCoPage: coDong.map(d => d.cuaHang),
+                ketLuan,
+                chiTiet: ketQua,
+            },
+        })
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: String(err?.message || err).slice(0, 300) })
+    }
+})
+
 router.get('/store-health', async (req: Request, res: Response) => {
     try {
         const storeCode = String(req.query.storeCode || 'KENGISTORE').trim()
